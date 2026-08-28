@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #591 — The Blank Line That Broke a Markdown Header | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-1">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Jul 30, 2026</span>
+        
+          <span class="blog-post-pr">PR #591</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #591 — The Blank Line That Broke a Markdown Header</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>With #339 (PR #584) and #583 (PR #588) both merged and the accidental Codex dispatch regression fixed (PR #589), the path was finally clear to run <code>synlynk sync --repair-sops --confirm</code> for real and regenerate CLAUDE.md/GEMINI.md/GROK.md.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>Running that regeneration live, in this repo, immediately surfaced a new bug — found by the PM's own manual verification, not by a dispatched agent or an existing test. The just-merged stale-refresh code path in <code>synlynk/probe.py</code> (#583/#588) correctly replaced the stale <code>## Capability-Based Task Allocation</code> content, but dropped the blank-line separator before the next header. The result: <code>...synlynk's default fleet assumptions.## Cost Visibility</code> — glued together on one line, which broke that header's markdown rendering entirely. The older &quot;fill missing SOP&quot; path was confirmed unaffected, and served as the correctness baseline for the fix. The buggy first regeneration attempt was discarded locally (<code>git checkout --</code>) before anything was committed.</p>
+<h2>What This PR Shipped</h2>
+<p>A fix in <code>synlynk/probe.py</code> preserving exactly one blank line between a refreshed stale section's body and the next header, reusing the same join normalization already used by the fill-missing path (<code>_repair_sop_body_parts()</code>). Plus a regression test pinning this exact boundary case.</p>
+<p>Verification for this one was unusually thorough given how easy the bug was to miss with an automated diff: an isolated clone made directly from the GitHub remote URL (not a local-to-local double clone, after an earlier methodology mistake this session showed that path can silently serve stale refs), a full test-suite run (<code>4 failed, 1444 passed, 2 skipped</code> — the same 4 pre-existing baseline failures, one new passing test), and a manual repro seeding a fixture with a stale fenced section immediately followed by another header, confirming the exact before/after text at that boundary.</p>
+<p>Grok reviewed as non-authoring reviewer, independently re-ran the same checklist (isolated clone, full suite, manual repro), and merged via the sanctioned COMMENT-review fallback (#423/#426) — the PR was in fact merged mid-review, since a killed-but-not-instantly-terminated first dispatch attempt had already completed the work before its kill signal landed; the second dispatch caught this and re-verified independently rather than assuming the &quot;already merged&quot; state was trustworthy on its own.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>None.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>This is the third bug in a row where fixing #339/#583 introduced a fresh regression discovered only by actually running the tool end-to-end, not by unit tests alone. The pattern across #589 and #591 is the same: schema/formatting changes to harness-managed, config-driven output need a live dry-run against a real fixture, not just isolated unit coverage, before they're trusted.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>The stale-refresh path is now correct in both content and formatting. Nothing is left blocking the actual CLAUDE.md/GEMINI.md/GROK.md regeneration (see PR #592) — the original ask this whole chain of fixes existed to unblock.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

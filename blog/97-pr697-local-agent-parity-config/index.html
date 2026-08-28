@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>synlynk | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date"></span>
+        
+      </div>
+      <h1 class="blog-post-title"></h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>97: two-tier parity, shipped one tier at a time</h1>
+<h2>Where we left off</h2>
+<p>PR #95 (litellm provider-prefix fix) closed the loop on the <code>local</code> agent actually
+<em>working</em> — a real dispatch reached Ornith and got a response instead of silently
+no-opping. That fixed correctness. It said nothing about safety posture: <code>local</code>
+dispatched with the same flag surface as every other agent, no guardrails scoped to
+the fact that this agent runs against a small (9B, 4-bit) self-hosted model with no
+vendor-side abuse controls behind it.</p>
+<h2>What moved the goalpost</h2>
+<p>Brainstorming surfaced that &quot;parity&quot; for the <code>local</code> agent isn't one config, it's two:
+a <strong>Starter tier</strong> (small model, conservative flags, safe defaults) and a <strong>Full tier</strong>
+(larger model, <code>--architect</code> mode, autonomous lint/test) — gated by which model is
+actually pinned in <code>.agents/local.json</code>. The open question was whether to build both
+tiers now, or ship Starter immediately and defer Full.</p>
+<p>The design spec resolved it by adding an A/B test as a gate: dispatch the same battery
+of prompts (docstring add, mechanical rename, small extraction, plus the PR #690
+runaway-trigger prompt) against both <code>Ornith-1.0-9B-4bit</code> (currently pinned) and
+<code>Qwen3.6-27B-4bit</code> (Full-tier candidate), capture diff-correctness/safety-drift/wall-clock
+data directly — not from job status — and let that data decide whether Full-tier is
+worth building at all. The last open question, resolved explicitly rather than left
+implicit: <strong>ship Starter-tier guardrails now, against whichever model is currently
+pinned, regardless of what the A/B test eventually shows.</strong> Re-pinning to a different
+model later is a separate, small change — it shouldn't block shipping the safety
+guardrails that apply either way.</p>
+<h2>What this PR ships</h2>
+<p>Two independent pieces, sequenced per the plan (<code>docs/superpowers/plans/2026-08-03-local-agent-parity-config.md</code>):</p>
+<p><strong>The A/B harness</strong> (<code>scripts/local_agent_ab_test.py</code>) — a standalone CLI, not a permanent
+part of the dispatch path:</p>
+<pre><code class="language-python">def _build_temp_config(base_config: dict, model_id: str) -&gt; dict:
+    ...  # pins model_id, unpins everything else, never mutates the original
+def run_ab_case(model_id, label, prompt, dispatch_runner=None) -&gt; dict:
+    ...  # swaps .agents/local.json, dispatches, restores config in a finally block
+</code></pre>
+<p><code>run_ab_case</code> backs up and restores <code>.agents/local.json</code> around every run — including on
+a raised exception from the dispatch itself — so a crashed A/B run can never leave the
+repo's real agent config pointed at the wrong model. Results append as JSONL to
+<code>project-docs/decisions/2026-08-03-local-agent-ab-test-results.jsonl</code>, one row per
+model/prompt pair, for Claude/PM to read and decide from — the harness itself makes no
+judgment call about which model wins.</p>
+<p><strong>Starter-tier guardrails</strong> (<code>synlynk/local_agent.py</code>), shipped against the currently-pinned
+<code>Ornith-1.0-9B-4bit</code> per the resolved open question above:</p>
+<pre><code class="language-python">_STARTER_TIER_GUARDRAIL_FLAGS = [
+    &quot;--no-auto-lint&quot;, &quot;--no-auto-test&quot;, &quot;--map-tokens&quot;, &quot;0&quot;,
+]
+</code></pre>
+<p>appended unconditionally to every <code>local</code> dispatch's flags — no <code>--architect</code>, no
+autonomous lint/test execution, no repo-map context leak. Full-tier flags are explicitly
+<em>not</em> in this codepath; the function's docstring says so directly, so the boundary
+survives the next person who edits this file without having read the spec.</p>
+<p>Built via four sequential <code>synlynk dispatch codex</code> tasks for the harness (config-transform
+→ config I/O/result-row → run_ab_case orchestration → CLI entrypoint) plus one for the
+guardrail flags, each reviewed directly — diff read, tests re-run independently, never
+trusting job self-report — before fast-forward merging into the branch. Codex caught two
+real gaps in the plan itself without a round-trip: a missing <code>import json</code> in a test
+snippet, and two pre-existing exact-match flag-list assertions (in both
+<code>tests/test_local_agent.py</code> and <code>tests/test_dispatch_local_agent.py</code>) that needed updating
+for the new flags — both anticipated in the plan's own regression-risk note, so this was
+the plan working as intended, not a surprise.</p>
+<h2>Where this leaves the local-agent track</h2>
+<p>Full project suite: 1622 passed, 2 skipped (baseline 1575 + ~15 new tests from this plan +
+existing growth, 0 failures). Starter-tier guardrails are live against the currently-pinned
+model regardless of what the A/B test later shows. Full-tier (<code>--architect</code>,
+autonomous lint/test) remains explicitly out of scope for this plan — a future,
+separately-gated change once the A/B data actually justifies re-pinning to a larger model.</p>
+<h2>Next goalpost</h2>
+<p>Run the A/B harness for real against both models and read the results. If Qwen3.6-27B-4bit
+wins on the data, re-pin <code>.agents/local.json</code> and build the Full-tier flag surface as its
+own small, separately-reviewed change — the guardrail boundary this PR drew makes that a
+config change plus a new flag set, not a rewrite.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

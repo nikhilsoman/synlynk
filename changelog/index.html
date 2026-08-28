@@ -42,26 +42,290 @@ Versioning follows <a href="https://semver.org/spec/v2.0.0.html">Semantic Versio
 <h2><a href="https://github.com/nikhilsoman/synlynk/compare/v0.3.0...HEAD">Unreleased</a></h2>
 <h3 class="tag-added">Added</h3>
 <ul>
-<li><code>synlynk agent add &lt;name&gt;</code> to retroactively onboard a newly available CLI agent on <code>$PATH</code>, generating its directive file, writing its role fence, wiring <code>workgroup_agents</code> / <code>agent_slots</code> / <code>roles</code>, and seeding a capability baseline. Fixes #277.</li>
-<li>Lazy daily housekeeping on the first <code>synlynk exec</code> of a new calendar day, detecting new PATH agents, re-probing onboarded agents for drift, repairing directive fences, and recording <code>last_housekeeping_date</code>. Fixes #277.</li>
+<li><strong>Charter Content &amp; Structure Schema</strong>
+<ul>
+<li>Charters now require YAML frontmatter (<code>schema_version</code>, <code>role</code>, <code>description</code>, <code>durability</code>, <code>tools</code>, <code>credentials</code>) plus three markdown sections (<code>## Instructions</code>, <code>## Authority &amp; Escalation</code>, <code>## Workflow Ownership</code>), enforced via a new <code>synlynk/charter_schema.py</code> validator wired into <code>propose_charter_revision</code>.</li>
+<li>Retired the dead <code>.synlynk/agents/&lt;id&gt;.yaml</code> projection file and <code>regenerate_agent_projection()</code> — its only field (<code>capability_grants</code>) was write-only, never read.</li>
+<li>Added <code>synlynk agent sync-routing &lt;id_or_alias&gt;</code> to regenerate a charter's <code>dispatch_routing</code> frontmatter block from <code>.synlynk/policy.json</code>'s task-allocation table.</li>
+<li>Migrated all 7 provisioned charters (dev, qa, architect, pm, tpm, designer, marketing) to schema revision 3; <code>pm</code>'s migration restores the competitive-intelligence-sweep / capability-gap-doc content that had been lost in an earlier revision.</li>
+</ul>
+</li>
+</ul>
+<p><strong>Agent vs Harness Terminology — Phase 0 (design 2026-08-09, plan 2026-08-09)</strong></p>
+<ul>
+<li><code>docs/glossary-agent-vs-harness.md</code> — canonical definition distinguishing <strong>Agent</strong> (persistent role identity + charter: pm/architect/tpm/dev/designer/qa/marketing/synlynk-bot) from <strong>Harness</strong> (swappable execution backend: Claude/Agy/Grok/Codex/local).</li>
+<li>Auto-generated <code>## Capability-Based Task Allocation</code> table (synced into CLAUDE.md/GEMINI.md/AGENTS.md/GROK.md via <code>synlynk doctor --fix</code>) now reads <code>| Role | Harness | Tasks |</code> instead of the conflated <code>| Role | Agent | Tasks |</code>, with a glossary-link note.</li>
+<li>Hand-maintained &quot;Terminology: Agent vs Harness&quot; section added to this repo's own <code>CLAUDE.md</code>.</li>
+<li><code>.synlynk/roles.yaml</code>, <code>README.md</code>, <code>SYNLYNK_GUIDE.md</code> wording fixed to stop conflating Agent and Harness.</li>
+<li><strong>Not yet a shippable milestone:</strong> first phase of a 5-phase roadmap (<code>docs/superpowers/specs/2026-08-09-synlynk-agent-roles-charters-design.md</code> §10). Phase 1 (agent manifests/charter storage) has since shipped — see <code>[0.14.0]</code> below — but Phases 2-4 (memory, capability registry, portability) remain unbuilt. Held out of 0.13.1 and 0.14.0; will ship as its own named release once the full terminology rollout is complete.</li>
+</ul>
+<p><strong>Quota-Aware Dispatch Reservation (design 2026-08-08, plan 2026-08-08)</strong></p>
+<ul>
+<li><code>agent_reservations</code> ledger tracks estimated-token reservations per harness from the moment a job is queued/dispatched until it settles, closing the gap where <code>--force-agent</code> and daemon-queued dispatches could bypass quota checks entirely.</li>
+<li><code>dispatch_agent()</code> now consults quota unconditionally (including <code>--force-agent</code> calls) and defers (<code>queued</code>, <code>blocked_reason=quota_exhausted</code>) instead of raising when a harness has no headroom; deferred jobs resume automatically once the harness's quota window resets — no manual re-dispatch needed.</li>
+<li><code>_dispatch_ready_jobs()</code> no longer falls through to an exhausted harness when a job is blocked; it stays queued for the next poll.</li>
+<li><code>synlynk schedule --execute</code> opens real reservations for the whole batch at commit time via <code>_enqueue_plan()</code>.</li>
+<li><code>_force_exhaust_quota()</code> wires sentinel's existing <code>QUOTA_EXHAUSTED</code> detection into the reservation ledger without ever touching already-running jobs.</li>
+<li><code>synlynk/tpm_hooks.py</code> — narrow TPM hook surface (<code>tpm_observe_reservations</code>, <code>tpm_reorder_queue</code>, <code>tpm_reallocate</code>) plus a read-only <code>synlynk quota --tpm-view</code> CLI command to inspect open reservations across harnesses.</li>
+<li><strong>Not yet a shippable milestone:</strong> no active agents currently exercise the reservation ledger or TPM hooks in production dispatch flow. Held out of 0.13.1 and 0.14.0; will ship once agents actually consume it.</li>
+</ul>
+<div class="changelog-version-header"><span class="changelog-version">v0.18.0</span><span class="changelog-date">2026-08-27</span></div>
+<p><strong>Release pitch:</strong> a backlog of already-shipped, undocumented work — QA merge-gate authority, the gh-write broker, harness capability registry v2, and a week of dispatch/gh-write reliability fixes — finally gets a version number, and today's own session shows why that matters: a live datetime-comparison crash (#1184) and a per-connection DB backup storm (#1087) both got root-caused and fixed in the same sitting this release closes out.</p>
+<h3 class="tag-added">Added</h3>
+<p><strong>QA delegated merge-gate authority + completion tracker + merge-restricted classes (design 2026-08-20/22, gh#1079/#1099/#1100/#1101, PRs #1082-#1104)</strong></p>
+<ul>
+<li><code>docs/superpowers/specs/2026-08-20-qa-merge-gate-authority-design.md</code> and its implementation plan give QA delegated authority to merge PRs that pass verification, instead of every merge requiring a human or PM-role action.</li>
+<li>Completion tracker (PR #1100) adds a Vizor panel surfacing verified-but-unmerged PRs.</li>
+<li>Merge-restricted classes (PR #1101) carve out PR categories (e.g. release branches, policy.json changes) that stay outside QA's delegated authority regardless of verification status.</li>
+</ul>
+<p><strong>GitHub-write broker design (resolves #865 brainstorm, PR #1075)</strong></p>
+<ul>
+<li>Design spec for a centralized gh-write broker consolidating GitHub App token resolution and write-permission checks behind one interface, replacing scattered per-call-site identity resolution.</li>
+</ul>
+<p><strong>Harness capability registry v2 — Plan B (gh#786, PRs #1053-#1066)</strong></p>
+<ul>
+<li><code>harness_models</code> / <code>harness_modes</code> / <code>capability_calibration_*</code> tables replace the old flat capability ledger with per-model, per-mode calibration data.</li>
+<li>Stage 0 explore bonus seeds calibration for thin-data models; single-model sweep entry point and diff-and-queue-new-models helper keep the registry current as harnesses add models.</li>
+</ul>
+<p><strong>gh-write identity hardening — Phase 1 closeout (gh#423/#426, PR #1110)</strong> and <strong>Agent-roles Phase 2 — memory-gated capability routing (PR #1030)</strong></p>
+<ul>
+<li>Round out the identity-hardening and capability-routing work referenced but not yet changelogged from earlier in August.</li>
+</ul>
+<p><strong>Dispatch and gh-write reliability hardening (2026-08-24 to 2026-08-27, PRs #1140/#1164/#1166/#1172/#1174/#1175/#1177/#1180/#1182/#1183)</strong></p>
+<ul>
+<li>Daemon-owned GitHub App token cache unblocks headless dispatch (#1140, PR #1174); worktree gh-write dispatch now falls back to the main repo's <code>github_apps</code> when the worktree has none (PR #1164).</li>
+<li>PR-review task type is now inferred from task text (#1166, PRs #1172/#1175); a missing <code>review</code> <code>task_allocation</code> policy entry is added; grok's review-type gh-write authorization is correctly downgraded (PR #1177).</li>
+<li>Codex sandbox network access is now gated per #340 (PR #1180).</li>
+<li>gh-write targets are resolved from task text for #860 (PR #1183); a <code>jobs.py</code> bug in <code>_maybe_open_worktree_pr</code> is fixed (PR #1182).</li>
+<li>Harness capability baseline + recurring reassessment protocol documented (PR #1178).</li>
+</ul>
+<p><strong>PM competitive-intelligence sweep (PR #1159)</strong></p>
+<ul>
+<li>Weekly cron job maintaining a living comparison doc against competitor tooling, feeding a decide-round pipeline for roadmap input.</li>
+</ul>
+<h3 class="tag-fixed">Fixed</h3>
+<p><strong>[LIVE issue] <code>jobs --all</code> crash on naive/aware datetime comparison (gh#1184, PR #1187)</strong></p>
+<ul>
+<li><code>_parse_iso8601()</code> in <code>synlynk/gh_verify.py</code> now normalizes a trailing <code>Z</code> and coerces naive timestamps to UTC-aware before comparison, instead of crashing with <code>TypeError: can't compare offset-naive and offset-aware datetimes</code> whenever a GitHub-sourced timestamp reached <code>gh_write_verified()</code>. <code>_apply_gh_write_verification()</code> in <code>synlynk/jobs.py</code> normalizes <code>since</code> through the same parser before use.</li>
+</ul>
+<p><strong>[LIVE-6, gh#1140] branch-protection sync re-enabling <code>enforce_admins</code>, closing #1185 (PR #1186)</strong></p>
+<ul>
+<li><code>cmd_policy_sync_branch_protection()</code> no longer hardcodes <code>enforce_admins=True</code>; a prior sync had silently re-locked the repo's own admin-merge bypass.</li>
+</ul>
+<p><strong>[LIVE issue] <code>_migrate_db()</code> backup storm on every connection (gh#1087, PR #1189)</strong></p>
+<ul>
+<li><code>_migrate_db()</code> now returns immediately once <code>PRAGMA user_version</code> is current, instead of running the harness-rename migration and full schema executescript unconditionally on every connection. Root-caused as the likely source of intermittent <code>database is locked</code> failures seen during full-suite test runs (e.g. <code>test_cmd_agent_add_onboards_agent</code>).</li>
+</ul>
+<h3>Process notes</h3>
+<ul>
+<li><strong>8 stale <code>[APPROVAL]</code> GitHub issues closed (gh#1142-#1149):</strong> artifacts of the <code>[0.17.0]</code> Task 5 live dogfood verification's temporary <code>task_dispatch_demo</code> policy rule, which was fully reverted before merge and never landed on <code>main</code>. These tickets could never resolve through the normal auto-resume flow; closed as <code>not planned</code> with provenance comments during this release's backlog sweep.</li>
+<li><strong>Version-drift note:</strong> the <code>VERSION</code> file had drifted to <code>0.16.0</code> despite <code>v0.17.0</code> already being tagged and released — see <a href="https://github.com/nikhilsoman/synlynk/issues/1188">#1188</a> for root cause and proposed durable fix (dispatch-time drift warning, defensive schema-version gate). This release's version bump corrects the immediate drift; #1188 remains open for the systemic fix.</li>
+</ul>
+<div class="changelog-version-header"><span class="changelog-version">v0.17.0</span><span class="changelog-date">2026-08-24</span></div>
+<p><strong>Release pitch:</strong> an approved <code>[APPROVAL]</code> ticket now actually unblocks the story it was raised for — the last gap between v0.16.0's authority layer and a <code>tpm sweep</code> loop that runs unattended for real, closed and live-verified against this repo's own GitHub tracker.</p>
+<h3 class="tag-added">Added</h3>
+<p><strong>Ticket-driven approval auto-resume (design/plan 2026-08-24, PRs #1137-#1139, #1141)</strong></p>
+<ul>
+<li>Closes the known gap flagged at the end of <code>[0.16.0]</code>: resolving an <code>[APPROVAL]</code> ticket now actually unblocks the parked story on the next <code>synlynk tpm sweep</code> pass, instead of the story re-parking forever.</li>
+<li><code>approval_tickets</code> table (PR #1137) plus <code>_find_ticket()</code> / <code>_insert_ticket()</code> / <code>_mark_ticket_consumed()</code> helpers in <code>synlynk/db.py</code> (PR #1138) give <code>run_sweep_pass()</code> (PR #1139) three-way state awareness per story/action: no ticket yet → file one; open ticket → keep parking; resolved ticket → consume it and let dispatch proceed.</li>
+<li><code>synlynk/events.py</code>'s <code>_scan_approval_tickets()</code> (PR #1141) now writes <code>approval_tickets.status='resolved'</code> at the same point it emits <code>approval_resolved</code>, so the resolution is durable state the next sweep pass can actually query — not just an event log entry nothing consumed.</li>
+<li><strong>Live dogfood verification (Task 5, Claude-direct per plan, 2026-08-24):</strong> ran the full ticket lifecycle against this repo's real GitHub issue tracker using a temporary, fully-reverted <code>task_dispatch_demo</code> policy rule (reverted before merge; never landed on <code>main</code>). Demo story <code>story-becf09a5</code>: sweep 1 parked it and filed ticket id 8 → issue <a href="https://github.com/nikhilsoman/synlynk/issues/1149">#1149</a>; sweep 2 confirmed no duplicate ticket/issue; <code>gh issue comment 1149 --body &quot;approve&quot;</code> + <code>scan_local_events()</code> produced <code>approval_resolved</code> event id 371 referencing issue #1149; sweep 3 dispatched instead of re-parking (job <code>job-e8277299</code>, exit 0) and marked the ticket <code>consumed</code> (<code>consumed_at</code> set). Every claim was verified via direct DB query / <code>gh issue list</code> / <code>synlynk events tail</code>, not sweep's own printed summary.</li>
+<li><strong>Process note:</strong> Tasks 1-4's implementer stage was dispatched to Codex per the project's PM/review-only split as usual. Task 4 hit a session-level blocker — the Claude Code auto-mode classifier repeatedly denied <code>synlynk dispatch</code> calls even with valid role-scoped GitHub App credentials — so Task 4 was implemented directly by Claude as a documented, user-approved workaround. Filed as <a href="https://github.com/nikhilsoman/synlynk/issues/1140">LIVE-6, #1140</a> (Sev2) since it degrades the autonomy-design goal; root cause not yet investigated.</li>
+</ul>
+<h3>Known gaps (carried forward)</h3>
+<ul>
+<li><a href="https://github.com/nikhilsoman/synlynk/issues/1140">LIVE-6, #1140</a> — Claude Code auto-mode classifier blocks <code>synlynk dispatch</code> calls even with valid role-scoped GitHub App credentials, forcing a manual-implementation fallback. Root cause not yet investigated.</li>
+</ul>
+<div class="changelog-version-header"><span class="changelog-version">v0.16.0</span><span class="changelog-date">2026-08-23</span></div>
+<p><strong>Release pitch:</strong> the authority layer v0.15.0 built now actually gates something unattended — <code>synlynk tpm sweep</code> walks ready stories through dispatch end-to-end, pauses on a policy-flagged action with a GitHub approval ticket instead of blocking the whole batch, and a live dogfood run proved both the happy path and the pause+ticket path work — surfacing two real gaps in the process, filed rather than papered over.</p>
+<h3 class="tag-added">Added</h3>
+<p><strong>GOVERNS <code>awaiting_approval</code> event (Task 10, PR #1125)</strong></p>
+<ul>
+<li>New GOVERNS event type extending the <code>job_terminal</code>/<code>review_submitted</code> event-contract pattern (PR #922): <code>emit_awaiting_approval(story_id, action, reason)</code> in <code>synlynk/events.py</code>, recording which <code>policy.json</code> <code>approval_required_for</code> rule matched.</li>
+</ul>
+<p><strong>Approval-gate ticket flow (Task 11, PR #1126)</strong></p>
+<ul>
+<li><code>synlynk/approval_gate.py</code> — <code>raise_approval_ticket()</code> files a <code>[APPROVAL] &lt;action&gt; — &lt;story_id&gt;</code> GitHub issue with story context, the matched policy rule, and instructions to reply <code>approve</code> or act directly on GitHub.</li>
+<li><code>synlynk/events.py</code>'s <code>_scan_approval_tickets()</code> polls open <code>[APPROVAL]</code> issues and emits <code>approval_resolved</code> for any that are closed or have an <code>approve</code>-prefixed comment, wired as the last step of <code>scan_local_events()</code>.</li>
+</ul>
+<p><strong><code>synlynk tpm sweep</code> (Task 12, PR #1127)</strong></p>
+<ul>
+<li>One pass over <code>readiness='ready'</code> stories: dispatch → verify → PR → review → merge per story, gating every step on <code>check_authority()</code>. A <code>requires_approval</code> result parks that story (raises a ticket, emits <code>awaiting_approval</code>) without blocking the rest of the batch. Per-pass summary surfaced via <code>synlynk status</code>.</li>
+</ul>
+<p><strong>Live dogfood verification (Task 13, Claude-direct per plan)</strong></p>
+<ul>
+<li>Ran <code>synlynk tpm sweep</code> unattended against this repo's real backlog. To avoid dispatching all 8 pre-existing ready stories for real, the 8 were temporarily parked (<code>synlynk story draft</code>) and restored afterward; only two purpose-built demo stories were swept.</li>
+<li>Pass 1 (no approval rule active) proved the normal path: <code>story-028d26d9</code> dispatched, ran to completion, PR opened.</li>
+<li>Pass 2 (a temporary, documented, fully-reverted test-only <code>policy.json</code> rule — <code>task_dispatch:</code> has no default rule that can trip <code>requires_approval</code>, since <code>_matches_approval_rule()</code> explicitly skips <code>security_sensitive_paths:</code> for dispatch actions) proved the pause path: <code>story-7aa0aaec</code> parked, a real <code>[APPROVAL]</code> issue was filed and assigned, <code>approve</code> was commented, and <code>_scan_approval_tickets()</code> correctly emitted <code>approval_resolved</code> (event id 272) — independently confirmed via <code>synlynk events tail --type approval_resolved</code> and <code>gh issue view --json state,comments</code>.</li>
+<li>Every claim was cross-checked directly (<code>synlynk jobs --all</code>, direct DB queries, <code>gh issue list --search</code>, <code>gh api .../branches/main/protection</code>) rather than trusted from the sweep's own printed summary, per the plan's explicit instruction.</li>
+</ul>
+<h3 class="tag-fixed">Fixed</h3> / Known gaps (filed, not patched in this release — Claude is PM/review only; fixes are implementation work for a future dispatch)
+- **`scan_local_events()` crashes before reaching `_scan_approval_tickets()`** (`sqlite3.OperationalError: table subscriptions has no column named harness_name`), and its only production call site (`workspace_agent.py`'s `cmd_workspace_agent_run`) has no wired CLI subcommand — meaning the documented approval-resolution detection path does not actually run unattended today. Filed as [#1132](https://github.com/nikhilsoman/synlynk/issues/1132).
+- **`synlynk story done` does not clear `readiness`**, and `_ready_stories()`'s in-flight guard only excludes `queued`/`running` jobs, not `done` ones — so a story whose dispatch already completed gets re-swept and re-parked on the very next pass, observed live with `story-028d26d9`. Filed as [#1133](https://github.com/nikhilsoman/synlynk/issues/1133).
+- **Resolving an approval ticket does not auto-unblock a re-sweep**: `check_authority()` is purely policy-rule-based with no awareness of ticket-resolution state, so `approval_resolved` firing does not itself let the parked story advance on the next pass. This matches the plan's own scoping (ticket-driven auto-resume was explicitly out of scope for this plan) — a known limitation, not a regression, and the natural next increment once #1132/#1133 are fixed.
+<div class="changelog-version-header"><span class="changelog-version">v0.15.0</span><span class="changelog-date">2026-08-23</span></div>
+<p><strong>Release pitch:</strong> synlynk's own repo gets a real authority layer — a two-tier <code>policy.json</code> (workspace defaults + per-repo overrides) that turns previously-hardcoded prose tables (who can merge, who can cut a release, who can edit the roadmap, which harness handles which task type) into data, gated by a fail-closed <code>check_authority()</code> resolver, with branch protection now live-verified on <code>main</code>.</p>
+<h3 class="tag-added">Added</h3>
+<p><strong>Workspace Policy Layer (design 2026-08-23, plan <code>docs/superpowers/plans/2026-08-23-workspace-policy-and-autonomous-loop.md</code>, PR #1122)</strong></p>
+<ul>
+<li><code>synlynk/policy.py</code> — two-tier policy schema: workspace defaults (<code>~/.synlynk/workspaces/&lt;name&gt;/policy.json</code>, falling back to <code>DEFAULT_WORKSPACE_POLICY</code> when absent) merged with a repo's sparse <code>.synlynk/policy.json</code> overrides, whole-object-replace-per-top-level-key (not a deep merge).</li>
+<li><code>check_authority(action, role, repo_path)</code> → <code>AuthorityResult(allowed, requires_approval, reason)</code>, covering <code>roadmap_edit</code>, <code>goal_create</code>, <code>merge</code>, <code>release_cut</code>, and <code>task_dispatch:&lt;type&gt;</code> actions, plus an <code>approval_required_for</code> rule matcher (named releases, roadmap-authority changes, security-sensitive paths, irreversible merges).</li>
+<li>Wired fail-closed into four call sites: <code>dispatch_agent()</code>'s task-allocation resolution, <code>cmd_release</code>, <code>cmd_roadmap_add</code>, <code>cmd_goal_create</code> — each raises <code>RuntimeError</code> on <code>allowed=False</code> rather than proceeding.</li>
+<li><code>synlynk policy check-merge</code>, <code>synlynk policy sync-branch-protection</code>, <code>synlynk policy show</code> — new CLI commands; <code>sync-branch-protection</code> calls GitHub's branch protection API idempotently, deriving required status checks from <code>.github/workflows/</code>.</li>
+<li>This repo's own <code>.synlynk/policy.json</code> migrates the existing CLAUDE.md prose tables (Capability-Based Task Allocation, PR Review Discipline, Named Release authority) into data — CLAUDE.md now points to <code>synlynk policy show</code> as the source of truth instead of hand-maintained tables.</li>
+<li>Full <code>check_authority()</code> unit coverage: allow/deny/requires_approval across both tiers, override-merge rule, missing-repo-override inheritance, unknown task_type denial (<code>tests/test_policy.py</code>, 11 tests).</li>
+<li><strong>Live-verified:</strong> branch protection synced and independently confirmed via <code>gh api repos/nikhilsoman/synlynk/branches/main/protection</code> — <code>required_status_checks</code> = <code>[&quot;test (3.8)&quot;, &quot;test (3.10)&quot;, &quot;test (3.12)&quot;, &quot;qa-gate&quot;]</code>, <code>required_reviews</code> = <code>1</code>, <code>enforce_admins</code> = <code>true</code>.</li>
+</ul>
+<h3 class="tag-fixed">Fixed</h3>
+- Default `role="dev"` on `cmd_release`/`cmd_roadmap_add`/`cmd_goal_create` didn't match the default policy's `pm`-only authority for these actions, causing unspecified-role calls (including coldstart's own roadmap-row write) to fail closed. Defaulted to `role="pm"`, matching the actions' actual authority scope.
+- Taxonomy regression: two new `policy` subcommands were missing `COMMAND_TAXONOMY` entries, failing `test_taxonomy_matches_real_cli_surface`.
+<div class="changelog-version-header"><span class="changelog-version">v0.14.0</span><span class="changelog-date">2026-08-16</span></div>
+<p><strong>Release pitch:</strong> the execution floor gets a truth guarantee — every GitHub-write dispatch now has its claimed outcome independently verified against live GitHub state instead of trusted at face value — and workspace agents get a real identity: a storage-backed charter, a <code>synlynk agent init/list/show/edit/disable</code> onboarding surface, and dispatch integration that resolves role and harness from that identity automatically.</p>
+<h3 class="tag-added">Added</h3>
+<p><strong>GOVERNS Job-Truth / GH-Write Consolidation (#701, PR #978)</strong> — closes #331, #579, #935</p>
+<ul>
+<li><code>synlynk/gh_verify.py</code> <code>gh_write_verified()</code> — an independent delivery-of-effect check that queries live GitHub state via the orchestrator's own <code>gh</code> identity (not the sandboxed job's), replacing &quot;the job said it succeeded&quot; with &quot;GitHub confirms the write landed.&quot;</li>
+<li>Wired into <code>dispatch.py</code>'s <code>_check_job_stall</code> (extends timeout on an unverified write, kills the job on a confirmed failure) and <code>jobs.py</code>'s <code>_reconcile_daemon_jobs</code> (new <code>succeeded_gh_write_failed</code> terminal status distinct from a clean success).</li>
+<li><code>gh_write_verified</code> surfaced as a column in <code>synlynk jobs</code> output.</li>
+<li>Regression guard (<code>tests/test_gh_write_guard.py</code>) asserting every terminal-status-deciding code path for a <code>--requires-gh-write</code> job consults the check.</li>
+<li><code>synlynk doctor</code> TC-7 preflight verifies Agy's local <code>gh</code> allow-rules before routing gh-write tasks to it, instead of failing at dispatch runtime.</li>
+<li>Codex PR-review tasks now route through the <code>gh</code> CLI directly instead of the previously-unreliable MCP <code>add_review_to_pr</code>/<code>add_comment_to_issue</code> tools.</li>
+</ul>
+<p><strong>Workspace-Scoped Agent Artifact Storage (design 2026-08-14/15, gh#936, PR #988)</strong></p>
+<ul>
+<li>Mints a real <code>workspace_id</code> (uuid4, persisted once in <code>.synlynk/config.json</code>) keying a new workspace-level agent artifact store.</li>
+<li><code>agent_id</code> registry (<code>register_agent</code>/<code>resolve_agent_id</code>) mirroring the existing <code>member_id</code>/<code>member_aliases</code> pattern — loud failure on an unregistered alias, rejects duplicate agent_id/alias.</li>
+<li>Canonical <code>charter.md</code> + provenance-chained <code>charter.revisions.jsonl</code> storage (<code>read_charter</code>/<code>propose_charter_revision</code>) with stale-parent-revision conflict detection, extended to <code>memory/</code> and <code>statements-of-record/</code> entries.</li>
+<li><code>regenerate_agent_projection()</code> writes a generated, gitignored <code>.synlynk/agents/&lt;agent_id&gt;.yaml</code> projection (agent_id/role/overrides only, never charter content) via a stdlib-only flat YAML emitter.</li>
+</ul>
+<p><strong>Agent-Roles-Charters Phase 1 — CLI Onboarding + Dispatch Integration (design 2026-08-16, PR #1003)</strong></p>
+<ul>
+<li><code>synlynk agent init/list/show/edit/disable</code> — the CLI onboarding surface for workspace agents (org-chart roles: dev/qa/pm/architect/tpm/designer/marketing/synlynk-bot), built on the storage layer above.</li>
+<li><code>dispatch_agent()</code> gains <code>agent_id</code> support: validates the agent is registered/enabled, resolves its role, auto-selects a harness by capability fit when none is forced, and threads the resolved role into GitHub-identity/token resolution (taking precedence over <code>story_id</code>-derived role when both are present).</li>
+<li><code>synlynk dispatch --as-agent &lt;id_or_alias&gt;</code> — makes the <code>harness</code> positional argument optional when <code>--as-agent</code> triggers auto-selection.</li>
+</ul>
+<p><strong>Agent → Harness CLI Rename (PR #993)</strong></p>
+<ul>
+<li>Renames <code>synlynk agent add/configure/run/list</code> to <code>synlynk harness add/configure/run/list</code>, resolving the naming collision between execution-backend harnesses and the workspace/role-identity agents introduced above. No deprecation shim — pre-1.0 breaking change, decided via a 4/4 <code>synlynk decide --panel</code> vote (<code>project-docs/decisions/2026-08-16-synlynk-s-cli-has-a-naming-collision-syn.md</code>).</li>
+<li>Frees the <code>agent</code> CLI verb for the onboarding surface above. <code>dispatch &lt;agent&gt;</code>, <code>open &lt;agent&gt;</code>, <code>probe --agent</code>, <code>quota --agent</code> are untouched — those use &quot;agent&quot; in unrelated senses.</li>
+</ul>
+<p><strong>TPM/Session MVP (plan 2026-08-13, PRs #934, #944, #950, #954, #959)</strong></p>
+<ul>
+<li><code>sessions</code> table + <code>synlynk/session.py</code> active-session marker file helpers.</li>
+<li><code>devlog_entries</code> gains <code>session_id</code>/<code>goal_id</code> columns; <code>cmd_devlog_append()</code> auto-inherits the active session when not passed explicitly.</li>
+<li><code>session_id</code> threaded through <code>dispatch_agent()</code> → <code>daemon_jobs</code> → <code>cost_entries</code> (with inheritance from job to cost row), so every dispatch and its cost are attributable to the session that launched it.</li>
+<li><code>synlynk dispatch --session &lt;id&gt;</code> override flag.</li>
+<li><code>synlynk session status</code> surfaces a NUDGE line when <code>daemon_jobs</code> has rows with no <code>session_id</code> — the first concrete TPM-facing signal for unattributed work.</li>
+</ul>
+<h3 class="tag-fixed">Fixed</h3>
+- Devlog identity re-fork prevented by resolving the devlog path through the `member_id` registry instead of a raw filename match (#956).
+- Dispatch stall-timeout extended for review-only jobs, which previously could be killed mid-review before posting (#939).
+- Review-only `synlynk dispatch` jobs no longer get miscounted against implementation-job budgets (#943, closes #937).
+<h3>Housekeeping</h3>
+<ul>
+<li>Worktree/job accumulation (#559) audited and closed without new code: <code>synlynk worktree audit</code>/<code>worktree clean</code> (shipped pre-0.13.1 in PR #676) already covers the core ask; <code>synlynk status</code>'s existing staleness hint covers the proactive-warning ask. Re-verified against this repo's own worktree state during the audit.</li>
+</ul>
+<div class="changelog-version-header"><span class="changelog-version">v0.13.1</span><span class="changelog-date">2026-08-13</span></div>
+<p><strong>Release pitch:</strong> synlynk gets safer to operate on — init/migrate/upgrade can now roll back on failure, project docs are DB-canonical instead of hand-parsed markdown, the GOVERNS event bus gains job-terminal and review-submitted events plus a <code>synlynk events tail</code> command, and a new doctor check catches invalid GitHub tokens before a dispatch wastes a turn discovering them.</p>
+<h3 class="tag-added">Added</h3>
+<p><strong>GOVERNS Event-Contract Extension (design 2026-08-12, plan 2026-08-12, #922)</strong></p>
+<ul>
+<li><code>job_terminal</code> event — emitted synchronously from <code>_reconcile_daemon_jobs()</code> for every daemon job reaching a terminal state, payload <code>{job_id, status, cost_recorded, dispatch_context}</code>.</li>
+<li><code>review_submitted</code> event — emitted from <code>scan_local_events()</code> for each GitHub PR review not already represented, payload <code>{pr_number, reviewer_login, reviewer_role, verdict}</code>, with <code>reviewer_role</code> derived from bot-login patterns.</li>
+<li><code>synlynk events tail [--type TYPE] [--limit N]</code> — read-only CLI command listing recent events newest-first directly from the <code>events</code> table.</li>
+</ul>
+<p><strong>Init/Migrate/Upgrade Rollback Mechanism (design 2026-07-22, plan 2026-07-22)</strong></p>
+<ul>
+<li><code>rollback_checkpoint</code> (Leg 1) wraps <code>init()</code> and <code>cmd_migrate()</code> in a git-checkpoint + untracked-state backup, auto-restoring on any mid-operation failure.</li>
+<li><code>rollback_checkpoint_upgrade</code> (Leg 2) wraps <code>_run_upgrade()</code> in a global install snapshot (pipx reinstall-by-tag / script bin+lib backup), auto-restoring on upgrade failure.</li>
+<li><code>synlynk rollback [--last|&lt;op-id&gt;|--clear]</code> — manual rollback CLI, restoring or discarding the most recent (or a specific) checkpoint manifest.</li>
+<li><code>--dry-run</code> on <code>synlynk init</code> and <code>synlynk upgrade</code> — preview what would be written/changed without touching disk or making network/subprocess calls.</li>
+<li>Failure-injection live selftest coverage for both rollback legs, plus dedicated <code>rollback --last</code>/<code>--clear</code> scenario tests.</li>
+</ul>
+<p><strong>State Engine PR1 — DB-canonical roadmap/memory/costs (design 2026-07-20, plan 2026-07-25)</strong></p>
+<ul>
+<li><code>roadmap.md</code>, <code>memory.md</code>, and <code>costs.md</code> are now write-through generated from <code>state.db</code> (roadmap_arcs/roadmap_phases, memory_entries, cost_entries), with rotation/archive and a warn-and-continue mutation guard for hand-edits.</li>
+<li><code>check_budgets()</code> reads <code>cost_entries</code> directly instead of regex-parsing <code>costs.md</code>.</li>
+<li><code>synlynk migrate</code> run on this repo itself — <code>project-docs/</code> relocated under <code>.synlynk/</code>, <code>.synlynk_migrated</code> sentinel committed.</li>
+</ul>
+<p><strong><code>synlynk doctor</code> TC-6 — GitHub CLI auth check (#928, closes #577)</strong></p>
+<ul>
+<li>New check across all 4 dispatch harnesses (claude, codex, agy, grok) inspects <code>gh auth status</code> output for known invalid-token marker strings even when the command exits 0 — the documented false-green failure mode where a dispatch sandbox has a broken GitHub token but <code>gh</code> doesn't report a nonzero exit.</li>
 </ul>
 <h3 class="tag-fixed">Fixed</h3>
 <ul>
-<li><strong><code>synlynk migrate</code> false-positive <code>MigrationImportError</code> on idempotent re-runs (#276):</strong>
-the loud-fail check treated <code>INSERT OR IGNORE</code> with <code>rowcount == 0</code> as a hard failure
-whenever a non-empty source landed zero <em>new</em> rows. On a project that had already been
-migrated, natural-key collisions (especially <code>roadmap_arcs.version</code> UNIQUE) correctly
-no-op the insert, so re-import / <code>--recover</code> raised
-<code>MigrationImportError: 0 rows inserted … roadmap_arcs (N parsed/attempted, 0 inserted)</code>
-even when every expected row was already present. <code>_migrate_import()</code> now checks natural
-keys before insert (<code>memory_entries.section</code>, <code>roadmap_arcs.version</code>,
-<code>roadmap_phases(arc_version, phase_title)</code>, cost fingerprint, <code>devlog</code> author+date+title,
-<code>todo</code> <code>gh_issue</code> already set) and only fails loud when zero rows were inserted <em>and</em>
-not all attempted rows were already present. Genuine 0-of-N write failures still raise
-with the same error message prefix.</li>
-<li><strong>Dispatch auto-PR branch detection (#280):</strong> <code>_finalize_completed_worktree_job()</code> re-derives the worktree's actual current branch via <code>git branch --show-current</code> instead of trusting the pre-recorded <code>dispatch/&lt;agent&gt;/&lt;job_id&gt;</code> name. When an agent commits on a custom branch (the encouraged human-readable pattern), push and <code>gh pr create --head</code> now target that branch; the job record is updated so <code>synlynk jobs</code> reports the real name. Detached HEAD falls back to the recorded branch without erroring.</li>
-<li><code>synlynk probe</code> now clears <code>HARNESS_VERSION_DRIFT</code> alerts for the specific agent it just re-probed, so the warning disappears once the recorded <code>installed_version</code> matches the live binary again. Fixes #281.</li>
+<li>Bumped <code>linkify-it</code> to 5.0.2 in <code>website/package-lock.json</code>, resolving a high-severity quadratic-complexity DoS (CVE-2026-59887, GHSA-v245-v573-v5vm) in its <code>mailto:</code> schema validator. Dev-only, transitive via <code>markdown-it</code>; fixes GitHub Dependabot alert #6.</li>
+<li><code>synlynk jobs</code> now resolves the repo's real default base branch before <code>gh pr create</code>, avoiding hardcoded <code>--base main</code> failures on repos whose default branch is <code>master</code> or another tracked branch.</li>
+<li><code>synlynk dispatch agy</code> now warns when no write/run permissions are granted, so headless dispatches do not fail silently when approval-gated tool calls are auto-denied.</li>
+<li>Bumped <code>brace-expansion</code> to 1.1.16 in <code>website/package-lock.json</code>, resolving a high-severity exponential-time DoS (CVE-2026-13149, GHSA-3jxr-9vmj-r5cp) in expansion of consecutive non-expanding <code>{}</code> groups. Dev-only, transitive via <code>minimatch</code>; fixes GitHub Dependabot alert #7.</li>
 </ul>
+<h3>Docs</h3>
+<ul>
+<li><code>docs/rca/2026-08-13-dispatched-pr-review-cancellation-714.md</code> (#929, closes #714) — RCA concluding Grok's <code>cancelled</code> stopReason on dispatched PR reviews is harness-side, not a synlynk stall/timeout bug; no code change warranted.</li>
+</ul>
+<div class="changelog-version-header"><span class="changelog-version">v0.13.0</span><span class="changelog-date">2026-07-22</span></div>
+<p><strong>Release pitch:</strong> synlynk learns to explain itself — every command now has a discoverable taxonomy entry with a maturity-tiered reveal, a live selftest exercises all 59 commands end-to-end, cost accounting gets payment-model awareness and a task-boundary fence around actual spend, and dispatch routing gets capability-aware enough to stop sending GitHub-write work to agents that structurally can't do it.</p>
+<h3 class="tag-added">Added</h3>
+<p><strong>Command Taxonomy, Maturity-Tiered Reveal, and Trigger Registry (design #303, PRs #304/#305/#309/#310/#311/#312/#316/#319/#320/#321)</strong></p>
+<ul>
+<li><code>COMMAND_TAXONOMY</code> becomes the single source of truth for all 59 commands — <code>cli.py</code>'s <code>build_parser()</code> extracted standalone (#304), taxonomy command surface restored and hardened (#305), default <code>fenced_commands</code> allowlist (#309).</li>
+<li>Command reference docs now generate directly from <code>COMMAND_TAXONOMY</code> (#316) instead of hand-maintained markdown, closing a recurring drift source.</li>
+<li>FTUE wizard and the <code>synlynk</code> launch picker are now driven by the same taxonomy (#319), so first-run onboarding and the reference docs can never disagree about what a command does or which tier it belongs to.</li>
+<li>Tier-scoped trigger phrases wired into <code>synlynk:start</code>/<code>synlynk:end</code> session fencing (#320).</li>
+<li>Pre-commit hook installed on <code>synlynk init</code> to gate instructions drift between the taxonomy and generated CLAUDE.md/GEMINI.md/AGENTS.md content (#321).</li>
+</ul>
+<p><strong>Task-Boundary Cost Fence (story-615bc8f4, PRs #313/#314/#315/#317)</strong></p>
+<ul>
+<li><code>synlynk exec</code>'s actual-cost print now routes through a dedicated cost fence at the task boundary (#313) rather than being computed ad hoc per call site, closing a class of under/over-reporting bugs where a task's real spend diverged from what <code>costs.md</code> recorded.</li>
+<li>Shipped and marked complete in the roadmap (#314); PM session cost for the execution itself logged per the Cost Capture Protocol (#315, #317).</li>
+</ul>
+<p><strong>Live Command Selftest (PR #328, follow-ups #335/#337)</strong></p>
+<ul>
+<li><code>synlynk selftest</code> — a taxonomy-driven smoke test that exercises all 59 commands, catching command-surface regressions the unit suite doesn't (drift between <code>COMMAND_TAXONOMY</code> and actual CLI behavior, broken flag wiring, silent crashes on real invocation).</li>
+<li>Blog post documenting the design and implementation (#335).</li>
+<li>Follow-up fix: live paid selftest scenarios now rebind <code>DB_PATH</code> to a scratch workspace instead of touching the real project DB (#337, scenario N6).</li>
+</ul>
+<p><strong>Capability Sweep + Industry Taxonomy (PR #367)</strong></p>
+<ul>
+<li><code>synlynk capability sweep</code> — a taxonomy-driven calibration sweep scoring agent capability against NAICS/APQC/SFIA-coded skill axes, seeded from <code>synlynk/capability_baseline.json</code> and reinforced organically as real PRs land, with a configurable <code>$10</code> cost guardrail (<code>capability_sweep.cost_cap_usd</code>) and independent cross-agent verification scoring.</li>
+<li>Legacy free-text <code>discipline</code> / <code>org_domain</code> / <code>industry</code> values are crosswalked to NAICS/APQC/SFIA codes on migration, tagging unmatched values <code>legacy_unmapped</code> rather than dropping them.</li>
+</ul>
+<p><strong>Payment-Model-Aware Cost/Value Accounting — PMA-1 through PMA-6 (PR #374)</strong></p>
+<ul>
+<li>Cost and value accounting now distinguishes payment model (subscription-seat vs. metered/API) so <code>costs.md</code> and budget reporting reflect what was actually spent under each agent's real billing arrangement, instead of a single blended token-rate assumption.</li>
+<li>Manual cost entries gained payment-column population (#402); historical entries backfilled with <code>api_equivalent_usd</code> for cross-model comparison (#388).</li>
+<li>Roadmap and devlog synced for both Capability Sweep (#367) and PMA (#374) landing together (#375).</li>
+</ul>
+<p><strong>Story-ID Auto-Provisioning for Dispatch (PR #407)</strong></p>
+<ul>
+<li><code>dispatch_agent()</code> now auto-provisions a <code>story_id</code> when a dispatched task has none, closing a gap where ad hoc dispatches (not tied to an existing story) fell outside cost/capability tracking.</li>
+</ul>
+<p><strong><code>can_gh_write</code> Capability Routing (issues #423/#426, PRs #427/#432/#438)</strong></p>
+<ul>
+<li><code>AGENT_CAPABILITY_BASELINES</code> gained a <code>can_gh_write</code> field so dispatch routing can structurally avoid sending GitHub-write work (<code>gh pr review</code>/merge) to agents that can't complete it headless (Agy, Codex, local) — previously enforced only by SOP convention (#427, #432 codified the convention first; #438 made it structural).</li>
+<li>New <code>--requires-gh-write</code> dispatch flag and enforcement logic in <code>dispatch_agent()</code>.</li>
+</ul>
+<h3 class="tag-fixed">Fixed</h3>
+<ul>
+<li><strong><code>synlynk watch</code> crash on <code>CYCLES.index(&quot;work&quot;)</code> (issue #421, fixed by #301, released here):</strong> the <code>v0.12.0</code> tag shipped <code>cmd_watch()</code> still looking up a <code>&quot;work&quot;</code> cycle name that had already been renamed out of <code>hud.py</code>'s <code>CYCLES</code> list under the GOVERNS seven-stage vocabulary rollout, raising <code>ValueError: 'work' is not in list</code> on every invocation. The fix (<code>CYCLES.index(&quot;execute&quot;)</code>) merged to <code>main</code> via #301 two days after the <code>v0.12.0</code> tag, but was never shipped in a release until now.</li>
+<li><strong><code>synlynk viz --serve</code> exits immediately, nothing binds the port (issue #421, PR #440, merged as #421):</strong> <code>_start_server()</code> spawned the HTTP server on a <code>daemon=True</code> thread and returned immediately with no blocking call, so the process exited (killing the daemon thread with it) right after printing &quot;Serving at...&quot;. Not a sandbox/forking artifact — reproduced identically in a real terminal. Fix adds <code>_serve_until_stopped()</code>, which blocks the main thread until <code>KeyboardInterrupt</code> and then cleanly shuts the server down.</li>
+<li><code>synlynk migrate</code> false-positive <code>MigrationImportError</code> on idempotent re-runs (#276, #278): natural-key collisions on re-import no longer trip the loud-fail check.</li>
+<li>Dispatch auto-PR branch detection re-derives the worktree's actual current branch instead of trusting the pre-recorded name (#280, #283).</li>
+<li><code>synlynk probe</code> clears <code>HARNESS_VERSION_DRIFT</code> for the specific agent just re-probed (#281, #284).</li>
+<li><code>synlynk agent add &lt;name&gt;</code> retrofits onboarding for a newly available CLI agent already on <code>$PATH</code> (#277, #285), plus lazy daily housekeeping on the first <code>synlynk exec</code> of a new calendar day.</li>
+<li>Token-outlier cost entries now flagged safely instead of silently corrupting averages (#295).</li>
+<li>Stale Cost Visibility / Repo Hygiene SOP text corrected (#290, #296).</li>
+<li>Per-provider model rates with freshness checks across <code>costs</code>, <code>doctor</code>, and <code>sentinel</code> (#289, #297).</li>
+<li>Probe version-token parsing fixed (#294); model version now resolved from agent config files (#287, #292).</li>
+<li><code>agent_quotas</code> now populated from telemetry, plus a new <code>synlynk quota</code> CLI (#291, #293).</li>
+<li>Job summary overwrites guarded against clobbering (#387).</li>
+<li>Dispatch worktrees branch from a fresh <code>origin/main</code> tip instead of a potentially stale local ref (#398, #395).</li>
+<li>Headless permission denials correctly classified, avoiding false positives from echoed source text (#399, #404).</li>
+<li>Agy permission dispatch enabled (#417).</li>
+<li>GitHub issue #379 follow-up: <code>.g</code> file handling fix (#384).</li>
+<li><code>__init__.py</code> modularisation epic marked shipped, closing stale #380 (#401).</li>
+</ul>
+<p>Design specs: <code>docs/superpowers/specs/2026-07-21-command-taxonomy-maturity-reveal-design.md</code>, capability sweep and PMA specs referenced in PRs #367/#374. Roadmap rows synced for Task-Boundary Cost Fence, Command Taxonomy, and Live Command Selftest (#416). State Engine tiered design (single-user/team/enterprise) drafted for a future release (#412) — not shipped in this version.</p>
 <div class="changelog-version-header"><span class="changelog-version">v0.12.0</span><span class="changelog-date">2026-07-15</span></div>
 <p><strong>Release pitch:</strong> the operational backbone gets provably reliable and provably accounted for — dispatched jobs finish their own git steps, a 5th zero-cost local agent joins the fleet, story routing gets real capability+quota+cost scoring with a fleet batch scheduler, and every dollar synlynk reports is now either structurally sourced or visibly flagged as an estimate.</p>
 <h3 class="tag-added">Added</h3>
@@ -136,7 +400,7 @@ with the same error message prefix.</li>
 <h3 class="tag-added">Added</h3>
 <p><strong>Agent Autonomy Bridge (BS-12, PR #119)</strong></p>
 <ul>
-<li><strong><code>synlynk dispatch --grant &lt;perm&gt; --revoke &lt;perm&gt;</code></strong> — per-task permission overrides; role defaults in <code>.synlynk/config.json</code> map 12 roles (pm, review, implement, test, css, infra, etc.) to capability tiers. Resolved set translates to <code>--allowedTools</code> (Claude), <code>--approval-policy</code> (Codex), or a <code>## Permissions</code> context header (Agy).</li>
+<li><strong><code>synlynk dispatch --grant &lt;perm&gt; --revoke &lt;perm&gt;</code></strong> — per-task permission overrides; role defaults in <code>.synlynk/config.json</code> map 12 roles (pm, review, implement, test, css, infra, etc.) to capability tiers. Resolved set translates to <code>--allowedTools</code> (Claude), <code>--ask-for-approval</code> (Codex), or a <code>## Permissions</code> context header (Agy).</li>
 <li><strong><code>synlynk configure agent &lt;name&gt; [--flag k=v] [--env K=V] [--network-dep host:port]</code></strong> — write per-project harness overrides to <code>.agents/&lt;agent&gt;.json</code>; <code>dispatch_agent()</code> merges at call time: baseline → per-project overrides → per-task grant/revoke.</li>
 <li><strong><code>synlynk jobs --stalled</code></strong> — list jobs with <code>HANDOFF_PENDING</code> sentinel (set when a job accumulates STALL_NO_OUTPUT, FLATLINE, or QUOTA_EXHAUSTED). Shows job ID, agent, failure sentinel, elapsed time, and recommended next agent.</li>
 <li><strong><code>synlynk jobs handoff &lt;job_id&gt; [--to &lt;agent&gt;]</code></strong> — transfer a stalled job to a new agent; appends <code>## Handoff Note</code> to the job context file, increments <code>handoff_count</code>, updates <code>previous_agents</code> (JSON array), launches new dispatch with full context, clears <code>HANDOFF_PENDING</code>.</li>

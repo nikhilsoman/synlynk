@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #614 — Dispatch Preflight Capability Gate | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-1">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Jul 31, 2026</span>
+        
+          <span class="blog-post-pr">PR #614</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #614 — Dispatch Preflight Capability Gate</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>Phase 5 (<code>#606</code>) shipped <code>_scan_repo_requirements()</code> as a presence-only discovery primitive — Docker, MCP, and GitHub Actions signals from the repo tree, with no policy attached. Phase 3 (<code>#607</code>) and Phase 4 (<code>#612</code>) landed the remediation audit log and <code>doctor --fix agy</code> path. The remaining integration gap was dispatch-time enforcement: nothing in <code>dispatch_agent()</code> yet combined probe age/status, declared job needs, and repo signals into a single block-or-degrade decision before the subprocess spawned.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>Two hard constraints from the design spec shaped the implementation more than the happy path did:</p>
+<ol>
+<li><strong>#578/#580 are still unmerged.</strong> Literal TC1–5 pass/fail values are not trustworthy. The gate therefore routes every real dispatch through the <strong>no-coverage</strong> branch today via a single <code>_probe_results_trustworthy()</code> function that returns <code>False</code>. Stale and failing branches are implemented and tested, but effectively dead until that fix stack lands and the gate flips.</li>
+<li><strong>#419 is still open.</strong> This PR deliberately does <strong>not</strong> add an <code>UNVERIFIED_CAPABILITY</code> telemetry tag on degrade. Degrade is logged/returned as a decision only; taxonomy for that tag waits on #419.</li>
+</ol>
+<p>Also: declared need is explicit. A generic <code>--requires &lt;capability&gt;</code> flag (repeatable) generalizes the existing <code>--requires-gh-write</code> pattern. Presence of a repo artifact alone can only degrade; hard-block requires an explicit <code>--requires</code> declaration.</p>
+<h2>What This PR Shipped</h2>
+<ul>
+<li><code>_probe_results_trustworthy()</code> in <code>synlynk/dispatch.py</code> — hard-coded <code>False</code> until #578/#580 land.</li>
+<li><code>_dispatch_capability_preflight()</code> called from <code>dispatch_agent()</code> before spawn, implementing the four-way branch:
+<ul>
+<li><strong>stale</strong> → sync re-probe, timeout/fail = block</li>
+<li><strong>failing</strong> → hard block</li>
+<li><strong>no-coverage + required</strong> → hard block with inline remediation (e.g. <code>synlynk doctor --fix agy</code>)</li>
+<li><strong>no-coverage + optional</strong> → degrade (no new telemetry field)</li>
+</ul>
+</li>
+<li>Wires Phase 5's <code>_scan_repo_requirements(cwd)</code> for the presence-vs-declared split.</li>
+<li>CLI: <code>--requires</code> (append) on <code>synlynk dispatch</code>, plumbed through <code>requires=</code> on <code>dispatch_agent()</code>.</li>
+<li>Tests: one per four-way branch, one for presence-vs-declared, one asserting the trust gate forces no-coverage even for a fresh probe.</li>
+</ul>
+<h2>Brainstorm Visuals Used</h2>
+<p>None. Implementation slice of <code>docs/superpowers/plans/2026-07-30-harness-compatibility-capability.md</code> Phase 6.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>Dispatch can now fail loud <em>before</em> a job id is allocated when the operator has declared a capability the gate cannot verify — instead of spawning a process that idles or no-ops. While probes remain untrusted, that loud path is reserved for explicit <code>--requires</code>; everything else degrades with a reason string so operators still see the gap without a false hard-block storm.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>Flip <code>_probe_results_trustworthy()</code> when #578/#580 merge; add <code>UNVERIFIED_CAPABILITY</code> only after #419's taxonomy is known. Until then, the structure is ready and the live path is intentionally conservative: no-coverage for every real dispatch, hard-block only on declared requirements.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

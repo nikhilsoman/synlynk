@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>synlynk | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date"></span>
+        
+      </div>
+      <h1 class="blog-post-title"></h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>118: PR #993 — freeing <code>agent</code> from <code>harness</code></h1>
+<h2>Where we left off</h2>
+<p>PR #880 (post #113) shipped Phase 0 of the Agent-vs-Harness terminology rollout:
+<code>docs/glossary-agent-vs-harness.md</code>, a renamed <code>Role | Harness | Tasks</code> table, and
+wording fixes across <code>CLAUDE.md</code>/<code>README.md</code>/<code>SYNLYNK_GUIDE.md</code>. But Phase 0 was
+docs-only by design — it named the distinction without touching any code. The CLI
+itself still had <code>synlynk agent add/configure/run/list</code> bound to execution-backend
+selection, which is exactly the concept Phase 0's glossary calls <strong>Harness</strong>, not
+<strong>Agent</strong>. Task #97 (Agent-roles-charters Phase 1) needed the real <code>agent</code> verb
+for role-identity onboarding (<code>agent init/list/show/edit/disable</code>) and couldn't
+claim it while the old harness-execution group still held it.</p>
+<h2>What moved the goalpost</h2>
+<p>Nothing strategic shifted — this is the mechanical unblock Phase 0 always implied
+but didn't do. The only real decision was whether a rename this central needed a
+deprecation shim. Pre-1.0, with a small and mostly-internal user base, the answer
+came out of a <code>synlynk decide --panel claude,agy,codex,grok --record</code> vote:
+unanimous 4/4 for a clean break, no shim
+(<code>project-docs/decisions/2026-08-16-synlynk-s-cli-has-a-naming-collision-syn.md</code>).</p>
+<h2>What this PR shipped</h2>
+<ul>
+<li><code>synlynk agent add/configure/run/list</code> → <code>synlynk harness add/configure/run/list</code>
+— the CLI verb group, its <code>dest</code>, and its <code>help_parsers</code> key all moved; the
+underlying <code>cmd_agent_add/configure/run/list</code> Python function names were left
+alone, since only the CLI-facing surface needed to change.</li>
+<li>No deprecation shim. Running the old <code>synlynk agent add ...</code> now fails with
+argparse's standard &quot;invalid choice&quot; error rather than silently routing to the
+new behavior — deliberate, per the spec's §4 breaking-change stance.</li>
+<li>Explicitly left untouched: <code>dispatch &lt;agent&gt;</code>, <code>open &lt;agent&gt;</code>, <code>probe --agent</code>,
+<code>quota --agent</code>, <code>configure agent</code> — all of these use &quot;agent&quot; in senses that
+don't collide (dispatch target, not the harness-execution verb group), so
+renaming them would have been scope creep against the actual naming collision.</li>
+<li>Freed the <code>agent</code> top-level verb for PR #1003 (Agent-roles-charters Phase 1),
+which landed immediately after and claimed it for <code>synlynk agent init/list/show/edit/disable</code>.</li>
+</ul>
+<h2>What this achieved</h2>
+<p>Closes the last blocker on Task #97's CLI surface. The terminology rollout is now
+consistent end-to-end: the glossary defines the split, the docs use the right
+words, and the CLI's own verb namespace no longer contradicts either.</p>
+<h2>The goal at the end of this PR</h2>
+<p><code>agent</code> is free. Phase 1 of Agent-roles-charters (storage + CLI onboarding +
+dispatch integration) ships next, in the same session, using the verb this PR
+unblocked.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

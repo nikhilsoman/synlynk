@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #TBD — Phase 3: Remediation Audit Log | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-2">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Jul 30, 2026</span>
+        
+          <span class="blog-post-pr">PR #TBD</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #TBD — Phase 3: Remediation Audit Log</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>PR #587 corrected the harness-compatibility spec itself, but it also sharpened the operational requirement behind the spec's §2a remediation flow: any future <code>doctor --fix</code> write must leave behind a durable, append-only audit trail. The existing DB-canonical state engine had already solved that class of problem for <code>roadmap.md</code>, <code>memory.md</code>, and <code>costs.md</code>; the missing piece here was a write-only remediation ledger with no pruning behavior and no separate file-based shadow system.</p>
+<h2>Strategic Shifts in This PR (if any)</h2>
+<p>No goalpost move. This phase follows the PR #542 state-engine pattern instead of inventing a new log format or reusing the rolling telemetry file. The only explicit choice was to keep the remediation audit in <code>state.db</code> because the DB path is available in this repo context; the JSON fallback mentioned in the plan remains a contingency, not the primary mechanism.</p>
+<h2>What This PR Shipped</h2>
+<ul>
+<li>A new <code>remediation_actions</code> table in the canonical SQLite schema, with fields for <code>timestamp</code>, <code>agent</code>, <code>target_file</code>, <code>exact_diff</code>, and <code>operator</code>.</li>
+<li>A matching migration path in <code>synlynk/db.py</code> so older DBs get the table on first open.</li>
+<li><code>cmd_remediation_log(...)</code>, an append-only write helper that inserts one audit row per confirmed remediation and never updates or prunes prior entries.</li>
+<li>A regression test that writes 101 entries, verifies the table still contains all 101, and confirms the first and last writes are both preserved. That proves the audit log is not inheriting the 100-entry rolling cap used by <code>.synlynk/telemetry.json</code>.</li>
+</ul>
+<h2>Brainstorm Visuals Used</h2>
+<p>None.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>Phase 4 can now require every <code>--yes</code>-confirmed remediation write to append a durable record before the write completes. That closes a process gap in the remediation flow: operator-confirmed fixes will be auditable without depending on a prunable telemetry trail or an ad hoc markdown note.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>The next goalpost is Phase 4: wire <code>synlynk doctor --fix agy</code> to compute the exact settings diff, show it to the operator, and append one remediation audit row for every confirmed write.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

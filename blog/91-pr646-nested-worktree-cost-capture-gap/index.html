@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #646 — Fix Nested-Worktree Cost-Capture Gap | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-3">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Aug 02, 2026</span>
+        
+          <span class="blog-post-pr">PR #646</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #646 — Fix Nested-Worktree Cost-Capture Gap</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>PR #587 (post #90) closed the loop on harness capability drift and regression classification. However, telemetry collection and cost tracking depend on reliably recording every subagent job's token usage in the central <code>state.db</code> at <code>~/.synlynk/projects/&lt;hash-of-main-repo-root&gt;/state.db</code>. Prior to PR #646, when an agent dispatched a job from within an existing job's git worktree, cost logging suffered from an isolated DB resolution bug.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>Previously, DB path resolution (<code>_resolve_db_path</code>), migration state checking (<code>_is_migrated</code>), and project-docs directory resolution (<code>_synlynk_project_docs_dir</code>) relied on <code>git rev-parse --git-common-dir</code> or local CWD without absolute path formatting. When executing inside a nested git worktree, <code>git rev-parse --git-common-dir</code> could return relative paths or fail to correctly anchor to the main repository root. This caused cost accounting entries (<code>cost_entries</code>) to be written into an isolated, orphaned <code>state.db</code> instance inside the worktree instead of the shared primary repository ledger.</p>
+<p>The strategic shift in this PR introduces <code>_project_root()</code> in <code>synlynk/__init__.py</code> using <code>git rev-parse --path-format=absolute --git-common-dir</code>. By resolving the git common directory with <code>--path-format=absolute</code> and deriving its parent directory (<code>..</code>), all path resolutions (DB path, migration markers, <code>.synlynk/project-docs</code> directory, and migration command paths) are strictly anchored to the shared main repository root across all git worktrees.</p>
+<h2>What This PR Shipped</h2>
+<ul>
+<li><strong>Shared Project Root Resolver</strong> (<code>synlynk/__init__.py</code>): Added <code>_project_root()</code> and <code>_get_project_root()</code> using <code>git rev-parse --path-format=absolute --git-common-dir</code> to locate the absolute main repo root directory, falling back to CWD outside git.</li>
+<li><strong>Centralized DB &amp; Path Resolution</strong> (<code>synlynk/__init__.py</code>): Updated <code>_resolve_db_path()</code>, <code>_is_migrated()</code>, and <code>_synlynk_project_docs_dir()</code> to use <code>_project_root()</code>, guaranteeing all linked git worktrees share the same canonical <code>state.db</code> at <code>~/.synlynk/projects/&lt;key&gt;/state.db</code>.</li>
+<li><strong>Migration Path Anchoring</strong> (<code>synlynk/db.py</code>): Updated <code>cmd_migrate</code> to resolve <code>.synlynk/config.json</code> and <code>.synlynk/.synlynk_migrated</code> against <code>_get_project_root()</code>.</li>
+<li><strong>Worktree Cost Capture Regression Test</strong> (<code>tests/test_cost_ledger.py</code>): Added <code>test_update_costs_uses_shared_state_db_from_linked_worktree</code> which creates a linked git worktree, executes <code>update_costs()</code> from inside the worktree, and verifies that the cost row lands in the shared <code>state.db</code>.</li>
+</ul>
+<h2>Brainstorm Visuals Used</h2>
+<p>None — standard bugfix addressing root-cause path resolution logic.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>By anchoring state DB resolution and migration sentinel checks to the absolute git common parent directory, multi-agent dispatch pipelines operating across multiple concurrent git worktrees maintain 100% telemetry fidelity and shared cost ledger recording.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>With cost capture reliably anchored across all worktree topologies, cost tracking and quota enforcement remain accurate regardless of how deeply nested subagent dispatches are spawned.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

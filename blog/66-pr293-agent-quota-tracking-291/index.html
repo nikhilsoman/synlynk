@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #293 — agent_quotas finally gets real usage (#291) | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-2">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Jul 16, 2026</span>
+        
+          <span class="blog-post-pr">PR #293</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #293 — agent_quotas finally gets real usage (#291)</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>v0.12.0 closed the measurement-and-reliability arc: structured token adapters, a provenance-aware cost ledger, and a 3-stage capability → quota → cost router with a fleet batch scheduler. The quota stage shipped as schema + helpers (<code>agent_quotas</code>, <code>_upsert_agent_quota</code>, <code>_quota_headroom</code>, <code>_quota_status_for_agent</code>) in the #141 base matrix work — but the table stayed empty in production. Stage 2 was a real gate against a signal that was never written. Issue #291 named that gap: decorative plumbing, no CLI, no non-zero <code>used_tokens</code>.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>None to the product goal. One implementation choice locked for this PR: <strong>telemetry proxy first</strong>, not provider API scraping. Most coding CLIs still do not expose a durable usage/limits surface synlynk can poll headlessly. The issue explicitly allowed accumulating from <code>.synlynk/telemetry.json</code> via the existing upsert path. Live provider meters remain a future probe enhancement (already noted as follow-up in the #141 blog post).</p>
+<p>Limits are therefore <strong>config defaults</strong> (overridable at <code>budget.quota_limits</code>), not Anthropic/OpenAI plan meters. The CLI labels that honesty: &quot;source: telemetry proxy + config limits.&quot;</p>
+<h2>What This PR Shipped</h2>
+<ol>
+<li>
+<p><strong><code>refresh_agent_quotas_from_telemetry()</code></strong> in <code>synlynk/quota.py</code></p>
+<ul>
+<li>Reads <code>.synlynk/telemetry.json</code></li>
+<li>Attributes events by <code>agent</code> field or first command token (<code>claude</code> / <code>agy</code> / <code>codex</code> / <code>grok</code> / <code>local</code>; <code>gemini</code> → <code>agy</code>)</li>
+<li>Rolls tokens and request counts into every plan window (<code>5h</code>, <code>hourly</code>, <code>daily</code>, <code>weekly</code>, <code>monthly</code>)</li>
+<li>Upserts via <code>_upsert_agent_quota()</code> with <code>reset_at</code> and both <code>tokens</code> + <code>requests</code> units</li>
+</ul>
+</li>
+<li>
+<p><strong><code>synlynk quota [--agent NAME] [--json]</code></strong></p>
+<ul>
+<li>Refreshes from telemetry, then prints per-agent min headroom and per-window used/limit/reset using <code>_quota_headroom</code> / <code>_read_agent_quota_rows</code> / <code>_quota_status_for_agent</code></li>
+</ul>
+</li>
+<li>
+<p><strong>Wiring so stage 2 sees non-zero data</strong></p>
+<ul>
+<li>After each <code>exec</code> telemetry write</li>
+<li>Once at the start of <code>_best_agent_for_story</code></li>
+<li>Once at the start of fleet <code>_compute_schedule_plan</code></li>
+</ul>
+</li>
+<li>
+<p><strong>Tests</strong> in <code>tests/test_agent_quota_tracking.py</code> — populate-from-telemetry, stage-2 non-degraded after refresh, routing prefers non-exhausted agent after refresh, CLI text/JSON, agent attribution edge cases.</p>
+</li>
+</ol>
+<h2>Brainstorm Visuals Used</h2>
+<p>None — gap fix against already-designed #141 matrix.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>The capability → quota → cost router can finally hard-gate on something other than an empty table or the project-level <code>limit_requests</code> floor. Operators can answer &quot;how much 5h / weekly headroom does claude have in <em>this</em> workspace?&quot; without opening SQLite. The signal is a proxy — but a proxy that updates on every exec is still the difference between a decorative schema and a live control surface.</p>
+<h2>New Goalpost</h2>
+<ul>
+<li>Optional probe path that overwrites proxy rows with harness-native usage when a CLI exposes it</li>
+<li>Surface <code>block_reason='quota'</code> on stories when every candidate is exhausted</li>
+<li>Fleet Scheduler v2 reset-timing bin-packing (already deferred to goal-d38e3c83) can consume real <code>reset_at</code> once production data accrues</li>
+</ul>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

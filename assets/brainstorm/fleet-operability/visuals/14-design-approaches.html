@@ -1,0 +1,36 @@
+<h2>Design approaches — how we package the work</h2>
+<p class="subtitle">Policies are locked. Pick the delivery shape for the design doc + first plan.</p>
+
+<div class="section">
+  <p class="label">Policy snapshot</p>
+  <ul>
+    <li>Supported / Proven (7d) · Core 4 · local out</li>
+    <li>Hard freeze · <code>selftest --matrix</code> · $10/wk live</li>
+    <li>Codex builder-only · FAIL doctor set · ban UNKNOWN · refuse nested state.db</li>
+    <li>Then: GH-write + grants for Core 4 · native go/no-go after first Proven week</li>
+  </ul>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="one-spec-phased" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>One operability spec, phased stories (recommended)</h3>
+      <p>Single design doc: product tiers + matrix runner + doctor/state/completion policy. Implementation plan phases: (1) dry matrix + fail-closed doctor + UNKNOWN/state policy, (2) live matrix $10/wk, (3) GH-write+grants epic (separate plan after phase 2). Clean gate narrative.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="two-specs" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Two specs now</h3>
+      <p>Spec 1: matrix + truth signals. Spec 2: GH-write + grants (design only, build later). More paper upfront; risk designing grants before matrix teaches us.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="matrix-only-thin" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Thin matrix-only spec</h3>
+      <p>Only <code>selftest --matrix</code>. Policy changes as drive-by bullets without design. Fastest; doctor/UNKNOWN/state may stay inconsistent.</p>
+    </div>
+  </div>
+</div>

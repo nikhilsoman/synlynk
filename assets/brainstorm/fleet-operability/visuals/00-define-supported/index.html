@@ -1,0 +1,57 @@
+<h2>Block 0 — What does “supported” mean?</h2>
+<p class="subtitle">This is the gate definition. Everything else (fleet list, doctor severity, matrix gate) hangs off this one sentence.</p>
+
+<div class="section">
+  <p class="label">Context</p>
+  <p>The decide panel was unanimous: full-fleet operability is <strong>not</strong> completely supported today. Before we design the fix, we need a product definition that CI and <code>doctor</code> can enforce — not a vibes-based marketing claim.</p>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>CLI on PATH</h3>
+      <p>A harness is “supported” if its binary is installed and invokable. Lightest bar. Matches today; allows false-greens forever.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Doctor green</h3>
+      <p>Supported = all TC checks pass for that agent (flags, network, SOP, etc.). Stronger than A, but still can be presence-only if TCs stay soft.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Weekly green live matrix</h3>
+      <p>Supported = last live home×target matrix cell passed (exit + cost/files + side-effects). Only true proof. Costs $ and needs a runner.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="d" onclick="toggleSelect(this)">
+    <div class="letter">D</div>
+    <div class="content">
+      <h3>Tiered (recommended)</h3>
+      <p><strong>Supported</strong> = doctor FAIL-closed green + last dry matrix green. <strong>Proven</strong> = plus live matrix within N days. Docs never claim more than the tier.</p>
+    </div>
+  </div>
+</div>
+
+<div class="pros-cons" style="margin-top:1.5rem">
+  <div class="pros">
+    <h4>Why D is recommended</h4>
+    <ul>
+      <li>Matches panel synthesis: stop advertising unproven claims</li>
+      <li>Lets daily CI stay cheap (dry) while live proof is scheduled</li>
+      <li>Gives language for “experimental” (local, codex GH-write)</li>
+    </ul>
+  </div>
+  <div class="cons">
+    <h4>Tradeoffs</h4>
+    <ul>
+      <li>Two words to maintain (Supported vs Proven)</li>
+      <li>Requires matrix runner to exist before “Proven” means anything</li>
+      <li>Still need to define which TCs are FAIL vs warn</li>
+    </ul>
+  </div>
+</div>

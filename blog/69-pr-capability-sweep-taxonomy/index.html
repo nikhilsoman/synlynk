@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Capability Sweep + Industry Taxonomy — Calibrating Agents Against Real Skill Axes | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-1">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Jul 19, 2026</span>
+        
+          <span class="blog-post-pr">PR TBD</span>
+        
+      </div>
+      <h1 class="blog-post-title">Capability Sweep + Industry Taxonomy — Calibrating Agents Against Real Skill Axes</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>After #292's model-identity fix, <code>capability_ratings</code> rows finally key on a real <code>model_at_dispatch</code> instead of collapsing three of four agents into <code>unknown</code>. But the ratings themselves were still scored against ad-hoc, free-text <code>discipline</code> / <code>org_domain</code> / <code>industry</code> labels with no standard vocabulary and no calibration mechanism beyond whatever a single job happened to touch. There was no way to bootstrap a new agent's capability profile before it had done any real work, and no way to reward an agent for shipping a PR that sailed through review clean versus one that took four rounds of changes.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>None to the roadmap — this is the next planned increment of Horizon-0 measurement credibility, decomposed into two independent specs executed in parallel worktrees: capability-sweep-taxonomy (this PR) and payment-model-accounting (in progress, see next post). No API surface was cut; the taxonomy and multiplier are additive to the existing <code>capability_ratings</code> schema.</p>
+<h2>What This PR Shipped</h2>
+<p><strong>Taxonomy layer</strong> (<code>synlynk/taxonomy_standards.py</code>): static NAICS / APQC / SFIA lookup tables replace free-text discipline/org_domain/industry fields. <code>_migrate_db()</code> crosswalks legacy values on migration via <code>LEGACY_DISCIPLINE_CROSSWALK</code> / <code>LEGACY_ORG_DOMAIN_CROSSWALK</code> / <code>LEGACY_INDUSTRY_CROSSWALK</code>; anything with no match is tagged <code>legacy_unmapped=1</code> rather than silently dropped or coerced. <code>_taxonomy_label(axis, code)</code> resolves a code to its human-readable label for display, falling back to the raw code for anything unmapped.</p>
+<p><strong>Calibration sweep</strong> (<code>synlynk/capability_sweep.py</code>, new, 269 lines): <code>synlynk capability sweep</code> seeds each agent's capability ledger from <code>synlynk/capability_baseline.json</code> (shipped with the package) and dispatches SFIA-scoped calibration tasks with independent cross-agent verification scoring, gated by a configurable <code>capability_sweep.cost_cap_usd</code> (default <code>$10</code>). <code>capability_ratings</code> rows seeded this way carry <code>sample_count</code> 3–5 and <code>signal_source='baseline_seed'</code>, so real, organically-earned ratings can outweigh the synthetic baseline as they accumulate — the blending logic treats baseline seeds as a soft prior, not a permanent score.</p>
+<p><strong>PR review-cycle multiplier</strong> (<code>synlynk/pr_multiplier.py</code>, new, 71 lines): <code>synlynk pr check</code> now applies a geometric decay — <code>1.10 × 0.825^(N-1)</code>, floored at <code>0.25x</code> — to a PR's <code>capability_ratings.quality</code> values at merge time, where <code>N = 1 + changes_requested_count</code>. A clean first-pass approval earns a 10% bonus; each round of requested changes erodes the credit. Scoped to the <em>current</em> branch's own PR via <code>gh pr view --json number</code> — not any historical PR — so the multiplier can never misapply one PR's review count to another's ledger rows. GitHub-only in v1 (<code>_is_github_remote()</code> gates it); off GitHub, ratings pass through unmultiplied.</p>
+<p><strong>Distribution &amp; linkage</strong>: <code>synlynk/capability_baseline.json</code> ships in package releases; <code>_maybe_open_worktree_pr()</code> now captures and returns the created/existing PR's number so <code>capability_ratings.pr_number</code> can be set at job-finalization time, giving the multiplier something to join against.</p>
+<p><strong>Tests</strong>: four new test files covering taxonomy crosswalk idempotency (including the <code>legacy_unmapped</code> edge case), the sweep command's cost guardrail, PR-number capture, and the multiplier's decay/floor/clamping behavior with 8 dedicated cases.</p>
+<p><strong>Follow-up caught in final review</strong>: the sweep command's first pass registered its own CLI taxonomy entry dynamically at <code>build_parser()</code>-time via a <code>weakref.finalize</code> hook, to satisfy <code>test_taxonomy_matches_real_cli_surface()</code> without the author noticing the codebase's existing convention — a static dict entry in <code>taxonomy.py</code>, same as all 59 other commands. Fixed as a small follow-up commit; the fix itself broke <code>test_docs_sync.py</code> (the generated <code>docs/reference/commands.md</code> no longer matched), resolved by regenerating that doc via the existing <code>scripts/generate_command_docs.py</code>.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>None — this spec was scoped directly from the Horizon-0 measurement-credibility backlog without a visual-companion session.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>Capability ratings now speak a shared, industry-standard vocabulary (NAICS/APQC/SFIA) instead of free text, making cross-project and cross-agent comparison meaningful. New agents get a defensible starting capability profile instead of a cold-start <code>unknown</code>. And the review-cycle multiplier makes <code>capability_ratings.quality</code> reflect not just &quot;did the code work&quot; but &quot;did it work on the first try&quot; — a real signal for future agent-routing decisions.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>Both plan documents for this Horizon-0 measurement cycle are complete: capability-sweep-taxonomy (this PR) and payment-model-accounting (its sibling branch, converting raw token counts into an honest per-payment-model dollar figure — subscription quota, overage, or granted credit — instead of a uniform pay-as-you-go assumption). The next goalpost is finishing payment-model-accounting and, once both land, revisiting the deferred #353 dependency this sweep's organic-reinforcement blending was partially gated on.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

@@ -47,14 +47,14 @@
         <tr>
           <th class='col-feature'>Feature</th>
           <th class='col-version current'>
-            <div class='version-label'>v0.12.0</div>
+            <div class='version-label'>v0.13.1</div>
             <a href='https://install.synlynk.com' class='btn-install'>↓ install</a>
-            <a href='/changelog/#v0.12' class='changelog-link'>changelog →</a>
+            <a href='/changelog/#v0.13' class='changelog-link'>changelog →</a>
           </th>
+          <th class='col-version'><div class='version-label'>v0.13.0</div><a href='/changelog/#v0.13' class='changelog-link'>changelog →</a></th>
+          <th class='col-version'><div class='version-label'>v0.12.0</div><a href='/changelog/#v0.12' class='changelog-link'>changelog →</a></th>
           <th class='col-version'><div class='version-label'>v0.11.0</div><a href='/changelog/#v0.11' class='changelog-link'>changelog →</a></th>
           <th class='col-version'><div class='version-label'>v0.10.0</div><a href='/changelog/#v0.10' class='changelog-link'>changelog →</a></th>
-          <th class='col-version'><div class='version-label'>v0.9.x</div><a href='/changelog/#v0.9' class='changelog-link'>changelog →</a></th>
-          <th class='col-version'><div class='version-label'>v0.8.x</div><a href='/changelog/#v0.8' class='changelog-link'>changelog →</a></th>
         </tr>
       </thead>
       <tbody>
@@ -82,13 +82,21 @@
           <td><span class='check'>✓</span></td>
           <td><span class='check'>✓</span></td>
           <td><span class='check'>✓</span></td>
-          <td><span class='dash'>—</span></td>
+          <td><span class='check'>✓</span></td>
         </tr>
         <tr class='feature-row layer-view'>
           <td><div class='feature-name'>Migration &amp; state.db</div><div class='feature-desc'>One-shot migration of project-docs/ markdown to SQLite state.db with flat-file write-through</div><a class='feature-blog-link' href='/blog/36-prTBD-bs18-migrate/' target='_blank'>origin post →</a></td>
           <td><span class='check'>✓</span></td>
           <td><span class='check'>✓</span></td>
           <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+        </tr>
+        <tr class='feature-row layer-view'>
+          <td><div class='feature-name'>DB-canonical project docs (State Engine PR1)</div><div class='feature-desc'>roadmap.md, memory.md, and costs.md are generated write-through from state.db with rotation/archive and mutation guards</div><a class='feature-blog-link' href='/blog/80-pr542-state-engine-pr1-db-canonical/' target='_blank'>origin post →</a></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
           <td><span class='dash'>—</span></td>
           <td><span class='dash'>—</span></td>
         </tr>
@@ -116,7 +124,7 @@
           <td><span class='check'>✓</span></td>
           <td><span class='check'>✓</span></td>
           <td><span class='check'>✓</span></td>
-          <td><span class='dash'>—</span></td>
+          <td><span class='check'>✓</span></td>
         </tr>
         <tr class='feature-row layer-view'>
           <td><div class='feature-name'>context-mode flag</div><div class='feature-desc'>--context-mode solo|team|full controls context injection scope</div><a class='feature-blog-link' href='/blog/23-fix-dispatch-context-scoping/' target='_blank'>origin post →</a></td>
@@ -124,13 +132,13 @@
           <td><span class='check'>✓</span></td>
           <td><span class='check'>✓</span></td>
           <td><span class='check'>✓</span></td>
-          <td><span class='dash'>—</span></td>
+          <td><span class='check'>✓</span></td>
         </tr>
         <tr class='feature-row layer-view'>
           <td><div class='feature-name'>Job isolation via worktrees</div><div class='feature-desc'>Dedicated git worktree per job to prevent concurrent execution collisions</div><a class='feature-blog-link' href='/changelog/#v0.12' target='_blank'>origin post →</a></td>
           <td><span class='check'>✓</span></td>
-          <td><span class='dash'>—</span></td>
-          <td><span class='dash'>—</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
           <td><span class='dash'>—</span></td>
           <td><span class='dash'>—</span></td>
         </tr>
@@ -138,22 +146,30 @@
           <td><div class='feature-name'>Agent Autonomy Bridge</div><div class='feature-desc'>Per-task permission overrides, project harness config, and job handoff protocol</div><a class='feature-blog-link' href='/blog/47-pr119-bs12-agent-autonomy-bridge/' target='_blank'>origin post →</a></td>
           <td><span class='check'>✓</span></td>
           <td><span class='check'>✓</span></td>
-          <td><span class='dash'>—</span></td>
-          <td><span class='dash'>—</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
           <td><span class='dash'>—</span></td>
         </tr>
         <tr class='feature-row layer-view'>
           <td><div class='feature-name'>Quota-headroom gates</div><div class='feature-desc'>Routing gate auditing agent_quotas across five sliding time windows</div><a class='feature-blog-link' href='/blog/51-prTBD-141-agent-quotas-routing-gate/' target='_blank'>origin post →</a></td>
           <td><span class='check'>✓</span></td>
-          <td><span class='dash'>—</span></td>
-          <td><span class='dash'>—</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
           <td><span class='dash'>—</span></td>
           <td><span class='dash'>—</span></td>
         </tr>
         <tr class='feature-row layer-view'>
           <td><div class='feature-name'>Capability matrix routing</div><div class='feature-desc'>Three-stage story routing scoring capability, quota headroom, and cost tie-breakers</div><a class='feature-blog-link' href='/blog/50-prTBD-governs-stage-rollout/' target='_blank'>origin post →</a></td>
           <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
           <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+        <tr class='feature-row layer-view'>
+          <td><div class='feature-name'>can_gh_write capability routing</div><div class='feature-desc'>Structural routing preventing GitHub-write work from dispatching to headless agents lacking write permissions</div><a class='feature-blog-link' href='/blog/72-v013-discoverability-and-accounting/' target='_blank'>origin post →</a></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
           <td><span class='dash'>—</span></td>
           <td><span class='dash'>—</span></td>
           <td><span class='dash'>—</span></td>
@@ -190,25 +206,25 @@
           <td><span class='check'>✓</span></td>
           <td><span class='check'>✓</span></td>
           <td><span class='check'>✓</span></td>
-          <td><span class='dash'>—</span></td>
+          <td><span class='check'>✓</span></td>
         </tr>
         <tr class='feature-row layer-view'>
           <td><div class='feature-name'>Live Job Observatory</div><div class='feature-desc'>htop-style watch command and browser UI showcasing active fleet status in real-time</div><a class='feature-blog-link' href='/blog/45-pr117-bs13-observatory/' target='_blank'>origin post →</a></td>
           <td><span class='check'>✓</span></td>
           <td><span class='check'>✓</span></td>
-          <td><span class='dash'>—</span></td>
-          <td><span class='dash'>—</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
           <td><span class='dash'>—</span></td>
         </tr>
 
-        <tr class='group-row layer-view'><td colspan='6'>COORDINATION — RELAY</td></tr>
+        <tr class='group-row layer-view'><td colspan='6'>COORDINATION — RELAY &amp; EVENTS</td></tr>
         <tr class='feature-row layer-view'>
           <td><div class='feature-name'>SSE relay broker</div><div class='feature-desc'>synlynk relay start — live job stream across processes</div><a class='feature-blog-link' href='/blog/24-pr31-v0.9.4-context-dispatch-relay/' target='_blank'>origin post →</a></td>
           <td><span class='check'>✓</span></td>
           <td><span class='check'>✓</span></td>
           <td><span class='check'>✓</span></td>
           <td><span class='check'>✓</span></td>
-          <td><span class='dash'>—</span></td>
+          <td><span class='check'>✓</span></td>
         </tr>
         <tr class='feature-row layer-view'>
           <td><div class='feature-name'>Budget pulse</div><div class='feature-desc'>Per-exec token+cost summary printed after each run</div><a class='feature-blog-link' href='/blog/12-pr42-v0.6.0-job-control/' target='_blank'>origin post →</a></td>
@@ -220,6 +236,30 @@
         </tr>
         <tr class='feature-row layer-view'>
           <td><div class='feature-name'>Measurement Ledger hardening</div><div class='feature-desc'>Provenance-tagged cost logs, custom model rate files, and structured CLI token extraction</div><a class='feature-blog-link' href='/blog/56-prTBD-measurement-ledger-hardening-phase1/' target='_blank'>origin post →</a></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+        <tr class='feature-row layer-view'>
+          <td><div class='feature-name'>Payment-model-aware accounting</div><div class='feature-desc'>Distinguishes subscription seats vs. metered API spend with credit grants and actual-dollar tracking</div><a class='feature-blog-link' href='/blog/72-v013-discoverability-and-accounting/' target='_blank'>origin post →</a></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+        <tr class='feature-row layer-view'>
+          <td><div class='feature-name'>Task-boundary cost fence</div><div class='feature-desc'>Shared allowlist-gated cost reporting at dispatch start and task completion</div><a class='feature-blog-link' href='/blog/72-v013-discoverability-and-accounting/' target='_blank'>origin post →</a></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+        <tr class='feature-row layer-view'>
+          <td><div class='feature-name'>GOVERNS event bus &amp; tail</div><div class='feature-desc'>job_terminal and review_submitted event types on GOVERNS event bus plus synlynk events tail CLI command</div><a class='feature-blog-link' href='/blog/116-v0.13.1-operational-reliability-patch/' target='_blank'>origin post →</a></td>
           <td><span class='check'>✓</span></td>
           <td><span class='dash'>—</span></td>
           <td><span class='dash'>—</span></td>
@@ -237,12 +277,20 @@
           <td><span class='check'>✓</span></td>
         </tr>
         <tr class='feature-row layer-view'>
-          <td><div class='feature-name'>synlynk doctor</div><div class='feature-desc'>Diagnose agent binaries + config contracts</div><a class='feature-blog-link' href='/blog/27-pr69-v0.9.8-synlynk-doctor/' target='_blank'>origin post →</a></td>
-          <td><span class='check'>✓</span></td>
-          <td><span class='check'>✓</span></td>
-          <td><span class='check'>✓</span></td>
+          <td><div class='feature-name'>Init/Migrate/Upgrade Rollback</div><div class='feature-desc'>Automatic mutation checkpointing and auto-restore on failure, synlynk rollback CLI, and --dry-run preview</div><a class='feature-blog-link' href='/blog/116-v0.13.1-operational-reliability-patch/' target='_blank'>origin post →</a></td>
           <td><span class='check'>✓</span></td>
           <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+        <tr class='feature-row layer-view'>
+          <td><div class='feature-name'>synlynk doctor</div><div class='feature-desc'>Diagnose agent binaries + config contracts, including TC-6 false-green GitHub CLI auth token checks across all 4 harnesses</div><a class='feature-blog-link' href='/blog/116-v0.13.1-operational-reliability-patch/' target='_blank'>origin post →</a></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
         </tr>
         <tr class='feature-row layer-view'>
           <td><div class='feature-name'>synlynk join</div><div class='feature-desc'>Scan existing repo + auto-detect teammates</div><a class='feature-blog-link' href='/blog/21-pr-v092-team-onboarding-consensus/' target='_blank'>origin post →</a></td>
@@ -265,45 +313,69 @@
           <td><span class='check'>✓</span></td>
           <td><span class='check'>✓</span></td>
           <td><span class='check'>✓</span></td>
-          <td><span class='dash'>—</span></td>
-          <td><span class='dash'>—</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
         </tr>
         <tr class='feature-row layer-view'>
           <td><div class='feature-name'>pipx packaging</div><div class='feature-desc'>Installable via pipx with CLI upgrade paths aware of distribution channel</div><a class='feature-blog-link' href='/blog/26-pr68-v0.9.8-pipx-packaging/' target='_blank'>origin post →</a></td>
           <td><span class='check'>✓</span></td>
           <td><span class='check'>✓</span></td>
           <td><span class='check'>✓</span></td>
-          <td><span class='dash'>—</span></td>
-          <td><span class='dash'>—</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
         </tr>
         <tr class='feature-row layer-view'>
           <td><div class='feature-name'>synlynk viz</div><div class='feature-desc'>Local browser-based dashboard with Gantt, effort/cost charts, and report cards</div><a class='feature-blog-link' href='/blog/39-prTBD-bs21-vizor/' target='_blank'>origin post →</a></td>
           <td><span class='check'>✓</span></td>
           <td><span class='check'>✓</span></td>
           <td><span class='check'>✓</span></td>
-          <td><span class='dash'>—</span></td>
-          <td><span class='dash'>—</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
         </tr>
         <tr class='feature-row layer-view'>
           <td><div class='feature-name'>Platform status</div><div class='feature-desc'>Infrastructure health mode checking harness compliance, version drift, and budget pulse</div><a class='feature-blog-link' href='/blog/42-pr110-bs16-ecosystem-status/' target='_blank'>origin post →</a></td>
           <td><span class='check'>✓</span></td>
           <td><span class='check'>✓</span></td>
           <td><span class='check'>✓</span></td>
-          <td><span class='dash'>—</span></td>
-          <td><span class='dash'>—</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
         </tr>
         <tr class='feature-row layer-view'>
           <td><div class='feature-name'>synlynk release</div><div class='feature-desc'>Automated release utility to bump versions, compile changelogs, and stub blog posts</div><a class='feature-blog-link' href='/blog/38-pr97-v0.10.1-release-command/' target='_blank'>origin post →</a></td>
           <td><span class='check'>✓</span></td>
           <td><span class='check'>✓</span></td>
           <td><span class='check'>✓</span></td>
-          <td><span class='dash'>—</span></td>
-          <td><span class='dash'>—</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
         </tr>
         <tr class='feature-row layer-view'>
           <td><div class='feature-name'>Architect Map &amp; Goals</div><div class='feature-desc'>Force-directed repo graph, side drawer details, and story/goal rollups in HUD</div><a class='feature-blog-link' href='/blog/53-pr167-vizor-architect-map-v2/' target='_blank'>origin post →</a></td>
           <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
           <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+        <tr class='feature-row layer-view'>
+          <td><div class='feature-name'>Command Taxonomy single source</div><div class='feature-desc'>Unified taxonomy for 59 commands driving FTUE wizard, auto-generated docs, and session triggers</div><a class='feature-blog-link' href='/blog/72-v013-discoverability-and-accounting/' target='_blank'>origin post →</a></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+        <tr class='feature-row layer-view'>
+          <td><div class='feature-name'>Live Command Selftest</div><div class='feature-desc'>Taxonomy-driven synlynk selftest verifying all 59 commands in a real workspace</div><a class='feature-blog-link' href='/blog/72-v013-discoverability-and-accounting/' target='_blank'>origin post →</a></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+        <tr class='feature-row layer-view'>
+          <td><div class='feature-name'>Capability Sweep &amp; Calibration</div><div class='feature-desc'>NAICS/APQC/SFIA-coded calibration scoring with $10 cost guardrail and cross-agent verification</div><a class='feature-blog-link' href='/blog/72-v013-discoverability-and-accounting/' target='_blank'>origin post →</a></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
           <td><span class='dash'>—</span></td>
           <td><span class='dash'>—</span></td>
           <td><span class='dash'>—</span></td>
@@ -320,12 +392,20 @@
           <td><span class='check'>✓</span></td>
         </tr>
         <tr class='feature-row user-view'>
-          <td><div class='feature-name'>synlynk doctor</div><div class='feature-desc'>Diagnose agent binaries + config contracts</div><a class='feature-blog-link' href='/blog/27-pr69-v0.9.8-synlynk-doctor/' target='_blank'>origin post →</a></td>
-          <td><span class='check'>✓</span></td>
-          <td><span class='check'>✓</span></td>
-          <td><span class='check'>✓</span></td>
+          <td><div class='feature-name'>Init/Migrate/Upgrade Rollback</div><div class='feature-desc'>Automatic mutation checkpointing and auto-restore on failure, synlynk rollback CLI, and --dry-run preview</div><a class='feature-blog-link' href='/blog/116-v0.13.1-operational-reliability-patch/' target='_blank'>origin post →</a></td>
           <td><span class='check'>✓</span></td>
           <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+        <tr class='feature-row user-view'>
+          <td><div class='feature-name'>synlynk doctor</div><div class='feature-desc'>Diagnose agent binaries + config contracts, including TC-6 false-green GitHub CLI auth token checks across all 4 harnesses</div><a class='feature-blog-link' href='/blog/116-v0.13.1-operational-reliability-patch/' target='_blank'>origin post →</a></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
         </tr>
         <tr class='feature-row user-view'>
           <td><div class='feature-name'>synlynk join</div><div class='feature-desc'>Scan existing repo + auto-detect teammates</div><a class='feature-blog-link' href='/blog/21-pr-v092-team-onboarding-consensus/' target='_blank'>origin post →</a></td>
@@ -340,14 +420,22 @@
           <td><span class='check'>✓</span></td>
           <td><span class='check'>✓</span></td>
           <td><span class='check'>✓</span></td>
-          <td><span class='dash'>—</span></td>
-          <td><span class='dash'>—</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
         </tr>
         <tr class='feature-row user-view'>
           <td><div class='feature-name'>Migration &amp; state.db</div><div class='feature-desc'>One-shot migration of project-docs/ markdown to SQLite state.db with flat-file write-through</div><a class='feature-blog-link' href='/blog/36-prTBD-bs18-migrate/' target='_blank'>origin post →</a></td>
           <td><span class='check'>✓</span></td>
           <td><span class='check'>✓</span></td>
           <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+        </tr>
+        <tr class='feature-row user-view'>
+          <td><div class='feature-name'>DB-canonical project docs (State Engine PR1)</div><div class='feature-desc'>roadmap.md, memory.md, and costs.md are generated write-through from state.db with rotation/archive and mutation guards</div><a class='feature-blog-link' href='/blog/80-pr542-state-engine-pr1-db-canonical/' target='_blank'>origin post →</a></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
           <td><span class='dash'>—</span></td>
           <td><span class='dash'>—</span></td>
         </tr>
@@ -356,6 +444,22 @@
           <td><span class='check'>✓</span></td>
           <td><span class='check'>✓</span></td>
           <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+        </tr>
+        <tr class='feature-row user-view'>
+          <td><div class='feature-name'>Command Taxonomy single source</div><div class='feature-desc'>Unified taxonomy for 59 commands driving FTUE wizard, auto-generated docs, and session triggers</div><a class='feature-blog-link' href='/blog/72-v013-discoverability-and-accounting/' target='_blank'>origin post →</a></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+        <tr class='feature-row user-view'>
+          <td><div class='feature-name'>Live Command Selftest</div><div class='feature-desc'>Taxonomy-driven synlynk selftest verifying all 59 commands in a real workspace</div><a class='feature-blog-link' href='/blog/72-v013-discoverability-and-accounting/' target='_blank'>origin post →</a></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
           <td><span class='dash'>—</span></td>
           <td><span class='dash'>—</span></td>
         </tr>
@@ -383,7 +487,7 @@
           <td><span class='check'>✓</span></td>
           <td><span class='check'>✓</span></td>
           <td><span class='check'>✓</span></td>
-          <td><span class='dash'>—</span></td>
+          <td><span class='check'>✓</span></td>
         </tr>
         <tr class='feature-row user-view'>
           <td><div class='feature-name'>Background dispatch</div><div class='feature-desc'>Spawns agent CLIs as background jobs with PID tracking</div><a class='feature-blog-link' href='/blog/11-pr39-v0.4.0-hybrid-workgroup-bootstrap/' target='_blank'>origin post →</a></td>
@@ -407,7 +511,7 @@
           <td><span class='check'>✓</span></td>
           <td><span class='check'>✓</span></td>
           <td><span class='check'>✓</span></td>
-          <td><span class='dash'>—</span></td>
+          <td><span class='check'>✓</span></td>
         </tr>
         <tr class='feature-row user-view'>
           <td><div class='feature-name'>context-mode flag</div><div class='feature-desc'>--context-mode solo|team|full controls context injection scope</div><a class='feature-blog-link' href='/blog/23-fix-dispatch-context-scoping/' target='_blank'>origin post →</a></td>
@@ -415,13 +519,13 @@
           <td><span class='check'>✓</span></td>
           <td><span class='check'>✓</span></td>
           <td><span class='check'>✓</span></td>
-          <td><span class='dash'>—</span></td>
+          <td><span class='check'>✓</span></td>
         </tr>
         <tr class='feature-row user-view'>
           <td><div class='feature-name'>Job isolation via worktrees</div><div class='feature-desc'>Dedicated git worktree per job to prevent concurrent execution collisions</div><a class='feature-blog-link' href='/changelog/#v0.12' target='_blank'>origin post →</a></td>
           <td><span class='check'>✓</span></td>
-          <td><span class='dash'>—</span></td>
-          <td><span class='dash'>—</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
           <td><span class='dash'>—</span></td>
           <td><span class='dash'>—</span></td>
         </tr>
@@ -429,22 +533,30 @@
           <td><div class='feature-name'>Agent Autonomy Bridge</div><div class='feature-desc'>Per-task permission overrides, project harness config, and job handoff protocol</div><a class='feature-blog-link' href='/blog/47-pr119-bs12-agent-autonomy-bridge/' target='_blank'>origin post →</a></td>
           <td><span class='check'>✓</span></td>
           <td><span class='check'>✓</span></td>
-          <td><span class='dash'>—</span></td>
-          <td><span class='dash'>—</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
           <td><span class='dash'>—</span></td>
         </tr>
         <tr class='feature-row user-view'>
           <td><div class='feature-name'>Quota-headroom gates</div><div class='feature-desc'>Routing gate auditing agent_quotas across five sliding time windows</div><a class='feature-blog-link' href='/blog/51-prTBD-141-agent-quotas-routing-gate/' target='_blank'>origin post →</a></td>
           <td><span class='check'>✓</span></td>
-          <td><span class='dash'>—</span></td>
-          <td><span class='dash'>—</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
           <td><span class='dash'>—</span></td>
           <td><span class='dash'>—</span></td>
         </tr>
         <tr class='feature-row user-view'>
           <td><div class='feature-name'>Capability matrix routing</div><div class='feature-desc'>Three-stage story routing scoring capability, quota headroom, and cost tie-breakers</div><a class='feature-blog-link' href='/blog/50-prTBD-governs-stage-rollout/' target='_blank'>origin post →</a></td>
           <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
           <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+        <tr class='feature-row user-view'>
+          <td><div class='feature-name'>can_gh_write capability routing</div><div class='feature-desc'>Structural routing preventing GitHub-write work from dispatching to headless agents lacking write permissions</div><a class='feature-blog-link' href='/blog/72-v013-discoverability-and-accounting/' target='_blank'>origin post →</a></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
           <td><span class='dash'>—</span></td>
           <td><span class='dash'>—</span></td>
           <td><span class='dash'>—</span></td>
@@ -481,29 +593,29 @@
           <td><span class='check'>✓</span></td>
           <td><span class='check'>✓</span></td>
           <td><span class='check'>✓</span></td>
-          <td><span class='dash'>—</span></td>
+          <td><span class='check'>✓</span></td>
         </tr>
         <tr class='feature-row user-view'>
           <td><div class='feature-name'>synlynk viz</div><div class='feature-desc'>Local browser-based dashboard with Gantt, effort/cost charts, and report cards</div><a class='feature-blog-link' href='/blog/39-prTBD-bs21-vizor/' target='_blank'>origin post →</a></td>
           <td><span class='check'>✓</span></td>
           <td><span class='check'>✓</span></td>
           <td><span class='check'>✓</span></td>
-          <td><span class='dash'>—</span></td>
-          <td><span class='dash'>—</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
         </tr>
         <tr class='feature-row user-view'>
           <td><div class='feature-name'>Platform status</div><div class='feature-desc'>Infrastructure health mode checking harness compliance, version drift, and budget pulse</div><a class='feature-blog-link' href='/blog/42-pr110-bs16-ecosystem-status/' target='_blank'>origin post →</a></td>
           <td><span class='check'>✓</span></td>
           <td><span class='check'>✓</span></td>
           <td><span class='check'>✓</span></td>
-          <td><span class='dash'>—</span></td>
-          <td><span class='dash'>—</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
         </tr>
         <tr class='feature-row user-view'>
           <td><div class='feature-name'>Architect Map &amp; Goals</div><div class='feature-desc'>Force-directed repo graph, side drawer details, and story/goal rollups in HUD</div><a class='feature-blog-link' href='/blog/53-pr167-vizor-architect-map-v2/' target='_blank'>origin post →</a></td>
           <td><span class='check'>✓</span></td>
-          <td><span class='dash'>—</span></td>
-          <td><span class='dash'>—</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
           <td><span class='dash'>—</span></td>
           <td><span class='dash'>—</span></td>
         </tr>
@@ -511,8 +623,8 @@
           <td><div class='feature-name'>Live Job Observatory</div><div class='feature-desc'>htop-style watch command and browser UI showcasing active fleet status in real-time</div><a class='feature-blog-link' href='/blog/45-pr117-bs13-observatory/' target='_blank'>origin post →</a></td>
           <td><span class='check'>✓</span></td>
           <td><span class='check'>✓</span></td>
-          <td><span class='dash'>—</span></td>
-          <td><span class='dash'>—</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
           <td><span class='dash'>—</span></td>
         </tr>
 
@@ -523,6 +635,14 @@
           <td><span class='check'>✓</span></td>
           <td><span class='check'>✓</span></td>
           <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+        </tr>
+        <tr class='feature-row user-view'>
+          <td><div class='feature-name'>GOVERNS event bus &amp; tail</div><div class='feature-desc'>job_terminal and review_submitted event types on GOVERNS event bus plus synlynk events tail CLI command</div><a class='feature-blog-link' href='/blog/116-v0.13.1-operational-reliability-patch/' target='_blank'>origin post →</a></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
           <td><span class='dash'>—</span></td>
         </tr>
         <tr class='feature-row user-view'>
@@ -544,7 +664,31 @@
         <tr class='feature-row user-view'>
           <td><div class='feature-name'>Measurement Ledger hardening</div><div class='feature-desc'>Provenance-tagged cost logs, custom model rate files, and structured CLI token extraction</div><a class='feature-blog-link' href='/blog/56-prTBD-measurement-ledger-hardening-phase1/' target='_blank'>origin post →</a></td>
           <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
           <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+        <tr class='feature-row user-view'>
+          <td><div class='feature-name'>Payment-model-aware accounting</div><div class='feature-desc'>Distinguishes subscription seats vs. metered API spend with credit grants and actual-dollar tracking</div><a class='feature-blog-link' href='/blog/72-v013-discoverability-and-accounting/' target='_blank'>origin post →</a></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+        <tr class='feature-row user-view'>
+          <td><div class='feature-name'>Task-boundary cost fence</div><div class='feature-desc'>Shared allowlist-gated cost reporting at dispatch start and task completion</div><a class='feature-blog-link' href='/blog/72-v013-discoverability-and-accounting/' target='_blank'>origin post →</a></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+          <td><span class='dash'>—</span></td>
+        </tr>
+        <tr class='feature-row user-view'>
+          <td><div class='feature-name'>Capability Sweep &amp; Calibration</div><div class='feature-desc'>NAICS/APQC/SFIA-coded calibration scoring with $10 cost guardrail and cross-agent verification</div><a class='feature-blog-link' href='/blog/72-v013-discoverability-and-accounting/' target='_blank'>origin post →</a></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
           <td><span class='dash'>—</span></td>
           <td><span class='dash'>—</span></td>
           <td><span class='dash'>—</span></td>
@@ -554,8 +698,8 @@
           <td><span class='check'>✓</span></td>
           <td><span class='check'>✓</span></td>
           <td><span class='check'>✓</span></td>
-          <td><span class='dash'>—</span></td>
-          <td><span class='dash'>—</span></td>
+          <td><span class='check'>✓</span></td>
+          <td><span class='check'>✓</span></td>
         </tr>
       </tbody>
     </table>

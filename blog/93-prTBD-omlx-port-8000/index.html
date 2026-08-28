@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>8080 vs. 8000 — When the Design Doc and the Actual Binary Disagree | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-1">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Aug 02, 2026</span>
+        
+          <span class="blog-post-pr">PR TBD</span>
+        
+      </div>
+      <h1 class="blog-post-title">8080 vs. 8000 — When the Design Doc and the Actual Binary Disagree</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>PR #657 (post #92) closed the last known gap in the Local agent's onboarding surface: <code>synlynk local doctor</code> now checks for Aider on <code>PATH</code>, not just oMLX reachability and the model roster. That left &quot;finish the rollout&quot; complete on the code side, with only two operational steps remaining before the 5th agent was actually usable on this machine: install Aider, and bring up <code>omlx serve</code>.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>Walking through those two remaining operational steps surfaced a second gap — smaller than #657's, but real. Aider was already installed (<code>~/.local/bin/aider</code>, 0.86.2, via the official installer script, confirmed live). oMLX, once started, came up on port <strong>8000</strong> — its actual default — not port 8080, which is what <code>.agents/local.json</code>, <code>synlynk/local_agent.py</code>'s fallback config, and <code>synlynk/_constants.py</code>'s preflight <code>required_endpoints</code> check all hardcoded. The design spec had apparently carried this literal forward without ever running the real binary against it. No architecture changed; the fix is a value correction, not a design revision, so no spec/plan backfill was warranted this time (unlike #657, which touched a genuine behavioral gap in a shipped function).</p>
+<h2>What This PR Shipped</h2>
+<p>Two commits: the config fix directly (a JSON literal, not source code — outside the implementer/PM split), and the two source-code literals dispatched to Codex per the locked role split.</p>
+<ul>
+<li><strong><code>.agents/local.json</code></strong>: <code>endpoint</code> corrected from <code>http://127.0.0.1:8080</code> to <code>http://127.0.0.1:8000</code>.</li>
+<li><strong><code>synlynk/local_agent.py</code></strong>: <code>_DEFAULT_LOCAL_CONFIG[&quot;endpoint&quot;]</code> corrected to match.</li>
+<li><strong><code>synlynk/_constants.py</code></strong>: <code>AGENT_CAPABILITY_BASELINES[&quot;local&quot;][&quot;network_deps&quot;][&quot;required_endpoints&quot;]</code> corrected to <code>[&quot;127.0.0.1:8000&quot;]</code> — this is the value doctor's preflight reachability check actually probes.</li>
+</ul>
+<p>Verified via direct worktree diff (exactly the two intended literals, nothing else touched) and a full local test-suite run before merge, not from job-status summary alone: 1564 passed, 2 skipped. No test fixtures needed changing — every test that hardcodes <code>8080</code> does so as standalone mock config data, not an assertion against the real default.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>None — a two-line literal correction across three files.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p><code>synlynk local doctor</code>'s reachability check now probes the port oMLX actually binds to, closing the gap between &quot;doctor says healthy&quot; and &quot;oMLX is actually reachable&quot; that #657 closed for Aider. Between #657 and this PR, every doctor claim about the Local agent's onboarding state is now backed by a real, verified check against the real binaries — not an assumption baked into the original design spec.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>The Local agent rollout's operational checklist is now fully clear: Aider installed, oMLX port corrected, model download still pending (<code>ornith-1.0-9b</code> / <code>mlx-community/Ornith-1.0-9B</code>, the pinned default). Next up: the herdr-integration sub-project's brainstorm, and separately, the still-open fleet-parity reliability cluster spec (<code>docs/superpowers/specs/2026-08-02-fleet-parity-reliability-cluster-design.md</code>) awaiting user review before its implementation plan can be written.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

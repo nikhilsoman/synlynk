@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>synlynk | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date"></span>
+        
+      </div>
+      <h1 class="blog-post-title"></h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>101. PR #853 — Watching Synlynk @Work, the 4th docs.njk document</h1>
+<h2>Goal at the end of the previous PR</h2>
+<p>PR #852 closed out the #846/#847 bugfix cycle: the TUI's approve/kill keybindings existed but weren't wired up, and the Slack notifier's event filter matched nothing due to three divergent naming schemes plus a wrong hardcoded port. Both were fixed, independently verified, and merged. Issue #848 — the &quot;Watching synlynk&quot; onboarding guide that surfaced those two bugs in the first place — was unblocked but explicitly not started, per its own dependency framing (&quot;do not write the final guide until both are resolved&quot;).</p>
+<h2>What moved the goalpost this PR</h2>
+<p>The user asked to kick off #848 as a real, publishable document rather than internal reference material: a 4th card on the <code>synlynk.com/docs</code> page, sitting alongside the Quick Start Guide, Command Reference, and The Manual. Two things had to be established before any writing could start:</p>
+<ol>
+<li><strong>What &quot;rich visuals/screenshots&quot; means for this project.</strong> A grep across all three existing docs turned up zero <code>&lt;img&gt;</code> tags — every &quot;visual&quot; in the existing series is a hand-coded CSS/HTML mockup: fake terminal windows with syntax-colored spans, fake browser chrome, fake UI panels. Rather than assume, this was raised as an explicit clarifying question; the user confirmed CSS mockups only, matching the existing style exactly.</li>
+<li><strong>How to get from HTML to a published PDF.</strong> All three existing docs are self-contained, print-styled A4 HTML files with a matching <code>.pdf</code> committed alongside them — but there's no PDF-generation tooling anywhere in the repo (no wkhtmltopdf, no weasyprint, no puppeteer script). The three existing PDFs are static, produced out-of-band. This meant PDF rendering had to be a manual &quot;deploy&quot; step done directly, not something delegated to the content-writing dispatch.</li>
+</ol>
+<h2>What this PR shipped, technically</h2>
+<p>Content-writing was dispatched to Agy (<code>job-94bd0c6b</code>, $1.40, 126s) with a fully detailed, code-grounded task spec — not &quot;write a guide,&quot; but the exact keybindings from <code>synlynk/tui.py</code>, the exact port (<code>8721</code>, from <code>synlynk/viz.py</code>'s <code>DEFAULT_PORT</code>) and CLI flags for Vizor, and the corrected Slack event names (<code>dispatch</code>/<code>approve_pr</code>/<code>kill_job</code>) and one-way/read-only nature from <code>synlynk/notifiers/slack.py</code>. The task spec also mapped specific content to specific callout classes (<code>.c-new</code> for the TUI approve/kill keybindings as a recently-shipped capability, <code>.c-tip</code> for the uxcore-shared-backend observation, <code>.c-info</code> for &quot;bring your own Slack webhook,&quot; <code>.c-warn</code> for the Slack notifier's read-only limitation) so the finished doc would use the existing design language correctly rather than reinvent it.</p>
+<p>Agy delivered <code>docs/synlynk-watching-at-work-guide.html</code> (1224 lines, 9 pages) and the 4th <code>.doc-card</code> in <code>website/src/docs.njk</code> (🛰️ thumb, matching copy tone). Review found one real bug — three <code>&lt;td&gt;</code> elements used inside a bare <code>&lt;ul&gt;</code> with no table, in the Slack event-types list — fixed directly (<code>&lt;li&gt;</code>, matching the surrounding list markup) rather than re-dispatched, since it was a single 3-line HTML correction. Everything else held up: zero <code>&lt;img&gt;</code> tags, all five callout classes used correctly, port <code>8721</code> correct throughout with no stray <code>8420</code>, keybindings and Slack event names verified against the current source.</p>
+<p>With content and markup verified, the remaining two deliverables were handled directly as &quot;deploy&quot; actions per the PM/implementer role split (dispatch agents write content and code; Claude packages and ships):</p>
+<ul>
+<li><strong>Version placeholder</strong>: the doc shipped with a <code>vNEXT</code> placeholder by design (per the dispatch task's own instruction), to be filled in before merge. <code>synlynk/_constants.py</code> gives the current shipped version as <code>v0.13.0</code>; all four occurrences (title, maintenance-comment header, cover page, footer) were updated via <code>sed</code>.</li>
+<li><strong>PDF rendering</strong>: with no in-repo tooling, rendered via headless Chrome (<code>google-chrome --headless --print-to-pdf</code>) against a local <code>python3 -m http.server</code> serving the docs directory — Chrome's <code>file://</code> handling inside the browser-automation tool was blocked, so a local HTTP server was the reliable path. Output: 9 pages (matching the target page count from the other docs), 1.14MB (in line with the 0.8–1.8MB range of the three existing PDFs). Verified visually by rendering the cover page and the TUI keybindings page to PNG and inspecting them directly — both matched the design system and had accurate content, including a terminal mockup showing the exact <code>[1]Fleet [2]Jobs [3]Costs [4]Review  [q]uit  [a]pprove [k]ill</code> hint string from the shipped <code>tui.py</code>.</li>
+</ul>
+<p>The PR itself (#853) was originally auto-opened by the dispatch finalizer with a generic title; its title and body were rewritten to describe the actual shipped work and include <code>Closes #848</code> for GitHub auto-close.</p>
+<h2>Brainstorm visuals</h2>
+<p>None used — this was a content and packaging task against an already-established design system (the three existing docs), not new visual design surface.</p>
+<h2>What this achieved toward the long-arc goal</h2>
+<p>The <code>synlynk.com/docs</code> page now documents all three of UX 1.0's observability surfaces — TUI, Vizor, Slack — in the same polished, publishable form as the rest of the manual. More importantly, the process that produced it (tracing real keybindings and event names against shipped code, rather than describing intended behavior) is the same process that caught #846 and #847 in the first place. This PR is the payoff of that earlier bug-hunting: the guide it produces is accurate on day one because the two things it would otherwise have had to caveat are already fixed.</p>
+<h2>New goalpost</h2>
+<p>With #848 shipped, the original &quot;Watching synlynk&quot; documentation thread is closed. No specific next step was assigned by this PR — the next priorities under discussion are the already-spec'd-and-planned GOVERNS-lifecycle + workspace-agent pilot (<code>2026-08-08-governs-lifecycle-workspace-agent-pilot.md</code>), the still-open UX-1.0 field-trial-readiness thread, and a recurring cluster of job-status/cost-capture truthfulness bugs (#701, #579, #752, #740, #787) worth batching into one investigation rather than fixing piecemeal.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

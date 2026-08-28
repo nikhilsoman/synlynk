@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>synlynk | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date"></span>
+        
+      </div>
+      <h1 class="blog-post-title"></h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>119: v0.14.0 — truth in the pipe, identity for the agents</h1>
+<h2>Where we left off</h2>
+<p>v0.13.1 (post #116) closed by deliberately <em>not</em> naming a milestone around two
+half-finished features — Agent vs Harness terminology (Phase 0 only) and
+Quota-Aware Dispatch Reservation (no consumer yet) — and instead shipped what was
+actually load-bearing: GOVERNS event-contract extensions and the
+init/migrate/upgrade rollback mechanism. That left two real gaps on the table,
+named explicitly in <code>docs/strategy/2026-08-15-two-imperatives-roadmap.md</code>:
+<strong>execution autonomy</strong> (can Agy/Grok/Codex be trusted with more of the loop
+without Claude babysitting every write?) and <strong>workspace context accuracy</strong> (does
+tracked state — <code>state.db</code>, <code>project-docs/*</code>, memory — stay honest without silent
+drift?). Job-truth/gh-write reliability (#701) was called out specifically as a
+<em>recurring</em> failure — fixed once, recurred as #935 — meaning it had to be closed
+before stacking more autonomy on top of it made any sense.</p>
+<h2>What moved the goalpost</h2>
+<p>Nothing rescoped mid-flight this time. The two imperatives' own dependency
+ordering held: job-truth/gh-write consolidation shipped first (unreliable
+execution floor fixed before building on it), then the workspace-context-
+governance vertical slice (which designed the agent artifact storage that
+Agent-roles-charters Phase 1 needed), then Phase 1 itself. The one genuine
+mid-stream decision was cadence, not scope: rather than accumulating everything
+into one eventual <code>v0.14.0</code>, named releases now cut per completed 3+-PR cluster —
+literally the Named Release Policy's own existing trigger, just applied more
+deliberately than before.</p>
+<h2>What this PR shipped</h2>
+<p><strong>Release pitch:</strong> the execution floor gets a truth guarantee — every
+GitHub-write dispatch now has its claimed outcome independently verified against
+live GitHub state instead of trusted at face value — and workspace agents get a
+real identity: a storage-backed charter, a <code>synlynk agent init/list/show/edit/disable</code> onboarding surface, and dispatch integration that
+resolves role and harness from that identity automatically.</p>
+<ul>
+<li><strong>GOVERNS job-truth/gh-write consolidation</strong> (#701, closes #331/#579/#935) —
+<code>gh_write_verified()</code> queries live GitHub state through the orchestrator's own
+identity (never the sandboxed job's) and is now consulted on every code path
+that decides a <code>--requires-gh-write</code> job's terminal status, with a regression
+guard (<code>tests/test_gh_write_guard.py</code>) locking that in. This is the fix for the
+exact silent-failure pattern this session hit twice more on PR #1006 and #1010's
+own reviews — a dispatched job reporting <code>exit 0</code> after its <code>stopReason</code> was
+actually <code>cancelled</code> right before the <code>gh pr review</code> call landed.</li>
+<li><strong>Workspace-scoped agent artifact storage</strong> (gh#936) — a real <code>workspace_id</code>,
+an <code>agent_id</code> registry mirroring the existing <code>member_id</code> pattern, and
+provenance-chained <code>charter.md</code>/<code>memory/</code>/<code>statements-of-record/</code> storage with
+conflict detection on stale-parent revisions.</li>
+<li><strong>Agent-roles-charters Phase 1</strong> — <code>synlynk agent init/list/show/edit/disable</code>
+as the onboarding surface, <code>dispatch_agent(agent_id=...)</code> resolving role and
+auto-selecting a harness by capability fit, and <code>synlynk dispatch --as-agent</code>.</li>
+<li><strong>Agent → Harness rename</strong> (#993) — freed the <code>agent</code> verb for the surface
+above (see post #118).</li>
+<li><strong>TPM/session MVP</strong> — a <code>sessions</code> table, <code>session_id</code> threaded through
+<code>dispatch_agent() → daemon_jobs → cost_entries</code>, and a NUDGE line in <code>synlynk session status</code> for unattributed dispatches — the first concrete signal a
+future TPM role can act on.</li>
+<li><strong>#559 (worktree/job accumulation)</strong> closed without new code: <code>synlynk worktree audit</code>/<code>worktree clean</code>, shipped pre-0.13.1, already covered it.</li>
+</ul>
+<p>Terminology Phase 0 and Quota-Aware Dispatch Reservation stay in <code>[Unreleased]</code> —
+Phase 0 gained Phase 1 this release but Phases 2-4 (memory, capability registry,
+portability) are still unbuilt, and nothing yet exercises the reservation ledger
+in production dispatch.</p>
+<h2>What this achieved</h2>
+<p>Both halves of the two-imperatives roadmap moved from &quot;designed&quot; to &quot;shipped and
+verified in production&quot; — including on themselves: the job-truth consolidation
+this release ships is the same mechanism that caught its own predecessor's
+silent-failure pattern recurring twice during this release's own review cycle,
+before the fix had even finished landing everywhere.</p>
+<h2>The goal at the end of this PR</h2>
+<p>Agent-roles-charters continues into Phase 2 (memory), the reservation ledger
+waits for a real consumer, and the two-imperatives roadmap's next item —
+whatever surfaces highest on <code>docs/strategy/2026-08-15-two-imperatives-roadmap.md</code>
+once its status table is next revisited — picks up from here.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

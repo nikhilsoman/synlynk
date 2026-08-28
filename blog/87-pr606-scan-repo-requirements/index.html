@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #606 — _scan_repo_requirements: Presence-Only Repo Requirement Discovery | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-3">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Jul 30, 2026</span>
+        
+          <span class="blog-post-pr">PR #606</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #606 — _scan_repo_requirements: Presence-Only Repo Requirement Discovery</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>PR #587 closed the loop on harness-capability reality checking: synlynk had a canonical way to describe what each harness can actually do, where the headless failure modes are, and which assumptions had to be corrected. The next gap was narrower and more operational: the dispatch layer still had no cheap way to tell whether a repo itself carries static requirements like Docker, MCP, or GitHub Actions. This PR starts that separation by adding a pure repository-signal scanner instead of folding policy into dispatch.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>The main strategic decision was to keep the new code strictly as a discovery primitive. That means:</p>
+<ol>
+<li>it scans for presence only;</li>
+<li>it returns a requirement set, not a block/degrade decision;</li>
+<li>it lives in <code>probe.py</code>, alongside the other inspection helpers;</li>
+<li>it stays out of <code>dispatch.py</code> until the later preflight phase wires it in.</li>
+</ol>
+<p>That boundary matters because the next phase needs a clean signal to consume. If discovery and enforcement get mixed together now, the preflight gate becomes harder to reason about and harder to test.</p>
+<h2>What This PR Shipped</h2>
+<p>PR #606 added <code>_scan_repo_requirements(repo_path)</code> in <code>synlynk/probe.py</code> and exported it through <code>synlynk/__init__.py</code>.</p>
+<p>The helper is intentionally small and deterministic:</p>
+<ul>
+<li>it returns <code>set[str]</code>;</li>
+<li>it inspects the repo root with presence checks only;</li>
+<li><code>Dockerfile</code>, <code>docker-compose.yml</code>, or <code>docker-compose.yaml</code> map to <code>docker</code>;</li>
+<li><code>.mcp.json</code> or <code>mcp.json</code> map to <code>mcp</code>;</li>
+<li>any non-empty <code>.github/workflows/</code> directory maps to <code>gh-actions</code>;</li>
+<li>filesystem errors are swallowed and treated as &quot;no detectable requirement&quot;.</li>
+</ul>
+<p>The tests in <code>tests/test_probe.py</code> cover all eight combinations of those artifact families so the function stays presence-only and does not regress into policy or parsing logic. The test matrix also documents the intended contract: this function is a signal source, not an enforcement layer.</p>
+<p>Notably, this PR does <strong>not</strong> wire the scan into dispatch yet. That work is reserved for the later preflight gate phase, where repo requirements will be combined with declared job needs and the existing capability checks.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>None. This PR was an implementation slice of the harness-compatibility plan, not a separate brainstormed design.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>This is a small but important layer boundary. Autonomous dispatch needs to know more than &quot;can the agent run&quot; - it also needs to know &quot;does this repo imply extra tooling expectations.&quot; <code>_scan_repo_requirements()</code> creates that signal without pretending to know what to do with it.</p>
+<p>That separation is what makes the later preflight gate feasible:</p>
+<ul>
+<li>discovery stays cheap and testable;</li>
+<li>enforcement stays centralized;</li>
+<li>repo-specific requirements can be handled consistently instead of being inferred ad hoc in multiple places.</li>
+</ul>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>The goal after PR #606 is not &quot;block unsupported repos.&quot; The goal is narrower: make repo requirements observable so the future preflight gate can make an explicit decision from a real input. In other words, the repo now has a factual scanner, but policy still belongs to the next phase.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

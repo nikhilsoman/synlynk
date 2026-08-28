@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>chore/identity-slug-override — Untangling Repo Name from Product Name | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-2">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Aug 12, 2026</span>
+        
+          <span class="blog-post-pr">PR TBD</span>
+        
+      </div>
+      <h1 class="blog-post-title">chore/identity-slug-override — Untangling Repo Name from Product Name</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>114: Untangling Repo Name from Product Name</h1>
+<h2>Broader goal (previous)</h2>
+<p>By PR #901 (org-scoped manifest fix), cc-videoreframing's role-identity provisioning (<code>synlynk identity init --role pm</code>) had cleared its last technical blocker — the manifest URL builder now worked against org-owned repos. The next step was simply to retry provisioning and move on to the remaining seven roles.</p>
+<h2>Why this PR</h2>
+<p>Retrying surfaced a naming question instead: <code>_resolve_project_slug()</code> derives the GitHub App name slug purely from <code>os.path.basename(cwd)</code> — for cc-videoreframing, that's the literal directory name <code>cc-videoreframing</code>. But the live product name is &quot;vdowrx,&quot; and the user wanted App identities named <code>synlynk-vdowrx-&lt;role&gt;</code>, not <code>synlynk-ccvidreframe-&lt;role&gt;</code>.</p>
+<p>The first framing of that ask was broad — &quot;we anyways need to think of this holistically... needs a deeper review of possible combinations&quot; — raising the question of whether synlynk's per-repo identity model needed to become multi-repo-aware. Brainstorming narrowed this down considerably. The already-approved autonomous-ops spec had a line that read, on first pass, like vdowrx was a <em>retired</em> name; the user corrected that — vdowrx is live, and only the identity slug needed to change, not the git repo name itself. That reduced the scope from &quot;redesign identity architecture for multi-repo workspaces&quot; to &quot;let one repo's config override one string.&quot;</p>
+<p>Two naming collisions got caught before they became implementation mistakes. <code>project_id</code> already means a GitHub Projects v2 node ID (<code>PVT_...</code>), consumed by the instructions template builder — reusing it for the App slug would have silently overloaded two unrelated concepts. <code>workspace_name</code>/<code>workspace_id</code> was also rejected: <code>synlynk scan --workspace &lt;name&gt;</code> already names a <em>different</em>, genuinely multi-repo concept (a named grouping of repos under <code>~/.synlynk/workspaces/&lt;name&gt;/</code>). The field ended up named <code>identity_slug</code> — deliberately distinct from both.</p>
+<h2>What shipped</h2>
+<ul>
+<li><strong><code>synlynk/__init__.py</code></strong> — <code>identity_slug: None</code> added to <code>load_config()</code>'s schema defaults, backfilled into any existing <code>.synlynk/config.json</code> like every other default field.</li>
+<li><strong><code>synlynk/team.py</code></strong> — <code>_resolve_project_slug()</code> now checks <code>load_config().get(&quot;identity_slug&quot;)</code> first (via the existing <code>_pkg()</code> cross-module accessor, which avoids a circular import since <code>team.py</code> is imported <em>by</em> <code>synlynk/__init__.py</code>), and only falls through to the original git-root/cwd-basename logic when unset or empty. No other call site changed — <code>_build_app_manifest_url</code>, <code>_truncate_app_name</code>, and <code>cmd_identity_init_role</code> all already reach the slug exclusively through this one function.</li>
+<li><strong><code>tests/test_identity_init_role.py</code></strong> — two new tests: override behavior when <code>identity_slug</code> is set, and unchanged fallback behavior (regression guard) when it isn't.</li>
+<li>No CLI flag. This is a persistent, per-repo config field, not a per-invocation override — matching how every other identity-scoped setting in <code>.synlynk/config.json</code> already works.</li>
+</ul>
+<p>Execution followed brainstorming → writing-plans → subagent-driven-development end to end: design spec and plan authored and committed by Claude (PM/review role), implementation dispatched to Codex as a single combined job (<code>synlynk dispatch codex</code>) covering both the schema field and the TDD'd resolver change. Codex's own sandboxed dispatch environment reported the job as BLOCKED — 5 failing tests, none of them the two new ones — which turned out to be a environment artifact: <code>HTTPServer.server_bind</code> and state-db writes are blocked by permission inside that sandbox. Independently re-running the exact same tests, then the full file, then the entire 1869-test suite in this session's own unrestricted environment came back clean (1869 passed, 2 skipped, zero failures) — confirming the diff itself introduced no regressions. Codex's job summary had also claimed an unrelated <code>GEMINI.md</code> file was &quot;left untouched,&quot; when in fact it had an uncommitted stray edit; caught by diffing directly rather than trusting the self-report, and discarded before merge — a recurrence of the standing &quot;never trust job status alone&quot; lesson from #202, this time on Codex's self-report rather than <code>synlynk jobs</code>.</p>
+<p>Both review stages (spec-compliance, code-quality) and a final holistic review passed clean with no changes requested.</p>
+<h2>New goalpost</h2>
+<p>With <code>identity_slug</code> support merged, the remaining step for cc-videoreframing is mechanical: add <code>&quot;identity_slug&quot;: &quot;vdowrx&quot;</code> to its <code>.synlynk/config.json</code> and retry <code>synlynk identity init --role pm</code>, then work through the remaining seven roles (architect, tpm, dev, designer, qa, marketing, synlynk-bot). That rollout step is deliberately out of scope for this PR — it's a one-line manual config change for one specific repo, not a code change.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

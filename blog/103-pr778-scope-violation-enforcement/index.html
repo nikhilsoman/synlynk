@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #778 — Scope Violation Enforcement: Making --scope-paths Mean Something | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-3">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Aug 08, 2026</span>
+        
+          <span class="blog-post-pr">PR #778</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #778 — Scope Violation Enforcement: Making --scope-paths Mean Something</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>PR #770/#771 closed the first of three sub-projects under issue #769 (itself born from issue #720's
+six-item hardening checklist): the permission-denied classifier fix, which stopped a live false-positive
+pattern by corroborating denial-signatures against real worktree git activity before trusting them. That
+left two sub-projects on the board — safe-caller-construction docs (not yet started), and this one: scope
+enforcement for design-only/docs-only dispatches.</p>
+<p>The gap it targets is specific. A dispatch's <code>--task</code> text can <em>ask</em> an agent to touch only
+<code>docs/superpowers/specs/**</code>, but nothing before this PR checked whether the agent actually stayed inside
+that boundary. A design-only job could drift into editing <code>synlynk/jobs.py</code> and still get auto-finalized,
+pushed, and turned into a PR — the same unconditional path every other completed job takes.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>None of substance. The design went through two factual corrections during brainstorming — first, that
+<code>_resolve_dispatch_permissions()</code> governs the <em>dispatched agent's own</em> tool permissions, not synlynk's
+post-hoc PR-creation call (so the real enforcement point had to be <code>_finalize_completed_worktree_job()</code>,
+not the permissions resolver); second, that PR #768 never actually added a &quot;receipt-compliance&quot; cell to
+<code>fleet.py</code>'s <code>run_matrix_dry()</code> — that precedent was fabricated in an early spec draft and had to be
+struck before the plan was written, since a plan task built against it would have targeted code that
+doesn't exist. Both corrections narrowed the design to what the codebase actually supports rather than
+shifting its goal.</p>
+<h2>What This PR Shipped</h2>
+<p>A new repeatable <code>--scope-paths &lt;glob&gt;</code> flag on <code>synlynk dispatch</code>, parallel to the existing
+<code>--requires</code>/<code>--grant</code> flags. It's stored the same way every other ad-hoc job field is stored — jobs
+persist as a plain JSON array via <code>_load_jobs()</code>/<code>_save_jobs()</code>, so <code>scope_paths</code> just becomes one more
+key on the job dict with no schema migration.</p>
+<p>Enforcement happens in two places:</p>
+<ol>
+<li><strong><code>_inspect_worktree_git_state()</code></strong> gained a <code>changed_files</code> field — the union of <code>git diff --name-only base_commit..HEAD</code> and any dirty working-tree paths, reusing the existing
+<code>_collect_worktree_status_paths()</code> helper.</li>
+<li><strong>A new <code>_check_scope_compliance()</code> helper</strong> (<code>fnmatch</code>-based) is wired into both existing
+reconciliation call sites in <code>jobs.py</code> (waitpid-reaped and dead-pid branches — the same two places the
+permission-denied and task-receipt checks already run). When a job declares <code>scope_paths</code> and its
+actual changed files drift outside every declared glob, the job's status is set to <code>SCOPE_VIOLATION</code>
+and <code>_finalize_completed_worktree_job()</code>/<code>_apply_dispatch_gate()</code> are skipped entirely — no commit, no
+push, no PR. The worktree is left intact for inspection, matching the repo's flag-don't-destroy
+posture. A compliant scope-declared job still pushes normally, but <code>_maybe_open_worktree_pr()</code> is
+skipped by default unless <code>--requires-gh-write</code> was also passed — reusing that existing flag rather
+than introducing a new grant type.</li>
+</ol>
+<p>Tests: unit coverage for <code>_check_scope_compliance()</code> (single glob, multiple globs, an out-of-scope file,
+the empty-scope no-op case) plus four reconciliation-level tests mirroring the existing <code>test_reconcile_*</code>
+fixture style — violation blocks push/PR, in-scope-only reconciles to <code>completed</code> and pushes without a PR,
+<code>--requires-gh-write</code> overrides the PR skip, and jobs with no <code>scope_paths</code> declared are unaffected
+(the regression guard, given how much of the reconciliation path is shared).</p>
+<p>One real bug surfaced during execution, not in the design: the dispatched README-documentation task
+initially inserted its new <code>--scope-paths</code> and <code>scope_violation_files</code> docs <em>inside</em> the
+<code>&lt;!-- commands:start --&gt;...&lt;!-- commands:end --&gt;</code> block that <code>scripts/generate_command_docs.py</code>
+regenerates and <code>tests/test_docs_sync.py</code> asserts against verbatim. The full suite caught it
+(<code>README.md's command section is stale</code>); a follow-up dispatch moved both subsections below the
+<code>commands:end</code> marker, which fixed the test and left the generated block untouched.</p>
+<p>The branch also needed reconciling against <code>origin/main</code>, which had moved five commits ahead during
+this work (PRs #768, #770, #771, #762, #772). One add/add conflict in <code>tests/test_jobs.py</code> — both sides
+had appended new test functions immediately after the same import block, no content overlap — resolved
+by keeping both blocks. Full suite after merge: 1730 passed, 2 skipped.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>None — this design was entirely text/API-shape, no visual companion was used.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>This closes the loop between <em>asking</em> an agent to stay in scope and <em>enforcing</em> it. Before this PR,
+scope was a request embedded in prose; a hallucinating or overreaching dispatch had no backstop beyond
+the agent's own judgment. Now a design-only or docs-only dispatch has a hard boundary: drift outside the
+declared glob and the job is quarantined as <code>SCOPE_VIOLATION</code> rather than silently merged. Combined with
+the task-receipt protocol (#768) and the permission-denied corroboration fix (#770), the fleet now has
+three independent, evidence-based gates — receipt delivery, denial corroboration, and changed-file
+scope — none of which need to trust an agent's self-report.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>Two of #769's three sub-projects are now shipped. The remaining piece — safe-caller-construction
+docs — is unscoped and unscheduled; it's a documentation-only item with no enforcement mechanism of its
+own, so it can be picked up independently whenever it's prioritized. With #769 nearly closed, the next
+open thread on the hardening front is filing a follow-up issue for the live <code>permission_denied</code>
+classifier false-positive observed on this branch's own Task 4 dispatch (job-48f5c006) — ground-truth
+verification showed the flagged job had, in fact, done complete and correct work — which is a live
+instance of exactly the failure mode #770/#771 was built to catch, just not yet fully eliminated.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

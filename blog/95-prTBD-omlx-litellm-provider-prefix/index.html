@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>synlynk | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date"></span>
+        
+      </div>
+      <h1 class="blog-post-title"></h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>95: exit 0 lied — a real dispatch never reached Ornith</h1>
+<h2>Where we left off</h2>
+<p>PR #672 fixed two independent gaps in the local-agent stack: the port literal (8080→8000,
+carried over from PR #665) and oMLX's mandatory <code>Authorization: Bearer</code> auth, which
+<code>synlynk local doctor</code> now sends correctly. With that PR merged, <code>synlynk local doctor</code>
+went fully green — oMLX reachable, roster matched, aider installed.</p>
+<h2>What moved the goalpost</h2>
+<p>Doctor passing looked like &quot;done.&quot; It wasn't. The first real end-to-end test — actually
+dispatching a task to the <code>local</code> agent (<code>synlynk dispatch local --task &quot;Scan this repo and give me a summary&quot;</code>) — reported <code>OK (exit 0)</code>, <code>0 tokens in / 0 tokens out</code>, <code>0 files touched</code>. That last number should have been the tell: Aider ran, but did nothing.</p>
+<p>The captured log told the real story:</p>
+<pre><code>litellm.BadRequestError: LLM Provider NOT provided. Pass in the LLM provider you
+are trying to call. You passed model=Ornith-1.0-9B-4bit
+</code></pre>
+<p>Aider doesn't talk to the OpenAI-compatible endpoint directly — it goes through a library
+called litellm, which infers the request format from the <code>--model</code> string. Known OpenAI
+model names resolve automatically. An arbitrary local name like <code>Ornith-1.0-9B-4bit</code> does
+not, even with <code>--openai-api-base</code> pointed at oMLX — litellm needs an explicit provider
+prefix (<code>openai/Ornith-1.0-9B-4bit</code>) to route the call at all. Without it, litellm errors
+<em>before</em> sending anything, and Aider's subprocess still exits 0 because from its own
+perspective, nothing crashed.</p>
+<p>This bug has existed since the <code>local</code> agent's original ship (PR #204/205/207) — every
+real dispatch to it has been silently failing at the litellm layer the entire time. It
+was only caught now because this was the first time anyone actually ran a live dispatch
+against a real, authenticated oMLX instance instead of just checking <code>doctor</code>.</p>
+<h2>What this PR ships</h2>
+<p>One functional line, in <code>_local_dispatch_model_flags()</code> (<code>synlynk/local_agent.py</code>):</p>
+<pre><code class="language-python">&quot;--model&quot;, f&quot;openai/{model_id}&quot;,
+</code></pre>
+<p><code>.agents/local.json</code>'s roster IDs are untouched — they still store the bare oMLX-native
+name (<code>Ornith-1.0-9B-4bit</code>), matching what <code>/v1/models</code> actually returns, which is what
+<code>cmd_local_doctor()</code>'s roster check depends on. The prefix is added only at the point the
+Aider CLI flags are built, so doctor and dispatch each use the form the tool they're
+talking to actually needs.</p>
+<p>Caught a real regression along the way: a stale assertion in
+<code>tests/test_dispatch_local_agent.py</code> (a different test file than the one the first
+dispatch touched) still expected the un-prefixed model flag. The full project suite
+(1575 tests) surfaced it; a second small Codex dispatch fixed the one-line assertion.
+Verified directly — not from job-status alone — before merging either commit.</p>
+<p>Backfilled as Addendum 3 / Task Group 8 into the same design spec and implementation
+plan that already carry Addenda 1 and 2, continuing this project's pattern of folding
+narrow post-ship gaps into the original document rather than spawning new ones.</p>
+<h2>Where this leaves the local-agent track</h2>
+<p>Doctor going green was necessary but not sufficient — this is the fix that makes a real
+dispatch actually reach the model. Next verification step: re-run the same test dispatch
+(<code>&quot;Scan this repo and give me a summary&quot;</code>) on <code>main</code> after this merges, and confirm Ornith
+produces an actual response this time.</p>
+<h2>Next goalpost</h2>
+<p>Same two open threads as before this PR: user review of the fleet-parity reliability
+cluster spec, and the not-yet-started herdr-integration brainstorm.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>synlynk | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date"></span>
+        
+      </div>
+      <h1 class="blog-post-title"></h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>v0.16.0 — The Autonomous Loop</h1>
+<p><strong>PRs:</strong> <a href="https://github.com/nikhilsoman/synlynk/pull/1125">#1125</a>, <a href="https://github.com/nikhilsoman/synlynk/pull/1126">#1126</a>, <a href="https://github.com/nikhilsoman/synlynk/pull/1127">#1127</a>
+<strong>Date:</strong> 2026-08-23</p>
+<h2>The goal as understood at the end of the previous PR</h2>
+<p>PR #1122 (2026-08-23) shipped v0.15.0, the Workspace Policy Layer: a two-tier
+<code>policy.json</code> (workspace defaults + per-repo overrides) and a fail-closed
+<code>check_authority()</code> resolver that turned this repo's own prose tables
+(who can merge, who can cut a release, which harness handles which task
+type) into data, gated at four call sites, with branch protection live-
+verified on <code>main</code>. That release deliberately stopped at the <em>signal</em> —
+<code>check_authority()</code> could tell a caller &quot;this needs human approval&quot; but
+nothing consumed that signal unattended. v0.16.0 was scoped, from the same
+brainstorm session, as the release that actually closes the loop: the
+<code>awaiting_approval</code> event, the ticket-based pause mechanism, and the sweep
+command that walks stories through dispatch without a human driving each
+step — the 2026-08-31 full-autonomy exit criterion for synlynk's own repo.</p>
+<h2>Strategic shift in this PR</h2>
+<p>No scope change from what v0.15.0's own post already previewed — this is
+the second of the two Named Releases the original brainstorm anticipated,
+landing as planned. The one real-time adjustment happened inside Task 13's
+execution, not before it: the live dogfood run was supposed to exercise
+<code>synlynk tpm sweep</code> against &quot;a story that trips an approval rule,&quot; but the
+plan's assumption that some default policy rule would naturally gate
+<code>task_dispatch:</code> actions turned out to be false — <code>_matches_approval_rule()</code>
+explicitly skips <code>security_sensitive_paths:</code> rules for dispatch actions,
+and no other default rule covers that action type at all. Rather than
+silently declaring the pause path untestable, a temporary, clearly-labeled,
+fully-reverted test-only rule (<code>task_dispatch_demo</code>) was added to this
+repo's <code>.synlynk/policy.json</code> for the duration of the demo, removed
+immediately after, and confirmed removed via an empty
+<code>git diff origin/main -- synlynk/policy.py .synlynk/policy.json</code>. The demo
+also surfaced that the live backlog had 8 real ready stories that an
+unscoped sweep would have dispatched for real — caught before running the
+sweep, and handled by temporarily parking those 8 (<code>synlynk story draft</code>)
+and restoring them afterward, rather than letting the dogfood run become an
+unintended production dispatch of unrelated work.</p>
+<h2>What this PR shipped</h2>
+<p><strong><code>awaiting_approval</code> GOVERNS event (Task 10, PR #1125)</strong> — extends the
+<code>job_terminal</code>/<code>review_submitted</code> event-contract pattern from PR #922.
+<code>emit_awaiting_approval(story_id, action, reason)</code> in <code>synlynk/events.py</code>
+records which <code>approval_required_for</code> rule matched, giving every pause a
+durable, queryable record instead of a transient console message.</p>
+<p><strong>Approval-gate ticket flow (Task 11, PR #1126)</strong> — <code>synlynk/approval_gate.py</code>'s
+<code>raise_approval_ticket()</code> files a <code>[APPROVAL] &lt;action&gt; — &lt;story_id&gt;</code> GitHub
+issue carrying story context and the matched rule, with instructions to
+reply <code>approve</code> or act directly. Resolution detection extends
+<code>scan_local_events()</code> with a new <code>_scan_approval_tickets()</code> step: it polls
+open <code>[APPROVAL]</code> issues and emits <code>approval_resolved</code> for any closed or
+carrying an <code>approve</code>-prefixed comment.</p>
+<p><strong><code>synlynk tpm sweep</code> (Task 12, PR #1127)</strong> — the command that actually uses
+all of this: one pass over <code>readiness='ready'</code> stories, each walked through
+dispatch → verify → PR → review → merge, with every step gated on
+<code>check_authority()</code>. A <code>requires_approval</code> result parks that one story
+(raises the ticket, emits the event) without blocking the rest of the
+batch — the core design property that makes unattended operation safe
+rather than all-or-nothing.</p>
+<p><strong>Live dogfood verification (Task 13, Claude-direct per the plan)</strong> — not a
+unit test, a real run against this repo's real backlog. Pass 1 (no
+approval rule active) dispatched <code>story-028d26d9</code> for real, through to a
+merged PR — proving the happy path end-to-end, not mocked. Pass 2 (the
+temporary test-only rule described above) parked <code>story-7aa0aaec</code>, filed a
+real <code>[APPROVAL]</code> GitHub issue, received an <code>approve</code> comment, and
+correctly emitted <code>approval_resolved</code> (event id 272) — independently
+confirmed via <code>synlynk events tail --type approval_resolved</code> and
+<code>gh issue view --json state,comments</code>, not just the sweep's own printed
+summary. Every other claim in the run — dispatch status, branch protection
+state, ticket creation — was cross-checked the same way, per the plan's
+explicit instruction not to trust self-reported status alone.</p>
+<p><strong>Two real gaps found by actually running it, not by reading the code</strong> —
+<code>scan_local_events()</code> crashes on a <code>subscriptions</code> table schema bug before
+it ever reaches <code>_scan_approval_tickets()</code>, and its only call site has no
+wired CLI subcommand, so the documented resolution-detection path doesn't
+run in production today (filed as
+<a href="https://github.com/nikhilsoman/synlynk/issues/1132">#1132</a>). Separately,
+<code>synlynk story done</code> doesn't clear <code>readiness</code>, and the sweep's in-flight
+guard only excludes <code>queued</code>/<code>running</code> jobs — so a story whose dispatch
+already completed gets re-swept and re-parked on the next pass, observed
+live with <code>story-028d26d9</code> (filed as
+<a href="https://github.com/nikhilsoman/synlynk/issues/1133">#1133</a>). Per this
+project's own role split, both were filed rather than patched inline —
+fixing them is implementation work for a future dispatch, not Claude's
+verification-only Task 13.</p>
+<h2>Brainstorm visuals</h2>
+<p>None — same as v0.15.0, this design session stayed text-only.</p>
+<h2>What this achieved on the path to full autonomy</h2>
+<p>The loop synlynk's own repo needed for the 2026-08-31 exit criterion now
+exists and has been proven live, not just designed: a story can be dispatched,
+verified, and merged with no human in the step-by-step path, and a
+policy-flagged action pauses cleanly with a ticket instead of either
+blocking the whole batch or silently proceeding unauthorized. The two bugs
+the dogfood run found are exactly the kind of gap that only shows up under
+a real run against a real backlog — a mocked or unit-tested version of this
+release would have shipped with the resolution-detection path silently
+broken.</p>
+<h2>The goalpost at the end of this PR</h2>
+<p>Two known gaps stand between this release and true unattended operation:
+<code>scan_local_events()</code>'s approval-resolution path needs a working call site
+(#1132), and re-sweep needs to stop re-parking already-completed stories
+(#1133). Both are scoped narrowly enough to land as normal dispatched fixes
+rather than a new Named Release. Beyond those two, the deferred
+ticket-resolution-auto-resume gap (approving a ticket doesn't itself
+unblock the next sweep pass) is the natural v0.17.0-scale increment once
+the sweep loop has run unattended for real for a while — not blocking the
+2026-08-31 exit criterion, but the next thing worth designing once this
+release's rough edges are sanded down.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

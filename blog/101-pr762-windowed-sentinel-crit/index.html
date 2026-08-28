@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #762 — Windowed sentinel_crit: Stop Lifetime Logs from Keeping Ops RED | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Aug 07, 2026</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #762 — Windowed sentinel_crit: Stop Lifetime Logs from Keeping Ops RED</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>Windowed <code>sentinel_crit</code> — Stop Lifetime Logs from Keeping Ops RED</h1>
+<h2>Broader goal (end of previous PR)</h2>
+<p>Platform ops nightly (#719) replaced fleet-only EOD with a cross-repo scoreboard. Hygiene and ops were deliberately split: a machine could be hygiene-GREEN while ops stayed RED on real multi-agent failures (LIVE issues, sentinel CRITICAL, bad job rates).</p>
+<h2>What moved the goalpost</h2>
+<p>The first live nightlies reported <strong>ops RED</strong> with <code>sentinel_crit≈47–48</code> while open LIVE=0. A full triage showed the truth:</p>
+<table>
+<thead>
+<tr>
+<th>Bucket</th>
+<th style="text-align:right">Count</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>REAL (≤48h)</td>
+<td style="text-align:right">5</td>
+<td>Recent agy timeouts / stalls worth acting on</td>
+</tr>
+<tr>
+<td>AGED (2–7d)</td>
+<td style="text-align:right">12</td>
+<td>Preflight noise / already-done jobs</td>
+</tr>
+<tr>
+<td>STALE (&gt;7d)</td>
+<td style="text-align:right">31</td>
+<td>July history — pure append-only log debt</td>
+</tr>
+</tbody>
+</table>
+<p><code>sentinel.md</code> is an <strong>append-only</strong> alert log. L4 counted <strong>every</strong> CRITICAL/FLATLINE line in the file. Lifetime history is not an open incident. That made the scoreboard untrustworthy and drowned the five real lines.</p>
+<h2>What this PR ships</h2>
+<ol>
+<li><strong><code>count_sentinel_critical_lines</code></strong> — pure helper that returns <code>(windowed, lifetime, untimestamped)</code>.</li>
+<li><strong>Window = report <code>--hours</code></strong> (override via <code>SYNLYNK_OPS_SENTINEL_HOURS</code>).</li>
+<li><strong>Alert-bullet only</strong> — requires <code>- [</code> so triage notes mentioning the word CRITICAL do not count.</li>
+<li><strong>Untimestamped CRITICAL lines</strong> count toward lifetime only (cannot flip ops RED).</li>
+<li><strong>Signals payload</strong> now includes:
+<ul>
+<li><code>sentinel_critical_lines</code> (windowed — used for pass/findings)</li>
+<li><code>sentinel_critical_lines_lifetime</code></li>
+<li><code>sentinel_critical_untimestamped</code></li>
+<li><code>sentinel_window_hours</code></li>
+</ul>
+</li>
+<li>Human report L4 line shows both windowed and lifetime.</li>
+<li>Unit tests with a multi-month fixture (acceptance: 40 stale lines → windowed 0, no sentinel finding).</li>
+<li>Docs note in <code>docs/brainstorm/fleet-operability/PLATFORM-OPS-NIGHTLY.md</code>.</li>
+</ol>
+<h2>Related hygiene (not in this PR)</h2>
+<p>Same day ops triage archived STALE sentinels and reaped zombie <code>running</code> jobs; product follow-ups: #750 (agy timeout cluster), #752 (cost $0 gap), #753 (<code>jobs reap</code>).</p>
+<h2>On the long arc</h2>
+<p>Autonomous multi-agent dispatch needs a scoreboard that is <strong>actionable</strong>, not historically noisy. Windowed L4 is a small correctness fix that makes nightly ops RED mean &quot;something recent is wrong.&quot;</p>
+<h2>New goalpost</h2>
+<ul>
+<li>Nightly ops RED on sentinel only when <strong>recent</strong> severity alerts exceed threshold.</li>
+<li>Still open: auto-reap zombies (#753), agy timeout root cause (#750), cost capture gap (#752).</li>
+</ul>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #835 — Context-Mode Telemetry: Measuring Right-Sized Context | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-3">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Aug 09, 2026</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #835 — Context-Mode Telemetry: Measuring Right-Sized Context</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>Context-Mode Telemetry — Measuring Right-Sized Context</h1>
+<h2>Broader goal (previous)</h2>
+<p>Platform ops could score hygiene vs real multi-agent work (windowed sentinels, job reap). The scoreboard still could not answer a product-critical question: <strong>do jobs get task-level or full context?</strong></p>
+<h2>Why this PR</h2>
+<p>Right-sizing context by job type is a core synlynk claim. Without telemetry we only had defaults (<code>--context-mode task</code>) and folklore (PM often forces <code>full</code>). After a week of real <code>by_context_mode</code> data we can refine modes and, later, replace static <code>generate_context</code> with an <strong>Architect Workspace Agent</strong> as a configurable context provider.</p>
+<h2>What shipped</h2>
+<ol>
+<li><strong><code>daemon_jobs.context_mode</code> + <code>context_bytes</code></strong> — written on every dispatch (after truncation).</li>
+<li><strong><code>jobs.json</code> + telemetry</strong> — same fields on the job object / dispatch event.</li>
+<li><strong><code>cost_entries.context_mode</code></strong> — inherited from the job row on cost insert when not passed.</li>
+<li><strong><code>ops report</code></strong> — L1 <code>by_context_mode</code> counts + %, <code>context_bytes</code> summary; L2 cost by mode.</li>
+<li><strong><code>synlynk jobs</code></strong> table — CTX column.</li>
+<li><strong>Design note</strong> — <code>docs/superpowers/specs/2026-08-09-context-mode-telemetry-and-architect-context-provider-design.md</code> for the Architect provider path.</li>
+</ol>
+<h2>On the long arc</h2>
+<p>Instrumentation first → policy second → Architect-built context third. This PR is the measurement spine.</p>
+<h2>New goalpost</h2>
+<ul>
+<li>Nightly ops shows mode mix (even if early data is mostly <code>unknown</code> + new <code>task</code>/<code>full</code>).</li>
+<li>After ~7 days: open Architect provider design implementation; mode policy informed by data.</li>
+</ul>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

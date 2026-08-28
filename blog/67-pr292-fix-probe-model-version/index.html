@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #292 — Fix Tier-2 Model Probe (#287) | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-3">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Jul 16, 2026</span>
+        
+          <span class="blog-post-pr">PR #292</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #292 — Fix Tier-2 Model Probe (#287)</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>After v0.12.0 (Measurement &amp; Reliability), model identity is a first-class ledger field: <code>model_at_dispatch</code> is probed before every job, capability ratings key on it, and cost rates resolve through <code>_model_rate_for_version()</code>. That only works if the Tier-2 probe actually returns a real model id.</p>
+<h2>Strategic Shifts in This PR (if any)</h2>
+<p>None. This is a correctness fix for an existing measurement path — no API or roadmap change.</p>
+<h2>What This PR Shipped</h2>
+<p><strong>Bug (#287):</strong> <code>_probe_model_version()</code> shelled out to agent CLIs (<code>claude /status</code>, <code>agy --version</code>, <code>codex --version</code>, <code>grok -v</code>) and regex-scraped stdout. Live results:</p>
+<table>
+<thead>
+<tr>
+<th>Agent</th>
+<th>Before</th>
+<th>Root cause</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>claude</td>
+<td><code>unknown</code></td>
+<td><code>/status</code> is interactive-only</td>
+</tr>
+<tr>
+<td>agy</td>
+<td><code>unknown</code></td>
+<td><code>--version</code> is CLI version, not model</td>
+</tr>
+<tr>
+<td>codex</td>
+<td><code>codex-cli</code></td>
+<td>matched CLI <em>name</em>, not <code>model</code></td>
+</tr>
+<tr>
+<td>grok</td>
+<td><code>unknown</code></td>
+<td><code>-v</code> is CLI version, not model</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Fix:</strong> read each agent's own home config instead of shelling out:</p>
+<ul>
+<li><strong>codex</strong> → <code>~/.codex/config.toml</code> top-level <code>model</code></li>
+<li><strong>grok</strong> → <code>~/.grok/config.toml</code> <code>[models] default</code></li>
+<li><strong>claude</strong> → <code>~/.claude/settings.json</code> <code>model</code> key; absent → <code>&quot;uses Claude Code's built-in default, no override&quot;</code></li>
+<li><strong>agy</strong> → <code>&quot;session-scoped, no fixed default&quot;</code> (no persistent model file)</li>
+</ul>
+<p>Helper <code>_read_toml_string_value()</code> is stdlib-only: tries <code>tomllib</code> when present (3.11+), falls back to a small section/key regex so 3.8–3.10 CI stays green.</p>
+<p><strong>Tests:</strong> config-file cases in <code>tests/test_probe.py</code>; obsolete subprocess-scrape tests in <code>test_capability_scoring.py</code> and <code>test_synlynk.py</code> rewritten.</p>
+<p>Live verification after the fix: <code>codex → gpt-5.4-mini</code>, <code>grok → grok-build</code>, <code>claude → built-in default</code>, <code>agy → session-scoped</code>.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>None.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>Dispatch telemetry and capability scoring stop collapsing three of four agents into <code>model_version='unknown'</code>. Accurate <code>model_at_dispatch</code> is a prerequisite for trustworthy cost ledger rows, split-model detection, and any future routing that weights agents by model performance.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>Tier-2 model identity is config-truthful. Follow-ons stay out of scope here: Tier-1 CLI-version parsing (separate bug), optional attenuation of the long descriptive strings for agy/claude if the ledger prefers short tokens, and ambient <code>synlynk probe</code> drift publish (BS-8).</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

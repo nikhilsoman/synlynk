@@ -1,0 +1,31 @@
+<h2>Block 4 — Grants system (#338) fate</h2>
+<p class="subtitle">Grants/permissions are a no-op for Agy, Grok, and Local. You chose to <strong>invest in full Core 4 GH-write</strong> — grants may or may not be part of that path.</p>
+
+<div class="options">
+  <div class="option" data-choice="implement-all" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Implement grants for all Core 4</h3>
+      <p>Make <code>--grant/--revoke</code> real across harnesses. Large surface; couples to each vendor permission model. Likely post-matrix unless stop-the-line.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="hide-until-real" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Hide/remove from docs &amp; UI until real (recommended with GH-invest)</h3>
+      <p>Stop advertising grants. GH-write work focuses on auth tokens + sandbox allow-rules first (#426/#569), not the grants DSL. Re-introduce grants when matrix can prove them.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="claude-only-grants" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Keep grants only where they already work</h3>
+      <p>Document “claude-only grants”; others ignore flags. Honest but confusing dual model.</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <p class="label">Sequencing note</p>
+  <p>Your GH-write choice (B) is an <strong>invest</strong> track. Under the hard freeze, it should be either: (1) a sequenced epic after matrix MVP, or (2) explicitly stop-the-line exception. We’ll lock that on the next screen.</p>
+</div>

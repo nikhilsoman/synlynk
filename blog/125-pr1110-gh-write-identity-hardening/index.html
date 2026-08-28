@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>synlynk | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date"></span>
+        
+      </div>
+      <h1 class="blog-post-title"></h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>PR #1110 — gh-write Identity Hardening: Phase 1 Closeout (#423)</h1>
+<p><strong>PR:</strong> <a href="https://github.com/nikhilsoman/synlynk/pull/1110">#1110</a>
+<strong>Date:</strong> 2026-08-23
+<strong>Relates to:</strong> #423, #569, #426</p>
+<h2>Goal at the end of the previous PR</h2>
+<p>The immediately preceding PR (#731, v1.0 UX consolidation) landed a lesson about full-suite regression discipline, but the thread this PR actually continues goes back further: PR #517 built synlynk's per-role GitHub App identity system — each role (<code>dev</code>, <code>qa</code>, <code>architect</code>, etc.) can carry its own scoped GitHub App token, so a dispatched job's writes are attributable to the role doing the work, not to one shared personal account. That system had shipped, but as of this session it had never been live-tested end-to-end against a real PR. The informal &quot;full autonomy roadmap&quot; captured in <code>project-docs/memory.md</code> (2026-08-22 entry) named turning on real GitHub branch protection, backed by these role-scoped identities, as Phase 1's exit criterion — but nobody had actually dispatched a job that posted a real <code>gh pr review</code> under a role identity and checked whether it worked.</p>
+<h2>What moved the goalpost this PR</h2>
+<p>This session ran that live test for the first time, on two harnesses:</p>
+<ul>
+<li><strong>Agy</strong> (<code>job-488c152f</code>) — succeeded, but only after finding and fixing a real bug: <code>_run_tc7()</code> was checking <code>settings[&quot;allowRules&quot;]</code>, a key that doesn't exist in the actual <code>~/.gemini/antigravity-cli/settings.json</code> schema (the real path is <code>settings[&quot;permissions&quot;][&quot;allow&quot;]</code>). Filed as #1106, fixed in #1107. Also required discovering — by reading dispatch source directly, not from any doc — that <code>--requires-gh-write</code> alone wasn't sufficient; a separate <code>--grant run:shell</code> was needed, or the dispatch failed closed with <code>PermissionEnforcementError</code>.</li>
+<li><strong>claude</strong> — succeeded cleanly on the first attempt with just <code>--grant run:shell</code> added up front. No preflight bugs, no local operator-config precondition, roughly 3x cheaper and faster than the Agy path.</li>
+</ul>
+<p>Both results were verified against the live GitHub API (<code>gh pr view 1105 --json reviews</code>), not taken on the dispatched jobs' own self-reports — both reviews were confirmed authored by the distinct App bot login <code>synlynk-synlynk-dev</code>, not the shared personal account.</p>
+<p>That test also surfaced that CLAUDE.md's #426 routing table (&quot;route gh-write to Grok by default&quot;) was empirically false: Grok's dispatch sandbox denies <code>bash</code> entirely (<code>job-3e428904</code> reported &quot;OK, exit 0&quot; but <code>git diff origin/main</code> showed zero real change — a silent no-op masked by a misleading job status). The static <code>HARNESS_CAPABILITY_BASELINES</code> table in <code>synlynk/_constants.py</code> disagreed with observed reality in both directions: <code>agy.can_gh_write</code> was <code>False</code> despite a live-proven success, <code>grok.can_gh_write</code> was <code>True</code> despite a live-proven total failure.</p>
+<p>Rather than re-litigating the identity/token architecture itself (already built, per #517), this PR scoped down to three concrete gaps the live test exposed, captured in a design doc (<code>docs/superpowers/specs/2026-08-23-gh-write-identity-hardening-design.md</code>) before any code was touched.</p>
+<h2>What this PR shipped</h2>
+<p>Executed via <code>superpowers:subagent-driven-development</code> — one fresh Codex dispatch per task, spec-compliance and code-quality review against the actual diff before merging each one, PM/review/deploy work staying in this session per this project's role split.</p>
+<ol>
+<li><strong>Corrected harness capability data</strong> (<code>synlynk/_constants.py</code>): <code>agy.can_gh_write</code> False→True, <code>grok.can_gh_write</code> True→False, matching the live-tested results above.</li>
+<li><strong>Harness selection ordering</strong> (<code>synlynk/dispatch.py</code>, <code>_harness_for_org_role</code>): a new <code>_GH_WRITE_HARNESS_PRIORITY = (&quot;claude&quot;, &quot;agy&quot;)</code> constant makes gh-write auto-selection prefer claude, then agy — never grok — while leaving non-gh-write selection alphabetical and unchanged.</li>
+<li><strong>#426 routing SOP correction</strong> (<code>synlynk/probe.py</code>, both the static <code>_CAPABILITY_ALLOCATION_SOP</code> template and the dynamic <code>_repair_capability_allocation_sop</code> generator, which regenerate the checked-in CLAUDE.md): replaced &quot;Route any task that requires GitHub write actions to Grok by default&quot; with the corrected claude-primary/Agy-fallback text and the concrete sandbox-limitation reasoning (Grok denies bash, Codex blocks network egress to <code>api.github.com</code>).</li>
+<li><strong><code>--requires-gh-write</code> now auto-implies <code>run:shell</code></strong> (<code>synlynk/dispatch.py</code>): a <code>requires_gh_write=True</code> dispatch injects <code>&quot;run:shell&quot;</code> into <code>effective_grants</code> before <code>_resolve_dispatch_permissions</code> builds the final permission set — closing the exact friction this session's own live test hit (forgetting the separate <code>--grant run:shell</code> flag).</li>
+<li><strong>Fail-closed role resolution for gh-write</strong> (<code>synlynk/dispatch.py</code>, <code>synlynk/cli.py</code>): the old <code>agent_role or _role_for_story(story_id) or &quot;dev&quot;</code> fallback silently authenticated every unlabeled gh-write dispatch as the <code>dev</code> role — defeating #423's whole point of separating identities by role. That <code>or &quot;dev&quot;</code> is now removed for <code>requires_gh_write=True</code> dispatches; if no role resolves via <code>--as-agent</code>, a role-tagged <code>--story</code>, or the new <code>--role &lt;role&gt;</code> flag, <code>dispatch_agent</code> and <code>_build_subprocess_env</code> both raise <code>RuntimeError</code> before any subprocess spawns.</li>
+</ol>
+<p>Five new unit tests were added across <code>tests/test_synlynk.py</code> covering: the <code>run:shell</code> auto-imply (and its non-gh-write no-op counterpart), the fail-closed raise with no role, <code>--role qa</code> resolving correctly, and the <code>_build_subprocess_env</code>-level equivalents. Two pre-existing gaps were caught by the two-stage review process rather than shipping silently: a stray dangling markdown bullet left in the regenerated CLAUDE.md, and — found only during the Task 6 full-suite run — a stale, unrelated test assertion (<code>test_directive_templates_contain_sop_headers</code>) still literally checking for the superseded <code>&quot;Grok only&quot;</code> table text, which the Task 3 dispatch had correctly left alone (it was out of that task's declared scope) but which the merge nonetheless broke. Both were fixed as targeted follow-up dispatches rather than folded silently into an earlier commit.</p>
+<p>One recurring friction worth naming: this session's own <code>--requires-gh-write</code> auto-detection regex (<code>_task_requires_gh_write</code>) kept false-positiving on the dispatch prompts for Tasks 4 and 5, because those tasks' required code content literally contains the string <code>--requires-gh-write</code> — and <code>\bgh\b</code> matches &quot;gh&quot; even hyphen-bounded. For Task 5 and Task 4, the prompts couldn't be reworded around it (the trigger was in code the plan required, not incidental prose), so dispatch used the project's own documented <code>SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH=1</code> escape hatch, verified safe because no role in this sandbox has a provisioned GitHub App token in the first place, and because both dispatched jobs' own instructions explicitly forbade touching <code>gh</code> at all.</p>
+<h2>Brainstorm visuals</h2>
+<p>None were created for this design — the three fixes were narrow and code-shaped, not architectural or visual.</p>
+<h2>What this achieves on the path to autonomy</h2>
+<p>Phase 1 of the full-autonomy roadmap's stated exit criterion — &quot;branch protection can be turned on for real, backed by role-scoped identities&quot; — depended on the identity mechanism actually working under realistic conditions (no manually-remembered extra flags, no silent identity conflation, correct default routing). This PR closes exactly those three gaps. It deliberately does not build the gh-write broker described in <code>docs/superpowers/specs/2026-08-19-gh-write-broker-design.md</code> (#865) — that design would make the broker the <em>only</em> path capable of a GitHub write by removing direct <code>gh</code>/MCP write access from every harness, which is a structurally stronger but separate effort. This PR is explicit interim hardening of the mechanism the broker is meant to eventually retire; a tracking issue (#1109) keeps that &quot;Phase 1b&quot; work from going silently orphaned.</p>
+<h2>Next goalpost</h2>
+<p>One live dispatch remains before Phase 1 can be marked fully done: a real <code>--role qa</code> (or similar) dispatch against a live PR, using the new fail-closed path and corrected default routing together, followed by actually turning on GitHub branch protection backed by that role's identity. That live-test-and-flip-protection step is Phase 1's true completion task, tracked separately from this PR's automated test suite. Once done, Phase 2 — porting the same qa-gate pattern to rxcc — can start.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

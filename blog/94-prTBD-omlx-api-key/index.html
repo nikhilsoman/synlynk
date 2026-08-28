@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>synlynk | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date"></span>
+        
+      </div>
+      <h1 class="blog-post-title"></h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>94: oMLX needs an API key, and the roster ID was wrong too</h1>
+<h2>Where we left off</h2>
+<p>PR #665 fixed the oMLX endpoint's port literal — <code>.agents/local.json</code>, <code>synlynk/local_agent.py</code>'s
+<code>_DEFAULT_LOCAL_CONFIG</code>, and <code>synlynk/_constants.py</code>'s <code>AGENT_CAPABILITY_BASELINES</code> all pointed at
+8080, but the real oMLX install on this machine binds 8000. That PR closed with the port corrected
+in all three places and verified live on <code>main</code>.</p>
+<h2>What moved the goalpost</h2>
+<p>With the port fixed, <code>synlynk local doctor</code> should have gone green. It didn't — it failed with a
+401 Unauthorized. Digging in surfaced two independent problems, not one:</p>
+<ol>
+<li><strong>oMLX requires auth.</strong> With <code>auth.skip_api_key_verification: false</code> in oMLX's own
+<code>~/.omlx/settings.json</code> (the default), every request needs
+<code>Authorization: Bearer &lt;api_key&gt;</code>. Nothing in synlynk ever sent that header — <code>_health_check()</code>
+built a bare GET request, and a real dispatch's <code>env_passthrough</code> allowlist for the <code>local</code>
+agent was empty, so even Aider itself would never see a key forwarded to it.</li>
+<li><strong>The roster ID was stale.</strong> <code>.agents/local.json</code> pinned <code>ornith-1.0-9b</code>; oMLX actually serves
+<code>Ornith-1.0-9B-4bit</code>, derived from its on-disk HuggingFace-style model directory name. Two
+config-drift bugs discovered in the same investigation, unrelated to each other.</li>
+</ol>
+<p>Verified both independently via direct authenticated <code>curl</code> — <code>/v1/models</code> returned the real model
+list, <code>/v1/chat/completions</code> returned a real generated response — confirming the underlying
+inference stack was never the problem; synlynk's own request-building was.</p>
+<h2>What this PR ships</h2>
+<p>Split into a config-only fix (mine, direct) and a code fix (dispatched to Codex), per this
+project's role split:</p>
+<ul>
+<li><code>.agents/local.json</code>: <code>ornith-1.0-9b</code> → <code>Ornith-1.0-9B-4bit</code>.</li>
+<li><code>_health_check()</code> in <code>synlynk/local_agent.py</code> gained an optional <code>api_key</code> parameter; when set,
+it sends <code>Authorization: Bearer &lt;api_key&gt;</code> as a request header.</li>
+<li><code>cmd_local_doctor()</code> now reads <code>OPENAI_API_KEY</code> from the environment and passes it through. A
+401 is now reported distinctly (<code>&quot;oMLX rejected the request (401 Unauthorized) — export OPENAI_API_KEY and retry&quot;</code>) instead of the old, misleading <code>&quot;Start it with: omlx serve&quot;</code> message
+that conflated auth failure with &quot;not running.&quot;</li>
+<li><code>AGENT_CAPABILITY_BASELINES[&quot;local&quot;][&quot;env_passthrough&quot;]</code> gained <code>&quot;OPENAI_API_KEY&quot;</code> — the existing
+<code>_build_subprocess_env()</code> allowlist mechanism in <code>synlynk/dispatch.py</code> needed no new plumbing,
+just a wider allowlist entry. Aider already reads <code>OPENAI_API_KEY</code> natively for OpenAI-compatible
+backends, so doctor and a live dispatch now share one convention.</li>
+</ul>
+<p>Both the design spec (<code>docs/superpowers/specs/2026-07-12-local-agent-mlx-driver-design.md</code>) and
+implementation plan (<code>docs/superpowers/plans/2026-07-12-local-agent-mlx-driver.md</code>) got backfilled
+with an Addendum and a Task Group, following the same pattern set by the earlier Aider-presence-check
+gap (PR #657) — narrow post-ship gaps in an already-shipped feature get folded into the original
+spec/plan rather than spawning a parallel document.</p>
+<p><strong>Security constraint, kept throughout:</strong> the real API key (found at <code>~/.omlx/settings.json</code>) is
+never written to the repo, any config file, or a commit. Tests use fake placeholder values
+(<code>sk-test-123</code>, <code>sk-env-key</code>). The operator exports <code>OPENAI_API_KEY</code> in their own shell; synlynk
+code only ever reads it from the environment at runtime.</p>
+<p>4 new tests cover the header-sending behavior and the 401-vs-generic-unreachable distinction. Full
+project suite: 1571 passed, 2 skipped, no regressions.</p>
+<h2>Where this leaves the local-agent track</h2>
+<p>The aider+oMLX &quot;Local&quot; 5th agent rollout is now fully functional end-to-end on this machine: correct
+port, correct roster ID, and authenticated health checks and dispatch. <code>synlynk local doctor</code> with
+<code>OPENAI_API_KEY</code> exported should report clean.</p>
+<h2>Next goalpost</h2>
+<p>Two threads remain open, neither started: the fleet-parity reliability cluster spec
+(<code>docs/superpowers/specs/2026-08-02-fleet-parity-reliability-cluster-design.md</code>) is waiting on
+review, and the herdr-integration brainstorm (the second half of &quot;Local Agents with Synlynk&quot;) hasn't
+begun.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

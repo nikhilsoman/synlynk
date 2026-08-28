@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #670 — Dry matrix in CI + real live smoke for Proven | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-1">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Aug 02, 2026</span>
+        
+          <span class="blog-post-pr">PR #670</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #670 — Dry matrix in CI + real live smoke for Proven</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>Fleet operability Phase 1–2 (#661) made Supported/Proven measurable. Dogfood immediately showed nested product <code>state.db</code> under job worktrees reappearing (#650 fallback into worktree cwd), keeping Core 4 <strong>unsupported</strong>.</p>
+<h2>What This PR Shipped</h2>
+<ol>
+<li><strong>CI dry matrix</strong> — <code>synlynk selftest --matrix</code> on Python 3.12 in test.yml (no model spend).</li>
+<li><strong>Prevent re-buildup</strong> — sandbox fallback path uses <code>$TMPDIR/synlynk-sandbox/&lt;hash&gt;/state.db</code> when cwd is under worktrees; job finalize purges nested product state under the job worktree.</li>
+<li><strong>Real live matrix</strong> — <code>selftest --matrix --live</code> runs a trivial headless CLI smoke per Core 4 agent (budget-capped, default $10) so tier-2 greens can lift status to <strong>Proven</strong>.</li>
+</ol>
+<h2>Goalpost</h2>
+<p>Dry matrix is a merge gate. Live Proven is operator-runnable without mock cells. Nested ledger debris should stop growing under normal dispatch.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

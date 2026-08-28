@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Receipt Protocol — Detection-Only Delivery Confirmation for Dispatched Tasks | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Aug 07, 2026</span>
+        
+          <span class="blog-post-pr">PR TBD</span>
+        
+      </div>
+      <h1 class="blog-post-title">The Receipt Protocol — Detection-Only Delivery Confirmation for Dispatched Tasks</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>Issue #720 identified three deferred sub-projects growing out of the dispatch fail-closed
+work (design doc: <code>docs/superpowers/specs/2026-08-07-dispatch-fail-closed-task-validation-design.md</code>).
+Sub-project 1 — fail-closed empty-task validation — shipped in PR #759: <code>synlynk dispatch</code>
+now refuses to send an empty or whitespace-only task string to an agent, closing a class of
+silent no-op dispatches. That left two deferred pieces: a receipt protocol confirming an
+agent actually <em>received</em> the task text it was dispatched, and (still outstanding) a third
+sub-project not covered by this PR.</p>
+<p>The gap sub-project 1 didn't close: fail-closed validation only guards against Synlynk
+sending nothing. It says nothing about whether the agent's own CLI harness actually
+delivered that non-empty task to the model before doing work — a truncated prompt pipe, a
+CLI flag mismatch, or a race in headless invocation could all still result in an agent
+starting &quot;work&quot; against a task it never actually read.</p>
+<h2>Strategic Shifts in This PR (if any)</h2>
+<p>None. This PR is exactly the sub-project 2 scope described in #720 and the approved design
+spec (<code>docs/superpowers/specs/2026-08-07-receipt-protocol-design.md</code>): cross-CLI
+<code>task_received</code> confirmation between Synlynk and each headless harness, with digest matching
+and a new <code>task_delivery_failed</code> job status. No scope was added or cut during implementation.</p>
+<h2>What This PR Shipped</h2>
+<p>The core mechanism is deliberately dumb: <strong>detection-only, no protocol negotiation with the
+agent CLI</strong>. Synlynk prepends a fixed instruction to every dispatched prompt asking the agent
+to print <code>SYNLYNK_TASK_RECEIVED: &lt;task_sha256&gt;</code> as its literal first line of output, then
+Synlynk greps for that line in the captured log after the fact. No handshake, no blocking
+wait, no changes to any agent CLI's own protocol — just an echo Synlynk can verify or fail to
+find.</p>
+<p>Seven tasks landed, each dispatched independently to Codex or Agy via <code>synlynk dispatch &lt;agent&gt; --task &quot;...&quot; --force-agent --context-mode full --base chore/receipt-protocol-design</code>,
+verified against its own diff and test run before merging locally into the feature branch
+(consolidating into this one PR rather than the per-task auto-opened PRs, which were closed
+as superseded):</p>
+<ol>
+<li><strong><code>_render_task_receipt_instruction(task_sha256)</code></strong> in <code>synlynk/dispatch.py</code> — builds the
+prompt-injection text; wired into <code>_format_prompt_for_agent()</code> for all three prompt-shape
+branches (Claude, Codex, generic) so it's agent-agnostic by construction.</li>
+<li><strong><code>_check_task_receipt(log_text, task_sha256)</code></strong> in <code>synlynk/jobs.py</code> — classifies a job's
+captured log into <code>ok</code> (marker is the literal first non-blank line), <code>late</code> (marker present
+but not first), <code>mismatch</code> (a receipt marker is first but the digest is wrong), or <code>absent</code>.</li>
+<li><strong><code>_classify_task_delivery(receipt_status, has_corroborating_activity)</code></strong> — the
+false-positive guard. A receipt failure alone doesn't hard-fail a job: if the job's
+worktree shows real git activity (<code>has_activity</code> or <code>remote_has_activity</code>), the job is
+downgraded to a non-blocking WARN instead of <code>task_delivery_failed</code>. This mirrors the
+existing <code>permission_denied</code> false-positive lesson from job-b88e0f92 — a status label
+should never override direct evidence of real, correctly-scoped work.</li>
+<li><strong>Waitpid-reaped reconciliation wiring</strong> — the classification is applied in the
+<code>if waitpid_reaped:</code> branch of <code>_reconcile_jobs()</code>, setting <code>job[&quot;status&quot;] = &quot;task_delivery_failed&quot;</code> on hard failure or writing a <code>TASK_RECEIPT_WARN</code> sentinel alert on
+soft failure.</li>
+<li><strong>Dead-pid reconciliation wiring</strong> — the structurally parallel edit in the <code>except ProcessLookupError:</code> branch, since a job whose process died before Synlynk could reap it
+needs the same classification applied independently (different code path, same log-based
+evidence).</li>
+<li><strong><code>live_agent_receipt_check()</code> in <code>synlynk/fleet.py</code></strong> — a new Tier-2 <code>selftest --matrix</code>
+cell (<code>live_receipt:&lt;agent&gt;</code>) that runs one real headless CLI turn per Core-4 agent
+(Claude, Codex, Grok, Agy) with a fixed test digest and checks compliance live, not just in
+unit tests against captured logs. Wired into <code>run_matrix_live()</code>'s existing budget-loop
+pattern (mirroring the <code>live_agent_smoke</code> cell's <code>mock=True</code> stub and <code>spent</code>/<code>budget_usd</code>
+accounting rather than introducing a divergent loop shape).</li>
+<li><strong>README documentation</strong> — a short paragraph after the existing fail-closed guard section
+explaining the receipt marker, the <code>task_delivery_failed</code> status, and the WARN
+corroboration fallback.</li>
+</ol>
+<p>Test coverage: 80 tests across <code>tests/test_dispatch.py</code> and <code>tests/test_jobs.py</code> covering the
+receipt-detection state machine (ok/late/mismatch/absent/none), the corroboration
+classification (hard-fail/warn/clean), and both reconciliation branches (waitpid-reaped and
+dead-pid) with a real local-git-repo fixture for the activity-corroboration case; plus 4 new
+tests in <code>tests/test_fleet_operability.py</code> for the live matrix cell. Full combined suite: 108
+passing.</p>
+<p>Two operational lessons surfaced during execution, both resolved without losing work: a
+<code>permission_denied</code> status on the dead-pid-branch task (job-70a6ef9a) and again on the
+selftest-matrix task (job-47fe2f30) turned out to be false positives — direct inspection of
+each job's worktree diff and a live test run confirmed correctly-scoped, spec-matching
+commits in both cases, consistent with the repo's standing &quot;never trust <code>synlynk jobs</code> status
+alone&quot; memory. Separately, a merge/push cycle for one task silently no-op'd because the Bash
+tool's working directory had persisted inside a job's own worktree from a prior <code>cd</code> — caught
+immediately via <code>git log origin/&lt;branch&gt; --oneline -1</code> disagreeing with the expected tip, and
+recovered by re-verifying <code>pwd</code>/<code>git branch --show-current</code> before retrying the merge.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>None — this sub-project's design was scoped directly in the #720 spec and design doc from a
+prior brainstorming session; no new visual companion session was run for this PR.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>A dispatched job's completion status can now distinguish &quot;the agent did the work&quot; from &quot;the
+agent's CLI never actually saw the task&quot; — without that distinction, a silently-dropped
+prompt looks identical to a successful no-op job, which is exactly the kind of failure mode
+autonomous dispatch loops can't self-correct from if nothing flags it. The WARN corroboration
+guard keeps this from becoming a new source of false-positive noise: a missing receipt marker
+next to a real, verifiable commit is a signal worth surfacing, not a reason to discard
+correct work.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>Sub-project 2 of #720 is complete. Sub-project 3 (not yet scoped in this PR) remains
+outstanding per the original #720 breakdown — the next PM pass should confirm what it covers
+and whether it's still needed given the receipt protocol and fail-closed guard now both
+shipped. Separately, the <code>selftest --matrix</code> receipt cell adds real (budgeted) API cost per
+run across all four Core-4 agents — worth watching in <code>project-docs/costs.md</code> once this ships
+and starts running against CI or scheduled selftest invocations.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

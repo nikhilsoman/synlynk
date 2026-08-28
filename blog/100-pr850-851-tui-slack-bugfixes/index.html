@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>synlynk | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date"></span>
+        
+      </div>
+      <h1 class="blog-post-title"></h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>100. PRs #850/#851 — Closing the two bugs the onboarding guide surfaced</h1>
+<h2>Goal at the end of the previous PR</h2>
+<p>PR #731 (post #99) shipped Synlynk UX 1.0: <code>uxcore</code> as the shared data/write/RBAC seam behind both the curses TUI and Vizor, with the Slack notifier standing as the reference BYOUX consumer. PR #837 then closed out field-trial readiness — playblazer-ng onboarding verified, all 7 journey maps walked interactively end to end with zero console errors. UX 1.0 was, on paper, done and field-trial-ready.</p>
+<h2>What moved the goalpost this PR</h2>
+<p>Writing step-by-step usage instructions for the TUI, Vizor, and Slack surfaces — intended as starter material for a future &quot;Watching synlynk&quot; onboarding guide — is a different exercise from journey-map verification. Journey maps confirm a surface <em>renders</em>. Writing a usage guide requires tracing what actually happens when a user presses a key or reads a message, which surfaced two real bugs that interactive click-through had not caught:</p>
+<ol>
+<li><strong>TUI approve/kill keybindings didn't exist.</strong> <code>synlynk/tui.py</code>'s main loop only handled <code>1</code>/<code>2</code>/<code>3</code>/<code>4</code> (panel switch) and <code>q</code> (quit). The status bar even advertised panels, but there was no way to actually approve a pending PR or kill an in-flight job from the terminal — the two write actions <code>uxcore</code> was explicitly built to expose.</li>
+<li><strong>The Slack notifier's event filter matched nothing.</strong> <code>NOTIFY_EVENT_TYPES = [&quot;dispatch_complete&quot;, &quot;pr_approved&quot;, &quot;job_failed&quot;]</code> never matched <code>uxcore._execute_write</code>'s actual logged action strings (<code>&quot;dispatch&quot;</code>, <code>&quot;approve_pr&quot;</code>, <code>&quot;kill_job&quot;</code>). A second, independent check inside <code>format_message()</code> used a <em>third</em> naming scheme (<code>&quot;job_completed&quot;</code>, <code>&quot;job_failed&quot;</code>) for the Vizor deep-link. And that deep-link was hardcoded to <code>localhost:8420</code> — Vizor's real default port is <code>8721</code>.</li>
+</ol>
+<p>Rather than quietly working around these while drafting the guide, both were filed as issues (#846, #847) with a third issue (#848) to write the actual guide, explicitly blocked on the first two landing — no point documenting behavior that's about to be fixed out from under the docs.</p>
+<h2>What this PR shipped, technically</h2>
+<p>Both fixes were dispatched to Codex (<code>synlynk dispatch codex --issue 846/847 --base main</code>) rather than implemented directly, per this project's PM/implementer role split.</p>
+<p><strong>PR #851 (issue #846) — TUI approve/kill:</strong></p>
+<ul>
+<li><code>synlynk/tui.py</code>: <code>a</code>/<code>k</code> keybindings on the Jobs panel. <code>a</code> calls <code>uxcore.approve_pr(pr_number=...)</code> on the selected pending-approval job; <code>k</code> prompts a y/n confirm, then calls <code>uxcore.kill_job(job_id=...)</code> on the selected in-flight job. <code>KEY_UP</code>/<code>KEY_DOWN</code> added for job selection, with a status-message line reporting result or rejection (&quot;No pending-approval job selected&quot;, etc.).</li>
+<li><code>synlynk/uxcore.py</code>: <code>JobRun</code> gained optional <code>job_id</code>, <code>pr_number</code>, <code>status</code> fields (backward-compatible — older telemetry rows lack them). <code>get_jobs()</code> now cross-references live-tracked jobs (<code>synlynk.jobs._load_jobs()</code>) so jobs that haven't emitted telemetry yet (still queued/running) are still selectable for approve/kill.</li>
+<li><code>docs/superpowers/ux-1.0-surface-checklist.md</code>'s approve/kill rows updated from &quot;requires live interactive session&quot; to &quot;keybinding implemented, unit-tested; still requires live interactive-session verification&quot; — deliberately <em>not</em> marked Pass, since a sandboxed dispatch job cannot perform the live verification the checklist's own header requires.</li>
+</ul>
+<p><strong>PR #850 (issue #847) — Slack notifier event names and deep-link port:</strong></p>
+<ul>
+<li><code>NOTIFY_EVENT_TYPES</code> corrected to <code>[&quot;dispatch&quot;, &quot;approve_pr&quot;, &quot;kill_job&quot;]</code>, matching <code>uxcore._execute_write</code>'s real action strings.</li>
+<li><code>format_message()</code>'s separate deep-link check now reuses <code>NOTIFY_EVENT_TYPES</code> directly instead of maintaining a third divergent list.</li>
+<li>New <code>_vizor_port()</code> reads <code>.synlynk/config.json</code>'s <code>vizor.port</code>, falling back to <code>synlynk.viz.DEFAULT_PORT</code> (<code>8721</code>), replacing the hardcoded <code>8420</code>.</li>
+</ul>
+<p><strong>Review discipline:</strong> both jobs' self-reported &quot;OK (exit 0)&quot; was treated as a starting point, not proof (per standing memory #202). Before merge: full test suites were re-run directly in each job's worktree (1791 passed/2 skipped for #846; 1789 passed/2 skipped for #847), CI was confirmed green across all three supported Python versions, both diffs were read in full, <code>synlynk pr check</code> was run from each worktree, and two anomalies were run down rather than waved through — the unexplained <code>GEMINI.md</code> touch turned out to be the harness's own routine <code>verified:</code> timestamp bump, and the seemingly-duplicate <code>tests/test_notifier_slack.py</code> / <code>tests/test_slack_notifier.py</code> pair turned out to be two files that already coexisted on <code>main</code> pre-dispatch, not an agent-created orphan. Both PR bodies were auto-generated without a GitHub closing keyword (<code>Fix GitHub issue #846:</code> rather than <code>Fixes #846</code>), so both were edited to add <code>Fixes #N</code> before merge, confirmed by both issues actually closing post-merge. Reviews were posted as the sanctioned non-authoring COMMENT-approve (caveat #423 — all dispatch agents share one GitHub identity, so <code>gh pr review --approve</code> fails on self-authored PRs).</p>
+<p>One open thread, not yet chased down: both jobs' actual cost came in far above their pre-execution estimates ($5.19 actual vs. ~$0.14 estimated for #846; $4.22 vs. ~$0.05 for #847) — over 30x and 80x. Likely just <code>structured_output</code> vs. <code>prompt_estimate</code> accounting divergence, but worth a closer look if the pattern recurs on future dispatches.</p>
+<h2>Brainstorm visuals</h2>
+<p>None used for this PR — both fixes were narrowly scoped bug corrections against an already-approved design (the UX 1.0 spec behind #731), not new design surface.</p>
+<h2>What this achieved toward the long-arc goal</h2>
+<p>UX 1.0's premise is that <code>uxcore</code> is the single seam behind every surface, so a write action defined once behaves identically everywhere. These two bugs were exactly the kind that premise is supposed to prevent slipping through: the TUI had a write capability defined in <code>uxcore</code> that its own UI never exposed, and the Slack consumer was subscribing to event names that didn't exist. Both are now closed, and — more importantly — they were caught by the process the guide-writing work was designed to catch: describing real usage, not just confirming a screen renders.</p>
+<h2>New goalpost</h2>
+<p>Issue #848 (&quot;Watching synlynk&quot; onboarding guide, TUI/Vizor/Slack) is now unblocked — its guard condition (#846 and #847 resolved) is satisfied. It has not been started; per its own explicit dependency framing it should be confirmed with the user as the next step rather than assumed.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

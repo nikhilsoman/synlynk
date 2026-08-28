@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #587 — Harness Compatibility &amp; Capability: A Design Spec That Corrected Itself | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-2">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Jul 30, 2026</span>
+        
+          <span class="blog-post-pr">PR #587</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #587 — Harness Compatibility &amp; Capability: A Design Spec That Corrected Itself</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>Coming out of PR #549 (LIVE-3 recovery) and the run of state-engine and identity work before it, synlynk's dispatch mechanism was reliable at the level of &quot;does the job run and does a PR come out the other end.&quot; What it didn't have was any model of <em>why</em> a dispatched job goes quiet without producing anything. The trigger for this PR was a real incident: an Agy dispatch job ran ~72 minutes, took one 3-second turn, hit a shell <code>command</code> permission wall that headless mode couldn't prompt for, was silently auto-denied, and produced nothing. Nothing in synlynk's telemetry distinguished that from a job that was still legitimately thinking.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>The work started as a single research thread (environment discovery, harness capability testing, third-party tool interop, headful-vs-headless adherence) intended to produce one design spec. It became something with a second, load-bearing deliverable: a <strong>canonical, versioned, periodically-recalibrated capability reference</strong> (<code>docs/reference/harness-capability-matrix.md</code>), separate from the spec itself. The shift happened because the design spec kept citing specific harness behavior — Codex's config schema, Grok's flag surface, which failure modes are silent vs. loud — as settled fact, when in several cases it was inherited assumption nobody had gone back to the harness's own maintainer to check.</p>
+<p>So the process changed twice, mid-PR:</p>
+<ol>
+<li><strong>Round 1 — design critique.</strong> <code>synlynk decide --panel claude,agy,codex,grok</code> reviewed the spec as critics. Claude, Codex, and Grok converged on four required amendments (mandatory audit logging, a required/optional capability split, presence-only v1 gating, explicit hard-gate references); Agy returned no output.</li>
+<li><strong>Round 2 — maintainer self-review.</strong> A second, differently-scoped panel round asked each agent to stop critiquing the design and instead <strong>self-report as maintainer of its own harness</strong> — what it can actually do, per surface, headless vs. interactive, and whether synlynk's assumptions about its config were even correct. This is the round that mattered most, because it's the one that found real errors rather than design opinions.</li>
+</ol>
+<h2>What This PR Shipped</h2>
+<p><strong>The self-review round surfaced four concrete corrections</strong>, each backed by the harness's own CLI, not inference:</p>
+<ul>
+<li><strong>Claude's headless permission-wall failure mode is a loud error</strong> (a permission-denied exception surfaces in output), not the silent auto-deny the spec had generalized from Agy's incident. This mattered because §2a's remediation design had assumed a uniform failure shape across harnesses.</li>
+<li><strong>Grok is not a bare Claude-instruction-inheritor.</strong> It has a real, documented native flag surface (<code>--permission-mode</code>, <code>--allow</code>/<code>--deny</code>, <code>--yolo</code>, <code>~/.grok/config.toml</code>) that <code>_permissions_to_flags</code> in <code>dispatch.py</code> simply never maps to — a real gap (confirming #338), but a narrower and more fixable one than &quot;Grok has no config surface at all.&quot;</li>
+<li><strong>Codex's approval flag is <code>--ask-for-approval</code></strong> (<code>untrusted|on-request|never</code>), not the legacy Codex approval-flag name as <code>AGENT_CAPABILITY_BASELINES</code> currently has it.</li>
+<li><strong>Codex's assumed write-back target is unconfirmed.</strong> The spec's §2a remediation mechanism for Codex assumed a <code>[sandbox_workspace_write]</code> TOML table with <code>network_access</code>/<code>writable_roots</code> keys — a target that two prior dispatch attempts had reported as independently confirmed. Queried directly, Codex's own <code>codex sandbox --help</code> output could not substantiate it; the real surface exposes <code>--sandbox-state-disable-network</code>, <code>--sandbox-state-readable-root</code>, <code>--allow-unix-socket</code>, <code>--permission-profile</code> instead. The spec now flags this as unverified and blocks implementation of that specific write path pending independent confirmation against the actual <code>config.toml</code> schema — the same treatment already given to the #339/#578/#580 hard-gates.</li>
+</ul>
+<p><strong>Getting Codex's answer required routing around synlynk's own tooling.</strong> <code>synlynk decide</code>'s panel query (<code>synlynk/team.py:329</code>) hardcodes a 120-second timeout per agent. Codex failed against it twice — once via a broken local <code>timeout</code> wrapper (macOS doesn't ship GNU <code>timeout</code>), once against the real internal limit — because a five-section self-review prompt reliably takes Codex several minutes and ~44K tokens to answer completely. The eventual fix was to bypass <code>synlynk decide</code> and query <code>codex exec</code> directly with no artificial timeout. This is now recorded as a known gap in both the spec (§7) and the canon doc: synlynk's own dispatch tooling should treat &gt;120s silence from Codex as &quot;still working&quot; for non-trivial prompts, not &quot;failed.&quot;</p>
+<p><strong>The canon doc itself</strong> (<code>docs/reference/harness-capability-matrix.md</code>) captures, per harness: a capability matrix broken out by surface (CLI/IDE/web/desktop/API), interactive-vs-headless behavior, confirmed config/control surfaces, known gaps, and a self-correction section against this spec's original claims — plus real CLI version numbers captured via each vendor's own <code>--version</code> output (Claude 2.1.220, Agy 1.1.8, Codex 0.144.1, Grok 0.2.106), with a &quot;Maintenance &amp; calibration&quot; section framing it explicitly as a recurring task: recalibrate on any minor version bump, on any unexpected capability wall, or quarterly at minimum. It was also published as a standalone Artifact — separate from its life as a committed repo doc — for a scannable, presentable copy of the same data.</p>
+<p>One structural finding from cross-referencing all four self-reviews: <strong>surface-capability asymmetry</strong>. Claude and Agy are the only two harnesses whose non-CLI surfaces (IDE extensions) add genuinely new capability rather than just rehosting the CLI. Codex is the most CLI-concentrated of the four — every other surface either shares the identical stack or has no confirmed presence at all. That means dispatch-time capability assumptions ported from one harness's IDE/desktop behavior don't generalize, and Codex specifically should be treated as CLI-only for capability detection until proven otherwise.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>None — this PR's brainstorm ran headless (dispatched via <code>synlynk dispatch claude</code>, HEADLESS-SAFE mode) and explicitly skipped the Visual Companion offer, since two prior dispatch attempts (<code>job-a58018b8</code>, <code>job-3b0fb176</code>) had demonstrated that an interactive Visual Companion prompt is itself an instance of the exact headless/headful adherence gap this goal targets.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>This PR is the first time synlynk's own design process caught itself asserting a harness behavior that turned out to be wrong, and fixed the assertion using the harness's own CLI as the source of truth rather than tribal knowledge or a prior dispatch's confident-but-mistaken research note. That's a small instance of the larger goal: a dispatched harness should either succeed at a granted capability headless, or fail loud with a specific, operator-actionable remediation step (<code>goal-6ebfe9b5</code>). Before this PR, synlynk's own design docs weren't holding themselves to that standard about the harnesses they describe.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>Nikhil approved the design spec on 2026-07-30. The implementation plan (<code>docs/superpowers/plans/2026-07-30-harness-compatibility-capability.md</code>) is now committed, per the Design → Plan → Build Sequence. It surfaced one finding the spec itself had anticipated but this session confirmed as live: the spec's own hard-gate dependency, #339, is closed, but its actual fix PRs (<strong>#578, #580</strong>) are still open and unmerged. That means the preflight-gating phase in the plan is scoped to run its &quot;no-coverage&quot; fallback path — never trusting a literal TC1-5 probe result — until those land, and the plan calls out re-checking their merge status immediately before that phase is dispatched rather than trusting this snapshot. Similarly, #419 (permission-denial telemetry misclassification) is confirmed open with no fix yet, so the plan tracks the <code>UNVERIFIED_CAPABILITY</code> telemetry tag as blocked follow-up rather than scheduling it now. Two smaller follow-ups remain explicitly deferred, not forgotten: the Version Snapshot table's IDE/web/desktop/API version cells for all four harnesses (captured only for CLI this pass), and making <code>synlynk/team.py:329</code>'s 120s panel timeout configurable so Codex doesn't need a manual bypass on every future self-review round — the plan schedules that as its own low-risk, dependency-free phase.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

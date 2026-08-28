@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #731 — Synlynk UX 1.0: TUI + Vizor on Shared uxcore | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-3">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Aug 05, 2026</span>
+        
+          <span class="blog-post-pr">PR #731</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #731 — Synlynk UX 1.0: TUI + Vizor on Shared uxcore</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>99: Synlynk UX 1.0 — TUI + Vizor on Shared uxcore</h1>
+<h2>Where we left off</h2>
+<p>In post #98 (PR #715), we analyzed the local-agent A/B test results and confirmed hardware limits were the gating factor. But in terms of user experience architecture, the system had reached a structural bottleneck. Prior to PR #731, Vizor was our sole visual HUD into repo state. Its internal data generator <code>generate_viz_data()</code> served as the implicit read path for web visualizations, but synlynk lacked a unified, testable UX core.</p>
+<p>Specifically, there was no single write chokepoint, no Actor or role-based access control (RBAC) model, no feature-flag scoping, and no &quot;Bring Your Own UX&quot; (BYOUX) public interface. Terminal users had no live TUI, web users relied on ad-hoc HTTP handler routes directly calling <code>dispatch_agent</code>, and external extensions (such as chat notifications or external process monitors) had no event-stream interface to subscribe to. The goalpost was to unify both terminal and web interfaces on top of a shared, testable library kernel (<code>synlynk/uxcore.py</code>).</p>
+<h2>What moved the goalpost</h2>
+<p>Implementation followed a straight execution of the approved design spec (<code>docs/superpowers/specs/2026-08-05-synlynk-ux-1.0-design.md</code>) and plan (<code>docs/superpowers/plans/2026-08-05-synlynk-ux-1.0.md</code>) without mid-stream strategic pivots. However, one key architectural decision shaped how the unified core functions:</p>
+<p>Rather than having Vizor's HTTP server or the new curses TUI call <code>dispatch_agent</code> directly, all mutation operations (dispatching agents, approving PRs, killing jobs) were routed through a single internal chokepoint: <code>uxcore._execute_write()</code>.</p>
+<p>This write chokepoint re-checks actor capabilities via <code>list_capabilities(actor)</code> before executing the underlying operation, and then appends a structured audit event to <code>.synlynk/events.jsonl</code>. Decoupling write execution from HTTP handlers and CLI dispatch loops is what made the reference Slack notifier and any future BYOUX consumer possible — third-party tools can consume structured events via <code>uxcore.subscribe()</code> without touching web handlers or parsing low-level subprocess stdout.</p>
+<h2>What this PR shipped</h2>
+<p>PR #731 shipped the core foundation of Synlynk UX 1.0 across 18 modified files (+3251 lines, -201 lines), delivered via 12 dispatched implementation tasks across our multi-agent workgroup (Codex for CLI/plumbing, Grok for algorithmic surfaces, Agy for documentation/templates) plus a final regression-fix pass:</p>
+<ul>
+<li><strong><code>synlynk/uxcore.py</code> (The Shared Core):</strong>
+<ul>
+<li>Data accessors (<code>get_costs</code>, <code>get_gantt_data</code>, <code>get_jobs</code>, <code>get_fleet_state</code>) extracted out of Vizor's <code>generate_viz_data()</code>.</li>
+<li><code>Actor</code> and <code>Role</code> RBAC seams (<code>owner</code>, <code>member</code>, <code>viewer</code>), defaulting to <code>LocalActor</code> (<code>owner</code>).</li>
+<li><code>list_capabilities(actor)</code> manifest pattern mapping active feature flags and roles into capability lists.</li>
+<li>Single write chokepoint <code>_execute_write(action, actor, **params)</code> handling dispatch, PR approval, and job termination while appending to <code>.synlynk/events.jsonl</code>.</li>
+<li><code>subscribe(event_types=None)</code> for live event tailing.</li>
+<li>Static <code>FeatureFlags.is_enabled(flag, tier)</code> checks from <code>.synlynk/config.json</code>.</li>
+</ul>
+</li>
+<li><strong><code>synlynk/tui.py</code> (Terminal Surface):</strong>
+<ul>
+<li>Curses-based terminal interface (<code>synlynk tui</code>) with 4 main panels: Fleet, Jobs, Costs, and Review.</li>
+<li>Headless/pad-based render testing in <code>tests/test_tui_panels.py</code> requiring no live terminal.</li>
+</ul>
+</li>
+<li><strong><code>synlynk/viz.py</code> Rewire (Web Surface):</strong>
+<ul>
+<li>Web routes refactored to delegate data fetching to <code>uxcore.get_*()</code> and write actions (dispatch/approve/kill) through <code>uxcore</code> write functions.</li>
+</ul>
+</li>
+<li><strong><code>synlynk/notifiers/slack.py</code> (Reference BYOUX Consumer):</strong>
+<ul>
+<li>Minimal one-way Slack webhook notifier (<code>synlynk notify slack --webhook-url &lt;url&gt;</code>) tailing <code>uxcore.subscribe()</code>.</li>
+</ul>
+</li>
+<li><strong><code>docs/api/uxcore.md</code> (BYOUX Public Library Interface):</strong>
+<ul>
+<li>Published public API documentation for external tools integrating with <code>uxcore</code>.</li>
+</ul>
+</li>
+<li><strong>Command Taxonomy &amp; Plumbing:</strong>
+<ul>
+<li>Added <code>tui</code> to <code>synlynk/taxonomy.py</code> and regenerated CLI reference docs. <code>notify slack</code> is registered as a CLI subcommand but deliberately excluded from the taxonomy (it's a hook-triggered BYOUX consumer, not an orientation-gateway command).</li>
+</ul>
+</li>
+</ul>
+<h3>Lesson from the Final Regression Pass</h3>
+<p>The feature work was implemented across 12 individual dispatched tasks, each with task-level unit tests. However, when running the full test suite (<code>pytest</code>) before merging, three cross-cutting regressions surfaced:</p>
+<ol>
+<li>A missing <code>'tui'</code> entry in <code>synlynk/taxonomy.py</code> caused taxonomy validation tests to fail.</li>
+<li>An obsolete pre-rewire assertion in <code>tests/test_viz.py</code> was expecting direct <code>dispatch_agent</code> calls instead of <code>uxcore</code> dispatch.</li>
+<li><code>docs/reference/commands.md</code> was out of sync after registering the new CLI commands.</li>
+</ol>
+<p>This served as an explicit reminder: task-scoped unit test passes are necessary but not sufficient — a full-suite regression run before branch completion remains mandatory.</p>
+<h2>Brainstorm visuals used</h2>
+<p>No dedicated HTML visual companion was created in <code>docs/brainstorm/</code> for this specific UX 1.0 design spec. Prior art for Vizor's visual dashboard layout exists in <code>docs/brainstorm/bs21-vizor/</code>, which informed the original panel breakdown (Fleet, Jobs, Costs, Review) now mirrored 1:1 between the web interface and the new curses TUI.</p>
+<h2>What this achieved on the path to autonomy</h2>
+<p>In our overarching arc to position synlynk as &quot;the OS for multi-agent development&quot;, two user interfaces hand-rolling separate views into workspace state created maintenance overhead and inconsistent policy enforcement.</p>
+<p>By consolidating both the TUI and Vizor behind <code>uxcore</code>, any future agent execution, governance check, or telemetry filter implemented in <code>uxcore</code> instantly applies across all user-facing surfaces. Furthermore, the introduction of <code>subscribe()</code> and <code>_execute_write</code> creates a clean, event-driven extension seam for external tools, autonomous notification relays, and multi-agent orchestrators.</p>
+<h2>Next goalpost</h2>
+<p>With the BYOUX public interface established and validated by the reference Slack notifier, the next goalpost is exercising the <code>uxcore</code> seam with a second, non-Slack consumer (such as a webhook/relay consumer or the fleet-parity operability audit queued in project memory) to prove the abstraction cleanly generalizes beyond its first consumer.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #479 — The Agy Jetski Investigation: An RCA With No Fix | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-3">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Jul 24, 2026</span>
+        
+          <span class="blog-post-pr">PR #479</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #479 — The Agy Jetski Investigation: An RCA With No Fix</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>PR #475 had just shipped a warning for the <em>generic</em> silent-no-op failure mode: <code>agy</code> dispatched with no write/run permissions produces a clean-looking success that actually did nothing. That fix assumed the underlying cause was always &quot;permissions were never granted.&quot; A follow-up handoff note from the rxcc session — the same one that surfaced PR #475's bugs — reported a <em>more specific</em> failure: permissions correctly granted, but a headless-runtime &quot;jetski&quot; auto-deny for the command/shell tool specifically, four different mitigation attempts all failing identically.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>This PR is the result of a shift the user made explicitly mid-investigation: rather than speccing an engineering fix from the rxcc handoff note alone, reproduce the bug locally first. Two rounds of reproduction attempts (four dispatched <code>agy</code> jobs total, covering every permission-granting mechanism synlynk has: <code>--grant</code>-based flag injection, <code>.agents/agy.json</code> harness-overrides matching rxcc's exact config, with and without a global <code>~/.gemini/settings.json</code> allow-rule, and one job explicitly forced to invoke the shell/command tool the jetski error names) all succeeded cleanly — zero repro. Given that, the user's second explicit call was to drop the planned spec entirely rather than write a fix for a bug that couldn't be shown to exist in synlynk's own code.</p>
+<h2>What This PR Shipped</h2>
+<p><code>docs/rca/2026-07-24-agy-jetski-headless-permission-investigation.md</code> — not a code change, a closed investigation record. It documents:</p>
+<ul>
+<li>The exact reported symptom: a dispatched <code>agy</code> job completing <code>status: OK (exit 0)</code> with zero file changes and a job log containing Antigravity CLI's own <code>jetski: no output produced — a tool required the &quot;command&quot; permission that headless mode cannot prompt for, so it was auto-denied</code> message.</li>
+<li>rxcc's four failed mitigation attempts (default <code>.agents/agy.json</code> override, <code>--grant &quot;command(*)&quot; --skip-preflight</code>, project-scoped <code>.gemini/settings.json</code>, global <code>~/.gemini/settings.json</code>) — all ruled out settings.json scope as the blocker, since even the machine-wide grant didn't clear it.</li>
+<li>This session's four reproduction attempts against the confirmed <em>identical</em> machine, OS build, <code>agy</code> version (1.1.6), and <code>~/.gemini/antigravity-cli/</code> state directory as the rxcc session — all four succeeded, including the one built specifically to exercise the named &quot;command&quot; permission.</li>
+<li>The conclusion: no synlynk-side code path (neither the <code>--grant</code>-to-flag resolution nor the <code>.agents/&lt;agent&gt;.json</code> harness-overrides path) could be found or triggered that silently drops <code>--dangerously-skip-permissions</code>. Both mechanisms correctly reached <code>agy</code> and were honored every time.</li>
+<li>A named suspect for what actually happened: <code>~/.gemini/antigravity-cli/jetski_state.pbtxt</code>, a session/auth token file populated by interactive login, flagged by rxcc's own handoff as unexamined. A stale or momentarily invalid token there is consistent with all four of rxcc's fixes failing identically (none of them touch auth state) and with this session's inability to reproduce it on the same install.</li>
+<li>Explicit next-step guidance for if it recurs: capture the raw job log (not a narrative summary), check <code>agy --version</code> against 1.1.6, and force a fresh interactive login before retrying — rather than re-running the same settings.json/<code>--grant</code>/harness-overrides permutations this investigation already covered exhaustively.</li>
+</ul>
+<h2>Brainstorm Visuals Used</h2>
+<p>None — this was a reproduction-and-write-up task, not a design decision; no visual companion was used or needed.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>The discipline exercised here — reproduce before speccing, and write down a negative result with the same rigor as a positive one — matters more than the specific conclusion. A cross-repo bug report relayed secondhand, with a plausible-sounding root cause already proposed, is exactly the kind of input that could have produced a spec for a fix to a bug that doesn't exist in this repo's code. The RCA closes the loop honestly: no engineering fix was specced or implemented, the existing PR #475 warning remains the correct and sufficient mitigation for the failure mode it actually addresses, and a concrete, falsifiable theory (stale auth token) is recorded for whoever hits this next, instead of the investigation simply evaporating from institutional memory once the chat session that ran it ends.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>This investigation is closed, not resolved — if the jetski auto-deny recurs, the fix (if one exists) belongs to Google's Antigravity CLI, not synlynk, and the RCA's own &quot;If this recurs&quot; section is the runbook for confirming that before anyone re-opens dispatch-side investigation. No follow-up work is scheduled from this PR; it's a terminal node in this session's thread, distinct from the still-open dispatch-reliability work (issue #461's job-status misreporting pattern) that PR #463 left unresolved.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

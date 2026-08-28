@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #676 — synlynk worktree audit/clean: automating the hygiene protocol | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Aug 03, 2026</span>
+        
+          <span class="blog-post-pr">PR #676</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #676 — synlynk worktree audit/clean: automating the hygiene protocol</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>The Worktree Hygiene Protocol (CLAUDE.md, added via PR #575) formalized when a dispatch-job worktree/branch should be removed: on merge, confirmed via <code>git status --short</code> + <code>git merge-base --is-ancestor</code> (or PR state for squash merges), with a periodic full audit &quot;at least every ~20 dispatched jobs.&quot; That periodic audit was pure manual archaeology — a July 2026 sweep found 30 stale worktrees/branches that had accumulated because cleanup only ever happened reactively, in large batches, long after the owning PRs had merged. The protocol existed; nothing enforced it.</p>
+<h2>What This PR Shipped</h2>
+<p><code>synlynk worktree audit</code> and <code>synlynk worktree clean</code>, a new command group in <code>synlynk/worktree.py</code> that runs the manual audit procedure automatically:</p>
+<ul>
+<li><strong>Classification</strong> (<code>_classify_worktree</code>) applies the protocol's own checks as a pure function over pre-fetched signals: dirty-tree override → <code>git merge-base --is-ancestor</code> → <code>gh pr</code> state (including a net-diff-stat heuristic for closed-but-unmerged PRs) → four gh-required outcomes. A second pass, <code>_apply_nesting_floor</code>, enforces that a nested worktree can never rank safer than its parent — mirroring the hygiene protocol's rule that a parent PR's merge should sweep every nested <code>worktrees/job-*</code> inside it.</li>
+<li><strong><code>synlynk worktree audit</code></strong> (read-only) reports every worktree as SAFE / NEEDS-REVIEW / UNSAFE with its reasoning, plus a <code>--json</code> payload for tooling.</li>
+<li><strong><code>synlynk worktree clean</code></strong> is dry-run by default; <code>--apply</code> removes only SAFE items, nested-before-parent, with <code>git worktree remove --force</code> + <code>git branch -D</code> + best-effort <code>git push origin --delete</code>, continuing past individual failures instead of aborting the batch.</li>
+<li><strong><code>synlynk status</code></strong> gained a lightweight <code>WORKTREES</code> hint line — local-only, no <code>gh</code> calls — so staleness is visible on every status check, not just when someone remembers to run a full audit.</li>
+</ul>
+<p>Built via <code>synlynk dispatch codex</code> across six dispatched tasks (dataclasses/parsing → classification → nesting floor → audit/clean orchestration → CLI wiring → status integration), each reviewed by Claude directly (spec compliance, then code quality) before merging into the feature branch — matching this repo's locked PM/implementer role split. Two review-time fixes were needed: an import-ordering nit in the test file, and a missed <code>docs/reference/commands.md</code> regeneration after the new <code>worktree audit</code>/<code>worktree clean</code> entries were added to <code>synlynk/taxonomy.py</code> (caught by <code>test_docs_sync.py</code> before merge, not after).</p>
+<p>Manual verification against this repo's own real worktree state (98 worktrees, accumulated across months of dispatch work) found 8 genuinely SAFE stale worktrees with merged-PR reasons — proving the tool works on the exact mess it was built to clean up.</p>
+<h2>Goalpost</h2>
+<p>The Worktree Hygiene Protocol's periodic-audit step is now a single command instead of a manual <code>git worktree list --porcelain</code> + cross-reference exercise. Next: fold <code>synlynk worktree audit</code> into the actual cleanup cadence (post-merge, and periodically) so the 30-stale-worktree accumulation pattern doesn't recur.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

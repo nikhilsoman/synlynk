@@ -70,7 +70,7 @@
 <p>Translation to agent CLI flags via <code>_permissions_to_flags()</code> in <code>synlynk/dispatch.py</code>:</p>
 <ul>
 <li>Claude: <code>--allowedTools</code> list</li>
-<li>Codex: <code>--approval-policy</code> (<code>none</code> / <code>untrusted</code> / <code>all</code>)</li>
+<li>Codex: <code>--ask-for-approval</code> (<code>untrusted</code> / <code>on-request</code> / <code>never</code>)</li>
 <li>Agy: injected as a <code>## Permissions</code> section in the task context header (no CLI flag available)</li>
 </ul>
 <h3>Scope B — Per-Project Harness Config</h3>

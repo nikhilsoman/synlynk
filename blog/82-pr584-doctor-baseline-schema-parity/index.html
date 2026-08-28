@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #584 — #339: When &#39;Green Across the Board&#39; Meant the Checks Weren&#39;t Running | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-2">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Jul 29, 2026</span>
+        
+          <span class="blog-post-pr">PR #584</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #584 — #339: When &#39;Green Across the Board&#39; Meant the Checks Weren&#39;t Running</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>Coming out of the LIVE-3 recovery (PR #549) and the state-engine work, the standing priority was a pre-launch headless-capability audit across the agent fleet — confirming <code>synlynk doctor</code> could actually be trusted to say which agents support which dispatch flags, headless contracts, and network dependencies before that audit started trusting its output.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>None planned as a pivot, but the PR itself exists because of one: issue #339 found that <code>doctor</code>'s TC-1/TC-2/TC-3/TC-5 checks were silently vacuous-passing for most agents. <code>AGENT_CAPABILITY_BASELINES</code> in <code>synlynk/_constants.py</code> had inconsistent per-agent schema — <code>claude</code> and <code>local</code> had <code>dispatch_flags</code> as a bare list, <code>codex</code> was missing it entirely, only <code>agy</code>/<code>grok</code> were dict-shaped with <code>valid_flags</code>/<code>invalid_flags</code>/<code>required_flags</code>. Checks silently skipped agents that didn't match the shape they expected instead of failing loudly.</p>
+<h2>What This PR Shipped</h2>
+<p>Five fixes, all from the issue's own suggested plan:</p>
+<ol>
+<li>A TC-0 schema-completeness meta-check that asserts every agent has the required keys in the required shape, failing loudly per-agent instead of silently skipping.</li>
+<li>Normalized <code>dispatch_flags</code> to one dict shape across all five agents, backfilled with real values (e.g. <code>claude</code>: <code>--dangerously-skip-permissions</code> as a required flag, sourced from this project's own harness fence rather than guessed).</li>
+<li>Added <code>headless_contract</code> and <code>network_deps</code> baselines for every agent.</li>
+<li>Added <code>local</code> to <code>doctor.py</code>'s TC-5 file map with an explicit &quot;no directive file, intentionally skipped&quot; report line instead of silent omission.</li>
+<li>Confirmed <code>synlynk doctor</code> output now genuinely differs per agent instead of being uniformly green.</li>
+</ol>
+<p>Two rounds of correction followed non-authoring review from Grok. The first: normalizing <code>claude</code>/<code>local</code> to dict-shaped flags accidentally turned on a live <code>subprocess.run([agent, &quot;--help&quot;])</code> call inside <code>_preflight_dispatch</code>'s hot path for those two agents (previously it never fired for them, since their <code>valid_flags</code>/<code>required_flags</code> were always empty). That broke 5 tests mocking <code>Popen</code> but not probe.py's separate <code>subprocess.run</code>, and added real dispatch-time latency. The fix: read <code>compliance_status</code>/<code>active_flags</code> from the already-populated <code>harness_records</code> table instead of calling the CLI live — exactly the persisted-probe-then-consume-at-dispatch architecture #339 was arguing for in the first place, just not yet applied to this one path.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>None — this was root-cause-driven from the issue text and existing test failures, not a design decision.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p><code>synlynk doctor</code> output is now something the fleet-parity audit can actually trust. But merging this PR immediately introduced a new regression of its own (see PR #589) — a reminder that schema-normalization work touching every agent's baseline entry is exactly the kind of change that needs a full isolated-clone test run before merge, not a spot check on the agents that were the original focus.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>Doctor/probe output is trustworthy again, but the fleet-parity audit itself (#332, #338, #340, #342, #347, #348, #419, #461) is still not started — it should proceed carefully now, given #339's own fix needed two follow-up corrections before it was actually clean.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

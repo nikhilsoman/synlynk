@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>synlynk | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date"></span>
+        
+      </div>
+      <h1 class="blog-post-title"></h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>116: v0.13.1 — the release that stayed a patch</h1>
+<h2>Where we left off</h2>
+<p>Task #73 (Autonomous Ops Lite, item 3) asked for one thing: run the manual
+autopilot-lite loop — dispatch, review, merge, reconcile — against a real synlynk
+goal instead of a synthetic one. The goal picked was <code>goal-adb60ccc</code>, scoped as
+&quot;epic closure&quot; across the Job-Truth and GH-Write epics from
+<code>docs/superpowers/plans/2026-08-09-job-truth-and-gh-write-epics.md</code>: Epic A3 (#740,
+cost-completeness for terminal jobs), Epic B2 (#577, Codex-sandbox invalid gh-token
+diagnosis), and Epic B3 (#659 and #714, dispatched-review-cancellation RCA). The
+working assumption going in was that closing these four stories would round out
+enough scope to cut a named <code>v0.14.0</code> minor release.</p>
+<h2>What moved the goalpost</h2>
+<p>The loop run itself surfaced real friction — two consecutive Agy scratch-worktree
+infra crashes, a Grok review that landed on the wrong branch and posted a
+corrupted-template review, and a GitHub branch-protection block that looked like a
+missing review but was actually a pending CI check — all handled via the existing
+escalation clauses (self-review fallback, <code>finishing-a-development-branch</code>) rather
+than blocking the loop. That's exactly the kind of attribution/friction data task
+#75 exists to capture.</p>
+<p>But looking at what was actually sitting in <code>CHANGELOG.md</code>'s <code>[Unreleased]</code> section
+once the four stories landed, two of the largest line items didn't hold up to a
+&quot;is this a real milestone&quot; test: <strong>Agent vs Harness Terminology</strong> is explicitly
+Phase 0 of a 5-phase roadmap — the glossary and doctor table got renamed, but
+phases 1-4 (agent manifests, memory, capability registry, portability) don't exist
+yet. <strong>Quota-Aware Dispatch Reservation</strong> ships a real <code>agent_reservations</code> ledger
+and TPM hook surface, but no active agent currently exercises either — there's
+nothing production consuming what would be the release's headline feature.</p>
+<p>Naming a <code>v0.14.0</code> minor around content that's either incomplete or inert breaks
+the release policy's own rule: <em>if you can't write the one-sentence pitch, the
+scope isn't coherent enough.</em> Neither of those two features earns that sentence
+yet. So the release got rescoped down to what the Named Release Policy actually
+calls a patch: bug fixes and completed, load-bearing safety mechanisms, no new
+user-facing surface area with unfinished edges.</p>
+<h2>What this PR ships</h2>
+<p><code>v0.13.1</code>, cut as <code>release/v0.13.1</code> off <code>main</code>:</p>
+<ul>
+<li><strong>GOVERNS event-contract extension</strong> (#922) — <code>job_terminal</code> and
+<code>review_submitted</code> event types plus <code>synlynk events tail [--type] [--limit]</code>,
+read-only against the existing <code>events</code> table.</li>
+<li><strong>Init/Migrate/Upgrade Rollback Mechanism</strong> — <code>rollback_checkpoint</code> and
+<code>rollback_checkpoint_upgrade</code> wrap <code>init()</code>/<code>migrate()</code>/<code>upgrade()</code> in
+checkpoint-and-restore, plus <code>synlynk rollback [--last|&lt;op-id&gt;|--clear]</code> and
+<code>--dry-run</code> previews.</li>
+<li><strong>State Engine PR1</strong> — <code>roadmap.md</code>/<code>memory.md</code>/<code>costs.md</code> are now write-through
+generated from <code>state.db</code> instead of hand-parsed markdown.</li>
+<li><strong><code>synlynk doctor</code> TC-6</strong> (#928, closes #577) — a new gh-auth check across all
+four dispatch harnesses that catches the false-green failure mode where <code>gh auth status</code> exits 0 but the token is actually invalid, closing the Codex-sandbox
+root cause diagnosed this session (no GitHub App token provisioned, network
+egress to <code>api.github.com</code> disabled by the sandbox).</li>
+<li><strong>Dispatched-review-cancellation RCA</strong> (#929, closes #714) — concluded Grok's
+<code>cancelled</code> stopReason is harness-side, distinct from synlynk's own 30-minute
+stall killer (<code>_check_job_stall()</code>) and <code>HARNESS_TIMEOUT_PATTERNS</code>; no code
+change warranted.</li>
+<li>Three CVE/reliability fixes carried over from <code>[Unreleased]</code>: <code>linkify-it</code> and
+<code>brace-expansion</code> bumps (Dependabot #6/#7), and the base-branch resolution +
+Agy permission-warning fixes.</li>
+</ul>
+<p>Agent vs Harness terminology and Quota-Aware Dispatch Reservation stay in
+<code>[Unreleased]</code> — both are real, tested, merged code, just not yet a milestone
+worth naming.</p>
+<h2>What this achieved</h2>
+<p>Every story in the <code>goal-adb60ccc</code> epic-closure goal is closed (A3 #740, B2 #577,
+B3 #659/#714), the fleet gained a doctor check that should catch the exact
+gh-token failure mode that cost three dispatch attempts on PR #928, and the
+release discipline held: a release got <em>smaller</em> rather than shipping partial
+work under a bigger version number because the version number was already
+mentally reserved.</p>
+<h2>The goal at the end of this PR</h2>
+<p><code>v0.13.1</code> ships. Task #75 — writing up the attribution/friction findings from
+this loop run (Agy scratch-worktree infra bug, Codex network restriction,
+recurring stale-job-status pattern, the branch-protection-vs-review confusion) —
+feeds directly into Week 2's TPM/session MVP design, which is also the natural
+trigger for Quota-Aware Dispatch Reservation to graduate out of <code>[Unreleased]</code>:
+once there's a TPM actually reading the reservation ledger, that's the milestone.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

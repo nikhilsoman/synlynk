@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #383 — .gitattributes union merge for project-docs churn | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-2">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Jul 19, 2026</span>
+        
+          <span class="blog-post-pr">PR #383</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #383 — .gitattributes union merge for project-docs churn</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>After v0.12.0 (Measurement &amp; Reliability) and the live-command-selftest arc (PR #328), concurrent multi-agent / multi-worktree work is the default operating mode. Shared markdown under <code>project-docs/</code> remains a write-through, git-tracked human surface even as <code>state.db</code> is the machine-readable substrate. That surface is also a merge-conflict magnet: todo checkboxes, cost ledger rows, and per-user devlogs get appended from many sessions at once.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>None at the product architecture level. This is a pure hygiene fix for team-mode git friction — not a replacement for <code>state.db</code>, and not a change to how agents write docs. The goalpost stays the same: keep agents and humans on one shared project state without burning time on conflict markers in append-only files.</p>
+<h2>What This PR Shipped</h2>
+<ol>
+<li>
+<p><strong>Root <code>.gitattributes</code></strong> declaring Git's built-in union merge for:</p>
+<ul>
+<li><code>project-docs/todo.md</code></li>
+<li><code>project-docs/costs.md</code></li>
+<li><code>project-docs/devlogs/*.md</code></li>
+</ul>
+</li>
+<li>
+<p><strong>Verified driver setup:</strong> a scratch-repo merge of concurrent appends confirmed that <code>merge=union</code> works with <strong>zero</strong> local git config. It is a built-in attribute value (see <code>gitattributes(5)</code>), not a custom driver that would need <code>git config merge.union.driver</code>. Control case without <code>.gitattributes</code> produced standard <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code> conflict markers; with the attribute, both sides' lines were kept and the merge completed cleanly.</p>
+</li>
+<li>
+<p><strong>CLAUDE.md Session Protocol note</strong> so contributors and agents know pull is still preferred, union may leave nondeterministic line order, and no one-time config ceremony is required.</p>
+</li>
+</ol>
+<h2>Brainstorm Visuals Used</h2>
+<p>None — issue-driven plumbing.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>Reduces a recurring class of human/agent merge pain (15 recent commits on these paths, historical conflict markers in <code>todo.md</code>) without inventing a custom merge driver or CI gate. Multi-agent team mode can keep writing append-only ledgers with fewer false-stop conflict resolutions.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>Docs-drift merge noise is mitigated for the highest-churn append paths. Remaining gaps (roadmap/memory concurrent edits, intentional reorder/delete conflicts that union cannot resolve well, any future move of docs under <code>.synlynk/project-docs/</code>) stay out of scope until they show the same recurrence rate.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,45 @@
+<h2>Design §2 — Matrix runner (<code>selftest --matrix</code>)</h2>
+<p class="subtitle">Architecture of the truth gate. Approve in terminal to continue.</p>
+
+<div class="section">
+  <p class="label">Command surface</p>
+  <pre style="background:var(--code-bg,#111);padding:0.75rem;border-radius:6px;overflow:auto;font-size:0.85rem">synlynk selftest --matrix              # dry (default): no model $, CI-safe
+synlynk selftest --matrix --live       # live tiers; budget-capped
+synlynk selftest --matrix --live --budget 10   # default $10/week enforced</pre>
+</div>
+
+<div class="section">
+  <p class="label">Grid</p>
+  <ul>
+    <li><strong>Homes (rows):</strong> claude, agy, codex, grok (not local)</li>
+    <li><strong>Verb columns:</strong> status, doctor, dispatch-dry, jobs, logs, pr-check (dry), cost (schema), story (list)</li>
+    <li><strong>Target columns (live only):</strong> dispatch trivial task to each of Core 4 as headless worker</li>
+  </ul>
+</div>
+
+<div class="section">
+  <p class="label">Tiers</p>
+  <ol>
+    <li><strong>Dry/contract</strong> — argv matches baseline; instruction file exists; doctor TC-2/3; no nested state.db; free</li>
+    <li><strong>Live trivial</strong> — real agent call, minimal prompt, assert exit 0 + reconciled terminal status + cost row (or explicit zero)</li>
+    <li><strong>Live git-only</strong> — optional later; worktree commit smoke (not Phase 1)</li>
+    <li><strong>Live GH-write</strong> — only after GH-write epic; only agents with can_gh_write proven</li>
+  </ol>
+  <p>Phase 1 ships tier 1. Phase 2 ships tier 2 under $10/week hard stop (abort remaining cells; mark incomplete not green).</p>
+</div>
+
+<div class="section">
+  <p class="label">Storage</p>
+  <p>Results → <code>state.db</code> table <code>fleet_matrix_runs</code> (run_id, tier, home, cell, status, detail, ts, cost_usd). Last green timestamps drive Proven freshness in <code>synlynk status</code>.</p>
+</div>
+
+<div class="section">
+  <p class="label">Assertions (any failure = cell red)</p>
+  <ul>
+    <li>Exit 0 and job terminal status ≠ UNKNOWN</li>
+    <li>Instruction file present for agent under test</li>
+    <li>No nested product state.db under worktrees/</li>
+    <li>Live: cost ledger entry or explicit zero-cost marker</li>
+    <li>Codex builder-only: GH-write cells are N/A (not red) until epic lifts the label</li>
+  </ul>
+</div>

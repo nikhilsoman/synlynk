@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>synlynk | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date"></span>
+        
+      </div>
+      <h1 class="blog-post-title"></h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>v0.15.0 — The Workspace Policy Layer</h1>
+<p><strong>PR:</strong> <a href="https://github.com/nikhilsoman/synlynk/pull/1122">#1122</a>
+<strong>Date:</strong> 2026-08-23</p>
+<h2>The goal as understood at the end of the previous PR</h2>
+<p>PR #1110 (2026-08-23) closed out Phase 1 of the road-to-autonomous-ops program:
+role-scoped GitHub App identities, fail-closed role resolution (#423/#569),
+live-validated end-to-end. That left synlynk's own repo able to <em>identify</em>
+which role was acting, but with no machine-readable answer to &quot;is this role
+<em>authorized</em> to do this&quot; — that answer still lived as prose tables in
+CLAUDE.md (Capability-Based Task Allocation, PR Review Discipline, Named
+Release Policy), hand-read by whichever agent happened to be doing the work.
+Full autonomous operation for synlynk's own repo, targeted for 2026-08-31,
+needed those tables to become data a program can actually gate on — and
+needed that data to be per-workspace configurable from the start, since
+Phase 2 (rxcc) and Phase 3 (cc-videoreframing) are already known to need
+materially different policies (rxcc in particular, for DPDP/ABDM regulatory
+reasons).</p>
+<h2>Strategic shift in this PR</h2>
+<p>The brainstorm session that produced the design spec
+(<code>docs/superpowers/specs/2026-08-23-workspace-policy-and-autonomous-loop-design.md</code>)
+scoped this as two Named Releases rather than one big-bang PR: v0.15.0
+&quot;Workspace Policy Layer&quot; (the authority mechanism itself, landing on
+synlynk's own repo first) and v0.16.0 &quot;Autonomous Loop&quot; (the
+<code>awaiting_approval</code> event, the approval-gate flow, and <code>synlynk tpm sweep</code> —
+the loop that actually <em>uses</em> the authority mechanism unattended). This post
+covers v0.15.0 only; v0.16.0 is next.</p>
+<h2>What this PR shipped</h2>
+<p><strong>Two-tier policy schema</strong> (<code>synlynk/policy.py</code>): workspace defaults at
+<code>~/.synlynk/workspaces/&lt;name&gt;/policy.json</code> (falling back to an in-code
+<code>DEFAULT_WORKSPACE_POLICY</code> when absent — new workspaces get sane behavior
+with zero config), merged with a repo's sparse <code>.synlynk/policy.json</code>
+overrides. The merge rule is deliberately simple: whole-object replace per
+top-level key under <code>defaults</code>, not a recursive deep merge. A repo that wants
+to change <code>merge_authority</code> writes the whole <code>merge_authority</code> object; it
+doesn't patch individual fields inside it. That keeps a repo-override file
+short and its meaning unambiguous by inspection — no need to trace two files
+to know what a merged key actually resolves to.</p>
+<p><strong><code>check_authority(action, role, repo_path)</code> → <code>AuthorityResult</code></strong>: covers
+<code>roadmap_edit</code>, <code>goal_create</code>, <code>merge</code>, <code>release_cut</code>, and
+<code>task_dispatch:&lt;type&gt;</code> actions, plus an <code>approval_required_for</code> rule matcher
+(currently: named releases, roadmap-authority changes, security-sensitive
+paths, irreversible merges — the approval <em>ticket</em> mechanism itself is
+v0.16.0's job, this release only produces the <code>requires_approval</code> signal).</p>
+<p><strong>Four fail-closed call sites</strong>, matching #569's established style
+(<code>RuntimeError</code> with an explicit reason, not a silent no-op):
+<code>dispatch_agent()</code>'s task-allocation resolution, <code>cmd_release</code>,
+<code>cmd_roadmap_add</code>, <code>cmd_goal_create</code>.</p>
+<p><strong>Three new CLI commands</strong>: <code>synlynk policy check-merge</code> (reviewer-facing —
+non-zero exit means don't merge), <code>synlynk policy sync-branch-protection</code>
+(idempotent; PUTs GitHub's branch-protection API using required checks
+derived from <code>.github/workflows/</code>), <code>synlynk policy show</code> (prints the fully
+resolved workspace+repo policy — the new source of truth for &quot;who can do
+what here,&quot; replacing hand-read prose).</p>
+<p><strong>This repo's own migration</strong>: <code>.synlynk/policy.json</code> now encodes exactly
+what CLAUDE.md's tables said in prose — <code>qa</code> merges after non-authoring
+review, <code>pm</code> cuts releases with human approval, the dev-authority
+task-allocation table (Codex for implement/test/refactor/cli-plumbing, Agy
+for css/templates/content/subpages, Grok for canvas/js/infra, Claude for
+gh_write). CLAUDE.md's Capability-Based Task Allocation section is now a
+five-line pointer to <code>synlynk policy show</code> instead of a hand-maintained
+table — one fewer place to forget to update.</p>
+<p><strong>A regression caught mid-review, not by CI first</strong>: the default
+<code>role=&quot;dev&quot;</code> left on <code>cmd_release</code>/<code>cmd_roadmap_add</code>/<code>cmd_goal_create</code>
+didn't match the default policy's <code>pm</code>-only authority for those actions, so
+any call that didn't pass <code>--role</code> explicitly — including coldstart's own
+first roadmap-row write — started failing closed. CI on PR #1122 caught it
+first, actually (all three Python versions red); fixed in <code>20cb59c</code> by
+defaulting those three commands to <code>role=&quot;pm&quot;</code>, matching what they're
+actually gating on. Worth calling out because it's exactly the failure mode
+fail-closed design is supposed to produce loudly instead of silently — it
+did.</p>
+<p><strong>Live verification, not just &quot;tests pass&quot;</strong>: <code>synlynk policy sync-branch-protection</code> was run against the real <code>nikhilsoman/synlynk</code> repo
+after PR #1122 merged to <code>main</code>, then independently confirmed via
+<code>gh api repos/nikhilsoman/synlynk/branches/main/protection</code> —
+<code>required_status_checks</code> = <code>[&quot;test (3.8)&quot;, &quot;test (3.10)&quot;, &quot;test (3.12)&quot;, &quot;qa-gate&quot;]</code>, <code>required_reviews</code> = <code>1</code>, <code>enforce_admins</code> = <code>true</code>. This is
+Phase 1's original stated exit criterion (&quot;branch protection can be turned
+on for real&quot;) and it's now independently checkable, not just asserted.</p>
+<h2>Brainstorm visuals</h2>
+<p>None — this design session stayed text-only; the schema and merge rule were
+simple enough not to need a visual companion.</p>
+<h2>What this achieved on the path to full autonomy</h2>
+<p>The mechanism that decides &quot;is this action allowed&quot; now exists as data,
+gates real call sites, fails closed the way #569 established, and is proven
+live on the one repo currently exercising it. Nothing about it hardcodes
+synlynk's specific choices as universal — a repo with no <code>.synlynk/policy.json</code>
+at all still gets sane <code>DEFAULT_WORKSPACE_POLICY</code> behavior, and a repo that
+wants rxcc's more conservative posture writes its own override file with no
+code change required. That's the portability property Phase 2/3 rollout
+needs, built in from the first repo rather than retrofitted later.</p>
+<h2>The goalpost at the end of this PR</h2>
+<p>v0.16.0 &quot;Autonomous Loop&quot; is next: the <code>awaiting_approval</code> GOVERNS event
+type, the approval-gate flow (<code>gh issue create</code> + resolution detection
+extending <code>scan_local_events()</code>), and <code>synlynk tpm sweep</code> — the command that
+actually walks ready stories through dispatch→verify→PR→review→merge
+end-to-end, gated on the authority mechanism this release built, parking on
+<code>requires_approval</code> without blocking the batch. The 2026-08-31 exit
+criterion is a live dogfood run of that loop, including at least one story
+that deliberately trips an approval rule, proving the pause+ticket+resume
+path works unattended — not just the happy path.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

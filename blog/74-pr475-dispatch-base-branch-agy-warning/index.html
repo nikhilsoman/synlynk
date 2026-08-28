@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #475 — Dynamic PR Base Resolution + Silent Agy No-Op Warning | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-2">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Jul 24, 2026</span>
+        
+          <span class="blog-post-pr">PR #475</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #475 — Dynamic PR Base Resolution + Silent Agy No-Op Warning</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>PR #463 had just landed dispatch stacking and the ground-truth suite gate — jobs now branch off the actual feature branch tip instead of stale <code>origin/main</code>, and a job can no longer report <code>completed</code> while leaving the test suite red. That work assumed the dispatch pipeline's surrounding plumbing (PR creation, headless permission handling) was already solid; this PR exists because a job dispatched from a <em>different</em> repo (rxcc) surfaced that it wasn't.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>None planned — this PR is a direct reliability fix triggered by a live failure report from a sibling session, not a scoped design. No spec or plan preceded it; the two bugs were small enough to fix directly once diagnosed.</p>
+<h2>What This PR Shipped</h2>
+<p>Two independent dispatch-pipeline bugs, fixed together because both surfaced from the same failed job report:</p>
+<ol>
+<li>
+<p><strong>Hardcoded PR base branch</strong> (<code>synlynk/jobs.py</code>): <code>_maybe_open_worktree_pr</code> called <code>gh pr create --base main</code> unconditionally. Any repo whose default branch isn't literally <code>main</code> (e.g. <code>master</code>) failed with &quot;no commits between main and branch&quot; even though the dispatched work was real, complete, and already pushed. Fixed by resolving the actual default branch via <code>origin/HEAD</code>'s symbolic-ref, falling back through <code>origin/main</code> → <code>origin/master</code> → <code>main</code> → <code>master</code> if the symbolic-ref lookup itself fails.</p>
+</li>
+<li>
+<p><strong>Silent no-op in headless <code>agy</code> dispatch</strong> (<code>synlynk/dispatch.py</code>): when a job has no write/run permissions granted — the default state whenever <code>.synlynk/config.json</code> has no <code>roles</code> entry for <code>agy</code> and no explicit <code>--grant</code> flag is passed — <code>_permissions_to_flags</code> returned an empty flag list with no <code>--dangerously-skip-permissions</code>. In headless mode there's no human to approve a gated tool call, so any approval-required tool gets auto-denied and the job does nothing while still looking like a clean success. The fix doesn't change that behavior (skip-permissions still isn't force-added) — it makes the failure mode loud: a warning prints whenever <code>agy</code> is dispatched with no permissions granted, so a silent zero-output job is now a visible one.</p>
+</li>
+</ol>
+<p>Two new unit tests cover <code>_resolve_default_base_branch</code> (both the <code>origin/main</code>-present and <code>origin/master</code>-only-fallback paths) and one covers <code>_maybe_open_worktree_pr</code> using the resolved branch in its <code>gh pr create</code> call. Two more cover <code>_permissions_to_flags(&quot;agy&quot;, ...)</code> — warning on empty permissions, staying silent on the happy path. 45/45 passing in <code>tests/test_dispatch.py</code> + <code>tests/test_jobs.py</code>. Squashed to <code>10387db</code> on 2026-07-24.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>None — diagnosed and fixed directly from a failure report, no brainstorming session preceded this PR.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>Both fixes remove a class of dispatch failure that looks identical to success from the outside — a <code>gh pr create</code> that silently can't run because of a wrong assumed default branch, and an <code>agy</code> job that silently does nothing because of an unstated permission gap. Neither bug is exotic: both are the kind of thing that only surfaces once synlynk is dispatched against repos it wasn't originally built and tested against (rxcc, in this case) — which is exactly the generalization step autonomous multi-agent dispatch across multiple projects requires. Making the second failure loud rather than silent is the more important half: a job dispatch that returns exit 0 with zero file changes is worse than one that fails outright, because nothing downstream (job status, <code>synlynk jobs</code>, the ground-truth gate from PR #463) currently distinguishes &quot;nothing needed to be done&quot; from &quot;nothing was allowed to be done.&quot;</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>The warning added here is a diagnostic aid, not a structural fix — it makes the silent-no-op failure mode visible in logs, but doesn't prevent it or auto-remediate it (e.g. by escalating permissions automatically). The very next PR in this session (#479) exists because the warning alone didn't explain a <em>second</em>, more specific instance of headless permission denial (Antigravity CLI's own &quot;jetski&quot; auto-deny message) reported from the same sibling session — that investigation is where this thread picks up.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

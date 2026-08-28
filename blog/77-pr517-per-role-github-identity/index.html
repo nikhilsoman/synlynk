@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #517 — Per-Role GitHub App Identity for Dispatched Agents | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-1">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Jul 25, 2026</span>
+        
+          <span class="blog-post-pr">PR #517</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #517 — Per-Role GitHub App Identity for Dispatched Agents</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>By PR #476 (closing the brace-expansion CVE) and the surrounding work in that window, synlynk's dispatch and review pipeline was functionally solid but had a known integrity gap tracked as issue #423: every dispatched agent — Claude, Agy, Grok, Codex — writes to GitHub under the <em>same</em> <code>gh</code> identity, the repo owner's personal account. The PR Review Discipline rule (&quot;a non-authoring agent must review before merge&quot;) was pure process discipline with no mechanism behind it. GitHub itself cannot tell dispatched agents apart, so it can't enforce anything, and every dispatch-authored PR hit &quot;Can not approve your own pull request&quot; the moment a reviewer tried to actually approve.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>None on the design side — #423 was scoped and speced in earlier sessions (<code>docs/superpowers/specs/2026-07-23-agent-github-identity-design.md</code>, plan at <code>docs/superpowers/plans/2026-07-24-agent-github-identity-design.md</code>). The shift in <em>this</em> PR was operational: what started as &quot;land the feature&quot; turned into a multi-round validation-and-fix cycle once real GitHub App installation-permission propagation delays showed up in practice (see below), and once independent review surfaced a genuine security gap in the implementation that hadn't been caught by the earlier live validation.</p>
+<h2>What This PR Shipped</h2>
+<p><strong>Per-role GitHub App identity.</strong> Each dispatch role (<code>dev</code>, <code>qa</code>, <code>review</code>, etc.) can have its own GitHub App, installed on the repo, with its own scoped <code>default_permissions</code>. <code>synlynk identity init &lt;role&gt;</code> walks through the manifest flow (<code>_build_app_manifest_url</code> generates a local HTML form that POSTs to <code>github.com/settings/apps/new</code>), stores the resulting App ID/installation ID/private key under <code>.synlynk/github_apps/&lt;role&gt;.json</code> + <code>&lt;role&gt;.pem</code> (permissions tightened via <code>os.chmod(..., 0o600)</code>), and <code>get_installation_token(role, app_config)</code> mints short-lived installation tokens on demand by signing a JWT and exchanging it for an installation access token.</p>
+<p><strong>Wiring into dispatch.</strong> <code>synlynk dispatch &lt;agent&gt; --requires-gh-write</code> now resolves a role-scoped token via <code>_resolve_dispatch_gh_token(_role_for_story(story_id) or &quot;dev&quot;)</code> and injects it as <code>GH_TOKEN</code> into the dispatched subprocess's environment — so a job's <code>gh pr create</code>/<code>gh pr review</code>/etc. calls authenticate as <code>app/synlynk-&lt;project&gt;-&lt;role&gt;</code> instead of the human operator.</p>
+<p><strong>Task 10 live validation.</strong> This is where the propagation-delay problem showed up: even after correctly setting <code>contents: write</code> on the App's manifest, GitHub does not retroactively apply a permission upgrade to an <em>existing</em> installation — the installation owner has to separately accept a pending permission-update prompt in the GitHub UI. Two validation retries (job-1e212ed9, throwaway PRs #512/#513, both still authored under the personal account) failed against this exact wall before the fix was identified and manually applied. Retry 3 (job-778e4be7 → PR #514) succeeded cleanly: <code>author.login: &quot;app/synlynk-synlynk-dev&quot;</code>, <code>is_bot: true</code>, confirmed independently via <code>gh pr view --json author</code> rather than trusting the dispatched job's own summary — a discipline this PR reinforced after retry 2's self-report turned out to be flatly wrong about whether it had used a personal token.</p>
+<p><strong>Independent review caught what live validation missed.</strong> PR #517 was opened with a Security Review section flagging two known, documented limitations (cross-process token redaction being a practical no-op; a TOCTOU window on private-key file permissions). A non-authoring review dispatched to Codex (job-c051d151) verified those and surfaced something more serious: <code>synlynk/dispatch.py</code>'s <code>requires_gh_write</code> block only <em>set</em> <code>GH_TOKEN</code> when a role token was successfully minted — it never <em>cleared</em> any <code>GH_TOKEN</code>/<code>GITHUB_TOKEN</code> already present in the parent shell's environment when minting failed or no role App was provisioned. A dispatch explicitly flagged as needing role-scoped GitHub write access could silently fall through to the operator's personal credential, which is exactly the failure mode this whole feature exists to prevent. Task 10's live validation never caught it because the role App <em>was</em> provisioned in that test, so the fallback path never triggered.</p>
+<p>The fix, dispatched to Codex and integrated after independent diff review: when no role-scoped token resolves, explicitly <code>proc_env.pop(&quot;GH_TOKEN&quot;, None)</code> / <code>proc_env.pop(&quot;GITHUB_TOKEN&quot;, None)</code> and print a clear stderr warning, rather than leaving whatever was inherited. A regression test proves it — it pre-seeds fake personal-token values via <code>monkeypatch.setenv</code>, dispatches with a token resolver that returns <code>None</code>, and asserts neither key survives into the captured subprocess env.</p>
+<p><strong>One more real bug, caught by CI, not local tests.</strong> After merging and pushing, GitHub Actions failed <code>test (3.8)</code> with <code>TypeError: 'type' object is not subscriptable</code> — <code>synlynk/team.py</code> used <code>tuple[Path, Path, Path]</code> (PEP 585 subscript syntax), which only works on Python 3.9+. Local test runs never caught it because the local interpreter was newer. Fixed with <code>from __future__ import annotations</code>, matching the pattern already used in <code>observatory.py</code>, <code>hud.py</code>, <code>db.py</code>, <code>rollback.py</code>, and <code>selftest.py</code> — applied directly rather than dispatched, since it was a one-line, unambiguous, already-precedented fix to unblock CI on code that had already been reviewed.</p>
+<p><strong>Review posted the sanctioned way.</strong> As expected, <code>gh pr review 517 --approve</code> failed with &quot;Can not approve your own pull request&quot; — every dispatched agent and Claude's own interactive session share the same personal <code>gh</code> identity, so GitHub correctly refuses self-approval. Per the #423 caveat in <code>CLAUDE.md</code>'s PR Review Discipline section, the fallback is a formal COMMENT review with an explicit approve checklist, which is what got posted before merge.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>None — this PR proceeded directly from the already-approved spec and plan; no new brainstorm was run this cycle.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>This closes the biggest remaining gap in dispatch-based multi-agent autonomy: GitHub write actions taken by dispatched agents are now attributable to a specific role identity instead of blurring into the operator's own account, and the fallback path that would have silently defeated that guarantee has been closed and covered by a regression test. The PR Review Discipline's non-authoring-reviewer rule still isn't GitHub-enforced — it can't be, given the shared-identity constraint on approvals — but the review itself is now backed by a role-attributable audit trail on the GitHub side for anything the role actually <em>writes</em>.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>Two follow-ups filed and deliberately not bundled into this PR: <strong>#524</strong> (token redaction across <code>synlynk logs</code> invocations is currently a no-op in real multi-process usage) and <strong>#525</strong> (<code>synlynk doctor</code>'s CLI entrypoint never actually reaches any of its 10 registered <code>HEALTH_CHECKS</code>, including the two new identity checks added here). Neither blocks the core per-role identity feature, but both are real gaps worth closing. Also explicitly deferred, per the original plan's own scoping: provisioning a <code>qa</code> role and generalizing GH_TOKEN injection to dispatch flows beyond <code>--requires-gh-write</code>.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

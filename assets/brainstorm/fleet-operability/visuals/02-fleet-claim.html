@@ -1,0 +1,44 @@
+<h2>Block 0 / 2 — What is the product claim for the fleet?</h2>
+<p class="subtitle">Today baselines list five members (claude, agy, codex, grok, local) but open/doctor disagree. Under tiered Supported/Proven, what do we claim publicly?</p>
+
+<div class="section">
+  <p class="label">Locked so far</p>
+  <p>✓ Tiered: Supported = fail-closed doctor + dry matrix · Proven = + live matrix ≤ <strong>7 days</strong><br>
+     ✓ Docs never claim higher than the tier</p>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="five-aspire" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Five-member aspirational fleet</h3>
+      <p>Keep advertising all five; mark unproven as “experimental.” Risk: users still treat experimental as supported.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="four-core" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Four-member core (recommended)</h3>
+      <p><strong>Core fleet:</strong> claude, agy, codex, grok. <strong>local</strong> = experimental/opt-in only until open + TC-1/TC-3 + dry matrix green. Help text matches core.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="capability-table" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>No fixed headcount — capability table only</h3>
+      <p>Publish home × headless × GH-write × network as the product surface. “Fleet of N” is not a claim. Honest, but harder to market.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="two-tier-fleet" onclick="toggleSelect(this)">
+    <div class="letter">D</div>
+    <div class="content">
+      <h3>Core 4 + explicit Experimental lane</h3>
+      <p>Same as B, but Experimental is a first-class lane (local today; maybe others later) with different doctor bar and no dispatch default routing.</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <p class="label">Panel bias</p>
+  <p>Decide panel: stop advertising local until green; keep GH-write on claude/grok only until #426 closed. <strong>B or D</strong> fit that best.</p>
+</div>

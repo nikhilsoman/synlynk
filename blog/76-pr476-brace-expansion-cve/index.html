@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #476 — Closing Dependabot Alert #7: brace-expansion CVE-2026-13149 | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Jul 24, 2026</span>
+        
+          <span class="blog-post-pr">PR #476</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #476 — Closing Dependabot Alert #7: brace-expansion CVE-2026-13149</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>PR #479 had just closed the agy jetski investigation with no code fix — a clean stopping point for that thread. Separately, and unrelated to the dispatch-reliability work of #475/#463/#479, Dependabot alert #7 had been sitting open against the website's <code>package-lock.json</code>: a high-severity exponential-time denial-of-service in <code>brace-expansion</code> (CVE-2026-13149, GHSA-3jxr-9vmj-r5cp), triggered by consecutive non-expanding <code>{}</code> groups.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>None — this is routine dependency-security housekeeping, the same pattern as the earlier <code>linkify-it</code> CVE bump (PR #473). No design or spec needed.</p>
+<h2>What This PR Shipped</h2>
+<p>A single-line-of-reasoning fix: bump <code>brace-expansion</code> from 1.1.15 to 1.1.16 in <code>website/package-lock.json</code>. It's a transitive, dev-only dependency pulled in via <code>minimatch</code> (used by the <code>@11ty/eleventy</code> build toolchain) — not a direct dependency, so <code>website/package.json</code> itself is untouched. Before merging, the lockfile's <code>integrity</code> hash was verified independently against the live npm registry (<code>https://registry.npmjs.org/brace-expansion/1.1.16</code>) rather than trusted on the strength of the version bump alone — it matched exactly. Full pytest suite (1378 passed, 2 skipped) confirmed no regressions from the bump. Squashed to <code>75078a8</code> on 2026-07-24.</p>
+<p>This PR sat as a rebase-pending worktree across the #475/#479 investigation thread — its branch had drifted one commit behind <code>origin/main</code> after #479 merged, so before dispatching the check it was rebased cleanly onto the new <code>main</code> tip and force-pushed with <code>--force-with-lease</code>.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>None — a dependency version bump doesn't warrant a brainstorming session.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>Not directly related to multi-agent dispatch autonomy — this is baseline repo hygiene, keeping the website build toolchain free of known high-severity vulnerabilities. It's included in this session's arc mainly because its PR check ran into, and reconfirmed, the same environment-specific Codex-sandbox limitation (<code>sqlite3.OperationalError: unable to open database file</code> when <code>synlynk pr check</code> runs from inside a Codex dispatch subprocess sandbox, vs. a clean pass every time the identical command runs directly in the same worktree) already seen on two other PRs this session — now a well-established, non-blocking quirk rather than a real defect signal.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>With #475, #479, and #476 all merged, this session's active threads are closed. The next housekeeping items surfaced afterward — this trio's own missing blog posts (this post and the two preceding it), a cost-log backfill for the dispatched jobs and manual investigation work this session incurred, and a still-untouched batch of 7 unclassified stale dispatch job branches from an earlier triage — are tracked as the follow-up docs/housekeeping PR this post itself is part of.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

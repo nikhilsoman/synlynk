@@ -1,0 +1,36 @@
+<h2>Design §4 — Phases &amp; backlog (≤5 stories)</h2>
+<p class="subtitle">Implementation sequencing for the plan after this spec. Approve to freeze the design and write the spec file.</p>
+
+<div class="section">
+  <p class="label">Phase 1 — Truth gate MVP (under hard freeze)</p>
+  <ol>
+    <li><strong>S1:</strong> Doctor fail-closed (instruction, nested state.db, TC-2, TC-3) + Core 4 / local help text alignment</li>
+    <li><strong>S2:</strong> Canonical state policy (refuse nested product ledger) + UNKNOWN ban / FAILED_UNVERIFIED</li>
+    <li><strong>S3:</strong> <code>selftest --matrix</code> dry tier + <code>fleet_matrix_runs</code> + status Proven/Supported labels (dry-only Proven never set)</li>
+  </ol>
+  <p>After S3: hard freeze lifts for non-parity work; fleet-parity still gated on dry green in CI.</p>
+</div>
+
+<div class="section">
+  <p class="label">Phase 2 — Live proof</p>
+  <ol start="4">
+    <li><strong>S4:</strong> <code>--live</code> matrix tier 2, $10/week budget hard stop, weekly/manual runner docs; Proven freshness 7d</li>
+  </ol>
+</div>
+
+<div class="section">
+  <p class="label">Phase 3 — Separate epic (new plan after first Proven week)</p>
+  <ol start="5">
+    <li><strong>S5 (epic placeholder):</strong> Core 4 GH-write + grants — design/plan only after Phase 2 data; not detailed in this plan</li>
+  </ol>
+  <p>Then: native harness go/no-go brainstorm (not a story in this backlog).</p>
+</div>
+
+<div class="section">
+  <p class="label">Explicit non-goals of this design</p>
+  <ul>
+    <li>Implementing native harness</li>
+    <li>Full grants/GH-write implementation (only sequencing commitment)</li>
+    <li>Making local Core without meeting open+TC-1+TC-3+dry</li>
+  </ul>
+</div>

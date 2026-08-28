@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>synlynk | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date"></span>
+        
+      </div>
+      <h1 class="blog-post-title"></h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>PR #1022 — Agent-Roles-Charters Phase 1 Follow-Ups: Closing the Footguns</h1>
+<h2>The Goal at the End of the Previous PR</h2>
+<p>PR #1003 (post #117) shipped Phase 1 of agent-roles-charters: a CLI (<code>synlynk agent init/list/show/edit/disable</code>) and <code>agent_id</code>-driven dispatch integration, giving synlynk a
+persistent workspace-agent identity distinct from the swappable execution harness. Its
+non-authoring review (Grok, via <code>synlynk pr check</code>) approved and merged the PR but flagged five
+non-blocking follow-up items — real footguns for the capability-grants work planned in Phase 2, not
+blockers for Phase 1 itself. PR #1003's own retrospective named them explicitly: <code>capability_grants</code>
+still gets wiped on every <code>agent edit</code>, and a dispatched job's originating agent identity is lost
+the moment dispatch returns because <code>daemon_jobs</code> has no <code>agent_id</code> column.</p>
+<h2>Strategic Shift in This PR</h2>
+<p>None. This PR is exactly the scope <code>docs/superpowers/specs/2026-08-16-agent-roles-phase1-followups-design.md</code>
+laid out: five small, same-file-neighborhood fixes, explicitly scoped apart from the larger Phase 2
+(memory + gated learning) work so that cleanup didn't get tangled with new design risk. One
+deliberate, flagged deviation from the spec's literal text: §3 said to add <code>agent_id</code> to the
+quota-deferred <code>INSERT INTO daemon_jobs</code> branch &quot;mirroring <code>session_id</code> exactly&quot; — but that branch
+doesn't actually carry <code>session_id</code> today. The plan documented this up front and every dispatch
+prompt for that task explicitly said to leave the branch untouched rather than force a mirror that
+would introduce an inconsistency the spec didn't intend.</p>
+<h2>What This PR Shipped</h2>
+<p>Executed as eight TDD tasks via Subagent-Driven Development, each dispatched individually to Codex
+(<code>synlynk dispatch codex --task &quot;...&quot; --force-agent --context-mode full</code>), independently re-verified
+by re-running the affected test files myself after every merge rather than trusting each job's
+self-reported pass/fail — one job's self-report (3 failures) turned out to be a sandbox-only
+<code>PermissionError</code> writing to <code>~/.synlynk/workspaces</code>, confirmed harmless only once re-run outside
+that job's sandbox:</p>
+<ul>
+<li><strong><code>daemon_jobs.agent_id</code> persistence</strong> — new schema migration (<code>db.py</code>, guarded <code>ALTER TABLE</code>)
+and a new <code>_ensure_daemon_job_agent_id_column()</code> helper, threaded through both live write paths in
+<code>dispatch_agent()</code> (the <code>UPDATE ... SET agent_id=COALESCE(agent_id, ?)</code> branch and the
+<code>INSERT OR REPLACE</code> branch). The value written is the <code>agent_id</code> UUID parameter, not the resolved
+role string — it identifies <em>which</em> workspace agent dispatched the job.</li>
+<li><strong><code>capability_grants</code> merge-not-replace</strong> — <code>regenerate_agent_projection()</code> now reads the existing
+<code>.synlynk/agents/&lt;id&gt;.yaml</code> projection's <code>overrides</code> block before writing, merging new
+<code>repo_overrides</code> on top instead of replacing the dict wholesale. <code>cmd_agent_edit</code> drops its
+hardcoded <code>repo_overrides={&quot;capability_grants&quot;: {}}</code> entirely — existing grants now survive a
+charter edit. New-agent init is unaffected: with no existing file, the merge still starts from
+<code>{}</code>.</li>
+<li><strong><code>resolve_dispatch_harness()</code> extraction</strong> — the inline role→harness resolution logic that lived
+only inside <code>dispatch_agent()</code> is now a standalone, side-effect-free function (no subprocess spawn,
+no DB write), called from both <code>dispatch_agent()</code> and <code>cli.py</code>'s <code>--dry-run</code> preview branch. Before
+this, <code>synlynk dispatch --as-agent dev --dry-run</code> (no explicit harness) printed <code>agent: None</code>
+because the preview never ran the same auto-selection the live path did.</li>
+<li><strong><code>_harness_for_org_role</code> restricted to <code>CORE_FLEET</code></strong> — the function iterated
+<code>sorted(AGENT_CAPABILITY_BASELINES)</code>, the full baseline key set including experimental/non-fleet
+entries, sorted alphabetically. A future baseline (e.g. <code>&quot;local&quot;</code>) could win a role's harness pick
+purely by sorting before <code>agy</code>/<code>claude</code>. Iteration now filters to <code>synlynk._constants.CORE_FLEET</code>
+first.</li>
+<li><strong>Regression coverage</strong> — a new test proves <code>story_id</code>-based routing still wins over <code>agent_id</code>
+role-based fallback when both are present (confirming Task 5's extraction preserved the original
+precedence order), plus a test locking in the <code>CORE_FLEET</code> filter using a fake non-fleet baseline
+that would otherwise win by alphabetical sort.</li>
+</ul>
+<p>Full suite: 2026 passed, 2 skipped, 0 failed (<code>python3 -m pytest -q</code>, run independently after every
+merge, not just at the end).</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>None — this was pattern-following cleanup work in an already-mapped file neighborhood
+(<code>dispatch.py</code>, <code>agent_cli.py</code>, <code>agent_store.py</code>, <code>db.py</code>, <code>cli.py</code>); no new visual brainstorming was
+needed.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>The two persistence gaps this closes are exactly the ones the next phase depends on. Phase 2 wants
+<code>capability_grants</code> to become load-bearing — actually read and enforced during dispatch/harness
+selection — which only makes sense if grants survive a charter edit instead of being silently reset
+every time. And any future &quot;jobs by agent&quot; view, cost attribution, or trust-scoring mechanism needs
+<code>daemon_jobs.agent_id</code> to actually exist in the table; before this PR, the identity was resolved in
+memory and then thrown away the moment <code>dispatch_agent()</code> returned.</p>
+<h2>The Goal at the End of This PR</h2>
+<p>All five PR #1003 follow-up items are closed. Phase 1 of agent-roles-charters, plus its own
+follow-up debt, is now fully settled — nothing deferred, nothing silently dropped. The next goalpost
+is Phase 2: making <code>capability_grants</code> mean something (read and enforced, not just stored) and
+building the gated-learning/memory layer on top of the now-solid identity and persistence
+foundation this PR finished laying.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

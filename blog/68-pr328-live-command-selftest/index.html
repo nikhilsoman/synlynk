@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #328 — Live Command Selftest: Does synlynk Actually Work in a Real Repo? | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Jul 18, 2026</span>
+        
+          <span class="blog-post-pr">PR #328</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #328 — Live Command Selftest: Does synlynk Actually Work in a Real Repo?</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>PR #292 closed out model-identity correctness — Tier-2 probes stopped collapsing three of four agents into <code>model_version='unknown'</code>. With v0.12.0 (Measurement &amp; Reliability) shipped and its immediate follow-on fixed, the GTM checklist's item 2 (SDLC/GOVERNS stage placement) was already fully shipped via the command taxonomy PRs (#303, #316, #319). Item 1 remained open and unscoped: &quot;Deep review of every synlynk command and its testing in a live repo scenario.&quot; Every command had unit tests under mocks. None had ever been proven to actually work end-to-end against a real, live host repo — the taxonomy work built the map (59 commands, GOVERNS stages, capability tiers) but never drove a car across the terrain it described.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>None to the scope as brainstormed. The design (<code>docs/superpowers/specs/2026-07-17-live-command-selftest-design.md</code>) explicitly bounded the work to avoid a 59-command bespoke-scenario slog: a generic <code>--help</code> fallback scenario covers every taxonomy command by default, with hand-written real scenarios layered on only for (a) the core first-session lifecycle commands a new user actually touches, and (b) the four paid-agent-CLI commands (<code>dispatch</code>, <code>exec</code>, <code>schedule --execute</code>, <code>release</code>) that need budget-capped guardrails rather than a bare fallback. Anything beyond that — more bespoke scenarios, deeper live coverage — was explicitly deferred as follow-up, not squeezed into this plan.</p>
+<h2>What This PR Shipped</h2>
+<p>A new <code>synlynk/selftest.py</code> module (794 lines at merge) wired as a <code>selftest</code> CLI subcommand, dry by default with a <code>--live</code> flag capped at $2 real spend:</p>
+<ul>
+<li><strong><code>ScenarioContext</code>/<code>ScenarioResult</code> dataclasses</strong> and a <code>SELFTEST_SCENARIOS</code> registry keyed by taxonomy command name, driven by <code>COMMAND_TAXONOMY</code> (59 entries) with a generic fallback scenario for any command without a bespoke entry.</li>
+<li><strong><code>run_selftest(live=False)</code></strong> iterates the full taxonomy sorted by a dependency-aware <code>_selftest_sort_key</code>, executes whichever scenario is registered (or the fallback), and aggregates results.</li>
+<li><strong>Bespoke lifecycle scenarios</strong> for <code>init</code>, <code>scan</code>, <code>join</code>, <code>goal create/list/link/status</code>, <code>story create/list</code>, <code>decide</code>, <code>dispatch</code>, <code>jobs</code>, <code>status</code>, <code>instructions status</code> — the commands a new user's first real session actually exercises.</li>
+<li><strong>Budget-capped paid-command scenarios</strong>: <code>_dispatch_scenario</code>, <code>_exec_scenario</code>, <code>_schedule_scenario</code> each check <code>ctx.remaining_budget() &lt;= 0</code> before spending a cent, fire a trivial <code>&quot;Reply with the single word OK and do nothing else.&quot;</code> prompt against the real agent CLI, and record actual/estimated cost against the cap. <code>_release_scenario</code> is a hard, permanent skip — release is a real-world publish action (git tag/push, GitHub release) with no safe way to run it against a scratch repo, so it's verified structurally via <code>--help</code> only, not exercised live.</li>
+</ul>
+<p><strong>Delivery took four dispatch attempts for the paid-scenario task alone</strong> — the most dispatch-heavy single task this project has needed. Attempts 1–2 failed outright; attempt 3 (job-1769d38d) correctly integrated prior work but then stopped without writing any new code, a &quot;did the setup, reported done&quot; failure mode distinct from the earlier two. Attempt 4 succeeded only after switching to an extremely prescriptive prompt — exact code embedded verbatim, an explicit &quot;Step 0 is setup, not the task&quot; warning, and a hard completion-check gate the job had to pass before it could consider itself finished. Even then, the successful commit bundled two unrelated file changes (<code>GEMINI.md</code>, <code>project-docs/todo.md</code>) that turned out to be a stray worktree-local <code>state.db</code> regenerating those files as a side effect of running ordinary <code>synlynk</code> commands inside the job's worktree — filed as issue #330. The fix was to cherry-pick only the single real commit, not the job's full worktree state.</p>
+<p><strong>Post-merge, code review surfaced two real bugs</strong> rather than nitpicks. Dispatched Grok as reviewer (job-4af48bb2 first attempt hit a headless permission auto-denial — Agy's baseline has no auto-approval flag equivalent to Grok's <code>required_flags: [&quot;--always-approve&quot;]</code>, so a tool permission prompt got silently auto-denied in headless mode; $0.39 spent for zero usable output, filed as issue #332 alongside the Grok-login gap from an earlier session). The retry (job-203ff24a) succeeded and posted two blocking findings directly on the PR: <strong>B1</strong> — the <code>--live</code> paid scenarios ran against the host repo's actual CWD instead of an isolated scratch workspace, contradicting the design's throwaway-repo safety story; <strong>B2</strong> — the status scenario hand-rolled an incomplete <code>cycle_capability</code> table schema that crashed with <code>OperationalError: table cycle_capability has no column named verb_count</code> whenever it ran before any other scenario happened to initialize the real schema first.</p>
+<p>Both were dispatched to Codex as a single fix (job-0bf7cdc6, commit <code>5e94632</code>): <code>run_selftest(live=True)</code> now creates the scratch workspace once up front and threads that same path through to every scenario, paid and lifecycle alike, with a real <code>git init</code> + minimal config/commit; the status scenario now seeds through the real <code>synlynk_pkg._get_db()</code> init path instead of a hand-rolled <code>CREATE TABLE IF NOT EXISTS</code>. Two new regression tests lock both fixes in (12 total in <code>tests/test_selftest.py</code>, up from 10). A second Grok re-review (job-814e12f2) confirmed both fixes independently — including standalone-executing the status scenario to prove B2 doesn't just rely on scenario ordering — and surfaced one further non-blocking residual (N6: <code>DB_PATH</code> still resolves to the host's central ledger even though CWD isolation is now correct, meaning a live run's paid scenarios still write <code>daemon_jobs</code> rows into the real project ledger rather than a scratch one) before giving an explicit approve.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>None — this was a spec-driven plan (<code>docs/superpowers/specs/2026-07-17-live-command-selftest-design.md</code>) with no visual design questions; the interesting decisions were scope boundaries (fallback vs. bespoke, which lifecycle commands count as &quot;first session&quot;) resolved through direct text questions during brainstorming.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>GTM checklist item 1 now has a real, repeatable answer instead of an open question: every one of the 59 taxonomy commands has <em>some</em> live-repo verification (fallback <code>--help</code> check at minimum), the commands a new user actually touches on day one have real behavioral scenarios, and the four commands that spend real money have budget-capped guardrails before they're ever exercised outside of mocks. This PR also produced the most complete live case study yet of where the dispatch mechanism's own guardrails are thin: a job that &quot;finishes&quot; without doing the task, a job that silently gets auto-denied by a headless permission gate, worktree-local DB corruption, and a review comment that only persists because the reviewer was explicitly told to post it to <code>gh pr comment</code> rather than trust job-log durability. All four became filed, root-caused issues (#329–#332) rather than one-off annoyances worked around and forgotten.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>The live-command-selftest building block is shipped and merged. Four issues are now filed and scoped for follow-up, none blocking further work: #329 (<code>synlynk cost log</code> doesn't write to <code>costs.md</code>), #330 (stray worktree-local <code>state.db</code> can corrupt <code>todo.md</code>/<code>GEMINI.md</code>), #331 (<code>daemon_jobs</code> reconciliation has no ground-truth git verification, unlike the now largely-dead legacy job store that does), and #332 (preflight dispatch has no check for agent auth/login state or headless permission-allow-rule presence — the exact two failure classes that surfaced live during this PR's own review dispatches). Also open, non-blocking: N6 from Grok's re-review (rebind <code>DB_PATH</code> to the scratch workspace for full <code>--live</code> isolation, not just CWD isolation). None of these are required before GTM checklist item 1 is considered addressed at the building-block level — they're the next round of hardening, tracked rather than silently absorbed.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

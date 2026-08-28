@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #536 — Wiring HEALTH_CHECKS Into the Real synlynk doctor CLI Path | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-3">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Jul 25, 2026</span>
+        
+          <span class="blog-post-pr">PR #536</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #536 — Wiring HEALTH_CHECKS Into the Real synlynk doctor CLI Path</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>PR #517 added two new entries to <code>HEALTH_CHECKS</code> — checks for un-provisioned identity roles and for identity-file permission/gitignore drift — as part of shipping per-role GitHub App identity. Its Security Review noted, without fixing, that these checks were unreachable in practice: <code>synlynk doctor</code> run from the actual CLI (<code>cli.py:1071</code>'s bare <code>cmd_doctor()</code> call, with no <code>checks</code> argument) never touched <code>HEALTH_CHECKS</code> at all. It only ran the interactive TC1-5 agent-testing wizard. Filed as #525.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>The investigation here turned up more nuance than a simple oversight. <code>cmd_doctor(args=None, checks: _List = None)</code> already had two intentional, separately-tested code paths: an explicit <code>checks=[...]</code> call (used by tests at <code>tests/test_synlynk.py:6570-6588</code>) that runs only the given checks, and the real CLI's <code>checks=None</code> default (tested at <code>tests/test_synlynk.py:188,617,677</code>) that ran only the TC1-5 wizard. Neither path was broken on its own terms — they just never overlapped, and the CLI default was the one missing <code>HEALTH_CHECKS</code> entirely. Rather than guess at a fix, this was scoped via <code>AskUserQuestion</code> before dispatch: the chosen design runs both in sequence on the <code>checks=None</code> path — print the <code>HEALTH_CHECKS</code> report first, then fall through unchanged into TC1-5 — with no new flags or subcommands added.</p>
+<h2>What This PR Shipped</h2>
+<p><strong><code>_print_health_check_report(checks)</code></strong> extracted as its own function in <code>synlynk/doctor.py</code>, formatting and printing the pass/warn/fail report (with fix hints) for a given list of checks, returning whether any failed.</p>
+<p><strong><code>cmd_doctor(args=None, checks=None)</code> behavior change</strong>, scoped precisely:</p>
+<ul>
+<li><code>checks=[...]</code> (explicit): unchanged — <code>return 1 if _print_health_check_report(checks) else 0</code>, exactly as before.</li>
+<li><code>checks=None</code> (the real CLI default): now calls <code>_print_health_check_report(HEALTH_CHECKS)</code> first, then falls through — unchanged — into the existing TC1-5 wizard logic (agent filter, DB connection, TC1-5 test runs).</li>
+</ul>
+<p><strong>Verification against spec.</strong> The dispatched diff (job-a6115feb, story-abbccee7) matched the design decision exactly on first read — no fix needed before integration, unlike its sibling fix in #524/PR #535. New test <code>test_wire_health_checks_into_real_synlynk_doc</code> (in <code>tests/test_agent_quota_tracking.py</code> — not the most obvious file for a doctor-related test, but functionally correct and not worth blocking on) monkeypatches <code>HEALTH_CHECKS</code> and the TC1-5 runner functions, calls <code>sl.cmd_doctor()</code> with no arguments, and asserts the health-check output (<code>&quot;identity_roles&quot; in out</code>) and the TC1-5 wizard output (<code>&quot;doctor [agy]&quot; in out</code>) both appear.</p>
+<p><strong>Unrelated upstream churn during integration.</strong> Between dispatch and integration, <code>origin/main</code> advanced past the jobs' original base (<code>cc9998c</code>) to include an unrelated, already-merged fix for issue #526 (<code>6b57600</code>, &quot;synlynk jobs --all permanently shows 'unkn'&quot;), which happened to touch the exact same region of <code>tests/test_agent_quota_tracking.py</code>. Cherry-picking the #525 fix commit onto a fresh integration branch produced a genuine but unrelated merge conflict — resolved by keeping both new tests side by side, since neither touched the other's logic. Full suite after resolution: <code>pytest tests/ -q</code> → 1410 passed, 2 skipped.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>None — the design question (run both in sequence vs. add a flag) was resolved directly with Nikhil via a scoped multiple-choice question rather than a full brainstorm session.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p><code>synlynk doctor</code> now actually surfaces all 10 registered health checks — including the two identity-related ones added in #517 — to anyone running the CLI normally, not just to tests that pass <code>checks=</code> explicitly. Combined with #524/PR #535, this closes out every follow-up #517 left open: the per-role GitHub identity feature is now fully diagnosable and its redaction guarantee holds across process boundaries.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>With #517, #524, and #525 all closed, the identity/dispatch-integrity arc that started with issue #423 is complete. No new follow-ups were identified during this work; the next thread of work is whatever's next on the roadmap rather than a continuation of this arc.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

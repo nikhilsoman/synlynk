@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #587 — Harness Capability Drift &amp; Regression Classification | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-2">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Aug 01, 2026</span>
+        
+          <span class="blog-post-pr">PR #587</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #587 — Harness Capability Drift &amp; Regression Classification</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>PR #614 (post #89) landed dispatch-time capability enforcement — block or degrade a dispatch before it spawns, based on probe results and declared requirements. But that gate can only be as good as the data feeding it, and two gaps sat underneath it: capability data (<code>AGENT_CAPABILITY_BASELINES</code>, the probe results) only ever refreshed reactively at dispatch time, and when a harness-facing failure did occur, nothing distinguished &quot;synlynk broke this&quot; from &quot;the harness changed underneath us.&quot; That second gap was concrete, not theoretical: issue #616/#617, where a host-side PR-auto-create fallback silently ignored <code>job['base_branch']</code> and shipped undetected because nothing exercised that code path.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>The brainstorm for this work (<code>docs/superpowers/specs/2026-07-31-harness-capability-drift-regression-classification-design.md</code>) explicitly considered and rejected making this a synlynk-run hosted service — centralizing regression classification or smoke tests would require holding user GitHub credentials, a trust boundary this project has never crossed. The one piece with a real efficiency case (a shared, read-only capability-matrix data feed) was logged as a v2 signal instead (<code>docs/reference/capability-framework-generalization-notes.md</code>), decoupled from this spec's local-only mechanism.</p>
+<p>The other shift was scope-internal: Task 8's plan named both <code>_run_free_probe</code> and <code>_run_paid_smoke_test</code> as needing classifier wiring, but the step-by-step only detailed the first. A final review pass caught the gap before merge — the paid/live smoke-test path is the one that actually exercises code, so leaving it unclassified would have left the most regression-relevant failure path with no audit trail. Same review pass caught a second real bug: <code>_dispatch_scenario</code> was incrementing <code>ctx.spent_usd</code> internally <em>and</em> <code>run_selftest</code>'s flatten loop was adding it again, doubling the effective spend against the $2 live-run budget cap.</p>
+<h2>What This PR Shipped</h2>
+<p>Nine tasks, dispatched to Codex in dependency order (schema → triggers → selftest extensions → classifier → status surfacing), each verified via direct worktree diff read + test run before merge — never trusting job self-reports alone:</p>
+<ul>
+<li><strong>Schema</strong> (<code>synlynk/db.py</code>): <code>capability_watch</code>, <code>gh_write_capability</code>, <code>capability_incidents</code> tables.</li>
+<li><strong>Staleness triggers</strong> (<code>synlynk/capability_watch.py</code>): a free, structural TC1–5 re-probe fired from a background daemon thread on every CLI invocation (never blocks the real command), plus an opt-in paid <code>selftest --live</code> trigger gated by <code>auto_smoke_test</code> in config.</li>
+<li><strong><code>selftest.py</code> Phase 1–3</strong>: <code>ScenarioContext</code> gained <code>mode</code>/<code>harness</code> axes so dispatch/exec scenarios loop over every configured harness instead of one hardcoded name; <code>_dispatch_scenario</code> now waits for worktree finalization and asserts the resulting PR's base branch matches <code>job['base_branch']</code> — the exact check that would have caught #617; new GH-write-action scenarios populate <code>gh_write_capability</code> per harness × mode cell; and a mocking-depth reduction pass on <code>_scenario_join</code>/<code>_scenario_decide</code> replaced mocked internals with real devlog writes and real per-agent response assertions.</li>
+<li><strong>Classifier</strong> (<code>synlynk/capability_classifier.py</code>): <code>classify_failure()</code> diffs the failing path's git history since the last known-green run against the harness fingerprint, landing a <code>regression</code> / <code>drift</code> / <code>unclassified</code> verdict in <code>capability_incidents</code>. Wired into both the free probe and (post-review-fix) the paid smoke test.</li>
+<li><strong><code>synlynk status</code></strong>: surfaces &quot;smoke test overdue&quot; and the five most recent regression incidents, folded into the same string that's both printed and returned — preserving the existing <code>print(output); return output</code> contract rather than adding side-channel <code>print()</code> calls.</li>
+</ul>
+<p>Two real bugs surfaced during the final review pass and were fixed before merge: the double-counted dispatch cost (<code>_dispatch_scenario</code> no longer self-increments <code>ctx.spent_usd</code>; only <code>run_selftest</code>'s flatten loop does) and the missing <code>_run_paid_smoke_test</code> classifier wiring. A third, unrelated regression was caught during full-suite verification and fixed independently: Task 2's background staleness thread was making real <code>subprocess.run</code> calls from inside any test that invoked <code>cli.py</code>'s <code>main()</code>, racing other tests' own subprocess mocks and causing nondeterministic failures — fixed with an autouse <code>stub_staleness_check_thread</code> fixture in <code>conftest.py</code>, matching the existing <code>stub_dispatch_worktree</code> pattern.</p>
+<p>Full suite: 1510 passed, 2 skipped, stable across repeated runs.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>None — the design doc's Discussion section (why not a hosted service) did the work a visual comparison usually would.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>The dispatch-time gate from PR #614 now sits on top of data that keeps itself fresh without a daemon dependency, and every probe/smoke-test failure gets a first-pass verdict instead of pure human triage. <code>selftest --live</code> now actually exercises the #617-class failure mode (PR base-branch mismatch) instead of only asserting scenario presence. Two known, deliberate limitations remain from the plan itself (not implementation gaps): <code>harness_fingerprint_changed</code> is hardcoded <code>False</code> at every call site, so &quot;drift&quot; classification is structurally unreachable until fingerprint tracking exists, and the GH-write scenario is an explicitly-named &quot;structural check&quot; (does <code>gh</code> expose the subcommand) rather than a real per-agent/per-mode invocation — catching that class of flakiness for real would require dispatching genuine headless/home invocations per harness, a larger piece of work than this spec scoped.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>Both known limitations above are candidates for a follow-up spec, not blockers for this one. The nearer-term goalpost: flip <code>_probe_results_trustworthy()</code> (still hardcoded <code>False</code>, tracked separately as #578/#580) so the dispatch-time gate this PR feeds can actually trust probe data instead of defaulting to no-coverage on every real dispatch.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

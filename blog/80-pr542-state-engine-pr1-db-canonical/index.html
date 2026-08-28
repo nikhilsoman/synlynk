@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #542 — State Engine PR1: DB-Canonical Roadmap, Memory, and Costs | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Jul 26, 2026</span>
+        
+          <span class="blog-post-pr">PR #542</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #542 — State Engine PR1: DB-Canonical Roadmap, Memory, and Costs</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p><code>todo.md</code> had already been DB-canonical for a while — stories live in a <code>stories</code> table, <code>todo.md</code> is regenerated from it, and that pattern was stable. <code>roadmap.md</code>, <code>memory.md</code>, and <code>costs.md</code> were still flat markdown, hand-edited or append-only, and drifting: repeated <code>costs.md</code> corruption incidents (#481, #482, #485) traced back to exactly the class of problem <code>todo.md</code> had already solved — multiple writers touching a plain-text file with no single source of truth. The <code>2026-07-20-state-engine-tiered-design.md</code> spec had already been approved, laying out a three-PR sequence (PR1/PR2/PR3) to extend the <code>todo.md</code> pattern to the rest of <code>project-docs/</code>.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>None — this PR executes Tier 1 PR1 as specced, no scope changes. The one deliberate addition beyond the spec's letter: §8.1 called for running <code>synlynk migrate</code> against synlynk's own repo as the final landing step, and Task 7 of the implementation plan treated that as a <em>real</em> dry run, not a formality — it surfaced two live bugs in the process (a stash-exclude-pathspec/<code>.gitignore</code> interaction bug, and a <code>cmd_roadmap_add</code> <code>NameError</code>), both fixed before merge, plus one deliberately deferred <code>.gitignore</code> substring false-positive (tracked separately as #546).</p>
+<h2>What This PR Shipped</h2>
+<ul>
+<li><code>_generate_roadmap_md()</code> + <code>cmd_roadmap_add()</code>-style CLI verbs writing through to <code>roadmap_arcs</code>/<code>roadmap_phases</code>, mirroring <code>todo.md</code>'s existing pattern.</li>
+<li><code>_generate_costs_md()</code>, with <code>cmd_cost_log()</code> now writing through on every log call instead of relying on append-only markdown.</li>
+<li><code>check_budgets()</code> switched to query <code>cost_entries</code> directly; <code>parse_costs_md()</code> regex parsing demoted to a fallback path only.</li>
+<li>Rotation/archive: <code>project-docs/archive/&lt;file&gt;-&lt;period&gt;.md</code> + <code>INDEX.md</code>, replacing unbounded file growth.</li>
+<li>A mutation guard: a header banner on generated files plus a hand-edit detection check that warns loudly and continues (rather than blocking) when a genuine uncommitted hand-edit is found — deliberately warn-and-continue per §8.2, not a hard gate.</li>
+<li>A specific test proving the guard's git-pull-then-resync case does <em>not</em> false-positive: a fresh pull that changes the file without a local DB mutation must not trigger a warning.</li>
+<li>The migrate-on-self step itself: <code>synlynk migrate</code> run against this repo, <code>.synlynk_migrated</code> sentinel committed, <code>project-docs/roadmap.md</code>/<code>memory.md</code>/<code>costs.md</code>/<code>todo.md</code> removed from git tracking in favor of DB-backed regeneration.</li>
+</ul>
+<p>Two real bugs surfaced by actually running the migrate (not just unit-testing the migrate code) rather than three fabricated ones — the whole point of Task 7 being a live dry run instead of a mocked one.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>None — this PR executed an already-approved spec; no new design decisions needed a visual companion.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>Every file an agent might read for context (<code>roadmap.md</code>, <code>memory.md</code>, <code>costs.md</code>) is now regenerated from a single database, the same discipline <code>todo.md</code> already had. That closes the specific failure mode that caused #481/#482/#485: two agents (or an agent and a human) editing the same markdown file concurrently, each unaware of the other's write. A DB-backed write-through with a mutation guard means concurrent agent writes converge instead of clobbering each other silently.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>PR1 is done; PR2 (DB-canonicalize <code>vizor-workspace-map.json</code> + fix <code>viz.py</code>'s stale reads of <code>roadmap_arcs</code>/<code>roadmap_phases</code>, owned by Grok) and PR3 (scoped <code>dispatch_agent()</code> context + symbol/story graph tables, owned by Codex+Grok) are next in the Tier 1 sequence. But this PR's own merge produced an unplanned complication: the non-authoring reviewer's conflict resolution (triggered by other PRs landing during review) deleted more of <code>project-docs/</code> than PR1 actually intended — see PR #549 and its RCA, the direct follow-up to this post.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

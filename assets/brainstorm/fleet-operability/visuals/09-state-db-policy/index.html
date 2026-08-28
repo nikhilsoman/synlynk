@@ -1,0 +1,26 @@
+<h2>Block 3 — Nested state.db policy</h2>
+<p class="subtitle">Doctor will FAIL if nested copies exist. What should runtime do when a job tries to create one?</p>
+
+<div class="options">
+  <div class="option" data-choice="hard-error" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Hard error + refuse (recommended)</h3>
+      <p>Jobs must use the canonical <code>~/.synlynk/projects/&lt;key&gt;/state.db</code> (or explicit env override). Creating <code>.synlynk/state.db</code> under a job worktree is an error after migration period, not a silent fallback — except the #650 sandbox fallback which is documented as empty/local-only and never the product ledger.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="warn-redirect" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Warn + redirect to canonical</h3>
+      <p>Always open canonical path; log warning if nested file exists. Softer; nested files can linger as zombies.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="quarantine" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Quarantine + auto-delete nested on doctor</h3>
+      <p>Doctor removes nested DBs (or moves to trash). Aggressive; risk of deleting intentional local scratch.</p>
+    </div>
+  </div>
+</div>

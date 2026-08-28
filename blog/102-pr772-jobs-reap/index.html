@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #772 — jobs reap: Kill Zombie `running` Rows for Real | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-2">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Aug 07, 2026</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #772 — jobs reap: Kill Zombie `running` Rows for Real</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1><code>jobs reap</code> — Kill Zombie <code>running</code> Rows for Real</h1>
+<h2>Broader goal (end of previous PR)</h2>
+<p>PR #762 windowed <code>sentinel_crit</code> so lifetime <code>sentinel.md</code> history no longer kept platform ops RED. The scoreboard could see recent failures honestly — and immediately showed the next lie: hundreds of <code>daemon_jobs</code> rows stuck at <code>status=running</code> with dead PIDs.</p>
+<h2>What moved the goalpost</h2>
+<p>A same-day ops triage reaped <strong>482</strong> zombies by hand (45 in the three main project DBs). STALL_NO_OUTPUT and HARNESS_INTERNAL_TIMEOUT killed processes and wrote CRITICAL sentinels but often <strong>left the row running</strong>. <code>_reconcile_daemon_jobs</code> also left dead PIDs as open-ended <code>unknown</code> (or skipped null PIDs). Manual SQL is not a product.</p>
+<h2>What this PR ships</h2>
+<ol>
+<li><strong><code>synlynk jobs reap</code></strong> — dry-run by default; <code>--apply</code> marks zombies <code>timed_out</code> / <code>exit_code=-9</code>; <code>--all-projects</code> walks every <code>~/.synlynk/projects/*/state.db</code>.</li>
+<li><strong>Auto-reap on sentinel write</strong> — when <code>_write_sentinel_alert</code> emits <code>STALL_NO_OUTPUT</code> or <code>HARNESS_INTERNAL_TIMEOUT</code>, parse <code>job-*</code> and flip still-running daemon rows immediately.</li>
+<li><strong>Hardened <code>_reconcile_daemon_jobs</code></strong> — null PID and dead PID (including non-child processes) become <code>timed_out</code> instead of lingering <code>running</code> / vague <code>unknown</code>.</li>
+<li>Helpers: <code>_pid_is_alive</code>, <code>mark_daemon_job_terminal</code>, <code>scan_zombie_running_jobs</code>, <code>apply_reap_zombies</code>, <code>auto_reap_job_from_sentinel</code>.</li>
+<li>Tests for dry-run/apply, auto-reap via sentinel, CLI parser, and reconcile expectation update.</li>
+</ol>
+<h2>On the long arc</h2>
+<p>Autonomous multi-agent dispatch needs a job table that matches process reality. Windowed sentinels (#751) fixed the alert log; <code>jobs reap</code> (#753) fixes the queue truth that platform ops L1 rates depend on.</p>
+<h2>New goalpost</h2>
+<ul>
+<li>Operators have a one-command hygiene path (<code>jobs reap --all-projects --apply</code>).</li>
+<li>Future STALL/TIMEOUT cannot recreate the 482-zombie pile without an auto flip.</li>
+<li>Still open: agy timeout root cause (#750), cost capture gaps (#752), full #701 epic.</li>
+</ul>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

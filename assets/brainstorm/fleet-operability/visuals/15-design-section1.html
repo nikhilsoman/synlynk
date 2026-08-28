@@ -1,0 +1,45 @@
+<h2>Design §1 — Product model &amp; fleet</h2>
+<p class="subtitle">Does this match what we locked? Approve in terminal to continue.</p>
+
+<div class="section">
+  <p class="label">Tiers</p>
+  <table style="width:100%;border-collapse:collapse;font-size:0.9rem">
+    <tr style="border-bottom:1px solid var(--border,#333)">
+      <th align="left">Tier</th><th align="left">Meaning</th><th align="left">Enforced by</th>
+    </tr>
+    <tr style="border-bottom:1px solid var(--border,#333)">
+      <td><strong>Supported</strong></td>
+      <td>Agent is Core 4 + fail-closed doctor green + dry matrix green for required cells</td>
+      <td>doctor exit≠0 blocks “supported” claims; dry matrix in CI</td>
+    </tr>
+    <tr style="border-bottom:1px solid var(--border,#333)">
+      <td><strong>Proven</strong></td>
+      <td>Supported + live matrix cell green within 7 days</td>
+      <td>matrix results table + freshness in status/docs</td>
+    </tr>
+    <tr>
+      <td><strong>Experimental</strong></td>
+      <td>Not Core 4 (local today). May appear in advanced docs only; never default help list</td>
+      <td>dispatch allowlist / open help text</td>
+    </tr>
+  </table>
+</div>
+
+<div class="section">
+  <p class="label">Core fleet</p>
+  <p><code>claude</code> · <code>agy</code> · <code>codex</code> · <code>grok</code></p>
+  <ul>
+    <li><strong>local</strong>: removed from <code>synlynk open</code> / dispatch help / “supported fleet” claims until open + TC-1 + TC-3 + dry matrix green</li>
+    <li><strong>codex</strong>: Core 4 member with role label <strong>builder-only</strong> — matrix and docs must not claim GH-write, package-install, or network-heavy sandbox until those cells Proven</li>
+  </ul>
+</div>
+
+<div class="section">
+  <p class="label">Hard freeze</p>
+  <p>No new fleet-parity / harness-compatibility feature PRs merge until Phase 1 (dry matrix + fail-closed doctor + UNKNOWN/state policy) lands. Allowed: stop-the-line bugs (broken dispatch, TC-2 crash, data loss).</p>
+</div>
+
+<div class="section">
+  <p class="label">Out of this spec’s build phases (sequenced later)</p>
+  <p>Full Core 4 GH-write invest · grants for all Core 4 · native-harness go/no-go (after first Proven week)</p>
+</div>

@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>synlynk | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date"></span>
+        
+      </div>
+      <h1 class="blog-post-title"></h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>96: the request finally landed — and the model tried to delete a test file</h1>
+<h2>Where we left off</h2>
+<p>PR #678 fixed the litellm provider-prefix bug: <code>_local_dispatch_model_flags()</code> now sends
+<code>openai/Ornith-1.0-9B-4bit</code> instead of the bare roster name, so Aider's requests actually
+reach oMLX instead of erroring out before anything is sent. <code>exit 0</code> finally meant what it
+said. Next step: re-run the same test dispatch on <code>main</code> and see what Ornith actually says.</p>
+<h2>What moved the goalpost</h2>
+<p>The re-run (<code>synlynk dispatch local --task &quot;Scan this repo and give me a summary&quot;</code>) did
+reach the model this time — real progress, and a strictly longer runtime (44+ minutes vs.
+the previous attempt's instant litellm failure) was itself a plausible good sign. It wasn't.</p>
+<p>The captured log showed the model open a <code>THINKING</code> block, correctly reason that it should
+scan the repo and answer, then immediately start proposing whole-file rewrites instead —
+beginning with <code>tests/test_agent_quota_tracking.py</code>, collapsed from 1,804 lines down to a
+single line (<code>@@ -1,1804 +1 @@</code>). It kept doing this across file after file for 94,000+ log
+lines with no summary ever appearing. The process was killed manually rather than left to
+run indefinitely.</p>
+<p>Root cause wasn't in <code>synlynk/local_agent.py</code> at all — <code>_local_dispatch_model_flags()</code>
+already reads <code>edit_format</code> correctly per model from <code>.agents/local.json</code>. The bug was in
+the data: the pinned <code>Ornith-1.0-9B-4bit</code> entry declared <code>&quot;edit_format&quot;: &quot;whole&quot;</code>, which
+tells Aider (and therefore the model) that any response must be expressed as a complete
+replacement file. A capable model can recognize a plain question and just answer in prose
+despite that constraint; this 9B model apparently can't reliably tell &quot;answer in prose&quot;
+from &quot;must emit a whole-file block,&quot; so a Q&amp;A-shaped prompt got forced through the file-edit
+code path and degenerated into near-empty rewrites.</p>
+<p>Because Aider was also run with <code>--no-auto-commits</code>, none of the hallucinated edits actually
+landed — <code>git status</code> in the job worktree showed only Aider's own harmless <code>.aider*</code> line
+auto-added to <code>.gitignore</code>. No data was lost. But the dispatch produced nothing useful and
+would not have converged on its own.</p>
+<h2>What this PR ships</h2>
+<p>A one-line <strong>config</strong> correction, not a code change — <code>.agents/local.json</code>:</p>
+<pre><code class="language-json">{&quot;id&quot;: &quot;Ornith-1.0-9B-4bit&quot;, &quot;pinned&quot;: true, &quot;edit_format&quot;: &quot;diff&quot;},
+</code></pre>
+<p><code>diff</code> format doesn't carry the same &quot;reproduce the entire file&quot; pressure — a no-op response
+is a valid near-empty diff hunk rather than a full-file replacement — and is Aider's own
+recommended default for models at this capability tier. <code>qwen-coder</code> and <code>gemma-coder</code>
+roster entries are untouched (they aren't actually downloaded into oMLX yet — a separate,
+already-flagged gap, out of scope here).</p>
+<p>Caught a genuinely new failure mode along the way: Codex's sandbox denied direct filesystem
+writes to <code>.agents/local.json</code>, so it worked around it with <code>git update-index --cacheinfo</code>
+to stage the correct blob straight into git's index, then committed cleanly. That commit
+(<code>f522266</code>) was correct. But the physical file on disk was never actually rewritten, and the
+dispatch harness's own post-job wrap-up commit snapshotted that stale on-disk state,
+silently reverting the fix in a second, harness-authored commit — a fourth distinct flavor
+of &quot;job reports done/exit 0 but the real change didn't stick&quot; this session, this time caused
+by the dispatch tooling itself rather than the agent or the model. Caught by reading the
+actual git history and file contents directly rather than trusting job status, and fixed
+with an explicit <code>git revert</code> of the harness's bogus commit before merging. Not fixed at the
+harness level in this PR — flagged as a follow-up, kept out of scope to keep this branch
+narrow.</p>
+<p>This does <strong>not</strong> make <code>local</code> dispatch a general-purpose Q&amp;A agent — it remains scoped to
+coding tasks with file-edit deliverables, same as the other four agents. <code>diff</code> format
+reduces the blast radius of a confused response; it doesn't guarantee a coherent one.
+True read-only/Q&amp;A support for <code>local</code> is an explicit non-goal here, not solved.</p>
+<p>Backfilled as Addendum 4 / Task Group 9 into the same design spec and implementation plan
+that already carry Addenda 1–3 — the fourth time this pattern has held for this feature.</p>
+<h2>Next goalpost</h2>
+<p>Two threads worth raising explicitly: (1) whether to file and act on the dispatch-harness
+wrap-up-commit bug found above — it's not specific to <code>local</code>, any sandboxed agent write
+workaround could hit the same silent-revert failure mode; (2) the same two longer-standing
+open items as before — user review of the fleet-parity reliability cluster spec, and the
+not-yet-started herdr-integration brainstorm.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

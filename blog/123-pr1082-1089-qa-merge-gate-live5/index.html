@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PRs #1082–#1089 — Shipping the QA Merge Gate, and the Bug It Found on the Way | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-3">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Aug 22, 2026</span>
+        
+          <span class="blog-post-pr">PR #1082, #1083, #1084, #1086, #1088, #1089</span>
+        
+      </div>
+      <h1 class="blog-post-title">PRs #1082–#1089 — Shipping the QA Merge Gate, and the Bug It Found on the Way</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>PR #1079 (still open as of this post — see note below) laid out the design for
+<strong>block-only</strong> merge-gate authority: compute a qa-gate verdict from CI matrix status
+plus sentinel health, wire it into <code>synlynk pr check</code>, add a CI job that enforces it,
+and finally make GitHub's own branch protection require that job to pass. The plan
+(<code>docs/superpowers/plans/2026-08-20-qa-merge-gate-authority.md</code>) decomposed this into
+four stacked PRs, each dispatched to Codex or Grok per the plan's harness assignment,
+with every review/merge step staying with Claude per this project's PM-only role.</p>
+<h2>Strategic Shifts in This PR (if any)</h2>
+<p>No scope changes to the qa-gate plan itself. The one real shift was operational,
+discovered mid-execution: <strong>synlynk's own state-DB migration logic had a live bug</strong>
+(tracked as LIVE-5, issue #1087) that surfaced while dispatching the stacked PRs —
+<code>_migrate_db()</code> was copying the entire state DB on <em>every</em> connection instead of only
+when a schema change was actually pending, producing 384 stale <code>.pre-migration-*.bak</code>
+files (1.8GB) and lock-contention crashes in <code>synlynk probe</code>/<code>dispatch</code>/<code>pr check</code>.
+That got triaged as a Sev1 per the Live Issues SOP, RCA'd, fixed, and merged
+(PR #1086, #1088) in the middle of the qa-gate stack rather than deferred — the gate
+work couldn't proceed reliably while the dispatch tooling underneath it was corrupting
+its own state.</p>
+<h2>What This PR Shipped</h2>
+<p><strong>The qa-gate stack (Tasks 1–4 of the plan):</strong></p>
+<ul>
+<li><strong>#1082/#1083</strong> — the <code>qa_gate_verdict</code> module (CI matrix + sentinel health →
+block/pass verdict) and its wiring into <code>synlynk pr check</code>.</li>
+<li><strong>#1084</strong> — the <code>qa-gate:</code> CI job, added inside <code>.github/workflows/test.yml</code> as
+<code>needs: test</code> rather than a standalone <code>qa-gate.yml</code>. Same-file <code>needs:</code> was a
+deliberate choice: separate workflow files run in parallel with no cross-file
+ordering, so a standalone file would almost always see the test matrix as still
+pending and fail closed.</li>
+<li><strong>#1089</strong> — <code>scripts/apply_qa_gate_branch_protection.sh</code>, a dry-run-only
+read-modify-write script that adds <code>qa-gate</code> to main's required status checks
+without clobbering existing ones. This one took two dispatch cycles: the first
+Codex delivery (job-424c7c39) shipped with <code>--jq 'contexts'</code> — invalid jq syntax
+missing the leading dot — but Codex's own self-test didn't catch it because the
+test harness PATH-injected a <strong>mock <code>gh</code> binary</strong> that silently ignored <code>--jq</code>
+entirely and returned pre-shaped JSON. I found the bug by running the script
+against the real <code>gh</code> CLI directly during review. The fix-dispatch explicitly
+banned mocking <code>gh</code> a second time and required reproduction against the real CLI
+before and after the fix — verified independently again before merge.
+Task 4 also cost two wasted dispatch cycles from a different cause: the branch
+actually created by the first Codex job was <code>chore/qa-gate-branch-protection</code>
+(the plan's task text contained a literal <code>git checkout -b</code> instruction that
+Codex followed verbatim), not the <code>dispatch/codex/job-*</code> auto-naming convention
+the redispatch assumed — <code>_resolve_explicit_base_ref()</code> in <code>synlynk/dispatch.py</code>
+happily resolved the wrong <code>--base</code> to main's tip instead of erroring, so two
+redispatches silently produced worktrees missing the actual script until the
+branch was confirmed directly via <code>git branch --show-current</code>.
+Two Grok attempts at this same task also failed earlier with <code>stopReason: &quot;cancelled&quot;</code> after 53–90s each, with correct in-progress reasoning per the
+job's <code>&quot;thought&quot;</code> field — read as backend/session instability rather than a
+task-comprehension problem, so the harness was switched to Codex rather than
+retried a third time on Grok.</li>
+</ul>
+<p><strong>The LIVE-5 fix (#1086 RCA, #1088 code):</strong></p>
+<ul>
+<li>Gated <code>_snapshot_before_migration()</code> behind a schema-fingerprint check so it only
+backs up when a migration is actually about to change something — zero file
+copies on the common already-migrated-DB path.</li>
+<li>Added a <code>PRAGMA user_version</code>-gated <code>_DB_MIGRATION_VERSION</code> constant to make
+repeated <code>_migrate_db()</code> calls on an already-current DB cheap and idempotent.</li>
+<li>Fixed a second, harder-crash bug in <code>_run_harness_rename_migration()</code>: the
+rename from <code>agent_reservations</code> to <code>harness_reservations</code> only checked that the
+source table existed, not that the destination didn't — if <code>agent_reservations</code>
+got re-created empty by a later <code>CREATE TABLE IF NOT EXISTS</code> in the same
+migration pass, the next connection's rename crashed with
+<code>OperationalError: there is already another table or index with this name</code>.</li>
+<li>Three regression tests: double-migration produces zero new backups, rename is
+safe when both tables already exist, and the normal single-migration path still
+produces exactly one backup.</li>
+</ul>
+<h2>Brainstorm Visuals Used</h2>
+<p>None — this work executed directly off the already-approved
+<code>docs/superpowers/plans/2026-08-20-qa-merge-gate-authority.md</code> plan document; no new
+brainstorming was needed for either the gate stack or the LIVE-5 fix.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>The qa-gate is the mechanism that lets synlynk eventually trust a dispatched agent's
+PR without a human re-running CI checks by hand — <code>synlynk pr check</code> now computes a
+real block/pass verdict from CI + sentinel state, and once
+<code>apply_qa_gate_branch_protection.sh</code> is actually run (still a deliberate,
+human-confirmed-only step — see below), GitHub itself will refuse to merge a PR
+whose qa-gate job hasn't passed. That's a concrete step toward &quot;qa role delegated
+merge-gate authority,&quot; the follow-up spec flagged back in #1075's Out of Scope.</p>
+<p>Just as importantly, the LIVE-5 catch is a case study in the review discipline this
+project runs on: a dispatched agent's own self-test (via a mock tool) can look green
+while masking a real bug, and this project's non-authoring-reviewer-runs-it-for-real
+step caught it before merge, twice in a row (the branch-protection jq bug, and
+independently the DB migration storm that was found through direct production
+symptoms, not through any agent's test suite).</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>The full qa-merge-gate-authority stack (#1082, #1083, #1084, #1089) plus the LIVE-5
+fix (#1086, #1088) are on <code>main</code>. Three items remain explicitly deferred, not silently
+dropped:</p>
+<ol>
+<li><strong>Actually applying branch protection</strong> — <code>apply_qa_gate_branch_protection.sh</code>
+exists and is verified safe in dry-run, but running it for real against <code>main</code>'s
+protection rules is a human-confirmed action, not yet scheduled.</li>
+<li><strong>PR #1079</strong> (the original block-only design spec) is still open, unmerged — the
+implementation shipped ahead of the spec doc landing, which is a process gap worth
+closing separately rather than retconning here.</li>
+<li>A full worktree hygiene audit ran immediately after this stack shipped (9 stale
+worktrees/branches from this and prior sessions cleaned up, 2 genuinely open
+branches — #1079 and #1081 — correctly left alone), keeping the &quot;clean up the
+moment the owning PR merges&quot; protocol from silently drifting into the kind of
+30-worktree backlog a prior audit had to clear in bulk.</li>
+</ol>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

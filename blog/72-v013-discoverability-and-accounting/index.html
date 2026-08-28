@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>synlynk | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date"></span>
+        
+      </div>
+      <h1 class="blog-post-title"></h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>v0.13.0 — Discoverability &amp; Accounting</h1>
+<p><strong>Date:</strong> 2026-07-22
+<strong>Tag:</strong> <a href="https://github.com/nikhilsoman/synlynk/releases/tag/v0.13.0">v0.13.0</a>
+<strong>PRs:</strong> #274–#440 (~60 PRs since v0.12.0)</p>
+<hr>
+<p><strong>One sentence:</strong> synlynk learns to explain itself — every command now has a discoverable taxonomy entry with a maturity-tiered reveal, a live selftest exercises all 59 commands end-to-end, cost accounting gets payment-model awareness and a task-boundary fence around actual spend, and dispatch routing gets capability-aware enough to stop sending GitHub-write work to agents that structurally can't do it.</p>
+<hr>
+<h2>What v0.13.0 Is</h2>
+<p>v0.12.0 closed the H0 measurement gate — every cost figure synlynk displays is now sourced or labeled. Seven days and roughly sixty PRs later, v0.13.0 answers the next question the platform needed to answer: <em>does synlynk know what it can do, and does it tell you honestly?</em> A full command taxonomy now backs FTUE, docs, and trigger phrases from one source of truth; a live selftest actually runs all 59 commands instead of trusting unit-test coverage; cost accounting learns the difference between a subscription seat and a metered API call; and dispatch routing gained a first real capability gate — <code>can_gh_write</code> — instead of relying on an SOP a dispatched agent has no way to enforce on itself.</p>
+<p>This is a wide release, like v0.12.0 before it. <code>[Unreleased]</code> accumulated a full feature cluster without an intermediate cut — this release rolls it all up rather than retroactively splitting seven days of history.</p>
+<p>Six interlocking epics shipped, plus two live-issue fixes:</p>
+<ol>
+<li><strong>Command Taxonomy, Maturity-Tiered Reveal, and Trigger Registry</strong> (#303) — one registry drives FTUE, docs generation, and trigger phrases.</li>
+<li><strong>Task-Boundary Cost Fence</strong> (story-615bc8f4) — shared, allowlist-gated cost display at dispatch-start and job-completion.</li>
+<li><strong>Live Command Selftest</strong> (#328) — a taxonomy-driven smoke test exercising all 59 commands against a real scratch workspace.</li>
+<li><strong>Capability Sweep + Industry Taxonomy</strong> (#367) — NAICS/APQC/SFIA-coded calibration scoring for agent capability.</li>
+<li><strong>Payment-Model-Aware Cost Accounting</strong> (#374) — real dollars vs. pay-as-you-go-equivalent estimates, per agent.</li>
+<li><strong><code>can_gh_write</code> Capability Routing</strong> (#423/#426/#438) — structural enforcement of who can complete GitHub-write dispatch work.</li>
+<li><strong>Two live-issue fixes</strong> (#421) — <code>synlynk watch</code>'s <code>CYCLES.index(&quot;work&quot;)</code> crash and <code>synlynk viz --serve</code>'s daemon-thread hang, both root-caused and shipped in this release.</li>
+</ol>
+<hr>
+<h2>The Milestones</h2>
+<h3>Command Taxonomy, Maturity-Tiered Reveal, and Trigger Registry (#303)</h3>
+<p>New <code>synlynk/taxonomy.py</code> — <code>COMMAND_TAXONOMY</code> classifies all 59 CLI commands/subcommands by <code>governs_stage</code>, <code>maturity_tier</code> (FTUE / Goal / Execute / Team-Enterprise / latent), <code>prominence</code>, <code>orientation_gateway</code>, <code>audience</code>, <code>trigger_phrases</code>, and <code>hook_event</code>. This single registry now drives three previously-separate, previously-drifting surfaces: the FTUE wizard and <code>synlynk launch</code> task picker (#319), the auto-generated command reference docs (#316), and tier-scoped trigger phrases in the <code>synlynk:start</code>/<code>synlynk:end</code> session fence (#320). A pre-commit hook installed at <code>synlynk init</code> (#321) now gates instructions drift between the taxonomy and the generated CLAUDE.md/GEMINI.md/AGENTS.md content, closing the class of bug where the docs quietly stopped matching the CLI.</p>
+<h3>Task-Boundary Cost Fence (story-615bc8f4)</h3>
+<p>Cost/token data now surfaces at two fixed points — dispatch-start (an estimate) and job-completion (the actual) — in one shared, allowlist-gated format (<code>synlynk/fencing.py</code>: <code>FenceData</code>, <code>render_task_fence()</code>, <code>is_fenced_command()</code>), instead of being computed ad hoc at each call site. <code>dispatch_agent()</code> attaches an estimate to the job dict so both the direct <code>dispatch</code> CLI path and <code>schedule --execute</code> print it without duplicated estimation logic, and <code>exec_command()</code>'s and <code>_format_job_summary()</code>'s cost prints route through the same renderer. <code>release</code> is explicitly out of scope.</p>
+<h3>Live Command Selftest (#328)</h3>
+<p>The GTM checklist's item 1 — &quot;deep review of every synlynk command and its testing in a live repo scenario&quot; — got a real answer instead of a manual audit. New <code>synlynk/selftest.py</code> runs a taxonomy-driven smoke test against a real scratch git repo, grouped into lifecycle/free/paid scenario tiers (paid scenarios — <code>dispatch</code>/<code>exec</code>/<code>schedule</code> — gated behind explicit opt-in since they spend real tokens). A follow-up fix (#337) closed a real isolation gap: the paid scenarios chdir'd into the scratch workspace but never rebound <code>synlynk.DB_PATH</code>, so a live paid run could still write real rows into the host's actual central DB.</p>
+<h3>Capability Sweep + Industry Taxonomy (#367)</h3>
+<p>Static NAICS/APQC/SFIA lookup tables plus a migration crosswalk for legacy free-text <code>discipline</code>/<code>org_domain</code>/<code>industry</code> values (unmatched values tagged <code>legacy_unmapped</code>, never silently dropped). <code>synlynk capability sweep</code> runs a taxonomy-driven calibration sweep — CLI model discovery, SFIA-scoped calibration tasks, independent cross-agent verification scoring — under a configurable <code>$10</code> cost guardrail. A <code>capability_baseline.json</code> seeds cold-start capability rows so new agents don't start from zero. <code>synlynk pr check</code> also gained a geometric review-cycle multiplier at merge time, rewarding clean first-pass approvals and decaying quality credit across requested-changes rounds.</p>
+<h3>Payment-Model-Aware Cost Accounting (#374)</h3>
+<p>Closes a real accuracy gap the Measurement Ledger epic didn't cover: two agents on different payment models (subscription seat vs. metered API) were being reported at the same blended token rate. <code>payment_models</code> config, a <code>credit_grants</code> ledger table, and <code>resolve_payment_value()</code> now branch correctly across subscription overage billing, oldest-first multi-grant consumption, and plain pay-as-you-go — with <code>costs.md</code> splitting rows into api-equivalent and actual-dollars-spent columns, and <code>check_budgets()</code>'s Budget Pulse gaining a per-agent payment-model rollup.</p>
+<h3><code>can_gh_write</code> Capability Routing (#423/#426/#438)</h3>
+<p>The root problem: dispatched agents share a single GitHub identity, so <code>gh pr review --approve</code> always fails as self-approval, and only Claude/Grok can structurally complete GitHub-write work headless — a fact that lived only in SOP text, unenforced by code. This epic makes it structural: <code>can_gh_write: bool</code> on <code>AGENT_CAPABILITY_BASELINES</code>, a new <code>--requires-gh-write</code> dispatch flag, and enforcement in <code>dispatch_agent()</code>. A non-blocking gap remains open: reroute-target selection currently favors <code>claude</code> over <code>grok</code> due to dict insertion order, despite the SOP's &quot;Grok only&quot; intent — tracked, not yet fixed. The deeper identity half of #423 (distinct per-agent GitHub identities so a real <code>gh pr review --approve</code> becomes possible, not just a comment-review workaround) stays out of scope for this release.</p>
+<h3>Two live-issue fixes (#421)</h3>
+<p>Both reported directly during real usage, both fully root-caused before any fix shipped:</p>
+<ul>
+<li><strong><code>synlynk watch</code> crash</strong> — <code>ValueError: 'work' is not in list</code>. The <code>v0.12.0</code> tag shipped <code>cmd_watch()</code> still looking up a <code>&quot;work&quot;</code> cycle name that had already been renamed out of <code>hud.py</code>'s <code>CYCLES</code> list under the GOVERNS seven-stage vocabulary rollout. The fix (<code>CYCLES.index(&quot;execute&quot;)</code>) had actually merged to <code>main</code> via #301 two days after the <code>v0.12.0</code> tag — it just never made it into a release until now.</li>
+<li><strong><code>synlynk viz --serve</code> immediate exit</strong> — reported as a suspected sandbox/daemonization artifact, but reproduced identically outside the sandbox: <code>_start_server()</code> spawned the HTTP server on a <code>daemon=True</code> thread and returned immediately, so the process (and its daemon thread) died right after printing &quot;Serving at...&quot;. New <code>_serve_until_stopped()</code> blocks the main thread until <code>KeyboardInterrupt</code>, then shuts the server down cleanly. Verified with a new regression test using a fake HTTP server (the sandbox blocks real localhost binds in CI).</li>
+</ul>
+<hr>
+<h2>Test Count</h2>
+<table>
+<thead>
+<tr>
+<th>Milestone</th>
+<th>Tests</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>v0.12.0 (tag)</td>
+<td>1140 passed, 2 skipped</td>
+</tr>
+<tr>
+<td><strong>v0.13.0</strong></td>
+<td><strong>1319 passed, 2 skipped</strong></td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2>What's Next</h2>
+<p>Grok's non-blocking observation on <code>can_gh_write</code> reroute-target ordering (favoring <code>claude</code> over <code>grok</code> by dict insertion order) is still open. Issue #423's GitHub-identity half (per-agent PAT/App so a real <code>gh pr review --approve</code> is possible) remains unscoped. Adding <code>watch</code>/<code>viz</code> real-launch coverage to the Live Command Selftest, flagged as a natural companion fix during this release's investigation, hasn't been scoped yet either. The security-hardening cluster (#348–#355) and the job-status/reconciliation cluster (#329–#331, #419, parked #202) remain open and untouched by this release.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

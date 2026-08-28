@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #857 — GH-Write Fail-Closed: No More Silent Personal Keyring | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-1">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Aug 09, 2026</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #857 — GH-Write Fail-Closed: No More Silent Personal Keyring</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>GH-Write Fail-Closed — No More Silent Personal Keyring</h1>
+<h2>Broader goal</h2>
+<p>Epic B (job-truth + GH-write plan): stop shared-identity review/merge and stop pretending env-token stripping blocks <code>gh</code>.</p>
+<h2>What moved</h2>
+<p>#569 showed strip-and-warn is false security — <code>gh</code> uses host keyring via <code>HOME</code>. B0/B1 <strong>fail closed</strong> without a role App token; when a token mints, inject it and isolate <code>GH_CONFIG_DIR</code>.</p>
+<h2>Shipped</h2>
+<ul>
+<li><code>--requires-gh-write</code> + no App → <code>RuntimeError</code> with <code>identity init</code> instructions</li>
+<li>Token present → <code>GH_TOKEN</code>/<code>GITHUB_TOKEN</code> + isolated <code>GH_CONFIG_DIR</code></li>
+<li>Escape hatch: <code>SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH=1</code> (warned)</li>
+<li>Design: <code>docs/superpowers/specs/2026-08-09-gh-write-identity-fail-closed-design.md</code></li>
+</ul>
+<h2>New goalpost</h2>
+<p>Operators must provision role Apps for real GH-write dispatches. Process routing to Grok/Agy remains until bots are installed; product no longer claims &quot;will fail&quot; while succeeding as the human.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PRs #824–#830 — UX 1.0 Field Trial Readiness: From Shipped to Trusted | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-2">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Aug 08, 2026</span>
+        
+          <span class="blog-post-pr">PR #824, #825, #826, #827, #829, #830</span>
+        
+      </div>
+      <h1 class="blog-post-title">PRs #824–#830 — UX 1.0 Field Trial Readiness: From Shipped to Trusted</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>PR #731 (post 99) shipped Synlynk UX 1.0 — TUI, Vizor, and a shared <code>uxcore</code> library — as working code. But &quot;shipped&quot; and &quot;trustworthy&quot; are different bars. The UX 1.0 spec's own Phase 1 required exercising every surface against real projects with real dispatch jobs before calling it done; synthetic runs don't count. Nothing had verified TUI, Vizor, or the (not-yet-built) Slack notifier against actual daily use.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>None — this window executed the field-trial-readiness plan (<code>docs/superpowers/plans/2026-08-06-ux-1.0-field-trial-readiness.md</code>) exactly as designed, across its four phases. The one surprise was operational rather than strategic: the Phase 1 checklist surfaced a real bug (<code>#822</code> — Vizor's <code>/</code> route crashed with <code>EOFError</code> on an unconfigured <code>.synlynk/config.json</code>, because <code>_ftue_prompts()</code> called <code>input()</code> unconditionally with no TTY guard) instead of a clean pass. That's the checklist doing its job.</p>
+<h2>What This PR Shipped</h2>
+<p>Six PRs closed out the plan's four phases:</p>
+<ul>
+<li><strong>#824</strong> — the Vizor FTUE fix for #822, closing the Phase 1 checklist's only Fail row.</li>
+<li><strong>#825</strong> — Phase 2's journey map simulator (<code>docs/brainstorm/ux-journey-map/</code>), an interactive HTML walkthrough of all 7 UX 1.0 user journeys across TUI/Vizor/Slack.</li>
+<li><strong>#826</strong> — Phase 3b: a first-visit banner in Vizor pointing new users at the other two surfaces.</li>
+<li><strong>#827</strong> — Phase 3c: Slack notifier cross-links back to Vizor (<code>View live in Vizor</code> links in job messages).</li>
+<li><strong>#829</strong> — Phase 3a: <code>synlynk/ux_nudges.py</code>, a terminal tip producer. <code>pending_ux_tip()</code> checks <code>daemon_jobs</code> for concurrent running jobs and, above a threshold, surfaces a one-time nudge (<code>synlynk tui</code>) via the existing nudge-fence rendering path in <code>dispatch.py</code>, respecting a <code>dismissed_ids</code> list in config so it doesn't nag.</li>
+<li><strong>#830</strong> — Phase 4 documentation: the completed Phase 1 surface checklist (<code>docs/superpowers/ux-1.0-surface-checklist.md</code>) with the #822 row re-verified Pass against real re-runs on rxcc and cc-videoreframing, plus the devlog entry recording the trial window's start.</li>
+</ul>
+<p>Two implementation-adjacent notes worth keeping: job-729771ed (Task 3) needed a clean re-dispatch after an earlier attempt corrupted its prompt via shell backtick expansion inside a double-quoted <code>--task</code> argument — the fix was dispatching without embedding literal code spans in that argument, and the second attempt landed cleanly with schema-correct tests (the plan's placeholder assumption for <code>daemon_jobs</code>'s columns was wrong; the implementer checked the real schema and wrote against it). And PR #825 needed a merge-conflict resolution against <code>origin/main</code> before it was mergeable — a trivial whitespace-only conflict in <code>tests/test_agent_quota_tracking.py</code>, resolved and re-verified against the full suite (1778 passed).</p>
+<p>Every PR here went through this repo's non-authoring review discipline: since dispatched agents share one GitHub identity, self-approval via <code>gh pr review --approve</code> fails outright, so each PR got a formal COMMENT review with an explicit checklist instead, per the sanctioned fallback for GitHub-identity caveat #423.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>PR #825's journey map (<code>docs/brainstorm/ux-journey-map/index.html</code> and <code>journey-map.html</code>) is itself the artifact — an interactive companion for navigating all 7 UX 1.0 journeys, built as part of this PR rather than informing a decision upstream of it.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>This is the difference between an agent fleet that <em>has</em> observability surfaces and one that's actually <em>using</em> them. A dispatched agent's work is only as trustworthy as the human's ability to watch it happen — TUI for live terminal oversight, Vizor for browser-based dashboards, Slack for async notification — and until this work, none of those three had been exercised against real jobs on real projects. The #822 bug is the concrete proof of why that distinction matters: a surface that &quot;should work&quot; crashed on first real contact with an unconfigured project, exactly the kind of gap synthetic testing misses and field trials catch.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>The field trial window is now open (started 2026-08-08) across four subject projects — rxcc, cc-videoreframing, synlynk itself, and playblazer-ng (pending onboarding — it has no <code>.synlynk/</code> directory yet, the first blocker to resolve). The trial has no fixed end date; it closes when the three surfaces have a clean bug bar under real daily use and the user signs off, at which point Named Release Policy kicks in: CHANGELOG, VERSION bump, <code>gh release create</code>, and a closing post. Until then, the next goalpost is unglamorous but necessary: watch for Sev1/Sev2 issues against TUI/Vizor/Slack under the existing Live Issues SOP, and don't declare victory early.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

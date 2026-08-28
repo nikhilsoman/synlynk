@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fleet-Parity Security Cluster — Fail Closed, Not Warn-and-Proceed | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-3">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Aug 02, 2026</span>
+        
+          <span class="blog-post-pr">PR TBD</span>
+        
+      </div>
+      <h1 class="blog-post-title">Fleet-Parity Security Cluster — Fail Closed, Not Warn-and-Proceed</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>PR #587 (post #90) closed out the harness-capability-drift-regression-classification chain, and with it the last dependency blocking the fleet-parity audit — eight issues (#332, #338, #340, #342, #347, #348, #419, #461) queued since mid-project as &quot;known gaps between what synlynk assumes about dispatched agents and what those agents' CLIs can actually enforce.&quot; Three of the eight (#332/#419/#461) turned out to already be fixed by PR #604 and were closed by inspection. The remaining five split cleanly along one axis: does the gap let a dispatched agent <strong>do more than it was granted</strong> (security severity), or does it <strong>fail or drift without exceeding scope</strong> (reliability severity)? This PR is the security half — #348 and #338. The reliability half (#340/#342/#347) stays queued as a follow-up spec.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>The brainstorm surfaced a decision point that shaped everything downstream: when an agent has no real CLI mechanism to enforce a requested restriction, should dispatch warn and proceed, or refuse outright? The codebase's existing behavior for Agy's read-only case was warn-and-proceed — print a caveat, then run with full permissions anyway. That's strictly worse than having no restriction mechanism at all, because it creates the appearance of a boundary that isn't there. The locked-in decision: fail closed. A loud refusal beats a silent no-op that gives false confidence.</p>
+<p>The same question came up for the environment leak (#348): strip known-secret-shaped patterns from the inherited environment, or allowlist a minimal fixed set and add to it only on confirmed need? Denylists only ever catch patterns someone thought to strip; allowlists default to nothing. Went with the allowlist — <code>_build_subprocess_env()</code> replaces <code>os.environ.copy()</code> entirely rather than filtering it.</p>
+<p>Two scope cuts kept this from sprawling into the reliability cluster's territory: Local (aider) gets the same fail-closed treatment as any agent with no declared enforcement mechanism, rather than investing in wiring up aider's actual <code>--read</code> flag (unverified in this environment — aider isn't installed here) — that's logged as a follow-up, not solved here. Same for Agy's <code>--sandbox</code> flag, whose real semantics aren't documented in this repo. Both are explicit &quot;fail closed now, investigate later&quot; calls rather than either doing the investigation or leaving warn-and-proceed in place.</p>
+<h2>What This PR Shipped</h2>
+<p>Four tasks, dispatched to Codex in dependency order, each verified via direct worktree diff + targeted test run before merge — not from job-status summaries alone, which this session confirmed can misreport <code>files: 0 touched</code> even on real, correctly-scoped commits (a display quirk, distinguished from an actual false-completion pattern seen earlier in unrelated dispatch history).</p>
+<ul>
+<li><strong><code>PermissionEnforcementError</code></strong> (<code>synlynk/dispatch.py</code>): a new exception <code>_permissions_to_flags()</code> raises instead of warning. Agy's read-only branch (<code>set(permissions) &lt;= {&quot;read:*&quot;}</code>) now raises rather than printing a caveat and returning <code>[]</code>; Local raises for any non-empty permission set (empty permissions — no restriction requested — stays a no-op). Claude/Codex/Grok/Agy-write paths are unchanged; they already have real per-permission enforcement. The caller lets the exception propagate, so dispatch fails before any worktree or subprocess work begins — cheap, immediate failure instead of a wasted dispatch.</li>
+<li><strong><code>env_passthrough</code> baseline field</strong> (<code>synlynk/_constants.py</code>): every entry in <code>AGENT_CAPABILITY_BASELINES</code> gained an <code>env_passthrough: []</code> key. Investigation for this spec found all five agents currently authenticate via login state or file-based credentials rather than environment variables — so the field starts empty everywhere, populated only when a future agent genuinely needs an env var passed through.</li>
+<li><strong><code>_build_subprocess_env()</code></strong> (<code>synlynk/dispatch.py</code>): replaces the single <code>proc_env = os.environ.copy()</code> call site with a function that builds the subprocess environment from a fixed base allowlist (<code>PATH</code>, <code>HOME</code>, <code>LANG</code>, git identity vars, etc.) plus each agent's <code>env_passthrough</code> list — nothing else from the parent shell crosses over. The existing GH_TOKEN inject/strip logic for <code>--requires-gh-write</code> dispatches is preserved verbatim inside the new function; three pre-existing regression tests in <code>test_dispatch_github_identity.py</code> confirm that behavior survived the refactor unchanged.</li>
+<li><strong><code>_redact_secret_patterns()</code></strong> (<code>synlynk/__init__.py</code>): a second redaction pass layered after the existing <code>_redact_active_tokens()</code> (which only catches synlynk's own minted GitHub App tokens). Five compiled patterns cover GitHub PATs/OAuth tokens, AWS access key IDs, OpenAI-style keys, and Slack tokens — applied to captured job output before it's printed or logged. This is explicitly defense-in-depth: the env allowlist is the primary control that keeps secrets out of the subprocess in the first place; this pass catches the case where a secret still ends up in captured stdout some other way (e.g., echoed by the dispatched agent itself).</li>
+</ul>
+<p>One pre-existing test needed updating as part of the regression gate: <code>test_synlynk.py::test_permissions_to_flags_agy_returns_empty_for_read_only</code> asserted the exact old behavior Task 1 deliberately changed. Replaced with an assertion that <code>PermissionEnforcementError</code> is now raised — the plan itself pre-authorized this class of fix, distinguishing it from an unintended regression.</p>
+<p>Full suite: 1536 passed, 2 skipped, stable.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>None — every decision in this spec was a text/tradeoff question (fail-closed vs. warn, allowlist vs. denylist), not a visual one.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>Every dispatched agent's declared permission scope is now something synlynk either genuinely enforces or refuses to pretend it enforces — no more silent gaps between the permission a caller requests and what actually reaches the subprocess. And no dispatched subprocess, regardless of trust level, inherits the operator's full shell environment by default; every var it sees is either a fixed baseline or an agent's declared, confirmed-necessary requirement. Combined with the generic secret redaction, this closes both the write-path (what the subprocess can access) and read-path (what makes it into logs) versions of the same underlying gap.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>The reliability cluster (#340/#342/#347 — jobs that fail or drift without exceeding granted scope) is next up as its own spec, following the same brainstorm → plan → dispatch → verify discipline this PR used. Two explicitly-deferred follow-ups from this spec remain logged for whenever there's a real aider/Agy <code>--sandbox</code> install to test against: Local's <code>--read</code> flag and Agy's <code>--sandbox</code> semantics, both currently fail-closed rather than genuinely scoped.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

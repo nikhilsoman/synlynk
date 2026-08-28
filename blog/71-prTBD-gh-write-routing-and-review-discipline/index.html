@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Docs — GitHub write routing (Grok only) + PR Review Discipline identity caveat | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Jul 21, 2026</span>
+        
+          <span class="blog-post-pr">PR #432</span>
+        
+      </div>
+      <h1 class="blog-post-title">Docs — GitHub write routing (Grok only) + PR Review Discipline identity caveat</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>synlynk's multi-agent workgroup rests on two process rules that were already written into every agent's harness fence: <strong>capability-based task allocation</strong> (route by skill) and <strong>PR Review Discipline</strong> (non-authoring agent reviews and merges). Those rules assumed that any dispatched agent could run the same <code>gh</code> surface, and that GitHub would treat different agents as different reviewers.</p>
+<h2>Strategic Shifts in This PR (if any)</h2>
+<p>No product or code path change. This PR accepts two operational facts discovered while shipping PR #416 / #417 and codifies them as sanctioned policy (issues #423 option 3, #426 first bullet):</p>
+<ol>
+<li><strong>Only Grok can complete headless GitHub write actions</strong> today. Agy auto-denies the headless <code>command</code> permission class for external-mutating <code>gh</code> writes even with <code>--dangerously-skip-permissions</code>. Codex's <code>workspace-write</code> sandbox blocks egress to <code>api.github.com</code> by design.</li>
+<li><strong>GitHub cannot enforce &quot;non-authoring reviewer&quot;</strong> under the current auth model. Every dispatch-authored PR and every dispatched review run as the same GitHub user, so <code>gh pr review --approve</code> always fails with &quot;Can not approve your own pull request.&quot;</li>
+</ol>
+<p>The near-term resolution is document-the-reality, not separate bot identities or sandbox redesign.</p>
+<h2>What This PR Shipped</h2>
+<p>Updated the canonical SOP strings in <code>synlynk/probe.py</code> (<code>_PR_REVIEW_SOP</code>, <code>_CAPABILITY_ALLOCATION_SOP</code>) and the live harness fences in <code>CLAUDE.md</code> and <code>GROK.md</code> (the project-root files that currently carry those sections):</p>
+<table>
+<thead>
+<tr>
+<th>Change</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>New routing row: <strong>GitHub write actions → Grok only</strong></td>
+<td>Covers <code>gh pr review</code>, <code>gh pr merge</code>, <code>gh pr create</code>, <code>gh issue comment</code></td>
+</tr>
+<tr>
+<td><code>#426</code> note under Capability-Based Task Allocation</td>
+<td>Explains why Agy/Codex fail headless on mutating <code>gh</code></td>
+</tr>
+<tr>
+<td><code>#423</code> note under PR Review Discipline</td>
+<td>Non-authoring reviewer is dispatch process control, not GitHub enforcement</td>
+</tr>
+<tr>
+<td>Sanctioned fallback</td>
+<td>Formal COMMENT review + explicit approve checklist (PR #417 pattern), not <code>gh pr review --approve</code></td>
+</tr>
+</tbody>
+</table>
+<p><code>synlynk sync --repair-sops</code> / init will re-inject the updated blocks from <code>probe.py</code> for agents whose fences are missing those headers. GEMINI.md's current harness fence is contract/flags-only (no SOP table body yet); AGENTS.md is absent in this tree — both will pick up the new text when SOPs are next repaired or generated.</p>
+<h2>Empirical proof of #426</h2>
+<p>This PR itself is part of the evidence trail: an earlier attempt to dispatch this exact docs-only task to Agy failed with the headless <code>command</code> permission auto-deny — even though the task needed no review/merge, only <code>gh pr create</code> at the end. Opening the PR from Grok is the working path the new policy describes.</p>
+<h2>Brainstorm Visuals</h2>
+<p>None.</p>
+<h2>Progress Toward Full Autonomous Multi-Agent Dispatch</h2>
+<p>Autonomy requires honest capability maps. Dispatch that routes PR review/merge/create to agents that structurally cannot complete those steps wastes jobs and erodes trust in the workgroup protocol. Codifying Grok-only GitHub writes and the COMMENT-review fallback closes two silent failure modes without pretending GitHub branch protection can see multi-agent identity.</p>
+<h2>New Goalpost</h2>
+<p>Until separate GitHub identities (or Codex network-scoped sandbox / Agy command allowlisting) land, <strong>any dispatch task that must mutate GitHub via <code>gh</code> goes to Grok</strong>, and <strong>every dispatch-authored PR review ends as COMMENT + approve checklist</strong>, never formal <code>--approve</code>.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

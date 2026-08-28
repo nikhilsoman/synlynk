@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #535 — Cross-Process Token Redaction for GitHub App Installation Tokens | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-2">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Jul 25, 2026</span>
+        
+          <span class="blog-post-pr">PR #535</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #535 — Cross-Process Token Redaction for GitHub App Installation Tokens</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>PR #517 shipped per-role GitHub App identity (#423): dispatched agents now write to GitHub under a role-scoped App installation token instead of the operator's personal account. That PR's own Security Review flagged a known, documented limitation rather than silently shipping it: <code>_redact_active_tokens</code> in <code>synlynk/__init__.py</code> only ever checked the <em>in-process</em> <code>_token_cache</code> in <code>github_app_auth.py</code>. In practice, <code>synlynk dispatch</code> (which mints the token) and a later <code>synlynk logs</code> invocation (which displays output that might contain it) are almost always separate CLI processes — so the redaction was a no-op for the exact case it exists to cover. Filed as #524 and deliberately not bundled into #517.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>None — this was a scoped, well-understood bug fix from the moment #524 was filed. The only real decision was <em>how</em> to bridge the cross-process gap without a running daemon or shared memory: an on-disk cache file, written when a token is minted and read by any later process wanting to redact.</p>
+<h2>What This PR Shipped</h2>
+<p><strong>On-disk redaction cache.</strong> <code>get_installation_token()</code> in <code>synlynk/github_app_auth.py</code> now calls <code>_persist_token_for_redaction(role, token, expires_at)</code> immediately after caching a freshly-minted token in-process. That function appends the token to <code>.synlynk/token_redaction_cache.json</code>, pruning any already-expired entries first, and sets <code>0o600</code> permissions on the file (it holds live credentials, however short-lived). <code>_load_redaction_tokens()</code> is the read side: it loads the cache, filters out anything past its <code>expires_at</code>, and returns the still-valid token strings.</p>
+<p><strong>Wiring into redaction.</strong> <code>_redact_active_tokens</code> in <code>synlynk/__init__.py</code> now checks both sources — the in-process <code>_token_cache</code> (same-process dispatch) and <code>_load_redaction_tokens()</code> (a token minted by an earlier, separate <code>dispatch</code> invocation) — before replacing any match with <code>***REDACTED***</code>. Installation tokens live about an hour, and <code>dispatch</code>/<code>logs</code> are normally different invocations entirely, so the on-disk path is the one that actually matters in real usage.</p>
+<p><strong>A real bug caught before merge, not after.</strong> The dispatched fix (job-67052f14, story-8fe00292) hardcoded <code>_redaction_cache_path()</code> as <code>os.path.join(&quot;synlynk&quot;, &quot;token_redaction_cache.json&quot;)</code> — one directory name short of the spec, which called for <code>.synlynk/</code> (the hidden config directory every other piece of local state lives under), not <code>synlynk/</code> (the actual Python package source directory). The job's own new tests in <code>tests/test_github_app_auth.py</code> had baked in the identical wrong path via <code>tmp_path / &quot;synlynk&quot; / &quot;token_redaction_cache.json&quot;</code>, so <code>pytest</code> reported all green despite the defect. It only surfaced because running the full suite directly in the real integration worktree — not inside a <code>tmp_path</code> fixture — left behind an untracked <code>synlynk/token_redaction_cache.json</code> file, visible in <code>git status --short</code>. That's not a file that should ever appear at the top level of the source tree, which is what prompted the investigation. Fixed directly (a one-line path correction to already-reviewed, already-tested code, plus the three matching test-path references) rather than re-dispatched, and disclosed explicitly in the PR body under a &quot;Note on integration&quot; section rather than merged quietly.</p>
+<p><strong>Test coverage.</strong> New tests in <code>tests/test_github_app_auth.py</code> cover: cache-file creation and persistence, <code>0o600</code> permission enforcement, expired-token filtering on read, and pruning of expired entries on write. Full suite after the fix: <code>pytest tests/ -q</code> → 1413 passed, 2 skipped.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>None — straightforward bug fix from a filed issue, no brainstorm needed.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>Closes the second of two integrity gaps #517 explicitly flagged and deferred. Redaction now actually works across the process boundary where it matters — a dispatched job's minted GitHub App token won't leak into a human operator's terminal via a later <code>synlynk logs</code> call. It's also a concrete data point for why dispatched diffs need independent verification even when the job reports success and its own tests pass: self-consistent tests can bake in the same bug they're meant to catch.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>#525 (<code>synlynk doctor</code>'s CLI entrypoint never reaching its 10 registered <code>HEALTH_CHECKS</code>) was investigated and dispatched in parallel with this fix, landing separately as PR #536. With both #524 and #525 closed, the per-role GitHub identity work opened in #517 is now fully closed out — no more known follow-ups from that PR remain open.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

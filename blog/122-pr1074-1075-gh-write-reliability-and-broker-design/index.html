@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #1074 / #1075 — GitHub-Write Reliability, and the Spec for the Next Step | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-2">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Aug 20, 2026</span>
+        
+          <span class="blog-post-pr">PR #1074, #1075</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #1074 / #1075 — GitHub-Write Reliability, and the Spec for the Next Step</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Goal at the End of the Previous PR</h2>
+<p>Issue #859 had already closed the identity half of dispatched GitHub writes: role-scoped GitHub
+App tokens mean a dispatched job's <code>gh</code> calls are attributable to the role that made them, not to
+whichever personal keyring happened to be logged in. That left a second, distinct question open
+and explicitly unscoped — issue #865, &quot;can Codex physically make the write at all?&quot; Codex runs
+under <code>codex exec -s workspace-write</code>, and that sandbox structurally blocks network egress to
+<code>api.github.com</code>. A 2026-08-09 <code>synlynk decide</code> panel (Claude + Agy + Codex) had already agreed a
+real path exists — an allowlisted egress rule, a brokered relay, or a separate elevated-trust
+invocation mode — but that it needed its own scoped design and security review before any code
+got written. That was the state entering this session: identity solved, physical write path still
+an open design question.</p>
+<h2>Strategic Shift in This PR</h2>
+<p>None to the overall roadmap, but the work order inverted mid-session. Brainstorming #865's broker
+design surfaced a related, more urgent bug: dispatched agents doing PR reviews or issue closes were
+occasionally hitting silent &quot;user cancelled MCP tool call&quot; failures — confirmed 5-for-5 on recent
+jobs, including one closing issues via Grok. Root-causing it (issue #659) found that the
+<code>_format_prompt_for_agent</code> guardrail telling agents to use the <code>gh</code> CLI directly instead of MCP
+GitHub tools was only ever injected when <code>requires_gh_write=True</code> was explicitly passed — and
+operators reliably forgot to pass it for tasks whose GitHub-write intent was implicit in the task
+text (&quot;close issue #935 citing the PR&quot;) rather than stated as a flag. That's a live reliability bug
+independent of #865's sandbox-egress question, so it got fixed first, as PR #1074, while #865's
+design work continued in parallel as PR #1075.</p>
+<h2>What This PR Shipped</h2>
+<p><strong>PR #1074 (fix #659):</strong> <code>synlynk/dispatch.py</code> gained <code>_task_requires_gh_write(task, task_type)</code> —
+a conservative regex classifier that promotes <code>requires_gh_write</code> to <code>True</code> when task text combines
+a GitHub-write action verb (<code>approve</code>, <code>close</code>, <code>comment</code>, <code>merge</code>, <code>review</code>, <code>request-changes</code>)
+with a GitHub/PR/issue target (<code>github</code>, <code>gh</code>, <code>pull request</code>, <code>pr #N</code>, <code>issue #N</code>). The explicit
+<code>--requires-gh-write</code> CLI flag remains an override that still works unchanged — this only closes
+the gap for tasks where the operator didn't think to set it. <code>cli.py</code>'s dispatch preview path and
+<code>dispatch_agent()</code> itself both now run task text through this classifier before resolving the
+harness or building the prompt. Alongside the detection fix, the guardrail text itself got
+stronger: what used to be an advisory paragraph is now headed &quot;GitHub Write Instructions
+(MANDATORY)&quot; and explicitly names <code>close_issue</code> and other <code>github_*</code> MCP write tools as disallowed,
+not just discouraged — addressing the other half of the failure mode, where the guardrail was
+present but not reliably followed.</p>
+<p><strong>PR #1075 (docs, resolves #865's brainstorm):</strong> the design spec itself
+(<code>docs/superpowers/specs/2026-08-19-gh-write-broker-design.md</code>), hardened across three
+<code>synlynk decide</code> panel rounds. The architecture settled on a brokered relay: dispatched jobs write
+a typed request file (<code>schema_version</code>, <code>request_id</code>, <code>idempotency_key</code>, <code>nonce</code>, <code>job_id</code>, <code>repo</code>,
+<code>actor_role</code>, <code>commit_sha</code>, an allowlisted <code>action_args</code> map) to
+<code>.synlynk/gh_write_requests/&lt;request_id&gt;.json</code>; a non-LLM host-code broker consumes it atomically,
+executes the write with the role's own App token, verifies the result against live GitHub state,
+and writes <code>.synlynk/gh_write_results/&lt;request_id&gt;.json</code>. A late addition — §5b, added after a
+dedicated approval round — extends the same broker to interactive home-mode sessions (not just
+dispatch jobs) via a session-registration file (<code>.synlynk/registered_sessions/&lt;session_id&gt;.json</code>)
+and a unified watcher, with unregistered sources rejected by default rather than silently ignored.</p>
+<p>Both PRs hit the same unrelated CI snag on the way in: a repo-wide &quot;guard against <code>__init__.py</code>
+regrowth&quot; check was failing on <code>main</code> itself (4054 lines against a 4000-line limit), unconnected to
+either PR's diff. That got its own fix — PR #1077, dispatched to Codex, splitting <code>logs.py</code> and
+<code>platform_status.py</code> out of <code>__init__.py</code> (4054 → 3690 lines) — before #1074 and #1075 could merge.
+A second, quieter finding came out of getting #1074 green after #1077 landed: <code>gh run rerun</code>
+replays a workflow run against the merge-ref it captured at the <em>original</em> trigger event, not a
+freshly recomputed one against <code>main</code>'s new tip — so reruns kept reporting the stale 4054-line
+failure even after the real fix was on <code>main</code>. The actual fix was forcing a genuine <code>synchronize</code>
+event via <code>gh api repos/.../pulls/&lt;N&gt;/update-branch</code>, which both #1074 and #1075 needed.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>None — #865's design work stayed in text/spec form across the <code>synlynk decide</code> panel rounds; no
+architecture question in this thread benefited from visual mockups.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>Issue #659's fix closes a real trust gap in autonomous dispatch: a dispatched agent silently
+failing to post a review or close an issue — with no error surfaced anywhere — is worse than a
+loud failure, because nothing downstream knows the task didn't actually complete. Broadening
+detection to cover implicit-intent task text (not just the explicit flag) means that gap shrinks
+without requiring every dispatch caller to remember a flag correctly every time. #865's spec is the
+harder, more consequential piece: it's the design that will eventually let Codex make GitHub writes
+at all, closing the last capability gap between &quot;Codex can review code&quot; and &quot;Codex can act on that
+review&quot; — without punching a hole in the sandbox that isolates it.</p>
+<h2>The Goal at the End of This PR</h2>
+<p>The broker spec is approved and merged, but nothing has been built yet — the next goalpost is the
+implementation plan (<code>docs/superpowers/plans/</code>) for §5's in-scope slice, followed by the actual
+broker build. Two items are explicitly deferred per the spec's own §9, not yet scheduled: a
+follow-up PR amending <code>docs/superpowers/specs/2026-08-09-synlynk-agent-roles-charters-design.md</code>
+for qa's delegated merge-gate authority, and the broker-as-persistent-system-service question,
+which the spec deliberately left unanswered rather than guessing at.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

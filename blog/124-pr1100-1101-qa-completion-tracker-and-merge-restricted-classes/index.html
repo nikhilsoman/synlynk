@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>synlynk | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date"></span>
+        
+      </div>
+      <h1 class="blog-post-title"></h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>Goal at the End of the Previous PR</h2>
+<p>Post #123 landed the qa-merge-gate-authority stack: <code>synlynk pr check</code> computes a
+real block/pass verdict from CI + sentinel state, and <code>apply_qa_gate_branch_protection.sh</code>
+exists (dry-run verified, not yet applied for real). Three things were explicitly
+deferred: applying branch protection for real, landing #1079's original design spec
+doc, and the follow-up work each of those specs called out as &quot;not built yet&quot; —
+including a reserved-but-unbuilt <code>qa_gate_mode</code> value (<code>merge-restricted-classes</code>)
+and a way to verify that a merged PR actually fulfilled the spec/plan it claimed to
+implement, not just that its own tests passed.</p>
+<h2>No Strategic Shift</h2>
+<p>Both plans executed this PR were written and approved before #123 merged
+(<code>docs/superpowers/plans/2026-08-22-qa-completion-tracker.md</code> off spec #1091,
+<code>docs/superpowers/plans/2026-08-22-qa-merge-restricted-classes.md</code> off spec #1079 §5).
+Nikhil approved running both in parallel via subagent-driven-development once #123
+was stable. No goalpost moved — this is the two follow-ups #123 named, built.</p>
+<h2>What Shipped, Technically</h2>
+<p><strong>PR #1100 — Completion Tracker (qa-completion-tracker plan, 4 tasks):</strong></p>
+<ul>
+<li><code>synlynk/completion_tracker.py</code>: <code>parse_spec_reference()</code> extracts a spec/plan
+path or issue reference out of a PR body; <code>compute_completion_verdict()</code> +
+<code>_load_reference_content()</code> produce a fulfilled/partial/diverged verdict with
+rationale by comparing the referenced spec against the actual PR diff.</li>
+<li><code>synlynk/events.py</code>: <code>_scan_pr_completion()</code> + <code>_existing_spec_verified_pr_numbers()</code>
+wired into <code>scan_local_events()</code> — mirrors the existing <code>review_submitted</code> scan
+pattern from the GOVERNS event-contract extension, finding <code>pr_merged</code> events with
+no matching <code>spec_verified</code> event yet and emitting one once a verdict is computed.</li>
+<li><code>synlynk/viz.py</code>: new Vizor panel on the existing BS-21 stage-progress bars —
+<code>_load_spec_verifications()</code> loader, <code>spec_verifications</code> key in <code>_base_data()</code>,
+<code>renderVerified()</code> / <code>toggleVerifiedPanel()</code> / <code>renderVerifiedEntry()</code> JS, plus a
+summary card and panel in the HTML — so merged-but-not-yet-verified PRs are now
+visually distinct from merged-and-verified ones, closing the gap #123 flagged: a
+dispatched agent's own tests passing was never the same claim as &quot;this PR actually
+did what the spec said.&quot;</li>
+<li>Tests: <code>tests/test_completion_tracker.py</code>, <code>tests/test_completion_tracker_vizor.py</code>,
+extensions to <code>tests/test_events.py</code>.</li>
+</ul>
+<p><strong>PR #1101 — Merge-Restricted-Classes Gate Mode (qa-merge-restricted-classes plan, 4 tasks):</strong></p>
+<ul>
+<li><code>synlynk/merge_class.py</code>: <code>is_docs_only_change()</code> — a file-pattern matcher that
+classifies a PR's changed files as docs-only or not.</li>
+<li><code>synlynk/qa_gate.py</code>: <code>_qa_gate_mode()</code> reads <code>qa_gate_mode</code> from
+<code>.synlynk/config.json</code> (default <code>&quot;block-only&quot;</code>); <code>_gh_pr_changed_files()</code> wraps
+<code>gh pr diff &lt;n&gt; --name-only</code>. A real bug surfaced and was self-corrected mid-task
+here: the first commit (<code>353e38e</code>) read <code>synlynk/config.json</code> instead of
+<code>.synlynk/config.json</code>; a follow-up commit (<code>a37e3e8</code>) fixed it before the PR was
+finalized — caught by the implementer's own review pass, then independently
+re-verified in this session's spec-compliance review.</li>
+<li><code>synlynk/db.py</code>: wired the fast path into <code>cmd_pr_check()</code> — when
+<code>qa_gate_mode == &quot;merge-restricted-classes&quot;</code> and the PR is docs-only, qa merges it
+directly rather than routing through the full block-only gate. Task 3 also added
+module-level wrapper functions (<code>_qa_gate_mode</code>, <code>_gh_pr_changed_files</code>,
+<code>_is_github_remote</code>, <code>_current_pr_number</code>, <code>_extract_pr_review_cycles</code>,
+<code>_apply_review_cycle_multiplier</code>) re-exporting the real implementations from
+<code>qa_gate.py</code>/<code>pr_multiplier.py</code>/<code>sentinel.py</code> — necessary, not scope creep: the
+plan's own test fixtures patch these exact names as <code>synlynk.db.*</code> module
+attributes, which requires them to exist at module scope.</li>
+<li>Task 4: since <code>.synlynk/config.json</code> is gitignored, this task landed as a
+spec-doc note (in the gate-authority design doc) rather than a code default —
+correctly scoped to what's actually committable.</li>
+</ul>
+<p>Both PRs were reviewed directly by Claude (spec-compliance first, then code
+quality — no sub-delegated review) against their authoritative plan text, comparing
+diffs section-by-section rather than trusting the implementer's own summary. Zero
+blocking findings on either. Both merged via the #423 COMMENT-review-with-checklist
+fallback (<code>gh pr review --approve</code> fails under the shared bot identity), then
+<code>gh pr merge --squash</code>.</p>
+<h2>Process Note: Dispatch Stacking Produced 8+ PRs for 2 Plans</h2>
+<p>Both plans stacked 4 tasks each via <code>synlynk dispatch &lt;agent&gt; --base &lt;branch&gt;</code>.
+Every stacked task opened its own PR against <code>main</code> rather than against the parent
+task's branch — not a one-off, a <code>--base</code> behavior. The two 4-task plans produced
+8+ PRs and 16 worktrees/branches total, requiring a full Worktree Hygiene Protocol
+sweep after both terminal PRs (#1100, #1101) merged: cross-referencing every branch
+against <code>gh pr list --state all</code> and, since squash merges break literal ancestry,
+validating no-PR branches against their pre-squash terminal branch tips instead of
+<code>origin/main</code> directly. All 16 worktrees and local branches removed, 12 remote
+branches explicitly deleted (4 had already been auto-pruned by GitHub on
+merge/close). This is now recorded as a standing process note for future stacked
+dispatch sessions — worth a synlynk issue to make <code>--base</code> target the parent
+branch as PR base instead of always opening against <code>main</code>.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>None — both plans executed directly off their already-approved spec/plan documents;
+no new brainstorming was needed.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>The completion tracker closes a trust gap the qa-gate stack (#123) opened but didn't
+close: a green qa-gate proves CI passed, not that the PR did what it claimed. Vizor
+now distinguishes merged from verified, giving a human (or eventually another agent)
+a place to see that distinction without re-reading every diff. The merge-restricted-
+classes mode is the first concrete, narrow answer to #1079 §5's deferred question —
+&quot;what PR class is safe to let qa merge unattended&quot; — landing exactly the example the
+original spec named (docs-only) rather than the broader, harder case (dependency
+bumps, CI config) that still needs its own design pass.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>Both #1091 and #1079's design-doc PRs (still open) now have their concrete follow-up
+plans fully implemented, reviewed, and merged. What remains, unchanged from #123's
+own deferred list: actually applying branch protection for real (still a deliberate
+human-confirmed step, not yet scheduled), and landing #1079/#1091 themselves as
+merged design docs rather than leaving the implementation ahead of the spec. The new
+goalpost: extend <code>qa_gate_mode == merge-restricted-classes</code> to the harder PR classes
+#1079 §5 named but deferred (dependency bumps, CI config), now that the docs-only
+case has a working, reviewed reference implementation to build from.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fixing #910 — Resume Identity Init at Install Confirmation, Not App Creation | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-3">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Aug 12, 2026</span>
+        
+      </div>
+      <h1 class="blog-post-title">Fixing #910 — Resume Identity Init at Install Confirmation, Not App Creation</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>Resume at Confirmation, Not from Scratch</h1>
+<h2>Broader goal (previous)</h2>
+<p>PR #908 shipped <code>identity_slug</code>, letting a repo's GitHub App identity slug diverge from its directory basename — the immediate need being cc-videoreframing's App identities named after its product &quot;vdowrx&quot; rather than the repo folder. The next step was purely operational: set <code>identity_slug: &quot;vdowrx&quot;</code> in cc-videoreframing's config and run <code>synlynk identity init --role pm</code> to provision the first role under the new naming.</p>
+<h2>Why this PR</h2>
+<p>That rollout surfaced a real bug live. The <code>pm</code> App got created successfully — manifest exchanged, <code>app_id</code>/<code>client_id</code>/<code>app_slug</code>/private key all written to disk — and the user completed GitHub's install flow in their browser, selecting the specific repo for App access. But the local CLI process had already died on <code>input()</code> hitting <code>EOFError</code> in a non-interactive shell, before it could write <code>installation_id</code> back to the JSON file. Re-running <code>synlynk identity init --role pm</code> didn't resume — it reopened a brand-new manifest form and a new browser tab, asking the user to create the App and pick repo access all over again. <code>cmd_identity_init_role()</code>'s only early-return check was &quot;is <code>installation_id</code> already set&quot; — there was no state for &quot;App created, install not yet confirmed,&quot; so anything short of full completion fell all the way back to square one.</p>
+<p>The immediate situation was resolved manually — a standalone script reusing <code>_confirm_installation</code>'s own JWT-signing and <code>/app/installations</code> lookup logic to fetch and write the correct <code>installation_id</code> without touching the broken code path — but the underlying bug needed a real fix before the remaining seven roles (architect, tpm, dev, designer, qa, marketing, synlynk-bot) hit the same stall.</p>
+<h2>What shipped</h2>
+<p>One new branch in <code>cmd_identity_init_role()</code> (<code>synlynk/team.py</code>), inserted between the existing &quot;fully provisioned, no-op&quot; check and the manifest-creation loop: if the role's JSON file has <code>app_id</code>, <code>client_id</code>, <code>app_slug</code>, and a private key on disk, but no <code>installation_id</code>, skip straight to <code>_confirm_installation(existing[&quot;app_slug&quot;], json_path)</code> and the trailing <code>roles.yaml</code> registration — no new manifest, no new browser tab, no re-prompt for repo access.</p>
+<pre><code class="language-python">if (
+    existing.get(&quot;app_id&quot;)
+    and existing.get(&quot;client_id&quot;)
+    and existing.get(&quot;app_slug&quot;)
+    and existing.get(&quot;private_key_path&quot;)
+    and os.path.exists(existing[&quot;private_key_path&quot;])
+):
+    print(f&quot;  role '{role}' has an App already created ({existing['app_slug']}) — resuming at install confirmation&quot;)
+    _confirm_installation(existing[&quot;app_slug&quot;], json_path)
+    ...
+    return
+</code></pre>
+<p><code>_confirm_installation</code> itself was untouched — it already did the right thing once actually called. This was a routing bug, not a logic bug.</p>
+<p>Process: a fast-path design spec (issue #910 already had problem, impact, and suggested fix fully written out, so no multi-round brainstorming dialogue was needed), a TDD implementation plan, dispatched whole to Codex per the established subagent-driven pattern. Codex's diff came back exactly on spec — one new branch, one new test (<code>test_cmd_identity_init_role_resumes_at_confirmation_when_app_created_but_not_installed</code>) asserting <code>_confirm_installation</code> is called exactly once and neither <code>_build_app_manifest_url</code> nor <code>webbrowser.open</code> fire. Verification caught a wrinkle worth noting: Codex's own sandboxed worktree reported 5 failures (2 pre-existing localhost-socket-bind tests, 3 unrelated <code>.synlynk/project-docs/todo.md</code> permission errors) — none touching this change. Cherry-picking the same commit into the unsandboxed parent worktree and re-running confirmed all 12 identity-init tests and the full 1870-test suite pass clean, isolating those failures as sandbox artifacts rather than regressions.</p>
+<h2>On the long arc</h2>
+<p>This closes the loop the <code>identity_slug</code> rollout opened: the feature that let cc-videoreframing get a correctly-branded App identity also exposed that the provisioning flow had no resume semantics at all, just &quot;done&quot; or &quot;start over.&quot; Fixing it here — rather than working around it again for each of the remaining seven roles — turns a one-off manual recovery into a permanent property of the tool.</p>
+<h2>New goalpost</h2>
+<p><code>identity init</code> can now recover cleanly from a mid-flow interruption at any point after App creation. Next: resume provisioning the remaining seven cc-videoreframing roles, now able to rely on this fix if any of them stall the same way.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

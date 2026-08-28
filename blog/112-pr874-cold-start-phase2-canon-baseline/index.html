@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #874 — cold-start Phase 2: The Canon Baseline | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Aug 09, 2026</span>
+        
+          <span class="blog-post-pr">PR #874</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #874 — cold-start Phase 2: The Canon Baseline</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>cold-start Phase 2 — The Canon Baseline</h1>
+<h2>Broader goal (previous)</h2>
+<p><code>synlynk start</code> already told an operator, on a warm re-run against an existing repo, what stack it detected and which harnesses were functional, and seeded a story from a one-line intent. It did not yet produce any durable artifact of what the tool actually knows about the workspace — that was explicitly deferred as &quot;cold-start Phase 2&quot; in the Phase 1 docstring.</p>
+<h2>Why this PR</h2>
+<p>Every other synlynk surface (roadmap, memory, telemetry) accumulates state that operators and agents can trust. Cold-start had nothing comparable: each <code>synlynk start</code> run re-derived context from scratch and threw it away. The design goal for Phase 2 was narrow and deliberate — produce a <code>workspace-canon.md</code> baseline that states only what a shallow scan can <em>prove</em>, never what it merely guesses, and make that provenance checkable and stale-detectable over time.</p>
+<h2>What shipped</h2>
+<ol>
+<li><strong><code>synlynk/canon.py</code></strong> (new module) — a Documentation Index (real content: every markdown file found under <code>project-docs/</code>/<code>docs/</code>) plus a 3-claim provenance receipt. Each claim (stack detected, git repository, harness on PATH) is sourced directly from scan data and <strong>skipped, never fabricated</strong>, if its backing field is missing.</li>
+<li><strong>Skeleton stubs</strong> for the sections Phase 2 doesn't attempt yet (Retrospective Roadmap, Current State, projection views) — present in the file, explicitly marked as not-yet-generated, no provenance stamp.</li>
+<li><strong>Provenance/staleness</strong> — a single <code>&lt;!-- canon:section=baseline sha=&lt;sha&gt; assessed_at=&lt;iso8601&gt; --&gt;</code> HTML comment stamps only the baseline section. <code>sha=unknown</code> (no git repo at generation time) is treated as never stale, so a non-git workspace doesn't get spuriously flagged.</li>
+<li><strong>Wiring</strong> — <code>_run_existing_project_flow</code> in <code>synlynk/coldstart.py</code> now calls <code>canon.run_canon_baseline(root, scan)</code>. First run offers deep-scan consent once; re-runs skip the prompt entirely and print a staleness banner if HEAD has moved since the stamped SHA.</li>
+<li><strong>Post-review fix</strong> — the final review subagent caught a real spec violation: the git-repository claim could fire for a directory with no <code>.git</code> at all, reachable via the ambiguous-mode-defaults-to-&quot;existing&quot; path in <code>_resolve_cold_start_mode</code>. Fixed by gating the claim on an actual <code>os.path.isdir(.../&quot;.git&quot;)</code> check, with regression tests for both the negative and positive case.</li>
+</ol>
+<p>Execution was fully subagent-driven per this repo's role split: spec → plan → 7 TDD tasks, each dispatched to <code>synlynk dispatch codex</code>, independently verified (worktree diff read, tests re-run myself, not trusted from job self-report) and merged one at a time by Claude/PM. A dedicated final-review subagent then checked the assembled diff against the spec before the fix task and PR.</p>
+<h2>On the long arc</h2>
+<p>This is the first synlynk surface that writes a durable, provenance-stamped claim about a workspace rather than an ephemeral scan summary. The &quot;never fabricate, always cite a source, mark staleness explicitly&quot; discipline built here is the same discipline the deferred Retrospective Roadmap and Current State sections will need — Phase 2 proved the pattern on the smallest possible surface (2 real sections) before it gets reused on the harder ones.</p>
+<h2>New goalpost</h2>
+<p><code>workspace-canon.md</code> exists and is trustworthy for its two real sections. The deferred skeleton sections (Retrospective Roadmap, Current State, 5 projection views) are the next cold-start increment, each requiring its own claim-sourcing design before it can move past &quot;skeleton stub.&quot;</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

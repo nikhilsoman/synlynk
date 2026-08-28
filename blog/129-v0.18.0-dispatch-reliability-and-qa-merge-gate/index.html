@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>synlynk | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date"></span>
+        
+      </div>
+      <h1 class="blog-post-title"></h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>v0.18.0 — Dispatch Reliability &amp; QA Merge-Gate Authority</h1>
+<h2>Where we left off</h2>
+<p>Post #128 (v0.17.0) shipped ticket-driven approval auto-resume, closing the last named gap in the <code>tpm sweep</code> loop. That release tagged and published cleanly. What it didn't do — and what nothing since #1110 had done either — was give the several weeks of work that shipped alongside it a version number. QA's delegated merge-gate authority, the harness capability registry rewrite, the gh-write broker design, and a full Phase 1 identity-hardening closeout all landed on <code>main</code> between mid-August and v0.17.0's tag, each with its own PR and (mostly) its own blog post, but none of them got folded into a CHANGELOG entry or a release. They were shipped code with no release story.</p>
+<p>A same-day sweep of the open-issue and open-PR backlog against <code>docs/strategy/road-to-autonomous-ops.md</code>'s release gates surfaced this directly: the gate &quot;No unreviewed autonomous merge or release&quot; implicitly assumes releases happen at a reasonable cadence, and going four weeks with a growing pile of undocumented <code>main</code> commits works against that. It also surfaced two live defects along the way — a datetime-comparison crash in <code>jobs --all</code> (#1184) and a per-connection database backup storm (#1087) — both fixed in the same session that triggered this release.</p>
+<h2>What moved the goalpost</h2>
+<p>No architecture changed here. This release is bookkeeping made necessary by its own absence: cutting <code>v0.18.0</code> is the correction, not a new capability. The one real finding was operational rather than technical — the sweep discovered the repo's own <code>VERSION</code> file had silently drifted to <code>0.16.0</code> while GitHub already showed <code>v0.17.0</code> as the latest tagged release. <code>synlynk doctor</code>'s <code>_hc_version_current()</code> check exists specifically to catch this class of drift, but it only runs when a human explicitly invokes <code>synlynk doctor</code> — nothing in the release-cut or dispatch hot path calls it. That gap is now tracked separately as #1188 rather than papered over by this release; bumping <code>VERSION</code> to <code>0.18.0</code> here fixes today's instance of the drift without fixing the mechanism that let it happen.</p>
+<h2>What this release shipped</h2>
+<p><strong>QA delegated merge-gate authority, completion tracker, and merge-restricted classes</strong> (gh#1079/#1099/#1100/#1101, PRs #1082-#1104) — QA can now merge PRs that pass verification without every merge routing through PM/human action, with an explicit carve-out list (release branches, <code>policy.json</code> changes) that stays outside that delegation regardless of verification status. A Vizor panel surfaces verified-but-unmerged PRs so the delegation doesn't just move the bottleneck out of sight.</p>
+<p><strong>GitHub-write broker design</strong> (resolves #865 brainstorm, PR #1075) and <strong>gh-write identity hardening Phase 1 closeout</strong> (gh#423/#426, PR #1110) — consolidate GitHub App token resolution and write-permission checks behind one interface instead of scattered per-call-site logic, closing out the identity-hardening track that #1140/#1164/#1172/#1174/#1175/#1177/#1178/#1180 continued building on through this week.</p>
+<p><strong>Harness capability registry v2</strong> (gh#786, PRs #1053-#1066) — replaces the old flat capability ledger with <code>harness_models</code>/<code>harness_modes</code>/<code>capability_calibration_*</code> tables, per-model and per-mode instead of per-harness, plus a Stage 0 explore bonus so thin-calibration-data models aren't starved of dispatch opportunities while they build a track record.</p>
+<p><strong>Agent-roles Phase 2 — memory-gated capability routing</strong> (PR #1030) — routing decisions can now consult accumulated per-role memory rather than treating every dispatch as a cold start.</p>
+<p><strong>A week of dispatch and gh-write reliability fixes</strong> (PRs #1140/#1164/#1166/#1172/#1174/#1175/#1177/#1180/#1182/#1183): a daemon-owned GitHub App token cache unblocks headless dispatch; worktree gh-write dispatch falls back to the main repo's <code>github_apps</code> when the worktree has none; PR-review task type is now inferred from task text; a missing <code>review</code> <code>task_allocation</code> policy entry is filled in; grok's review-type gh-write authorization is correctly downgraded; Codex sandbox network access is gated per #340; gh-write targets resolve from task text for #860; and a <code>_maybe_open_worktree_pr</code> bug in <code>jobs.py</code> is fixed.</p>
+<p><strong>PM competitive-intelligence sweep</strong> (PR #1159) — a weekly cron job maintaining a living comparison doc against competitor tooling, feeding a decide-round pipeline for roadmap input.</p>
+<h2>The two live fixes that triggered the cut</h2>
+<p><strong>#1184 — <code>jobs --all</code> datetime-comparison crash</strong> (PR #1187). <code>_parse_iso8601()</code> in <code>synlynk/gh_verify.py</code> crashed with <code>TypeError: can't compare offset-naive and offset-aware datetimes</code> whenever a naive timestamp reached <code>gh_write_verified()</code>. Root cause was a pipx install four releases stale — the local CLI predated the v0.14.0 <code>agent</code>→<code>harness</code> DB rename entirely, which is what surfaced the real bug once the install was current. Fixed by normalizing a trailing <code>Z</code> and coercing naive timestamps to UTC-aware before every comparison. Independently verified with a full local test run outside the dispatch sandbox: 2267 passed, 2 pre-existing unrelated flakes, 0 regressions.</p>
+<p><strong>#1087 — <code>_migrate_db()</code> backup storm</strong> (PR #1189). <code>_migrate_db()</code> ran the harness-rename migration, full schema <code>executescript</code>, and seed step unconditionally on every connection open — the backup snapshot itself was already gated on schema version, but nothing after it was. Root-caused as the likely source of the intermittent <code>database is locked</code> failures seen during the #1187 verification run (<code>test_cmd_agent_add_onboards_agent</code>, <code>test_cmd_probewrite_fencetrue_clobbers_sop_harness</code>). Fixed with an early return once <code>PRAGMA user_version</code> is already current; regression test confirms a second connection against an already-migrated DB does zero migration work.</p>
+<h2>Process note: cleaning up dogfood exhaust</h2>
+<p>The same sweep closed eight stale <code>[APPROVAL]</code> GitHub issues (#1142-#1149) — artifacts of v0.17.0's Task 5 live dogfood run, which used a temporary <code>task_dispatch_demo</code> policy rule that was fully reverted before merge and never landed on <code>main</code>. Every one of those tickets cited a policy rule that no longer exists, meaning none of them could ever resolve through the normal auto-resume flow they were testing. Not a design flaw — the rule was deliberately throwaway — but leaving eight dead tickets sitting in the tracker works directly against the release gate &quot;GitHub Issues in configured scope are linked, parked, or marked out of scope.&quot; Closed with provenance comments rather than silently.</p>
+<h2>Where this leaves the long-arc goal</h2>
+<p><code>road-to-autonomous-ops.md</code> targets a public Autonomous Development Loop Preview by 2026-10-01, gated on (among other things) 100% of terminal jobs having cost data, no unreviewed autonomous merge, and GitHub Issues in scope being linked/parked/out-of-scope. This release doesn't advance the TPM/session MVP track directly — it's the release-hygiene correction that keeps four weeks of real shipped capability (QA merge-gate authority chief among them) from just sitting undocumented on <code>main</code> while that track continues. The open item it deliberately does not close is the ~90-issue backlog beyond the eight dogfood artifacts: that triage pass is running in parallel, in a separate session, and will get its own accounting once it's done.</p>
+<h2>New goalpost</h2>
+<p>Next: land the outstanding backlog triage, keep #1188 (version-drift) moving toward a durable fix rather than a one-off correction, and get back to the TPM/session MVP work <code>road-to-autonomous-ops.md</code> actually schedules for the 2026-08-17 to 2026-08-30 window.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

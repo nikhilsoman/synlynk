@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Safe Caller Construction: Documenting the Path That Already Existed | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Aug 08, 2026</span>
+        
+          <span class="blog-post-pr">PR #783</span>
+        
+      </div>
+      <h1 class="blog-post-title">Safe Caller Construction: Documenting the Path That Already Existed</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>PR #778 closed the second of three sub-projects under issue #769 (itself born from issue #720's
+six-item hardening checklist): scope enforcement, which turned <code>--scope-paths</code> from a request in
+prose into a hard boundary a job either respects or gets quarantined for violating (<code>SCOPE_VIOLATION</code>).
+That left one sub-project on the board — safe-caller-construction docs, the sixth and final #720
+requirement: publish guidance on constructing <code>synlynk dispatch</code> task text safely, since
+<code>--task &quot;&lt;text&gt;&quot;</code> is a shell command and any caller building it by string-interpolating dynamic
+content is exposed to the same class of bug as SQL string concatenation.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>One real one, surfaced by the user before design work started rather than during it. The obvious
+reading of #720's requirement 6 was &quot;publish an SDK/API example that accepts task text as
+structured data&quot; — which raises the question of whether that means <em>building</em> a new structured
+interface (a <code>--task-file</code>/stdin JSON path for non-Python CLI callers) or <em>documenting</em> the
+structured path that already exists (<code>dispatch_agent()</code> in <code>synlynk/dispatch.py</code>, which already
+takes <code>task</code> as a plain <code>str</code> and never touches a shell). The user's framing settled it: no caller
+needs a structured CLI interface today — synlynk's own internal callers are all Python or a human
+typing the CLI — so building one now would be speculative. But Team/Enterprise editions
+(targeted ~September 2026) are expected to introduce external, non-Python, non-human callers
+(webhooks, an API gateway, other services), and <em>that's</em> when a structured interface stops being
+speculative. The design commits to &quot;Option 1 now, design toward Option 2, build Option 2 when
+Team/Enterprise starts&quot; — document today's real safe path, and file a tracked, unscheduled issue
+for the future one instead of building it blind.</p>
+<p>A second, smaller correction happened during design review, before it reached a plan: my first
+draft assumed <code>docs/reference/commands.md</code> was hand-editable. Checking
+<code>scripts/generate_command_docs.py</code> before finalizing the design showed <code>render_reference_doc()</code>
+does a full <code>Path(...).write_text(...)</code> overwrite with no preserved-section markers — a direct
+edit would be silently wiped on the next regeneration. The design moved the link into the
+generator's own source instead, so it survives every future run.</p>
+<h2>What This PR Shipped</h2>
+<p>One new hand-written file, <code>docs/reference/safe-caller-construction.md</code>, with four sections:</p>
+<ol>
+<li><strong>Python callers (recommended).</strong> Call <code>dispatch_agent()</code> directly — <code>task</code> is already a plain
+<code>str</code>, no shell involved, no escaping step needed regardless of where the text came from. Points
+to the real internal caller at <code>synlynk/capability_sweep.py:127</code>
+(<code>dispatch_agent(agent, task, **dispatch_kwargs)</code>) as a live, grep-able example rather than a
+duplicated snippet that can drift out of sync with the real signature.</li>
+<li><strong>Shell/CLI/automation callers.</strong> A do/don't pair: <strong>don't</strong>
+<code>os.system(f'synlynk dispatch codex --task &quot;{task_text}&quot;')</code> (breaks the moment <code>task_text</code>
+contains a <code>&quot;</code>, backtick, <code>$(...)</code>, or newline); <strong>do</strong>
+<code>subprocess.run([&quot;synlynk&quot;, &quot;dispatch&quot;, &quot;codex&quot;, &quot;--task&quot;, task_text])</code> (argument list, default
+<code>shell=False</code>, no re-parsing, no quoting needed at all). One line for callers stuck building a
+literal shell string anyway (a Makefile, a <code>.sh</code> script): <code>shlex.quote()</code>, never hand-rolled
+escaping.</li>
+<li><strong>Verify before you dispatch for real.</strong> Points at the existing <code>--dry-run</code> flag (shipped in
+PR #759) and <code>jobs --summary</code>'s <code>task_sha256</code>/<code>task_preview</code> fields as the way to confirm what a
+dynamically constructed task string actually resolved to, both before and after a real dispatch.</li>
+<li><strong>Known gap.</strong> One paragraph, explicitly framed as deferred rather than a current limitation:
+no <code>--task-file</code>/stdin structured interface exists for non-Python CLI callers, linking
+<a href="https://github.com/nikhilsoman/synlynk/issues/782">issue #782</a> — filed with the trigger
+condition (external, non-Python, non-human callers appearing) spelled out so it isn't
+rediscovered from scratch in September.</li>
+</ol>
+<p>The new file is discoverable via a one-line addition inside <code>render_reference_doc()</code>'s header —
+&quot;See <a href="safe-caller-construction.md">safe-caller-construction.md</a> for guidance on building dispatch
+task text programmatically.&quot; — added to the <em>generator source</em>, not the generated output, then
+<code>docs/reference/commands.md</code> regenerated so the link is live immediately.
+<code>tests/test_docs_sync.py</code> continues to assert the generated file matches the generator, unchanged.</p>
+<p>No production code changed — <code>dispatch_agent()</code>, <code>cli.py</code>'s <code>dispatch</code> subcommand, and the
+receipt/classifier/scope enforcement from the prior two #769 sub-projects were all already correct;
+this sub-project only had to write down the path that already worked.</p>
+<p>One real dispatch hiccup, not in the design: the implementer job (job-7135dcb4) reported done with
+exit 0 and genuinely correct, fully-committed work — but that work existed only in the job's own
+local nested worktree/branch, never pushed or merged anywhere. Caught by the standing &quot;never trust
+<code>synlynk jobs</code> status alone&quot; discipline (<code>#202</code>): diffing the target branch against origin came up
+empty, which sent me into the job's own worktree to inspect its <code>git log</code>/<code>git diff --stat</code>
+directly. Resolved with a manual fast-forward merge of the job's branch rather than an expensive
+re-dispatch, since the work itself checked out clean. A leftover nested <code>worktrees/job-7135dcb4/</code>
+directory then caused <code>pytest -q</code> to double-collect the test suite from both copies (92 collection
+errors) until it was removed per Worktree Hygiene Protocol, after which the full suite ran clean:
+1730 passed, 2 skipped.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>None — this design was entirely text/API-shape (a scoping question about strings vs. structured
+data), no visual companion was used.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>This closes issue #720's full six-item hardening checklist and, with it, issue #769's three-part
+decomposition: the permission-denied classifier corroboration fix (#770/#771), scope enforcement
+(#778), and now safe caller construction. The fleet's dispatch surface is now documented end to end
+for both of its real caller shapes — Python-native (already safe, now written down) and shell/CI
+(safe <em>if</em> built as an argument list, now shown explicitly as a do/don't). Nothing here adds new
+enforcement code; it closes the gap between &quot;a safe path exists&quot; and &quot;callers know to use it,&quot;
+which is exactly what #720 asked for.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>#720 and #769 are both fully shipped as of this PR. The one open thread this sub-project
+deliberately did not resolve — a structured <code>--task-file</code>/stdin interface for non-Python CLI
+callers — is now a named, findable placeholder (#782) rather than an implicit gap, with its trigger
+condition already written down: Team/Enterprise work starting in September, introducing the first
+non-Python, non-human dispatch callers synlynk will actually have. Until then, the two safe paths
+documented here are the complete answer.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
