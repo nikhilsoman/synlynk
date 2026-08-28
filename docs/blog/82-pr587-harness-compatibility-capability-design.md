@@ -4,7 +4,7 @@ date: 2026-07-30
 series: "Building the OS for Multi-Agent Development"
 post: 82
 pr: "#587"
-merged: status: open (spec approved 2026-07-30; implementation plan committed)
+merged: status open (spec approved 2026-07-30; implementation plan committed)
 ---
 
 ## The Broader Goal at the End of the Previous PR
