@@ -368,6 +368,36 @@ def _snapshot_before_migration(conn: sqlite3.Connection) -> str | None:
     return backup_path
 
 
+def _normalize_org_domain_drift(conn: sqlite3.Connection) -> None:
+    for table in ("stories", "capability_ratings"):
+        valid_org_values = set(_ORG_DOMAINS) | set(_ORG_DOMAIN_DRIFT_MAP) | {"unknown"}
+        placeholders = ", ".join("?" for _ in valid_org_values)
+        unknown_rows = [
+            row[0]
+            for row in conn.execute(
+                f"SELECT DISTINCT org_domain FROM {table} "
+                f"WHERE org_domain IS NOT NULL AND org_domain NOT IN ({placeholders})",
+                tuple(valid_org_values),
+            ).fetchall()
+            if row[0]
+        ]
+        for old_value, new_value in _ORG_DOMAIN_DRIFT_MAP.items():
+            conn.execute(
+                f"UPDATE {table} SET org_domain=? WHERE org_domain=?",
+                (new_value, old_value),
+            )
+        conn.execute(
+            f"UPDATE {table} SET org_domain='unknown' "
+            f"WHERE org_domain IS NULL OR org_domain = '' OR org_domain NOT IN ({placeholders})",
+            tuple(valid_org_values),
+        )
+        if unknown_rows:
+            print(
+                f"  ⚠ {table} org_domain values remapped to unknown: "
+                + ", ".join(sorted(set(unknown_rows)))
+            )
+
+
 def _migrate_db(conn: sqlite3.Connection) -> None:
     """Idempotent schema migrations. Adds tables/views if absent."""
     migration_version = conn.execute("PRAGMA user_version").fetchone()[0]
@@ -1090,6 +1120,7 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             CREATE INDEX IF NOT EXISTS idx_fleet_matrix_runs_lookup
                 ON fleet_matrix_runs(home, cell, tier, ts);
         """)
+        _normalize_org_domain_drift(conn)
         # capability-sweep-taxonomy: crosswalk legacy free-text values to NAICS/APQC/SFIA codes
         from synlynk.taxonomy_standards import (
             LEGACY_DISCIPLINE_CROSSWALK,
@@ -1146,33 +1177,8 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
         conn.execute(f"PRAGMA user_version = {_DB_MIGRATION_VERSION}")
         conn.commit()
 
-    for table in ("stories", "capability_ratings"):
-        valid_org_values = set(_ORG_DOMAINS) | set(_ORG_DOMAIN_DRIFT_MAP) | {"unknown"}
-        placeholders = ", ".join("?" for _ in valid_org_values)
-        unknown_rows = [
-            row[0]
-            for row in conn.execute(
-                f"SELECT DISTINCT org_domain FROM {table} "
-                f"WHERE org_domain IS NOT NULL AND org_domain NOT IN ({placeholders})",
-                tuple(valid_org_values),
-            ).fetchall()
-            if row[0]
-        ]
-        for old_value, new_value in _ORG_DOMAIN_DRIFT_MAP.items():
-            conn.execute(
-                f"UPDATE {table} SET org_domain=? WHERE org_domain=?",
-                (new_value, old_value),
-            )
-        conn.execute(
-            f"UPDATE {table} SET org_domain='unknown' "
-            f"WHERE org_domain IS NULL OR org_domain = '' OR org_domain NOT IN ({placeholders})",
-            tuple(valid_org_values),
-        )
-        if unknown_rows:
-            print(
-                f"  ⚠ {table} org_domain values remapped to unknown: "
-                + ", ".join(sorted(set(unknown_rows)))
-            )
+    else:
+        _normalize_org_domain_drift(conn)
 
 
 _VALID_COST_SOURCES = {
