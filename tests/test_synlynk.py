@@ -6961,6 +6961,8 @@ def test_daemon_cli_uninstall_service_dispatch(project_dir, monkeypatch):
 
 
 def test_install_service_macos(project_dir, monkeypatch):
+    import plistlib
+
     monkeypatch.setenv("HOME", str(project_dir))
     monkeypatch.setattr(synlynk.sys, "platform", "darwin")
     monkeypatch.setattr(synlynk.shutil, "which", lambda name: "/usr/local/bin/synlynk" if name == "synlynk" else None)
@@ -6987,6 +6989,8 @@ def test_install_service_macos(project_dir, monkeypatch):
     assert "<string>/usr/local/bin/synlynk</string>" in plist
     assert "<string>com.synlynk.daemon</string>" in plist
     assert ".synlynk/launchd.log" in plist
+    assert plistlib.loads(plist.encode())["KeepAlive"] == {"SuccessfulExit": False}
+    assert "<key>KeepAlive</key>\n    <false/>" not in plist
     assert calls[0][0] == ["launchctl", "load", "-w", str(plist_path)]
 
 
