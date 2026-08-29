@@ -185,7 +185,7 @@ def _aggregate_usage_from_telemetry(
           ...
         }
 
-    Only agents observed in telemetry are included. Events without a parseable
+    Only harnesses observed in telemetry are included. Events without a parseable
     timestamp are skipped (cannot attribute to a window).
     """
     now_ts = float(now if now is not None else time.time())
@@ -665,7 +665,7 @@ def _quota_status_for_agent(
       degraded: bool  True when signal unavailable — do not hard-block
 
     Degraded-mode behavior (documented + implemented, #141):
-      If quota rows cannot be read this cycle, or no rows exist for the agent,
+      If quota rows cannot be read this cycle, or no rows exist for the harness,
       status="unknown" and degraded=True. The routing engine keeps the harness
       eligible (does not hard-block) but ranks known-headroom harnesses first.
     """
