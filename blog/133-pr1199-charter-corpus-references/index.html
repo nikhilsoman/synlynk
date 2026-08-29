@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #1199 — Grounding Charters in the Corpus, Not the Spec | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-1">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Aug 29, 2026</span>
+        
+          <span class="blog-post-pr">PR #1260</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #1199 — Grounding Charters in the Corpus, Not the Spec</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>PR #1202 (post #132) finished a mechanical terminology sweep — replacing stray &quot;agent&quot; with
+&quot;harness&quot; across <code>synlynk/*.py</code> so the Agent/Harness distinction (agents are <em>who</em>, harnesses are
+<em>how</em>) held consistently in code, not just in docs. That PR closed one gap on tracking issue #1198
+(&quot;[Tracking] Autonomous Operations Activation&quot;): the terminology was now internally consistent, but
+several sub-issues under #1198 remained — including #1199, which #1202's own investigation had
+flagged as still open. The goal at that point was simply: work through #1198's remaining sub-issues
+in priority order, starting with whichever was shovel-ready.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>None. #1199 was picked over #1203 (GOVERNS backlog automation) specifically because #1203 requires
+a <code>superpowers:brainstorming</code> pass first per its own issue text, while #1199 — &quot;Document corpus
+references used to derive workspace agent charter content&quot; — could go straight to a plan. No
+goalpost moved; this was the next item in the queue, taken in the order its own preconditions
+allowed.</p>
+<h2>What This PR Shipped</h2>
+<p>The real discovery this PR made was architectural, not textual: charter content lives in <strong>two
+places</strong>, and #1199 only owns one of them.</p>
+<ol>
+<li><code>synlynk/agent_cli.py</code>'s <code>SEED_CHARTERS</code> dict — the git-tracked, durable seed source used only
+when <code>cmd_agent_init()</code> provisions a brand-new agent.</li>
+<li>Each live agent's actual runtime charter at
+<code>~/.synlynk/workspaces/&lt;workspace_id&gt;/agents/&lt;agent_id&gt;/charter.md</code>, written by
+<code>agent_store.propose_charter_revision()</code> — not git-tracked, workspace-local state.</li>
+</ol>
+<p>PR #1196 had already restored <code>pm</code>'s charter text from a real record; #1199's job was to do the
+same derivation exercise — for real, from the actual corpus, not spec-guessed prose — for the other
+six roles: <code>dev</code>, <code>qa</code>, <code>architect</code>, <code>tpm</code>, <code>designer</code>, <code>marketing</code>. <code>synlynk-bot</code> was explicitly
+out of scope (infra catch-all, no real corpus to mine).</p>
+<p>Per this repo's locked role split, the actual charter authorship was dispatched, not written by
+Claude:</p>
+<ul>
+<li><strong>Task 1</strong> (dispatched to Codex, job <code>job-8a37f307</code>): audited <code>dev</code>, <code>qa</code>, <code>architect</code> against
+<code>project-docs/devlogs/nikhilsoman.md</code>, <code>project-docs/memory.md</code>, and targeted
+<code>git log --oneline --grep=</code> searches. Result: <code>qa</code>'s and <code>architect</code>'s charter bodies were
+rewritten — <code>qa</code> to describe policy-gated (<code>.synlynk/policy.json</code>), currently
+docs-only-demonstrated merge authority rather than an unrestricted claim; <code>architect</code> to describe
+the role as provisioned-but-largely-unexercised, since the corpus shows Claude actually operating
+in a pm/reviewer capacity, not a separately exercised architect identity. <code>dev</code>'s charter was left
+unchanged — the corpus confirmed the existing text was already accurate. &quot;No change&quot; was an
+explicitly valid finding, not a failure to find something.</li>
+<li><strong>Task 2</strong> (dispatched to Codex, job <code>job-f4c16542</code>): same treatment for <code>tpm</code>, <code>designer</code>,
+<code>marketing</code>. <code>tpm</code>'s charter now precisely describes the implemented ready-story-scan /
+policy-gate-check / ticket-create-or-reuse / daemon-dispatch loop (<code>synlynk/tpm_sweep.py</code>), citing
+the 2026-08-24 &quot;ticket-driven approval auto-resume&quot; devlog entry, rather than the vaguer prior
+framing. <code>marketing</code>'s Instructions dropped an unsupported universal claim (&quot;writes every PR's
+blog post&quot;) in favor of dispatch-conditional framing. <code>designer</code> was left unchanged — no
+fabricated track record found.</li>
+</ul>
+<p>Every changed section only touched charter body prose — <code>Instructions</code>, <code>Authority &amp; Escalation</code>,
+<code>Workflow Ownership</code>. Frontmatter (<code>schema_version</code>, <code>role</code>, <code>description</code>, <code>durability</code>, <code>tools</code>,
+<code>credentials</code>) was verified byte-identical to <code>origin/main</code> for all 8 roles, including the 6
+touched ones, by the spec-compliance review pass.</p>
+<p><code>docs/charters/corpus-references.md</code> documents the sourcing for all 6 roles — per-role
+<strong>Sources consulted</strong> / <strong>Findings</strong> / <strong>Charter changes made</strong>, with specific devlog dates, memory
+section names, and grep commands, all independently verified to exist against the real corpus (not
+just asserted) by the review passes.</p>
+<p>Both required review stages ran: a spec-compliance pass confirmed frontmatter integrity and citation
+accuracy; a code-quality pass confirmed internal consistency across sibling charters (no conflicting
+merge-authority claims between <code>qa</code>/<code>architect</code>/<code>tpm</code>), Python string-literal correctness in the
+<code>SEED_CHARTERS</code> dict, a clean <code>charter_schema.validate_charter()</code> run for all 6 changed roles, and a
+clean full-suite test run — 2322 passed, 2 skipped, 2 pre-existing <code>database is locked</code> failures
+(unrelated to this change, present on <code>origin/main</code> too).</p>
+<p><strong>Merge note:</strong> the same underlying job content (<code>job-8a37f307</code> + <code>job-f4c16542</code>) landed via two
+parallel PM tracks working the same issue — this session's own PR (#1262, opened after rebase/two-
+stage review) and a separate session's PR (<strong>#1260</strong>), which reached the daemon's &quot;reviewer
+unavailable → escalate to Claude&quot; fallback first and self-merged with an equivalent verification
+checklist (diff scope, <code>charter_schema.validate_charter()</code>, targeted pytest). #1260 is the PR of
+record; #1262 was closed as superseded once a rebase confirmed zero remaining diff against <code>main</code>
+beyond this blog post. Not a process gap — both tracks independently converged on the same
+sanctioned escalation path.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>None — #1199 had no brainstorm gate; it went straight from issue to plan per the Design → Plan →
+Build sequence.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>A charter that claims authority the corpus doesn't back is worse than no charter — it tells a
+dispatched agent (or a human reading the roster) that a role can do something it has never actually
+been exercised to do. Grounding six charters in real devlog/git history closes that trust gap ahead
+of any push toward more autonomous, charter-driven dispatch: the <code>SEED_CHARTERS</code> seed text a
+brand-new agent gets on <code>synlynk agent init</code> now matches what the role has actually demonstrated,
+not what the original spec guessed it might.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>Task 3 — bumping the 6 already-provisioned live agents' runtime charters
+(<code>~/.synlynk/workspaces/.../charter.md</code>) to match the updated <code>SEED_CHARTERS</code> text via
+<code>propose_charter_revision()</code> — is an explicit post-merge operational step performed directly by
+Claude (PM/deploy role), not dispatched, mirroring how PR #1196 handled the same step for <code>pm</code>. Once
+that's done, the next and final open item under #1198 is #1203 (GOVERNS backlog automation), which
+still needs its own <code>superpowers:brainstorming</code> pass before a plan can be written.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
