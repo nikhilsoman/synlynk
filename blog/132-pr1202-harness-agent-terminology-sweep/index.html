@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>synlynk | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date"></span>
+        
+      </div>
+      <h1 class="blog-post-title"></h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>PR #1202 — Saying What We Mean: Harness vs. Agent</h1>
+<h2>Where we left off</h2>
+<p>The previous #1198 sub-issue, #1200 (doctor check for elevated PR review cycles), shipped as PR #1245 — the second of five sub-issues in the Autonomous Operations Activation tracking arc to close, after #1201. With #1200 done, the remaining three unstarted sub-issues were #1199 (charter corpus-reference docs), #1202 (harness/agent terminology standardization), and #1203 (GOVERNS backlog automation, which needs its own brainstorm pass first per the issue text). #1202 was picked next: its own issue text noted it needed &quot;a decision before any rename sweep is dispatched&quot; — but that decision had already been made. <code>docs/glossary-agent-vs-harness.md</code> already defines the split canonically: <strong>Agent</strong> is a persistent role identity with a charter (pm/architect/tpm/dev/designer/qa/marketing/synlynk-bot) — <em>who</em> is accountable; <strong>Harness</strong> is a swappable execution backend (Claude/Agy/Codex/Grok/local) — <em>how</em> work gets executed. The prerequisite #1202 asked for was satisfied before the ticket was even picked up.</p>
+<h2>What moved the goalpost</h2>
+<p>Nothing strategic shifted here — this was a scoping call, not a redirect. The plan (<code>docs/superpowers/plans/2026-08-29-harness-agent-terminology-sweep.md</code>) locked the sweep to prose only: <code>help=</code> strings, docstrings, and <code>#</code> comments in <code>synlynk/*.py</code>, wherever the text used &quot;agent&quot; to mean an execution backend or &quot;harness&quot; to mean a role identity. Two things were explicitly carved out:</p>
+<ul>
+<li><strong>CLI subcommands, flags, and DB columns</strong> — <code>synlynk agent configure</code>, <code>--agent</code>, <code>--as-agent</code>, <code>known_agents</code>, DB <code>agent</code> columns. Renaming those is a breaking change with a real deprecation-path cost; that decision got its own follow-up issue (#1255) rather than being bundled into a prose PR.</li>
+<li><strong>Historical proposal docs</strong> (<code>docs/*-human-agent-hybrid-workgroup-study.md</code>, <code>docs/multi-agent-orchestration-proposal.md</code>) — left untouched on the same principle already applied to not backfilling PR #1233's missing blog post: rewriting history to match later terminology misrepresents it.</li>
+</ul>
+<h2>What this PR shipped</h2>
+<p>Two dispatched Codex jobs swept ten files across two tasks — <code>cli.py</code>/<code>dispatch.py</code> first, then <code>__init__.py</code>, <code>capability_sweep.py</code>, <code>costs.py</code>, <code>db.py</code>, <code>jobs.py</code>, <code>probe.py</code>, <code>quota.py</code>, <code>wizard.py</code> — rewording roughly 25 lines total. Every change stayed inside a string literal or comment; no identifier, flag name, subcommand name, or DB key was touched, verified line-by-line against <code>git diff</code> rather than trusted from the job's own report.</p>
+<p>The two-stage review (spec-compliance, then code-quality) required by the subagent-driven-development workflow caught two real gaps that a first-pass dispatch missed:</p>
+<ul>
+<li><strong>Spec-compliance review</strong> found 8 <code>cli.py</code> help strings the Task 1 re-scan step should have caught but didn't — several directly inconsistent with sibling files the same PR had already fixed (<code>jobs.py</code>'s handoff docstring said &quot;harness,&quot; but the paired <code>cli.py --stalled</code>/<code>handoff</code> help text still said &quot;agent&quot;; same for <code>db.py</code>'s credit-grant docstring vs. <code>cli.py</code>'s <code>credit grant</code> help). Fixed in a follow-up commit.</li>
+<li><strong>Code-quality review</strong> found two matched-pair inconsistencies in <code>synlynk/quota.py</code> — docstrings where three of four references to the concept were swept to &quot;harness&quot; but one word in the same sentence was missed, producing agent/harness whiplash mid-paragraph. Fixed in a second follow-up commit.</li>
+</ul>
+<p>Both follow-ups were small enough to be tempting to hand-edit directly, but went through <code>synlynk dispatch</code> anyway, per the locked role split — implementation stays out of Claude's hands even for two-word fixes.</p>
+<p>Test baseline held steady across all three commits and the final rebase onto <code>origin/main</code>: <code>2 failed, 2312 passed, 2 skipped</code>, matching the long-standing pre-existing <code>sqlite3.OperationalError: database is locked</code> flakes in <code>test_agent_quota_tracking.py</code> and <code>test_roles.py</code> — zero regressions from a pure prose sweep, confirmed by an independent rerun in the properly cleaned worktree rather than trusting either dispatch job's self-reported (and sandbox-noisier) test count.</p>
+<p>One dispatch-tooling snag repeated from the #1200 work: <code>_task_requires_gh_write()</code>'s false-positive heuristic (already filed as #1246 from that prior session) tripped again on the first dispatch attempt here, this time on the task prompt's own mentions of &quot;gh#1202&quot; and &quot;review.&quot; Worked around by passing <code>--role dev</code> explicitly rather than reformulating the prompt, since #1246 is now tracked separately and doesn't need re-diagnosing each time it recurs.</p>
+<h2>Where this leaves the long-arc goal</h2>
+<p>#1198's tracking arc now has three of five sub-issues closed (#1201, #1200, #1202). #1202 also spawned its own follow-up, #1255, tracking the harder breaking-change decision (CLI flag and DB column renames) that #1202 deliberately deferred. Remaining unstarted: #1199 (charter corpus-reference docs) and #1203 (GOVERNS backlog automation, brainstorm-gated).</p>
+<h2>New goalpost</h2>
+<p>Land this PR, run Worktree Hygiene Protocol cleanup on <code>feat/1202-harness-agent-terminology-sweep</code> and its now-already-cleaned dispatch sub-worktrees, then pick up the next #1198 sub-issue — #1199 or #1203, with the choice surfaced explicitly rather than assumed, matching how #1200 and #1202 were each chosen with reasoning shown rather than picked silently.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
