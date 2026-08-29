@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>synlynk | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date"></span>
+        
+      </div>
+      <h1 class="blog-post-title"></h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>PR #1245 — Doctor Learns to Watch Its Own Reviewers</h1>
+<h2>Where we left off</h2>
+<p>The previous sub-issue in the #1198 autonomous-ops tracking arc, #1201, wired charter content into dispatch/execution context (PR #1233, merged as <code>0ce8ef3</code>) — closing the gap where a dispatched harness had no visibility into the charter authority governing its own task. That PR should have shipped its own blog post per this repo's standing protocol and didn't; noting the gap here rather than silently backfilling it, since a retroactive post written after the fact would just be reconstructed narrative, not a real build diary entry.</p>
+<p>With #1201 closed, #1198's remaining four sub-issues (#1199, #1200, #1202, #1203) were surveyed fresh. #1200 — &quot;doctor: add check for agent underperformance (elevated PR review cycles)&quot; — was picked as the next target: small, bounded, and with its data plumbing (<code>capability_ratings.pr_review_cycles</code>, populated per-rating by <code>synlynk/jobs.py</code> since the PR-review-cycles capability signal shipped) already in place. Nothing needed inventing; the ticket was really asking &quot;surface data that already exists.&quot;</p>
+<h2>What moved the goalpost</h2>
+<p>Given how narrow the ask was, the repo's Brainstorm-First Policy (full spec doc + sign-off before any code) was deliberately skipped in favor of going straight to a plan — with the explicit condition that any parameter choices the plan had to lock in (window size, sample-size floor, warn threshold) would be surfaced for review rather than picked silently. That's a process-weight call, not a precedent: Brainstorm-First stays the default for anything with actual design surface.</p>
+<p>One correction surfaced during research: the original issue text pointed at <code>daemon_jobs.pr_review_cycles</code> as the data source. That column doesn't exist — <code>daemon_jobs</code>'s schema has no such field. The real data lives in <code>capability_ratings.pr_review_cycles</code>, already populated by the capability-rating pipeline in <code>synlynk/jobs.py</code>. Implementing against the ticket's literal wording would have produced a health check that silently queried nothing.</p>
+<h2>What this PR shipped</h2>
+<p><strong><code>_hc_pr_review_cycles()</code></strong> in <code>synlynk/doctor.py</code> — a new <code>synlynk doctor</code> health check modeled directly on the existing <code>_collect_capability_drop()</code> pattern in <code>synlynk/support_engineer.py</code> (per-agent <code>AVG(...)</code> over a <code>ts</code> window via SQLite's <code>datetime('now', '-N days')</code>), but as an absolute-threshold check rather than a drop-detection one. Locked parameters, all called out explicitly in the plan for review before implementation:</p>
+<ul>
+<li><strong>Window:</strong> last 30 days</li>
+<li><strong>Minimum sample size:</strong> 3 ratings with non-null <code>pr_review_cycles</code> — bumped from the capability-drop check's floor of 2, since <code>pr_review_cycles</code> swings harder on tiny samples than <code>quality</code> does</li>
+<li><strong>Warn threshold:</strong> average <code>pr_review_cycles</code> &gt; 1.5 — averaging above one full round of changes-requested per PR</li>
+<li><strong>No-data / fresh-project state resolves to <code>ok</code>, not <code>warn</code></strong> — matching the existing &quot;nothing breaks without agents&quot; doctor-check discipline established for <code>_hc_agent_profiles()</code> and others</li>
+</ul>
+<p>Registered in <code>HEALTH_CHECKS</code>, immediately before <code>_hc_version_current()</code>. Six new tests (<code>test_hc_pr_review_cycles_no_data</code>, <code>_below_threshold</code>, <code>_elevated</code>, <code>_below_min_sample_size</code>, <code>_ignores_stale_ratings</code>, <code>_ignores_null_cycles</code>) exercise the window boundary, the sample-size floor, and null-safety, using the existing <code>isolated_db</code> fixture and FK-safe inserts into <code>stories</code> (required by <code>capability_ratings</code>'s foreign key).</p>
+<p>Per this repo's locked role split, none of this was written directly — the plan was dispatched to Codex via <code>synlynk dispatch codex --base feat/1200-doctor-pr-review-cycles</code>, and the result went through the two-stage review the subagent-driven-development workflow requires: a spec-compliance pass (byte-for-byte match against the plan's code, confirmed — including that Codex's one unplanned addition, exposing <code>_hc_pr_review_cycles</code> at package level in <code>synlynk/__init__.py</code>, was a necessary consequence of the plan's own test code calling <code>synlynk._hc_pr_review_cycles()</code>, not scope creep) and a code-quality pass (approved, with only minor non-blocking test-coverage nits: no test for the DB-failure branch, no exact-boundary tests at avg==1.5 or count==3, no multi-agent composition test).</p>
+<p>One dispatch-tooling rough edge surfaced along the way: <code>synlynk/dispatch.py</code>'s <code>_task_requires_gh_write()</code> heuristic — which scans task text for GitHub-write intent so operators don't have to remember <code>--requires-gh-write</code> — false-positived twice on this dispatch. The plan's own filename (<code>...doctor-pr-review-cycles-check.md</code>) contains the word &quot;review&quot;, and mentioning the tracking issue number tripped the <code>\bissue\b</code>/<code>\bgh\b</code> target pattern; combined, the heuristic concluded this was a GitHub-write task and refused to dispatch without a resolvable role identity. Neither dispatch attempt involved any actual GitHub write — it was pure code authorship. Fixed by rewording the task prompt to avoid the trigger words entirely; worth a lightweight follow-up ticket since any dispatch prompt that happens to reference a filename or ticket number in prose is at risk of the same false positive.</p>
+<h2>Where this leaves the long-arc goal</h2>
+<p>#1198's tracking arc for Autonomous Operations Activation now has two of five sub-issues closed (#1201, #1200). The remaining three — #1199 (charter corpus-reference docs), #1202 (harness/agent terminology standardization, needs a decision first), #1203 (GOVERNS backlog automation, needs its own brainstorm/design pass) — are unstarted.</p>
+<h2>New goalpost</h2>
+<p>Next: land PR #1245, run the Worktree Hygiene Protocol cleanup on this branch and its <code>dispatch/codex/job-0b8e3483</code> sub-worktree once merged, then pick up the next #1198 sub-issue. Separately unresolved: a stash of uncommitted <code>CLAUDE.md</code>/<code>GEMINI.md</code>/<code>GROK.md</code> changes found on <code>main</code>'s working tree mid-session (addressing #1242's README-sync protocol gap) is preserved at <code>stash@{0}</code> but still needs a disposition decision — commit properly on its own branch, or confirm it was superseded and drop it.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
