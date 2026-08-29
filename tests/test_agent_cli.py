@@ -1,10 +1,45 @@
 import sqlite3
 import subprocess
 import re
+import os
 
 import pytest
 
 from synlynk.agent_cli import SEED_CHARTERS
+
+
+def test_wire_charter_content_into_dispatchexecut(project_dir, tmp_path, monkeypatch):
+    import synlynk
+    from synlynk import agent_store
+    from synlynk.dispatch import exec_command
+
+    monkeypatch.chdir(project_dir)
+    monkeypatch.setattr(os.path, "expanduser", lambda path: path.replace("~", str(tmp_path / "fake_home")))
+    agent_store.register_agent("pm-primary", [{"kind": "role_slug", "value": "pm"}])
+    agent_store.propose_charter_revision(
+        "pm-primary",
+        "---\nschema_version: 1\nrole: pm\ndescription: test\n"
+        "durability: dispatch-only\ntools: []\ncredentials: []\n---\n\n"
+        "## Instructions\n\nCharter injection regression.\n\n"
+        "## Authority & Escalation\n\nEscalates per policy.\n\n"
+        "## Workflow Ownership\n\nOwns this test.\n",
+        actor="test", parent_revision=0,
+    )
+    monkeypatch.setattr(synlynk, "check_budgets", lambda: None)
+    monkeypatch.setattr(synlynk, "_check_pre_exec_gate", lambda force=False: True)
+    monkeypatch.setattr(synlynk, "set_state", lambda *a, **kw: None)
+    monkeypatch.setattr(synlynk, "_check_costs_freshness", lambda: None)
+    monkeypatch.setattr(synlynk, "log_telemetry_event", lambda *a, **kw: None)
+    monkeypatch.setattr(synlynk, "check_sentinel_patterns", lambda **kw: None)
+    monkeypatch.setattr(synlynk, "_check_instruction_drift", lambda: None)
+    monkeypatch.setattr(synlynk, "WatchDaemon", None)
+    monkeypatch.setattr(synlynk, "update_costs", lambda *a, **kw: None)
+    monkeypatch.setattr(synlynk, "load_config", lambda: {"fenced_commands": []})
+
+    exec_command(["echo", "hi"])
+    context_text = (project_dir / ".synlynk" / "context.md").read_text()
+    assert "## Role Charter" in context_text
+    assert "Charter injection regression." in context_text
 
 
 def _quiet_checkpoint(monkeypatch):
