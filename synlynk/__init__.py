@@ -921,6 +921,7 @@ CREATE TABLE IF NOT EXISTS stories (
     legacy_unmapped INTEGER NOT NULL DEFAULT 0,
     priority      INTEGER NOT NULL DEFAULT 5,
     readiness     TEXT NOT NULL DEFAULT 'draft',
+    archived_at   TIMESTAMP,
     created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -2904,24 +2905,35 @@ def checkpoint() -> None:
     _check_upstream_divergence()
     username = get_username()
     canonical_id = _resolve_member_id(username)
-    todo_path = "project-docs/todo.md"
     if _is_migrated():
         devlog_path = os.path.join(_synlynk_project_docs_dir(), "devlogs", f"{canonical_id}.md")
+        docs_dir = _synlynk_project_docs_dir()
     else:
         devlog_path = os.path.join(_docs_dir(), "devlogs", f"{canonical_id}.md")
+        docs_dir = _docs_dir()
 
-    # Collect resolved tasks (done/superseded/absorbed) and keep the rest
-    completed, active_lines = [], []
-    if os.path.exists(todo_path):
-        with open(todo_path) as f:
-            for line in f:
-                if re.match(r'\s*-\s*\[(x|~|>)\]', line, re.IGNORECASE):
-                    id_m = re.search(r'<!--\s*id:\s*(\d+)\s*-->', line)
-                    text = re.sub(r'-\s*\[(x|~|>)\]\s*', '', line, flags=re.IGNORECASE).strip()
-                    text = re.sub(r'<!--.*?-->', '', text).strip()
-                    completed.append({"id": id_m.group(1) if id_m else None, "text": text})
-                else:
-                    active_lines.append(line)
+    # Legacy projects may have a hand-written todo.md but no story rows yet.
+    # Import it once before checkpointing so the database remains the source of truth.
+    conn = _get_db()
+    story_count = conn.execute("SELECT COUNT(*) FROM stories").fetchone()[0]
+    if story_count == 0:
+        _import_todo_to_stories(docs_dir, conn=conn)
+        conn.commit()
+
+    resolved_rows = conn.execute(
+        "SELECT story_id, title FROM stories "
+        "WHERE archived_at IS NULL AND status IN ('done', 'deferred', 'superseded', 'absorbed') "
+        "ORDER BY created_at ASC, id ASC"
+    ).fetchall()
+    completed = [{"id": story_id, "text": title or story_id} for story_id, title in resolved_rows]
+    if resolved_rows:
+        archived_at = time.strftime('%Y-%m-%d %H:%M:%S')
+        conn.executemany(
+            "UPDATE stories SET archived_at=? WHERE story_id=? AND archived_at IS NULL",
+            [(archived_at, story_id) for story_id, _ in resolved_rows],
+        )
+    conn.commit()
+    conn.close()
 
     # Write resolved tasks through to the devlog (DB row + regenerated flat file)
     if completed:
@@ -2929,8 +2941,7 @@ def checkpoint() -> None:
         for task in completed:
             body_lines.append(f"- {task['text']}")
         cmd_devlog_append(canonical_id, time.strftime('%Y-%m-%d'), "\n".join(body_lines) + "\n")
-        with open(todo_path, "w") as f:
-            f.writelines(active_lines)
+    _generate_todo_md()
 
     _archive_old_devlog_entries(devlog_path, canonical_id)
     generate_context()
