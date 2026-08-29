@@ -67,3 +67,66 @@ track record or independent merge authority that the corpus does not support.
 Workflow Ownership body text to identify the role as provisioned-but-largely-
 unexercised, and to defer review/merge authority to explicit policy and the assigned
 non-authoring reviewer. Frontmatter was unchanged.
+
+## tpm
+
+**Sources consulted:** `project-docs/devlogs/nikhilsoman.md` in full, especially
+the 2026-06-23 TPM Agent design entry, the 2026-08-23 autonomous-loop/release
+entry, and the 2026-08-24 ticket-driven approval auto-resume entry;
+`project-docs/memory.md` in full, especially "State DB & Agentic PM",
+"Agent Identity, Dispatch & Entitlements", and "QA Completion Tracker +
+Merge-Restricted-Classes Gate Mode"; `synlynk/tpm_sweep.py` and the related
+`git log --oneline --grep="tpm\|sweep\|dispatch\|ticket" -i | head -60` history.
+
+**Findings:** The live TPM implementation scans ready stories that have no
+queued, running, or completed daemon job; checks policy authority; creates or
+reuses approval tickets when dispatch is blocked; and consumes resolved ticket
+state before dispatching. The 2026-08-24 record confirms this three-way
+no-ticket/open/resolved flow and its durable event-scanner writeback. This is a
+tasking and lifecycle-enforcement loop, not technical-plan authorship.
+
+**Charter changes made:** Updated the Instructions, Authority & Escalation, and
+Workflow Ownership body text to describe the implemented ready-story,
+policy-gate, approval-ticket, and daemon-job behavior precisely. Frontmatter was
+unchanged.
+
+## designer
+
+**Sources consulted:** `project-docs/devlogs/nikhilsoman.md` in full, especially
+the 2026-06-28 BS-5 website scaffold entry, the 2026-06-29 website polish and
+merge entry, and the 2026-08-09 user-facing guide and journey-map verification
+entries; `project-docs/memory.md` in full, especially "Roadmap Realignment" and
+"Agent Identity, Dispatch & Entitlements"; `git log --oneline
+--grep="blog\|marketing\|designer\|css\|ui" -i | head -60`.
+
+**Findings:** The corpus contains concrete UI, CSS, template, website, and
+visual-verification work performed by Grok and Agy, including the BS-5 site
+scaffold and Agy template/subpage work. It does not reliably identify any of
+that work as executed under a `role=designer` charter; the role remains a
+provisioned dispatch-only destination routed to Agy.
+
+**Charter changes made:** None. The existing body already states the supported
+UI/UX scope, dispatch-only durability, Agy routing, and information-architecture
+escalation without claiming a designer track record. Frontmatter was unchanged.
+
+## marketing
+
+**Sources consulted:** `project-docs/devlogs/nikhilsoman.md` in full, especially
+the 2026-06-28/29 website and blog work, the 2026-08-09 guide and release
+bookkeeping entries, and the 2026-08-24 release/blog entry;
+`project-docs/memory.md` in full, especially "Roadmap Realignment",
+"Positioning", and the resolved "Blog Post Protocol" note; `docs/blog/README.md`
+and its series index; `git log --oneline
+--grep="blog\|marketing\|designer\|css\|ui" -i | head -60`.
+
+**Findings:** The repository has a substantial blog and public-website corpus,
+but the records attribute individual posts and content tasks to different
+harnesses or direct PM work, not consistently to a `role=marketing` charter.
+The corpus therefore supports marketing as an explicit dispatch-only comms
+function, with the blog README/template as its content contract, but does not
+support the stronger claim that marketing writes every PR's blog post.
+
+**Charter changes made:** Updated the Instructions body to make comms work
+explicitly dispatch-triggered and conditional on an approved technical summary,
+and removed the unsupported universal "every PR" claim. Frontmatter was
+unchanged.
