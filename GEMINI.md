@@ -186,7 +186,7 @@ task, not the Agent (role) doing the work
 | implement / test / refactor / cli-plumbing / review | Codex | implement, test, refactor, cli-plumbing, review |
 Do not start a task outside your role column without explicit approval from Claude.
 
-**GitHub write routing (#1271):** Route any task that requires GitHub write actions to **Codex by default, Claude/Agy as fallbacks** (verified live in job `job-836e13a4`)
+**GitHub write routing (#426):** Route any task that requires GitHub write actions to **Codex by default, Claude/Agy as fallbacks** (verified live in job `job-836e13a4`)
 - Grok's dispatch sandbox denies `bash` execution entirely in this environment (confirmed via `git diff origin/main` showing a total silent no-op despite a generic "OK, exit 0" job status — do not trust job-status alone for Grok gh-write attempts)
 - Codex receives network access only for explicit `--requires-gh-write` dispatches
 - Pass `--requires-gh-write` on synlynk dispatch to enforce the routing hint automatically; it now also auto-implies the `run:shell` permission grant and fails closed with a `RuntimeError` if no role is resolvable via `--as-agent`, `--story`, or `--role` (#569)
