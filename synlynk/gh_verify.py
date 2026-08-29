@@ -3,7 +3,7 @@
 import json
 import re
 import subprocess
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 
@@ -28,7 +28,10 @@ def _parse_iso8601(value: Optional[str]):
         return None
     normalized = value[:-1] + "+00:00" if value.endswith("Z") else value
     try:
-        return datetime.fromisoformat(normalized)
+        parsed = datetime.fromisoformat(normalized)
+        if parsed.tzinfo is None:
+            return parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
     except (ValueError, TypeError):
         return None
 

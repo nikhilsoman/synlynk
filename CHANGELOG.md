@@ -11,6 +11,12 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Charter Content & Structure Schema**
+  - Charters now require YAML frontmatter (`schema_version`, `role`, `description`, `durability`, `tools`, `credentials`) plus three markdown sections (`## Instructions`, `## Authority & Escalation`, `## Workflow Ownership`), enforced via a new `synlynk/charter_schema.py` validator wired into `propose_charter_revision`.
+  - Retired the dead `.synlynk/agents/<id>.yaml` projection file and `regenerate_agent_projection()` — its only field (`capability_grants`) was write-only, never read.
+  - Added `synlynk agent sync-routing <id_or_alias>` to regenerate a charter's `dispatch_routing` frontmatter block from `.synlynk/policy.json`'s task-allocation table.
+  - Migrated all 7 provisioned charters (dev, qa, architect, pm, tpm, designer, marketing) to schema revision 3; `pm`'s migration restores the competitive-intelligence-sweep / capability-gap-doc content that had been lost in an earlier revision.
+
 **Agent vs Harness Terminology — Phase 0 (design 2026-08-09, plan 2026-08-09)**
 - `docs/glossary-agent-vs-harness.md` — canonical definition distinguishing **Agent** (persistent role identity + charter: pm/architect/tpm/dev/designer/qa/marketing/synlynk-bot) from **Harness** (swappable execution backend: Claude/Agy/Grok/Codex/local).
 - Auto-generated `## Capability-Based Task Allocation` table (synced into CLAUDE.md/GEMINI.md/AGENTS.md/GROK.md via `synlynk doctor --fix`) now reads `| Role | Harness | Tasks |` instead of the conflated `| Role | Agent | Tasks |`, with a glossary-link note.
@@ -26,6 +32,69 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `_force_exhaust_quota()` wires sentinel's existing `QUOTA_EXHAUSTED` detection into the reservation ledger without ever touching already-running jobs.
 - `synlynk/tpm_hooks.py` — narrow TPM hook surface (`tpm_observe_reservations`, `tpm_reorder_queue`, `tpm_reallocate`) plus a read-only `synlynk quota --tpm-view` CLI command to inspect open reservations across harnesses.
 - **Not yet a shippable milestone:** no active agents currently exercise the reservation ledger or TPM hooks in production dispatch flow. Held out of 0.13.1 and 0.14.0; will ship once agents actually consume it.
+
+## [0.18.0] - 2026-08-27
+
+**Release pitch:** a backlog of already-shipped, undocumented work — QA merge-gate authority, the gh-write broker, harness capability registry v2, and a week of dispatch/gh-write reliability fixes — finally gets a version number, and today's own session shows why that matters: a live datetime-comparison crash (#1184) and a per-connection DB backup storm (#1087) both got root-caused and fixed in the same sitting this release closes out.
+
+### Added
+
+**QA delegated merge-gate authority + completion tracker + merge-restricted classes (design 2026-08-20/22, gh#1079/#1099/#1100/#1101, PRs #1082-#1104)**
+- `docs/superpowers/specs/2026-08-20-qa-merge-gate-authority-design.md` and its implementation plan give QA delegated authority to merge PRs that pass verification, instead of every merge requiring a human or PM-role action.
+- Completion tracker (PR #1100) adds a Vizor panel surfacing verified-but-unmerged PRs.
+- Merge-restricted classes (PR #1101) carve out PR categories (e.g. release branches, policy.json changes) that stay outside QA's delegated authority regardless of verification status.
+
+**GitHub-write broker design (resolves #865 brainstorm, PR #1075)**
+- Design spec for a centralized gh-write broker consolidating GitHub App token resolution and write-permission checks behind one interface, replacing scattered per-call-site identity resolution.
+
+**Harness capability registry v2 — Plan B (gh#786, PRs #1053-#1066)**
+- `harness_models` / `harness_modes` / `capability_calibration_*` tables replace the old flat capability ledger with per-model, per-mode calibration data.
+- Stage 0 explore bonus seeds calibration for thin-data models; single-model sweep entry point and diff-and-queue-new-models helper keep the registry current as harnesses add models.
+
+**gh-write identity hardening — Phase 1 closeout (gh#423/#426, PR #1110)** and **Agent-roles Phase 2 — memory-gated capability routing (PR #1030)**
+- Round out the identity-hardening and capability-routing work referenced but not yet changelogged from earlier in August.
+
+**Dispatch and gh-write reliability hardening (2026-08-24 to 2026-08-27, PRs #1140/#1164/#1166/#1172/#1174/#1175/#1177/#1180/#1182/#1183)**
+- Daemon-owned GitHub App token cache unblocks headless dispatch (#1140, PR #1174); worktree gh-write dispatch now falls back to the main repo's `github_apps` when the worktree has none (PR #1164).
+- PR-review task type is now inferred from task text (#1166, PRs #1172/#1175); a missing `review` `task_allocation` policy entry is added; grok's review-type gh-write authorization is correctly downgraded (PR #1177).
+- Codex sandbox network access is now gated per #340 (PR #1180).
+- gh-write targets are resolved from task text for #860 (PR #1183); a `jobs.py` bug in `_maybe_open_worktree_pr` is fixed (PR #1182).
+- Harness capability baseline + recurring reassessment protocol documented (PR #1178).
+
+**PM competitive-intelligence sweep (PR #1159)**
+- Weekly cron job maintaining a living comparison doc against competitor tooling, feeding a decide-round pipeline for roadmap input.
+
+### Fixed
+
+**[LIVE issue] `jobs --all` crash on naive/aware datetime comparison (gh#1184, PR #1187)**
+- `_parse_iso8601()` in `synlynk/gh_verify.py` now normalizes a trailing `Z` and coerces naive timestamps to UTC-aware before comparison, instead of crashing with `TypeError: can't compare offset-naive and offset-aware datetimes` whenever a GitHub-sourced timestamp reached `gh_write_verified()`. `_apply_gh_write_verification()` in `synlynk/jobs.py` normalizes `since` through the same parser before use.
+
+**[LIVE-6, gh#1140] branch-protection sync re-enabling `enforce_admins`, closing #1185 (PR #1186)**
+- `cmd_policy_sync_branch_protection()` no longer hardcodes `enforce_admins=True`; a prior sync had silently re-locked the repo's own admin-merge bypass.
+
+**[LIVE issue] `_migrate_db()` backup storm on every connection (gh#1087, PR #1189)**
+- `_migrate_db()` now returns immediately once `PRAGMA user_version` is current, instead of running the harness-rename migration and full schema executescript unconditionally on every connection. Root-caused as the likely source of intermittent `database is locked` failures seen during full-suite test runs (e.g. `test_cmd_agent_add_onboards_agent`).
+
+### Process notes
+
+- **8 stale `[APPROVAL]` GitHub issues closed (gh#1142-#1149):** artifacts of the `[0.17.0]` Task 5 live dogfood verification's temporary `task_dispatch_demo` policy rule, which was fully reverted before merge and never landed on `main`. These tickets could never resolve through the normal auto-resume flow; closed as `not planned` with provenance comments during this release's backlog sweep.
+- **Version-drift note:** the `VERSION` file had drifted to `0.16.0` despite `v0.17.0` already being tagged and released — see [#1188](https://github.com/nikhilsoman/synlynk/issues/1188) for root cause and proposed durable fix (dispatch-time drift warning, defensive schema-version gate). This release's version bump corrects the immediate drift; #1188 remains open for the systemic fix.
+
+## [0.17.0] - 2026-08-24
+
+**Release pitch:** an approved `[APPROVAL]` ticket now actually unblocks the story it was raised for — the last gap between v0.16.0's authority layer and a `tpm sweep` loop that runs unattended for real, closed and live-verified against this repo's own GitHub tracker.
+
+### Added
+
+**Ticket-driven approval auto-resume (design/plan 2026-08-24, PRs #1137-#1139, #1141)**
+- Closes the known gap flagged at the end of `[0.16.0]`: resolving an `[APPROVAL]` ticket now actually unblocks the parked story on the next `synlynk tpm sweep` pass, instead of the story re-parking forever.
+- `approval_tickets` table (PR #1137) plus `_find_ticket()` / `_insert_ticket()` / `_mark_ticket_consumed()` helpers in `synlynk/db.py` (PR #1138) give `run_sweep_pass()` (PR #1139) three-way state awareness per story/action: no ticket yet → file one; open ticket → keep parking; resolved ticket → consume it and let dispatch proceed.
+- `synlynk/events.py`'s `_scan_approval_tickets()` (PR #1141) now writes `approval_tickets.status='resolved'` at the same point it emits `approval_resolved`, so the resolution is durable state the next sweep pass can actually query — not just an event log entry nothing consumed.
+- **Live dogfood verification (Task 5, Claude-direct per plan, 2026-08-24):** ran the full ticket lifecycle against this repo's real GitHub issue tracker using a temporary, fully-reverted `task_dispatch_demo` policy rule (reverted before merge; never landed on `main`). Demo story `story-becf09a5`: sweep 1 parked it and filed ticket id 8 → issue [#1149](https://github.com/nikhilsoman/synlynk/issues/1149); sweep 2 confirmed no duplicate ticket/issue; `gh issue comment 1149 --body "approve"` + `scan_local_events()` produced `approval_resolved` event id 371 referencing issue #1149; sweep 3 dispatched instead of re-parking (job `job-e8277299`, exit 0) and marked the ticket `consumed` (`consumed_at` set). Every claim was verified via direct DB query / `gh issue list` / `synlynk events tail`, not sweep's own printed summary.
+- **Process note:** Tasks 1-4's implementer stage was dispatched to Codex per the project's PM/review-only split as usual. Task 4 hit a session-level blocker — the Claude Code auto-mode classifier repeatedly denied `synlynk dispatch` calls even with valid role-scoped GitHub App credentials — so Task 4 was implemented directly by Claude as a documented, user-approved workaround. Filed as [LIVE-6, #1140](https://github.com/nikhilsoman/synlynk/issues/1140) (Sev2) since it degrades the autonomy-design goal; root cause not yet investigated.
+
+### Known gaps (carried forward)
+- [LIVE-6, #1140](https://github.com/nikhilsoman/synlynk/issues/1140) — Claude Code auto-mode classifier blocks `synlynk dispatch` calls even with valid role-scoped GitHub App credentials, forcing a manual-implementation fallback. Root cause not yet investigated.
 
 ## [0.16.0] - 2026-08-23
 

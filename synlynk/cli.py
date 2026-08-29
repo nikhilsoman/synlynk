@@ -159,6 +159,7 @@ def build_parser() -> argparse.ArgumentParser:
         cmd_identity_init,
         cmd_instructions_ack,
         cmd_instructions_diff,
+        cmd_instructions_register,
         cmd_instructions_status,
         cmd_instructions_update,
         cmd_jobs,
@@ -502,6 +503,11 @@ def build_parser() -> argparse.ArgumentParser:
     agent_edit_parser.add_argument("--charter", required=True,
         help="Path to new charter content, or '-' to read from stdin")
 
+    agent_sync_routing_parser = agent_sub.add_parser(
+        "sync-routing", help="Regenerate an agent's dispatch_routing frontmatter from policy.json"
+    )
+    agent_sync_routing_parser.add_argument("id_or_alias", help="Agent ID or alias (e.g. role slug)")
+
     agent_disable_parser = agent_sub.add_parser("disable", help="Disable a workspace agent")
     agent_disable_parser.add_argument("id_or_alias", help="Agent ID or alias (e.g. role slug)")
 
@@ -809,6 +815,16 @@ def build_parser() -> argparse.ArgumentParser:
     story_done_parser = story_sub.add_parser("done", help="Mark a story done")
     story_done_parser.add_argument("story_id")
 
+    pm_parser = subparsers.add_parser("pm", help="PM agent commands")
+    pm_subparsers = pm_parser.add_subparsers(dest="pm_command")
+    pm_sweep_parser = pm_subparsers.add_parser(
+        "sweep", help="Run one competitive-intelligence sweep pass"
+    )
+    pm_sweep_parser.add_argument(
+        "--dry-run", action="store_true",
+        help="Print the composed research prompt without invoking Claude"
+    )
+
     tpm_parser = subparsers.add_parser("tpm", help="TPM sweep commands")
     tpm_subparsers = tpm_parser.add_subparsers(dest="tpm_command")
     sweep_parser = tpm_subparsers.add_parser(
@@ -949,6 +965,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     instr_update_parser.add_argument("file", nargs="?", default=None,
                                      help="Specific file to update (default: all)")
+    instr_register_parser = instructions_sub.add_parser(
+        "register", help="Backfill the manifest from existing synlynk sections"
+    )
+    instr_register_parser.add_argument("file", nargs="?", default=None,
+                                       help="Specific file to register (default: all)")
     instr_ack_parser = instructions_sub.add_parser(
         "ack", help="Acknowledge an INSTRUCTION_DRIFT sentinel event"
     )
@@ -1194,14 +1215,22 @@ def main(argv=None) -> None:
             if not args.agent and not resolved_agent_id:
                 dispatch_parser.error("the following arguments are required: agent (unless --as-agent is given)")
 
-            _explicit_gh_write_target_kind = getattr(args, "gh_write_target_kind", None)
-            _resolved_gh_write_target_kind = _explicit_gh_write_target_kind or (
-                "pr" if getattr(args, "task_type", None) == "review" else "issue"
-            )
-            from synlynk.dispatch import _task_requires_gh_write
+            from synlynk.dispatch import _infer_task_type, _task_requires_gh_write
             _effective_requires_gh_write = bool(
                 getattr(args, "requires_gh_write", False)
                 or _task_requires_gh_write(args.task, getattr(args, "task_type", None))
+            )
+            _effective_task_type = getattr(args, "task_type", None) or (
+                _infer_task_type(args.task) if _effective_requires_gh_write else None
+            )
+            if _effective_task_type == "review" and not getattr(args, "task_type", None):
+                print(
+                    "  info: inferred task_type=review from task text "
+                    "(pass --task-type explicitly to override)"
+                )
+            _explicit_gh_write_target_kind = getattr(args, "gh_write_target_kind", None)
+            _resolved_gh_write_target_kind = _explicit_gh_write_target_kind or (
+                "pr" if _effective_task_type == "review" else "issue"
             )
 
             if getattr(args, "dry_run", False):
@@ -1220,7 +1249,7 @@ def main(argv=None) -> None:
                     force_agent=getattr(args, "force_agent", False),
                     requires_gh_write=_effective_requires_gh_write,
                     static_baseline=getattr(args, "static_baseline", False),
-                    task_type=getattr(args, "task_type", None),
+                    task_type=_effective_task_type,
                 )
                 print()
                 print(f"agent:        {preview['agent']}")
@@ -1245,7 +1274,7 @@ def main(argv=None) -> None:
                                  force_agent=getattr(args, "force_agent", False),
                                  static_baseline=getattr(args, "static_baseline", False),
                                  requires_gh_write=_effective_requires_gh_write,
-                                 task_type=getattr(args, "task_type", None),
+                                 task_type=_effective_task_type,
                                  gh_write_target_kind=_resolved_gh_write_target_kind,
                                  requires=getattr(args, "requires", []),
                                  context_mode=getattr(args, "context_mode", "task"),
@@ -1282,6 +1311,8 @@ def main(argv=None) -> None:
             agent_cli.cmd_agent_show(args.id_or_alias)
         elif args.agent_action == "edit":
             agent_cli.cmd_agent_edit(args.id_or_alias, args.charter)
+        elif args.agent_action == "sync-routing":
+            agent_cli.cmd_agent_sync_routing(args.id_or_alias)
         elif args.agent_action == "disable":
             agent_cli.cmd_agent_disable(args.id_or_alias)
         else:
@@ -1358,6 +1389,10 @@ def main(argv=None) -> None:
             cmd_story_draft(args.story_id)
         elif args.story_action == "done":
             cmd_story_done(args.story_id)
+    elif args.command == "pm" and args.pm_command == "sweep":
+        from synlynk.pm_agent import cmd_pm_sweep
+
+        cmd_pm_sweep(dry_run=args.dry_run)
     elif args.command == "tpm" and args.tpm_command == "sweep":
         from synlynk.tpm_sweep import run_sweep_pass
 
@@ -1443,6 +1478,8 @@ def main(argv=None) -> None:
             cmd_instructions_diff(getattr(args, "file", None))
         elif action == "update":
             cmd_instructions_update(getattr(args, "file", None))
+        elif action == "register":
+            cmd_instructions_register(getattr(args, "file", None))
         elif action == "ack":
             cmd_instructions_ack(args.file)
         else:

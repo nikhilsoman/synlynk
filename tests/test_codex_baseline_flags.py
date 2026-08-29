@@ -4,11 +4,12 @@ from synlynk._constants import HARNESS_CAPABILITY_BASELINES
 from synlynk.probe import _run_tc2
 
 
-def test_codex_valid_flags_use_ask_for_approval_not_approval_policy():
+def test_codex_valid_flags_use_config_override_for_approval_policy():
     flags = HARNESS_CAPABILITY_BASELINES["codex"]["dispatch_flags"]
     valid = flags.get("valid_flags", [])
     invalid = flags.get("invalid_flags", [])
-    assert "--ask-for-approval" in valid
+    assert "-c" in valid
+    assert "--ask-for-approval" not in valid
     assert "--approval-policy" not in valid
     assert "--approval-policy" in invalid
 

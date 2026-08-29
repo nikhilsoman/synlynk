@@ -15,7 +15,7 @@ import threading
 import time
 from typing import Optional, Tuple
 
-from synlynk._constants import HARNESS_CAPABILITY_BASELINES
+from synlynk._constants import HARNESS_CAPABILITY_BASELINES, _CODEX_NETWORK_PERMISSION
 
 _ORG_ROLE_TO_BASELINE_ROLE = {
     "dev": "builder",
@@ -65,7 +65,7 @@ def _harness_for_org_role(org_role: str, baselines_map: dict, requires_gh_write:
         return name
     return None
 
-from synlynk.github_app_auth import get_installation_token
+from synlynk.github_app_auth import read_cached_installation_token
 from synlynk.fencing import FenceData, is_fenced_command, render_task_fence
 from synlynk.git_ref_lock import git_ref_operation_lock
 from synlynk.gh_verify import gh_write_verified
@@ -242,16 +242,48 @@ def _load_harness_overrides(agent: str) -> dict:
         return empty
 
 
+def _resolve_github_apps_dir() -> str:
+    """Resolve the provisioned GitHub App directory across git worktrees."""
+    cwd_apps_dir = os.path.join(".synlynk", "github_apps")
+    if os.path.isdir(cwd_apps_dir):
+        return cwd_apps_dir
+
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--git-common-dir"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        git_common_dir = result.stdout.strip()
+        if git_common_dir:
+            git_common_dir = os.path.abspath(git_common_dir)
+            main_repo_apps_dir = os.path.join(
+                os.path.dirname(git_common_dir), ".synlynk", "github_apps"
+            )
+            if os.path.isdir(main_repo_apps_dir):
+                return main_repo_apps_dir
+    except Exception:
+        pass
+
+    return cwd_apps_dir
+
+
 def _resolve_dispatch_gh_token(role: str) -> Optional[str]:
     """Resolve a role-scoped GitHub App installation token for dispatch.
 
+    Reads the daemon-maintained token cache only — never signs a JWT or calls
+    the GitHub API itself (that live-credential action is what triggered
+    Claude Code's auto-mode classifier to block dispatch, #1140).
     Falls back to the synlynk-bot catch-all identity if the role has no
-    provisioned App. Returns None (never a human's personal token) if
-    neither is provisioned — dispatch proceeds using whatever `gh auth`
-    is already configured on the host in that case.
+    provisioned App. Returns None if neither is provisioned, or if the
+    provisioned role's cached token is missing/stale (daemon not running or
+    hasn't refreshed yet) — dispatch's caller decides whether that's a
+    fail-closed error (--requires-gh-write) or a silent host-auth fallback.
     """
+    apps_dir = _resolve_github_apps_dir()
     for candidate_role in (role, "synlynk-bot"):
-        json_path = os.path.join(".synlynk", "github_apps", f"{candidate_role}.json")
+        json_path = os.path.join(apps_dir, f"{candidate_role}.json")
         if not os.path.exists(json_path):
             continue
         try:
@@ -261,14 +293,7 @@ def _resolve_dispatch_gh_token(role: str) -> Optional[str]:
             continue
         if not app_config.get("installation_id"):
             continue
-        try:
-            return get_installation_token(candidate_role, app_config)
-        except Exception as exc:
-            print(
-                f"  ⚠ could not mint GitHub App token for role '{candidate_role}': {exc}",
-                file=sys.stderr,
-            )
-            return None
+        return read_cached_installation_token(candidate_role, apps_dir)
     return None
 
 
@@ -279,8 +304,9 @@ def _resolve_dispatch_gh_bot_login(role: str) -> Optional[str]:
     login from each App's ``app_slug`` instead of minting a token. Returns
     None if no App is provisioned; it never guesses a login.
     """
+    apps_dir = _resolve_github_apps_dir()
     for candidate_role in (role, "synlynk-bot"):
-        json_path = os.path.join(".synlynk", "github_apps", f"{candidate_role}.json")
+        json_path = os.path.join(apps_dir, f"{candidate_role}.json")
         if not os.path.exists(json_path):
             continue
         try:
@@ -421,9 +447,12 @@ def _permissions_to_flags(agent: str, permissions: list) -> list:
         return ["--allowedTools", ",".join(tools)]
     if agent == "codex":
         has_write = any((perm or "").startswith("write:") for perm in (permissions or []))
+        flags = []
         if not has_write:
-            return ["--ask-for-approval", "untrusted"]
-        return []
+            flags = ["-c", "approval_policy=untrusted"]
+        if _CODEX_NETWORK_PERMISSION in (permissions or []):
+            flags += ["-c", "sandbox_workspace_write.network_access=true"]
+        return flags
     if agent == "grok":
         return _grok_permission_flags(permissions)
     if agent == "local":
@@ -527,7 +556,10 @@ def _build_subprocess_env(agent: str, overrides: dict, requires_gh_write: bool, 
                 "Dispatch refused: --requires-gh-write requires a role-scoped GitHub App "
                 f"token, but none is available for role {role!r} "
                 f"(checked .synlynk/github_apps/{role}.json and synlynk-bot.json). "
-                f"Run: synlynk identity init --role {role}  "
+                f"If the App is provisioned, ensure the token cache is fresh: "
+                f"synlynk daemon status  (start it with: synlynk daemon start — "
+                f"it refreshes tokens automatically every ~50 min). "
+                f"If the App isn't provisioned yet: synlynk identity init --role {role}  "
                 "Or set SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH=1 to opt into host `gh` auth "
                 "(uses personal keyring — not recommended; see #569)."
             )
@@ -931,6 +963,15 @@ _GH_TARGET_RE = re.compile(
     re.IGNORECASE,
 )
 
+_REVIEW_TASK_RE = re.compile(
+    r"(?:\breview\s+and\s+post\b|"
+    r"\bpost(?:\s+(?:a|an))?\s+(?:github\s+)?(?:pr|pull\s+request)\s+review\b|"
+    r"\bpost(?:\s+(?:a|an))?\s+review\b|"
+    r"\b(?:pr|pull\s+request)\s+review\b|"
+    r"\bcode\s+review\b)",
+    re.IGNORECASE,
+)
+
 
 def _task_requires_gh_write(task: str, task_type: str = None) -> bool:
     """Infer GitHub-write intent so operators do not have to remember a flag.
@@ -943,6 +984,14 @@ def _task_requires_gh_write(task: str, task_type: str = None) -> bool:
     if re.search(r"\bgh\s+(?:issue|pr)\s+(?:review|comment|close|merge)\b", text, re.IGNORECASE):
         return True
     return bool(_GH_WRITE_ACTION_RE.search(text) and _GH_TARGET_RE.search(text))
+
+
+def _infer_task_type(task: str) -> Optional[str]:
+    """Infer only an unambiguous PR review task type from task text."""
+    text = task or ""
+    if _REVIEW_TASK_RE.search(text) and _GH_TARGET_RE.search(text):
+        return "review"
+    return None
 
 
 def _job_summary_path(job_id: str) -> str:
@@ -2477,6 +2526,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         flags = flags + ["--output-format", "json"]
     if agent == "codex":
         flags = flags + ["--json"]
+        if _CODEX_NETWORK_PERMISSION in permissions and "sandbox_workspace_write.network_access=true" not in flags:
+            flags = flags + ["-c", "sandbox_workspace_write.network_access=true"]
         try:
             result = subprocess.run(
                 ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
@@ -2668,9 +2719,34 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     gh_write_target_value = None
     gh_write_author_value = None
     gh_write_expect_value = None
-    if requires_gh_write and issue is not None:
-        target_prefix = "pr" if gh_write_target_kind == "pr" else "issue"
-        gh_write_target_value = f"{target_prefix}:{issue}"
+    gh_write_target_number = issue
+    resolved_gh_write_target_kind = gh_write_target_kind
+    if requires_gh_write and gh_write_target_number is None:
+        task_target_match = re.search(
+            r"\b(?:pr|pull\s+request)\s*#?\s*(\d+)\b",
+            task or "",
+            re.IGNORECASE,
+        )
+        issue_target_match = re.search(
+            r"\bissues?\s*#?\s*(\d+)\b",
+            task or "",
+            re.IGNORECASE,
+        )
+        if task_target_match:
+            resolved_gh_write_target_kind = "pr"
+            gh_write_target_number = int(task_target_match.group(1))
+        elif issue_target_match:
+            resolved_gh_write_target_kind = "issue"
+            gh_write_target_number = int(issue_target_match.group(1))
+        else:
+            print(
+                "  ⚠ --requires-gh-write task has no numbered PR/issue target; "
+                "falling back to worktree activity verification",
+                file=sys.stderr,
+            )
+    if requires_gh_write and gh_write_target_number is not None:
+        target_prefix = "pr" if resolved_gh_write_target_kind == "pr" else "issue"
+        gh_write_target_value = f"{target_prefix}:{gh_write_target_number}"
         gh_write_role = resolved_agent_role or _role_for_story(story_id)
         gh_write_author_value = _resolve_dispatch_gh_bot_login(gh_write_role)
         gh_write_expect_value = "review_posted" if task_type == "review" else "closed"

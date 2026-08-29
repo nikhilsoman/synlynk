@@ -68,11 +68,7 @@ def _render_claude_log_line(line: str):
 
 
 def _redact_active_tokens(text: str) -> str:
-    from synlynk.github_app_auth import _load_redaction_tokens, _token_cache
-    for entry in _token_cache.values():
-        token = entry.get("token")
-        if token:
-            text = text.replace(token, "***REDACTED***")
+    from synlynk.github_app_auth import _load_redaction_tokens
     for token in _load_redaction_tokens():
         text = text.replace(token, "***REDACTED***")
     return text

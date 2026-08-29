@@ -242,6 +242,7 @@ from synlynk.instructions import (
     install_pre_commit_hook,
     cmd_instructions_ack,
     cmd_instructions_diff,
+    cmd_instructions_register,
     cmd_instructions_status,
     cmd_instructions_update,
 )
@@ -1058,6 +1059,18 @@ CREATE TABLE IF NOT EXISTS events (
     authority_scope TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type, id);
+
+CREATE TABLE IF NOT EXISTS approval_tickets (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    story_id      TEXT NOT NULL,
+    action        TEXT NOT NULL,
+    issue_url     TEXT NOT NULL UNIQUE,
+    status        TEXT NOT NULL DEFAULT 'open',
+    opened_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    resolved_at   TIMESTAMP,
+    consumed_at   TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_approval_tickets_story_action ON approval_tickets(story_id, action, status);
 
 CREATE TABLE IF NOT EXISTS subscriptions (
     id                 INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -3127,7 +3140,7 @@ merged: YYYY-MM-DD (or status: open)
     stub_content = stub_content.replace('post: N', f'post: {next_nn}')
     stub_content = stub_content.replace('pr: "#N"', 'pr: "#TBD"')
     stub_content = stub_content.replace('merged: YYYY-MM-DD (or status: open)', 'status: open')
-    stub_content = stub_content.replace('merged: status: open', 'status: open')
+    stub_content = stub_content.replace('merged: status' + ': open', 'status: open')
 
     if dry_run:
         # Step f: In dry-run mode, print everything but write nothing

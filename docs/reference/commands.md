@@ -54,6 +54,7 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `jobs reap` (secondary) — execute
 - `schedule` (primary) — execute
 - `tpm sweep` (primary) — execute
+- `pm sweep` (primary) — execute
 - `release` (primary) — release
 - `pr check` (primary) — release
 - `pr gate-status` (secondary) — release
@@ -105,3 +106,4 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `instructions diff` — sustain
 - `instructions update` — sustain
 - `instructions ack` — sustain
+- `instructions register` — sustain

@@ -1,3 +1,5 @@
+> Superseded by docs/strategy/competitive-landscape.md (2026-08-24) — content migrated, this file kept for history
+
 # synlynk: Comparative Analysis (Superpowers vs. GStack vs. synlynk)
 **Date:** June 5, 2026  
 **Status:** Evaluation Report / GTM Positioning  

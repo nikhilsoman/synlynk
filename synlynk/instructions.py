@@ -774,6 +774,19 @@ _MARKER_STYLE_FOR_TOOL = {
     "universal": "html",
 }
 
+# These are the instruction files that can be safely backfilled. Fenced files
+# preserve surrounding content; Cursor's canonical path is wholly synlynk-owned.
+_REGISTERABLE_INSTRUCTION_TARGETS = (
+    ("CLAUDE.md", "claude"),
+    ("GEMINI.md", "agy"),
+    ("AGENTS.md", "codex"),
+    ("GROK.md", "grok"),
+    (".cursor/rules/synlynk.mdc", "cursor"),
+    (".github/copilot-instructions.md", "copilot"),
+    (".windsurfrules", "windsurf"),
+    ("AI_INSTRUCTIONS.md", "universal"),
+)
+
 def _load_instruction_manifest() -> dict:
     """Returns files dict from .synlynk/instructions.json, or {} if absent."""
     if not os.path.exists(_INSTRUCTIONS_MANIFEST):
@@ -804,6 +817,74 @@ def _write_instruction_manifest(entries: dict) -> None:
     }
     with open(_INSTRUCTIONS_MANIFEST, "w") as f:
         json.dump(manifest, f, indent=2)
+
+
+def cmd_instructions_register(file_path: Optional[str] = None) -> None:
+    """Backfill the manifest from existing fenced instruction sections.
+
+    Registration only reads instruction files and writes manifest metadata. It
+    never calls _write_instruction_file, so user content and the existing
+    synlynk section are left unchanged.
+    """
+    targets = list(_REGISTERABLE_INSTRUCTION_TARGETS)
+    if file_path:
+        requested = os.path.normpath(file_path)
+        target_by_path = {os.path.normpath(path): (path, tool) for path, tool in targets}
+        target_by_path.update({os.path.abspath(path): (file_path, tool) for path, tool in targets})
+        target = target_by_path.get(requested)
+        if target is None:
+            # Permit an explicitly supplied path when its own HTML fence
+            # identifies the tool. Hash-fenced files are identified by the
+            # canonical .windsurfrules path above.
+            if not os.path.exists(file_path):
+                print(f"  {file_path}: missing")
+                return
+            content = Path(file_path).read_text()
+            marker_match = re.search(
+                r"^[ \t]*<!-- synlynk:start[^>]*\btool=\"([^\"]+)\"[^>]* -->",
+                content, flags=re.MULTILINE,
+            )
+            tool = marker_match.group(1) if marker_match else None
+            if tool not in _MARKER_STYLE_FOR_TOOL or _MARKER_STYLE_FOR_TOOL[tool] == "none":
+                print(f"  {file_path}: unsupported or unfenced instruction file")
+                return
+            target = (file_path, tool)
+        targets = [target]
+
+    existing = _load_instruction_manifest()
+    entries = {}
+    registered = []
+    skipped = []
+    for path, tool in targets:
+        marker_style = _MARKER_STYLE_FOR_TOOL[tool]
+        if not os.path.exists(path):
+            skipped.append((path, "missing"))
+            continue
+        content = Path(path).read_text()
+        section = _extract_synlynk_section(content, marker_style)
+        if section is None:
+            skipped.append((path, "no synlynk fence"))
+            continue
+        sha = _compute_section_sha(section)
+        info = {"tool": tool, "sha": sha}
+        if existing.get(path, {}).get("tool") == tool and existing.get(path, {}).get("sha") == sha:
+            continue
+        entries[path] = info
+        registered.append(path)
+
+    if entries:
+        _write_instruction_manifest(entries)
+
+    if file_path and not registered:
+        if skipped:
+            print(f"  {skipped[0][0]}: {skipped[0][1]}")
+        else:
+            print(f"  {file_path}: already registered")
+    else:
+        for path in registered:
+            print(f"  {_pkg('_GREEN')}✓{_pkg('_RESET')} Registered {path}")
+        for path, reason in skipped:
+            print(f"  {path}: {reason}")
 
 _PRE_COMMIT_HOOK_MARKER = "-m synlynk instructions status --pre-commit"
 

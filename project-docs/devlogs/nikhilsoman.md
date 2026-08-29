@@ -1,4 +1,26 @@
 
+## 2026-08-24 — Ticket-driven approval auto-resume shipped (Tasks 1-4, PRs #1137/#1138/#1139/#1141), Task 5 live dogfood verified
+
+### Shipped
+- Closes the known gap flagged at the end of `[0.16.0]`'s CHANGELOG entry: resolving an `[APPROVAL]` ticket now actually unblocks a parked story on the next `synlynk tpm sweep` pass instead of it re-parking forever.
+- **PR #1137** — `approval_tickets` table added to the schema.
+- **PR #1138** — `_find_ticket()` / `_insert_ticket()` / `_mark_ticket_consumed()` helpers in `synlynk/db.py`.
+- **PR #1139** — three-way ticket-state branch wired into `run_sweep_pass()` (`synlynk/tpm_sweep.py`): no ticket → file one; open → keep parking; resolved → consume + dispatch.
+- **PR #1141** — `_scan_approval_tickets()` (`synlynk/events.py`) now writes `approval_tickets.status='resolved'` at the same point it emits `approval_resolved`, so resolution is durable queryable state, not just an event nothing reads back.
+- **Task 5 (live dogfood, Claude-direct per plan):** ran the full lifecycle against this repo's real GitHub tracker in a throwaway worktree (`chore/task5-dogfood-verification`, never pushed/merged) with a temporary `task_dispatch_demo` policy rule, fully reverted before discarding the branch. Demo story `story-becf09a5`: sweep 1 parked it, filed ticket id 8 → issue #1149; sweep 2 confirmed no duplicate ticket/issue (`gh issue list --search` returned exactly one); `gh issue comment 1149 --body "approve"` + a manual `scan_local_events()` call produced `approval_resolved` event id 371 referencing issue #1149 (`synlynk events tail --type approval_resolved`); sweep 3 dispatched (job `job-e8277299`, exit 0) instead of re-parking, and the ticket row was confirmed `status='consumed'` with `consumed_at` set — verified via direct `_find_ticket()` DB query, not sweep's own printed summary.
+- Post-revert full suite: 2219 passed, 2 skipped, 2 failed — both the already-known pre-existing `database is locked` flakes (`test_agent_quota_tracking.py::test_cmd_probewrite_fencetrue_clobbers_sop_harness`, `test_roles.py::test_cmd_agent_add_onboards_agent`), independently reproduced against clean `origin/main` in isolation earlier this session, confirming no regression.
+
+### Process deviation (filed as live issue)
+- Tasks 1-3's implementer stage dispatched cleanly to Codex per the PM/review-only role split. Task 4's dispatch calls were repeatedly denied by the Claude Code auto-mode classifier even with valid role-scoped GitHub App credentials — with Nikhil's explicit approval, Task 4 was implemented directly instead of retrying dispatch indefinitely.
+- Filed **[LIVE-6, issue #1140](https://github.com/nikhilsoman/synlynk/issues/1140)**, Sev2 (workaround existed, no prod defect/data loss) — framed as breaking the project's autonomy-design goal, since a human had to approve a manual-implementation fallback rather than dispatch succeeding unattended. Action items (root-causing the classifier's trigger, `.pem`-presence vs `--role` correlation, out-of-worktree credential referencing) are filed but not yet investigated.
+
+### Cleanup
+- Worktree hygiene applied throughout: two zero-commit no-op dispatch worktrees from failed Codex attempts removed, `task4-approval-resolution-writeback` worktree/branch removed after PR #1141 merged, Task 5's throwaway worktree/branch and its nested dispatch worktree (`job-e8277299`, zero real diff beyond its base) removed at the end, five stale non-worktree scaffold directories (no `.git`, leftover from earlier failed local-dispatch attempts) also cleared.
+
+### Next
+- Investigate LIVE-6 (#1140) root cause when picked up.
+- CHANGELOG's `[Unreleased]` section now has this work ready for a Named Release (v0.17.0 candidate) — not cut yet, pending explicit release-authority approval per `.synlynk/policy.json` (`requires_human_approval: true`).
+
 ## 2026-08-09
 ### Issues #846/#847 resolved — TUI approve/kill keybindings + Slack notifier event/port mismatches
 
@@ -1191,3 +1213,11 @@ implementation plan.
 - **TDD Test**: Added a regression test `test_reconcile_detects_stall_and_kills_process` to `tests/test_synlynk.py`.
 - **Config**: Added defaults for `stall_timeout_minutes` and `agents` config sections to `load_config()` and configuration templates.
 - **Verification**: Verified implementation against 485 tests, ensuring all tests passed.
+
+## 2026-08-25 — Session: PR backlog triage + LIVE-8 verification signal fix
+
+### Completed
+- Triaged the 24-PR backlog in `nikhilsoman/synlynk`, closing 22 stale or duplicate PRs from the superseded `workspace-policy-and-autonomous-loop` and `PM competitive-intel sweep` task stacks, along with three standalone stale PRs; removed the related worktrees and branches under the Worktree Hygiene Protocol.
+- Merged PR #1081, documenting the durable agent runtime, and PR #1175, adding the missing `review` task-allocation override to `synlynk/policy.json`'s `dev_authority` configuration to close the LIVE-8/#1166 policy gap.
+- Confirmed that PR #1172's task-type inference fix and PR #1175's policy override together make the daemon's `gh_write_verified` signal reliable for future runs of LIVE-8 (#1166, Grok gh-write stalls).
+- Planned a fresh Grok dispatch to obtain a real pass/fail result for the gh-write terminal action before deciding whether Grok's gh-write capability profile should be downgraded.

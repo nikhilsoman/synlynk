@@ -148,6 +148,9 @@ COMMAND_TAXONOMY = [
     {"command": "tpm sweep", "governs_stage": "execute", "maturity_tier": 2, "prominence": "primary",
      "orientation_gateway": False, "audience": "human",
      "trigger_phrases": ["run the TPM sweep", "sweep ready stories"], "hook_event": None},
+    {"command": "pm sweep", "governs_stage": "execute", "maturity_tier": 2, "prominence": "primary",
+     "orientation_gateway": False, "audience": "human",
+     "trigger_phrases": ["run the competitive sweep", "check for competitor gaps"], "hook_event": None},
     {"command": "release", "governs_stage": "release", "maturity_tier": 2, "prominence": "primary",
      "orientation_gateway": False, "audience": "human",
      "trigger_phrases": ["cut a release", "ship v0.x.0"], "hook_event": None},
@@ -289,6 +292,8 @@ COMMAND_TAXONOMY = [
      "orientation_gateway": False, "audience": "hook", "trigger_phrases": [], "hook_event": None},
     {"command": "instructions ack", "governs_stage": "sustain", "maturity_tier": "latent", "prominence": None,
      "orientation_gateway": False, "audience": "hook", "trigger_phrases": [], "hook_event": "pre-commit"},
+    {"command": "instructions register", "governs_stage": "sustain", "maturity_tier": "latent", "prominence": None,
+     "orientation_gateway": False, "audience": "hook", "trigger_phrases": [], "hook_event": None},
 ]
 
 

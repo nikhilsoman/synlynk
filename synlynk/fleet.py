@@ -20,6 +20,7 @@ from synlynk._constants import (
     EXPERIMENTAL_FLEET,
     MATRIX_LIVE_BUDGET_USD,
     PROVEN_FRESHNESS_DAYS,
+    _CODEX_NETWORK_PERMISSION,
 )
 
 # Trivial live-smoke prompt: forces a real headless agent turn without file edits.
@@ -352,7 +353,9 @@ def tier_for_agent(conn, agent: str, *, now: float | None = None) -> str:
     return "supported"
 
 
-def live_agent_smoke(home: str, *, timeout_s: int = _LIVE_SMOKE_TIMEOUT_S) -> MatrixCellResult:
+def live_agent_smoke(
+    home: str, *, timeout_s: int = _LIVE_SMOKE_TIMEOUT_S, permissions: list = None
+) -> MatrixCellResult:
     """Run one real headless CLI smoke turn for *home* (no file edits)."""
     baseline = HARNESS_CAPABILITY_BASELINES.get(home) or {}
     cli = baseline.get("cli", home)
@@ -380,6 +383,8 @@ def live_agent_smoke(home: str, *, timeout_s: int = _LIVE_SMOKE_TIMEOUT_S) -> Ma
             )
         elif home == "codex":
             cmd = [cli, "exec", "-", "-s", "workspace-write"]
+            if _CODEX_NETWORK_PERMISSION in (permissions or []):
+                cmd += ["-c", "sandbox_workspace_write.network_access=true"]
             proc = subprocess.run(
                 cmd,
                 input=prompt,
@@ -442,7 +447,13 @@ def live_agent_smoke(home: str, *, timeout_s: int = _LIVE_SMOKE_TIMEOUT_S) -> Ma
     )
 
 
-def live_agent_receipt_check(home: str, task_sha256: str, *, timeout_s: int = _LIVE_SMOKE_TIMEOUT_S) -> MatrixCellResult:
+def live_agent_receipt_check(
+    home: str,
+    task_sha256: str,
+    *,
+    timeout_s: int = _LIVE_SMOKE_TIMEOUT_S,
+    permissions: list = None,
+) -> MatrixCellResult:
     """Runs one real headless CLI turn for *home* and checks receipt-marker
     compliance: the CLI must echo SYNLYNK_TASK_RECEIVED: <digest> as its
     literal first output line (see #720 receipt protocol)."""
@@ -469,6 +480,8 @@ def live_agent_receipt_check(home: str, task_sha256: str, *, timeout_s: int = _L
             proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_s)
         elif home == "codex":
             cmd = [cli, "exec", "-", "-s", "workspace-write"]
+            if _CODEX_NETWORK_PERMISSION in (permissions or []):
+                cmd += ["-c", "sandbox_workspace_write.network_access=true"]
             proc = subprocess.run(cmd, input=prompt, capture_output=True, text=True, timeout=timeout_s)
         elif prompt_via_arg and prompt_flag:
             cmd = [cli] + ni + [prompt_flag, prompt]

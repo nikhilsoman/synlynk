@@ -979,12 +979,19 @@ def test_maybe_open_worktree_pr_skips_for_review_task_type(tmp_path, monkeypatch
 
 
 def test_maybe_open_worktree_pr_skips_for_requires_gh_write(tmp_path, monkeypatch):
+    import subprocess
     import synlynk.jobs as jobs_mod
 
     worktree_path = tmp_path / "repo"
     worktree_path.mkdir()
 
     def fake_run(cmd, **kwargs):
+        if cmd[:4] == ["git", "-C", str(worktree_path), "symbolic-ref"]:
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="")
+        if cmd[:5] == ["git", "-C", str(worktree_path), "rev-parse", "--verify"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="deadbeef\n", stderr="")
+        if cmd[:6] == ["git", "-C", str(worktree_path), "diff", "--quiet"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         raise AssertionError(f"no subprocess call expected, got: {cmd}")
 
     monkeypatch.setattr(jobs_mod.subprocess, "run", fake_run)
@@ -998,7 +1005,7 @@ def test_maybe_open_worktree_pr_skips_for_requires_gh_write(tmp_path, monkeypatc
     assert pr_number is None
 
 
-def test_maybe_open_worktree_pr_does_not_skip_for_scope_declared_with_requires_gh_write(tmp_path, monkeypatch):
+def test_maybe_open_worktree_pr_does_not_skip_for_changed_requires_gh_write_worktree(tmp_path, monkeypatch):
     import subprocess
     import synlynk.jobs as jobs_mod
 
@@ -1012,6 +1019,8 @@ def test_maybe_open_worktree_pr_does_not_skip_for_scope_declared_with_requires_g
             candidate = cmd[5]
             if candidate == "origin/main":
                 return subprocess.CompletedProcess(cmd, 0, stdout="deadbeef\n", stderr="")
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="")
+        if cmd[:6] == ["git", "-C", str(worktree_path), "diff", "--quiet"]:
             return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="")
         if cmd[:3] == ["gh", "pr", "list"]:
             return subprocess.CompletedProcess(cmd, 0, stdout="[]\n", stderr="")
@@ -1027,7 +1036,7 @@ def test_maybe_open_worktree_pr_does_not_skip_for_scope_declared_with_requires_g
     )
 
     pr_number = jobs_mod._maybe_open_worktree_pr(
-        {"id": "job-3", "task": "write docs", "scope_paths": ["docs/**"], "requires_gh_write": True},
+        {"id": "job-3", "task": "write docs", "requires_gh_write": True},
         str(worktree_path),
         "dispatch/codex/job-3",
     )

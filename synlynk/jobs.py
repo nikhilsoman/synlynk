@@ -15,7 +15,7 @@ from synlynk.sentinel import _write_sentinel_alert
 from synlynk._constants import HARNESS_CAPABILITY_BASELINES
 from synlynk.fleet import terminal_status_for_unknown_exit
 from synlynk.events import emit_event
-from synlynk.gh_verify import gh_write_verified
+from synlynk.gh_verify import _parse_iso8601, gh_write_verified
 
 
 _BOLD = "[1m"
@@ -333,15 +333,39 @@ def _resolve_worktree_pr_base_branch(job: dict, worktree_path: str) -> Optional[
     return _resolve_default_base_branch(worktree_path) or "main"
 
 
+def _worktree_has_no_diff_against_base_branch(job: dict, worktree_path: str) -> bool:
+    """Return whether the worktree HEAD matches its resolved base branch."""
+    base_branch = _resolve_worktree_pr_base_branch(job, worktree_path)
+    if not base_branch:
+        return False
+
+    try:
+        diff_result = subprocess.run(
+            ["git", "-C", worktree_path, "diff", "--quiet", base_branch, "HEAD"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except Exception:
+        return False
+
+    return diff_result.returncode == 0
+
+
 def _maybe_open_worktree_pr(job: dict, worktree_path: str, worktree_branch: Optional[str]) -> Optional[int]:
     """Opens a PR for a finalized worktree if one does not already exist."""
     if not worktree_path or not worktree_branch:
         return
 
-    if job.get("task_type") == "review" or (job.get("requires_gh_write") and not job.get("scope_paths")):
+    is_review_task = job.get("task_type") == "review"
+    is_empty_gh_write_worktree = (
+        job.get("requires_gh_write")
+        and _worktree_has_no_diff_against_base_branch(job, worktree_path)
+    )
+    if is_review_task or is_empty_gh_write_worktree:
         print(
             f"  ⚠ skipping automatic PR creation for {worktree_branch}: "
-            f"job is review/gh-write-only (task_type={job.get('task_type') or 'none'}, "
+            f"job is review/empty-gh-write (task_type={job.get('task_type') or 'none'}, "
             f"requires_gh_write={bool(job.get('requires_gh_write'))})"
         )
         return
@@ -2180,8 +2204,13 @@ def _apply_gh_write_verification(
     """Consult GitHub state for a --requires-gh-write job and return status/outcome."""
     if not requires_gh_write:
         return status, None
+    # daemon_jobs historically stores started_at without an offset. Normalize
+    # it before handing it to the verifier so all timestamp inputs use UTC.
+    since_dt = _parse_iso8601(since)
+    normalized_since = since_dt.isoformat() if since_dt is not None else since
     verified = gh_write_verified(
-        gh_write_target, expect=expect, since=since, expect_author=expect_author,
+        gh_write_target, expect=expect, since=normalized_since,
+        expect_author=expect_author,
     )
     verified_str = "true" if verified is True else ("false" if verified is False else "unknown")
     if verified is False and status in ("done", "failed_unverified"):
