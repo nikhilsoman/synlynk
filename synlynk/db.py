@@ -340,7 +340,7 @@ def _run_harness_rename_migration(conn) -> None:
         {row[1] for row in conn.execute("PRAGMA table_info(agent_quotas)")}
         if _table_exists(conn, "agent_quotas") else set()
     )
-    if qcols and "agent" in qcols:
+    if qcols and "agent" in qcols and not _table_exists(conn, "harness_quotas"):
         conn.execute("ALTER TABLE agent_quotas RENAME COLUMN agent TO harness")
         conn.execute("ALTER TABLE agent_quotas RENAME TO harness_quotas")
         conn.execute("DROP INDEX IF EXISTS idx_agent_quotas_agent")

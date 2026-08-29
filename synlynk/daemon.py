@@ -815,8 +815,11 @@ class SynlynkDaemon(WatchDaemon):
                 except Exception:
                     _traceback.print_exc()
                 last_mtimes = self._get_mtimes("project-docs")
-            _reconcile_daemon_jobs()
-            _dispatch_ready_jobs(max_parallel=max_parallel)
+            try:
+                _reconcile_daemon_jobs()
+                _dispatch_ready_jobs(max_parallel=max_parallel)
+            except Exception:
+                _traceback.print_exc()
             if time.time() - last_token_refresh >= self.token_refresh_interval_seconds:
                 self._refresh_github_tokens()
                 last_token_refresh = time.time()

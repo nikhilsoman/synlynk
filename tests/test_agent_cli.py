@@ -308,6 +308,25 @@ def test_live5__harness_rename_is_safe_when_both_reservation_tables_exist():
     _run_harness_rename_migration(conn)
 
 
+def test_live5__harness_quotas_rename_is_safe_when_target_table_exists():
+    from synlynk.db import _run_harness_rename_migration
+
+    conn = sqlite3.connect(":memory:")
+    conn.executescript(
+        """
+        CREATE TABLE agent_quotas (agent TEXT PRIMARY KEY, quota INTEGER);
+        CREATE TABLE harness_quotas (harness TEXT PRIMARY KEY, quota INTEGER);
+        INSERT INTO agent_quotas VALUES ('legacy', 1);
+        INSERT INTO harness_quotas VALUES ('current', 2);
+        """
+    )
+
+    _run_harness_rename_migration(conn)
+
+    assert conn.execute("SELECT * FROM agent_quotas").fetchone() == ("legacy", 1)
+    assert conn.execute("SELECT * FROM harness_quotas").fetchone() == ("current", 2)
+
+
 def test_fixevents_subscriptions_table_missing_harness_name_migration(project_dir):
     import synlynk
     from synlynk.db import _run_harness_rename_migration
@@ -785,4 +804,3 @@ def test_fix_1250_dispatch_job_summaries_silently_report_zero_files_touched(
     monkeypatch.chdir(tmp_path)
     assert os.path.isabs(job["worktree_path"])
     assert _worktree_files_touched(job["worktree_path"]) == ["touched.txt"]
-
