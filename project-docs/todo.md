@@ -14,7 +14,8 @@
 - [x] [LIVE-6] #1140 reopened, root-caused (pre-fork token refresh moved into `daemon start`, not eliminated by prior fix), cross-linked to #1228, fixed via PR #1249 (merged `a37f4ff`, 2026-08-29)
 - [x] #1250 — dispatch job summaries silently report "files: 0 touched"; root-caused (`_job_worktree_details()` CWD-relative path), fixed via PR #1251 (merged `77a9be1`, 2026-08-29)
 - [x] PR #1195, #1214, #1215 — all confirmed MERGED on GitHub; Review Queue entry below was stale, removed
-- [x] #1228 — root-caused via systematic-debugging (unprotected exception boundary in daemon `_run_loop()`, 3 independent trigger bugs), fixed via PR #1258 (merged, 2026-08-29); also surfaced a fresh env gap (qa-role GH App token not resolvable in a fresh dispatch worktree even when fresh at repo root) — not yet filed as its own issue
+- [x] #1228 — root-caused via systematic-debugging (unprotected exception boundary in daemon `_run_loop()`, 3 independent trigger bugs), fixed via PR #1258 (merged, 2026-08-29)
+- [x] PR #1232 — second, independently-dispatched, genuinely complementary fix for #1228 (CWD-relative daemon state paths — pidfile/logfile/watch-state via `_repo_common_dir()`/`_daemon_state_path()`); rebased onto post-#1258 main, found+fixed a real regression it introduced (bare `except Exception` needed around the new `subprocess.run` call — a global `Popen` mock in unrelated tests was tripping it), merged 2026-08-29. Confirmed via code read that it does NOT touch the separate qa-role GH-App-token-cache gap below — filed as #1264.
 
 ## Next Task
 - [ ] Fleet-parity remainder (only #342 and #347 of the original cluster are still open; #332/#338/#340/#348/#419/#461 all closed — see Recently Landed)
@@ -32,7 +33,7 @@
 - [ ] #1188 — pipx-installed synlynk drifts silently from repo VERSION until schema-mismatch crash
 - [ ] #1194 — `synlynk decide --record` writes decision docs to gitignored path once repo is 'migrated'
 - [ ] #1213 comment (2026-08-29) — Codex `api.github.com` sandbox-egress-block explanation for gh-write failures was never live-tested; #720 receipt-check failure observed instead this session, doesn't corroborate the theory — this session's #1228 fix dispatch (job-78d04989) had Codex successfully create PR #1258 with `--requires-gh-write`, further undermining the sandbox-egress theory — worth isolating failure mode when TC-suite live-test work happens
-- [ ] New (2026-08-29, untriaged) — qa-role GitHub App token not resolvable for a fresh `synlynk dispatch` worktree even when fresh/valid at the main repo root (`.synlynk/github_apps/qa.json`+`.token.json`, refreshed by daemon 19:34 same day) — blocked Agy review dispatch on PR #1258 three times (nested worktree, main repo root, both failed identically); forced Claude self-review fallback. Needs its own issue + root-cause pass, likely same family as the worktree GH-App-gap memory.
+- [ ] #1264 — qa-role GH App token cache writer (`github_app_auth.py:refresh_installation_token()`) doesn't share the daemon's worktree-aware path resolution that `_daemon_state_path()` now uses post-#1232; blocked Agy/Codex `--requires-gh-write` dispatch 3-4 times this session (PR #1258 review, PR #1232 fix attempts), forced Claude self-review/self-fix fallback each time. Root cause identified at code level; live reproduction with diagnostic instrumentation still needed before a fix is designed.
 
 ## Review Queue
 - (empty — #1195/#1214/#1215 all merged, 2026-08-29)
