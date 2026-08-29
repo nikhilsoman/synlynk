@@ -265,6 +265,8 @@ def generate_context(scope: str = "full", out_path: str = None) -> str:
     with open(context_file, "w") as out:
         out.write("# synlynk Context Snapshot\n\n")
         out.write(f"Generated: {time.strftime('%Y-%m-%d %H:%M:%S')} | User: @{username} | Mode: {mode}\n\n")
+        from synlynk.charter_injection import render_charter_section
+        out.write(render_charter_section(repo_path=os.getcwd()))
 
         # Sentinel alerts at top (omit section if empty)
         if os.path.exists(sentinel_file):
