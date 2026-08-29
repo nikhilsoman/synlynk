@@ -139,7 +139,90 @@ def test_synlynk_daemon_run_loop_refreshes_tokens_on_interval(tmp_path, monkeypa
     assert len(refresh_calls) >= 2
 
 
-def test_synlynk_daemon_start_calls_refresh_before_run_loop(tmp_path, monkeypatch):
+def test_watch_daemon_run_loop_refreshes_tokens_before_first_sleep(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+
+    import synlynk.daemon as daemon_mod
+
+    refresh_calls = []
+    monkeypatch.setattr(
+        daemon_mod,
+        "_pkg",
+        lambda name, default=None: {"load_config": lambda: {"watch_interval_seconds": 30}}.get(
+            name, default
+        ),
+    )
+
+    monkeypatch.setattr(
+        daemon_mod.WatchDaemon,
+        "_refresh_github_tokens",
+        lambda self: refresh_calls.append(1),
+    )
+
+    def stop_sleep(_seconds):
+        raise KeyboardInterrupt()
+
+    monkeypatch.setattr(time, "sleep", stop_sleep)
+
+    daemon = WatchDaemon()
+    try:
+        daemon._run_loop()
+    except KeyboardInterrupt:
+        pass
+
+    assert refresh_calls == [1]
+
+
+def test_synlynk_daemon_run_loop_refreshes_tokens_before_first_sleep(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+
+    import synlynk.daemon as daemon_mod
+    import http.server as _http_server
+
+    refresh_calls = []
+    monkeypatch.setattr(
+        daemon_mod,
+        "_pkg",
+        lambda name, default=None: {
+            "load_config": lambda: {"watch_interval_seconds": 30},
+        }.get(name, default),
+    )
+    monkeypatch.setattr(daemon_mod, "_reconcile_daemon_jobs", lambda: None)
+    monkeypatch.setattr(daemon_mod, "_dispatch_ready_jobs", lambda max_parallel=4: None)
+
+    def stop_sleep(_seconds):
+        raise KeyboardInterrupt()
+
+    monkeypatch.setattr(time, "sleep", stop_sleep)
+
+    class FakeServer:
+        allow_reuse_address = False
+
+        def __init__(self, addr, handler):
+            pass
+
+        def serve_forever(self):
+            return None
+
+    monkeypatch.setattr(_http_server, "HTTPServer", FakeServer)
+
+    monkeypatch.setattr(
+        daemon_mod.SynlynkDaemon,
+        "_refresh_github_tokens",
+        lambda self: refresh_calls.append(1),
+    )
+
+    daemon = daemon_mod.SynlynkDaemon()
+    daemon._get_mtimes = lambda path: {}
+    try:
+        daemon._run_loop()
+    except KeyboardInterrupt:
+        pass
+
+    assert refresh_calls == [1]
+
+
+def test_synlynk_daemon_start_does_not_refresh_in_foreground(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".synlynk").mkdir()
 
@@ -156,10 +239,10 @@ def test_synlynk_daemon_start_calls_refresh_before_run_loop(tmp_path, monkeypatc
 
     daemon_mod.SynlynkDaemon().start()
 
-    assert call_order == ["refresh", "run_loop"]
+    assert call_order == ["run_loop"]
 
 
-def test_synlynk_daemon_start_refreshes_tokens_before_fork(tmp_path, monkeypatch):
+def test_synlynk_daemon_start_defers_refresh_until_post_fork_run_loop(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".synlynk").mkdir()
 
@@ -173,7 +256,7 @@ def test_synlynk_daemon_start_refreshes_tokens_before_fork(tmp_path, monkeypatch
     fork_calls = []
 
     def fake_fork():
-        assert call_order == ["refresh"]
+        assert call_order == []
         fork_calls.append(1)
         return 0
 
@@ -184,12 +267,11 @@ def test_synlynk_daemon_start_refreshes_tokens_before_fork(tmp_path, monkeypatch
 
     daemon_mod.SynlynkDaemon().start()
 
-    assert call_order == ["refresh", "run_loop"]
-    assert call_order.index("refresh") == 0
+    assert call_order == ["run_loop"]
     assert len(fork_calls) == 2
 
 
-def test_watch_daemon_start_refreshes_tokens_before_fork(tmp_path, monkeypatch):
+def test_watch_daemon_start_defers_refresh_until_post_fork_run_loop(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".synlynk").mkdir()
 
@@ -208,7 +290,7 @@ def test_watch_daemon_start_refreshes_tokens_before_fork(tmp_path, monkeypatch):
     fork_calls = []
 
     def fake_fork():
-        assert call_order == ["refresh"]
+        assert call_order == []
         fork_calls.append(1)
         return 0
 
@@ -219,6 +301,5 @@ def test_watch_daemon_start_refreshes_tokens_before_fork(tmp_path, monkeypatch):
 
     daemon_mod.WatchDaemon().start()
 
-    assert call_order == ["refresh", "run_loop"]
-    assert call_order.index("refresh") == 0
+    assert call_order == ["run_loop"]
     assert len(fork_calls) == 2
