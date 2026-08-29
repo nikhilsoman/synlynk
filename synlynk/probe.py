@@ -21,6 +21,7 @@ SOP_SECTION_HEADERS = [
     "## Capability-Based Task Allocation",
     "## Cost Visibility",
     "## Repo Hygiene",
+    "## Herdr Workspace Protocol",
 ]
 
 _PR_REVIEW_SOP = """\
@@ -87,6 +88,22 @@ _REPO_HYGIENE_SOP = """\
 5. Run `git branch --show-current` before committing to verify branch.
 """
 
+_HERDR_WORKSPACE_SOP = """\
+## Herdr Workspace Protocol
+1. At a task/session boundary, finish housekeeping (project docs, memory, cost log) before running `/clear`.
+2. File a ticket — with an appropriate label (e.g. `tech-debt` for a gap surfaced mid-task, out of current scope) — for anything left open beyond the current story/goal/session, rather than letting it go untracked.
+3. Launch each new session in a new Herdr tab + new pane, within the same workspace (Herdr workspace = synlynk workspace).
+- Never reuse another session's pane.
+4. Name each pane and tab with the synlynk session_id / job-ID / agent name so panes are identifiable at a glance.
+5. When working in person via Herdr, run interactive-shell sessions for each of the 4 core harnesses (Claude, Codex, Agy, Grok) as needed — synlynk aims to be harness-agnostic, giving each harness equal "home" (interactive) and "away" (headless dispatch) airtime while cycling through implementation work across target workspaces.
+- (Local harness — Ornith+Aider+oMLX — is a future extension, not yet wired up.)
+6. Any new harness interactive session also gets its own new tab within the same workspace.
+7. Begin every Claude session with `/rc`.
+- **Precondition for all Herdr commands:** check `test "${HERDR_ENV:-}" = 1` before issuing any `herdr` command; if unset, this agent is not running inside Herdr and must not attempt to control a Herdr session from outside it.
+- Herdr is Apache-2.0 licensed (no NOTICE file) — free to reference/use without royalty or attribution beyond standard license retention.
+- Full CLI reference: https://github.com/herdrdev/herdr/blob/v0.8.2/skills/herdr/SKILL.md
+"""
+
 SOP_BLOCKS = [
     _PR_REVIEW_SOP,
     _BRAINSTORM_SOP,
@@ -94,6 +111,7 @@ SOP_BLOCKS = [
     _CAPABILITY_ALLOCATION_SOP,
     _COST_VISIBILITY_SOP,
     _REPO_HYGIENE_SOP,
+    _HERDR_WORKSPACE_SOP,
 ]
 
 _VERSION_TOKEN_PATTERN = re.compile(r"\b\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?\b")

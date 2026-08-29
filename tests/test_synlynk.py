@@ -48,13 +48,14 @@ def test_can_gh_write_baselines_match_live_verified_reality():
 def test_sop_section_headers_defined():
     from synlynk.probe import SOP_SECTION_HEADERS
 
-    assert len(SOP_SECTION_HEADERS) == 6
+    assert len(SOP_SECTION_HEADERS) == 7
     assert "## PR Review Discipline" in SOP_SECTION_HEADERS
     assert "## Brainstorm-First Policy" in SOP_SECTION_HEADERS
     assert "## Design → Plan → Build Sequence" in SOP_SECTION_HEADERS
     assert "## Capability-Based Task Allocation" in SOP_SECTION_HEADERS
     assert "## Cost Visibility" in SOP_SECTION_HEADERS
     assert "## Repo Hygiene" in SOP_SECTION_HEADERS
+    assert "## Herdr Workspace Protocol" in SOP_SECTION_HEADERS
 
 
 def test_capability_allocation_table_uses_harness_not_agent_header():
@@ -83,6 +84,7 @@ def test_directive_templates_contain_sop_headers(tmp_path, isolated_db, monkeypa
     content = (tmp_path / "CLAUDE.md").read_text()
     assert "## PR Review Discipline" in content
     assert "## Repo Hygiene" in content
+    assert "## Herdr Workspace Protocol" in content
     # #432 supersedes #427's interim one-liner with a capability-table row + notes
     assert "| GitHub write actions | **claude, Agy fallback** |" in content
     assert "GitHub write routing (#426)" in content
