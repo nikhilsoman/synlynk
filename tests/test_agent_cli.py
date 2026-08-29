@@ -788,6 +788,349 @@ def test_cli_dispatch_dry_run_as_agent_without_explicit_harness_shows_resolved_a
     assert "agent:        agy" in captured.out
 
 
+def _docs_keep_readme_synchronized_readme(
+    root,
+    version,
+    test_count=None,
+    extra="",
+    stale_commands=False,
+    test_wording="collected",
+):
+    from scripts.generate_command_docs import render_readme_section
+
+    commands_md = root / "docs" / "reference" / "commands.md"
+    commands_md.parent.mkdir(parents=True, exist_ok=True)
+    commands_md.write_text("# Command Reference\n")
+    section = (
+        "<!-- commands:start -->\n\n- `synlynk init`\n\n<!-- commands:end -->"
+        if stale_commands
+        else render_readme_section()
+    )
+    test_badge = ""
+    test_prose = ""
+    if test_count is not None:
+        test_badge = (
+            f'  <a href="https://github.com/nikhilsoman/synlynk">'
+            f'<img src="https://img.shields.io/badge/tests-{test_count}%20{test_wording}-brightgreen" '
+            f'alt="Tests"></a>\n'
+        )
+        test_prose = f" {test_count} tests {test_wording}."
+    (root / "README.md").write_text(
+        f"""<p align="center">
+{test_badge}  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/version-{version}-blue" alt="Version"></a>
+</p>
+
+**v{version}:** Named release summary covering the README consistency gate.{test_prose}
+
+## Install
+
+```bash
+pipx install git+https://github.com/nikhilsoman/synlynk
+python3 bin/synlynk.py --help
+```
+
+## Commands
+
+{section}
+
+{extra}
+"""
+    )
+
+
+def test_docs_keep_readme_synchronized_during_named_releases_flags_stale_version_and_test_count(
+    tmp_path,
+):
+    from synlynk.release_readme import validate_readme_for_release
+
+    _docs_keep_readme_synchronized_readme(tmp_path, "0.12.0", test_count=1140)
+    findings = validate_readme_for_release(
+        str(tmp_path), "0.18.0", collected_test_count=2316
+    )
+    by_check = {item.check: item.message for item in findings}
+    test_count_blob = " ".join(
+        item.message for item in findings if item.check == "test_count"
+    )
+    assert "version" in by_check
+    assert "0.12.0" in by_check["version"]
+    assert "0.18.0" in by_check["version"]
+    assert "test_count" in by_check
+    assert "1140" in test_count_blob
+    assert "2316" in test_count_blob
+    assert "not pass/fail" in test_count_blob or "collect-only" in test_count_blob
+
+
+def test_docs_keep_readme_synchronized_during_named_releases_handles_planned_vs_shipped_commands(
+    tmp_path,
+):
+    from synlynk.release_readme import validate_readme_for_release
+
+    _docs_keep_readme_synchronized_readme(
+        tmp_path,
+        "0.18.0",
+        extra=(
+            "Coming soon: `synlynk teleport` will ship in a later release.\n"
+            "Use `synlynk teleport` today for faster clones.\n"
+        ),
+    )
+    findings = validate_readme_for_release(
+        str(tmp_path), "0.18.0", collected_test_count=0
+    )
+    command_findings = [item for item in findings if item.check == "commands"]
+    assert command_findings, findings
+    assert any("teleport" in item.message for item in command_findings)
+    # The planned line must not be the only/extra failure — unmarked shipped claim is.
+    assert all("coming soon" not in item.message.lower() for item in command_findings)
+
+
+def test_docs_keep_readme_synchronized_during_named_releases_ignores_ordinary_prose(
+    tmp_path,
+):
+    from synlynk.release_readme import validate_readme_for_release
+
+    _docs_keep_readme_synchronized_readme(
+        tmp_path,
+        "0.18.0",
+        extra=(
+            "synlynk is a Python CLI that turns your terminal into a hybrid workgroup.\n"
+            "1. **Install synlynk globally:**\n"
+            "If you installed synlynk before 2026-07, here's what's new.\n"
+        ),
+    )
+    findings = validate_readme_for_release(
+        str(tmp_path), "0.18.0", collected_test_count=0
+    )
+    command_findings = [item for item in findings if item.check == "commands"]
+    assert command_findings == []
+    joined = " ".join(item.message for item in findings)
+    assert "is a Python CLI" not in joined
+    assert "globally" not in joined
+    assert "before" not in joined
+
+
+def test_docs_keep_readme_synchronized_during_named_releases_normalizes_relative_root(
+    tmp_path, monkeypatch
+):
+    from synlynk.release_readme import validate_readme_for_release
+
+    _docs_keep_readme_synchronized_readme(
+        tmp_path,
+        "0.18.0",
+        extra="See [CONTRIBUTING.md](CONTRIBUTING.md).\n",
+    )
+    (tmp_path / "CONTRIBUTING.md").write_text("# Contribute\n")
+    monkeypatch.chdir(tmp_path)
+    findings = validate_readme_for_release(".", "0.18.0", collected_test_count=0)
+    assert not any("escapes repo" in item.message for item in findings)
+    assert not any("missing path: CONTRIBUTING.md" in item.message for item in findings)
+
+
+def test_docs_keep_readme_synchronized_during_named_releases_allows_github_relative_routes(
+    tmp_path,
+):
+    from synlynk.release_readme import validate_readme_for_release
+
+    _docs_keep_readme_synchronized_readme(
+        tmp_path,
+        "0.18.0",
+        extra=(
+            "See the [Discussions](../../discussions) tab.\n"
+            "Do not follow [escaped](../outside.md).\n"
+        ),
+    )
+    findings = validate_readme_for_release(
+        str(tmp_path), "0.18.0", collected_test_count=0
+    )
+    link_messages = [item.message for item in findings if item.check == "links"]
+    assert not any("../../discussions" in msg for msg in link_messages)
+    assert any("escapes repo root: ../outside.md" in msg for msg in link_messages)
+
+
+def test_docs_keep_readme_synchronized_during_named_releases_rejects_passing_without_verified_run(
+    tmp_path,
+):
+    from synlynk.release_readme import (
+        format_readme_check_report,
+        validate_readme_for_release,
+    )
+
+    _docs_keep_readme_synchronized_readme(
+        tmp_path, "0.18.0", test_count=12, test_wording="passing"
+    )
+    findings = validate_readme_for_release(
+        str(tmp_path), "0.18.0", collected_test_count=12
+    )
+    test_count_findings = [item for item in findings if item.check == "test_count"]
+    assert test_count_findings, findings
+    assert len(test_count_findings) == 1
+    blob = " ".join(item.message for item in test_count_findings)
+    assert "12" in blob
+    assert "passing" in blob.lower()
+    assert "collect-only" in blob
+    report = format_readme_check_report(findings, "0.18.0")
+    assert "pytest --collect-only" in report
+    assert "passing" in report.lower()
+    assert "[x] collected test count" not in report
+
+
+def test_docs_keep_readme_synchronized_during_named_releases_accepts_collected_wording(
+    tmp_path,
+):
+    from synlynk.release_readme import (
+        format_readme_check_report,
+        validate_readme_for_release,
+    )
+
+    _docs_keep_readme_synchronized_readme(
+        tmp_path, "0.18.0", test_count=12, test_wording="collected"
+    )
+    findings = validate_readme_for_release(
+        str(tmp_path), "0.18.0", collected_test_count=12
+    )
+    assert findings == []
+    report = format_readme_check_report(findings, "0.18.0")
+    assert "pytest --collect-only" in report
+    assert "[x] collected test count" in report
+
+
+def test_docs_keep_readme_synchronized_during_named_releases_accepts_verified_passing(
+    tmp_path,
+):
+    from synlynk.release_readme import validate_readme_for_release
+
+    _docs_keep_readme_synchronized_readme(
+        tmp_path, "0.18.0", test_count=12, test_wording="passing"
+    )
+    findings = validate_readme_for_release(
+        str(tmp_path),
+        "0.18.0",
+        collected_test_count=12,
+        verified_passing_count=12,
+    )
+    assert not any(item.check == "test_count" for item in findings), findings
+
+
+def test_docs_keep_readme_synchronized_during_named_releases_rejects_stale_verified_passing(
+    tmp_path,
+):
+    from synlynk.release_readme import validate_readme_for_release
+
+    _docs_keep_readme_synchronized_readme(
+        tmp_path, "0.18.0", test_count=12, test_wording="passing"
+    )
+    findings = validate_readme_for_release(
+        str(tmp_path),
+        "0.18.0",
+        collected_test_count=12,
+        verified_passing_count=11,
+    )
+    blob = " ".join(item.message for item in findings if item.check == "test_count")
+    assert "12" in blob
+    assert "11" in blob
+    assert "passing" in blob.lower()
+
+
+def test_docs_keep_readme_synchronized_during_named_releases_records_waiver_not_version(
+    tmp_path,
+):
+    from synlynk.release_readme import (
+        format_readme_check_report,
+        parse_waivers,
+        validate_readme_for_release,
+    )
+
+    _docs_keep_readme_synchronized_readme(tmp_path, "0.12.0", test_count=1140)
+    waivers = parse_waivers(
+        ["test_count=collect unavailable in this environment", "version=leave badge"]
+    )
+    findings = validate_readme_for_release(
+        str(tmp_path),
+        "0.18.0",
+        collected_test_count=2316,
+        waivers=waivers,
+    )
+    assert any(item.check == "version" for item in findings)
+    assert not any(item.check == "test_count" for item in findings)
+    report = format_readme_check_report(findings, "0.18.0", waivers=waivers)
+    assert "collect unavailable in this environment" in report
+    assert "[waived]" in report
+    assert "version cannot be waived" in report
+
+
+def test_docs_keep_readme_synchronized_during_named_releases_blocks_release_cut(
+    tmp_path, monkeypatch
+):
+    from synlynk import cmd_release
+
+    (tmp_path / "VERSION").write_text("0.10.0\n")
+    monkeypatch.chdir(tmp_path)
+    _docs_keep_readme_synchronized_readme(tmp_path, "0.12.0", test_count=1140)
+    monkeypatch.setattr("subprocess.check_output", lambda *a, **k: b"")
+    with pytest.raises(RuntimeError, match="README is not synchronized"):
+        cmd_release(dry_run=False, role="pm")
+    assert (tmp_path / "VERSION").read_text().strip() == "0.10.0"
+
+
+def test_docs_keep_readme_synchronized_during_named_releases_check_docs_flag(
+    tmp_path, monkeypatch
+):
+    from synlynk.cli import build_parser, main
+
+    parser = build_parser()
+    args = parser.parse_args(
+        ["release", "--check-docs", "--waive", "test_count=manual recount pending"]
+    )
+    assert args.check_docs is True
+    assert args.waive == ["test_count=manual recount pending"]
+
+    (tmp_path / "VERSION").write_text("0.18.0\n")
+    monkeypatch.chdir(tmp_path)
+    _docs_keep_readme_synchronized_readme(tmp_path, "0.12.0")
+    with pytest.raises(SystemExit) as exc:
+        main(["release", "--check-docs"])
+    assert exc.value.code == 1
+    assert (tmp_path / "VERSION").read_text().strip() == "0.18.0"
+
+
+def test_docs_keep_readme_synchronized_during_named_releases_passes_when_in_sync(
+    tmp_path,
+):
+    from synlynk.release_readme import validate_readme_for_release
+
+    _docs_keep_readme_synchronized_readme(tmp_path, "0.18.0", test_count=12)
+    findings = validate_readme_for_release(
+        str(tmp_path), "0.18.0", collected_test_count=12
+    )
+    assert findings == []
+
+
+def test_docs_keep_readme_synchronized_during_named_releases_real_readme_patterns(
+    monkeypatch,
+):
+    from synlynk.release_readme import validate_readme_for_release
+
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    monkeypatch.chdir(repo_root)
+    findings = validate_readme_for_release(
+        ".", "0.18.0", collected_test_count=9999
+    )
+    by_check = {}
+    for item in findings:
+        by_check.setdefault(item.check, []).append(item.message)
+    assert any("0.12.0" in msg for msg in by_check.get("version", []))
+    test_count_blob = " ".join(by_check.get("test_count", []))
+    assert "1140" in test_count_blob
+    assert "9999" not in test_count_blob
+    assert "passing" in test_count_blob.lower()
+    assert "collect-only" in test_count_blob or "collected" in test_count_blob.lower()
+    command_blob = " ".join(by_check.get("commands", []))
+    assert "is a Python CLI" not in command_blob
+    assert "globally" not in command_blob
+    link_blob = " ".join(by_check.get("links", []))
+    assert "escapes repo" not in link_blob
+    assert "../../discussions" not in link_blob
+
+
 def test_fix_1250_dispatch_job_summaries_silently_report_zero_files_touched(
     git_worktree_repo, monkeypatch, tmp_path
 ):

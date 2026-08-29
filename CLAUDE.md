@@ -148,6 +148,21 @@ Rationale: a July 2026 audit found 30 stale worktrees/branches accumulated becau
 4. **Update in one PR:** if reassessment finds drift (a harness got more/less reliable at something), update both `.synlynk/policy.json`'s `task_allocation` routing and `docs/harness-capability-baseline.md`'s table together, with the evidence cited in both places. This keeps dispatch routing and the documented baseline from diverging the way policy.json and CLAUDE.md's own routing table did before #426's hardening.
 5. **No drift found:** still worth a one-line note in the baseline doc's row (or a dated comment) confirming it was checked, so the next reassessment knows the finding isn't stale just because it's old.
 
+## Named Release README Sync
+
+Before cutting a named release (`synlynk release`, including `--dry-run`), README.md must pass `synlynk release --check-docs` (the same validator the cut invokes). Fail closed on unwaived errors.
+
+Checklist:
+
+1. **version** (not waivable) — version badge equals the version being tagged.
+2. **test_count** — `tests-N collected` / `N tests collected` must match `pytest --collect-only`. Collection is a count check, not a pass/fail run. Wording such as `N tests passing` is rejected unless a verified passing count from a full-suite run is supplied.
+3. **hero** — first `**vX.Y.Z:**` summary matches the version and is non-empty.
+4. **install** — documents `pipx install`, `install.sh`, or `python3 bin/synlynk.py`.
+5. **links** — relative markdown links resolve under the abspath-normalized repo root; GitHub UI routes such as `../../discussions` are allowed.
+6. **commands** — generated `<!-- commands:start -->` block is current; shipped `` `synlynk <cmd>` `` mentions in inline or fenced code (not ordinary prose) are in `COMMAND_TAXONOMY` unless the same line marks them planned.
+
+Waive a waivable check only with `--waive check=reason` (non-empty reason). `version` cannot be waived.
+
 <!-- synlynk:harness vsop-repair verified:2026-08-29T07:09:44Z -->
 # Harness Instructions (synlynk-managed — do not edit)
 

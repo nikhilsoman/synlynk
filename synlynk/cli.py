@@ -1004,6 +1004,12 @@ def build_parser() -> argparse.ArgumentParser:
     release_parser.add_argument('--version', help='Explicit version string e.g. 0.11.0')
     release_parser.add_argument('--minor', action='store_true', help='Bump minor instead of patch')
     release_parser.add_argument('--role', default='dev')
+    release_parser.add_argument(
+        '--check-docs', action='store_true',
+        help='Validate README against release metadata without cutting a release')
+    release_parser.add_argument(
+        '--waive', action='append', default=[],
+        help='Skip a waivable README check: check=reason (repeatable)')
 
     viz_parser = subparsers.add_parser("viz", help="Open local browser workspace dashboard")
     viz_parser.add_argument("--serve", action="store_true",
@@ -1600,6 +1606,8 @@ def main(argv=None) -> None:
             version=getattr(args, "version", None),
             minor=getattr(args, "minor", False),
             role=getattr(args, "role", "dev"),
+            check_docs=getattr(args, "check_docs", False),
+            waive=getattr(args, "waive", None),
         )
     elif args.command == "viz":
         cmd_viz(args)
