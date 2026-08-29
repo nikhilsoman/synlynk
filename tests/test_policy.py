@@ -8,6 +8,39 @@ from synlynk.policy import load_policy, DEFAULT_WORKSPACE_POLICY
 from synlynk.policy import check_authority, AuthorityResult
 
 
+def test_load_policy_defaults_human_authority_role_to_pm(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    policy = load_policy(repo_path=str(repo), workspace_name="default")
+    assert policy["human_authority_role"] == {"role": "pm", "requires_human_approval": True}
+
+
+def test_get_human_authority_role_reads_pointer(tmp_path, monkeypatch):
+    from synlynk.policy import get_human_authority_role
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    assert get_human_authority_role(repo_path=str(repo)) == "pm"
+
+
+def test_get_human_authority_role_reads_repo_override(tmp_path, monkeypatch):
+    from synlynk.policy import get_human_authority_role
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    repo = tmp_path / "repo"
+    repo_policy_path = repo / ".synlynk" / "policy.json"
+    _write_json(repo_policy_path, {
+        "schema_version": 1,
+        "repo_id": "test",
+        "overrides": {
+            "human_authority_role": {"role": "architect", "requires_human_approval": True},
+        },
+    })
+    assert get_human_authority_role(repo_path=str(repo)) == "architect"
+
+
 def _write_json(path: Path, data: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data))

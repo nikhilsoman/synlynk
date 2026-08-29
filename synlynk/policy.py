@@ -40,6 +40,7 @@ DEFAULT_WORKSPACE_POLICY: Dict[str, Any] = {
             "review_fallback": "comment_checklist",
         },
         "release_authority": {"can_cut_release": ["pm"], "requires_human_approval": True},
+        "human_authority_role": {"role": "pm", "requires_human_approval": True},
         "approval_required_for": [
             "security_sensitive_paths:.github/workflows/**,.synlynk/policy.json,.synlynk/github_apps/**",
             "irreversible_merge",
@@ -91,6 +92,13 @@ def load_policy(repo_path: str, workspace_name: str = "default") -> Dict[str, An
             merged[key] = value
 
     return merged
+
+
+def get_human_authority_role(repo_path: str, workspace_name: str = "default") -> str:
+    """Return the role currently holding the human-authority pointer."""
+    policy = load_policy(repo_path=repo_path, workspace_name=workspace_name)
+    pointer = policy.get("human_authority_role") or {}
+    return pointer.get("role") or "pm"
 
 
 import fnmatch
