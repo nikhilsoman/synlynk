@@ -134,6 +134,8 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | **[126](./126-pr1122-v0.15.0-workspace-policy-layer.md)** | **v0.15.0 — The Workspace Policy Layer (Named Release)** | [#1122](https://github.com/nikhilsoman/synlynk/pull/1122) | **2026-08-23** |
 | **[127](./127-pr1125-1127-v0.16.0-autonomous-loop.md)** | **v0.16.0 — The Autonomous Loop (Named Release)** | [#1125](https://github.com/nikhilsoman/synlynk/pull/1125), [#1127](https://github.com/nikhilsoman/synlynk/pull/1127) | **2026-08-23** |
 | **[128](./128-pr1137-1151-v0.17.0-ticket-driven-approval-auto-resume.md)** | **v0.17.0 — Ticket-Driven Approval Auto-Resume (Named Release)** | [#1137](https://github.com/nikhilsoman/synlynk/pull/1137), [#1138](https://github.com/nikhilsoman/synlynk/pull/1138), [#1139](https://github.com/nikhilsoman/synlynk/pull/1139), [#1141](https://github.com/nikhilsoman/synlynk/pull/1141), [#1151](https://github.com/nikhilsoman/synlynk/pull/1151) | **2026-08-24** |
+| **[129](./129-v0.18.0-dispatch-reliability-and-qa-merge-gate.md)** | **v0.18.0 — Dispatch Reliability & QA Merge-Gate Authority (Named Release)** | — | **2026-08-28** |
+| [130](./130-pr1245-doctor-pr-review-cycles-check.md) | PR #1245 — Doctor Learns to Watch Its Own Reviewers | [#1245](https://github.com/nikhilsoman/synlynk/pull/1245) | 2026-08-29 |
 
 ## Per-PR Post Template
 
