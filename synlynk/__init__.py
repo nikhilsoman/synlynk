@@ -2922,7 +2922,7 @@ def checkpoint() -> None:
 
     resolved_rows = conn.execute(
         "SELECT story_id, title FROM stories "
-        "WHERE archived_at IS NULL AND status IN ('done', 'deferred', 'superseded', 'absorbed') "
+        "WHERE archived_at IS NULL AND status IN ('done', 'superseded', 'absorbed') "
         "ORDER BY created_at ASC, id ASC"
     ).fetchall()
     completed = [{"id": story_id, "text": title or story_id} for story_id, title in resolved_rows]
@@ -2941,7 +2941,8 @@ def checkpoint() -> None:
         for task in completed:
             body_lines.append(f"- {task['text']}")
         cmd_devlog_append(canonical_id, time.strftime('%Y-%m-%d'), "\n".join(body_lines) + "\n")
-    _generate_todo_md()
+    if resolved_rows:
+        _generate_todo_md()
 
     _archive_old_devlog_entries(devlog_path, canonical_id)
     generate_context()
