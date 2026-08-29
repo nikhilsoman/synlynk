@@ -188,7 +188,7 @@ def cmd_capability_sweep_for_harness_model(harness_name: str, model_id: str) -> 
 
 
 def _pick_verifier_agent(executor_agent: str, available_agents: list) -> str:
-    """Picks a verifier agent that is not the executor - genuine independence,
+    """Picks a verifier harness that is not the executor - genuine independence,
     fixing the #353 self-attestation gap for the seeded portion of the ledger.
     """
     candidates = [agent for agent in available_agents if agent != executor_agent]
@@ -217,7 +217,7 @@ def _verify_calibration_result(
     skill: str,
     executor_output: dict,
 ) -> dict:
-    """Ask a different agent to score the executor output and parse its verdict."""
+    """Ask a different harness to score the executor output and parse its verdict."""
     label = SFIA_CODES.get(skill, {}).get("label", skill)
     verify_task = (
         f"Review this {label} calibration task output from another harness and score it "

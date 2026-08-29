@@ -1024,7 +1024,7 @@ def test_create_job_worktree_anchors_to_base_tip_sha_and_returns_details(git_wor
 
     result = dispatch_mod._create_job_worktree("job-test1", "codex")
 
-    assert result["path"] == _os.path.join("worktrees", "job-test1")
+    assert result["path"] == _os.path.abspath(_os.path.join("worktrees", "job-test1"))
     assert result["base_branch"] == "feat/example"
     assert result["base_sha"] == tip
     assert _os.path.isdir(result["path"])

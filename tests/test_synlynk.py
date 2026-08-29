@@ -6695,7 +6695,7 @@ def test_synlynk_daemon_inherits_watch_daemon():
 
 def test_synlynk_daemon_has_separate_pidfile(project_dir):
     d = synlynk.SynlynkDaemon()
-    assert d.pidfile == ".synlynk/daemon.pid"
+    assert d.pidfile == str(project_dir / ".synlynk" / "daemon.pid")
     assert d.pidfile != synlynk.WatchDaemon().pidfile
 
 
@@ -7451,6 +7451,90 @@ def test_hc_model_rates_invalid_date(tmp_path, monkeypatch):
     assert result.status == "warn"
     assert "invalid" in result.message
     assert "Update" in result.fix
+
+
+def _insert_capability_rating(conn, story_id, agent, pr_review_cycles, days_ago=0):
+    conn.execute(
+        "INSERT INTO stories (story_id) VALUES (?)",
+        (story_id,),
+    )
+    conn.execute(
+        "INSERT INTO capability_ratings (story_id, agent, model_version, "
+        "signal_source, quality, pr_review_cycles, ts) VALUES "
+        "(?, ?, 'test-model', 'auto', 5.0, ?, datetime('now', ?))",
+        (story_id, agent, pr_review_cycles, f'-{days_ago} days'),
+    )
+    conn.commit()
+
+
+def test_hc_pr_review_cycles_no_data(isolated_db):
+    import synlynk
+    result = synlynk._hc_pr_review_cycles()
+    assert result.status == "ok"
+    assert "no data" in result.message.lower()
+
+
+def test_hc_pr_review_cycles_below_threshold(isolated_db):
+    import synlynk
+    conn = synlynk._get_db()
+    for i in range(4):
+        _insert_capability_rating(conn, f"story-below-{i}", "codex", pr_review_cycles=1)
+    conn.close()
+    result = synlynk._hc_pr_review_cycles()
+    assert result.status == "ok"
+
+
+def test_hc_pr_review_cycles_elevated(isolated_db):
+    import synlynk
+    conn = synlynk._get_db()
+    for i in range(4):
+        _insert_capability_rating(conn, f"story-hi-{i}", "agy", pr_review_cycles=3)
+    conn.close()
+    result = synlynk._hc_pr_review_cycles()
+    assert result.status == "warn"
+    assert "agy" in result.message
+    assert "3.0" in result.message or "3" in result.message
+
+
+def test_hc_pr_review_cycles_below_min_sample_size(isolated_db):
+    import synlynk
+    conn = synlynk._get_db()
+    # Only 2 ratings — below the minimum-sample-size floor of 3, must not warn
+    # even though the average (3.0) is above the threshold.
+    for i in range(2):
+        _insert_capability_rating(conn, f"story-small-{i}", "grok", pr_review_cycles=3)
+    conn.close()
+    result = synlynk._hc_pr_review_cycles()
+    assert result.status == "ok"
+
+
+def test_hc_pr_review_cycles_ignores_stale_ratings(isolated_db):
+    import synlynk
+    conn = synlynk._get_db()
+    # 4 elevated ratings, but all outside the 30-day window — must not warn.
+    for i in range(4):
+        _insert_capability_rating(conn, f"story-stale-{i}", "codex", pr_review_cycles=3, days_ago=45)
+    conn.close()
+    result = synlynk._hc_pr_review_cycles()
+    assert result.status == "ok"
+
+
+def test_hc_pr_review_cycles_ignores_null_cycles(isolated_db):
+    import synlynk
+    conn = synlynk._get_db()
+    for i in range(4):
+        story_id = f"story-null-{i}"
+        conn.execute("INSERT INTO stories (story_id) VALUES (?)", (story_id,))
+        conn.execute(
+            "INSERT INTO capability_ratings (story_id, agent, model_version, "
+            "signal_source, quality) VALUES (?, 'codex', 'test-model', 'auto', 5.0)",
+            (story_id,),
+        )
+    conn.commit()
+    conn.close()
+    result = synlynk._hc_pr_review_cycles()
+    assert result.status == "ok"
+    assert "no data" in result.message.lower()
 
 
 def test_sentinel_model_rates_no_file(tmp_path, monkeypatch):

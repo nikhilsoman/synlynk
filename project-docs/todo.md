@@ -11,6 +11,11 @@
 - [x] #1209 — Codex dispatch `--ask-for-approval` flag mismatch (PR #1210, merged 2026-08-28, issue closed 2026-08-29)
 - [x] #1211 — macOS launchd daemon `KeepAlive` missing `SuccessfulExit: false` (PR #1212, merged 2026-08-28, issue closed 2026-08-29)
 - [x] #332/#338/#340/#348/#419/#461/#786/#936/#860 — all confirmed CLOSED on GitHub; stale in this file for weeks, removed from Next Task below
+- [x] [LIVE-6] #1140 reopened, root-caused (pre-fork token refresh moved into `daemon start`, not eliminated by prior fix), cross-linked to #1228, fixed via PR #1249 (merged `a37f4ff`, 2026-08-29)
+- [x] #1250 — dispatch job summaries silently report "files: 0 touched"; root-caused (`_job_worktree_details()` CWD-relative path), fixed via PR #1251 (merged `77a9be1`, 2026-08-29)
+- [x] PR #1195, #1214, #1215 — all confirmed MERGED on GitHub; Review Queue entry below was stale, removed
+- [x] #1228 — root-caused via systematic-debugging (unprotected exception boundary in daemon `_run_loop()`, 3 independent trigger bugs), fixed via PR #1258 (merged, 2026-08-29)
+- [x] PR #1232 — second, independently-dispatched, genuinely complementary fix for #1228 (CWD-relative daemon state paths — pidfile/logfile/watch-state via `_repo_common_dir()`/`_daemon_state_path()`); rebased onto post-#1258 main, found+fixed a real regression it introduced (bare `except Exception` needed around the new `subprocess.run` call — a global `Popen` mock in unrelated tests was tripping it), merged 2026-08-29. Confirmed via code read that it does NOT touch the separate qa-role GH-App-token-cache gap below — filed as #1264.
 
 ## Next Task
 - [ ] Fleet-parity remainder (only #342 and #347 of the original cluster are still open; #332/#338/#340/#348/#419/#461 all closed — see Recently Landed)
@@ -27,6 +32,8 @@
   - [ ] #1203 — Design GOVERNS backlog automation (auto-associate discovered/open/planned work with issues) — needs brainstorm first
 - [ ] #1188 — pipx-installed synlynk drifts silently from repo VERSION until schema-mismatch crash
 - [ ] #1194 — `synlynk decide --record` writes decision docs to gitignored path once repo is 'migrated'
+- [ ] #1213 comment (2026-08-29) — Codex `api.github.com` sandbox-egress-block explanation for gh-write failures was never live-tested; #720 receipt-check failure observed instead this session, doesn't corroborate the theory — this session's #1228 fix dispatch (job-78d04989) had Codex successfully create PR #1258 with `--requires-gh-write`, further undermining the sandbox-egress theory — worth isolating failure mode when TC-suite live-test work happens
+- [ ] #1264 — qa-role GH App token cache writer (`github_app_auth.py:refresh_installation_token()`) doesn't share the daemon's worktree-aware path resolution that `_daemon_state_path()` now uses post-#1232; blocked Agy/Codex `--requires-gh-write` dispatch 3-4 times this session (PR #1258 review, PR #1232 fix attempts), forced Claude self-review/self-fix fallback each time. Root cause identified at code level; live reproduction with diagnostic instrumentation still needed before a fix is designed.
 
 ## Review Queue
-- [ ] PR #1195, #1214, #1215 — open docs-only PRs, each needs a non-authoring reviewer dispatched + `synlynk pr check` before merge
+- (empty — #1195/#1214/#1215 all merged, 2026-08-29)

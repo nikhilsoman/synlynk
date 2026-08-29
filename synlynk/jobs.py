@@ -43,6 +43,26 @@ def _pkg(name: str, default=None):
     return getattr(package, name, default)
 
 
+def _worktree_path_is_available(worktree_path: Optional[str], operation: str) -> bool:
+    """Check a persisted worktree path and explain silent-path failures."""
+    if not worktree_path:
+        return False
+    if os.path.isdir(worktree_path):
+        return True
+    if os.path.isabs(worktree_path):
+        reason = "the absolute path does not exist"
+    else:
+        reason = (
+            "the stored path is relative and cannot be resolved from the current CWD; "
+            "the worktree may exist elsewhere"
+        )
+    print(
+        f"  ⚠ worktree unavailable while trying to {operation}: {worktree_path} ({reason})",
+        file=sys.stderr,
+    )
+    return False
+
+
 def _load_jobs() -> list:
     """Reads .synlynk/jobs.json; returns [] if missing or corrupt."""
     jobs_file = _pkg("JOBS_FILE")
@@ -259,7 +279,7 @@ def _push_worktree_branch_if_needed(
 
 def _resolve_default_base_branch(worktree_path: Optional[str]) -> Optional[str]:
     """Resolve the repo's default base branch for gh pr create."""
-    if not worktree_path or not os.path.isdir(worktree_path):
+    if not _worktree_path_is_available(worktree_path, "resolve default base branch"):
         return None
 
     try:
@@ -493,7 +513,7 @@ def _finalize_completed_worktree_job(job: dict, git_state: Optional[dict]) -> No
     """Best-effort git finalization for a completed job with genuine work."""
     # Always purge nested product state.db under the job worktree (fleet nested_state).
     worktree_path = (job or {}).get("worktree_path")
-    if worktree_path and os.path.isdir(worktree_path):
+    if _worktree_path_is_available(worktree_path, "purge nested product state"):
         try:
             from synlynk.fleet import purge_nested_product_state_under
 
@@ -507,10 +527,10 @@ def _finalize_completed_worktree_job(job: dict, git_state: Optional[dict]) -> No
         return
 
     worktree_path = job.get("worktree_path")
-    if not worktree_path or not os.path.isdir(worktree_path):
+    if not _worktree_path_is_available(worktree_path, "finalize completed job"):
         return
 
-    # Re-derive from the live worktree so push/PR follow wherever the agent committed.
+    # Re-derive from the live worktree so push/PR follow wherever the harness committed.
     worktree_branch = _resolve_finalize_worktree_branch(job, worktree_path)
     if not worktree_branch:
         return
@@ -711,7 +731,7 @@ def _inspect_worktree_git_state(
     started_at: Optional[str] = None,
 ) -> Optional[dict]:
     """Returns git evidence for a worktree, or None when it is unavailable."""
-    if not worktree_path or not os.path.isdir(worktree_path):
+    if not _worktree_path_is_available(worktree_path, "inspect git state"):
         return None
 
     try:
@@ -796,7 +816,8 @@ def _inspect_origin_branch_activity(
     started_at: Optional[str],
 ) -> Optional[dict]:
     """Returns commit/file evidence for origin/<branch> activity since started_at."""
-    if not worktree_path or not os.path.isdir(worktree_path) or not worktree_branch or not started_at:
+    if (not _worktree_path_is_available(worktree_path, "inspect origin branch activity")
+            or not worktree_branch or not started_at):
         return None
 
     remote_ref = f"origin/{worktree_branch}"
@@ -862,7 +883,7 @@ def _count_dispatch_rework(story_id: str) -> int:
                if j.get("story_id") == story_id and j.get("status") == "completed")
 
 def _extract_micro_rework(log_text: str) -> int:
-    """Counts sub-task retry signals in agent log output."""
+    """Counts sub-task retry signals in harness log output."""
     patterns = [r"retrying step", r"retry attempt", r"re-trying", r"attempt \d+"]
     count = 0
     for pat in patterns:
@@ -870,7 +891,7 @@ def _extract_micro_rework(log_text: str) -> int:
     return count
 
 def _count_tool_calls(log_text: str) -> int:
-    """Counts coarse tool-call markers in captured agent output."""
+    """Counts coarse tool-call markers in captured harness output."""
     patterns = ("Tool:", "Running tool", "function_call", "tool_use")
     return sum(log_text.count(pattern) for pattern in patterns)
 
@@ -1054,7 +1075,7 @@ def _write_capability_rating(job: dict, log_text: str) -> None:
     conn.close()
 
 def _capability_candidates_for_story(conn, discipline, org, industry, phase) -> list:
-    """Return [(agent, weighted_score, model_version), ...] best-first.
+    """Return [(harness, weighted_score, model_version), ...] best-first.
 
     Falls back through progressively wider coordinates (same as legacy
     _best_agent_for_story single-row lookup).
@@ -2058,7 +2079,7 @@ def _daemon_job_worktree_path(job_id: str, log_path: Optional[str] = None) -> Op
             job_dir = after.split("/", 1)[0]
             prefix = norm.split(marker, 1)[0]
             candidates.append(f"{prefix}/worktrees/{job_dir}")
-    candidates.append(os.path.join("worktrees", job_id))
+    candidates.append(os.path.abspath(os.path.join("worktrees", job_id)))
     for path in candidates:
         if path and os.path.isdir(path):
             return path
@@ -2534,7 +2555,7 @@ def _dispatch_ready_jobs(max_parallel: int = 4) -> int:
                     job_id=job_id,
                 )
             except (RuntimeError, ValueError):
-                # Preflight/worktree/unknown-agent failures: fail the queue row so
+                # Preflight/worktree/unknown-harness failures: fail the queue row so
                 # the daemon does not spin forever on an unlaunchable job.
                 conn.execute(
                     "UPDATE daemon_jobs SET status='failed', completed_at=? WHERE job_id=?",
@@ -2747,7 +2768,7 @@ def cmd_jobs(all_jobs: bool = False, watch: bool = False, summary: Optional[str]
         _render()
 
 def cmd_jobs_handoff(job_id: str, to_agent: str = None) -> None:
-    """Transfer a stalled job to another agent, preserving context."""
+    """Transfer a stalled job to another harness, preserving context."""
     from synlynk.dispatch import dispatch_agent as _dispatch
 
     conn = _pkg("_get_db")()

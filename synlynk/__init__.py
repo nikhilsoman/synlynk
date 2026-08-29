@@ -126,6 +126,7 @@ from synlynk.doctor import (
     _hc_identity_key,
     _hc_instruction_files,
     _hc_model_rates,
+    _hc_pr_review_cycles,
     _hc_project_init,
     _hc_python_version,
     _hc_version_current,
@@ -1325,7 +1326,7 @@ def _load_agent_config(name: str) -> dict:
 
 
 def _load_agent_profile(harness_name: str, agents_dir: str = ".agents") -> dict:
-    """Load an agent profile and normalize harness/model defaults."""
+    """Load a harness profile and normalize harness/model defaults."""
     import json as _json
 
     candidates = [
@@ -1347,7 +1348,7 @@ def _load_agent_profile(harness_name: str, agents_dir: str = ".agents") -> dict:
 
 
 def _dispatch_flags_for_agent(agent: str) -> list:
-    """Return the executable dispatch flags for an agent baseline.
+    """Return the executable dispatch flags for a harness baseline.
 
     Supports both the legacy list form and the structured mapping form.
     """
@@ -2049,7 +2050,7 @@ def _check_agent_functional(cli: str) -> Optional[str]:
 
 
 def discover_agents(config: dict = None) -> list:
-    """Scans for installed agent CLIs and checks each is functional.
+    """Scans for installed harness CLIs and checks each is functional.
 
     Returns list of dicts: {name, cli, version, functional, capabilities,
     roles, discovery_path}.
@@ -2232,7 +2233,7 @@ def cmd_agent_configure(agent_name: str) -> None:
 
 
 def cmd_agent_add(agent_name: str) -> None:
-    """Retrofit an on-PATH agent into the current project."""
+    """Retrofit an on-PATH harness into the current project."""
     if agent_name not in HARNESS_CAPABILITY_BASELINES:
         print(f"  Error: unknown agent '{agent_name}'. Known: {', '.join(sorted(HARNESS_CAPABILITY_BASELINES))}")
         return
@@ -2465,7 +2466,7 @@ def cmd_shell(story_id: str = None) -> None:
 
 
 def cmd_launch(agent: str, story_id: str = None) -> None:
-    """Launches an agent CLI interactively in the current directory.
+    """Launches a harness CLI interactively in the current directory.
 
     Pre-generates .synlynk/context-<agent>.md and starts the CLI so the
     agent reads it as initial context. Stdout/stderr are not captured —
@@ -2517,7 +2518,7 @@ def cmd_launch(agent: str, story_id: str = None) -> None:
 
 
 def cmd_run_trio(task: str, story_id: str = None) -> None:
-    """Dispatches all functional agents in parallel — one job per agent.
+    """Dispatches all functional harnesses in parallel — one job per harness.
 
     This is a parallel convenience wrapper, NOT the sequential Trio pipeline.
     Each agent gets the same task description and full context. For the
@@ -3497,7 +3498,7 @@ _ROBOT_ASCII = "[~]"  # ASCII robot stand-in for terminal (no emoji)
 def init(force: bool = False, agents: list = None,
          org: str = None, repo: str = None, project_id: str = None,
          mode: str = "solo", dry_run: bool = False, quiet: bool = False) -> None:
-    """Progressive wizard: semantic scan → agent discovery → doc bootstrap → nudge."""
+    """Progressive wizard: semantic scan → harness discovery → doc bootstrap → nudge."""
 
     def _print_step(n: int, label: str) -> None:
         print(f"\n{_BOLD}{_CYAN}Step {n}/{_TOTAL_STEPS} — {label}{_RESET}")
