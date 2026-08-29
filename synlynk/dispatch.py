@@ -790,7 +790,7 @@ def _check_job_stall(job: dict, config: dict, sentinel_path: str) -> bool:
 
 def _resolve_worktree_base_commit(worktree_path: Optional[str]) -> Optional[dict]:
     """Find the merge-base used to compare a worktree against mainline refs."""
-    if not worktree_path or not os.path.isdir(worktree_path):
+    if not _worktree_path_is_available(worktree_path, "resolve base commit"):
         return None
 
     for ref in ("origin/main", "origin/master", "main", "master"):
@@ -815,7 +815,7 @@ def _resolve_worktree_base_commit(worktree_path: Optional[str]) -> Optional[dict
 
 def _worktree_files_touched(worktree_path: Optional[str]) -> list:
     """Return sorted file paths committed in a worktree since the resolved merge-base."""
-    if not worktree_path or not os.path.isdir(worktree_path):
+    if not _worktree_path_is_available(worktree_path, "collect touched files"):
         return []
 
     inspect_worktree_git_state = _pkg("_inspect_worktree_git_state")
@@ -857,7 +857,7 @@ def _run_dispatch_gate(job: dict, gate_suite_cmd: str) -> Optional[dict]:
     if not gate_suite_cmd:
         return None
     worktree_path = job.get("worktree_path")
-    if not worktree_path or not os.path.isdir(worktree_path):
+    if not _worktree_path_is_available(worktree_path, "run dispatch gate"):
         return None
 
     try:
@@ -1267,9 +1267,29 @@ def _warn_context_size(context_text: str) -> None:
         print("    Use --context-mode task to reduce size")
 
 
+def _worktree_path_is_available(worktree_path: Optional[str], operation: str) -> bool:
+    """Check a persisted worktree path and explain silent-path failures."""
+    if not worktree_path:
+        return False
+    if os.path.isdir(worktree_path):
+        return True
+    if os.path.isabs(worktree_path):
+        reason = "the absolute path does not exist"
+    else:
+        reason = (
+            "the stored path is relative and cannot be resolved from the current CWD; "
+            "the worktree may exist elsewhere"
+        )
+    print(
+        f"  ⚠ worktree unavailable while trying to {operation}: {worktree_path} ({reason})",
+        file=sys.stderr,
+    )
+    return False
+
+
 def _job_worktree_details(job_id: str, agent: str) -> Tuple[str, str]:
     """Returns the per-job worktree path and branch name."""
-    worktree_path = os.path.join("worktrees", job_id)
+    worktree_path = os.path.abspath(os.path.join("worktrees", job_id))
     worktree_branch = f"dispatch/{agent}/{job_id}"
     return worktree_path, worktree_branch
 

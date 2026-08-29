@@ -113,6 +113,20 @@ def test_dispatch_real_files_touched_via_git_diff_clean_worktree_returns_empty(g
     assert sl._worktree_files_touched(job["worktree_path"]) == []
 
 
+def test_dispatch_real_files_touched_from_different_cwd_uses_absolute_stored_path(
+    git_worktree_repo, monkeypatch, tmp_path
+):
+    import synlynk as sl
+
+    job = _dispatch_git_worktree_job(monkeypatch)
+    _commit_worktree_files(job["worktree_path"], {"from-other-cwd.txt": "proof\n"}, "cwd proof")
+
+    monkeypatch.chdir(tmp_path)
+
+    assert os.path.isabs(job["worktree_path"])
+    assert sl._worktree_files_touched(job["worktree_path"]) == ["from-other-cwd.txt"]
+
+
 def test_dispatch_real_files_touched_via_git_diff_missing_worktree_path_returns_empty():
     import synlynk as sl
 
@@ -199,7 +213,7 @@ def test_dispatch_perjob_git_worktree_isolation_creates_branch_and_worktree(git_
     job = sl.dispatch_agent("codex", "fix bug", skip_preflight=True)
     expected_job_id = _job_id("codex", "fix bug", 1_725_000_000.123)
     expected_branch = f"dispatch/codex/{expected_job_id}"
-    expected_worktree = os.path.join("worktrees", expected_job_id)
+    expected_worktree = os.path.abspath(os.path.join("worktrees", expected_job_id))
     expected_base_sha = "abc123"
 
     assert ["git", "fetch", "origin", "main"] in [cmd for cmd, _ in captured_run]
