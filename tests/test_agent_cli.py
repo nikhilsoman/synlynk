@@ -767,3 +767,22 @@ def test_cli_dispatch_dry_run_as_agent_without_explicit_harness_shows_resolved_a
     main(["dispatch", "--task", "run the test suite", "--as-agent", "qa", "--dry-run"])
     captured = capsys.readouterr()
     assert "agent:        agy" in captured.out
+
+
+def test_fix_1250_dispatch_job_summaries_silently_report_zero_files_touched(
+    git_worktree_repo, monkeypatch, tmp_path
+):
+    import synlynk as sl
+    from synlynk.dispatch import _job_worktree_details, _worktree_files_touched
+    from tests.test_agy_dispatch_fix import _dispatch_git_worktree_job, _commit_worktree_files
+
+    path, branch = _job_worktree_details("job-test1250", "codex")
+    assert os.path.isabs(path)
+
+    job = _dispatch_git_worktree_job(monkeypatch)
+    _commit_worktree_files(job["worktree_path"], {"touched.txt": "content\n"}, "touch file")
+
+    monkeypatch.chdir(tmp_path)
+    assert os.path.isabs(job["worktree_path"])
+    assert _worktree_files_touched(job["worktree_path"]) == ["touched.txt"]
+
