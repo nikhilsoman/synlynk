@@ -1,4 +1,14 @@
 
+## 2026-08-29 — Direct Codex GitHub-Write Network Access via Config Override (PR #1271, closes #1268, relates to #865)
+
+### Shipped
+- **Live Empirical Sandbox Probe:** Tested OpenAI Codex CLI `v0.150.1` under `workspace-write` sandbox. Confirmed default Seatbelt sandbox blocks DNS egress (`curl: (6) Could not resolve host: api.github.com`), but passing `-c sandbox_workspace_write.network_access=true` cleanly enables outbound HTTPS (`HTTP/2 200`). Disproved theory that sandbox egress is unalterably blocked.
+- **PR #1258 Attribution De-bunked:** Proved that Codex did not execute `gh pr create` in `job-78d04989`; PR #1258 was opened by synlynk's host finalizer (`_maybe_open_worktree_pr` in `synlynk/jobs.py`) after Codex exited.
+- **Direct Config Override over Brokered Relay (#1268):** Replaced the proposed file-based IPC daemon relay with 5 lines of native config override in `synlynk/dispatch.py:dispatch_agent()`: when `requires_gh_write=True` and `agent == "codex"`, auto-grant `_CODEX_NETWORK_PERMISSION` (`"run:install"`), generating `-c sandbox_workspace_write.network_access=true`.
+- **Implementation Dispatched to Codex:** Authored spec (`docs/superpowers/specs/2026-08-29-codex-direct-gh-write-network-access-design.md`) and plan (`docs/superpowers/plans/2026-08-29-codex-direct-gh-write-network-access.md`). Dispatched to Codex (`job-93ffd443`, base `feat/1268-codex-direct-gh-write`), which implemented the flag wiring and added 3 unit/preflight tests in `tests/test_agent_cli.py`.
+- **Review & Merge:** Dispatched to Grok (hit session cancel bug), escalated to Claude (hit monthly rate limit), escalated to Agy (`job-fc59d327`) which verified full test suite and CI green (Python 3.8, 3.10, 3.12, qa-gate) and posted formal review approval on PR #1271. Squash-merged into `main` (`4eddd09`).
+- **Blog Post:** `docs/blog/134-pr1271-codex-direct-gh-write-network-access.md`.
+
 ## 2026-08-24 — Ticket-driven approval auto-resume shipped (Tasks 1-4, PRs #1137/#1138/#1139/#1141), Task 5 live dogfood verified
 
 ### Shipped
