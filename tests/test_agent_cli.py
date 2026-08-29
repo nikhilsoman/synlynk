@@ -943,6 +943,7 @@ def test_docs_keep_readme_synchronized_during_named_releases_rejects_passing_wit
     )
     test_count_findings = [item for item in findings if item.check == "test_count"]
     assert test_count_findings, findings
+    assert len(test_count_findings) == 1
     blob = " ".join(item.message for item in test_count_findings)
     assert "12" in blob
     assert "passing" in blob.lower()
@@ -1100,7 +1101,7 @@ def test_docs_keep_readme_synchronized_during_named_releases_real_readme_pattern
     assert any("0.12.0" in msg for msg in by_check.get("version", []))
     test_count_blob = " ".join(by_check.get("test_count", []))
     assert "1140" in test_count_blob
-    assert "9999" in test_count_blob
+    assert "9999" not in test_count_blob
     assert "passing" in test_count_blob.lower()
     assert "collect-only" in test_count_blob or "collected" in test_count_blob.lower()
     command_blob = " ".join(by_check.get("commands", []))

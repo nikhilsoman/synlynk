@@ -317,7 +317,11 @@ def validate_readme_for_release(
                         "(count only; not pass/fail)",
                     )
                 )
-        elif collected_test_count > 0 and verified_passing_count is None:
+        elif (
+            collected_test_count > 0
+            and not passing_claims
+            and verified_passing_count is None
+        ):
             findings.append(
                 ReadmeFinding(
                     "test_count",
