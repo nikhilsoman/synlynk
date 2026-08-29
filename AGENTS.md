@@ -28,7 +28,7 @@ Log estimated cost when dispatching further work; prefer minimal context mode fo
 
 <!-- synlynk:end -->
 
-<!-- synlynk:harness vsop-repair verified:2026-08-09T18:03:36Z -->
+<!-- synlynk:harness vsop-repair verified:2026-08-29T07:09:44Z -->
 # Harness Instructions (synlynk-managed — do not edit)
 
 ## PR Review Discipline
@@ -65,8 +65,25 @@ task, not the Agent (role) doing the work
 | implement / test / refactor / cli-plumbing | Codex | implement, test, refactor, cli-plumbing |
 Do not start a task outside your role column without explicit approval from Claude.
 
-**GitHub write routing (#426):** Route any task that requires GitHub write actions to **Grok by default**. Agy headless can complete `gh pr review`, `gh pr comment`, and `gh pr merge` writes when the machine-local `~/.gemini/antigravity-cli/settings.json` already contains scoped `command(gh pr review)`, `command(gh pr comment)`, and `command(gh pr merge)` allow-rules; that precondition is operator-confirmed, not reliably verifiable mid-task. Codex's `workspace-write` sandbox blocks network egress to `api.github.com` by design. Pass `--requires-gh-write` on synlynk dispatch to enforce the routing hint automatically, but do not treat it as a hard identity guarantee yet: the token-stripping fallback does not prevent `gh` from using a locally logged-in personal keyring identity when no role-scoped GitHub App token is available (#569).
+**GitHub write routing (#426):** Route any task that requires GitHub write actions to **claude by default, Agy as fallback** (live-verified 2026-08-23; see `docs/superpowers/specs/2026-08-23-gh-write-identity-hardening-design.md`)
+- Grok's dispatch sandbox denies `bash` execution entirely in this environment (confirmed via `git diff origin/main` showing a total silent no-op despite a generic "OK, exit 0" job status — do not trust job-status alone for Grok gh-write attempts)
+- Codex's `workspace-write` sandbox blocks network egress to `api.github.com` by design
+- Pass `--requires-gh-write` on synlynk dispatch to enforce the routing hint automatically; it now also auto-implies the `run:shell` permission grant and fails closed with a `RuntimeError` if no role is resolvable via `--as-agent`, `--story`, or `--role` (#569)
 
 This table is generated from `.synlynk/config.json` so it tracks the repo's own routing rather than synlynk's default fleet assumptions.
+
+## Herdr Workspace Protocol
+1. At a task/session boundary, finish housekeeping (project docs, memory, cost log) before running `/clear`.
+2. File a ticket — with an appropriate label (e.g. `tech-debt` for a gap surfaced mid-task, out of current scope) — for anything left open beyond the current story/goal/session, rather than letting it go untracked.
+3. Launch each new session in a new Herdr tab + new pane, within the same workspace (Herdr workspace = synlynk workspace).
+- Never reuse another session's pane.
+4. Name each pane and tab with the synlynk session_id / job-ID / agent name so panes are identifiable at a glance.
+5. When working in person via Herdr, run interactive-shell sessions for each of the 4 core harnesses (Claude, Codex, Agy, Grok) as needed — synlynk aims to be harness-agnostic, giving each harness equal "home" (interactive) and "away" (headless dispatch) airtime while cycling through implementation work across target workspaces.
+- (Local harness — Ornith+Aider+oMLX — is a future extension, not yet wired up.)
+6. Any new harness interactive session also gets its own new tab within the same workspace.
+7. Begin every Claude session with `/rc`.
+- **Precondition for all Herdr commands:** check `test "${HERDR_ENV:-}" = 1` before issuing any `herdr` command; if unset, this agent is not running inside Herdr and must not attempt to control a Herdr session from outside it.
+- Herdr is Apache-2.0 licensed (no NOTICE file) — free to reference/use without royalty or attribution beyond standard license retention.
+- Full CLI reference: https://github.com/herdrdev/herdr/blob/v0.8.2/skills/herdr/SKILL.md
 
 <!-- /synlynk:harness -->
