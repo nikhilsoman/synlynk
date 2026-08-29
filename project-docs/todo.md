@@ -11,6 +11,9 @@
 - [x] #1209 — Codex dispatch `--ask-for-approval` flag mismatch (PR #1210, merged 2026-08-28, issue closed 2026-08-29)
 - [x] #1211 — macOS launchd daemon `KeepAlive` missing `SuccessfulExit: false` (PR #1212, merged 2026-08-28, issue closed 2026-08-29)
 - [x] #332/#338/#340/#348/#419/#461/#786/#936/#860 — all confirmed CLOSED on GitHub; stale in this file for weeks, removed from Next Task below
+- [x] [LIVE-6] #1140 reopened, root-caused (pre-fork token refresh moved into `daemon start`, not eliminated by prior fix), cross-linked to #1228, fixed via PR #1249 (merged `a37f4ff`, 2026-08-29)
+- [x] #1250 — dispatch job summaries silently report "files: 0 touched"; root-caused (`_job_worktree_details()` CWD-relative path), fixed via PR #1251 (merged `77a9be1`, 2026-08-29)
+- [x] PR #1195, #1214, #1215 — all confirmed MERGED on GitHub; Review Queue entry below was stale, removed
 
 ## Next Task
 - [ ] Fleet-parity remainder (only #342 and #347 of the original cluster are still open; #332/#338/#340/#348/#419/#461 all closed — see Recently Landed)
@@ -27,6 +30,8 @@
   - [ ] #1203 — Design GOVERNS backlog automation (auto-associate discovered/open/planned work with issues) — needs brainstorm first
 - [ ] #1188 — pipx-installed synlynk drifts silently from repo VERSION until schema-mismatch crash
 - [ ] #1194 — `synlynk decide --record` writes decision docs to gitignored path once repo is 'migrated'
+- [ ] #1228 — synlynk daemon (GitHub App token refresher) does not persist/stay running between sessions — root-cause investigation not yet started (symptom-level only, 4+ occurrences on record incl. today's Agy review timeout on PR #1251)
+- [ ] #1213 comment (2026-08-29) — Codex `api.github.com` sandbox-egress-block explanation for gh-write failures was never live-tested; #720 receipt-check failure observed instead this session, doesn't corroborate the theory — worth isolating failure mode when TC-suite live-test work happens
 
 ## Review Queue
-- [ ] PR #1195, #1214, #1215 — open docs-only PRs, each needs a non-authoring reviewer dispatched + `synlynk pr check` before merge
+- (empty — #1195/#1214/#1215 all merged, 2026-08-29)
