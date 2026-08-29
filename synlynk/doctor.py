@@ -453,6 +453,54 @@ def _hc_model_rates() -> HealthCheck:
     )
 
 
+_PR_REVIEW_CYCLES_WINDOW_DAYS = 30
+_PR_REVIEW_CYCLES_MIN_SAMPLES = 3
+_PR_REVIEW_CYCLES_WARN_THRESHOLD = 1.5
+
+
+def _hc_pr_review_cycles() -> HealthCheck:
+    """Flags agents/roles with an elevated average pr_review_cycles over a recent window."""
+    try:
+        conn = _pkg("_get_db")()
+        rows = conn.execute(
+            "SELECT agent, AVG(pr_review_cycles), COUNT(*) FROM capability_ratings "
+            "WHERE pr_review_cycles IS NOT NULL "
+            f"AND ts > datetime('now', '-{_PR_REVIEW_CYCLES_WINDOW_DAYS} days') "
+            "GROUP BY agent"
+        ).fetchall()
+    except Exception:
+        return HealthCheck(
+            "pr_review_cycles",
+            "warn",
+            "Could not read capability_ratings — skipping pr_review_cycles check",
+        )
+
+    elevated = [
+        (agent, avg_cycles, count)
+        for agent, avg_cycles, count in rows
+        if count >= _PR_REVIEW_CYCLES_MIN_SAMPLES and avg_cycles is not None
+        and avg_cycles > _PR_REVIEW_CYCLES_WARN_THRESHOLD
+    ]
+
+    if not elevated:
+        return HealthCheck(
+            "pr_review_cycles",
+            "ok",
+            f"No agent has elevated PR review cycles (no data, or all below "
+            f"{_PR_REVIEW_CYCLES_WARN_THRESHOLD} avg over last {_PR_REVIEW_CYCLES_WINDOW_DAYS}d)",
+        )
+
+    elevated.sort(key=lambda t: t[1], reverse=True)
+    summary = ", ".join(f"{agent} ({avg_cycles:.1f} avg, n={count})" for agent, avg_cycles, count in elevated)
+    return HealthCheck(
+        "pr_review_cycles",
+        "warn",
+        f"Elevated PR review cycles over last {_PR_REVIEW_CYCLES_WINDOW_DAYS}d: {summary}",
+        fix="Review recent PRs from the flagged agent(s) for recurring rework patterns; "
+            "consider adjusting task_allocation routing in .synlynk/policy.json if the pattern holds",
+    )
+
+
 def cleanup_selftest_workspaces(temp_root: str = None) -> int:
     """Remove orphaned synlynk selftest scratch workspaces under the temp dir."""
     root = temp_root or tempfile.gettempdir()
@@ -485,6 +533,7 @@ HEALTH_CHECKS = [
     _hc_agent_profiles,
     _hc_instruction_files,
     _hc_model_rates,
+    _hc_pr_review_cycles,
     _hc_version_current,
 ]
 

@@ -126,6 +126,7 @@ from synlynk.doctor import (
     _hc_identity_key,
     _hc_instruction_files,
     _hc_model_rates,
+    _hc_pr_review_cycles,
     _hc_project_init,
     _hc_python_version,
     _hc_version_current,
