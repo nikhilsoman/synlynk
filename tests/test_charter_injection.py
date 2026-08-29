@@ -64,7 +64,19 @@ def test_render_charter_section_resolves_reassigned_role(project_dir, tmp_path, 
     assert "Design things." in section
 
 
-def test_render_charter_section_raises_loudly_when_no_agent_registered(project_dir, tmp_path, monkeypatch):
+def test_render_charter_section_is_noop_when_workspace_has_no_agents(project_dir, tmp_path, monkeypatch):
     monkeypatch.chdir(project_dir)
+    assert render_charter_section(repo_path=str(project_dir)) == ""
+
+
+def test_render_charter_section_raises_when_registered_agents_lack_role(
+    project_dir, tmp_path, monkeypatch
+):
+    monkeypatch.chdir(project_dir)
+    fake_home = tmp_path / "fake_home"
+    monkeypatch.setattr("os.path.expanduser", lambda path: path.replace("~", str(fake_home)))
+    agent_store.register_agent(
+        "architect-primary", [{"kind": "role_slug", "value": "architect"}]
+    )
     with pytest.raises(CharterInjectionError, match="no registered agent"):
         render_charter_section(repo_path=str(project_dir))

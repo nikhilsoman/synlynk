@@ -1,7 +1,5 @@
 import os
 
-import pytest
-
 from synlynk import agent_store
 from synlynk.context import generate_context
 
@@ -42,8 +40,10 @@ def test_generate_context_includes_resolved_role_charter(project_dir, tmp_path, 
     assert "Do PM things." in context_text
 
 
-def test_generate_context_raises_when_authority_role_unregistered(project_dir, tmp_path, monkeypatch):
+def test_generate_context_is_noop_when_workspace_has_no_agents(project_dir, tmp_path, monkeypatch):
     monkeypatch.chdir(project_dir)
     monkeypatch.setattr(os.path, "expanduser", lambda path: path.replace("~", str(tmp_path / "fake_home")))
-    with pytest.raises(Exception, match="no registered agent"):
-        generate_context(scope="full", out_path=str(project_dir / ".synlynk" / "context.md"))
+    context_text = generate_context(
+        scope="full", out_path=str(project_dir / ".synlynk" / "context.md")
+    )
+    assert "## Role Charter" not in context_text

@@ -8,8 +8,8 @@ class CharterInjectionError(Exception):
     """Raised when the authority role has no usable registered charter."""
 
 
-def _find_agent_for_role(role: str):
-    for entry in agent_store.list_agents():
+def _find_agent_for_role(role: str, entries):
+    for entry in entries:
         role_slug = next(
             (alias["value"] for alias in entry["aliases"] if alias["kind"] == "role_slug"),
             None,
@@ -22,7 +22,11 @@ def _find_agent_for_role(role: str):
 def render_charter_section(repo_path: str) -> str:
     """Return the resolved authority role's charter as a Markdown section."""
     role = get_human_authority_role(repo_path=repo_path)
-    entry = _find_agent_for_role(role)
+    entries = agent_store.list_agents()
+    if not entries:
+        return ""
+
+    entry = _find_agent_for_role(role, entries)
     if entry is None:
         raise CharterInjectionError(
             f"human_authority_role is {role!r} but no registered agent has "
