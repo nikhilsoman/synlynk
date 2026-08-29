@@ -43,6 +43,26 @@ def _pkg(name: str, default=None):
     return getattr(package, name, default)
 
 
+def _worktree_path_is_available(worktree_path: Optional[str], operation: str) -> bool:
+    """Check a persisted worktree path and explain silent-path failures."""
+    if not worktree_path:
+        return False
+    if os.path.isdir(worktree_path):
+        return True
+    if os.path.isabs(worktree_path):
+        reason = "the absolute path does not exist"
+    else:
+        reason = (
+            "the stored path is relative and cannot be resolved from the current CWD; "
+            "the worktree may exist elsewhere"
+        )
+    print(
+        f"  ⚠ worktree unavailable while trying to {operation}: {worktree_path} ({reason})",
+        file=sys.stderr,
+    )
+    return False
+
+
 def _load_jobs() -> list:
     """Reads .synlynk/jobs.json; returns [] if missing or corrupt."""
     jobs_file = _pkg("JOBS_FILE")
@@ -259,7 +279,7 @@ def _push_worktree_branch_if_needed(
 
 def _resolve_default_base_branch(worktree_path: Optional[str]) -> Optional[str]:
     """Resolve the repo's default base branch for gh pr create."""
-    if not worktree_path or not os.path.isdir(worktree_path):
+    if not _worktree_path_is_available(worktree_path, "resolve default base branch"):
         return None
 
     try:
@@ -493,7 +513,7 @@ def _finalize_completed_worktree_job(job: dict, git_state: Optional[dict]) -> No
     """Best-effort git finalization for a completed job with genuine work."""
     # Always purge nested product state.db under the job worktree (fleet nested_state).
     worktree_path = (job or {}).get("worktree_path")
-    if worktree_path and os.path.isdir(worktree_path):
+    if _worktree_path_is_available(worktree_path, "purge nested product state"):
         try:
             from synlynk.fleet import purge_nested_product_state_under
 
@@ -507,7 +527,7 @@ def _finalize_completed_worktree_job(job: dict, git_state: Optional[dict]) -> No
         return
 
     worktree_path = job.get("worktree_path")
-    if not worktree_path or not os.path.isdir(worktree_path):
+    if not _worktree_path_is_available(worktree_path, "finalize completed job"):
         return
 
     # Re-derive from the live worktree so push/PR follow wherever the agent committed.
@@ -711,7 +731,7 @@ def _inspect_worktree_git_state(
     started_at: Optional[str] = None,
 ) -> Optional[dict]:
     """Returns git evidence for a worktree, or None when it is unavailable."""
-    if not worktree_path or not os.path.isdir(worktree_path):
+    if not _worktree_path_is_available(worktree_path, "inspect git state"):
         return None
 
     try:
@@ -796,7 +816,8 @@ def _inspect_origin_branch_activity(
     started_at: Optional[str],
 ) -> Optional[dict]:
     """Returns commit/file evidence for origin/<branch> activity since started_at."""
-    if not worktree_path or not os.path.isdir(worktree_path) or not worktree_branch or not started_at:
+    if (not _worktree_path_is_available(worktree_path, "inspect origin branch activity")
+            or not worktree_branch or not started_at):
         return None
 
     remote_ref = f"origin/{worktree_branch}"
@@ -2058,7 +2079,7 @@ def _daemon_job_worktree_path(job_id: str, log_path: Optional[str] = None) -> Op
             job_dir = after.split("/", 1)[0]
             prefix = norm.split(marker, 1)[0]
             candidates.append(f"{prefix}/worktrees/{job_dir}")
-    candidates.append(os.path.join("worktrees", job_id))
+    candidates.append(os.path.abspath(os.path.join("worktrees", job_id)))
     for path in candidates:
         if path and os.path.isdir(path):
             return path

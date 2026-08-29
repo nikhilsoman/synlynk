@@ -50,7 +50,7 @@ def stub_dispatch_worktree(monkeypatch, request):
         dispatch_mod,
         "_create_job_worktree",
         lambda job_id, agent, base=None: {
-            "path": os.path.join("worktrees", job_id),
+            "path": os.path.abspath(os.path.join("worktrees", job_id)),
             "branch": f"dispatch/{agent}/{job_id}",
             "base_branch": None,
             "base_sha": None,
