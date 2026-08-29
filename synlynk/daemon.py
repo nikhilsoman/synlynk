@@ -45,7 +45,6 @@ class WatchDaemon:
         if not hasattr(os, "fork"):
             print("  ⚠ watch daemon requires Unix (macOS/Linux). Not supported on Windows.")
             return
-        self._refresh_github_tokens()
         pid = os.fork()
         if pid > 0:
             print("  ● synlynk watch started.")
@@ -169,6 +168,10 @@ class WatchDaemon:
         config = _pkg("load_config")()
         interval = config.get("watch_interval_seconds", 30)
         last_mtimes = self._get_mtimes("project-docs")
+        # Refresh after daemonization so daemon start never performs signing or
+        # network I/O in the foreground process.  This also keeps the refresh
+        # in the same post-fork execution path as periodic refreshes.
+        self._refresh_github_tokens()
         last_token_refresh = time.time()
         while True:
             time.sleep(interval)
@@ -702,7 +705,6 @@ class SynlynkDaemon(WatchDaemon):
         if not hasattr(os, "fork"):
             print("  ⚠ daemon requires Unix (macOS/Linux). Not supported on Windows.")
             return
-        self._refresh_github_tokens()
         pid = os.fork()
         if pid > 0:
             print("  ● synlynk daemon started.")
@@ -795,6 +797,10 @@ class SynlynkDaemon(WatchDaemon):
         max_parallel = config.get("max_parallel", 4)
         interval = config.get("watch_interval_seconds", 30)
         last_mtimes = self._get_mtimes("project-docs")
+        # Defer the initial refresh until the detached daemon has completed
+        # its post-fork setup.  The caller of daemon start must not wait for
+        # openssl signing or a GitHub API request.
+        self._refresh_github_tokens()
         last_token_refresh = time.time()
         while True:
             time.sleep(interval)
