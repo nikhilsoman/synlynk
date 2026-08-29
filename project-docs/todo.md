@@ -1,17 +1,32 @@
 # Task Execution Order and Dependencies
 
-## Active Task
-- [x] Two-imperatives roadmap cluster (job-truth/gh-write, workspace-context-governance, worktree/job cleanup (#559), `agent`→`harness` CLI rename (PR #993), Agent-roles-charters Phase 1 (PR #1003)) — landed 2026-08-15/16, cut as v0.14.0 (PR #1012)
-- [x] PR #1003 follow-up cleanup: `capability_grants` merge-not-replace, `daemon_jobs.agent_id` persistence (PR #1022) — landed 2026-08-16/17
-- [x] Agent-roles-charters Phase 2: memory-gated capability routing via synthetic per-org-role story (PR #1030) — landed 2026-08-17
-- [x] Dependabot: 2 high-severity vulnerabilities on main — re-checked 2026-08-17, zero open/historical alerts via `gh api dependabot/alerts`; stale entry, already resolved (dependency bump in an intervening PR, or Dependabot auto-closed)
+## Recently Landed (since last sync)
+- [x] v0.15.0 — Workspace Policy Layer
+- [x] v0.16.0 — Autonomous Loop
+- [x] v0.17.0 — Ticket-Driven Approval Auto-Resume
+- [x] v0.18.0 — Dispatch Reliability & QA Merge-Gate Authority
+- [x] Charter authority design + injection mechanism spec (PR #1193) — content/structure follow-up spec also drafted, plan not yet dispatched
+- [x] Harness capability baseline + recurring reassessment protocol (`docs/harness-capability-baseline.md`, PR #1178, 2026-08-25) — tracked ongoing via #1179
+- [x] LIVE-9 (`jobs --all` datetime crash) + LIVE-10 (branch-protection `enforce_admins` regression) — RCAs written, fixes merged
+- [x] #1209 — Codex dispatch `--ask-for-approval` flag mismatch (PR #1210, merged 2026-08-28, issue closed 2026-08-29)
+- [x] #1211 — macOS launchd daemon `KeepAlive` missing `SuccessfulExit: false` (PR #1212, merged 2026-08-28, issue closed 2026-08-29)
+- [x] #332/#338/#340/#348/#419/#461/#786/#936/#860 — all confirmed CLOSED on GitHub; stale in this file for weeks, removed from Next Task below
 
 ## Next Task
-- [ ] Fleet-parity audit (#332/#338/#340/#342/#347/#348/#419/#461)
+- [ ] Fleet-parity remainder (only #342 and #347 of the original cluster are still open; #332/#338/#340/#348/#419/#461 all closed — see Recently Landed)
 - [ ] #573 — Agy+Stitch MCP integration
-- [ ] #786 — Rename internal 'agent' nomenclature to 'harness' (CLI, DB columns, docs) — broader than PR #993's CLI-verb-only rename; re-scope against the now-shipped agent-roles-charters `agent` (workspace identity) vs `harness` (execution backend) split before starting, may be partially/fully superseded
-- [ ] PR #1030 deferred scope: "jobs by agent" view / cost attribution on `daemon_jobs.agent_id` (persisted since PR #1022, still unconsumed); `capability_grants` enforcement during harness selection (Phase 2 added learned *scoring*, not grant *enforcement*)
-- [ ] #914 — Workspace-level (multi-repo) agent identities — flagged as possibly adjacent during Phase 2 brainstorm, not yet triaged into a phase
+- [ ] #914 — Workspace-level (multi-repo) agent identities — still untriaged into a phase
 - [ ] #937 — Review-dispatch job wrote to docs/ outside its read-only scope (job-0c924723, PR #933)
-- [ ] #936 — Workspace context divergence: state.db silently disagrees with project-docs/* markdown
-- [ ] #860 — Job self-report status still unreliable, recurs after #461 closed COMPLETED
+- [ ] #1179 — Harness capability reassessment recurring cycle (parent/tracking; first cycle due ~25 jobs from creation or 2026-09-25)
+- [ ] #1213 — Automated live in-sandbox gh-write probe (re-scoped 2026-08-29 as concrete implementation under #1179, not a duplicate mechanism — see issue comment)
+- [ ] #1198 — [Tracking] Autonomous Operations Activation (5 children, all open: #1199, #1200, #1201, #1202, #1203)
+  - [ ] #1199 — Document corpus references used to derive charter content — **do before #1201**: this audit is what would catch/fix the still-unreconciled pm charter regression (competitive-intelligence-sweep/capability-gap-doc content overwritten with generic prose during an `agent edit pm` earlier, now stuck at revision 2, never restored) before it gets wired into live execution
+  - [ ] #1200 — `synlynk doctor` check for agent underperformance (elevated PR review cycles)
+  - [ ] #1201 — Wire charter content into dispatch/execution context (implements PR #1193's surfacing mechanism; charter content/structure design spec drafted, plan not yet written) — **blocked behind #1199**, see above
+  - [ ] #1202 — Standardize harness vs. agent terminology across codebase and docs
+  - [ ] #1203 — Design GOVERNS backlog automation (auto-associate discovered/open/planned work with issues) — needs brainstorm first
+- [ ] #1188 — pipx-installed synlynk drifts silently from repo VERSION until schema-mismatch crash
+- [ ] #1194 — `synlynk decide --record` writes decision docs to gitignored path once repo is 'migrated'
+
+## Review Queue
+- [ ] PR #1195, #1214, #1215 — open docs-only PRs, each needs a non-authoring reviewer dispatched + `synlynk pr check` before merge

@@ -81,10 +81,10 @@ HARNESS_CAPABILITY_BASELINES = {
             "-s", "workspace-write",
         ],
         "dispatch_flags": {
-            # Codex CLI renamed --approval-policy → --ask-for-approval (values:
-            # untrusted|on-request|never). TC-2 scans `codex --help` for these names.
+            # Codex exec accepts approval_policy through the generic -c/--config
+            # override; --ask-for-approval was removed from the CLI.
             # Keep --sandbox as a valid long form of -s used in non_interactive_flags.
-            "valid_flags": ["--ask-for-approval", "--model", "--sandbox"],
+            "valid_flags": ["-c", "--model", "--sandbox"],
             "invalid_flags": [
                 "--dangerously-bypass-approvals-and-sandbox",
                 "--dangerously-skip-permissions",

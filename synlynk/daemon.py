@@ -459,7 +459,10 @@ def _daemon_install_service(daemon_instance) -> None:
                     <key>RunAtLoad</key>
                     <true/>
                     <key>KeepAlive</key>
-                    <false/>
+                    <dict>
+                      <key>SuccessfulExit</key>
+                      <false/>
+                    </dict>
                     <key>StandardOutPath</key>
                     <string>{log_path}</string>
                     <key>StandardErrorPath</key>

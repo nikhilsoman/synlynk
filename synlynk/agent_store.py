@@ -8,6 +8,7 @@ import uuid
 from datetime import datetime, timezone
 
 from synlynk import _write_json_atomic
+from synlynk import charter_schema
 
 _CONFIG_PATH = os.path.join(".synlynk", "config.json")
 
@@ -188,7 +189,6 @@ def _write_versioned_file(
         f.write(json.dumps(entry) + "\n")
     return new_revision
 
-
 def read_charter(agent_id: str):
     """Return (content, current_revision) for an agent's charter."""
     base = agent_store_path(agent_id)
@@ -205,6 +205,7 @@ def propose_charter_revision(
 
     No auto-approval logic is included; the gated mutability tier is out of scope.
     """
+    charter_schema.validate_charter(content)
     base = agent_store_path(agent_id)
     return _write_versioned_file(
         os.path.join(base, "charter.md"),
@@ -213,6 +214,27 @@ def propose_charter_revision(
         actor,
         parent_revision,
     )
+
+
+def sync_dispatch_routing(agent_id: str, role: str, actor: str) -> int:
+    """Regenerate an agent's charter `dispatch_routing` frontmatter block
+    from .synlynk/policy.json's <role>_authority.task_allocation table.
+
+    No-op (returns the current revision unchanged, no new revision written)
+    if the role has no task_allocation entry in policy.json.
+    """
+    from synlynk import policy as policy_mod
+
+    content, revision = read_charter(agent_id)
+    merged_policy = policy_mod.load_policy(repo_path=os.getcwd())
+    authority = merged_policy.get(f"{role}_authority", {})
+    task_allocation = authority.get("task_allocation")
+    if not task_allocation:
+        return revision
+
+    block = charter_schema.render_dispatch_routing_block(task_allocation)
+    new_content = charter_schema.set_frontmatter_block(content, "dispatch_routing", block)
+    return propose_charter_revision(agent_id, new_content, actor=actor, parent_revision=revision)
 
 
 _ENTRY_CATEGORIES = ("memory", "statements-of-record")
@@ -306,75 +328,3 @@ def propose_entry_revision(
     with open(revisions_path, "a") as f:
         f.write(json.dumps(entry_row) + "\n")
     return new_revision
-
-
-def _dump_flat_yaml(data: dict, indent: int = 0) -> str:
-    lines = []
-    pad = "  " * indent
-    for key, value in data.items():
-        if value is None:
-            lines.append(f"{pad}{key}: null")
-        elif isinstance(value, dict):
-            if not value:
-                lines.append(f"{pad}{key}: {{}}")
-            else:
-                lines.append(f"{pad}{key}:")
-                lines.append(_dump_flat_yaml(value, indent + 1))
-        else:
-            lines.append(f"{pad}{key}: {value}")
-    return "\n".join(lines)
-
-
-def _agent_role(agent_id: str) -> str:
-    registry = _load_registry()
-    for agent in registry["agents"]:
-        if agent["agent_id"] == agent_id:
-            for alias in agent["aliases"]:
-                if alias["kind"] == "role_slug":
-                    return alias["value"]
-    return ""
-
-
-def _read_existing_projection_overrides(projection_path: str) -> dict:
-    if not os.path.exists(projection_path):
-        return {}
-    try:
-        with open(projection_path) as f:
-            lines = f.readlines()
-    except OSError:
-        return {}
-    overrides = {}
-    in_overrides = False
-    for line in lines:
-        stripped = line.rstrip("\n")
-        if stripped == "overrides:":
-            in_overrides = True
-            continue
-        if in_overrides:
-            if not stripped.startswith("  ") or stripped.strip() == "":
-                break
-            key, _, value = stripped.strip().partition(": ")
-            if key:
-                overrides[key] = value if value != "{}" else {}
-    return overrides
-
-
-def regenerate_agent_projection(agent_id: str, repo_overrides: dict = None) -> None:
-    workspace_id = get_workspace_id()
-    projection_dir = os.path.join(".synlynk", "agents")
-    os.makedirs(projection_dir, exist_ok=True)
-    projection_path = os.path.join(projection_dir, f"{agent_id}.yaml")
-
-    merged_overrides = _read_existing_projection_overrides(projection_path)
-    merged_overrides.update(repo_overrides or {})
-
-    payload = {
-        "agent_id": agent_id,
-        "workspace_id": workspace_id,
-        "role": _agent_role(agent_id),
-        "overrides": merged_overrides,
-    }
-    rendered = _dump_flat_yaml(payload) + "\n"
-
-    with open(projection_path, "w") as f:
-        f.write(rendered)

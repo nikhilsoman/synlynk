@@ -106,3 +106,4 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `instructions diff` — sustain
 - `instructions update` — sustain
 - `instructions ack` — sustain
+- `instructions register` — sustain

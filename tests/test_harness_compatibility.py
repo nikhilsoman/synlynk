@@ -214,6 +214,43 @@ def test_fence_preserves_surrounding_bytes(tmp_path):
     assert text.endswith(after)
 
 
+def test_fence_upsert_is_noop_when_content_unchanged(tmp_path):
+    from synlynk import _upsert_harness_fence
+
+    md = tmp_path / "GEMINI.md"
+    md.write_text(
+        "# Human content\n\n"
+        "<!-- synlynk:harness v1.0 verified:2026-01-01T00:00:00Z -->\n"
+        "# Harness Instructions (synlynk-managed — do not edit)\n\n"
+        "same body\n"
+        "<!-- /synlynk:harness -->\n"
+    )
+
+    _upsert_harness_fence(str(md), "1.0", "same body")
+
+    text = md.read_text()
+    assert "verified:2026-01-01T00:00:00Z" in text
+    assert text.count("<!-- synlynk:harness") == 1
+
+
+def test_fence_upsert_rewrites_when_version_changes_but_body_same(tmp_path):
+    from synlynk import _upsert_harness_fence
+
+    md = tmp_path / "GEMINI.md"
+    md.write_text(
+        "<!-- synlynk:harness v1.0 verified:2026-01-01T00:00:00Z -->\n"
+        "# Harness Instructions (synlynk-managed — do not edit)\n\n"
+        "same body\n"
+        "<!-- /synlynk:harness -->\n"
+    )
+
+    _upsert_harness_fence(str(md), "1.1", "same body")
+
+    text = md.read_text()
+    assert "verified:2026-01-01T00:00:00Z" not in text
+    assert "<!-- synlynk:harness v1.1" in text
+
+
 def test_preflight_fires_drift_sentinel_on_version_change(tmp_path, monkeypatch):
     import socket
     import sqlite3

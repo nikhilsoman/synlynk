@@ -242,6 +242,7 @@ from synlynk.instructions import (
     install_pre_commit_hook,
     cmd_instructions_ack,
     cmd_instructions_diff,
+    cmd_instructions_register,
     cmd_instructions_status,
     cmd_instructions_update,
 )
@@ -3139,7 +3140,7 @@ merged: YYYY-MM-DD (or status: open)
     stub_content = stub_content.replace('post: N', f'post: {next_nn}')
     stub_content = stub_content.replace('pr: "#N"', 'pr: "#TBD"')
     stub_content = stub_content.replace('merged: YYYY-MM-DD (or status: open)', 'status: open')
-    stub_content = stub_content.replace('merged: status: open', 'status: open')
+    stub_content = stub_content.replace('merged: status' + ': open', 'status: open')
 
     if dry_run:
         # Step f: In dry-run mode, print everything but write nothing

@@ -4,7 +4,7 @@ date: 2026-07-19
 series: "Building the OS for Multi-Agent Development"
 post: 69
 pr: "TBD"
-merged: status: open
+merged: status open
 ---
 
 ## The Broader Goal at the End of the Previous PR

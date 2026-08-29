@@ -11,6 +11,12 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Charter Content & Structure Schema**
+  - Charters now require YAML frontmatter (`schema_version`, `role`, `description`, `durability`, `tools`, `credentials`) plus three markdown sections (`## Instructions`, `## Authority & Escalation`, `## Workflow Ownership`), enforced via a new `synlynk/charter_schema.py` validator wired into `propose_charter_revision`.
+  - Retired the dead `.synlynk/agents/<id>.yaml` projection file and `regenerate_agent_projection()` — its only field (`capability_grants`) was write-only, never read.
+  - Added `synlynk agent sync-routing <id_or_alias>` to regenerate a charter's `dispatch_routing` frontmatter block from `.synlynk/policy.json`'s task-allocation table.
+  - Migrated all 7 provisioned charters (dev, qa, architect, pm, tpm, designer, marketing) to schema revision 3; `pm`'s migration restores the competitive-intelligence-sweep / capability-gap-doc content that had been lost in an earlier revision.
+
 **Agent vs Harness Terminology — Phase 0 (design 2026-08-09, plan 2026-08-09)**
 - `docs/glossary-agent-vs-harness.md` — canonical definition distinguishing **Agent** (persistent role identity + charter: pm/architect/tpm/dev/designer/qa/marketing/synlynk-bot) from **Harness** (swappable execution backend: Claude/Agy/Grok/Codex/local).
 - Auto-generated `## Capability-Based Task Allocation` table (synced into CLAUDE.md/GEMINI.md/AGENTS.md/GROK.md via `synlynk doctor --fix`) now reads `| Role | Harness | Tasks |` instead of the conflated `| Role | Agent | Tasks |`, with a glossary-link note.
