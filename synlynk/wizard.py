@@ -667,7 +667,7 @@ def _wiz_screen_skills(scan: dict) -> None:
 _ROBOT_ASCII = "[~]"
 
 def _wiz_screen_agents(scan: dict) -> None:
-    """Screen 4 — agent fleet display (no required choice)."""
+    """Screen 4 — harness fleet display (no required choice)."""
     _wiz_clear()
     _wiz_header(step=4, total=6)
     print(f"  {_BOLD}Your agent fleet{_RESET}\n")

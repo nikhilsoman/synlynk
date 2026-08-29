@@ -1,4 +1,4 @@
-"""synlynk quota: per-agent quota headroom, upsert, and cost estimation."""
+"""synlynk quota: per-harness quota headroom, upsert, and cost estimation."""
 
 import json
 import os
@@ -49,7 +49,7 @@ _DEFAULT_QUOTA_LIMITS = {
     "monthly": {"tokens": 5_000_000, "requests": 3_000},
 }
 
-# Agent binary names we attribute telemetry to (first token of command).
+# Harness binary names we attribute telemetry to (first token of command).
 _KNOWN_AGENT_BINARIES = frozenset({
     "claude", "agy", "codex", "grok", "gemini", "local",
 })
@@ -102,7 +102,7 @@ def _event_epoch(event: dict) -> Optional[float]:
 
 
 def _agent_from_telemetry_event(event: dict) -> Optional[str]:
-    """Resolve agent name from an explicit field or the command's first token."""
+    """Resolve harness name from an explicit field or the command's first token."""
     agent = event.get("agent")
     if isinstance(agent, str) and agent.strip():
         name = agent.strip().lower()
@@ -172,7 +172,7 @@ def _aggregate_usage_from_telemetry(
     *,
     now: Optional[float] = None,
 ) -> dict:
-    """Aggregate per-agent token and request usage inside each quota window.
+    """Aggregate per-harness token and request usage inside each quota window.
 
     Returns::
 
@@ -197,7 +197,7 @@ def _aggregate_usage_from_telemetry(
         # without usage when type is unknown. Prefer type=="exec" (has tokens).
         etype = event.get("type")
         if etype not in (None, "exec", "dispatch"):
-            # Still allow bare events that carry tokens/agent without type
+            # Still allow bare events that carry tokens/harness without type
             if event.get("in_tokens") is None and event.get("out_tokens") is None:
                 if etype not in ("exec",):
                     continue
@@ -307,7 +307,7 @@ _refresh_agent_quotas_from_telemetry = refresh_agent_quotas_from_telemetry
 
 
 def cmd_quota(agent: Optional[str] = None, json_output: bool = False) -> None:
-    """Report per-agent quota headroom and reset times (synlynk quota).
+    """Report per-harness quota headroom and reset times (synlynk quota).
 
     Refreshes harness_quotas from telemetry first so the table is never a
     permanent empty shell when usage data exists.
@@ -574,8 +574,8 @@ def _project_request_quota_from_config() -> Optional[dict]:
 
     Returns a synthetic quota dict, or None if config cannot be read.
     This is the bridge between .synlynk/config.json limit_requests and the
-    per-agent request-unit rows in harness_quotas — not a substitute for
-    per-agent plan quotas, but a workspace floor when no agent-level request
+    per-harness request-unit rows in harness_quotas — not a substitute for
+    per-harness plan quotas, but a workspace floor when no harness-level request
     row exists.
     """
     try:
@@ -609,7 +609,7 @@ def _project_request_quota_from_config() -> Optional[dict]:
 
 
 def _read_agent_quota_rows(conn, agent: str) -> Optional[list]:
-    """Read harness_quotas rows for an agent.
+    """Read harness_quotas rows for a harness.
 
     Returns:
       - list of row dicts on success (may be empty — empty means no signal)
@@ -656,7 +656,7 @@ def _quota_status_for_agent(
     estimated_tokens: Optional[int] = None,
     estimated_requests: int = 1,
 ) -> dict:
-    """Stage-2 quota gate for one agent.
+    """Stage-2 quota gate for one harness.
 
     Returns dict with keys:
       status: "ok" | "exhausted" | "unknown"
@@ -666,8 +666,8 @@ def _quota_status_for_agent(
 
     Degraded-mode behavior (documented + implemented, #141):
       If quota rows cannot be read this cycle, or no rows exist for the agent,
-      status="unknown" and degraded=True. The routing engine keeps the agent
-      eligible (does not hard-block) but ranks known-headroom agents first.
+      status="unknown" and degraded=True. The routing engine keeps the harness
+      eligible (does not hard-block) but ranks known-headroom harnesses first.
     """
     rows = _pkg("_read_agent_quota_rows")(conn, agent)
     if rows is None:
@@ -679,7 +679,7 @@ def _quota_status_for_agent(
             "reason": "quota_unreadable",
         }
     if not rows:
-        # No per-agent signal. Optionally fold in project request budget so
+        # No per-harness signal. Optionally fold in project request budget so
         # limit_requests is not an orphan field relative to the quota matrix.
         project_req = _pkg("_project_request_quota_from_config")()
         if project_req is None:
