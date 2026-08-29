@@ -2,7 +2,7 @@
 title: "PR #1239 — The Book Gets Co-Authors: Part 0 + Part I, v0.3-DRAFT"
 date: 2026-08-29
 series: "Building the OS for Multi-Agent Development"
-post: 126
+post: 131
 pr: "#1239"
 merged: "2026-08-29"
 ---
