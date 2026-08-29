@@ -41,7 +41,7 @@ def test_can_gh_write_baselines_match_live_verified_reality():
     assert HARNESS_CAPABILITY_BASELINES["claude"]["can_gh_write"] is True
     assert HARNESS_CAPABILITY_BASELINES["agy"]["can_gh_write"] is True
     assert HARNESS_CAPABILITY_BASELINES["grok"]["can_gh_write"] is False
-    assert HARNESS_CAPABILITY_BASELINES["codex"]["can_gh_write"] is False
+    assert HARNESS_CAPABILITY_BASELINES["codex"]["can_gh_write"] is True
     assert HARNESS_CAPABILITY_BASELINES["local"]["can_gh_write"] is False
 
 
@@ -86,8 +86,8 @@ def test_directive_templates_contain_sop_headers(tmp_path, isolated_db, monkeypa
     assert "## Repo Hygiene" in content
     assert "## Herdr Workspace Protocol" in content
     # #432 supersedes #427's interim one-liner with a capability-table row + notes
-    assert "| GitHub write actions | **claude, Agy fallback** |" in content
-    assert "GitHub write routing (#426)" in content
+    assert "| GitHub write actions | **codex, Claude/Agy fallback** |" in content
+    assert "GitHub write routing (#1271)" in content
     assert "GitHub identity note (#423)" in content
 
 
@@ -121,14 +121,14 @@ def test_run_tc5_missing_file_reports_all_headers(tmp_path):
     assert len(result["missing"]["claude"]) == len(SOP_SECTION_HEADERS)
 
 
-def test_capability_allocation_sop_routes_gh_write_to_claude_not_grok():
+def test_capability_allocation_sop_routes_gh_write_to_codex_not_grok():
     from synlynk.probe import _CAPABILITY_ALLOCATION_SOP, _repair_capability_allocation_sop
 
-    assert "claude by default" in _CAPABILITY_ALLOCATION_SOP
+    assert "Codex by default" in _CAPABILITY_ALLOCATION_SOP
     assert "Route any task that requires GitHub write actions to **Grok by default**" not in _CAPABILITY_ALLOCATION_SOP
 
     repaired = _repair_capability_allocation_sop({"roles": {}})
-    assert "claude by default" in repaired
+    assert "Codex by default" in repaired
     assert "Route any task that requires GitHub write actions to **Grok by default**" not in repaired
 
 

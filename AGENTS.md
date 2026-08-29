@@ -12,7 +12,7 @@ Implementer / tests / refactor / CLI plumbing. Builder-only for fleet claims unt
 ## Headless contract
 - Invoked via `codex exec` with workspace sandbox flags from synlynk dispatch.
 - Prefer non-interactive completion; write commits with the Co-Authored-By trailer above.
-- Do not assume GitHub write works headless — route PR review/merge to agents with `can_gh_write` unless role tokens are provisioned.
+- Codex is proven capable of headless GitHub writes; use `--requires-gh-write` so dispatch grants its scoped network permission and role token.
 
 ## Git Worktree-First Policy
 Never commit directly to `main`/`master`. Use the job worktree provided by dispatch.
@@ -59,15 +59,15 @@ task, not the Agent (role) doing the work
 
 | Role | Harness | Tasks |
 | :--- | :--- | :--- |
-| pm / review / deploy / brainstorm | Claude | pm, review, deploy, brainstorm |
+| pm / deploy / brainstorm | Claude | pm, deploy, brainstorm |
 | implement / test / css / templates / content / subpages | Agy | implement, test, css, templates, content, subpages |
 | implement / test / canvas / js / infra | Grok | implement, test, canvas, js, infra |
-| implement / test / refactor / cli-plumbing | Codex | implement, test, refactor, cli-plumbing |
+| implement / test / refactor / cli-plumbing / review | Codex | implement, test, refactor, cli-plumbing, review |
 Do not start a task outside your role column without explicit approval from Claude.
 
-**GitHub write routing (#426):** Route any task that requires GitHub write actions to **claude by default, Agy as fallback** (live-verified 2026-08-23; see `docs/superpowers/specs/2026-08-23-gh-write-identity-hardening-design.md`)
+**GitHub write routing (#1271):** Route any task that requires GitHub write actions to **Codex by default, Claude/Agy as fallbacks** (verified live in job `job-836e13a4`)
 - Grok's dispatch sandbox denies `bash` execution entirely in this environment (confirmed via `git diff origin/main` showing a total silent no-op despite a generic "OK, exit 0" job status — do not trust job-status alone for Grok gh-write attempts)
-- Codex's `workspace-write` sandbox blocks network egress to `api.github.com` by design
+- Codex receives network access only for explicit `--requires-gh-write` dispatches
 - Pass `--requires-gh-write` on synlynk dispatch to enforce the routing hint automatically; it now also auto-implies the `run:shell` permission grant and fails closed with a `RuntimeError` if no role is resolvable via `--as-agent`, `--story`, or `--role` (#569)
 
 This table is generated from `.synlynk/config.json` so it tracks the repo's own routing rather than synlynk's default fleet assumptions.
