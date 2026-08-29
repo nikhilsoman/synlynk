@@ -6,12 +6,17 @@ A nonfiction book grounded in synlynk's real build history and three sister proj
 
 ## Files
 
-- `the-supervised-machine-v0.2-DRAFT.html` — source of truth. Single-file, self-contained HTML (inline CSS, no external assets).
-- `the-supervised-machine-v0.2-DRAFT.pdf` — rendered output, regenerated from the HTML. Do not hand-edit the PDF.
+- `the-supervised-machine-v0.3-DRAFT.html` — source of truth. Single-file, self-contained HTML (inline CSS, no external assets).
+- `the-supervised-machine-v0.3-DRAFT.pdf` — rendered output, regenerated from the HTML. Do not hand-edit the PDF.
 
 ## Editorial history
 
 This draft's structure and content were shaped by a formal editorial-panel review, recorded as a Decision at `project-docs/decisions/2026-08-29-editorial-review-the-supervised-machine.md`. That review's four targeted edits (front-matter glossary + endnoted citations, Part One/Two chapter consolidation, Chapter 14 dedup fix, Chapter 16 reframed as a coda, Chapters 17–19 merged) are reflected in this version.
+
+This draft also incorporates the first chapters written under the multi-author
+repositioning: see `docs/superpowers/specs/2026-08-29-book-multiauthor-repositioning-design.md`
+for the chapter-ownership map and the live claude/codex/grok/agy consultation this design
+was based on.
 
 ## Rebuilding the PDF
 
