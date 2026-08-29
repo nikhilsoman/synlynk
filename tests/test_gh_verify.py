@@ -115,6 +115,21 @@ def test_gh_write_verified_handles_aware_entry_and_naive_since(monkeypatch):
     ) is True
 
 
+def test_gh_write_verified_handles_naive_entry_and_aware_since(monkeypatch):
+    def fake_run(cmd, **kwargs):
+        return subprocess.CompletedProcess(
+            cmd,
+            0,
+            stdout='{"reviews":[{"submittedAt":"2026-08-18T11:00:00"}]}',
+            stderr="",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    assert gh_write_verified(
+        "pr:1038", expect="review_posted", since="2026-08-18T10:00:00+00:00"
+    ) is True
+
+
 def test_gh_write_verified_review_posted_false_when_only_stale_entry(monkeypatch):
     def fake_run(cmd, **kwargs):
         return subprocess.CompletedProcess(

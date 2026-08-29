@@ -139,6 +139,74 @@ def test_synlynk_daemon_run_loop_refreshes_tokens_on_interval(tmp_path, monkeypa
     assert len(refresh_calls) >= 2
 
 
+def test_synlynk_daemon_run_loop_survives_job_tick_exception(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+
+    import synlynk.daemon as daemon_mod
+    import http.server as _http_server
+
+    monkeypatch.setattr(
+        daemon_mod,
+        "_pkg",
+        lambda name, default=None: {
+            "load_config": lambda: {"watch_interval_seconds": 0},
+        }.get(name, default),
+    )
+
+    reconcile_calls = []
+    dispatch_calls = []
+
+    def fail_once():
+        reconcile_calls.append(1)
+        if len(reconcile_calls) == 1:
+            raise RuntimeError("transient reconciliation failure")
+
+    monkeypatch.setattr(daemon_mod, "_reconcile_daemon_jobs", fail_once)
+    monkeypatch.setattr(
+        daemon_mod,
+        "_dispatch_ready_jobs",
+        lambda max_parallel=4: dispatch_calls.append(max_parallel),
+    )
+
+    refresh_calls = []
+
+    def stop_after_two_ticks(self):
+        refresh_calls.append(1)
+        if len(refresh_calls) >= 3:
+            raise KeyboardInterrupt()
+
+    monkeypatch.setattr(
+        daemon_mod.SynlynkDaemon,
+        "_refresh_github_tokens",
+        stop_after_two_ticks,
+    )
+
+    class FakeServer:
+        allow_reuse_address = False
+
+        def __init__(self, addr, handler):
+            pass
+
+        def serve_forever(self):
+            return None
+
+    monkeypatch.setattr(_http_server, "HTTPServer", FakeServer)
+
+    daemon = daemon_mod.SynlynkDaemon()
+    daemon.token_refresh_interval_seconds = 0
+    daemon._context_lock = __import__("threading").Lock()
+    daemon._get_mtimes = lambda path: {}
+
+    try:
+        daemon._run_loop()
+    except KeyboardInterrupt:
+        pass
+
+    assert len(reconcile_calls) >= 2
+    assert dispatch_calls == [4]
+    assert "transient reconciliation failure" in capsys.readouterr().err
+
+
 def test_watch_daemon_run_loop_refreshes_tokens_before_first_sleep(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
 
