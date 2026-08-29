@@ -420,7 +420,7 @@ class PermissionEnforcementError(RuntimeError):
 
 
 def _permissions_to_flags(agent: str, permissions: list) -> list:
-    """Translate permission strings into agent-specific CLI flags."""
+    """Translate permission strings into harness-specific CLI flags."""
     from synlynk._constants import _PERMISSION_TO_TOOL_MAP
 
     if agent == "agy":

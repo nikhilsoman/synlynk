@@ -222,7 +222,7 @@ def build_parser() -> argparse.ArgumentParser:
     init_parser.add_argument("--force", action="store_true",
                              help="Overwrite existing template files")
     init_parser.add_argument("--agents", default="claude,agy,codex,grok",
-                             help="Comma-separated agent set to generate files for (claude,agy,codex,grok)")
+                             help="Comma-separated harness set to generate files for (claude,agy,codex,grok)")
     init_parser.add_argument("--mode", choices=["solo", "team"], default="solo",
                              help="Project mode written to project-docs/.synlynk_config.json")
     init_parser.add_argument("--org", default=None,
@@ -230,7 +230,7 @@ def build_parser() -> argparse.ArgumentParser:
     init_parser.add_argument("--repo", default=None,
                              help="GitHub repository name (stored in .synlynk/config.json)")
     init_parser.add_argument("--project-id", default=None, dest="project_id",
-                             help="GitHub Projects v2 node ID (fills TODO: PROJECT_ID in agent files)")
+                             help="GitHub Projects v2 node ID (fills TODO: PROJECT_ID in harness files)")
     init_parser.add_argument("--docs-dir", default=None, dest="docs_dir",
                              help="Directory for project docs (default: project-docs). "
                                   "Use '.' for repos that keep docs at the repo root.")
@@ -258,7 +258,7 @@ def build_parser() -> argparse.ArgumentParser:
     decide_parser.add_argument("topic", help="Decision topic (quoted string)")
     decide_parser.add_argument(
         "--panel", required=True,
-        help="Comma-separated agent names, e.g. claude,agy,codex"
+        help="Comma-separated harness names, e.g. claude,agy,codex"
     )
     decide_parser.add_argument(
         "--record", action="store_true",
@@ -335,7 +335,7 @@ def build_parser() -> argparse.ArgumentParser:
                                 help="Discard the current checkpoint without restoring")
 
     probe_parser = subparsers.add_parser(
-        "probe", help="Probe agent harness capability and record compatibility"
+        "probe", help="Probe harness capability and record compatibility"
     )
     probe_parser.add_argument(
         "--harness", "--agent", default=None, dest="harness",
@@ -344,7 +344,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     doctor_parser = subparsers.add_parser("doctor", help="Run health checks on your synlynk installation")
     doctor_parser.add_argument("--fix", default=None,
-                               help="Apply a targeted remediation for the named agent (agy only)")
+                               help="Apply a targeted remediation for the named harness (agy only)")
     doctor_parser.add_argument("--yes", action="store_true",
                                help="Write the proposed remediation without prompting")
 
