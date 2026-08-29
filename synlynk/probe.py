@@ -30,7 +30,7 @@ _PR_REVIEW_SOP = """\
 3. The reviewer alone must merge the PR.
 4. If the reviewer is unavailable, escalate to Claude.
 
-**GitHub identity caveat (#423):** The non-authoring reviewer rule is a *process control* enforced by dispatch discipline, **not** a GitHub-enforced mechanism. All dispatched agents share one GitHub identity (`gh` under the repo owner), so GitHub cannot verify a different reviewer and `gh pr review --approve` fails with "Can not approve your own pull request" on every dispatch-authored PR. **Sanctioned fallback:** post a formal COMMENT review with an explicit approve checklist (as on PR #417) instead of `gh pr review --approve`.
+**GitHub identity note (#423):** If a role has a registered workspace agent (`synlynk agent init <role>`, e.g. `qa` or `architect`), dispatch its review via `synlynk dispatch claude --as-agent <role-agent-id>` — this posts a genuine approving review under that role's own distinct GitHub App identity, satisfying GitHub's non-author review requirement for real approvals. Route day-to-day reviews through `qa` and any feature/architecture-impacting review through `architect`. **Fallback (no registered agent for the role):** post a formal COMMENT review with an explicit approve checklist (as on PR #417) instead of an approving review, since dispatches without `--as-agent` share the single repo-owner GitHub identity and an approving review will fail with the self-approval error.
 """
 
 _BRAINSTORM_SOP = """\
@@ -317,6 +317,12 @@ _FENCE_OPEN_PATTERN = _re.compile(
     r"<!-- synlynk:harness v\S+ verified:\S+ -->.*?<!-- /synlynk:harness -->",
     _re.DOTALL,
 )
+_FENCE_VERSION_AND_BODY_PATTERN = _re.compile(
+    r"<!-- synlynk:harness v(\S+) verified:\S+ -->\n"
+    r"# Harness Instructions \(synlynk-managed — do not edit\)\n\n"
+    r"(.*?)\n<!-- /synlynk:harness -->",
+    _re.DOTALL,
+)
 
 
 def _build_fence_content(harness_version: str, body: str) -> str:
@@ -336,10 +342,14 @@ def _upsert_harness_fence(file_path: str, harness_version: str, body: str) -> No
         print(f"  warning: {file_path} not found — fence skipped. Run synlynk init to create it.", file=sys.stderr)
         return
 
-    fence = _build_fence_content(harness_version, body)
     with open(file_path, "r", encoding="utf-8") as f:
         current = f.read()
 
+    existing_match = _FENCE_VERSION_AND_BODY_PATTERN.search(current)
+    if existing_match and existing_match.group(1) == harness_version and existing_match.group(2) == body:
+        return
+
+    fence = _build_fence_content(harness_version, body)
     if _FENCE_OPEN_PATTERN.search(current):
         updated = _FENCE_OPEN_PATTERN.sub(fence, current, count=1)
     else:
@@ -897,14 +907,10 @@ def _read_harness_fence_body(file_path: str) -> str:
             content = f.read()
     except OSError:
         return ""
-    match = re.search(
-        r"<!-- synlynk:harness v\S+ verified:\S+ -->\n# Harness Instructions \(synlynk-managed — do not edit\)\n\n(.*?)\n<!-- /synlynk:harness -->",
-        content,
-        re.DOTALL,
-    )
+    match = _FENCE_VERSION_AND_BODY_PATTERN.search(content)
     if not match:
         return ""
-    return match.group(1)
+    return match.group(2)
 
 
 def _repair_config_agents(cfg: dict) -> list:
@@ -986,12 +992,16 @@ def _repair_pr_review_sop(cfg: dict) -> str:
         "2. From within the PR's own checked-out worktree/branch, the reviewer must run `synlynk pr check` so it can auto-detect the PR via git/gh context.\n"
         "3. The reviewer alone must merge the PR.\n"
         f"4. If the reviewer is unavailable, escalate to {escalation_target}.\n\n"
-        "**GitHub identity caveat (#423):** The non-authoring reviewer rule is a *process control* "
-        "enforced by dispatch discipline, **not** a GitHub-enforced mechanism. All dispatched agents "
-        "share one GitHub identity (`gh` under the repo owner), so GitHub cannot verify a different "
-        "reviewer and `gh pr review --approve` fails with \"Can not approve your own pull request\" on "
-        "every dispatch-authored PR. **Sanctioned fallback:** post a formal COMMENT review with an "
-        "explicit approve checklist (as on PR #417) instead of `gh pr review --approve`.\n"
+        "**GitHub identity note (#423):** If a role has a registered workspace agent "
+        "(`synlynk agent init <role>`, e.g. `qa` or `architect`), dispatch its review via "
+        "`synlynk dispatch claude --as-agent <role-agent-id>` — this posts a genuine approving "
+        "review under that role's own distinct GitHub App identity, satisfying GitHub's non-author "
+        "review requirement for real approvals. Route day-to-day reviews through `qa` and any "
+        "feature/architecture-impacting review through `architect`. **Fallback (no registered "
+        "agent for the role):** post a formal COMMENT review with an explicit approve checklist "
+        "(as on PR #417) instead of an approving review, since dispatches without `--as-agent` "
+        "share the single repo-owner GitHub identity and an approving review will fail with the "
+        "self-approval error.\n"
     )
 
 

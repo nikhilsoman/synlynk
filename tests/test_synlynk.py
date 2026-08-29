@@ -86,7 +86,7 @@ def test_directive_templates_contain_sop_headers(tmp_path, isolated_db, monkeypa
     # #432 supersedes #427's interim one-liner with a capability-table row + notes
     assert "| GitHub write actions | **claude, Agy fallback** |" in content
     assert "GitHub write routing (#426)" in content
-    assert "GitHub identity caveat (#423)" in content
+    assert "GitHub identity note (#423)" in content
 
 
 def test_run_tc5_passes_when_all_headers_present(tmp_path):
@@ -725,12 +725,22 @@ def test_permissions_to_flags_claude_allowedtools():
     assert "Edit" in tools_str
 
 
-def test_permissions_to_flags_codex_ask_for_approval():
+def test_permissions_to_flags_codex_read_only_uses_config_override():
     from synlynk.dispatch import _permissions_to_flags
 
     result = _permissions_to_flags("codex", ["read:*"])
-    assert "--ask-for-approval" in result
-    assert "untrusted" in result
+    assert result == ["-c", "approval_policy=untrusted"]
+    assert "--ask-for-approval" not in result
+
+
+def test_permissions_to_flags_codex_network_access_requires_run_install():
+    from synlynk.dispatch import _permissions_to_flags
+
+    granted = _permissions_to_flags("codex", ["read:*", "run:install"])
+    assert granted[-2:] == ["-c", "sandbox_workspace_write.network_access=true"]
+
+    default_safe = _permissions_to_flags("codex", ["read:*"])
+    assert "sandbox_workspace_write.network_access=true" not in default_safe
 
 
 def test_permissions_to_flags_agy_raises_for_read_only():
@@ -2688,8 +2698,8 @@ def test_sentinel_clear_by_severity(project_dir):
     assert "ZOMBIE_DAEMON" in alerts[0]
 
 
-def test_version_is_0170(project_dir):
-    assert synlynk.VERSION == "0.17.0"
+def test_version_is_0180(project_dir):
+    assert synlynk.VERSION == "0.18.0"
 
 
 def test_pyproject_version_matches_module(project_dir):
@@ -5041,8 +5051,8 @@ def test_codex_baseline_uses_exec_subcommand(project_dir, monkeypatch):
     shell_cmd = captured["cmd"][2]  # ["sh", "-c", <shell_cmd>]
     assert "codex exec" in shell_cmd
     assert "workspace-write" in shell_cmd
-    assert "--ask-for-approval" in shell_cmd
-    assert shell_cmd.count("--ask-for-approval") == 1
+    assert "approval_policy=untrusted" in shell_cmd
+    assert "--ask-for-approval" not in shell_cmd
     assert "--dangerously-bypass-approvals-and-sandbox" not in shell_cmd
     # Bare --sandbox (no value) must not appear; value is already supplied via -s workspace-write
     assert "--sandbox" not in shell_cmd
@@ -6951,6 +6961,8 @@ def test_daemon_cli_uninstall_service_dispatch(project_dir, monkeypatch):
 
 
 def test_install_service_macos(project_dir, monkeypatch):
+    import plistlib
+
     monkeypatch.setenv("HOME", str(project_dir))
     monkeypatch.setattr(synlynk.sys, "platform", "darwin")
     monkeypatch.setattr(synlynk.shutil, "which", lambda name: "/usr/local/bin/synlynk" if name == "synlynk" else None)
@@ -6977,6 +6989,8 @@ def test_install_service_macos(project_dir, monkeypatch):
     assert "<string>/usr/local/bin/synlynk</string>" in plist
     assert "<string>com.synlynk.daemon</string>" in plist
     assert ".synlynk/launchd.log" in plist
+    assert plistlib.loads(plist.encode())["KeepAlive"] == {"SuccessfulExit": False}
+    assert "<key>KeepAlive</key>\n    <false/>" not in plist
     assert calls[0][0] == ["launchctl", "load", "-w", str(plist_path)]
 
 

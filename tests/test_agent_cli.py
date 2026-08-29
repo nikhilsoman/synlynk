@@ -1,9 +1,83 @@
-import os
 import sqlite3
+import subprocess
 
 import pytest
 
 from synlynk.agent_cli import SEED_CHARTERS
+
+
+def test_macos_launchd_daemon_service_has_keepalive_successful_exit_dict(
+    project_dir, monkeypatch
+):
+    import synlynk
+    import plistlib
+
+    monkeypatch.setenv("HOME", str(project_dir))
+    monkeypatch.setattr(synlynk.sys, "platform", "darwin")
+    monkeypatch.setattr(
+        synlynk.shutil,
+        "which",
+        lambda name: "/usr/local/bin/synlynk" if name == "synlynk" else None,
+    )
+    monkeypatch.setattr(synlynk.os, "makedirs", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        synlynk.subprocess,
+        "run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(args[0], 0),
+    )
+
+    launchagents_dir = project_dir / "Library" / "LaunchAgents"
+    launchagents_dir.mkdir(parents=True, exist_ok=True)
+
+    synlynk._daemon_install_service(object())
+
+    plist = (launchagents_dir / "com.synlynk.daemon.plist").read_text()
+    assert plistlib.loads(plist.encode())["KeepAlive"] == {"SuccessfulExit": False}
+    assert "<key>KeepAlive</key>\n    <false/>" not in plist
+
+
+def test_jobs_all_crashes_typeerror_comparing_offset_naive_and_aware(monkeypatch):
+    from synlynk.gh_verify import gh_write_verified
+
+    def fake_run(cmd, **kwargs):
+        return subprocess.CompletedProcess(
+            cmd,
+            0,
+            stdout='{"reviews":[{"submittedAt":"2026-08-18T11:00:00Z"}]}',
+            stderr="",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    assert gh_write_verified(
+        "pr:1038", expect="review_posted", since="2026-08-18T10:00:00"
+    ) is True
+
+
+def test_codex_dispatch_workspacewrite_sandbox_bl_network_permission_adds_override():
+    from synlynk.dispatch import _permissions_to_flags
+
+    flags = _permissions_to_flags("codex", ["read:*", "run:install"])
+
+    assert flags[-2:] == ["-c", "sandbox_workspace_write.network_access=true"]
+
+
+def test_codex_dispatch_workspacewrite_sandbox_bl_without_network_permission_is_safe():
+    from synlynk.dispatch import _permissions_to_flags
+
+    flags = _permissions_to_flags("codex", ["read:*"])
+
+    assert flags == ["-c", "approval_policy=untrusted"]
+    assert "--ask-for-approval" not in flags
+    assert "sandbox_workspace_write.network_access=true" not in flags
+
+
+def test_codex_dispatch_fails_askforapproval_rejected_flag_is_not_emitted():
+    from synlynk.dispatch import _permissions_to_flags
+
+    flags = _permissions_to_flags("codex", ["read:*"])
+
+    assert flags == ["-c", "approval_policy=untrusted"]
+    assert "--ask-for-approval" not in flags
 
 
 def test_pm_charter_includes_competitive_sweep_responsibility():
@@ -74,6 +148,27 @@ def test_live5__migrate_db_copies_the_entire_state_db_only_once(tmp_path):
 
     assert before == 1
     assert after == before
+
+
+def test_live5__migrate_db_skips_work_on_already_migrated_connection(tmp_path, monkeypatch):
+    from synlynk import db
+
+    db_path = tmp_path / "state.db"
+    conn = sqlite3.connect(db_path)
+    conn.execute("CREATE TABLE legacy (payload TEXT)")
+    conn.execute("INSERT INTO legacy VALUES (?)", ("x" * 8192,))
+    conn.commit()
+
+    db._migrate_db(conn)
+    conn.close()
+
+    def fail_if_called(_conn):
+        raise AssertionError("migration work ran for an already-migrated database")
+
+    monkeypatch.setattr(db, "_run_harness_rename_migration", fail_if_called)
+    second_conn = sqlite3.connect(db_path)
+    db._migrate_db(second_conn)
+    second_conn.close()
 
 
 def test_live5__harness_rename_is_safe_when_both_reservation_tables_exist():
@@ -153,17 +248,6 @@ def test_cmd_agent_init_creates_registry_entry_and_charter(project_dir):
     assert content == agent_cli.SEED_CHARTERS["dev"]
 
 
-def test_cmd_agent_init_writes_projection_with_empty_capability_grants(project_dir):
-    from synlynk import agent_cli
-
-    agent_id = agent_cli.cmd_agent_init("qa")
-
-    projection_path = os.path.join(".synlynk", "agents", f"{agent_id}.yaml")
-    with open(projection_path) as f:
-        rendered = f.read()
-    assert "capability_grants: {}" in rendered
-
-
 def test_cmd_agent_init_rejects_duplicate_role(project_dir, capsys):
     from synlynk import agent_cli
 
@@ -236,14 +320,27 @@ def test_cmd_agent_edit_updates_charter(project_dir, tmp_path, capsys):
     agent_id = agent_cli.cmd_agent_init("dev")
     capsys.readouterr()
 
+    new_content = (
+        "---\n"
+        "schema_version: 1\n"
+        "role: dev\n"
+        'description: "Implementation — writes the code, reviews own PRs."\n'
+        "durability: dispatch-only\n"
+        "tools: []\n"
+        "credentials: []\n"
+        "---\n\n"
+        "## Instructions\n\nUpdated instructions.\n\n"
+        "## Authority & Escalation\n\nUpdated escalation.\n\n"
+        "## Workflow Ownership\n\nUpdated ownership.\n"
+    )
     charter_file = tmp_path / "new_charter.md"
-    charter_file.write_text("Implementation — writes the code, reviews own PRs.")
+    charter_file.write_text(new_content)
 
     agent_cli.cmd_agent_edit(agent_id, str(charter_file))
 
     content, revision = agent_store.read_charter(agent_id)
     assert revision == 2
-    assert content == "Implementation — writes the code, reviews own PRs."
+    assert content == new_content
 
 
 def test_cmd_agent_edit_stdin(project_dir, monkeypatch, capsys):
@@ -253,11 +350,24 @@ def test_cmd_agent_edit_stdin(project_dir, monkeypatch, capsys):
     agent_id = agent_cli.cmd_agent_init("dev")
     capsys.readouterr()
 
-    monkeypatch.setattr("sys.stdin", io.StringIO("New charter from stdin."))
+    new_content = (
+        "---\n"
+        "schema_version: 1\n"
+        "role: dev\n"
+        'description: "New charter from stdin."\n'
+        "durability: dispatch-only\n"
+        "tools: []\n"
+        "credentials: []\n"
+        "---\n\n"
+        "## Instructions\n\nFrom stdin.\n\n"
+        "## Authority & Escalation\n\nFrom stdin.\n\n"
+        "## Workflow Ownership\n\nFrom stdin.\n"
+    )
+    monkeypatch.setattr("sys.stdin", io.StringIO(new_content))
     agent_cli.cmd_agent_edit(agent_id, "-")
 
     content, revision = agent_store.read_charter(agent_id)
-    assert content == "New charter from stdin."
+    assert content == new_content
     assert revision == 2
 
 
@@ -287,26 +397,49 @@ def test_cmd_agent_edit_stale_revision_exits_1(project_dir, tmp_path, monkeypatc
     assert "updated by someone else" in captured.err or "updated by someone else" in captured.out
 
 
-def test_cmd_agent_edit_preserves_capability_grants_set_after_init(project_dir, tmp_path, capsys):
+def test_cmd_agent_edit_rejects_invalid_charter_exits_1(project_dir, tmp_path, capsys):
+    from synlynk import agent_cli
+
+    agent_id = agent_cli.cmd_agent_init("dev")
+    capsys.readouterr()
+
+    charter_file = tmp_path / "invalid.md"
+    charter_file.write_text("not a valid charter, no frontmatter")
+
+    with pytest.raises(SystemExit) as exc_info:
+        agent_cli.cmd_agent_edit(agent_id, str(charter_file))
+    assert exc_info.value.code == 1
+    captured = capsys.readouterr()
+    assert "failed validation" in captured.err
+
+
+def test_cmd_agent_sync_routing_populates_dispatch_routing_for_dev(project_dir, capsys):
     from synlynk import agent_cli, agent_store
 
     agent_id = agent_cli.cmd_agent_init("dev")
     capsys.readouterr()
 
-    # Simulate a future mechanism (e.g. Phase 3 capability registry) writing
-    # a non-empty capability_grants after init but before this edit.
-    agent_store.regenerate_agent_projection(
-        agent_id, repo_overrides={"capability_grants": {"can_deploy": True}}
-    )
+    agent_cli.cmd_agent_sync_routing(agent_id)
 
-    charter_file = tmp_path / "edited_charter.md"
-    charter_file.write_text("Implementation — writes the code, now with more detail.")
-    agent_cli.cmd_agent_edit(agent_id, str(charter_file))
+    content, revision = agent_store.read_charter(agent_id)
+    assert revision == 2
+    assert "dispatch_routing:" in content
+    captured = capsys.readouterr()
+    assert "Synced dispatch_routing" in captured.out
 
-    projection_path = os.path.join(".synlynk", "agents", f"{agent_id}.yaml")
-    with open(projection_path) as f:
-        rendered = f.read()
-    assert "can_deploy: True" in rendered
+
+def test_cmd_agent_sync_routing_reports_noop_for_role_without_task_allocation(project_dir, capsys):
+    from synlynk import agent_cli, agent_store
+
+    agent_id = agent_cli.cmd_agent_init("qa")
+    capsys.readouterr()
+
+    agent_cli.cmd_agent_sync_routing(agent_id)
+
+    content, revision = agent_store.read_charter(agent_id)
+    assert revision == 1
+    captured = capsys.readouterr()
+    assert "nothing to sync" in captured.out
 
 
 def test_cmd_agent_disable_sets_flag(project_dir, capsys):

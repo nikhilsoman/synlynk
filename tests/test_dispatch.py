@@ -1222,6 +1222,107 @@ def test_dispatch_agent_persists_requires_gh_write_and_target_on_daemon_jobs(pro
     assert row[1] == "issue:701"
 
 
+def test_dispatch_agent_extracts_pr_target_from_task_for_gh_write(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+
+    class FakeProc:
+        pid = 1
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(
+        dispatch_mod.subprocess,
+        "run",
+        lambda *a, **kw: dispatch_mod.subprocess.CompletedProcess(
+            a[0], 0, stdout='{"title":"review PR","body":"","labels":[]}', stderr=""
+        ),
+    )
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda *a, **kw: {"passed": True, "sentinel": None, "reason": None})
+    monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_gh_token", lambda role: "test-gh-token")
+    monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_gh_bot_login", lambda role: "qa-bot")
+
+    sl.dispatch_agent(
+        "codex", "post a review on PR #1180", force_agent=True,
+        requires_gh_write=True, task_type="review", role="qa",
+    )
+
+    conn = sl._get_db()
+    row = conn.execute(
+        "SELECT gh_write_target, gh_write_author, gh_write_expect FROM daemon_jobs "
+        "ORDER BY enqueued_at DESC LIMIT 1"
+    ).fetchone()
+    conn.close()
+    assert row[0] == "pr:1180"
+    assert row[1]
+    assert row[2] == "review_posted"
+
+
+def test_dispatch_agent_warns_and_falls_back_without_gh_write_target(project_dir, monkeypatch, capsys):
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+
+    class FakeProc:
+        pid = 1
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(
+        dispatch_mod.subprocess,
+        "run",
+        lambda *a, **kw: dispatch_mod.subprocess.CompletedProcess(
+            a[0], 0, stdout='{"title":"sign-off note","body":"","labels":[]}', stderr=""
+        ),
+    )
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda *a, **kw: {"passed": True, "sentinel": None, "reason": None})
+    monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_gh_token", lambda role: "test-gh-token")
+
+    sl.dispatch_agent(
+        "codex", "post the requested sign-off note", force_agent=True,
+        requires_gh_write=True, role="qa",
+    )
+
+    captured = capsys.readouterr()
+    assert "no numbered PR/issue target" in captured.err
+    conn = sl._get_db()
+    row = conn.execute(
+        "SELECT gh_write_target, gh_write_author FROM daemon_jobs "
+        "ORDER BY enqueued_at DESC LIMIT 1"
+    ).fetchone()
+    conn.close()
+    assert row[0] is None
+    assert row[1] is None
+
+
+def test_dispatch_agent_explicit_issue_takes_precedence_over_task_target(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+
+    class FakeProc:
+        pid = 1
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(
+        dispatch_mod.subprocess,
+        "run",
+        lambda *a, **kw: dispatch_mod.subprocess.CompletedProcess(
+            a[0], 0, stdout='{"title":"explicit issue","body":"","labels":[]}', stderr=""
+        ),
+    )
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda *a, **kw: {"passed": True, "sentinel": None, "reason": None})
+    monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_gh_token", lambda role: "test-gh-token")
+
+    sl.dispatch_agent(
+        "codex", "post a review on PR #1180 and reference issue #1200", force_agent=True,
+        requires_gh_write=True, issue=1300, gh_write_target_kind="issue", role="qa",
+    )
+
+    conn = sl._get_db()
+    row = conn.execute(
+        "SELECT gh_write_target FROM daemon_jobs ORDER BY enqueued_at DESC LIMIT 1"
+    ).fetchone()
+    conn.close()
+    assert row[0] == "issue:1300"
+
+
 def test_dispatch_agent_persists_agent_id_on_daemon_jobs(project_dir, monkeypatch):
     import synlynk as sl
     import synlynk.dispatch as dispatch_mod

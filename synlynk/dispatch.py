@@ -15,7 +15,7 @@ import threading
 import time
 from typing import Optional, Tuple
 
-from synlynk._constants import HARNESS_CAPABILITY_BASELINES
+from synlynk._constants import HARNESS_CAPABILITY_BASELINES, _CODEX_NETWORK_PERMISSION
 
 _ORG_ROLE_TO_BASELINE_ROLE = {
     "dev": "builder",
@@ -447,9 +447,12 @@ def _permissions_to_flags(agent: str, permissions: list) -> list:
         return ["--allowedTools", ",".join(tools)]
     if agent == "codex":
         has_write = any((perm or "").startswith("write:") for perm in (permissions or []))
+        flags = []
         if not has_write:
-            return ["--ask-for-approval", "untrusted"]
-        return []
+            flags = ["-c", "approval_policy=untrusted"]
+        if _CODEX_NETWORK_PERMISSION in (permissions or []):
+            flags += ["-c", "sandbox_workspace_write.network_access=true"]
+        return flags
     if agent == "grok":
         return _grok_permission_flags(permissions)
     if agent == "local":
@@ -2523,6 +2526,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         flags = flags + ["--output-format", "json"]
     if agent == "codex":
         flags = flags + ["--json"]
+        if _CODEX_NETWORK_PERMISSION in permissions and "sandbox_workspace_write.network_access=true" not in flags:
+            flags = flags + ["-c", "sandbox_workspace_write.network_access=true"]
         try:
             result = subprocess.run(
                 ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
@@ -2714,9 +2719,34 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     gh_write_target_value = None
     gh_write_author_value = None
     gh_write_expect_value = None
-    if requires_gh_write and issue is not None:
-        target_prefix = "pr" if gh_write_target_kind == "pr" else "issue"
-        gh_write_target_value = f"{target_prefix}:{issue}"
+    gh_write_target_number = issue
+    resolved_gh_write_target_kind = gh_write_target_kind
+    if requires_gh_write and gh_write_target_number is None:
+        task_target_match = re.search(
+            r"\b(?:pr|pull\s+request)\s*#?\s*(\d+)\b",
+            task or "",
+            re.IGNORECASE,
+        )
+        issue_target_match = re.search(
+            r"\bissues?\s*#?\s*(\d+)\b",
+            task or "",
+            re.IGNORECASE,
+        )
+        if task_target_match:
+            resolved_gh_write_target_kind = "pr"
+            gh_write_target_number = int(task_target_match.group(1))
+        elif issue_target_match:
+            resolved_gh_write_target_kind = "issue"
+            gh_write_target_number = int(issue_target_match.group(1))
+        else:
+            print(
+                "  ⚠ --requires-gh-write task has no numbered PR/issue target; "
+                "falling back to worktree activity verification",
+                file=sys.stderr,
+            )
+    if requires_gh_write and gh_write_target_number is not None:
+        target_prefix = "pr" if resolved_gh_write_target_kind == "pr" else "issue"
+        gh_write_target_value = f"{target_prefix}:{gh_write_target_number}"
         gh_write_role = resolved_agent_role or _role_for_story(story_id)
         gh_write_author_value = _resolve_dispatch_gh_bot_login(gh_write_role)
         gh_write_expect_value = "review_posted" if task_type == "review" else "closed"

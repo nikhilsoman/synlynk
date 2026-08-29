@@ -368,585 +368,7 @@ def _snapshot_before_migration(conn: sqlite3.Connection) -> str | None:
     return backup_path
 
 
-def _migrate_db(conn: sqlite3.Connection) -> None:
-    """Idempotent schema migrations. Adds tables/views if absent."""
-    migration_version = conn.execute("PRAGMA user_version").fetchone()[0]
-    if migration_version < _DB_MIGRATION_VERSION:
-        _snapshot_before_migration(conn)
-    _run_harness_rename_migration(conn)
-    from synlynk import HARNESS_CAPABILITY_BASELINES, _DB_SCHEMA, _DB_SCORES_VIEW, _seed_verb_map
-    conn.executescript(_DB_SCHEMA)
-    story_cols = {row[1] for row in conn.execute("PRAGMA table_info(stories)")}
-    if "discipline" not in story_cols:
-        try:
-            conn.execute("ALTER TABLE stories ADD COLUMN discipline TEXT NOT NULL DEFAULT 'backend'")
-        except sqlite3.OperationalError:
-            pass
-    if "role" not in story_cols:
-        try:
-            conn.execute("ALTER TABLE stories ADD COLUMN role TEXT NOT NULL DEFAULT 'dev'")
-        except sqlite3.OperationalError:
-            pass
-    if "stage" not in story_cols:
-        try:
-            conn.execute("ALTER TABLE stories ADD COLUMN stage TEXT NOT NULL DEFAULT 'open'")
-        except sqlite3.OperationalError:
-            pass
-    if "estimated_tokens" not in story_cols:
-        conn.execute("ALTER TABLE stories ADD COLUMN estimated_tokens INTEGER")
-    if "actual_tokens" not in story_cols:
-        conn.execute("ALTER TABLE stories ADD COLUMN actual_tokens INTEGER")
-    if "stack_tags" not in story_cols:
-        conn.execute("ALTER TABLE stories ADD COLUMN stack_tags TEXT DEFAULT '[]'")
-    if "status" not in story_cols:
-        conn.execute("ALTER TABLE stories ADD COLUMN status TEXT NOT NULL DEFAULT 'open'")
-    if "goal_id" not in story_cols:
-        try:
-            conn.execute("ALTER TABLE stories ADD COLUMN goal_id TEXT REFERENCES goals(goal_id)")
-        except sqlite3.OperationalError:
-            pass
-    conn.execute(
-        "UPDATE stories SET discipline = COALESCE(NULLIF(discipline, ''), NULLIF(engg_domain, ''), 'backend') "
-        "WHERE discipline IS NULL OR discipline = ''"
-    )
-    conn.execute(
-        "UPDATE stories SET role = COALESCE(NULLIF(role, ''), 'dev') "
-        "WHERE role IS NULL OR role = ''"
-    )
-    conn.execute(
-        "UPDATE stories SET stage = COALESCE(NULLIF(stage, ''), 'open') "
-        "WHERE stage IS NULL OR stage = ''"
-    )
-    conn.execute(
-        "UPDATE stories SET engg_domain = COALESCE(NULLIF(engg_domain, ''), discipline, 'backend') "
-        "WHERE engg_domain IS NULL OR engg_domain = ''"
-    )
-    gc_cols = {row[1] for row in conn.execute("PRAGMA table_info(goal_contributions)")}
-    if "link_status" not in gc_cols:
-        try:
-            conn.execute(
-                "ALTER TABLE goal_contributions ADD COLUMN link_status TEXT NOT NULL DEFAULT 'linked'"
-            )
-        except sqlite3.OperationalError:
-            pass
-    if "skip_reason" not in gc_cols:
-        try:
-            conn.execute("ALTER TABLE goal_contributions ADD COLUMN skip_reason TEXT")
-        except sqlite3.OperationalError:
-            pass
-    daemon_job_cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)")}
-    if "handoff_count" not in daemon_job_cols:
-        try:
-            conn.execute("ALTER TABLE daemon_jobs ADD COLUMN handoff_count INTEGER NOT NULL DEFAULT 0")
-        except sqlite3.OperationalError:
-            pass
-    if "previous_agents" not in daemon_job_cols:
-        try:
-            conn.execute("ALTER TABLE daemon_jobs ADD COLUMN previous_agents TEXT")
-        except sqlite3.OperationalError:
-            pass
-    if "dispatch_context" not in daemon_job_cols:
-        try:
-            conn.execute("ALTER TABLE daemon_jobs ADD COLUMN dispatch_context TEXT")
-        except sqlite3.OperationalError:
-            pass
-    if "blocked_reason" not in daemon_job_cols:
-        try:
-            conn.execute("ALTER TABLE daemon_jobs ADD COLUMN blocked_reason TEXT")
-        except sqlite3.OperationalError:
-            pass
-    if "context_mode" not in daemon_job_cols:
-        try:
-            conn.execute("ALTER TABLE daemon_jobs ADD COLUMN context_mode TEXT")
-        except sqlite3.OperationalError:
-            pass
-    if "context_bytes" not in daemon_job_cols:
-        try:
-            conn.execute("ALTER TABLE daemon_jobs ADD COLUMN context_bytes INTEGER")
-        except sqlite3.OperationalError:
-            pass
-    if "session_id" not in daemon_job_cols:
-        try:
-            conn.execute("ALTER TABLE daemon_jobs ADD COLUMN session_id TEXT")
-        except sqlite3.OperationalError:
-            pass
-    if "agent_id" not in daemon_job_cols:
-        try:
-            conn.execute("ALTER TABLE daemon_jobs ADD COLUMN agent_id TEXT")
-        except sqlite3.OperationalError:
-            pass
-    if "requires_gh_write" not in daemon_job_cols:
-        try:
-            conn.execute("ALTER TABLE daemon_jobs ADD COLUMN requires_gh_write INTEGER NOT NULL DEFAULT 0")
-        except sqlite3.OperationalError:
-            pass
-    if "gh_write_target" not in daemon_job_cols:
-        try:
-            conn.execute("ALTER TABLE daemon_jobs ADD COLUMN gh_write_target TEXT")
-        except sqlite3.OperationalError:
-            pass
-    if "gh_write_verified" not in daemon_job_cols:
-        try:
-            conn.execute("ALTER TABLE daemon_jobs ADD COLUMN gh_write_verified TEXT")
-        except sqlite3.OperationalError:
-            pass
-    if "gh_write_author" not in daemon_job_cols:
-        try:
-            conn.execute("ALTER TABLE daemon_jobs ADD COLUMN gh_write_author TEXT")
-        except sqlite3.OperationalError:
-            pass
-    if "gh_write_expect" not in daemon_job_cols:
-        try:
-            conn.execute("ALTER TABLE daemon_jobs ADD COLUMN gh_write_expect TEXT DEFAULT 'closed'")
-        except sqlite3.OperationalError:
-            pass
-    cost_cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}
-    if "session_id" not in cost_cols:
-        try:
-            conn.execute("ALTER TABLE cost_entries ADD COLUMN session_id TEXT")
-        except sqlite3.OperationalError:
-            pass
-    conn.execute("DROP VIEW IF EXISTS capability_scores")
-    conn.executescript(_DB_SCORES_VIEW)
-    conn.executescript("""
-        CREATE TABLE IF NOT EXISTS harness_baselines (
-            harness_name TEXT NOT NULL,
-            cli_version TEXT NOT NULL DEFAULT 'any',
-            headless_contract TEXT NOT NULL DEFAULT '{}',
-            dispatch_flags TEXT NOT NULL DEFAULT '{}',
-            network_deps TEXT NOT NULL DEFAULT '{}',
-            baseline_source TEXT NOT NULL DEFAULT 'curated',
-            PRIMARY KEY (harness_name, cli_version)
-        );
-
-        CREATE TABLE IF NOT EXISTS harness_records (
-            harness_name TEXT PRIMARY KEY,
-            installed_version TEXT NOT NULL DEFAULT 'unknown',
-            compliance_status TEXT NOT NULL DEFAULT 'unknown',
-            active_contract TEXT NOT NULL DEFAULT '{}',
-            active_flags TEXT NOT NULL DEFAULT '{}',
-            last_probe_at TEXT,
-            capability_hash TEXT NOT NULL DEFAULT ''
-        );
-
-        CREATE TABLE IF NOT EXISTS harness_verb_map (
-            synlynk_verb TEXT,
-            verb_category TEXT,
-            harness_name TEXT NOT NULL,
-            harness_command TEXT,
-            supported TEXT NOT NULL DEFAULT 'none',
-            partial_notes TEXT,
-            min_cli_version TEXT,
-            PRIMARY KEY (synlynk_verb, harness_name)
-        );
-
-        CREATE TABLE IF NOT EXISTS harness_command_palette (
-            harness_name TEXT NOT NULL,
-            cli_version TEXT NOT NULL,
-            command TEXT NOT NULL,
-            command_type TEXT NOT NULL,
-            synlynk_verb TEXT,
-            help_text TEXT,
-            first_seen_version TEXT NOT NULL,
-            last_seen_version TEXT,
-            PRIMARY KEY (harness_name, cli_version, command)
-        );
-
-        CREATE TABLE IF NOT EXISTS harness_version_history (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            harness_name TEXT NOT NULL,
-            cli_version TEXT NOT NULL,
-            event_type TEXT NOT NULL,
-            prev_hash TEXT,
-            new_hash TEXT,
-            recorded_at TEXT NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS harness_models (
-            harness_name TEXT NOT NULL,
-            model_id TEXT NOT NULL,
-            first_seen_at TEXT NOT NULL,
-            last_seen_at TEXT NOT NULL,
-            status TEXT NOT NULL DEFAULT 'active',
-            superseded_by TEXT,
-            discovery_source TEXT NOT NULL DEFAULT 'curated',
-            PRIMARY KEY (harness_name, model_id)
-        );
-
-        CREATE TABLE IF NOT EXISTS harness_modes (
-            harness_name TEXT NOT NULL,
-            cli_version_range TEXT NOT NULL,
-            mode_type TEXT NOT NULL,
-            mode_name TEXT NOT NULL,
-            shape TEXT NOT NULL DEFAULT '{}',
-            PRIMARY KEY (harness_name, cli_version_range, mode_type, mode_name)
-        );
-
-        CREATE TABLE IF NOT EXISTS capability_calibration_tasks (
-            task_id TEXT PRIMARY KEY,
-            role TEXT NOT NULL,
-            skill TEXT NOT NULL,
-            difficulty TEXT NOT NULL,
-            prompt_template TEXT NOT NULL,
-            created_at TEXT NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS capability_calibration_results (
-            result_id TEXT PRIMARY KEY,
-            harness_name TEXT NOT NULL,
-            model_id TEXT NOT NULL,
-            task_id TEXT NOT NULL,
-            score REAL NOT NULL,
-            cost_usd REAL NOT NULL,
-            verified_by TEXT NOT NULL,
-            run_at TEXT NOT NULL,
-            FOREIGN KEY (task_id) REFERENCES capability_calibration_tasks(task_id)
-        );
-    """)
-    from synlynk.capability_sweep import _seed_calibration_tasks
-    _seed_calibration_tasks(conn)
-    conn.executescript("""
-        CREATE TABLE IF NOT EXISTS capability_watch (
-            id INTEGER PRIMARY KEY CHECK (id = 1),
-            last_probe_at TEXT,
-            last_green_probe_at TEXT,
-            last_smoke_test_at TEXT,
-            last_green_smoke_at TEXT
-        );
-
-        CREATE TABLE IF NOT EXISTS gh_write_capability (
-            harness TEXT NOT NULL,
-            mode TEXT NOT NULL,
-            action TEXT NOT NULL,
-            status TEXT NOT NULL DEFAULT 'unknown',
-            checked_at TEXT,
-            PRIMARY KEY (harness, mode, action)
-        );
-
-        CREATE TABLE IF NOT EXISTS capability_incidents (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            harness TEXT NOT NULL,
-            failing_path TEXT NOT NULL,
-            classification TEXT NOT NULL,
-            evidence TEXT NOT NULL DEFAULT '',
-            detected_at TEXT NOT NULL
-        );
-    """)
-    conn.execute(
-        "INSERT OR IGNORE INTO capability_watch (id, last_probe_at, last_green_probe_at, "
-        "last_smoke_test_at, last_green_smoke_at) VALUES (1, NULL, NULL, NULL, NULL)"
-    )
-    harness_verb_cols = {row[1] for row in conn.execute("PRAGMA table_info(harness_verb_map)")}
-    if "verb" not in harness_verb_cols:
-        try:
-            conn.execute("ALTER TABLE harness_verb_map ADD COLUMN verb TEXT")
-        except sqlite3.OperationalError:
-            pass
-    if "cycle_hint" not in harness_verb_cols:
-        try:
-            conn.execute("ALTER TABLE harness_verb_map ADD COLUMN cycle_hint TEXT")
-        except sqlite3.OperationalError:
-            pass
-    if "support" not in harness_verb_cols:
-        try:
-            conn.execute("ALTER TABLE harness_verb_map ADD COLUMN support TEXT")
-        except sqlite3.OperationalError:
-            pass
-    if "notes" not in harness_verb_cols:
-        try:
-            conn.execute("ALTER TABLE harness_verb_map ADD COLUMN notes TEXT")
-        except sqlite3.OperationalError:
-            pass
-    if "updated_at" not in harness_verb_cols:
-        try:
-            conn.execute("ALTER TABLE harness_verb_map ADD COLUMN updated_at TEXT")
-        except sqlite3.OperationalError:
-            pass
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS cycle_capability (
-            harness_name  TEXT NOT NULL,
-            cycle         TEXT NOT NULL,
-            support       TEXT NOT NULL DEFAULT 'none',
-            notes         TEXT,
-            verb_count    INTEGER DEFAULT 0,
-            full_count    INTEGER DEFAULT 0,
-            partial_count INTEGER DEFAULT 0,
-            updated_at    TEXT NOT NULL,
-            PRIMARY KEY (harness_name, cycle)
-        )
-    """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS harness_status (
-            harness_name           TEXT PRIMARY KEY,
-            attach_rate_24h        REAL DEFAULT 0.0,
-            attach_point_in_time   INTEGER DEFAULT 0,
-            adherence_score        REAL DEFAULT NULL,
-            completion_rate_24h    REAL DEFAULT NULL,
-            rescue_count_24h       INTEGER DEFAULT 0,
-            output_velocity_p50    REAL DEFAULT NULL,
-            installed_version      TEXT DEFAULT '',
-            latest_version         TEXT DEFAULT NULL,
-            plan_tier              TEXT DEFAULT 'unknown',
-            plan_type              TEXT DEFAULT 'd2c',
-            ctx_window_tokens      INTEGER DEFAULT NULL,
-            read_budget_tokens     INTEGER DEFAULT NULL,
-            write_budget_tokens    INTEGER DEFAULT NULL,
-            tool_budget_count      INTEGER DEFAULT NULL,
-            tc1_status             TEXT DEFAULT 'unknown',
-            tc2_status             TEXT DEFAULT 'unknown',
-            tc3_status             TEXT DEFAULT 'unknown',
-            tc4_status             TEXT DEFAULT 'unknown',
-            harness_compat_score   REAL DEFAULT NULL,
-            last_probe_at          TEXT DEFAULT NULL,
-            last_telemetry_at      TEXT DEFAULT NULL
-        )
-    """)
-    conn.executescript("""
-        CREATE TABLE IF NOT EXISTS memory_entries (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            section     TEXT NOT NULL,
-            body        TEXT NOT NULL,
-            author      TEXT,
-            created_at  TEXT DEFAULT (datetime('now')),
-            updated_at  TEXT DEFAULT (datetime('now'))
-        );
-        CREATE TABLE IF NOT EXISTS roadmap_arcs (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            version     TEXT NOT NULL UNIQUE,
-            title       TEXT,
-            status      TEXT DEFAULT 'planned',
-            target_date TEXT,
-            notes       TEXT
-        );
-        CREATE TABLE IF NOT EXISTS roadmap_phases (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            arc_version TEXT NOT NULL REFERENCES roadmap_arcs(version),
-            phase_title TEXT NOT NULL,
-            status      TEXT DEFAULT 'planned',
-            priority    TEXT,
-            story_id    TEXT REFERENCES stories(story_id),
-            notes       TEXT
-        );
-        CREATE TABLE IF NOT EXISTS cost_entries (
-            id                INTEGER PRIMARY KEY AUTOINCREMENT,
-            session_date      TEXT NOT NULL,
-            agent             TEXT,
-            model             TEXT,
-            input_tokens      INTEGER,
-            output_tokens     INTEGER,
-            cache_read_tokens INTEGER,
-            story_id          TEXT REFERENCES stories(story_id),
-            epic_id           INTEGER REFERENCES roadmap_arcs(id),
-            phase_id          INTEGER REFERENCES roadmap_phases(id),
-            total_cost_usd    REAL,
-            api_equivalent_usd REAL,
-            actual_usd        REAL,
-            payment_mode      TEXT,
-            notes             TEXT,
-            cost_source       TEXT NOT NULL,
-            estimate_basis    TEXT,
-            job_id            TEXT,
-            recorded_at       TEXT DEFAULT (datetime('now')),
-            dispatch_context  TEXT,
-            context_mode      TEXT,
-            session_id        TEXT REFERENCES sessions(session_id)
-        );
-        CREATE TABLE IF NOT EXISTS remediation_actions (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp   TEXT NOT NULL,
-            agent       TEXT NOT NULL,
-            target_file TEXT NOT NULL,
-            exact_diff  TEXT NOT NULL,
-            operator    TEXT NOT NULL
-        );
-        CREATE INDEX IF NOT EXISTS idx_remediation_actions_timestamp
-            ON remediation_actions(timestamp);
-        CREATE TABLE IF NOT EXISTS devlog_entries (
-            id            INTEGER PRIMARY KEY AUTOINCREMENT,
-            author        TEXT NOT NULL,
-            entry_date    TEXT NOT NULL,
-            session_title TEXT,
-            session_id    TEXT,
-            goal_id       TEXT REFERENCES goals(goal_id),
-            member_id     TEXT,
-            body          TEXT NOT NULL,
-            recorded_at   TEXT DEFAULT (datetime('now'))
-        );
-        CREATE INDEX IF NOT EXISTS idx_devlog_author ON devlog_entries(author);
-        CREATE INDEX IF NOT EXISTS idx_devlog_date   ON devlog_entries(entry_date);
-        CREATE TABLE IF NOT EXISTS decisions (
-            decision_id   TEXT PRIMARY KEY,
-            topic         TEXT NOT NULL,
-            date          TEXT NOT NULL,
-            panel         TEXT NOT NULL,
-            status        TEXT NOT NULL,
-            inputs        TEXT NOT NULL,
-            synthesis     TEXT NOT NULL,
-            decision_text TEXT NOT NULL,
-            signature     TEXT,
-            created_at    TEXT DEFAULT (datetime('now'))
-        );
-        CREATE TABLE IF NOT EXISTS members (
-            member_id      TEXT PRIMARY KEY,
-            canonical_name TEXT NOT NULL,
-            created_at     TEXT DEFAULT (datetime('now'))
-        );
-        CREATE TABLE IF NOT EXISTS member_aliases (
-            alias      TEXT PRIMARY KEY,
-            member_id  TEXT NOT NULL REFERENCES members(member_id),
-            alias_type TEXT NOT NULL DEFAULT 'manual',
-            added_at   TEXT DEFAULT (datetime('now'))
-        );
-    """)
-    devlog_cols = {row[1] for row in conn.execute("PRAGMA table_info(devlog_entries)")}
-    if "session_id" not in devlog_cols:
-        try:
-            conn.execute("ALTER TABLE devlog_entries ADD COLUMN session_id TEXT")
-        except sqlite3.OperationalError:
-            pass
-    if "member_id" not in devlog_cols:
-        conn.execute("ALTER TABLE devlog_entries ADD COLUMN member_id TEXT")
-
-    if "goal_id" not in devlog_cols:
-        try:
-            conn.execute("ALTER TABLE devlog_entries ADD COLUMN goal_id TEXT REFERENCES goals(goal_id)")
-        except sqlite3.OperationalError:
-            pass
-
-    conn.execute(
-        "INSERT OR IGNORE INTO members (member_id, canonical_name) VALUES (?, ?)",
-        ("nikhilsoman", "Nikhil Soman"),
-    )
-    conn.executemany(
-        "INSERT OR IGNORE INTO member_aliases (alias, member_id, alias_type) VALUES (?, ?, 'seed')",
-        [("nikhil", "nikhilsoman"), ("nikhilsoman", "nikhilsoman")],
-    )
-    arc_cols = {row[1] for row in conn.execute("PRAGMA table_info(roadmap_arcs)")}
-    if "goal_id" not in arc_cols:
-        try:
-            conn.execute("ALTER TABLE roadmap_arcs ADD COLUMN goal_id TEXT REFERENCES goals(goal_id)")
-        except sqlite3.OperationalError:
-            pass
-    rating_cols = {row[1] for row in conn.execute("PRAGMA table_info(capability_ratings)")}
-    for col, default in [("discipline", "backend"), ("role", "dev"), ("stage", "open")]:
-        if col not in rating_cols:
-            try:
-                conn.execute(f"ALTER TABLE capability_ratings ADD COLUMN {col} TEXT NOT NULL DEFAULT '{default}'")
-            except sqlite3.OperationalError:
-                pass
-    if "stack_tags" not in rating_cols:
-        try:
-            conn.execute("ALTER TABLE capability_ratings ADD COLUMN stack_tags TEXT DEFAULT '[]'")
-        except sqlite3.OperationalError:
-            pass
-    if "pr_number" not in rating_cols:
-        try:
-            conn.execute("ALTER TABLE capability_ratings ADD COLUMN pr_number INTEGER")
-        except sqlite3.OperationalError:
-            pass
-    cost_cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}
-    for col, typedef in [
-        ("story_id", "TEXT REFERENCES stories(story_id)"),
-        ("epic_id", "INTEGER REFERENCES roadmap_arcs(id)"),
-        ("phase_id", "INTEGER REFERENCES roadmap_phases(id)"),
-    ]:
-        if col not in cost_cols:
-            try:
-                conn.execute(f"ALTER TABLE cost_entries ADD COLUMN {col} {typedef}")
-            except sqlite3.OperationalError:
-                pass
-    cost_cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}
-    for col in ("api_equivalent_usd", "actual_usd", "payment_mode"):
-        if col not in cost_cols:
-            typedef = "TEXT" if col == "payment_mode" else "REAL"
-            try:
-                conn.execute(f"ALTER TABLE cost_entries ADD COLUMN {col} {typedef}")
-            except sqlite3.OperationalError:
-                pass
-    if "cost_source" not in cost_cols:
-        conn.execute("ALTER TABLE cost_entries RENAME TO cost_entries_pre_provenance")
-        conn.execute("""
-            CREATE TABLE cost_entries (
-                id                INTEGER PRIMARY KEY AUTOINCREMENT,
-                session_date      TEXT NOT NULL,
-                agent             TEXT,
-                model             TEXT,
-                input_tokens      INTEGER,
-                output_tokens     INTEGER,
-                cache_read_tokens INTEGER,
-                story_id          TEXT REFERENCES stories(story_id),
-                epic_id           INTEGER REFERENCES roadmap_arcs(id),
-                phase_id          INTEGER REFERENCES roadmap_phases(id),
-                total_cost_usd    REAL,
-                api_equivalent_usd REAL,
-                actual_usd        REAL,
-                payment_mode      TEXT,
-                notes             TEXT,
-                cost_source       TEXT NOT NULL,
-                estimate_basis    TEXT,
-                job_id            TEXT,
-                recorded_at       TEXT DEFAULT (datetime('now')),
-                dispatch_context  TEXT
-            )
-        """)
-        old_cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries_pre_provenance)")}
-        select_cols = ", ".join(
-            c if c in old_cols else "NULL"
-            for c in (
-                "session_date",
-                "agent",
-                "model",
-                "input_tokens",
-                "output_tokens",
-                "cache_read_tokens",
-                "story_id",
-                "epic_id",
-                "phase_id",
-                "total_cost_usd",
-                "notes",
-            )
-        )
-        conn.execute(f"""
-            INSERT INTO cost_entries
-                (session_date, agent, model, input_tokens, output_tokens, cache_read_tokens,
-                 story_id, epic_id, phase_id, total_cost_usd, api_equivalent_usd, actual_usd,
-                 payment_mode, notes, cost_source, estimate_basis, job_id, recorded_at)
-            SELECT {select_cols}, NULL, NULL, NULL, 'legacy_unknown', NULL, NULL, recorded_at
-            FROM cost_entries_pre_provenance
-        """)
-        conn.execute("DROP TABLE cost_entries_pre_provenance")
-        cost_cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}
-    if "job_id" not in cost_cols:
-        try:
-            conn.execute("ALTER TABLE cost_entries ADD COLUMN job_id TEXT")
-        except sqlite3.OperationalError:
-            pass
-    if "dispatch_context" not in cost_cols:
-        try:
-            conn.execute("ALTER TABLE cost_entries ADD COLUMN dispatch_context TEXT")
-        except sqlite3.OperationalError:
-            pass
-    if "context_mode" not in cost_cols:
-        try:
-            conn.execute("ALTER TABLE cost_entries ADD COLUMN context_mode TEXT")
-        except sqlite3.OperationalError:
-            pass
-    conn.execute(
-        "CREATE UNIQUE INDEX IF NOT EXISTS idx_cost_entries_job_id "
-        "ON cost_entries(job_id) WHERE job_id IS NOT NULL"
-    )
-    conn.execute(
-        "UPDATE capability_ratings SET discipline = COALESCE(NULLIF(discipline, ''), NULLIF(engg_domain, ''), 'backend') "
-        "WHERE discipline IS NULL OR discipline = ''"
-    )
-    conn.execute(
-        "UPDATE capability_ratings SET role = COALESCE(NULLIF(role, ''), 'dev') "
-        "WHERE role IS NULL OR role = ''"
-    )
-    conn.execute(
-        "UPDATE capability_ratings SET stage = COALESCE(NULLIF(stage, ''), 'open') "
-        "WHERE stage IS NULL OR stage = ''"
-    )
+def _normalize_org_domain_drift(conn: sqlite3.Connection) -> None:
     for table in ("stories", "capability_ratings"):
         valid_org_values = set(_ORG_DOMAINS) | set(_ORG_DOMAIN_DRIFT_MAP) | {"unknown"}
         placeholders = ", ".join("?" for _ in valid_org_values)
@@ -974,204 +396,790 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
                 f"  ⚠ {table} org_domain values remapped to unknown: "
                 + ", ".join(sorted(set(unknown_rows)))
             )
-    # BS-22 introduced erroneous cycle renames; delete any rows with the wrong names
-    # so they don't block migration on databases that ran the bad migration.
-    for sql in [
-        "DELETE FROM cycle_capability WHERE cycle IN ('design','build','sustain')",
-    ]:
-        try:
-            conn.execute(sql)
-        except (sqlite3.OperationalError, sqlite3.IntegrityError):
-            pass
-    cycle_remap = {
-        "dream": "goal", "design": "visualize", "plan": "open",
-        "work": "execute", "build": "execute", "ship": "release",
-        "maintain": "sustain", "engage": "execute",
-    }
-    for old, new in cycle_remap.items():
-        try:
-            conn.execute(
-                "UPDATE cycle_capability SET cycle=? WHERE cycle=?",
-                (new, old)
-            )
-        except sqlite3.IntegrityError:
-            # A row for (agent_name, new) already exists — the old-named row
-            # is a stale duplicate now that both map to the same cycle.
-            conn.execute("DELETE FROM cycle_capability WHERE cycle=?", (old,))
-    import json as _json
-    _HARNESS_MAP = {"claude": "claude-cli", "agy": "agy", "grok": "grok", "codex": "codex"}
-    for _agent_name, _baseline in HARNESS_CAPABILITY_BASELINES.items():
-        _harness_name = _HARNESS_MAP.get(_agent_name, _agent_name)
-        conn.execute("""
-            INSERT OR IGNORE INTO harness_baselines
-                (harness_name, cli_version, headless_contract, dispatch_flags, network_deps, baseline_source)
-            VALUES (?, 'any', ?, ?, ?, 'curated')
-        """, (
-            _harness_name,
-            _json.dumps(_baseline.get("headless_contract", {})),
-            _json.dumps(_baseline.get("dispatch_flags", {})),
-            _json.dumps(_baseline.get("network_deps", {})),
-        ))
-    try:
-        conn.execute("ALTER TABLE stories ADD COLUMN gh_issue TEXT")
-    except Exception:
-        pass
-    conn.commit()
-    # v0.9.2: token budget columns on stories
-    for _col, _typedef in [("estimated_tokens", "INTEGER"), ("actual_tokens", "INTEGER")]:
-        try:
-            conn.execute(f"ALTER TABLE stories ADD COLUMN {_col} {_typedef}")
-        except Exception:
-            pass  # column already exists
-    # #141: harness_quotas base table (also in _DB_SCHEMA; re-assert for older DBs)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS harness_quotas (
-            id           INTEGER PRIMARY KEY AUTOINCREMENT,
-            harness      TEXT NOT NULL,
-            model        TEXT NOT NULL DEFAULT 'unknown',
-            quota_type   TEXT NOT NULL,
-            unit         TEXT NOT NULL DEFAULT 'tokens',
-            limit_tokens INTEGER NOT NULL,
-            used_tokens  INTEGER NOT NULL DEFAULT 0,
-            reset_at     TIMESTAMP,
-            updated_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(harness, model, quota_type, unit)
-        )
-    """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS pr_multiplier_applied (
-            pr_number  INTEGER PRIMARY KEY,
-            applied_at TEXT NOT NULL
-        )
-    """)
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_harness_quotas_harness ON harness_quotas(harness)"
-    )
-    # Quota-aware dispatch reservation: harness_reservations base table
-    # (also in _DB_SCHEMA; re-assert for older DBs)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS harness_reservations (
-            id             INTEGER PRIMARY KEY AUTOINCREMENT,
-            harness        TEXT NOT NULL,
-            tokens         INTEGER NOT NULL,
-            scope          TEXT NOT NULL,
-            scope_id       TEXT,
-            job_id         TEXT,
-            status         TEXT NOT NULL DEFAULT 'open',
-            created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            released_at    TIMESTAMP
-        )
-    """)
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_harness_reservations_harness "
-        "ON harness_reservations(harness, status)"
-    )
-    quota_cols = {row[1] for row in conn.execute("PRAGMA table_info(harness_quotas)")}
-    if quota_cols and "unit" not in quota_cols:
-        try:
-            conn.execute(
-                "ALTER TABLE harness_quotas ADD COLUMN unit TEXT NOT NULL DEFAULT 'tokens'"
-            )
-        except sqlite3.OperationalError:
-            pass
-    if quota_cols and "model" not in quota_cols:
-        try:
-            conn.execute(
-                "ALTER TABLE harness_quotas ADD COLUMN model TEXT NOT NULL DEFAULT 'unknown'"
-            )
-        except sqlite3.OperationalError:
-            pass
-    # #141 follow-up: fleet scheduler columns on stories
-    for _col, _typedef in [
-        ("priority", "INTEGER NOT NULL DEFAULT 5"),
-        ("readiness", "TEXT NOT NULL DEFAULT 'draft'"),
-    ]:
-        try:
-            conn.execute(f"ALTER TABLE stories ADD COLUMN {_col} {_typedef}")
-        except Exception:
-            pass  # column already exists
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS credit_grants (
-            id              INTEGER PRIMARY KEY AUTOINCREMENT,
-            agent           TEXT NOT NULL,
-            face_value_usd  REAL NOT NULL,
-            remaining_usd   REAL NOT NULL,
-            granted_at      TEXT NOT NULL,
-            expires_at      TEXT,
-            note            TEXT
-        )
-    """)
-    # Fleet operability matrix (Supported / Proven tracking)
-    conn.executescript("""
-        CREATE TABLE IF NOT EXISTS fleet_matrix_runs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            run_id TEXT NOT NULL,
-            tier INTEGER NOT NULL,
-            home TEXT NOT NULL,
-            cell TEXT NOT NULL,
-            status TEXT NOT NULL,
-            detail TEXT,
-            cost_usd REAL NOT NULL DEFAULT 0,
-            ts TEXT NOT NULL
-        );
-        CREATE INDEX IF NOT EXISTS idx_fleet_matrix_runs_lookup
-            ON fleet_matrix_runs(home, cell, tier, ts);
-    """)
-    # capability-sweep-taxonomy: crosswalk legacy free-text values to NAICS/APQC/SFIA codes
-    from synlynk.taxonomy_standards import (
-        LEGACY_DISCIPLINE_CROSSWALK,
-        LEGACY_ORG_DOMAIN_CROSSWALK,
-        LEGACY_INDUSTRY_CROSSWALK,
-    )
-    # capability-sweep-taxonomy: one-time gate so the crosswalk only ever
-    # rewrites pre-migration legacy data, not fresh rows written afterward
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS _taxonomy_crosswalk_state ("
-        "id INTEGER PRIMARY KEY CHECK (id = 1), completed INTEGER NOT NULL DEFAULT 0)"
-    )
-    conn.execute(
-        "INSERT OR IGNORE INTO _taxonomy_crosswalk_state (id, completed) VALUES (1, 0)"
-    )
-    already_done = conn.execute(
-        "SELECT completed FROM _taxonomy_crosswalk_state WHERE id = 1"
-    ).fetchone()[0]
-    for table in ("stories", "capability_ratings"):
-        cols = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
-        if "legacy_unmapped" not in cols:
+
+
+def _migrate_db(conn: sqlite3.Connection) -> None:
+    """Idempotent schema migrations. Adds tables/views if absent."""
+    migration_version = conn.execute("PRAGMA user_version").fetchone()[0]
+    if migration_version < _DB_MIGRATION_VERSION:
+        _snapshot_before_migration(conn)
+        _run_harness_rename_migration(conn)
+        from synlynk import HARNESS_CAPABILITY_BASELINES, _DB_SCHEMA, _DB_SCORES_VIEW, _seed_verb_map
+        conn.executescript(_DB_SCHEMA)
+        story_cols = {row[1] for row in conn.execute("PRAGMA table_info(stories)")}
+        if "discipline" not in story_cols:
             try:
-                conn.execute(f"ALTER TABLE {table} ADD COLUMN legacy_unmapped INTEGER NOT NULL DEFAULT 0")
+                conn.execute("ALTER TABLE stories ADD COLUMN discipline TEXT NOT NULL DEFAULT 'backend'")
+            except sqlite3.OperationalError:
+                pass
+        if "role" not in story_cols:
+            try:
+                conn.execute("ALTER TABLE stories ADD COLUMN role TEXT NOT NULL DEFAULT 'dev'")
+            except sqlite3.OperationalError:
+                pass
+        if "stage" not in story_cols:
+            try:
+                conn.execute("ALTER TABLE stories ADD COLUMN stage TEXT NOT NULL DEFAULT 'open'")
+            except sqlite3.OperationalError:
+                pass
+        if "estimated_tokens" not in story_cols:
+            conn.execute("ALTER TABLE stories ADD COLUMN estimated_tokens INTEGER")
+        if "actual_tokens" not in story_cols:
+            conn.execute("ALTER TABLE stories ADD COLUMN actual_tokens INTEGER")
+        if "stack_tags" not in story_cols:
+            conn.execute("ALTER TABLE stories ADD COLUMN stack_tags TEXT DEFAULT '[]'")
+        if "status" not in story_cols:
+            conn.execute("ALTER TABLE stories ADD COLUMN status TEXT NOT NULL DEFAULT 'open'")
+        if "goal_id" not in story_cols:
+            try:
+                conn.execute("ALTER TABLE stories ADD COLUMN goal_id TEXT REFERENCES goals(goal_id)")
+            except sqlite3.OperationalError:
+                pass
+        conn.execute(
+            "UPDATE stories SET discipline = COALESCE(NULLIF(discipline, ''), NULLIF(engg_domain, ''), 'backend') "
+            "WHERE discipline IS NULL OR discipline = ''"
+        )
+        conn.execute(
+            "UPDATE stories SET role = COALESCE(NULLIF(role, ''), 'dev') "
+            "WHERE role IS NULL OR role = ''"
+        )
+        conn.execute(
+            "UPDATE stories SET stage = COALESCE(NULLIF(stage, ''), 'open') "
+            "WHERE stage IS NULL OR stage = ''"
+        )
+        conn.execute(
+            "UPDATE stories SET engg_domain = COALESCE(NULLIF(engg_domain, ''), discipline, 'backend') "
+            "WHERE engg_domain IS NULL OR engg_domain = ''"
+        )
+        gc_cols = {row[1] for row in conn.execute("PRAGMA table_info(goal_contributions)")}
+        if "link_status" not in gc_cols:
+            try:
+                conn.execute(
+                    "ALTER TABLE goal_contributions ADD COLUMN link_status TEXT NOT NULL DEFAULT 'linked'"
+                )
+            except sqlite3.OperationalError:
+                pass
+        if "skip_reason" not in gc_cols:
+            try:
+                conn.execute("ALTER TABLE goal_contributions ADD COLUMN skip_reason TEXT")
+            except sqlite3.OperationalError:
+                pass
+        daemon_job_cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)")}
+        if "handoff_count" not in daemon_job_cols:
+            try:
+                conn.execute("ALTER TABLE daemon_jobs ADD COLUMN handoff_count INTEGER NOT NULL DEFAULT 0")
+            except sqlite3.OperationalError:
+                pass
+        if "previous_agents" not in daemon_job_cols:
+            try:
+                conn.execute("ALTER TABLE daemon_jobs ADD COLUMN previous_agents TEXT")
+            except sqlite3.OperationalError:
+                pass
+        if "dispatch_context" not in daemon_job_cols:
+            try:
+                conn.execute("ALTER TABLE daemon_jobs ADD COLUMN dispatch_context TEXT")
+            except sqlite3.OperationalError:
+                pass
+        if "blocked_reason" not in daemon_job_cols:
+            try:
+                conn.execute("ALTER TABLE daemon_jobs ADD COLUMN blocked_reason TEXT")
+            except sqlite3.OperationalError:
+                pass
+        if "context_mode" not in daemon_job_cols:
+            try:
+                conn.execute("ALTER TABLE daemon_jobs ADD COLUMN context_mode TEXT")
+            except sqlite3.OperationalError:
+                pass
+        if "context_bytes" not in daemon_job_cols:
+            try:
+                conn.execute("ALTER TABLE daemon_jobs ADD COLUMN context_bytes INTEGER")
+            except sqlite3.OperationalError:
+                pass
+        if "session_id" not in daemon_job_cols:
+            try:
+                conn.execute("ALTER TABLE daemon_jobs ADD COLUMN session_id TEXT")
+            except sqlite3.OperationalError:
+                pass
+        if "agent_id" not in daemon_job_cols:
+            try:
+                conn.execute("ALTER TABLE daemon_jobs ADD COLUMN agent_id TEXT")
+            except sqlite3.OperationalError:
+                pass
+        if "requires_gh_write" not in daemon_job_cols:
+            try:
+                conn.execute("ALTER TABLE daemon_jobs ADD COLUMN requires_gh_write INTEGER NOT NULL DEFAULT 0")
+            except sqlite3.OperationalError:
+                pass
+        if "gh_write_target" not in daemon_job_cols:
+            try:
+                conn.execute("ALTER TABLE daemon_jobs ADD COLUMN gh_write_target TEXT")
+            except sqlite3.OperationalError:
+                pass
+        if "gh_write_verified" not in daemon_job_cols:
+            try:
+                conn.execute("ALTER TABLE daemon_jobs ADD COLUMN gh_write_verified TEXT")
+            except sqlite3.OperationalError:
+                pass
+        if "gh_write_author" not in daemon_job_cols:
+            try:
+                conn.execute("ALTER TABLE daemon_jobs ADD COLUMN gh_write_author TEXT")
+            except sqlite3.OperationalError:
+                pass
+        if "gh_write_expect" not in daemon_job_cols:
+            try:
+                conn.execute("ALTER TABLE daemon_jobs ADD COLUMN gh_write_expect TEXT DEFAULT 'closed'")
+            except sqlite3.OperationalError:
+                pass
+        cost_cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}
+        if "session_id" not in cost_cols:
+            try:
+                conn.execute("ALTER TABLE cost_entries ADD COLUMN session_id TEXT")
+            except sqlite3.OperationalError:
+                pass
+        conn.execute("DROP VIEW IF EXISTS capability_scores")
+        conn.executescript(_DB_SCORES_VIEW)
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS harness_baselines (
+                harness_name TEXT NOT NULL,
+                cli_version TEXT NOT NULL DEFAULT 'any',
+                headless_contract TEXT NOT NULL DEFAULT '{}',
+                dispatch_flags TEXT NOT NULL DEFAULT '{}',
+                network_deps TEXT NOT NULL DEFAULT '{}',
+                baseline_source TEXT NOT NULL DEFAULT 'curated',
+                PRIMARY KEY (harness_name, cli_version)
+            );
+
+            CREATE TABLE IF NOT EXISTS harness_records (
+                harness_name TEXT PRIMARY KEY,
+                installed_version TEXT NOT NULL DEFAULT 'unknown',
+                compliance_status TEXT NOT NULL DEFAULT 'unknown',
+                active_contract TEXT NOT NULL DEFAULT '{}',
+                active_flags TEXT NOT NULL DEFAULT '{}',
+                last_probe_at TEXT,
+                capability_hash TEXT NOT NULL DEFAULT ''
+            );
+
+            CREATE TABLE IF NOT EXISTS harness_verb_map (
+                synlynk_verb TEXT,
+                verb_category TEXT,
+                harness_name TEXT NOT NULL,
+                harness_command TEXT,
+                supported TEXT NOT NULL DEFAULT 'none',
+                partial_notes TEXT,
+                min_cli_version TEXT,
+                PRIMARY KEY (synlynk_verb, harness_name)
+            );
+
+            CREATE TABLE IF NOT EXISTS harness_command_palette (
+                harness_name TEXT NOT NULL,
+                cli_version TEXT NOT NULL,
+                command TEXT NOT NULL,
+                command_type TEXT NOT NULL,
+                synlynk_verb TEXT,
+                help_text TEXT,
+                first_seen_version TEXT NOT NULL,
+                last_seen_version TEXT,
+                PRIMARY KEY (harness_name, cli_version, command)
+            );
+
+            CREATE TABLE IF NOT EXISTS harness_version_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                harness_name TEXT NOT NULL,
+                cli_version TEXT NOT NULL,
+                event_type TEXT NOT NULL,
+                prev_hash TEXT,
+                new_hash TEXT,
+                recorded_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS harness_models (
+                harness_name TEXT NOT NULL,
+                model_id TEXT NOT NULL,
+                first_seen_at TEXT NOT NULL,
+                last_seen_at TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'active',
+                superseded_by TEXT,
+                discovery_source TEXT NOT NULL DEFAULT 'curated',
+                PRIMARY KEY (harness_name, model_id)
+            );
+
+            CREATE TABLE IF NOT EXISTS harness_modes (
+                harness_name TEXT NOT NULL,
+                cli_version_range TEXT NOT NULL,
+                mode_type TEXT NOT NULL,
+                mode_name TEXT NOT NULL,
+                shape TEXT NOT NULL DEFAULT '{}',
+                PRIMARY KEY (harness_name, cli_version_range, mode_type, mode_name)
+            );
+
+            CREATE TABLE IF NOT EXISTS capability_calibration_tasks (
+                task_id TEXT PRIMARY KEY,
+                role TEXT NOT NULL,
+                skill TEXT NOT NULL,
+                difficulty TEXT NOT NULL,
+                prompt_template TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS capability_calibration_results (
+                result_id TEXT PRIMARY KEY,
+                harness_name TEXT NOT NULL,
+                model_id TEXT NOT NULL,
+                task_id TEXT NOT NULL,
+                score REAL NOT NULL,
+                cost_usd REAL NOT NULL,
+                verified_by TEXT NOT NULL,
+                run_at TEXT NOT NULL,
+                FOREIGN KEY (task_id) REFERENCES capability_calibration_tasks(task_id)
+            );
+        """)
+        from synlynk.capability_sweep import _seed_calibration_tasks
+        _seed_calibration_tasks(conn)
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS capability_watch (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                last_probe_at TEXT,
+                last_green_probe_at TEXT,
+                last_smoke_test_at TEXT,
+                last_green_smoke_at TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS gh_write_capability (
+                harness TEXT NOT NULL,
+                mode TEXT NOT NULL,
+                action TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'unknown',
+                checked_at TEXT,
+                PRIMARY KEY (harness, mode, action)
+            );
+
+            CREATE TABLE IF NOT EXISTS capability_incidents (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                harness TEXT NOT NULL,
+                failing_path TEXT NOT NULL,
+                classification TEXT NOT NULL,
+                evidence TEXT NOT NULL DEFAULT '',
+                detected_at TEXT NOT NULL
+            );
+        """)
+        conn.execute(
+            "INSERT OR IGNORE INTO capability_watch (id, last_probe_at, last_green_probe_at, "
+            "last_smoke_test_at, last_green_smoke_at) VALUES (1, NULL, NULL, NULL, NULL)"
+        )
+        harness_verb_cols = {row[1] for row in conn.execute("PRAGMA table_info(harness_verb_map)")}
+        if "verb" not in harness_verb_cols:
+            try:
+                conn.execute("ALTER TABLE harness_verb_map ADD COLUMN verb TEXT")
+            except sqlite3.OperationalError:
+                pass
+        if "cycle_hint" not in harness_verb_cols:
+            try:
+                conn.execute("ALTER TABLE harness_verb_map ADD COLUMN cycle_hint TEXT")
+            except sqlite3.OperationalError:
+                pass
+        if "support" not in harness_verb_cols:
+            try:
+                conn.execute("ALTER TABLE harness_verb_map ADD COLUMN support TEXT")
+            except sqlite3.OperationalError:
+                pass
+        if "notes" not in harness_verb_cols:
+            try:
+                conn.execute("ALTER TABLE harness_verb_map ADD COLUMN notes TEXT")
+            except sqlite3.OperationalError:
+                pass
+        if "updated_at" not in harness_verb_cols:
+            try:
+                conn.execute("ALTER TABLE harness_verb_map ADD COLUMN updated_at TEXT")
+            except sqlite3.OperationalError:
+                pass
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS cycle_capability (
+                harness_name  TEXT NOT NULL,
+                cycle         TEXT NOT NULL,
+                support       TEXT NOT NULL DEFAULT 'none',
+                notes         TEXT,
+                verb_count    INTEGER DEFAULT 0,
+                full_count    INTEGER DEFAULT 0,
+                partial_count INTEGER DEFAULT 0,
+                updated_at    TEXT NOT NULL,
+                PRIMARY KEY (harness_name, cycle)
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS harness_status (
+                harness_name           TEXT PRIMARY KEY,
+                attach_rate_24h        REAL DEFAULT 0.0,
+                attach_point_in_time   INTEGER DEFAULT 0,
+                adherence_score        REAL DEFAULT NULL,
+                completion_rate_24h    REAL DEFAULT NULL,
+                rescue_count_24h       INTEGER DEFAULT 0,
+                output_velocity_p50    REAL DEFAULT NULL,
+                installed_version      TEXT DEFAULT '',
+                latest_version         TEXT DEFAULT NULL,
+                plan_tier              TEXT DEFAULT 'unknown',
+                plan_type              TEXT DEFAULT 'd2c',
+                ctx_window_tokens      INTEGER DEFAULT NULL,
+                read_budget_tokens     INTEGER DEFAULT NULL,
+                write_budget_tokens    INTEGER DEFAULT NULL,
+                tool_budget_count      INTEGER DEFAULT NULL,
+                tc1_status             TEXT DEFAULT 'unknown',
+                tc2_status             TEXT DEFAULT 'unknown',
+                tc3_status             TEXT DEFAULT 'unknown',
+                tc4_status             TEXT DEFAULT 'unknown',
+                harness_compat_score   REAL DEFAULT NULL,
+                last_probe_at          TEXT DEFAULT NULL,
+                last_telemetry_at      TEXT DEFAULT NULL
+            )
+        """)
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS memory_entries (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                section     TEXT NOT NULL,
+                body        TEXT NOT NULL,
+                author      TEXT,
+                created_at  TEXT DEFAULT (datetime('now')),
+                updated_at  TEXT DEFAULT (datetime('now'))
+            );
+            CREATE TABLE IF NOT EXISTS roadmap_arcs (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                version     TEXT NOT NULL UNIQUE,
+                title       TEXT,
+                status      TEXT DEFAULT 'planned',
+                target_date TEXT,
+                notes       TEXT
+            );
+            CREATE TABLE IF NOT EXISTS roadmap_phases (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                arc_version TEXT NOT NULL REFERENCES roadmap_arcs(version),
+                phase_title TEXT NOT NULL,
+                status      TEXT DEFAULT 'planned',
+                priority    TEXT,
+                story_id    TEXT REFERENCES stories(story_id),
+                notes       TEXT
+            );
+            CREATE TABLE IF NOT EXISTS cost_entries (
+                id                INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_date      TEXT NOT NULL,
+                agent             TEXT,
+                model             TEXT,
+                input_tokens      INTEGER,
+                output_tokens     INTEGER,
+                cache_read_tokens INTEGER,
+                story_id          TEXT REFERENCES stories(story_id),
+                epic_id           INTEGER REFERENCES roadmap_arcs(id),
+                phase_id          INTEGER REFERENCES roadmap_phases(id),
+                total_cost_usd    REAL,
+                api_equivalent_usd REAL,
+                actual_usd        REAL,
+                payment_mode      TEXT,
+                notes             TEXT,
+                cost_source       TEXT NOT NULL,
+                estimate_basis    TEXT,
+                job_id            TEXT,
+                recorded_at       TEXT DEFAULT (datetime('now')),
+                dispatch_context  TEXT,
+                context_mode      TEXT,
+                session_id        TEXT REFERENCES sessions(session_id)
+            );
+            CREATE TABLE IF NOT EXISTS remediation_actions (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp   TEXT NOT NULL,
+                agent       TEXT NOT NULL,
+                target_file TEXT NOT NULL,
+                exact_diff  TEXT NOT NULL,
+                operator    TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_remediation_actions_timestamp
+                ON remediation_actions(timestamp);
+            CREATE TABLE IF NOT EXISTS devlog_entries (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                author        TEXT NOT NULL,
+                entry_date    TEXT NOT NULL,
+                session_title TEXT,
+                session_id    TEXT,
+                goal_id       TEXT REFERENCES goals(goal_id),
+                member_id     TEXT,
+                body          TEXT NOT NULL,
+                recorded_at   TEXT DEFAULT (datetime('now'))
+            );
+            CREATE INDEX IF NOT EXISTS idx_devlog_author ON devlog_entries(author);
+            CREATE INDEX IF NOT EXISTS idx_devlog_date   ON devlog_entries(entry_date);
+            CREATE TABLE IF NOT EXISTS decisions (
+                decision_id   TEXT PRIMARY KEY,
+                topic         TEXT NOT NULL,
+                date          TEXT NOT NULL,
+                panel         TEXT NOT NULL,
+                status        TEXT NOT NULL,
+                inputs        TEXT NOT NULL,
+                synthesis     TEXT NOT NULL,
+                decision_text TEXT NOT NULL,
+                signature     TEXT,
+                created_at    TEXT DEFAULT (datetime('now'))
+            );
+            CREATE TABLE IF NOT EXISTS members (
+                member_id      TEXT PRIMARY KEY,
+                canonical_name TEXT NOT NULL,
+                created_at     TEXT DEFAULT (datetime('now'))
+            );
+            CREATE TABLE IF NOT EXISTS member_aliases (
+                alias      TEXT PRIMARY KEY,
+                member_id  TEXT NOT NULL REFERENCES members(member_id),
+                alias_type TEXT NOT NULL DEFAULT 'manual',
+                added_at   TEXT DEFAULT (datetime('now'))
+            );
+        """)
+        devlog_cols = {row[1] for row in conn.execute("PRAGMA table_info(devlog_entries)")}
+        if "session_id" not in devlog_cols:
+            try:
+                conn.execute("ALTER TABLE devlog_entries ADD COLUMN session_id TEXT")
+            except sqlite3.OperationalError:
+                pass
+        if "member_id" not in devlog_cols:
+            conn.execute("ALTER TABLE devlog_entries ADD COLUMN member_id TEXT")
+
+        if "goal_id" not in devlog_cols:
+            try:
+                conn.execute("ALTER TABLE devlog_entries ADD COLUMN goal_id TEXT REFERENCES goals(goal_id)")
             except sqlite3.OperationalError:
                 pass
 
-    if not already_done:
-        for table, col, crosswalk in (
-            ("stories", "discipline", LEGACY_DISCIPLINE_CROSSWALK),
-            ("stories", "org_domain", LEGACY_ORG_DOMAIN_CROSSWALK),
-            ("stories", "industry", LEGACY_INDUSTRY_CROSSWALK),
-            ("capability_ratings", "discipline", LEGACY_DISCIPLINE_CROSSWALK),
-            ("capability_ratings", "org_domain", LEGACY_ORG_DOMAIN_CROSSWALK),
-            ("capability_ratings", "industry", LEGACY_INDUSTRY_CROSSWALK),
-        ):
-            for legacy_value, code in crosswalk.items():
-                conn.execute(
-                    f"UPDATE {table} SET {col}=?, legacy_unmapped=0 WHERE {col}=?",
-                    (code, legacy_value),
-                )
-            known_codes = set(crosswalk.values())
-            rows = conn.execute(f"SELECT DISTINCT {col} FROM {table}").fetchall()
-            for (value,) in rows:
-                if value is not None and value not in known_codes and value not in crosswalk:
-                    conn.execute(
-                        f"UPDATE {table} SET legacy_unmapped=1 WHERE {col}=? AND legacy_unmapped=0",
-                        (value,),
-                    )
         conn.execute(
-            "UPDATE _taxonomy_crosswalk_state SET completed = 1 WHERE id = 1"
+            "INSERT OR IGNORE INTO members (member_id, canonical_name) VALUES (?, ?)",
+            ("nikhilsoman", "Nikhil Soman"),
         )
-    conn.commit()
-    _seed_verb_map(conn)
-    conn.execute(f"PRAGMA user_version = {_DB_MIGRATION_VERSION}")
-    conn.commit()
+        conn.executemany(
+            "INSERT OR IGNORE INTO member_aliases (alias, member_id, alias_type) VALUES (?, ?, 'seed')",
+            [("nikhil", "nikhilsoman"), ("nikhilsoman", "nikhilsoman")],
+        )
+        arc_cols = {row[1] for row in conn.execute("PRAGMA table_info(roadmap_arcs)")}
+        if "goal_id" not in arc_cols:
+            try:
+                conn.execute("ALTER TABLE roadmap_arcs ADD COLUMN goal_id TEXT REFERENCES goals(goal_id)")
+            except sqlite3.OperationalError:
+                pass
+        rating_cols = {row[1] for row in conn.execute("PRAGMA table_info(capability_ratings)")}
+        for col, default in [("discipline", "backend"), ("role", "dev"), ("stage", "open")]:
+            if col not in rating_cols:
+                try:
+                    conn.execute(f"ALTER TABLE capability_ratings ADD COLUMN {col} TEXT NOT NULL DEFAULT '{default}'")
+                except sqlite3.OperationalError:
+                    pass
+        if "stack_tags" not in rating_cols:
+            try:
+                conn.execute("ALTER TABLE capability_ratings ADD COLUMN stack_tags TEXT DEFAULT '[]'")
+            except sqlite3.OperationalError:
+                pass
+        if "pr_number" not in rating_cols:
+            try:
+                conn.execute("ALTER TABLE capability_ratings ADD COLUMN pr_number INTEGER")
+            except sqlite3.OperationalError:
+                pass
+        cost_cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}
+        for col, typedef in [
+            ("story_id", "TEXT REFERENCES stories(story_id)"),
+            ("epic_id", "INTEGER REFERENCES roadmap_arcs(id)"),
+            ("phase_id", "INTEGER REFERENCES roadmap_phases(id)"),
+        ]:
+            if col not in cost_cols:
+                try:
+                    conn.execute(f"ALTER TABLE cost_entries ADD COLUMN {col} {typedef}")
+                except sqlite3.OperationalError:
+                    pass
+        cost_cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}
+        for col in ("api_equivalent_usd", "actual_usd", "payment_mode"):
+            if col not in cost_cols:
+                typedef = "TEXT" if col == "payment_mode" else "REAL"
+                try:
+                    conn.execute(f"ALTER TABLE cost_entries ADD COLUMN {col} {typedef}")
+                except sqlite3.OperationalError:
+                    pass
+        if "cost_source" not in cost_cols:
+            conn.execute("ALTER TABLE cost_entries RENAME TO cost_entries_pre_provenance")
+            conn.execute("""
+                CREATE TABLE cost_entries (
+                    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_date      TEXT NOT NULL,
+                    agent             TEXT,
+                    model             TEXT,
+                    input_tokens      INTEGER,
+                    output_tokens     INTEGER,
+                    cache_read_tokens INTEGER,
+                    story_id          TEXT REFERENCES stories(story_id),
+                    epic_id           INTEGER REFERENCES roadmap_arcs(id),
+                    phase_id          INTEGER REFERENCES roadmap_phases(id),
+                    total_cost_usd    REAL,
+                    api_equivalent_usd REAL,
+                    actual_usd        REAL,
+                    payment_mode      TEXT,
+                    notes             TEXT,
+                    cost_source       TEXT NOT NULL,
+                    estimate_basis    TEXT,
+                    job_id            TEXT,
+                    recorded_at       TEXT DEFAULT (datetime('now')),
+                    dispatch_context  TEXT
+                )
+            """)
+            old_cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries_pre_provenance)")}
+            select_cols = ", ".join(
+                c if c in old_cols else "NULL"
+                for c in (
+                    "session_date",
+                    "agent",
+                    "model",
+                    "input_tokens",
+                    "output_tokens",
+                    "cache_read_tokens",
+                    "story_id",
+                    "epic_id",
+                    "phase_id",
+                    "total_cost_usd",
+                    "notes",
+                )
+            )
+            conn.execute(f"""
+                INSERT INTO cost_entries
+                    (session_date, agent, model, input_tokens, output_tokens, cache_read_tokens,
+                     story_id, epic_id, phase_id, total_cost_usd, api_equivalent_usd, actual_usd,
+                     payment_mode, notes, cost_source, estimate_basis, job_id, recorded_at)
+                SELECT {select_cols}, NULL, NULL, NULL, 'legacy_unknown', NULL, NULL, recorded_at
+                FROM cost_entries_pre_provenance
+            """)
+            conn.execute("DROP TABLE cost_entries_pre_provenance")
+            cost_cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}
+        if "job_id" not in cost_cols:
+            try:
+                conn.execute("ALTER TABLE cost_entries ADD COLUMN job_id TEXT")
+            except sqlite3.OperationalError:
+                pass
+        if "dispatch_context" not in cost_cols:
+            try:
+                conn.execute("ALTER TABLE cost_entries ADD COLUMN dispatch_context TEXT")
+            except sqlite3.OperationalError:
+                pass
+        if "context_mode" not in cost_cols:
+            try:
+                conn.execute("ALTER TABLE cost_entries ADD COLUMN context_mode TEXT")
+            except sqlite3.OperationalError:
+                pass
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_cost_entries_job_id "
+            "ON cost_entries(job_id) WHERE job_id IS NOT NULL"
+        )
+        conn.execute(
+            "UPDATE capability_ratings SET discipline = COALESCE(NULLIF(discipline, ''), NULLIF(engg_domain, ''), 'backend') "
+            "WHERE discipline IS NULL OR discipline = ''"
+        )
+        conn.execute(
+            "UPDATE capability_ratings SET role = COALESCE(NULLIF(role, ''), 'dev') "
+            "WHERE role IS NULL OR role = ''"
+        )
+        conn.execute(
+            "UPDATE capability_ratings SET stage = COALESCE(NULLIF(stage, ''), 'open') "
+            "WHERE stage IS NULL OR stage = ''"
+        )
+        # BS-22 introduced erroneous cycle renames; delete any rows with the wrong names
+        # so they don't block migration on databases that ran the bad migration.
+        for sql in [
+            "DELETE FROM cycle_capability WHERE cycle IN ('design','build','sustain')",
+        ]:
+            try:
+                conn.execute(sql)
+            except (sqlite3.OperationalError, sqlite3.IntegrityError):
+                pass
+        cycle_remap = {
+            "dream": "goal", "design": "visualize", "plan": "open",
+            "work": "execute", "build": "execute", "ship": "release",
+            "maintain": "sustain", "engage": "execute",
+        }
+        for old, new in cycle_remap.items():
+            try:
+                conn.execute(
+                    "UPDATE cycle_capability SET cycle=? WHERE cycle=?",
+                    (new, old)
+                )
+            except sqlite3.IntegrityError:
+                # A row for (agent_name, new) already exists — the old-named row
+                # is a stale duplicate now that both map to the same cycle.
+                conn.execute("DELETE FROM cycle_capability WHERE cycle=?", (old,))
+        import json as _json
+        _HARNESS_MAP = {"claude": "claude-cli", "agy": "agy", "grok": "grok", "codex": "codex"}
+        for _agent_name, _baseline in HARNESS_CAPABILITY_BASELINES.items():
+            _harness_name = _HARNESS_MAP.get(_agent_name, _agent_name)
+            conn.execute("""
+                INSERT OR IGNORE INTO harness_baselines
+                    (harness_name, cli_version, headless_contract, dispatch_flags, network_deps, baseline_source)
+                VALUES (?, 'any', ?, ?, ?, 'curated')
+            """, (
+                _harness_name,
+                _json.dumps(_baseline.get("headless_contract", {})),
+                _json.dumps(_baseline.get("dispatch_flags", {})),
+                _json.dumps(_baseline.get("network_deps", {})),
+            ))
+        try:
+            conn.execute("ALTER TABLE stories ADD COLUMN gh_issue TEXT")
+        except Exception:
+            pass
+        conn.commit()
+        # v0.9.2: token budget columns on stories
+        for _col, _typedef in [("estimated_tokens", "INTEGER"), ("actual_tokens", "INTEGER")]:
+            try:
+                conn.execute(f"ALTER TABLE stories ADD COLUMN {_col} {_typedef}")
+            except Exception:
+                pass  # column already exists
+        # #141: harness_quotas base table (also in _DB_SCHEMA; re-assert for older DBs)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS harness_quotas (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                harness      TEXT NOT NULL,
+                model        TEXT NOT NULL DEFAULT 'unknown',
+                quota_type   TEXT NOT NULL,
+                unit         TEXT NOT NULL DEFAULT 'tokens',
+                limit_tokens INTEGER NOT NULL,
+                used_tokens  INTEGER NOT NULL DEFAULT 0,
+                reset_at     TIMESTAMP,
+                updated_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(harness, model, quota_type, unit)
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS pr_multiplier_applied (
+                pr_number  INTEGER PRIMARY KEY,
+                applied_at TEXT NOT NULL
+            )
+        """)
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_harness_quotas_harness ON harness_quotas(harness)"
+        )
+        # Quota-aware dispatch reservation: harness_reservations base table
+        # (also in _DB_SCHEMA; re-assert for older DBs)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS harness_reservations (
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                harness        TEXT NOT NULL,
+                tokens         INTEGER NOT NULL,
+                scope          TEXT NOT NULL,
+                scope_id       TEXT,
+                job_id         TEXT,
+                status         TEXT NOT NULL DEFAULT 'open',
+                created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                released_at    TIMESTAMP
+            )
+        """)
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_harness_reservations_harness "
+            "ON harness_reservations(harness, status)"
+        )
+        quota_cols = {row[1] for row in conn.execute("PRAGMA table_info(harness_quotas)")}
+        if quota_cols and "unit" not in quota_cols:
+            try:
+                conn.execute(
+                    "ALTER TABLE harness_quotas ADD COLUMN unit TEXT NOT NULL DEFAULT 'tokens'"
+                )
+            except sqlite3.OperationalError:
+                pass
+        if quota_cols and "model" not in quota_cols:
+            try:
+                conn.execute(
+                    "ALTER TABLE harness_quotas ADD COLUMN model TEXT NOT NULL DEFAULT 'unknown'"
+                )
+            except sqlite3.OperationalError:
+                pass
+        # #141 follow-up: fleet scheduler columns on stories
+        for _col, _typedef in [
+            ("priority", "INTEGER NOT NULL DEFAULT 5"),
+            ("readiness", "TEXT NOT NULL DEFAULT 'draft'"),
+        ]:
+            try:
+                conn.execute(f"ALTER TABLE stories ADD COLUMN {_col} {_typedef}")
+            except Exception:
+                pass  # column already exists
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS credit_grants (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                agent           TEXT NOT NULL,
+                face_value_usd  REAL NOT NULL,
+                remaining_usd   REAL NOT NULL,
+                granted_at      TEXT NOT NULL,
+                expires_at      TEXT,
+                note            TEXT
+            )
+        """)
+        # Fleet operability matrix (Supported / Proven tracking)
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS fleet_matrix_runs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_id TEXT NOT NULL,
+                tier INTEGER NOT NULL,
+                home TEXT NOT NULL,
+                cell TEXT NOT NULL,
+                status TEXT NOT NULL,
+                detail TEXT,
+                cost_usd REAL NOT NULL DEFAULT 0,
+                ts TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_fleet_matrix_runs_lookup
+                ON fleet_matrix_runs(home, cell, tier, ts);
+        """)
+        _normalize_org_domain_drift(conn)
+        # capability-sweep-taxonomy: crosswalk legacy free-text values to NAICS/APQC/SFIA codes
+        from synlynk.taxonomy_standards import (
+            LEGACY_DISCIPLINE_CROSSWALK,
+            LEGACY_ORG_DOMAIN_CROSSWALK,
+            LEGACY_INDUSTRY_CROSSWALK,
+        )
+        # capability-sweep-taxonomy: one-time gate so the crosswalk only ever
+        # rewrites pre-migration legacy data, not fresh rows written afterward
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS _taxonomy_crosswalk_state ("
+            "id INTEGER PRIMARY KEY CHECK (id = 1), completed INTEGER NOT NULL DEFAULT 0)"
+        )
+        conn.execute(
+            "INSERT OR IGNORE INTO _taxonomy_crosswalk_state (id, completed) VALUES (1, 0)"
+        )
+        already_done = conn.execute(
+            "SELECT completed FROM _taxonomy_crosswalk_state WHERE id = 1"
+        ).fetchone()[0]
+        for table in ("stories", "capability_ratings"):
+            cols = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+            if "legacy_unmapped" not in cols:
+                try:
+                    conn.execute(f"ALTER TABLE {table} ADD COLUMN legacy_unmapped INTEGER NOT NULL DEFAULT 0")
+                except sqlite3.OperationalError:
+                    pass
+
+        if not already_done:
+            for table, col, crosswalk in (
+                ("stories", "discipline", LEGACY_DISCIPLINE_CROSSWALK),
+                ("stories", "org_domain", LEGACY_ORG_DOMAIN_CROSSWALK),
+                ("stories", "industry", LEGACY_INDUSTRY_CROSSWALK),
+                ("capability_ratings", "discipline", LEGACY_DISCIPLINE_CROSSWALK),
+                ("capability_ratings", "org_domain", LEGACY_ORG_DOMAIN_CROSSWALK),
+                ("capability_ratings", "industry", LEGACY_INDUSTRY_CROSSWALK),
+            ):
+                for legacy_value, code in crosswalk.items():
+                    conn.execute(
+                        f"UPDATE {table} SET {col}=?, legacy_unmapped=0 WHERE {col}=?",
+                        (code, legacy_value),
+                    )
+                known_codes = set(crosswalk.values())
+                rows = conn.execute(f"SELECT DISTINCT {col} FROM {table}").fetchall()
+                for (value,) in rows:
+                    if value is not None and value not in known_codes and value not in crosswalk:
+                        conn.execute(
+                            f"UPDATE {table} SET legacy_unmapped=1 WHERE {col}=? AND legacy_unmapped=0",
+                            (value,),
+                        )
+            conn.execute(
+                "UPDATE _taxonomy_crosswalk_state SET completed = 1 WHERE id = 1"
+            )
+        conn.commit()
+        _seed_verb_map(conn)
+        conn.execute(f"PRAGMA user_version = {_DB_MIGRATION_VERSION}")
+        conn.commit()
+
+    else:
+        _normalize_org_domain_drift(conn)
+        conn.commit()
 
 
 _VALID_COST_SOURCES = {

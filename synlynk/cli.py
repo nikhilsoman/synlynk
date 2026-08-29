@@ -159,6 +159,7 @@ def build_parser() -> argparse.ArgumentParser:
         cmd_identity_init,
         cmd_instructions_ack,
         cmd_instructions_diff,
+        cmd_instructions_register,
         cmd_instructions_status,
         cmd_instructions_update,
         cmd_jobs,
@@ -501,6 +502,11 @@ def build_parser() -> argparse.ArgumentParser:
     agent_edit_parser.add_argument("id_or_alias", help="Agent ID or alias (e.g. role slug)")
     agent_edit_parser.add_argument("--charter", required=True,
         help="Path to new charter content, or '-' to read from stdin")
+
+    agent_sync_routing_parser = agent_sub.add_parser(
+        "sync-routing", help="Regenerate an agent's dispatch_routing frontmatter from policy.json"
+    )
+    agent_sync_routing_parser.add_argument("id_or_alias", help="Agent ID or alias (e.g. role slug)")
 
     agent_disable_parser = agent_sub.add_parser("disable", help="Disable a workspace agent")
     agent_disable_parser.add_argument("id_or_alias", help="Agent ID or alias (e.g. role slug)")
@@ -959,6 +965,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     instr_update_parser.add_argument("file", nargs="?", default=None,
                                      help="Specific file to update (default: all)")
+    instr_register_parser = instructions_sub.add_parser(
+        "register", help="Backfill the manifest from existing synlynk sections"
+    )
+    instr_register_parser.add_argument("file", nargs="?", default=None,
+                                       help="Specific file to register (default: all)")
     instr_ack_parser = instructions_sub.add_parser(
         "ack", help="Acknowledge an INSTRUCTION_DRIFT sentinel event"
     )
@@ -1300,6 +1311,8 @@ def main(argv=None) -> None:
             agent_cli.cmd_agent_show(args.id_or_alias)
         elif args.agent_action == "edit":
             agent_cli.cmd_agent_edit(args.id_or_alias, args.charter)
+        elif args.agent_action == "sync-routing":
+            agent_cli.cmd_agent_sync_routing(args.id_or_alias)
         elif args.agent_action == "disable":
             agent_cli.cmd_agent_disable(args.id_or_alias)
         else:
@@ -1465,6 +1478,8 @@ def main(argv=None) -> None:
             cmd_instructions_diff(getattr(args, "file", None))
         elif action == "update":
             cmd_instructions_update(getattr(args, "file", None))
+        elif action == "register":
+            cmd_instructions_register(getattr(args, "file", None))
         elif action == "ack":
             cmd_instructions_ack(args.file)
         else:
