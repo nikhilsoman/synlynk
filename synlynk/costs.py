@@ -159,7 +159,7 @@ def _log_has_prior_activity_evidence(lines) -> bool:
 
 
 def _log_has_permission_denied_signature(output_text: str) -> bool:
-    """Detect the headless permission auto-denial signature in agent output."""
+    """Detect the headless permission auto-denial signature in harness output."""
     text = output_text or ""
     lines = [line for line in text.splitlines() if line.strip()]
     if not lines:
@@ -308,9 +308,9 @@ def extract_tokens(output_text: str, agent: str = None) -> tuple:
 
 def extract_model_version(output_text: str, agent: str = None) -> str:
     """
-    Tier 1: Parse model_version from # synlynk-meta block in agent output.
-    Tier 2: read model from the agent profile.
-    Tier 3 fallback: read default_model from .synlynk/config.json for the agent.
+    Tier 1: Parse model_version from # synlynk-meta block in harness output.
+    Tier 2: read model from the harness profile.
+    Tier 3 fallback: read default_model from .synlynk/config.json for the harness.
     Returns 'unknown' if neither source provides a value.
     """
     # Tier 1: structured header
@@ -338,7 +338,7 @@ def extract_model_version(output_text: str, agent: str = None) -> str:
 
 
 def extract_verifier_meta(output_text: str) -> Optional[dict]:
-    """Parses the # synlynk-meta block from a verifier agent's output.
+    """Parses the # synlynk-meta block from a verifier harness's output.
 
     Returns dict with quality, correct, rework_needed, verifier_model — or None if absent.
     """
@@ -409,7 +409,7 @@ def _load_model_rates() -> dict:
 
 
 def _resolve_billing_mode(agent: str) -> str:
-    """Resolves billing mode for an agent; local is always actual."""
+    """Resolves billing mode for a harness; local is always actual."""
     normalized_agent = os.path.basename(agent or "")
     if normalized_agent == "local":
         return "actual"
@@ -436,7 +436,7 @@ class PaymentValue:
 
 
 def _payment_model_config_for_agent(agent: str) -> dict:
-    """Return the configured payment model block for an agent."""
+    """Return the configured payment model block for a harness."""
     config = _pkg("load_config")() or {}
     payment_models = config.get("payment_models", {})
     if not isinstance(payment_models, dict):
@@ -562,7 +562,7 @@ def _credit_grant_actual_usd(agent: str, api_equivalent_usd: float) -> tuple:
 
 
 def resolve_payment_value(agent: str, tokens_in: int, tokens_out: int) -> PaymentValue:
-    """Resolve API-equivalent and actual payment values for an agent call."""
+    """Resolve API-equivalent and actual payment values for a harness call."""
     pm_config = _payment_model_config_for_agent(agent)
     mode = pm_config.get("mode", "pay_as_you_go")
 

@@ -530,7 +530,7 @@ def _finalize_completed_worktree_job(job: dict, git_state: Optional[dict]) -> No
     if not _worktree_path_is_available(worktree_path, "finalize completed job"):
         return
 
-    # Re-derive from the live worktree so push/PR follow wherever the agent committed.
+    # Re-derive from the live worktree so push/PR follow wherever the harness committed.
     worktree_branch = _resolve_finalize_worktree_branch(job, worktree_path)
     if not worktree_branch:
         return
@@ -883,7 +883,7 @@ def _count_dispatch_rework(story_id: str) -> int:
                if j.get("story_id") == story_id and j.get("status") == "completed")
 
 def _extract_micro_rework(log_text: str) -> int:
-    """Counts sub-task retry signals in agent log output."""
+    """Counts sub-task retry signals in harness log output."""
     patterns = [r"retrying step", r"retry attempt", r"re-trying", r"attempt \d+"]
     count = 0
     for pat in patterns:
@@ -891,7 +891,7 @@ def _extract_micro_rework(log_text: str) -> int:
     return count
 
 def _count_tool_calls(log_text: str) -> int:
-    """Counts coarse tool-call markers in captured agent output."""
+    """Counts coarse tool-call markers in captured harness output."""
     patterns = ("Tool:", "Running tool", "function_call", "tool_use")
     return sum(log_text.count(pattern) for pattern in patterns)
 
@@ -1075,7 +1075,7 @@ def _write_capability_rating(job: dict, log_text: str) -> None:
     conn.close()
 
 def _capability_candidates_for_story(conn, discipline, org, industry, phase) -> list:
-    """Return [(agent, weighted_score, model_version), ...] best-first.
+    """Return [(harness, weighted_score, model_version), ...] best-first.
 
     Falls back through progressively wider coordinates (same as legacy
     _best_agent_for_story single-row lookup).
@@ -2555,7 +2555,7 @@ def _dispatch_ready_jobs(max_parallel: int = 4) -> int:
                     job_id=job_id,
                 )
             except (RuntimeError, ValueError):
-                # Preflight/worktree/unknown-agent failures: fail the queue row so
+                # Preflight/worktree/unknown-harness failures: fail the queue row so
                 # the daemon does not spin forever on an unlaunchable job.
                 conn.execute(
                     "UPDATE daemon_jobs SET status='failed', completed_at=? WHERE job_id=?",
@@ -2768,7 +2768,7 @@ def cmd_jobs(all_jobs: bool = False, watch: bool = False, summary: Optional[str]
         _render()
 
 def cmd_jobs_handoff(job_id: str, to_agent: str = None) -> None:
-    """Transfer a stalled job to another agent, preserving context."""
+    """Transfer a stalled job to another harness, preserving context."""
     from synlynk.dispatch import dispatch_agent as _dispatch
 
     conn = _pkg("_get_db")()

@@ -2980,7 +2980,7 @@ def cmd_credit_grant(
     expires: str = None,
     note: str = None,
 ) -> None:
-    """Record a new credit grant for an agent."""
+    """Record a new credit grant for a harness."""
     from synlynk import _GREEN, _RESET, _get_db
 
     if amount < 0:

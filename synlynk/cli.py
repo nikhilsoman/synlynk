@@ -222,7 +222,7 @@ def build_parser() -> argparse.ArgumentParser:
     init_parser.add_argument("--force", action="store_true",
                              help="Overwrite existing template files")
     init_parser.add_argument("--agents", default="claude,agy,codex,grok",
-                             help="Comma-separated agent set to generate files for (claude,agy,codex,grok)")
+                             help="Comma-separated harness set to generate files for (claude,agy,codex,grok)")
     init_parser.add_argument("--mode", choices=["solo", "team"], default="solo",
                              help="Project mode written to project-docs/.synlynk_config.json")
     init_parser.add_argument("--org", default=None,
@@ -230,7 +230,7 @@ def build_parser() -> argparse.ArgumentParser:
     init_parser.add_argument("--repo", default=None,
                              help="GitHub repository name (stored in .synlynk/config.json)")
     init_parser.add_argument("--project-id", default=None, dest="project_id",
-                             help="GitHub Projects v2 node ID (fills TODO: PROJECT_ID in agent files)")
+                             help="GitHub Projects v2 node ID (fills TODO: PROJECT_ID in harness files)")
     init_parser.add_argument("--docs-dir", default=None, dest="docs_dir",
                              help="Directory for project docs (default: project-docs). "
                                   "Use '.' for repos that keep docs at the repo root.")
@@ -258,7 +258,7 @@ def build_parser() -> argparse.ArgumentParser:
     decide_parser.add_argument("topic", help="Decision topic (quoted string)")
     decide_parser.add_argument(
         "--panel", required=True,
-        help="Comma-separated agent names, e.g. claude,agy,codex"
+        help="Comma-separated harness names, e.g. claude,agy,codex"
     )
     decide_parser.add_argument(
         "--record", action="store_true",
@@ -290,7 +290,7 @@ def build_parser() -> argparse.ArgumentParser:
     goal_link_parser.add_argument("--secondary", action="store_true")
     goal_sub.add_parser("status", help="Show goal completion rollup")
 
-    local_parser = subparsers.add_parser("local", help="Manage the local (oMLX) agent")
+    local_parser = subparsers.add_parser("local", help="Manage the local (oMLX) harness")
     local_sub = local_parser.add_subparsers(dest="local_action")
     local_sub.add_parser("doctor", help="Check oMLX endpoint reachability and model roster")
 
@@ -335,7 +335,7 @@ def build_parser() -> argparse.ArgumentParser:
                                 help="Discard the current checkpoint without restoring")
 
     probe_parser = subparsers.add_parser(
-        "probe", help="Probe agent harness capability and record compatibility"
+        "probe", help="Probe harness capability and record compatibility"
     )
     probe_parser.add_argument(
         "--harness", "--agent", default=None, dest="harness",
@@ -344,7 +344,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     doctor_parser = subparsers.add_parser("doctor", help="Run health checks on your synlynk installation")
     doctor_parser.add_argument("--fix", default=None,
-                               help="Apply a targeted remediation for the named agent (agy only)")
+                               help="Apply a targeted remediation for the named harness (agy only)")
     doctor_parser.add_argument("--yes", action="store_true",
                                help="Write the proposed remediation without prompting")
 
@@ -571,7 +571,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     selftest_parser.add_argument(
         "--live", action="store_true",
-        help="Run against a real throwaway git repo, including real paid-agent-CLI invocations, capped at $2 total spend",
+        help="Run against a real throwaway git repo, including real paid-harness-CLI invocations, capped at $2 total spend",
     )
     selftest_parser.add_argument(
         "--matrix", action="store_true",
@@ -605,20 +605,20 @@ def build_parser() -> argparse.ArgumentParser:
                                        help="Clear only alerts with this code")
 
     dispatch_parser = subparsers.add_parser(
-        "dispatch", help="Dispatch an agent to run a task in the background")
+        "dispatch", help="Dispatch a harness to run a task in the background")
     known_agents = sorted(HARNESS_CAPABILITY_BASELINES)
     dispatch_parser.add_argument("agent",
         nargs="?", default=None,
         choices=known_agents,
-        help=f"Agent name: {', '.join(known_agents)}. Optional when --as-agent triggers auto-selection.")
+        help=f"Harness name: {', '.join(known_agents)}. Optional when --as-agent triggers auto-selection.")
     dispatch_parser.add_argument("--task", required=True,
-        help="Task description for the agent")
+        help="Task description for the harness")
     dispatch_parser.add_argument("--story", default=None, dest="story_id",
         help="Story/task ID for context labelling")
     dispatch_parser.add_argument("--issue", type=int, default=None,
         help="GitHub issue number to associate this dispatch with (auto-detected from #N in --task if omitted)")
     dispatch_parser.add_argument("--force-agent", action="store_true", dest="force_agent",
-        help="Bypass capability routing — dispatch to the exact agent specified")
+        help="Bypass capability routing — dispatch to the exact harness specified")
     dispatch_parser.add_argument("--static-baseline", action="store_true", dest="static_baseline",
         help="Bypass learned capability-score routing for this dispatch — use the "
              "deterministic static baseline pick instead (Phase 2, #914-adjacent)")
@@ -704,7 +704,7 @@ def build_parser() -> argparse.ArgumentParser:
     jobs_parser.add_argument("--stalled", action="store_true",
         help="List jobs awaiting handoff")
     jobs_sub = jobs_parser.add_subparsers(dest="jobs_cmd")
-    handoff_p = jobs_sub.add_parser("handoff", help="Transfer a stalled job to another agent")
+    handoff_p = jobs_sub.add_parser("handoff", help="Transfer a stalled job to another harness")
     handoff_p.add_argument("job_id")
     handoff_p.add_argument("--to", dest="to_agent", default=None)
     reap_p = jobs_sub.add_parser(
@@ -755,7 +755,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Story ID to label the shell session")
 
     open_parser = subparsers.add_parser(
-        "open", help="Open an agent CLI interactively with pre-loaded context")
+        "open", help="Open a harness CLI interactively with pre-loaded context")
     open_parser.add_argument(
         "agent",
         choices=sorted(CORE_FLEET),
@@ -883,7 +883,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     credit_parser = subparsers.add_parser("credit", help="Credit grant ledger commands")
     credit_sub = credit_parser.add_subparsers(dest="credit_action")
-    grant_parser = credit_sub.add_parser("grant", help="Record a credit grant for an agent")
+    grant_parser = credit_sub.add_parser("grant", help="Record a credit grant for a harness")
     grant_parser.add_argument(
         "--harness", "--agent", required=True, dest="harness",
         help="Harness name (e.g. agy, codex) (--agent is deprecated, use --harness)",
@@ -894,7 +894,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     quota_parser = subparsers.add_parser(
         "quota",
-        help="Show per-agent quota headroom / reset windows (5h, hourly, daily, weekly, monthly)",
+        help="Show per-harness quota headroom / reset windows (5h, hourly, daily, weekly, monthly)",
     )
     quota_parser.add_argument(
         "--harness", "--agent",

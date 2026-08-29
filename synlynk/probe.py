@@ -1,4 +1,4 @@
-"""synlynk probe: agent capability probing, fence management, TC compliance."""
+"""synlynk probe: harness capability probing, fence management, TC compliance."""
 
 from __future__ import annotations
 
@@ -1342,10 +1342,10 @@ def _read_toml_string_value(path: str, key: str, section: Optional[str] = None) 
 
 
 def _probe_model_version(harness_name: str, cli: str) -> str:
-    """Tier 2: resolve the agent's configured model from its own config files.
+    """Tier 2: resolve the harness's configured model from its own config files.
 
     CLI ``--version`` / ``/status`` probes only surface harness/CLI version (or
-    require an interactive session), so this reads each agent's home config:
+    require an interactive session), so this reads each harness's home config:
 
     - codex: ``~/.codex/config.toml`` top-level ``model``
     - grok:  ``~/.grok/config.toml`` ``[models] default``
