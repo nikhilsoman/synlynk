@@ -14,6 +14,7 @@
 - [x] [LIVE-6] #1140 reopened, root-caused (pre-fork token refresh moved into `daemon start`, not eliminated by prior fix), cross-linked to #1228, fixed via PR #1249 (merged `a37f4ff`, 2026-08-29)
 - [x] #1250 — dispatch job summaries silently report "files: 0 touched"; root-caused (`_job_worktree_details()` CWD-relative path), fixed via PR #1251 (merged `77a9be1`, 2026-08-29)
 - [x] PR #1195, #1214, #1215 — all confirmed MERGED on GitHub; Review Queue entry below was stale, removed
+- [x] #1228 — root-caused via systematic-debugging (unprotected exception boundary in daemon `_run_loop()`, 3 independent trigger bugs), fixed via PR #1258 (merged, 2026-08-29); also surfaced a fresh env gap (qa-role GH App token not resolvable in a fresh dispatch worktree even when fresh at repo root) — not yet filed as its own issue
 
 ## Next Task
 - [ ] Fleet-parity remainder (only #342 and #347 of the original cluster are still open; #332/#338/#340/#348/#419/#461 all closed — see Recently Landed)
@@ -30,8 +31,8 @@
   - [ ] #1203 — Design GOVERNS backlog automation (auto-associate discovered/open/planned work with issues) — needs brainstorm first
 - [ ] #1188 — pipx-installed synlynk drifts silently from repo VERSION until schema-mismatch crash
 - [ ] #1194 — `synlynk decide --record` writes decision docs to gitignored path once repo is 'migrated'
-- [ ] #1228 — synlynk daemon (GitHub App token refresher) does not persist/stay running between sessions — root-cause investigation not yet started (symptom-level only, 4+ occurrences on record incl. today's Agy review timeout on PR #1251)
-- [ ] #1213 comment (2026-08-29) — Codex `api.github.com` sandbox-egress-block explanation for gh-write failures was never live-tested; #720 receipt-check failure observed instead this session, doesn't corroborate the theory — worth isolating failure mode when TC-suite live-test work happens
+- [ ] #1213 comment (2026-08-29) — Codex `api.github.com` sandbox-egress-block explanation for gh-write failures was never live-tested; #720 receipt-check failure observed instead this session, doesn't corroborate the theory — this session's #1228 fix dispatch (job-78d04989) had Codex successfully create PR #1258 with `--requires-gh-write`, further undermining the sandbox-egress theory — worth isolating failure mode when TC-suite live-test work happens
+- [ ] New (2026-08-29, untriaged) — qa-role GitHub App token not resolvable for a fresh `synlynk dispatch` worktree even when fresh/valid at the main repo root (`.synlynk/github_apps/qa.json`+`.token.json`, refreshed by daemon 19:34 same day) — blocked Agy review dispatch on PR #1258 three times (nested worktree, main repo root, both failed identically); forced Claude self-review fallback. Needs its own issue + root-cause pass, likely same family as the worktree GH-App-gap memory.
 
 ## Review Queue
 - (empty — #1195/#1214/#1215 all merged, 2026-08-29)
