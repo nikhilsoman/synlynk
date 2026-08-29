@@ -2,12 +2,74 @@
 
 import json
 import os
+import subprocess
 import sys
 import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ""))
 
-from synlynk.daemon import SynlynkDaemon, WatchDaemon
+from synlynk.daemon import SynlynkDaemon, WatchDaemon, _repo_common_dir
+
+
+def _git_run(args, cwd):
+    subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True)
+
+
+def test_repo_common_dir_is_shared_by_main_repo_and_worktree(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git_run(["init"], repo)
+    _git_run(["config", "user.email", "test@example.com"], repo)
+    _git_run(["config", "user.name", "Test"], repo)
+    (repo / "tracked.txt").write_text("tracked\n")
+    _git_run(["add", "tracked.txt"], repo)
+    _git_run(["commit", "-m", "initial"], repo)
+    worktree = tmp_path / "worktree"
+    _git_run(["worktree", "add", str(worktree)], repo)
+
+    monkeypatch.chdir(repo)
+    main_root = _repo_common_dir()
+    monkeypatch.chdir(worktree)
+    assert _repo_common_dir() == main_root == str(repo)
+
+
+def test_repo_common_dir_falls_back_to_cwd_outside_git(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    assert _repo_common_dir() == str(tmp_path)
+
+
+def test_daemon_paths_and_token_refresh_use_main_repo_from_worktree(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git_run(["init"], repo)
+    _git_run(["config", "user.email", "test@example.com"], repo)
+    _git_run(["config", "user.name", "Test"], repo)
+    (repo / "tracked.txt").write_text("tracked\n")
+    _git_run(["add", "tracked.txt"], repo)
+    _git_run(["commit", "-m", "initial"], repo)
+    worktree = tmp_path / "worktree"
+    _git_run(["worktree", "add", str(worktree)], repo)
+
+    apps_dir = repo / ".synlynk" / "github_apps"
+    apps_dir.mkdir(parents=True)
+    (apps_dir / "dev.json").write_text(json.dumps({"installation_id": "10"}))
+    refreshed = []
+    import synlynk.daemon as daemon_mod
+    monkeypatch.setattr(
+        daemon_mod.github_app_auth,
+        "refresh_installation_token",
+        lambda role, app_config: refreshed.append(role),
+    )
+    monkeypatch.chdir(worktree)
+
+    watch = WatchDaemon()
+    daemon = SynlynkDaemon()
+    assert watch.pidfile == str(repo / ".synlynk" / "watch.pid")
+    assert watch.logfile == str(repo / ".synlynk" / "watch.log")
+    assert daemon.pidfile == str(repo / ".synlynk" / "daemon.pid")
+    assert daemon.logfile == str(repo / ".synlynk" / "daemon.log")
+    watch._refresh_github_tokens()
+    assert refreshed == ["dev"]
 
 
 def test_refresh_github_tokens_refreshes_each_provisioned_role(tmp_path, monkeypatch):

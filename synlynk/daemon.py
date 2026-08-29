@@ -24,6 +24,38 @@ def _pkg(name: str, default=None):
         return default
     return getattr(package, name, default)
 
+
+def _repo_common_dir() -> str:
+    """Return the repository root shared by all worktrees.
+
+    Git's common directory is ``<repo>/.git`` for a normal repository and is
+    shared by linked worktrees.  Bare repositories report the repository
+    directory itself, so only strip the final component when it is actually
+    named ``.git``.  Commands outside a Git repository retain the historical
+    current-working-directory behavior.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        common_dir = result.stdout.strip()
+        if not common_dir:
+            raise ValueError("git returned an empty common directory")
+        common_dir = os.path.abspath(common_dir)
+        if os.path.basename(common_dir) == ".git":
+            return os.path.dirname(common_dir)
+        return common_dir
+    except (OSError, subprocess.CalledProcessError, ValueError):
+        return os.getcwd()
+
+
+def _daemon_state_path(*parts: str) -> str:
+    return os.path.join(_repo_common_dir(), ".synlynk", *parts)
+
+
 class WatchDaemon:
     """Polls project-docs/ and regenerates context.md on change.
 
@@ -31,8 +63,8 @@ class WatchDaemon:
     """
 
     def __init__(self):
-        self.pidfile = ".synlynk/watch.pid"
-        self.logfile = ".synlynk/watch.log"
+        self.pidfile = _daemon_state_path("watch.pid")
+        self.logfile = _daemon_state_path("watch.log")
         self.settle_seconds = 3
         self.token_refresh_interval_seconds = 50 * 60
 
@@ -145,7 +177,7 @@ class WatchDaemon:
         Best-effort per role: one role's failure (revoked App, bad
         installation_id) must not stop the others or crash the daemon loop.
         """
-        apps_dir = os.path.join(".synlynk", "github_apps")
+        apps_dir = _daemon_state_path("github_apps")
         if not os.path.isdir(apps_dir):
             return
         for json_path in sorted(glob.glob(os.path.join(apps_dir, "*.json"))):
@@ -688,8 +720,8 @@ class SynlynkDaemon(WatchDaemon):
     def __init__(self):
         import threading as _threading
         super().__init__()
-        self.pidfile = ".synlynk/daemon.pid"
-        self.logfile = ".synlynk/daemon.log"
+        self.pidfile = _daemon_state_path("daemon.pid")
+        self.logfile = _daemon_state_path("daemon.log")
         self._start_time = time.time()
         self._context_lock = _threading.Lock()
 
@@ -697,7 +729,7 @@ class SynlynkDaemon(WatchDaemon):
         if self._is_running():
             print("  synlynk daemon is already running.")
             return
-        watch_pid = ".synlynk/watch.pid"
+        watch_pid = _daemon_state_path("watch.pid")
         if os.path.exists(watch_pid):
             print("  ⚠ synlynk watch is also running — both will poll project-docs/.")
         if os.path.exists(self.pidfile):

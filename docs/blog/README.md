@@ -137,6 +137,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | **[129](./129-v0.18.0-dispatch-reliability-and-qa-merge-gate.md)** | **v0.18.0 — Dispatch Reliability & QA Merge-Gate Authority (Named Release)** | — | **2026-08-28** |
 | [130](./130-pr1245-doctor-pr-review-cycles-check.md) | PR #1245 — Doctor Learns to Watch Its Own Reviewers | [#1245](https://github.com/nikhilsoman/synlynk/pull/1245) | 2026-08-29 |
 | [131](./131-pr1239-multiauthor-book-part0-part1.md) | PR #1239 — The Book Gets Co-Authors: Part 0 + Part I, v0.3-DRAFT | [#1239](https://github.com/nikhilsoman/synlynk/pull/1239) | 2026-08-29 |
+| [133](./133-prTBD-daemon-worktree-state-paths.md) | Daemon State Belongs to the Repository, Not the Worktree | TBD | 2026-08-29 |
 
 ## Per-PR Post Template
 
