@@ -48,7 +48,11 @@ def _repo_common_dir() -> str:
         if os.path.basename(common_dir) == ".git":
             return os.path.dirname(common_dir)
         return common_dir
-    except (OSError, subprocess.CalledProcessError, ValueError):
+    except Exception:
+        # Broad by design: this must never crash daemon construction, whether
+        # from a missing git binary, a non-repo cwd, or a test harness that
+        # monkeypatches subprocess.Popen process-wide (subprocess.run() uses
+        # Popen internally, so unrelated tests' fakes can surface here too).
         return os.getcwd()
 
 
