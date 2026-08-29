@@ -15,7 +15,7 @@
 
 Functions: `collect_pytest_test_count`, `parse_waivers`, `validate_readme_for_release`, `format_readme_check_report`.
 
-Review follow-ups (#1242 comment): snippet-only command scan, abspath-normalized root, GitHub UI routes, collect-only semantics.
+Review follow-ups (#1242 comment): snippet-only command scan, abspath-normalized root, GitHub UI routes, collect-only semantics (reject “passing” wording unless a verified full-suite passing count is supplied).
 
 ## Task 2: Wire `synlynk release`
 

@@ -26,7 +26,7 @@ Keep the implementation in `synlynk/release_readme.py`. Do not auto-edit README 
 | Check id | What | Waivable |
 |---|---|---|
 | `version` | Version badge (`badge/version-X.Y.Z`) equals expected version. Expected version is the version the cut would write, or current `VERSION` for `--check-docs` without `--version`/`--minor`. | **No.** An older advertised version after a named release is the bug. |
-| `test_count` | Numeric claims (`tests-N` badge and `N tests passing` / `N tests collected` prose) must agree with each other and with `pytest --collect-only` (or `0` when `tests/` is absent). A repo that collects `> 0` tests must advertise that count. Collection failure is reported as unverified. **Collection is a count check only** — it does not run the suite and does not attest that tests pass. README wording such as “tests passing” is treated as a collected-count claim. | Yes, with a recorded reason |
+| `test_count` | Numeric **collected** claims (`tests-N collected` badge and `N tests collected` prose) must agree with each other and with `pytest --collect-only` (or `0` when `tests/` is absent). A repo that collects `> 0` tests must advertise that collected count. Collection failure is reported as unverified. **Collection is a count check only** — it does not run the suite and does not attest that tests pass. README wording such as “N tests passing” / `tests-N passing` is **rejected** unless a verified passing count from a full-suite run is supplied (`verified_passing_count`). Collect-only must never mark a passing claim green. | Yes, with a recorded reason |
 | `hero` | First `**vX.Y.Z:**` summary matches expected version and has a non-empty summary. | Yes |
 | `install` | README still documents at least one current install path: `pipx install`, `install.sh`, or `python3 bin/synlynk.py`. | Yes |
 | `links` | Relative markdown links resolve to files under the **abspath-normalized** repo root. `http(s)`/`mailto`/anchors are skipped. GitHub README UI routes such as `../../discussions` are skipped (not local files). | Yes |
@@ -37,7 +37,7 @@ Keep the implementation in `synlynk/release_readme.py`. Do not auto-edit README 
 1. Do not treat prose such as “synlynk is a Python CLI”, “synlynk globally”, or “synlynk before” as commands.
 2. Normalize `root` (including `root="."`) before join/containment so valid relative links are not reported as escaping the repo.
 3. `../../discussions` (and sibling GitHub UI tabs) are valid README routes, not missing files.
-4. Never describe collect-only as proof that N tests are passing.
+4. Never describe collect-only as proof that N tests are passing. Reject “N tests passing” unless a verified full-suite passing count is supplied; collected-count wording is the collect-only claim.
 
 ## When a README update is unnecessary
 
@@ -82,7 +82,8 @@ CLAUDE.md gains a **Named Release README Sync** standing instruction listing the
 - Prose “synlynk is a Python CLI” / “synlynk globally” → no `commands` error
 - `root="."` with a valid in-repo relative link → no escape finding
 - `../../discussions` → no escape finding; a true `../outside.md` escape still errors
-- “N tests passing” matching collect-only count is green as a **count** claim; report labels it collect-only / not pass/fail
+- “N tests collected” matching collect-only count is green; report labels it collect-only / not pass/fail
+- “N tests passing” matching collect-only count is **not** green unless `verified_passing_count` is supplied and matches; report must not mark the check `[x]` for an unverified passing claim
 - `--waive test_count=...` records the reason; `--waive version=...` still fails
 - `cmd_release` does not write VERSION when README version is stale
 - `synlynk release --check-docs` is parsed and fails closed

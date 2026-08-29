@@ -26,10 +26,10 @@ COMMANDS_START = "<!-- commands:start -->"
 COMMANDS_END = "<!-- commands:end -->"
 _VERSION_BADGE_RE = re.compile(r"badge/version-(\d+\.\d+\.\d+)", re.IGNORECASE)
 _TEST_BADGE_RE = re.compile(
-    r"tests-(\d+)(?:%20|\s)+(?:passing|collected)", re.IGNORECASE
+    r"tests-(\d+)(?:%20|\s)+(passing|collected)", re.IGNORECASE
 )
 _TEST_PROSE_RE = re.compile(
-    r"(\d+)\s+tests(?:\s+passing|\s+collected)\b", re.IGNORECASE
+    r"(\d+)\s+tests\s+(passing|collected)\b", re.IGNORECASE
 )
 _HERO_RE = re.compile(r"\*\*v(\d+\.\d+\.\d+):\*\*\s*(.*)", re.IGNORECASE)
 _MD_LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
@@ -186,11 +186,29 @@ def _command_is_shipped(cmd: str, shipped: set) -> bool:
     return False
 
 
+def _split_test_count_claims(text: str) -> Tuple[List[int], List[int]]:
+    """Return (collected_claims, passing_claims) from badge and prose."""
+    collected: List[int] = []
+    passing: List[int] = []
+    for number, kind in _TEST_BADGE_RE.findall(text) + _TEST_PROSE_RE.findall(text):
+        bucket = passing if kind.lower() == "passing" else collected
+        bucket.append(int(number))
+    return collected, passing
+
+
+def _unique_claim(values: Sequence[int]) -> Optional[int]:
+    unique = set(values)
+    if len(unique) == 1:
+        return next(iter(unique))
+    return None
+
+
 def validate_readme_for_release(
     root: str,
     expected_version: str,
     collected_test_count: Optional[int] = None,
     waivers: Optional[Dict[str, str]] = None,
+    verified_passing_count: Optional[int] = None,
 ) -> List[ReadmeFinding]:
     """Return unwaived README findings for a named-release version."""
     expected = expected_version.strip().lstrip("v")
@@ -227,18 +245,51 @@ def validate_readme_for_release(
                 )
             )
 
-    badge_counts = [int(n) for n in _TEST_BADGE_RE.findall(text)]
-    prose_counts = [int(n) for n in _TEST_PROSE_RE.findall(text)]
-    claimed_counts = badge_counts + prose_counts
-    unique_claims = set(claimed_counts)
-    if len(unique_claims) > 1:
+    collected_claims, passing_claims = _split_test_count_claims(text)
+    unique_collected = set(collected_claims)
+    unique_passing = set(passing_claims)
+    if len(unique_collected) > 1:
         findings.append(
             ReadmeFinding(
                 "test_count",
                 "README collected-test-count claims disagree: "
-                + ", ".join(str(n) for n in sorted(unique_claims)),
+                + ", ".join(str(n) for n in sorted(unique_collected)),
             )
         )
+    if len(unique_passing) > 1:
+        findings.append(
+            ReadmeFinding(
+                "test_count",
+                "README passing-test-count claims disagree: "
+                + ", ".join(str(n) for n in sorted(unique_passing)),
+            )
+        )
+
+    if passing_claims:
+        claimed_passing = _unique_claim(passing_claims)
+        if verified_passing_count is None:
+            shown = (
+                str(claimed_passing)
+                if claimed_passing is not None
+                else ", ".join(str(n) for n in sorted(unique_passing))
+            )
+            findings.append(
+                ReadmeFinding(
+                    "test_count",
+                    f"README claims {shown} tests passing, but this check only "
+                    "runs pytest --collect-only (not a pass/fail run). Use "
+                    "'N tests collected' wording, or supply a verified passing "
+                    "count from a full-suite run.",
+                )
+            )
+        elif claimed_passing is not None and claimed_passing != verified_passing_count:
+            findings.append(
+                ReadmeFinding(
+                    "test_count",
+                    f"README claims {claimed_passing} tests passing, full-suite "
+                    f"verification reported {verified_passing_count} passing",
+                )
+            )
 
     if collected_test_count is None:
         collected_test_count = collect_pytest_test_count(root)
@@ -252,22 +303,27 @@ def validate_readme_for_release(
             )
         )
     else:
-        if unique_claims:
-            claimed = next(iter(unique_claims)) if len(unique_claims) == 1 else None
-            if claimed is not None and claimed != collected_test_count:
+        claimed_collected = _unique_claim(collected_claims)
+        if unique_collected:
+            if (
+                claimed_collected is not None
+                and claimed_collected != collected_test_count
+            ):
                 findings.append(
                     ReadmeFinding(
                         "test_count",
-                        f"README claims {claimed} tests, pytest collected "
-                        f"{collected_test_count} (count only; not pass/fail)",
+                        f"README claims {claimed_collected} tests collected, "
+                        f"pytest collected {collected_test_count} "
+                        "(count only; not pass/fail)",
                     )
                 )
-        elif collected_test_count > 0:
+        elif collected_test_count > 0 and verified_passing_count is None:
             findings.append(
                 ReadmeFinding(
                     "test_count",
                     "README has no collected-test-count claim; pytest collected "
-                    f"{collected_test_count}",
+                    f"{collected_test_count}. Use 'N tests collected' rather "
+                    "than 'N tests passing'.",
                 )
             )
 
@@ -389,7 +445,8 @@ def format_readme_check_report(
         ("version", "version metadata"),
         (
             "test_count",
-            "collected test count (pytest --collect-only; not pass/fail)",
+            "collected test count (pytest --collect-only; "
+            "'passing' requires a verified full-suite run)",
         ),
         ("hero", "hero/release summary"),
         ("install", "install instructions"),

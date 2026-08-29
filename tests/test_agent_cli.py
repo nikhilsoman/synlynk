@@ -770,7 +770,12 @@ def test_cli_dispatch_dry_run_as_agent_without_explicit_harness_shows_resolved_a
 
 
 def _docs_keep_readme_synchronized_readme(
-    root, version, test_count=None, extra="", stale_commands=False
+    root,
+    version,
+    test_count=None,
+    extra="",
+    stale_commands=False,
+    test_wording="collected",
 ):
     from scripts.generate_command_docs import render_readme_section
 
@@ -787,10 +792,10 @@ def _docs_keep_readme_synchronized_readme(
     if test_count is not None:
         test_badge = (
             f'  <a href="https://github.com/nikhilsoman/synlynk">'
-            f'<img src="https://img.shields.io/badge/tests-{test_count}%20passing-brightgreen" '
+            f'<img src="https://img.shields.io/badge/tests-{test_count}%20{test_wording}-brightgreen" '
             f'alt="Tests"></a>\n'
         )
-        test_prose = f" {test_count} tests passing."
+        test_prose = f" {test_count} tests {test_wording}."
     (root / "README.md").write_text(
         f"""<p align="center">
 {test_badge}  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/version-{version}-blue" alt="Version"></a>
@@ -824,13 +829,16 @@ def test_docs_keep_readme_synchronized_during_named_releases_flags_stale_version
         str(tmp_path), "0.18.0", collected_test_count=2316
     )
     by_check = {item.check: item.message for item in findings}
+    test_count_blob = " ".join(
+        item.message for item in findings if item.check == "test_count"
+    )
     assert "version" in by_check
     assert "0.12.0" in by_check["version"]
     assert "0.18.0" in by_check["version"]
     assert "test_count" in by_check
-    assert "1140" in by_check["test_count"]
-    assert "2316" in by_check["test_count"]
-    assert "not pass/fail" in by_check["test_count"]
+    assert "1140" in test_count_blob
+    assert "2316" in test_count_blob
+    assert "not pass/fail" in test_count_blob or "collect-only" in test_count_blob
 
 
 def test_docs_keep_readme_synchronized_during_named_releases_handles_planned_vs_shipped_commands(
@@ -919,7 +927,7 @@ def test_docs_keep_readme_synchronized_during_named_releases_allows_github_relat
     assert any("escapes repo root: ../outside.md" in msg for msg in link_messages)
 
 
-def test_docs_keep_readme_synchronized_during_named_releases_treats_passing_as_collected_count(
+def test_docs_keep_readme_synchronized_during_named_releases_rejects_passing_without_verified_run(
     tmp_path,
 ):
     from synlynk.release_readme import (
@@ -927,15 +935,79 @@ def test_docs_keep_readme_synchronized_during_named_releases_treats_passing_as_c
         validate_readme_for_release,
     )
 
-    _docs_keep_readme_synchronized_readme(tmp_path, "0.18.0", test_count=12)
+    _docs_keep_readme_synchronized_readme(
+        tmp_path, "0.18.0", test_count=12, test_wording="passing"
+    )
+    findings = validate_readme_for_release(
+        str(tmp_path), "0.18.0", collected_test_count=12
+    )
+    test_count_findings = [item for item in findings if item.check == "test_count"]
+    assert test_count_findings, findings
+    blob = " ".join(item.message for item in test_count_findings)
+    assert "12" in blob
+    assert "passing" in blob.lower()
+    assert "collect-only" in blob
+    report = format_readme_check_report(findings, "0.18.0")
+    assert "pytest --collect-only" in report
+    assert "passing" in report.lower()
+    assert "[x] collected test count" not in report
+
+
+def test_docs_keep_readme_synchronized_during_named_releases_accepts_collected_wording(
+    tmp_path,
+):
+    from synlynk.release_readme import (
+        format_readme_check_report,
+        validate_readme_for_release,
+    )
+
+    _docs_keep_readme_synchronized_readme(
+        tmp_path, "0.18.0", test_count=12, test_wording="collected"
+    )
     findings = validate_readme_for_release(
         str(tmp_path), "0.18.0", collected_test_count=12
     )
     assert findings == []
     report = format_readme_check_report(findings, "0.18.0")
     assert "pytest --collect-only" in report
-    assert "not pass/fail" in report
-    assert "tests passing" not in report.lower() or "not pass/fail" in report
+    assert "[x] collected test count" in report
+
+
+def test_docs_keep_readme_synchronized_during_named_releases_accepts_verified_passing(
+    tmp_path,
+):
+    from synlynk.release_readme import validate_readme_for_release
+
+    _docs_keep_readme_synchronized_readme(
+        tmp_path, "0.18.0", test_count=12, test_wording="passing"
+    )
+    findings = validate_readme_for_release(
+        str(tmp_path),
+        "0.18.0",
+        collected_test_count=12,
+        verified_passing_count=12,
+    )
+    assert not any(item.check == "test_count" for item in findings), findings
+
+
+def test_docs_keep_readme_synchronized_during_named_releases_rejects_stale_verified_passing(
+    tmp_path,
+):
+    from synlynk.release_readme import validate_readme_for_release
+
+    _docs_keep_readme_synchronized_readme(
+        tmp_path, "0.18.0", test_count=12, test_wording="passing"
+    )
+    findings = validate_readme_for_release(
+        str(tmp_path),
+        "0.18.0",
+        collected_test_count=12,
+        verified_passing_count=11,
+    )
+    blob = " ".join(item.message for item in findings if item.check == "test_count")
+    assert "12" in blob
+    assert "11" in blob
+    assert "passing" in blob.lower()
 
 
 def test_docs_keep_readme_synchronized_during_named_releases_records_waiver_not_version(
@@ -1026,7 +1098,11 @@ def test_docs_keep_readme_synchronized_during_named_releases_real_readme_pattern
     for item in findings:
         by_check.setdefault(item.check, []).append(item.message)
     assert any("0.12.0" in msg for msg in by_check.get("version", []))
-    assert any("1140" in msg and "9999" in msg for msg in by_check.get("test_count", []))
+    test_count_blob = " ".join(by_check.get("test_count", []))
+    assert "1140" in test_count_blob
+    assert "9999" in test_count_blob
+    assert "passing" in test_count_blob.lower()
+    assert "collect-only" in test_count_blob or "collected" in test_count_blob.lower()
     command_blob = " ".join(by_check.get("commands", []))
     assert "is a Python CLI" not in command_blob
     assert "globally" not in command_blob
