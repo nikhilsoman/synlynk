@@ -41,6 +41,25 @@ def test_get_human_authority_role_reads_repo_override(tmp_path, monkeypatch):
     assert get_human_authority_role(repo_path=str(repo)) == "architect"
 
 
+def test_task_allocation_covers_pm_and_architect_task_types(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    policy = load_policy(repo_path=str(repo), workspace_name="default")
+    table = policy["dev_authority"]["task_allocation"]
+    assert table["pm"]["harness"] == "claude"
+    assert table["brainstorm"]["harness"] == "claude"
+    assert table["architecture-review"]["harness"] == "claude"
+
+
+def test_check_authority_task_dispatch_pm_allowed(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    result = check_authority("task_dispatch:pm", role="pm", repo_path=str(repo))
+    assert result.allowed
+
+
 def _write_json(path: Path, data: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data))

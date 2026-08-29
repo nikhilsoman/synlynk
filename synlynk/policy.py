@@ -32,6 +32,9 @@ DEFAULT_WORKSPACE_POLICY: Dict[str, Any] = {
                 "cli-plumbing": {"harness": "codex", "fallback": []},
                 "review": {"harness": "claude", "fallback": []},
                 "gh_write": {"harness": "claude", "fallback": ["agy"]},
+                "pm": {"harness": "claude", "fallback": []},
+                "brainstorm": {"harness": "claude", "fallback": []},
+                "architecture-review": {"harness": "claude", "fallback": []},
             },
         },
         "merge_authority": {
