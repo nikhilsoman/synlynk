@@ -5,6 +5,32 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from synlynk import cmd_release
+from scripts.generate_command_docs import render_readme_section
+
+
+def _write_synced_readme(root, version):
+    commands_md = root / "docs" / "reference" / "commands.md"
+    commands_md.parent.mkdir(parents=True, exist_ok=True)
+    commands_md.write_text("# Command Reference\n")
+    (root / "README.md").write_text(
+        f"""<p align="center">
+  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/version-{version}-blue" alt="Version"></a>
+</p>
+
+**v{version}:** Named release summary for tests covering the README gate.
+
+## Install
+
+```bash
+pipx install git+https://github.com/nikhilsoman/synlynk
+python3 bin/synlynk.py --help
+```
+
+## Commands
+
+{render_readme_section()}
+"""
+    )
 
 
 def test_cmd_release_refuses_when_role_not_authorized(tmp_path, monkeypatch):
@@ -26,6 +52,7 @@ def test_cmd_release_dry_run_no_writes(tmp_path, monkeypatch):
     readme_file.write_text("## Per-PR Post Template\n```markdown\n---\ntitle: \"PR #N — <theme>\"\ndate: YYYY-MM-DD\nmerged: YYYY-MM-DD (or status: open)\n---\n```\n")
 
     monkeypatch.chdir(tmp_path)
+    _write_synced_readme(tmp_path, "0.10.1")
 
     # Mock git calls
     def mock_check_output(cmd, **kwargs):
@@ -45,6 +72,7 @@ def test_cmd_release_bumps_version(tmp_path, monkeypatch):
     version_file.write_text("0.10.0\n")
 
     monkeypatch.chdir(tmp_path)
+    _write_synced_readme(tmp_path, "0.10.1")
 
     # Mock git calls
     def mock_check_output(cmd, **kwargs):
@@ -64,6 +92,7 @@ def test_cmd_release_writes_changelog(tmp_path, monkeypatch):
     changelog_file.write_text("# Changelog\n\n## [0.9.0] - 2026-06-01\n")
 
     monkeypatch.chdir(tmp_path)
+    _write_synced_readme(tmp_path, "0.10.1")
 
     # Mock git calls to simulate some commits
     def mock_check_output(cmd, **kwargs):
@@ -94,6 +123,7 @@ def test_cmd_release_writes_blog_stub(tmp_path, monkeypatch):
     (blog_dir / "05-pr12-v0.9.0.md").write_text("stub")
 
     monkeypatch.chdir(tmp_path)
+    _write_synced_readme(tmp_path, "0.10.1")
 
     # Mock git calls
     def mock_check_output(cmd, **kwargs):
@@ -115,6 +145,7 @@ def test_cmd_release_checklist_printed(tmp_path, monkeypatch, capsys):
     blog_dir.mkdir(parents=True)
 
     monkeypatch.chdir(tmp_path)
+    _write_synced_readme(tmp_path, "0.10.1")
 
     # Mock git calls
     def mock_check_output(cmd, **kwargs):
@@ -129,6 +160,7 @@ def test_cmd_release_checklist_printed(tmp_path, monkeypatch, capsys):
     assert "[x] VERSION bumped" in captured.out
     assert "[x] CHANGELOG entry written" in captured.out
     assert "Blog post stub: docs/blog/00-prTBD-v0.10.1.md" in captured.out
+    assert "[x] README synchronized" in captured.out
     assert "[ ] git tag v0.10.1 && git push --tags" in captured.out
 
 def test_cmd_release_minor_flag(tmp_path, monkeypatch):
@@ -136,6 +168,7 @@ def test_cmd_release_minor_flag(tmp_path, monkeypatch):
     version_file.write_text("0.10.0\n")
 
     monkeypatch.chdir(tmp_path)
+    _write_synced_readme(tmp_path, "0.11.0")
 
     # Mock git calls
     def mock_check_output(cmd, **kwargs):

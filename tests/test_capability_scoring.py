@@ -1127,6 +1127,22 @@ def test_add_synlynk_release_command_to_synlynk__(tmp_path, monkeypatch):
     version_file.write_text("0.10.0\n")
     changelog_file = tmp_path / "CHANGELOG.md"
     changelog_file.write_text("# Changelog\n\n## [0.9.0] - 2026-06-01\n")
+    from scripts.generate_command_docs import render_readme_section
+    commands_md = tmp_path / "docs" / "reference" / "commands.md"
+    commands_md.parent.mkdir(parents=True)
+    commands_md.write_text("# Command Reference\n")
+    (tmp_path / "README.md").write_text(
+        "<p align=\"center\">\n"
+        "  <a href=\"https://github.com/nikhilsoman/synlynk\">"
+        "<img src=\"https://img.shields.io/badge/version-0.10.1-blue\" alt=\"Version\"></a>\n"
+        "</p>\n\n"
+        "**v0.10.1:** Named release summary for tests covering the README gate.\n\n"
+        "## Install\n\n"
+        "pipx install git+https://github.com/nikhilsoman/synlynk\n"
+        "python3 bin/synlynk.py --help\n\n"
+        "## Commands\n\n"
+        f"{render_readme_section()}\n"
+    )
     
     monkeypatch.chdir(tmp_path)
     
