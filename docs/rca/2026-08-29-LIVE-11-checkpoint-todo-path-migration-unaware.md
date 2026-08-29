@@ -3,7 +3,9 @@
 **Date:** 2026-08-29
 **Severity:** Sev1
 **Issue:** [#1217](https://github.com/nikhilsoman/synlynk/issues/1217)
-**Related:** [#936](https://github.com/nikhilsoman/synlynk/issues/936) (reopened — parent divergence issue this is a confirmed instance of)
+**Related:** [#936](https://github.com/nikhilsoman/synlynk/issues/936) (reopened during investigation, since re-closed — see Correction below; its two stated root causes are already fixed in current code and unrelated to this issue)
+
+> **Correction (2026-08-29, same day):** The original version of this RCA claimed devlogs and decision records shared this same migration-unaware, non-DB-backed defect. Direct code investigation (during implementation-plan drafting for the follow-up spec) found that claim false: `devlog_entries` and `decisions` already exist as state.db tables, are already fully wired into `checkpoint()` (via `cmd_devlog_append()`/`_write_devlog_file()`) and `cmd_decide()` (via `_write_decision_record_md()`), and are already migration-aware — tracing back to a pre-existing foundational commit (`db9a652`, "State Engine PR1"). Only `checkpoint()`'s handling of `todo.md` remains broken. This revision removes the incorrect claims and narrows scope to the verified bug. #1219 and #1220 (opened on the original, wider premise) have been closed/rescoped accordingly — see their closing comments.
 
 ## Summary
 
@@ -57,7 +59,7 @@ This function is correctly migration-aware. It is called from exactly one place:
 
 **Consequence:** In this (migrated) repo, `.synlynk/project-docs/todo.md` exists, is gitignored, and contains exactly two rows — `Story one` and `Story two` — placeholder/test stories, because nothing in this repo's real backlog has ever been represented as a `stories` table row. Meanwhile `project-docs/todo.md` — the file `checkpoint()` operates on, and the file every human/Claude PM session reads, hand-edits, and lands via PR (confirmed via `git log -- project-docs/todo.md` showing prior syncs landing through PRs #1031, #1010, #882, and this session's own #1216) — has no connection to `state.db` at all.
 
-This is the same defect *class* as root cause #2 already documented in #936 (`cmd_decide()` in `synlynk/team.py` resolving a migration-unaware path via `_docs_dir()` with no `_is_migrated()` check). #936's own scope section named this exact gap — "every other `_docs_dir()`-style call site needs the same audit" — but `checkpoint()`'s `todo_path` (which doesn't even call `_docs_dir()`, it's a bare literal, an even more basic miss) was never audited before #936 was closed.
+**On #936 and the devlog/decision comparison:** #936 originally claimed two other root causes — `checkpoint()` never writing devlog entries to state.db, and `cmd_decide()` resolving a migration-unaware path via `_docs_dir()` with no `_is_migrated()` check. Direct code investigation (see Correction note above) found both of those claims no longer hold: `cmd_devlog_append()`/`_write_devlog_file()` (devlogs) and `cmd_decision_record()`/`_write_decision_record_md()` (decisions) are already DB-backed (via the `devlog_entries` and `decisions` tables respectively) and already correctly branch on `_is_migrated()`. This foundation predates this investigation, landing in commit `db9a652` ("State Engine PR1"). `checkpoint()`'s `todo_path`, by contrast, is a bare literal with no `_is_migrated()` branch at all, and — unlike devlogs, which delegate to the DB-backed `cmd_devlog_append()` — bypasses the `stories` table entirely, hand-parsing and rewriting the flat file with regex. This is genuinely a narrower, todo.md-only miss, not an instance of a wider unaudited pattern.
 
 ## Why this went undetected for so long
 
@@ -68,15 +70,15 @@ This is the same defect *class* as root cause #2 already documented in #936 (`cm
 
 ## Impact
 
-- Confirmed in synlynk itself (this repo). The same defect class (migration-unaware path resolution for a project-docs constituent) was already independently confirmed in cc-videoreframing for devlogs/decisions (#936's origin report), so this is not synlynk-specific — any migrated repo using `synlynk`'s checkpoint/story workflow is affected.
+- Confirmed in synlynk itself (this repo). Scope is `checkpoint()`'s `todo.md` handling only — devlogs and decisions are already DB-backed and migration-aware (see Correction note above), so this is not the wider cross-file pattern originally suspected.
 - The `stories` table and its capability-scoring/routing machinery (`create_story`, capability_grants, learned scoring per PR #1030) have been operating against a `stories` table that has never received real backlog content in this repo, because nothing ever wrote real stories into it — the actual backlog has lived entirely in hand-edited markdown this whole time.
-- No data loss: `project-docs/todo.md`'s content is intact and git-tracked. The impact is architectural — the state.db-as-authority model this project's own strategy doc claims is already true for todo.md has never actually been true in practice.
+- No data loss: `project-docs/todo.md`'s content is intact and git-tracked. The impact is architectural — the state.db-as-authority model already achieved for devlogs/decisions was never extended to todo.md, and `_generate_todo_md()`'s own header claims a source of truth that `checkpoint()` doesn't honor.
 
 ## Action items
 
-1. **#1218** — Make `checkpoint()`'s `todo_path` migration-aware, matching the `devlog_path` pattern two lines below it in the same function (mechanical fix, narrow scope — the specific bug this RCA root-caused).
-2. **#1219** — Resolve the (a)/(b) authority decision #936 originally called for and never made: either make `state.db` genuinely authoritative for todo.md/devlogs/decisions (backfill `project-docs/todo.md`'s real content into the `stories` table, retire the hand-edit path) or formally accept markdown as authoritative and stop stamping `.synlynk/project-docs/todo.md` as "generated, do NOT hand-edit" when it demonstrably isn't the real source. Needs a brainstorm per Brainstorm-First Policy before implementation, same as #936 originally scoped.
-3. **#1220** — Add a `synlynk doctor` check that flags todo.md drift between `project-docs/todo.md` and `.synlynk/project-docs/todo.md` (or their post-(a)/(b)-decision equivalent) so this class of silent divergence surfaces automatically instead of requiring a manual audit to notice.
+1. **#1218** — Wire `checkpoint()`'s todo.md handling through the `stories` table and `_generate_todo_md()`, mirroring the already-proven `cmd_devlog_append()`/`_write_devlog_file()` pattern used for devlogs — not just a path-literal fix in isolation. Evaluate reusing/extending the existing `_import_todo_to_stories()` backfill parser (`synlynk/db.py:2207`, currently only wired into the one-time `_migrate_import()` flow) rather than designing a new backfill mechanism.
+2. ~~**#1219**~~ — Closed: the state.db-authority decision this issue asked for was already made and implemented for devlogs/decisions (State Engine PR1, `db9a652`); only todo.md was left out, and that is tracked as the narrower #1218 above. No open decision remains.
+3. **#1220** — Rescoped/closed: see issue for final disposition (todo.md-only drift check, folded into #1218, or closed as unnecessary given the scope reduction).
 
 ## Prevention
 
