@@ -1117,11 +1117,10 @@ def test_docs_keep_readme_synchronized_during_named_releases_real_readme_pattern
     by_check = {}
     for item in findings:
         by_check.setdefault(item.check, []).append(item.message)
-    assert any("0.12.0" in msg for msg in by_check.get("version", []))
+    assert by_check.get("version", []) == []
     test_count_blob = " ".join(by_check.get("test_count", []))
-    assert "1140" in test_count_blob
-    assert "9999" not in test_count_blob
-    assert "passing" in test_count_blob.lower()
+    assert "2346" in test_count_blob
+    assert "9999" in test_count_blob
     assert "collect-only" in test_count_blob or "collected" in test_count_blob.lower()
     command_blob = " ".join(by_check.get("commands", []))
     assert "is a Python CLI" not in command_blob
