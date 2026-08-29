@@ -6695,7 +6695,7 @@ def test_synlynk_daemon_inherits_watch_daemon():
 
 def test_synlynk_daemon_has_separate_pidfile(project_dir):
     d = synlynk.SynlynkDaemon()
-    assert d.pidfile == ".synlynk/daemon.pid"
+    assert d.pidfile == str(project_dir / ".synlynk" / "daemon.pid")
     assert d.pidfile != synlynk.WatchDaemon().pidfile
 
 
