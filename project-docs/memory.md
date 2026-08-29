@@ -1,5 +1,14 @@
 # synlynk Memory
 
+## Direct Codex GitHub-Write Network Access via Config Override (decided/shipped 2026-08-29)
+- **Shipped:** PR #1271 (closes #1268, relates to #865). Replaces the proposed brokered file relay with a native configuration override (`-c sandbox_workspace_write.network_access=true`) injected into Codex dispatch when `requires_gh_write` is active. [@agy]
+- **Attribution Finding:** PR #1258 was created by synlynk's host wrapper (`_maybe_open_worktree_pr`), not by Codex inside the sandbox. Codex never attempted network calls.
+- **Empirical Sandbox Probe:** Live test confirmed that `codex exec -s workspace-write` blocks DNS egress by default (`Could not resolve host: api.github.com`), but `-c sandbox_workspace_write.network_access=true` cleanly enables outbound HTTPS (`HTTP/2 200`).
+- **Implementation:** `synlynk/dispatch.py:dispatch_agent()` now appends `_CODEX_NETWORK_PERMISSION` (`"run:install"`) to `effective_grants` for Codex when `requires_gh_write=True`, causing `_permissions_to_flags()` to emit the network access override flag.
+- **Security & Isolation:** Default non-gh-write dispatches remain strictly isolated without network access. Environment variables continue to be scrubbed via `_ENV_ALLOWLIST_BASE`, and only temporary, role-scoped GitHub App tokens are injected into isolated directories.
+- **Spec & Plan:** `docs/superpowers/specs/2026-08-29-codex-direct-gh-write-network-access-design.md`, `docs/superpowers/plans/2026-08-29-codex-direct-gh-write-network-access.md`.
+- **Blog Post:** `docs/blog/134-pr1271-codex-direct-gh-write-network-access.md`.
+
 ## QA Completion Tracker + Merge-Restricted-Classes Gate Mode (decided/shipped 2026-08-22)
 - **Shipped:** PR #1100 (completion tracker — `spec_verified` GOVERNS event, Vizor panel distinguishing merged vs verified PRs) and PR #1101 (`qa_gate_mode=merge-restricted-classes` — qa merges docs-only PRs directly, first concrete answer to #1079 §5's deferred "what PR class is safe to merge unattended"). [@nikhilsoman via Claude]
 - **Both plans** executed via subagent-driven-development, dispatched to Codex; reviewed directly by Claude (spec-compliance + code quality, no sub-delegated review) against plan text; merged via #423 COMMENT-review-with-checklist fallback.
