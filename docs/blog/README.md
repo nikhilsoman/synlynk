@@ -136,6 +136,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | **[128](./128-pr1137-1151-v0.17.0-ticket-driven-approval-auto-resume.md)** | **v0.17.0 — Ticket-Driven Approval Auto-Resume (Named Release)** | [#1137](https://github.com/nikhilsoman/synlynk/pull/1137), [#1138](https://github.com/nikhilsoman/synlynk/pull/1138), [#1139](https://github.com/nikhilsoman/synlynk/pull/1139), [#1141](https://github.com/nikhilsoman/synlynk/pull/1141), [#1151](https://github.com/nikhilsoman/synlynk/pull/1151) | **2026-08-24** |
 | **[129](./129-v0.18.0-dispatch-reliability-and-qa-merge-gate.md)** | **v0.18.0 — Dispatch Reliability & QA Merge-Gate Authority (Named Release)** | — | **2026-08-28** |
 | [130](./130-pr1245-doctor-pr-review-cycles-check.md) | PR #1245 — Doctor Learns to Watch Its Own Reviewers | [#1245](https://github.com/nikhilsoman/synlynk/pull/1245) | 2026-08-29 |
+| [131](./131-pr1239-multiauthor-book-part0-part1.md) | PR #1239 — The Book Gets Co-Authors: Part 0 + Part I, v0.3-DRAFT | [#1239](https://github.com/nikhilsoman/synlynk/pull/1239) | 2026-08-29 |
 
 ## Per-PR Post Template
 
