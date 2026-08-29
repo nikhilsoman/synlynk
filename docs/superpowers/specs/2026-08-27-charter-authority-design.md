@@ -66,6 +66,8 @@ Rejected alternatives:
 - If the pointer names a role with no registered agent (`agent_store.list_agents()` has no matching `role_slug`), injection must fail loudly (visible error, not silent fallback) — an unset authority role is a configuration error, not a normal state.
 - Charter injection failures (missing charter file, revision-store read error) must not silently produce an empty-charter dispatch; surface the failure the same way other dispatch preflight failures already surface today.
 
+**Amendment (2026-08-29, Nikhil, discovered during #1201 implementation):** the rule above assumed a repo actively using workspace agents. It does not hold when the workspace has *never* provisioned any agents at all (`agent_store.list_agents()` returns `[]`) — that is the default, opt-in state for any repo, and conflicts with the standing "nothing breaks without agents" design principle. Refined rule: if `list_agents()` is empty (zero agents registered in the workspace, period), `render_charter_section()` returns `""` — a silent no-op, no error. The fail-loud behavior above applies only when the workspace *has* registered agents but none match the resolved `human_authority_role` (a genuinely dangling/misconfigured pointer). This surfaced as a real regression: wiring injection into `generate_context()` broke ~33 pre-existing tests and would have broken `checkpoint()`/`exec` for every unadopted repo.
+
 ## 6. Testing
 
 - Unit coverage for the injector resolving `human_authority_role` correctly for both the default (`pm`) and a reassigned value, without any `role == pm` branch existing in the code path.

@@ -16,7 +16,10 @@
         "refactor": {"harness": "codex", "fallback": []},
         "cli-plumbing": {"harness": "codex", "fallback": []},
         "review": {"harness": "claude", "fallback": ["agy"]},
-        "gh_write": {"harness": "claude", "fallback": ["agy"]}
+        "gh_write": {"harness": "claude", "fallback": ["agy"]},
+        "pm": {"harness": "claude", "fallback": []},
+        "brainstorm": {"harness": "claude", "fallback": []},
+        "architecture-review": {"harness": "claude", "fallback": []}
       }
     },
     "merge_authority": {

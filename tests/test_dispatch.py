@@ -423,6 +423,39 @@ def test_exec_command_falls_back_when_exec_not_allowlisted(tmp_path, monkeypatch
     assert "-- exec complete" not in captured.out
 
 
+def test_exec_command_context_includes_charter(project_dir, tmp_path, monkeypatch):
+    from synlynk import agent_store
+    from synlynk.dispatch import exec_command
+
+    monkeypatch.chdir(project_dir)
+    monkeypatch.setattr("os.path.expanduser", lambda path: path.replace("~", str(tmp_path / "fake_home")))
+    agent_store.register_agent("pm-primary", [{"kind": "role_slug", "value": "pm"}])
+    agent_store.propose_charter_revision(
+        "pm-primary",
+        "---\nschema_version: 1\nrole: pm\ndescription: test\n"
+        "durability: dispatch-only\ntools: []\ncredentials: []\n---\n\n"
+        "## Instructions\n\nDo PM things.\n\n"
+        "## Authority & Escalation\n\nEscalates per policy.\n\n"
+        "## Workflow Ownership\n\nOwns this test.\n",
+        actor="test", parent_revision=0,
+    )
+    monkeypatch.setattr(sl, "check_budgets", lambda: None)
+    monkeypatch.setattr(sl, "_check_pre_exec_gate", lambda force=False: True)
+    monkeypatch.setattr(sl, "set_state", lambda *a, **kw: None)
+    monkeypatch.setattr(sl, "_check_costs_freshness", lambda: None)
+    monkeypatch.setattr(sl, "log_telemetry_event", lambda *a, **kw: None)
+    monkeypatch.setattr(sl, "check_sentinel_patterns", lambda **kw: None)
+    monkeypatch.setattr(sl, "_check_instruction_drift", lambda: None)
+    monkeypatch.setattr(sl, "WatchDaemon", None)
+    monkeypatch.setattr(sl, "update_costs", lambda *a, **kw: None)
+    monkeypatch.setattr(sl, "load_config", lambda: {"fenced_commands": []})
+
+    exec_command(["echo", "hi"])
+    context_text = (project_dir / ".synlynk" / "context.md").read_text()
+    assert "## Role Charter" in context_text
+    assert "Do PM things." in context_text
+
+
 def test_dispatch_agent_auto_provisions_story_id_when_not_given(project_dir, monkeypatch):
     import synlynk as sl
     import synlynk.dispatch as dispatch_mod
