@@ -203,6 +203,76 @@ def test_codex_dispatch_fails_askforapproval_rejected_flag_is_not_emitted():
     assert "--ask-for-approval" not in flags
 
 
+def test_codex_dispatch_effective_grants_includes_network_permission_on_gh_write():
+    from synlynk._constants import _CODEX_NETWORK_PERMISSION
+    from synlynk.dispatch import _permissions_to_flags, _resolve_dispatch_permissions
+
+    agent = "codex"
+    requires_gh_write = True
+    effective_grants = []
+    if requires_gh_write:
+        if "run:shell" not in effective_grants:
+            effective_grants.append("run:shell")
+        if agent == "codex" and _CODEX_NETWORK_PERMISSION not in effective_grants:
+            effective_grants.append(_CODEX_NETWORK_PERMISSION)
+
+    perms = _resolve_dispatch_permissions(agent, role_list=["builder"], grants=effective_grants)
+    assert _CODEX_NETWORK_PERMISSION in perms
+
+    flags = _permissions_to_flags(agent, perms)
+    assert flags[-2:] == ["-c", "sandbox_workspace_write.network_access=true"]
+
+
+def test_codex_dispatch_effective_grants_omits_network_permission_when_gh_write_false():
+    from synlynk._constants import _CODEX_NETWORK_PERMISSION
+    from synlynk.dispatch import _permissions_to_flags, _resolve_dispatch_permissions
+
+    agent = "codex"
+    requires_gh_write = False
+    effective_grants = []
+    if requires_gh_write:
+        if "run:shell" not in effective_grants:
+            effective_grants.append("run:shell")
+        if agent == "codex" and _CODEX_NETWORK_PERMISSION not in effective_grants:
+            effective_grants.append(_CODEX_NETWORK_PERMISSION)
+
+    perms = _resolve_dispatch_permissions(agent, role_list=["builder"], grants=effective_grants)
+    assert _CODEX_NETWORK_PERMISSION not in perms
+
+    flags = _permissions_to_flags(agent, perms)
+    assert "sandbox_workspace_write.network_access=true" not in flags
+
+
+def test_execute_the_plan_at_docssuperpowersplans_codex_requires_gh_write_appends_network_access_flag(
+    project_dir, monkeypatch
+):
+    import synlynk.dispatch as dispatch_mod
+
+    recorded_shell = []
+
+    def fake_popen(cmd, *args, **kwargs):
+        if cmd and cmd[0] == "sh":
+            recorded_shell.append(cmd[2])
+        return type("DummyProc", (), {"pid": 9999})()
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_gh_token", lambda role: "fake-token")
+    monkeypatch.setattr(dispatch_mod, "_gh_write_allow_host_auth", lambda: True)
+
+    dispatch_mod.dispatch_agent(
+        agent="codex",
+        task="gh pr review 123 --comment -b test",
+        requires_gh_write=True,
+        role="qa",
+        force_agent=True,
+        skip_preflight=True,
+        context_mode="none",
+    )
+
+    assert len(recorded_shell) == 1
+    assert "-c sandbox_workspace_write.network_access=true" in recorded_shell[0]
+
+
 def test_pm_charter_includes_competitive_sweep_responsibility():
     assert "competitive-intelligence sweep" in SEED_CHARTERS["pm"]
     assert "capability/marketing-gap comparison doc" in SEED_CHARTERS["pm"]

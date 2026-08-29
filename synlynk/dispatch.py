@@ -2441,8 +2441,11 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     if task_type == "review":
         role_list = ["review"]
     effective_grants = list(grants or [])
-    if requires_gh_write and "run:shell" not in effective_grants:
-        effective_grants.append("run:shell")
+    if requires_gh_write:
+        if "run:shell" not in effective_grants:
+            effective_grants.append("run:shell")
+        if agent == "codex" and _CODEX_NETWORK_PERMISSION not in effective_grants:
+            effective_grants.append(_CODEX_NETWORK_PERMISSION)
     permissions = _resolve_dispatch_permissions(
         agent, role_list=role_list, grants=effective_grants, revokes=revokes
     )
