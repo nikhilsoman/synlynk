@@ -1,9 +1,97 @@
 import sqlite3
 import subprocess
+import re
 
 import pytest
 
 from synlynk.agent_cli import SEED_CHARTERS
+
+
+def _quiet_checkpoint(monkeypatch):
+    import synlynk
+
+    monkeypatch.setattr(synlynk, "_check_upstream_divergence", lambda: None)
+    monkeypatch.setattr(synlynk, "_archive_old_devlog_entries", lambda *args: None)
+    monkeypatch.setattr(synlynk, "generate_context", lambda: None)
+    monkeypatch.setattr(synlynk, "log_telemetry_event", lambda event: None)
+    monkeypatch.setattr(synlynk.WatchDaemon, "_is_running", lambda self: False)
+    monkeypatch.setattr(synlynk, "parse_costs_md", lambda: (0.0, 0))
+
+
+def test_fix_checkpoint_todomd_handling_it_bypass_migrated_archives_and_regenerates(
+    project_dir, monkeypatch
+):
+    import synlynk
+
+    db_path = project_dir / "state.db"
+    monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(db_path))
+    (project_dir / ".synlynk" / ".synlynk_migrated").touch()
+    generated_todo = project_dir / ".synlynk" / "project-docs" / "todo.md"
+    generated_todo.parent.mkdir(parents=True)
+    generated_todo.write_text("# generated\n")
+    (project_dir / "project-docs" / "todo.md").write_text(
+        "- [x] legacy wrong path <!-- id: story-wrong -->\n"
+    )
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO stories (story_id, title, status) VALUES (?, ?, ?)",
+        ("story-done", "Finished work", "done"),
+    )
+    conn.execute(
+        "INSERT INTO stories (story_id, title, status) VALUES (?, ?, ?)",
+        ("story-open", "Still active", "open"),
+    )
+    conn.commit()
+    conn.close()
+    _quiet_checkpoint(monkeypatch)
+
+    synlynk.checkpoint()
+
+    conn = synlynk._get_db()
+    rows = conn.execute(
+        "SELECT story_id, archived_at FROM stories ORDER BY story_id"
+    ).fetchall()
+    conn.close()
+    assert rows[0][1] is not None
+    assert rows[1][1] is None
+    assert "Finished work" not in generated_todo.read_text()
+    assert "Still active" in generated_todo.read_text()
+    assert "legacy wrong path" in (project_dir / "project-docs" / "todo.md").read_text()
+
+
+def test_fix_checkpoint_todomd_handling_it_bypass_pre_migration_backfill_is_idempotent(
+    project_dir, monkeypatch
+):
+    import synlynk
+
+    db_path = project_dir / "state.db"
+    monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(db_path))
+    (project_dir / "project-docs" / "todo.md").write_text(
+        "- [x] Finished legacy work <!-- id: story-legacy -->\n"
+        "- [ ] Current legacy work <!-- id: story-current -->\n"
+    )
+    _quiet_checkpoint(monkeypatch)
+
+    synlynk.checkpoint()
+    synlynk.checkpoint()
+
+    conn = synlynk._get_db()
+    rows = conn.execute(
+        "SELECT story_id, status, archived_at FROM stories ORDER BY story_id"
+    ).fetchall()
+    conn.close()
+    assert rows[0][:2] == ("story-current", "open")
+    assert rows[0][2] is None
+    assert rows[1][:2] == ("story-legacy", "done")
+    assert rows[1][2] is not None
+
+
+def test_fix_checkpoint_todomd_handling_it_bypass_has_no_literal_todo_path():
+    import inspect
+    import synlynk
+
+    source = inspect.getsource(synlynk.checkpoint)
+    assert not re.search(r"todo_path\\s*=", source)
 
 
 def test_macos_launchd_daemon_service_has_keepalive_successful_exit_dict(

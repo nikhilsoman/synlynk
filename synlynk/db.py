@@ -97,7 +97,7 @@ _PROJECT_DOC_KEEP_N = 50
 # Bump when a new schema migration is added.  This is deliberately kept in
 # SQLite's small built-in metadata slot so checking it does not touch the DB
 # file or create a backup on already-migrated connections.
-_DB_MIGRATION_VERSION = 1
+_DB_MIGRATION_VERSION = 2
 
 _GENERATORS_BY_FILENAME = {
     "todo.md": "_generate_todo_md",
@@ -430,6 +430,11 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             conn.execute("ALTER TABLE stories ADD COLUMN stack_tags TEXT DEFAULT '[]'")
         if "status" not in story_cols:
             conn.execute("ALTER TABLE stories ADD COLUMN status TEXT NOT NULL DEFAULT 'open'")
+        if "archived_at" not in story_cols:
+            try:
+                conn.execute("ALTER TABLE stories ADD COLUMN archived_at TIMESTAMP")
+            except sqlite3.OperationalError:
+                pass
         if "goal_id" not in story_cols:
             try:
                 conn.execute("ALTER TABLE stories ADD COLUMN goal_id TEXT REFERENCES goals(goal_id)")
@@ -1779,7 +1784,8 @@ def _generate_todo_md() -> None:
 
     conn = _get_db()
     rows = conn.execute(
-        "SELECT story_id, title, engg_domain, status FROM stories ORDER BY created_at ASC"
+        "SELECT story_id, title, engg_domain, status FROM stories "
+        "WHERE archived_at IS NULL ORDER BY created_at ASC"
     ).fetchall()
     conn.close()
 
@@ -2250,7 +2256,7 @@ def _import_todo_to_stories(docs_dir: str = None, conn=None) -> int:
             status = checkbox_status.get(mark)
             if status is None:
                 continue
-            id_match = re.search(r'<!--\s*id:(story-[\w-]+)\s*-->', line)
+            id_match = re.search(r'<!--\s*id:\s*([^>\s]+)\s*-->', line)
             if id_match and id_match.group(1) in existing_ids:
                 continue
 
