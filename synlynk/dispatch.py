@@ -1277,9 +1277,18 @@ def _format_prompt_for_agent(agent: str, context_text: str, story_id: str,
         )
     if agent == "agy":
         working_dir = cwd_hint or os.getcwd()
+        stitch_hint = ""
+        if "stitch" in (task or "").lower() or "mcp__stitch" in (task or "").lower():
+            stitch_hint = (
+                "## Stitch MCP Tool Usage Note\n"
+                "On Agy, Stitch MCP tools are invoked via the built-in meta-tool:\n"
+                "`call_mcp_tool(server=\"stitch\", tool=\"<tool_name>\", arguments={...})`\n"
+                "Do not call `mcp__stitch__<tool_name>` directly.\n\n"
+            )
         return (
             f"{headers}"
             f"{gh_write_instruction}"
+            f"{stitch_hint}"
             f"## Working Directory\n{working_dir}\n"
             f"All file edits MUST be in this directory.\n\n"
             f"Task: {task}\n"
@@ -2035,6 +2044,7 @@ def _preflight_dispatch(
     permissions: Optional[list] = None,
     force_agent: bool = False,
     root: Optional[str] = None,
+    declared_requires: Optional[list] = None,
 ) -> dict:
     import socket as _socket
     from synlynk._constants import CORE_FLEET as _CORE_FLEET, CORE_INSTRUCTION_FILES as _CORE_INSTRUCTION_FILES
@@ -2050,6 +2060,19 @@ def _preflight_dispatch(
                     "sentinel": "INSTRUCTION_FILE_MISSING",
                     "reason": f"Missing instruction file '{expected_file}' for Core 4 agent '{harness_name}' (LIVE-1 / #343 class error). Run synlynk init or pass --force-harness.",
                 }
+
+    if harness_name == "agy" and declared_requires:
+        req_set = set(declared_requires)
+        if "stitch" in req_set or "mcp" in req_set:
+            from synlynk.doctor import _run_tc8
+            tc8_res = _run_tc8()
+            if not tc8_res["passed"]:
+                if not force_agent:
+                    return {
+                        "passed": False,
+                        "sentinel": "MCP_SERVER_MISSING",
+                        "reason": f"Agy requires Stitch MCP server ({tc8_res['error']}). Run 'synlynk doctor --fix agy' or configure with 'agy mcp add'.",
+                    }
 
     baseline = HARNESS_CAPABILITY_BASELINES.get(harness_name, {})
 
@@ -2583,6 +2606,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 _task_hint=task,
                 permissions=permissions,
                 force_agent=force_agent,
+                declared_requires=declared_requires,
             )
         except TypeError:
             try:

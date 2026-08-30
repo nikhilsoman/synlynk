@@ -49,6 +49,33 @@ def test_dispatch_agent_sets_instruction_receipt_fields(tmp_path, monkeypatch):
     assert job["instruction_receipt"] is None
 
 
+def test_preflight_blocks_missing_stitch_mcp_when_required(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "GEMINI.md").write_text("# Agy")
+    from synlynk.dispatch import _preflight_dispatch
+
+    monkeypatch.setattr("synlynk.doctor._run_tc8", lambda *a, **kw: {"passed": False, "error": "stitch MCP server not configured"})
+
+    result = _preflight_dispatch("agy", [], root=str(tmp_path), declared_requires=["stitch"])
+    assert result["passed"] is False
+    assert result["sentinel"] == "MCP_SERVER_MISSING"
+    assert "stitch" in result["reason"]
+
+    result_forced = _preflight_dispatch("agy", [], root=str(tmp_path), declared_requires=["stitch"], force_agent=True)
+    assert result_forced.get("sentinel") != "MCP_SERVER_MISSING"
+
+
+def test_format_prompt_for_agy_injects_stitch_tool_hint():
+    from synlynk.dispatch import _format_prompt_for_agent
+
+    prompt = _format_prompt_for_agent(
+        "agy", "some context", "story-1", "Design new checkout screen using stitch MCP", "", ""
+    )
+    assert "## Stitch MCP Tool Usage Note" in prompt
+    assert "call_mcp_tool" in prompt
+    assert "mcp__stitch__" in prompt
+
+
 def test_format_job_summary_flags_cancelled_github_mcp_write():
     summary = _format_job_summary(
         "job-gh-cancelled", "codex", None, 0, 1.0, 0, 0, 0.0,

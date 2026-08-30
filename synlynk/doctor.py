@@ -385,6 +385,97 @@ def _run_tc7(settings_path: str = None) -> dict:
     return {"passed": not missing, "missing": missing, "error": ""}
 
 
+def _agy_mcp_config_path() -> str:
+    return os.path.expanduser("~/.gemini/config/mcp_config.json")
+
+
+def _run_tc8(mcp_config_path: str = None) -> dict:
+    """TC-8: Agy (Gemini antigravity-cli) Stitch MCP configuration preflight.
+
+    Checks that ~/.gemini/config/mcp_config.json contains an active, enabled
+    Stitch MCP server configuration. Without this, Agy cannot call Stitch MCP
+    tools in headless dispatch (#573).
+    """
+    if mcp_config_path is None:
+        mcp_config_path = _agy_mcp_config_path()
+    if not os.path.exists(mcp_config_path):
+        return {
+            "passed": False,
+            "error": "mcp_config file not found",
+        }
+    try:
+        with open(mcp_config_path) as f:
+            content = f.read().strip()
+            if not content:
+                return {
+                    "passed": False,
+                    "error": "mcp_config file is empty",
+                }
+            cfg = json.loads(content)
+    except (OSError, json.JSONDecodeError) as exc:
+        return {
+            "passed": False,
+            "error": str(exc),
+        }
+    servers = cfg.get("mcpServers", {})
+    if "stitch" not in servers:
+        return {
+            "passed": False,
+            "error": "stitch MCP server not configured in mcpServers",
+        }
+    stitch_cfg = servers["stitch"]
+    if stitch_cfg.get("disabled", False):
+        return {
+            "passed": False,
+            "error": "stitch MCP server is disabled in mcpServers",
+        }
+    return {"passed": True, "error": ""}
+
+
+def _build_agy_stitch_fix_plan() -> FixPlan:
+    target_file = _agy_mcp_config_path()
+    current = _load_json_file(target_file)
+    servers = current.get("mcpServers")
+    if not isinstance(servers, dict):
+        servers = {}
+    desired_servers = dict(servers)
+    desired_servers["stitch"] = {
+        "command": "npx",
+        "args": ["-y", "stitch-mcp@1.0.0"],
+        "disabled": False,
+        "env": {
+            "GOOGLE_CLOUD_PROJECT": "gen-lang-client-0187568210",
+        },
+    }
+    desired = dict(current)
+    desired["mcpServers"] = desired_servers
+    current_content = _dump_json(current)
+    desired_content = _dump_json(desired)
+    diff = "".join(
+        difflib.unified_diff(
+            current_content.splitlines(keepends=True),
+            desired_content.splitlines(keepends=True),
+            fromfile=target_file,
+            tofile=target_file,
+        )
+    )
+    needs_write = current_content != desired_content
+    message = (
+        "Agy mcp_config.json is missing required Stitch MCP server configuration."
+        if needs_write
+        else "Agy mcp_config.json already contains required Stitch MCP server configuration."
+    )
+    return FixPlan(
+        agent="agy",
+        target_file=target_file,
+        current_content=current_content,
+        desired_content=desired_content,
+        diff=diff,
+        needs_write=needs_write,
+        message=message,
+    )
+
+
 def _apply_fix_plan(plan: FixPlan, operator: str) -> None:
     os.makedirs(os.path.dirname(plan.target_file), exist_ok=True)
     with open(plan.target_file, "w") as fh:
@@ -402,6 +493,11 @@ def cmd_doctor_fix(agent: str, args=None) -> int:
         raise ValueError("synlynk doctor --fix currently supports only agy")
 
     plan = _build_agy_fix_plan()
+    if not plan.needs_write:
+        stitch_plan = _build_agy_stitch_fix_plan()
+        if stitch_plan.needs_write:
+            plan = stitch_plan
+
     print(plan.diff or f"No diff for {plan.target_file} (already compliant).")
     if not plan.needs_write:
         print(f"  {plan.message}")
@@ -716,6 +812,11 @@ def cmd_doctor(args=None, checks: _List = None) -> int:
                 if not tc7["passed"]:
                     for rule in tc7["missing"]:
                         print(f"      missing allow-rule: {rule}")
+                tc8 = _run_tc8()
+                tc8_status = "✓" if tc8["passed"] else "✗"
+                print(f"    TC-8 agy-stitch-mcp-preflight: {tc8_status}")
+                if not tc8["passed"]:
+                    print(f"      {tc8['error']}")
             if tc5["passed"]:
                 print("    TC-5 sops:    ✓")
             else:

@@ -171,6 +171,73 @@ def test_run_tc7_missing_settings_file_reports_all_rules_missing(tmp_path):
     assert len(result["missing"]) == 3
 
 
+def test_run_tc8_passes_when_stitch_mcp_configured(tmp_path):
+    from synlynk.doctor import _run_tc8
+
+    mcp_config_path = tmp_path / "mcp_config.json"
+    mcp_config_path.write_text(json.dumps({
+        "mcpServers": {
+            "stitch": {
+                "command": "npx",
+                "args": ["-y", "stitch-mcp@1.0.0"],
+                "disabled": False,
+            }
+        }
+    }))
+    result = _run_tc8(mcp_config_path=str(mcp_config_path))
+    assert result["passed"] is True
+    assert result["error"] == ""
+
+
+def test_run_tc8_reports_missing_when_stitch_not_configured(tmp_path):
+    from synlynk.doctor import _run_tc8
+
+    mcp_config_path = tmp_path / "mcp_config.json"
+    mcp_config_path.write_text(json.dumps({"mcpServers": {}}))
+    result = _run_tc8(mcp_config_path=str(mcp_config_path))
+    assert result["passed"] is False
+    assert "stitch" in result["error"]
+
+
+def test_run_tc8_reports_missing_when_stitch_disabled(tmp_path):
+    from synlynk.doctor import _run_tc8
+
+    mcp_config_path = tmp_path / "mcp_config.json"
+    mcp_config_path.write_text(json.dumps({
+        "mcpServers": {
+            "stitch": {
+                "command": "npx",
+                "args": ["-y", "stitch-mcp@1.0.0"],
+                "disabled": True,
+            }
+        }
+    }))
+    result = _run_tc8(mcp_config_path=str(mcp_config_path))
+    assert result["passed"] is False
+    assert "disabled" in result["error"]
+
+
+def test_run_tc8_missing_file_reports_error(tmp_path):
+    from synlynk.doctor import _run_tc8
+
+    result = _run_tc8(mcp_config_path=str(tmp_path / "does-not-exist.json"))
+    assert result["passed"] is False
+    assert "not found" in result["error"]
+
+
+def test_build_agy_stitch_fix_plan(tmp_path, monkeypatch):
+    from synlynk.doctor import _build_agy_stitch_fix_plan
+
+    fake_config = tmp_path / "mcp_config.json"
+    fake_config.write_text(json.dumps({}))
+    monkeypatch.setattr("synlynk.doctor._agy_mcp_config_path", lambda: str(fake_config))
+
+    plan = _build_agy_stitch_fix_plan()
+    assert plan.needs_write is True
+    assert "stitch" in plan.desired_content
+    assert "stitch-mcp@1.0.0" in plan.desired_content
+
+
 def test_run_tc4_skips_flag_only_command_templates(monkeypatch):
     """dispatch.model/dispatch.tools store a bare flag ("--model {model}"), not a
     full invocation. TC-4 must not try to exec the flag itself as a binary."""
