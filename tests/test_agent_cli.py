@@ -205,17 +205,17 @@ def test_codex_dispatch_workspacewrite_sandbox_bl_without_network_permission_is_
 
     flags = _permissions_to_flags("codex", ["read:*"])
 
-    assert flags == ["-c", "approval_policy=untrusted"]
+    assert flags == ["-s", "read-only"]
     assert "--ask-for-approval" not in flags
     assert "sandbox_workspace_write.network_access=true" not in flags
 
 
-def test_codex_dispatch_fails_askforapproval_rejected_flag_is_not_emitted():
+def test_codex_dispatch_fails_hardcoded_approval_flag_is_not_emitted():
     from synlynk.dispatch import _permissions_to_flags
 
     flags = _permissions_to_flags("codex", ["read:*"])
 
-    assert flags == ["-c", "approval_policy=untrusted"]
+    assert flags == ["-s", "read-only"]
     assert "--ask-for-approval" not in flags
 
 
