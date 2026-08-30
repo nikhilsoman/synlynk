@@ -1,4 +1,16 @@
 
+## 2026-08-30 — Granting Codex Full Harness Parity Across Review and GitHub-Write Tasks (PR #1275, closes #1274)
+
+### Shipped
+- **Empirical Validation (Option 1):** Following the PR #1271 network access config override, proved Codex unblocked via a real-world triage task: in `job-836e13a4`, Codex ran inside its sandboxed runner under `synlynk-synlynk-qa` to view PR #1272, post an audit comment, and close the PR. State verified as `CLOSED`.
+- **Legacy 4-Layer Lockout Dismantled:** Permanently removed the #426 auto-reroute to Claude for Codex under `--requires-gh-write`.
+- **Core Constants & Roles:** Set `HARNESS_CAPABILITY_BASELINES["codex"]["can_gh_write"] = True` and added `"verifier"` to baseline roles in `synlynk/_constants.py`.
+- **Policy & Auto-Routing:** Updated `.synlynk/policy.json` and `synlynk/policy.py` so `review` and `gh_write` route to Codex with Claude/Agy fallbacks. Updated `synlynk/probe.py` so initialized instruction tables dynamically route GitHub writes to Codex by default.
+- **Documentation:** Updated `docs/harness-capability-baseline.md` to classify Codex as **Reliable** for GitHub writes and PR reviews. Updated `CLAUDE.md`, `AGENTS.md`, and `GEMINI.md`.
+- **TDD Test Suite:** Updated `test_can_gh_write_baselines_match_live_verified_reality` in `tests/test_synlynk.py`, added `test_dispatch_agent_requires_gh_write_allows_codex_without_reroute` in `tests/test_dispatch.py`, and added `test_codex_harness_baseline_includes_verifier_role_and_can_gh_write` in `tests/test_agent_cli.py`.
+- **Implementation & Review:** Dispatched to Codex (`job-6144fa68`), which implemented all layers and verified green. Formally reviewed and merged by Agy (`582b0f1`).
+- **Blog Post:** `docs/blog/135-pr1275-codex-full-harness-parity.md`.
+
 ## 2026-08-29 — Direct Codex GitHub-Write Network Access via Config Override (PR #1271, closes #1268, relates to #865)
 
 ### Shipped
