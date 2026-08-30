@@ -1294,4 +1294,31 @@ def test_warn_deprecated_harness_flags(capsys):
     assert "warning: --to-agent is deprecated, use --to-harness instead" in captured.err
 
 
+def test_harness_config_and_listing_with_harnesses_dir(tmp_path, monkeypatch, capsys):
+    import json
+    import synlynk
+    from synlynk.support_engineer import cmd_harness_list, cmd_agent_list
+
+    monkeypatch.chdir(tmp_path)
+    harnesses_dir = tmp_path / ".harnesses"
+    harnesses_dir.mkdir()
+    (harnesses_dir / "codex.json").write_text(json.dumps({"harness": "codex", "model": "codex-test"}))
+
+    cfg = synlynk._load_agent_config("codex")
+    assert cfg["harness"] == "codex"
+    assert cfg["model"] == "codex-test"
+
+    dummy_cursor = type("DummyCursor", (), {"fetchone": lambda self: None})()
+    dummy_db = type("DummyDB", (), {"execute": lambda self, *a, **k: dummy_cursor, "close": lambda self: None})()
+    monkeypatch.setattr(synlynk.support_engineer, "_pkg", lambda name: lambda: dummy_db)
+    cmd_harness_list()
+    captured = capsys.readouterr()
+    assert "codex" in captured.out
+
+    assert cmd_agent_list is cmd_harness_list
+    assert synlynk.cmd_harness_add is synlynk.cmd_agent_add
+    assert synlynk.cmd_harness_configure is synlynk.cmd_agent_configure
+
+
+
 

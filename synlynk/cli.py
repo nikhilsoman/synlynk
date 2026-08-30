@@ -152,6 +152,10 @@ def build_parser() -> argparse.ArgumentParser:
         cmd_agent_configure,
         cmd_agent_list,
         cmd_agent_run,
+        cmd_harness_add,
+        cmd_harness_configure,
+        cmd_harness_list,
+        cmd_harness_run,
         cmd_audit_docs,
         cmd_decide,
         cmd_doctor,
@@ -1500,17 +1504,17 @@ def main(argv=None) -> None:
     elif args.command == "harness":
         action = getattr(args, "harness_action", None)
         if action == "add":
-            cmd_agent_add(args.name)
+            cmd_harness_add(args.name)
         elif action == "configure":
-            cmd_agent_configure(args.name)
+            cmd_harness_configure(args.name)
         elif action == "run":
-            cmd_agent_run(
+            cmd_harness_run(
                 args.name,
                 dry_run=getattr(args, "dry_run", False),
                 install_cron=getattr(args, "install_cron", False),
             )
         elif action == "list":
-            cmd_agent_list()
+            cmd_harness_list()
         else:
             help_parsers.get("harness", parser).print_help()
     elif args.command == "ops":
