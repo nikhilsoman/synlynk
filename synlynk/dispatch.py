@@ -435,11 +435,7 @@ def _permissions_to_flags(agent: str, permissions: list) -> list:
             )
             return []
         if set(permissions) <= {"read:*"}:
-            raise PermissionEnforcementError(
-                f"agy has no mechanism to enforce a read-only-only permission set {sorted(permissions)}; "
-                "headless mode cannot reliably block write/command tool calls. Refusing to dispatch "
-                "rather than silently granting more than requested."
-            )
+            return ["--mode", "plan"]
         return ["--dangerously-skip-permissions"]
     if agent == "claude":
         tools = []
@@ -2551,6 +2547,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         flags = flags + ["--output-format", "stream-json", "--verbose"]
     if agent == "agy":
         flags = flags + ["--output-format", "json"]
+        if "--print-timeout" not in flags:
+            flags = flags + ["--print-timeout", "30m0s"]
     if agent == "codex":
         flags = flags + ["--json"]
         if _CODEX_NETWORK_PERMISSION in permissions and "sandbox_workspace_write.network_access=true" not in flags:

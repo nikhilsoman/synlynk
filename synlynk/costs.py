@@ -122,9 +122,11 @@ def _extract_agy_structured(output_text: str) -> Optional[_TokenCounts]:
     try:
         in_tokens = int(usage["input_tokens"])
         out_tokens = int(usage["output_tokens"]) + int(usage.get("thinking_tokens", 0))
+        cache_read_tokens = int(usage.get("cache_read_tokens", 0))
     except (KeyError, TypeError, ValueError):
         return None
-    return _TokenCounts(in_tokens, out_tokens, 0, "structured_output")
+    return _TokenCounts(in_tokens, out_tokens, cache_read_tokens, "structured_output")
+
 
 
 def _event_shows_real_activity(event) -> bool:

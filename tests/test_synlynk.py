@@ -745,11 +745,10 @@ def test_permissions_to_flags_codex_network_access_requires_run_install():
     assert "sandbox_workspace_write.network_access=true" not in default_safe
 
 
-def test_permissions_to_flags_agy_raises_for_read_only():
-    from synlynk.dispatch import _permissions_to_flags, PermissionEnforcementError
+def test_permissions_to_flags_agy_read_only_emits_mode_plan():
+    from synlynk.dispatch import _permissions_to_flags
 
-    with pytest.raises(PermissionEnforcementError, match="agy"):
-        _permissions_to_flags("agy", ["read:*"])
+    assert _permissions_to_flags("agy", ["read:*"]) == ["--mode", "plan"]
 
 
 def test_permissions_to_flags_agy_returns_empty_for_no_permissions():

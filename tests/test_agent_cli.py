@@ -1224,3 +1224,30 @@ def test_fix_1250_dispatch_job_summaries_silently_report_zero_files_touched(
     monkeypatch.chdir(tmp_path)
     assert os.path.isabs(job["worktree_path"])
     assert _worktree_files_touched(job["worktree_path"]) == ["touched.txt"]
+
+
+def test_agy_headless_parity_pass_printtimeout_30(project_dir, monkeypatch):
+    import synlynk.dispatch as dispatch_mod
+
+    recorded_shell = []
+
+    def fake_popen(cmd, *args, **kwargs):
+        if cmd and cmd[0] == "sh":
+            recorded_shell.append(cmd[2])
+        return type("DummyProc", (), {"pid": 9999})()
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", fake_popen)
+
+    dispatch_mod.dispatch_agent(
+        agent="agy",
+        task="Audit codebase without write access",
+        task_type="review",
+        skip_preflight=True,
+        context_mode="none",
+    )
+
+    assert len(recorded_shell) == 1
+    assert "--print-timeout 30m0s" in recorded_shell[0]
+    assert "--mode plan" in recorded_shell[0]
+
+

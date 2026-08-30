@@ -118,7 +118,15 @@ HARNESS_CAPABILITY_BASELINES = {
         "prompt_flag": "-p",     # placed last: agy -p "$PROMPT"
         "prompt_via_arg": True,
         "dispatch_flags": {
-            "valid_flags": ["--print", "--model", "--add-dir", "--sandbox", "--dangerously-skip-permissions"],
+            "valid_flags": [
+                "--print",
+                "--model",
+                "--add-dir",
+                "--sandbox",
+                "--dangerously-skip-permissions",
+                "--print-timeout",
+                "--mode",
+            ],
             "invalid_flags": ["--always-approve", "--non-interactive"],
             "required_flags": [],
         },
