@@ -16,6 +16,17 @@ def test_load_policy_defaults_human_authority_role_to_pm(tmp_path, monkeypatch):
     assert policy["human_authority_role"] == {"role": "pm", "requires_human_approval": True}
 
 
+def test_agent_roles_includes_marketing_harness_agy(tmp_path, monkeypatch):
+    from synlynk.policy import load_policy
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    policy = load_policy(repo_path=str(tmp_path))
+    assert policy["agent_roles"]["marketing"] == {
+        "default_harness": "agy",
+        "scope": ["content", "blog", "comms"],
+    }
+
+
 def test_get_human_authority_role_reads_pointer(tmp_path, monkeypatch):
     from synlynk.policy import get_human_authority_role
 

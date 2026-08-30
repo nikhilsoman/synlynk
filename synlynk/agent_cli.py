@@ -171,7 +171,11 @@ SEED_CHARTERS = {
         "template. Escalates to whoever holds `human_authority_role` before\n"
         "publishing anything that commits to a roadmap claim not yet approved.\n\n"
         "## Workflow Ownership\n\n"
-        "Owns the Blog/Comms pass of the Named Release stage.\n"
+        "Owns the Blog/Comms pass of the Named Release stage. Also owns the\n"
+        "standing readership-growth outcome tracked as goal-0c4e96ff (book\n"
+        "manuscript + blog series), fed by stories the PM links to that goal —\n"
+        "dispatched automatically per the TPM sweep's role-based routing (see\n"
+        "synlynk/tpm_sweep.py), not on every PR.\n"
     ),
     "synlynk-bot": (
         "---\n"

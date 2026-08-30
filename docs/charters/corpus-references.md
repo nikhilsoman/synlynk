@@ -130,3 +130,20 @@ support the stronger claim that marketing writes every PR's blog post.
 explicitly dispatch-triggered and conditional on an approved technical summary,
 and removed the unsupported universal "every PR" claim. Frontmatter was
 unchanged.
+
+### 2026-08-30 addendum: goal-0c4e96ff ownership
+
+**Sources consulted:** `docs/superpowers/specs/2026-08-30-marketing-goal-ownership-design.md`
+(approved design spec, PR #1294), `goal-0c4e96ff` story linkage (22 stories,
+18 primary / 4 secondary via `goal_contributions`).
+
+**Findings:** Unlike the original charter's Blog/Comms scope (evidenced by
+actual PR history), this addition is a forward-looking, explicitly-approved
+standing responsibility rather than a corpus-evidenced pattern — the readership
+metrics needed to eventually evidence it are tracked as a prerequisite story
+(`story-33ab504a`), not yet instrumented.
+
+**Charter changes made:** Added one sentence to `## Workflow Ownership`
+naming `goal-0c4e96ff` ownership, dispatched via the TPM sweep's role-based
+routing (`synlynk/tpm_sweep.py`, Task 2 of this plan) rather than per-PR.
+No change to `durability`, `Authority & Escalation`, or `Instructions`.
