@@ -4,7 +4,7 @@
 
 ## The two imperatives
 
-1. **Execution autonomy** — workspace agents (Agy/Grok/Codex) take over all implementation/testing/dispatch work; Claude stays PM/review/deploy only.
+1. **Execution autonomy** — workspace agents (dev/qa/designer/marketing) execute implementation and verification tasks through autonomous harnesses (Codex/Grok/Agy); Claude stays PM/review/deploy only.
 2. **Workspace context accuracy** — tracked project state (`state.db`, `project-docs/*`, devlogs, memory, roadmap) stays accurate and drift-free, with no silent divergence between what's tracked and reality.
 
 Every item below is ordered by how directly it closes one or both gaps. See the 2026-08-15 recap conversation for the full audit this roadmap is built from (specs without plans, plans pending implementation, open issues categorized against the two imperatives).
