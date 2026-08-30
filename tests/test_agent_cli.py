@@ -1259,3 +1259,39 @@ def test_agy_headless_parity_pass_printtimeout_30(project_dir, monkeypatch):
     assert "--mode plan" in recorded_shell[0]
 
 
+def test_dispatch_cli_force_harness_and_deprecated_force_agent():
+    from synlynk.cli import build_parser
+
+    parser = build_parser()
+    args1 = parser.parse_args(["dispatch", "codex", "--task", "test", "--force-harness"])
+    assert args1.force_agent is True
+
+    args2 = parser.parse_args(["dispatch", "codex", "--task", "test", "--force-agent"])
+    assert args2.force_agent is True
+
+
+def test_jobs_handoff_cli_to_harness():
+    from synlynk.cli import build_parser
+
+    parser = build_parser()
+    args = parser.parse_args(["jobs", "handoff", "job-12345", "--to-harness", "codex"])
+    assert args.to_agent == "codex"
+
+
+def test_warn_deprecated_harness_flags(capsys):
+    from synlynk.cli import _warn_deprecated_harness_flag
+
+    _warn_deprecated_harness_flag(["synlynk", "quota", "--agent", "codex"])
+    captured = capsys.readouterr()
+    assert "warning: --agent is deprecated, use --harness instead" in captured.err
+
+    _warn_deprecated_harness_flag(["synlynk", "dispatch", "codex", "--task", "t", "--force-agent"])
+    captured = capsys.readouterr()
+    assert "warning: --force-agent is deprecated, use --force-harness instead" in captured.err
+
+    _warn_deprecated_harness_flag(["synlynk", "jobs", "handoff", "j1", "--to-agent", "codex"])
+    captured = capsys.readouterr()
+    assert "warning: --to-agent is deprecated, use --to-harness instead" in captured.err
+
+
+
