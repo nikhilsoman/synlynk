@@ -219,6 +219,16 @@ def test_codex_dispatch_fails_hardcoded_approval_flag_is_not_emitted():
     assert "--ask-for-approval" not in flags
 
 
+def test_codex_dispatch_with_network_permission_does_not_emit_read_only_sandbox():
+    from synlynk._constants import _CODEX_NETWORK_PERMISSION
+    from synlynk.dispatch import _permissions_to_flags
+
+    flags = _permissions_to_flags("codex", ["read:*", _CODEX_NETWORK_PERMISSION])
+    assert "-s" not in flags
+    assert "read-only" not in flags
+    assert flags == ["-c", "sandbox_workspace_write.network_access=true"]
+
+
 def test_codex_dispatch_effective_grants_includes_network_permission_on_gh_write():
     from synlynk._constants import _CODEX_NETWORK_PERMISSION
     from synlynk.dispatch import _permissions_to_flags, _resolve_dispatch_permissions
