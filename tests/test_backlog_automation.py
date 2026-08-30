@@ -62,3 +62,91 @@ def test_search_similar_issues_empty_on_gh_failure():
     fake_result = MagicMock(returncode=1, stdout="", stderr="rate limited")
     with patch("subprocess.run", return_value=fake_result):
         assert search_similar_issues("anything") == []
+
+
+def test_resolve_goal_uses_explicit_goal_id(db_conn):
+    from synlynk.db import cmd_goal_create
+    from synlynk.backlog_automation import resolve_goal
+    goal_id = cmd_goal_create("Ship X", "X is shipped", role="pm")
+    resolved_id, basis = resolve_goal(db_conn, goal_id=goal_id)
+    assert resolved_id == goal_id
+    assert "explicit" in basis
+
+
+def test_resolve_goal_creates_new_goal_when_requested(db_conn):
+    from synlynk.backlog_automation import resolve_goal
+    resolved_id, basis = resolve_goal(
+        db_conn, new_goal_outcome="Backlog stays current",
+        new_goal_criterion="No discovered work sits unfiled for >1 session",
+    )
+    row = db_conn.execute("SELECT outcome FROM goals WHERE goal_id=?", (resolved_id,)).fetchone()
+    assert row[0] == "Backlog stays current"
+    assert "new goal created" in basis
+
+
+def test_resolve_goal_returns_none_when_nothing_given(db_conn):
+    from synlynk.backlog_automation import resolve_goal
+    resolved_id, basis = resolve_goal(db_conn)
+    assert resolved_id is None
+    assert "no goal" in basis
+
+
+def test_file_backlog_item_happy_path(db_conn):
+    from synlynk.backlog_automation import file_backlog_item
+    from synlynk.db import cmd_goal_create
+
+    goal_id = cmd_goal_create("Ship X", "X is shipped", role="pm")
+
+    search_result = MagicMock(returncode=0, stdout="[]", stderr="")
+    create_result = MagicMock(returncode=0, stdout="https://github.com/nikhilsoman/synlynk/issues/9001\n", stderr="")
+    repo_result = MagicMock(returncode=0, stdout="nikhilsoman/synlynk\n", stderr="")
+    view_result = MagicMock(returncode=0, stdout="555", stderr="")
+    subissue_result = MagicMock(returncode=0, stdout="{}", stderr="")
+
+    # Call order matches file_backlog_item -> search_similar_issues, then
+    # _create_github_issue's internal sequence: create, repo_view, id_view, sub_issue_post.
+    with patch("subprocess.run", side_effect=[search_result, create_result, repo_result, view_result, subissue_result]):
+        outcome = file_backlog_item(
+            db_conn, title="Investigate flaky test", body="details here",
+            source="marker", goal_id=goal_id, parent_issue=1198,
+        )
+
+    assert outcome["status"] == "filed"
+    assert outcome["gh_issue_url"] == "https://github.com/nikhilsoman/synlynk/issues/9001"
+    story = db_conn.execute(
+        "SELECT title, goal_id FROM stories WHERE story_id=?", (outcome["story_id"],)
+    ).fetchone()
+    assert story == ("Investigate flaky test", goal_id)
+    ledger_row = db_conn.execute(
+        "SELECT status, gh_issue_url, story_id FROM backlog_proposals WHERE story_id=?",
+        (outcome["story_id"],),
+    ).fetchone()
+    assert ledger_row == ("filed", outcome["gh_issue_url"], outcome["story_id"])
+
+
+def test_file_backlog_item_skips_ledger_duplicate(db_conn):
+    from synlynk.backlog_automation import file_backlog_item, compute_signal_hash, record_proposal
+    h = compute_signal_hash("Already proposed thing", "marker")
+    record_proposal(db_conn, signal_hash=h, title="Already proposed thing", source="marker",
+                     status="declined", gh_issue_url=None, story_id=None, goal_id=None,
+                     goal_match_basis=None, session_id=None)
+    with patch("subprocess.run") as mock_run:
+        outcome = file_backlog_item(db_conn, title="Already proposed thing", body="x", source="marker")
+    assert outcome["status"] == "skipped_duplicate"
+    mock_run.assert_not_called()
+
+
+def test_file_backlog_item_skips_gh_title_duplicate(db_conn):
+    from synlynk.backlog_automation import file_backlog_item
+    search_result = MagicMock(
+        returncode=0,
+        stdout='[{"title": "Investigate flaky test", "url": "https://github.com/x/y/issues/42"}]',
+        stderr="",
+    )
+    with patch("subprocess.run", return_value=search_result) as mock_run:
+        outcome = file_backlog_item(db_conn, title="Investigate flaky test", body="x", source="marker")
+    assert outcome["status"] == "skipped_duplicate_gh"
+    assert outcome["gh_issue_url"] == "https://github.com/x/y/issues/42"
+    # only the search call — no issue was created
+    assert mock_run.call_count == 1
+    assert mock_run.call_args[0][0][:3] == ["gh", "issue", "list"]
