@@ -159,17 +159,18 @@ def _mint_installation_token(app_id: str, installation_id: str, private_key_path
     return token, expires_at
 
 
-def refresh_installation_token(role: str, app_config: dict) -> None:
+def refresh_installation_token(role: str, app_config: dict, apps_dir: Optional[str] = None) -> None:
     """Mint a fresh installation token for `role` and cache it to disk.
 
     Daemon-only: this is the only remaining caller of _mint_installation_token
     (and transitively _sign_jwt/openssl). dispatch must never call this —
     it only reads the cache via read_cached_installation_token().
+    ``apps_dir``, when given, overrides the default cwd-relative lookup.
     """
     token, expires_at = _mint_installation_token(
         app_config["app_id"], app_config["installation_id"], app_config["private_key_path"],
     )
-    cache_path = _role_token_cache_path(role)
+    cache_path = _role_token_cache_path(role, apps_dir=apps_dir)
     os.makedirs(os.path.dirname(cache_path), exist_ok=True)
     with open(cache_path, "w") as f:
         json.dump({"token": token, "expires_at": expires_at}, f)

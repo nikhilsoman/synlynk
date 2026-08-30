@@ -60,6 +60,24 @@ def _daemon_state_path(*parts: str) -> str:
     return os.path.join(_repo_common_dir(), ".synlynk", *parts)
 
 
+def _daemonize_via_reexec(entry_point: str, logfile: str) -> None:
+    """Spawn a detached child process running a module-level entry point."""
+    module_path, func_name = entry_point.rsplit(".", 1)
+    code = f"from {module_path} import {func_name}; {func_name}()"
+    log = open(logfile, "a")
+    env = {**os.environ, "_SYNLYNK_DAEMON_CHILD": "1"}
+    subprocess.Popen(
+        [sys.executable, "-c", code],
+        stdin=subprocess.DEVNULL,
+        stdout=log,
+        stderr=subprocess.STDOUT,
+        start_new_session=True,
+        close_fds=True,
+        env=env,
+    )
+    log.close()
+
+
 class WatchDaemon:
     """Polls project-docs/ and regenerates context.md on change.
 
@@ -78,27 +96,8 @@ class WatchDaemon:
             return
         if os.path.exists(self.pidfile):
             os.remove(self.pidfile)
-        if not hasattr(os, "fork"):
-            print("  ⚠ watch daemon requires Unix (macOS/Linux). Not supported on Windows.")
-            return
-        pid = os.fork()
-        if pid > 0:
-            print("  ● synlynk watch started.")
-            return
-        os.setsid()
-        pid = os.fork()
-        if pid > 0:
-            sys.exit(0)
-        # Daemon process: redirect stdio to log
-        sys.stdout.flush()
-        sys.stderr.flush()
-        with open(self.logfile, "a") as log:
-            os.dup2(log.fileno(), sys.stdout.fileno())
-            os.dup2(log.fileno(), sys.stderr.fileno())
-        with open(self.pidfile, "w") as f:
-            f.write(str(os.getpid()))
-        _pkg("set_state")("watching")
-        self._run_loop()
+        _daemonize_via_reexec("synlynk.daemon._watch_daemon_child_main", self.logfile)
+        print("  ● synlynk watch started.")
 
     def stop(self) -> None:
         if not os.path.exists(self.pidfile):
@@ -193,7 +192,7 @@ class WatchDaemon:
                     app_config = json.load(fh)
                 if not app_config.get("installation_id"):
                     continue
-                github_app_auth.refresh_installation_token(role, app_config)
+                github_app_auth.refresh_installation_token(role, app_config, apps_dir=apps_dir)
             except Exception as exc:
                 print(
                     f"  ⚠ could not refresh GitHub App token for role '{role}': {exc}",
@@ -206,7 +205,7 @@ class WatchDaemon:
         last_mtimes = self._get_mtimes("project-docs")
         # Refresh after daemonization so daemon start never performs signing or
         # network I/O in the foreground process.  This also keeps the refresh
-        # in the same post-fork execution path as periodic refreshes.
+        # in the same post-daemonization execution path as periodic refreshes.
         self._refresh_github_tokens()
         last_token_refresh = time.time()
         while True:
@@ -223,6 +222,14 @@ class WatchDaemon:
             if time.time() - last_token_refresh >= self.token_refresh_interval_seconds:
                 self._refresh_github_tokens()
                 last_token_refresh = time.time()
+
+
+def _watch_daemon_child_main() -> None:
+    d = WatchDaemon()
+    with open(d.pidfile, "w") as f:
+        f.write(str(os.getpid()))
+    _pkg("set_state")("watching")
+    d._run_loop()
 
 def _make_daemon_handler(daemon_instance):
     """Returns a BaseHTTPRequestHandler class with daemon_instance bound via closure."""
@@ -738,30 +745,8 @@ class SynlynkDaemon(WatchDaemon):
             print("  ⚠ synlynk watch is also running — both will poll project-docs/.")
         if os.path.exists(self.pidfile):
             os.remove(self.pidfile)
-        if not hasattr(os, "fork"):
-            print("  ⚠ daemon requires Unix (macOS/Linux). Not supported on Windows.")
-            return
-        pid = os.fork()
-        if pid > 0:
-            print("  ● synlynk daemon started.")
-            return
-        os.setsid()
-        pid = os.fork()
-        if pid > 0:
-            sys.exit(0)
-        sys.stdout.flush()
-        sys.stderr.flush()
-        with open(self.logfile, "a") as log:
-            os.dup2(log.fileno(), sys.stdout.fileno())
-            os.dup2(log.fileno(), sys.stderr.fileno())
-        with open(self.pidfile, "w") as f:
-            f.write(str(os.getpid()))
-        start_time = time.time()
-        self._start_time = start_time
-        start_file = self.pidfile.replace(".pid", ".start")
-        with open(start_file, "w") as f:
-            f.write(str(start_time))
-        self._run_loop()
+        _daemonize_via_reexec("synlynk.daemon._synlynk_daemon_child_main", self.logfile)
+        print("  ● synlynk daemon started.")
 
     def stop(self) -> None:
         if not os.path.exists(self.pidfile):
@@ -834,7 +819,7 @@ class SynlynkDaemon(WatchDaemon):
         interval = config.get("watch_interval_seconds", 30)
         last_mtimes = self._get_mtimes("project-docs")
         # Defer the initial refresh until the detached daemon has completed
-        # its post-fork setup.  The caller of daemon start must not wait for
+        # its setup. The caller of daemon start must not wait for
         # openssl signing or a GitHub API request.
         self._refresh_github_tokens()
         last_token_refresh = time.time()
@@ -859,6 +844,18 @@ class SynlynkDaemon(WatchDaemon):
             if time.time() - last_token_refresh >= self.token_refresh_interval_seconds:
                 self._refresh_github_tokens()
                 last_token_refresh = time.time()
+
+
+def _synlynk_daemon_child_main() -> None:
+    d = SynlynkDaemon()
+    with open(d.pidfile, "w") as f:
+        f.write(str(os.getpid()))
+    start_time = time.time()
+    d._start_time = start_time
+    start_file = d.pidfile.replace(".pid", ".start")
+    with open(start_file, "w") as f:
+        f.write(str(start_time))
+    d._run_loop()
 
 def cmd_relay_start(port: int = None) -> None:
     """Starts the relay broker in the foreground (Ctrl-C to stop)."""

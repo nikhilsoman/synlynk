@@ -161,3 +161,22 @@ def test_load_redaction_tokens_omits_expired_entries(monkeypatch, tmp_path):
     tokens = gh_auth._load_redaction_tokens()
 
     assert tokens == ["valid-token"]
+
+
+def test_refresh_installation_token_writes_to_explicit_apps_dir(monkeypatch, tmp_path):
+    from synlynk import github_app_auth as gh_auth
+
+    other_cwd = tmp_path / "unrelated_cwd"
+    other_cwd.mkdir()
+    monkeypatch.chdir(other_cwd)
+    apps_dir = tmp_path / "worktree_common" / ".synlynk" / "github_apps"
+    apps_dir.mkdir(parents=True)
+    expires = time.time() + 3600
+    monkeypatch.setattr(gh_auth, "_mint_installation_token",
+                        lambda app_id, installation_id, private_key_path: ("worktree-token", expires))
+    app_config = {"app_id": "1", "installation_id": "2", "private_key_path": "unused.pem"}
+    gh_auth.refresh_installation_token("qa", app_config, apps_dir=str(apps_dir))
+    cache_path = apps_dir / "qa.token.json"
+    assert cache_path.exists()
+    assert json.loads(cache_path.read_text())["token"] == "worktree-token"
+    assert not (other_cwd / ".synlynk" / "github_apps" / "qa.token.json").exists()
