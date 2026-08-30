@@ -1,4 +1,18 @@
 
+## 2026-08-30 — Fleet Parity: Instruction File Preflight Check and Closed-Loop Receipt Verification (PR #1309, closes #347)
+
+### Shipped
+- **Design Spec & Implementation Plan:** Authored and committed formal Design Spec (`docs/superpowers/specs/2026-08-30-instruction-file-preflight-verification-design.md`) and Implementation Plan (`docs/superpowers/plans/2026-08-30-instruction-file-preflight-verification.md`), resolving #347 (tracking story `story-e5383d22`, linked to `goal-a222b393`).
+- **Instruction Version Extraction:** In `synlynk/instructions.py`, added `extract_instruction_version()` and `get_instruction_file_for_agent()` supporting both `synlynk:start` and `synlynk:harness` markers.
+- **Preflight Gate:** In `synlynk/dispatch.py:_preflight_dispatch()`, asserts that the target core instruction file exists in initialized workspaces before dispatching (fails closed with `INSTRUCTION_FILE_MISSING` unless forced).
+- **Closed-Loop Receipt Protocol:** In `synlynk/dispatch.py:_format_prompt_for_agent()`, injects `SYNLYNK_INSTRUCTION_VERSION` directive without disclosing the expected token.
+- **Telemetry & Verification:** In `synlynk/jobs.py`, added `_check_instruction_receipt()` to verify `ok`, `mismatch`, `none`, or `absent`, recording `job["instruction_receipt"]` and emitting advisory sentinel warnings on convention drift.
+- **Test Suite (TDD):**
+  - Added unit tests in `tests/test_instructions.py`, `tests/test_dispatch.py`, and `tests/test_jobs.py`.
+  - All 499 tests in `tests/test_synlynk.py`, 111 in `tests/test_dispatch.py`, 75 in `tests/test_jobs.py`, and 14 in `tests/test_instructions.py` pass clean.
+- **Blog Post:** `docs/blog/142-pr1309-instruction-file-preflight-and-receipt-verification.md` (indexed in `docs/blog/README.md`).
+[@agy]
+
 ## 2026-08-30 — Fleet Parity: Enforce --cwd for Grok and -C for Codex with Working-Directory Protection (PR #1308, closes #342)
 
 ### Shipped
