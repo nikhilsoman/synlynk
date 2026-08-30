@@ -150,6 +150,7 @@ def cmd_capability_sweep_for_harness_model(harness_name: str, model_id: str) -> 
     tasks = conn.execute(
         "SELECT task_id, role, skill, difficulty, prompt_template FROM capability_calibration_tasks"
     ).fetchall()
+    conn.commit()
     available_agents = [a for a in HARNESS_CAPABILITY_BASELINES if a != "local" and a != harness_name]
 
     total_cost = 0.0

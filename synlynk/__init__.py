@@ -1327,7 +1327,7 @@ def _load_agent_config(name: str) -> dict:
     ]
     path = next((candidate for candidate in candidates if os.path.exists(candidate)), candidates[0])
     if not os.path.exists(path):
-        raise FileNotFoundError(f"No harness config found at {path}")
+        raise FileNotFoundError(f"No agent config found at {path}")
     with open(path) as f:
         return _json.load(f)
 
