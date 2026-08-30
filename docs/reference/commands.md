@@ -99,6 +99,8 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `identity init` — sustain
 - `identity list` — sustain
 - `events tail` — sustain
+- `backlog note` — sustain
+- `backlog scan-session` — sustain
 - `repair` — sustain
 - `exit` — sustain
 - `harness run` — execute
