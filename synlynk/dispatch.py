@@ -423,6 +423,29 @@ class PermissionEnforcementError(RuntimeError):
     """Raised when an agent has no real mechanism to enforce requested permissions."""
 
 
+def _merge_codex_permission_flags(flags: list, permission_flags: list) -> list:
+    """Merge Codex permission flags, giving permission-derived sandbox mode precedence."""
+    if not any(
+        flag in {"-s", "--sandbox"} or flag.startswith("--sandbox=")
+        for flag in permission_flags
+    ):
+        return flags + permission_flags
+
+    merged = []
+    index = 0
+    while index < len(flags):
+        flag = flags[index]
+        if flag in {"-s", "--sandbox"}:
+            index += 2
+            continue
+        if flag.startswith("--sandbox="):
+            index += 1
+            continue
+        merged.append(flag)
+        index += 1
+    return merged + permission_flags
+
+
 def _permissions_to_flags(agent: str, permissions: list) -> list:
     """Translate permission strings into harness-specific CLI flags."""
     from synlynk._constants import _PERMISSION_TO_TOOL_MAP
@@ -449,7 +472,7 @@ def _permissions_to_flags(agent: str, permissions: list) -> list:
         has_write = any((perm or "").startswith("write:") for perm in (permissions or []))
         flags = []
         if not has_write:
-            flags = ["-c", "approval_policy=untrusted"]
+            flags = ["-s", "read-only"]
         if _CODEX_NETWORK_PERMISSION in (permissions or []):
             flags += ["-c", "sandbox_workspace_write.network_access=true"]
         return flags
@@ -2449,7 +2472,11 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     permissions = _resolve_dispatch_permissions(
         agent, role_list=role_list, grants=effective_grants, revokes=revokes
     )
-    flags = flags + _permissions_to_flags(agent, permissions)
+    permission_flags = _permissions_to_flags(agent, permissions)
+    if agent == "codex":
+        flags = _merge_codex_permission_flags(flags, permission_flags)
+    else:
+        flags = flags + permission_flags
     if agent == "agy" and permissions:
         perm_lines = "\n".join(f"- {p}" for p in permissions)
         task = f"## Permissions\n{perm_lines}\n\n{task}"
