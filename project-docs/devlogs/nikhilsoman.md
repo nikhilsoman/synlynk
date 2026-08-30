@@ -1,4 +1,14 @@
 
+## 2026-08-30 — Eliminating Grok Headless Execution Cancellation via --always-approve (PR #1279, closes #1277)
+
+### Shipped
+- **Forensic RCA & Resolution of Historic Mystery:** Located Grok session telemetry in `~/.grok/sessions/` for `job-b3492d49` and reverse-engineered the Grok binary (`crates/codegen/xai-grok-workspace/src/permission/manager/bash_grants.rs`, `exec_risk.rs`). Proved that recurring `stopReason: "cancelled"` / `PermissionCancelled` across #714, #880, #1038, and #1166 (LIVE-8) was caused by Grok's internal shell AST parser auto-cancelling compound commands when run under `--permission-mode dontAsk`.
+- **Empirical Proof:** Proved live that running compound pytest commands under `--permission-mode dontAsk` reproduces `stopReason: "cancelled"` in 1 turn, while `--always-approve` or `bypassPermissions` executes cleanly (`stopReason: "end_turn"`).
+- **Core Dispatch & Constants Updates:** Updated `synlynk/dispatch.py:_grok_permission_flags()` to emit `["--always-approve"]` whenever `run:shell` or `run:tests` is granted. In `synlynk/_constants.py`, added `--permission-mode` to valid flags and set `"required_flags": ["--always-approve"]`.
+- **Test Suite (TDD):** Added `test_grok_permission_flags_emits_always_approve_when_shell_or_tests_granted` in `tests/test_dispatch.py`, reconciled assertions in `tests/test_synlynk.py` and `tests/test_agent_quota_tracking.py`.
+- **Implementation & Review:** Dispatched to Grok (`job-4ba2fb42`, commit `41c8070`), which implemented all layers and passed all 6 test files. Formally reviewed and merged by Agy (`68a7bd4`).
+- **Blog Post:** `docs/blog/136-pr1279-grok-headless-permission-mode.md`.
+
 ## 2026-08-30 — Granting Codex Full Harness Parity Across Review and GitHub-Write Tasks (PR #1275, closes #1274)
 
 ### Shipped

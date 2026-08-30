@@ -140,6 +140,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [133](./133-prTBD-daemon-worktree-state-paths.md) | Daemon State Belongs to the Repository, Not the Worktree | TBD | 2026-08-29 |
 | [134](./134-pr1271-codex-direct-gh-write-network-access.md) | PR #1271 — Direct Codex GitHub-Write Network Access via Config Override | [#1271](https://github.com/nikhilsoman/synlynk/pull/1271) | 2026-08-29 |
 | [135](./135-pr1275-codex-full-harness-parity.md) | PR #1275 — Granting Codex Full Harness Parity Across Review and GitHub-Write Tasks | [#1275](https://github.com/nikhilsoman/synlynk/pull/1275) | 2026-08-30 |
+| [136](./136-pr1279-grok-headless-permission-mode.md) | PR #1279 — Eliminating Grok Headless Execution Cancellation via --always-approve | [#1279](https://github.com/nikhilsoman/synlynk/pull/1279) | 2026-08-30 |
 
 ## Per-PR Post Template
 

@@ -1,5 +1,12 @@
 # synlynk Memory
 
+## Grok Headless Cancellation Resolved via --always-approve (decided/shipped 2026-08-30)
+- **Shipped:** PR #1279 (closes #1277, relates to #714, #880, #1038, #1166). Permanently resolves Grok's recurring headless execution cancellation (`stopReason: "cancelled"`, `PermissionCancelled`). [@agy]
+- **Root Cause:** In headless execution, passing `--permission-mode dontAsk` triggered Grok's internal shell AST parser (`bash_command_splitting.rs`) and safety risk classifier (`exec_risk.rs`) on compound commands (e.g. `pytest ...; echo "FILTER_EXIT=$?"`). Because `dontAsk` suppresses interactive prompting, the resolver immediately returned `decision: "cancelled"`, aborting the turn.
+- **Fix:** In `synlynk/dispatch.py:_grok_permission_flags()`, whenever `run:shell` or `run:tests` is granted, dispatch emits `["--always-approve"]`. In `synlynk/_constants.py`, added `--permission-mode` to valid flags and made `--always-approve` required on Grok dispatch.
+- **Verification:** Implemented by Grok via `synlynk dispatch` (`job-4ba2fb42`, commit `41c8070`), verified across all matrix runners (Python 3.8, 3.10, 3.12, `qa-gate`), and merged to `main`.
+- **Blog Post:** `docs/blog/136-pr1279-grok-headless-permission-mode.md`.
+
 ## Codex Full Harness Parity Across Review and GH-Write Tasks (decided/shipped 2026-08-30)
 - **Shipped:** PR #1275 (closes #1274, relates to #1271, #865, #426, #569). Permanently eliminates the legacy 4-layer lockout that auto-rerouted Codex GitHub writes to Claude, establishing OpenAI Codex as a first-class peer for reviews, code inspection, and GitHub-write tasks. [@agy]
 - **Empirical Proof:** In job `job-836e13a4`, Codex executed inside its Seatbelt sandbox with `-c sandbox_workspace_write.network_access=true` to query PR #1272, post an audit comment, and close the PR via `gh pr close` under its role GitHub App identity (`synlynk-synlynk-qa`), verifying zero egress blocks or token failures.
