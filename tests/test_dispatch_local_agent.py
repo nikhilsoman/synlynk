@@ -35,7 +35,7 @@ class TestDispatchFlagsForLocalAgent(unittest.TestCase):
     @patch("synlynk.dispatch._pkg")
     def test_other_agents_unaffected(self, mock_pkg):
         mock_pkg.return_value = {
-            "codex": {"dispatch_flags": {"required_flags": ["-c", "approval_policy=untrusted"]}},
+            "codex": {"dispatch_flags": {"required_flags": ["-s", "read-only"]}},
         }
         flags = dispatch_mod._dispatch_flags_for_agent("codex")
-        self.assertEqual(flags, ["-c", "approval_policy=untrusted"])
+        self.assertEqual(flags, ["-s", "read-only"])

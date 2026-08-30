@@ -727,11 +727,11 @@ def test_permissions_to_flags_claude_allowedtools():
     assert "Edit" in tools_str
 
 
-def test_permissions_to_flags_codex_read_only_uses_config_override():
+def test_permissions_to_flags_codex_read_only_uses_sandbox_flag():
     from synlynk.dispatch import _permissions_to_flags
 
     result = _permissions_to_flags("codex", ["read:*"])
-    assert result == ["-c", "approval_policy=untrusted"]
+    assert result == ["-s", "read-only"]
     assert "--ask-for-approval" not in result
 
 
@@ -5050,7 +5050,7 @@ def test_codex_baseline_uses_exec_subcommand(project_dir, monkeypatch):
     shell_cmd = captured["cmd"][2]  # ["sh", "-c", <shell_cmd>]
     assert "codex exec" in shell_cmd
     assert "workspace-write" in shell_cmd
-    assert "approval_policy=untrusted" in shell_cmd
+    assert "-s read-only" in shell_cmd
     assert "--ask-for-approval" not in shell_cmd
     assert "--dangerously-bypass-approvals-and-sandbox" not in shell_cmd
     # Bare --sandbox (no value) must not appear; value is already supplied via -s workspace-write
