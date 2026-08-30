@@ -5,7 +5,7 @@ series: "Building the OS for Multi-Agent Development"
 post: 140
 pr: "#1306"
 issue: "#1255"
-status: open
+merged: 2026-08-30
 ---
 
 # PR #1306 — Standardizing Harness vs. Workspace Agent Separation Across CLI Flags, Configs, and Docs
