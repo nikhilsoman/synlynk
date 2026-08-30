@@ -8,6 +8,14 @@ import pytest
 from synlynk.agent_cli import SEED_CHARTERS
 
 
+def test_codex_harness_baseline_includes_verifier_role_and_can_gh_write():
+    from synlynk._constants import HARNESS_CAPABILITY_BASELINES
+
+    codex = HARNESS_CAPABILITY_BASELINES["codex"]
+    assert "verifier" in codex["roles"]
+    assert codex["can_gh_write"] is True
+
+
 def test_wire_charter_content_into_dispatchexecut(project_dir, tmp_path, monkeypatch):
     import synlynk
     from synlynk import agent_store
@@ -243,7 +251,7 @@ def test_codex_dispatch_effective_grants_omits_network_permission_when_gh_write_
     assert "sandbox_workspace_write.network_access=true" not in flags
 
 
-def test_execute_the_plan_at_docssuperpowersplans_codex_requires_gh_write_appends_network_access_flag(
+def test_execute_the_implementation_plan_at_docssuperpowersplans_codex_requires_gh_write_appends_network_access_flag(
     project_dir, monkeypatch
 ):
     import synlynk.dispatch as dispatch_mod

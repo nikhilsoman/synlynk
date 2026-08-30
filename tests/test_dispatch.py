@@ -1416,14 +1416,35 @@ def test_dispatch_agent_requires_gh_write_force_agent_warns_and_proceeds(project
     monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_gh_token", lambda role: "test-gh-token")
 
     job = sl.dispatch_agent(
-        "codex", "review and merge PR #500", story_id="story-manual-1",
+        "grok", "review and merge PR #500", story_id="story-manual-1",
         context_mode="none", requires_gh_write=True, force_agent=True, role="qa",
+    )
+
+    assert job["agent"] == "grok"
+    captured = capsys.readouterr()
+    assert "grok" in captured.err
+    assert "#426" in captured.err
+
+
+def test_dispatch_agent_requires_gh_write_allows_codex_without_reroute(project_dir, monkeypatch, capsys):
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+
+    class FakeProc:
+        pid = 1
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda harness_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
+    monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_gh_token", lambda role: "test-gh-token")
+
+    job = sl.dispatch_agent(
+        "codex", "review and merge PR #500", story_id="story-manual-1",
+        context_mode="none", requires_gh_write=True, role="qa",
     )
 
     assert job["agent"] == "codex"
     captured = capsys.readouterr()
-    assert "codex" in captured.err
-    assert "#426" in captured.err
+    assert "#426" not in captured.out + captured.err
 
 
 def test_dispatch_agent_requires_gh_write_blocks_agy_when_tc7_fails(project_dir, monkeypatch, capsys):

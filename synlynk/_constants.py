@@ -70,7 +70,7 @@ HARNESS_CAPABILITY_BASELINES = {
     },
     "codex": {
         "cli": "codex",
-        "can_gh_write": False,
+        "can_gh_write": True,
         # 'exec' subcommand + '-' reads prompt from stdin without requiring a TTY.
         # 'codex exec' sets approval:never by default — no bypass flag needed.
         # '-s workspace-write' confines writes to workdir + /tmp while allowing
@@ -107,9 +107,9 @@ HARNESS_CAPABILITY_BASELINES = {
             "required_endpoints": [],
             "optional_endpoints": [],
         },
-        "roles": ["builder"],
+        "roles": ["builder", "verifier"],
         "env_passthrough": [],
-        "strengths": ["code completion", "inline edits", "fast iteration"],
+        "strengths": ["code completion", "inline edits", "fast iteration", "pr review", "code inspection"],
     },
     "agy": {
         "cli": "agy",
