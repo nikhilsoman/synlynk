@@ -6,7 +6,8 @@ Part of #1198 (Element 2). Closes the design gate on #1203.
 
 No mechanism exists to automatically add newly discovered work, planned future work, or
 work surfaced during interactive harness sessions to the backlog with correct GOVERNS
-association. Filing today is entirely manual (`gh issue create --parent ...`), so
+association. Filing today is entirely manual (`gh issue create` plus a separate
+sub-issue-linking step), so
 discovered work either gets filed inconsistently by whoever remembers, or is lost when a
 session closes without anyone writing it down as a ticket.
 
@@ -20,8 +21,14 @@ different signal source: `cmd_agent_run` collects signals (`_collect_test_suite`
 cross-references a `story_id` to an `issue_url` for a different flow
 (`raise_approval_ticket` / `_insert_ticket` in `tpm_sweep.py`).
 
-This design reuses that pattern — a new collector and archetype feeding the existing
-autopilot pipeline — rather than building a parallel filing/dedup/ledger system.
+This design reuses that pattern's *shape* — signal collection → dedup → filing, with a
+ledger table sibling to `autopilot_runs` — rather than building an unrelated
+filing/dedup/ledger system from scratch. It does not wire directly into
+`cmd_agent_run`'s `collector_map`/archetype loop: that loop dedups and files
+immediately with no confirm step, which is right for a headless/cron sweep but cannot
+satisfy the session-close path's "human confirms" requirement below. The two entry paths
+are instead both driven by the calling agent (Claude, live in-session) invoking a
+synchronous CLI command directly — see Entry paths.
 
 ## Entry paths
 
@@ -41,21 +48,19 @@ collector sweep) and calls the shared dedup/file helpers directly.
 
 ### 2. Session-close safety net
 
-A new collector, `_collect_session_discoveries`, added to the `collector_map` in
-`cmd_agent_run`, under a new archetype `backlog_scribe`
-(`collectors: [session_discoveries]`, `fixer: none` — this archetype only files, it
-never attempts fixes the way the existing autopilot flow's `_attempt_fix` does).
-
-At session close (the existing `sessions` table close/disposition step), Claude reads
-the closing `sessions.closing_summary` and the devlog delta written for that session,
-and classifies candidate items as file-worthy or not — the same judgment call already
-made when deciding devlog vs. memory content, not a rigid keyword/pattern list.
-Candidates that pass dedup are presented as a short yes/no list; nothing is filed until
-confirmed. This is a safety net for work that should have gone through the marker path
-but wasn't flagged live — it is deliberately lower-trust (confirm-gated) than the marker
-path (immediate-file), matching the project's existing `requires_approval`/
-`awaiting_approval` gating philosophy in `events.py` for anything a scheduled sweep,
-rather than a live human-directed call, is about to write to GitHub.
+`synlynk backlog scan-session --session-id <id>` — a new standalone CLI command, called
+by Claude as part of session-close housekeeping. It does deterministic data-gathering
+only: reads the closing `sessions.closing_summary` plus a devlog tail for that session
+and prints them. No `cmd_agent_run`/archetype involvement — the calling agent (Claude,
+already live in-session) does the file-worthy classification itself, the same judgment
+call already made when deciding devlog vs. memory content, not a rigid keyword/pattern
+list. Candidates that pass dedup are presented as a short yes/no list; nothing is filed
+automatically. Each confirmed item is then filed with a separate `synlynk backlog note`
+call (path 1, above) — this is a safety net for work that should have gone through the
+marker path but wasn't flagged live, and it is deliberately lower-trust (confirm-gated)
+than the marker path (immediate-file), matching the project's existing
+`requires_approval`/`awaiting_approval` gating philosophy in `events.py` for anything
+a sweep-like scan, rather than a live human-directed filing call, surfaces.
 
 ## Dedup
 
@@ -89,8 +94,10 @@ Two layers — they catch different failure modes:
 
 ## Filing / GOVERNS association
 
-On file: create the GitHub issue (`--parent <active tracking issue>` plus appropriate
-labels — matching how #1199 and #1203 themselves were filed under #1198) **and** a
+On file: create the GitHub issue (`gh issue create` with appropriate labels, then
+register it as a GitHub sub-issue of the active tracking issue via the sub-issues REST
+API — `gh issue create` has no `--parent` flag — matching how #1199 and #1203 themselves
+were filed under #1198) **and** a
 `stories` row (`story_id`, `title`, `stage='open'`, `readiness='draft'`), linked via
 `goal_contributions` to a `goals` row. The `backlog_proposals` row stores `gh_issue_url`,
 `story_id`, and `goal_id` together so the ledger, the GitHub issue, and the local story
@@ -126,11 +133,16 @@ guess is traceable and correctable after the fact rather than silently invisible
   ships (e.g. #1264 vs #1263 dedup, flagged in #1199's wrap-up) — this system governs
   new discoveries going forward.
 
-## Open items for the implementation plan
+## Open items — resolved in the implementation plan
 
-- Exact title-similarity threshold for the `gh search_issues` dedup check (needs a
-  concrete value/algorithm, not just "similar").
-- Where `backlog_scribe`'s archetype config lives relative to existing archetypes in
-  `_load_agent_config` — follow existing config file conventions exactly.
-- Whether `synlynk backlog note` needs a `--dry-run` flag mirroring `cmd_agent_run`'s
-  existing `dry_run` parameter, for consistency with the rest of the CLI surface.
+Resolved in `docs/superpowers/plans/2026-08-29-governs-backlog-automation.md`:
+
+- `gh search_issues` dedup uses exact match on normalized title, not a fuzzy score —
+  offloads relevance ranking to GitHub's own search, keeps false-positive blocking near
+  zero.
+- No archetype config needed: the session-close path is a standalone
+  `synlynk backlog scan-session` CLI command (see "Prior art" and "Entry paths" above),
+  not a `cmd_agent_run` collector, so there is no archetype to configure.
+- No `--dry-run` flag on `synlynk backlog note` — `scan-session` already gives a preview
+  step for the confirm-gated path, and the marker path's premise is that calling it *is*
+  the deliberate act.
