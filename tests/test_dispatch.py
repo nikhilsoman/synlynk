@@ -1506,6 +1506,20 @@ def test_dispatch_agent_requires_gh_write_raises_when_no_capable_agent(project_d
         )
 
 
+def test_grok_permission_flags_emits_always_approve_when_shell_or_tests_granted():
+    from synlynk.dispatch import _grok_permission_flags
+
+    shell_flags = _grok_permission_flags(["read:*", "run:shell"])
+    test_flags = _grok_permission_flags(["read:*", "run:tests"])
+
+    assert shell_flags == ["--always-approve"]
+    assert test_flags == ["--always-approve"]
+    assert "--permission-mode" not in shell_flags
+    assert "dontAsk" not in shell_flags
+    assert "--permission-mode" not in test_flags
+    assert "dontAsk" not in test_flags
+
+
 def test_permissions_to_flags_agy_warns_on_empty_permissions(capsys):
     from synlynk.dispatch import _permissions_to_flags
 
