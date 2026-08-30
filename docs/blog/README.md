@@ -145,6 +145,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [138](./138-pr1288-claude-harness-alignment.md) | PR #1288 — Aligning Claude Baseline Roles with PM/Deploy Governance | [#1288](https://github.com/nikhilsoman/synlynk/pull/1288) | 2026-08-30 |
 | [139](./139-pr1282-daemon-reexec-fork-safety.md) | PR #1282 — Eliminating Daemon Re-Exec Fork Desync via Fork Safety | [#1282](https://github.com/nikhilsoman/synlynk/pull/1282) | 2026-08-30 |
 | [140](./140-pr1306-harness-vs-workspace-agent-separation.md) | PR #1306 — Standardizing Harness vs. Workspace Agent Separation Across CLI Flags, Configs, and Docs | [#1306](https://github.com/nikhilsoman/synlynk/pull/1306) | 2026-08-30 |
+| [141](./141-pr1308-grok-codex-cwd-protection.md) | PR #1308 — Fleet Parity: Enforce --cwd for Grok and -C for Codex with Working-Directory Protection | [#1308](https://github.com/nikhilsoman/synlynk/pull/1308) | 2026-08-30 |
 
 ## Per-PR Post Template
 

@@ -23,9 +23,10 @@
 - [x] #1283 (PR #1286, merged `f740ba1`, 2026-08-30) — Eliminate Agy headless 5m timeout, enable read-only plan mode, and capture prompt-cache tokens. Injected `--print-timeout 30m0s` on all headless Agy dispatches, mapped `read:*` permissions to `--mode plan`, and extracted `cache_read_tokens` from structured output (verified with 7.14M cached tokens). Implemented by Agy, reviewed/merged on main.
 - [x] #1284 (PR #1288, merged `b7e99e9`, 2026-08-30) — Align Claude baseline roles with PM/deploy governance SOP; updated `_constants.py` roles from `["architect", "builder"]` to `["architect", "pm"]`, updated `docs/harness-capability-baseline.md`. Implemented by Claude (`job-56f6ecec`), reviewed/merged on main.
 - [x] #1255 (PR #1306, 2026-08-30) — Standardize Harness vs. Workspace Agent separation across CLI flags, configs, and docs. Added canonical `--force-harness` and `--to-harness` flags (with backward-compatible deprecation aliases), enabled `.harnesses/` directory resolution, exported canonical `cmd_harness_*` functions, resolved SQLite lock contention during model discovery, and cleaned living strategy docs.
+- [x] #342 (PR #1308, 2026-08-30) — Fleet Parity: Enforce --cwd for Grok and -C for Codex with working-directory prompt header. Passed explicit worktree path flags to Grok and Codex in `dispatch_agent()`, added Grok Working Directory prompt header in `_format_prompt_for_agent()`, and verified all 499 tests pass.
 
 ## Next Task
-- [ ] Fleet-parity remainder (only #342 and #347 of the original cluster are still open; #332/#338/#340/#348/#419/#461 all closed — see Recently Landed)
+- [ ] Fleet-parity remainder (only #347 of the original cluster is still open; #332/#338/#340/#342/#348/#419/#461 all closed/addressed — see Recently Landed)
 - [ ] #573 — Agy+Stitch MCP integration
 - [ ] #914 — Workspace-level (multi-repo) agent identities — still untriaged into a phase
 - [ ] #937 — Review-dispatch job wrote to docs/ outside its read-only scope (job-0c924723, PR #933)

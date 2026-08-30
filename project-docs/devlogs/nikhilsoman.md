@@ -1,4 +1,20 @@
 
+## 2026-08-30 — Fleet Parity: Enforce --cwd for Grok and -C for Codex with Working-Directory Protection (PR #1308, closes #342)
+
+### Shipped
+- **Design Spec & Implementation Plan:** Authored and committed formal Design Spec (`docs/superpowers/specs/2026-08-30-grok-codex-cwd-protection-design.md`) and Implementation Plan (`docs/superpowers/plans/2026-08-30-grok-codex-cwd-protection.md`), resolving #342 (tracking story `story-e66de65c`, linked to `goal-a222b393`).
+- **Grok Structural Flag & Defense-in-Depth:**
+  - In `synlynk/dispatch.py:dispatch_agent()`, dynamically appends `["--cwd", worktree_path]` to Grok's execution flags upon worktree creation, preventing unintended auto-relocation or out-of-worktree edits.
+  - Added a dedicated Grok prompt branch in `_format_prompt_for_agent()` injecting the explicit `## Working Directory` reminder header.
+- **Codex Working Directory Root:**
+  - In `synlynk/dispatch.py:dispatch_agent()`, dynamically appends `["-C", worktree_path]` to Codex's execution flags, enforcing the workspace root.
+- **Test Suite (TDD):**
+  - Added unit test `test_format_prompt_for_grok_includes_working_directory` in `tests/test_synlynk.py`.
+  - Added unit tests `test_grok_dispatch_includes_cwd_flag` and `test_codex_dispatch_includes_c_flag` in `tests/test_synlynk.py`.
+  - All 499 tests in `tests/test_synlynk.py`, 107 in `tests/test_dispatch.py`, and 74 in `tests/test_agent_cli.py` pass clean.
+- **Blog Post:** `docs/blog/141-pr1308-grok-codex-cwd-protection.md` (indexed in `docs/blog/README.md`).
+[@agy]
+
 ## 2026-08-30 — Standardizing Harness vs. Workspace Agent Separation Across CLI Flags, Configs, and Docs (PR #1306, closes #1255)
 
 ### Shipped
