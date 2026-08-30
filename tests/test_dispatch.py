@@ -1536,11 +1536,65 @@ def test_permissions_to_flags_agy_write_permissions_keep_skip_flag_without_warni
     assert out == ""
 
 
-def test_permissions_to_flags_agy_raises_on_read_only_permissions():
-    from synlynk.dispatch import _permissions_to_flags, PermissionEnforcementError
+def test_agy_permission_flags_read_only_emits_mode_plan():
+    from synlynk.dispatch import _permissions_to_flags
 
-    with pytest.raises(PermissionEnforcementError, match="agy"):
-        _permissions_to_flags("agy", ["read:*"])
+    assert _permissions_to_flags("agy", ["read:*"]) == ["--mode", "plan"]
+
+
+def test_agy_dispatch_flags_includes_print_timeout(project_dir, monkeypatch):
+    import synlynk.dispatch as dispatch_mod
+
+    recorded_cmd = []
+
+    def fake_popen(cmd, *args, **kwargs):
+        if cmd and cmd[0] == "sh":
+            recorded_cmd.append(cmd)
+        return type("DummyProc", (), {"pid": 9999})()
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", fake_popen)
+
+    dispatch_mod.dispatch_agent(
+        agent="agy",
+        task="write docs",
+        skip_preflight=True,
+        context_mode="none",
+    )
+
+    assert len(recorded_cmd) == 1
+    shell_cmd = recorded_cmd[0][2]
+    assert "--print-timeout 30m0s" in shell_cmd
+
+
+def test_agy_dispatch_flags_does_not_duplicate_print_timeout_if_already_present(project_dir, monkeypatch):
+    import synlynk.dispatch as dispatch_mod
+
+    recorded_cmd = []
+
+    def fake_popen(cmd, *args, **kwargs):
+        if cmd and cmd[0] == "sh":
+            recorded_cmd.append(cmd)
+        return type("DummyProc", (), {"pid": 9999})()
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(
+        dispatch_mod,
+        "_load_harness_overrides",
+        lambda agent: {"dispatch_flags": {"print-timeout": "10m0s"}},
+    )
+
+    dispatch_mod.dispatch_agent(
+        agent="agy",
+        task="write docs",
+        skip_preflight=True,
+        context_mode="none",
+    )
+
+    assert len(recorded_cmd) == 1
+    shell_cmd = recorded_cmd[0][2]
+    assert "--print-timeout 10m0s" in shell_cmd
+    assert "--print-timeout 30m0s" not in shell_cmd
+
 
 
 def test_permissions_to_flags_local_raises_on_any_permissions():
