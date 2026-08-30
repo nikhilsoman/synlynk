@@ -141,6 +141,8 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [134](./134-pr1271-codex-direct-gh-write-network-access.md) | PR #1271 — Direct Codex GitHub-Write Network Access via Config Override | [#1271](https://github.com/nikhilsoman/synlynk/pull/1271) | 2026-08-29 |
 | [135](./135-pr1275-codex-full-harness-parity.md) | PR #1275 — Granting Codex Full Harness Parity Across Review and GitHub-Write Tasks | [#1275](https://github.com/nikhilsoman/synlynk/pull/1275) | 2026-08-30 |
 | [136](./136-pr1279-grok-headless-permission-mode.md) | PR #1279 — Eliminating Grok Headless Execution Cancellation via --always-approve | [#1279](https://github.com/nikhilsoman/synlynk/pull/1279) | 2026-08-30 |
+| [137](./137-pr1286-agy-headless-parity.md) | PR #1286 — Eliminating Agy Headless 5m Timeout, Enabling Plan Mode, and Capturing Prompt Cache Telemetry | [#1286](https://github.com/nikhilsoman/synlynk/pull/1286) | 2026-08-30 |
+| [138](./138-pr1288-claude-harness-alignment.md) | PR #1288 — Aligning Claude Baseline Roles with PM/Deploy Governance | [#1288](https://github.com/nikhilsoman/synlynk/pull/1288) | 2026-08-30 |
 
 ## Per-PR Post Template
 

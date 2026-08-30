@@ -1,5 +1,19 @@
 # synlynk Memory
 
+## Claude Baseline Roles Aligned with PM/Deploy SOP (decided/shipped 2026-08-30)
+- **Shipped:** PR #1288 (closes #1284, relates to #1140, #423). Aligns Anthropic Claude's baseline programmatic roles with governance SOP. [@agy]
+- **Role Alignment:** In `synlynk/_constants.py`, updated `HARNESS_CAPABILITY_BASELINES["claude"]["roles"]` from `["architect", "builder"]` to `["architect", "pm"]`, eliminating capability routing drift while preserving `can_gh_write: True` for PM, deploy, and PR review tasks.
+- **Verification:** Implemented by Claude (`job-56f6ecec`, commit `cada628`), covered by `test_claude_harness_alignment_update_baseline`, verified across all matrix runners (Python 3.8, 3.10, 3.12, `qa-gate`), and merged to `main`.
+- **Blog Post:** `docs/blog/138-pr1288-claude-harness-alignment.md`.
+
+## Agy Headless Parity: Timeout, Plan Mode, & Prompt Cache Telemetry (decided/shipped 2026-08-30)
+- **Shipped:** PR #1286 (closes #1283, relates to #750, #162, #437, #1106). Establishes headless execution parity for Google Antigravity (`agy`). [@agy]
+- **Eliminate 5-Minute Headless Timeout:** Added `--print-timeout` to `HARNESS_CAPABILITY_BASELINES["agy"]["dispatch_flags"]["valid_flags"]` in `synlynk/_constants.py` and dynamically injects `["--print-timeout", "30m0s"]` on all headless Agy dispatches in `synlynk/dispatch.py:dispatch_agent()`, eliminating the 5-minute timeout boundary (#750 / #162).
+- **Read-Only Plan Mode:** Replaced `PermissionEnforcementError` on `read:*` in `synlynk/dispatch.py:_permissions_to_flags()` with native `["--mode", "plan"]`, allowing Agy to safely execute read-only audits and code reviews.
+- **Capture Gemini Prompt Cache Telemetry:** In `synlynk/costs.py:_extract_agy_structured()`, parse `cache_read_tokens = int(usage.get("cache_read_tokens", 0))` instead of hardcoding `0`, capturing millions of cached tokens and eliminating billing distortion.
+- **Verification:** Unit tests added in `tests/test_dispatch.py`, `tests/test_agent_cli.py`, `tests/test_constants.py`, `tests/test_cost_ledger.py`, and `tests/test_costs.py`. All 731 tests passed across all matrix runners (Python 3.8, 3.10, 3.12, `qa-gate`), and merged to `main`.
+- **Blog Post:** `docs/blog/137-pr1286-agy-headless-parity.md`.
+
 ## Grok Headless Cancellation Resolved via --always-approve (decided/shipped 2026-08-30)
 - **Shipped:** PR #1279 (closes #1277, relates to #714, #880, #1038, #1166). Permanently resolves Grok's recurring headless execution cancellation (`stopReason: "cancelled"`, `PermissionCancelled`). [@agy]
 - **Root Cause:** In headless execution, passing `--permission-mode dontAsk` triggered Grok's internal shell AST parser (`bash_command_splitting.rs`) and safety risk classifier (`exec_risk.rs`) on compound commands (e.g. `pytest ...; echo "FILTER_EXIT=$?"`). Because `dontAsk` suppresses interactive prompting, the resolver immediately returned `decision: "cancelled"`, aborting the turn.
