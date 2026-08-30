@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #1308 — Fleet Parity: Enforce --cwd for Grok and -C for Codex with Working-Directory Protection | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-1">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Aug 30, 2026</span>
+        
+          <span class="blog-post-pr">PR #1308</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #1308 — Fleet Parity: Enforce --cwd for Grok and -C for Codex with Working-Directory Protection</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>PR #1308 — Fleet Parity: Enforce --cwd for Grok and -C for Codex with Working-Directory Protection</h1>
+<h2>The Broader Goal at the End of the Previous PR</h2>
+<p>PR #1306 established the canonical distinction between <strong>Workspace Agents</strong> (persistent org-chart roles like <code>dev</code>, <code>qa</code>, <code>architect</code>, <code>pm</code>) and <strong>Harnesses</strong> (swappable model execution backends like Claude, Codex, Grok, Agy, and Local). With that boundary stabilized, the next priority on the roadmap was addressing the remaining fleet-parity vulnerabilities under issue #342.</p>
+<h2>What Was Missing</h2>
+<p>In early autonomous development experiments (commit <code>8c1e124</code>), Agy (Gemini CLI) reset its working directory to an internal scratch path upon launch, ignoring the target git worktree. Because Gemini CLI lacked a command-line <code>--cwd</code> flag, synlynk mitigated this by injecting an explicit <code>## Working Directory</code> prompt header reminding the model of its required root.</p>
+<p>Issue #342 identified that Grok CLI (<code>grok</code>) carries the identical auto-relocation risk (<code>-w, --worktree</code>), yet was completely undefended:</p>
+<ol>
+<li><code>synlynk/dispatch.py</code> never passed Grok's native <code>--cwd &lt;CWD&gt;</code> flag.</li>
+<li>Grok fell into the generic prompt formatter branch without the working-directory reminder.</li>
+<li>Codex CLI similarly exposed <code>-C, --cd &lt;DIR&gt;</code> to lock its execution root, but was also dispatched without it.</li>
+</ol>
+<p>If a harness resets or misinterprets its working root, file edits and tool executions can land silently outside the assigned worktree—a dangerous multi-agent failure mode.</p>
+<h2>What Shipped</h2>
+<ol>
+<li><strong>Grok Structural Flag &amp; Defense-in-Depth:</strong>
+<ul>
+<li>In <code>synlynk/dispatch.py:dispatch_agent()</code>, dynamically appends <code>[&quot;--cwd&quot;, worktree_path]</code> to Grok's execution flags upon worktree creation.</li>
+<li>Added a dedicated Grok prompt branch in <code>_format_prompt_for_agent()</code> that injects the <code>## Working Directory</code> reminder header.</li>
+</ul>
+</li>
+<li><strong>Codex Working Directory Root:</strong>
+<ul>
+<li>In <code>synlynk/dispatch.py:dispatch_agent()</code>, dynamically appends <code>[&quot;-C&quot;, worktree_path]</code> to Codex's execution flags.</li>
+</ul>
+</li>
+<li><strong>Comprehensive Test Suite:</strong>
+<ul>
+<li>Added unit test <code>test_format_prompt_for_grok_includes_working_directory</code> in <code>tests/test_synlynk.py</code>.</li>
+<li>Added unit tests <code>test_grok_dispatch_includes_cwd_flag</code> and <code>test_codex_dispatch_includes_c_flag</code> in <code>tests/test_synlynk.py</code>.</li>
+<li>Verified that all 499 tests in <code>tests/test_synlynk.py</code>, 107 in <code>tests/test_dispatch.py</code>, and 74 in <code>tests/test_agent_cli.py</code> pass cleanly.</li>
+</ul>
+</li>
+</ol>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
