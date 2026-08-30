@@ -1268,6 +1268,19 @@ def _format_prompt_for_agent(agent: str, context_text: str, story_id: str,
             f"{verify_section}\n"
             f"Context summary:\n{context_text}"
         )
+    if agent == "grok":
+        working_dir = cwd_hint or os.getcwd()
+        return (
+            f"{receipt_instruction}"
+            f"{gh_write_instruction}"
+            f"## Working Directory\n{working_dir}\n"
+            f"All file edits MUST be in this directory.\n\n"
+            f"{context_text}"
+            f"{story_ref}"
+            f"{file_section}"
+            f"\n\n## Your Task\n{task}"
+            f"{verify_section}\n"
+        )
     return (
         f"{receipt_instruction}"
         f"{gh_write_instruction}"
@@ -2608,6 +2621,10 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     worktree_path = worktree_info["path"]
     base_branch = worktree_info["base_branch"]
     base_sha = worktree_info["base_sha"]
+    if agent == "grok" and worktree_path and "--cwd" not in flags:
+        flags = flags + ["--cwd", worktree_path]
+    if agent == "codex" and worktree_path and "-C" not in flags and "--cd" not in flags:
+        flags = flags + ["-C", worktree_path]
     worktree_synlynk_dir = os.path.join(worktree_path, ".synlynk")
     logs_dir = os.path.join(worktree_synlynk_dir, "logs")
     prompts_dir = os.path.join(worktree_synlynk_dir, "prompts")

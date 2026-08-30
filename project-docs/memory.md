@@ -1,5 +1,12 @@
 # synlynk Memory
 
+## Fleet Parity: Grok --cwd and Codex -C Working Directory Protection (decided/shipped 2026-08-30)
+- **Shipped:** PR #1308 (closes #342, relates to commit `8c1e124`). Enforces working directory root isolation across Grok and Codex dispatches. [@agy]
+- **Grok Structural & Defense-in-Depth:** In `synlynk/dispatch.py:dispatch_agent()`, dynamically appends `["--cwd", worktree_path]` to Grok CLI flags upon worktree creation, and injects a `## Working Directory` reminder header in `_format_prompt_for_agent()`.
+- **Codex Working Directory Root:** In `synlynk/dispatch.py:dispatch_agent()`, dynamically appends `["-C", worktree_path]` to Codex CLI flags upon worktree creation.
+- **Verification:** Covered by unit tests `test_format_prompt_for_grok_includes_working_directory`, `test_grok_dispatch_includes_cwd_flag`, and `test_codex_dispatch_includes_c_flag` in `tests/test_synlynk.py`. All 499 tests in `tests/test_synlynk.py` pass cleanly.
+- **Blog Post:** `docs/blog/141-pr1308-grok-codex-cwd-protection.md`.
+
 ## Claude Baseline Roles Aligned with PM/Deploy SOP (decided/shipped 2026-08-30)
 - **Shipped:** PR #1288 (closes #1284, relates to #1140, #423). Aligns Anthropic Claude's baseline programmatic roles with governance SOP. [@agy]
 - **Role Alignment:** In `synlynk/_constants.py`, updated `HARNESS_CAPABILITY_BASELINES["claude"]["roles"]` from `["architect", "builder"]` to `["architect", "pm"]`, eliminating capability routing drift while preserving `can_gh_write: True` for PM, deploy, and PR review tasks.

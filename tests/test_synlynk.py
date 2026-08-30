@@ -5002,6 +5002,18 @@ def test_format_prompt_agy_no_hardcoded_truncation(project_dir):
     assert "A" * 2001 in result
 
 
+def test_format_prompt_for_grok_includes_working_directory(project_dir):
+    """_format_prompt_for_agent with grok must include the Working Directory header."""
+    import synlynk as sl
+    result = sl._format_prompt_for_agent(
+        "grok", "Context data", "story-123", "implement feature", "", "", cwd_hint="/custom/worktree/path"
+    )
+    assert "## Working Directory" in result
+    assert "/custom/worktree/path" in result
+    assert "All file edits MUST be in this directory." in result
+    assert "## Your Task\nimplement feature" in result
+
+
 def test_dispatch_agent_claude_prompt_format(project_dir, monkeypatch):
     """dispatch_agent uses _format_prompt_for_agent for claude."""
     import synlynk as sl
@@ -5054,6 +5066,42 @@ def test_codex_baseline_uses_exec_subcommand(project_dir, monkeypatch):
     assert "--dangerously-bypass-approvals-and-sandbox" not in shell_cmd
     # Bare --sandbox (no value) must not appear; value is supplied via -s read-only.
     assert "--sandbox" not in shell_cmd
+
+
+def test_grok_dispatch_includes_cwd_flag(project_dir, monkeypatch):
+    """Grok dispatch must explicitly pass --cwd <worktree_path>."""
+    import synlynk as sl
+    captured = {}
+    class FakeProc:
+        pid = 12345
+    def fake_popen(cmd, **kw):
+        captured["cmd"] = cmd
+        return FakeProc()
+    monkeypatch.setattr("subprocess.Popen", fake_popen)
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None: {"passed": True, "sentinel": None, "reason": None})
+    monkeypatch.setattr(sl, "_probe_model_version", lambda *a, **kw: "unknown")
+    monkeypatch.setattr(sl, "generate_context", lambda scope="full", out_path=None: "")
+    monkeypatch.setattr(sl, "load_config", lambda: {"roles": {"grok": ["implement", "test"]}})
+    job = sl.dispatch_agent("grok", "implement auth fix", force_agent=True)
+    shell_cmd = captured["cmd"][2]
+    assert f"--cwd {job['worktree_path']}" in shell_cmd or f"--cwd '{job['worktree_path']}'" in shell_cmd or f'--cwd "{job["worktree_path"]}"' in shell_cmd
+
+
+def test_codex_dispatch_includes_c_flag(project_dir, monkeypatch):
+    """Codex dispatch must explicitly pass -C <worktree_path>."""
+    import synlynk as sl
+    captured = {}
+    class FakeProc:
+        pid = 777
+    def fake_popen(cmd, **kw):
+        captured["cmd"] = cmd
+        return FakeProc()
+    monkeypatch.setattr("subprocess.Popen", fake_popen)
+    monkeypatch.setattr(sl, "load_config", lambda: {"roles": {"codex": ["review"]}})
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None: {"passed": True, "sentinel": None, "reason": None})
+    job = sl.dispatch_agent("codex", "review the codebase")
+    shell_cmd = captured["cmd"][2]
+    assert f"-C {job['worktree_path']}" in shell_cmd or f"-C '{job['worktree_path']}'" in shell_cmd or f'-C "{job["worktree_path"]}"' in shell_cmd
 
 
 def test_cmd_jobs_prints_running_jobs(project_dir, monkeypatch, capsys):
