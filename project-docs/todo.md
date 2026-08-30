@@ -25,9 +25,9 @@
 - [x] #1255 (PR #1306, 2026-08-30) — Standardize Harness vs. Workspace Agent separation across CLI flags, configs, and docs. Added canonical `--force-harness` and `--to-harness` flags (with backward-compatible deprecation aliases), enabled `.harnesses/` directory resolution, exported canonical `cmd_harness_*` functions, resolved SQLite lock contention during model discovery, and cleaned living strategy docs.
 - [x] #342 (PR #1308, 2026-08-30) — Fleet Parity: Enforce --cwd for Grok and -C for Codex with working-directory prompt header. Passed explicit worktree path flags to Grok and Codex in `dispatch_agent()`, added Grok Working Directory prompt header in `_format_prompt_for_agent()`, and verified all 499 tests pass.
 - [x] #347 (PR #1309, 2026-08-30) — Fleet Parity: Instruction file preflight presence check and closed-loop receipt verification. Added instruction version extraction (`extract_instruction_version`), preflight check in `_preflight_dispatch()`, closed-loop `SYNLYNK_INSTRUCTION_VERSION` receipt protocol in `_format_prompt_for_agent()`, and receipt validation in `_check_instruction_receipt()`. All 499 tests pass.
+- [x] #573 (PR #1310, 2026-08-31) — Fleet Parity: Agy Stitch MCP Integration, Diagnostics, and Prompt Guidance. Discovered Gemini CLI extension vs. Antigravity MCP config mismatch, implemented TC-8 Stitch MCP doctor check with `synlynk doctor --fix agy` auto-remediation, added `--requires stitch` preflight gate, and injected `call_mcp_tool` prompt guidance. All 504 tests pass.
 
 ## Next Task
-- [ ] #573 — Agy+Stitch MCP integration
 - [ ] #914 — Workspace-level (multi-repo) agent identities — still untriaged into a phase
 - [ ] #937 — Review-dispatch job wrote to docs/ outside its read-only scope (job-0c924723, PR #933)
 - [ ] #1179 — Harness capability reassessment recurring cycle (parent/tracking; first cycle due ~25 jobs from creation or 2026-09-25)

@@ -1,4 +1,25 @@
 
+## 2026-08-31 — Fleet Parity: Agy Stitch MCP Integration, Diagnostics, and Prompt Guidance (PR #1310, closes #573)
+
+### Shipped
+- **Design Spec & Implementation Plan:** Authored and committed formal Design Spec (`docs/superpowers/specs/2026-08-31-agy-stitch-mcp-integration-design.md`) and Implementation Plan (`docs/superpowers/plans/2026-08-31-agy-stitch-mcp-integration.md`), resolving #573 (tracking story `story-f51c7705`, linked to `goal-a222b393`).
+- **Root Cause Empirical Findings:**
+  - Stitch was installed via `gemini extensions install` (`~/.gemini/extensions/Stitch/`), which Antigravity CLI does not read. Agy reads `~/.gemini/config/mcp_config.json`, which was empty.
+  - Agy does not use `mcp__stitch__*` flat tool syntax; it uses the built-in meta-tool `call_mcp_tool(server="stitch", tool="<tool_name>", arguments={...})`.
+  - Configured Stitch in `~/.gemini/config/mcp_config.json` and verified live headless dispatch with `--dangerously-skip-permissions` succeeds, calling `list_projects` and returning 6 live projects.
+- **TC-8 Doctor Preflight & Remediation:**
+  - Implemented `_run_tc8()` in `synlynk/doctor.py` checking Stitch MCP configuration.
+  - Added `_build_agy_stitch_fix_plan()` to `synlynk doctor --fix agy`.
+  - Added `stitch.googleapis.com:443` to optional network endpoints in `synlynk/_constants.py`.
+- **Preflight & Prompt Adaptation:**
+  - In `synlynk/dispatch.py`, added `--requires stitch` / `--requires mcp` preflight gate failing closed with `MCP_SERVER_MISSING` if TC-8 fails.
+  - Injected `## Stitch MCP Tool Usage Note` prompting Agy to invoke `call_mcp_tool`.
+- **Test Suite (TDD):**
+  - Added unit tests in `tests/test_synlynk.py` and `tests/test_dispatch.py`.
+  - All 504 tests in `tests/test_synlynk.py` and 113 in `tests/test_dispatch.py` pass clean.
+- **Blog Post:** `docs/blog/143-pr1310-agy-stitch-mcp-integration.md` (indexed in `docs/blog/README.md`).
+[@agy]
+
 ## 2026-08-30 — Fleet Parity: Instruction File Preflight Check and Closed-Loop Receipt Verification (PR #1309, closes #347)
 
 ### Shipped
