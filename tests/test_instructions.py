@@ -195,3 +195,34 @@ def test_register_sniffs_tool_from_marker_on_nonstandard_path(tmp_path, monkeypa
     cmd_instructions_register(str(custom))
     manifest = json.loads((tmp_path / ".synlynk" / "instructions.json").read_text())
     assert manifest["files"][str(custom)]["tool"] == "claude"
+
+
+def test_extract_instruction_version_html_marker():
+    from synlynk.instructions import extract_instruction_version
+
+    content = '<!-- synlynk:start version="0.9.4" tool="agy" -->\nmanaged\n<!-- synlynk:end -->'
+    assert extract_instruction_version(content) == "0.9.4"
+
+
+def test_extract_instruction_version_hash_marker():
+    from synlynk.instructions import extract_instruction_version
+
+    content = '# synlynk:start version="0.13.0"\nmanaged\n# synlynk:end'
+    assert extract_instruction_version(content) == "0.13.0"
+
+
+def test_extract_instruction_version_harness_marker():
+    from synlynk.instructions import extract_instruction_version
+
+    content = '<!-- synlynk:harness v2.0.0 verified:2026-08-29T18:53:59Z -->\nmanaged\n<!-- /synlynk:harness -->'
+    assert extract_instruction_version(content) == "v2.0.0"
+
+    content_named = '<!-- synlynk:harness vsop-repair verified:2026-08-29T07:09:44Z -->\nmanaged'
+    assert extract_instruction_version(content_named) == "vsop-repair"
+
+
+def test_extract_instruction_version_missing():
+    from synlynk.instructions import extract_instruction_version
+
+    assert extract_instruction_version("Just normal content without markers") is None
+    assert extract_instruction_version("") is None

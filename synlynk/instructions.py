@@ -12,10 +12,33 @@ import stat
 from pathlib import Path
 from typing import Optional
 
-from synlynk._constants import HARNESS_CAPABILITY_BASELINES, VERSION, _INSTALL_SCRIPT_URL
+from synlynk._constants import CORE_INSTRUCTION_FILES, HARNESS_CAPABILITY_BASELINES, VERSION, _INSTALL_SCRIPT_URL
 from synlynk.probe import SOP_BLOCKS
 from synlynk.sentinel import _write_sentinel_alert
 from synlynk.taxonomy import entries_up_to_tier
+
+
+def extract_instruction_version(content: str) -> Optional[str]:
+    """Extracts instruction version/tag from an instruction file content.
+
+    Matches either:
+    1. <!-- synlynk:start version="X" ... --> or # synlynk:start version="X"
+    2. <!-- synlynk:harness X verified:... -->
+    """
+    if not content:
+        return None
+    m = re.search(r'synlynk:start\s+version="([^"]+)"', content)
+    if m:
+        return m.group(1).strip()
+    m = re.search(r'synlynk:harness\s+(\S+)\s+verified:', content)
+    if m:
+        return m.group(1).strip()
+    return None
+
+
+def get_instruction_file_for_agent(agent: str) -> Optional[str]:
+    """Returns the canonical instruction file name for a core harness."""
+    return CORE_INSTRUCTION_FILES.get(agent)
 
 
 def _pkg(name: str, default=None):

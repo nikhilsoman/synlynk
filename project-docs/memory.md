@@ -1,5 +1,13 @@
 # synlynk Memory
 
+## Fleet Parity: Instruction File Preflight and Closed-Loop Receipt Verification (decided/shipped 2026-08-30)
+- **Shipped:** PR #1309 (closes #347, relates to #343, #344, #345, #720). Enforces preflight instruction file presence and closed-loop execution receipt verification. [@agy]
+- **Instruction Version Extraction:** In `synlynk/instructions.py`, added `extract_instruction_version()` and `get_instruction_file_for_agent()` supporting both `synlynk:start` and `synlynk:harness` markers.
+- **Preflight Gate:** In `synlynk/dispatch.py:_preflight_dispatch()`, asserts that the target core instruction file exists in initialized workspaces before dispatching (fails closed with `INSTRUCTION_FILE_MISSING` unless forced).
+- **Closed-Loop Receipt Protocol:** In `synlynk/dispatch.py:_format_prompt_for_agent()`, injects `SYNLYNK_INSTRUCTION_VERSION` directive without disclosing the expected token.
+- **Telemetry & Verification:** In `synlynk/jobs.py`, added `_check_instruction_receipt()` to verify `ok`, `mismatch`, `none`, or `absent`, recording `job["instruction_receipt"]` and emitting advisory sentinel warnings on convention drift.
+- **Blog Post:** `docs/blog/142-pr1309-instruction-file-preflight-and-receipt-verification.md`.
+
 ## Fleet Parity: Grok --cwd and Codex -C Working Directory Protection (decided/shipped 2026-08-30)
 - **Shipped:** PR #1308 (closes #342, relates to commit `8c1e124`). Enforces working directory root isolation across Grok and Codex dispatches. [@agy]
 - **Grok Structural & Defense-in-Depth:** In `synlynk/dispatch.py:dispatch_agent()`, dynamically appends `["--cwd", worktree_path]` to Grok CLI flags upon worktree creation, and injects a `## Working Directory` reminder header in `_format_prompt_for_agent()`.

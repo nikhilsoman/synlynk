@@ -16,6 +16,39 @@ def test_dispatch_agent_raises_when_task_type_not_in_policy_allocation_table(tmp
         )
 
 
+def test_preflight_blocks_missing_instruction_file(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "CLAUDE.md").write_text("# Claude")
+    from synlynk.dispatch import _preflight_dispatch
+
+    result = _preflight_dispatch("agy", [], root=str(tmp_path))
+    assert result["passed"] is False
+    assert result["sentinel"] == "INSTRUCTION_FILE_MISSING"
+    assert "GEMINI.md" in result["reason"]
+
+    result_forced = _preflight_dispatch("agy", [], root=str(tmp_path), force_agent=True)
+    # With force_agent=True, instruction file check is bypassed (does not fail with INSTRUCTION_FILE_MISSING)
+    assert result_forced.get("sentinel") != "INSTRUCTION_FILE_MISSING"
+
+
+def test_dispatch_agent_sets_instruction_receipt_fields(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "AGENTS.md").write_text('<!-- synlynk:start version="0.13.0" tool="codex" -->\n')
+    from synlynk.dispatch import dispatch_agent
+
+    class FakeProc:
+        pid = 999
+
+    monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr("synlynk.dispatch._preflight_dispatch", lambda *a, **kw: {"passed": True, "sentinel": None, "reason": None})
+    monkeypatch.setattr("synlynk.load_config", lambda: {"roles": {"codex": ["review"]}})
+
+    job = dispatch_agent("codex", "review codebase", skip_preflight=True)
+    assert job["instruction_file"] == "AGENTS.md"
+    assert job["expected_instruction_version"] == "0.13.0"
+    assert job["instruction_receipt"] is None
+
+
 def test_format_job_summary_flags_cancelled_github_mcp_write():
     summary = _format_job_summary(
         "job-gh-cancelled", "codex", None, 0, 1.0, 0, 0, 0.0,
@@ -153,6 +186,31 @@ def test_format_prompt_for_agent_prepends_receipt_instruction_for_all_agents():
         )
         assert prompt.startswith("## Task Receipt (required)")
         assert "SYNLYNK_TASK_RECEIVED: deadbeef" in prompt
+
+
+def test_render_instruction_receipt_instruction_contains_marker_and_filename():
+    import synlynk.dispatch as dispatch_mod
+
+    instruction = dispatch_mod._render_instruction_receipt_instruction("AGENTS.md")
+
+    assert "## Instruction Receipt (required)" in instruction
+    assert "AGENTS.md" in instruction
+    assert "SYNLYNK_INSTRUCTION_VERSION: <version>" in instruction
+    assert "SYNLYNK_INSTRUCTION_VERSION: none" in instruction
+
+
+def test_format_prompt_for_agent_includes_instruction_receipt_instruction():
+    import synlynk.dispatch as dispatch_mod
+
+    for agent in ("claude", "codex", "agy", "grok"):
+        prompt = dispatch_mod._format_prompt_for_agent(
+            agent, "context", "story-1", "do the thing", "", "",
+            task_sha256="deadbeef",
+            instruction_file="AGENTS.md",
+        )
+        assert "## Instruction Receipt (required)" in prompt
+        assert "SYNLYNK_INSTRUCTION_VERSION: <version>" in prompt
+        assert "AGENTS.md" in prompt
         assert "do the thing" in prompt
 
 
