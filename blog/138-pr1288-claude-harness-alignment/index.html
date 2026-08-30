@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #1288 — Aligning Claude Baseline Roles with PM/Deploy Governance and Resolving Fleet Contradictions | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-2">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Aug 30, 2026</span>
+        
+          <span class="blog-post-pr">PR #1288</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #1288 — Aligning Claude Baseline Roles with PM/Deploy Governance and Resolving Fleet Contradictions</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>With Agy headless parity landed in PR #1286, the final standing fleet contradiction was Anthropic Claude's programmatic classification as a &quot;builder&quot; in <code>synlynk/_constants.py</code> despite project governance strictly locking Claude into a PM/deployer role.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>Having Claude listed as a &quot;builder&quot; caused automated capability scoring to consider Claude an implementation candidate, conflicting directly with <code>CLAUDE.md</code> and <code>docs/harness-capability-baseline.md</code>. Aligning <code>_constants.py</code> with governance guarantees that autonomous routing respects the PM/implementer division of labor.</p>
+<h2>What This PR Shipped</h2>
+<ol>
+<li><strong>Updated Baseline Roles:</strong>
+<ul>
+<li>In <code>synlynk/_constants.py</code>, updated <code>HARNESS_CAPABILITY_BASELINES[&quot;claude&quot;][&quot;roles&quot;]</code> from <code>[&quot;architect&quot;, &quot;builder&quot;]</code> to <code>[&quot;architect&quot;, &quot;pm&quot;]</code>.</li>
+<li>Preserved <code>can_gh_write: True</code> so Claude can execute PM, deploy, and PR review workflows.</li>
+</ul>
+</li>
+<li><strong>Capability Baseline Documentation:</strong>
+<ul>
+<li>Updated <code>docs/harness-capability-baseline.md</code> to formally document Claude's role alignment.</li>
+</ul>
+</li>
+<li><strong>Verification Tests:</strong>
+<ul>
+<li>Added <code>test_claude_harness_alignment_update_baseline</code> in <code>tests/test_agent_cli.py</code>.</li>
+</ul>
+</li>
+</ol>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>All four core harnesses (Codex, Grok, Agy, Claude) now possess fully aligned, verified baseline contracts and execution models.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

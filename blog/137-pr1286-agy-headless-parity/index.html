@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #1286 — Eliminating Agy Headless 5-Minute Timeout, Enabling Plan Mode, and Capturing Prompt Cache Telemetry | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-1">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Aug 30, 2026</span>
+        
+          <span class="blog-post-pr">PR #1286</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #1286 — Eliminating Agy Headless 5-Minute Timeout, Enabling Plan Mode, and Capturing Prompt Cache Telemetry</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>After establishing full headless parity for OpenAI Codex (PR #1275) and xAI Grok (PR #1279), the objective shifted to evaluating harness parity for the remaining core fleet members: Google Agy (Antigravity CLI) and Anthropic Claude.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>For months, Agy dispatches that lasted longer than 5 minutes failed intermittently with <code>Error: timeout waiting for response</code> (<code>HARNESS_INTERNAL_TIMEOUT</code>), often leaving zombie jobs in <code>daemon_jobs</code>. Simultaneously, Agy could not be dispatched for read-only audits or code reviews without write permissions due to an unnecessary <code>PermissionEnforcementError</code> fail-closed check. In addition, prompt cache hits in Gemini were discarded as <code>0</code> cache reads, distorting cost tracking.</p>
+<p>PR #1286 resolves all three structural defects natively.</p>
+<h2>What This PR Shipped</h2>
+<ol>
+<li><strong>Pass <code>--print-timeout 30m0s</code> on All Headless Agy Dispatches:</strong>
+<ul>
+<li>Declared <code>--print-timeout</code> and <code>--mode</code> in <code>synlynk/_constants.py</code> under <code>HARNESS_CAPABILITY_BASELINES[&quot;agy&quot;][&quot;dispatch_flags&quot;][&quot;valid_flags&quot;]</code>.</li>
+<li>In <code>synlynk/dispatch.py:dispatch_agent()</code>, dynamically appends <code>[&quot;--print-timeout&quot;, &quot;30m0s&quot;]</code> for <code>agy</code> dispatches, preventing the default 5-minute client-side timeout.</li>
+</ul>
+</li>
+<li><strong>Native Read-Only Planning Mode:</strong>
+<ul>
+<li>In <code>synlynk/dispatch.py:_permissions_to_flags()</code>, replaced the <code>PermissionEnforcementError</code> for <code>permissions &lt;= {&quot;read:*&quot;}</code> with <code>[&quot;--mode&quot;, &quot;plan&quot;]</code>, allowing Agy to be safely dispatched for read-only audits and reviews.</li>
+</ul>
+</li>
+<li><strong>Capture Gemini Prompt Cache Telemetry:</strong>
+<ul>
+<li>In <code>synlynk/costs.py:_extract_agy_structured()</code>, extracted <code>cache_read_tokens = int(usage.get(&quot;cache_read_tokens&quot;, 0))</code> instead of hardcoding <code>0</code>. During our dogfooding run, 7.14M prompt cache tokens were accurately captured!</li>
+</ul>
+</li>
+<li><strong>Comprehensive Test Coverage:</strong>
+<ul>
+<li>Added unit tests verifying <code>--print-timeout 30m0s</code> injection, <code>--mode plan</code> translation, and cache token extraction across <code>tests/test_dispatch.py</code>, <code>tests/test_agent_cli.py</code>, <code>tests/test_constants.py</code>, <code>tests/test_cost_ledger.py</code>, and <code>tests/test_costs.py</code>.</li>
+</ul>
+</li>
+</ol>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>Agy can now reliably execute deep, multi-minute implementation tasks and read-only reviews without premature aborts or distorted billing telemetry.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
