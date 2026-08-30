@@ -8,7 +8,9 @@ from synlynk.approval_gate import raise_approval_ticket
 from synlynk.db import _find_ticket, _insert_ticket, _mark_ticket_consumed
 from synlynk.dispatch import dispatch_agent
 from synlynk.events import emit_awaiting_approval
-from synlynk.policy import check_authority
+from synlynk.policy import check_authority, load_policy
+
+_FALLBACK_HARNESS = "codex"
 
 
 def _ready_stories() -> list:
@@ -28,6 +30,20 @@ def _ready_stories() -> list:
         ]
     finally:
         conn.close()
+
+
+def _resolve_harness(role: str, repo_path: str) -> str:
+    """Look up the default dispatch harness for a story's role.
+
+    Falls back to codex (the pre-existing hardcoded behavior) for any role
+    with no entry in policy["agent_roles"], so unmapped roles keep working
+    exactly as before this change.
+    """
+    policy = load_policy(repo_path=repo_path)
+    role_entry = policy.get("agent_roles", {}).get(role)
+    if role_entry and role_entry.get("default_harness"):
+        return role_entry["default_harness"]
+    return _FALLBACK_HARNESS
 
 
 def run_sweep_pass(assignee: str = "nikhilsoman") -> Dict[str, int]:
@@ -71,8 +87,9 @@ def run_sweep_pass(assignee: str = "nikhilsoman") -> Dict[str, int]:
                 continue
 
         try:
+            harness = _resolve_harness(story["role"], repo_path)
             dispatch_agent(
-                "codex",
+                harness,
                 story["title"],
                 story_id=story["story_id"],
                 task_type="implement",
