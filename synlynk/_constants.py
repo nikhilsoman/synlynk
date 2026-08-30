@@ -43,7 +43,8 @@ _PERMISSION_TO_TOOL_MAP = {
 _CODEX_NETWORK_PERMISSION = "run:install"
 
 # Known baseline capabilities per agent CLI.
-# Roles: "architect" (design/docs), "builder" (implement), "verifier" (test/review)
+# Roles: "architect" (design/docs), "builder" (implement), "verifier" (test/review),
+# "pm" (program management/deploy — Claude-only, per CLAUDE.md role split)
 HARNESS_CAPABILITY_BASELINES = {
     "claude": {
         "cli": "claude",
@@ -64,7 +65,7 @@ HARNESS_CAPABILITY_BASELINES = {
             "required_endpoints": [],
             "optional_endpoints": [],
         },
-        "roles": ["architect", "builder"],
+        "roles": ["architect", "pm"],
         "env_passthrough": [],
         "strengths": ["long context", "reasoning", "code review", "planning"],
     },

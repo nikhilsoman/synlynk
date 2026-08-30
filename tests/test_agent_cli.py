@@ -16,6 +16,14 @@ def test_codex_harness_baseline_includes_verifier_role_and_can_gh_write():
     assert codex["can_gh_write"] is True
 
 
+def test_claude_harness_alignment_update_baseline():
+    from synlynk._constants import HARNESS_CAPABILITY_BASELINES
+
+    claude = HARNESS_CAPABILITY_BASELINES["claude"]
+    assert claude["roles"] == ["architect", "pm"]
+    assert "builder" not in claude["roles"]
+
+
 def test_wire_charter_content_into_dispatchexecut(project_dir, tmp_path, monkeypatch):
     import synlynk
     from synlynk import agent_store
