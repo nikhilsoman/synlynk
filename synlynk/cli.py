@@ -453,6 +453,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="Maximum number of events to show (default 20)",
     )
 
+    backlog_parser = subparsers.add_parser("backlog", help="GOVERNS backlog automation")
+    backlog_sub = backlog_parser.add_subparsers(dest="backlog_command")
+
+    note_parser = backlog_sub.add_parser("note", help="File a discovered/planned work item now")
+    note_parser.add_argument("title")
+    note_parser.add_argument("--body", default="")
+    note_parser.add_argument("--session-id", default=None)
+    note_parser.add_argument("--goal-id", default=None)
+    note_parser.add_argument("--new-goal-outcome", default=None)
+    note_parser.add_argument("--new-goal-criterion", default=None)
+    note_parser.add_argument("--parent-issue", type=int, default=1198)
+
+    scan_parser = backlog_sub.add_parser("scan-session", help="Print session material for a discovery re-scan")
+    scan_parser.add_argument("--session-id", required=True)
+
     session_parser = subparsers.add_parser("session", help="Manage work-envelope sessions")
     session_sub = session_parser.add_subparsers(dest="session_action")
     session_open_parser = session_sub.add_parser("open", help="Open a new session")
@@ -984,6 +999,7 @@ def build_parser() -> argparse.ArgumentParser:
         "goal": goal_parser,
         "identity": identity_parser,
         "events": events_parser,
+        "backlog": backlog_parser,
         "session": session_parser,
         "instructions": instructions_parser,
         "local": local_parser,
@@ -1645,6 +1661,18 @@ def main(argv=None) -> None:
             cmd_events_tail(event_type=args.event_type, limit=args.limit)
         else:
             help_parsers.get("events", parser).print_help()
+    elif args.command == "backlog":
+        from synlynk.backlog_automation import cmd_backlog_note, cmd_backlog_scan_session
+        if args.backlog_command == "note":
+            cmd_backlog_note(
+                title=args.title, body=args.body, session_id=args.session_id,
+                goal_id=args.goal_id, new_goal_outcome=args.new_goal_outcome,
+                new_goal_criterion=args.new_goal_criterion, parent_issue=args.parent_issue,
+            )
+        elif args.backlog_command == "scan-session":
+            cmd_backlog_scan_session(args.session_id)
+        else:
+            help_parsers.get("backlog", parser).print_help()
     elif args.command == "session":
         action = getattr(args, "session_action", None)
         from synlynk.db import (

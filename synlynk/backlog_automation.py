@@ -158,3 +158,84 @@ def file_backlog_item(conn, title: str, body: str, source: str, session_id: str 
         goal_match_basis=basis, session_id=session_id,
     )
     return {"status": "filed", "gh_issue_url": gh_issue_url or None, "story_id": story_id}
+
+
+def collect_session_material(conn, session_id: str) -> dict:
+    """Read raw material for a closed session: closing_summary plus a devlog tail.
+    Returns None if the session doesn't exist. Deterministic data-gathering only —
+    classifying this material into backlog candidates is the calling agent's job.
+    """
+    row = conn.execute(
+        "SELECT session_id, title, closing_summary FROM sessions WHERE session_id=?",
+        (session_id,),
+    ).fetchone()
+    if row is None:
+        return None
+
+    devlog_tail = ""
+    devlog_user = subprocess.run(
+        ["git", "config", "user.name"], capture_output=True, text=True
+    ).stdout.strip()
+    if devlog_user:
+        devlog_path = f"project-docs/devlogs/{devlog_user}.md"
+        try:
+            with open(devlog_path) as f:
+                content = f.read()
+            devlog_tail = content[-2000:]
+        except OSError:
+            devlog_tail = ""
+
+    return {
+        "session_id": row[0],
+        "title": row[1],
+        "closing_summary": row[2] or "",
+        "devlog_tail": devlog_tail,
+    }
+
+
+def cmd_backlog_note(title: str, body: str, source: str = "marker", session_id: str = None,
+                      goal_id: str = None, new_goal_outcome: str = None,
+                      new_goal_criterion: str = None, parent_issue=1198) -> None:
+    """CLI entrypoint for the explicit-marker path. Files immediately (no confirm gate) —
+    calling this command is itself the deliberate act.
+    """
+    from synlynk import _get_db
+    conn = _get_db()
+    try:
+        outcome = file_backlog_item(
+            conn, title=title, body=body, source=source, session_id=session_id,
+            goal_id=goal_id, new_goal_outcome=new_goal_outcome,
+            new_goal_criterion=new_goal_criterion, parent_issue=parent_issue,
+        )
+    finally:
+        conn.close()
+
+    if outcome["status"] == "skipped_duplicate":
+        print(f"  [backlog] skipped — already proposed: {title!r}")
+        return
+    if outcome["status"] == "skipped_duplicate_gh":
+        print(f"  [backlog] skipped — matches existing GitHub issue: {outcome['gh_issue_url']}")
+        return
+    print(f"  [backlog] filed: {outcome['gh_issue_url']}  (story: {outcome['story_id']})")
+
+
+def cmd_backlog_scan_session(session_id: str) -> None:
+    """CLI entrypoint for the session-close safety net. Prints raw material for the
+    calling agent to read and classify — filing candidates is a separate
+    `synlynk backlog note` call per confirmed item, not automatic.
+    """
+    from synlynk import _get_db
+    conn = _get_db()
+    try:
+        material = collect_session_material(conn, session_id)
+    finally:
+        conn.close()
+
+    if material is None:
+        print(f"  [backlog] no session found: {session_id}")
+        return
+
+    print(f"  [backlog] session {material['session_id']} — {material['title']}")
+    print(f"\n  closing_summary:\n  {material['closing_summary']}\n")
+    if material["devlog_tail"]:
+        print(f"  devlog tail:\n{material['devlog_tail']}\n")

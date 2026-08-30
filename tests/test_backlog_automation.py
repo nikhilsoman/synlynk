@@ -150,3 +150,50 @@ def test_file_backlog_item_skips_gh_title_duplicate(db_conn):
     # only the search call — no issue was created
     assert mock_run.call_count == 1
     assert mock_run.call_args[0][0][:3] == ["gh", "issue", "list"]
+
+
+def test_collect_session_material_reads_closing_summary(db_conn, tmp_path, monkeypatch):
+    from synlynk.backlog_automation import collect_session_material
+    db_conn.execute(
+        "INSERT INTO sessions (session_id, title, status, opened_at, closing_summary) "
+        "VALUES (?, ?, 'closed', '2026-08-29T10:00:00', ?)",
+        ("sess-1", "Test session", "Shipped X, discovered Y needs follow-up"),
+    )
+    db_conn.commit()
+    material = collect_session_material(db_conn, "sess-1")
+    assert material["closing_summary"] == "Shipped X, discovered Y needs follow-up"
+    assert material["session_id"] == "sess-1"
+
+
+def test_collect_session_material_missing_session(db_conn):
+    from synlynk.backlog_automation import collect_session_material
+    material = collect_session_material(db_conn, "does-not-exist")
+    assert material is None
+
+
+def test_cli_backlog_note_invokes_file_backlog_item(db_conn, capsys):
+    from synlynk import cli
+    with patch("synlynk.backlog_automation.file_backlog_item") as mock_file:
+        mock_file.return_value = {"status": "filed", "gh_issue_url": "https://x/9001", "story_id": "backlog-abc"}
+        cli.main(["backlog", "note", "Found a gap", "--body", "details"])
+    mock_file.assert_called_once()
+    _, kwargs = mock_file.call_args
+    assert kwargs["title"] == "Found a gap"
+    assert kwargs["body"] == "details"
+    assert kwargs["source"] == "marker"
+    out = capsys.readouterr().out
+    assert "filed" in out
+    assert "https://x/9001" in out
+
+
+def test_cli_backlog_scan_session_prints_material(db_conn, capsys):
+    from synlynk import cli
+    db_conn.execute(
+        "INSERT INTO sessions (session_id, title, status, opened_at, closing_summary) "
+        "VALUES (?, ?, 'closed', '2026-08-29T10:00:00', ?)",
+        ("sess-2", "Another session", "Nothing notable"),
+    )
+    db_conn.commit()
+    cli.main(["backlog", "scan-session", "--session-id", "sess-2"])
+    out = capsys.readouterr().out
+    assert "Nothing notable" in out
