@@ -1,5 +1,12 @@
 # synlynk Memory
 
+## Codex Full Harness Parity Across Review and GH-Write Tasks (decided/shipped 2026-08-30)
+- **Shipped:** PR #1275 (closes #1274, relates to #1271, #865, #426, #569). Permanently eliminates the legacy 4-layer lockout that auto-rerouted Codex GitHub writes to Claude, establishing OpenAI Codex as a first-class peer for reviews, code inspection, and GitHub-write tasks. [@agy]
+- **Empirical Proof:** In job `job-836e13a4`, Codex executed inside its Seatbelt sandbox with `-c sandbox_workspace_write.network_access=true` to query PR #1272, post an audit comment, and close the PR via `gh pr close` under its role GitHub App identity (`synlynk-synlynk-qa`), verifying zero egress blocks or token failures.
+- **Core Baselines & Policy:** Set `HARNESS_CAPABILITY_BASELINES["codex"]["can_gh_write"] = True` and added `"verifier"` to baseline roles in `synlynk/_constants.py`. Updated `.synlynk/policy.json` and `synlynk/policy.py` so `review` and `gh_write` route to Codex with Claude and Agy as fallbacks.
+- **Templates & Directives:** Updated `synlynk/probe.py` so initialized instruction tables dynamically route GitHub writes to Codex by default, and updated `docs/harness-capability-baseline.md` to classify Codex as **Reliable**.
+- **Blog Post:** `docs/blog/135-pr1275-codex-full-harness-parity.md`.
+
 ## Direct Codex GitHub-Write Network Access via Config Override (decided/shipped 2026-08-29)
 - **Shipped:** PR #1271 (closes #1268, relates to #865). Replaces the proposed brokered file relay with a native configuration override (`-c sandbox_workspace_write.network_access=true`) injected into Codex dispatch when `requires_gh_write` is active. [@agy]
 - **Attribution Finding:** PR #1258 was created by synlynk's host wrapper (`_maybe_open_worktree_pr`), not by Codex inside the sandbox. Codex never attempted network calls.
