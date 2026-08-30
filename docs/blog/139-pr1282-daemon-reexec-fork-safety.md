@@ -2,16 +2,16 @@
 title: "PR #1282 — Daemon Re-Exec: Fixing macOS Fork-Safety Crashes"
 date: 2026-08-30
 series: "Building the OS for Multi-Agent Development"
-post: 100
+post: 139
 pr: "#1282"
 merged: 2026-08-30
 ---
 
-# 100: Daemon Re-Exec — Fixing macOS Fork-Safety Crashes
+# 139: Daemon Re-Exec — Fixing macOS Fork-Safety Crashes
 
 ## Where we left off
 
-Post #99 (PR #731) shipped Synlynk UX 1.0 — a unified `uxcore` write chokepoint feeding both the TUI and Vizor. That work assumed the background daemon (`synlynk daemon start`) was a reliable, always-on process feeding fleet state and refreshing GH App tokens. It wasn't. On this machine, the daemon had never survived its own startup.
+Post #138 (PR #1288) closed out a run of harness-parity work — Claude realigned to PM/deploy-only in `_constants.py`, Agy given headless parity, Grok's cancellation bug fixed, Codex granted full gh-write parity. All of that work assumed the background daemon (`synlynk daemon start`) was a reliable, always-on process feeding fleet state and refreshing GH App tokens. It wasn't. On this machine, the daemon had never survived its own startup — a fact this PR's investigation surfaced independently of that harness-parity thread.
 
 ## What moved the goalpost
 
