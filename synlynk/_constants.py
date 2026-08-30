@@ -152,9 +152,15 @@ HARNESS_CAPABILITY_BASELINES = {
         "prompt_flag": "--single",  # placed last: grok --single "$PROMPT"
         "prompt_via_arg": True,
         "dispatch_flags": {
-            "valid_flags": ["--always-approve", "--output-format", "--model", "--single"],
+            "valid_flags": [
+                "--always-approve",
+                "--permission-mode",
+                "--output-format",
+                "--model",
+                "--single",
+            ],
             "invalid_flags": ["--yes", "--dangerously-skip-permissions", "--print", "--non-interactive"],
-            "required_flags": [],
+            "required_flags": ["--always-approve"],
         },
         "headless_contract": {
             "requires_pty": False,
