@@ -143,6 +143,8 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [136](./136-pr1279-grok-headless-permission-mode.md) | PR #1279 — Eliminating Grok Headless Execution Cancellation via --always-approve | [#1279](https://github.com/nikhilsoman/synlynk/pull/1279) | 2026-08-30 |
 | [137](./137-pr1286-agy-headless-parity.md) | PR #1286 — Eliminating Agy Headless 5m Timeout, Enabling Plan Mode, and Capturing Prompt Cache Telemetry | [#1286](https://github.com/nikhilsoman/synlynk/pull/1286) | 2026-08-30 |
 | [138](./138-pr1288-claude-harness-alignment.md) | PR #1288 — Aligning Claude Baseline Roles with PM/Deploy Governance | [#1288](https://github.com/nikhilsoman/synlynk/pull/1288) | 2026-08-30 |
+| [139](./139-pr1282-daemon-reexec-fork-safety.md) | PR #1282 — Eliminating Daemon Re-Exec Fork Desync via Fork Safety | [#1282](https://github.com/nikhilsoman/synlynk/pull/1282) | 2026-08-30 |
+| [140](./140-pr1306-harness-vs-workspace-agent-separation.md) | PR #1306 — Standardizing Harness vs. Workspace Agent Separation Across CLI Flags, Configs, and Docs | [#1306](https://github.com/nikhilsoman/synlynk/pull/1306) | 2026-08-30 |
 
 ## Per-PR Post Template
 

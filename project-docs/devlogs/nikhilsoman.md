@@ -1,4 +1,29 @@
 
+## 2026-08-30 — Standardizing Harness vs. Workspace Agent Separation Across CLI Flags, Configs, and Docs (PR #1306, closes #1255)
+
+### Shipped
+- **Ontological Separation Formally Defined:** Authored and committed formal Design Spec (`docs/superpowers/specs/2026-08-30-harness-agent-separation-design.md`) and Implementation Plan (`docs/superpowers/plans/2026-08-30-harness-agent-separation.md`), resolving #1255 (parent #1198, tracking story `story-a646edf9`, linked to `goal-a222b393` and `goal-85656c82`).
+  - **Workspace Agents:** Persistent functional identities (`pm`, `architect`, `tpm`, `dev`, `designer`, `qa`, `marketing`, `synlynk-bot`) holding charters, durability, workflow stage ownership, and GitHub App credentials.
+  - **Harnesses:** Swappable execution backends (`claude`, `codex`, `grok`, `agy`, `local`) providing model access, process sandboxing, and token metering.
+- **Living Roadmap & Instruction Preambles Cleaned:**
+  - Corrected `docs/strategy/2026-08-15-two-imperatives-roadmap.md` line 7 to clearly state that autonomous workspace agents (`dev`, `qa`, `designer`, `marketing`) execute via autonomous harnesses (`codex`, `grok`, `agy`).
+  - Updated `GEMINI.md`, `CLAUDE.md`, and `GROK.md` preambles from `- **Agent name:** <Name>` to `- **Harness:** <Name>`.
+- **CLI Surface Standardization & Deprecation Aliasing:**
+  - Added canonical `--force-harness` to `synlynk dispatch` while retaining `--force-agent` as a deprecated alias with soft warning.
+  - Added canonical `--to-harness` to `synlynk jobs handoff` alongside `--to` and `--to-agent`.
+  - Extended `_warn_deprecated_harness_flag` in `synlynk/cli.py` to cover `--force-agent` and `--to-agent`.
+- **Directory Resolution & Internal Function Aliasing:**
+  - Updated `_load_agent_config`, `_load_agent_profile`, and `cmd_harness_list` to resolve `.harnesses/` first with transparent fallback to `.agents/`.
+  - Exported canonical `cmd_harness_add`, `cmd_harness_configure`, `cmd_harness_list`, and `cmd_harness_run` alongside original names.
+- **Database Lock Safety Optimization:**
+  - In `synlynk/db.py`, guarded `_normalize_org_domain_drift` updates with row-existence checks, eliminating unnecessary DML executions and SQLite same-thread write lock contention.
+  - In `synlynk/probe.py` and `synlynk/capability_sweep.py`, released read locks and committed transactions before dispatching calibration tasks.
+- **Test Suite (TDD):**
+  - Added `test_dispatch_cli_force_harness_and_deprecated_force_agent`, `test_jobs_handoff_cli_to_harness`, `test_warn_deprecated_harness_flags`, and `test_harness_config_and_listing_with_harnesses_dir` in `tests/test_agent_cli.py`.
+  - All 496 core tests in `tests/test_synlynk.py`, 107 in `tests/test_dispatch.py`, and 72 in `tests/test_agent_cli.py` passed clean.
+- **Blog Post:** `docs/blog/140-pr1306-harness-vs-workspace-agent-separation.md` (indexed in `docs/blog/README.md`).
+[@agy]
+
 ## 2026-08-30 — Full Fleet Harness Parity Achieved: Agy Headless Parity (PR #1286) & Claude Role Alignment (PR #1288)
 
 ### Shipped

@@ -247,6 +247,15 @@ HTTP Context Server (v0.7, `localhost:27471`) is the underlying transport.
 - **Attribution:** All `memory.md` and `devlogs/` entries in team mode MUST have `[@username]`.
 - **conftest.py:** Fixtures must mirror the real costs.md 6-column schema at all times. `isolated_db` autouse fixture redirects `synlynk.DB_PATH` to a per-test temp path — every test gets its own `state.db`, no cross-test DB pollution.
 
+## Harness vs. Workspace Agent Separation (decided 2026-08-30, ships PR #1306)
+- Strict ontological boundary: Workspace Agents (`pm`, `architect`, `tpm`, `dev`, `designer`, `qa`, `marketing`, `synlynk-bot`) are durable role identities, charter holders, and lifecycle owners; Harnesses (`claude`, `codex`, `grok`, `agy`, `local`) are execution backends and compute resources.
+- `synlynk dispatch --force-harness`: Added as canonical flag to pin a harness backend; `--force-agent` is preserved as a deprecated alias emitting a non-breaking warning.
+- `synlynk jobs handoff --to-harness`: Added alongside `--to` and `--to-agent`.
+- Config discovery: `.harnesses/` is checked first with transparent fallback to `.agents/`.
+- Database lock safety: `synlynk/db.py` guards `_normalize_org_domain_drift` updates with row-existence checks, eliminating same-thread SQLite deadlocks during nested dispatches.
+- Full design spec: `docs/superpowers/specs/2026-08-30-harness-agent-separation-design.md`.
+[@agy]
+
 ## Superseded Decisions
 - ~~Tier model (Solo/Team/Enterprise)~~ → retired 2026-06-06. Replaced by OS layer model.
 - ~~"Context Switchboard" framing~~ → retired 2026-06-06. Replaced by "OS for multi-agent development."
