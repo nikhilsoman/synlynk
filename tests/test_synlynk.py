@@ -5049,11 +5049,10 @@ def test_codex_baseline_uses_exec_subcommand(project_dir, monkeypatch):
     sl.dispatch_agent("codex", "review the codebase")
     shell_cmd = captured["cmd"][2]  # ["sh", "-c", <shell_cmd>]
     assert "codex exec" in shell_cmd
-    assert "workspace-write" in shell_cmd
     assert "-s read-only" in shell_cmd
     assert "--ask-for-approval" not in shell_cmd
     assert "--dangerously-bypass-approvals-and-sandbox" not in shell_cmd
-    # Bare --sandbox (no value) must not appear; value is already supplied via -s workspace-write
+    # Bare --sandbox (no value) must not appear; value is supplied via -s read-only.
     assert "--sandbox" not in shell_cmd
 
 
