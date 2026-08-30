@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #1309 — Fleet Parity: Instruction File Preflight Check and Closed-Loop Receipt Verification | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-2">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Aug 30, 2026</span>
+        
+          <span class="blog-post-pr">PR #1309</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #1309 — Fleet Parity: Instruction File Preflight Check and Closed-Loop Receipt Verification</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>PR #1309 — Fleet Parity: Instruction File Preflight Check and Closed-Loop Receipt Verification</h1>
+<h2>The Broader Goal at the End of the Previous PR</h2>
+<p>PR #1308 closed issue #342 by enforcing <code>--cwd</code> for Grok and <code>-C</code> for Codex, securing working-directory root containment across all autonomous dispatches. That left issue #347 as the final remaining open ticket from the original dogfooding-readiness fleet-parity cluster.</p>
+<h2>What Was Missing</h2>
+<p>Synlynk coordinates multi-agent workflows through instruction files (<code>CLAUDE.md</code>, <code>GEMINI.md</code>, <code>AGENTS.md</code>, <code>GROK.md</code>), where role boundaries, commit trailer requirements, and PR review protocols are defined.</p>
+<p>However, the pipeline previously relied on unverified trust:</p>
+<ol>
+<li><code>_preflight_dispatch()</code> did not verify that a Core 4 agent's directive file was actually present and readable in an initialized repo. In issue #343, <code>AGENTS.md</code> was missing entirely, yet dispatches executed blindly.</li>
+<li>Even when a file exists on disk, there was zero closed-loop verification that the spawned CLI actually read and internalized it. A job could report success while silently violating all repo conventions.</li>
+</ol>
+<h2>What Shipped</h2>
+<ol>
+<li><strong>Instruction Version Extraction:</strong>
+<ul>
+<li>Added <code>extract_instruction_version()</code> and <code>get_instruction_file_for_agent()</code> in <code>synlynk/instructions.py</code>, extracting canonical version tokens from both <code>synlynk:start</code> and <code>synlynk:harness</code> markers.</li>
+</ul>
+</li>
+<li><strong>Preflight Gate in <code>_preflight_dispatch</code>:</strong>
+<ul>
+<li>Fails closed with <code>INSTRUCTION_FILE_MISSING</code> if an instruction file for a Core 4 agent is absent in an initialized repo, unless explicitly bypassed with <code>--force-harness</code> / <code>--force-agent</code>.</li>
+</ul>
+</li>
+<li><strong>Closed-Loop Instruction Receipt Protocol:</strong>
+<ul>
+<li>In <code>synlynk/dispatch.py:_format_prompt_for_agent()</code>, prompts the agent to echo <code>SYNLYNK_INSTRUCTION_VERSION: &lt;version&gt;</code> without revealing the version string in the prompt text.</li>
+<li>The agent must genuinely inspect its loaded directive file to return the matching token.</li>
+</ul>
+</li>
+<li><strong>Log Analysis &amp; Advisory Signals:</strong>
+<ul>
+<li>In <code>synlynk/jobs.py</code>, added <code>_check_instruction_receipt()</code> to classify output as <code>ok</code>, <code>mismatch</code>, <code>none</code>, or <code>absent</code>.</li>
+<li>Wired into <code>_reconcile_jobs()</code> and <code>_reconcile_active_job()</code> to record telemetry and emit advisory sentinel alerts on convention drift.</li>
+</ul>
+</li>
+<li><strong>Comprehensive TDD Tests:</strong>
+<ul>
+<li>Added unit tests in <code>tests/test_instructions.py</code>, <code>tests/test_dispatch.py</code>, and <code>tests/test_jobs.py</code>.</li>
+<li>All 499 tests in <code>tests/test_synlynk.py</code> pass cleanly.</li>
+</ul>
+</li>
+</ol>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
