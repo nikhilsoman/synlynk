@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>synlynk | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date"></span>
+        
+      </div>
+      <h1 class="blog-post-title"></h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>PR #1279 — Eliminating Grok Headless Execution Cancellation via --always-approve</h1>
+<h2>Where we left off</h2>
+<p>Across issues #714, #880, #1038, and #1166 (LIVE-8), headless dispatches to Grok repeatedly aborted right before executing terminal actions (e.g. running pytest suites or executing `gh pr review`) with:
+```json
+&quot;stopReason&quot;: &quot;cancelled&quot;
+```
+Previous root-cause investigations concluded that this was an inscrutable upstream black-box cancellation by xAI or an external session timeout, and Grok was downgraded out of the `review` fallback policy in PR #1177.</p>
+<p>Earlier today, when Grok was assigned to review PR #1271 in `job-b3492d49`, it hit this exact cancellation on turn 4 while attempting to run its test suite.</p>
+<h2>The Root Cause: The `dontAsk` Trap</h2>
+<p>Deep forensic inspection of Grok session event logs (`events.jsonl`, `updates.jsonl`) and binary reverse-engineering (`crates/codegen/xai-grok-workspace/src/permission/`) uncovered the exact root cause:</p>
+<ol>
+<li>
+<p><strong>Tool Schema Mismatch:</strong>
+Grok's internal terminal execution tool is named `run_terminal_command`, whereas `synlynk/dispatch.py:_grok_permission_flags()` was attempting to map Claude tool names (`Bash`, `Edit`, `Write`).</p>
+</li>
+<li>
+<p><strong>The `dontAsk` Cancellation Trap:</strong>
+When a dispatch lacked all 5 full repo permissions (the standard for `review`, `qa`, or scoped `dev`), `dispatch.py` emitted `--permission-mode dontAsk`.
+Grok incorporates an internal shell AST splitter (`bash_command_splitting.rs`) and risk classifier (`exec_risk.rs`). When Grok generated compound commands (e.g. `python3 -m pytest ... ; echo &quot;FILTER_EXIT=$?&quot;`), the classifier required confirmation (`permission_requested`). Because `dontAsk` mode suppresses operator prompts, the resolver immediately issued `decision: &quot;cancelled&quot;` (~1ms wait time), which terminated the turn with `stopReason: &quot;cancelled&quot;` and `cancellationCategory: &quot;PermissionCancelled&quot;`.</p>
+</li>
+<li>
+<p><strong>Empirical Proof:</strong>
+We tested this against the Grok CLI: running compound commands under `--permission-mode dontAsk` reproduced `stopReason: &quot;cancelled&quot;` in a single turn. Running the exact same commands under `--always-approve` or `--permission-mode bypassPermissions` succeeded with `stopReason: &quot;end_turn&quot;` and exit code 0.</p>
+</li>
+</ol>
+<h2>What this PR shipped</h2>
+<p>Following the Design Spec (`docs/superpowers/specs/2026-08-30-grok-headless-permission-mode-design.md`) and Implementation Plan (`docs/superpowers/plans/2026-08-30-grok-headless-permission-mode.md`), PR #1279 was dispatched to Grok itself (`job-4ba2fb42`) to fix its own execution mode:</p>
+<ul>
+<li><strong>`synlynk/dispatch.py`:</strong>
+Updated `_grok_permission_flags()`: when `run:shell` or `run:tests` is present in the granted permission set, emit `[&quot;--always-approve&quot;]`, eliminating the fatal `dontAsk` auto-cancellation path.</li>
+<li><strong>`synlynk/_constants.py`:</strong>
+Added `--permission-mode` to Grok's `valid_flags`, and added `--always-approve` to `required_flags` for Grok headless dispatches.</li>
+<li><strong>Test Suite Updates:</strong>
+<ul>
+<li>Added `test_grok_permission_flags_emits_always_approve_when_shell_or_tests_granted` in `tests/test_dispatch.py`.</li>
+<li>Reconciled existing tests in `tests/test_synlynk.py` and `tests/test_agent_quota_tracking.py` to align with the new flag contract.</li>
+</ul>
+</li>
+<li><strong>Documentation:</strong>
+Updated `docs/harness-capability-baseline.md` to document the resolution of the historical cancellation pattern.</li>
+</ul>
+<h2>Review and Merge Flow</h2>
+<ul>
+<li><strong>Authorship:</strong> Implemented by Grok via `synlynk dispatch` (`job-4ba2fb42`, commit `41c8070`).</li>
+<li><strong>Review:</strong> Reviewed by Agy (`synlynk pr check` passed, all GitHub Actions CI checks passed green across Python 3.8, 3.10, 3.12, and `qa-gate`, formal review checklist posted).</li>
+<li><strong>Merge:</strong> Merged to `main` as `68a7bd4d311bb2ca9ff370cac92f33c6eedf2633`.</li>
+</ul>
+<h2>Where this leaves the fleet</h2>
+<p>Grok headless dispatch is now stabilized against the multi-command permission cancellation bug. With Codex unblocked and operating with full harness parity (PR #1275), and Grok headless cancellation resolved, synlynk now possesses robust multi-harness redundancy across all execution tracks.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
