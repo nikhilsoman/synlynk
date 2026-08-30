@@ -5,7 +5,7 @@ series: "Building the OS for Multi-Agent Development"
 post: 141
 pr: "#1308"
 issue: "#342"
-status: open
+merged: 2026-08-30
 ---
 
 # PR #1308 — Fleet Parity: Enforce --cwd for Grok and -C for Codex with Working-Directory Protection
