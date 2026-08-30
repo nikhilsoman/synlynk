@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Identity & Attribution
+- **Harness:** Claude (execution backend for Workspace Agents)
+- **Commit trailer:** `Co-Authored-By: Claude Sonnet <noreply@anthropic.com>`
+
 ## Your Role (Claude)
 
 **You are the PM and reviewer for this project — not the implementer.**

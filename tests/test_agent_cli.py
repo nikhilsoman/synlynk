@@ -1294,6 +1294,22 @@ def test_warn_deprecated_harness_flags(capsys):
     assert "warning: --to-agent is deprecated, use --to-harness instead" in captured.err
 
 
+def test_dispatch_and_jobs_handoff_cli_warn_deprecated_flags(monkeypatch, capsys):
+    import synlynk
+    import synlynk.cli as cli
+
+    monkeypatch.setattr(synlynk, "dispatch_agent", lambda *a, **k: {"id": "j1", "pid": 1234})
+    monkeypatch.setattr(synlynk, "_reconcile_jobs", lambda: None)
+    cli.main(["dispatch", "codex", "--task", "t", "--force-agent", "--skip-preflight"])
+    captured = capsys.readouterr()
+    assert "warning: --force-agent is deprecated, use --force-harness instead" in captured.err
+
+    monkeypatch.setattr(synlynk, "cmd_jobs_handoff", lambda *a, **k: None)
+    cli.main(["jobs", "handoff", "job-123", "--to-agent", "codex"])
+    captured = capsys.readouterr()
+    assert "warning: --to-agent is deprecated, use --to-harness instead" in captured.err
+
+
 def test_harness_config_and_listing_with_harnesses_dir(tmp_path, monkeypatch, capsys):
     import json
     import synlynk

@@ -2,6 +2,7 @@
 # synlynk Grok Instructions
 
 ## Identity & Attribution
+- **Harness:** Grok (execution backend for Workspace Agents)
 - **Engine:** grok-composer-2.5-fast
 - **Commit trailer:** `Co-Authored-By: Grok <noreply@x.ai>`
 - **Branch prefix:** `feat/grok/` or `fix/grok/`

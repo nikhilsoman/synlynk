@@ -1227,6 +1227,7 @@ def main(argv=None) -> None:
         else:
             sentinel_list()  # default: list
     elif args.command == "dispatch":
+        _warn_deprecated_harness_flag(cli_tokens)
         known_agents = sorted(HARNESS_CAPABILITY_BASELINES)
         try:
             resolved_agent_id = None
@@ -1342,6 +1343,7 @@ def main(argv=None) -> None:
         cmd_backfill_capability_ratings()
     elif args.command == "jobs":
         if getattr(args, "jobs_cmd", None) == "handoff":
+            _warn_deprecated_harness_flag(cli_tokens)
             cmd_jobs_handoff(args.job_id, to_agent=getattr(args, "to_agent", None))
         elif getattr(args, "jobs_cmd", None) == "reap":
             raise SystemExit(
