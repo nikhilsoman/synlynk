@@ -58,7 +58,7 @@ def test_daemon_paths_and_token_refresh_use_main_repo_from_worktree(tmp_path, mo
     monkeypatch.setattr(
         daemon_mod.github_app_auth,
         "refresh_installation_token",
-        lambda role, app_config: refreshed.append(role),
+        lambda role, app_config, apps_dir=None: refreshed.append(role),
     )
     monkeypatch.chdir(worktree)
 
@@ -87,7 +87,7 @@ def test_refresh_github_tokens_refreshes_each_provisioned_role(tmp_path, monkeyp
     import synlynk.daemon as daemon_mod
     monkeypatch.setattr(
         daemon_mod.github_app_auth, "refresh_installation_token",
-        lambda role, app_config: refreshed.append(role),
+        lambda role, app_config, apps_dir=None: refreshed.append(role),
     )
 
     WatchDaemon()._refresh_github_tokens()
@@ -109,7 +109,7 @@ def test_refresh_github_tokens_one_role_failure_does_not_block_others(tmp_path, 
     refreshed = []
     import synlynk.daemon as daemon_mod
 
-    def fake_refresh(role, app_config):
+    def fake_refresh(role, app_config, apps_dir=None):
         if role == "dev":
             raise RuntimeError("installation revoked")
         refreshed.append(role)
@@ -135,7 +135,7 @@ def test_refresh_github_tokens_skips_token_cache_files(tmp_path, monkeypatch):
     import synlynk.daemon as daemon_mod
     monkeypatch.setattr(
         daemon_mod.github_app_auth, "refresh_installation_token",
-        lambda role, app_config: refreshed.append(role),
+        lambda role, app_config, apps_dir=None: refreshed.append(role),
     )
 
     WatchDaemon()._refresh_github_tokens()
@@ -352,84 +352,113 @@ def test_synlynk_daemon_run_loop_refreshes_tokens_before_first_sleep(tmp_path, m
     assert refresh_calls == [1]
 
 
-def test_synlynk_daemon_start_does_not_refresh_in_foreground(tmp_path, monkeypatch):
+def test_daemonize_via_reexec_spawns_detached_subprocess(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    (tmp_path / ".synlynk").mkdir()
-
     import synlynk.daemon as daemon_mod
 
-    call_order = []
-    monkeypatch.setattr(daemon_mod.SynlynkDaemon, "_refresh_github_tokens", lambda self: call_order.append("refresh"))
-    monkeypatch.setattr(daemon_mod.SynlynkDaemon, "_run_loop", lambda self: call_order.append("run_loop"))
-    monkeypatch.setattr(daemon_mod.SynlynkDaemon, "_is_running", lambda self: False)
-    monkeypatch.setattr(os, "fork", lambda: 0)
-    monkeypatch.setattr(os, "setsid", lambda: None)
-    monkeypatch.setattr(os, "dup2", lambda source, target: None)
-    monkeypatch.setattr(os, "getpid", lambda: 12345)
+    captured = {}
 
-    daemon_mod.SynlynkDaemon().start()
+    class FakePopen:
+        def __init__(self, args, **kwargs):
+            captured["args"] = args
+            captured["kwargs"] = kwargs
 
-    assert call_order == ["run_loop"]
+    monkeypatch.setattr(daemon_mod.subprocess, "Popen", FakePopen)
+    logfile = str(tmp_path / "test.log")
+    daemon_mod._daemonize_via_reexec("synlynk.daemon._watch_daemon_child_main", logfile)
+
+    assert captured["args"] == [
+        daemon_mod.sys.executable, "-c",
+        "from synlynk.daemon import _watch_daemon_child_main; _watch_daemon_child_main()",
+    ]
+    assert captured["kwargs"]["start_new_session"] is True
+    assert captured["kwargs"]["close_fds"] is True
+    assert captured["kwargs"]["stdin"] == daemon_mod.subprocess.DEVNULL
+    assert captured["kwargs"]["stderr"] == daemon_mod.subprocess.STDOUT
+    assert captured["kwargs"]["env"]["_SYNLYNK_DAEMON_CHILD"] == "1"
+    assert os.path.exists(logfile)
 
 
-def test_synlynk_daemon_start_defers_refresh_until_post_fork_run_loop(tmp_path, monkeypatch):
+def test_watch_daemon_start_spawns_detached_child_and_returns_immediately(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".synlynk").mkdir()
-
     import synlynk.daemon as daemon_mod
-
-    call_order = []
-    monkeypatch.setattr(daemon_mod.SynlynkDaemon, "_refresh_github_tokens", lambda self: call_order.append("refresh"))
-    monkeypatch.setattr(daemon_mod.SynlynkDaemon, "_run_loop", lambda self: call_order.append("run_loop"))
-    monkeypatch.setattr(daemon_mod.SynlynkDaemon, "_is_running", lambda self: False)
-
-    fork_calls = []
-
-    def fake_fork():
-        assert call_order == []
-        fork_calls.append(1)
-        return 0
-
-    monkeypatch.setattr(os, "fork", fake_fork)
-    monkeypatch.setattr(os, "setsid", lambda: None)
-    monkeypatch.setattr(os, "dup2", lambda source, target: None)
-    monkeypatch.setattr(os, "getpid", lambda: 12345)
-
-    daemon_mod.SynlynkDaemon().start()
-
-    assert call_order == ["run_loop"]
-    assert len(fork_calls) == 2
-
-
-def test_watch_daemon_start_defers_refresh_until_post_fork_run_loop(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path)
-    (tmp_path / ".synlynk").mkdir()
-
-    import synlynk.daemon as daemon_mod
-
-    call_order = []
-    monkeypatch.setattr(daemon_mod.WatchDaemon, "_refresh_github_tokens", lambda self: call_order.append("refresh"))
-    monkeypatch.setattr(daemon_mod.WatchDaemon, "_run_loop", lambda self: call_order.append("run_loop"))
     monkeypatch.setattr(daemon_mod.WatchDaemon, "_is_running", lambda self: False)
-    monkeypatch.setattr(
-        daemon_mod,
-        "_pkg",
-        lambda name, default=None: (lambda state: None) if name == "set_state" else default,
-    )
+    daemon = daemon_mod.WatchDaemon()
+    captured = {}
 
-    fork_calls = []
+    class FakePopen:
+        def __init__(self, args, **kwargs):
+            captured["args"] = args
+            captured["kwargs"] = kwargs
 
-    def fake_fork():
-        assert call_order == []
-        fork_calls.append(1)
-        return 0
+    monkeypatch.setattr(daemon_mod.subprocess, "Popen", FakePopen)
+    daemon.start()
+    assert captured["args"] == [
+        daemon_mod.sys.executable, "-c",
+        "from synlynk.daemon import _watch_daemon_child_main; _watch_daemon_child_main()",
+    ]
 
-    monkeypatch.setattr(os, "fork", fake_fork)
-    monkeypatch.setattr(os, "setsid", lambda: None)
-    monkeypatch.setattr(os, "dup2", lambda source, target: None)
+
+def test_watch_daemon_child_main_writes_pidfile_then_runs_loop(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    import synlynk.daemon as daemon_mod
+    call_order = []
+    monkeypatch.setattr(daemon_mod, "_pkg", lambda name, default=None:
+                        (lambda state: call_order.append(f"set_state:{state}"))
+                        if name == "set_state" else default)
+    monkeypatch.setattr(daemon_mod.WatchDaemon, "_run_loop", lambda self: call_order.append("run_loop"))
     monkeypatch.setattr(os, "getpid", lambda: 12345)
+    daemon_mod._watch_daemon_child_main()
+    assert (tmp_path / ".synlynk" / "watch.pid").read_text() == "12345"
+    assert call_order == ["set_state:watching", "run_loop"]
 
-    daemon_mod.WatchDaemon().start()
 
+def test_synlynk_daemon_start_spawns_detached_child_and_returns_immediately(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    import synlynk.daemon as daemon_mod
+    monkeypatch.setattr(daemon_mod.SynlynkDaemon, "_is_running", lambda self: False)
+    daemon = daemon_mod.SynlynkDaemon()
+    captured = {}
+
+    class FakePopen:
+        def __init__(self, args, **kwargs):
+            captured["args"] = args
+            captured["kwargs"] = kwargs
+
+    monkeypatch.setattr(daemon_mod.subprocess, "Popen", FakePopen)
+    daemon.start()
+    assert captured["args"] == [
+        daemon_mod.sys.executable, "-c",
+        "from synlynk.daemon import _synlynk_daemon_child_main; _synlynk_daemon_child_main()",
+    ]
+
+
+def test_synlynk_daemon_child_main_writes_pidfile_and_start_file_then_runs_loop(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    import synlynk.daemon as daemon_mod
+    call_order = []
+    monkeypatch.setattr(daemon_mod.SynlynkDaemon, "_run_loop", lambda self: call_order.append("run_loop"))
+    monkeypatch.setattr(os, "getpid", lambda: 54321)
+    daemon_mod._synlynk_daemon_child_main()
+    assert (tmp_path / ".synlynk" / "daemon.pid").read_text() == "54321"
+    assert (tmp_path / ".synlynk" / "daemon.start").exists()
     assert call_order == ["run_loop"]
-    assert len(fork_calls) == 2
+
+
+def test_refresh_github_tokens_passes_apps_dir_through_to_refresh_call(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    apps_dir = tmp_path / ".synlynk" / "github_apps"
+    apps_dir.mkdir(parents=True)
+    (apps_dir / "dev.json").write_text(json.dumps({
+        "role": "dev", "app_id": "1", "installation_id": "10", "private_key_path": "dev.pem",
+    }))
+    calls = []
+    import synlynk.daemon as daemon_mod
+    monkeypatch.setattr(daemon_mod.github_app_auth, "refresh_installation_token",
+                        lambda role, app_config, apps_dir=None: calls.append((role, apps_dir)))
+    WatchDaemon()._refresh_github_tokens()
+    assert calls == [("dev", str(apps_dir))]
