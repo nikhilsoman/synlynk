@@ -125,6 +125,7 @@ def _log_has_permission_denied_signature(log_text: str) -> bool:
 
 
 _TASK_RECEIPT_MARKER_PREFIX = "SYNLYNK_TASK_RECEIVED:"
+_INSTRUCTION_RECEIPT_MARKER_PREFIX = "SYNLYNK_INSTRUCTION_VERSION:"
 
 
 def _check_task_receipt(log_text: str, task_sha256: Optional[str]) -> Optional[str]:
@@ -145,6 +146,28 @@ def _check_task_receipt(log_text: str, task_sha256: Optional[str]) -> Optional[s
         return "late"
     if lines[0].startswith(_TASK_RECEIPT_MARKER_PREFIX):
         return "mismatch"
+    return "absent"
+
+
+def _check_instruction_receipt(log_text: str, expected_version: Optional[str]) -> Optional[str]:
+    """Classifies instruction-receipt marker compliance in a job's log.
+
+    Returns one of 'ok', 'mismatch', 'none', 'absent', or None when the
+    check does not apply (empty log or no expected version).
+    """
+    if not log_text or not expected_version:
+        return None
+    lines = [ln.strip() for ln in log_text.splitlines() if ln.strip()]
+    if not lines:
+        return "absent"
+    for line in lines:
+        if line.startswith(_INSTRUCTION_RECEIPT_MARKER_PREFIX):
+            val = line[len(_INSTRUCTION_RECEIPT_MARKER_PREFIX):].strip()
+            if val.lower() == "none":
+                return "none"
+            if val == expected_version:
+                return "ok"
+            return "mismatch"
     return "absent"
 
 
@@ -1418,6 +1441,19 @@ def _reconcile_jobs() -> None:
                 task_delivery = _classify_task_delivery(receipt_status, has_corroborating_activity)
                 if task_delivery["hard_fail"]:
                     job["status"] = "task_delivery_failed"
+                instruction_receipt_status = _check_instruction_receipt(
+                    log_text, job.get("expected_instruction_version")
+                )
+                if instruction_receipt_status:
+                    job["instruction_receipt"] = instruction_receipt_status
+                    if instruction_receipt_status in ("mismatch", "none", "absent") and job.get("expected_instruction_version"):
+                        _write_sentinel_alert(
+                            "WARNING",
+                            "INSTRUCTION_LOAD_MISMATCH" if instruction_receipt_status == "mismatch" else "INSTRUCTION_LOAD_ABSENT",
+                            f"Job {job.get('id')} on agent '{job.get('agent')}' failed instruction verification: {instruction_receipt_status} "
+                            f"(expected '{job.get('expected_instruction_version')}').",
+                            sentinel_path,
+                        )
             if job.get("status") != "completed" and log_text:
                 log_text_lower = log_text.lower()
                 for phrase in _pkg("HARNESS_TIMEOUT_PATTERNS"):
@@ -1619,6 +1655,11 @@ def _reconcile_jobs() -> None:
                     task_delivery = _classify_task_delivery(receipt_status, has_corroborating_activity)
                     if task_delivery["hard_fail"]:
                         job["status"] = "task_delivery_failed"
+                    instruction_receipt_status = _check_instruction_receipt(
+                        log_text, job.get("expected_instruction_version")
+                    )
+                    if instruction_receipt_status:
+                        job["instruction_receipt"] = instruction_receipt_status
                 if job.get("status") != "completed":
                     log_text_lower = log_text.lower()
                     for phrase in _pkg("HARNESS_TIMEOUT_PATTERNS"):

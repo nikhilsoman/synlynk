@@ -1219,16 +1219,36 @@ def _render_task_receipt_instruction(task_sha256: Optional[str]) -> str:
     )
 
 
+def _render_instruction_receipt_instruction(instruction_file: Optional[str]) -> str:
+    """Returns a prompt-prepend block instructing the agent to confirm that
+    its project instruction file was loaded by echoing its version tag
+    (see #347 instruction-receipt protocol)."""
+    if not instruction_file:
+        return ""
+    return (
+        "## Instruction Receipt (required)\n"
+        f"Confirm that your project instruction file ({instruction_file}) is loaded.\n"
+        "Print this exact line as your second output line (immediately after SYNLYNK_TASK_RECEIVED if present):\n"
+        "SYNLYNK_INSTRUCTION_VERSION: <version>\n"
+        "where <version> is the version string from your instruction file (e.g. from `synlynk:start version=\"...\"` or `synlynk:harness ...`).\n"
+        "If no instruction file is loaded, print:\n"
+        "SYNLYNK_INSTRUCTION_VERSION: none\n\n"
+    )
+
+
 def _format_prompt_for_agent(agent: str, context_text: str, story_id: str,
                               task: str, file_section: str, verify_section: str,
                               cwd_hint: Optional[str] = None,
                               task_sha256: Optional[str] = None,
+                              instruction_file: Optional[str] = None,
                               *, requires_gh_write: bool = False) -> str:
     """Returns a prompt formatted for the agent's preferred input style."""
     requires_gh_write = bool(
         requires_gh_write or _task_requires_gh_write(task)
     )
     receipt_instruction = _render_task_receipt_instruction(task_sha256)
+    instruction_receipt = _render_instruction_receipt_instruction(instruction_file)
+    headers = f"{receipt_instruction}{instruction_receipt}"
     story_ref = f"\n\n## Story / Task Reference\nStory ID: {story_id}" if story_id else ""
     gh_write_instruction = ""
     if requires_gh_write:
@@ -1247,7 +1267,7 @@ def _format_prompt_for_agent(agent: str, context_text: str, story_id: str,
         sentences = [s.strip() for s in re.split(r"[.!?]", task) if s.strip()]
         criteria = "\n".join(f"- {s}" for s in sentences) if sentences else f"- {task}"
         return (
-            f"{receipt_instruction}"
+            f"{headers}"
             f"{gh_write_instruction}"
             f"## Task Criteria\n{criteria}\n"
             f"{file_section}\n"
@@ -1258,7 +1278,7 @@ def _format_prompt_for_agent(agent: str, context_text: str, story_id: str,
     if agent == "agy":
         working_dir = cwd_hint or os.getcwd()
         return (
-            f"{receipt_instruction}"
+            f"{headers}"
             f"{gh_write_instruction}"
             f"## Working Directory\n{working_dir}\n"
             f"All file edits MUST be in this directory.\n\n"
@@ -1271,7 +1291,7 @@ def _format_prompt_for_agent(agent: str, context_text: str, story_id: str,
     if agent == "grok":
         working_dir = cwd_hint or os.getcwd()
         return (
-            f"{receipt_instruction}"
+            f"{headers}"
             f"{gh_write_instruction}"
             f"## Working Directory\n{working_dir}\n"
             f"All file edits MUST be in this directory.\n\n"
@@ -1282,7 +1302,7 @@ def _format_prompt_for_agent(agent: str, context_text: str, story_id: str,
             f"{verify_section}\n"
         )
     return (
-        f"{receipt_instruction}"
+        f"{headers}"
         f"{gh_write_instruction}"
         f"{context_text}"
         f"{story_ref}"
@@ -2013,8 +2033,23 @@ def _preflight_dispatch(
     db_conn=None,
     _task_hint: str = "",
     permissions: Optional[list] = None,
+    force_agent: bool = False,
+    root: Optional[str] = None,
 ) -> dict:
     import socket as _socket
+    from synlynk._constants import CORE_FLEET as _CORE_FLEET, CORE_INSTRUCTION_FILES as _CORE_INSTRUCTION_FILES
+    from synlynk.fleet import repo_has_any_core_instruction_file
+
+    check_root = root or os.getcwd()
+    if harness_name in _CORE_FLEET and repo_has_any_core_instruction_file(check_root):
+        expected_file = _CORE_INSTRUCTION_FILES.get(harness_name)
+        if expected_file and not os.path.exists(os.path.join(check_root, expected_file)):
+            if not force_agent:
+                return {
+                    "passed": False,
+                    "sentinel": "INSTRUCTION_FILE_MISSING",
+                    "reason": f"Missing instruction file '{expected_file}' for Core 4 agent '{harness_name}' (LIVE-1 / #343 class error). Run synlynk init or pass --force-harness.",
+                }
 
     baseline = HARNESS_CAPABILITY_BASELINES.get(harness_name, {})
 
@@ -2547,6 +2582,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 db_conn=_preflight_db,
                 _task_hint=task,
                 permissions=permissions,
+                force_agent=force_agent,
             )
         except TypeError:
             try:
@@ -2675,6 +2711,21 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     verify_section = verify_contract(story_id, task) if (story_id and verify_contract) else ""
 
     task_sha256_for_receipt = hashlib.sha256(task.encode("utf-8")).hexdigest()
+    from synlynk.instructions import extract_instruction_version, get_instruction_file_for_agent
+
+    instruction_file = get_instruction_file_for_agent(agent)
+    expected_instruction_version = None
+    if instruction_file:
+        instr_path = os.path.join(worktree_path or os.getcwd(), instruction_file)
+        if not os.path.exists(instr_path):
+            instr_path = os.path.join(os.getcwd(), instruction_file)
+        if os.path.exists(instr_path):
+            try:
+                with open(instr_path, "r", encoding="utf-8") as _f:
+                    expected_instruction_version = extract_instruction_version(_f.read())
+            except Exception:
+                pass
+
     format_prompt = _pkg("_format_prompt_for_agent", _format_prompt_for_agent)
     try:
         prompt = format_prompt(
@@ -2686,6 +2737,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             verify_section,
             cwd_hint=worktree_path,
             task_sha256=task_sha256_for_receipt,
+            instruction_file=instruction_file,
             requires_gh_write=requires_gh_write,
         )
     except TypeError:
@@ -2865,6 +2917,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         "task_type": task_type or "",
         "agent_id": agent_id or "",
         "resolved_agent_role": resolved_agent_role or "",
+        "instruction_file": instruction_file or "",
+        "expected_instruction_version": expected_instruction_version or "",
+        "instruction_receipt": None,
     }
 
     load_jobs = _pkg("_load_jobs")

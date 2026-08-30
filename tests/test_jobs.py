@@ -76,6 +76,41 @@ def test_check_task_receipt_returns_none_for_empty_log_or_digest():
     assert jobs_mod._check_task_receipt("some log", None) is None
 
 
+def test_check_instruction_receipt_ok():
+    import synlynk.jobs as jobs_mod
+
+    log_text = "SYNLYNK_TASK_RECEIVED: abc123\nSYNLYNK_INSTRUCTION_VERSION: 0.13.0\nsome work"
+    assert jobs_mod._check_instruction_receipt(log_text, "0.13.0") == "ok"
+
+
+def test_check_instruction_receipt_mismatch():
+    import synlynk.jobs as jobs_mod
+
+    log_text = "SYNLYNK_TASK_RECEIVED: abc123\nSYNLYNK_INSTRUCTION_VERSION: 0.9.4\nsome work"
+    assert jobs_mod._check_instruction_receipt(log_text, "0.13.0") == "mismatch"
+
+
+def test_check_instruction_receipt_none_reported():
+    import synlynk.jobs as jobs_mod
+
+    log_text = "SYNLYNK_TASK_RECEIVED: abc123\nSYNLYNK_INSTRUCTION_VERSION: none\nsome work"
+    assert jobs_mod._check_instruction_receipt(log_text, "0.13.0") == "none"
+
+
+def test_check_instruction_receipt_absent():
+    import synlynk.jobs as jobs_mod
+
+    log_text = "SYNLYNK_TASK_RECEIVED: abc123\nsome work without instruction receipt"
+    assert jobs_mod._check_instruction_receipt(log_text, "0.13.0") == "absent"
+
+
+def test_check_instruction_receipt_empty():
+    import synlynk.jobs as jobs_mod
+
+    assert jobs_mod._check_instruction_receipt("", "0.13.0") is None
+    assert jobs_mod._check_instruction_receipt("some log", None) is None
+
+
 def test_classify_task_delivery_hard_fail_when_no_marker_and_no_activity():
     import synlynk.jobs as jobs_mod
 
