@@ -6,8 +6,8 @@ A nonfiction book grounded in synlynk's real build history and three sister proj
 
 ## Files
 
-- `the-supervised-machine-v0.3-DRAFT.html` — source of truth. Single-file, self-contained HTML (inline CSS, no external assets).
-- `the-supervised-machine-v0.3-DRAFT.pdf` — rendered output, regenerated from the HTML. Do not hand-edit the PDF.
+- `the-supervised-machine-v0.4-DRAFT.html` — source of truth. Single-file, self-contained HTML (inline CSS, no external assets).
+- `the-supervised-machine-v0.4-DRAFT.pdf` — rendered output, regenerated from the HTML. Do not hand-edit the PDF.
 
 ## Editorial history
 
@@ -18,13 +18,18 @@ repositioning: see `docs/superpowers/specs/2026-08-29-book-multiauthor-repositio
 for the chapter-ownership map and the live claude/codex/grok/agy consultation this design
 was based on.
 
+This draft also adds Part II ("The Onboarding"): see
+`docs/superpowers/specs/2026-08-29-book-multiauthor-repositioning-design.md` Section 4 for
+the lead/contributor split (Agy leads, Codex contributes a named practical recipe within
+the same chapter rather than a separate byline).
+
 ## Rebuilding the PDF
 
 ```bash
 "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
   --headless --disable-gpu --no-pdf-header-footer \
-  --print-to-pdf=docs/book/the-supervised-machine-v0.2-DRAFT.pdf \
-  "file://$(pwd)/docs/book/the-supervised-machine-v0.2-DRAFT.html"
+  --print-to-pdf=docs/book/the-supervised-machine-v0.4-DRAFT.pdf \
+  "file://$(pwd)/docs/book/the-supervised-machine-v0.4-DRAFT.html"
 ```
 
 Regenerate the PDF and commit both files together whenever the HTML changes — never let them drift. When cutting a new minor version, rename both files (`vX.Y-DRAFT`), update the cover/title/preface version strings in the HTML, and update this README.
