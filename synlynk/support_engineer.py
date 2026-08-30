@@ -155,15 +155,15 @@ def _install_cron_entry(name: str) -> None:
         return
     print(f"  [cron] Installed: {entry}")
 
-def cmd_agent_list() -> None:
-    """List .agents/ config files and their last run status."""
-    agents_dir = ".agents"
-    if not os.path.exists(agents_dir):
-        print("  No .agents/ directory found")
+def cmd_harness_list() -> None:
+    """List .harnesses/ or .agents/ config files and their last run status."""
+    harness_dir = ".harnesses" if os.path.exists(".harnesses") else (".agents" if os.path.exists(".agents") else ("harnesses" if os.path.exists("harnesses") else "agents"))
+    if not os.path.exists(harness_dir):
+        print("  No .harnesses/ or .agents/ directory found")
         return
-    files = [f for f in os.listdir(agents_dir) if f.endswith(".json")]
+    files = [f for f in os.listdir(harness_dir) if f.endswith(".json")]
     if not files:
-        print("  No agent configs in .agents/")
+        print(f"  No harness configs in {harness_dir}/")
         return
     conn = _pkg("_get_db")()
     for fname in sorted(files):
@@ -175,6 +175,11 @@ def cmd_agent_list() -> None:
         last_run = f"{row[0]}  status={row[1]}" if row else "never run"
         print(f"  {harness_name:<25}  {last_run}")
     conn.close()
+
+
+cmd_agent_list = cmd_harness_list
+cmd_harness_run = cmd_agent_run
+
 
 def _collect_test_suite(signal_cfg: dict) -> list:
     """Run pytest; return a high-severity finding if any test fails."""

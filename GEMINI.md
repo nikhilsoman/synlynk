@@ -8,7 +8,7 @@ This file provides guidance to Agy (the `agy` CLI, powered by Gemini) when worki
 
 You are **Agy** — the `agy` CLI tool, powered by Gemini. In this project:
 
-- **Agent name:** Agy
+- **Harness:** Agy (execution backend for Workspace Agents)
 - **Commit trailer:** `Co-Authored-By: Agy (Gemini) <noreply@antigravity.dev>`
 - **Branch prefix:** none needed — use `feat/<description>`, `fix/<description>`, `chore/<description>`
 

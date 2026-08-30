@@ -167,6 +167,8 @@ from synlynk.support_engineer import (
     _stalled_job_ids_from_sentinel,
     cmd_agent_list,
     cmd_agent_run,
+    cmd_harness_list,
+    cmd_harness_run,
 )
 from synlynk.context import (
     _append_vizor_notes,
@@ -1315,9 +1317,14 @@ def _check_verb_support(verb: str, harness_name: str, db_conn) -> dict:
 
 
 def _load_agent_config(name: str) -> dict:
-    """Load .agents/<name>.json. Raises FileNotFoundError with clear message."""
+    """Load .harnesses/<name>.json or .agents/<name>.json. Raises FileNotFoundError with clear message."""
     import json as _json
-    candidates = [os.path.join(".agents", f"{name}.json"), os.path.join("agents", f"{name}.json")]
+    candidates = [
+        os.path.join(".harnesses", f"{name}.json"),
+        os.path.join("harnesses", f"{name}.json"),
+        os.path.join(".agents", f"{name}.json"),
+        os.path.join("agents", f"{name}.json"),
+    ]
     path = next((candidate for candidate in candidates if os.path.exists(candidate)), candidates[0])
     if not os.path.exists(path):
         raise FileNotFoundError(f"No agent config found at {path}")
@@ -1331,6 +1338,8 @@ def _load_agent_profile(harness_name: str, agents_dir: str = ".agents") -> dict:
 
     candidates = [
         os.path.join(agents_dir, f"{harness_name}.json"),
+        os.path.join(".harnesses", f"{harness_name}.json"),
+        os.path.join("harnesses", f"{harness_name}.json"),
         os.path.join(".agents", f"{harness_name}.json"),
         os.path.join("agents", f"{harness_name}.json"),
     ]
@@ -2188,8 +2197,9 @@ def cmd_agent_configure(agent_name: str) -> None:
         print(f"  Unknown agent '{agent_name}'. Known: {list(HARNESS_CAPABILITY_BASELINES)}")
         return
 
-    os.makedirs(".agents", exist_ok=True)
-    path = os.path.join(".agents", f"{agent_name}.json")
+    harnesses_dir = ".harnesses" if os.path.exists(".harnesses") or not os.path.exists(".agents") else ".agents"
+    os.makedirs(harnesses_dir, exist_ok=True)
+    path = os.path.join(harnesses_dir, f"{agent_name}.json")
 
     existing = {}
     if os.path.exists(path):
@@ -2299,6 +2309,11 @@ def cmd_agent_add(agent_name: str) -> None:
         status = "skipped (up to date)" if probe_result.get("skipped") else probe_result.get("status", "unknown")
         print(f"  {_GREEN}✓{_RESET} probe [{agent_name}] {probe_result.get('version', 'unknown')} → {status}")
     print(f"  {_GREEN}✓{_RESET} onboarded {agent_name} from {cli_path}")
+
+
+cmd_harness_add = cmd_agent_add
+cmd_harness_configure = cmd_agent_configure
+
 
 
 def _run_daily_housekeeping() -> None:

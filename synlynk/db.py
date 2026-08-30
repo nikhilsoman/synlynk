@@ -382,15 +382,20 @@ def _normalize_org_domain_drift(conn: sqlite3.Connection) -> None:
             if row[0]
         ]
         for old_value, new_value in _ORG_DOMAIN_DRIFT_MAP.items():
-            conn.execute(
-                f"UPDATE {table} SET org_domain=? WHERE org_domain=?",
-                (new_value, old_value),
-            )
-        conn.execute(
-            f"UPDATE {table} SET org_domain='unknown' "
-            f"WHERE org_domain IS NULL OR org_domain = '' OR org_domain NOT IN ({placeholders})",
+            if conn.execute(f"SELECT 1 FROM {table} WHERE org_domain=? LIMIT 1", (old_value,)).fetchone():
+                conn.execute(
+                    f"UPDATE {table} SET org_domain=? WHERE org_domain=?",
+                    (new_value, old_value),
+                )
+        if conn.execute(
+            f"SELECT 1 FROM {table} WHERE org_domain IS NULL OR org_domain = '' OR org_domain NOT IN ({placeholders}) LIMIT 1",
             tuple(valid_org_values),
-        )
+        ).fetchone():
+            conn.execute(
+                f"UPDATE {table} SET org_domain='unknown' "
+                f"WHERE org_domain IS NULL OR org_domain = '' OR org_domain NOT IN ({placeholders})",
+                tuple(valid_org_values),
+            )
         if unknown_rows:
             print(
                 f"  ⚠ {table} org_domain values remapped to unknown: "

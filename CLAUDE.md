@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Identity & Attribution
+- **Harness:** Claude (execution backend for Workspace Agents)
+- **Commit trailer:** `Co-Authored-By: Claude Sonnet <noreply@anthropic.com>`
+
 ## Your Role (Claude)
 
 **You are the PM and reviewer for this project — not the implementer.**
@@ -13,7 +17,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | Deployments (`gh`, `pulumi up`, CI triggers) | CSS, JS, templates, CLI plumbing → Agy/Grok/Codex |
 | Dispatch prompts and context packaging | Canvas/animation work → Grok |
 
-Use `python3 -m synlynk dispatch <agent> --task "..." --force-agent --context-mode full` to hand off. Never implement features end-to-end yourself. Small (<10 line) inline examples to clarify a dispatch prompt are acceptable; full implementations are not.
+Use `python3 -m synlynk dispatch <harness> --task "..." --force-harness --context-mode full` to hand off. Never implement features end-to-end yourself. Small (<10 line) inline examples to clarify a dispatch prompt are acceptable; full implementations are not.
 
 ## What This Project Is
 

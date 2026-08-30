@@ -471,7 +471,7 @@ def _permissions_to_flags(agent: str, permissions: list) -> list:
     if agent == "codex":
         has_write = any((perm or "").startswith("write:") for perm in (permissions or []))
         flags = []
-        if not has_write:
+        if not has_write and _CODEX_NETWORK_PERMISSION not in (permissions or []):
             flags = ["-s", "read-only"]
         if _CODEX_NETWORK_PERMISSION in (permissions or []):
             flags += ["-c", "sandbox_workspace_write.network_access=true"]

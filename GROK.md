@@ -2,14 +2,15 @@
 # synlynk Grok Instructions
 
 ## Identity & Attribution
+- **Harness:** Grok (execution backend for Workspace Agents)
 - **Engine:** grok-composer-2.5-fast
 - **Commit trailer:** `Co-Authored-By: Grok <noreply@x.ai>`
 - **Branch prefix:** `feat/grok/` or `fix/grok/`
 
 ## Domain Ownership
-| Domain | Owned by this agent | Notes |
+| Domain | Owned by this harness | Notes |
 |:---|:---|:---|
-| TODO: fill domains for this agent | | |
+| TODO: fill domains for this harness | | |
 
 ## Git Worktree-First Policy
 Never commit directly to `main`/`master`. Create a dedicated worktree for every feature or fix:

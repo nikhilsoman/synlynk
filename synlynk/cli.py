@@ -152,6 +152,10 @@ def build_parser() -> argparse.ArgumentParser:
         cmd_agent_configure,
         cmd_agent_list,
         cmd_agent_run,
+        cmd_harness_add,
+        cmd_harness_configure,
+        cmd_harness_list,
+        cmd_harness_run,
         cmd_audit_docs,
         cmd_decide,
         cmd_doctor,
@@ -617,8 +621,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="Story/task ID for context labelling")
     dispatch_parser.add_argument("--issue", type=int, default=None,
         help="GitHub issue number to associate this dispatch with (auto-detected from #N in --task if omitted)")
-    dispatch_parser.add_argument("--force-agent", action="store_true", dest="force_agent",
-        help="Bypass capability routing — dispatch to the exact harness specified")
+    dispatch_parser.add_argument(
+        "--force-harness", "--force-agent", action="store_true", dest="force_agent",
+        help="Bypass capability routing — dispatch to the exact harness specified",
+    )
     dispatch_parser.add_argument("--static-baseline", action="store_true", dest="static_baseline",
         help="Bypass learned capability-score routing for this dispatch — use the "
              "deterministic static baseline pick instead (Phase 2, #914-adjacent)")
@@ -706,7 +712,8 @@ def build_parser() -> argparse.ArgumentParser:
     jobs_sub = jobs_parser.add_subparsers(dest="jobs_cmd")
     handoff_p = jobs_sub.add_parser("handoff", help="Transfer a stalled job to another harness")
     handoff_p.add_argument("job_id")
-    handoff_p.add_argument("--to", dest="to_agent", default=None)
+    handoff_p.add_argument("--to-harness", "--to-agent", "--to", dest="to_agent", default=None,
+        help="Harness to hand off the stalled job to")
     reap_p = jobs_sub.add_parser(
         "reap",
         help="Reap dead-PID daemon_jobs stuck in status=running (dry-run default; --apply writes)",
@@ -1029,6 +1036,10 @@ def build_parser() -> argparse.ArgumentParser:
 def _warn_deprecated_harness_flag(argv) -> None:
     if "--agent" in argv and "--harness" not in argv:
         print("  warning: --agent is deprecated, use --harness instead", file=sys.stderr)
+    if "--force-agent" in argv and "--force-harness" not in argv:
+        print("  warning: --force-agent is deprecated, use --force-harness instead", file=sys.stderr)
+    if "--to-agent" in argv and "--to-harness" not in argv:
+        print("  warning: --to-agent is deprecated, use --to-harness instead", file=sys.stderr)
 
 
 def main(argv=None) -> None:
@@ -1053,6 +1064,10 @@ def main(argv=None) -> None:
         cmd_agent_configure,
         cmd_agent_list,
         cmd_agent_run,
+        cmd_harness_add,
+        cmd_harness_configure,
+        cmd_harness_list,
+        cmd_harness_run,
         cmd_audit_docs,
         cmd_decide,
         cmd_doctor,
@@ -1212,6 +1227,7 @@ def main(argv=None) -> None:
         else:
             sentinel_list()  # default: list
     elif args.command == "dispatch":
+        _warn_deprecated_harness_flag(cli_tokens)
         known_agents = sorted(HARNESS_CAPABILITY_BASELINES)
         try:
             resolved_agent_id = None
@@ -1327,6 +1343,7 @@ def main(argv=None) -> None:
         cmd_backfill_capability_ratings()
     elif args.command == "jobs":
         if getattr(args, "jobs_cmd", None) == "handoff":
+            _warn_deprecated_harness_flag(cli_tokens)
             cmd_jobs_handoff(args.job_id, to_agent=getattr(args, "to_agent", None))
         elif getattr(args, "jobs_cmd", None) == "reap":
             raise SystemExit(

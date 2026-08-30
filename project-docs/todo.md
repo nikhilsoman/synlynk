@@ -22,6 +22,7 @@
 - [x] #1277 (PR #1279, merged `68a7bd4`, 2026-08-30) — Eliminate Grok headless cancellation failure by adopting `--always-approve`; root-caused `stopReason: cancelled` to Grok's internal shell AST parser auto-cancelling compound commands in `--permission-mode dontAsk`. Updated `_grok_permission_flags()` to emit `--always-approve` when `run:shell` or `run:tests` is granted, made `--always-approve` required in `_constants.py`. Implemented by Grok (`job-4ba2fb42`), reviewed/merged by Agy.
 - [x] #1283 (PR #1286, merged `f740ba1`, 2026-08-30) — Eliminate Agy headless 5m timeout, enable read-only plan mode, and capture prompt-cache tokens. Injected `--print-timeout 30m0s` on all headless Agy dispatches, mapped `read:*` permissions to `--mode plan`, and extracted `cache_read_tokens` from structured output (verified with 7.14M cached tokens). Implemented by Agy, reviewed/merged on main.
 - [x] #1284 (PR #1288, merged `b7e99e9`, 2026-08-30) — Align Claude baseline roles with PM/deploy governance SOP; updated `_constants.py` roles from `["architect", "builder"]` to `["architect", "pm"]`, updated `docs/harness-capability-baseline.md`. Implemented by Claude (`job-56f6ecec`), reviewed/merged on main.
+- [x] #1255 (PR #1306, 2026-08-30) — Standardize Harness vs. Workspace Agent separation across CLI flags, configs, and docs. Added canonical `--force-harness` and `--to-harness` flags (with backward-compatible deprecation aliases), enabled `.harnesses/` directory resolution, exported canonical `cmd_harness_*` functions, resolved SQLite lock contention during model discovery, and cleaned living strategy docs.
 
 ## Next Task
 - [ ] Fleet-parity remainder (only #342 and #347 of the original cluster are still open; #332/#338/#340/#348/#419/#461 all closed — see Recently Landed)
@@ -30,11 +31,11 @@
 - [ ] #937 — Review-dispatch job wrote to docs/ outside its read-only scope (job-0c924723, PR #933)
 - [ ] #1179 — Harness capability reassessment recurring cycle (parent/tracking; first cycle due ~25 jobs from creation or 2026-09-25)
 - [ ] #1213 — Automated live in-sandbox gh-write probe (re-scoped 2026-08-29 as concrete implementation under #1179, not a duplicate mechanism — see issue comment)
-- [ ] #1198 — [Tracking] Autonomous Operations Activation (5 children, all open: #1199, #1200, #1201, #1202, #1203)
+- [ ] #1198 — [Tracking] Autonomous Operations Activation (5 children: #1199, #1200, #1201, #1202 [done], #1203)
   - [ ] #1199 — Document corpus references used to derive charter content — **do before #1201**: this audit is what would catch/fix the still-unreconciled pm charter regression (competitive-intelligence-sweep/capability-gap-doc content overwritten with generic prose during an `agent edit pm` earlier, now stuck at revision 2, never restored) before it gets wired into live execution
   - [ ] #1200 — `synlynk doctor` check for agent underperformance (elevated PR review cycles)
   - [ ] #1201 — Wire charter content into dispatch/execution context (implements PR #1193's surfacing mechanism; charter content/structure design spec drafted, plan not yet written) — **blocked behind #1199**, see above
-  - [ ] #1202 — Standardize harness vs. agent terminology across codebase and docs
+  - [x] #1202 / #1255 — Standardize harness vs. agent terminology across codebase, CLI flags, configs, and docs (PR #1254, PR #1306)
   - [ ] #1203 — Design GOVERNS backlog automation (auto-associate discovered/open/planned work with issues) — needs brainstorm first
 - [ ] #1188 — pipx-installed synlynk drifts silently from repo VERSION until schema-mismatch crash
 - [ ] #1194 — `synlynk decide --record` writes decision docs to gitignored path once repo is 'migrated'
