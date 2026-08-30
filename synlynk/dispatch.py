@@ -376,6 +376,10 @@ def _grok_permission_flags(permissions: list) -> list:
     if not permission_set:
         return []
 
+    # Headless Grok auto-cancels compound shell in dontAsk (stopReason: cancelled).
+    if "run:shell" in permission_set or "run:tests" in permission_set:
+        return ["--always-approve"]
+
     if set(_GROK_PERMISSION_RULES).issubset(permission_set):
         return ["--always-approve"]
 

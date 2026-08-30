@@ -4103,7 +4103,7 @@ def test_dispatch_agent_claude_includes_dangerously_skip_permissions(project_dir
     assert "--dangerously-skip-permissions" in shell_cmd
 
 
-def test_grok_dispatch_omits_always_approve(project_dir, monkeypatch):
+def test_grok_dispatch_uses_always_approve(project_dir, monkeypatch):
     import synlynk as sl
     captured = {}
 
@@ -4137,10 +4137,8 @@ def test_grok_dispatch_omits_always_approve(project_dir, monkeypatch):
         pytest.xfail("requires Agy Task 1 — passes after feat/v0.9.7-grok-agy merges")
     sl.dispatch_agent("grok", "implement auth fix", story_id="14", force_agent=True)
     shell_cmd = captured["cmd"][2]
-    assert "--permission-mode dontAsk" in shell_cmd
-    assert "--always-approve" not in shell_cmd
-    assert "--allow Read" in shell_cmd
-    assert "Bash(pytest:*)" in shell_cmd
+    assert "--always-approve" in shell_cmd
+    assert "--permission-mode dontAsk" not in shell_cmd
     assert "--output-format json" in shell_cmd
 
 
@@ -4215,14 +4213,14 @@ def test_grok_dispatch_single_flag_placed_before_prompt(project_dir, monkeypatch
     sl.dispatch_agent("grok", "fix the login bug", story_id="99", force_agent=True)
     shell_cmd = captured["cmd"][2]
     # --single must appear after the Grok permission flags and directly before "$PROMPT"
-    assert "--permission-mode dontAsk" in shell_cmd
+    assert "--always-approve" in shell_cmd
+    assert "--permission-mode dontAsk" not in shell_cmd
     assert "--single" in shell_cmd
     single_pos = shell_cmd.index("--single")
     prompt_pos = shell_cmd.index('"$PROMPT"')
     assert single_pos < prompt_pos, "--single must come before $PROMPT"
-    perm_pos = shell_cmd.index("--permission-mode")
-    assert perm_pos < single_pos, "--permission-mode must come before --single"
-    assert "--always-approve" not in shell_cmd
+    approve_pos = shell_cmd.index("--always-approve")
+    assert approve_pos < single_pos, "--always-approve must come before --single"
 
 
 def test_agy_prompt_flag_split_from_non_interactive_flags():
@@ -7129,24 +7127,27 @@ def test_agent_capability_baselines_includes_grok():
     assert grok["cli"] == "grok"
     assert grok.get("prompt_flag") == "--single"
     assert "-p" not in grok.get("non_interactive_flags", [])
-    # Grok now derives permission mode from the resolved permission set.
+    # Headless Grok requires --always-approve to avoid dontAsk auto-cancel (#1277).
     assert "--always-approve" in grok["dispatch_flags"]["valid_flags"]
-    assert grok["dispatch_flags"]["required_flags"] == []
+    assert "--permission-mode" in grok["dispatch_flags"]["valid_flags"]
+    assert grok["dispatch_flags"]["required_flags"] == ["--always-approve"]
     assert "--yes" in grok["dispatch_flags"]["invalid_flags"]
     assert "cli-chat-proxy.grok.com:443" in grok["network_deps"]["required_endpoints"]
     assert "builder" in grok["roles"]
     assert "architect" in grok["roles"]
 
 
-def test_grok_baseline_no_longer_requires_always_approve():
-    # Grok no longer hardcodes always-approve as a required dispatch flag.
+def test_grok_baseline_requires_always_approve():
+    # Headless Grok requires --always-approve so compound shell is not auto-cancelled (#1277).
     from synlynk import HARNESS_CAPABILITY_BASELINES
     grok = HARNESS_CAPABILITY_BASELINES.get("grok", {})
     flags = grok.get("dispatch_flags", {})
     assert "--always-approve" in flags.get("valid_flags", []), \
         "--always-approve must be valid for Grok (--yes was dropped)"
-    assert flags.get("required_flags", []) == [], \
-        "Grok must not require --always-approve by default"
+    assert "--permission-mode" in flags.get("valid_flags", []), \
+        "--permission-mode must remain valid for bypassPermissions fallback"
+    assert flags.get("required_flags", []) == ["--always-approve"], \
+        "Grok must require --always-approve for headless dispatch"
     assert "--yes" in flags.get("invalid_flags", []), \
         "--yes must be invalid for Grok (it was dropped by Grok CLI)"
 

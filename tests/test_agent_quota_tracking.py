@@ -1026,6 +1026,13 @@ def test_phase_2_of_docssuperpowersplans20260730h_grok_role_permission_flags(rol
 
     permissions = _resolve_dispatch_permissions("grok", role_list=[role_name])
     flags = _permissions_to_flags("grok", permissions)
+    execution_granted = "run:shell" in permissions or "run:tests" in permissions
+
+    if execution_granted:
+        assert flags == ["--always-approve"]
+        assert "--permission-mode" not in flags
+        assert "dontAsk" not in flags
+        return
 
     assert flags[:2] == ["--permission-mode", "dontAsk"]
     assert "--always-approve" not in flags
