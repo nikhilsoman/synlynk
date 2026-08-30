@@ -1,4 +1,19 @@
 
+## 2026-08-30 — Full Fleet Harness Parity Achieved: Agy Headless Parity (PR #1286) & Claude Role Alignment (PR #1288)
+
+### Shipped
+- **Authoritative Reference Doc Landed (PR #1285):** Authored `docs/harness-parity-reference.md`, establishing the authoritative 4-harness capability matrix across Codex, Grok, Agy, and Claude, detailing interactive vs. headless parity dimensions, and scoping periodic checks for `synlynk doctor`.
+- **Agy Headless Parity Package (PR #1286, closes #1283):**
+  - **Eliminate 5-Minute Headless Timeout:** Root-caused recurring `Error: timeout waiting for response` (`HARNESS_INTERNAL_TIMEOUT` / #750, #162) to the Antigravity CLI's default `--print-timeout 5m0s`. Added `--print-timeout` to valid flags in `_constants.py` and dynamically injected `--print-timeout 30m0s` on all headless Agy dispatches.
+  - **Empirical Proof Captured Live:** Job `job-0341dfc9` ran under the pre-fix code, wrote all files, and timed out at exactly 318s with `"error": "timeout waiting for response"`, confirming the exact bug and simultaneously capturing 7.14M prompt cache tokens in telemetry!
+  - **Read-Only Plan Mode:** Replaced `PermissionEnforcementError` for `read:*` permissions in `_permissions_to_flags()` with native `["--mode", "plan"]`, unblocking Agy for read-only audits and reviews.
+  - **Capture Prompt Caching Telemetry:** In `synlynk/costs.py:_extract_agy_structured()`, extracted `cache_read_tokens` from `usage` instead of hardcoding 0.
+  - **Test Suite:** Added 5 new tests across `tests/test_dispatch.py`, `tests/test_agent_cli.py`, `tests/test_constants.py`, `tests/test_cost_ledger.py`, and `tests/test_costs.py`. All 731 tests passed green across Python 3.8, 3.10, 3.12, and QA Gate.
+- **Claude Baseline Role Alignment (PR #1288, closes #1284):**
+  - Updated `synlynk/_constants.py` to change Claude's baseline roles from `["architect", "builder"]` to `["architect", "pm"]`, resolving the standing contradiction with `CLAUDE.md` and `docs/harness-capability-baseline.md`.
+  - Dispatched implementation to Claude (`job-56f6ecec`, commit `cada628`), which updated `_constants.py`, `docs/harness-capability-baseline.md`, and added `test_claude_harness_alignment_update_baseline` in `tests/test_agent_cli.py`. Passed all 4 matrix CI checks.
+- **Blog Posts:** `docs/blog/137-pr1286-agy-headless-parity.md`, `docs/blog/138-pr1288-claude-harness-alignment.md`.
+
 ## 2026-08-30 — Eliminating Grok Headless Execution Cancellation via --always-approve (PR #1279, closes #1277)
 
 ### Shipped
