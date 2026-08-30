@@ -5,7 +5,7 @@ series: "Building the OS for Multi-Agent Development"
 post: 142
 pr: "#1309"
 issue: "#347"
-status: open
+status: merged
 ---
 
 # PR #1309 — Fleet Parity: Instruction File Preflight Check and Closed-Loop Receipt Verification
