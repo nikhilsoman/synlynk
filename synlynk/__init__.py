@@ -1037,6 +1037,21 @@ CREATE TABLE IF NOT EXISTS goal_contributions (
     UNIQUE(goal_id, story_id)
 );
 
+CREATE TABLE IF NOT EXISTS backlog_proposals (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    signal_hash      TEXT NOT NULL,
+    title            TEXT NOT NULL,
+    source           TEXT NOT NULL,
+    status           TEXT NOT NULL,
+    gh_issue_url     TEXT,
+    story_id         TEXT,
+    goal_id          TEXT,
+    goal_match_basis TEXT,
+    session_id       TEXT,
+    ts               TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_backlog_proposals_hash ON backlog_proposals(signal_hash);
+
 CREATE TABLE IF NOT EXISTS sessions (
     id               INTEGER PRIMARY KEY AUTOINCREMENT,
     session_id       TEXT NOT NULL UNIQUE,
