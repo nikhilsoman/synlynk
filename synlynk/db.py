@@ -85,7 +85,7 @@ _DISCIPLINES = (
     "docs",
 )
 
-_ROLES = ("architect", "dev", "pm", "tpm", "qa", "designer")
+_ROLES = ("architect", "dev", "pm", "tpm", "qa", "designer", "marketing")
 _STAGES = tuple(CYCLES)
 _ORG_DOMAIN_DRIFT_MAP = {
     "developer_experience": "platform",

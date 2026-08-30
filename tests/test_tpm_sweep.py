@@ -6,6 +6,12 @@ from synlynk.tpm_sweep import _ready_stories
 from synlynk.tpm_sweep import run_sweep_pass
 
 
+def test_cmd_story_create_accepts_marketing_role(isolated_db, project_dir):
+    story_id = cmd_story_create(title="marketing story", role="marketing")
+
+    assert story_id
+
+
 def test_run_sweep_pass_advances_authorized_story(isolated_db, project_dir):
     story_id = cmd_story_create(title="test story", story_id="story-1")
     cmd_story_ready(story_id)
