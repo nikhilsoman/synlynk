@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>synlynk | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date"></span>
+        
+      </div>
+      <h1 class="blog-post-title"></h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>PR #1275 — Granting Codex Full Harness Parity Across Review and GitHub-Write Tasks</h1>
+<h2>Where we left off</h2>
+<p>In PR #1271, we landed direct config-override network access (<code>-c sandbox_workspace_write.network_access=true</code>) for OpenAI Codex under <code>--requires-gh-write</code>. Immediately following that merge, we proved the capability empirically: in job <code>job-836e13a4</code>, Codex executed inside its sandboxed runner to inspect PR #1272, post an audit comment via <code>gh pr comment</code>, and close the PR via <code>gh pr close</code> under its role-scoped GitHub App identity (<code>synlynk-synlynk-qa</code>).</p>
+<p>However, Codex remained structurally prevented from receiving ordinary review or GitHub-write tasks due to a legacy 4-layer lockout that originated in issue #426. Any dispatch to Codex with <code>--requires-gh-write</code> would automatically warn and reroute the task to Claude (<code>rerouted_to = capable_agents[0]</code>), unless an operator manually passed <code>--force-agent</code>.</p>
+<p>Issue #1274 was opened to permanently remove this bypass and grant Codex full first-class harness parity across review and GitHub-write tasks.</p>
+<h2>The 4-Layer Lockout Dismantled</h2>
+<p>PR #1275 updated all four layers that previously restricted Codex:</p>
+<ol>
+<li>
+<p><strong>Core Capability Baselines (<code>synlynk/_constants.py</code>):</strong></p>
+<ul>
+<li>Flipped <code>HARNESS_CAPABILITY_BASELINES[&quot;codex&quot;][&quot;can_gh_write&quot;]</code> from <code>False</code> to <code>True</code>.</li>
+<li>Added <code>&quot;verifier&quot;</code> to Codex's baseline roles: <code>[&quot;builder&quot;, &quot;verifier&quot;]</code>.</li>
+<li>Updated <code>strengths</code> to include <code>&quot;pr review&quot;</code>.</li>
+</ul>
+</li>
+<li>
+<p><strong>Dispatch Auto-Rerouting (<code>synlynk/dispatch.py</code>):</strong></p>
+<ul>
+<li>With <code>can_gh_write: True</code>, <code>dispatch_agent(&quot;codex&quot;, ..., requires_gh_write=True)</code> no longer triggers the #426 capability gate rerouting.</li>
+<li>Codex dispatches proceed natively to execution without requiring <code>--force-agent</code> or emitting capability warnings.</li>
+</ul>
+</li>
+<li>
+<p><strong>Fleet Policy &amp; SOP Generation (<code>.synlynk/policy.json</code>, <code>synlynk/policy.py</code>, <code>synlynk/probe.py</code>):</strong></p>
+<ul>
+<li>Updated <code>.synlynk/policy.json</code> and <code>synlynk/policy.py</code>:
+<ul>
+<li><code>&quot;review&quot;: {&quot;harness&quot;: &quot;codex&quot;, &quot;fallback&quot;: [&quot;claude&quot;, &quot;agy&quot;]}</code></li>
+<li><code>&quot;gh_write&quot;: {&quot;harness&quot;: &quot;codex&quot;, &quot;fallback&quot;: [&quot;claude&quot;, &quot;agy&quot;]}</code></li>
+</ul>
+</li>
+<li>Updated <code>synlynk/probe.py</code> so initialized instruction tables dynamically route GitHub-write tasks to Codex by default, preventing future doc updates from reverting to Claude-only routing.</li>
+</ul>
+</li>
+<li>
+<p><strong>Living Baseline Records &amp; Directives:</strong></p>
+<ul>
+<li>Updated <code>docs/harness-capability-baseline.md</code> to classify Codex as <strong>Reliable</strong> for both headless GitHub writes and non-authoring PR reviews.</li>
+<li>Updated <code>CLAUDE.md</code>, <code>AGENTS.md</code>, and <code>GEMINI.md</code> to align all agent instructions with the new fleet allocation.</li>
+</ul>
+</li>
+</ol>
+<h2>Test-Driven Development &amp; Verification</h2>
+<p>The changes were backed by unit tests verifying the new behavior:</p>
+<ul>
+<li><code>test_can_gh_write_baselines_match_live_verified_reality</code> in <code>tests/test_synlynk.py</code> asserting <code>can_gh_write</code> is <code>True</code> for Codex.</li>
+<li><code>test_dispatch_agent_requires_gh_write_allows_codex_without_reroute</code> in <code>tests/test_dispatch.py</code> asserting dispatch does not reroute or warn.</li>
+<li><code>test_codex_harness_baseline_includes_verifier_role_and_can_gh_write</code> in <code>tests/test_agent_cli.py</code>.</li>
+<li>Updated <code>test_dispatch_agent_requires_gh_write_force_agent_warns_and_proceeds</code> to target <code>grok</code> (the only remaining harness lacking headless shell writes).</li>
+</ul>
+<p>All 2,349 tests passed cleanly across Python 3.8, 3.10, and 3.12 CI runners.</p>
+<h2>Review and Merge Flow</h2>
+<ul>
+<li><strong>Authorship:</strong> Implemented by Codex via <code>synlynk dispatch</code> (<code>job-6144fa68</code> on base <code>feat/1274-codex-full-harness-parity</code>).</li>
+<li><strong>Review:</strong> Reviewed by Agy (<code>synlynk pr check</code> passed, test verification verified green, approval review posted).</li>
+<li><strong>Merge:</strong> Merged to <code>main</code> as <code>582b0f1153498c72aa4747a1dd242b52d9c47321</code>.</li>
+</ul>
+<h2>Where this leaves the long-arc goal</h2>
+<p>OpenAI Codex is now an authorized, capable, and trusted first-class harness for all coding, testing, reviewing, and GitHub-write tasks across the synlynk fleet. With Claude currently constrained by quota and Grok undergoing headless permission mode stabilization, Codex provides critical resilience and execution bandwidth for autonomous operations.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
