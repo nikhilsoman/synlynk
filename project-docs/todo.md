@@ -35,7 +35,7 @@
   - [ ] #1199 — Document corpus references used to derive charter content — **do before #1201**: this audit is what would catch/fix the still-unreconciled pm charter regression (competitive-intelligence-sweep/capability-gap-doc content overwritten with generic prose during an `agent edit pm` earlier, now stuck at revision 2, never restored) before it gets wired into live execution
   - [ ] #1200 — `synlynk doctor` check for agent underperformance (elevated PR review cycles)
   - [ ] #1201 — Wire charter content into dispatch/execution context (implements PR #1193's surfacing mechanism; charter content/structure design spec drafted, plan not yet written) — **blocked behind #1199**, see above
-  - [x] #1202 / #1255 — Standardize harness vs. agent terminology across codebase, CLI flags, configs, and docs (PR #1254, PR #1306)
+  - [x] #1202 / #1255 — Standardize harness vs. agent terminology across codebase, CLI flags, configs, and docs (PR #1254, PR #1306); follow-up DB migration filed as #1307 / story-043eb9ee
   - [ ] #1203 — Design GOVERNS backlog automation (auto-associate discovered/open/planned work with issues) — needs brainstorm first
 - [ ] #1188 — pipx-installed synlynk drifts silently from repo VERSION until schema-mismatch crash
 - [ ] #1194 — `synlynk decide --record` writes decision docs to gitignored path once repo is 'migrated'
