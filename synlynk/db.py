@@ -97,7 +97,7 @@ _PROJECT_DOC_KEEP_N = 50
 # Bump when a new schema migration is added.  This is deliberately kept in
 # SQLite's small built-in metadata slot so checking it does not touch the DB
 # file or create a backup on already-migrated connections.
-_DB_MIGRATION_VERSION = 3
+_DB_MIGRATION_VERSION = 4
 
 _GENERATORS_BY_FILENAME = {
     "todo.md": "_generate_todo_md",
