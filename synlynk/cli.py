@@ -899,6 +899,28 @@ def build_parser() -> argparse.ArgumentParser:
     grant_parser.add_argument("--expires", default=None, help="ISO8601 expiry date, optional")
     grant_parser.add_argument("--note", default=None, help="Free-text note")
 
+    backlog_parser = subparsers.add_parser("backlog", help="GOVERNS backlog automation commands")
+    backlog_sub = backlog_parser.add_subparsers(dest="backlog_action")
+    backlog_capture_parser = backlog_sub.add_parser("capture", help="Stage newly discovered work into backlog")
+    backlog_capture_parser.add_argument("--title", required=True, help="Title of discovered work")
+    backlog_capture_parser.add_argument("--description", default="", help="Detailed description")
+    backlog_capture_parser.add_argument("--role", default="dev", help="Assigned role (dev, qa, pm, etc.)")
+    backlog_capture_parser.add_argument("--stage", default="open", help="GOVERNS stage (open, sustain, etc.)")
+    backlog_capture_parser.add_argument("--source-type", default="manual", dest="source_type")
+    backlog_capture_parser.add_argument("--source-ref", default="", dest="source_ref")
+    backlog_capture_parser.add_argument("--priority", type=int, default=5)
+    backlog_capture_parser.add_argument("--sync-gh", action="store_true", dest="sync_gh")
+    backlog_capture_parser.add_argument("--parent", type=int, default=None, dest="parent_issue")
+
+    backlog_list_parser = backlog_sub.add_parser("list", help="List staged and discovered backlog items")
+    backlog_list_parser.add_argument("--stage", default=None, help="Filter by GOVERNS stage")
+    backlog_list_parser.add_argument("--unfiled", action="store_true", help="Only show unfiled items (no gh_issue)")
+
+    backlog_sync_parser = backlog_sub.add_parser("sync", help="Synchronize staged backlog items to GitHub issues")
+    backlog_sync_parser.add_argument("--dry-run", action="store_true", help="Dry run without creating real issues")
+    backlog_sync_parser.add_argument("--parent", type=int, default=None, dest="parent_issue")
+    backlog_sync_parser.add_argument("--stage", default=None, help="Filter by GOVERNS stage")
+
     quota_parser = subparsers.add_parser(
         "quota",
         help="Show per-harness quota headroom / reset windows (5h, hourly, daily, weekly, monthly)",
@@ -1458,6 +1480,51 @@ def main(argv=None) -> None:
             except ValueError as e:
                 print(f"Error: {e}")
                 sys.exit(1)
+    elif args.command == "backlog":
+        if args.backlog_action == "capture":
+            from synlynk.backlog import stage_discovered_work
+            res = stage_discovered_work(
+                title=args.title,
+                description=args.description,
+                role=args.role,
+                stage=args.stage,
+                source_type=args.source_type,
+                source_ref=args.source_ref,
+                priority=args.priority,
+                sync_gh=args.sync_gh,
+                parent_issue=args.parent_issue,
+            )
+            if res.get("staged"):
+                print(f"✓ Staged backlog item {res['story_id']}: '{res['title']}' (stage: {res['stage']}, role: {res['role']})")
+                if res.get("gh_issue"):
+                    print(f"  GitHub issue #{res['gh_issue']} created")
+            else:
+                print(f"  ⚠ Did not stage item: {res.get('reason')} (fingerprint: {res.get('fingerprint', '')})")
+        elif args.backlog_action == "list":
+            from synlynk.backlog import list_staged_backlog
+            items = list_staged_backlog(stage=args.stage, unfiled_only=args.unfiled)
+            if not items:
+                print("No staged backlog items found.")
+            else:
+                print(f"{'STORY ID':<16} {'STAGE':<10} {'ROLE':<8} {'ISSUE':<8} {'TITLE'}")
+                print("─" * 70)
+                for it in items:
+                    gh = f"#{it['gh_issue']}" if it.get("gh_issue") else "—"
+                    print(f"{it['story_id']:<16} {it['stage']:<10} {it['role']:<8} {gh:<8} {it['title']}")
+        elif args.backlog_action == "sync":
+            from synlynk.backlog import sync_backlog_to_github
+            synced = sync_backlog_to_github(dry_run=args.dry_run, parent_issue=args.parent_issue, stage=args.stage)
+            if not synced:
+                print("No unfiled backlog items to sync.")
+            else:
+                for it in synced:
+                    action = it.get("action", "")
+                    if action == "created_issue":
+                        print(f"✓ Created issue #{it['gh_issue']} for {it['story_id']}: '{it['title']}'")
+                    elif action == "dry_run_sync":
+                        print(f"[dry-run] Would create issue for {it['story_id']}: '{it['title']}' (stage: {it['stage']}, role: {it['role']})")
+                    else:
+                        print(f"✗ Failed to sync {it['story_id']}: '{it['title']}'")
     elif args.command == "policy" and args.policy_command == "show":
         sys.exit(cmd_policy_show())
     elif args.command == "policy" and args.policy_command == "check-merge":
