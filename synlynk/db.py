@@ -2041,8 +2041,11 @@ def _detect_hand_edit(filename: str) -> str | None:
     except Exception:
         regenerated_content = None
     finally:
-        with open(file_path, "w") as f:
-            f.write(working_tree_content)
+        try:
+            with open(file_path, "w") as f:
+                f.write(working_tree_content)
+        except OSError:
+            pass
 
     if regenerated_content is None:
         return None

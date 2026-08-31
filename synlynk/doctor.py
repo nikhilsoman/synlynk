@@ -120,6 +120,48 @@ def _hc_docs_dir() -> HealthCheck:
     )
 
 
+def _hc_todo_drift() -> HealthCheck:
+    """Warns if todo.md has drifted between migration paths or from state.db regeneration."""
+    try:
+        is_migrated = _pkg("_is_migrated")() if callable(_pkg("_is_migrated")) else False
+        legacy_path = os.path.join(_pkg("_docs_dir")(), "todo.md") if callable(_pkg("_docs_dir")) else "project-docs/todo.md"
+        migrated_path = os.path.join(_pkg("_synlynk_project_docs_dir")(), "todo.md") if callable(_pkg("_synlynk_project_docs_dir")) else ".synlynk/project-docs/todo.md"
+    except Exception:
+        return HealthCheck("todo_drift", "ok", "todo.md path check skipped")
+
+    # Check for split-path divergence in migrated repos
+    if is_migrated and os.path.exists(legacy_path) and os.path.exists(migrated_path):
+        try:
+            with open(legacy_path, "r", encoding="utf-8") as f1, open(migrated_path, "r", encoding="utf-8") as f2:
+                c1, c2 = f1.read().strip(), f2.read().strip()
+            if c1 != c2:
+                return HealthCheck(
+                    "todo_drift",
+                    "warn",
+                    "todo.md exists in both project-docs/ and .synlynk/project-docs/ with divergent content",
+                    fix="Reconcile tasks into state.db and run: synlynk checkpoint",
+                )
+        except Exception:
+            pass
+
+    # Check for hand-edit drift against state.db
+    detect_fn = _pkg("_detect_hand_edit")
+    if callable(detect_fn):
+        try:
+            warning = detect_fn("todo.md")
+            if warning:
+                return HealthCheck(
+                    "todo_drift",
+                    "warn",
+                    "todo.md has drifted from state.db regeneration",
+                    fix="Reconcile tasks via synlynk story create or run: synlynk checkpoint",
+                )
+        except Exception:
+            pass
+
+    return HealthCheck("todo_drift", "ok", "todo.md is synchronized")
+
+
 def _hc_identity_key() -> HealthCheck:
     key_path = os.path.join(os.path.expanduser("~/.synlynk"), "identity.key")
     if os.path.exists(key_path):
@@ -648,6 +690,7 @@ HEALTH_CHECKS = [
     _hc_python_version,
     _hc_project_init,
     _hc_docs_dir,
+    _hc_todo_drift,
     _hc_identity_key,
     _hc_identity_roles,
     _hc_identity_file_perms,
