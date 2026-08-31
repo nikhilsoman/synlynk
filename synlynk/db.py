@@ -97,7 +97,7 @@ _PROJECT_DOC_KEEP_N = 50
 # Bump when a new schema migration is added.  This is deliberately kept in
 # SQLite's small built-in metadata slot so checking it does not touch the DB
 # file or create a backup on already-migrated connections.
-_DB_MIGRATION_VERSION = 4
+_DB_MIGRATION_VERSION = 5
 
 _GENERATORS_BY_FILENAME = {
     "todo.md": "_generate_todo_md",
@@ -445,6 +445,30 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
                 conn.execute("ALTER TABLE stories ADD COLUMN goal_id TEXT REFERENCES goals(goal_id)")
             except sqlite3.OperationalError:
                 pass
+        if "fingerprint" not in story_cols:
+            try:
+                conn.execute("ALTER TABLE stories ADD COLUMN fingerprint TEXT")
+            except sqlite3.OperationalError:
+                pass
+        if "source_type" not in story_cols:
+            try:
+                conn.execute("ALTER TABLE stories ADD COLUMN source_type TEXT")
+            except sqlite3.OperationalError:
+                pass
+        if "source_ref" not in story_cols:
+            try:
+                conn.execute("ALTER TABLE stories ADD COLUMN source_ref TEXT")
+            except sqlite3.OperationalError:
+                pass
+        if "governs_stage" not in story_cols:
+            try:
+                conn.execute("ALTER TABLE stories ADD COLUMN governs_stage TEXT NOT NULL DEFAULT 'open'")
+            except sqlite3.OperationalError:
+                pass
+        try:
+            conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_stories_fingerprint ON stories(fingerprint) WHERE fingerprint IS NOT NULL")
+        except sqlite3.OperationalError:
+            pass
         conn.execute(
             "UPDATE stories SET discipline = COALESCE(NULLIF(discipline, ''), NULLIF(engg_domain, ''), 'backend') "
             "WHERE discipline IS NULL OR discipline = ''"

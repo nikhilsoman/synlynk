@@ -170,6 +170,18 @@ from synlynk.support_engineer import (
     cmd_harness_list,
     cmd_harness_run,
 )
+from synlynk.backlog import (
+    check_duplicate,
+    compute_fingerprint,
+    list_staged_backlog,
+    stage_discovered_work,
+    sync_backlog_to_github,
+)
+from synlynk.backlog_extractor import (
+    extract_from_devlog_content,
+    extract_from_doctor_failures,
+    extract_from_job_summary,
+)
 from synlynk.charter_injection import (
     CharterInjectionError,
     render_charter_section,
@@ -929,6 +941,11 @@ CREATE TABLE IF NOT EXISTS stories (
     legacy_unmapped INTEGER NOT NULL DEFAULT 0,
     priority      INTEGER NOT NULL DEFAULT 5,
     readiness     TEXT NOT NULL DEFAULT 'draft',
+    fingerprint   TEXT UNIQUE,
+    source_type   TEXT,
+    source_ref    TEXT,
+    governs_stage TEXT DEFAULT 'open',
+    gh_issue      TEXT,
     archived_at   TIMESTAMP,
     created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -2970,6 +2987,22 @@ def checkpoint() -> None:
         _generate_todo_md()
 
     _archive_old_devlog_entries(devlog_path, canonical_id)
+    if os.path.exists(devlog_path):
+        try:
+            with open(devlog_path, "r", encoding="utf-8") as _df:
+                _devlog_text = _df.read()
+            _discovered = extract_from_devlog_content(_devlog_text, author=canonical_id)
+            for _d in _discovered:
+                stage_discovered_work(
+                    title=_d["title"],
+                    description=_d.get("description", ""),
+                    role=_d.get("role", "dev"),
+                    stage=_d.get("stage", "open"),
+                    source_type=_d.get("source_type", "devlog"),
+                    source_ref=_d.get("source_ref", f"devlog:{canonical_id}"),
+                )
+        except Exception:
+            pass
     generate_context()
 
     completed_ids = [t["id"] for t in completed if t["id"]]
