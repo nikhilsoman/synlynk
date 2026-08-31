@@ -5,7 +5,7 @@ series: "Building the OS for Multi-Agent Development"
 post: 143
 pr: "#1310"
 issue: "#573"
-status: open
+status: merged
 ---
 
 # PR #1310 — Fleet Parity: Agy Stitch MCP Integration, Diagnostics, and Prompt Guidance
