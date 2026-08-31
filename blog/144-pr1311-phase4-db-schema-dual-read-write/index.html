@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #1311 — Harness vs. Agent Separation Phase 4: Database Schema Dual-Read / Dual-Write | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Aug 31, 2026</span>
+        
+          <span class="blog-post-pr">PR #1311</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #1311 — Harness vs. Agent Separation Phase 4: Database Schema Dual-Read / Dual-Write</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>PR #1311 — Harness vs. Agent Separation Phase 4: Database Schema Dual-Read / Dual-Write</h1>
+<h2>The Broader Goal</h2>
+<p>Following the architecture established in <code>docs/superpowers/specs/2026-08-30-harness-agent-separation-design.md</code>, synlynk distinguishes two distinct concepts that were previously conflated under the <code>agent</code> column:</p>
+<ol>
+<li><strong>Compute Harnesses:</strong> The execution runtimes (<code>claude</code>, <code>codex</code>, <code>grok</code>, <code>agy</code>, <code>local</code>).</li>
+<li><strong>Workspace Agents:</strong> The organizational charter roles (<code>pm</code>, <code>architect</code>, <code>tpm</code>, <code>dev</code>, <code>designer</code>, <code>qa</code>, <code>marketing</code>).</li>
+</ol>
+<p>Phase 4 (Issue #1307 / Story <code>story-043eb9ee</code>) migrates synlynk's persistent database schema and query surfaces to support this distinction while maintaining 100% backward compatibility via dual-read and dual-write semantics.</p>
+<h2>What Was Missing &amp; Root Cause</h2>
+<p>Previously:</p>
+<ul>
+<li><code>daemon_jobs</code> and <code>cost_entries</code> only stored an <code>agent</code> column. When a job was dispatched for role <code>dev</code> on harness <code>codex</code>, the database recorded <code>agent=&quot;codex&quot;</code>, discarding or entangling the role dimension.</li>
+<li>Cost aggregation functions could only group by <code>agent</code>, preventing cost breakdowns along the two real axes: compute runtime spend vs. team function / role spend.</li>
+<li>Schema migrations needed to gracefully handle existing SQLite ledgers and linked worktrees without locking contention.</li>
+</ul>
+<h2>What Shipped</h2>
+<ol>
+<li>
+<p><strong>Database Schema &amp; Version 3 Migration (<code>synlynk/db.py</code>, <code>synlynk/__init__.py</code>):</strong></p>
+<ul>
+<li>Bumped <code>_DB_MIGRATION_VERSION = 3</code>.</li>
+<li>Added <code>harness TEXT</code> and <code>role TEXT</code> columns to <code>daemon_jobs</code>.</li>
+<li>Added <code>harness TEXT</code> and <code>agent_role TEXT</code> columns to <code>cost_entries</code>.</li>
+<li>Executed backfill migrations (<code>UPDATE ... SET harness = agent</code>) and created dedicated indexes (<code>idx_daemon_jobs_harness</code>, <code>idx_cost_entries_harness</code>, <code>idx_cost_entries_agent_role</code>).</li>
+<li>Added <code>get_costs_by_harness()</code> and <code>get_costs_by_agent_role()</code> query helpers.</li>
+<li>Updated <code>_insert_cost_row()</code> with dual-write semantics and role fallback lookups from <code>stories</code> or <code>daemon_jobs</code>.</li>
+</ul>
+</li>
+<li>
+<p><strong>Dispatch &amp; Jobs Layer Dual-Write (<code>synlynk/dispatch.py</code>, <code>synlynk/jobs.py</code>, <code>synlynk/costs.py</code>):</strong></p>
+<ul>
+<li>Added <code>_ensure_daemon_job_harness_columns()</code> for resilient runtime migrations across linked worktrees.</li>
+<li>Populated <code>harness</code> and <code>role</code> across <code>daemon_jobs</code> (INSERT / UPDATE) and in-memory job dictionaries.</li>
+<li>Forwarded <code>harness</code> and <code>agent_role</code> through <code>update_costs()</code>, <code>_reconcile_jobs()</code>, <code>_reconcile_daemon_jobs()</code>, and <code>_ensure_daemon_job_cost_entry()</code>.</li>
+<li>Unified connection management in <code>dispatch_agent()</code> to eliminate SQLite lock contentions during single-threaded capability sweeps and quota gating.</li>
+</ul>
+</li>
+<li>
+<p><strong>Comprehensive Tests:</strong></p>
+<ul>
+<li>Added migration tests in <code>tests/test_migrate.py</code>.</li>
+<li>Added cost entry schema and insertion tests in <code>tests/test_cost_ledger.py</code>.</li>
+<li>Added dispatch persistence tests in <code>tests/test_dispatch.py</code>.</li>
+<li>Verified full repository test suite: <strong>2405 passed, 2 skipped</strong>.</li>
+</ul>
+</li>
+</ol>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
