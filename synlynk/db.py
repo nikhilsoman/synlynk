@@ -2254,9 +2254,8 @@ def cmd_devlog_append(author: str, entry_date: str, body: str,
 
 def _write_decision_record_md(decision_id: str) -> None:
     """Regenerate the .md + .json sidecar for a decision from the decisions table.
-    Post-migration: writes to .synlynk/project-docs/decisions/.
-    Pre-migration: writes to project-docs/decisions/."""
-    from synlynk import _docs_dir, _get_db, _is_migrated, _synlynk_project_docs_dir
+    Writes to project-docs/decisions/ (git-tracked)."""
+    from synlynk import _docs_dir, _get_db
 
     conn = _get_db()
     row = conn.execute(
@@ -2269,13 +2268,8 @@ def _write_decision_record_md(decision_id: str) -> None:
     panel = json.loads(panel_json)
     inputs = json.loads(inputs_json)
 
-    if _is_migrated():
-        decisions_dir = os.path.join(_synlynk_project_docs_dir(), "decisions")
-    else:
-        docs_dir = _docs_dir()
-        if not os.path.exists(docs_dir):
-            return
-        decisions_dir = os.path.join(docs_dir, "decisions")
+    docs_dir = _docs_dir()
+    decisions_dir = os.path.join(docs_dir, "decisions")
     os.makedirs(decisions_dir, exist_ok=True)
 
     slug = re.sub(r'[^a-z0-9]+', '-', topic.lower())[:40].strip('-')
