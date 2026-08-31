@@ -129,6 +129,7 @@ from synlynk.doctor import (
     _hc_pr_review_cycles,
     _hc_project_init,
     _hc_python_version,
+    _hc_todo_drift,
     _hc_version_current,
     cmd_doctor,
 )
