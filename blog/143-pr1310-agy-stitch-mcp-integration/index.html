@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #1310 — Fleet Parity: Agy Stitch MCP Integration, Diagnostics, and Prompt Guidance | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-3">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Aug 31, 2026</span>
+        
+          <span class="blog-post-pr">PR #1310</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #1310 — Fleet Parity: Agy Stitch MCP Integration, Diagnostics, and Prompt Guidance</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>PR #1310 — Fleet Parity: Agy Stitch MCP Integration, Diagnostics, and Prompt Guidance</h1>
+<h2>The Broader Goal at the End of the Previous PR</h2>
+<p>PR #1309 closed issue #347, completing the entire original fleet parity cluster (#332, #338, #340, #342, #347, #348, #419, #461). Next on the roadmap was issue #573: investigating and resolving why Agy (Google Antigravity CLI) was reported unable to invoke Stitch MCP tools in headless dispatches.</p>
+<h2>What Was Missing &amp; The Real Root Cause</h2>
+<ol>
+<li><strong>Configuration Gap:</strong> Stitch had been installed via the Gemini CLI extension installer (<code>gemini extensions install https://github.com/gemini-cli-extensions/stitch</code>), which placed extension metadata under <code>~/.gemini/extensions/Stitch/</code>. But <code>synlynk dispatch agy</code> invokes the Antigravity CLI (<code>agy</code>), which does not read <code>~/.gemini/extensions/</code>. Antigravity loads MCP servers exclusively from <code>~/.gemini/config/mcp_config.json</code>, which was empty.</li>
+<li><strong>Tool Invocation Paradigm Mismatch:</strong> Prompts assumed the Claude Code convention of flat, prefixed tool names (<code>mcp__stitch__*</code>). In Antigravity CLI, MCP tools are invoked through the built-in meta-tool <code>call_mcp_tool(server=&quot;stitch&quot;, tool=&quot;&lt;tool_name&gt;&quot;, arguments={...})</code>.</li>
+<li><strong>Live Verification:</strong> Once <code>stitch</code> was added to <code>~/.gemini/config/mcp_config.json</code> (<code>npx -y stitch-mcp@1.0.0</code> with project <code>gen-lang-client-0187568210</code>), live headless dispatch verified that <code>call_mcp_tool</code> executed without permission prompts, successfully returning live Stitch projects.</li>
+</ol>
+<h2>What Shipped</h2>
+<ol>
+<li><strong>Capability Baseline Update:</strong> Added <code>stitch.googleapis.com:443</code> to optional network endpoints for Agy in <code>synlynk/_constants.py</code>.</li>
+<li><strong>TC-8 Doctor Preflight:</strong> Added <code>_run_tc8()</code> in <code>synlynk/doctor.py</code> asserting that <code>~/.gemini/config/mcp_config.json</code> has an active, enabled <code>stitch</code> server configuration.</li>
+<li><strong>Doctor Auto-Remediation:</strong> Added <code>_build_agy_stitch_fix_plan()</code> to <code>synlynk doctor --fix agy</code> for one-command remediation.</li>
+<li><strong>Dispatch Preflight &amp; Prompt Adaptation:</strong>
+<ul>
+<li>Enforced <code>--requires stitch</code> / <code>--requires mcp</code> checks in <code>synlynk/dispatch.py:_preflight_dispatch()</code>.</li>
+<li>Injected the <code>## Stitch MCP Tool Usage Note</code> reminding Agy to invoke <code>call_mcp_tool</code> whenever Stitch is referenced.</li>
+</ul>
+</li>
+<li><strong>Tests:</strong> Added comprehensive unit tests in <code>tests/test_synlynk.py</code> and <code>tests/test_dispatch.py</code>. All 504 tests pass.</li>
+</ol>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
