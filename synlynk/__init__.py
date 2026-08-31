@@ -170,6 +170,11 @@ from synlynk.support_engineer import (
     cmd_harness_list,
     cmd_harness_run,
 )
+from synlynk.charter_injection import (
+    CharterInjectionError,
+    render_charter_section,
+    resolve_role_charter,
+)
 from synlynk.context import (
     _append_vizor_notes,
     _generate_context_from_db,
