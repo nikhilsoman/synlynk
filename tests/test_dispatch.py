@@ -65,6 +65,10 @@ def test_preflight_blocks_missing_stitch_mcp_when_required(tmp_path, monkeypatch
     assert result_forced.get("sentinel") != "MCP_SERVER_MISSING"
 
 
+def test_fleet_parity_agy_stitch_mcp_integration_preflight_blocks(tmp_path, monkeypatch):
+    test_preflight_blocks_missing_stitch_mcp_when_required(tmp_path, monkeypatch)
+
+
 def test_format_prompt_for_agy_injects_stitch_tool_hint():
     from synlynk.dispatch import _format_prompt_for_agent
 
@@ -74,6 +78,10 @@ def test_format_prompt_for_agy_injects_stitch_tool_hint():
     assert "## Stitch MCP Tool Usage Note" in prompt
     assert "call_mcp_tool" in prompt
     assert "mcp__stitch__" in prompt
+
+
+def test_fleet_parity_agy_stitch_mcp_integration_prompt_format():
+    test_format_prompt_for_agy_injects_stitch_tool_hint()
 
 
 def test_format_job_summary_flags_cancelled_github_mcp_write():

@@ -417,17 +417,39 @@ def _run_tc8(mcp_config_path: str = None) -> dict:
             "passed": False,
             "error": str(exc),
         }
-    servers = cfg.get("mcpServers", {})
-    if "stitch" not in servers:
+    if not isinstance(cfg, dict):
+        return {
+            "passed": False,
+            "error": "mcp_config is invalid JSON (expected object)",
+        }
+    servers = cfg.get("mcpServers")
+    if not isinstance(servers, dict) or "stitch" not in servers:
         return {
             "passed": False,
             "error": "stitch MCP server not configured in mcpServers",
         }
-    stitch_cfg = servers["stitch"]
+    stitch_cfg = servers.get("stitch")
+    if not isinstance(stitch_cfg, dict):
+        return {
+            "passed": False,
+            "error": "stitch MCP server configuration is invalid (expected object)",
+        }
     if stitch_cfg.get("disabled", False):
         return {
             "passed": False,
             "error": "stitch MCP server is disabled in mcpServers",
+        }
+    cmd = stitch_cfg.get("command")
+    if cmd != "npx":
+        return {
+            "passed": False,
+            "error": f"stitch MCP server command is '{cmd}' (expected 'npx')",
+        }
+    args = stitch_cfg.get("args")
+    if not isinstance(args, list) or not any("stitch-mcp" in str(a) for a in args):
+        return {
+            "passed": False,
+            "error": "stitch MCP server args missing 'stitch-mcp'",
         }
     return {"passed": True, "error": ""}
 
@@ -492,26 +514,29 @@ def cmd_doctor_fix(agent: str, args=None) -> int:
     if agent != "agy":
         raise ValueError("synlynk doctor --fix currently supports only agy")
 
-    plan = _build_agy_fix_plan()
-    if not plan.needs_write:
-        stitch_plan = _build_agy_stitch_fix_plan()
-        if stitch_plan.needs_write:
-            plan = stitch_plan
+    plans = [_build_agy_fix_plan(), _build_agy_stitch_fix_plan()]
+    active_plans = [p for p in plans if p.needs_write]
 
-    print(plan.diff or f"No diff for {plan.target_file} (already compliant).")
-    if not plan.needs_write:
-        print(f"  {plan.message}")
+    if not active_plans:
+        for plan in plans:
+            print(f"No diff for {plan.target_file} (already compliant).")
+            print(f"  {plan.message}")
         return 0
 
-    should_write = _confirm_fix(f"Apply remediation to {plan.target_file}?", args=args)
-    if not should_write:
-        print("  Aborted. No files written.")
-        return 1
+    exit_code = 0
+    for plan in active_plans:
+        print(plan.diff or f"No diff for {plan.target_file}.")
+        should_write = _confirm_fix(f"Apply remediation to {plan.target_file}?", args=args)
+        if not should_write:
+            print("  Aborted. No files written.")
+            exit_code = 1
+            continue
 
-    operator = "non-interactive --yes" if getattr(args, "yes", False) else "interactive confirm"
-    _apply_fix_plan(plan, operator=operator)
-    print(f"  Wrote {plan.target_file}")
-    return 0
+        operator = "non-interactive --yes" if getattr(args, "yes", False) else "interactive confirm"
+        _apply_fix_plan(plan, operator=operator)
+        print(f"  Wrote {plan.target_file}")
+
+    return exit_code
 
 
 def _hc_model_rates() -> HealthCheck:
