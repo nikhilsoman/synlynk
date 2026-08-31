@@ -1,5 +1,13 @@
 # synlynk Memory
 
+## Fleet Parity: Agy Stitch MCP Integration, Diagnostics, and Prompt Guidance (decided/shipped 2026-08-31)
+- **Shipped:** PR #1310 (closes #573, relates to #426, #332). Resolves Stitch MCP configuration and invocation gaps on Agy. [@agy]
+- **Configuration vs. Extension Mismatch:** Agy (Google Antigravity CLI) does not read Gemini CLI extensions (`~/.gemini/extensions/Stitch/`). Agy requires MCP servers configured in `~/.gemini/config/mcp_config.json`.
+- **Tool Calling Convention:** Agy invokes MCP tools through `call_mcp_tool(server="stitch", tool="<tool_name>", arguments={...})` rather than Claude Code's `mcp__stitch__*` naming convention.
+- **Diagnostics & Auto-Remediation:** Added `_run_tc8()` (TC-8 Stitch MCP preflight) and `_build_agy_stitch_fix_plan()` in `synlynk/doctor.py` enabling one-command remediation via `synlynk doctor --fix agy`.
+- **Preflight & Prompt Adaptation:** In `synlynk/dispatch.py`, added `--requires stitch` / `--requires mcp` preflight gate, and injected `## Stitch MCP Tool Usage Note` prompting Agy to invoke `call_mcp_tool`.
+- **Blog Post:** `docs/blog/143-pr1310-agy-stitch-mcp-integration.md`.
+
 ## Fleet Parity: Instruction File Preflight and Closed-Loop Receipt Verification (decided/shipped 2026-08-30)
 - **Shipped:** PR #1309 (closes #347, relates to #343, #344, #345, #720). Enforces preflight instruction file presence and closed-loop execution receipt verification. [@agy]
 - **Instruction Version Extraction:** In `synlynk/instructions.py`, added `extract_instruction_version()` and `get_instruction_file_for_agent()` supporting both `synlynk:start` and `synlynk:harness` markers.
