@@ -822,7 +822,7 @@ def test_cmd_decision_record_writes_db_and_md_json_when_migrated(tmp_path, monke
     conn.close()
     assert row == ("Relay ownership", "approved", "Decision: use option B.")
 
-    decisions_dir = backup / "decisions"
+    decisions_dir = tmp_path / "project-docs" / "decisions"
     md_files = list(decisions_dir.glob("*.md"))
     json_files = list(decisions_dir.glob("*.json"))
     assert len(md_files) == 1
@@ -837,6 +837,35 @@ def test_cmd_decision_record_writes_db_and_md_json_when_migrated(tmp_path, monke
     assert "### agy" in md_content
     assert "## Synthesis" in md_content
     assert "> Signatures:" in md_content
+
+
+def test_cmd_decision_record_writes_to_worktree_project_docs(tmp_path, monkeypatch):
+    main_repo = tmp_path / "main_repo"
+    main_repo.mkdir()
+    (main_repo / ".synlynk").mkdir()
+    (main_repo / ".synlynk" / ".synlynk_migrated").write_text("1")
+    (main_repo / "project-docs").mkdir()
+
+    worktree = tmp_path / "worktree_1"
+    worktree.mkdir()
+    (worktree / "project-docs").mkdir()
+
+    # Switch to worktree cwd
+    monkeypatch.chdir(worktree)
+    monkeypatch.setattr(synlynk, "_project_root", lambda: str(main_repo))
+
+    synlynk.cmd_decision_record(
+        "dec-wt-12345", "Worktree scoped decision", "2026-08-29", ["claude", "agy"],
+        {"claude": "Claude WT input"}, "Synthesis in WT", "Decision: committed in WT.",
+    )
+
+    # Must be written to worktree's project-docs/decisions/
+    wt_decisions = worktree / "project-docs" / "decisions"
+    assert (wt_decisions / "2026-08-29-worktree-scoped-decision.md").exists()
+    assert (wt_decisions / "2026-08-29-worktree-scoped-decision.json").exists()
+    # Must NOT exist in main repo's .synlynk/project-docs/decisions/
+    main_synlynk_decisions = main_repo / ".synlynk" / "project-docs" / "decisions"
+    assert not main_synlynk_decisions.exists()
 
 
 def test_cmd_decision_record_syncs_both_md_and_json(tmp_path, monkeypatch):

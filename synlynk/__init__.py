@@ -1306,7 +1306,9 @@ def _dr_sync(relative_path: str) -> None:
         dr_path = os.path.expanduser(str(dr_path))
         if not os.path.isdir(dr_path):
             return
-        src = os.path.join('.synlynk', 'project-docs', relative_path)
+        src = os.path.join(_docs_dir(), relative_path)
+        if not os.path.exists(src):
+            src = os.path.join('.synlynk', 'project-docs', relative_path)
         if not os.path.exists(src):
             return
         dst = os.path.join(dr_path, 'project-docs', relative_path)
