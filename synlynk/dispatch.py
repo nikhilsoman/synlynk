@@ -2735,7 +2735,13 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             scope = "full"
         try:
             generate_context = _pkg("generate_context")
-            context_text = generate_context(scope=scope, out_path=context_file) or ""
+            try:
+                context_text = generate_context(scope=scope, out_path=context_file, role=resolved_agent_role) or ""
+            except TypeError as te:
+                if "unexpected keyword argument 'role'" in str(te) or "unexpected keyword argument \"role\"" in str(te):
+                    context_text = generate_context(scope=scope, out_path=context_file) or ""
+                else:
+                    raise
         except Exception:
             pass
     warn_context = _pkg("_warn_context_size", _warn_context_size)
@@ -2977,6 +2983,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         "instruction_file": instruction_file or "",
         "expected_instruction_version": expected_instruction_version or "",
         "instruction_receipt": None,
+        "charter_role": resolved_agent_role or "",
+        "charter_revision": _pkg("resolve_role_charter")(role=resolved_agent_role)[2] if (_pkg("resolve_role_charter") and resolved_agent_role) else None,
     }
 
     load_jobs = _pkg("_load_jobs")

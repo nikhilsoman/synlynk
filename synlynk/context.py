@@ -72,7 +72,7 @@ def _write_last_devlog_section(out, filepath: str) -> None:
     if sections:
         out.writelines(sections[-1])
 
-def _generate_task_context(story_id: Optional[str], out_path: str = None) -> str:
+def _generate_task_context(story_id: Optional[str], out_path: str = None, role: Optional[str] = None) -> str:
     """Writes minimal scoped context for a single story dispatch. Returns context string.
 
     out_path: write to this path instead of the global .synlynk/context.md.
@@ -84,14 +84,29 @@ def _generate_task_context(story_id: Optional[str], out_path: str = None) -> str
     conn = _pkg("_get_db")()
     row = None
     if story_id:
-        row = conn.execute(
-            "SELECT title, engg_domain, org_domain, phase FROM stories WHERE story_id=?",
-            (story_id,)
-        ).fetchone()
+        try:
+            row = conn.execute(
+                "SELECT title, engg_domain, org_domain, phase, role FROM stories WHERE story_id=?",
+                (story_id,)
+            ).fetchone()
+        except Exception:
+            row = conn.execute(
+                "SELECT title, engg_domain, org_domain, phase FROM stories WHERE story_id=?",
+                (story_id,)
+            ).fetchone()
     conn.close()
 
     buf.write("# synlynk Context Snapshot (task-scoped)\n\n")
     buf.write(f"Generated: {time.strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+
+    resolved_role = role or (row[4] if row and len(row) > 4 and row[4] else None)
+    try:
+        from synlynk.charter_injection import render_charter_section
+        charter_sec = render_charter_section(repo_path=os.getcwd(), role=resolved_role)
+        if charter_sec:
+            buf.write(charter_sec)
+    except Exception:
+        pass
 
     if story_id and row:
         buf.write("## Story\n")
@@ -142,7 +157,7 @@ def _generate_task_context(story_id: Optional[str], out_path: str = None) -> str
     print(f"  ✓ Task-scoped context saved to {context_file}")
     return context_text
 
-def _generate_context_from_db(scope: str = "full", out_path: str = None) -> str:
+def _generate_context_from_db(scope: str = "full", out_path: str = None, role: Optional[str] = None) -> str:
     """Build context.md from state.db (post-migration path)."""
     context_file = out_path if out_path else ".synlynk/context.md"
     os.makedirs(os.path.dirname(os.path.abspath(context_file)), exist_ok=True)
@@ -172,6 +187,13 @@ def _generate_context_from_db(scope: str = "full", out_path: str = None) -> str:
             f"Generated: {time.strftime('%Y-%m-%d %H:%M:%S')} "
             f"| User: @{username} | Mode: {mode}\n\n"
         )
+        try:
+            from synlynk.charter_injection import render_charter_section
+            charter_sec = render_charter_section(repo_path=os.getcwd(), role=role)
+            if charter_sec:
+                out.write(charter_sec)
+        except Exception:
+            pass
         if active_goal:
             goal_id, outcome, criterion, deadline = active_goal
             deadline_s = deadline or "ongoing"
@@ -230,7 +252,7 @@ def _append_vizor_notes(context_file: str) -> None:
                         elif tag == "defer":
                             f.write(f"\n- ⏸ Defer: {element_id} — {note.get('text','')}")
 
-def generate_context(scope: str = "full", out_path: str = None) -> str:
+def generate_context(scope: str = "full", out_path: str = None, role: Optional[str] = None) -> str:
     """Aggregates project-docs into .synlynk/context.md (active items only).
 
     Returns the context string. The file is still written for daemon HTTP
@@ -240,7 +262,7 @@ def generate_context(scope: str = "full", out_path: str = None) -> str:
     Passed through to _generate_task_context for per-job isolation in dispatch.
     """
     if _pkg("_is_migrated")():
-        return _generate_context_from_db(scope=scope, out_path=out_path)
+        return _generate_context_from_db(scope=scope, out_path=out_path, role=role)
 
     docs_dir = _pkg("_docs_dir")()
     context_file = out_path if out_path else ".synlynk/context.md"
@@ -251,9 +273,9 @@ def generate_context(scope: str = "full", out_path: str = None) -> str:
 
     if scope != "full":
         if scope.startswith("task:"):
-            return _generate_task_context(scope[5:], out_path=out_path)
+            return _generate_task_context(scope[5:], out_path=out_path, role=role)
         if scope == "task":
-            return _generate_task_context(None, out_path=out_path)
+            return _generate_task_context(None, out_path=out_path, role=role)
         print(f"  ⚠ scope='{scope}' not yet implemented, falling back to full context")
         scope = "full"
 
@@ -265,8 +287,13 @@ def generate_context(scope: str = "full", out_path: str = None) -> str:
     with open(context_file, "w") as out:
         out.write("# synlynk Context Snapshot\n\n")
         out.write(f"Generated: {time.strftime('%Y-%m-%d %H:%M:%S')} | User: @{username} | Mode: {mode}\n\n")
-        from synlynk.charter_injection import render_charter_section
-        out.write(render_charter_section(repo_path=os.getcwd()))
+        try:
+            from synlynk.charter_injection import render_charter_section
+            charter_sec = render_charter_section(repo_path=os.getcwd(), role=role)
+            if charter_sec:
+                out.write(charter_sec)
+        except Exception:
+            pass
 
         # Sentinel alerts at top (omit section if empty)
         if os.path.exists(sentinel_file):
