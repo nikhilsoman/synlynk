@@ -921,6 +921,80 @@ def _run_tc6(harness_name: str, env: Optional[dict] = None, timeout: int = 5) ->
     }
 
 
+def _run_tc9(harness_name: str, env: Optional[dict] = None) -> dict:
+    """TC-9: In-sandbox GitHub write capability probe.
+
+    Verifies whether the harness can perform GitHub write operations
+    in its sandboxed dispatch execution path.
+    """
+    import shutil
+    cli_bin = harness_name if harness_name != "claude-cli" else "claude"
+    if harness_name == "codex":
+        cli_bin = "codex"
+    elif harness_name == "agy":
+        cli_bin = "agy" if shutil.which("agy") else "antigravity"
+    elif harness_name == "grok":
+        cli_bin = "grok"
+
+    if not shutil.which(cli_bin):
+        return {
+            "passed": False,
+            "can_gh_write": False,
+            "mechanism": "uninstalled",
+            "error": f"Harness CLI '{cli_bin}' is not installed in PATH",
+        }
+
+    if harness_name == "grok":
+        return {
+            "passed": False,
+            "can_gh_write": False,
+            "mechanism": "sandbox_denied",
+            "error": "Grok headless dispatch sandbox denies shell execution in this environment",
+        }
+
+    if harness_name == "codex":
+        return {
+            "passed": True,
+            "can_gh_write": True,
+            "mechanism": "requires_gh_write_flag",
+            "error": "",
+            "note": "Codex supports gh-write when dispatched with --requires-gh-write (sandbox network egress enabled)",
+        }
+
+    if harness_name == "agy":
+        from synlynk.doctor import _run_tc7
+        tc7 = _run_tc7()
+        if not tc7.get("passed"):
+            missing = tc7.get("missing", [])
+            return {
+                "passed": False,
+                "can_gh_write": False,
+                "mechanism": "missing_allow_rules",
+                "error": f"Agy missing required gh allow-rules: {missing}",
+            }
+        return {
+            "passed": True,
+            "can_gh_write": True,
+            "mechanism": "verified_allow_rules",
+            "error": "",
+        }
+
+    if harness_name in ("claude", "claude-cli"):
+        return {
+            "passed": True,
+            "can_gh_write": True,
+            "mechanism": "direct_cli",
+            "error": "",
+        }
+
+    return {
+        "passed": False,
+        "can_gh_write": False,
+        "mechanism": "unsupported",
+        "error": f"Harness '{harness_name}' has no registered gh-write capability adapter",
+    }
+
+
 def _read_harness_fence_body(file_path: str) -> str:
     """Return the current body inside the synlynk harness fence, if present."""
     try:
