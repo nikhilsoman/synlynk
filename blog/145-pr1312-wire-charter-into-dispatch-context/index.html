@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #1312 — Wire Charter Content into Dispatch and Execution Context | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-1">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Aug 31, 2026</span>
+        
+          <span class="blog-post-pr">PR #1312</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #1312 — Wire Charter Content into Dispatch and Execution Context</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>PR #1312 — Wire Charter Content into Dispatch and Execution Context</h1>
+<h2>The Broader Goal</h2>
+<p>In multi-agent software development, agents need authoritative, role-grounded directives that define their responsibilities, escalation rules, and durability. Per <code>docs/superpowers/specs/2026-08-27-charter-authority-design.md</code>, synlynk provisions durable agent records in <code>agent_store</code> with version-tracked Markdown charters.</p>
+<p>Issue #1201 (Story <code>story-586b6237</code>) wires this charter authority directly into dispatch execution context so that every dispatched harness run receives its role-specific charter automatically as the first section in <code>.synlynk/contexts/&lt;job-id&gt;.md</code>.</p>
+<h2>What Was Missing &amp; Root Cause</h2>
+<p>Previously:</p>
+<ul>
+<li><code>synlynk/charter_injection.py:render_charter_section</code> only resolved the default <code>human_authority_role</code> (falling back to <code>pm</code>), ignoring the specific role assigned to a dispatched task or story.</li>
+<li><code>synlynk/context.py:generate_context</code> and <code>_generate_task_context</code> lacked a <code>role</code> parameter and could not inject role-specific charters for non-PM roles (<code>dev</code>, <code>qa</code>, <code>architect</code>, etc.).</li>
+<li>Dispatched jobs did not record <code>charter_role</code> or <code>charter_revision</code> in their job metadata dictionary, preventing downstream traceability of the exact charter revision under which an agent executed.</li>
+</ul>
+<h2>What Shipped</h2>
+<ol>
+<li>
+<p><strong>Role-Specific Charter Resolution (<code>synlynk/charter_injection.py</code>, <code>synlynk/__init__.py</code>):</strong></p>
+<ul>
+<li>Added <code>resolve_role_charter(role=None, repo_path=None)</code> returning <code>(role, agent_id, revision, content)</code>.</li>
+<li>Updated <code>render_charter_section(repo_path=None, role=None)</code> to resolve the explicit role when supplied, falling back to <code>get_human_authority_role()</code>.</li>
+<li>Handled unadopted workspaces gracefully by returning <code>&quot;&quot;</code> when zero agents are provisioned, while raising <code>CharterInjectionError</code> if a requested role cannot be found in an adopted workspace.</li>
+</ul>
+</li>
+<li>
+<p><strong>Context Injection Pipeline (<code>synlynk/context.py</code>):</strong></p>
+<ul>
+<li>Updated <code>generate_context()</code>, <code>_generate_context_from_db()</code>, and <code>_generate_task_context()</code> to accept <code>role: Optional[str] = None</code>.</li>
+<li>Injected <code>render_charter_section(role=role)</code> at the header of generated task and full contexts.</li>
+</ul>
+</li>
+<li>
+<p><strong>Dispatch Integration &amp; Metadata Recording (<code>synlynk/dispatch.py</code>):</strong></p>
+<ul>
+<li>Passed <code>role=resolved_agent_role</code> into <code>generate_context()</code>.</li>
+<li>Recorded <code>charter_role</code> and <code>charter_revision</code> in the <code>job</code> dictionary for full telemetry and auditability.</li>
+</ul>
+</li>
+<li>
+<p><strong>Comprehensive Test Suite (<code>tests/test_charter_injection_dispatch.py</code>):</strong></p>
+<ul>
+<li>Added unit and integration tests covering empty workspaces, default PM resolution, explicit role resolution (<code>dev</code>, <code>qa</code>), missing role rejection, task context injection, and end-to-end dispatch context generation.</li>
+</ul>
+</li>
+</ol>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
