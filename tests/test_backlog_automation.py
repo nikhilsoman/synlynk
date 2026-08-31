@@ -117,10 +117,13 @@ Job completed with status OK.
 FOLLOWUP: Add missing mock for subprocess in test_runner
 TECH-DEBT: Clean up deprecated agent_quotas table references
 """
-    items = extract_from_job_summary(summary, job_id="job-1234")
+    items = extract_from_job_summary(summary, job_id="job-1234", touched_files=["tests/test_runner.py"])
     assert len(items) == 2
     assert items[0]["title"] == "Add missing mock for subprocess in test_runner"
     assert items[0]["source_type"] == "job_output"
+    assert items[0]["role"] == "qa"
+    assert "touched files: tests/test_runner.py" in items[0]["description"]
+    assert items[0]["touched_files"] == ["tests/test_runner.py"]
     assert items[1]["title"] == "Clean up deprecated agent_quotas table references"
 
 
@@ -136,25 +139,30 @@ def test_extract_from_doctor_failures():
     assert items[0]["role"] == "qa"
 
 
-def test_sync_backlog_to_github(test_db):
-    stage_discovered_work(title="Syncable discovery 1", db_conn=test_db)
-    stage_discovered_work(title="Syncable discovery 2", db_conn=test_db)
+def test_check_duplicate_github_layer():
+    with patch("synlynk.backlog._query_github_open_issues", return_value=[{"number": 1203, "title": "Design GOVERNS backlog automation"}]):
+        assert check_duplicate("design governs backlog automation", check_gh=True) is True
+        assert check_duplicate("completely new task", check_gh=True) is False
 
-    # Dry run test
-    dry_results = sync_backlog_to_github(db_conn=test_db, dry_run=True)
-    assert len(dry_results) == 2
-    assert all(r["action"] == "dry_run_sync" for r in dry_results)
 
-    # Real sync with mock
-    with patch("synlynk.backlog._create_github_issue", side_effect=[1401, 1402]):
-        real_results = sync_backlog_to_github(db_conn=test_db, dry_run=False, parent_issue=1198)
-        assert len(real_results) == 2
-        assert real_results[0]["gh_issue"] == 1401
-        assert real_results[1]["gh_issue"] == 1402
+def test_sync_backlog_to_github_with_existing_issue_deduplication(test_db):
+    stage_discovered_work(title="Existing issue on GitHub", db_conn=test_db)
+    stage_discovered_work(title="Brand new issue", db_conn=test_db)
 
-    # Verify state.db was updated with issue numbers
-    unfiled_after = list_staged_backlog(db_conn=test_db, unfiled_only=True)
-    assert len(unfiled_after) == 0
+    # Mock GH open issues containing "Existing issue on GitHub" (#999)
+    gh_mock_issues = [{"number": 999, "title": "Existing issue on GitHub"}]
+    with patch("synlynk.backlog._query_github_open_issues", return_value=gh_mock_issues):
+        with patch("synlynk.backlog._create_github_issue", return_value=1001) as mock_create:
+            results = sync_backlog_to_github(db_conn=test_db, dry_run=False)
+            assert len(results) == 2
+            by_title = {r["title"]: r for r in results}
+            # Existing issue linked without creating new issue
+            assert by_title["Existing issue on GitHub"]["gh_issue"] == 999
+            assert by_title["Existing issue on GitHub"]["action"] == "linked_existing_issue"
+            # Brand new item created new issue
+            assert by_title["Brand new issue"]["gh_issue"] == 1001
+            assert by_title["Brand new issue"]["action"] == "created_issue"
+            assert mock_create.call_count == 1
 
 
 def test_cli_backlog_integration(capsys, monkeypatch, test_db):

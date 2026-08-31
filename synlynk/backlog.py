@@ -35,27 +35,58 @@ def _get_connection(db_conn=None):
     return _get_db()
 
 
-def check_duplicate(title: str, fingerprint: str = None, db_conn=None) -> bool:
-    """Check whether a work item with this title or fingerprint already exists in state.db."""
-    conn = _get_connection(db_conn)
-    if conn is None:
-        return False
-
-    fp = fingerprint or compute_fingerprint(title)
+def _query_github_open_issues() -> list[dict]:
+    """Query open GitHub issues for deduplication."""
     try:
-        row = conn.execute(
-            "SELECT 1 FROM stories WHERE fingerprint = ? LIMIT 1", (fp,)
-        ).fetchone()
-        if row:
+        res = subprocess.run(
+            ["gh", "issue", "list", "--state", "open", "--limit", "100", "--json", "number,title,labels"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return json.loads(res.stdout.strip() or "[]")
+    except Exception:
+        return []
+
+
+def _check_github_duplicate(title: str, gh_issues: Optional[list[dict]] = None) -> Optional[int]:
+    """Check if an open GitHub issue with matching normalized title already exists."""
+    if not title:
+        return None
+    normalized = re.sub(r"[^a-z0-9]+", " ", title.lower()).strip()
+    issues = gh_issues if gh_issues is not None else _query_github_open_issues()
+    for iss in issues:
+        iss_title = iss.get("title", "")
+        norm_iss = re.sub(r"[^a-z0-9]+", " ", iss_title.lower()).strip()
+        if norm_iss == normalized:
+            return iss.get("number")
+    return None
+
+
+def check_duplicate(title: str, fingerprint: str = None, db_conn=None, check_gh: bool = False) -> bool:
+    """Check whether a work item with this title or fingerprint already exists in state.db or GitHub."""
+    conn = _get_connection(db_conn)
+    fp = fingerprint or compute_fingerprint(title)
+    if conn is not None:
+        try:
+            row = conn.execute(
+                "SELECT 1 FROM stories WHERE fingerprint = ? LIMIT 1", (fp,)
+            ).fetchone()
+            if row:
+                return True
+
+            normalized_title = re.sub(r"[^a-z0-9]+", " ", (title or "").lower()).strip()
+            rows = conn.execute("SELECT title FROM stories WHERE title IS NOT NULL").fetchall()
+            for (existing_title,) in rows:
+                if re.sub(r"[^a-z0-9]+", " ", (existing_title or "").lower()).strip() == normalized_title:
+                    return True
+        except Exception:
+            pass
+
+    if check_gh:
+        if _check_github_duplicate(title) is not None:
             return True
 
-        normalized_title = re.sub(r"[^a-z0-9]+", " ", (title or "").lower()).strip()
-        rows = conn.execute("SELECT title FROM stories WHERE title IS NOT NULL").fetchall()
-        for (existing_title,) in rows:
-            if re.sub(r"[^a-z0-9]+", " ", (existing_title or "").lower()).strip() == normalized_title:
-                return True
-    except Exception:
-        pass
     return False
 
 
@@ -226,10 +257,25 @@ def sync_backlog_to_github(
     conn = _get_connection(db_conn)
     unfiled = list_staged_backlog(db_conn=conn, stage=stage, unfiled_only=True)
     synced = []
+    gh_issues_cache = _query_github_open_issues()
 
     for item in unfiled:
         if dry_run:
             synced.append({**item, "action": "dry_run_sync"})
+            continue
+
+        existing_issue_num = _check_github_duplicate(item["title"], gh_issues=gh_issues_cache)
+        if existing_issue_num:
+            if conn is not None:
+                try:
+                    conn.execute(
+                        "UPDATE stories SET gh_issue = ? WHERE story_id = ?",
+                        (str(existing_issue_num), item["story_id"]),
+                    )
+                    conn.commit()
+                except Exception:
+                    pass
+            synced.append({**item, "gh_issue": existing_issue_num, "action": "linked_existing_issue"})
             continue
 
         issue_num = _create_github_issue(

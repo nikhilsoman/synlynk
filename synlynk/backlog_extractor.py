@@ -82,6 +82,13 @@ def extract_from_job_summary(summary: str, job_id: str = "", touched_files: list
 
     results = []
     lines = summary.splitlines()
+    files_list = list(touched_files) if touched_files else []
+    files_note = f" (touched files: {', '.join(files_list)})" if files_list else ""
+
+    # Infer default role / stage from touched files if applicable
+    default_role = "qa" if files_list and all(f.startswith("tests/") for f in files_list) else "dev"
+    default_stage = "sustain" if files_list and all(f.startswith("tests/") for f in files_list) else "open"
+
     for line in lines:
         stripped = line.strip()
         match = re.search(r"(?:^|\b)(?:FOLLOWUP|TECH-DEBT|DISCOVERED):\s*(.*)", stripped, re.IGNORECASE)
@@ -90,11 +97,12 @@ def extract_from_job_summary(summary: str, job_id: str = "", touched_files: list
             if item_text:
                 results.append({
                     "title": item_text,
-                    "description": f"Surfaced in job {job_id} output.",
-                    "stage": "open",
-                    "role": "dev",
+                    "description": f"Surfaced in job {job_id} output{files_note}.",
+                    "stage": default_stage,
+                    "role": default_role,
                     "source_type": "job_output",
                     "source_ref": f"job:{job_id}" if job_id else "job",
+                    "touched_files": files_list,
                 })
     return results
 
