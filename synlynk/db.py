@@ -97,7 +97,7 @@ _PROJECT_DOC_KEEP_N = 50
 # Bump when a new schema migration is added.  This is deliberately kept in
 # SQLite's small built-in metadata slot so checking it does not touch the DB
 # file or create a backup on already-migrated connections.
-_DB_MIGRATION_VERSION = 2
+_DB_MIGRATION_VERSION = 3
 
 _GENERATORS_BY_FILENAME = {
     "todo.md": "_generate_todo_md",
@@ -540,6 +540,20 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
                 conn.execute("ALTER TABLE daemon_jobs ADD COLUMN gh_write_expect TEXT DEFAULT 'closed'")
             except sqlite3.OperationalError:
                 pass
+        if "harness" not in daemon_job_cols:
+            try:
+                conn.execute("ALTER TABLE daemon_jobs ADD COLUMN harness TEXT")
+            except sqlite3.OperationalError:
+                pass
+        if "role" not in daemon_job_cols:
+            try:
+                conn.execute("ALTER TABLE daemon_jobs ADD COLUMN role TEXT")
+            except sqlite3.OperationalError:
+                pass
+        try:
+            conn.execute("UPDATE daemon_jobs SET harness = agent WHERE (harness IS NULL OR harness = '') AND agent IS NOT NULL")
+        except sqlite3.OperationalError:
+            pass
         cost_cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}
         if "session_id" not in cost_cols:
             try:
@@ -771,6 +785,8 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
                 id                INTEGER PRIMARY KEY AUTOINCREMENT,
                 session_date      TEXT NOT NULL,
                 agent             TEXT,
+                harness           TEXT,
+                agent_role        TEXT,
                 model             TEXT,
                 input_tokens      INTEGER,
                 output_tokens     INTEGER,
@@ -971,9 +987,35 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
                 conn.execute("ALTER TABLE cost_entries ADD COLUMN context_mode TEXT")
             except sqlite3.OperationalError:
                 pass
+        if "harness" not in cost_cols:
+            try:
+                conn.execute("ALTER TABLE cost_entries ADD COLUMN harness TEXT")
+            except sqlite3.OperationalError:
+                pass
+        if "agent_role" not in cost_cols:
+            try:
+                conn.execute("ALTER TABLE cost_entries ADD COLUMN agent_role TEXT")
+            except sqlite3.OperationalError:
+                pass
+        try:
+            conn.execute(
+                "UPDATE cost_entries SET harness = agent "
+                "WHERE (harness IS NULL OR harness = '') AND agent IS NOT NULL"
+            )
+        except sqlite3.OperationalError:
+            pass
         conn.execute(
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_cost_entries_job_id "
             "ON cost_entries(job_id) WHERE job_id IS NOT NULL"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_daemon_jobs_harness ON daemon_jobs(harness)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_cost_entries_harness ON cost_entries(harness)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_cost_entries_agent_role ON cost_entries(agent_role)"
         )
         conn.execute(
             "UPDATE capability_ratings SET discipline = COALESCE(NULLIF(discipline, ''), NULLIF(engg_domain, ''), 'backend') "
@@ -1203,13 +1245,13 @@ _VALID_COST_SOURCES = {
 
 def _insert_cost_row(
     session_date: str,
-    agent: str,
-    model: str,
-    input_tokens: int,
-    output_tokens: int,
-    cache_read_tokens: int,
-    cost_source: str,
-    total_cost_usd: float,
+    agent: str = None,
+    model: str = None,
+    input_tokens: int = 0,
+    output_tokens: int = 0,
+    cache_read_tokens: int = 0,
+    cost_source: str = "actual",
+    total_cost_usd: float = 0.0,
     notes: str = None,
     story_id: str = None,
     epic_id: int = None,
@@ -1222,6 +1264,8 @@ def _insert_cost_row(
     dispatch_context: str = None,
     context_mode: str = None,
     session_id: str = None,
+    harness: str = None,
+    agent_role: str = None,
 ) -> None:
     """Insert or update a cost_entries row through the single sanctioned path."""
     from synlynk import _get_db
@@ -1237,6 +1281,24 @@ def _insert_cost_row(
 
     conn = _get_db()
     try:
+        harness_val = harness or agent
+        agent_val = agent or harness
+        role_val = agent_role
+        if role_val is None and story_id:
+            try:
+                r_row = conn.execute("SELECT role FROM stories WHERE story_id=?", (story_id,)).fetchone()
+                if r_row and r_row[0]:
+                    role_val = r_row[0]
+            except Exception:
+                pass
+        if role_val is None and job_id:
+            try:
+                j_row = conn.execute("SELECT role FROM daemon_jobs WHERE job_id=?", (job_id,)).fetchone()
+                if j_row and j_row[0]:
+                    role_val = j_row[0]
+            except Exception:
+                pass
+
         # Inherit context_mode from the job row when the caller did not pass one
         # so cost rollups can segment by task/full/none without plumbing every path.
         if context_mode is None and job_id is not None:
@@ -1269,6 +1331,8 @@ def _insert_cost_row(
                     """UPDATE cost_entries SET
                         session_date=?,
                         agent=?,
+                        harness=COALESCE(?, harness),
+                        agent_role=COALESCE(?, agent_role),
                         model=?,
                         input_tokens=?,
                         output_tokens=?,
@@ -1289,7 +1353,9 @@ def _insert_cost_row(
                     WHERE job_id=?""",
                     (
                         session_date,
-                        agent,
+                        agent_val,
+                        harness_val,
+                        role_val,
                         model,
                         input_tokens,
                         output_tokens,
@@ -1314,12 +1380,14 @@ def _insert_cost_row(
                 return
         conn.execute(
             """INSERT INTO cost_entries
-                (session_date, agent, model, input_tokens, output_tokens, cache_read_tokens,
+                (session_date, agent, harness, agent_role, model, input_tokens, output_tokens, cache_read_tokens,
                  cost_source, estimate_basis, total_cost_usd, api_equivalent_usd, actual_usd, payment_mode, notes, story_id, epic_id, phase_id, job_id, dispatch_context, context_mode, session_id)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 session_date,
-                agent,
+                agent_val,
+                harness_val,
+                role_val,
                 model,
                 input_tokens,
                 output_tokens,
@@ -1343,6 +1411,48 @@ def _insert_cost_row(
         conn.commit()
     finally:
         conn.close()
+
+
+def get_costs_by_harness(conn: sqlite3.Connection = None) -> dict[str, float]:
+    """Return total cost USD grouped by compute harness."""
+    from synlynk import _get_db
+
+    close_conn = False
+    if conn is None:
+        conn = _get_db()
+        close_conn = True
+    try:
+        rows = conn.execute(
+            "SELECT COALESCE(NULLIF(harness, ''), NULLIF(agent, ''), 'unknown'), "
+            "SUM(COALESCE(total_cost_usd, 0.0)) "
+            "FROM cost_entries "
+            "GROUP BY COALESCE(NULLIF(harness, ''), NULLIF(agent, ''), 'unknown')"
+        ).fetchall()
+        return {r[0]: round(float(r[1] or 0.0), 4) for r in rows}
+    finally:
+        if close_conn:
+            conn.close()
+
+
+def get_costs_by_agent_role(conn: sqlite3.Connection = None) -> dict[str, float]:
+    """Return total cost USD grouped by workspace agent role."""
+    from synlynk import _get_db
+
+    close_conn = False
+    if conn is None:
+        conn = _get_db()
+        close_conn = True
+    try:
+        rows = conn.execute(
+            "SELECT COALESCE(NULLIF(agent_role, ''), 'unattributed'), "
+            "SUM(COALESCE(total_cost_usd, 0.0)) "
+            "FROM cost_entries "
+            "GROUP BY COALESCE(NULLIF(agent_role, ''), 'unattributed')"
+        ).fetchall()
+        return {r[0]: round(float(r[1] or 0.0), 4) for r in rows}
+    finally:
+        if close_conn:
+            conn.close()
 
 def _migrate_import(docs_dir: str, dry_run: bool = False) -> None:
     """Parse flat files in docs_dir -> state.db. Prints import summary.

@@ -291,7 +291,7 @@ def _queue_calibration_sweep(harness_name: str, model_id: str, conn) -> None:
     discovered (harness, model) pair, reusing capability_sweep.py's machinery."""
     from synlynk.capability_sweep import cmd_capability_sweep_for_harness_model
     try:
-        cmd_capability_sweep_for_harness_model(harness_name, model_id)
+        cmd_capability_sweep_for_harness_model(harness_name, model_id, conn=conn)
     except SystemExit:
         pass  # cost cap exceeded — model stays 'active' with zero calibration data,
               # picked up by the routing explore-bonus in Task 4 instead

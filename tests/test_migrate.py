@@ -885,3 +885,49 @@ def test_migrate_adds_gh_write_author_and_expect_columns(tmp_path):
     assert "gh_write_author" in cols
     assert "gh_write_expect" in cols
     conn.close()
+
+
+def test_migrate_v3_adds_harness_and_role_columns_and_backfills(tmp_path):
+    import sqlite3
+    from synlynk.db import _migrate_db
+
+    db_path = tmp_path / "state.db"
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        "CREATE TABLE daemon_jobs (job_id TEXT PRIMARY KEY, agent TEXT, task TEXT, "
+        "story_id TEXT, status TEXT, priority INTEGER, depends_on TEXT, pid INTEGER, "
+        "enqueued_at TEXT, started_at TEXT, log_path TEXT)"
+    )
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, depends_on, enqueued_at) "
+        "VALUES ('job-1', 'codex', 'fix bug', 'done', 5, '[]', '2026-08-31T00:00:00')"
+    )
+    conn.execute(
+        "CREATE TABLE cost_entries (id INTEGER PRIMARY KEY, session_date TEXT, agent TEXT, "
+        "model TEXT, input_tokens INTEGER, output_tokens INTEGER, total_cost_usd REAL, "
+        "cost_source TEXT)"
+    )
+    conn.execute(
+        "INSERT INTO cost_entries (session_date, agent, model, input_tokens, output_tokens, total_cost_usd, cost_source) "
+        "VALUES ('2026-08-31', 'claude', 'claude-3-7-sonnet', 1000, 200, 0.05, 'actual')"
+    )
+    conn.commit()
+
+    _migrate_db(conn)
+
+    daemon_cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)")}
+    assert "harness" in daemon_cols
+    assert "role" in daemon_cols
+
+    cost_cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}
+    assert "harness" in cost_cols
+    assert "agent_role" in cost_cols
+
+    # Check backfilled values
+    job_row = conn.execute("SELECT agent, harness FROM daemon_jobs WHERE job_id='job-1'").fetchone()
+    assert job_row == ("codex", "codex")
+
+    cost_row = conn.execute("SELECT agent, harness FROM cost_entries").fetchone()
+    assert cost_row == ("claude", "claude")
+    conn.close()
+

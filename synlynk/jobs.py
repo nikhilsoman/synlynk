@@ -1329,7 +1329,7 @@ def _reconcile_jobs() -> None:
             model_version = job.get("model_version") or job.get("model_at_dispatch")
             try:
                 _pkg("update_costs")(
-                    f"{job.get('agent', '')} job {job.get('id', '')}",
+                    f"{job.get('harness') or job.get('agent', '')} job {job.get('id', '')}",
                     in_tokens,
                     out_tokens,
                     duration_s or 0,
@@ -1338,6 +1338,8 @@ def _reconcile_jobs() -> None:
                     agent=job.get("agent", ""),
                     basis=basis,
                     job_id=job.get("id"),
+                    harness=job.get("harness") or job.get("agent", ""),
+                    agent_role=job.get("resolved_agent_role") or job.get("role"),
                 )
             except sqlite3.IntegrityError:
                 _write_sentinel_alert(
@@ -2187,6 +2189,7 @@ def _ensure_daemon_job_cost_entry(
                 agent=agent or "",
                 basis=basis,
                 job_id=job_id,
+                harness=agent or "",
             )
             return True
         except Exception as exc:
@@ -2477,6 +2480,7 @@ def _reconcile_daemon_jobs() -> None:
                         agent=agent,
                         basis=basis,
                         job_id=job_id,
+                        harness=agent,
                     )
                 except Exception as exc:
                     print(f"  ⚠ update_costs failed for {job_id}: {exc}")

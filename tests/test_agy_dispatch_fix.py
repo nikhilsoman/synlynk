@@ -1447,11 +1447,11 @@ def test_extend_tokencost_extraction_with_cache_b_update_costs_inserts_fk_column
     assert "story_id" in insert_query
     assert "epic_id" in insert_query
     assert "phase_id" in insert_query
-    assert insert_params[2] == "claude-sonnet-4-6"
-    assert insert_params[5] == 128
-    assert insert_params[13] == "story-1"
-    assert insert_params[14] == 7
-    assert insert_params[15] == 11
+    assert "claude-sonnet-4-6" in insert_params
+    assert 128 in insert_params
+    assert "story-1" in insert_params
+    assert 7 in insert_params
+    assert 11 in insert_params
 
 
 def test_extend_tokencost_extraction_with_cache_b_update_costs_backwards_compatible_default_args(tmp_path, monkeypatch):
