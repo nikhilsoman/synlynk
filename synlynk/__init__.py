@@ -1001,6 +1001,8 @@ CREATE INDEX IF NOT EXISTS idx_autopilot_runs_hash ON autopilot_runs(signal_hash
 CREATE TABLE IF NOT EXISTS daemon_jobs (
     job_id       TEXT PRIMARY KEY,
     agent        TEXT NOT NULL,
+    harness      TEXT,
+    role         TEXT,
     task         TEXT NOT NULL,
     story_id     TEXT,
     status       TEXT NOT NULL DEFAULT 'queued',
@@ -1210,7 +1212,8 @@ def _get_db() -> _sqlite3.Connection:
     override = os.environ.get("SYNLYNK_STATE_DB_PATH")
     if override:
         os.makedirs(os.path.dirname(override), exist_ok=True)
-        conn = _sqlite3.connect(override)
+        conn = _sqlite3.connect(override, timeout=30.0)
+        conn.isolation_level = None
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA foreign_keys=ON")
         _migrate_db(conn)
@@ -1235,7 +1238,8 @@ def _get_db() -> _sqlite3.Connection:
             if not tried_fallback:
                 assert_not_nested_product_ledger(db_path, home_writable=True)
             os.makedirs(os.path.dirname(db_path), exist_ok=True)
-            conn = _sqlite3.connect(db_path)
+            conn = _sqlite3.connect(db_path, timeout=30.0)
+            conn.isolation_level = None
             conn.execute("PRAGMA journal_mode=WAL")
             conn.execute("PRAGMA foreign_keys=ON")
             _migrate_db(conn)

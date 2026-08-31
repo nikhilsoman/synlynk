@@ -2205,3 +2205,33 @@ def test_dispatch_agent_story_id_wins_over_agent_id_role_for_harness_selection(p
     )
 
     assert job["agent"] == "grok"
+
+
+def test_dispatch_agent_populates_harness_and_role_in_daemon_jobs(project_dir, monkeypatch):
+    import os
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+
+    monkeypatch.setattr(sl, "DB_PATH", os.path.join(project_dir, "state.db"))
+    class FakeProc:
+        pid = 12345
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda harness_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
+
+    job = sl.dispatch_agent(
+        "codex", "refactor module", role="dev", force_agent=True, context_mode="none"
+    )
+
+    assert job["harness"] == "codex"
+    assert job["agent"] == "codex"
+    assert job["role"] == "dev"
+
+    conn = sl._get_db()
+    row = conn.execute(
+        "SELECT agent, harness, role FROM daemon_jobs WHERE job_id=?",
+        (job["id"],)
+    ).fetchone()
+    conn.close()
+    assert row == ("codex", "codex", "dev")
+

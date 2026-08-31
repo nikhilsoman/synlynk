@@ -212,6 +212,26 @@ def _ensure_daemon_job_gh_write_columns(conn) -> None:
                 pass
 
 
+def _ensure_daemon_job_harness_columns(conn) -> None:
+    """Add Phase 4 harness and role columns for legacy/unit-test daemon schemas."""
+    try:
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)").fetchall()}
+    except Exception:
+        return
+    if not cols:
+        return
+    definitions = {
+        "harness": "TEXT",
+        "role": "TEXT",
+    }
+    for name, definition in definitions.items():
+        if name not in cols:
+            try:
+                conn.execute(f"ALTER TABLE daemon_jobs ADD COLUMN {name} {definition}")
+            except Exception:
+                pass
+
+
 def _context_mode_hint(context_mode: str, task: str) -> Optional[str]:
     if context_mode != "full":
         return None
@@ -2318,7 +2338,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                    session_id: str = None,
                    gh_write_target_kind: str = "issue",
                    model: str = None,
-                   role: str = None) -> dict:
+                   role: str = None,
+                   db_conn=None) -> dict:
     if not task or not task.strip():
         raise ValueError(
             "--task is empty or whitespace-only; refusing to dispatch (see #720)"
@@ -2419,83 +2440,96 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         _job_seed = dispatch_time if dispatch_time is not None else time.time()
         job_id = "job-" + _hashlib_early.md5(f"{agent}{task}{_job_seed}".encode()).hexdigest()[:8]
 
-    get_db_fn = _pkg("_get_db")
-    if get_db_fn:
-        _quota_conn = get_db_fn()
-        if _quota_conn is not None:
-            resolve_story_fn = _pkg("resolve_or_create_story_id")
-            _est_tokens = None
-            if story_id and resolve_story_fn:
-                _row = _quota_conn.execute(
-                    "SELECT estimated_tokens FROM stories WHERE story_id=?", (story_id,)
-                ).fetchone()
-                if _row and _row[0]:
-                    _est_tokens = int(_row[0])
-            if _est_tokens is None:
-                # Ad-hoc call with no story estimate: rough heuristic, ~4 chars/token.
-                _est_tokens = max(1000, len(task) // 4)
+    dconn = db_conn
+    owns_dconn = False
+    if dconn is None:
+        get_db_fn = _pkg("_get_db")
+        if get_db_fn:
+            dconn = get_db_fn() if callable(get_db_fn) else get_db_fn
+            owns_dconn = True
+    elif callable(dconn):
+        dconn = dconn()
+        owns_dconn = True
 
-            quota_status_fn = _pkg("_quota_status_for_agent")
-            qstatus = (
-                quota_status_fn(_quota_conn, agent, estimated_tokens=_est_tokens)
-                if quota_status_fn
-                else {"status": "unknown", "degraded": True}
-            )
-
-            if qstatus.get("status") == "exhausted":
-                reset_at = None
-                rows_fn = _pkg("_read_agent_quota_rows")
-                if rows_fn:
-                    for _r in rows_fn(_quota_conn, agent) or []:
-                        if _r.get("reset_at"):
-                            reset_at = _r["reset_at"]
-                            break
-                now_iso = time.strftime("%Y-%m-%dT%H:%M:%S")
-                existing_job = _quota_conn.execute(
-                    "SELECT 1 FROM daemon_jobs WHERE job_id=?", (job_id,)
-                ).fetchone()
-                if existing_job:
-                    _quota_conn.execute(
-                        "UPDATE daemon_jobs SET status='queued', "
-                        "blocked_reason='quota_exhausted' WHERE job_id=?",
-                        (job_id,),
-                    )
-                else:
-                    _quota_conn.execute(
-                        "INSERT INTO daemon_jobs (job_id, agent, task, story_id, status, "
-                        "priority, depends_on, enqueued_at, blocked_reason) "
-                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                        (job_id, agent, task, story_id, "queued", 5, "[]", now_iso,
-                         "quota_exhausted"),
-                    )
-                _quota_conn.commit()
-                return {
-                    "deferred": True,
-                    "reason": qstatus.get("reason", "quota_exhausted"),
-                    "retry_after": reset_at,
-                    "job_id": job_id,
-                }
-
-            open_reservation_fn = _pkg("_open_reservation")
-            has_reservations_table = _quota_conn.execute(
-                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='harness_reservations'"
+    if dconn is not None:
+        resolve_story_fn = _pkg("resolve_or_create_story_id")
+        _est_tokens = None
+        if story_id and resolve_story_fn:
+            _row = dconn.execute(
+                "SELECT estimated_tokens FROM stories WHERE story_id=?", (story_id,)
             ).fetchone()
-            if open_reservation_fn and has_reservations_table:
-                _scope = "plan" if os.environ.get("SYNLYNK_SCHEDULE_RUN_ID") else "session"
-                existing_reservation = _quota_conn.execute(
-                    "SELECT 1 FROM harness_reservations "
-                    "WHERE status='open' AND job_id=?",
+            if _row and _row[0]:
+                _est_tokens = int(_row[0])
+        if _est_tokens is None:
+            # Ad-hoc call with no story estimate: rough heuristic, ~4 chars/token.
+            _est_tokens = max(1000, len(task) // 4)
+
+        quota_status_fn = _pkg("_quota_status_for_agent")
+        qstatus = (
+            quota_status_fn(dconn, agent, estimated_tokens=_est_tokens)
+            if quota_status_fn
+            else {"status": "unknown", "degraded": True}
+        )
+
+        if qstatus.get("status") == "exhausted":
+            reset_at = None
+            rows_fn = _pkg("_read_agent_quota_rows")
+            if rows_fn:
+                for _r in rows_fn(dconn, agent) or []:
+                    if _r.get("reset_at"):
+                        reset_at = _r["reset_at"]
+                        break
+            now_iso = time.strftime("%Y-%m-%dT%H:%M:%S")
+            existing_job = dconn.execute(
+                "SELECT 1 FROM daemon_jobs WHERE job_id=?", (job_id,)
+            ).fetchone()
+            if existing_job:
+                dconn.execute(
+                    "UPDATE daemon_jobs SET status='queued', "
+                    "blocked_reason='quota_exhausted' WHERE job_id=?",
                     (job_id,),
-                ).fetchone()
-                if not existing_reservation:
-                    open_reservation_fn(
-                        _quota_conn,
-                        agent,
-                        _est_tokens,
-                        scope=_scope,
-                        scope_id=os.environ.get("SYNLYNK_SCHEDULE_RUN_ID"),
-                        job_id=job_id,
-                    )
+                )
+            else:
+                dconn.execute(
+                    "INSERT INTO daemon_jobs (job_id, agent, task, story_id, status, "
+                    "priority, depends_on, enqueued_at, blocked_reason) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (job_id, agent, task, story_id, "queued", 5, "[]", now_iso,
+                     "quota_exhausted"),
+                )
+            dconn.commit()
+            if owns_dconn and dconn is not None:
+                try:
+                    dconn.close()
+                except Exception:
+                    pass
+            return {
+                "deferred": True,
+                "reason": qstatus.get("reason", "quota_exhausted"),
+                "retry_after": reset_at,
+                "job_id": job_id,
+            }
+
+        open_reservation_fn = _pkg("_open_reservation")
+        has_reservations_table = dconn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='harness_reservations'"
+        ).fetchone()
+        if open_reservation_fn and has_reservations_table:
+            _scope = "plan" if os.environ.get("SYNLYNK_SCHEDULE_RUN_ID") else "session"
+            existing_reservation = dconn.execute(
+                "SELECT 1 FROM harness_reservations "
+                "WHERE status='open' AND job_id=?",
+                (job_id,),
+            ).fetchone()
+            if not existing_reservation:
+                open_reservation_fn(
+                    dconn,
+                    agent,
+                    _est_tokens,
+                    scope=_scope,
+                    scope_id=os.environ.get("SYNLYNK_SCHEDULE_RUN_ID"),
+                    job_id=job_id,
+                )
 
     resolve_or_create_story_id = _pkg("resolve_or_create_story_id")
     if resolve_or_create_story_id:
@@ -2581,12 +2615,10 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         except Exception:
             pass
         capability_gate_fn = _pkg("_dispatch_capability_preflight", _dispatch_capability_preflight)
-        _get_db_fn = _pkg("_get_db")
-        _capability_db = _get_db_fn() if _get_db_fn else None
         capability_gate = capability_gate_fn(
             agent,
             task,
-            db_conn=_capability_db,
+            db_conn=dconn,
             cwd=os.getcwd(),
             requires=declared_requires,
         )
@@ -2596,13 +2628,11 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             print(f"  ⚠ capability gate degraded: {capability_gate.get('reason')}")
     if not skip_preflight:
         preflight_fn = _pkg("_preflight_dispatch", _preflight_dispatch)
-        _get_db_fn = _pkg("_get_db")
-        _preflight_db = _get_db_fn() if _get_db_fn else None
         try:
             preflight = preflight_fn(
                 harness_name=agent,
                 dispatch_flags=flags,
-                db_conn=_preflight_db,
+                db_conn=dconn,
                 _task_hint=task,
                 permissions=permissions,
                 force_agent=force_agent,
@@ -2613,16 +2643,16 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 preflight = preflight_fn(
                     harness_name=agent,
                     dispatch_flags=flags,
-                    db_conn=_preflight_db,
+                    db_conn=dconn,
                     _task_hint=task,
                 )
             except TypeError:
-                    try:
-                        preflight = preflight_fn(
-                            agent_name=agent, dispatch_flags=flags, db_conn=_preflight_db
-                        )
-                    except TypeError:
-                        raise
+                try:
+                    preflight = preflight_fn(
+                        agent_name=agent, dispatch_flags=flags, db_conn=dconn
+                    )
+                except TypeError:
+                    raise
         if isinstance(preflight, dict):
             if not preflight.get("passed", False):
                 sentinel_path = os.path.join(".synlynk", "sentinel.md")
@@ -2909,6 +2939,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     job = {
         "id": job_id,
         "agent": agent,
+        "harness": agent,
+        "role": resolved_agent_role or "",
+        "agent_role": resolved_agent_role or "",
         "story_id": story_id or "",
         "task": task,
         "cycle": cycle,
@@ -2959,10 +2992,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             jobs_to_save.append(saved_job)
         save_jobs(jobs_to_save)
 
-    dconn = None
-    get_db = _pkg("_get_db")
     try:
-        dconn = get_db() if get_db else None
         if dconn is not None:
             # Tests and older DBs may create daemon_jobs without these columns;
             # ensure before INSERT so dispatch never hard-fails on schema lag.
@@ -2970,6 +3000,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             _ensure_daemon_job_session_column(dconn)
             _ensure_daemon_job_agent_id_column(dconn)
             _ensure_daemon_job_gh_write_columns(dconn)
+            _ensure_daemon_job_harness_columns(dconn)
             existing = dconn.execute(
                 "SELECT 1 FROM daemon_jobs WHERE job_id=?", (job_id,)
             ).fetchone()
@@ -2978,7 +3009,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 dispatch_context = _dispatch_context()
                 dconn.execute(
                     "UPDATE daemon_jobs SET status='running', pid=?, started_at=?, "
-                    "log_path=?, agent=?, task=?, story_id=?, "
+                    "log_path=?, agent=?, harness=?, role=?, task=?, story_id=?, "
                     "dispatch_context=COALESCE(dispatch_context, ?), "
                     "context_mode=?, context_bytes=?, "
                     "session_id=COALESCE(session_id, ?), "
@@ -2990,6 +3021,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                         job["started_at"],
                         log_file,
                         agent,
+                        agent,
+                        resolved_agent_role or None,
                         task,
                         story_id,
                         dispatch_context,
@@ -3006,13 +3039,15 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 dispatch_context = _dispatch_context()
                 dconn.execute(
                     "INSERT OR REPLACE INTO daemon_jobs "
-                    "(job_id, agent, task, story_id, status, priority, depends_on, pid, "
+                    "(job_id, agent, harness, role, task, story_id, status, priority, depends_on, pid, "
                     "enqueued_at, started_at, log_path, dispatch_context, context_mode, context_bytes, session_id, "
                     "agent_id, requires_gh_write, gh_write_target, gh_write_author, gh_write_expect) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         job_id,
                         agent,
+                        agent,
+                        resolved_agent_role or None,
                         task,
                         story_id,
                         "running",
@@ -3035,7 +3070,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 )
             dconn.commit()
     finally:
-        if dconn is not None:
+        if owns_dconn and dconn is not None:
             try:
                 dconn.close()
             except Exception:
