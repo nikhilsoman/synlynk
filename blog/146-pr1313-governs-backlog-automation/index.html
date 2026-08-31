@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #1313 — GOVERNS Backlog Automation: Auto-Associate Discovered and Planned Work | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-2">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Aug 31, 2026</span>
+        
+          <span class="blog-post-pr">PR #1313</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #1313 — GOVERNS Backlog Automation: Auto-Associate Discovered and Planned Work</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>PR #1313 — GOVERNS Backlog Automation: Auto-Associate Discovered and Planned Work</h1>
+<h2>The Broader Goal</h2>
+<p>In autonomous multi-agent development fleets, tasks and technical debt are discovered dynamically during interactive sessions, autonomous dispatch jobs, and health diagnostics (<code>synlynk doctor</code>).</p>
+<p>Part of the <strong>Autonomous Operations Activation</strong> roadmap (#1198), Issue #1203 implements <strong>GOVERNS Backlog Automation</strong>: a deterministic, deduplicated, lifecycle-aware subsystem that captures discovered work, maps it to the 7-stage GOVERNS taxonomy (<code>goal</code>, <code>open</code>, <code>visualize</code>, <code>execute</code>, <code>release</code>, <code>notify</code>, <code>sustain</code>), and safely synchronizes it with GitHub Issues without spam or duplication.</p>
+<h2>What Was Missing &amp; Root Cause</h2>
+<p>Previously:</p>
+<ul>
+<li>No automated subsystem existed to capture and structure discovered work across devlogs, job outputs, or doctor failures.</li>
+<li>Unstructured auto-filing risked duplicate-issue spam on GitHub.</li>
+<li>Discovered work was not tied to the 7-stage GOVERNS lifecycle model or tracked in <code>state.db</code>.</li>
+</ul>
+<h2>What Shipped</h2>
+<ol>
+<li>
+<p><strong>Deterministic Fingerprinting &amp; 4-Layer Anti-Spam Deduplication (<code>synlynk/backlog.py</code>):</strong></p>
+<ul>
+<li>Implemented <code>compute_fingerprint(title, source_ref)</code> using SHA-256 over normalized title and source references.</li>
+<li>Enforced deduplication across <code>state.db:stories</code> unique fingerprint index, existing titles, and open GitHub issues.</li>
+</ul>
+</li>
+<li>
+<p><strong>Signal Extraction Heuristics (<code>synlynk/backlog_extractor.py</code>):</strong></p>
+<ul>
+<li>Added extractors for devlog follow-up sections and <code>&lt;!-- discover: ... --&gt;</code> markers.</li>
+<li>Added parsers for out-of-scope <code>FOLLOWUP:</code> / <code>TECH-DEBT:</code> items in autonomous job outputs.</li>
+<li>Added doctor failure conversion into <code>governs:sustain</code> maintenance tasks.</li>
+</ul>
+</li>
+<li>
+<p><strong>Data Model &amp; Schema Migration (<code>synlynk/db.py</code>, <code>synlynk/__init__.py</code>):</strong></p>
+<ul>
+<li>Bumped <code>_DB_MIGRATION_VERSION</code> to 5.</li>
+<li>Added <code>fingerprint</code>, <code>source_type</code>, <code>source_ref</code>, and <code>governs_stage</code> columns with unique index on <code>stories</code>.</li>
+</ul>
+</li>
+<li>
+<p><strong>CLI Subcommand Surface (<code>synlynk/cli.py</code>):</strong></p>
+<ul>
+<li>Added <code>synlynk backlog capture</code> for staging discovered work.</li>
+<li>Added <code>synlynk backlog list</code> for inspecting staged backlog items.</li>
+<li>Added <code>synlynk backlog sync</code> for dry-run and upstream GitHub issue creation.</li>
+</ul>
+</li>
+<li>
+<p><strong>Session Checkpoint Integration (<code>synlynk/__init__.py:checkpoint</code>):</strong></p>
+<ul>
+<li>Automatically scans session devlogs during checkpoint/session boundary and stages new action items into the backlog.</li>
+</ul>
+</li>
+<li>
+<p><strong>Comprehensive Unit &amp; Integration Test Suite (<code>tests/test_backlog_automation.py</code>):</strong></p>
+<ul>
+<li>Added 8 test cases covering fingerprint normalization, deduplication, signal extraction, staging, GitHub syncing, and CLI commands.</li>
+</ul>
+</li>
+</ol>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
