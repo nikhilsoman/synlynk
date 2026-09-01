@@ -1,6 +1,11 @@
 # synlynk Memory
 
-## Fleet Parity: Agy Stitch MCP Integration, Diagnostics, and Prompt Guidance (decided/shipped 2026-08-31)
+## Hardening: Prohibit Direct todo.md Hand-Edits Across Harness Instruction Templates (decided/shipped 2026-09-01)
+- **Shipped:** PR #1318 (closes #1317, relates to #1220, PR #1314). Hardens harness instruction templates against direct `todo.md` edits. [@agy]
+- **Root Cause Resolution:** Legacy instruction templates in `synlynk/instructions.py` and repository directive files (`GEMINI.md`, `CLAUDE.md`, `GROK.md`) previously told models to edit `[ ] → [x]` in `todo.md`. This contradicted the authoritative role of `state.db` and triggered doctor drift warnings (`_hc_todo_drift`).
+- **Template Hardening:** Updated `_session_protocol`, `_build_cursor_mdc()`, `_build_copilot_instructions()`, and `_build_windsurf_rules()` in `synlynk/instructions.py` to prohibit direct `todo.md` edits and direct agents to use `synlynk story done <id>` (or `synlynk story create/update`) and `synlynk checkpoint`.
+- **Verification:** Unit test `test_instruction_templates_prohibit_direct_todo_edits()` in `tests/test_instructions.py` asserts that all templates prohibit hand-edits and reference `state.db` / `synlynk story done` / `synlynk checkpoint`. All 506 tests in `tests/test_synlynk.py` pass.
+- **Blog Post:** `docs/blog/144-pr1318-harden-harness-instructions-todo-state-db.md`.
 - **Shipped:** PR #1310 (closes #573, relates to #426, #332). Resolves Stitch MCP configuration and invocation gaps on Agy. [@agy]
 - **Configuration vs. Extension Mismatch:** Agy (Google Antigravity CLI) does not read Gemini CLI extensions (`~/.gemini/extensions/Stitch/`). Agy requires MCP servers configured in `~/.gemini/config/mcp_config.json`.
 - **Tool Calling Convention:** Agy invokes MCP tools through `call_mcp_tool(server="stitch", tool="<tool_name>", arguments={...})` rather than Claude Code's `mcp__stitch__*` naming convention.

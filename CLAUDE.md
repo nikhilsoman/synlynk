@@ -88,7 +88,7 @@ At session start:
 2. Identify current user via `git config user.name`
 3. Surface last completed task, next task from `todo.md`, and (in team mode) recent entries from teammates' devlogs
 
-Keep `project-docs/` docs updated during the session: roadmap status, todo checkboxes, memory decisions with `[@username]` attribution, and devlog entry in `project-docs/devlogs/<username>.md`.
+Keep `project-docs/` docs updated during the session: roadmap status, task status in `state.db` (via `synlynk story done <id>` and `synlynk checkpoint` — do NOT hand-edit `todo.md`), memory decisions with `[@username]` attribution, and devlog entry in `project-docs/devlogs/<username>.md`.
 
 ## Blog Post Protocol
 

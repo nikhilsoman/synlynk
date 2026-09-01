@@ -1,4 +1,14 @@
 
+## 2026-09-01 — Hardening: Prohibit Direct todo.md Hand-Edits Across Harness Instruction Templates (PR #1318, closes #1317)
+
+### Shipped
+- **Design Spec & Implementation Plan:** Authored and committed formal Design Spec (`docs/superpowers/specs/2026-09-01-harden-harness-instructions-todo-state-db-design.md`) and Implementation Plan (`docs/superpowers/plans/2026-09-01-harden-harness-instructions-todo-state-db.md`), resolving #1317 (tracking story `story-5cc37133`, linked to `goal-a222b393`).
+- **Root Cause Resolution:** Legacy instruction templates in `synlynk/instructions.py` and repository directive files (`GEMINI.md`, `CLAUDE.md`, `GROK.md`) previously instructed models to hand-edit `[ ] → [x]` checkboxes in `todo.md`. This contradicted the single-source-of-truth role of `state.db` and triggered doctor drift warnings (`_hc_todo_drift`).
+- **Template Hardening:** Updated `_session_protocol`, `_build_cursor_mdc()`, `_build_copilot_instructions()`, and `_build_windsurf_rules()` in `synlynk/instructions.py` to prohibit direct `todo.md` edits and direct agents to use `synlynk story done <id>` (or `synlynk story create/update`) and `synlynk checkpoint`.
+- **Test Suite (TDD):** Added `test_instruction_templates_prohibit_direct_todo_edits()` in `tests/test_instructions.py`. All 15 tests in `tests/test_instructions.py`, 133 in dispatch/doctor/instruction suites, and 506 in `tests/test_synlynk.py` pass clean.
+- **Blog Post:** `docs/blog/144-pr1318-harden-harness-instructions-todo-state-db.md` (indexed in `docs/blog/README.md`).
+[@agy]
+
 ## 2026-08-31 — Fleet Parity: Agy Stitch MCP Integration, Diagnostics, and Prompt Guidance (PR #1310, closes #573)
 
 ### Shipped

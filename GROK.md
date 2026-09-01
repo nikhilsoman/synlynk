@@ -86,10 +86,10 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
    - Row 3 (team mode only): Last 1 entry per teammate from project-docs/devlogs/
 
 ## During the session
-- Update task status in project-docs/todo.md — do NOT delete tasks:
-  `[ ]` active · `[x]` done · `[-]` deferred · `[~]` superseded · `[>]` absorbed
+- Do NOT hand-edit `todo.md` directly — it is an auto-generated view projected from `state.db`.
+- Update task status in `state.db` via `synlynk story done <id>` (or `synlynk story create/update`).
 - Append decisions to project-docs/memory.md with [@username] attribution
-- Run `synlynk checkpoint` at every task boundary
+- Run `synlynk checkpoint` at every task boundary to archive completed tasks and refresh context
 - In team mode: always `git pull` before editing any project-docs file
 - Log costs in project-docs/costs.md after each significant AI operation
 
