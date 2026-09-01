@@ -127,8 +127,36 @@ def test_doctor_prints_tc9_output(monkeypatch, capsys):
         monkeypatch.setattr("synlynk.doctor.find_nested_product_state_dbs", lambda path: [])
         monkeypatch.setattr("synlynk.doctor.repo_has_any_core_instruction_file", lambda path: False)
 
-        args = MagicMock(fix=None, agent="claude")
+        args = MagicMock(fix=None, agent="claude", live_probe=False)
         cmd_doctor(args=args)
 
         captured = capsys.readouterr().out
         assert "TC-9 gh-write: ✓ (direct_cli)" in captured
+
+
+def test_get_harness_gh_write_capability():
+    from synlynk.probe import _get_harness_gh_write_capability
+
+    # Fallback to baseline
+    cap_claude = _get_harness_gh_write_capability("claude")
+    assert cap_claude["can_gh_write"] is True
+    assert cap_claude["source"] == "baseline"
+
+    cap_grok = _get_harness_gh_write_capability("grok")
+    assert cap_grok["can_gh_write"] is False
+
+    # Dynamic from probe history in db
+    db = sqlite3.connect(":memory:")
+    _migrate_db(db)
+
+    db.execute(
+        "INSERT INTO harness_version_history (harness_name, cli_version, event_type, recorded_at) "
+        "VALUES ('codex', 'verified_sandbox_execution', 'gh_write_probe', '2026-09-01T00:00:00Z')"
+    )
+    db.commit()
+
+    cap_codex = _get_harness_gh_write_capability("codex", db_conn=db)
+    assert cap_codex["can_gh_write"] is True
+    assert cap_codex["source"] == "probe_history"
+    assert cap_codex["mechanism"] == "verified_sandbox_execution"
+    assert cap_codex["last_probe_at"] == "2026-09-01T00:00:00Z"

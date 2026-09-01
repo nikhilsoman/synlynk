@@ -1138,6 +1138,50 @@ def _run_tc9(
     return res
 
 
+def _get_harness_gh_write_capability(harness_name: str, db_conn=None) -> dict:
+    """Return the current gh-write capability for a harness, querying the last
+    recorded TC-9 probe from state.db or falling back to the curated baseline.
+    """
+    if db_conn is not None:
+        try:
+            row = db_conn.execute(
+                """
+                SELECT event_type, cli_version, recorded_at
+                FROM harness_version_history
+                WHERE harness_name=? AND event_type='gh_write_probe'
+                ORDER BY recorded_at DESC LIMIT 1
+                """,
+                (harness_name,)
+            ).fetchone()
+            if row:
+                mechanism = row[1]
+                can_write = mechanism not in (
+                    "sandbox_denied",
+                    "missing_allow_rules",
+                    "uninstalled",
+                    "gh_auth_failed",
+                    "sandbox_network_blocked",
+                    "execution_failed",
+                    "unsupported",
+                )
+                return {
+                    "can_gh_write": can_write,
+                    "mechanism": mechanism,
+                    "last_probe_at": row[2],
+                    "source": "probe_history",
+                }
+        except Exception:
+            pass
+
+    baseline = HARNESS_CAPABILITY_BASELINES.get(harness_name, {})
+    return {
+        "can_gh_write": baseline.get("can_gh_write", False),
+        "mechanism": "baseline_default",
+        "last_probe_at": None,
+        "source": "baseline",
+    }
+
+
 def _read_harness_fence_body(file_path: str) -> str:
     """Return the current body inside the synlynk harness fence, if present."""
     try:

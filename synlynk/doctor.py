@@ -886,7 +886,8 @@ def cmd_doctor(args=None, checks: _List = None) -> int:
                 print(f"    TC-8 agy-stitch-mcp-preflight: {tc8_status}")
                 if not tc8["passed"]:
                     print(f"      {tc8['error']}")
-            tc9 = _run_tc9(agent, db_conn=db_conn)
+            live_probe = getattr(args, "live_probe", False) if args is not None else False
+            tc9 = _run_tc9(agent, live=live_probe, db_conn=db_conn)
             if tc9:
                 if tc9["passed"]:
                     tc9_note = f" ({tc9.get('mechanism', 'supported')})" if tc9.get("mechanism") else ""
