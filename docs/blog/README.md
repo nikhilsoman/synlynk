@@ -154,6 +154,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [152](./152-pr1320-dispatch-gh-write-false-positives.md) | PR #1320 — Tighten _task_requires_gh_write() Auto-Detection Heuristic | [#1320](https://github.com/nikhilsoman/synlynk/pull/1320) | 2026-09-01 |
 | [153](./153-pr1321-roles-fix-repairs-sops.md) | PR #1321 — Repair Stale & Missing SOP Sections during synlynk roles --fix | [#1321](https://github.com/nikhilsoman/synlynk/pull/1321) | 2026-09-01 |
 | [154](./154-pr1322-fix-blog-post-103-frontmatter.md) | PR #1322 — Fix YAML Frontmatter in Blog Post 103 | [#1322](https://github.com/nikhilsoman/synlynk/pull/1322) | 2026-09-02 |
+| [155](./155-pr1323-cli-version-drift-warning.md) | PR #1323 — Catching a Stale pipx CLI Before It Misleads You | [#1323](https://github.com/nikhilsoman/synlynk/pull/1323) | 2026-09-02 |
 
 ## Per-PR Post Template
 
