@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #1318 — Hardening: Prohibit Direct todo.md Hand-Edits Across Harness Instruction Templates | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Sep 01, 2026</span>
+        
+          <span class="blog-post-pr">PR #1318</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #1318 — Hardening: Prohibit Direct todo.md Hand-Edits Across Harness Instruction Templates</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>PR #1318 — Hardening: Prohibit Direct todo.md Hand-Edits Across Harness Instruction Templates</h1>
+<h2>The Broader Goal at the End of the Previous PR</h2>
+<p>PR #1316 shipped the automated live in-sandbox GitHub-write probe (TC-9, issue #1213), closing the empirical verification gap across the fleet. Following that landing, an audit of model behavior revealed a chronic reflex where dispatched agents across all harnesses repeatedly attempted to hand-edit <code>project-docs/todo.md</code> directly.</p>
+<h2>What Was Missing &amp; The Real Root Cause</h2>
+<p>An audit of instruction templates in <code>synlynk/instructions.py</code> and active directive files (<code>CLAUDE.md</code>, <code>GEMINI.md</code>, <code>GROK.md</code>, <code>.github/copilot-instructions.md</code>, <code>.windsurfrules</code>) identified a direct contradiction:</p>
+<ul>
+<li>The instruction templates explicitly commanded agents to <code>- Update task status in project-docs/todo.md ([ ] → [x])</code>.</li>
+<li>In synlynk's runtime architecture, however, <code>state.db</code> is the authoritative single source of truth; <code>todo.md</code> is an auto-generated view projected at <code>synlynk checkpoint</code>, and <code>_hc_todo_drift</code> in <code>synlynk doctor</code> warns against manual hand-edits.</li>
+</ul>
+<h2>What Shipped</h2>
+<ol>
+<li><strong>Instruction Template Hardening (<code>synlynk/instructions.py</code>):</strong>
+<ul>
+<li>Updated <code>_session_protocol</code>, <code>_build_cursor_mdc()</code>, <code>_build_copilot_instructions()</code>, and <code>_build_windsurf_rules()</code> to explicitly prohibit hand-editing <code>todo.md</code> and direct agents to use <code>synlynk story done &lt;id&gt;</code> (or <code>synlynk story create/update</code>) and <code>synlynk checkpoint</code>.</li>
+</ul>
+</li>
+<li><strong>Directive Files Alignment:</strong>
+<ul>
+<li>Updated root directive files (<code>GEMINI.md</code>, <code>CLAUDE.md</code>, <code>GROK.md</code>) to eliminate legacy checkbox hand-edit instructions.</li>
+</ul>
+</li>
+<li><strong>Unit Test Coverage (<code>tests/test_instructions.py</code>):</strong>
+<ul>
+<li>Added <code>test_instruction_templates_prohibit_direct_todo_edits()</code> asserting that all generated templates prohibit direct <code>todo.md</code> edits and reference <code>state.db</code> / <code>synlynk story done</code> / <code>synlynk checkpoint</code>. All 15 tests pass.</li>
+</ul>
+</li>
+</ol>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
