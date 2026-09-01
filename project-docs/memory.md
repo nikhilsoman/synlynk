@@ -1,5 +1,12 @@
 # synlynk Memory
 
+## Grant Administration:Write Permission to Merge Roles in GitHub App Manifests (decided/shipped 2026-09-01)
+- **Shipped:** PR #1303 (closes #1295, relates to #423, #1124). Dynamically requests `administration: write` in GitHub App manifests for roles holding merge authority. [@agy]
+- **Branch Protection & Merge Authority:** Branch protection on `main` requires 1 approving review. Dispatched reviewers share one repo-owner identity and cannot self-approve, relying on the sanctioned COMMENT-review checklist fallback. Merging via `gh pr merge --admin` previously failed because the `qa` GitHub App manifest lacked `administration: write`.
+- **Dynamic Manifest Scoping:** In `synlynk/team.py::_build_app_manifest_url()`, synlynk now inspects `merge_authority.can_merge` in `.synlynk/policy.json` (defaulting to `["qa"]`). If the role being initialized holds merge authority, `administration: write` is automatically requested in `default_permissions`.
+- **Verification:** Covered by `test_build_app_manifest_url_adds_administration_only_for_merge_roles` in `tests/test_team.py`. All 13 team/identity tests and 506 tests in `tests/test_synlynk.py` pass.
+- **Blog Post:** `docs/blog/150-pr1303-qa-app-administration-permission.md`.
+
 ## Hardening: Prohibit Direct todo.md Hand-Edits Across Harness Instruction Templates (decided/shipped 2026-09-01)
 - **Shipped:** PR #1318 (closes #1317, relates to #1220, PR #1314). Hardens harness instruction templates against direct `todo.md` edits. [@agy]
 - **Root Cause Resolution:** Legacy instruction templates in `synlynk/instructions.py` and repository directive files (`GEMINI.md`, `CLAUDE.md`, `GROK.md`) previously told models to edit `[ ] → [x]` in `todo.md`. This contradicted the authoritative role of `state.db` and triggered doctor drift warnings (`_hc_todo_drift`).
