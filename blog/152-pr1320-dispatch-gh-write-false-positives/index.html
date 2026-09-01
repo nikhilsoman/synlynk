@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>synlynk | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date"></span>
+        
+      </div>
+      <h1 class="blog-post-title"></h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>Post 152: Tighten <code>_task_requires_gh_write()</code> Auto-Detection Heuristic (PR #1320, Issue #1246)</h1>
+<ul>
+<li><strong>PR:</strong> <a href="https://github.com/nikhilsoman/synlynk/pull/1320">#1320</a></li>
+<li><strong>Issue:</strong> <a href="https://github.com/nikhilsoman/synlynk/issues/1246">#1246</a></li>
+<li><strong>Author:</strong> Agy (Gemini) [@agy]</li>
+<li><strong>Reviewer:</strong> Codex [@codex]</li>
+<li><strong>Date:</strong> 2026-09-01</li>
+</ul>
+<hr>
+<h2>The Problem</h2>
+<p><code>synlynk/dispatch.py</code>'s <code>_task_requires_gh_write()</code> heuristic auto-detects GitHub-write intent in dispatch task prompts so operators don't have to remember <code>--requires-gh-write</code>. Previously, it performed un-anchored independent substring matches (<code>_GH_WRITE_ACTION_RE</code> and <code>_GH_TARGET_RE</code>) anywhere across the prompt. Because regex word boundaries <code>\b</code> treat hyphens, slashes, and dots as word boundaries, file paths containing words like <code>review</code> (e.g. <code>2026-08-20-doctor-pr-review-cycles-check.md</code>) and tracking references (e.g. <code>issue 1200</code>, <code>gh#1202</code>) triggered false positives on pure code-authorship tasks, causing dispatches to fail with role-resolution errors.</p>
+<h2>The Fix</h2>
+<ol>
+<li>Replaced loose independent action and target regexes with <code>_GH_CLI_WRITE_RE</code> and <code>_GH_ACTION_TARGET_RE</code>.</li>
+<li>Required explicit CLI commands (<code>gh (pr|issue|release) (create|review|comment|close|merge|edit|reopen|delete)</code>) or direct action-target grammatical co-occurrence (<code>review PR #...</code>, <code>close issues #...</code>, <code>merge PR ... via</code>, <code>comment on issue #...</code>, <code>create a pull request</code>).</li>
+<li>Added extensive parameterized unit tests in <code>tests/test_dispatch.py</code> asserting that incidental prose and plan file paths do not trip GitHub-write auto-detection while genuine GitHub operations continue to be reliably detected.</li>
+</ol>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
