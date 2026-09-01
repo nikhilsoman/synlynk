@@ -1346,5 +1346,15 @@ def test_harness_config_and_listing_with_harnesses_dir(tmp_path, monkeypatch, ca
     assert synlynk.cmd_harness_configure is synlynk.cmd_agent_configure
 
 
+def test_featdoctor_add_tc9_insandbox_ghwrite_cap(monkeypatch):
+    import synlynk
+    monkeypatch.setattr("shutil.which", lambda bin_name: "/usr/local/bin/claude")
+    monkeypatch.setattr(synlynk.probe, "_run_tc6", lambda *a, **k: {"passed": True, "error": "", "output": "ok"})
+    res = synlynk._run_tc9("claude")
+    assert res["passed"] is True
+    assert res["can_gh_write"] is True
+
+
+
 
 
