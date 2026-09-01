@@ -1028,7 +1028,7 @@ def build_parser() -> argparse.ArgumentParser:
         "roles", help="Show agent role table and directive file fence status")
     roles_parser.add_argument(
         "--fix", action="store_true",
-        help="Write missing role fences into agent directive files")
+        help="Write missing role fences and repair stale/missing SOP sections in directive files")
 
     release_parser = subparsers.add_parser('release', help='Cut a named release')
     release_parser.add_argument('--dry-run', action='store_true')

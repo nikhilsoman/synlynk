@@ -1259,9 +1259,12 @@ def _repair_config_agents(cfg: dict) -> list:
     """Return the directive-backed agents that should be considered for SOP repair."""
     cfg_roles = cfg.get("roles") or {}
     workgroup_agents = list(cfg.get("workgroup_agents") or [])
-    if workgroup_agents:
-        return workgroup_agents
-    return [agent for agent in cfg_roles.keys() if agent in {"claude", "agy", "codex", "grok"}]
+    role_agents = [agent for agent in cfg_roles.keys() if agent in {"claude", "agy", "codex", "grok"}]
+    agents = []
+    for a in workgroup_agents + role_agents:
+        if a and a not in agents and a in {"claude", "agy", "codex", "grok"}:
+            agents.append(a)
+    return agents or ["claude", "agy", "codex", "grok"]
 
 
 def _repair_role_list(value) -> list:

@@ -149,6 +149,8 @@ def test_cmd_roles_fix_writes_fence(tmp_path, monkeypatch, capsys):
     synlynk.cmd_roles(fix=True)
     content = claude_md.read_text()
     assert "<!-- synlynk:harness" in content
+    assert "## PR Review Discipline" in content
+    assert "## Herdr Workspace Protocol" in content
 
 
 def test_cmd_roles_fix_skips_missing_file(tmp_path, monkeypatch, capsys):
@@ -158,6 +160,42 @@ def test_cmd_roles_fix_skips_missing_file(tmp_path, monkeypatch, capsys):
     synlynk.cmd_roles(fix=True)
     _ = capsys.readouterr()
     assert not (tmp_path / "CLAUDE.md").exists()
+
+
+def test_cmd_roles_fix_repairs_missing_sops_in_fenced_file(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    _write_config(tmp_path, workgroup_agents=["claude"])
+    claude_md = tmp_path / "CLAUDE.md"
+    claude_md.write_text(
+        "# Claude\n"
+        "<!-- synlynk:harness v1.0 verified:2026-08-01T00:00:00Z -->\n"
+        "## Your Role\npm\n"
+        "<!-- /synlynk:harness -->\n"
+    )
+    synlynk.cmd_roles(fix=True)
+    content = claude_md.read_text()
+    assert "## PR Review Discipline" in content
+    assert "## Herdr Workspace Protocol" in content
+    assert "## Brainstorm-First Policy" in content
+
+
+def test_cmd_roles_fix_refreshes_stale_sops(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    _write_config(tmp_path, workgroup_agents=["claude"])
+    claude_md = tmp_path / "CLAUDE.md"
+    claude_md.write_text(
+        "# Claude\n"
+        "<!-- synlynk:harness v1.0 verified:2026-08-01T00:00:00Z -->\n"
+        "# Harness Instructions (synlynk-managed — do not edit)\n\n"
+        "## PR Review Discipline\n"
+        "1. Assign a non-authoring agent to review the PR.\n"
+        "2. Run `synlynk pr check <pr#>`\n"
+        "<!-- /synlynk:harness -->\n"
+    )
+    synlynk.cmd_roles(fix=True)
+    content = claude_md.read_text()
+    assert "synlynk pr check <pr#>" not in content
+    assert "synlynk pr check" in content
 
 
 def test_cmd_agent_add_onboards_agent(tmp_path, monkeypatch, capsys):
