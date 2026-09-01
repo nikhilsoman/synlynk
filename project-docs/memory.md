@@ -1,5 +1,12 @@
 # synlynk Memory
 
+## Tighten _task_requires_gh_write() Auto-Detection Heuristic (decided/shipped 2026-09-01)
+- **Shipped:** PR #1320 (closes #1246, relates to #659, #1110, #1200). Eliminates false-positive GitHub write auto-detection on incidental prompt prose and plan filenames. [@agy]
+- **Root Cause Resolution:** `_task_requires_gh_write()` previously ran unanchored `_GH_WRITE_ACTION_RE` and `_GH_TARGET_RE` substring searches across prompts. File paths containing `review` (e.g. `2026-08-20-doctor-pr-review-cycles-check.md`), tracking references (e.g. `gh#1202`), and flags (`--requires-gh-write`) triggered false positives on pure code authorship tasks, failing dispatches with role-resolution errors.
+- **Grammatical Co-Occurrence:** Replaced independent regexes with `_GH_CLI_WRITE_RE` and `_GH_ACTION_TARGET_RE`, requiring explicit CLI write commands (`gh (pr|issue|release) (create|review|comment|close|merge|edit|reopen|delete)`) or direct action-target grammatical pairing (`review PR #...`, `close issues #...`, `merge PR ... via`, `comment on issue #...`, `create a pull request`).
+- **Verification:** Unit tests added in `tests/test_dispatch.py` covering positive and negative prompt variations. All 140 dispatch tests, 7 task inference tests, and 506 suite tests pass clean.
+- **Blog Post:** `docs/blog/152-pr1320-dispatch-gh-write-false-positives.md`.
+
 ## Decouple README Sync Validator Unit Tests from Live Repo Root (decided/shipped 2026-09-01)
 - **Shipped:** PR #1319 (closes #1270, relates to #1242, PR #1269). Decouples README consistency unit tests from live filesystem mutations. [@agy]
 - **Root Cause Resolution:** `test_docs_keep_readme_synchronized_during_named_releases_real_readme_patterns` in `tests/test_agent_cli.py` previously executed `validate_readme_for_release()` against the live repository root `repo_root` and asserted hardcoded test counts (e.g. `2346`). This caused spurious test failures whenever `README.md` was updated.

@@ -292,6 +292,52 @@ def test_format_prompt_for_agent_auto_detects_issue_closing_task_shape():
     assert "close_issue" in prompt
 
 
+@pytest.mark.parametrize(
+    "task",
+    [
+        "Implement Task 1 in docs/superpowers/plans/2026-08-20-doctor-pr-review-cycles-check.md on issue 1200",
+        "In synlynk/dispatch.py, handle --requires-gh-write flag when reviewing code",
+        "Fix bug in synlynk/jobs.py (gh#1200). Write unit tests and review error handling.",
+        "Investigate the issue where state.db lock causes review timeout in job-1234",
+        "Refactor PR review checklist generator in synlynk/instructions.py (closes #1317)",
+        "See docs/blog/130-pr1245-doctor-pr-review-cycles-check.md for review context on issue #1200",
+        "Fix issue with token extraction in synlynk/costs.py (see issue #1246)",
+        "Write tests for the review cycles check without touching GitHub",
+        "Update the README docs for #42",
+        "Fix bug described in gh#1202: update GEMINI.md and review documentation",
+        "",
+        None,
+    ],
+)
+def test_task_requires_gh_write_does_not_false_positive_on_incidental_prose(task):
+    from synlynk.dispatch import _task_requires_gh_write
+
+    assert _task_requires_gh_write(task) is False
+
+
+@pytest.mark.parametrize(
+    "task",
+    [
+        "Close GitHub issues #935 and #701, citing the implementation PR and verification job.",
+        "Close issue #99 as duplicate",
+        "Review PR #1303 (fix/1295-qa-admin-permission). Check out branch fix/1295-qa-admin-permission, run tests, post review, and merge PR 1303.",
+        "review PR 1038",
+        "Please do a code review of PR #42 and leave comments",
+        "Post a GitHub PR review for PR #1164",
+        "gh pr merge 1303 --squash --delete-branch --admin",
+        "gh issue close 1246 --comment 'Fixed'",
+        "Merge pull request #1294 using gh pr merge",
+        "Comment on issue #1200 with the benchmark results",
+        "Post a review comment on PR #1234 approving the changes",
+        "Create a pull request for branch feat/123",
+    ],
+)
+def test_task_requires_gh_write_detects_actual_gh_write_actions(task):
+    from synlynk.dispatch import _task_requires_gh_write
+
+    assert _task_requires_gh_write(task) is True
+
+
 def test_gh_write_instruction_present_for_grok_when_required():
     from synlynk.dispatch import _format_prompt_for_agent
 

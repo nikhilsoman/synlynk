@@ -995,23 +995,38 @@ def _render_dispatch_preview(agent: str, task: str, context_mode: str,
     }
 
 
-_GH_WRITE_ACTION_RE = re.compile(
-    r"\b(?:approve|close|comment|merge|review|request[- ]changes|"
-    r"submit(?:ting)?\s+(?:a\s+)?review|add_(?:review|comment))\b",
+_GH_CLI_WRITE_RE = re.compile(
+    r"\bgh\s+(?:issue|pr|release)\s+(?:create|review|comment|close|merge|edit|reopen|delete)\b",
     re.IGNORECASE,
 )
-_GH_TARGET_RE = re.compile(
-    r"(?:\bgithub\b|\bgh\b|\bpull\s+request\b|\bpr\s*#?\d+\b|"
-    r"\bissues?\s*#?\d+\b|\bissue\b|\bpull\s+requests?\b)",
+
+_GH_ACTION_TARGET_RE = re.compile(
+    r"(?:"
+    r"\b(?:review|approv(?:e|ing))\s+(?:(?:the|this)\s+)?(?:github\s+)?(?:pr|pull\s+request)\s*#?\d+\b|"
+    r"\b(?:post|submit|add)\s+(?:(?:a|an)\s+)?(?:formal\s+)?(?:github\s+)?(?:pr\s+|pull\s+request\s+)?review\b|"
+    r"\b(?:do|conduct|perform)\s+(?:a\s+)?(?:code\s+)?review\s+of\s+(?:github\s+)?(?:pr|pull\s+request)\s*#?\d+\b|"
+    r"\b(?:pr|pull\s+request)\s+review\s+(?:for|on|of)\s+(?:pr|pull\s+request)?\s*#?\d+\b|"
+    r"\breview\s+and\s+post\b|"
+    r"\bclose\s+(?:(?:the|this|all)\s+)?(?:github\s+)?(?:issues?|prs?|pull\s+requests?)\s*#?\d+\b|"
+    r"\bclose\s+(?:(?:the|this|all)\s+)?(?:github\s+)?(?:issues?|prs?|pull\s+requests?)\s+(?:as|citing)\b|"
+    r"\bmerge\s+(?:(?:the|this)\s+)?(?:github\s+)?(?:pr|pull\s+request)\s*#?\d+\b|"
+    r"\bmerge\s+(?:(?:the|this)\s+)?(?:pr|pull\s+request)\s+via\b|"
+    r"\bcomment\s+on\s+(?:(?:the|this)\s+)?(?:github\s+)?(?:issues?|prs?|pull\s+requests?)\s*#?\d+\b|"
+    r"\bpost\s+(?:(?:a|an)\s+)?(?:comment|response)\s+(?:on|to)\s+(?:(?:the|this)\s+)?(?:github\s+)?(?:issues?|prs?|pull\s+requests?)\s*#?\d+\b|"
+    r"\b(?:create|open)\s+(?:(?:a|an)\s+)?(?:new\s+)?(?:github\s+)?(?:pr|pull\s+request)\b"
+    r")",
     re.IGNORECASE,
 )
 
 _REVIEW_TASK_RE = re.compile(
-    r"(?:\breview\s+and\s+post\b|"
+    r"(?:"
+    r"\breview\s+and\s+post\b|"
     r"\bpost(?:\s+(?:a|an))?\s+(?:github\s+)?(?:pr|pull\s+request)\s+review\b|"
     r"\bpost(?:\s+(?:a|an))?\s+review\b|"
     r"\b(?:pr|pull\s+request)\s+review\b|"
-    r"\bcode\s+review\b)",
+    r"\bcode\s+review\s+of\s+(?:github\s+)?(?:pr|pull\s+request)\b|"
+    r"\breview\s+(?:github\s+)?(?:pr|pull\s+request)\s*#?\d+\b"
+    r")",
     re.IGNORECASE,
 )
 
@@ -1019,20 +1034,21 @@ _REVIEW_TASK_RE = re.compile(
 def _task_requires_gh_write(task: str, task_type: str = None) -> bool:
     """Infer GitHub-write intent so operators do not have to remember a flag.
 
-    The explicit ``--requires-gh-write`` flag remains the override, while this
-    conservative detector only promotes action words when the task also names
-    GitHub/PR/issue context.
+    The explicit ``--requires-gh-write`` flag remains the override. This detector
+    checks for explicit ``gh`` CLI write invocations or tight co-occurrence of
+    GitHub write actions directly paired with target objects (PRs/issues), preventing
+    false positives on file paths, tracking issue mentions, and non-action prose.
     """
     text = task or ""
-    if re.search(r"\bgh\s+(?:issue|pr)\s+(?:review|comment|close|merge)\b", text, re.IGNORECASE):
+    if _GH_CLI_WRITE_RE.search(text):
         return True
-    return bool(_GH_WRITE_ACTION_RE.search(text) and _GH_TARGET_RE.search(text))
+    return bool(_GH_ACTION_TARGET_RE.search(text))
 
 
 def _infer_task_type(task: str) -> Optional[str]:
     """Infer only an unambiguous PR review task type from task text."""
     text = task or ""
-    if _REVIEW_TASK_RE.search(text) and _GH_TARGET_RE.search(text):
+    if _REVIEW_TASK_RE.search(text):
         return "review"
     return None
 

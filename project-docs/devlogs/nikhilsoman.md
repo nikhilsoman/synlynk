@@ -1,4 +1,13 @@
 
+## 2026-09-01 — Tighten _task_requires_gh_write() Auto-Detection Heuristic (PR #1320, closes #1246)
+
+### Shipped
+- **Design Spec & Implementation Plan:** Authored and committed formal Design Spec (`docs/superpowers/specs/2026-09-01-dispatch-gh-write-false-positives-design.md`) and Implementation Plan (`docs/superpowers/plans/2026-09-01-dispatch-gh-write-false-positives.md`), resolving #1246 (tracking story `story-a19a6ea6`, linked to `goal-bde24050`).
+- **Grammatical Co-Occurrence & False Positive Elimination:** In `synlynk/dispatch.py`, replaced loose independent regexes with `_GH_CLI_WRITE_RE` and `_GH_ACTION_TARGET_RE`, eliminating false positives on plan file paths (e.g. `2026-08-20-doctor-pr-review-cycles-check.md`), tracking references (e.g. `gh#1202`), and internal review prose.
+- **Test Suite (TDD):** Added parameterized positive and negative test cases in `tests/test_dispatch.py`. All 140 dispatch tests, 7 task inference tests, and 506 suite tests pass clean.
+- **Blog Post:** `docs/blog/152-pr1320-dispatch-gh-write-false-positives.md` (indexed in `docs/blog/README.md`).
+[@agy]
+
 ## 2026-09-01 — Decouple README Sync Validator Unit Tests from Live Repo Root (PR #1319, closes #1270)
 
 ### Shipped
