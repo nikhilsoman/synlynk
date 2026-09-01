@@ -149,6 +149,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [142](./142-pr1309-instruction-file-preflight-and-receipt-verification.md) | PR #1309 — Fleet Parity: Instruction File Preflight Check and Closed-Loop Receipt Verification | [#1309](https://github.com/nikhilsoman/synlynk/pull/1309) | 2026-08-30 |
 | [143](./143-pr1310-agy-stitch-mcp-integration.md) | PR #1310 — Fleet Parity: Agy Stitch MCP Integration, Diagnostics, and Prompt Guidance | [#1310](https://github.com/nikhilsoman/synlynk/pull/1310) | 2026-08-31 |
 | [144](./144-pr1318-harden-harness-instructions-todo-state-db.md) | PR #1318 — Hardening: Prohibit Direct todo.md Hand-Edits Across Harness Instruction Templates | [#1318](https://github.com/nikhilsoman/synlynk/pull/1318) | 2026-09-01 |
+| [150](./150-pr1303-qa-app-administration-permission.md) | PR #1303 — Grant Administration:Write Permission to Merge Roles in GitHub App Manifests | [#1303](https://github.com/nikhilsoman/synlynk/pull/1303) | 2026-09-01 |
 
 ## Per-PR Post Template
 

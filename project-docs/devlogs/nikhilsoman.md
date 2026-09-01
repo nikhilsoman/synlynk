@@ -1,4 +1,13 @@
 
+## 2026-09-01 — Grant Administration:Write Permission to Merge Roles in GitHub App Manifests (PR #1303, closes #1295)
+
+### Shipped
+- **Design Spec & Implementation Plan:** Authored and committed formal Design Spec (`docs/superpowers/specs/2026-09-01-qa-app-admin-permission-design.md`) and Implementation Plan (`docs/superpowers/plans/2026-09-01-qa-app-admin-permission.md`), resolving #1295 (tracking story `story-issue-1295`, linked to `goal-bde24050`).
+- **Dynamic Manifest Scoping:** In `synlynk/team.py::_build_app_manifest_url()`, dynamically query `merge_authority.can_merge` in `.synlynk/policy.json` (defaulting to `["qa"]`). If the role being initialized holds merge authority, `administration: write` is automatically added to `default_permissions`.
+- **Test Suite (TDD):** Added `test_build_app_manifest_url_adds_administration_only_for_merge_roles` in `tests/test_team.py`. All 13 team/identity tests and 506 tests in `tests/test_synlynk.py` pass clean.
+- **Blog Post:** `docs/blog/150-pr1303-qa-app-administration-permission.md` (indexed in `docs/blog/README.md`).
+[@agy]
+
 ## 2026-09-01 — Hardening: Prohibit Direct todo.md Hand-Edits Across Harness Instruction Templates (PR #1318, closes #1317)
 
 ### Shipped

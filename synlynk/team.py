@@ -23,6 +23,7 @@ from synlynk._constants import (
     HARNESS_CAPABILITY_BASELINES,
     AGENT_PANEL_QUERY_TIMEOUT_SECONDS,
 )
+from synlynk.policy import load_policy
 
 
 def _pkg(name: str, default=None):
@@ -196,6 +197,11 @@ def _build_app_manifest_url(
             "pull_requests": "write",
         },
     }
+    merge_roles = load_policy(repo_path=os.getcwd()).get("merge_authority", {}).get(
+        "can_merge", ["qa"]
+    )
+    if role in merge_roles:
+        manifest["default_permissions"]["administration"] = "write"
     manifest_json = json.dumps(manifest)
     escaped_manifest = html.escape(manifest_json, quote=True)
     form_action = (
