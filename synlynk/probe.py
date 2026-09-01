@@ -744,6 +744,7 @@ def _probe_agent(harness_name: str, db_conn, fast_path_ok: bool = True, write_fe
     if discovered_version and discovered_version not in ("unknown", "session-scoped, no fixed default", "uses Claude Code's built-in default, no override"):
         _diff_and_queue_new_models(harness_name, [discovered_version], db_conn)
 
+    tc9 = _run_tc9(harness_name, db_conn=db_conn)
     db_conn.commit()
     return {
         "skipped": False,
@@ -751,6 +752,7 @@ def _probe_agent(harness_name: str, db_conn, fast_path_ok: bool = True, write_fe
         "version_detected": version_detected,
         "status": compliance,
         "schema_issues": schema_issues,
+        "tc9": tc9,
     }
 
 
