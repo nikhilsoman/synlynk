@@ -1,4 +1,13 @@
 
+## 2026-09-02 — Fix YAML Frontmatter in Blog Post 103 (PR #1322, closes #941)
+
+### Shipped
+- **Design Spec & Implementation Plan:** Authored and committed formal Design Spec (`docs/superpowers/specs/2026-09-02-fix-blog-post-103-frontmatter-design.md`) and Implementation Plan (`docs/superpowers/plans/2026-09-02-fix-blog-post-103-frontmatter.md`), resolving #941 (tracking story `story-65f140b9`, linked to `goal-85656c82`).
+- **YAML Frontmatter Repair:** Updated `docs/blog/103-pr778-scope-violation-enforcement.md` to fix invalid YAML (`merged: 2026-08-08`), resolving the Eleventy website build parse failure.
+- **Verification:** Ran `npm run build` in `website/` to verify all 393 output files compile cleanly with zero errors. All 506 suite tests pass.
+- **Blog Post:** `docs/blog/154-pr1322-fix-blog-post-103-frontmatter.md` (indexed in `docs/blog/README.md`).
+[@agy]
+
 ## 2026-09-01 — Repair Stale & Missing SOP Sections during synlynk roles --fix (PR #1321, closes #1231)
 
 ### Shipped

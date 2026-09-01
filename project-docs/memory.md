@@ -1,5 +1,12 @@
 # synlynk Memory
 
+## Fix YAML Frontmatter in Blog Post 103 (decided/shipped 2026-09-02)
+- **Shipped:** PR #1322 (closes #941). Fixes invalid YAML frontmatter in `docs/blog/103-pr778-scope-violation-enforcement.md`. [@agy]
+- **Root Cause Resolution:** Post 103 contained `merged: status open`, which violated YAML syntax and caused Eleventy website builds (`npm run build`) to crash with a `bad indentation of a mapping entry` parse error.
+- **Merge Date Correction:** Updated `merged:` to `2026-08-08` matching the actual merge date of PR #778.
+- **Verification:** `npm run build` in `website/` generates all static HTML pages cleanly. Full test suite (506 tests) passes.
+- **Blog Post:** `docs/blog/154-pr1322-fix-blog-post-103-frontmatter.md`.
+
 ## Repair Stale & Missing SOP Sections during synlynk roles --fix (decided/shipped 2026-09-01)
 - **Shipped:** PR #1321 (closes #1231, relates to #718, #1229). Ensures `synlynk roles --fix` repairs missing and stale SOP sections across all configured agent directive files. [@agy]
 - **Root Cause Resolution:** `synlynk roles --fix` previously only checked whether a harness fence existed in each directive file, writing a minimal `## Your Role` fence if missing. It never called `_repair_sops_only()`, meaning newly-added SOP sections (e.g. `## Herdr Workspace Protocol`) and stale SOP sections (e.g. `## PR Review Discipline`) were not repaired or refreshed without explicitly discovering and running `synlynk sync --repair-sops --confirm`.
