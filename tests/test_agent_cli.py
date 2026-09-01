@@ -16,6 +16,32 @@ def test_codex_harness_baseline_includes_verifier_role_and_can_gh_write():
     assert codex["can_gh_write"] is True
 
 
+def test_cli_detect_and_warn_on_stale_pipxinstall(tmp_path, monkeypatch, capsys):
+    from synlynk import cli
+
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "synlynk"\n')
+    (tmp_path / "VERSION").write_text("0.19.0\n")
+    monkeypatch.chdir(tmp_path)
+
+    cli._warn_stale_repo_version("0.18.0")
+
+    warning = capsys.readouterr().err
+    assert "installed synlynk 0.18.0 is behind this repository's VERSION 0.19.0" in warning
+    assert "pipx install --force" in warning
+
+
+def test_cli_does_not_warn_when_repo_version_is_not_newer(tmp_path, monkeypatch, capsys):
+    from synlynk import cli
+
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "synlynk"\n')
+    (tmp_path / "VERSION").write_text("0.18.0\n")
+    monkeypatch.chdir(tmp_path)
+
+    cli._warn_stale_repo_version("0.18.0")
+
+    assert capsys.readouterr().err == ""
+
+
 def test_claude_harness_alignment_update_baseline():
     from synlynk._constants import HARNESS_CAPABILITY_BASELINES
 
@@ -1391,7 +1417,6 @@ def test_featdoctor_add_tc9_insandbox_ghwrite_cap(monkeypatch):
     res = synlynk._run_tc9("claude")
     assert res["passed"] is True
     assert res["can_gh_write"] is True
-
 
 
 

@@ -328,6 +328,15 @@ HTTP Context Server (v0.7, `localhost:27471`) is the underlying transport.
 ## Active Holds
 (none currently — see Superseded Decisions for the lifted Blog Post Protocol hold)
 
+## CLI Version Drift Warning (2026-09-02)
+
+When invoked inside a synlynk checkout, the CLI compares its running package
+version with the enclosing repository's `VERSION` file. If the installed version
+is older, it emits a non-blocking stderr warning with a forced pipx reinstall
+command. The check is local and best-effort, so malformed metadata and unrelated
+repositories remain silent. See `docs/superpowers/specs/2026-09-02-cli-version-drift-warning-design.md`.
+[@codex]
+
 ## Conventions
 - Attribution: `[@username]` on all team-mode entries.
 - Session protocol: read last 3 devlog entries at session start. Surface any open threads.

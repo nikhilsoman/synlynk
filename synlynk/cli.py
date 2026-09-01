@@ -1,8 +1,54 @@
 import argparse
 import os
 import sys
+from pathlib import Path
+import re
 
 _SYNLYNK_DIR = ".synlynk"
+
+
+def _synlynk_repo_root(start=None):
+    """Return the enclosing synlynk checkout, if ``start`` is inside one."""
+    path = Path.cwd() if start is None else Path(start)
+    if not path.is_dir():
+        path = path.parent
+    for candidate in (path, *path.parents):
+        pyproject = candidate / "pyproject.toml"
+        version_file = candidate / "VERSION"
+        if not (pyproject.is_file() and version_file.is_file()):
+            continue
+        try:
+            project_metadata = pyproject.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        if re.search(r"(?m)^\s*name\s*=\s*[\"']synlynk[\"']\s*$", project_metadata):
+            return candidate
+    return None
+
+
+def _warn_stale_repo_version(installed_version, cwd=None):
+    """Warn when an installed CLI predates the checkout it is being used in."""
+    repo_root = _synlynk_repo_root(cwd)
+    if repo_root is None:
+        return
+
+    try:
+        repo_version = (repo_root / "VERSION").read_text(encoding="utf-8").strip()
+        installed_parts = tuple(int(part) for part in str(installed_version).split("."))
+        repo_parts = tuple(int(part) for part in repo_version.split("."))
+    except (OSError, ValueError):
+        return
+
+    if installed_parts >= repo_parts:
+        return
+
+    print(
+        "warning: installed synlynk "
+        f"{installed_version} is behind this repository's VERSION {repo_version}. "
+        "Your pipx-installed CLI may be stale; refresh it with "
+        "`pipx install --force git+https://github.com/nikhilsoman/synlynk.git`.",
+        file=sys.stderr,
+    )
 
 def cmd_watch(args) -> None:
     """Terminal HUD for live workspace state."""
@@ -1163,6 +1209,7 @@ def main(argv=None) -> None:
     args = parser.parse_args(argv)
     cli_tokens = argv if argv is not None else sys.argv[1:]
     help_parsers = getattr(parser, "_synlynk_help_parsers", {})
+    _warn_stale_repo_version(VERSION)
 
     if args.command == "init":
         if getattr(args, "wizard", False):

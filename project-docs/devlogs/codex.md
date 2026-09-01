@@ -1,0 +1,14 @@
+# Codex Devlog
+
+## 2026-09-02 — CLI Version Drift Warning (#1188)
+
+- Added the design spec and implementation plan for detecting a stale
+  pipx-installed CLI inside a synlynk checkout.
+- Added `_synlynk_repo_root()` and `_warn_stale_repo_version()` in `synlynk/cli.py`.
+  The check compares package `VERSION` with repository `VERSION`, emits an
+  actionable stderr warning only when the installed version is behind, and is
+  silent for unrelated or malformed projects.
+- Added TDD coverage in `tests/test_agent_cli.py` for stale and current versions.
+- Added blog post 154 and indexed it in `docs/blog/README.md`.
+- Targeted test passed: `pytest tests/test_agent_cli.py -k 'cli_detect_and_warn_on_stale_pipxinstall' -v`.
+[@codex]
