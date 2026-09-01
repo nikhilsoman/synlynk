@@ -153,6 +153,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [151](./151-pr1319-readme-sync-test-synthetic-fixture.md) | PR #1319 — Decouple README Sync Validator Unit Tests from Live Repo Root | [#1319](https://github.com/nikhilsoman/synlynk/pull/1319) | 2026-09-01 |
 | [152](./152-pr1320-dispatch-gh-write-false-positives.md) | PR #1320 — Tighten _task_requires_gh_write() Auto-Detection Heuristic | [#1320](https://github.com/nikhilsoman/synlynk/pull/1320) | 2026-09-01 |
 | [153](./153-pr1321-roles-fix-repairs-sops.md) | PR #1321 — Repair Stale & Missing SOP Sections during synlynk roles --fix | [#1321](https://github.com/nikhilsoman/synlynk/pull/1321) | 2026-09-01 |
+| [154](./154-pr1322-cli-version-drift-warning.md) | Issue #1188 — Catching a Stale pipx CLI Before It Misleads You | [#1322](https://github.com/nikhilsoman/synlynk/pull/1322) | 2026-09-02 |
 
 ## Per-PR Post Template
 
