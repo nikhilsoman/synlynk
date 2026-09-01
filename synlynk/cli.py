@@ -351,6 +351,8 @@ def build_parser() -> argparse.ArgumentParser:
                                help="Apply a targeted remediation for the named harness (agy only)")
     doctor_parser.add_argument("--yes", action="store_true",
                                help="Write the proposed remediation without prompting")
+    doctor_parser.add_argument("--live-probe", action="store_true",
+                               help="Execute live in-sandbox gh-write probe during health checks")
 
     worktree_parser = subparsers.add_parser(
         "worktree", help="Audit and clean up stale git worktrees/branches"

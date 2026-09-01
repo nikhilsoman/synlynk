@@ -1942,8 +1942,11 @@ def _generate_todo_md() -> None:
         domain = f" [{engg_domain}]" if engg_domain and engg_domain != "unknown" else ""
         lines.append(f"- [{check}] {title or story_id}{domain} <!-- id:{story_id} -->\n")
 
-    with open(todo_path, "w") as f:
-        f.writelines(lines)
+    try:
+        with open(todo_path, "w") as f:
+            f.writelines(lines)
+    except (OSError, PermissionError):
+        return
 
     if _is_migrated():
         _dr_sync("todo.md")

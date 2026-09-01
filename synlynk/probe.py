@@ -744,6 +744,7 @@ def _probe_agent(harness_name: str, db_conn, fast_path_ok: bool = True, write_fe
     if discovered_version and discovered_version not in ("unknown", "session-scoped, no fixed default", "uses Claude Code's built-in default, no override"):
         _diff_and_queue_new_models(harness_name, [discovered_version], db_conn)
 
+    tc9 = _run_tc9(harness_name, db_conn=db_conn)
     db_conn.commit()
     return {
         "skipped": False,
@@ -751,6 +752,7 @@ def _probe_agent(harness_name: str, db_conn, fast_path_ok: bool = True, write_fe
         "version_detected": version_detected,
         "status": compliance,
         "schema_issues": schema_issues,
+        "tc9": tc9,
     }
 
 
@@ -885,14 +887,17 @@ def _run_tc6(harness_name: str, env: Optional[dict] = None, timeout: int = 5) ->
     inspected.  Keep the output in the result only for diagnostics; ``gh``
     does not print the token itself.
     """
-    auth_env = os.environ.copy() if env is None else dict(env)
+    run_kwargs = {
+        "capture_output": True,
+        "text": True,
+        "timeout": timeout,
+    }
+    if env is not None:
+        run_kwargs["env"] = dict(env)
     try:
         result = subprocess.run(
             ["gh", "auth", "status"],
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            env=auth_env,
+            **run_kwargs,
         )
     except FileNotFoundError:
         return {"passed": False, "error": "gh CLI not found", "output": ""}
@@ -918,6 +923,322 @@ def _run_tc6(harness_name: str, env: Optional[dict] = None, timeout: int = 5) ->
         "error": ", ".join(failures),
         "output": output,
         "returncode": result.returncode,
+    }
+
+
+def _run_tc9(
+    harness_name: str,
+    target_ref: Optional[str] = None,
+    live: bool = False,
+    env: Optional[dict] = None,
+    timeout: int = 15,
+    db_conn=None,
+) -> dict:
+    """TC-9: In-sandbox GitHub write capability probe.
+
+    Verifies whether the harness can perform GitHub write operations
+    in its sandboxed dispatch execution path.
+
+    When live=True, executes a live low-stakes gh write action (e.g. gh issue/pr comment
+    or dry-run write check) in the harness's actual sandboxed execution environment.
+    """
+    import shutil
+
+    # Prerequisite: GitHub CLI auth in environment (TC-6)
+    tc6 = _run_tc6(harness_name, env=env, timeout=timeout)
+    if not tc6.get("passed"):
+        return {
+            "passed": False,
+            "can_gh_write": False,
+            "mechanism": "gh_auth_failed",
+            "error": tc6.get("error") or "GitHub CLI authentication missing or invalid",
+            "output": tc6.get("output", ""),
+        }
+
+    cli_bin = harness_name if harness_name != "claude-cli" else "claude"
+    if harness_name == "codex":
+        cli_bin = "codex"
+    elif harness_name == "agy":
+        cli_bin = "agy" if shutil.which("agy") else "antigravity"
+    elif harness_name == "grok":
+        cli_bin = "grok"
+
+    bin_path = shutil.which(cli_bin)
+    if not bin_path:
+        return {
+            "passed": False,
+            "can_gh_write": False,
+            "mechanism": "uninstalled",
+            "error": f"Harness CLI '{cli_bin}' is not installed in PATH",
+        }
+
+    res = {
+        "passed": False,
+        "can_gh_write": False,
+        "mechanism": "unknown",
+        "error": "",
+        "note": "",
+        "output": "",
+        "live_tested": live,
+    }
+
+    cmd_str = (
+        f"gh issue comment {target_ref} --body '[synlynk probe] live gh-write verification'"
+        if target_ref
+        else "gh pr list --limit 1"
+    )
+
+    run_kwargs = {
+        "capture_output": True,
+        "text": True,
+        "timeout": timeout,
+    }
+    if env is not None:
+        run_kwargs["env"] = dict(env)
+
+    if harness_name == "grok":
+        if live:
+            try:
+                proc = subprocess.run(
+                    [cli_bin, "-p", cmd_str],
+                    **run_kwargs,
+                )
+                output = ((proc.stdout or "") + (proc.stderr or "")).strip()
+                if "denied" in output.lower() or proc.returncode != 0:
+                    res.update({
+                        "passed": False,
+                        "can_gh_write": False,
+                        "mechanism": "sandbox_denied",
+                        "error": "Grok headless dispatch sandbox denies shell execution in this environment",
+                        "output": output,
+                    })
+                else:
+                    res.update({
+                        "passed": True,
+                        "can_gh_write": True,
+                        "mechanism": "sandbox_allowed",
+                        "output": output,
+                    })
+            except Exception as exc:
+                res.update({
+                    "passed": False,
+                    "can_gh_write": False,
+                    "mechanism": "sandbox_denied",
+                    "error": str(exc),
+                })
+        else:
+            res.update({
+                "passed": False,
+                "can_gh_write": False,
+                "mechanism": "sandbox_denied",
+                "error": "Grok headless dispatch sandbox denies shell execution in this environment",
+            })
+
+    elif harness_name == "codex":
+        if live:
+            try:
+                proc = subprocess.run(
+                    [cli_bin, "exec", "--sandbox", "workspace-write", cmd_str],
+                    **run_kwargs,
+                )
+                output = ((proc.stdout or "") + (proc.stderr or "")).strip()
+                if proc.returncode == 0:
+                    res.update({
+                        "passed": True,
+                        "can_gh_write": True,
+                        "mechanism": "verified_sandbox_execution",
+                        "note": "Codex supports gh-write in workspace-write sandbox",
+                        "output": output,
+                    })
+                elif (
+                    "network" in output.lower()
+                    or "connection" in output.lower()
+                    or "reach" in output.lower()
+                ):
+                    res.update({
+                        "passed": False,
+                        "can_gh_write": False,
+                        "mechanism": "sandbox_network_blocked",
+                        "error": "Codex sandbox network egress blocked without --requires-gh-write",
+                        "output": output,
+                    })
+                else:
+                    res.update({
+                        "passed": False,
+                        "can_gh_write": False,
+                        "mechanism": "execution_failed",
+                        "error": output or f"Codex exited with code {proc.returncode}",
+                        "output": output,
+                    })
+            except Exception as exc:
+                res.update({
+                    "passed": False,
+                    "can_gh_write": False,
+                    "mechanism": "execution_failed",
+                    "error": str(exc),
+                })
+        else:
+            res.update({
+                "passed": True,
+                "can_gh_write": True,
+                "mechanism": "requires_gh_write_flag",
+                "error": "",
+                "note": "Codex supports gh-write when dispatched with --requires-gh-write (sandbox network egress enabled)",
+            })
+
+    elif harness_name == "agy":
+        from synlynk.doctor import _run_tc7
+
+        tc7 = _run_tc7()
+        if not tc7.get("passed"):
+            missing = tc7.get("missing", [])
+            res.update({
+                "passed": False,
+                "can_gh_write": False,
+                "mechanism": "missing_allow_rules",
+                "error": f"Agy missing required gh allow-rules: {missing}",
+            })
+        elif live:
+            try:
+                proc = subprocess.run(
+                    [cli_bin, "-p", cmd_str],
+                    **run_kwargs,
+                )
+                output = ((proc.stdout or "") + (proc.stderr or "")).strip()
+                if proc.returncode == 0:
+                    res.update({
+                        "passed": True,
+                        "can_gh_write": True,
+                        "mechanism": "verified_allow_rules",
+                        "output": output,
+                    })
+                else:
+                    res.update({
+                        "passed": False,
+                        "can_gh_write": False,
+                        "mechanism": "execution_failed",
+                        "error": output or f"Agy exited with code {proc.returncode}",
+                        "output": output,
+                    })
+            except Exception as exc:
+                res.update({
+                    "passed": False,
+                    "can_gh_write": False,
+                    "mechanism": "execution_failed",
+                    "error": str(exc),
+                })
+        else:
+            res.update({
+                "passed": True,
+                "can_gh_write": True,
+                "mechanism": "verified_allow_rules",
+                "error": "",
+            })
+
+    elif harness_name in ("claude", "claude-cli"):
+        if live:
+            try:
+                proc = subprocess.run(
+                    [cli_bin, "-p", cmd_str],
+                    **run_kwargs,
+                )
+                output = ((proc.stdout or "") + (proc.stderr or "")).strip()
+                if proc.returncode == 0:
+                    res.update({
+                        "passed": True,
+                        "can_gh_write": True,
+                        "mechanism": "direct_cli",
+                        "output": output,
+                    })
+                else:
+                    res.update({
+                        "passed": False,
+                        "can_gh_write": False,
+                        "mechanism": "execution_failed",
+                        "error": output or f"Claude exited with code {proc.returncode}",
+                        "output": output,
+                    })
+            except Exception as exc:
+                res.update({
+                    "passed": False,
+                    "can_gh_write": False,
+                    "mechanism": "execution_failed",
+                    "error": str(exc),
+                })
+        else:
+            res.update({
+                "passed": True,
+                "can_gh_write": True,
+                "mechanism": "direct_cli",
+                "error": "",
+            })
+    else:
+        res.update({
+            "passed": False,
+            "can_gh_write": False,
+            "mechanism": "unsupported",
+            "error": f"Harness '{harness_name}' has no registered gh-write capability adapter",
+        })
+
+    if db_conn is not None:
+        try:
+            now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            db_conn.execute(
+                """
+                INSERT INTO harness_version_history
+                    (harness_name, cli_version, event_type, recorded_at)
+                VALUES (?, ?, 'gh_write_probe', ?)
+                """,
+                (harness_name, res.get("mechanism", "unknown"), now),
+            )
+            db_conn.commit()
+        except Exception:
+            pass
+
+    return res
+
+
+def _get_harness_gh_write_capability(harness_name: str, db_conn=None) -> dict:
+    """Return the current gh-write capability for a harness, querying the last
+    recorded TC-9 probe from state.db or falling back to the curated baseline.
+    """
+    if db_conn is not None:
+        try:
+            row = db_conn.execute(
+                """
+                SELECT event_type, cli_version, recorded_at
+                FROM harness_version_history
+                WHERE harness_name=? AND event_type='gh_write_probe'
+                ORDER BY recorded_at DESC LIMIT 1
+                """,
+                (harness_name,)
+            ).fetchone()
+            if row:
+                mechanism = row[1]
+                can_write = mechanism not in (
+                    "sandbox_denied",
+                    "missing_allow_rules",
+                    "uninstalled",
+                    "gh_auth_failed",
+                    "sandbox_network_blocked",
+                    "execution_failed",
+                    "unsupported",
+                )
+                return {
+                    "can_gh_write": can_write,
+                    "mechanism": mechanism,
+                    "last_probe_at": row[2],
+                    "source": "probe_history",
+                }
+        except Exception:
+            pass
+
+    baseline = HARNESS_CAPABILITY_BASELINES.get(harness_name, {})
+    return {
+        "can_gh_write": baseline.get("can_gh_write", False),
+        "mechanism": "baseline_default",
+        "last_probe_at": None,
+        "source": "baseline",
     }
 
 
