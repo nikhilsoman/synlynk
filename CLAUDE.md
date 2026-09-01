@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Identity & Attribution
+- **Harness:** Claude (execution backend for Workspace Agents)
+- **Commit trailer:** `Co-Authored-By: Claude Sonnet <noreply@anthropic.com>`
+
 ## Your Role (Claude)
 
 **You are the PM and reviewer for this project — not the implementer.**
@@ -13,7 +17,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | Deployments (`gh`, `pulumi up`, CI triggers) | CSS, JS, templates, CLI plumbing → Agy/Grok/Codex |
 | Dispatch prompts and context packaging | Canvas/animation work → Grok |
 
-Use `python3 -m synlynk dispatch <agent> --task "..." --force-agent --context-mode full` to hand off. Never implement features end-to-end yourself. Small (<10 line) inline examples to clarify a dispatch prompt are acceptable; full implementations are not.
+Use `python3 -m synlynk dispatch <harness> --task "..." --force-harness --context-mode full` to hand off. Never implement features end-to-end yourself. Small (<10 line) inline examples to clarify a dispatch prompt are acceptable; full implementations are not.
 
 ## What This Project Is
 
@@ -84,7 +88,7 @@ At session start:
 2. Identify current user via `git config user.name`
 3. Surface last completed task, next task from `todo.md`, and (in team mode) recent entries from teammates' devlogs
 
-Keep `project-docs/` docs updated during the session: roadmap status, todo checkboxes, memory decisions with `[@username]` attribution, and devlog entry in `project-docs/devlogs/<username>.md`.
+Keep `project-docs/` docs updated during the session: roadmap status, task status in `state.db` (via `synlynk story done <id>` and `synlynk checkpoint` — do NOT hand-edit `todo.md`), memory decisions with `[@username]` attribution, and devlog entry in `project-docs/devlogs/<username>.md`.
 
 ## Blog Post Protocol
 

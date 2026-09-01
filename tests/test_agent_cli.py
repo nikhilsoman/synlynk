@@ -24,6 +24,35 @@ def test_claude_harness_alignment_update_baseline():
     assert "builder" not in claude["roles"]
 
 
+def test_harden_harness_instructions_to_prohibit_direct_todo_edits():
+    from synlynk.instructions import (
+        _build_templates,
+        _build_cursor_mdc,
+        _build_copilot_instructions,
+        _build_windsurf_rules,
+    )
+
+    templates_dict = _build_templates()
+    templates = [
+        templates_dict["CLAUDE.md"],
+        templates_dict["GEMINI.md"],
+        templates_dict["AGENTS.md"],
+        templates_dict["GROK.md"],
+        templates_dict["AI_INSTRUCTIONS.md"],
+        _build_cursor_mdc(),
+        _build_copilot_instructions(),
+        _build_windsurf_rules(),
+    ]
+
+    for tmpl in templates:
+        assert "[ ] active" not in tmpl
+        assert "Update task status in project-docs/todo.md" not in tmpl
+        assert "Update task status in `project-docs/todo.md`" not in tmpl
+        if "todo.md" in tmpl:
+            assert "state.db" in tmpl
+            assert "synlynk story done" in tmpl or "synlynk checkpoint" in tmpl
+
+
 def test_wire_charter_content_into_dispatchexecut(project_dir, tmp_path, monkeypatch):
     import synlynk
     from synlynk import agent_store
@@ -205,18 +234,28 @@ def test_codex_dispatch_workspacewrite_sandbox_bl_without_network_permission_is_
 
     flags = _permissions_to_flags("codex", ["read:*"])
 
-    assert flags == ["-c", "approval_policy=untrusted"]
+    assert flags == ["-s", "read-only"]
     assert "--ask-for-approval" not in flags
     assert "sandbox_workspace_write.network_access=true" not in flags
 
 
-def test_codex_dispatch_fails_askforapproval_rejected_flag_is_not_emitted():
+def test_codex_dispatch_fails_hardcoded_approval_flag_is_not_emitted():
     from synlynk.dispatch import _permissions_to_flags
 
     flags = _permissions_to_flags("codex", ["read:*"])
 
-    assert flags == ["-c", "approval_policy=untrusted"]
+    assert flags == ["-s", "read-only"]
     assert "--ask-for-approval" not in flags
+
+
+def test_codex_dispatch_with_network_permission_does_not_emit_read_only_sandbox():
+    from synlynk._constants import _CODEX_NETWORK_PERMISSION
+    from synlynk.dispatch import _permissions_to_flags
+
+    flags = _permissions_to_flags("codex", ["read:*", _CODEX_NETWORK_PERMISSION])
+    assert "-s" not in flags
+    assert "read-only" not in flags
+    assert flags == ["-c", "sandbox_workspace_write.network_access=true"]
 
 
 def test_codex_dispatch_effective_grants_includes_network_permission_on_gh_write():
@@ -1257,5 +1296,94 @@ def test_agy_headless_parity_pass_printtimeout_30(project_dir, monkeypatch):
     assert len(recorded_shell) == 1
     assert "--print-timeout 30m0s" in recorded_shell[0]
     assert "--mode plan" in recorded_shell[0]
+
+
+def test_dispatch_cli_force_harness_and_deprecated_force_agent():
+    from synlynk.cli import build_parser
+
+    parser = build_parser()
+    args1 = parser.parse_args(["dispatch", "codex", "--task", "test", "--force-harness"])
+    assert args1.force_agent is True
+
+    args2 = parser.parse_args(["dispatch", "codex", "--task", "test", "--force-agent"])
+    assert args2.force_agent is True
+
+
+def test_jobs_handoff_cli_to_harness():
+    from synlynk.cli import build_parser
+
+    parser = build_parser()
+    args = parser.parse_args(["jobs", "handoff", "job-12345", "--to-harness", "codex"])
+    assert args.to_agent == "codex"
+
+
+def test_warn_deprecated_harness_flags(capsys):
+    from synlynk.cli import _warn_deprecated_harness_flag
+
+    _warn_deprecated_harness_flag(["synlynk", "quota", "--agent", "codex"])
+    captured = capsys.readouterr()
+    assert "warning: --agent is deprecated, use --harness instead" in captured.err
+
+    _warn_deprecated_harness_flag(["synlynk", "dispatch", "codex", "--task", "t", "--force-agent"])
+    captured = capsys.readouterr()
+    assert "warning: --force-agent is deprecated, use --force-harness instead" in captured.err
+
+    _warn_deprecated_harness_flag(["synlynk", "jobs", "handoff", "j1", "--to-agent", "codex"])
+    captured = capsys.readouterr()
+    assert "warning: --to-agent is deprecated, use --to-harness instead" in captured.err
+
+
+def test_dispatch_and_jobs_handoff_cli_warn_deprecated_flags(monkeypatch, capsys):
+    import synlynk
+    import synlynk.cli as cli
+
+    monkeypatch.setattr(synlynk, "dispatch_agent", lambda *a, **k: {"id": "j1", "pid": 1234})
+    monkeypatch.setattr(synlynk, "_reconcile_jobs", lambda: None)
+    cli.main(["dispatch", "codex", "--task", "t", "--force-agent", "--skip-preflight"])
+    captured = capsys.readouterr()
+    assert "warning: --force-agent is deprecated, use --force-harness instead" in captured.err
+
+    monkeypatch.setattr(synlynk, "cmd_jobs_handoff", lambda *a, **k: None)
+    cli.main(["jobs", "handoff", "job-123", "--to-agent", "codex"])
+    captured = capsys.readouterr()
+    assert "warning: --to-agent is deprecated, use --to-harness instead" in captured.err
+
+
+def test_harness_config_and_listing_with_harnesses_dir(tmp_path, monkeypatch, capsys):
+    import json
+    import synlynk
+    from synlynk.support_engineer import cmd_harness_list, cmd_agent_list
+
+    monkeypatch.chdir(tmp_path)
+    harnesses_dir = tmp_path / ".harnesses"
+    harnesses_dir.mkdir()
+    (harnesses_dir / "codex.json").write_text(json.dumps({"harness": "codex", "model": "codex-test"}))
+
+    cfg = synlynk._load_agent_config("codex")
+    assert cfg["harness"] == "codex"
+    assert cfg["model"] == "codex-test"
+
+    dummy_cursor = type("DummyCursor", (), {"fetchone": lambda self: None})()
+    dummy_db = type("DummyDB", (), {"execute": lambda self, *a, **k: dummy_cursor, "close": lambda self: None})()
+    monkeypatch.setattr(synlynk.support_engineer, "_pkg", lambda name: lambda: dummy_db)
+    cmd_harness_list()
+    captured = capsys.readouterr()
+    assert "codex" in captured.out
+
+    assert cmd_agent_list is cmd_harness_list
+    assert synlynk.cmd_harness_add is synlynk.cmd_agent_add
+    assert synlynk.cmd_harness_configure is synlynk.cmd_agent_configure
+
+
+def test_featdoctor_add_tc9_insandbox_ghwrite_cap(monkeypatch):
+    import synlynk
+    monkeypatch.setattr("shutil.which", lambda bin_name: "/usr/local/bin/claude")
+    monkeypatch.setattr(synlynk.probe, "_run_tc6", lambda *a, **k: {"passed": True, "error": "", "output": "ok"})
+    res = synlynk._run_tc9("claude")
+    assert res["passed"] is True
+    assert res["can_gh_write"] is True
+
+
+
 
 

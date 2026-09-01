@@ -37,3 +37,15 @@
 - Ran `synlynk pr check` and confirmed all 71 tests in `tests/test_agent_quota_tracking.py` pass cleanly.
 - Posted formal COMMENT review per PR Review Discipline and #423 identity rule.
 - Merged PR #926 into main via `gh pr merge --squash`.
+
+## 2026-08-31 — Phase 4: Database Schema Dual-Read / Dual-Write (#1307 / PR #1311)
+
+### Shipped
+- Implemented Phase 4 database schema dual-read/dual-write separating compute harnesses (`claude`, `codex`, `grok`, `agy`, `local`) from workspace agent roles (`pm`, `architect`, `tpm`, `dev`, `designer`, `qa`, `marketing`).
+- Bumped `_DB_MIGRATION_VERSION = 3` with automatic column additions (`harness`, `role` in `daemon_jobs`; `harness`, `agent_role` in `cost_entries`), backfill migrations, and indexes.
+- Added `get_costs_by_harness()` and `get_costs_by_agent_role()` query helpers to `synlynk/db.py`.
+- Threaded dual-writes through `dispatch_agent()`, `_reconcile_jobs()`, `_reconcile_daemon_jobs()`, `update_costs()`, and `_insert_cost_row()`.
+- Unified SQLite connection management in `dispatch_agent()` preventing database lock contentions during single-threaded capability sweeps and quota gating.
+- Authored blog post `docs/blog/144-pr1311-phase4-db-schema-dual-read-write.md`.
+- Verified entire 2,405-test suite passing. PR #1311 reviewed by Codex (`job-abd04554`), CI passed, and merged into `main`. Closed issue #1307.
+

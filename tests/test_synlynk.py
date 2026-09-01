@@ -171,6 +171,138 @@ def test_run_tc7_missing_settings_file_reports_all_rules_missing(tmp_path):
     assert len(result["missing"]) == 3
 
 
+def test_run_tc8_passes_when_stitch_mcp_configured(tmp_path):
+    from synlynk.doctor import _run_tc8
+
+    mcp_config_path = tmp_path / "mcp_config.json"
+    mcp_config_path.write_text(json.dumps({
+        "mcpServers": {
+            "stitch": {
+                "command": "npx",
+                "args": ["-y", "stitch-mcp@1.0.0"],
+                "disabled": False,
+            }
+        }
+    }))
+    result = _run_tc8(mcp_config_path=str(mcp_config_path))
+    assert result["passed"] is True
+    assert result["error"] == ""
+
+
+def test_run_tc8_reports_missing_when_stitch_not_configured(tmp_path):
+    from synlynk.doctor import _run_tc8
+
+    mcp_config_path = tmp_path / "mcp_config.json"
+    mcp_config_path.write_text(json.dumps({"mcpServers": {}}))
+    result = _run_tc8(mcp_config_path=str(mcp_config_path))
+    assert result["passed"] is False
+    assert "stitch" in result["error"]
+
+
+def test_run_tc8_reports_missing_when_stitch_disabled(tmp_path):
+    from synlynk.doctor import _run_tc8
+
+    mcp_config_path = tmp_path / "mcp_config.json"
+    mcp_config_path.write_text(json.dumps({
+        "mcpServers": {
+            "stitch": {
+                "command": "npx",
+                "args": ["-y", "stitch-mcp@1.0.0"],
+                "disabled": True,
+            }
+        }
+    }))
+    result = _run_tc8(mcp_config_path=str(mcp_config_path))
+    assert result["passed"] is False
+    assert "disabled" in result["error"]
+
+
+def test_run_tc8_missing_file_reports_error(tmp_path):
+    from synlynk.doctor import _run_tc8
+
+    result = _run_tc8(mcp_config_path=str(tmp_path / "does-not-exist.json"))
+    assert result["passed"] is False
+    assert "not found" in result["error"]
+
+
+def test_run_tc8_reports_error_on_invalid_or_malformed_stitch_config(tmp_path):
+    from synlynk.doctor import _run_tc8
+
+    # Null stitch config
+    mcp_config_path = tmp_path / "mcp_config_null.json"
+    mcp_config_path.write_text(json.dumps({"mcpServers": {"stitch": None}}))
+    result = _run_tc8(mcp_config_path=str(mcp_config_path))
+    assert result["passed"] is False
+    assert "invalid" in result["error"]
+
+    # Wrong command
+    mcp_config_path_cmd = tmp_path / "mcp_config_cmd.json"
+    mcp_config_path_cmd.write_text(json.dumps({
+        "mcpServers": {
+            "stitch": {
+                "command": "bad",
+                "args": ["-y", "stitch-mcp@1.0.0"],
+                "disabled": False,
+            }
+        }
+    }))
+    result_cmd = _run_tc8(mcp_config_path=str(mcp_config_path_cmd))
+    assert result_cmd["passed"] is False
+    assert "expected 'npx'" in result_cmd["error"]
+
+    # Missing stitch-mcp in args
+    mcp_config_path_args = tmp_path / "mcp_config_args.json"
+    mcp_config_path_args.write_text(json.dumps({
+        "mcpServers": {
+            "stitch": {
+                "command": "npx",
+                "args": ["-y", "other-tool"],
+                "disabled": False,
+            }
+        }
+    }))
+    result_args = _run_tc8(mcp_config_path=str(mcp_config_path_args))
+    assert result_args["passed"] is False
+    assert "missing 'stitch-mcp'" in result_args["error"]
+
+
+def test_build_agy_stitch_fix_plan(tmp_path, monkeypatch):
+    from synlynk.doctor import _build_agy_stitch_fix_plan
+
+    fake_config = tmp_path / "mcp_config.json"
+    fake_config.write_text(json.dumps({}))
+    monkeypatch.setattr("synlynk.doctor._agy_mcp_config_path", lambda: str(fake_config))
+
+    plan = _build_agy_stitch_fix_plan()
+    assert plan.needs_write is True
+    assert "stitch" in plan.desired_content
+    assert "stitch-mcp@1.0.0" in plan.desired_content
+
+
+def test_cmd_doctor_fix_remediates_both_settings_and_mcp_config(tmp_path, monkeypatch):
+    import types
+    from synlynk.doctor import cmd_doctor_fix
+
+    fake_settings = tmp_path / "settings.json"
+    fake_settings.write_text(json.dumps({}))
+    fake_mcp = tmp_path / "mcp_config.json"
+    fake_mcp.write_text(json.dumps({}))
+
+    monkeypatch.setattr("synlynk.doctor._agy_settings_path", lambda: str(fake_settings))
+    monkeypatch.setattr("synlynk.doctor._agy_mcp_config_path", lambda: str(fake_mcp))
+
+    args = types.SimpleNamespace(yes=True)
+    code = cmd_doctor_fix("agy", args=args)
+    assert code == 0
+
+    saved_settings = json.loads(fake_settings.read_text())
+    assert "command(gh pr review)" in saved_settings.get("permissions", {}).get("allow", [])
+
+    saved_mcp = json.loads(fake_mcp.read_text())
+    assert "stitch" in saved_mcp.get("mcpServers", {})
+    assert saved_mcp["mcpServers"]["stitch"]["command"] == "npx"
+
+
 def test_run_tc4_skips_flag_only_command_templates(monkeypatch):
     """dispatch.model/dispatch.tools store a bare flag ("--model {model}"), not a
     full invocation. TC-4 must not try to exec the flag itself as a binary."""
@@ -727,11 +859,11 @@ def test_permissions_to_flags_claude_allowedtools():
     assert "Edit" in tools_str
 
 
-def test_permissions_to_flags_codex_read_only_uses_config_override():
+def test_permissions_to_flags_codex_read_only_uses_sandbox_flag():
     from synlynk.dispatch import _permissions_to_flags
 
     result = _permissions_to_flags("codex", ["read:*"])
-    assert result == ["-c", "approval_policy=untrusted"]
+    assert result == ["-s", "read-only"]
     assert "--ask-for-approval" not in result
 
 
@@ -1861,11 +1993,12 @@ def test_upgrade_reports_up_to_date(monkeypatch, capsys):
     captured = capsys.readouterr()
     assert "latest version" in captured.out
 
-def test_upgrade_auto_installs_new_version(monkeypatch, capsys):
+def test_upgrade_auto_installs_new_version(tmp_path, monkeypatch, capsys):
     import json as _json
     import types
     call_log = []
 
+    monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(synlynk, "_detect_install_type", lambda: "script")
 
     class Response:
@@ -5002,6 +5135,18 @@ def test_format_prompt_agy_no_hardcoded_truncation(project_dir):
     assert "A" * 2001 in result
 
 
+def test_format_prompt_for_grok_includes_working_directory(project_dir):
+    """_format_prompt_for_agent with grok must include the Working Directory header."""
+    import synlynk as sl
+    result = sl._format_prompt_for_agent(
+        "grok", "Context data", "story-123", "implement feature", "", "", cwd_hint="/custom/worktree/path"
+    )
+    assert "## Working Directory" in result
+    assert "/custom/worktree/path" in result
+    assert "All file edits MUST be in this directory." in result
+    assert "## Your Task\nimplement feature" in result
+
+
 def test_dispatch_agent_claude_prompt_format(project_dir, monkeypatch):
     """dispatch_agent uses _format_prompt_for_agent for claude."""
     import synlynk as sl
@@ -5049,12 +5194,47 @@ def test_codex_baseline_uses_exec_subcommand(project_dir, monkeypatch):
     sl.dispatch_agent("codex", "review the codebase")
     shell_cmd = captured["cmd"][2]  # ["sh", "-c", <shell_cmd>]
     assert "codex exec" in shell_cmd
-    assert "workspace-write" in shell_cmd
-    assert "approval_policy=untrusted" in shell_cmd
+    assert "-s read-only" in shell_cmd
     assert "--ask-for-approval" not in shell_cmd
     assert "--dangerously-bypass-approvals-and-sandbox" not in shell_cmd
-    # Bare --sandbox (no value) must not appear; value is already supplied via -s workspace-write
+    # Bare --sandbox (no value) must not appear; value is supplied via -s read-only.
     assert "--sandbox" not in shell_cmd
+
+
+def test_grok_dispatch_includes_cwd_flag(project_dir, monkeypatch):
+    """Grok dispatch must explicitly pass --cwd <worktree_path>."""
+    import synlynk as sl
+    captured = {}
+    class FakeProc:
+        pid = 12345
+    def fake_popen(cmd, **kw):
+        captured["cmd"] = cmd
+        return FakeProc()
+    monkeypatch.setattr("subprocess.Popen", fake_popen)
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None: {"passed": True, "sentinel": None, "reason": None})
+    monkeypatch.setattr(sl, "_probe_model_version", lambda *a, **kw: "unknown")
+    monkeypatch.setattr(sl, "generate_context", lambda scope="full", out_path=None: "")
+    monkeypatch.setattr(sl, "load_config", lambda: {"roles": {"grok": ["implement", "test"]}})
+    job = sl.dispatch_agent("grok", "implement auth fix", force_agent=True)
+    shell_cmd = captured["cmd"][2]
+    assert f"--cwd {job['worktree_path']}" in shell_cmd or f"--cwd '{job['worktree_path']}'" in shell_cmd or f'--cwd "{job["worktree_path"]}"' in shell_cmd
+
+
+def test_codex_dispatch_includes_c_flag(project_dir, monkeypatch):
+    """Codex dispatch must explicitly pass -C <worktree_path>."""
+    import synlynk as sl
+    captured = {}
+    class FakeProc:
+        pid = 777
+    def fake_popen(cmd, **kw):
+        captured["cmd"] = cmd
+        return FakeProc()
+    monkeypatch.setattr("subprocess.Popen", fake_popen)
+    monkeypatch.setattr(sl, "load_config", lambda: {"roles": {"codex": ["review"]}})
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None: {"passed": True, "sentinel": None, "reason": None})
+    job = sl.dispatch_agent("codex", "review the codebase")
+    shell_cmd = captured["cmd"][2]
+    assert f"-C {job['worktree_path']}" in shell_cmd or f"-C '{job['worktree_path']}'" in shell_cmd or f'-C "{job["worktree_path"]}"' in shell_cmd
 
 
 def test_cmd_jobs_prints_running_jobs(project_dir, monkeypatch, capsys):
@@ -7610,6 +7790,19 @@ def test_doctor_fix_agy_prints_diff_and_writes_on_yes(tmp_path, monkeypatch, cap
     settings_dir.mkdir(parents=True)
     settings_path = settings_dir / "settings.json"
     settings_path.write_text(json.dumps({"permissions": {"allow": ["command(gh pr review)"]}}, indent=2))
+    config_dir = tmp_path / ".gemini" / "config"
+    config_dir.mkdir(parents=True)
+    mcp_path = config_dir / "mcp_config.json"
+    mcp_path.write_text(json.dumps({
+        "mcpServers": {
+            "stitch": {
+                "command": "npx",
+                "args": ["-y", "stitch-mcp@1.0.0"],
+                "disabled": False,
+                "env": {"GOOGLE_CLOUD_PROJECT": "gen-lang-client-0187568210"},
+            }
+        }
+    }))
 
     args = SimpleNamespace(fix="agy", yes=True)
     exit_code = synlynk.cmd_doctor(args=args)

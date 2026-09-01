@@ -822,7 +822,7 @@ def test_cmd_decision_record_writes_db_and_md_json_when_migrated(tmp_path, monke
     conn.close()
     assert row == ("Relay ownership", "approved", "Decision: use option B.")
 
-    decisions_dir = backup / "decisions"
+    decisions_dir = tmp_path / "project-docs" / "decisions"
     md_files = list(decisions_dir.glob("*.md"))
     json_files = list(decisions_dir.glob("*.json"))
     assert len(md_files) == 1
@@ -837,6 +837,35 @@ def test_cmd_decision_record_writes_db_and_md_json_when_migrated(tmp_path, monke
     assert "### agy" in md_content
     assert "## Synthesis" in md_content
     assert "> Signatures:" in md_content
+
+
+def test_cmd_decision_record_writes_to_worktree_project_docs(tmp_path, monkeypatch):
+    main_repo = tmp_path / "main_repo"
+    main_repo.mkdir()
+    (main_repo / ".synlynk").mkdir()
+    (main_repo / ".synlynk" / ".synlynk_migrated").write_text("1")
+    (main_repo / "project-docs").mkdir()
+
+    worktree = tmp_path / "worktree_1"
+    worktree.mkdir()
+    (worktree / "project-docs").mkdir()
+
+    # Switch to worktree cwd
+    monkeypatch.chdir(worktree)
+    monkeypatch.setattr(synlynk, "_project_root", lambda: str(main_repo))
+
+    synlynk.cmd_decision_record(
+        "dec-wt-12345", "Worktree scoped decision", "2026-08-29", ["claude", "agy"],
+        {"claude": "Claude WT input"}, "Synthesis in WT", "Decision: committed in WT.",
+    )
+
+    # Must be written to worktree's project-docs/decisions/
+    wt_decisions = worktree / "project-docs" / "decisions"
+    assert (wt_decisions / "2026-08-29-worktree-scoped-decision.md").exists()
+    assert (wt_decisions / "2026-08-29-worktree-scoped-decision.json").exists()
+    # Must NOT exist in main repo's .synlynk/project-docs/decisions/
+    main_synlynk_decisions = main_repo / ".synlynk" / "project-docs" / "decisions"
+    assert not main_synlynk_decisions.exists()
 
 
 def test_cmd_decision_record_syncs_both_md_and_json(tmp_path, monkeypatch):
@@ -885,3 +914,49 @@ def test_migrate_adds_gh_write_author_and_expect_columns(tmp_path):
     assert "gh_write_author" in cols
     assert "gh_write_expect" in cols
     conn.close()
+
+
+def test_migrate_v3_adds_harness_and_role_columns_and_backfills(tmp_path):
+    import sqlite3
+    from synlynk.db import _migrate_db
+
+    db_path = tmp_path / "state.db"
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        "CREATE TABLE daemon_jobs (job_id TEXT PRIMARY KEY, agent TEXT, task TEXT, "
+        "story_id TEXT, status TEXT, priority INTEGER, depends_on TEXT, pid INTEGER, "
+        "enqueued_at TEXT, started_at TEXT, log_path TEXT)"
+    )
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, depends_on, enqueued_at) "
+        "VALUES ('job-1', 'codex', 'fix bug', 'done', 5, '[]', '2026-08-31T00:00:00')"
+    )
+    conn.execute(
+        "CREATE TABLE cost_entries (id INTEGER PRIMARY KEY, session_date TEXT, agent TEXT, "
+        "model TEXT, input_tokens INTEGER, output_tokens INTEGER, total_cost_usd REAL, "
+        "cost_source TEXT)"
+    )
+    conn.execute(
+        "INSERT INTO cost_entries (session_date, agent, model, input_tokens, output_tokens, total_cost_usd, cost_source) "
+        "VALUES ('2026-08-31', 'claude', 'claude-3-7-sonnet', 1000, 200, 0.05, 'actual')"
+    )
+    conn.commit()
+
+    _migrate_db(conn)
+
+    daemon_cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)")}
+    assert "harness" in daemon_cols
+    assert "role" in daemon_cols
+
+    cost_cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}
+    assert "harness" in cost_cols
+    assert "agent_role" in cost_cols
+
+    # Check backfilled values
+    job_row = conn.execute("SELECT agent, harness FROM daemon_jobs WHERE job_id='job-1'").fetchone()
+    assert job_row == ("codex", "codex")
+
+    cost_row = conn.execute("SELECT agent, harness FROM cost_entries").fetchone()
+    assert cost_row == ("claude", "claude")
+    conn.close()
+

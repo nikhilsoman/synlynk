@@ -212,6 +212,26 @@ def _ensure_daemon_job_gh_write_columns(conn) -> None:
                 pass
 
 
+def _ensure_daemon_job_harness_columns(conn) -> None:
+    """Add Phase 4 harness and role columns for legacy/unit-test daemon schemas."""
+    try:
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)").fetchall()}
+    except Exception:
+        return
+    if not cols:
+        return
+    definitions = {
+        "harness": "TEXT",
+        "role": "TEXT",
+    }
+    for name, definition in definitions.items():
+        if name not in cols:
+            try:
+                conn.execute(f"ALTER TABLE daemon_jobs ADD COLUMN {name} {definition}")
+            except Exception:
+                pass
+
+
 def _context_mode_hint(context_mode: str, task: str) -> Optional[str]:
     if context_mode != "full":
         return None
@@ -423,6 +443,29 @@ class PermissionEnforcementError(RuntimeError):
     """Raised when an agent has no real mechanism to enforce requested permissions."""
 
 
+def _merge_codex_permission_flags(flags: list, permission_flags: list) -> list:
+    """Merge Codex permission flags, giving permission-derived sandbox mode precedence."""
+    if not any(
+        flag in {"-s", "--sandbox"} or flag.startswith("--sandbox=")
+        for flag in permission_flags
+    ):
+        return flags + permission_flags
+
+    merged = []
+    index = 0
+    while index < len(flags):
+        flag = flags[index]
+        if flag in {"-s", "--sandbox"}:
+            index += 2
+            continue
+        if flag.startswith("--sandbox="):
+            index += 1
+            continue
+        merged.append(flag)
+        index += 1
+    return merged + permission_flags
+
+
 def _permissions_to_flags(agent: str, permissions: list) -> list:
     """Translate permission strings into harness-specific CLI flags."""
     from synlynk._constants import _PERMISSION_TO_TOOL_MAP
@@ -448,8 +491,8 @@ def _permissions_to_flags(agent: str, permissions: list) -> list:
     if agent == "codex":
         has_write = any((perm or "").startswith("write:") for perm in (permissions or []))
         flags = []
-        if not has_write:
-            flags = ["-c", "approval_policy=untrusted"]
+        if not has_write and _CODEX_NETWORK_PERMISSION not in (permissions or []):
+            flags = ["-s", "read-only"]
         if _CODEX_NETWORK_PERMISSION in (permissions or []):
             flags += ["-c", "sandbox_workspace_write.network_access=true"]
         return flags
@@ -1196,16 +1239,36 @@ def _render_task_receipt_instruction(task_sha256: Optional[str]) -> str:
     )
 
 
+def _render_instruction_receipt_instruction(instruction_file: Optional[str]) -> str:
+    """Returns a prompt-prepend block instructing the agent to confirm that
+    its project instruction file was loaded by echoing its version tag
+    (see #347 instruction-receipt protocol)."""
+    if not instruction_file:
+        return ""
+    return (
+        "## Instruction Receipt (required)\n"
+        f"Confirm that your project instruction file ({instruction_file}) is loaded.\n"
+        "Print this exact line as your second output line (immediately after SYNLYNK_TASK_RECEIVED if present):\n"
+        "SYNLYNK_INSTRUCTION_VERSION: <version>\n"
+        "where <version> is the version string from your instruction file (e.g. from `synlynk:start version=\"...\"` or `synlynk:harness ...`).\n"
+        "If no instruction file is loaded, print:\n"
+        "SYNLYNK_INSTRUCTION_VERSION: none\n\n"
+    )
+
+
 def _format_prompt_for_agent(agent: str, context_text: str, story_id: str,
                               task: str, file_section: str, verify_section: str,
                               cwd_hint: Optional[str] = None,
                               task_sha256: Optional[str] = None,
+                              instruction_file: Optional[str] = None,
                               *, requires_gh_write: bool = False) -> str:
     """Returns a prompt formatted for the agent's preferred input style."""
     requires_gh_write = bool(
         requires_gh_write or _task_requires_gh_write(task)
     )
     receipt_instruction = _render_task_receipt_instruction(task_sha256)
+    instruction_receipt = _render_instruction_receipt_instruction(instruction_file)
+    headers = f"{receipt_instruction}{instruction_receipt}"
     story_ref = f"\n\n## Story / Task Reference\nStory ID: {story_id}" if story_id else ""
     gh_write_instruction = ""
     if requires_gh_write:
@@ -1224,7 +1287,7 @@ def _format_prompt_for_agent(agent: str, context_text: str, story_id: str,
         sentences = [s.strip() for s in re.split(r"[.!?]", task) if s.strip()]
         criteria = "\n".join(f"- {s}" for s in sentences) if sentences else f"- {task}"
         return (
-            f"{receipt_instruction}"
+            f"{headers}"
             f"{gh_write_instruction}"
             f"## Task Criteria\n{criteria}\n"
             f"{file_section}\n"
@@ -1234,9 +1297,18 @@ def _format_prompt_for_agent(agent: str, context_text: str, story_id: str,
         )
     if agent == "agy":
         working_dir = cwd_hint or os.getcwd()
+        stitch_hint = ""
+        if "stitch" in (task or "").lower() or "mcp__stitch" in (task or "").lower():
+            stitch_hint = (
+                "## Stitch MCP Tool Usage Note\n"
+                "On Agy, Stitch MCP tools are invoked via the built-in meta-tool:\n"
+                "`call_mcp_tool(server=\"stitch\", tool=\"<tool_name>\", arguments={...})`\n"
+                "Do not call `mcp__stitch__<tool_name>` directly.\n\n"
+            )
         return (
-            f"{receipt_instruction}"
+            f"{headers}"
             f"{gh_write_instruction}"
+            f"{stitch_hint}"
             f"## Working Directory\n{working_dir}\n"
             f"All file edits MUST be in this directory.\n\n"
             f"Task: {task}\n"
@@ -1245,8 +1317,21 @@ def _format_prompt_for_agent(agent: str, context_text: str, story_id: str,
             f"{verify_section}\n"
             f"Context summary:\n{context_text}"
         )
+    if agent == "grok":
+        working_dir = cwd_hint or os.getcwd()
+        return (
+            f"{headers}"
+            f"{gh_write_instruction}"
+            f"## Working Directory\n{working_dir}\n"
+            f"All file edits MUST be in this directory.\n\n"
+            f"{context_text}"
+            f"{story_ref}"
+            f"{file_section}"
+            f"\n\n## Your Task\n{task}"
+            f"{verify_section}\n"
+        )
     return (
-        f"{receipt_instruction}"
+        f"{headers}"
         f"{gh_write_instruction}"
         f"{context_text}"
         f"{story_ref}"
@@ -1977,8 +2062,37 @@ def _preflight_dispatch(
     db_conn=None,
     _task_hint: str = "",
     permissions: Optional[list] = None,
+    force_agent: bool = False,
+    root: Optional[str] = None,
+    declared_requires: Optional[list] = None,
 ) -> dict:
     import socket as _socket
+    from synlynk._constants import CORE_FLEET as _CORE_FLEET, CORE_INSTRUCTION_FILES as _CORE_INSTRUCTION_FILES
+    from synlynk.fleet import repo_has_any_core_instruction_file
+
+    check_root = root or os.getcwd()
+    if harness_name in _CORE_FLEET and repo_has_any_core_instruction_file(check_root):
+        expected_file = _CORE_INSTRUCTION_FILES.get(harness_name)
+        if expected_file and not os.path.exists(os.path.join(check_root, expected_file)):
+            if not force_agent:
+                return {
+                    "passed": False,
+                    "sentinel": "INSTRUCTION_FILE_MISSING",
+                    "reason": f"Missing instruction file '{expected_file}' for Core 4 agent '{harness_name}' (LIVE-1 / #343 class error). Run synlynk init or pass --force-harness.",
+                }
+
+    if harness_name == "agy" and declared_requires:
+        req_set = set(declared_requires)
+        if "stitch" in req_set or "mcp" in req_set:
+            from synlynk.doctor import _run_tc8
+            tc8_res = _run_tc8()
+            if not tc8_res["passed"]:
+                if not force_agent:
+                    return {
+                        "passed": False,
+                        "sentinel": "MCP_SERVER_MISSING",
+                        "reason": f"Agy requires Stitch MCP server ({tc8_res['error']}). Run 'synlynk doctor --fix agy' or configure with 'agy mcp add'.",
+                    }
 
     baseline = HARNESS_CAPABILITY_BASELINES.get(harness_name, {})
 
@@ -2224,7 +2338,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                    session_id: str = None,
                    gh_write_target_kind: str = "issue",
                    model: str = None,
-                   role: str = None) -> dict:
+                   role: str = None,
+                   db_conn=None) -> dict:
     if not task or not task.strip():
         raise ValueError(
             "--task is empty or whitespace-only; refusing to dispatch (see #720)"
@@ -2325,83 +2440,96 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         _job_seed = dispatch_time if dispatch_time is not None else time.time()
         job_id = "job-" + _hashlib_early.md5(f"{agent}{task}{_job_seed}".encode()).hexdigest()[:8]
 
-    get_db_fn = _pkg("_get_db")
-    if get_db_fn:
-        _quota_conn = get_db_fn()
-        if _quota_conn is not None:
-            resolve_story_fn = _pkg("resolve_or_create_story_id")
-            _est_tokens = None
-            if story_id and resolve_story_fn:
-                _row = _quota_conn.execute(
-                    "SELECT estimated_tokens FROM stories WHERE story_id=?", (story_id,)
-                ).fetchone()
-                if _row and _row[0]:
-                    _est_tokens = int(_row[0])
-            if _est_tokens is None:
-                # Ad-hoc call with no story estimate: rough heuristic, ~4 chars/token.
-                _est_tokens = max(1000, len(task) // 4)
+    dconn = db_conn
+    owns_dconn = False
+    if dconn is None:
+        get_db_fn = _pkg("_get_db")
+        if get_db_fn:
+            dconn = get_db_fn() if callable(get_db_fn) else get_db_fn
+            owns_dconn = True
+    elif callable(dconn):
+        dconn = dconn()
+        owns_dconn = True
 
-            quota_status_fn = _pkg("_quota_status_for_agent")
-            qstatus = (
-                quota_status_fn(_quota_conn, agent, estimated_tokens=_est_tokens)
-                if quota_status_fn
-                else {"status": "unknown", "degraded": True}
-            )
-
-            if qstatus.get("status") == "exhausted":
-                reset_at = None
-                rows_fn = _pkg("_read_agent_quota_rows")
-                if rows_fn:
-                    for _r in rows_fn(_quota_conn, agent) or []:
-                        if _r.get("reset_at"):
-                            reset_at = _r["reset_at"]
-                            break
-                now_iso = time.strftime("%Y-%m-%dT%H:%M:%S")
-                existing_job = _quota_conn.execute(
-                    "SELECT 1 FROM daemon_jobs WHERE job_id=?", (job_id,)
-                ).fetchone()
-                if existing_job:
-                    _quota_conn.execute(
-                        "UPDATE daemon_jobs SET status='queued', "
-                        "blocked_reason='quota_exhausted' WHERE job_id=?",
-                        (job_id,),
-                    )
-                else:
-                    _quota_conn.execute(
-                        "INSERT INTO daemon_jobs (job_id, agent, task, story_id, status, "
-                        "priority, depends_on, enqueued_at, blocked_reason) "
-                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                        (job_id, agent, task, story_id, "queued", 5, "[]", now_iso,
-                         "quota_exhausted"),
-                    )
-                _quota_conn.commit()
-                return {
-                    "deferred": True,
-                    "reason": qstatus.get("reason", "quota_exhausted"),
-                    "retry_after": reset_at,
-                    "job_id": job_id,
-                }
-
-            open_reservation_fn = _pkg("_open_reservation")
-            has_reservations_table = _quota_conn.execute(
-                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='harness_reservations'"
+    if dconn is not None:
+        resolve_story_fn = _pkg("resolve_or_create_story_id")
+        _est_tokens = None
+        if story_id and resolve_story_fn:
+            _row = dconn.execute(
+                "SELECT estimated_tokens FROM stories WHERE story_id=?", (story_id,)
             ).fetchone()
-            if open_reservation_fn and has_reservations_table:
-                _scope = "plan" if os.environ.get("SYNLYNK_SCHEDULE_RUN_ID") else "session"
-                existing_reservation = _quota_conn.execute(
-                    "SELECT 1 FROM harness_reservations "
-                    "WHERE status='open' AND job_id=?",
+            if _row and _row[0]:
+                _est_tokens = int(_row[0])
+        if _est_tokens is None:
+            # Ad-hoc call with no story estimate: rough heuristic, ~4 chars/token.
+            _est_tokens = max(1000, len(task) // 4)
+
+        quota_status_fn = _pkg("_quota_status_for_agent")
+        qstatus = (
+            quota_status_fn(dconn, agent, estimated_tokens=_est_tokens)
+            if quota_status_fn
+            else {"status": "unknown", "degraded": True}
+        )
+
+        if qstatus.get("status") == "exhausted":
+            reset_at = None
+            rows_fn = _pkg("_read_agent_quota_rows")
+            if rows_fn:
+                for _r in rows_fn(dconn, agent) or []:
+                    if _r.get("reset_at"):
+                        reset_at = _r["reset_at"]
+                        break
+            now_iso = time.strftime("%Y-%m-%dT%H:%M:%S")
+            existing_job = dconn.execute(
+                "SELECT 1 FROM daemon_jobs WHERE job_id=?", (job_id,)
+            ).fetchone()
+            if existing_job:
+                dconn.execute(
+                    "UPDATE daemon_jobs SET status='queued', "
+                    "blocked_reason='quota_exhausted' WHERE job_id=?",
                     (job_id,),
-                ).fetchone()
-                if not existing_reservation:
-                    open_reservation_fn(
-                        _quota_conn,
-                        agent,
-                        _est_tokens,
-                        scope=_scope,
-                        scope_id=os.environ.get("SYNLYNK_SCHEDULE_RUN_ID"),
-                        job_id=job_id,
-                    )
+                )
+            else:
+                dconn.execute(
+                    "INSERT INTO daemon_jobs (job_id, agent, task, story_id, status, "
+                    "priority, depends_on, enqueued_at, blocked_reason) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (job_id, agent, task, story_id, "queued", 5, "[]", now_iso,
+                     "quota_exhausted"),
+                )
+            dconn.commit()
+            if owns_dconn and dconn is not None:
+                try:
+                    dconn.close()
+                except Exception:
+                    pass
+            return {
+                "deferred": True,
+                "reason": qstatus.get("reason", "quota_exhausted"),
+                "retry_after": reset_at,
+                "job_id": job_id,
+            }
+
+        open_reservation_fn = _pkg("_open_reservation")
+        has_reservations_table = dconn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='harness_reservations'"
+        ).fetchone()
+        if open_reservation_fn and has_reservations_table:
+            _scope = "plan" if os.environ.get("SYNLYNK_SCHEDULE_RUN_ID") else "session"
+            existing_reservation = dconn.execute(
+                "SELECT 1 FROM harness_reservations "
+                "WHERE status='open' AND job_id=?",
+                (job_id,),
+            ).fetchone()
+            if not existing_reservation:
+                open_reservation_fn(
+                    dconn,
+                    agent,
+                    _est_tokens,
+                    scope=_scope,
+                    scope_id=os.environ.get("SYNLYNK_SCHEDULE_RUN_ID"),
+                    job_id=job_id,
+                )
 
     resolve_or_create_story_id = _pkg("resolve_or_create_story_id")
     if resolve_or_create_story_id:
@@ -2449,7 +2577,11 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     permissions = _resolve_dispatch_permissions(
         agent, role_list=role_list, grants=effective_grants, revokes=revokes
     )
-    flags = flags + _permissions_to_flags(agent, permissions)
+    permission_flags = _permissions_to_flags(agent, permissions)
+    if agent == "codex":
+        flags = _merge_codex_permission_flags(flags, permission_flags)
+    else:
+        flags = flags + permission_flags
     if agent == "agy" and permissions:
         perm_lines = "\n".join(f"- {p}" for p in permissions)
         task = f"## Permissions\n{perm_lines}\n\n{task}"
@@ -2483,12 +2615,10 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         except Exception:
             pass
         capability_gate_fn = _pkg("_dispatch_capability_preflight", _dispatch_capability_preflight)
-        _get_db_fn = _pkg("_get_db")
-        _capability_db = _get_db_fn() if _get_db_fn else None
         capability_gate = capability_gate_fn(
             agent,
             task,
-            db_conn=_capability_db,
+            db_conn=dconn,
             cwd=os.getcwd(),
             requires=declared_requires,
         )
@@ -2498,31 +2628,31 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             print(f"  ⚠ capability gate degraded: {capability_gate.get('reason')}")
     if not skip_preflight:
         preflight_fn = _pkg("_preflight_dispatch", _preflight_dispatch)
-        _get_db_fn = _pkg("_get_db")
-        _preflight_db = _get_db_fn() if _get_db_fn else None
         try:
             preflight = preflight_fn(
                 harness_name=agent,
                 dispatch_flags=flags,
-                db_conn=_preflight_db,
+                db_conn=dconn,
                 _task_hint=task,
                 permissions=permissions,
+                force_agent=force_agent,
+                declared_requires=declared_requires,
             )
         except TypeError:
             try:
                 preflight = preflight_fn(
                     harness_name=agent,
                     dispatch_flags=flags,
-                    db_conn=_preflight_db,
+                    db_conn=dconn,
                     _task_hint=task,
                 )
             except TypeError:
-                    try:
-                        preflight = preflight_fn(
-                            agent_name=agent, dispatch_flags=flags, db_conn=_preflight_db
-                        )
-                    except TypeError:
-                        raise
+                try:
+                    preflight = preflight_fn(
+                        agent_name=agent, dispatch_flags=flags, db_conn=dconn
+                    )
+                except TypeError:
+                    raise
         if isinstance(preflight, dict):
             if not preflight.get("passed", False):
                 sentinel_path = os.path.join(".synlynk", "sentinel.md")
@@ -2581,6 +2711,10 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     worktree_path = worktree_info["path"]
     base_branch = worktree_info["base_branch"]
     base_sha = worktree_info["base_sha"]
+    if agent == "grok" and worktree_path and "--cwd" not in flags:
+        flags = flags + ["--cwd", worktree_path]
+    if agent == "codex" and worktree_path and "-C" not in flags and "--cd" not in flags:
+        flags = flags + ["-C", worktree_path]
     worktree_synlynk_dir = os.path.join(worktree_path, ".synlynk")
     logs_dir = os.path.join(worktree_synlynk_dir, "logs")
     prompts_dir = os.path.join(worktree_synlynk_dir, "prompts")
@@ -2601,7 +2735,13 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             scope = "full"
         try:
             generate_context = _pkg("generate_context")
-            context_text = generate_context(scope=scope, out_path=context_file) or ""
+            try:
+                context_text = generate_context(scope=scope, out_path=context_file, role=resolved_agent_role) or ""
+            except TypeError as te:
+                if "unexpected keyword argument 'role'" in str(te) or "unexpected keyword argument \"role\"" in str(te):
+                    context_text = generate_context(scope=scope, out_path=context_file) or ""
+                else:
+                    raise
         except Exception:
             pass
     warn_context = _pkg("_warn_context_size", _warn_context_size)
@@ -2631,6 +2771,21 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     verify_section = verify_contract(story_id, task) if (story_id and verify_contract) else ""
 
     task_sha256_for_receipt = hashlib.sha256(task.encode("utf-8")).hexdigest()
+    from synlynk.instructions import extract_instruction_version, get_instruction_file_for_agent
+
+    instruction_file = get_instruction_file_for_agent(agent)
+    expected_instruction_version = None
+    if instruction_file:
+        instr_path = os.path.join(worktree_path or os.getcwd(), instruction_file)
+        if not os.path.exists(instr_path):
+            instr_path = os.path.join(os.getcwd(), instruction_file)
+        if os.path.exists(instr_path):
+            try:
+                with open(instr_path, "r", encoding="utf-8") as _f:
+                    expected_instruction_version = extract_instruction_version(_f.read())
+            except Exception:
+                pass
+
     format_prompt = _pkg("_format_prompt_for_agent", _format_prompt_for_agent)
     try:
         prompt = format_prompt(
@@ -2642,6 +2797,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             verify_section,
             cwd_hint=worktree_path,
             task_sha256=task_sha256_for_receipt,
+            instruction_file=instruction_file,
             requires_gh_write=requires_gh_write,
         )
     except TypeError:
@@ -2789,6 +2945,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     job = {
         "id": job_id,
         "agent": agent,
+        "harness": agent,
+        "role": resolved_agent_role or "",
+        "agent_role": resolved_agent_role or "",
         "story_id": story_id or "",
         "task": task,
         "cycle": cycle,
@@ -2821,6 +2980,11 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         "task_type": task_type or "",
         "agent_id": agent_id or "",
         "resolved_agent_role": resolved_agent_role or "",
+        "instruction_file": instruction_file or "",
+        "expected_instruction_version": expected_instruction_version or "",
+        "instruction_receipt": None,
+        "charter_role": resolved_agent_role or "",
+        "charter_revision": _pkg("resolve_role_charter")(role=resolved_agent_role)[2] if (_pkg("resolve_role_charter") and resolved_agent_role) else None,
     }
 
     load_jobs = _pkg("_load_jobs")
@@ -2836,10 +3000,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             jobs_to_save.append(saved_job)
         save_jobs(jobs_to_save)
 
-    dconn = None
-    get_db = _pkg("_get_db")
     try:
-        dconn = get_db() if get_db else None
         if dconn is not None:
             # Tests and older DBs may create daemon_jobs without these columns;
             # ensure before INSERT so dispatch never hard-fails on schema lag.
@@ -2847,6 +3008,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             _ensure_daemon_job_session_column(dconn)
             _ensure_daemon_job_agent_id_column(dconn)
             _ensure_daemon_job_gh_write_columns(dconn)
+            _ensure_daemon_job_harness_columns(dconn)
             existing = dconn.execute(
                 "SELECT 1 FROM daemon_jobs WHERE job_id=?", (job_id,)
             ).fetchone()
@@ -2855,7 +3017,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 dispatch_context = _dispatch_context()
                 dconn.execute(
                     "UPDATE daemon_jobs SET status='running', pid=?, started_at=?, "
-                    "log_path=?, agent=?, task=?, story_id=?, "
+                    "log_path=?, agent=?, harness=?, role=?, task=?, story_id=?, "
                     "dispatch_context=COALESCE(dispatch_context, ?), "
                     "context_mode=?, context_bytes=?, "
                     "session_id=COALESCE(session_id, ?), "
@@ -2867,6 +3029,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                         job["started_at"],
                         log_file,
                         agent,
+                        agent,
+                        resolved_agent_role or None,
                         task,
                         story_id,
                         dispatch_context,
@@ -2883,13 +3047,15 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 dispatch_context = _dispatch_context()
                 dconn.execute(
                     "INSERT OR REPLACE INTO daemon_jobs "
-                    "(job_id, agent, task, story_id, status, priority, depends_on, pid, "
+                    "(job_id, agent, harness, role, task, story_id, status, priority, depends_on, pid, "
                     "enqueued_at, started_at, log_path, dispatch_context, context_mode, context_bytes, session_id, "
                     "agent_id, requires_gh_write, gh_write_target, gh_write_author, gh_write_expect) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         job_id,
                         agent,
+                        agent,
+                        resolved_agent_role or None,
                         task,
                         story_id,
                         "running",
@@ -2912,7 +3078,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 )
             dconn.commit()
     finally:
-        if dconn is not None:
+        if owns_dconn and dconn is not None:
             try:
                 dconn.close()
             except Exception:

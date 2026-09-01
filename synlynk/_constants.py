@@ -139,7 +139,7 @@ HARNESS_CAPABILITY_BASELINES = {
         },
         "network_deps": {
             "required_endpoints": ["generativelanguage.googleapis.com:443", "oauth2.googleapis.com:443"],
-            "optional_endpoints": [],
+            "optional_endpoints": ["stitch.googleapis.com:443"],
         },
         "auth_check": {
             "probe": ["agy", "--version"],

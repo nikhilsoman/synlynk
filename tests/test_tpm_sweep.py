@@ -6,6 +6,12 @@ from synlynk.tpm_sweep import _ready_stories
 from synlynk.tpm_sweep import run_sweep_pass
 
 
+def test_cmd_story_create_accepts_marketing_role(isolated_db, project_dir):
+    story_id = cmd_story_create(title="marketing story", role="marketing")
+
+    assert story_id
+
+
 def test_run_sweep_pass_advances_authorized_story(isolated_db, project_dir):
     story_id = cmd_story_create(title="test story", story_id="story-1")
     cmd_story_ready(story_id)
@@ -16,6 +22,33 @@ def test_run_sweep_pass_advances_authorized_story(isolated_db, project_dir):
         summary = run_sweep_pass()
     assert summary["advanced"] == 1
     assert summary["parked"] == 0
+
+
+def test_run_sweep_pass_routes_marketing_role_to_agy(isolated_db, project_dir):
+    story_id = cmd_story_create(title="write blog post", story_id="story-5", role="marketing")
+    cmd_story_ready(story_id)
+    with patch("synlynk.tpm_sweep.check_authority") as mock_auth, \
+            patch("synlynk.tpm_sweep.dispatch_agent") as mock_dispatch:
+        mock_auth.return_value = MagicMock(allowed=True, requires_approval=False)
+        mock_dispatch.return_value = {"id": "job-5", "agent": "agy"}
+        summary = run_sweep_pass()
+    assert summary["advanced"] == 1
+    mock_dispatch.assert_called_once()
+    called_harness = mock_dispatch.call_args[0][0]
+    assert called_harness == "agy"
+
+
+def test_run_sweep_pass_routes_dev_role_to_codex(isolated_db, project_dir):
+    story_id = cmd_story_create(title="fix bug", story_id="story-6", role="dev")
+    cmd_story_ready(story_id)
+    with patch("synlynk.tpm_sweep.check_authority") as mock_auth, \
+            patch("synlynk.tpm_sweep.dispatch_agent") as mock_dispatch:
+        mock_auth.return_value = MagicMock(allowed=True, requires_approval=False)
+        mock_dispatch.return_value = {"id": "job-6", "agent": "codex"}
+        summary = run_sweep_pass()
+    assert summary["advanced"] == 1
+    called_harness = mock_dispatch.call_args[0][0]
+    assert called_harness == "codex"
 
 
 def test_run_sweep_pass_parks_story_requiring_approval(isolated_db, project_dir):

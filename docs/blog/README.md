@@ -143,6 +143,12 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [136](./136-pr1279-grok-headless-permission-mode.md) | PR #1279 — Eliminating Grok Headless Execution Cancellation via --always-approve | [#1279](https://github.com/nikhilsoman/synlynk/pull/1279) | 2026-08-30 |
 | [137](./137-pr1286-agy-headless-parity.md) | PR #1286 — Eliminating Agy Headless 5m Timeout, Enabling Plan Mode, and Capturing Prompt Cache Telemetry | [#1286](https://github.com/nikhilsoman/synlynk/pull/1286) | 2026-08-30 |
 | [138](./138-pr1288-claude-harness-alignment.md) | PR #1288 — Aligning Claude Baseline Roles with PM/Deploy Governance | [#1288](https://github.com/nikhilsoman/synlynk/pull/1288) | 2026-08-30 |
+| [139](./139-pr1282-daemon-reexec-fork-safety.md) | PR #1282 — Eliminating Daemon Re-Exec Fork Desync via Fork Safety | [#1282](https://github.com/nikhilsoman/synlynk/pull/1282) | 2026-08-30 |
+| [140](./140-pr1306-harness-vs-workspace-agent-separation.md) | PR #1306 — Standardizing Harness vs. Workspace Agent Separation Across CLI Flags, Configs, and Docs | [#1306](https://github.com/nikhilsoman/synlynk/pull/1306) | 2026-08-30 |
+| [141](./141-pr1308-grok-codex-cwd-protection.md) | PR #1308 — Fleet Parity: Enforce --cwd for Grok and -C for Codex with Working-Directory Protection | [#1308](https://github.com/nikhilsoman/synlynk/pull/1308) | 2026-08-30 |
+| [142](./142-pr1309-instruction-file-preflight-and-receipt-verification.md) | PR #1309 — Fleet Parity: Instruction File Preflight Check and Closed-Loop Receipt Verification | [#1309](https://github.com/nikhilsoman/synlynk/pull/1309) | 2026-08-30 |
+| [143](./143-pr1310-agy-stitch-mcp-integration.md) | PR #1310 — Fleet Parity: Agy Stitch MCP Integration, Diagnostics, and Prompt Guidance | [#1310](https://github.com/nikhilsoman/synlynk/pull/1310) | 2026-08-31 |
+| [144](./144-pr1318-harden-harness-instructions-todo-state-db.md) | PR #1318 — Hardening: Prohibit Direct todo.md Hand-Edits Across Harness Instruction Templates | [#1318](https://github.com/nikhilsoman/synlynk/pull/1318) | 2026-09-01 |
 
 ## Per-PR Post Template
 

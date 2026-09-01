@@ -1,5 +1,33 @@
 # synlynk Memory
 
+## Hardening: Prohibit Direct todo.md Hand-Edits Across Harness Instruction Templates (decided/shipped 2026-09-01)
+- **Shipped:** PR #1318 (closes #1317, relates to #1220, PR #1314). Hardens harness instruction templates against direct `todo.md` edits. [@agy]
+- **Root Cause Resolution:** Legacy instruction templates in `synlynk/instructions.py` and repository directive files (`GEMINI.md`, `CLAUDE.md`, `GROK.md`) previously told models to edit `[ ] → [x]` in `todo.md`. This contradicted the authoritative role of `state.db` and triggered doctor drift warnings (`_hc_todo_drift`).
+- **Template Hardening:** Updated `_session_protocol`, `_build_cursor_mdc()`, `_build_copilot_instructions()`, and `_build_windsurf_rules()` in `synlynk/instructions.py` to prohibit direct `todo.md` edits and direct agents to use `synlynk story done <id>` (or `synlynk story create/update`) and `synlynk checkpoint`.
+- **Verification:** Unit test `test_instruction_templates_prohibit_direct_todo_edits()` in `tests/test_instructions.py` asserts that all templates prohibit hand-edits and reference `state.db` / `synlynk story done` / `synlynk checkpoint`. All 506 tests in `tests/test_synlynk.py` pass.
+- **Blog Post:** `docs/blog/144-pr1318-harden-harness-instructions-todo-state-db.md`.
+- **Shipped:** PR #1310 (closes #573, relates to #426, #332). Resolves Stitch MCP configuration and invocation gaps on Agy. [@agy]
+- **Configuration vs. Extension Mismatch:** Agy (Google Antigravity CLI) does not read Gemini CLI extensions (`~/.gemini/extensions/Stitch/`). Agy requires MCP servers configured in `~/.gemini/config/mcp_config.json`.
+- **Tool Calling Convention:** Agy invokes MCP tools through `call_mcp_tool(server="stitch", tool="<tool_name>", arguments={...})` rather than Claude Code's `mcp__stitch__*` naming convention.
+- **Diagnostics & Auto-Remediation:** Added `_run_tc8()` (TC-8 Stitch MCP preflight) and `_build_agy_stitch_fix_plan()` in `synlynk/doctor.py` enabling one-command remediation via `synlynk doctor --fix agy`.
+- **Preflight & Prompt Adaptation:** In `synlynk/dispatch.py`, added `--requires stitch` / `--requires mcp` preflight gate, and injected `## Stitch MCP Tool Usage Note` prompting Agy to invoke `call_mcp_tool`.
+- **Blog Post:** `docs/blog/143-pr1310-agy-stitch-mcp-integration.md`.
+
+## Fleet Parity: Instruction File Preflight and Closed-Loop Receipt Verification (decided/shipped 2026-08-30)
+- **Shipped:** PR #1309 (closes #347, relates to #343, #344, #345, #720). Enforces preflight instruction file presence and closed-loop execution receipt verification. [@agy]
+- **Instruction Version Extraction:** In `synlynk/instructions.py`, added `extract_instruction_version()` and `get_instruction_file_for_agent()` supporting both `synlynk:start` and `synlynk:harness` markers.
+- **Preflight Gate:** In `synlynk/dispatch.py:_preflight_dispatch()`, asserts that the target core instruction file exists in initialized workspaces before dispatching (fails closed with `INSTRUCTION_FILE_MISSING` unless forced).
+- **Closed-Loop Receipt Protocol:** In `synlynk/dispatch.py:_format_prompt_for_agent()`, injects `SYNLYNK_INSTRUCTION_VERSION` directive without disclosing the expected token.
+- **Telemetry & Verification:** In `synlynk/jobs.py`, added `_check_instruction_receipt()` to verify `ok`, `mismatch`, `none`, or `absent`, recording `job["instruction_receipt"]` and emitting advisory sentinel warnings on convention drift.
+- **Blog Post:** `docs/blog/142-pr1309-instruction-file-preflight-and-receipt-verification.md`.
+
+## Fleet Parity: Grok --cwd and Codex -C Working Directory Protection (decided/shipped 2026-08-30)
+- **Shipped:** PR #1308 (closes #342, relates to commit `8c1e124`). Enforces working directory root isolation across Grok and Codex dispatches. [@agy]
+- **Grok Structural & Defense-in-Depth:** In `synlynk/dispatch.py:dispatch_agent()`, dynamically appends `["--cwd", worktree_path]` to Grok CLI flags upon worktree creation, and injects a `## Working Directory` reminder header in `_format_prompt_for_agent()`.
+- **Codex Working Directory Root:** In `synlynk/dispatch.py:dispatch_agent()`, dynamically appends `["-C", worktree_path]` to Codex CLI flags upon worktree creation.
+- **Verification:** Covered by unit tests `test_format_prompt_for_grok_includes_working_directory`, `test_grok_dispatch_includes_cwd_flag`, and `test_codex_dispatch_includes_c_flag` in `tests/test_synlynk.py`. All 499 tests in `tests/test_synlynk.py` pass cleanly.
+- **Blog Post:** `docs/blog/141-pr1308-grok-codex-cwd-protection.md`.
+
 ## Claude Baseline Roles Aligned with PM/Deploy SOP (decided/shipped 2026-08-30)
 - **Shipped:** PR #1288 (closes #1284, relates to #1140, #423). Aligns Anthropic Claude's baseline programmatic roles with governance SOP. [@agy]
 - **Role Alignment:** In `synlynk/_constants.py`, updated `HARNESS_CAPABILITY_BASELINES["claude"]["roles"]` from `["architect", "builder"]` to `["architect", "pm"]`, eliminating capability routing drift while preserving `can_gh_write: True` for PM, deploy, and PR review tasks.
@@ -246,6 +274,15 @@ HTTP Context Server (v0.7, `localhost:27471`) is the underlying transport.
   with it. Never swallow non-zero. Flatline triggers after 3 consecutive non-zero same-command exits.
 - **Attribution:** All `memory.md` and `devlogs/` entries in team mode MUST have `[@username]`.
 - **conftest.py:** Fixtures must mirror the real costs.md 6-column schema at all times. `isolated_db` autouse fixture redirects `synlynk.DB_PATH` to a per-test temp path — every test gets its own `state.db`, no cross-test DB pollution.
+
+## Harness vs. Workspace Agent Separation (decided 2026-08-30, ships PR #1306)
+- Strict ontological boundary: Workspace Agents (`pm`, `architect`, `tpm`, `dev`, `designer`, `qa`, `marketing`, `synlynk-bot`) are durable role identities, charter holders, and lifecycle owners; Harnesses (`claude`, `codex`, `grok`, `agy`, `local`) are execution backends and compute resources.
+- `synlynk dispatch --force-harness`: Added as canonical flag to pin a harness backend; `--force-agent` is preserved as a deprecated alias emitting a non-breaking warning.
+- `synlynk jobs handoff --to-harness`: Added alongside `--to` and `--to-agent`.
+- Config discovery: `.harnesses/` is checked first with transparent fallback to `.agents/`.
+- Database lock safety: `synlynk/db.py` guards `_normalize_org_domain_drift` updates with row-existence checks, eliminating same-thread SQLite deadlocks during nested dispatches.
+- Full design spec: `docs/superpowers/specs/2026-08-30-harness-agent-separation-design.md`.
+[@agy]
 
 ## Superseded Decisions
 - ~~Tier model (Solo/Team/Enterprise)~~ → retired 2026-06-06. Replaced by OS layer model.

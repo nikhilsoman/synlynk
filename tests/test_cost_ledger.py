@@ -1901,3 +1901,52 @@ def test_cmd_logs_renders_claude_stream_json(project_dir, monkeypatch, tmp_path,
     assert "Done" in out
     assert '"type":"system"' not in out
     assert '"type":"result"' not in out
+
+
+def test_cost_entries_has_harness_and_agent_role_columns(project_dir, monkeypatch):
+    import synlynk
+
+    monkeypatch.setattr(synlynk, "DB_PATH", os.path.join(project_dir, "state.db"))
+    conn = synlynk._get_db()
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}
+    conn.close()
+    assert "harness" in cols
+    assert "agent_role" in cols
+
+
+def test_insert_cost_row_with_harness_and_agent_role(project_dir, monkeypatch):
+    import synlynk
+    from synlynk.db import _insert_cost_row, get_costs_by_harness, get_costs_by_agent_role
+
+    monkeypatch.setattr(synlynk, "DB_PATH", os.path.join(project_dir, "state.db"))
+    _insert_cost_row(
+        session_date="2026-08-31",
+        agent="codex",
+        harness="codex",
+        agent_role="dev",
+        model="o3-mini",
+        input_tokens=5000,
+        output_tokens=1000,
+        total_cost_usd=0.035,
+        cost_source="actual",
+    )
+    _insert_cost_row(
+        session_date="2026-08-31",
+        agent="claude",
+        harness="claude",
+        agent_role="pm",
+        model="claude-3-7-sonnet",
+        input_tokens=10000,
+        output_tokens=2000,
+        total_cost_usd=0.075,
+        cost_source="actual",
+    )
+
+    by_harness = get_costs_by_harness()
+    assert by_harness.get("codex") == 0.035
+    assert by_harness.get("claude") == 0.075
+
+    by_role = get_costs_by_agent_role()
+    assert by_role.get("dev") == 0.035
+    assert by_role.get("pm") == 0.075
+

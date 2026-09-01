@@ -152,6 +152,10 @@ def build_parser() -> argparse.ArgumentParser:
         cmd_agent_configure,
         cmd_agent_list,
         cmd_agent_run,
+        cmd_harness_add,
+        cmd_harness_configure,
+        cmd_harness_list,
+        cmd_harness_run,
         cmd_audit_docs,
         cmd_decide,
         cmd_doctor,
@@ -347,6 +351,8 @@ def build_parser() -> argparse.ArgumentParser:
                                help="Apply a targeted remediation for the named harness (agy only)")
     doctor_parser.add_argument("--yes", action="store_true",
                                help="Write the proposed remediation without prompting")
+    doctor_parser.add_argument("--live-probe", action="store_true",
+                               help="Execute live in-sandbox gh-write probe during health checks")
 
     worktree_parser = subparsers.add_parser(
         "worktree", help="Audit and clean up stale git worktrees/branches"
@@ -617,8 +623,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="Story/task ID for context labelling")
     dispatch_parser.add_argument("--issue", type=int, default=None,
         help="GitHub issue number to associate this dispatch with (auto-detected from #N in --task if omitted)")
-    dispatch_parser.add_argument("--force-agent", action="store_true", dest="force_agent",
-        help="Bypass capability routing — dispatch to the exact harness specified")
+    dispatch_parser.add_argument(
+        "--force-harness", "--force-agent", action="store_true", dest="force_agent",
+        help="Bypass capability routing — dispatch to the exact harness specified",
+    )
     dispatch_parser.add_argument("--static-baseline", action="store_true", dest="static_baseline",
         help="Bypass learned capability-score routing for this dispatch — use the "
              "deterministic static baseline pick instead (Phase 2, #914-adjacent)")
@@ -706,7 +714,8 @@ def build_parser() -> argparse.ArgumentParser:
     jobs_sub = jobs_parser.add_subparsers(dest="jobs_cmd")
     handoff_p = jobs_sub.add_parser("handoff", help="Transfer a stalled job to another harness")
     handoff_p.add_argument("job_id")
-    handoff_p.add_argument("--to", dest="to_agent", default=None)
+    handoff_p.add_argument("--to-harness", "--to-agent", "--to", dest="to_agent", default=None,
+        help="Harness to hand off the stalled job to")
     reap_p = jobs_sub.add_parser(
         "reap",
         help="Reap dead-PID daemon_jobs stuck in status=running (dry-run default; --apply writes)",
@@ -892,6 +901,28 @@ def build_parser() -> argparse.ArgumentParser:
     grant_parser.add_argument("--expires", default=None, help="ISO8601 expiry date, optional")
     grant_parser.add_argument("--note", default=None, help="Free-text note")
 
+    backlog_parser = subparsers.add_parser("backlog", help="GOVERNS backlog automation commands")
+    backlog_sub = backlog_parser.add_subparsers(dest="backlog_action")
+    backlog_capture_parser = backlog_sub.add_parser("capture", help="Stage newly discovered work into backlog")
+    backlog_capture_parser.add_argument("--title", required=True, help="Title of discovered work")
+    backlog_capture_parser.add_argument("--description", default="", help="Detailed description")
+    backlog_capture_parser.add_argument("--role", default="dev", help="Assigned role (dev, qa, pm, etc.)")
+    backlog_capture_parser.add_argument("--stage", default="open", help="GOVERNS stage (open, sustain, etc.)")
+    backlog_capture_parser.add_argument("--source-type", default="manual", dest="source_type")
+    backlog_capture_parser.add_argument("--source-ref", default="", dest="source_ref")
+    backlog_capture_parser.add_argument("--priority", type=int, default=5)
+    backlog_capture_parser.add_argument("--sync-gh", action="store_true", dest="sync_gh")
+    backlog_capture_parser.add_argument("--parent", type=int, default=None, dest="parent_issue")
+
+    backlog_list_parser = backlog_sub.add_parser("list", help="List staged and discovered backlog items")
+    backlog_list_parser.add_argument("--stage", default=None, help="Filter by GOVERNS stage")
+    backlog_list_parser.add_argument("--unfiled", action="store_true", help="Only show unfiled items (no gh_issue)")
+
+    backlog_sync_parser = backlog_sub.add_parser("sync", help="Synchronize staged backlog items to GitHub issues")
+    backlog_sync_parser.add_argument("--dry-run", action="store_true", help="Dry run without creating real issues")
+    backlog_sync_parser.add_argument("--parent", type=int, default=None, dest="parent_issue")
+    backlog_sync_parser.add_argument("--stage", default=None, help="Filter by GOVERNS stage")
+
     quota_parser = subparsers.add_parser(
         "quota",
         help="Show per-harness quota headroom / reset windows (5h, hourly, daily, weekly, monthly)",
@@ -1029,6 +1060,10 @@ def build_parser() -> argparse.ArgumentParser:
 def _warn_deprecated_harness_flag(argv) -> None:
     if "--agent" in argv and "--harness" not in argv:
         print("  warning: --agent is deprecated, use --harness instead", file=sys.stderr)
+    if "--force-agent" in argv and "--force-harness" not in argv:
+        print("  warning: --force-agent is deprecated, use --force-harness instead", file=sys.stderr)
+    if "--to-agent" in argv and "--to-harness" not in argv:
+        print("  warning: --to-agent is deprecated, use --to-harness instead", file=sys.stderr)
 
 
 def main(argv=None) -> None:
@@ -1053,6 +1088,10 @@ def main(argv=None) -> None:
         cmd_agent_configure,
         cmd_agent_list,
         cmd_agent_run,
+        cmd_harness_add,
+        cmd_harness_configure,
+        cmd_harness_list,
+        cmd_harness_run,
         cmd_audit_docs,
         cmd_decide,
         cmd_doctor,
@@ -1212,6 +1251,7 @@ def main(argv=None) -> None:
         else:
             sentinel_list()  # default: list
     elif args.command == "dispatch":
+        _warn_deprecated_harness_flag(cli_tokens)
         known_agents = sorted(HARNESS_CAPABILITY_BASELINES)
         try:
             resolved_agent_id = None
@@ -1327,6 +1367,7 @@ def main(argv=None) -> None:
         cmd_backfill_capability_ratings()
     elif args.command == "jobs":
         if getattr(args, "jobs_cmd", None) == "handoff":
+            _warn_deprecated_harness_flag(cli_tokens)
             cmd_jobs_handoff(args.job_id, to_agent=getattr(args, "to_agent", None))
         elif getattr(args, "jobs_cmd", None) == "reap":
             raise SystemExit(
@@ -1441,6 +1482,51 @@ def main(argv=None) -> None:
             except ValueError as e:
                 print(f"Error: {e}")
                 sys.exit(1)
+    elif args.command == "backlog":
+        if args.backlog_action == "capture":
+            from synlynk.backlog import stage_discovered_work
+            res = stage_discovered_work(
+                title=args.title,
+                description=args.description,
+                role=args.role,
+                stage=args.stage,
+                source_type=args.source_type,
+                source_ref=args.source_ref,
+                priority=args.priority,
+                sync_gh=args.sync_gh,
+                parent_issue=args.parent_issue,
+            )
+            if res.get("staged"):
+                print(f"✓ Staged backlog item {res['story_id']}: '{res['title']}' (stage: {res['stage']}, role: {res['role']})")
+                if res.get("gh_issue"):
+                    print(f"  GitHub issue #{res['gh_issue']} created")
+            else:
+                print(f"  ⚠ Did not stage item: {res.get('reason')} (fingerprint: {res.get('fingerprint', '')})")
+        elif args.backlog_action == "list":
+            from synlynk.backlog import list_staged_backlog
+            items = list_staged_backlog(stage=args.stage, unfiled_only=args.unfiled)
+            if not items:
+                print("No staged backlog items found.")
+            else:
+                print(f"{'STORY ID':<16} {'STAGE':<10} {'ROLE':<8} {'ISSUE':<8} {'TITLE'}")
+                print("─" * 70)
+                for it in items:
+                    gh = f"#{it['gh_issue']}" if it.get("gh_issue") else "—"
+                    print(f"{it['story_id']:<16} {it['stage']:<10} {it['role']:<8} {gh:<8} {it['title']}")
+        elif args.backlog_action == "sync":
+            from synlynk.backlog import sync_backlog_to_github
+            synced = sync_backlog_to_github(dry_run=args.dry_run, parent_issue=args.parent_issue, stage=args.stage)
+            if not synced:
+                print("No unfiled backlog items to sync.")
+            else:
+                for it in synced:
+                    action = it.get("action", "")
+                    if action == "created_issue":
+                        print(f"✓ Created issue #{it['gh_issue']} for {it['story_id']}: '{it['title']}'")
+                    elif action == "dry_run_sync":
+                        print(f"[dry-run] Would create issue for {it['story_id']}: '{it['title']}' (stage: {it['stage']}, role: {it['role']})")
+                    else:
+                        print(f"✗ Failed to sync {it['story_id']}: '{it['title']}'")
     elif args.command == "policy" and args.policy_command == "show":
         sys.exit(cmd_policy_show())
     elif args.command == "policy" and args.policy_command == "check-merge":

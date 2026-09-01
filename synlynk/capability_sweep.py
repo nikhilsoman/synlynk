@@ -134,7 +134,7 @@ def _extract_task_cost_usd(result: dict) -> float:
     return float(result.get("cost_usd", 0.0) or 0.0)
 
 
-def cmd_capability_sweep_for_harness_model(harness_name: str, model_id: str) -> None:
+def cmd_capability_sweep_for_harness_model(harness_name: str, model_id: str, conn=None) -> None:
     """Auto-triggered single-(harness,model) sweep against the full
     difficulty-graded task pool for every charter role (#786 Plan B).
     Reuses the existing dispatch/verify pair and cost-cap guardrail that
@@ -143,13 +143,15 @@ def cmd_capability_sweep_for_harness_model(harness_name: str, model_id: str) -> 
     from datetime import datetime, timezone
     from synlynk import load_config
 
-    conn = _get_db()
+    if conn is None:
+        conn = _get_db()
     cfg = load_config()
     cost_cap = cfg.get("capability_sweep", {}).get("cost_cap_usd", _DEFAULT_SWEEP_COST_CAP_USD)
 
     tasks = conn.execute(
         "SELECT task_id, role, skill, difficulty, prompt_template FROM capability_calibration_tasks"
     ).fetchall()
+    conn.commit()
     available_agents = [a for a in HARNESS_CAPABILITY_BASELINES if a != "local" and a != harness_name]
 
     total_cost = 0.0

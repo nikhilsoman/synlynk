@@ -55,6 +55,7 @@ DEFAULT_WORKSPACE_POLICY: Dict[str, Any] = {
             "qa": {"default_harness": "claude", "scope": ["review", "merge"]},
             "dev": {"default_harness": "codex", "scope": ["implement", "test"]},
             "architect": {"default_harness": "claude", "scope": ["roadmap", "brainstorm"]},
+            "marketing": {"default_harness": "agy", "scope": ["content", "blog", "comms"]},
         },
     },
 }

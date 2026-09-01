@@ -2,6 +2,7 @@
 # synlynk Codex Instructions
 
 ## Identity & Attribution
+- **Harness:** Codex (execution backend for Workspace Agents)
 - **Engine:** OpenAI Codex CLI (`codex exec`)
 - **Commit trailer:** `Co-Authored-By: Codex <noreply@openai.com>`
 - **Branch prefix:** prefer `feat/` / `fix/` task-scoped names when authoring

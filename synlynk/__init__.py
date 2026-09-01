@@ -59,6 +59,8 @@ from synlynk.probe import (
     _run_tc4,
     _run_tc5,
     _run_tc6,
+    _run_tc9,
+    _get_harness_gh_write_capability,
     _repair_capability_allocation_sop,
     _repair_sops_only,
     cmd_probe,
@@ -129,6 +131,7 @@ from synlynk.doctor import (
     _hc_pr_review_cycles,
     _hc_project_init,
     _hc_python_version,
+    _hc_todo_drift,
     _hc_version_current,
     cmd_doctor,
 )
@@ -167,6 +170,25 @@ from synlynk.support_engineer import (
     _stalled_job_ids_from_sentinel,
     cmd_agent_list,
     cmd_agent_run,
+    cmd_harness_list,
+    cmd_harness_run,
+)
+from synlynk.backlog import (
+    check_duplicate,
+    compute_fingerprint,
+    list_staged_backlog,
+    stage_discovered_work,
+    sync_backlog_to_github,
+)
+from synlynk.backlog_extractor import (
+    extract_from_devlog_content,
+    extract_from_doctor_failures,
+    extract_from_job_summary,
+)
+from synlynk.charter_injection import (
+    CharterInjectionError,
+    render_charter_section,
+    resolve_role_charter,
 )
 from synlynk.context import (
     _append_vizor_notes,
@@ -922,6 +944,11 @@ CREATE TABLE IF NOT EXISTS stories (
     legacy_unmapped INTEGER NOT NULL DEFAULT 0,
     priority      INTEGER NOT NULL DEFAULT 5,
     readiness     TEXT NOT NULL DEFAULT 'draft',
+    fingerprint   TEXT UNIQUE,
+    source_type   TEXT,
+    source_ref    TEXT,
+    governs_stage TEXT DEFAULT 'open',
+    gh_issue      TEXT,
     archived_at   TIMESTAMP,
     created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -999,6 +1026,8 @@ CREATE INDEX IF NOT EXISTS idx_autopilot_runs_hash ON autopilot_runs(signal_hash
 CREATE TABLE IF NOT EXISTS daemon_jobs (
     job_id       TEXT PRIMARY KEY,
     agent        TEXT NOT NULL,
+    harness      TEXT,
+    role         TEXT,
     task         TEXT NOT NULL,
     story_id     TEXT,
     status       TEXT NOT NULL DEFAULT 'queued',
@@ -1208,7 +1237,8 @@ def _get_db() -> _sqlite3.Connection:
     override = os.environ.get("SYNLYNK_STATE_DB_PATH")
     if override:
         os.makedirs(os.path.dirname(override), exist_ok=True)
-        conn = _sqlite3.connect(override)
+        conn = _sqlite3.connect(override, timeout=30.0)
+        conn.isolation_level = None
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA foreign_keys=ON")
         _migrate_db(conn)
@@ -1233,7 +1263,8 @@ def _get_db() -> _sqlite3.Connection:
             if not tried_fallback:
                 assert_not_nested_product_ledger(db_path, home_writable=True)
             os.makedirs(os.path.dirname(db_path), exist_ok=True)
-            conn = _sqlite3.connect(db_path)
+            conn = _sqlite3.connect(db_path, timeout=30.0)
+            conn.isolation_level = None
             conn.execute("PRAGMA journal_mode=WAL")
             conn.execute("PRAGMA foreign_keys=ON")
             _migrate_db(conn)
@@ -1277,7 +1308,9 @@ def _dr_sync(relative_path: str) -> None:
         dr_path = os.path.expanduser(str(dr_path))
         if not os.path.isdir(dr_path):
             return
-        src = os.path.join('.synlynk', 'project-docs', relative_path)
+        src = os.path.join(_docs_dir(), relative_path)
+        if not os.path.exists(src):
+            src = os.path.join('.synlynk', 'project-docs', relative_path)
         if not os.path.exists(src):
             return
         dst = os.path.join(dr_path, 'project-docs', relative_path)
@@ -1315,9 +1348,14 @@ def _check_verb_support(verb: str, harness_name: str, db_conn) -> dict:
 
 
 def _load_agent_config(name: str) -> dict:
-    """Load .agents/<name>.json. Raises FileNotFoundError with clear message."""
+    """Load .harnesses/<name>.json or .agents/<name>.json. Raises FileNotFoundError with clear message."""
     import json as _json
-    candidates = [os.path.join(".agents", f"{name}.json"), os.path.join("agents", f"{name}.json")]
+    candidates = [
+        os.path.join(".harnesses", f"{name}.json"),
+        os.path.join("harnesses", f"{name}.json"),
+        os.path.join(".agents", f"{name}.json"),
+        os.path.join("agents", f"{name}.json"),
+    ]
     path = next((candidate for candidate in candidates if os.path.exists(candidate)), candidates[0])
     if not os.path.exists(path):
         raise FileNotFoundError(f"No agent config found at {path}")
@@ -1331,6 +1369,8 @@ def _load_agent_profile(harness_name: str, agents_dir: str = ".agents") -> dict:
 
     candidates = [
         os.path.join(agents_dir, f"{harness_name}.json"),
+        os.path.join(".harnesses", f"{harness_name}.json"),
+        os.path.join("harnesses", f"{harness_name}.json"),
         os.path.join(".agents", f"{harness_name}.json"),
         os.path.join("agents", f"{harness_name}.json"),
     ]
@@ -2188,8 +2228,9 @@ def cmd_agent_configure(agent_name: str) -> None:
         print(f"  Unknown agent '{agent_name}'. Known: {list(HARNESS_CAPABILITY_BASELINES)}")
         return
 
-    os.makedirs(".agents", exist_ok=True)
-    path = os.path.join(".agents", f"{agent_name}.json")
+    harnesses_dir = ".harnesses" if os.path.exists(".harnesses") or not os.path.exists(".agents") else ".agents"
+    os.makedirs(harnesses_dir, exist_ok=True)
+    path = os.path.join(harnesses_dir, f"{agent_name}.json")
 
     existing = {}
     if os.path.exists(path):
@@ -2299,6 +2340,11 @@ def cmd_agent_add(agent_name: str) -> None:
         status = "skipped (up to date)" if probe_result.get("skipped") else probe_result.get("status", "unknown")
         print(f"  {_GREEN}✓{_RESET} probe [{agent_name}] {probe_result.get('version', 'unknown')} → {status}")
     print(f"  {_GREEN}✓{_RESET} onboarded {agent_name} from {cli_path}")
+
+
+cmd_harness_add = cmd_agent_add
+cmd_harness_configure = cmd_agent_configure
+
 
 
 def _run_daily_housekeeping() -> None:
@@ -2946,6 +2992,22 @@ def checkpoint() -> None:
         _generate_todo_md()
 
     _archive_old_devlog_entries(devlog_path, canonical_id)
+    if os.path.exists(devlog_path):
+        try:
+            with open(devlog_path, "r", encoding="utf-8") as _df:
+                _devlog_text = _df.read()
+            _discovered = extract_from_devlog_content(_devlog_text, author=canonical_id)
+            for _d in _discovered:
+                stage_discovered_work(
+                    title=_d["title"],
+                    description=_d.get("description", ""),
+                    role=_d.get("role", "dev"),
+                    stage=_d.get("stage", "open"),
+                    source_type=_d.get("source_type", "devlog"),
+                    source_ref=_d.get("source_ref", f"devlog:{canonical_id}"),
+                )
+        except Exception:
+            pass
     generate_context()
 
     completed_ids = [t["id"] for t in completed if t["id"]]

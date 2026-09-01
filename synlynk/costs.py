@@ -672,14 +672,14 @@ def update_costs(command: str, in_tokens: int, out_tokens: int, duration: float,
                  cache_read_tokens=None, model_version=None, story_id=None,
                  epic_id=None, phase_id=None, agent=None, basis="none",
                  job_id=None, discipline=None, phase=None,
-                 dispatch_context=None) -> None:
+                 dispatch_context=None, harness=None, agent_role=None) -> None:
     """Resolves a provenance tier and writes exactly one cost_entries row via
     the _insert_cost_row chokepoint.
 
     Never skips a write - a zero-token or unextractable result falls through to
     the estimated_tshirt chain.
     """
-    agent_name = agent or (command.split()[0] if command else "")
+    agent_name = harness or agent or (command.split()[0] if command else "")
     if not model_version:
         model_version = extract_model_version("", agent=agent_name) if agent_name else "unknown"
 
@@ -734,7 +734,7 @@ def update_costs(command: str, in_tokens: int, out_tokens: int, duration: float,
 
     if _pkg("_is_migrated")():
         _insert_cost_row(
-            session_date=ts, agent=agent_name, model=model_version,
+            session_date=ts, agent=agent or agent_name, model=model_version,
             input_tokens=in_tokens, output_tokens=out_tokens, cache_read_tokens=cache_read_tokens,
             cost_source=cost_source, estimate_basis=estimate_basis, total_cost_usd=est_cost,
             notes=f"exec: {short_cmd}", story_id=story_id, epic_id=epic_id, phase_id=phase_id,
@@ -743,6 +743,8 @@ def update_costs(command: str, in_tokens: int, out_tokens: int, duration: float,
             actual_usd=actual_usd,
             payment_mode=payment_value.mode,
             dispatch_context=dispatch_context,
+            harness=harness or agent_name,
+            agent_role=agent_role,
         )
         _pkg("_generate_costs_md")()
         _pkg("_dr_sync")("costs.md")

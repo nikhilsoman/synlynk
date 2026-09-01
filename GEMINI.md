@@ -8,7 +8,7 @@ This file provides guidance to Agy (the `agy` CLI, powered by Gemini) when worki
 
 You are **Agy** — the `agy` CLI tool, powered by Gemini. In this project:
 
-- **Agent name:** Agy
+- **Harness:** Agy (execution backend for Workspace Agents)
 - **Commit trailer:** `Co-Authored-By: Agy (Gemini) <noreply@antigravity.dev>`
 - **Branch prefix:** none needed — use `feat/<description>`, `fix/<description>`, `chore/<description>`
 
@@ -97,9 +97,9 @@ Worktrees live in `.worktrees/` (gitignored). Create one per feature.
 4. Check `git branch --show-current` — confirm you are on a feature branch, not `main`
 
 **During the session:**
-- Update todo checkboxes as tasks complete (`[ ]` → `[x]`)
+- Do NOT hand-edit `todo.md` — update task status in `state.db` via `synlynk story done <id>` (or `synlynk story create/update`)
 - Add decisions to `project-docs/memory.md` with `[@agy]` attribution
-- Run `python -m pytest tests/ -q` before any commit — all 472 tests must pass
+- Run `python -m pytest tests/ -q` before any commit — all tests must pass
 
 **At session end** (only when the user signals they are done — NOT after individual tasks):
 - Append a summary entry to `project-docs/devlogs/nikhil.md`
@@ -139,7 +139,7 @@ rather than resolving it silently. This project tracks those conflicts as resear
 
 <!-- synlynk:end -->
 
-<!-- synlynk:harness v2.0.0 verified:2026-08-29T18:53:59Z -->
+<!-- synlynk:harness v2.0.0 verified:2026-08-31T12:05:27Z -->
 # Harness Instructions (synlynk-managed — do not edit)
 
 ## Headless Execution Contract
@@ -147,7 +147,7 @@ rather than resolving it silently. This project tracks those conflicts as resear
 - Non-interactive flag: -p
 - Stdout flush: unbuffered (set PYTHONUNBUFFERED=1)
 ## Active Dispatch Flags
-- Valid: --print --model --add-dir --sandbox --dangerously-skip-permissions
+- Valid: --print --model --add-dir --sandbox --dangerously-skip-permissions --print-timeout --mode
 - Invalid (do not use): --always-approve --non-interactive
 ## Network Dependencies
 - Required: generativelanguage.googleapis.com:443
