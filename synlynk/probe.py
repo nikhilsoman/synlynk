@@ -887,14 +887,17 @@ def _run_tc6(harness_name: str, env: Optional[dict] = None, timeout: int = 5) ->
     inspected.  Keep the output in the result only for diagnostics; ``gh``
     does not print the token itself.
     """
-    auth_env = os.environ.copy() if env is None else dict(env)
+    run_kwargs = {
+        "capture_output": True,
+        "text": True,
+        "timeout": timeout,
+    }
+    if env is not None:
+        run_kwargs["env"] = dict(env)
     try:
         result = subprocess.run(
             ["gh", "auth", "status"],
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            env=auth_env,
+            **run_kwargs,
         )
     except FileNotFoundError:
         return {"passed": False, "error": "gh CLI not found", "output": ""}
@@ -985,15 +988,20 @@ def _run_tc9(
         else "gh pr list --limit 1"
     )
 
+    run_kwargs = {
+        "capture_output": True,
+        "text": True,
+        "timeout": timeout,
+    }
+    if env is not None:
+        run_kwargs["env"] = dict(env)
+
     if harness_name == "grok":
         if live:
             try:
                 proc = subprocess.run(
                     [cli_bin, "-p", cmd_str],
-                    capture_output=True,
-                    text=True,
-                    timeout=timeout,
-                    env=env or os.environ,
+                    **run_kwargs,
                 )
                 output = ((proc.stdout or "") + (proc.stderr or "")).strip()
                 if "denied" in output.lower() or proc.returncode != 0:
@@ -1031,10 +1039,7 @@ def _run_tc9(
             try:
                 proc = subprocess.run(
                     [cli_bin, "exec", "--sandbox", "workspace-write", cmd_str],
-                    capture_output=True,
-                    text=True,
-                    timeout=timeout,
-                    env=env or os.environ,
+                    **run_kwargs,
                 )
                 output = ((proc.stdout or "") + (proc.stderr or "")).strip()
                 if proc.returncode == 0:
@@ -1097,10 +1102,7 @@ def _run_tc9(
             try:
                 proc = subprocess.run(
                     [cli_bin, "-p", cmd_str],
-                    capture_output=True,
-                    text=True,
-                    timeout=timeout,
-                    env=env or os.environ,
+                    **run_kwargs,
                 )
                 output = ((proc.stdout or "") + (proc.stderr or "")).strip()
                 if proc.returncode == 0:
@@ -1138,10 +1140,7 @@ def _run_tc9(
             try:
                 proc = subprocess.run(
                     [cli_bin, "-p", cmd_str],
-                    capture_output=True,
-                    text=True,
-                    timeout=timeout,
-                    env=env or os.environ,
+                    **run_kwargs,
                 )
                 output = ((proc.stdout or "") + (proc.stderr or "")).strip()
                 if proc.returncode == 0:
