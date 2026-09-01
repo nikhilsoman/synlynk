@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Issue #1188 — Catching a Stale pipx CLI Before It Misleads You | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-3">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Sep 02, 2026</span>
+        
+          <span class="blog-post-pr">PR #1325</span>
+        
+      </div>
+      <h1 class="blog-post-title">Issue #1188 — Catching a Stale pipx CLI Before It Misleads You</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>The CLI should make the state of a multi-agent workspace legible and actionable,
+including failures caused by the tool installation itself.</p>
+<h2>What This PR Shipped</h2>
+<p>When <code>synlynk</code> is invoked from inside a synlynk checkout, the CLI now locates the
+checkout's <code>VERSION</code> file and compares it with the running package version. If the
+installed binary is behind, it prints a stderr warning identifying both versions
+and gives a concrete <code>pipx install --force</code> command to refresh the installation.
+The check is local, best-effort, and silent for non-synlynk directories,
+malformed metadata, and versions that are already current.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>It removes a subtle source of operator confusion: a repository can now explain
+when the command being used is older than the code the operator is inspecting.
+That shortens diagnosis time for stale pipx environments without blocking normal
+commands or requiring a network probe.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>Keep the CLI self-diagnosing at the boundary between installed tooling and live
+workspace state, while preserving a quiet path for ordinary use.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
