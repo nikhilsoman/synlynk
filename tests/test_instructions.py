@@ -226,3 +226,32 @@ def test_extract_instruction_version_missing():
 
     assert extract_instruction_version("Just normal content without markers") is None
     assert extract_instruction_version("") is None
+
+
+def test_instruction_templates_prohibit_direct_todo_edits():
+    from synlynk.instructions import (
+        _build_templates,
+        _build_cursor_mdc,
+        _build_copilot_instructions,
+        _build_windsurf_rules,
+    )
+
+    templates_dict = _build_templates()
+    templates = [
+        templates_dict["CLAUDE.md"],
+        templates_dict["GEMINI.md"],
+        templates_dict["AGENTS.md"],
+        templates_dict["GROK.md"],
+        templates_dict["AI_INSTRUCTIONS.md"],
+        _build_cursor_mdc(),
+        _build_copilot_instructions(),
+        _build_windsurf_rules(),
+    ]
+
+    for tmpl in templates:
+        assert "[ ] active" not in tmpl
+        assert "Update task status in project-docs/todo.md" not in tmpl
+        assert "Update task status in `project-docs/todo.md`" not in tmpl
+        if "todo.md" in tmpl:
+            assert "state.db" in tmpl
+            assert "synlynk story done" in tmpl or "synlynk checkpoint" in tmpl

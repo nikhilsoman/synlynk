@@ -97,9 +97,9 @@ Worktrees live in `.worktrees/` (gitignored). Create one per feature.
 4. Check `git branch --show-current` — confirm you are on a feature branch, not `main`
 
 **During the session:**
-- Update todo checkboxes as tasks complete (`[ ]` → `[x]`)
+- Do NOT hand-edit `todo.md` — update task status in `state.db` via `synlynk story done <id>` (or `synlynk story create/update`)
 - Add decisions to `project-docs/memory.md` with `[@agy]` attribution
-- Run `python -m pytest tests/ -q` before any commit — all 472 tests must pass
+- Run `python -m pytest tests/ -q` before any commit — all tests must pass
 
 **At session end** (only when the user signals they are done — NOT after individual tasks):
 - Append a summary entry to `project-docs/devlogs/nikhil.md`

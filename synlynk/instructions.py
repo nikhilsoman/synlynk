@@ -470,10 +470,10 @@ def _build_templates(org: str = None, repo: str = None, project_id: str = None,
    - Row 3 (team mode only): Last 1 entry per teammate from project-docs/devlogs/
 
 ## During the session
-- Update task status in project-docs/todo.md — do NOT delete tasks:
-  `[ ]` active · `[x]` done · `[-]` deferred · `[~]` superseded · `[>]` absorbed
+- Do NOT hand-edit `todo.md` directly — it is an auto-generated view projected from `state.db`.
+- Update task status in `state.db` via `synlynk story done <id>` (or `synlynk story create/update`).
 - Append decisions to project-docs/memory.md with [@username] attribution
-- Run `synlynk checkpoint` at every task boundary
+- Run `synlynk checkpoint` at every task boundary to archive completed tasks and refresh context
 - In team mode: always `git pull` before editing any project-docs file
 - Log costs in project-docs/costs.md after each significant AI operation
 
@@ -734,8 +734,7 @@ alwaysApply: true
 3. Check `.synlynk/sentinel.md` for active alerts
 
 ## During Session
-- Update task status in `project-docs/todo.md` — do not delete tasks:
-  `[ ]` active · `[x]` done · `[-]` deferred · `[~]` superseded · `[>]` absorbed
+- Do NOT hand-edit `todo.md` directly — update task status in `state.db` via `synlynk story done <id>` (or `synlynk story create/update`).
 - Append decisions to `project-docs/memory.md` with `[@username]` attribution
 - Run `synlynk checkpoint` at every task boundary
 
@@ -762,8 +761,7 @@ def _build_copilot_instructions() -> str:
 3. Check `.synlynk/sentinel.md` for active alerts
 
 ### During Session
-- Update task status in `project-docs/todo.md` — do not delete tasks:
-  `[ ]` active · `[x]` done · `[-]` deferred · `[~]` superseded · `[>]` absorbed
+- Do NOT hand-edit `todo.md` directly — update task status in `state.db` via `synlynk story done <id>` (or `synlynk story create/update`).
 - Append decisions to `project-docs/memory.md` with `[@username]` attribution
 - Run `synlynk checkpoint` at every task boundary
 - Never commit directly to `main`/`master` — create a worktree or branch first
@@ -777,7 +775,7 @@ def _build_windsurf_rules() -> str:
     """Returns content for .windsurfrules synlynk block (terse directive format)."""
     return """\
 Read .synlynk/context.md at session start.
-Update task status in project-docs/todo.md ([ ] active [x] done [-] deferred [~] superseded [>] absorbed).
+Do NOT hand-edit todo.md — update task status in state.db via `synlynk story done <id>` and `synlynk checkpoint`.
 Run `synlynk checkpoint` at task boundaries.
 Never commit directly to main or master — use a worktree.
 Append decisions to project-docs/memory.md with [@username].
