@@ -1,0 +1,557 @@
+diff --git a/docs/reference/commands.md b/docs/reference/commands.md
+index d1e3ca92..4ca9dac6 100644
+--- a/docs/reference/commands.md
++++ b/docs/reference/commands.md
+@@ -99,6 +99,8 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
+ - `identity init` — sustain
+ - `identity list` — sustain
+ - `events tail` — sustain
++- `backlog note` — sustain
++- `backlog scan-session` — sustain
+ - `repair` — sustain
+ - `exit` — sustain
+ - `harness run` — execute
+diff --git a/synlynk/__init__.py b/synlynk/__init__.py
+index bc43c3bc..4272a0e6 100644
+--- a/synlynk/__init__.py
++++ b/synlynk/__init__.py
+@@ -1037,6 +1037,21 @@ CREATE TABLE IF NOT EXISTS goal_contributions (
+     UNIQUE(goal_id, story_id)
+ );
+ 
++CREATE TABLE IF NOT EXISTS backlog_proposals (
++    id               INTEGER PRIMARY KEY AUTOINCREMENT,
++    signal_hash      TEXT NOT NULL,
++    title            TEXT NOT NULL,
++    source           TEXT NOT NULL,
++    status           TEXT NOT NULL,
++    gh_issue_url     TEXT,
++    story_id         TEXT,
++    goal_id          TEXT,
++    goal_match_basis TEXT,
++    session_id       TEXT,
++    ts               TIMESTAMP DEFAULT CURRENT_TIMESTAMP
++);
++CREATE INDEX IF NOT EXISTS idx_backlog_proposals_hash ON backlog_proposals(signal_hash);
++
+ CREATE TABLE IF NOT EXISTS sessions (
+     id               INTEGER PRIMARY KEY AUTOINCREMENT,
+     session_id       TEXT NOT NULL UNIQUE,
+diff --git a/synlynk/backlog_automation.py b/synlynk/backlog_automation.py
+new file mode 100644
+index 00000000..6a1642a3
+--- /dev/null
++++ b/synlynk/backlog_automation.py
+@@ -0,0 +1,241 @@
++"""GOVERNS backlog automation: dedup, goal resolution, and filing for
++discovered/planned work. See docs/superpowers/specs/2026-08-29-governs-backlog-automation-design.md.
++"""
++
++import hashlib
++import json
++import re
++import subprocess
++
++
++def compute_signal_hash(title: str, source: str) -> str:
++    """Stable hash of a normalized title + source, used as the dedup key."""
++    normalized = re.sub(r"\s+", " ", title.strip().lower())
++    return hashlib.md5(f"{source}:{normalized}".encode()).hexdigest()[:16]
++
++
++def has_ledger_duplicate(conn, signal_hash: str) -> bool:
++    """True if signal_hash already has a backlog_proposals row (filed or declined)."""
++    row = conn.execute(
++        "SELECT 1 FROM backlog_proposals WHERE signal_hash=? LIMIT 1", (signal_hash,)
++    ).fetchone()
++    return row is not None
++
++
++def record_proposal(conn, signal_hash: str, title: str, source: str, status: str,
++                     gh_issue_url, story_id, goal_id, goal_match_basis, session_id) -> None:
++    """Insert a backlog_proposals ledger row. Caller commits."""
++    conn.execute(
++        "INSERT INTO backlog_proposals "
++        "(signal_hash, title, source, status, gh_issue_url, story_id, goal_id, goal_match_basis, session_id) "
++        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
++        (signal_hash, title, source, status, gh_issue_url, story_id, goal_id, goal_match_basis, session_id),
++    )
++    conn.commit()
++
++
++def search_similar_issues(title: str) -> list:
++    """Search open+closed GitHub issues for similar titles via `gh issue list --search`.
++
++    Returns a list of {"title": ..., "url": ...} dicts, or [] on any gh failure.
++    """
++    result = subprocess.run(
++        ["gh", "issue", "list", "--search", title, "--state", "all",
++         "--json", "title,url", "--limit", "10"],
++        capture_output=True, text=True,
++    )
++    if result.returncode != 0:
++        return []
++    try:
++        return json.loads(result.stdout)
++    except (ValueError, TypeError):
++        return []
++
++
++def resolve_goal(conn, goal_id: str = None, new_goal_outcome: str = None,
++                  new_goal_criterion: str = None) -> tuple:
++    """Resolve which goal a story should link to.
++
++    Priority: explicit goal_id > create-new (outcome+criterion given) > no goal.
++    The caller (an interactive agent) has already done any "which goal fits best"
++    reasoning before calling this — this function only executes the decision.
++    Returns (goal_id_or_None, basis_string).
++    """
++    from synlynk.db import cmd_goal_create
++
++    if goal_id:
++        row = conn.execute("SELECT goal_id FROM goals WHERE goal_id=?", (goal_id,)).fetchone()
++        if row:
++            return goal_id, f"explicit goal_id passed: {goal_id}"
++        return None, f"no goal: explicit goal_id {goal_id!r} not found in goals table"
++
++    if new_goal_outcome and new_goal_criterion:
++        new_id = cmd_goal_create(new_goal_outcome, new_goal_criterion, role="pm")
++        return new_id, f"new goal created: no existing goal matched ({new_goal_outcome!r})"
++
++    return None, "no goal: no goal_id, session goal, or new-goal outcome/criterion given"
++
++
++def _repo_slug() -> str:
++    result = subprocess.run(
++        ["gh", "repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"],
++        capture_output=True, text=True,
++    )
++    return result.stdout.strip()
++
++
++def _create_github_issue(title: str, body: str, parent_issue, labels: str) -> str:
++    """Create the issue, then register it as a GitHub sub-issue of parent_issue.
++    Returns the new issue's URL, or '' on failure.
++    """
++    result = subprocess.run(
++        ["gh", "issue", "create", "--title", title, "--body", body, "--label", labels],
++        capture_output=True, text=True,
++    )
++    if result.returncode != 0:
++        return ""
++    issue_url = result.stdout.strip()
++    if not parent_issue:
++        return issue_url
++
++    issue_number = issue_url.rstrip("/").rsplit("/", 1)[-1]
++    repo = _repo_slug()
++    if not repo:
++        return issue_url
++
++    view_result = subprocess.run(
++        ["gh", "api", f"repos/{repo}/issues/{issue_number}", "--jq", ".id"],
++        capture_output=True, text=True,
++    )
++    if view_result.returncode != 0 or not view_result.stdout.strip():
++        return issue_url
++    child_db_id = view_result.stdout.strip()
++
++    subprocess.run(
++        ["gh", "api", f"repos/{repo}/issues/{parent_issue}/sub_issues",
++         "-X", "POST", "-f", f"sub_issue_id={child_db_id}"],
++        capture_output=True, text=True,
++    )
++    return issue_url
++
++
++def file_backlog_item(conn, title: str, body: str, source: str, session_id: str = None,
++                       goal_id: str = None, new_goal_outcome: str = None,
++                       new_goal_criterion: str = None, parent_issue=1198,
++                       labels: str = "enhancement") -> dict:
++    """Dedup (local ledger, then GitHub title search), resolve goal, file the GitHub
++    issue + story + ledger row.
++
++    Returns {"status": "filed"|"skipped_duplicate"|"skipped_duplicate_gh",
++             "gh_issue_url": str|None, "story_id": str|None}.
++    """
++    signal_hash = compute_signal_hash(title, source)
++    if has_ledger_duplicate(conn, signal_hash):
++        return {"status": "skipped_duplicate", "gh_issue_url": None, "story_id": None}
++
++    normalized_title = re.sub(r"\s+", " ", title.strip().lower())
++    for hit in search_similar_issues(title):
++        hit_title = re.sub(r"\s+", " ", hit.get("title", "").strip().lower())
++        if hit_title == normalized_title:
++            return {"status": "skipped_duplicate_gh", "gh_issue_url": hit.get("url"), "story_id": None}
++
++    resolved_goal_id, basis = resolve_goal(
++        conn, goal_id=goal_id, new_goal_outcome=new_goal_outcome, new_goal_criterion=new_goal_criterion
++    )
++
++    gh_issue_url = _create_github_issue(title, body, parent_issue, labels)
++
++    story_id = "backlog-" + hashlib.md5(f"{signal_hash}{gh_issue_url}".encode()).hexdigest()[:8]
++    conn.execute(
++        "INSERT OR IGNORE INTO stories (story_id, title, goal_id) VALUES (?, ?, ?)",
++        (story_id, title[:100], resolved_goal_id),
++    )
++    conn.commit()
++
++    record_proposal(
++        conn, signal_hash=signal_hash, title=title, source=source, status="filed",
++        gh_issue_url=gh_issue_url or None, story_id=story_id, goal_id=resolved_goal_id,
++        goal_match_basis=basis, session_id=session_id,
++    )
++    return {"status": "filed", "gh_issue_url": gh_issue_url or None, "story_id": story_id}
++
++
++def collect_session_material(conn, session_id: str) -> dict:
++    """Read raw material for a closed session: closing_summary plus a devlog tail.
++    Returns None if the session doesn't exist. Deterministic data-gathering only —
++    classifying this material into backlog candidates is the calling agent's job.
++    """
++    row = conn.execute(
++        "SELECT session_id, title, closing_summary FROM sessions WHERE session_id=?",
++        (session_id,),
++    ).fetchone()
++    if row is None:
++        return None
++
++    devlog_tail = ""
++    devlog_user = subprocess.run(
++        ["git", "config", "user.name"], capture_output=True, text=True
++    ).stdout.strip()
++    if devlog_user:
++        devlog_path = f"project-docs/devlogs/{devlog_user}.md"
++        try:
++            with open(devlog_path) as f:
++                content = f.read()
++            devlog_tail = content[-2000:]
++        except OSError:
++            devlog_tail = ""
++
++    return {
++        "session_id": row[0],
++        "title": row[1],
++        "closing_summary": row[2] or "",
++        "devlog_tail": devlog_tail,
++    }
++
++
++def cmd_backlog_note(title: str, body: str, source: str = "marker", session_id: str = None,
++                      goal_id: str = None, new_goal_outcome: str = None,
++                      new_goal_criterion: str = None, parent_issue=1198) -> None:
++    """CLI entrypoint for the explicit-marker path. Files immediately (no confirm gate) —
++    calling this command is itself the deliberate act.
++    """
++    from synlynk import _get_db
++    conn = _get_db()
++    try:
++        outcome = file_backlog_item(
++            conn, title=title, body=body, source=source, session_id=session_id,
++            goal_id=goal_id, new_goal_outcome=new_goal_outcome,
++            new_goal_criterion=new_goal_criterion, parent_issue=parent_issue,
++        )
++    finally:
++        conn.close()
++
++    if outcome["status"] == "skipped_duplicate":
++        print(f"  [backlog] skipped — already proposed: {title!r}")
++        return
++    if outcome["status"] == "skipped_duplicate_gh":
++        print(f"  [backlog] skipped — matches existing GitHub issue: {outcome['gh_issue_url']}")
++        return
++    print(f"  [backlog] filed: {outcome['gh_issue_url']}  (story: {outcome['story_id']})")
++
++
++def cmd_backlog_scan_session(session_id: str) -> None:
++    """CLI entrypoint for the session-close safety net. Prints raw material for the
++    calling agent to read and classify — filing candidates is a separate
++    `synlynk backlog note` call per confirmed item, not automatic.
++    """
++    from synlynk import _get_db
++    conn = _get_db()
++    try:
++        material = collect_session_material(conn, session_id)
++    finally:
++        conn.close()
++
++    if material is None:
++        print(f"  [backlog] no session found: {session_id}")
++        return
++
++    print(f"  [backlog] session {material['session_id']} — {material['title']}")
++    print(f"\n  closing_summary:\n  {material['closing_summary']}\n")
++    if material["devlog_tail"]:
++        print(f"  devlog tail:\n{material['devlog_tail']}\n")
+diff --git a/synlynk/cli.py b/synlynk/cli.py
+index 02bce302..99fcaa51 100644
+--- a/synlynk/cli.py
++++ b/synlynk/cli.py
+@@ -453,6 +453,21 @@ def build_parser() -> argparse.ArgumentParser:
+         help="Maximum number of events to show (default 20)",
+     )
+ 
++    backlog_parser = subparsers.add_parser("backlog", help="GOVERNS backlog automation")
++    backlog_sub = backlog_parser.add_subparsers(dest="backlog_command")
++
++    note_parser = backlog_sub.add_parser("note", help="File a discovered/planned work item now")
++    note_parser.add_argument("title")
++    note_parser.add_argument("--body", default="")
++    note_parser.add_argument("--session-id", default=None)
++    note_parser.add_argument("--goal-id", default=None)
++    note_parser.add_argument("--new-goal-outcome", default=None)
++    note_parser.add_argument("--new-goal-criterion", default=None)
++    note_parser.add_argument("--parent-issue", type=int, default=1198)
++
++    scan_parser = backlog_sub.add_parser("scan-session", help="Print session material for a discovery re-scan")
++    scan_parser.add_argument("--session-id", required=True)
++
+     session_parser = subparsers.add_parser("session", help="Manage work-envelope sessions")
+     session_sub = session_parser.add_subparsers(dest="session_action")
+     session_open_parser = session_sub.add_parser("open", help="Open a new session")
+@@ -984,6 +999,7 @@ def build_parser() -> argparse.ArgumentParser:
+         "goal": goal_parser,
+         "identity": identity_parser,
+         "events": events_parser,
++        "backlog": backlog_parser,
+         "session": session_parser,
+         "instructions": instructions_parser,
+         "local": local_parser,
+@@ -1645,6 +1661,18 @@ def main(argv=None) -> None:
+             cmd_events_tail(event_type=args.event_type, limit=args.limit)
+         else:
+             help_parsers.get("events", parser).print_help()
++    elif args.command == "backlog":
++        from synlynk.backlog_automation import cmd_backlog_note, cmd_backlog_scan_session
++        if args.backlog_command == "note":
++            cmd_backlog_note(
++                title=args.title, body=args.body, session_id=args.session_id,
++                goal_id=args.goal_id, new_goal_outcome=args.new_goal_outcome,
++                new_goal_criterion=args.new_goal_criterion, parent_issue=args.parent_issue,
++            )
++        elif args.backlog_command == "scan-session":
++            cmd_backlog_scan_session(args.session_id)
++        else:
++            help_parsers.get("backlog", parser).print_help()
+     elif args.command == "session":
+         action = getattr(args, "session_action", None)
+         from synlynk.db import (
+diff --git a/synlynk/db.py b/synlynk/db.py
+index 049d45f5..abf15052 100644
+--- a/synlynk/db.py
++++ b/synlynk/db.py
+@@ -97,7 +97,7 @@ _PROJECT_DOC_KEEP_N = 50
+ # Bump when a new schema migration is added.  This is deliberately kept in
+ # SQLite's small built-in metadata slot so checking it does not touch the DB
+ # file or create a backup on already-migrated connections.
+-_DB_MIGRATION_VERSION = 2
++_DB_MIGRATION_VERSION = 3
+ 
+ _GENERATORS_BY_FILENAME = {
+     "todo.md": "_generate_todo_md",
+diff --git a/tests/test_backlog_automation.py b/tests/test_backlog_automation.py
+new file mode 100644
+index 00000000..c4a03f9e
+--- /dev/null
++++ b/tests/test_backlog_automation.py
+@@ -0,0 +1,199 @@
++import os
++import sqlite3
++
++import pytest
++
++
++@pytest.fixture
++def db_conn(tmp_path, monkeypatch):
++    db_path = str(tmp_path / "state.db")
++    monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", db_path)
++    from synlynk import _get_db
++    conn = _get_db()
++    yield conn
++    conn.close()
++
++
++def test_backlog_proposals_table_exists(db_conn):
++    cols = {row[1] for row in db_conn.execute("PRAGMA table_info(backlog_proposals)")}
++    assert cols == {
++        "id", "signal_hash", "title", "source", "status",
++        "gh_issue_url", "story_id", "goal_id", "goal_match_basis",
++        "session_id", "ts",
++    }
++
++
++from unittest.mock import MagicMock, patch
++
++
++def test_compute_signal_hash_is_stable_and_source_sensitive():
++    from synlynk.backlog_automation import compute_signal_hash
++    h1 = compute_signal_hash("Fix the flaky retry test", "marker")
++    h2 = compute_signal_hash("fix the FLAKY retry test", "marker")
++    h3 = compute_signal_hash("Fix the flaky retry test", "session_close")
++    assert h1 == h2  # normalized (case/whitespace insensitive)
++    assert h1 != h3  # source is part of the hash
++
++
++def test_has_ledger_duplicate_true_after_insert(db_conn):
++    from synlynk.backlog_automation import compute_signal_hash, has_ledger_duplicate, record_proposal
++    h = compute_signal_hash("Some discovered thing", "marker")
++    assert has_ledger_duplicate(db_conn, h) is False
++    record_proposal(
++        db_conn, signal_hash=h, title="Some discovered thing", source="marker",
++        status="declined", gh_issue_url=None, story_id=None, goal_id=None,
++        goal_match_basis=None, session_id=None,
++    )
++    assert has_ledger_duplicate(db_conn, h) is True
++
++
++def test_search_similar_issues_parses_gh_output():
++    from synlynk.backlog_automation import search_similar_issues
++    fake_result = MagicMock(returncode=0, stdout='[{"title": "Fix the flaky retry test", "url": "https://github.com/x/y/issues/42"}]')
++    with patch("subprocess.run", return_value=fake_result) as mock_run:
++        hits = search_similar_issues("Fix flaky retry test")
++    assert hits == [{"title": "Fix the flaky retry test", "url": "https://github.com/x/y/issues/42"}]
++    args = mock_run.call_args[0][0]
++    assert args[:3] == ["gh", "issue", "list"]
++
++
++def test_search_similar_issues_empty_on_gh_failure():
++    from synlynk.backlog_automation import search_similar_issues
++    fake_result = MagicMock(returncode=1, stdout="", stderr="rate limited")
++    with patch("subprocess.run", return_value=fake_result):
++        assert search_similar_issues("anything") == []
++
++
++def test_resolve_goal_uses_explicit_goal_id(db_conn):
++    from synlynk.db import cmd_goal_create
++    from synlynk.backlog_automation import resolve_goal
++    goal_id = cmd_goal_create("Ship X", "X is shipped", role="pm")
++    resolved_id, basis = resolve_goal(db_conn, goal_id=goal_id)
++    assert resolved_id == goal_id
++    assert "explicit" in basis
++
++
++def test_resolve_goal_creates_new_goal_when_requested(db_conn):
++    from synlynk.backlog_automation import resolve_goal
++    resolved_id, basis = resolve_goal(
++        db_conn, new_goal_outcome="Backlog stays current",
++        new_goal_criterion="No discovered work sits unfiled for >1 session",
++    )
++    row = db_conn.execute("SELECT outcome FROM goals WHERE goal_id=?", (resolved_id,)).fetchone()
++    assert row[0] == "Backlog stays current"
++    assert "new goal created" in basis
++
++
++def test_resolve_goal_returns_none_when_nothing_given(db_conn):
++    from synlynk.backlog_automation import resolve_goal
++    resolved_id, basis = resolve_goal(db_conn)
++    assert resolved_id is None
++    assert "no goal" in basis
++
++
++def test_file_backlog_item_happy_path(db_conn):
++    from synlynk.backlog_automation import file_backlog_item
++    from synlynk.db import cmd_goal_create
++
++    goal_id = cmd_goal_create("Ship X", "X is shipped", role="pm")
++
++    search_result = MagicMock(returncode=0, stdout="[]", stderr="")
++    create_result = MagicMock(returncode=0, stdout="https://github.com/nikhilsoman/synlynk/issues/9001\n", stderr="")
++    repo_result = MagicMock(returncode=0, stdout="nikhilsoman/synlynk\n", stderr="")
++    view_result = MagicMock(returncode=0, stdout="555", stderr="")
++    subissue_result = MagicMock(returncode=0, stdout="{}", stderr="")
++
++    # Call order matches file_backlog_item -> search_similar_issues, then
++    # _create_github_issue's internal sequence: create, repo_view, id_view, sub_issue_post.
++    with patch("subprocess.run", side_effect=[search_result, create_result, repo_result, view_result, subissue_result]):
++        outcome = file_backlog_item(
++            db_conn, title="Investigate flaky test", body="details here",
++            source="marker", goal_id=goal_id, parent_issue=1198,
++        )
++
++    assert outcome["status"] == "filed"
++    assert outcome["gh_issue_url"] == "https://github.com/nikhilsoman/synlynk/issues/9001"
++    story = db_conn.execute(
++        "SELECT title, goal_id FROM stories WHERE story_id=?", (outcome["story_id"],)
++    ).fetchone()
++    assert story == ("Investigate flaky test", goal_id)
++    ledger_row = db_conn.execute(
++        "SELECT status, gh_issue_url, story_id FROM backlog_proposals WHERE story_id=?",
++        (outcome["story_id"],),
++    ).fetchone()
++    assert ledger_row == ("filed", outcome["gh_issue_url"], outcome["story_id"])
++
++
++def test_file_backlog_item_skips_ledger_duplicate(db_conn):
++    from synlynk.backlog_automation import file_backlog_item, compute_signal_hash, record_proposal
++    h = compute_signal_hash("Already proposed thing", "marker")
++    record_proposal(db_conn, signal_hash=h, title="Already proposed thing", source="marker",
++                     status="declined", gh_issue_url=None, story_id=None, goal_id=None,
++                     goal_match_basis=None, session_id=None)
++    with patch("subprocess.run") as mock_run:
++        outcome = file_backlog_item(db_conn, title="Already proposed thing", body="x", source="marker")
++    assert outcome["status"] == "skipped_duplicate"
++    mock_run.assert_not_called()
++
++
++def test_file_backlog_item_skips_gh_title_duplicate(db_conn):
++    from synlynk.backlog_automation import file_backlog_item
++    search_result = MagicMock(
++        returncode=0,
++        stdout='[{"title": "Investigate flaky test", "url": "https://github.com/x/y/issues/42"}]',
++        stderr="",
++    )
++    with patch("subprocess.run", return_value=search_result) as mock_run:
++        outcome = file_backlog_item(db_conn, title="Investigate flaky test", body="x", source="marker")
++    assert outcome["status"] == "skipped_duplicate_gh"
++    assert outcome["gh_issue_url"] == "https://github.com/x/y/issues/42"
++    # only the search call — no issue was created
++    assert mock_run.call_count == 1
++    assert mock_run.call_args[0][0][:3] == ["gh", "issue", "list"]
++
++
++def test_collect_session_material_reads_closing_summary(db_conn, tmp_path, monkeypatch):
++    from synlynk.backlog_automation import collect_session_material
++    db_conn.execute(
++        "INSERT INTO sessions (session_id, title, status, opened_at, closing_summary) "
++        "VALUES (?, ?, 'closed', '2026-08-29T10:00:00', ?)",
++        ("sess-1", "Test session", "Shipped X, discovered Y needs follow-up"),
++    )
++    db_conn.commit()
++    material = collect_session_material(db_conn, "sess-1")
++    assert material["closing_summary"] == "Shipped X, discovered Y needs follow-up"
++    assert material["session_id"] == "sess-1"
++
++
++def test_collect_session_material_missing_session(db_conn):
++    from synlynk.backlog_automation import collect_session_material
++    material = collect_session_material(db_conn, "does-not-exist")
++    assert material is None
++
++
++def test_cli_backlog_note_invokes_file_backlog_item(db_conn, capsys):
++    from synlynk import cli
++    with patch("synlynk.backlog_automation.file_backlog_item") as mock_file:
++        mock_file.return_value = {"status": "filed", "gh_issue_url": "https://x/9001", "story_id": "backlog-abc"}
++        cli.main(["backlog", "note", "Found a gap", "--body", "details"])
++    mock_file.assert_called_once()
++    _, kwargs = mock_file.call_args
++    assert kwargs["title"] == "Found a gap"
++    assert kwargs["body"] == "details"
++    assert kwargs["source"] == "marker"
++    out = capsys.readouterr().out
++    assert "filed" in out
++    assert "https://x/9001" in out
++
++
++def test_cli_backlog_scan_session_prints_material(db_conn, capsys):
++    from synlynk import cli
++    db_conn.execute(
++        "INSERT INTO sessions (session_id, title, status, opened_at, closing_summary) "
++        "VALUES (?, ?, 'closed', '2026-08-29T10:00:00', ?)",
++        ("sess-2", "Another session", "Nothing notable"),
++    )
++    db_conn.commit()
++    cli.main(["backlog", "scan-session", "--session-id", "sess-2"])
++    out = capsys.readouterr().out
++    assert "Nothing notable" in out
