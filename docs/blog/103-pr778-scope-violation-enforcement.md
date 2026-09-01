@@ -4,7 +4,7 @@ date: 2026-08-08
 series: "Building the OS for Multi-Agent Development"
 post: 103
 pr: "#778"
-merged: status open
+merged: 2026-08-08
 ---
 
 ## The Broader Goal at the End of the Previous PR
