@@ -24,6 +24,35 @@ def test_claude_harness_alignment_update_baseline():
     assert "builder" not in claude["roles"]
 
 
+def test_harden_harness_instructions_to_prohibit_direct_todo_edits():
+    from synlynk.instructions import (
+        _build_templates,
+        _build_cursor_mdc,
+        _build_copilot_instructions,
+        _build_windsurf_rules,
+    )
+
+    templates_dict = _build_templates()
+    templates = [
+        templates_dict["CLAUDE.md"],
+        templates_dict["GEMINI.md"],
+        templates_dict["AGENTS.md"],
+        templates_dict["GROK.md"],
+        templates_dict["AI_INSTRUCTIONS.md"],
+        _build_cursor_mdc(),
+        _build_copilot_instructions(),
+        _build_windsurf_rules(),
+    ]
+
+    for tmpl in templates:
+        assert "[ ] active" not in tmpl
+        assert "Update task status in project-docs/todo.md" not in tmpl
+        assert "Update task status in `project-docs/todo.md`" not in tmpl
+        if "todo.md" in tmpl:
+            assert "state.db" in tmpl
+            assert "synlynk story done" in tmpl or "synlynk checkpoint" in tmpl
+
+
 def test_wire_charter_content_into_dispatchexecut(project_dir, tmp_path, monkeypatch):
     import synlynk
     from synlynk import agent_store
