@@ -1406,7 +1406,7 @@ def _dispatch_flags_for_agent(agent: str) -> list:
 def cmd_roles(fix: bool = False) -> None:
     """Print current agent role table from config.
 
-    With --fix, regenerate role fences.
+    With --fix, regenerate role fences and repair SOP sections.
     """
     cfg = load_config()
     roles = cfg.get("roles", {})
@@ -1449,6 +1449,12 @@ def cmd_roles(fix: bool = False) -> None:
             except Exception as exc:
                 print(f"    {_YELLOW}⚠{_RESET} could not write {fname}: {exc}")
 
+    if fix:
+        try:
+            _repair_sops_only(cfg=cfg, dry_run=False)
+        except Exception as exc:
+            print(f"  {_YELLOW}⚠{_RESET} could not repair SOP sections: {exc}")
+
     print()
     if not fix:
         missing = [
@@ -1458,7 +1464,7 @@ def cmd_roles(fix: bool = False) -> None:
             and not _fence_exists(_directive_file_for_agent(a))
         ]
         if missing:
-            print(f"  {_DIM}Run `synlynk roles --fix` to write missing role fences{_RESET}\n")
+            print(f"  {_DIM}Run `synlynk roles --fix` to write missing role fences and repair SOP sections{_RESET}\n")
     if not visible_agents:
         print(f"  {_DIM}No agents in roles to display{_RESET}\n")
 

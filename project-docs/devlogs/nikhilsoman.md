@@ -1,4 +1,14 @@
 
+## 2026-09-01 — Repair Stale & Missing SOP Sections during synlynk roles --fix (PR #1321, closes #1231)
+
+### Shipped
+- **Design Spec & Implementation Plan:** Authored and committed formal Design Spec (`docs/superpowers/specs/2026-09-01-roles-fix-repairs-sops-design.md`) and Implementation Plan (`docs/superpowers/plans/2026-09-01-roles-fix-repairs-sops.md`), resolving #1231 (tracking story `story-ae286f37`, linked to `goal-a222b393`).
+- **Automatic SOP Repair:** Updated `cmd_roles(fix=True)` in `synlynk/__init__.py` to unconditionally invoke `_repair_sops_only(cfg=cfg, dry_run=False)` and updated `_repair_config_agents(cfg)` in `synlynk/probe.py` to inspect all configured directive-backed agents in `roles`.
+- **CLI Help Text & UX:** Updated `roles_parser` help text in `synlynk/cli.py` and `cmd_roles` guidance text.
+- **Test Suite (TDD):** Added unit tests in `tests/test_roles.py` covering backfilling missing SOP sections and refreshing stale SOP sections in fenced files. All 18 roles tests, 4 quota/SOP tests, and 506 suite tests pass clean.
+- **Blog Post:** `docs/blog/153-pr1321-roles-fix-repairs-sops.md` (indexed in `docs/blog/README.md`).
+[@agy]
+
 ## 2026-09-01 — Tighten _task_requires_gh_write() Auto-Detection Heuristic (PR #1320, closes #1246)
 
 ### Shipped

@@ -1,5 +1,12 @@
 # synlynk Memory
 
+## Repair Stale & Missing SOP Sections during synlynk roles --fix (decided/shipped 2026-09-01)
+- **Shipped:** PR #1321 (closes #1231, relates to #718, #1229). Ensures `synlynk roles --fix` repairs missing and stale SOP sections across all configured agent directive files. [@agy]
+- **Root Cause Resolution:** `synlynk roles --fix` previously only checked whether a harness fence existed in each directive file, writing a minimal `## Your Role` fence if missing. It never called `_repair_sops_only()`, meaning newly-added SOP sections (e.g. `## Herdr Workspace Protocol`) and stale SOP sections (e.g. `## PR Review Discipline`) were not repaired or refreshed without explicitly discovering and running `synlynk sync --repair-sops --confirm`.
+- **Automatic SOP Repair:** `cmd_roles(fix=True)` now invokes `_repair_sops_only(cfg=cfg, dry_run=False)`, and `_repair_config_agents(cfg)` now includes all directive-backed agents in `roles` alongside `workgroup_agents`.
+- **Verification:** Unit tests added in `tests/test_roles.py`. All 18 roles tests, 4 quota/SOP tests, and 506 suite tests pass clean.
+- **Blog Post:** `docs/blog/153-pr1321-roles-fix-repairs-sops.md`.
+
 ## Tighten _task_requires_gh_write() Auto-Detection Heuristic (decided/shipped 2026-09-01)
 - **Shipped:** PR #1320 (closes #1246, relates to #659, #1110, #1200). Eliminates false-positive GitHub write auto-detection on incidental prompt prose and plan filenames. [@agy]
 - **Root Cause Resolution:** `_task_requires_gh_write()` previously ran unanchored `_GH_WRITE_ACTION_RE` and `_GH_TARGET_RE` substring searches across prompts. File paths containing `review` (e.g. `2026-08-20-doctor-pr-review-cycles-check.md`), tracking references (e.g. `gh#1202`), and flags (`--requires-gh-write`) triggered false positives on pure code authorship tasks, failing dispatches with role-resolution errors.
