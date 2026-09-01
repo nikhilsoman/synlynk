@@ -923,9 +923,10 @@ def _run_tc6(harness_name: str, env: Optional[dict] = None, timeout: int = 5) ->
 
 def _run_tc9(
     harness_name: str,
+    target_ref: Optional[str] = None,
     live: bool = False,
     env: Optional[dict] = None,
-    timeout: int = 10,
+    timeout: int = 15,
     db_conn=None,
 ) -> dict:
     """TC-9: In-sandbox GitHub write capability probe.
@@ -933,8 +934,8 @@ def _run_tc9(
     Verifies whether the harness can perform GitHub write operations
     in its sandboxed dispatch execution path.
 
-    When live=True, invokes the harness CLI in non-interactive / sandbox mode
-    to test shell and gh execution live.
+    When live=True, executes a live low-stakes gh write action (e.g. gh issue/pr comment
+    or dry-run write check) in the harness's actual sandboxed execution environment.
     """
     import shutil
 
@@ -976,32 +977,37 @@ def _run_tc9(
         "live_tested": live,
     }
 
+    cmd_str = (
+        f"gh issue comment {target_ref} --body '[synlynk probe] live gh-write verification'"
+        if target_ref
+        else "gh pr list --limit 1"
+    )
+
     if harness_name == "grok":
         if live:
             try:
                 proc = subprocess.run(
-                    [cli_bin, "-p", "echo test"],
+                    [cli_bin, "-p", cmd_str],
                     capture_output=True,
                     text=True,
                     timeout=timeout,
                     env=env or os.environ,
                 )
-                output = (proc.stdout or "") + (proc.stderr or "")
+                output = ((proc.stdout or "") + (proc.stderr or "")).strip()
                 if "denied" in output.lower() or proc.returncode != 0:
                     res.update({
                         "passed": False,
                         "can_gh_write": False,
                         "mechanism": "sandbox_denied",
                         "error": "Grok headless dispatch sandbox denies shell execution in this environment",
-                        "output": output.strip(),
+                        "output": output,
                     })
                 else:
                     res.update({
                         "passed": True,
                         "can_gh_write": True,
                         "mechanism": "sandbox_allowed",
-                        "error": "",
-                        "output": output.strip(),
+                        "output": output,
                     })
             except Exception as exc:
                 res.update({
@@ -1022,35 +1028,47 @@ def _run_tc9(
         if live:
             try:
                 proc = subprocess.run(
-                    [cli_bin, "exec", "--sandbox", "workspace-write", "gh --version"],
+                    [cli_bin, "exec", "--sandbox", "workspace-write", cmd_str],
                     capture_output=True,
                     text=True,
                     timeout=timeout,
                     env=env or os.environ,
                 )
-                output = (proc.stdout or "") + (proc.stderr or "")
+                output = ((proc.stdout or "") + (proc.stderr or "")).strip()
                 if proc.returncode == 0:
                     res.update({
                         "passed": True,
                         "can_gh_write": True,
                         "mechanism": "verified_sandbox_execution",
                         "note": "Codex supports gh-write in workspace-write sandbox",
-                        "output": output.strip(),
+                        "output": output,
+                    })
+                elif (
+                    "network" in output.lower()
+                    or "connection" in output.lower()
+                    or "reach" in output.lower()
+                ):
+                    res.update({
+                        "passed": False,
+                        "can_gh_write": False,
+                        "mechanism": "sandbox_network_blocked",
+                        "error": "Codex sandbox network egress blocked without --requires-gh-write",
+                        "output": output,
                     })
                 else:
                     res.update({
-                        "passed": True,
-                        "can_gh_write": True,
-                        "mechanism": "requires_gh_write_flag",
-                        "note": "Codex requires --requires-gh-write flag for network egress to api.github.com",
-                        "output": output.strip(),
+                        "passed": False,
+                        "can_gh_write": False,
+                        "mechanism": "execution_failed",
+                        "error": output or f"Codex exited with code {proc.returncode}",
+                        "output": output,
                     })
             except Exception as exc:
                 res.update({
-                    "passed": True,
-                    "can_gh_write": True,
-                    "mechanism": "requires_gh_write_flag",
-                    "note": f"Codex requires --requires-gh-write: {exc}",
+                    "passed": False,
+                    "can_gh_write": False,
+                    "mechanism": "execution_failed",
+                    "error": str(exc),
                 })
         else:
             res.update({
@@ -1073,6 +1091,38 @@ def _run_tc9(
                 "mechanism": "missing_allow_rules",
                 "error": f"Agy missing required gh allow-rules: {missing}",
             })
+        elif live:
+            try:
+                proc = subprocess.run(
+                    [cli_bin, "-p", cmd_str],
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout,
+                    env=env or os.environ,
+                )
+                output = ((proc.stdout or "") + (proc.stderr or "")).strip()
+                if proc.returncode == 0:
+                    res.update({
+                        "passed": True,
+                        "can_gh_write": True,
+                        "mechanism": "verified_allow_rules",
+                        "output": output,
+                    })
+                else:
+                    res.update({
+                        "passed": False,
+                        "can_gh_write": False,
+                        "mechanism": "execution_failed",
+                        "error": output or f"Agy exited with code {proc.returncode}",
+                        "output": output,
+                    })
+            except Exception as exc:
+                res.update({
+                    "passed": False,
+                    "can_gh_write": False,
+                    "mechanism": "execution_failed",
+                    "error": str(exc),
+                })
         else:
             res.update({
                 "passed": True,
@@ -1085,19 +1135,28 @@ def _run_tc9(
         if live:
             try:
                 proc = subprocess.run(
-                    [cli_bin, "-p", "gh --version"],
+                    [cli_bin, "-p", cmd_str],
                     capture_output=True,
                     text=True,
                     timeout=timeout,
                     env=env or os.environ,
                 )
-                output = (proc.stdout or "") + (proc.stderr or "")
-                res.update({
-                    "passed": proc.returncode == 0,
-                    "can_gh_write": proc.returncode == 0,
-                    "mechanism": "direct_cli",
-                    "output": output.strip(),
-                })
+                output = ((proc.stdout or "") + (proc.stderr or "")).strip()
+                if proc.returncode == 0:
+                    res.update({
+                        "passed": True,
+                        "can_gh_write": True,
+                        "mechanism": "direct_cli",
+                        "output": output,
+                    })
+                else:
+                    res.update({
+                        "passed": False,
+                        "can_gh_write": False,
+                        "mechanism": "execution_failed",
+                        "error": output or f"Claude exited with code {proc.returncode}",
+                        "output": output,
+                    })
             except Exception as exc:
                 res.update({
                     "passed": False,
