@@ -3,7 +3,7 @@ title: "Issue #1188 — Catching a Stale pipx CLI Before It Misleads You"
 date: 2026-09-02
 series: "Building the OS for Multi-Agent Development"
 post: 155
-pr: "#1323"
+pr: "#1325"
 merged: status open
 ---
 
