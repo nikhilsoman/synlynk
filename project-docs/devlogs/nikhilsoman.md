@@ -1,4 +1,13 @@
 
+## 2026-09-01 — Decouple README Sync Validator Unit Tests from Live Repo Root (PR #1319, closes #1270)
+
+### Shipped
+- **Design Spec & Implementation Plan:** Authored and committed formal Design Spec (`docs/superpowers/specs/2026-09-01-readme-sync-test-synthetic-fixture-design.md`) and Implementation Plan (`docs/superpowers/plans/2026-09-01-readme-sync-test-synthetic-fixture.md`), resolving #1270 (tracking story `story-issue-1270`, linked to `goal-85656c82`).
+- **Synthetic Fixture Isolation:** Updated `test_docs_keep_readme_synchronized_during_named_releases_real_readme_patterns` in `tests/test_agent_cli.py` to use `tmp_path` and `_docs_keep_readme_synchronized_readme()`, isolating release validator assertions from live `README.md` updates.
+- **Test Suite (TDD):** Verified all 14 `docs_keep_readme` tests and 506 tests in `tests/test_synlynk.py` pass clean.
+- **Blog Post:** `docs/blog/151-pr1319-readme-sync-test-synthetic-fixture.md` (indexed in `docs/blog/README.md`).
+[@agy]
+
 ## 2026-09-01 — Grant Administration:Write Permission to Merge Roles in GitHub App Manifests (PR #1303, closes #1295)
 
 ### Shipped

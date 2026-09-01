@@ -150,6 +150,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [143](./143-pr1310-agy-stitch-mcp-integration.md) | PR #1310 — Fleet Parity: Agy Stitch MCP Integration, Diagnostics, and Prompt Guidance | [#1310](https://github.com/nikhilsoman/synlynk/pull/1310) | 2026-08-31 |
 | [144](./144-pr1318-harden-harness-instructions-todo-state-db.md) | PR #1318 — Hardening: Prohibit Direct todo.md Hand-Edits Across Harness Instruction Templates | [#1318](https://github.com/nikhilsoman/synlynk/pull/1318) | 2026-09-01 |
 | [150](./150-pr1303-qa-app-administration-permission.md) | PR #1303 — Grant Administration:Write Permission to Merge Roles in GitHub App Manifests | [#1303](https://github.com/nikhilsoman/synlynk/pull/1303) | 2026-09-01 |
+| [151](./151-pr1319-readme-sync-test-synthetic-fixture.md) | PR #1319 — Decouple README Sync Validator Unit Tests from Live Repo Root | [#1319](https://github.com/nikhilsoman/synlynk/pull/1319) | 2026-09-01 |
 
 ## Per-PR Post Template
 

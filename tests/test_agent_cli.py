@@ -1230,12 +1230,21 @@ def test_docs_keep_readme_synchronized_during_named_releases_passes_when_in_sync
 
 
 def test_docs_keep_readme_synchronized_during_named_releases_real_readme_patterns(
-    monkeypatch,
+    tmp_path, monkeypatch
 ):
     from synlynk.release_readme import validate_readme_for_release
 
-    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    monkeypatch.chdir(repo_root)
+    _docs_keep_readme_synchronized_readme(
+        tmp_path,
+        "0.18.0",
+        test_count=2346,
+        extra=(
+            "synlynk is a Python CLI that turns your terminal into a hybrid workgroup.\n"
+            "1. **Install synlynk globally:**\n"
+            "See the [Discussions](../../discussions) tab.\n"
+        ),
+    )
+    monkeypatch.chdir(tmp_path)
     findings = validate_readme_for_release(
         ".", "0.18.0", collected_test_count=9999
     )
