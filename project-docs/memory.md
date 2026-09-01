@@ -1,5 +1,12 @@
 # synlynk Memory
 
+## Decouple README Sync Validator Unit Tests from Live Repo Root (decided/shipped 2026-09-01)
+- **Shipped:** PR #1319 (closes #1270, relates to #1242, PR #1269). Decouples README consistency unit tests from live filesystem mutations. [@agy]
+- **Root Cause Resolution:** `test_docs_keep_readme_synchronized_during_named_releases_real_readme_patterns` in `tests/test_agent_cli.py` previously executed `validate_readme_for_release()` against the live repository root `repo_root` and asserted hardcoded test counts (e.g. `2346`). This caused spurious test failures whenever `README.md` was updated.
+- **Synthetic Fixture Isolation:** Refactored the test to construct a synthetic README fixture via pytest's `tmp_path` fixture and `_docs_keep_readme_synchronized_readme()`, validating version checks, test discrepancy detection, prose tolerance, and relative GitHub route handling in complete isolation.
+- **Verification:** Unit test passes cleanly in isolation and with full suite (506 tests).
+- **Blog Post:** `docs/blog/151-pr1319-readme-sync-test-synthetic-fixture.md`.
+
 ## Grant Administration:Write Permission to Merge Roles in GitHub App Manifests (decided/shipped 2026-09-01)
 - **Shipped:** PR #1303 (closes #1295, relates to #423, #1124). Dynamically requests `administration: write` in GitHub App manifests for roles holding merge authority. [@agy]
 - **Branch Protection & Merge Authority:** Branch protection on `main` requires 1 approving review. Dispatched reviewers share one repo-owner identity and cannot self-approve, relying on the sanctioned COMMENT-review checklist fallback. Merging via `gh pr merge --admin` previously failed because the `qa` GitHub App manifest lacked `administration: write`.
