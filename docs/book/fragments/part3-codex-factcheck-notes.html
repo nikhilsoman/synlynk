@@ -1,0 +1,29 @@
+<!-- targets: rxcc chapter -->
+<div class="callout" style="background:#eef4ee;">
+<div class="callout-label">Fact-Check — Codex</div>
+<p>The claim addressed here is the rxcc jetski incident: four mitigation attempts failed identically, while four fresh reproductions on the same machine/install/Agy version succeeded, leaving stale Antigravity session state as the named suspect rather than a synlynk code defect. I confirmed it in <code>docs/blog/75-pr479-agy-jetski-rca.md</code>, especially its summary of four dispatched Agy jobs, the exact <code>jetski: no output produced</code> symptom, zero local reproductions, and the unexamined <code>jetski_state.pbtxt</code> hypothesis. The project devlog independently records the same event and identifies Agy version 1.1.6 (<code>project-docs/devlogs/nikhilsoman.md</code>, PR #479 entry). The chapter’s negative conclusion is therefore supported, with the session-file cause correctly presented as a likely suspect, not a proven root cause.</p>
+</div>
+
+<!-- targets: cc-videoreframing chapter -->
+<div class="callout" style="background:#eef4ee;">
+<div class="callout-label">Fact-Check — Codex</div>
+<p>The exact claim is that issue #99 found the verifier fabricating output timestamps by copying the source timestamps and shifting them to zero, so a real encode could drift while verification reported confidence. I verified the issue’s existence and description in <code>project-docs/memory.md</code>, which calls #99 the “fabricated PTS correctness bug” and records it as an open gate for the cc-videoreframing/Vdowrx rollout. That repository-level record supports the defect characterization, but this checkout does not contain the sibling project’s source, issue body, or the cited <code>memory/live5-cc-videoreframing-verification-gap.md</code> file. I therefore cannot independently confirm the chapter’s finer implementation wording (“copied,” “shifted,” and the concat-demuxer assumption) beyond the project memory’s summary. The broad claim is supported; the detailed mechanism remains partially unverifiable here.</p>
+</div>
+
+<!-- targets: Playblazer chapter -->
+<div class="callout" style="background:#eef4ee;">
+<div class="callout-label">Fact-Check — Codex</div>
+<p>The claim checked is precise: Playblazer’s single synlynk-onboarding commit was <code>1443fad6</code>, dated 2026-08-09, and no commits followed. I could not verify that claim against the repository: this checkout contains no Playblazer source tree, git history, or commit object for <code>1443fad6</code>. The available in-repo corroboration is narrower: <code>project-docs/devlogs/nikhilsoman.md</code> records Playblazer-ng onboarding on 2026-08-09 as “PR #4” in the separate <code>Dialify/playblazer-ng</code> repository, and <code>docs/book/README.md</code> identifies Playblazer as a sister project. Those records do not establish the commit hash or post-onboarding commit count. This is unverifiable as stated from the present evidence, so the chapter should link the sibling repository or soften the wording before publication.</p>
+</div>
+
+<!-- targets: Grok infra-evidence chapter -->
+<div class="callout" style="background:#eef4ee;">
+<div class="callout-label">Fact-Check — Codex</div>
+<p>The claim checked is that PR #646 fixed nested-worktree cost capture by resolving the shared project root with <code>git rev-parse --path-format=absolute --git-common-dir</code>, preventing child jobs from writing to an orphaned local database. The exact citation, <code>docs/blog/91-pr646-nested-worktree-cost-capture-gap.md</code>, names the same resolver, the centralized database/path changes, and the regression test <code>test_update_costs_uses_shared_state_db_from_linked_worktree</code>. The implementation is also present in this checkout: <code>synlynk/__init__.py</code> defines the project-root resolution path, and the test appears under <code>tests/test_cost_ledger.py</code>. The chapter’s causal claim is supported. Its “merged that day” phrasing is a historical status claim supplied by the blog metadata; the technical fix itself is directly verifiable here.</p>
+</div>
+
+<!-- targets: Claude reviewer-seat chapter -->
+<div class="callout" style="background:#eef4ee;">
+<div class="callout-label">Fact-Check — Codex</div>
+<p>The claim checked is that PR #816 had twelve green task deliveries and a 1,751-test full-suite pass, yet review found two defects in the existing-job reservation seam: an uncaught duplicate-row <code>IntegrityError</code> and unconditional reservation opening that leaked phantom quota headroom. The exact citation, <code>docs/blog/105-pr816-quota-aware-dispatch-reservation.md</code>, confirms the twelve-task sequence, the 1,751-pass final state, and explicitly describes the follow-up regression as one no narrow task test caught. It also documents the caller-owned SQLite connection being closed by the quota gate, which is a separate defect from the two chapter examples. Thus the chapter’s numbers and broader “cross-cutting regression” point are verified, but the two exact defect descriptions need the referenced <code>memory/feedback.md</code> entry or PR diff cited directly; the blog alone does not establish both.</p>
+</div>
