@@ -1457,5 +1457,44 @@ def test_featdoctor_add_tc9_insandbox_ghwrite_cap(monkeypatch):
     assert res["can_gh_write"] is True
 
 
+def test_manifest_auth_prevent_dropped_oauth_codes_in_manifest_callback_server():
+    """gh:#906 — two callback requests landing before wait_for_code() is
+    called must both be queued, not have the second one silently dropped."""
+    import threading
+    from urllib.request import urlopen
+
+    import synlynk.team as team_mod
+
+    port, wait_for_code, shutdown = team_mod._run_manifest_callback_server(
+        timeout_seconds=5
+    )
+    try:
+        barrier = threading.Barrier(2)
+        results = {}
+
+        def fire(code, key):
+            barrier.wait(timeout=5)
+            with urlopen(
+                f"http://127.0.0.1:{port}/callback?code={code}", timeout=5
+            ) as resp:
+                results[key] = resp.status
+
+        t1 = threading.Thread(target=fire, args=("code-one", "t1"))
+        t2 = threading.Thread(target=fire, args=("code-two", "t2"))
+        t1.start()
+        t2.start()
+        t1.join(timeout=5)
+        t2.join(timeout=5)
+
+        assert results.get("t1") == 200
+        assert results.get("t2") == 200
+
+        first = wait_for_code()
+        second = wait_for_code()
+        assert {first, second} == {"code-one", "code-two"}
+    finally:
+        shutdown()
+
+
 
 
