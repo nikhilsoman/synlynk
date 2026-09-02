@@ -7,13 +7,14 @@ import html
 import json
 import os
 from pathlib import Path
+import queue
 import subprocess
 import re
 import sys
 import threading
 import time
 import webbrowser
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
 from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlparse
 from urllib.request import Request, urlopen
@@ -225,9 +226,17 @@ def _build_app_manifest_url(
 
 
 def _run_manifest_callback_server(timeout_seconds=180):
-    """Start a loopback server and return its port, waiter, and shutdown callback."""
-    code_ready = threading.Event()
-    captured = []
+    """Start a loopback server and return its port, waiter, and shutdown callback.
+
+    Uses an unbounded queue.Queue rather than an Event+list pair so that two
+    callback requests arriving concurrently (e.g. a duplicated browser tab,
+    or GitHub retrying the redirect) each enqueue their code independently.
+    The previous `if code and not code_ready.is_set()` check-then-set was not
+    atomic across threads (HTTPServer handles each request on its own
+    thread), so a second request landing between the check and the set could
+    have its code silently dropped instead of queued.
+    """
+    codes: "queue.Queue[str]" = queue.Queue()
 
     class CallbackHandler(BaseHTTPRequestHandler):
         def do_GET(self):  # noqa: N802 - required by BaseHTTPRequestHandler
@@ -236,9 +245,8 @@ def _run_manifest_callback_server(timeout_seconds=180):
                 self.send_error(404)
                 return
             code = parse_qs(parsed.query).get("code", [""])[0].strip()
-            if code and not code_ready.is_set():
-                captured.append(code)
-                code_ready.set()
+            if code:
+                codes.put(code)
             body = (
                 "<!doctype html><html><head><meta charset='utf-8'>"
                 "<title>Synlynk GitHub App</title></head><body>"
@@ -254,16 +262,20 @@ def _run_manifest_callback_server(timeout_seconds=180):
         def log_message(self, format, *args):
             return
 
-    server = HTTPServer(("127.0.0.1", 0), CallbackHandler)
+    # ThreadingHTTPServer (not plain HTTPServer) so two callback requests
+    # arriving back-to-back (e.g. a duplicated browser tab) are each
+    # dispatched to their own handler thread instead of being serialized
+    # behind a single request loop.
+    server = ThreadingHTTPServer(("127.0.0.1", 0), CallbackHandler)
+    server.daemon_threads = True
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
 
     def wait_for_code():
-        if code_ready.wait(timeout_seconds):
-            code = captured.pop(0)
-            code_ready.clear()
-            return code
-        return None
+        try:
+            return codes.get(timeout=timeout_seconds)
+        except queue.Empty:
+            return None
 
     def shutdown():
         server.shutdown()

@@ -350,6 +350,20 @@ command. The check is local and best-effort, so malformed metadata and unrelated
 repositories remain silent. See `docs/superpowers/specs/2026-09-02-cli-version-drift-warning-design.md`.
 [@codex]
 
+## Manifest Callback Server Concurrency Fix (2026-09-02, gh:#906)
+
+`synlynk/team.py::_run_manifest_callback_server` (the loopback server used
+during GitHub App Manifest role provisioning) captured its OAuth code via a
+`threading.Event` + list, which silently dropped a second concurrent
+`/callback` request's code (duplicated tab, retried redirect) since the
+check-then-set guard only ever kept the first code. Fixed by switching to
+`queue.Queue()` (unconditional `put`, never drops) and
+`http.server.ThreadingHTTPServer` (concurrent requests get independent
+handler threads instead of serializing behind one accept loop). External
+contract (`port, wait_for_code, shutdown`) unchanged. See
+`docs/superpowers/specs/2026-09-02-manifest-callback-concurrency-design.md`.
+[@claude]
+
 ## Conventions
 - Attribution: `[@username]` on all team-mode entries.
 - Session protocol: read last 3 devlog entries at session start. Surface any open threads.
