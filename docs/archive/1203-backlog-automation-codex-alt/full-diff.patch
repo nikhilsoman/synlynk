@@ -350,6 +350,21 @@ index 049d45f5..abf15052 100644
  
  _GENERATORS_BY_FILENAME = {
      "todo.md": "_generate_todo_md",
+diff --git a/synlynk/taxonomy.py b/synlynk/taxonomy.py
+index 63745210..02a4fdf3 100644
+--- a/synlynk/taxonomy.py
++++ b/synlynk/taxonomy.py
+@@ -278,6 +278,10 @@ COMMAND_TAXONOMY = [
+      "orientation_gateway": False, "audience": "pilot", "trigger_phrases": [], "hook_event": None},
+     {"command": "events tail", "governs_stage": "sustain", "maturity_tier": "latent", "prominence": None,
+      "orientation_gateway": False, "audience": "pilot", "trigger_phrases": [], "hook_event": None},
++    {"command": "backlog note", "governs_stage": "sustain", "maturity_tier": "latent", "prominence": None,
++     "orientation_gateway": False, "audience": "pilot", "trigger_phrases": [], "hook_event": None},
++    {"command": "backlog scan-session", "governs_stage": "sustain", "maturity_tier": "latent", "prominence": None,
++     "orientation_gateway": False, "audience": "pilot", "trigger_phrases": [], "hook_event": None},
+     {"command": "repair", "governs_stage": "sustain", "maturity_tier": "latent", "prominence": None,
+      "orientation_gateway": False, "audience": "pilot", "trigger_phrases": [], "hook_event": None},
+     {"command": "exit", "governs_stage": "sustain", "maturity_tier": "latent", "prominence": None,
 diff --git a/tests/test_backlog_automation.py b/tests/test_backlog_automation.py
 new file mode 100644
 index 00000000..c4a03f9e
