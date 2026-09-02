@@ -1,5 +1,11 @@
 # synlynk Memory
 
+## Research: Multi-Agent Swarms & Fleet Orchestration Engine (opened 2026-09-02)
+- **Filed:** Issue #1326 (story `story-95238497`, linked to `goal-005ea87d`). Explores an accelerated multi-agent swarm/fleet engine across all 5 harnesses (Claude, Codex, Agy, Grok, and Local). [@agy]
+- **Lifecycle & Deployment Matrix:** Evaluates initialization, tracking, messaging, and termination across home (interactive CLI/TUI) and away (headless) modes, abstracting harness-specific delegation models.
+- **Ephemeral Scaling:** Explores dynamic provisioning of lightweight subagent workers on cheap VPS micro-instances (Fly.io, Hetzner) and Kubernetes Job pods with SSE telemetry streaming.
+- **Local Harness Evolution:** Assesses Aider's limitations for swarm fan-out and evaluates `synlynk-local-runtime` (native async agent daemon) and Google Antigravity `LiteRTAgentConfig` on-device runners as alternatives.
+
 ## Fix YAML Frontmatter in Blog Post 103 (decided/shipped 2026-09-02)
 - **Shipped:** PR #1322 (closes #941). Fixes invalid YAML frontmatter in `docs/blog/103-pr778-scope-violation-enforcement.md`. [@agy]
 - **Root Cause Resolution:** Post 103 contained `merged: status open`, which violated YAML syntax and caused Eleventy website builds (`npm run build`) to crash with a `bad indentation of a mapping entry` parse error.
