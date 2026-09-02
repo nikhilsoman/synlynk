@@ -8,6 +8,17 @@ import pytest
 from synlynk.agent_cli import SEED_CHARTERS
 
 
+def test_fixdispatch_deduplicate_boolean_cli_flag():
+    from synlynk.dispatch import _deduplicate_boolean_cli_flags
+
+    flags = _deduplicate_boolean_cli_flags(
+        ["--always-approve", "--always-approve", "--allow", "Read", "--allow", "Write"]
+    )
+
+    assert flags.count("--always-approve") == 1
+    assert flags[-4:] == ["--allow", "Read", "--allow", "Write"]
+
+
 def test_config_add_grok_to_agent_slots_in_synlynk_and_default_config_templates(tmp_path, monkeypatch):
     import json
     import synlynk
@@ -1542,7 +1553,6 @@ def test_investigate_rootcause_costtoken_bloat_on_jobcf837848_and_add_costratio_
         sentinel_path=str(sentinel_file),
     )
     assert any(a["code"] == "TOKEN_BLOAT" and "1,210,000 tok/file" in a["message"] for a in alerts_ratio)
-
 
 
 

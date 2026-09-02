@@ -158,7 +158,8 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [156](./156-pr1327-agent-slots-grok.md) | PR #1330 — Fleet Parity: Add Grok to agent_slots in Default Config Templates | [#1330](https://github.com/nikhilsoman/synlynk/pull/1330) | 2026-09-02 |
 | [157](./157-pr1328-review-dispatch-readonly-scope.md) | PR #1331 — Making Review Dispatches Read-Only at the Repository Boundary | [#1331](https://github.com/nikhilsoman/synlynk/pull/1331) | 2026-09-02 |
 | [158](./158-pr1329-manifest-callback-concurrency.md) | PR #1332 — The GitHub App Manifest Callback Server Could Drop a Code | [#1332](https://github.com/nikhilsoman/synlynk/pull/1332) | 2026-09-02 |
-| [160](./160-pr1334-token-bloat-sentinel-guard.md) | PR #1334 — Sentinel Guard for Token Bloat and Cost Inflation | [#1334](https://github.com/nikhilsoman/synlynk/pull/1334) | 2026-09-02 |
+| [159](./159-pr1333-grok-always-approve-dedup.md) | PR #1335 — Deduplicating Grok's Boolean Dispatch Flags | [#1335](https://github.com/nikhilsoman/synlynk/pull/1335) | 2026-09-02 |
+| [160](./160-pr1334-token-bloat-sentinel-guard.md) | PR #1336 — Sentinel Guard for Token Bloat and Cost Inflation | [#1336](https://github.com/nikhilsoman/synlynk/pull/1336) | 2026-09-02 |
 
 ## Per-PR Post Template
 

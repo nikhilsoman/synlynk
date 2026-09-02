@@ -382,6 +382,15 @@ contract (`port, wait_for_code, shutdown`) unchanged. See
 `docs/superpowers/specs/2026-09-02-manifest-callback-concurrency-design.md`.
 [@claude]
 
+## Boolean Dispatch Flag Deduplication (#1327, 2026-09-02)
+
+Dispatch now removes repeated occurrences of known boolean CLI flags after
+baseline, override, permission, and harness-specific flags are combined. This
+prevents Grok's required and permission-derived `--always-approve` from being
+passed twice while preserving repeatable option/value pairs. See
+`docs/superpowers/specs/2026-09-02-grok-always-approve-dedup-design.md`.
+[@codex]
+
 ## Conventions
 - Attribution: `[@username]` on all team-mode entries.
 - Session protocol: read last 3 devlog entries at session start. Surface any open threads.
