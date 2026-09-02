@@ -516,6 +516,30 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             );
             CREATE INDEX IF NOT EXISTS idx_relay_mailbox_recipient
                 ON relay_mailbox(recipient_key, delivered_at);
+            CREATE TABLE IF NOT EXISTS backlog_items (
+                id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                item_id             TEXT UNIQUE,
+                title               TEXT NOT NULL,
+                body                TEXT,
+                issue_number        INTEGER,
+                gh_issue            TEXT,
+                author              TEXT,
+                labels              TEXT DEFAULT '[]',
+                fingerprint         TEXT UNIQUE,
+                role                TEXT NOT NULL DEFAULT 'dev',
+                stage               TEXT NOT NULL DEFAULT 'open',
+                governs_stage       TEXT NOT NULL DEFAULT 'open',
+                complexity_tier     INTEGER DEFAULT 2,
+                goal_id             TEXT,
+                acceptance_criteria TEXT DEFAULT '[]',
+                status              TEXT NOT NULL DEFAULT 'staged',
+                story_id            TEXT,
+                created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE INDEX IF NOT EXISTS idx_backlog_items_status ON backlog_items(status);
+            CREATE INDEX IF NOT EXISTS idx_backlog_items_issue_number ON backlog_items(issue_number);
+            CREATE INDEX IF NOT EXISTS idx_backlog_items_fingerprint ON backlog_items(fingerprint);
         """)
         story_cols = {row[1] for row in conn.execute("PRAGMA table_info(stories)")}
         if "discipline" not in story_cols:
