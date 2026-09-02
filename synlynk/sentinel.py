@@ -5,6 +5,7 @@ import os
 import re
 import subprocess
 import time
+import traceback
 from typing import Optional
 
 from synlynk._constants import QUOTA_PATTERNS
@@ -438,6 +439,50 @@ DEFAULT_TOKEN_BLOAT_ZERO_FILE_THRESHOLD = 500_000
 DEFAULT_TOKEN_PER_FILE_RATIO_THRESHOLD = 500_000
 DEFAULT_COST_INFLATION_WARN_THRESHOLD = 3.00
 DEFAULT_COST_INFLATION_CRITICAL_THRESHOLD = 5.00
+
+
+def enforce_job_circuit_breaker(job: dict, process=None, *, sentinel_path: Optional[str] = None,
+                                token_limit: int = DEFAULT_TOKEN_BLOAT_ZERO_FILE_THRESHOLD,
+                                cost_limit: float = 5.00) -> bool:
+    """Terminate an active zero-file job that has crossed a hard resource limit."""
+    tokens = int(job.get("in_tokens", 0) or 0) + int(job.get("out_tokens", 0) or 0)
+    files = job.get("files_touched", 0)
+    files = len(files) if isinstance(files, (list, tuple, set)) else int(files or 0)
+    cost = float(job.get("cost_usd", job.get("cost", 0.0)) or 0.0)
+    reason = None
+    if files == 0 and tokens >= token_limit:
+        reason = f"{tokens:,} tokens with 0 files touched"
+    elif cost >= cost_limit:
+        reason = f"${cost:.2f} cost"
+    if reason is None:
+        return False
+    proc = process
+    if proc is None and job.get("pid"):
+        try:
+            os.kill(int(job["pid"]), 15)
+        except (ProcessLookupError, PermissionError, TypeError, ValueError, OSError):
+            pass
+    elif proc is not None:
+        try:
+            proc.terminate()
+        except (AttributeError, OSError):
+            try:
+                os.kill(int(proc.pid), 15)
+            except (AttributeError, OSError, TypeError, ValueError):
+                pass
+    job["status"] = "stalled_aborted"
+    job["exit_code"] = -15
+    job["circuit_breaker_reason"] = reason
+    job["stack_trace"] = "".join(traceback.format_stack(limit=20))
+    _write_sentinel_alert("CRITICAL", "CIRCUIT_BREAKER", f"Job {job.get('id', '')}: {reason}.", sentinel_path)
+    log_telemetry_event({"type": "circuit_breaker", "job_id": job.get("id"),
+                         "reason": reason, "stack_trace": job["stack_trace"]})
+    return True
+
+
+def monitor_active_job(job: dict, process=None, **kwargs) -> bool:
+    """Compatibility-friendly active monitor entry point used by daemon loops."""
+    return enforce_job_circuit_breaker(job, process, **kwargs)
 
 
 def check_token_bloat(

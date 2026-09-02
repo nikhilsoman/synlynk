@@ -416,6 +416,16 @@ ledger preserves API-equivalent value separately from realized cash outlay;
 `actual_usd=0.0`.
 [@codex]
 
+## Cadence-Breaker Resilience Engine (#1346, 2026-09-02)
+
+Added bounded recovery for autonomous dispatch: `synlynk/rebase.py` resolves
+supported markdown append conflicts, sentinel can terminate jobs at 500k
+zero-file tokens or $5, dispatch can fail over after an immediate harness
+startup failure, and daemon reconciliation marks dead-PID jobs
+`killed_zombie` while removing leaked worktrees. Unsupported conflicts and
+uncertain process ownership remain fail-closed.
+[@codex]
+
 ## Conventions
 - Attribution: `[@username]` on all team-mode entries.
 - Session protocol: read last 3 devlog entries at session start. Surface any open threads.
