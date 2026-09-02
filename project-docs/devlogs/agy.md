@@ -49,3 +49,12 @@
 - Authored blog post `docs/blog/144-pr1311-phase4-db-schema-dual-read-write.md`.
 - Verified entire 2,405-test suite passing. PR #1311 reviewed by Codex (`job-abd04554`), CI passed, and merged into `main`. Closed issue #1307.
 
+## 2026-09-02 — Fleet Parity: Add Grok to agent_slots in Default Config Templates (#863 / PR #1327)
+
+### Shipped
+- Added `grok` to `defaults["agent_slots"]` in `synlynk/__init__.py:load_config()`, ensuring runtime config fallback contains all 4 Core Fleet harnesses (`claude`, `agy`, `codex`, `grok`).
+- Verified diagnostic profile validation (`_hc_agent_profiles`) in `synlynk doctor` and CLI slot resolutions recognize Grok consistently across initialized and uninitialized environments.
+- Added comprehensive unit test in `tests/test_agent_cli.py` and updated `test_load_config_has_new_defaults` in `tests/test_synlynk.py`.
+- Authored design spec `docs/superpowers/specs/2026-09-02-agent-slots-grok-design.md`, implementation plan `docs/superpowers/plans/2026-09-02-agent-slots-grok.md`, and blog post `docs/blog/156-pr1327-agent-slots-grok.md` indexed in `docs/blog/README.md`.
+
+
