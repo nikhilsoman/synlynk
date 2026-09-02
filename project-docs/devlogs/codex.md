@@ -9,6 +9,17 @@
 - Added focused cost tests and blog post 161.
 [@codex]
 
+## 2026-09-02 — First-Class Model Registry (#1339)
+
+- Added `ModelFamily`, `ModelSpec`, rate cards, context geometry, entitlement
+  tiers, and a built-in catalog in `synlynk/models.py`.
+- Added SQLite model-family/model tables, migration version 6, persistence and
+  querying helpers, CLI commands, taxonomy entries, and doctor coverage.
+- Added CLI harness, Ollama, and oMLX discovery probes plus blog/index updates.
+- Verification: Python compilation and registry smoke test passed; full pytest
+  verification remains to be run.
+[@codex]
+
 ## 2026-09-02 — CLI Version Drift Warning (#1188)
 
 - Added the design spec and implementation plan for detecting a stale

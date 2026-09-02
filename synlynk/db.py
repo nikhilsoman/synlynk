@@ -97,7 +97,7 @@ _PROJECT_DOC_KEEP_N = 50
 # Bump when a new schema migration is added.  This is deliberately kept in
 # SQLite's small built-in metadata slot so checking it does not touch the DB
 # file or create a backup on already-migrated connections.
-_DB_MIGRATION_VERSION = 5
+_DB_MIGRATION_VERSION = 6
 
 _GENERATORS_BY_FILENAME = {
     "todo.md": "_generate_todo_md",
@@ -296,6 +296,87 @@ def _table_exists(conn: sqlite3.Connection, name: str) -> bool:
     return conn.execute(
         "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)
     ).fetchone() is not None
+
+
+def upsert_model_family(conn: sqlite3.Connection, family) -> None:
+    """Insert or refresh a canonical ModelFamily."""
+    from synlynk.models import family_to_dict
+
+    value = family_to_dict(family)
+    conn.execute(
+        """INSERT INTO model_families
+           (family_id, provider, context_geometry, native_features, prompt_adapter)
+           VALUES (?, ?, ?, ?, ?)
+           ON CONFLICT(family_id) DO UPDATE SET provider=excluded.provider,
+             context_geometry=excluded.context_geometry,
+             native_features=excluded.native_features,
+             prompt_adapter=excluded.prompt_adapter,
+             updated_at=CURRENT_TIMESTAMP""",
+        (value["family_id"], value["provider"], json.dumps(value["context_geometry"]),
+         json.dumps(value["native_features"]), json.dumps(value["prompt_adapter"])),
+    )
+
+
+def upsert_model(conn: sqlite3.Connection, model) -> None:
+    """Insert or refresh a model, creating a minimal family for discoveries."""
+    from synlynk.models import ModelFamily
+
+    if not _table_exists(conn, "models"):
+        _migrate_db(conn)
+    family_id = model.family_id
+    if not conn.execute("SELECT 1 FROM model_families WHERE family_id=?", (family_id,)).fetchone():
+        upsert_model_family(conn, ModelFamily(family_id, "unknown"))
+    value = model
+    geometry = value.context_geometry
+    payload = {
+        "input_per_1k": value.rates.input_per_1k,
+        "output_per_1k": value.rates.output_per_1k,
+        "cache_read_per_1k": value.rates.cache_read_per_1k,
+        "reasoning_per_1k": value.rates.reasoning_per_1k,
+    }
+    conn.execute(
+        """INSERT INTO models
+           (model_id, family_id, harness_binding, locality, quantization, rates,
+            entitlement_tier, context_geometry, native_features, discovered, discovery_source)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(model_id) DO UPDATE SET family_id=excluded.family_id,
+             harness_binding=excluded.harness_binding, locality=excluded.locality,
+             quantization=excluded.quantization, rates=excluded.rates,
+             entitlement_tier=excluded.entitlement_tier, context_geometry=excluded.context_geometry,
+             native_features=excluded.native_features, discovered=excluded.discovered,
+             discovery_source=excluded.discovery_source, updated_at=CURRENT_TIMESTAMP""",
+        (value.model_id, value.family_id, value.harness_binding, value.locality,
+         value.quantization, json.dumps(payload), value.entitlement_tier.value,
+         json.dumps(geometry.__dict__) if geometry else None,
+         json.dumps(list(value.native_features)), int(value.discovered), value.discovery_source),
+    )
+
+
+def list_models(conn: sqlite3.Connection, harness: str | None = None) -> list[dict]:
+    query = "SELECT * FROM models"
+    params = ()
+    if harness:
+        query += " WHERE harness_binding=?"
+        params = (harness,)
+    query += " ORDER BY model_id"
+    cursor = conn.execute(query, params)
+    columns = [item[0] for item in cursor.description]
+    return [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+
+def get_model(conn: sqlite3.Connection, model_id: str) -> dict | None:
+    cursor = conn.execute("SELECT * FROM models WHERE model_id=?", (model_id,))
+    row = cursor.fetchone()
+    return dict(zip([item[0] for item in cursor.description], row)) if row else None
+
+
+def query_models(conn: sqlite3.Connection, harness: str | None = None) -> list[dict]:
+    """Named query helper for integrations that prefer query terminology."""
+    return list_models(conn, harness=harness)
+
+
+def query_model(conn: sqlite3.Connection, model_id: str) -> dict | None:
+    return get_model(conn, model_id)
 
 
 def _get_db():
