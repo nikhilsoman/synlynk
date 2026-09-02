@@ -97,7 +97,7 @@ _PROJECT_DOC_KEEP_N = 50
 # Bump when a new schema migration is added.  This is deliberately kept in
 # SQLite's small built-in metadata slot so checking it does not touch the DB
 # file or create a backup on already-migrated connections.
-_DB_MIGRATION_VERSION = 7
+_DB_MIGRATION_VERSION = 8
 
 _GENERATORS_BY_FILENAME = {
     "todo.md": "_generate_todo_md",
@@ -790,6 +790,26 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
         from synlynk.capability_sweep import _seed_calibration_tasks
         _seed_calibration_tasks(conn)
         conn.executescript("""
+            CREATE TABLE IF NOT EXISTS capability_ledger (
+                model_id TEXT NOT NULL,
+                harness TEXT NOT NULL,
+                task_domain TEXT NOT NULL,
+                alpha REAL NOT NULL DEFAULT 1.0,
+                beta REAL NOT NULL DEFAULT 1.0,
+                prior_alpha REAL NOT NULL DEFAULT 1.0,
+                prior_beta REAL NOT NULL DEFAULT 1.0,
+                recency_half_life REAL NOT NULL DEFAULT 30.0,
+                token_productivity_ratio REAL,
+                output_tokens_accepted INTEGER NOT NULL DEFAULT 0,
+                total_tokens_spent INTEGER NOT NULL DEFAULT 0,
+                p95_latency REAL,
+                observations INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY (model_id, harness, task_domain)
+            );
+            CREATE INDEX IF NOT EXISTS idx_capability_ledger_domain
+                ON capability_ledger(task_domain, harness);
+
             CREATE TABLE IF NOT EXISTS capability_watch (
                 id INTEGER PRIMARY KEY CHECK (id = 1),
                 last_probe_at TEXT,
