@@ -8,6 +8,44 @@ import pytest
 from synlynk.agent_cli import SEED_CHARTERS
 
 
+def test_config_add_grok_to_agent_slots_in_synlynk_and_default_config_templates(tmp_path, monkeypatch):
+    import json
+    import synlynk
+    from synlynk.instructions import _build_templates
+    from synlynk.doctor import _hc_agent_profiles
+
+    monkeypatch.chdir(tmp_path)
+    # 1. Verify load_config defaults contain all 4 Core Fleet agent slots
+    cfg = synlynk.load_config()
+    assert "agent_slots" in cfg
+    assert cfg["agent_slots"] == {
+        "claude": "claude",
+        "agy": "agy",
+        "codex": "codex",
+        "grok": "grok",
+    }
+
+    # 2. Verify _build_templates() config.json contains all 4 Core Fleet agent slots
+    templates = _build_templates()
+    assert "config.json" in templates
+    tpl_cfg = json.loads(templates["config.json"])
+    assert "agent_slots" in tpl_cfg
+    assert tpl_cfg["agent_slots"] == {
+        "claude": "claude",
+        "agy": "agy",
+        "codex": "codex",
+        "grok": "grok",
+    }
+
+    # 3. Verify doctor agent_profiles check recognizes grok in agent_slots
+    (tmp_path / ".agents").mkdir(parents=True, exist_ok=True)
+    for agent in ["claude", "agy", "codex", "grok"]:
+        (tmp_path / ".agents" / f"{agent}.json").write_text("{}")
+    res = _hc_agent_profiles()
+    assert res.status == "ok"
+    assert "grok" in res.message
+
+
 def test_codex_harness_baseline_includes_verifier_role_and_can_gh_write():
     from synlynk._constants import HARNESS_CAPABILITY_BASELINES
 
