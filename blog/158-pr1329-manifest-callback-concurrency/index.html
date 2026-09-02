@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Issue #906 — The GitHub App Manifest Callback Server Could Drop a Code | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-2">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Sep 02, 2026</span>
+        
+          <span class="blog-post-pr">PR #1329</span>
+        
+      </div>
+      <h1 class="blog-post-title">Issue #906 — The GitHub App Manifest Callback Server Could Drop a Code</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>Role provisioning (<code>synlynk team join</code> / role bootstrap) walks an operator
+through GitHub's App Manifest flow: open a pre-filled form, submit it,
+GitHub redirects to a loopback server on <code>127.0.0.1</code> with a one-time code,
+and synlynk exchanges that code for App credentials. That loopback server
+needs to be correct exactly once per operator per role — a dropped code
+means re-running the whole manifest flow by hand.</p>
+<h2>What This PR Shipped</h2>
+<p><code>synlynk/team.py::_run_manifest_callback_server</code> used a <code>threading.Event</code>
+plus a plain list to capture the single expected OAuth code:</p>
+<pre><code class="language-python">if code and not code_ready.is_set():
+    captured.append(code)
+    code_ready.set()
+</code></pre>
+<p>If a second <code>/callback</code> request arrived — a duplicated browser tab, GitHub
+retrying the redirect, a re-submitted manifest form — before
+<code>wait_for_code()</code> drained the first one, its code was silently discarded by
+construction: the guard only ever keeps the first code, and the
+check-then-set itself isn't atomic across request threads.</p>
+<p>The fix swaps the <code>Event</code>/list pair for a <code>queue.Queue()</code> — every valid code
+is unconditionally <code>put()</code>, so puts never drop data no matter how many
+requests land before the queue is drained — and swaps the plain
+<code>http.server.HTTPServer</code> for <code>ThreadingHTTPServer</code>, so concurrent callback
+requests get their own handler thread instead of serializing behind one
+accept loop. <code>wait_for_code()</code> becomes a <code>queue.get(timeout=...)</code>, keeping
+the external contract (<code>port, wait_for_code, shutdown</code>) unchanged.</p>
+<p>Added <code>tests/test_agent_cli.py::test_manifest_auth_prevent_dropped_oauth_codes_in_manifest_callback_server</code>,
+which fires two concurrent <code>/callback</code> requests with distinct codes from two
+threads (synchronized with a <code>threading.Barrier</code>) against the real loopback
+server, and asserts both get a 200 response and both codes are retrievable
+via two successive <code>wait_for_code()</code> calls.</p>
+<p>Design spec: <code>docs/superpowers/specs/2026-09-02-manifest-callback-concurrency-design.md</code>.
+Plan: <code>docs/superpowers/plans/2026-09-02-manifest-callback-concurrency.md</code>.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>Role provisioning is a one-shot, human-in-the-loop flow that every new
+teammate or role goes through exactly once — a silent drop there is
+maximally confusing because there is no earlier signal that anything went
+wrong. Removing the drop makes that onboarding step reliable under the kind
+of double-click/double-tab behavior real operators actually exhibit.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>Loopback callback servers used anywhere else in synlynk's auth flows should
+default to a queue-backed capture + <code>ThreadingHTTPServer</code>, not
+Event/list-based single-shot capture, as the standard pattern.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
