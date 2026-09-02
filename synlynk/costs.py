@@ -515,7 +515,14 @@ def _subscription_actual_usd(
     base_tokens = max(0, min(cumulative_in, tier_quota_in) - min(prior_used_in, tier_quota_in))
     base_tokens += max(0, min(cumulative_out, tier_quota_out) - min(prior_used_out, tier_quota_out))
     actual_usd = base_tokens / 1000 * amortized_rate
-    if pm_config.get("allow_extra_usage", False):
+    has_overage_config = (
+        pm_config.get("allow_extra_usage", False)
+        or "tier_quota_tokens_in" in pm_config
+        or "tier_quota_tokens_out" in pm_config
+        or "overage_rate_per_1k_in" in pm_config
+        or "overage_rate_per_1k_out" in pm_config
+    )
+    if has_overage_config and pm_config.get("allow_extra_usage") is not False:
         actual_usd += (marginal_over_in / 1000 * overage_rate_in) + (marginal_over_out / 1000 * overage_rate_out)
         cap = pm_config.get("extra_usage_cap_usd")
         if cap is not None:
