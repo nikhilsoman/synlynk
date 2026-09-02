@@ -1,5 +1,12 @@
 # synlynk Memory
 
+## Ephemeral swarm runners (2026-09-02)
+
+Ephemeral swarm execution uses a pluggable `SwarmRunnerDriver` contract with
+local and Fly.io implementations. Runner lifecycle is persisted in the
+`swarm_runners` SQLite table and progress is emitted through the existing
+relay as `runner_progress` events. [@codex]
+
 ## PM Autonomous Backlog Triaging & Story Formation Engine (decided/shipped 2026-09-02)
 - **Shipped:** PR #1349 (resolves #1340, story `story-c70350f9`, linked to `goal-6733bbf1`). Implements autonomous GitHub issue ingestion, multi-layered semantic/SHA-256 deduplication, structured story synthesis, testable acceptance criteria generation, complexity tiering, and auto-promotion to `state.db` ready stories. [@agy]
 - **Database Schema Migration:** Added `backlog_items` SQLite table in `synlynk/db.py` (migration version 8) with indexing over `status`, `issue_number`, and `fingerprint`.

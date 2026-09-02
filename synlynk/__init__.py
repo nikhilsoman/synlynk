@@ -1759,6 +1759,7 @@ def load_config() -> dict:
         "sync_endpoint": None,
         "exec_timeout_minutes": 30,
         "stall_timeout_minutes": 30,
+        "swarm_runners": {"default": "local", "enabled": ["local"], "timeout_seconds": 900},
         "review_stall_timeout_minutes": 90,
         "agents": {},
         "payment_models": {},

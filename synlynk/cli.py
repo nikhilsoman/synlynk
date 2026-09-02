@@ -589,6 +589,18 @@ def build_parser() -> argparse.ArgumentParser:
     watch_parser.add_argument("--live", action="store_true",
                               help="Active-job stream mode (3s refresh, no sidebar)")
 
+    swarm_parser = subparsers.add_parser("swarm", help="Manage ephemeral swarm runners")
+    swarm_sub = swarm_parser.add_subparsers(dest="swarm_action")
+    swarm_dispatch = swarm_sub.add_parser("dispatch", help="Provision an ephemeral runner batch")
+    swarm_dispatch.add_argument("--driver", choices=("local", "fly"), default="local")
+    swarm_dispatch.add_argument("--batch-size", type=int, default=1)
+    swarm_dispatch.add_argument("--task", default="true")
+    swarm_status = swarm_sub.add_parser("status", help="Show swarm runner status")
+    swarm_status.add_argument("--all", action="store_true")
+    swarm_destroy = swarm_sub.add_parser("destroy", help="Destroy swarm runners")
+    swarm_destroy.add_argument("runner_id", nargs="?")
+    swarm_destroy.add_argument("--all", action="store_true")
+
     daemon_parser = subparsers.add_parser("daemon", help="Manage the always-on context daemon")
     daemon_parser.add_argument(
         "action", nargs="?", choices=["start", "stop", "status", "restart"],
@@ -1122,6 +1134,7 @@ def build_parser() -> argparse.ArgumentParser:
         "run": run_parser,
         "team": team_parser,
         "worktree": worktree_parser,
+        "swarm": swarm_parser,
     }
 
     roles_parser = subparsers.add_parser(
@@ -1285,6 +1298,16 @@ def main(argv=None) -> None:
         upgrade(dry_run=getattr(args, "dry_run", False))
     elif args.command == "watch":
         cmd_watch(args)
+    elif args.command == "swarm":
+        from synlynk.swarm import cmd_swarm_destroy, cmd_swarm_dispatch, cmd_swarm_status
+        if args.swarm_action == "dispatch":
+            cmd_swarm_dispatch(args)
+        elif args.swarm_action == "status":
+            cmd_swarm_status(args)
+        elif args.swarm_action == "destroy":
+            cmd_swarm_destroy(args)
+        else:
+            swarm_parser.print_help()
     elif args.command == "daemon":
         d = SynlynkDaemon()
         if getattr(args, "install_service", False):

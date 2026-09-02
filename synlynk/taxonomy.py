@@ -31,6 +31,9 @@ def iter_leaf_commands(parser: argparse.ArgumentParser, prefix: tuple = ()):
 
 
 COMMAND_TAXONOMY = [
+    {"command": "swarm dispatch", "governs_stage": "execute", "maturity_tier": 2, "prominence": "primary", "orientation_gateway": False, "audience": "human", "trigger_phrases": ["fan out swarm work", "run ephemeral workers"], "hook_event": None},
+    {"command": "swarm status", "governs_stage": "visualize", "maturity_tier": 2, "prominence": "secondary", "orientation_gateway": False, "audience": "human", "trigger_phrases": ["show swarm runners"], "hook_event": None},
+    {"command": "swarm destroy", "governs_stage": "execute", "maturity_tier": 2, "prominence": "secondary", "orientation_gateway": False, "audience": "human", "trigger_phrases": ["tear down swarm runners"], "hook_event": None},
     {"command": "media generate", "governs_stage": "sustain", "maturity_tier": 2, "prominence": "secondary",
      "orientation_gateway": False, "audience": "human", "trigger_phrases": ["generate media assets", "render svg diagrams and og cards"], "hook_event": None},
     {"command": "models list", "governs_stage": "sustain", "maturity_tier": 2, "prominence": "secondary",
