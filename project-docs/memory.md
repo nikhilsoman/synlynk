@@ -1,5 +1,9 @@
 # synlynk Memory
 
+## Cross-Harness Event Relay (implemented 2026-09-02)
+- Added typed `EventEnvelope` and `ActorIdentifier` models, SQLite-backed relay event/mailbox tables, SSE streaming, and JSON-RPC messaging for cross-harness agent coordination.
+- CLI commands: `synlynk relay start`, `status`, `send`, and `tail`.
+
 ## Strategic Research & Architecture Initiatives (opened 2026-09-02)
 - **#1339 (Inter-Agent Event Relay & Messaging Bus):** Story `story-522f42cc`, linked to `goal-ef42902a`. Real-time SSE/JSON-RPC relay bus enabling cross-harness subagent messaging, mid-flight steering, and artifact exchange. [@agy]
 - **#1340 (PM Autonomous Backlog Triaging & Story Formation):** Story `story-c70350f9`, linked to `goal-6733bbf1`. Operationalizes PM's durable loop to autonomously ingest GitHub issues, perform semantic goal-clustering, synthesize acceptance criteria, and promote ready stories. [@agy]
