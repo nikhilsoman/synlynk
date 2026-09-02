@@ -987,7 +987,7 @@ def _dispatch_capturing_permissions(monkeypatch, *, task_type=None, grants=None)
             return lambda: {"roles": {"agy": list(_AGY_WRITE_BUNDLE_ROLES)}}
         return real_pkg(name, default)
 
-    def capture_flags(agent, perms):
+    def capture_flags(agent, perms, **kwargs):
         captured["permissions"] = list(perms)
         return []
 
@@ -1021,6 +1021,57 @@ def test_review_task_type_still_applies_explicit_grants(project_dir, monkeypatch
     assert "read:*" in permissions
     assert "run:tests" in permissions
     assert not any(perm.startswith("write:") for perm in permissions)
+
+
+def test_review_dispatch_strips_explicit_write_grants(project_dir, monkeypatch):
+    permissions = _dispatch_capturing_permissions(
+        monkeypatch,
+        task_type="review",
+        grants=["write:src/", "write:docs/", "run:tests"],
+    )
+
+    assert permissions == ["read:*", "run:tests"]
+    assert "write:src/" not in permissions
+    assert "write:docs/" not in permissions
+
+
+def test_review_codex_gh_write_keeps_repository_read_only(project_dir, monkeypatch):
+    import synlynk.dispatch as dispatch_mod
+
+    captured = {}
+
+    def fake_popen(command, *args, **kwargs):
+        captured["command"] = command
+
+        class FakeProc:
+            pid = 12345
+
+        return FakeProc()
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(dispatch_mod, "_preflight_dispatch", lambda *a, **kw: {"passed": True})
+    monkeypatch.setattr(
+        dispatch_mod,
+        "_build_subprocess_env",
+        lambda *a, **kw: {},
+    )
+
+    dispatch_mod.dispatch_agent(
+        "codex",
+        "review PR #937 and post findings",
+        task_type="review",
+        requires_gh_write=True,
+        role="qa",
+        grants=["write:src/", "write:docs/"],
+        story_id="story-937",
+        job_id="job-review-937",
+        skip_preflight=True,
+    )
+
+    command = " ".join(captured["command"])
+    assert "read-only" in command
+    assert "sandbox_workspace_read_only.network_access=true" in command
+    assert "sandbox_workspace_write.network_access=true" not in command
 
 
 @pytest.mark.parametrize("task_type", [None, "", "implement"])
@@ -2280,4 +2331,3 @@ def test_dispatch_agent_populates_harness_and_role_in_daemon_jobs(project_dir, m
     ).fetchone()
     conn.close()
     assert row == ("codex", "codex", "dev")
-

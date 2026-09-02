@@ -343,6 +343,16 @@ command. The check is local and best-effort, so malformed metadata and unrelated
 repositories remain silent. See `docs/superpowers/specs/2026-09-02-cli-version-drift-warning-design.md`.
 [@codex]
 
+## Review Dispatch Read-Only Scope (#937, 2026-09-02)
+
+Review task permission resolution now strips all `write:*` grants after
+combining role defaults, explicit grants, and revokes, so caller overrides
+cannot make a review job writable. Codex review jobs retain GitHub network
+access when required but use the read-only workspace sandbox. Regression tests
+cover explicit write grants and review command flags; see spec
+`docs/superpowers/specs/2026-09-02-review-dispatch-readonly-scope-design.md`.
+[@codex]
+
 ## Conventions
 - Attribution: `[@username]` on all team-mode entries.
 - Session protocol: read last 3 devlog entries at session start. Surface any open threads.

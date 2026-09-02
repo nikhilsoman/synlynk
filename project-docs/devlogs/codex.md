@@ -12,3 +12,13 @@
 - Added blog post 154 and indexed it in `docs/blog/README.md`.
 - Targeted test passed: `pytest tests/test_agent_cli.py -k 'cli_detect_and_warn_on_stale_pipxinstall' -v`.
 [@codex]
+
+## 2026-09-02 — Review Dispatch Read-Only Scope (#937)
+
+- Added a read-only permission-resolution mode that strips `write:*` grants
+  from review dispatches, including explicit caller grants.
+- Kept Codex GitHub review submission network access while selecting the
+  read-only workspace sandbox.
+- Added regression tests in `tests/test_dispatch.py`, plus spec, plan, blog
+  post 157, and index/memory updates.
+[@codex]

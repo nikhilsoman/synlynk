@@ -368,8 +368,14 @@ def _resolve_dispatch_permissions(
     role_list: list = None,
     grants: list = None,
     revokes: list = None,
+    read_only: bool = False,
 ) -> list:
-    """Compute effective permissions from role defaults, grants, and revokes."""
+    """Compute effective permissions from role defaults, grants, and revokes.
+
+    Review dispatches are allowed to retain read and explicitly requested
+    execution capabilities, but never write scopes.  This filter belongs at
+    permission resolution so grants cannot bypass the review policy.
+    """
     from synlynk._constants import _ROLE_PERMISSION_DEFAULTS
 
     del agent
@@ -378,6 +384,8 @@ def _resolve_dispatch_permissions(
         effective.update(_ROLE_PERMISSION_DEFAULTS.get(role, []))
     effective.update(grants or [])
     effective.difference_update(revokes or [])
+    if read_only:
+        effective = {perm for perm in effective if not perm.startswith("write:")}
     return sorted(effective)
 
 
@@ -466,7 +474,7 @@ def _merge_codex_permission_flags(flags: list, permission_flags: list) -> list:
     return merged + permission_flags
 
 
-def _permissions_to_flags(agent: str, permissions: list) -> list:
+def _permissions_to_flags(agent: str, permissions: list, read_only: bool = False) -> list:
     """Translate permission strings into harness-specific CLI flags."""
     from synlynk._constants import _PERMISSION_TO_TOOL_MAP
 
@@ -491,10 +499,14 @@ def _permissions_to_flags(agent: str, permissions: list) -> list:
     if agent == "codex":
         has_write = any((perm or "").startswith("write:") for perm in (permissions or []))
         flags = []
-        if not has_write and _CODEX_NETWORK_PERMISSION not in (permissions or []):
+        if read_only or (not has_write and _CODEX_NETWORK_PERMISSION not in (permissions or [])):
             flags = ["-s", "read-only"]
         if _CODEX_NETWORK_PERMISSION in (permissions or []):
-            flags += ["-c", "sandbox_workspace_write.network_access=true"]
+            network_sandbox = (
+                "sandbox_workspace_read_only.network_access=true"
+                if read_only else "sandbox_workspace_write.network_access=true"
+            )
+            flags += ["-c", network_sandbox]
         return flags
     if agent == "grok":
         return _grok_permission_flags(permissions)
@@ -2591,9 +2603,23 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         if agent == "codex" and _CODEX_NETWORK_PERMISSION not in effective_grants:
             effective_grants.append(_CODEX_NETWORK_PERMISSION)
     permissions = _resolve_dispatch_permissions(
-        agent, role_list=role_list, grants=effective_grants, revokes=revokes
+        agent,
+        role_list=role_list,
+        grants=effective_grants,
+        revokes=revokes,
+        read_only=task_type == "review",
     )
-    permission_flags = _permissions_to_flags(agent, permissions)
+    if task_type == "review":
+        # Keep compatibility with test/integration adapters that implement the
+        # historical two-argument translator while using the hardened native
+        # translator when available.
+        import inspect as _inspect
+        if "read_only" in _inspect.signature(_permissions_to_flags).parameters:
+            permission_flags = _permissions_to_flags(agent, permissions, read_only=True)
+        else:
+            permission_flags = _permissions_to_flags(agent, permissions)
+    else:
+        permission_flags = _permissions_to_flags(agent, permissions)
     if agent == "codex":
         flags = _merge_codex_permission_flags(flags, permission_flags)
     else:
@@ -2697,8 +2723,14 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             flags = flags + ["--print-timeout", "30m0s"]
     if agent == "codex":
         flags = flags + ["--json"]
-        if _CODEX_NETWORK_PERMISSION in permissions and "sandbox_workspace_write.network_access=true" not in flags:
-            flags = flags + ["-c", "sandbox_workspace_write.network_access=true"]
+        if _CODEX_NETWORK_PERMISSION in permissions and not any(
+            "network_access=true" in flag for flag in flags
+        ):
+            network_sandbox = (
+                "sandbox_workspace_read_only.network_access=true"
+                if task_type == "review" else "sandbox_workspace_write.network_access=true"
+            )
+            flags = flags + ["-c", network_sandbox]
         try:
             result = subprocess.run(
                 ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
