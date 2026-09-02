@@ -29,6 +29,20 @@ _ORG_ROLE_TO_BASELINE_ROLE = {
 }
 
 _GH_WRITE_HARNESS_PRIORITY = ("claude", "agy")
+_STARTUP_FAILOVER_ORDER = ("codex", "agy", "claude")
+
+
+def _secondary_harness(agent: str, baselines_map: dict = None) -> Optional[str]:
+    """Return the next configured harness for a launch-time failover."""
+    available = baselines_map or HARNESS_CAPABILITY_BASELINES
+    try:
+        index = _STARTUP_FAILOVER_ORDER.index(agent)
+    except ValueError:
+        return None
+    for candidate in _STARTUP_FAILOVER_ORDER[index + 1:]:
+        if candidate in available:
+            return candidate
+    return None
 
 
 def _harness_for_org_role(org_role: str, baselines_map: dict, requires_gh_write: bool = False):
@@ -2394,7 +2408,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                    gh_write_target_kind: str = "issue",
                    model: str = None,
                    role: str = None,
-                   db_conn=None) -> dict:
+                   db_conn=None,
+                   _startup_failover: bool = True) -> dict:
     if not task or not task.strip():
         raise ValueError(
             "--task is empty or whitespace-only; refusing to dispatch (see #720)"
@@ -3020,6 +3035,30 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         cwd=worktree_path,
         env=proc_env,
     )
+
+    # A process that has already exited failed during CLI startup (bad flag,
+    # missing binary, or sandbox setup). Give the task one deterministic
+    # failover before recording a normal running job. Fake processes used by
+    # callers/tests may not expose poll(), hence this is deliberately best effort.
+    try:
+        startup_exit = proc.poll()
+    except (AttributeError, OSError):
+        startup_exit = None
+    if _startup_failover and startup_exit not in (None, 0):
+        secondary = _secondary_harness(agent, baselines_map)
+        touched = _worktree_files_touched(worktree_path) if worktree_path else []
+        if secondary and not touched:
+            print(f"  ↪ startup failure on '{agent}' (exit {startup_exit}); failing over to '{secondary}'")
+            return dispatch_agent(
+                secondary, task, story_id=story_id, agent_id=agent_id,
+                force_agent=force_agent, context_mode=context_mode, cycle=cycle,
+                skip_preflight=skip_preflight, requires_gh_write=requires_gh_write,
+                static_baseline=static_baseline, task_type=task_type, requires=requires,
+                grants=grants, revokes=revokes, job_id=job_id, issue=issue, base=base,
+                scope_paths=scope_paths, session_id=session_id,
+                gh_write_target_kind=gh_write_target_kind, model=model, role=role,
+                db_conn=db_conn, _startup_failover=False,
+            )
 
     job = {
         "id": job_id,

@@ -2311,6 +2311,27 @@ def _apply_gh_write_verification(
     return status, verified_str
 
 
+def _reap_zombie_worktree(job_id: str, log_path: Optional[str]) -> bool:
+    """Remove a leaked worktree recorded by a dead daemon job."""
+    path = _daemon_job_worktree_path(job_id, log_path)
+    if not path or not os.path.exists(path):
+        return False
+    result = subprocess.run(
+        ["git", "-C", os.path.dirname(path), "worktree", "remove", "--force", path],
+        capture_output=True, text=True, check=False,
+    )
+    if result.returncode == 0:
+        return True
+    try:
+        if os.path.isdir(path):
+            import shutil
+            shutil.rmtree(path)
+            return True
+    except OSError:
+        pass
+    return False
+
+
 def _reconcile_daemon_jobs() -> None:
     """Reaps finished daemon_jobs; updates status/exit_code/completed_at in state.db.
 
@@ -2324,11 +2345,16 @@ def _reconcile_daemon_jobs() -> None:
         "FROM daemon_jobs WHERE status='running'"
     ).fetchall()
     now = time.strftime("%Y-%m-%dT%H:%M:%S")
+    def has_leaked_worktree(job_id, log_path):
+        path = _daemon_job_worktree_path(job_id, log_path)
+        return bool(path and os.path.exists(os.path.join(path, ".git")))
+
     try:
         for (job_id, agent, story_id, task, pid, started_at, completed_at, log_path,
              dispatch_context, requires_gh_write, gh_write_target, gh_write_author,
              gh_write_expect) in rows:
             exited = False
+            zombie = False
             raw_exit_status = None
             if pid is None:
                 # Null PID while "running" is always a zombie (#753).
@@ -2342,16 +2368,24 @@ def _reconcile_daemon_jobs() -> None:
                 except ChildProcessError:
                     # Not our child (daemon restart / external spawn) — probe liveness.
                     if not _pid_is_alive(pid):
-                        exited = True
+                        exited = True; zombie = has_leaked_worktree(job_id, log_path)
                 except Exception:
                     if not _pid_is_alive(pid):
-                        exited = True
+                        exited = True; zombie = has_leaked_worktree(job_id, log_path)
                 # Double-check: waitpid can return 0 for non-children on some paths;
                 # if still not exited, trust kill(0).
                 if not exited and not _pid_is_alive(pid):
-                    exited = True
+                    exited = True; zombie = has_leaked_worktree(job_id, log_path)
 
             if exited:
+                if zombie:
+                    _reap_zombie_worktree(job_id, log_path)
+                    conn.execute(
+                        "UPDATE daemon_jobs SET status='killed_zombie', exit_code=-9, completed_at=? "
+                        "WHERE job_id=? AND status='running'", (now, job_id)
+                    )
+                    conn.commit()
+                    continue
                 exit_code = None
                 exit_file = None
                 if raw_exit_status is not None:

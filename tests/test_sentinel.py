@@ -98,6 +98,23 @@ def test_check_token_bloat_triggers_on_zero_files_with_high_tokens(tmp_path):
     assert "job-cf837848" in content
 
 
+def test_active_job_circuit_breaker_terminates_zero_file_job(tmp_path):
+    from synlynk.sentinel import enforce_job_circuit_breaker
+
+    class Process:
+        pid = 321
+        terminated = False
+
+        def terminate(self):
+            self.terminated = True
+
+    process = Process()
+    job = {"id": "job-runaway", "in_tokens": 500_000, "out_tokens": 1, "files_touched": 0}
+    assert enforce_job_circuit_breaker(job, process, sentinel_path=str(tmp_path / "sentinel.md"))
+    assert process.terminated
+    assert job["status"] == "stalled_aborted"
+
+
 def test_check_token_bloat_triggers_on_high_token_per_file_ratio(tmp_path):
     from synlynk.sentinel import check_token_bloat
 
@@ -181,4 +198,3 @@ def test_check_token_bloat_scans_telemetry_file(tmp_path, monkeypatch):
     assert "TOKEN_BLOAT" in content
     assert "COST_INFLATION" in content
     assert "job-cf837848" in content
-
