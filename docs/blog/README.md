@@ -171,6 +171,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [163](./163-pr1346-cadence-breaker-resilience.md) | PR #1346 — Cadence-Breaker Resilience Engine | [#1346](https://github.com/nikhilsoman/synlynk/pull/1346) | 2026-09-02 |
 | [164](./164-pr1347-autonomous-growth-engine.md) | PR #1347 — Autonomous Growth & Marketing Engine | [#1347](https://github.com/nikhilsoman/synlynk/pull/1347) | 2026-09-02 |
 | [165](./165-pr1348-cross-harness-event-relay.md) | PR #1348 — Cross-Harness Inter-Agent Event Relay | [#1348](https://github.com/nikhilsoman/synlynk/pull/1348) | 2026-09-02 |
+| [167](./167-pr1350-living-charter-adaptive-routing.md) | Living Charters and Capability-Gated Adaptive Routing | #1350 | 2026-09-02 |
 
 ## Per-PR Post Template
 
