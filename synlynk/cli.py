@@ -792,8 +792,20 @@ def build_parser() -> argparse.ArgumentParser:
     relay_sub = relay_parser.add_subparsers(dest="relay_action")
 
     relay_start_p = relay_sub.add_parser("start", help="Start relay broker (foreground)")
-    relay_start_p.add_argument("--port", type=int, default=None,
-        help=f"Port to listen on (default: {SynlynkRelay.RELAY_PORT})")
+    relay_start_p.add_argument("--port", type=int, default=7432,
+        help="Port to listen on (default: 7432)")
+    relay_start_p.add_argument("--daemon", action="store_true", help="Start in the background")
+
+    relay_status_p = relay_sub.add_parser("status", help="Show relay health")
+    relay_status_p.add_argument("--relay-url", default=None, dest="relay_url")
+
+    relay_send_p = relay_sub.add_parser("send", help="Send a message to an agent")
+    relay_send_p.add_argument("--to-agent", required=True, dest="to_agent")
+    relay_send_p.add_argument("--message", required=True)
+    relay_send_p.add_argument("--relay-url", default=None, dest="relay_url")
+
+    relay_tail_p = relay_sub.add_parser("tail", help="Stream relay events")
+    relay_tail_p.add_argument("--relay-url", default=None, dest="relay_url")
 
     relay_broadcast_p = relay_sub.add_parser("broadcast", help="Send a broadcast event to the relay")
     relay_broadcast_p.add_argument("body", help="Message body")
@@ -1444,7 +1456,23 @@ def main(argv=None) -> None:
     elif args.command == "relay":
         action = getattr(args, "relay_action", None)
         if action == "start":
-            cmd_relay_start(port=getattr(args, "port", None))
+            if getattr(args, "daemon", False):
+                from synlynk.relay import RelayServer
+                from synlynk.daemon import _daemonize_via_reexec, _daemon_state_path
+                _daemonize_via_reexec("synlynk.relay._relay_child_main", _daemon_state_path("relay.log"))
+                print(f"relay started in background on port {args.port}")
+            else:
+                from synlynk.relay import RelayServer
+                RelayServer(port=args.port).start(background=False)
+        elif action == "status":
+            from synlynk.relay import cmd_relay_status
+            cmd_relay_status(args)
+        elif action == "send":
+            from synlynk.relay import cmd_relay_send
+            cmd_relay_send(args)
+        elif action == "tail":
+            from synlynk.relay import cmd_relay_tail
+            cmd_relay_tail(args)
         elif action == "broadcast":
             cmd_relay_broadcast(
                 kind=getattr(args, "kind", "message"),

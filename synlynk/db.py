@@ -97,7 +97,7 @@ _PROJECT_DOC_KEEP_N = 50
 # Bump when a new schema migration is added.  This is deliberately kept in
 # SQLite's small built-in metadata slot so checking it does not touch the DB
 # file or create a backup on already-migrated connections.
-_DB_MIGRATION_VERSION = 6
+_DB_MIGRATION_VERSION = 7
 
 _GENERATORS_BY_FILENAME = {
     "todo.md": "_generate_todo_md",
@@ -492,6 +492,31 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
         _run_harness_rename_migration(conn)
         from synlynk import HARNESS_CAPABILITY_BASELINES, _DB_SCHEMA, _DB_SCORES_VIEW, _seed_verb_map
         conn.executescript(_DB_SCHEMA)
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS relay_events (
+                event_id TEXT PRIMARY KEY,
+                event_type TEXT NOT NULL,
+                timestamp TEXT NOT NULL,
+                sender_json TEXT NOT NULL,
+                recipient_json TEXT,
+                payload_json TEXT NOT NULL,
+                envelope_json TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE INDEX IF NOT EXISTS idx_relay_events_created
+                ON relay_events(created_at);
+            CREATE TABLE IF NOT EXISTS relay_mailbox (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_id TEXT NOT NULL REFERENCES relay_events(event_id),
+                recipient_key TEXT NOT NULL,
+                envelope_json TEXT NOT NULL,
+                delivered_at TEXT,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(event_id, recipient_key)
+            );
+            CREATE INDEX IF NOT EXISTS idx_relay_mailbox_recipient
+                ON relay_mailbox(recipient_key, delivered_at);
+        """)
         story_cols = {row[1] for row in conn.execute("PRAGMA table_info(stories)")}
         if "discipline" not in story_cols:
             try:

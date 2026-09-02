@@ -88,6 +88,9 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `local doctor` (secondary) — sustain
 - `upgrade` (secondary) — sustain
 - `rollback` (secondary) — sustain
+- `relay status` (secondary) — visualize
+- `relay send` (secondary) — execute
+- `relay tail` (secondary) — visualize
 
 ## Tier 3 — Team / Enterprise
 

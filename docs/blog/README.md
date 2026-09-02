@@ -6,6 +6,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 
 | Post | Title | PR | Date |
 |---|---|---|---|
+| [165](./165-pr1348-cross-harness-event-relay.md) | Cross-Harness Event Relay | TBD | 2026-09-02 |
 | [00](./00-why-polyglot-harness.md) | Why We Need a Polyglot Harness | — | 2026-06-09 |
 | [01](./01-the-project-that-built-synlynk.md) | The Project That Built synlynk | — | 2026-06-09 |
 | [02](./02-pr1-v0.2.0-the-kernel.md) | PR #1 — v0.2.0: Laying the Kernel | [#1](https://github.com/nikhilsoman/synlynk/pull/1) | 2026-05-17 |
