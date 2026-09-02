@@ -3448,6 +3448,11 @@ def cmd_pr_check() -> None:
             f"{unreg_count} unregistered (soft-warn, not blocking)"
         )
         print("  Fix with: synlynk audit-docs --fix\n")
+    try:
+        from synlynk.marketing import update_blog_index
+        update_blog_index()
+    except Exception:
+        pass
     print(f"  {_GREEN}✓{_RESET} PR check passed — all model versions attested.")
 
 def cmd_score_attest(story_id: str, model_version: str) -> None:

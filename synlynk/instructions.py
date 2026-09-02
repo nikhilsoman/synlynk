@@ -1151,6 +1151,12 @@ def cmd_instructions_update(file_path: Optional[str] = None,
     if updated:
         _write_instruction_manifest(updated)
 
+    try:
+        from scripts.generate_command_docs import main as _sync_command_docs
+        _sync_command_docs()
+    except Exception:
+        pass
+
 def cmd_instructions_ack(file_path: str) -> None:
     """Acknowledge an INSTRUCTION_DRIFT event for a specific file.
 

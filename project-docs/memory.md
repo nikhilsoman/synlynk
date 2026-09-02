@@ -11,6 +11,15 @@
 - **#1342 (Living Charter Evolution & Capability-Gated Adaptive Routing):** Story `story-3699e01b`, linked to `goal-adb60ccc`. Dynamically recalibrates dispatch routing weights from verified telemetry and automatically proposes living charter revisions when empirical competencies shift. [@agy]
 - **#1343 (First-Class Model Registry & Complexity Dispatch):** Story `story-da31fea8`, linked to `goal-005ea87d`. Canonical Model & ModelFamily registry, local environment discovery, entitlement tiers, differential rate cards, and complexity-aware dispatch routing. [@agy]
 
+## Autonomous Growth & Marketing Engine (decided/shipped 2026-09-02)
+- **Shipped:** PR #1347 (story `story-9a3a7311`, relates to `goal-0c4e96ff`, `goal-9ef9a965`). Implements autonomous growth, blog frontmatter quality gating, living documentation sync, social draft export, and media asset generation. [@agy]
+- **Blog Quality Gate:** `validate_blog_post_frontmatter()` in `synlynk/marketing.py` enforces strict YAML frontmatter schema (`title`, `author`, `date`, `pr`, `version`, `tags`). Integrated with `update_blog_index()` and `synlynk pr check`.
+- **Living Documentation Sync:** `scripts/generate_command_docs.py` integrated into `synlynk instructions update` to prevent command reference and README drift.
+- **Social Announcement Export:** `extract_social_changelog_snippets()` automatically drafts tweets and changelog snippets to `.synlynk/social_drafts.json`.
+- **Media Asset Generator:** Added `synlynk media generate` CLI command and `synlynk/media.py` rendering high-resolution SVG architecture flowcharts and OpenGraph cards.
+- **Verification:** Unit tests in `tests/test_marketing.py`, `tests/test_media.py`, `tests/test_docs_sync.py`, and `test_featmarketing_implement_living_docs_sync` in `tests/test_agent_cli.py`.
+- **Blog Post:** `docs/blog/164-pr1347-autonomous-growth-engine.md`.
+
 ## Sentinel Guard: Token Bloat & Cost Inflation Detection (decided/shipped 2026-09-02)
 - **Shipped:** PR #1334 (closes #1073, story `story-a4b90a20`, relates to #1068). Adds Sentinel pattern and telemetry checks to detect anomalous token-per-file-touched ratios and cost inflation on completed and historical jobs. [@agy]
 - **Root Cause Resolution (Incident `job-cf837848`):** Investigated $5.26 / 7.6M input token bloat on issue #1068. Root cause identified as `--context-mode full` monotonic context expansion across multi-turn headless stall with zero files touched.
@@ -418,6 +427,16 @@ ledger preserves API-equivalent value separately from realized cash outlay;
 `synlynk cost true-up --month YYYY-MM` records the end-of-cycle variance as a
 `true_up_reconciliation` entry. Local `zero_cost` harnesses always record
 `actual_usd=0.0`.
+[@codex]
+
+## Cadence-Breaker Resilience Engine (#1346, 2026-09-02)
+
+Added bounded recovery for autonomous dispatch: `synlynk/rebase.py` resolves
+supported markdown append conflicts, sentinel can terminate jobs at 500k
+zero-file tokens or $5, dispatch can fail over after an immediate harness
+startup failure, and daemon reconciliation marks dead-PID jobs
+`killed_zombie` while removing leaked worktrees. Unsupported conflicts and
+uncertain process ownership remain fail-closed.
 [@codex]
 
 ## Conventions

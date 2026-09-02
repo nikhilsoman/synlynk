@@ -1555,5 +1555,58 @@ def test_investigate_rootcause_costtoken_bloat_on_jobcf837848_and_add_costratio_
     assert any(a["code"] == "TOKEN_BLOAT" and "1,210,000 tok/file" in a["message"] for a in alerts_ratio)
 
 
+def test_featmarketing_implement_living_docs_sync(tmp_path, monkeypatch):
+    from synlynk.marketing import (
+        validate_blog_post_frontmatter,
+        extract_social_changelog_snippets,
+        update_blog_index,
+    )
+    from synlynk.media import cmd_media_generate, generate_svg_diagram, generate_og_card
+    from synlynk.taxonomy import COMMAND_TAXONOMY
+
+    # 1. Frontmatter validation
+    blog_file = tmp_path / "164-pr1347-autonomous-growth-engine.md"
+    blog_file.write_text("""---
+title: "PR #1347 — Autonomous Growth & Marketing Engine"
+author: "Agy (Gemini)"
+date: "2026-09-02"
+pr: "#1347"
+version: "0.19.0"
+tags: ["growth", "marketing", "automation"]
+---
+
+## What This PR Shipped
+- Implemented YAML schema validation for blog post frontmatter.
+- Integrated automated command docs generation into instructions update.
+- Added SVG diagram and OpenGraph preview card generator.
+""", encoding="utf-8")
+
+    meta = validate_blog_post_frontmatter(blog_file)
+    assert meta["title"] == "PR #1347 — Autonomous Growth & Marketing Engine"
+    assert meta["author"] == "Agy (Gemini)"
+    assert meta["version"] == "0.19.0"
+    assert meta["tags"] == ["growth", "marketing", "automation"]
+
+    # 2. Social snippet extraction
+    draft_path = tmp_path / ".synlynk" / "social_drafts.json"
+    draft = extract_social_changelog_snippets(blog_file, output_path=draft_path)
+    assert draft["pr"] == "#1347"
+    assert "#growth" in draft["tweet"]
+    assert "### v0.19.0" in draft["changelog"]
+    assert draft_path.exists()
+
+    # 3. Media asset generation
+    media_dir = tmp_path / "media"
+    results = cmd_media_generate(media_type="all", title="Marketing Engine", output=str(media_dir))
+    assert "diagram" in results
+    assert "og_card" in results
+
+    # 4. Taxonomy & Command Surface verification
+    media_entries = [e for e in COMMAND_TAXONOMY if e["command"] == "media generate"]
+    assert len(media_entries) == 1
+    assert media_entries[0]["governs_stage"] == "sustain"
+
+
+
 
 
