@@ -85,6 +85,15 @@ from synlynk.git_ref_lock import git_ref_operation_lock
 from synlynk.gh_verify import gh_write_verified
 from synlynk.sentinel import _read_sentinel_alerts, _write_sentinel_alert
 from synlynk.policy import check_authority
+from synlynk.capability import expected_value as _capability_expected_value, route_expected_value
+
+
+def expected_dispatch_value(success_probability: float, criticality: float,
+                            amortized_cost: float, p95_latency: float,
+                            lambda_: float = 1.0) -> float:
+    """Return the adaptive dispatch expected value."""
+    return _capability_expected_value(success_probability, criticality, amortized_cost,
+                                      p95_latency, lambda_)
 
 
 def _pkg(name: str, default=None):
@@ -2332,7 +2341,8 @@ def _preflight_dispatch(
 
 def resolve_dispatch_harness(agent: str, agent_id: str = None, story_id: str = None,
                               force_agent: bool = False, requires_gh_write: bool = False,
-                              static_baseline: bool = False) -> str:
+                              static_baseline: bool = False, task_domain: str = None,
+                              criticality: float = 1.0, lambda_: float = 1.0) -> str:
     """Resolve which harness a dispatch will actually run on.
 
     Side-effect-free (no subprocess spawn, no DB write) so both the live
@@ -2368,7 +2378,22 @@ def resolve_dispatch_harness(agent: str, agent_id: str = None, story_id: str = N
 
     baselines_map = _pkg("HARNESS_CAPABILITY_BASELINES", HARNESS_CAPABILITY_BASELINES)
     picked = None
-    if story_id and not static_baseline:
+    if task_domain and not static_baseline:
+        try:
+            from synlynk import _get_db
+            conn = _get_db()
+            has_evidence = conn.execute(
+                "SELECT 1 FROM capability_ledger WHERE task_domain=? LIMIT 1", (task_domain,)
+            ).fetchone()
+            if has_evidence:
+                from synlynk._constants import CORE_FLEET
+                candidates = [name for name in baselines_map if name in CORE_FLEET]
+                choice = route_expected_value(candidates, task_domain, criticality,
+                                               conn=conn, lambda_=lambda_)
+                picked = choice["harness"] if choice else None
+        except Exception:
+            picked = None
+    if story_id and not static_baseline and picked is None:
         best_agent = _pkg("_best_agent_for_story")
         if best_agent:
             best = best_agent(story_id)
@@ -2408,6 +2433,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                    gh_write_target_kind: str = "issue",
                    model: str = None,
                    role: str = None,
+                   task_domain: str = None,
+                   criticality: float = 1.0,
+                   lambda_: float = 1.0,
                    db_conn=None,
                    _startup_failover: bool = True) -> dict:
     if not task or not task.strip():
@@ -2435,6 +2463,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         agent, agent_id=agent_id, story_id=story_id,
         force_agent=force_agent, requires_gh_write=requires_gh_write,
         static_baseline=static_baseline,
+        task_domain=task_domain, criticality=criticality, lambda_=lambda_,
     )
     resolved_agent_role = None
     if agent_id:
