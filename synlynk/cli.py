@@ -1,8 +1,54 @@
 import argparse
 import os
 import sys
+from pathlib import Path
+import re
 
 _SYNLYNK_DIR = ".synlynk"
+
+
+def _synlynk_repo_root(start=None):
+    """Return the enclosing synlynk checkout, if ``start`` is inside one."""
+    path = Path.cwd() if start is None else Path(start)
+    if not path.is_dir():
+        path = path.parent
+    for candidate in (path, *path.parents):
+        pyproject = candidate / "pyproject.toml"
+        version_file = candidate / "VERSION"
+        if not (pyproject.is_file() and version_file.is_file()):
+            continue
+        try:
+            project_metadata = pyproject.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        if re.search(r"(?m)^\s*name\s*=\s*[\"']synlynk[\"']\s*$", project_metadata):
+            return candidate
+    return None
+
+
+def _warn_stale_repo_version(installed_version, cwd=None):
+    """Warn when an installed CLI predates the checkout it is being used in."""
+    repo_root = _synlynk_repo_root(cwd)
+    if repo_root is None:
+        return
+
+    try:
+        repo_version = (repo_root / "VERSION").read_text(encoding="utf-8").strip()
+        installed_parts = tuple(int(part) for part in str(installed_version).split("."))
+        repo_parts = tuple(int(part) for part in repo_version.split("."))
+    except (OSError, ValueError):
+        return
+
+    if installed_parts >= repo_parts:
+        return
+
+    print(
+        "warning: installed synlynk "
+        f"{installed_version} is behind this repository's VERSION {repo_version}. "
+        "Your pipx-installed CLI may be stale; refresh it with "
+        "`pipx install --force git+https://github.com/nikhilsoman/synlynk.git`.",
+        file=sys.stderr,
+    )
 
 def cmd_watch(args) -> None:
     """Terminal HUD for live workspace state."""
@@ -297,6 +343,16 @@ def build_parser() -> argparse.ArgumentParser:
     local_parser = subparsers.add_parser("local", help="Manage the local (oMLX) harness")
     local_sub = local_parser.add_subparsers(dest="local_action")
     local_sub.add_parser("doctor", help="Check oMLX endpoint reachability and model roster")
+
+    models_parser = subparsers.add_parser("models", help="Inspect and discover the model registry")
+    models_sub = models_parser.add_subparsers(dest="models_action")
+    models_list_parser = models_sub.add_parser("list", help="List registered models")
+    models_list_parser.add_argument("--json", action="store_true", dest="json_output")
+    models_show_parser = models_sub.add_parser("show", help="Show one registered model")
+    models_show_parser.add_argument("model_id")
+    models_show_parser.add_argument("--json", action="store_true", dest="json_output")
+    models_discover_parser = models_sub.add_parser("discover", help="Probe installed harnesses and local runtimes")
+    models_discover_parser.add_argument("--json", action="store_true", dest="json_output")
 
     scan_parser = subparsers.add_parser(
         "scan", help="Scan workspace environment (repos, harnesses, agents, skills)")
@@ -864,6 +920,9 @@ def build_parser() -> argparse.ArgumentParser:
     cost_log_parser.add_argument("--tokens-out", type=int, required=True, dest="tokens_out")
     cost_log_parser.add_argument("--story-id", default=None, dest="story_id")
     cost_log_parser.add_argument("--note", default=None)
+    cost_true_up_parser = cost_sub.add_parser("true-up", help="Reconcile subscription costs for a month")
+    cost_true_up_parser.add_argument("--month", default=None, help="Billing month in YYYY-MM format")
+    cost_true_up_parser.add_argument("--harness", default=None)
 
     roadmap_parser = subparsers.add_parser("roadmap", help="Manage the roadmap")
     roadmap_sub = roadmap_parser.add_subparsers(dest="roadmap_action")
@@ -1163,6 +1222,7 @@ def main(argv=None) -> None:
     args = parser.parse_args(argv)
     cli_tokens = argv if argv is not None else sys.argv[1:]
     help_parsers = getattr(parser, "_synlynk_help_parsers", {})
+    _warn_stale_repo_version(VERSION)
 
     if args.command == "init":
         if getattr(args, "wizard", False):
@@ -1465,6 +1525,9 @@ def main(argv=None) -> None:
                 story_id=args.story_id,
                 note=args.note,
             )
+        elif args.cost_action == "true-up":
+            from synlynk.costs import cmd_cost_true_up
+            cmd_cost_true_up(month=args.month, harness=args.harness)
     elif args.command == "roadmap":
         if args.roadmap_action == "add":
             try:
@@ -1641,6 +1704,21 @@ def main(argv=None) -> None:
             sys.exit(cmd_local_doctor())
         else:
             help_parsers.get("local", parser).print_help()
+    elif args.command == "models":
+        from synlynk.models import cmd_models_discover, cmd_models_list, cmd_models_show
+        action = getattr(args, "models_action", None)
+        if action == "list":
+            cmd_models_list(json_output=args.json_output)
+        elif action == "show":
+            try:
+                cmd_models_show(args.model_id, json_output=args.json_output)
+            except ValueError as exc:
+                print(f"Error: {exc}")
+                sys.exit(1)
+        elif action == "discover":
+            cmd_models_discover(json_output=args.json_output)
+        else:
+            help_parsers.get("models", parser).print_help()
     elif args.command == "scan":
         cmd_scan(
             deep=getattr(args, "deep", False),

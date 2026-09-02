@@ -1,5 +1,33 @@
 # synlynk Memory
 
+## Strategic Research & Architecture Initiatives (opened 2026-09-02)
+- **#1339 (Inter-Agent Event Relay & Messaging Bus):** Story `story-522f42cc`, linked to `goal-ef42902a`. Real-time SSE/JSON-RPC relay bus enabling cross-harness subagent messaging, mid-flight steering, and artifact exchange. [@agy]
+- **#1340 (PM Autonomous Backlog Triaging & Story Formation):** Story `story-c70350f9`, linked to `goal-6733bbf1`. Operationalizes PM's durable loop to autonomously ingest GitHub issues, perform semantic goal-clustering, synthesize acceptance criteria, and promote ready stories. [@agy]
+- **#1341 (Ephemeral Swarm Execution Infrastructure Drivers):** Story `story-611003e0`, linked to `goal-005ea87d`. Pluggable ephemeral cloud runner drivers (Fly.io micro-VMs, Kubernetes Job pods, Hetzner Cloud) for massive parallel swarm execution with hard budget ceilings. [@agy]
+- **#1342 (Living Charter Evolution & Capability-Gated Adaptive Routing):** Story `story-3699e01b`, linked to `goal-adb60ccc`. Dynamically recalibrates dispatch routing weights from verified telemetry and automatically proposes living charter revisions when empirical competencies shift. [@agy]
+- **#1343 (First-Class Model Registry & Complexity Dispatch):** Story `story-da31fea8`, linked to `goal-005ea87d`. Canonical Model & ModelFamily registry, local environment discovery, entitlement tiers, differential rate cards, and complexity-aware dispatch routing. [@agy]
+
+## Sentinel Guard: Token Bloat & Cost Inflation Detection (decided/shipped 2026-09-02)
+- **Shipped:** PR #1334 (closes #1073, story `story-a4b90a20`, relates to #1068). Adds Sentinel pattern and telemetry checks to detect anomalous token-per-file-touched ratios and cost inflation on completed and historical jobs. [@agy]
+- **Root Cause Resolution (Incident `job-cf837848`):** Investigated $5.26 / 7.6M input token bloat on issue #1068. Root cause identified as `--context-mode full` monotonic context expansion across multi-turn headless stall with zero files touched.
+- **Sentinel Anomaly Detection:** Implemented `check_token_bloat()` in `synlynk/sentinel.py` configured with default thresholds (`500k` tokens with 0 files touched, `500k` tokens/file ratio, `$3.00` WARN / `$5.00` CRITICAL cost inflation).
+- **Integration & Scanning:** Wired into `_reconcile_jobs()` and `_reconcile_daemon_jobs()` in `synlynk/jobs.py` and `check_sentinel_patterns()` in `synlynk/sentinel.py` with telemetry fallback scanning across `.synlynk/telemetry.json`.
+- **Verification:** Unit tests in `tests/test_sentinel.py`, regression test `test_investigate_rootcause_costtoken_bloat_on_jobcf837848_and_add_costratio_sentinel_guard_1073` in `tests/test_agent_cli.py`. All tests pass.
+- **Blog Post:** `docs/blog/160-pr1334-token-bloat-sentinel-guard.md`.
+
+## Fleet Parity: Add Grok to agent_slots in Default Config Templates (decided/shipped 2026-09-02)
+- **Shipped:** PR #1327 (closes #863, story `story-1744cccb`). Adds `grok` to default `agent_slots` in `load_config()` and verifies clean dispatch slot resolution and diagnostic profile checks. [@agy]
+- **Core 4 Fleet Parity:** `agent_slots` defaults in `synlynk/__init__.py` now explicitly include `{"claude": "claude", "agy": "agy", "codex": "codex", "grok": "grok"}`, aligning runtime fallback behavior with `instructions.py` generated templates.
+- **Diagnostics & Slot Resolution:** Ensures `.agents/` profile validation (`_hc_agent_profiles`) in `synlynk doctor` and CLI slot resolutions recognize Grok consistently across initialized and uninitialized environments.
+- **Verification:** Unit test `test_config_add_grok_to_agent_slots_in_synlynk_and_default_config_templates` in `tests/test_agent_cli.py`, updated `test_load_config_has_new_defaults` in `tests/test_synlynk.py`. All tests pass.
+- **Blog Post:** `docs/blog/156-pr1327-agent-slots-grok.md`.
+
+## Research: Multi-Agent Swarms & Fleet Orchestration Engine (opened 2026-09-02)
+- **Filed:** Issue #1326 (story `story-95238497`, linked to `goal-005ea87d`). Explores an accelerated multi-agent swarm/fleet engine across all 5 harnesses (Claude, Codex, Agy, Grok, and Local). [@agy]
+- **Lifecycle & Deployment Matrix:** Evaluates initialization, tracking, messaging, and termination across home (interactive CLI/TUI) and away (headless) modes, abstracting harness-specific delegation models.
+- **Ephemeral Scaling:** Explores dynamic provisioning of lightweight subagent workers on cheap VPS micro-instances (Fly.io, Hetzner) and Kubernetes Job pods with SSE telemetry streaming.
+- **Local Harness Evolution:** Assesses Aider's limitations for swarm fan-out and evaluates `synlynk-local-runtime` (native async agent daemon) and Google Antigravity `LiteRTAgentConfig` on-device runners as alternatives.
+
 ## Fix YAML Frontmatter in Blog Post 103 (decided/shipped 2026-09-02)
 - **Shipped:** PR #1322 (closes #941). Fixes invalid YAML frontmatter in `docs/blog/103-pr778-scope-violation-enforcement.md`. [@agy]
 - **Root Cause Resolution:** Post 103 contained `merged: status open`, which violated YAML syntax and caused Eleventy website builds (`npm run build`) to crash with a `bad indentation of a mapping entry` parse error.
@@ -327,6 +355,66 @@ HTTP Context Server (v0.7, `localhost:27471`) is the underlying transport.
 
 ## Active Holds
 (none currently — see Superseded Decisions for the lifted Blog Post Protocol hold)
+
+## CLI Version Drift Warning (2026-09-02)
+
+When invoked inside a synlynk checkout, the CLI compares its running package
+version with the enclosing repository's `VERSION` file. If the installed version
+is older, it emits a non-blocking stderr warning with a forced pipx reinstall
+command. The check is local and best-effort, so malformed metadata and unrelated
+repositories remain silent. See `docs/superpowers/specs/2026-09-02-cli-version-drift-warning-design.md`.
+[@codex]
+
+## Review Dispatch Read-Only Scope (#937, 2026-09-02)
+
+Review task permission resolution now strips all `write:*` grants after
+combining role defaults, explicit grants, and revokes, so caller overrides
+cannot make a review job writable. Codex review jobs retain GitHub network
+access when required but use the read-only workspace sandbox. Regression tests
+cover explicit write grants and review command flags; see spec
+`docs/superpowers/specs/2026-09-02-review-dispatch-readonly-scope-design.md`.
+[@codex]
+
+## Manifest Callback Server Concurrency Fix (2026-09-02, gh:#906)
+
+`synlynk/team.py::_run_manifest_callback_server` (the loopback server used
+during GitHub App Manifest role provisioning) captured its OAuth code via a
+`threading.Event` + list, which silently dropped a second concurrent
+`/callback` request's code (duplicated tab, retried redirect) since the
+check-then-set guard only ever kept the first code. Fixed by switching to
+`queue.Queue()` (unconditional `put`, never drops) and
+`http.server.ThreadingHTTPServer` (concurrent requests get independent
+handler threads instead of serializing behind one accept loop). External
+contract (`port, wait_for_code, shutdown`) unchanged. See
+`docs/superpowers/specs/2026-09-02-manifest-callback-concurrency-design.md`.
+[@claude]
+
+## First-Class Model Registry (#1339, 2026-09-02)
+
+Phase 1/2 adds a canonical model-family/model registry backed by SQLite, with
+explicit context geometry, rate cards, and entitlement tiers. `synlynk models
+list|show|discover` expose built-ins and safe environment discovery for Claude,
+Codex, Agy, Grok, Ollama, and oMLX. Doctor verifies catalog availability.
+[@codex]
+
+## Boolean Dispatch Flag Deduplication (#1327, 2026-09-02)
+
+Dispatch now removes repeated occurrences of known boolean CLI flags after
+baseline, override, permission, and harness-specific flags are combined. This
+prevents Grok's required and permission-derived `--always-approve` from being
+passed twice while preserving repeatable option/value pairs. See
+`docs/superpowers/specs/2026-09-02-grok-always-approve-dedup-design.md`.
+[@codex]
+
+## Subscription Cost Ledger (#787, 2026-09-02)
+
+`harness_billing` is the preferred configuration for payment mode, monthly
+subscription fee, projected tokens, extra usage, and overage caps. The cost
+ledger preserves API-equivalent value separately from realized cash outlay;
+`synlynk cost true-up --month YYYY-MM` records the end-of-cycle variance as a
+`true_up_reconciliation` entry. Local `zero_cost` harnesses always record
+`actual_usd=0.0`.
+[@codex]
 
 ## Conventions
 - Attribution: `[@username]` on all team-mode entries.

@@ -50,6 +50,9 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 
 ## Tier 2 — Execute
 
+- `models list` (secondary) — sustain
+- `models show` (secondary) — sustain
+- `models discover` (secondary) — sustain
 - `dispatch` (primary) — execute
 - `backfill-capability-ratings` (secondary) — execute
 - `jobs` (primary) — execute
@@ -77,6 +80,7 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `sentinel list` (secondary) — execute
 - `sentinel clear` (secondary) — execute
 - `cost log` (secondary) — sustain
+- `cost true-up` (secondary) — sustain
 - `credit grant` (secondary) — sustain
 - `quota` (secondary) — sustain
 - `capability sweep` (secondary) — sustain

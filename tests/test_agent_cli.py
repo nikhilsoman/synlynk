@@ -8,12 +8,87 @@ import pytest
 from synlynk.agent_cli import SEED_CHARTERS
 
 
+def test_fixdispatch_deduplicate_boolean_cli_flag():
+    from synlynk.dispatch import _deduplicate_boolean_cli_flags
+
+    flags = _deduplicate_boolean_cli_flags(
+        ["--always-approve", "--always-approve", "--allow", "Read", "--allow", "Write"]
+    )
+
+    assert flags.count("--always-approve") == 1
+    assert flags[-4:] == ["--allow", "Read", "--allow", "Write"]
+
+
+def test_config_add_grok_to_agent_slots_in_synlynk_and_default_config_templates(tmp_path, monkeypatch):
+    import json
+    import synlynk
+    from synlynk.instructions import _build_templates
+    from synlynk.doctor import _hc_agent_profiles
+
+    monkeypatch.chdir(tmp_path)
+    # 1. Verify load_config defaults contain all 4 Core Fleet agent slots
+    cfg = synlynk.load_config()
+    assert "agent_slots" in cfg
+    assert cfg["agent_slots"] == {
+        "claude": "claude",
+        "agy": "agy",
+        "codex": "codex",
+        "grok": "grok",
+    }
+
+    # 2. Verify _build_templates() config.json contains all 4 Core Fleet agent slots
+    templates = _build_templates()
+    assert "config.json" in templates
+    tpl_cfg = json.loads(templates["config.json"])
+    assert "agent_slots" in tpl_cfg
+    assert tpl_cfg["agent_slots"] == {
+        "claude": "claude",
+        "agy": "agy",
+        "codex": "codex",
+        "grok": "grok",
+    }
+
+    # 3. Verify doctor agent_profiles check recognizes grok in agent_slots
+    (tmp_path / ".agents").mkdir(parents=True, exist_ok=True)
+    for agent in ["claude", "agy", "codex", "grok"]:
+        (tmp_path / ".agents" / f"{agent}.json").write_text("{}")
+    res = _hc_agent_profiles()
+    assert res.status == "ok"
+    assert "grok" in res.message
+
+
 def test_codex_harness_baseline_includes_verifier_role_and_can_gh_write():
     from synlynk._constants import HARNESS_CAPABILITY_BASELINES
 
     codex = HARNESS_CAPABILITY_BASELINES["codex"]
     assert "verifier" in codex["roles"]
     assert codex["can_gh_write"] is True
+
+
+def test_cli_detect_and_warn_on_stale_pipxinstall(tmp_path, monkeypatch, capsys):
+    from synlynk import cli
+
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "synlynk"\n')
+    (tmp_path / "VERSION").write_text("0.19.0\n")
+    monkeypatch.chdir(tmp_path)
+
+    cli._warn_stale_repo_version("0.18.0")
+
+    warning = capsys.readouterr().err
+    assert "installed synlynk 0.18.0 is behind this repository's VERSION 0.19.0" in warning
+    assert "pipx install --force" in warning
+
+
+def test_cli_does_not_warn_when_repo_version_is_not_newer(tmp_path, monkeypatch, capsys):
+    from synlynk import cli
+
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "synlynk"\n')
+    (tmp_path / "VERSION").write_text("0.18.0\n")
+    monkeypatch.chdir(tmp_path)
+
+    cli._warn_stale_repo_version("0.18.0")
+
+    assert capsys.readouterr().err == ""
 
 
 def test_claude_harness_alignment_update_baseline():
@@ -1392,6 +1467,92 @@ def test_featdoctor_add_tc9_insandbox_ghwrite_cap(monkeypatch):
     assert res["passed"] is True
     assert res["can_gh_write"] is True
 
+
+def test_manifest_auth_prevent_dropped_oauth_codes_in_manifest_callback_server():
+    """gh:#906 — two callback requests landing before wait_for_code() is
+    called must both be queued, not have the second one silently dropped."""
+    import threading
+    from urllib.request import urlopen
+
+    import synlynk.team as team_mod
+
+    port, wait_for_code, shutdown = team_mod._run_manifest_callback_server(
+        timeout_seconds=5
+    )
+    try:
+        barrier = threading.Barrier(2)
+        results = {}
+
+        def fire(code, key):
+            barrier.wait(timeout=5)
+            with urlopen(
+                f"http://127.0.0.1:{port}/callback?code={code}", timeout=5
+            ) as resp:
+                results[key] = resp.status
+
+        t1 = threading.Thread(target=fire, args=("code-one", "t1"))
+        t2 = threading.Thread(target=fire, args=("code-two", "t2"))
+        t1.start()
+        t2.start()
+        t1.join(timeout=5)
+        t2.join(timeout=5)
+
+        assert results.get("t1") == 200
+        assert results.get("t2") == 200
+
+        first = wait_for_code()
+        second = wait_for_code()
+        assert {first, second} == {"code-one", "code-two"}
+    finally:
+        shutdown()
+
+
+def test_investigate_rootcause_costtoken_bloat_on_jobcf837848_and_add_costratio_sentinel_guard_1073(tmp_path):
+    """Investigate issue #1073: Root-cause anomalous cost and token bloat on job-cf837848
+    ($5.26 / 7.6M input tokens on issue #1068).
+    Verifies Sentinel pattern detection for anomalous token-per-file ratio and cost inflation.
+    """
+    import synlynk
+    from synlynk.sentinel import check_token_bloat, _read_sentinel_alerts
+
+    sentinel_file = tmp_path / "sentinel.md"
+
+    # 1. Verify direct invocation of sentinel check with job-cf837848 metrics
+    alerts = synlynk.check_token_bloat(
+        in_tokens=7_600_000,
+        out_tokens=50_000,
+        cost_usd=5.26,
+        files_touched=0,
+        job_id="job-cf837848",
+        agent="codex",
+        sentinel_path=str(sentinel_file),
+    )
+
+    assert len(alerts) == 2
+    alert_codes = [a["code"] for a in alerts]
+    assert "TOKEN_BLOAT" in alert_codes
+    assert "COST_INFLATION" in alert_codes
+
+    # 2. Verify alert content in sentinel.md
+    raw_alerts = sentinel_file.read_text()
+    assert "TOKEN_BLOAT" in raw_alerts
+    assert "COST_INFLATION" in raw_alerts
+    assert "job-cf837848" in raw_alerts
+    assert "7,650,000 tokens" in raw_alerts
+    assert "0 files touched" in raw_alerts
+    assert "$5.26" in raw_alerts
+
+    # 3. Verify ratio check with files touched > 0
+    alerts_ratio = check_token_bloat(
+        in_tokens=1_200_000,
+        out_tokens=10_000,
+        cost_usd=1.50,
+        files_touched=1,
+        job_id="job-ratio-test",
+        agent="agy",
+        sentinel_path=str(sentinel_file),
+    )
+    assert any(a["code"] == "TOKEN_BLOAT" and "1,210,000 tok/file" in a["message"] for a in alerts_ratio)
 
 
 

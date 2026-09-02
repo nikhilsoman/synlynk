@@ -39,6 +39,7 @@ from synlynk.sentinel import (
     _write_sentinel_alert,
     check_model_rates_freshness,
     check_sentinel_patterns,
+    check_token_bloat,
     log_telemetry_event,
     sentinel_clear,
     sentinel_list,
@@ -953,6 +954,34 @@ CREATE TABLE IF NOT EXISTS stories (
     created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS model_families (
+    family_id TEXT PRIMARY KEY,
+    provider TEXT NOT NULL,
+    context_geometry TEXT NOT NULL DEFAULT '{}',
+    native_features TEXT NOT NULL DEFAULT '[]',
+    prompt_adapter TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS models (
+    model_id TEXT PRIMARY KEY,
+    family_id TEXT NOT NULL REFERENCES model_families(family_id),
+    harness_binding TEXT NOT NULL,
+    locality TEXT NOT NULL DEFAULT 'remote_api',
+    quantization TEXT,
+    rates TEXT NOT NULL DEFAULT '{}',
+    entitlement_tier TEXT NOT NULL,
+    context_geometry TEXT,
+    native_features TEXT NOT NULL DEFAULT '[]',
+    discovered INTEGER NOT NULL DEFAULT 0,
+    discovery_source TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_models_family ON models(family_id);
+CREATE INDEX IF NOT EXISTS idx_models_harness ON models(harness_binding);
+
 CREATE TABLE IF NOT EXISTS capability_ratings (
     id                    INTEGER PRIMARY KEY AUTOINCREMENT,
     story_id              TEXT NOT NULL REFERENCES stories(story_id),
@@ -1701,7 +1730,7 @@ def load_config() -> dict:
         "project_id": None,
         "identity_slug": None,
         "project_docs_dir": "project-docs",
-        "agent_slots": {"claude": "claude", "agy": "agy", "codex": "codex"},  # AGY CLI binary is named 'agy' — update when binary is renamed
+        "agent_slots": {"claude": "claude", "agy": "agy", "codex": "codex", "grok": "grok"},  # AGY CLI binary is named 'agy' — update when binary is renamed
         "workgroup_agents": [],
         "last_housekeeping_date": None,
         "team": None,
@@ -1711,6 +1740,7 @@ def load_config() -> dict:
         "review_stall_timeout_minutes": 90,
         "agents": {},
         "payment_models": {},
+        "harness_billing": {},
         "capability_sweep": {"cost_cap_usd": 10.0},
         "roles": capability_roles if capability_roles is not None else _default_roles_map(),
         "story_classification": {"method": "heuristic"},
@@ -1738,6 +1768,15 @@ def load_config() -> dict:
         for key, val in defaults["nudges"].items():
             if key not in config.get("nudges", {}):
                 config.setdefault("nudges", {})[key] = val
+        if not isinstance(config.get("harness_billing"), dict):
+            config["harness_billing"] = {}
+        for billing in config["harness_billing"].values():
+            if isinstance(billing, dict):
+                billing.setdefault("payment_mode", "pay_as_you_go")
+                billing.setdefault("monthly_base_fee_usd", 0.0)
+                billing.setdefault("projected_monthly_tokens", 10_000_000)
+                billing.setdefault("allow_extra_usage", False)
+                billing.setdefault("extra_usage_cap_usd", None)
         return config
     except (json.JSONDecodeError, IOError):
         return defaults

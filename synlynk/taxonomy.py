@@ -31,6 +31,12 @@ def iter_leaf_commands(parser: argparse.ArgumentParser, prefix: tuple = ()):
 
 
 COMMAND_TAXONOMY = [
+    {"command": "models list", "governs_stage": "sustain", "maturity_tier": 2, "prominence": "secondary",
+     "orientation_gateway": False, "audience": "human", "trigger_phrases": ["list registered models"], "hook_event": None},
+    {"command": "models show", "governs_stage": "sustain", "maturity_tier": 2, "prominence": "secondary",
+     "orientation_gateway": False, "audience": "human", "trigger_phrases": ["show model details"], "hook_event": None},
+    {"command": "models discover", "governs_stage": "sustain", "maturity_tier": 2, "prominence": "secondary",
+     "orientation_gateway": False, "audience": "human", "trigger_phrases": ["discover installed models"], "hook_event": None},
     # --- Tier 0: FTUE ---
     {"command": "init", "governs_stage": "open", "maturity_tier": 0, "prominence": "primary",
      "orientation_gateway": False, "audience": "human",
@@ -222,6 +228,9 @@ COMMAND_TAXONOMY = [
     {"command": "cost log", "governs_stage": "sustain", "maturity_tier": 2, "prominence": "secondary",
      "orientation_gateway": False, "audience": "human",
      "trigger_phrases": ["log this manual session's cost"], "hook_event": None},
+    {"command": "cost true-up", "governs_stage": "sustain", "maturity_tier": 2, "prominence": "secondary",
+     "orientation_gateway": False, "audience": "human",
+     "trigger_phrases": ["reconcile subscription costs", "true up monthly subscription spend"], "hook_event": None},
     {"command": "credit grant", "governs_stage": "sustain", "maturity_tier": 2, "prominence": "secondary",
      "orientation_gateway": False, "audience": "human",
      "trigger_phrases": ["grant a credit balance", "record a credit grant"], "hook_event": None},

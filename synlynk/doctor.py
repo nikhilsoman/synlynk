@@ -96,6 +96,21 @@ def _hc_project_init() -> HealthCheck:
     )
 
 
+def _hc_model_registry() -> HealthCheck:
+    """Ensure the canonical model catalog is available to doctor consumers."""
+    try:
+        from synlynk import _get_db
+        from synlynk.db import list_models
+        from synlynk.models import register_builtin_models
+        conn = _get_db()
+        register_builtin_models(conn)
+        count = len(list_models(conn))
+        conn.commit()
+        return HealthCheck("model_registry", "ok", f"{count} model(s) registered")
+    except Exception as exc:
+        return HealthCheck("model_registry", "warn", f"registry unavailable: {exc}", fix="Run: synlynk models discover")
+
+
 def _hc_docs_dir() -> HealthCheck:
     try:
         if _pkg("_is_migrated")():
@@ -690,6 +705,7 @@ def cleanup_selftest_workspaces(temp_root: str = None) -> int:
 HEALTH_CHECKS = [
     _hc_python_version,
     _hc_project_init,
+    _hc_model_registry,
     _hc_docs_dir,
     _hc_todo_drift,
     _hc_identity_key,

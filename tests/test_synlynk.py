@@ -2274,6 +2274,7 @@ def test_load_config_has_new_defaults(tmp_path, monkeypatch):
     assert config["agent_slots"]["claude"] == "claude"
     assert config["agent_slots"]["agy"] == "agy"
     assert config["agent_slots"]["codex"] == "codex"
+    assert config["agent_slots"]["grok"] == "grok"
     assert "stall_timeout_minutes" in config
     assert "agents" in config
     assert config["stall_timeout_minutes"] == 30

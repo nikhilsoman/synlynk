@@ -434,10 +434,129 @@ def check_model_rates_freshness() -> None:
         )
 
 
+DEFAULT_TOKEN_BLOAT_ZERO_FILE_THRESHOLD = 500_000
+DEFAULT_TOKEN_PER_FILE_RATIO_THRESHOLD = 500_000
+DEFAULT_COST_INFLATION_WARN_THRESHOLD = 3.00
+DEFAULT_COST_INFLATION_CRITICAL_THRESHOLD = 5.00
+
+
+def check_token_bloat(
+    in_tokens: int = 0,
+    out_tokens: int = 0,
+    cost_usd: float = 0.0,
+    files_touched: int = 0,
+    job_id: str = "",
+    agent: str = "",
+    sentinel_path: Optional[str] = None,
+    zero_file_token_threshold: int = DEFAULT_TOKEN_BLOAT_ZERO_FILE_THRESHOLD,
+    token_per_file_threshold: int = DEFAULT_TOKEN_PER_FILE_RATIO_THRESHOLD,
+    cost_warn_threshold: float = DEFAULT_COST_INFLATION_WARN_THRESHOLD,
+    cost_crit_threshold: float = DEFAULT_COST_INFLATION_CRITICAL_THRESHOLD,
+) -> list:
+    """Sentinel guard to detect and alert on anomalous token-per-file-touched ratios
+    or cost inflation on dispatched agent jobs and historical telemetry.
+
+    Returns a list of generated alert dictionaries: [{"severity": ..., "code": ..., "message": ...}].
+    """
+    alerts_generated = []
+
+    # If no direct metrics provided, scan recent telemetry events
+    if not in_tokens and not out_tokens and not cost_usd and not job_id:
+        telemetry_file = ".synlynk/telemetry.json"
+        data = []
+        if os.path.exists(telemetry_file):
+            try:
+                with open(telemetry_file) as f:
+                    data = json.load(f)
+            except (json.JSONDecodeError, IOError):
+                pass
+        for event in data:
+            if not isinstance(event, dict):
+                continue
+            e_in = event.get("in_tokens") or event.get("input_tokens") or 0
+            e_out = event.get("out_tokens") or event.get("output_tokens") or 0
+            e_cost = event.get("cost_usd") or event.get("total_cost_usd") or 0.0
+            e_files = event.get("files_touched") or 0
+            e_job = event.get("job_id") or ""
+            e_agent = event.get("agent") or event.get("harness") or ""
+            if e_in or e_out or e_cost:
+                alerts_generated.extend(
+                    check_token_bloat(
+                        in_tokens=e_in,
+                        out_tokens=e_out,
+                        cost_usd=e_cost,
+                        files_touched=e_files,
+                        job_id=e_job,
+                        agent=e_agent,
+                        sentinel_path=sentinel_path,
+                        zero_file_token_threshold=zero_file_token_threshold,
+                        token_per_file_threshold=token_per_file_threshold,
+                        cost_warn_threshold=cost_warn_threshold,
+                        cost_crit_threshold=cost_crit_threshold,
+                    )
+                )
+        return alerts_generated
+
+    total_tokens = int(in_tokens or 0) + int(out_tokens or 0)
+    cost = float(cost_usd or 0.0)
+    files_count = len(files_touched) if isinstance(files_touched, (list, tuple, set)) else int(files_touched or 0)
+    job_label = f"Job {job_id}" if job_id else "Dispatched job"
+    agent_label = f" on agent '{agent}'" if agent else ""
+
+    # 1. Zero-files touched with high token consumption
+    if files_count == 0 and total_tokens >= zero_file_token_threshold:
+        severity = "CRITICAL" if total_tokens >= 2_000_000 else "WARN"
+        msg = (
+            f"{job_label}{agent_label} consumed {total_tokens:,} tokens "
+            f"({in_tokens:,} in / {out_tokens:,} out) with 0 files touched — "
+            "anomalous token bloat detected."
+        )
+        _write_sentinel_alert(severity, "TOKEN_BLOAT", msg, sentinel_path=sentinel_path)
+        print(f"\n  ⚠ [TOKEN_BLOAT] {msg}")
+        alerts_generated.append({"severity": severity, "code": "TOKEN_BLOAT", "message": msg})
+
+    # 2. High token-per-file-touched ratio
+    elif files_count > 0:
+        ratio = total_tokens / files_count
+        if ratio >= token_per_file_threshold:
+            severity = "CRITICAL" if (ratio >= 1_000_000 or total_tokens >= 2_000_000) else "WARN"
+            msg = (
+                f"{job_label}{agent_label} consumed {total_tokens:,} tokens across {files_count} file(s) "
+                f"({ratio:,.0f} tok/file vs threshold {token_per_file_threshold:,}) — "
+                "anomalous token-per-file ratio detected."
+            )
+            _write_sentinel_alert(severity, "TOKEN_BLOAT", msg, sentinel_path=sentinel_path)
+            print(f"\n  ⚠ [TOKEN_BLOAT] {msg}")
+            alerts_generated.append({"severity": severity, "code": "TOKEN_BLOAT", "message": msg})
+
+    # 3. Cost Inflation
+    if cost >= cost_crit_threshold:
+        msg = (
+            f"{job_label}{agent_label} accumulated ${cost:.2f} "
+            f"(exceeds critical threshold ${cost_crit_threshold:.2f}) — "
+            "anomalous cost inflation detected."
+        )
+        _write_sentinel_alert("CRITICAL", "COST_INFLATION", msg, sentinel_path=sentinel_path)
+        print(f"\n  🚨 [COST_INFLATION] {msg}")
+        alerts_generated.append({"severity": "CRITICAL", "code": "COST_INFLATION", "message": msg})
+    elif cost >= cost_warn_threshold:
+        msg = (
+            f"{job_label}{agent_label} accumulated ${cost:.2f} "
+            f"(exceeds warning threshold ${cost_warn_threshold:.2f}) — "
+            "anomalous cost inflation detected."
+        )
+        _write_sentinel_alert("WARN", "COST_INFLATION", msg, sentinel_path=sentinel_path)
+        print(f"\n  ⚠ [COST_INFLATION] {msg}")
+        alerts_generated.append({"severity": "WARN", "code": "COST_INFLATION", "message": msg})
+
+    return alerts_generated
+
+
 def check_sentinel_patterns(output_text: str = "", exit_code: int = 0,
                              cmd: str = "") -> None:
-    """Detects flatline, success loop, and quota-exhausted; writes sentinel alerts."""
+    """Detects flatline, success loop, quota-exhausted, and token bloat; writes sentinel alerts."""
     check_model_rates_freshness()
+    check_token_bloat()
     telemetry_file = ".synlynk/telemetry.json"
     data = []
     if os.path.exists(telemetry_file):

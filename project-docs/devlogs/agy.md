@@ -49,3 +49,22 @@
 - Authored blog post `docs/blog/144-pr1311-phase4-db-schema-dual-read-write.md`.
 - Verified entire 2,405-test suite passing. PR #1311 reviewed by Codex (`job-abd04554`), CI passed, and merged into `main`. Closed issue #1307.
 
+## 2026-09-02 — Fleet Parity: Add Grok to agent_slots in Default Config Templates (#863 / PR #1327)
+
+### Shipped
+- Added `grok` to `defaults["agent_slots"]` in `synlynk/__init__.py:load_config()`, ensuring runtime config fallback contains all 4 Core Fleet harnesses (`claude`, `agy`, `codex`, `grok`).
+- Verified diagnostic profile validation (`_hc_agent_profiles`) in `synlynk doctor` and CLI slot resolutions recognize Grok consistently across initialized and uninitialized environments.
+- Added comprehensive unit test in `tests/test_agent_cli.py` and updated `test_load_config_has_new_defaults` in `tests/test_synlynk.py`.
+- Authored design spec `docs/superpowers/specs/2026-09-02-agent-slots-grok-design.md`, implementation plan `docs/superpowers/plans/2026-09-02-agent-slots-grok.md`, and blog post `docs/blog/156-pr1327-agent-slots-grok.md` indexed in `docs/blog/README.md`.
+
+## 2026-09-02 — Sentinel Guard: Token Bloat & Cost Inflation Detection (#1073 / PR #1334)
+
+### Shipped
+- Investigated root cause of anomalous token and cost bloat on `job-cf837848` ($5.26 / 7.6M input tokens on issue #1068). Identified `--context-mode full` monotonic context expansion across multi-turn headless stall without code modification.
+- Implemented `check_token_bloat()` in `synlynk/sentinel.py` with configurable thresholds (`500k` tokens for 0 files touched, `500k` tokens/file ratio, `$3.00` WARN / `$5.00` CRITICAL cost inflation).
+- Wired token bloat and cost inflation checks into `_reconcile_jobs()` and `_reconcile_daemon_jobs()` in `synlynk/jobs.py` and `check_sentinel_patterns()` in `synlynk/sentinel.py` with `.synlynk/telemetry.json` fallback scanning.
+- Exported `check_token_bloat` in `synlynk/__init__.py`.
+- Added unit tests in `tests/test_sentinel.py` and regression test `test_investigate_rootcause_costtoken_bloat_on_jobcf837848_and_add_costratio_sentinel_guard_1073` in `tests/test_agent_cli.py`.
+- Authored design spec `docs/superpowers/specs/2026-09-02-token-bloat-sentinel-guard-design.md`, plan `docs/superpowers/plans/2026-09-02-token-bloat-sentinel-guard.md`, and blog post `docs/blog/160-pr1334-token-bloat-sentinel-guard.md` indexed in `docs/blog/README.md`.
+
+

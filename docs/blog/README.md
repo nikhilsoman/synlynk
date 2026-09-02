@@ -154,6 +154,15 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [152](./152-pr1320-dispatch-gh-write-false-positives.md) | PR #1320 — Tighten _task_requires_gh_write() Auto-Detection Heuristic | [#1320](https://github.com/nikhilsoman/synlynk/pull/1320) | 2026-09-01 |
 | [153](./153-pr1321-roles-fix-repairs-sops.md) | PR #1321 — Repair Stale & Missing SOP Sections during synlynk roles --fix | [#1321](https://github.com/nikhilsoman/synlynk/pull/1321) | 2026-09-01 |
 | [154](./154-pr1322-fix-blog-post-103-frontmatter.md) | PR #1322 — Fix YAML Frontmatter in Blog Post 103 | [#1322](https://github.com/nikhilsoman/synlynk/pull/1322) | 2026-09-02 |
+| [155](./155-pr1325-cli-version-drift-warning.md) | PR #1325 — Catching a Stale pipx CLI Before It Misleads You | [#1325](https://github.com/nikhilsoman/synlynk/pull/1325) | 2026-09-02 |
+| [156](./156-pr1327-agent-slots-grok.md) | PR #1330 — Fleet Parity: Add Grok to agent_slots in Default Config Templates | [#1330](https://github.com/nikhilsoman/synlynk/pull/1330) | 2026-09-02 |
+| [157](./157-pr1328-review-dispatch-readonly-scope.md) | PR #1331 — Making Review Dispatches Read-Only at the Repository Boundary | [#1331](https://github.com/nikhilsoman/synlynk/pull/1331) | 2026-09-02 |
+| [158](./158-pr1329-manifest-callback-concurrency.md) | PR #1332 — The GitHub App Manifest Callback Server Could Drop a Code | [#1332](https://github.com/nikhilsoman/synlynk/pull/1332) | 2026-09-02 |
+| [159](./159-pr1333-grok-always-approve-dedup.md) | PR #1335 — Deduplicating Grok's Boolean Dispatch Flags | [#1335](https://github.com/nikhilsoman/synlynk/pull/1335) | 2026-09-02 |
+| [160](./160-pr1334-token-bloat-sentinel-guard.md) | PR #1336 — Sentinel Guard for Token Bloat and Cost Inflation | [#1336](https://github.com/nikhilsoman/synlynk/pull/1336) | 2026-09-02 |
+| [161](./161-pr1337-subscription-cost-amortization.md) | PR #1337 — Subscription Cost Amortization and True-Up | [#1337](https://github.com/nikhilsoman/synlynk/pull/1337) | 2026-09-02 |
+
+| [162](./162-pr1339-first-class-model-registry.md) | First-Class Models: Giving Dispatch a Real Registry | TBD | 2026-09-02 |
 
 ## Per-PR Post Template
 
