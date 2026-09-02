@@ -155,8 +155,9 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [153](./153-pr1321-roles-fix-repairs-sops.md) | PR #1321 — Repair Stale & Missing SOP Sections during synlynk roles --fix | [#1321](https://github.com/nikhilsoman/synlynk/pull/1321) | 2026-09-01 |
 | [154](./154-pr1322-fix-blog-post-103-frontmatter.md) | PR #1322 — Fix YAML Frontmatter in Blog Post 103 | [#1322](https://github.com/nikhilsoman/synlynk/pull/1322) | 2026-09-02 |
 | [155](./155-pr1325-cli-version-drift-warning.md) | PR #1325 — Catching a Stale pipx CLI Before It Misleads You | [#1325](https://github.com/nikhilsoman/synlynk/pull/1325) | 2026-09-02 |
-| [156](./156-pr1327-agent-slots-grok.md) | PR #1327 — Fleet Parity: Add Grok to agent_slots in Default Config Templates | [#1327](https://github.com/nikhilsoman/synlynk/pull/1327) | 2026-09-02 |
-| [158](./158-pr1329-manifest-callback-concurrency.md) | PR #1329 — The GitHub App Manifest Callback Server Could Drop a Code | [#1329](https://github.com/nikhilsoman/synlynk/pull/1329) | 2026-09-02 |
+| [156](./156-pr1327-agent-slots-grok.md) | PR #1330 — Fleet Parity: Add Grok to agent_slots in Default Config Templates | [#1330](https://github.com/nikhilsoman/synlynk/pull/1330) | 2026-09-02 |
+| [157](./157-pr1328-review-dispatch-readonly-scope.md) | PR #1331 — Making Review Dispatches Read-Only at the Repository Boundary | [#1331](https://github.com/nikhilsoman/synlynk/pull/1331) | 2026-09-02 |
+| [158](./158-pr1329-manifest-callback-concurrency.md) | PR #1332 — The GitHub App Manifest Callback Server Could Drop a Code | [#1332](https://github.com/nikhilsoman/synlynk/pull/1332) | 2026-09-02 |
 
 ## Per-PR Post Template
 

@@ -350,6 +350,16 @@ command. The check is local and best-effort, so malformed metadata and unrelated
 repositories remain silent. See `docs/superpowers/specs/2026-09-02-cli-version-drift-warning-design.md`.
 [@codex]
 
+## Review Dispatch Read-Only Scope (#937, 2026-09-02)
+
+Review task permission resolution now strips all `write:*` grants after
+combining role defaults, explicit grants, and revokes, so caller overrides
+cannot make a review job writable. Codex review jobs retain GitHub network
+access when required but use the read-only workspace sandbox. Regression tests
+cover explicit write grants and review command flags; see spec
+`docs/superpowers/specs/2026-09-02-review-dispatch-readonly-scope-design.md`.
+[@codex]
+
 ## Manifest Callback Server Concurrency Fix (2026-09-02, gh:#906)
 
 `synlynk/team.py::_run_manifest_callback_server` (the loopback server used
