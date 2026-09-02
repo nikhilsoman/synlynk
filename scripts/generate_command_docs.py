@@ -62,25 +62,33 @@ def render_readme_section() -> str:
     return "\n".join(lines)
 
 
-def main():
-    Path("docs/reference").mkdir(parents=True, exist_ok=True)
-    Path("docs/reference/commands.md").write_text(render_reference_doc())
+def main(repo_root=None):
+    root = Path(repo_root) if repo_root else Path.cwd()
+    ref_dir = root / "docs" / "reference"
+    ref_dir.mkdir(parents=True, exist_ok=True)
+    (ref_dir / "commands.md").write_text(render_reference_doc(), encoding="utf-8")
 
-    readme_path = Path("README.md")
-    readme = readme_path.read_text()
-    section = render_readme_section()
-    pattern = re.compile(
-        re.escape(README_START) + r".*?" + re.escape(README_END), re.DOTALL
-    )
-    if pattern.search(readme):
-        readme = pattern.sub(section, readme)
-    else:
-        raise RuntimeError(
-            f"README.md is missing {README_START}/{README_END} markers — "
-            "add them once around the command section, then re-run this script"
+    readme_path = root / "README.md"
+    if readme_path.exists():
+        readme = readme_path.read_text(encoding="utf-8")
+        section = render_readme_section()
+        pattern = re.compile(
+            re.escape(README_START) + r".*?" + re.escape(README_END), re.DOTALL
         )
-    readme_path.write_text(readme)
-    print("Regenerated docs/reference/commands.md and README.md command section.")
+        if pattern.search(readme):
+            readme = pattern.sub(section, readme)
+            readme_path.write_text(readme, encoding="utf-8")
+            print("Regenerated docs/reference/commands.md and README.md command section.")
+        elif repo_root is not None:
+            pass
+        else:
+            raise RuntimeError(
+                f"README.md is missing {README_START}/{README_END} markers — "
+                "add them once around the command section, then re-run this script"
+            )
+    else:
+        if repo_root is None:
+            print("Regenerated docs/reference/commands.md.")
 
 
 if __name__ == "__main__":
