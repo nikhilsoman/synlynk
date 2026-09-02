@@ -344,6 +344,16 @@ def build_parser() -> argparse.ArgumentParser:
     local_sub = local_parser.add_subparsers(dest="local_action")
     local_sub.add_parser("doctor", help="Check oMLX endpoint reachability and model roster")
 
+    models_parser = subparsers.add_parser("models", help="Inspect and discover the model registry")
+    models_sub = models_parser.add_subparsers(dest="models_action")
+    models_list_parser = models_sub.add_parser("list", help="List registered models")
+    models_list_parser.add_argument("--json", action="store_true", dest="json_output")
+    models_show_parser = models_sub.add_parser("show", help="Show one registered model")
+    models_show_parser.add_argument("model_id")
+    models_show_parser.add_argument("--json", action="store_true", dest="json_output")
+    models_discover_parser = models_sub.add_parser("discover", help="Probe installed harnesses and local runtimes")
+    models_discover_parser.add_argument("--json", action="store_true", dest="json_output")
+
     scan_parser = subparsers.add_parser(
         "scan", help="Scan workspace environment (repos, harnesses, agents, skills)")
     scan_parser.add_argument("--deep", action="store_true",
@@ -1694,6 +1704,21 @@ def main(argv=None) -> None:
             sys.exit(cmd_local_doctor())
         else:
             help_parsers.get("local", parser).print_help()
+    elif args.command == "models":
+        from synlynk.models import cmd_models_discover, cmd_models_list, cmd_models_show
+        action = getattr(args, "models_action", None)
+        if action == "list":
+            cmd_models_list(json_output=args.json_output)
+        elif action == "show":
+            try:
+                cmd_models_show(args.model_id, json_output=args.json_output)
+            except ValueError as exc:
+                print(f"Error: {exc}")
+                sys.exit(1)
+        elif action == "discover":
+            cmd_models_discover(json_output=args.json_output)
+        else:
+            help_parsers.get("models", parser).print_help()
     elif args.command == "scan":
         cmd_scan(
             deep=getattr(args, "deep", False),

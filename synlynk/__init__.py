@@ -954,6 +954,34 @@ CREATE TABLE IF NOT EXISTS stories (
     created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS model_families (
+    family_id TEXT PRIMARY KEY,
+    provider TEXT NOT NULL,
+    context_geometry TEXT NOT NULL DEFAULT '{}',
+    native_features TEXT NOT NULL DEFAULT '[]',
+    prompt_adapter TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS models (
+    model_id TEXT PRIMARY KEY,
+    family_id TEXT NOT NULL REFERENCES model_families(family_id),
+    harness_binding TEXT NOT NULL,
+    locality TEXT NOT NULL DEFAULT 'remote_api',
+    quantization TEXT,
+    rates TEXT NOT NULL DEFAULT '{}',
+    entitlement_tier TEXT NOT NULL,
+    context_geometry TEXT,
+    native_features TEXT NOT NULL DEFAULT '[]',
+    discovered INTEGER NOT NULL DEFAULT 0,
+    discovery_source TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_models_family ON models(family_id);
+CREATE INDEX IF NOT EXISTS idx_models_harness ON models(harness_binding);
+
 CREATE TABLE IF NOT EXISTS capability_ratings (
     id                    INTEGER PRIMARY KEY AUTOINCREMENT,
     story_id              TEXT NOT NULL REFERENCES stories(story_id),

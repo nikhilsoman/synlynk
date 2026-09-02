@@ -162,6 +162,8 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [160](./160-pr1334-token-bloat-sentinel-guard.md) | PR #1336 — Sentinel Guard for Token Bloat and Cost Inflation | [#1336](https://github.com/nikhilsoman/synlynk/pull/1336) | 2026-09-02 |
 | [161](./161-pr1337-subscription-cost-amortization.md) | PR #1337 — Subscription Cost Amortization and True-Up | [#1337](https://github.com/nikhilsoman/synlynk/pull/1337) | 2026-09-02 |
 
+| [162](./162-pr1339-first-class-model-registry.md) | First-Class Models: Giving Dispatch a Real Registry | TBD | 2026-09-02 |
+
 ## Per-PR Post Template
 
 From here forward, each PR gets a post following this structure:
