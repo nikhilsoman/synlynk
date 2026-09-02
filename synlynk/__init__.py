@@ -39,6 +39,7 @@ from synlynk.sentinel import (
     _write_sentinel_alert,
     check_model_rates_freshness,
     check_sentinel_patterns,
+    check_token_bloat,
     log_telemetry_event,
     sentinel_clear,
     sentinel_list,
