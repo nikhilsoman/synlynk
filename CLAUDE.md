@@ -118,6 +118,27 @@ adds, removes, or changes a cross-repo relationship. This keeps Vizor's Architec
 audit step — same discipline as the Blog Post Protocol above, but conditional rather than
 mandatory on every PR.
 
+## Named Release README Sync
+
+**Before tagging a named release, `README.md` must match the version being shipped.** Run `synlynk release --check-docs` (or let `synlynk release` fail closed) so stale badges cannot ride into a tag.
+
+Release checklist (also printed by `synlynk release`):
+
+1. **Version** — README version badge equals `VERSION` / the version about to be tagged. Not waivable.
+2. **Test-count claim** — numeric `tests-N` badge and `N tests passing` prose match `pytest --collect-only`.
+3. **Hero/release summary** — first `**vX.Y.Z:**` line matches that version and still describes the release.
+4. **Install instructions** — at least one current path (`pipx install`, `install.sh`, or `python3 bin/synlynk.py`).
+5. **Command/documentation links** — relative markdown links resolve; the `<!-- commands:start -->` block matches `python3 scripts/generate_command_docs.py`.
+6. **Shipped vs planned commands** — `synlynk <cmd>` mentions outside that block must be in `COMMAND_TAXONOMY`, or the same line must mark them planned (`coming soon`, `planned`, `not yet`, `unreleased`, `will ship`).
+
+**When a README update is unnecessary:** only if every check is already green, or a *waivable* check is skipped with an explicit recorded reason:
+
+```bash
+synlynk release --check-docs --waive test_count=pytest collect unavailable on this runner
+```
+
+`version` cannot be waived. Print the waiver on the release checklist so the decision is not silent.
+
 ## Cost Capture Protocol
 
 **For every PR, before merging:** confirm all dispatched/wrapped work in this PR is auto-captured (nothing to do — it already is via `dispatch_agent()`/`synlynk exec`), and any native/PM-session work (brainstorming, design docs, manual fixes) not tied to a dispatched job has a corresponding `synlynk cost log` entry. If genuinely zero cost was incurred outside dispatched work, note that explicitly in the PR rather than skipping the check silently.

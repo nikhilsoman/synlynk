@@ -767,3 +767,162 @@ def test_cli_dispatch_dry_run_as_agent_without_explicit_harness_shows_resolved_a
     main(["dispatch", "--task", "run the test suite", "--as-agent", "qa", "--dry-run"])
     captured = capsys.readouterr()
     assert "agent:        agy" in captured.out
+
+
+def _docs_keep_readme_synchronized_readme(
+    root, version, test_count=None, extra="", stale_commands=False
+):
+    from scripts.generate_command_docs import render_readme_section
+
+    commands_md = root / "docs" / "reference" / "commands.md"
+    commands_md.parent.mkdir(parents=True, exist_ok=True)
+    commands_md.write_text("# Command Reference\n")
+    section = (
+        "<!-- commands:start -->\n\n- `synlynk init`\n\n<!-- commands:end -->"
+        if stale_commands
+        else render_readme_section()
+    )
+    test_badge = ""
+    test_prose = ""
+    if test_count is not None:
+        test_badge = (
+            f'  <a href="https://github.com/nikhilsoman/synlynk">'
+            f'<img src="https://img.shields.io/badge/tests-{test_count}%20passing-brightgreen" '
+            f'alt="Tests"></a>\n'
+        )
+        test_prose = f" {test_count} tests passing."
+    (root / "README.md").write_text(
+        f"""<p align="center">
+{test_badge}  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/version-{version}-blue" alt="Version"></a>
+</p>
+
+**v{version}:** Named release summary covering the README consistency gate.{test_prose}
+
+## Install
+
+```bash
+pipx install git+https://github.com/nikhilsoman/synlynk
+python3 bin/synlynk.py --help
+```
+
+## Commands
+
+{section}
+
+{extra}
+"""
+    )
+
+
+def test_docs_keep_readme_synchronized_during_named_releases_flags_stale_version_and_test_count(
+    tmp_path,
+):
+    from synlynk.release_readme import validate_readme_for_release
+
+    _docs_keep_readme_synchronized_readme(tmp_path, "0.12.0", test_count=1140)
+    findings = validate_readme_for_release(
+        str(tmp_path), "0.18.0", collected_test_count=2316
+    )
+    by_check = {item.check: item.message for item in findings}
+    assert "version" in by_check
+    assert "0.12.0" in by_check["version"]
+    assert "0.18.0" in by_check["version"]
+    assert "test_count" in by_check
+    assert "1140" in by_check["test_count"]
+    assert "2316" in by_check["test_count"]
+
+
+def test_docs_keep_readme_synchronized_during_named_releases_handles_planned_vs_shipped_commands(
+    tmp_path,
+):
+    from synlynk.release_readme import validate_readme_for_release
+
+    _docs_keep_readme_synchronized_readme(
+        tmp_path,
+        "0.18.0",
+        extra=(
+            "Coming soon: `synlynk teleport` will ship in a later release.\n"
+            "Use `synlynk teleport` today for faster clones.\n"
+        ),
+    )
+    findings = validate_readme_for_release(
+        str(tmp_path), "0.18.0", collected_test_count=0
+    )
+    command_findings = [item for item in findings if item.check == "commands"]
+    assert command_findings, findings
+    assert any("teleport" in item.message for item in command_findings)
+    # The planned line must not be the only/extra failure — unmarked shipped claim is.
+    assert all("coming soon" not in item.message.lower() for item in command_findings)
+
+
+def test_docs_keep_readme_synchronized_during_named_releases_records_waiver_not_version(
+    tmp_path,
+):
+    from synlynk.release_readme import (
+        format_readme_check_report,
+        parse_waivers,
+        validate_readme_for_release,
+    )
+
+    _docs_keep_readme_synchronized_readme(tmp_path, "0.12.0", test_count=1140)
+    waivers = parse_waivers(
+        ["test_count=collect unavailable in this environment", "version=leave badge"]
+    )
+    findings = validate_readme_for_release(
+        str(tmp_path),
+        "0.18.0",
+        collected_test_count=2316,
+        waivers=waivers,
+    )
+    assert any(item.check == "version" for item in findings)
+    assert not any(item.check == "test_count" for item in findings)
+    report = format_readme_check_report(findings, "0.18.0", waivers=waivers)
+    assert "[waived] test-count claim: collect unavailable in this environment" in report
+    assert "version cannot be waived" in report
+
+
+def test_docs_keep_readme_synchronized_during_named_releases_blocks_release_cut(
+    tmp_path, monkeypatch
+):
+    from synlynk import cmd_release
+
+    (tmp_path / "VERSION").write_text("0.10.0\n")
+    monkeypatch.chdir(tmp_path)
+    _docs_keep_readme_synchronized_readme(tmp_path, "0.12.0", test_count=1140)
+    monkeypatch.setattr("subprocess.check_output", lambda *a, **k: b"")
+    with pytest.raises(RuntimeError, match="README is not synchronized"):
+        cmd_release(dry_run=False, role="pm")
+    assert (tmp_path / "VERSION").read_text().strip() == "0.10.0"
+
+
+def test_docs_keep_readme_synchronized_during_named_releases_check_docs_flag(
+    tmp_path, monkeypatch
+):
+    from synlynk.cli import build_parser, main
+
+    parser = build_parser()
+    args = parser.parse_args(
+        ["release", "--check-docs", "--waive", "test_count=manual recount pending"]
+    )
+    assert args.check_docs is True
+    assert args.waive == ["test_count=manual recount pending"]
+
+    (tmp_path / "VERSION").write_text("0.18.0\n")
+    monkeypatch.chdir(tmp_path)
+    _docs_keep_readme_synchronized_readme(tmp_path, "0.12.0")
+    with pytest.raises(SystemExit) as exc:
+        main(["release", "--check-docs"])
+    assert exc.value.code == 1
+    assert (tmp_path / "VERSION").read_text().strip() == "0.18.0"
+
+
+def test_docs_keep_readme_synchronized_during_named_releases_passes_when_in_sync(
+    tmp_path,
+):
+    from synlynk.release_readme import validate_readme_for_release
+
+    _docs_keep_readme_synchronized_readme(tmp_path, "0.18.0", test_count=12)
+    findings = validate_readme_for_release(
+        str(tmp_path), "0.18.0", collected_test_count=12
+    )
+    assert findings == []

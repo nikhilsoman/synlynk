@@ -2972,15 +2972,26 @@ def checkpoint() -> None:
         print(f"  Archived: {names}")
     print(f"  Budget: ${total_usd:.2f} / ${limit_usd:.2f} ({pct:.0f}%)  ·  {total_requests} requests")
 
-def cmd_release(dry_run: bool = False, version: Optional[str] = None, bump: bool = False, minor: bool = False, role: str = "pm") -> None:
+def cmd_release(dry_run: bool = False, version: Optional[str] = None, bump: bool = False, minor: bool = False, role: str = "pm", check_docs: bool = False, waive: Optional[list] = None) -> None:
     """Cut a named release: bump version, prepend CHANGELOG.md, write blog stub, print checklist."""
     import datetime
     import re
     from synlynk.policy import check_authority
+    from synlynk.release_readme import (
+        format_readme_check_report,
+        parse_waivers,
+        validate_readme_for_release,
+    )
 
-    authority = check_authority("release_cut", role=role, repo_path=os.getcwd())
-    if not authority.allowed:
-        raise RuntimeError(f"Release refused: role {role!r} is not authorized to cut a release per policy.json.")
+    try:
+        waivers = parse_waivers(waive)
+    except ValueError as exc:
+        raise RuntimeError(str(exc)) from exc
+
+    if not check_docs:
+        authority = check_authority("release_cut", role=role, repo_path=os.getcwd())
+        if not authority.allowed:
+            raise RuntimeError(f"Release refused: role {role!r} is not authorized to cut a release per policy.json.")
 
     # Resolve project root:
     # First priority: check if a VERSION file exists in CWD. If so, root is CWD.
@@ -3021,7 +3032,30 @@ def cmd_release(dry_run: bool = False, version: Optional[str] = None, bump: bool
         else:
             next_version = f"{major}.{minor_ver}.{patch + 1}"
 
+    next_version = next_version.lstrip("v")
     print(f"Proposed version: v{next_version}")
+
+    if check_docs and version is None and not minor:
+        expected_readme_version = current_version.lstrip("v")
+    else:
+        expected_readme_version = next_version
+
+    findings = validate_readme_for_release(
+        root, expected_readme_version, waivers=waivers
+    )
+    report = format_readme_check_report(
+        findings, expected_readme_version, waivers=waivers
+    )
+    print(report)
+    if findings:
+        if check_docs:
+            sys.exit(1)
+        raise RuntimeError(
+            "README is not synchronized for this named release. "
+            "Update README.md or re-run with --check-docs / --waive check=reason."
+        )
+    if check_docs:
+        return
 
     # Step b: Read merged stories since last git tag
     try:
@@ -3211,6 +3245,7 @@ merged: YYYY-MM-DD (or status: open)
     print("[x] VERSION bumped")
     print("[x] CHANGELOG entry written")
     print(f"[x] Blog post stub: docs/blog/{blog_filename}")
+    print("[x] README synchronized (version, test-count, hero, install, links, commands)")
     print(f"[ ] git tag v{next_version} && git push --tags")
     print(f"[ ] gh release create v{next_version}")
     print("[ ] Roadmap row marked shipped")
