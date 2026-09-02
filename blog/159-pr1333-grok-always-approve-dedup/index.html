@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #1333 — Deduplicating Grok&#39;s Boolean Dispatch Flags | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-3">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Sep 02, 2026</span>
+        
+          <span class="blog-post-pr">PR #1333</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #1333 — Deduplicating Grok&#39;s Boolean Dispatch Flags</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>The previous fleet-parity work made Grok a first-class dispatch target, but
+headless execution still depended on a precise composition of baseline and
+permission-derived CLI flags.</p>
+<h2>Strategic Shifts in This PR (if any)</h2>
+<p>No strategic shift was required. This is a reliability hardening change at the
+dispatch boundary.</p>
+<h2>What This PR Shipped</h2>
+<p>Issue #1327 exposed that Grok could receive <code>--always-approve</code> twice: once from
+its required baseline flags and once from permission translation for shell or
+test execution. The launch then failed before the task started.</p>
+<p>Dispatch now performs stable deduplication for known boolean CLI flags after
+all baseline, override, permission, and harness-specific flags are assembled.
+Repeatable options and option/value pairs remain unchanged. Regression tests
+cover both the actual Grok launch command and the focused helper behavior.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>Permission policy can now be composed from multiple sources without turning a
+valid headless Grok dispatch into an invalid command line. This makes automatic
+task allocation more resilient to overlapping defaults and grants.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>With duplicate boolean options normalized centrally, future fleet parity work
+can add harness defaults and permission translations independently while
+keeping the final launch contract valid.</p>
+<h2>Related Docs</h2>
+<ul>
+<li>Design Spec: <code>docs/superpowers/specs/2026-09-02-grok-always-approve-dedup-design.md</code></li>
+<li>Implementation Plan: <code>docs/superpowers/plans/2026-09-02-grok-always-approve-dedup.md</code></li>
+</ul>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
