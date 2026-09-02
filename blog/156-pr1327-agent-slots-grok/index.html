@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #1327 — Fleet Parity: Add Grok to agent_slots in Default Config Templates | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Sep 02, 2026</span>
+        
+          <span class="blog-post-pr">PR #1327</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #1327 — Fleet Parity: Add Grok to agent_slots in Default Config Templates</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>In previous fleet parity milestones (PRs #1308, #1309, #1310), synlynk established runtime and diagnostic equity across the Core 4 harnesses (<code>claude</code>, <code>agy</code>, <code>codex</code>, <code>grok</code>). These advancements enforced strict working directory boundaries, closed-loop instruction receipt verifications, and headless execution flag adaptations.</p>
+<h2>Strategic Shifts in This PR (if any)</h2>
+<p>No architectural pivot was required; this PR completes the configuration schema alignment for Core Fleet parity by ensuring runtime defaults match static template generation.</p>
+<h2>What This PR Shipped</h2>
+<ol>
+<li><strong><code>load_config()</code> Default Schema Alignment:</strong>
+Updated <code>defaults[&quot;agent_slots&quot;]</code> in <code>synlynk/__init__.py</code> from <code>{&quot;claude&quot;: &quot;claude&quot;, &quot;agy&quot;: &quot;agy&quot;, &quot;codex&quot;: &quot;codex&quot;}</code> to include <code>grok</code>:<pre><code class="language-python">&quot;agent_slots&quot;: {&quot;claude&quot;: &quot;claude&quot;, &quot;agy&quot;: &quot;agy&quot;, &quot;codex&quot;: &quot;codex&quot;, &quot;grok&quot;: &quot;grok&quot;}
+</code></pre>
+</li>
+<li><strong>Synchronized Diagnostics &amp; Profile Checks:</strong>
+With all 4 harnesses present in default <code>agent_slots</code>, <code>synlynk doctor</code> (<code>_hc_agent_profiles</code>) and repair routines (<code>synlynk repair</code>) cleanly discover and validate Grok's agent profile (<code>.agents/grok.json</code>) without requiring explicit manual configuration.</li>
+<li><strong>Automated Verification &amp; Regression Tests:</strong>
+<ul>
+<li>Added <code>test_config_add_grok_to_agent_slots_in_synlynk_and_default_config_templates</code> in <code>tests/test_agent_cli.py</code>.</li>
+<li>Updated <code>test_load_config_has_new_defaults</code> in <code>tests/test_synlynk.py</code>.</li>
+</ul>
+</li>
+</ol>
+<h2>Brainstorm Visuals Used</h2>
+<ul>
+<li><code>docs/brainstorm/model-aware-capability-scoring/model-resolution-chain.html</code> (informed model and harness slot resolution hierarchy).</li>
+</ul>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>Ensuring all 4 compute harnesses are recognized by default eliminates configuration drift in newly initialized workspaces and automated test fixtures, enabling multi-agent autonomous dispatch loops to seamlessly allocate tasks across the entire Core Fleet.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>With Core Fleet configuration parity established across templates and defaults, the next focus turns to multi-repo workspace agent identity resolution (#914) and recurring harness capability reassessment (#1179).</p>
+<h2>Related Docs</h2>
+<ul>
+<li>Design Spec: <code>docs/superpowers/specs/2026-09-02-agent-slots-grok-design.md</code></li>
+<li>Implementation Plan: <code>docs/superpowers/plans/2026-09-02-agent-slots-grok.md</code></li>
+<li>Memory: <code>project-docs/memory.md</code></li>
+<li>Devlog: <code>project-docs/devlogs/agy.md</code></li>
+</ul>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
