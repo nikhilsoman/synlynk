@@ -354,6 +354,13 @@ def build_parser() -> argparse.ArgumentParser:
     models_discover_parser = models_sub.add_parser("discover", help="Probe installed harnesses and local runtimes")
     models_discover_parser.add_argument("--json", action="store_true", dest="json_output")
 
+    media_parser = subparsers.add_parser("media", help="Manage and generate media assets")
+    media_sub = media_parser.add_subparsers(dest="media_action")
+    media_generate_parser = media_sub.add_parser("generate", help="Generate SVG diagrams and OpenGraph preview cards")
+    media_generate_parser.add_argument("--type", choices=["all", "diagram", "og-card", "svg", "og"], default="all", help="Media type to generate")
+    media_generate_parser.add_argument("--title", default="Autonomous Growth & Marketing Engine", help="Title for media asset")
+    media_generate_parser.add_argument("--output", "-o", default=None, help="Output file or directory path")
+
     scan_parser = subparsers.add_parser(
         "scan", help="Scan workspace environment (repos, harnesses, agents, skills)")
     scan_parser.add_argument("--deep", action="store_true",
@@ -1077,6 +1084,8 @@ def build_parser() -> argparse.ArgumentParser:
         "session": session_parser,
         "instructions": instructions_parser,
         "local": local_parser,
+        "media": media_parser,
+        "models": models_parser,
         "relay": relay_parser,
         "run": run_parser,
         "team": team_parser,
@@ -1719,6 +1728,17 @@ def main(argv=None) -> None:
             cmd_models_discover(json_output=args.json_output)
         else:
             help_parsers.get("models", parser).print_help()
+    elif args.command == "media":
+        from synlynk.media import cmd_media_generate
+        action = getattr(args, "media_action", None)
+        if action == "generate":
+            cmd_media_generate(
+                media_type=getattr(args, "type", "all"),
+                title=getattr(args, "title", "Autonomous Growth & Marketing Engine"),
+                output=getattr(args, "output", None),
+            )
+        else:
+            help_parsers.get("media", parser).print_help()
     elif args.command == "scan":
         cmd_scan(
             deep=getattr(args, "deep", False),
