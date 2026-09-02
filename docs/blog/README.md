@@ -163,6 +163,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [161](./161-pr1337-subscription-cost-amortization.md) | PR #1337 — Subscription Cost Amortization and True-Up | [#1337](https://github.com/nikhilsoman/synlynk/pull/1337) | 2026-09-02 |
 
 | [162](./162-pr1339-first-class-model-registry.md) | First-Class Models: Giving Dispatch a Real Registry | TBD | 2026-09-02 |
+| [164](./164-pr1347-autonomous-growth-engine.md) | PR #1347 — Autonomous Growth & Marketing Engine | [#1347](https://github.com/nikhilsoman/synlynk/pull/1347) | 2026-09-02 |
 
 ## Per-PR Post Template
 
