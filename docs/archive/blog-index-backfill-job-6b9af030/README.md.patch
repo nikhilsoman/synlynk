@@ -1,0 +1,39 @@
+diff --git a/docs/blog/README.md b/docs/blog/README.md
+index ed70d462..b707a40b 100644
+--- a/docs/blog/README.md
++++ b/docs/blog/README.md
+@@ -163,6 +163,34 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
+ | [161](./161-pr1337-subscription-cost-amortization.md) | PR #1337 — Subscription Cost Amortization and True-Up | [#1337](https://github.com/nikhilsoman/synlynk/pull/1337) | 2026-09-02 |
+ 
+ | [162](./162-pr1339-first-class-model-registry.md) | First-Class Models: Giving Dispatch a Real Registry | TBD | 2026-09-02 |
++| [28](./28-pr72-fix-grok-dispatch-prompt-flag.md) | 28-pr72-fix-grok-dispatch-prompt-flag | — | — |
++| [51](./51-prTBD-141-agent-quotas-routing-gate.md) | 51-prTBD-141-agent-quotas-routing-gate | — | — |
++| [52](./52-pr156-157-fleet-scheduler-v1-and-v2-deferral.md) | 52-pr156-157-fleet-scheduler-v1-and-v2-deferral | — | — |
++| [53](./53-pr167-vizor-architect-map-v2.md) | 53-pr167-vizor-architect-map-v2 | — | — |
++| [55](./55-pr204-205-207-local-agent-mlx-driver.md) | PR #204/#205/#207 — Local Agent: oMLX Driver, Capability Seeding, and Real-Hardware Tests | [#204/#205/#207](https://github.com/nikhilsoman/synlynk/pull/204/#205/#207) | 2026-07-13 |
++| [56](./56-prTBD-measurement-ledger-hardening-phase1.md) | PR #236 — Measurement Ledger Hardening Phase 1: No Number Lies About Where It Came From | [#236](https://github.com/nikhilsoman/synlynk/pull/236) | 2026-07-14 |
++| [57](./57-pr238-context-mode-hint.md) | PR #238 — A Dispatch Habit, Not a Bad Default: Warning on Redundant --context-mode full | [#238](https://github.com/nikhilsoman/synlynk/pull/238) | 2026-07-14 |
++| [58](./58-pr240-stall-killer-remote-activity.md) | PR #240 — The Stall-Killer Wasn't Checking Its Own Receipts | [#240](https://github.com/nikhilsoman/synlynk/pull/240) | 2026-07-14 |
++| [91](./91-prTBD-fleet-parity-security-cluster.md) | Fleet-Parity Security Cluster — Fail Closed, Not Warn-and-Proceed | TBD | 2026-08-02 |
++| [91](./91-pr646-nested-worktree-cost-capture-gap.md) | PR #646 — Fix Nested-Worktree Cost-Capture Gap | [#646](https://github.com/nikhilsoman/synlynk/pull/646) | 2026-08-02 |
++| [92](./92-pr650-sandbox-db-fallback.md) | PR #650 — Sandbox DB Fallback: Don't Crash When $HOME Is Read-Only | [#650](https://github.com/nikhilsoman/synlynk/pull/650) | 2026-08-02 |
++| [92](./92-prTBD-local-doctor-aider-check.md) | The Doctor That Didn't Check Its Own Patient — Closing a Gap in Local Agent Onboarding | TBD | 2026-08-02 |
++| [93](./93-prTBD-omlx-port-8000.md) | 8080 vs. 8000 — When the Design Doc and the Actual Binary Disagree | TBD | 2026-08-02 |
++| [93](./93-pr670-fleet-matrix-ci-live.md) | PR #670 — Dry matrix in CI + real live smoke for Proven | [#670](https://github.com/nikhilsoman/synlynk/pull/670) | 2026-08-02 |
++| [94](./94-prTBD-omlx-api-key.md) | 94-prTBD-omlx-api-key | — | — |
++| [95](./95-prTBD-omlx-litellm-provider-prefix.md) | 95-prTBD-omlx-litellm-provider-prefix | — | — |
++| [96](./96-pr676-worktree-audit-clean.md) | PR #676 — synlynk worktree audit/clean: automating the hygiene protocol | [#676](https://github.com/nikhilsoman/synlynk/pull/676) | 2026-08-03 |
++| [96](./96-prTBD-omlx-aider-edit-format.md) | 96-prTBD-omlx-aider-edit-format | — | — |
++| [100](./100-pr850-851-tui-slack-bugfixes.md) | 100-pr850-851-tui-slack-bugfixes | — | — |
++| [101](./101-pr853-watching-synlynk-guide.md) | 101-pr853-watching-synlynk-guide | — | — |
++| [132](./132-pr1202-harness-agent-terminology-sweep.md) | 132-pr1202-harness-agent-terminology-sweep | — | — |
++| [133](./133-pr1199-charter-corpus-references.md) | PR #1199 — Grounding Charters in the Corpus, Not the Spec | [#1260](https://github.com/nikhilsoman/synlynk/pull/1260) | 2026-08-29 |
++| [144](./144-pr1311-phase4-db-schema-dual-read-write.md) | PR #1311 — Harness vs. Agent Separation Phase 4: Database Schema Dual-Read / Dual-Write | [#1311](https://github.com/nikhilsoman/synlynk/pull/1311) | 2026-08-31 |
++| [145](./145-pr1312-wire-charter-into-dispatch-context.md) | PR #1312 — Wire Charter Content into Dispatch and Execution Context | [#1312](https://github.com/nikhilsoman/synlynk/pull/1312) | 2026-08-31 |
++| [146](./146-pr1313-governs-backlog-automation.md) | PR #1313 — GOVERNS Backlog Automation: Auto-Associate Discovered and Planned Work | [#1313](https://github.com/nikhilsoman/synlynk/pull/1313) | 2026-08-31 |
++| [147](./147-pr1314-doctor-warn-todo-drift.md) | 147-pr1314-doctor-warn-todo-drift | — | — |
++| [148](./148-pr1315-decide-record-worktree-docs-path.md) | 148-pr1315-decide-record-worktree-docs-path | — | — |
++| [149](./149-pr1316-doctor-tc9-live-gh-write-probe.md) | 149-pr1316-doctor-tc9-live-gh-write-probe | — | — |
+ 
+ ## Per-PR Post Template
+ 
