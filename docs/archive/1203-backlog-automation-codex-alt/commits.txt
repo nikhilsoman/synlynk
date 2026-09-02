@@ -1,0 +1,5 @@
+1b61df22 docs: regenerate command reference for backlog note/scan-session (#1203)
+4ec0713e feat: wire synlynk backlog note/scan-session CLI (#1203)
+582958c7 feat: add goal resolution and filing to backlog automation (#1203)
+d2fb3e28 feat: add backlog dedup helpers (#1203)
+391bed97 feat: add backlog_proposals ledger table (#1203)
