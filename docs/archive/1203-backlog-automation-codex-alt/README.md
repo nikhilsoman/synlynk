@@ -27,7 +27,7 @@ against or cherry-picking into the shipped #1313 implementation later.
 
 - `backlog_automation.py` — the core module as implemented by job-45231bd5
 - `test_backlog_automation.py` — its 15-test suite (all passing in isolation)
-- `full-diff.patch` — diff of the relevant files vs. `origin/main` at archive time
+- `full-diff.patch` — complete seven-file diff of PR #1304 (`856f0283` -> `1b61df22`), including `synlynk/taxonomy.py`
 - `commits.txt` — the 5 commits from `dispatch/codex/job-45231bd5`
 
 ## Related
