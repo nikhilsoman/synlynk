@@ -51,6 +51,12 @@ def run_sweep_pass(assignee: str = "nikhilsoman") -> Dict[str, int]:
     summary = {"advanced": 0, "parked": 0, "failed": 0}
     repo_path = os.getcwd()
 
+    try:
+        from synlynk.backlog import auto_promote_backlog
+        auto_promote_backlog()
+    except Exception:
+        pass
+
     for story in _ready_stories():
         authority = check_authority(
             "task_dispatch:implement",

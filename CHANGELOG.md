@@ -11,6 +11,10 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Cadence-breaker resilience engine:** markdown append conflict auto-rebase,
+  active-job circuit breaking at 500k zero-file tokens or $5, startup harness
+  failover, and dead-PID daemon worktree cleanup.
+
 - **Charter Content & Structure Schema**
   - Charters now require YAML frontmatter (`schema_version`, `role`, `description`, `durability`, `tools`, `credentials`) plus three markdown sections (`## Instructions`, `## Authority & Escalation`, `## Workflow Ownership`), enforced via a new `synlynk/charter_schema.py` validator wired into `propose_charter_revision`.
   - Retired the dead `.synlynk/agents/<id>.yaml` projection file and `regenerate_agent_projection()` — its only field (`capability_grants`) was write-only, never read.

@@ -43,6 +43,9 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `backlog capture` (secondary) — open
 - `backlog list` (secondary) — open
 - `backlog sync` (secondary) — open
+- `backlog ingest` (secondary) — open
+- `backlog triage` (primary) — open
+- `backlog auto-promote` (secondary) — open
 - `roadmap add` (secondary) — sustain
 - `open` (primary) — open
 - `launch` (primary) — open
@@ -50,11 +53,13 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 
 ## Tier 2 — Execute
 
+- `media generate` (secondary) — sustain
 - `models list` (secondary) — sustain
 - `models show` (secondary) — sustain
 - `models discover` (secondary) — sustain
 - `dispatch` (primary) — execute
 - `backfill-capability-ratings` (secondary) — execute
+- `charters adapt` (secondary) — sustain
 - `jobs` (primary) — execute
 - `jobs handoff` (secondary) — execute
 - `jobs reap` (secondary) — execute
@@ -88,6 +93,9 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `local doctor` (secondary) — sustain
 - `upgrade` (secondary) — sustain
 - `rollback` (secondary) — sustain
+- `relay status` (secondary) — visualize
+- `relay send` (secondary) — execute
+- `relay tail` (secondary) — visualize
 
 ## Tier 3 — Team / Enterprise
 

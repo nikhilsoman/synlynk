@@ -163,6 +163,10 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [161](./161-pr1337-subscription-cost-amortization.md) | PR #1337 — Subscription Cost Amortization and True-Up | [#1337](https://github.com/nikhilsoman/synlynk/pull/1337) | 2026-09-02 |
 
 | [162](./162-pr1339-first-class-model-registry.md) | First-Class Models: Giving Dispatch a Real Registry | TBD | 2026-09-02 |
+| [163](./163-pr1346-cadence-breaker-resilience.md) | PR #1346 — Cadence-Breaker Resilience Engine | [#1346](https://github.com/nikhilsoman/synlynk/pull/1346) | 2026-09-02 |
+| [164](./164-pr1347-autonomous-growth-engine.md) | PR #1347 — Autonomous Growth & Marketing Engine | [#1347](https://github.com/nikhilsoman/synlynk/pull/1347) | 2026-09-02 |
+| [166](./166-pr1349-pm-backlog-triage-engine.md) | PR #1349 — PM Autonomous Backlog Triaging & Story Formation Engine | [#1349](https://github.com/nikhilsoman/synlynk/pull/1349) | 2026-09-02 |
+| [167](./167-pr1350-living-charter-adaptive-routing.md) | Living Charters and Capability-Gated Adaptive Routing | #1350 | 2026-09-02 |
 
 ## Per-PR Post Template
 

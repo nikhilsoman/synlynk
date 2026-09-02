@@ -1,11 +1,33 @@
 # synlynk Memory
 
+## PM Autonomous Backlog Triaging & Story Formation Engine (decided/shipped 2026-09-02)
+- **Shipped:** PR #1349 (resolves #1340, story `story-c70350f9`, linked to `goal-6733bbf1`). Implements autonomous GitHub issue ingestion, multi-layered semantic/SHA-256 deduplication, structured story synthesis, testable acceptance criteria generation, complexity tiering, and auto-promotion to `state.db` ready stories. [@agy]
+- **Database Schema Migration:** Added `backlog_items` SQLite table in `synlynk/db.py` (migration version 8) with indexing over `status`, `issue_number`, and `fingerprint`.
+- **Deduplication Engine:** `is_duplicate_issue()` in `synlynk/backlog.py` prevents duplicate entries across `backlog_items`, `stories`, and merged PR/commit history.
+- **Story Synthesizer:** `synthesize_story_from_issue()` assigns role charters (`dev`, `qa`, `architect`, `pm`, `marketing`, `tpm`), GOVERNS stages, complexity tiers (Tier 1/2/3), extracts/synthesizes testable criteria, and associates with active roadmap goals.
+- **CLI & Sweep Wiring:** Exposed `synlynk backlog ingest [--sync-github]`, `synlynk backlog triage [--auto-promote]`, and `synlynk backlog auto-promote [--min-tier N]`. Registered in `COMMAND_TAXONOMY` and wired into `run_sweep_pass()` in `synlynk/tpm_sweep.py`.
+- **Verification:** Unit tests in `tests/test_backlog.py`, verification test `test_feat_pm_autonomous_backlog_triaging__story_c70350f9` in `tests/test_agent_cli.py`.
+- **Blog Post:** `docs/blog/166-pr1349-pm-backlog-triage-engine.md`.
+
+## Cross-Harness Event Relay (implemented 2026-09-02)
+- Added typed `EventEnvelope` and `ActorIdentifier` models, SQLite-backed relay event/mailbox tables, SSE streaming, and JSON-RPC messaging for cross-harness agent coordination.
+- CLI commands: `synlynk relay start`, `status`, `send`, and `tail`.
+
 ## Strategic Research & Architecture Initiatives (opened 2026-09-02)
 - **#1339 (Inter-Agent Event Relay & Messaging Bus):** Story `story-522f42cc`, linked to `goal-ef42902a`. Real-time SSE/JSON-RPC relay bus enabling cross-harness subagent messaging, mid-flight steering, and artifact exchange. [@agy]
 - **#1340 (PM Autonomous Backlog Triaging & Story Formation):** Story `story-c70350f9`, linked to `goal-6733bbf1`. Operationalizes PM's durable loop to autonomously ingest GitHub issues, perform semantic goal-clustering, synthesize acceptance criteria, and promote ready stories. [@agy]
 - **#1341 (Ephemeral Swarm Execution Infrastructure Drivers):** Story `story-611003e0`, linked to `goal-005ea87d`. Pluggable ephemeral cloud runner drivers (Fly.io micro-VMs, Kubernetes Job pods, Hetzner Cloud) for massive parallel swarm execution with hard budget ceilings. [@agy]
 - **#1342 (Living Charter Evolution & Capability-Gated Adaptive Routing):** Story `story-3699e01b`, linked to `goal-adb60ccc`. Dynamically recalibrates dispatch routing weights from verified telemetry and automatically proposes living charter revisions when empirical competencies shift. [@agy]
 - **#1343 (First-Class Model Registry & Complexity Dispatch):** Story `story-da31fea8`, linked to `goal-005ea87d`. Canonical Model & ModelFamily registry, local environment discovery, entitlement tiers, differential rate cards, and complexity-aware dispatch routing. [@agy]
+
+## Autonomous Growth & Marketing Engine (decided/shipped 2026-09-02)
+- **Shipped:** PR #1347 (story `story-9a3a7311`, relates to `goal-0c4e96ff`, `goal-9ef9a965`). Implements autonomous growth, blog frontmatter quality gating, living documentation sync, social draft export, and media asset generation. [@agy]
+- **Blog Quality Gate:** `validate_blog_post_frontmatter()` in `synlynk/marketing.py` enforces strict YAML frontmatter schema (`title`, `author`, `date`, `pr`, `version`, `tags`). Integrated with `update_blog_index()` and `synlynk pr check`.
+- **Living Documentation Sync:** `scripts/generate_command_docs.py` integrated into `synlynk instructions update` to prevent command reference and README drift.
+- **Social Announcement Export:** `extract_social_changelog_snippets()` automatically drafts tweets and changelog snippets to `.synlynk/social_drafts.json`.
+- **Media Asset Generator:** Added `synlynk media generate` CLI command and `synlynk/media.py` rendering high-resolution SVG architecture flowcharts and OpenGraph cards.
+- **Verification:** Unit tests in `tests/test_marketing.py`, `tests/test_media.py`, `tests/test_docs_sync.py`, and `test_featmarketing_implement_living_docs_sync` in `tests/test_agent_cli.py`.
+- **Blog Post:** `docs/blog/164-pr1347-autonomous-growth-engine.md`.
 
 ## Sentinel Guard: Token Bloat & Cost Inflation Detection (decided/shipped 2026-09-02)
 - **Shipped:** PR #1334 (closes #1073, story `story-a4b90a20`, relates to #1068). Adds Sentinel pattern and telemetry checks to detect anomalous token-per-file-touched ratios and cost inflation on completed and historical jobs. [@agy]
@@ -358,6 +380,16 @@ HTTP Context Server (v0.7, `localhost:27471`) is the underlying transport.
 
 ## CLI Version Drift Warning (2026-09-02)
 
+## Living Charter Evolution and Adaptive Routing (2026-09-02)
+
+The `capability_ledger` stores verified model/harness/domain outcomes with Beta
+priors and 30-day recency half-life decay. Adaptive dispatch can use expected
+value (posterior success probability times criticality over amortized cost plus
+latency penalty) once a domain has evidence; deterministic routing remains the
+first-run fallback. `synlynk charters adapt` reports capability divergence above
+25% and writes reviewable proposal files only when explicitly requested, so
+empirical learning does not silently change governance. [@codex]
+
 When invoked inside a synlynk checkout, the CLI compares its running package
 version with the enclosing repository's `VERSION` file. If the installed version
 is older, it emits a non-blocking stderr warning with a forced pipx reinstall
@@ -414,6 +446,16 @@ ledger preserves API-equivalent value separately from realized cash outlay;
 `synlynk cost true-up --month YYYY-MM` records the end-of-cycle variance as a
 `true_up_reconciliation` entry. Local `zero_cost` harnesses always record
 `actual_usd=0.0`.
+[@codex]
+
+## Cadence-Breaker Resilience Engine (#1346, 2026-09-02)
+
+Added bounded recovery for autonomous dispatch: `synlynk/rebase.py` resolves
+supported markdown append conflicts, sentinel can terminate jobs at 500k
+zero-file tokens or $5, dispatch can fail over after an immediate harness
+startup failure, and daemon reconciliation marks dead-PID jobs
+`killed_zombie` while removing leaked worktrees. Unsupported conflicts and
+uncertain process ownership remain fail-closed.
 [@codex]
 
 ## Conventions

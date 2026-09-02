@@ -9,6 +9,91 @@ from __future__ import annotations
 import json
 import re
 import time
+from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
+from typing import Any, ClassVar
+import uuid
+
+
+RELAY_EVENT_TYPES = (
+    "agent_started",
+    "task_progress",
+    "artifact_published",
+    "review_requested",
+    "steering_injected",
+    "agent_completed",
+)
+
+
+@dataclass(frozen=True)
+class ActorIdentifier:
+    """Stable identity for an agent participating in a relay."""
+
+    workspace_id: str
+    member_id: str
+    agent_role: str
+    harness: str
+    job_id: str
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, value: dict) -> "ActorIdentifier":
+        return cls(**{field: value.get(field) for field in cls.__dataclass_fields__})
+
+
+@dataclass(frozen=True)
+class EventEnvelope:
+    """Wire representation of a cross-harness event."""
+
+    event_id: str
+    timestamp: str
+    sender: ActorIdentifier
+    event_type: str
+    payload: dict[str, Any]
+    recipient: ActorIdentifier | None = None
+
+    EVENT_TYPES: ClassVar[tuple[str, ...]] = RELAY_EVENT_TYPES
+
+    def __post_init__(self):
+        if self.event_type not in self.EVENT_TYPES:
+            raise ValueError(f"unknown relay event type: {self.event_type}")
+
+    @classmethod
+    def create(cls, sender: ActorIdentifier, event_type: str, payload: dict,
+               recipient: ActorIdentifier | None = None) -> "EventEnvelope":
+        return cls(
+            event_id=f"evt-{uuid.uuid4().hex[:8]}",
+            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            sender=sender,
+            event_type=event_type,
+            payload=dict(payload),
+            recipient=recipient,
+        )
+
+    def to_dict(self) -> dict:
+        value = asdict(self)
+        value.pop("EVENT_TYPES", None)
+        return value
+
+    def to_json(self) -> str:
+        return json.dumps(self.to_dict(), sort_keys=True)
+
+    @classmethod
+    def from_dict(cls, value: dict) -> "EventEnvelope":
+        sender = value.get("sender")
+        recipient = value.get("recipient")
+        return cls(
+            event_id=value["event_id"], timestamp=value["timestamp"],
+            sender=sender if isinstance(sender, ActorIdentifier) else ActorIdentifier.from_dict(sender),
+            recipient=(recipient if isinstance(recipient, ActorIdentifier) else ActorIdentifier.from_dict(recipient)) if recipient else None,
+            event_type=value["event_type"], payload=dict(value.get("payload") or {}),
+        )
+
+    @classmethod
+    def from_json(cls, value: str) -> "EventEnvelope":
+        return cls.from_dict(json.loads(value))
 
 
 _ROLE_LOGIN_RE = re.compile(r"^synlynk-[a-z0-9]+-([a-z]+)\[bot\]$")

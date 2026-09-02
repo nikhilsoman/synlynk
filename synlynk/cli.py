@@ -354,6 +354,13 @@ def build_parser() -> argparse.ArgumentParser:
     models_discover_parser = models_sub.add_parser("discover", help="Probe installed harnesses and local runtimes")
     models_discover_parser.add_argument("--json", action="store_true", dest="json_output")
 
+    media_parser = subparsers.add_parser("media", help="Manage and generate media assets")
+    media_sub = media_parser.add_subparsers(dest="media_action")
+    media_generate_parser = media_sub.add_parser("generate", help="Generate SVG diagrams and OpenGraph preview cards")
+    media_generate_parser.add_argument("--type", choices=["all", "diagram", "og-card", "svg", "og"], default="all", help="Media type to generate")
+    media_generate_parser.add_argument("--title", default="Autonomous Growth & Marketing Engine", help="Title for media asset")
+    media_generate_parser.add_argument("--output", "-o", default=None, help="Output file or directory path")
+
     scan_parser = subparsers.add_parser(
         "scan", help="Scan workspace environment (repos, harnesses, agents, skills)")
     scan_parser.add_argument("--deep", action="store_true",
@@ -691,7 +698,11 @@ def build_parser() -> argparse.ArgumentParser:
              "(synlynk identity init --role); fails closed if none (#569). "
              "Also hints routing to a GH-capable agent unless --force-agent (#426).")
     dispatch_parser.add_argument("--task-type", default=None, dest="task_type",
-        help="Classify the dispatch task (for example, review) for task-specific handling")
+                                 help="Classify the dispatch task (for example, review) for task-specific handling")
+    dispatch_parser.add_argument("--task-domain", default=None, dest="task_domain",
+                                 help="Capability domain used by adaptive EV routing")
+    dispatch_parser.add_argument("--criticality", type=float, default=1.0,
+                                 help="Task criticality multiplier for adaptive routing")
     dispatch_parser.add_argument(
         "--gh-write-target-kind",
         choices=["issue", "pr"],
@@ -792,8 +803,20 @@ def build_parser() -> argparse.ArgumentParser:
     relay_sub = relay_parser.add_subparsers(dest="relay_action")
 
     relay_start_p = relay_sub.add_parser("start", help="Start relay broker (foreground)")
-    relay_start_p.add_argument("--port", type=int, default=None,
-        help=f"Port to listen on (default: {SynlynkRelay.RELAY_PORT})")
+    relay_start_p.add_argument("--port", type=int, default=7432,
+        help="Port to listen on (default: 7432)")
+    relay_start_p.add_argument("--daemon", action="store_true", help="Start in the background")
+
+    relay_status_p = relay_sub.add_parser("status", help="Show relay health")
+    relay_status_p.add_argument("--relay-url", default=None, dest="relay_url")
+
+    relay_send_p = relay_sub.add_parser("send", help="Send a message to an agent")
+    relay_send_p.add_argument("--to-agent", required=True, dest="to_agent")
+    relay_send_p.add_argument("--message", required=True)
+    relay_send_p.add_argument("--relay-url", default=None, dest="relay_url")
+
+    relay_tail_p = relay_sub.add_parser("tail", help="Stream relay events")
+    relay_tail_p.add_argument("--relay-url", default=None, dest="relay_url")
 
     relay_broadcast_p = relay_sub.add_parser("broadcast", help="Send a broadcast event to the relay")
     relay_broadcast_p.add_argument("body", help="Message body")
@@ -908,6 +931,12 @@ def build_parser() -> argparse.ArgumentParser:
     score_list_parser.add_argument("--engg", default=None)
     score_list_parser.add_argument("--org", default=None)
     score_list_parser.add_argument("--industry", default=None)
+    charters_parser = subparsers.add_parser("charters", help="Manage living role charters")
+    charters_sub = charters_parser.add_subparsers(dest="charters_action")
+    charters_adapt_parser = charters_sub.add_parser("adapt", help="Detect empirical charter drift")
+    charters_adapt_parser.add_argument("--threshold", type=float, default=0.25)
+    charters_adapt_parser.add_argument("--write-proposals", action="store_true",
+                                       help="Write reviewable proposal files")
     attest_parser = score_sub.add_parser("attest", help="Retroactively attest model version")
     attest_parser.add_argument("story_id")
     attest_parser.add_argument("--model", required=True)
@@ -981,6 +1010,16 @@ def build_parser() -> argparse.ArgumentParser:
     backlog_sync_parser.add_argument("--dry-run", action="store_true", help="Dry run without creating real issues")
     backlog_sync_parser.add_argument("--parent", type=int, default=None, dest="parent_issue")
     backlog_sync_parser.add_argument("--stage", default=None, help="Filter by GOVERNS stage")
+
+    backlog_ingest_parser = backlog_sub.add_parser("ingest", help="Ingest open GitHub issues into backlog")
+    backlog_ingest_parser.add_argument("--sync-github", "--sync-gh", action="store_true", dest="sync_github", help="Sync/link GitHub issues during ingest")
+    backlog_ingest_parser.add_argument("--limit", type=int, default=100, help="Maximum issues to fetch")
+
+    backlog_triage_parser = backlog_sub.add_parser("triage", help="Triage staged backlog items into structured stories")
+    backlog_triage_parser.add_argument("--auto-promote", action="store_true", dest="auto_promote", help="Auto-promote triaged items to ready stories")
+
+    backlog_autopromote_parser = backlog_sub.add_parser("auto-promote", help="Promote triaged backlog items to ready state.db stories")
+    backlog_autopromote_parser.add_argument("--min-tier", type=int, default=1, dest="min_tier", help="Minimum complexity tier to promote")
 
     quota_parser = subparsers.add_parser(
         "quota",
@@ -1077,6 +1116,8 @@ def build_parser() -> argparse.ArgumentParser:
         "session": session_parser,
         "instructions": instructions_parser,
         "local": local_parser,
+        "media": media_parser,
+        "models": models_parser,
         "relay": relay_parser,
         "run": run_parser,
         "team": team_parser,
@@ -1129,6 +1170,7 @@ def main(argv=None) -> None:
     from synlynk.capability_sweep import cmd_capability_sweep
     from synlynk.db import cmd_story_done
     from synlynk.policy_cli import cmd_policy_check_merge, cmd_policy_show, cmd_policy_sync_branch_protection
+    from synlynk.charters import cmd_charters_adapt
 
     from synlynk import (
         HARNESS_CAPABILITY_BASELINES,
@@ -1381,6 +1423,8 @@ def main(argv=None) -> None:
                                  static_baseline=getattr(args, "static_baseline", False),
                                  requires_gh_write=_effective_requires_gh_write,
                                  task_type=_effective_task_type,
+                                 task_domain=getattr(args, "task_domain", None),
+                                 criticality=getattr(args, "criticality", 1.0),
                                  gh_write_target_kind=_resolved_gh_write_target_kind,
                                  requires=getattr(args, "requires", []),
                                  context_mode=getattr(args, "context_mode", "task"),
@@ -1425,6 +1469,11 @@ def main(argv=None) -> None:
             help_parsers.get("agent", parser).print_help()
     elif args.command == "backfill-capability-ratings":
         cmd_backfill_capability_ratings()
+    elif args.command == "charters":
+        if getattr(args, "charters_action", None) == "adapt":
+            cmd_charters_adapt(threshold=args.threshold, dry_run=not args.write_proposals)
+        else:
+            parser.parse_args(["charters", "--help"])
     elif args.command == "jobs":
         if getattr(args, "jobs_cmd", None) == "handoff":
             _warn_deprecated_harness_flag(cli_tokens)
@@ -1444,7 +1493,23 @@ def main(argv=None) -> None:
     elif args.command == "relay":
         action = getattr(args, "relay_action", None)
         if action == "start":
-            cmd_relay_start(port=getattr(args, "port", None))
+            if getattr(args, "daemon", False):
+                from synlynk.relay import RelayServer
+                from synlynk.daemon import _daemonize_via_reexec, _daemon_state_path
+                _daemonize_via_reexec("synlynk.relay._relay_child_main", _daemon_state_path("relay.log"))
+                print(f"relay started in background on port {args.port}")
+            else:
+                from synlynk.relay import RelayServer
+                RelayServer(port=args.port).start(background=False)
+        elif action == "status":
+            from synlynk.relay import cmd_relay_status
+            cmd_relay_status(args)
+        elif action == "send":
+            from synlynk.relay import cmd_relay_send
+            cmd_relay_send(args)
+        elif action == "tail":
+            from synlynk.relay import cmd_relay_tail
+            cmd_relay_tail(args)
         elif action == "broadcast":
             cmd_relay_broadcast(
                 kind=getattr(args, "kind", "message"),
@@ -1590,6 +1655,31 @@ def main(argv=None) -> None:
                         print(f"[dry-run] Would create issue for {it['story_id']}: '{it['title']}' (stage: {it['stage']}, role: {it['role']})")
                     else:
                         print(f"✗ Failed to sync {it['story_id']}: '{it['title']}'")
+        elif args.backlog_action == "ingest":
+            from synlynk.backlog import ingest_backlog
+            res = ingest_backlog(
+                sync_github=getattr(args, "sync_github", False),
+                limit=getattr(args, "limit", 100),
+            )
+            print(f"✓ Ingested {res['ingested']} backlog items ({res['fetched']} fetched, {res['duplicates']} duplicates skipped).")
+        elif args.backlog_action == "triage":
+            from synlynk.backlog import triage_backlog
+            triaged = triage_backlog(auto_promote=getattr(args, "auto_promote", False))
+            if not triaged:
+                print("No pending backlog items to triage.")
+            else:
+                print(f"✓ Triaged {len(triaged)} backlog items:")
+                for item in triaged:
+                    print(f"  - [{item.get('role', 'dev')}] {item.get('title')} (Tier {item.get('complexity_tier', 2)}, Goal: {item.get('goal_id', 'none')})")
+        elif args.backlog_action == "auto-promote":
+            from synlynk.backlog import auto_promote_backlog
+            promoted = auto_promote_backlog(min_tier=getattr(args, "min_tier", 1))
+            if not promoted:
+                print("No backlog items eligible for auto-promotion.")
+            else:
+                print(f"✓ Promoted {len(promoted)} backlog items to ready stories:")
+                for story in promoted:
+                    print(f"  - {story.get('story_id')}: '{story.get('title')}' (role: {story.get('role')}, stage: {story.get('governs_stage')})")
     elif args.command == "policy" and args.policy_command == "show":
         sys.exit(cmd_policy_show())
     elif args.command == "policy" and args.policy_command == "check-merge":
@@ -1719,6 +1809,17 @@ def main(argv=None) -> None:
             cmd_models_discover(json_output=args.json_output)
         else:
             help_parsers.get("models", parser).print_help()
+    elif args.command == "media":
+        from synlynk.media import cmd_media_generate
+        action = getattr(args, "media_action", None)
+        if action == "generate":
+            cmd_media_generate(
+                media_type=getattr(args, "type", "all"),
+                title=getattr(args, "title", "Autonomous Growth & Marketing Engine"),
+                output=getattr(args, "output", None),
+            )
+        else:
+            help_parsers.get("media", parser).print_help()
     elif args.command == "scan":
         cmd_scan(
             deep=getattr(args, "deep", False),

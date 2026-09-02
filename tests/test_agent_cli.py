@@ -1555,5 +1555,159 @@ def test_investigate_rootcause_costtoken_bloat_on_jobcf837848_and_add_costratio_
     assert any(a["code"] == "TOKEN_BLOAT" and "1,210,000 tok/file" in a["message"] for a in alerts_ratio)
 
 
+def test_featmarketing_implement_living_docs_sync(tmp_path, monkeypatch):
+    from synlynk.marketing import (
+        validate_blog_post_frontmatter,
+        extract_social_changelog_snippets,
+        update_blog_index,
+    )
+    from synlynk.media import cmd_media_generate, generate_svg_diagram, generate_og_card
+    from synlynk.taxonomy import COMMAND_TAXONOMY
+
+    # 1. Frontmatter validation
+    blog_file = tmp_path / "164-pr1347-autonomous-growth-engine.md"
+    blog_file.write_text("""---
+title: "PR #1347 — Autonomous Growth & Marketing Engine"
+author: "Agy (Gemini)"
+date: "2026-09-02"
+pr: "#1347"
+version: "0.19.0"
+tags: ["growth", "marketing", "automation"]
+---
+
+## What This PR Shipped
+- Implemented YAML schema validation for blog post frontmatter.
+- Integrated automated command docs generation into instructions update.
+- Added SVG diagram and OpenGraph preview card generator.
+""", encoding="utf-8")
+
+    meta = validate_blog_post_frontmatter(blog_file)
+    assert meta["title"] == "PR #1347 — Autonomous Growth & Marketing Engine"
+    assert meta["author"] == "Agy (Gemini)"
+    assert meta["version"] == "0.19.0"
+    assert meta["tags"] == ["growth", "marketing", "automation"]
+
+    # 2. Social snippet extraction
+    draft_path = tmp_path / ".synlynk" / "social_drafts.json"
+    draft = extract_social_changelog_snippets(blog_file, output_path=draft_path)
+    assert draft["pr"] == "#1347"
+    assert "#growth" in draft["tweet"]
+    assert "### v0.19.0" in draft["changelog"]
+    assert draft_path.exists()
+
+    # 3. Media asset generation
+    media_dir = tmp_path / "media"
+    results = cmd_media_generate(media_type="all", title="Marketing Engine", output=str(media_dir))
+    assert "diagram" in results
+    assert "og_card" in results
+
+    # 4. Taxonomy & Command Surface verification
+    media_entries = [e for e in COMMAND_TAXONOMY if e["command"] == "media generate"]
+    assert len(media_entries) == 1
+    assert media_entries[0]["governs_stage"] == "sustain"
+
+
+def test_feat_pm_autonomous_backlog_triaging__story_c70350f9(tmp_path, monkeypatch, capsys):
+    from unittest.mock import patch, MagicMock
+    import synlynk
+    from synlynk.backlog import (
+        fetch_open_github_issues,
+        is_duplicate_issue,
+        synthesize_story_from_issue,
+        ingest_backlog,
+        triage_backlog,
+        auto_promote_backlog,
+    )
+    from synlynk.db import _migrate_db
+    from synlynk.taxonomy import COMMAND_TAXONOMY
+    from synlynk.cli import main
+
+    # 1. Verify schema migration creates backlog_items table
+    db_file = tmp_path / "test_state.db"
+    conn = sqlite3.connect(str(db_file))
+    _migrate_db(conn)
+
+    cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='backlog_items'")
+    assert cursor.fetchone() is not None
+
+    monkeypatch.setattr("synlynk.backlog._get_connection", lambda db_conn=None: conn)
+
+    # 2. Verify issue synthesis (role, tier, criteria, goal mapping)
+    issue_mock = {
+        "number": 1340,
+        "title": "PM Autonomous Backlog Triaging & Story Formation Engine",
+        "body": "Operationalize PM backlog triage.\n\n- [ ] Ingest open issues\n- [ ] Synthesize acceptance criteria\n- [ ] Auto-promote to ready stories",
+        "labels": [{"name": "role:pm"}],
+        "author": {"login": "nikhilsoman"},
+    }
+    story = synthesize_story_from_issue(issue_mock, db_conn=conn)
+    assert story["role"] == "pm"
+    assert story["complexity_tier"] in (2, 3)
+    assert story["goal_id"] == "goal-6733bbf1"
+    assert len(story["acceptance_criteria"]) >= 3
+    assert "Ingest open issues" in story["acceptance_criteria"][0]
+
+    # 3. Verify deduplication against state.db and closed PRs
+    mock_issues = [
+        issue_mock,
+        {
+            "number": 1341,
+            "title": "Ephemeral Swarm Execution Infrastructure Drivers",
+            "body": "Fly.io and Kubernetes ephemeral job pods",
+            "labels": [{"name": "role:dev"}],
+            "author": {"login": "nikhilsoman"},
+        },
+    ]
+
+    with patch("synlynk.backlog.fetch_open_github_issues", return_value=mock_issues):
+        with patch("synlynk.backlog.is_duplicate_issue", return_value=(False, "")):
+            # Ingest
+            res = ingest_backlog(db_conn=conn)
+            assert res["fetched"] == 2
+            assert res["ingested"] == 2
+
+            # Duplicate check
+            is_dup, _ = is_duplicate_issue(issue_mock, db_conn=conn, check_closed_prs=False)
+            assert is_dup is True
+
+    # 4. Verify triage and auto-promotion to state.db stories and goal_contributions
+    triaged = triage_backlog(auto_promote=False, db_conn=conn)
+    assert len(triaged) == 2
+    assert all(t["status"] == "triaged" for t in triaged)
+
+    promoted = auto_promote_backlog(db_conn=conn, min_tier=1)
+    assert len(promoted) == 2
+    for p in promoted:
+        assert p["story_id"].startswith("story-")
+        story_in_db = conn.execute(
+            "SELECT story_id, title, role, readiness, status FROM stories WHERE story_id = ?",
+            (p["story_id"],),
+        ).fetchone()
+        assert story_in_db is not None
+        assert story_in_db[3] == "ready"
+        assert story_in_db[4] == "open"
+
+    # 5. Verify CLI subcommands (ingest, triage, auto-promote)
+    with patch("synlynk.backlog.fetch_open_github_issues", return_value=[]):
+        main(["backlog", "ingest"])
+        out = capsys.readouterr().out
+        assert "Ingested 0 backlog items" in out
+
+        main(["backlog", "triage"])
+        out = capsys.readouterr().out
+        assert "No pending backlog items to triage" in out
+
+        main(["backlog", "auto-promote"])
+        out = capsys.readouterr().out
+        assert "No backlog items eligible for auto-promotion" in out
+
+    # 6. Verify taxonomy registration
+    cmds = {e["command"] for e in COMMAND_TAXONOMY}
+    assert "backlog ingest" in cmds
+    assert "backlog triage" in cmds
+    assert "backlog auto-promote" in cmds
+
+
+
 
 
