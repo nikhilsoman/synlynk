@@ -1496,5 +1496,54 @@ def test_manifest_auth_prevent_dropped_oauth_codes_in_manifest_callback_server()
         shutdown()
 
 
+def test_investigate_rootcause_costtoken_bloat_on_jobcf837848_and_add_costratio_sentinel_guard_1073(tmp_path):
+    """Investigate issue #1073: Root-cause anomalous cost and token bloat on job-cf837848
+    ($5.26 / 7.6M input tokens on issue #1068).
+    Verifies Sentinel pattern detection for anomalous token-per-file ratio and cost inflation.
+    """
+    import synlynk
+    from synlynk.sentinel import check_token_bloat, _read_sentinel_alerts
+
+    sentinel_file = tmp_path / "sentinel.md"
+
+    # 1. Verify direct invocation of sentinel check with job-cf837848 metrics
+    alerts = synlynk.check_token_bloat(
+        in_tokens=7_600_000,
+        out_tokens=50_000,
+        cost_usd=5.26,
+        files_touched=0,
+        job_id="job-cf837848",
+        agent="codex",
+        sentinel_path=str(sentinel_file),
+    )
+
+    assert len(alerts) == 2
+    alert_codes = [a["code"] for a in alerts]
+    assert "TOKEN_BLOAT" in alert_codes
+    assert "COST_INFLATION" in alert_codes
+
+    # 2. Verify alert content in sentinel.md
+    raw_alerts = sentinel_file.read_text()
+    assert "TOKEN_BLOAT" in raw_alerts
+    assert "COST_INFLATION" in raw_alerts
+    assert "job-cf837848" in raw_alerts
+    assert "7,650,000 tokens" in raw_alerts
+    assert "0 files touched" in raw_alerts
+    assert "$5.26" in raw_alerts
+
+    # 3. Verify ratio check with files touched > 0
+    alerts_ratio = check_token_bloat(
+        in_tokens=1_200_000,
+        out_tokens=10_000,
+        cost_usd=1.50,
+        files_touched=1,
+        job_id="job-ratio-test",
+        agent="agy",
+        sentinel_path=str(sentinel_file),
+    )
+    assert any(a["code"] == "TOKEN_BLOAT" and "1,210,000 tok/file" in a["message"] for a in alerts_ratio)
+
+
+
 
 
