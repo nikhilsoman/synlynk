@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #1334 — Sentinel Guard for Token Bloat and Cost Inflation | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <div class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Sep 02, 2026</span>
+        
+          <span class="blog-post-pr">PR #1334</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #1334 — Sentinel Guard for Token Bloat and Cost Inflation</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>Prior to this investigation, synlynk focused on establishing full fleet parity and operational stability across its four primary harnesses (Claude, Codex, Agy, and Grok). Sentinel monitors existed to catch command repetition loops (<code>SUCCESS_LOOP</code>), recurring subprocess crashes (<code>FLATLINE</code>), quota exhaustion (<code>QUOTA_EXHAUSTED</code>), and verification skips (<code>VERIFY_SKIP</code>). However, the system lacked a metric-driven guard to evaluate the economic efficiency and token intensity of individual job executions.</p>
+<h2>Strategic Shifts in This PR (if any)</h2>
+<p>Issue #1073 surfaced a live incident on <code>job-cf837848</code> (dispatch for issue #1068), where an agent job consumed <strong>7.6M input tokens</strong> and accumulated <strong>$5.26 USD</strong> across 6+ hours before timing out, without touching a single file in the worktree.</p>
+<p>This investigation shifted Sentinel from purely checking process health and stderr patterns to actively monitoring <strong>resource consumption anomalies</strong> — specifically calculating the <strong>token-per-file-touched ratio</strong> and alerting on <strong>cost inflation</strong>.</p>
+<h2>What This PR Shipped</h2>
+<ol>
+<li><strong>Root-Cause Investigation of <code>job-cf837848</code> (#1073):</strong>
+<ul>
+<li>Dispatched under <code>--context-mode full</code>, injecting extensive project-wide documentation and state tables.</li>
+<li>Headless multi-turn execution caused the context history to expand monotonically turn after turn.</li>
+<li>The agent stalled in internal loops without landing changes, leading to an infinite token-to-file ratio (7.65M tokens across 0 files touched).</li>
+</ul>
+</li>
+<li><strong>New Sentinel Guard in <code>synlynk/sentinel.py</code> (<code>check_token_bloat</code>):</strong>
+<ul>
+<li><strong>Zero-File Token Bloat (<code>TOKEN_BLOAT</code>):</strong> Triggers a <code>WARN</code> (at $\ge 500\text{k}$ tokens) or <code>CRITICAL</code> (at $\ge 2\text{M}$ tokens) when a job finishes or times out with zero files modified.</li>
+<li><strong>Anomalous Token-to-File Ratio (<code>TOKEN_BLOAT</code>):</strong> Computes $\frac{\text{total_tokens}}{\text{files_touched}}$ and triggers alerts when consumption exceeds $500\text{k}$ tokens/file (with <code>CRITICAL</code> at $\ge 1\text{M}$ tokens/file).</li>
+<li><strong>Cost Inflation (<code>COST_INFLATION</code>):</strong> Flags jobs accumulating $\ge $3.00$ (<code>WARN</code>) or $\ge $5.00$ (<code>CRITICAL</code>).</li>
+<li><strong>Telemetry Scanning:</strong> Reads <code>.synlynk/telemetry.json</code> to identify historical anomalies when invoked during periodic daemon passes or CLI checks.</li>
+</ul>
+</li>
+<li><strong>Reconciliation Integration in <code>synlynk/jobs.py</code>:</strong>
+<ul>
+<li>Evaluated automatically in <code>_reconcile_jobs()</code> and <code>_reconcile_daemon_jobs()</code> upon job completion.</li>
+</ul>
+</li>
+<li><strong>Comprehensive Test Suite:</strong>
+<ul>
+<li>Unit tests in <code>tests/test_sentinel.py</code> verifying ratio calculations, threshold boundaries, zero-file detections, and telemetry parsing.</li>
+<li>Issue regression test <code>test_investigate_rootcause_costtoken_bloat_on_jobcf837848_and_add_costratio_sentinel_guard_1073</code> in <code>tests/test_agent_cli.py</code>.</li>
+</ul>
+</li>
+</ol>
+<h2>Brainstorm Visuals Used</h2>
+<ul>
+<li><code>docs/brainstorm/sentinel-observability/sentinel-observability-system.html</code> (Sentinel Observability Architecture)</li>
+</ul>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>In an unattended autonomous loop, runaway agents can silently burn budgets and rate limits if not checked. By adding token-per-file ratio and cost inflation guards into Sentinel, synlynk ensures that inefficient context usage and spinning agents are immediately flagged in <code>.synlynk/sentinel.md</code>, <code>synlynk status</code>, and Vizor dashboards before budget limits are breached.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>With token bloat and cost inflation detection active in the Sentinel layer, future work can implement dynamic context pruning and automated throttle/re-prompt policies when in-flight turn tokens exceed expected bounds.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
