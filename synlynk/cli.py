@@ -698,7 +698,11 @@ def build_parser() -> argparse.ArgumentParser:
              "(synlynk identity init --role); fails closed if none (#569). "
              "Also hints routing to a GH-capable agent unless --force-agent (#426).")
     dispatch_parser.add_argument("--task-type", default=None, dest="task_type",
-        help="Classify the dispatch task (for example, review) for task-specific handling")
+                                 help="Classify the dispatch task (for example, review) for task-specific handling")
+    dispatch_parser.add_argument("--task-domain", default=None, dest="task_domain",
+                                 help="Capability domain used by adaptive EV routing")
+    dispatch_parser.add_argument("--criticality", type=float, default=1.0,
+                                 help="Task criticality multiplier for adaptive routing")
     dispatch_parser.add_argument(
         "--gh-write-target-kind",
         choices=["issue", "pr"],
@@ -927,6 +931,12 @@ def build_parser() -> argparse.ArgumentParser:
     score_list_parser.add_argument("--engg", default=None)
     score_list_parser.add_argument("--org", default=None)
     score_list_parser.add_argument("--industry", default=None)
+    charters_parser = subparsers.add_parser("charters", help="Manage living role charters")
+    charters_sub = charters_parser.add_subparsers(dest="charters_action")
+    charters_adapt_parser = charters_sub.add_parser("adapt", help="Detect empirical charter drift")
+    charters_adapt_parser.add_argument("--threshold", type=float, default=0.25)
+    charters_adapt_parser.add_argument("--write-proposals", action="store_true",
+                                       help="Write reviewable proposal files")
     attest_parser = score_sub.add_parser("attest", help="Retroactively attest model version")
     attest_parser.add_argument("story_id")
     attest_parser.add_argument("--model", required=True)
@@ -1160,6 +1170,7 @@ def main(argv=None) -> None:
     from synlynk.capability_sweep import cmd_capability_sweep
     from synlynk.db import cmd_story_done
     from synlynk.policy_cli import cmd_policy_check_merge, cmd_policy_show, cmd_policy_sync_branch_protection
+    from synlynk.charters import cmd_charters_adapt
 
     from synlynk import (
         HARNESS_CAPABILITY_BASELINES,
@@ -1412,6 +1423,8 @@ def main(argv=None) -> None:
                                  static_baseline=getattr(args, "static_baseline", False),
                                  requires_gh_write=_effective_requires_gh_write,
                                  task_type=_effective_task_type,
+                                 task_domain=getattr(args, "task_domain", None),
+                                 criticality=getattr(args, "criticality", 1.0),
                                  gh_write_target_kind=_resolved_gh_write_target_kind,
                                  requires=getattr(args, "requires", []),
                                  context_mode=getattr(args, "context_mode", "task"),
@@ -1456,6 +1469,11 @@ def main(argv=None) -> None:
             help_parsers.get("agent", parser).print_help()
     elif args.command == "backfill-capability-ratings":
         cmd_backfill_capability_ratings()
+    elif args.command == "charters":
+        if getattr(args, "charters_action", None) == "adapt":
+            cmd_charters_adapt(threshold=args.threshold, dry_run=not args.write_proposals)
+        else:
+            parser.parse_args(["charters", "--help"])
     elif args.command == "jobs":
         if getattr(args, "jobs_cmd", None) == "handoff":
             _warn_deprecated_harness_flag(cli_tokens)

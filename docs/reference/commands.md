@@ -59,6 +59,7 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `models discover` (secondary) — sustain
 - `dispatch` (primary) — execute
 - `backfill-capability-ratings` (secondary) — execute
+- `charters adapt` (secondary) — sustain
 - `jobs` (primary) — execute
 - `jobs handoff` (secondary) — execute
 - `jobs reap` (secondary) — execute

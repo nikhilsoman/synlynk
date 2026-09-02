@@ -380,6 +380,16 @@ HTTP Context Server (v0.7, `localhost:27471`) is the underlying transport.
 
 ## CLI Version Drift Warning (2026-09-02)
 
+## Living Charter Evolution and Adaptive Routing (2026-09-02)
+
+The `capability_ledger` stores verified model/harness/domain outcomes with Beta
+priors and 30-day recency half-life decay. Adaptive dispatch can use expected
+value (posterior success probability times criticality over amortized cost plus
+latency penalty) once a domain has evidence; deterministic routing remains the
+first-run fallback. `synlynk charters adapt` reports capability divergence above
+25% and writes reviewable proposal files only when explicitly requested, so
+empirical learning does not silently change governance. [@codex]
+
 When invoked inside a synlynk checkout, the CLI compares its running package
 version with the enclosing repository's `VERSION` file. If the installed version
 is older, it emits a non-blocking stderr warning with a forced pipx reinstall
