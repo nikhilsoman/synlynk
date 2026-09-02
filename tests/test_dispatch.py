@@ -1710,6 +1710,35 @@ def test_grok_permission_flags_emits_always_approve_when_shell_or_tests_granted(
     assert "dontAsk" not in test_flags
 
 
+def test_grok_dispatch_deduplicates_boolean_permission_and_baseline_flags(project_dir, monkeypatch):
+    import synlynk.dispatch as dispatch_mod
+
+    captured = {}
+
+    def fake_popen(command, *args, **kwargs):
+        captured["command"] = command
+
+        class FakeProc:
+            pid = 12345
+
+        return FakeProc()
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(dispatch_mod, "_dispatch_flags_for_agent", lambda agent: ["--always-approve"])
+    monkeypatch.setattr(dispatch_mod, "_preflight_dispatch", lambda *a, **kw: {"passed": True})
+
+    dispatch_mod.dispatch_agent(
+        agent="grok",
+        task="run tests",
+        grants=["run:shell"],
+        force_agent=True,
+        skip_preflight=True,
+        context_mode="none",
+    )
+
+    assert captured["command"][2].count("--always-approve") == 1
+
+
 def test_permissions_to_flags_agy_warns_on_empty_permissions(capsys):
     from synlynk.dispatch import _permissions_to_flags
 
