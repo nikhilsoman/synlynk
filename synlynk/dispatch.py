@@ -129,6 +129,33 @@ def _dispatch_flags_for_agent(agent: str) -> list:
     return flags
 
 
+_BOOLEAN_CLI_FLAGS = frozenset(
+    {
+        "--always-approve",
+        "--dangerously-skip-permissions",
+        "--no-auto-commits",
+        "--non-interactive",
+        "--print",
+        "--verbose",
+        "--yes",
+        "--yes-always",
+    }
+)
+
+
+def _deduplicate_boolean_cli_flags(flags: list) -> list:
+    """Remove repeated boolean flags while preserving stable flag ordering."""
+    seen = set()
+    result = []
+    for flag in flags or []:
+        if flag in _BOOLEAN_CLI_FLAGS:
+            if flag in seen:
+                continue
+            seen.add(flag)
+        result.append(flag)
+    return result
+
+
 def _ensure_daemon_job_context_columns(conn) -> None:
     """Add context_mode / context_bytes if missing (legacy schemas + unit fixtures).
 
@@ -2745,6 +2772,10 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                     flags = flags + ["--add-dir", git_common_dir]
         except Exception:
             pass
+
+    # Baseline, override, permission, and harness-specific sources can each
+    # contribute the same boolean flag (notably Grok's --always-approve).
+    flags = _deduplicate_boolean_cli_flags(flags)
 
     probe_model = _pkg("_probe_model_version")
     model_at_dispatch = model or (probe_model(agent, cli) if probe_model else "unknown")

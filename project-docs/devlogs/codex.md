@@ -22,3 +22,12 @@
 - Added regression tests in `tests/test_dispatch.py`, plus spec, plan, blog
   post 157, and index/memory updates.
 [@codex]
+
+## 2026-09-02 — Grok Boolean Dispatch Flag Deduplication (#1327)
+
+- Added stable normalization of known boolean CLI flags at the final dispatch
+  assembly boundary, preventing duplicate `--always-approve` values.
+- Added Grok launch coverage in `tests/test_dispatch.py` and the focused
+  regression test requested by the verification command in `tests/test_agent_cli.py`.
+- Added the design spec, plan, blog post 159, and blog index entry.
+[@codex]
