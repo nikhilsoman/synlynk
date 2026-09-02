@@ -5,6 +5,7 @@
 - **#1340 (PM Autonomous Backlog Triaging & Story Formation):** Story `story-c70350f9`, linked to `goal-6733bbf1`. Operationalizes PM's durable loop to autonomously ingest GitHub issues, perform semantic goal-clustering, synthesize acceptance criteria, and promote ready stories. [@agy]
 - **#1341 (Ephemeral Swarm Execution Infrastructure Drivers):** Story `story-611003e0`, linked to `goal-005ea87d`. Pluggable ephemeral cloud runner drivers (Fly.io micro-VMs, Kubernetes Job pods, Hetzner Cloud) for massive parallel swarm execution with hard budget ceilings. [@agy]
 - **#1342 (Living Charter Evolution & Capability-Gated Adaptive Routing):** Story `story-3699e01b`, linked to `goal-adb60ccc`. Dynamically recalibrates dispatch routing weights from verified telemetry and automatically proposes living charter revisions when empirical competencies shift. [@agy]
+- **#1343 (First-Class Model Registry & Complexity Dispatch):** Story `story-da31fea8`, linked to `goal-005ea87d`. Canonical Model & ModelFamily registry, local environment discovery, entitlement tiers, differential rate cards, and complexity-aware dispatch routing. [@agy]
 
 ## Sentinel Guard: Token Bloat & Cost Inflation Detection (decided/shipped 2026-09-02)
 - **Shipped:** PR #1334 (closes #1073, story `story-a4b90a20`, relates to #1068). Adds Sentinel pattern and telemetry checks to detect anomalous token-per-file-touched ratios and cost inflation on completed and historical jobs. [@agy]
