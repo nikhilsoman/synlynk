@@ -77,6 +77,7 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `sentinel list` (secondary) — execute
 - `sentinel clear` (secondary) — execute
 - `cost log` (secondary) — sustain
+- `cost true-up` (secondary) — sustain
 - `credit grant` (secondary) — sustain
 - `quota` (secondary) — sustain
 - `capability sweep` (secondary) — sustain
