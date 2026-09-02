@@ -4,6 +4,10 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 
 ## Series Index
 
+| [168](./168-pr1351-ephemeral-swarm-cloud-runners.md) | PR #1351 - Ephemeral Swarm Cloud Runners | [#1351](https://github.com/nikhilsoman/synlynk/pull/1351) | 2026-09-02 |
+
+| [168](./168-pr1351-ephemeral-swarm-cloud-runners.md) | PR #1351 - Ephemeral Swarm Cloud Runners | [#1351](https://github.com/nikhilsoman/synlynk/pull/1351) | 2026-09-02 |
+
 | Post | Title | PR | Date |
 |---|---|---|---|
 | [00](./00-why-polyglot-harness.md) | Why We Need a Polyglot Harness | — | 2026-06-09 |

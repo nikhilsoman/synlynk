@@ -97,7 +97,7 @@ _PROJECT_DOC_KEEP_N = 50
 # Bump when a new schema migration is added.  This is deliberately kept in
 # SQLite's small built-in metadata slot so checking it does not touch the DB
 # file or create a backup on already-migrated connections.
-_DB_MIGRATION_VERSION = 8
+_DB_MIGRATION_VERSION = 9
 
 _GENERATORS_BY_FILENAME = {
     "todo.md": "_generate_todo_md",
@@ -537,6 +537,21 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
                 created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
+            CREATE TABLE IF NOT EXISTS swarm_runners (
+                runner_id TEXT PRIMARY KEY,
+                driver TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'provisioning',
+                job_spec TEXT NOT NULL DEFAULT '{}',
+                provisioned_at TEXT NOT NULL,
+                last_telemetry_at TEXT,
+                exit_code INTEGER,
+                commit_sha TEXT,
+                results_json TEXT,
+                error TEXT,
+                destroyed_at TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_swarm_runners_status
+                ON swarm_runners(status, provisioned_at);
             CREATE INDEX IF NOT EXISTS idx_backlog_items_status ON backlog_items(status);
             CREATE INDEX IF NOT EXISTS idx_backlog_items_issue_number ON backlog_items(issue_number);
             CREATE INDEX IF NOT EXISTS idx_backlog_items_fingerprint ON backlog_items(fingerprint);
