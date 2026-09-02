@@ -98,6 +98,8 @@ class RelayBroker:
             event_type, payload = "review_requested", {"pr_url": params.get("pr_url"), "diff_summary": params.get("diff_summary", "")}
         elif method in ("relay.broadcast", "broadcast"):
             event_type, payload, recipient = "task_progress", params.get("payload") or {"topic": params.get("topic"), "message": params.get("message", "")}, None
+        elif method in ("relay.runner_progress", "runner_progress"):
+            event_type, payload, recipient = "runner_progress", params.get("payload") or {}, None
         else:
             raise ValueError(f"method not found: {method}")
         envelope = EventEnvelope.create(sender, event_type, payload, recipient)
