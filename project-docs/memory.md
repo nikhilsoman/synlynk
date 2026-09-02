@@ -389,6 +389,14 @@ contract (`port, wait_for_code, shutdown`) unchanged. See
 `docs/superpowers/specs/2026-09-02-manifest-callback-concurrency-design.md`.
 [@claude]
 
+## First-Class Model Registry (#1339, 2026-09-02)
+
+Phase 1/2 adds a canonical model-family/model registry backed by SQLite, with
+explicit context geometry, rate cards, and entitlement tiers. `synlynk models
+list|show|discover` expose built-ins and safe environment discovery for Claude,
+Codex, Agy, Grok, Ollama, and oMLX. Doctor verifies catalog availability.
+[@codex]
+
 ## Boolean Dispatch Flag Deduplication (#1327, 2026-09-02)
 
 Dispatch now removes repeated occurrences of known boolean CLI flags after

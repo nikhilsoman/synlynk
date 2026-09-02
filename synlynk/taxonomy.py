@@ -31,6 +31,12 @@ def iter_leaf_commands(parser: argparse.ArgumentParser, prefix: tuple = ()):
 
 
 COMMAND_TAXONOMY = [
+    {"command": "models list", "governs_stage": "sustain", "maturity_tier": 2, "prominence": "secondary",
+     "orientation_gateway": False, "audience": "human", "trigger_phrases": ["list registered models"], "hook_event": None},
+    {"command": "models show", "governs_stage": "sustain", "maturity_tier": 2, "prominence": "secondary",
+     "orientation_gateway": False, "audience": "human", "trigger_phrases": ["show model details"], "hook_event": None},
+    {"command": "models discover", "governs_stage": "sustain", "maturity_tier": 2, "prominence": "secondary",
+     "orientation_gateway": False, "audience": "human", "trigger_phrases": ["discover installed models"], "hook_event": None},
     # --- Tier 0: FTUE ---
     {"command": "init", "governs_stage": "open", "maturity_tier": 0, "prominence": "primary",
      "orientation_gateway": False, "audience": "human",
