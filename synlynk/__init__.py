@@ -954,6 +954,28 @@ CREATE TABLE IF NOT EXISTS stories (
     created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS backlog_items (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    item_id             TEXT UNIQUE,
+    title               TEXT NOT NULL,
+    body                TEXT,
+    issue_number        INTEGER,
+    gh_issue            TEXT,
+    author              TEXT,
+    labels              TEXT DEFAULT '[]',
+    fingerprint         TEXT UNIQUE,
+    role                TEXT NOT NULL DEFAULT 'dev',
+    stage               TEXT NOT NULL DEFAULT 'open',
+    governs_stage       TEXT NOT NULL DEFAULT 'open',
+    complexity_tier     INTEGER DEFAULT 2,
+    goal_id             TEXT,
+    acceptance_criteria TEXT DEFAULT '[]',
+    status              TEXT NOT NULL DEFAULT 'staged',
+    story_id            TEXT,
+    created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS model_families (
     family_id TEXT PRIMARY KEY,
     provider TEXT NOT NULL,

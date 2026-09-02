@@ -1,5 +1,14 @@
 # synlynk Memory
 
+## PM Autonomous Backlog Triaging & Story Formation Engine (decided/shipped 2026-09-02)
+- **Shipped:** PR #1349 (resolves #1340, story `story-c70350f9`, linked to `goal-6733bbf1`). Implements autonomous GitHub issue ingestion, multi-layered semantic/SHA-256 deduplication, structured story synthesis, testable acceptance criteria generation, complexity tiering, and auto-promotion to `state.db` ready stories. [@agy]
+- **Database Schema Migration:** Added `backlog_items` SQLite table in `synlynk/db.py` (migration version 8) with indexing over `status`, `issue_number`, and `fingerprint`.
+- **Deduplication Engine:** `is_duplicate_issue()` in `synlynk/backlog.py` prevents duplicate entries across `backlog_items`, `stories`, and merged PR/commit history.
+- **Story Synthesizer:** `synthesize_story_from_issue()` assigns role charters (`dev`, `qa`, `architect`, `pm`, `marketing`, `tpm`), GOVERNS stages, complexity tiers (Tier 1/2/3), extracts/synthesizes testable criteria, and associates with active roadmap goals.
+- **CLI & Sweep Wiring:** Exposed `synlynk backlog ingest [--sync-github]`, `synlynk backlog triage [--auto-promote]`, and `synlynk backlog auto-promote [--min-tier N]`. Registered in `COMMAND_TAXONOMY` and wired into `run_sweep_pass()` in `synlynk/tpm_sweep.py`.
+- **Verification:** Unit tests in `tests/test_backlog.py`, verification test `test_feat_pm_autonomous_backlog_triaging__story_c70350f9` in `tests/test_agent_cli.py`.
+- **Blog Post:** `docs/blog/166-pr1349-pm-backlog-triage-engine.md`.
+
 ## Cross-Harness Event Relay (implemented 2026-09-02)
 - Added typed `EventEnvelope` and `ActorIdentifier` models, SQLite-backed relay event/mailbox tables, SSE streaming, and JSON-RPC messaging for cross-harness agent coordination.
 - CLI commands: `synlynk relay start`, `status`, `send`, and `tail`.

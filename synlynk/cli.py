@@ -1001,6 +1001,16 @@ def build_parser() -> argparse.ArgumentParser:
     backlog_sync_parser.add_argument("--parent", type=int, default=None, dest="parent_issue")
     backlog_sync_parser.add_argument("--stage", default=None, help="Filter by GOVERNS stage")
 
+    backlog_ingest_parser = backlog_sub.add_parser("ingest", help="Ingest open GitHub issues into backlog")
+    backlog_ingest_parser.add_argument("--sync-github", "--sync-gh", action="store_true", dest="sync_github", help="Sync/link GitHub issues during ingest")
+    backlog_ingest_parser.add_argument("--limit", type=int, default=100, help="Maximum issues to fetch")
+
+    backlog_triage_parser = backlog_sub.add_parser("triage", help="Triage staged backlog items into structured stories")
+    backlog_triage_parser.add_argument("--auto-promote", action="store_true", dest="auto_promote", help="Auto-promote triaged items to ready stories")
+
+    backlog_autopromote_parser = backlog_sub.add_parser("auto-promote", help="Promote triaged backlog items to ready state.db stories")
+    backlog_autopromote_parser.add_argument("--min-tier", type=int, default=1, dest="min_tier", help="Minimum complexity tier to promote")
+
     quota_parser = subparsers.add_parser(
         "quota",
         help="Show per-harness quota headroom / reset windows (5h, hourly, daily, weekly, monthly)",
@@ -1627,6 +1637,31 @@ def main(argv=None) -> None:
                         print(f"[dry-run] Would create issue for {it['story_id']}: '{it['title']}' (stage: {it['stage']}, role: {it['role']})")
                     else:
                         print(f"✗ Failed to sync {it['story_id']}: '{it['title']}'")
+        elif args.backlog_action == "ingest":
+            from synlynk.backlog import ingest_backlog
+            res = ingest_backlog(
+                sync_github=getattr(args, "sync_github", False),
+                limit=getattr(args, "limit", 100),
+            )
+            print(f"✓ Ingested {res['ingested']} backlog items ({res['fetched']} fetched, {res['duplicates']} duplicates skipped).")
+        elif args.backlog_action == "triage":
+            from synlynk.backlog import triage_backlog
+            triaged = triage_backlog(auto_promote=getattr(args, "auto_promote", False))
+            if not triaged:
+                print("No pending backlog items to triage.")
+            else:
+                print(f"✓ Triaged {len(triaged)} backlog items:")
+                for item in triaged:
+                    print(f"  - [{item.get('role', 'dev')}] {item.get('title')} (Tier {item.get('complexity_tier', 2)}, Goal: {item.get('goal_id', 'none')})")
+        elif args.backlog_action == "auto-promote":
+            from synlynk.backlog import auto_promote_backlog
+            promoted = auto_promote_backlog(min_tier=getattr(args, "min_tier", 1))
+            if not promoted:
+                print("No backlog items eligible for auto-promotion.")
+            else:
+                print(f"✓ Promoted {len(promoted)} backlog items to ready stories:")
+                for story in promoted:
+                    print(f"  - {story.get('story_id')}: '{story.get('title')}' (role: {story.get('role')}, stage: {story.get('governs_stage')})")
     elif args.command == "policy" and args.policy_command == "show":
         sys.exit(cmd_policy_show())
     elif args.command == "policy" and args.policy_command == "check-merge":

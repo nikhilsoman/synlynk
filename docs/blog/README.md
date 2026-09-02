@@ -6,11 +6,6 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 
 | Post | Title | PR | Date |
 |---|---|---|---|
-<<<<<<< HEAD
-| [165](./165-pr1348-cross-harness-event-relay.md) | Cross-Harness Event Relay | TBD | 2026-09-02 |
-=======
-| [163](./163-pr1346-cadence-breaker-resilience.md) | PR #1346 - Cadence-Breaker Resilience | [#1346](https://github.com/nikhilsoman/synlynk/pull/1346) | 2026-09-02 |
->>>>>>> origin/main
 | [00](./00-why-polyglot-harness.md) | Why We Need a Polyglot Harness | — | 2026-06-09 |
 | [01](./01-the-project-that-built-synlynk.md) | The Project That Built synlynk | — | 2026-06-09 |
 | [02](./02-pr1-v0.2.0-the-kernel.md) | PR #1 — v0.2.0: Laying the Kernel | [#1](https://github.com/nikhilsoman/synlynk/pull/1) | 2026-05-17 |
@@ -171,6 +166,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [163](./163-pr1346-cadence-breaker-resilience.md) | PR #1346 — Cadence-Breaker Resilience Engine | [#1346](https://github.com/nikhilsoman/synlynk/pull/1346) | 2026-09-02 |
 | [164](./164-pr1347-autonomous-growth-engine.md) | PR #1347 — Autonomous Growth & Marketing Engine | [#1347](https://github.com/nikhilsoman/synlynk/pull/1347) | 2026-09-02 |
 | [165](./165-pr1348-cross-harness-event-relay.md) | PR #1348 — Cross-Harness Inter-Agent Event Relay | [#1348](https://github.com/nikhilsoman/synlynk/pull/1348) | 2026-09-02 |
+| [166](./166-pr1349-pm-backlog-triage-engine.md) | PR #1349 — PM Autonomous Backlog Triaging & Story Formation Engine | [#1349](https://github.com/nikhilsoman/synlynk/pull/1349) | 2026-09-02 |
 
 ## Per-PR Post Template
 

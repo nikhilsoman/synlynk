@@ -43,6 +43,9 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `backlog capture` (secondary) — open
 - `backlog list` (secondary) — open
 - `backlog sync` (secondary) — open
+- `backlog ingest` (secondary) — open
+- `backlog triage` (primary) — open
+- `backlog auto-promote` (secondary) — open
 - `roadmap add` (secondary) — sustain
 - `open` (primary) — open
 - `launch` (primary) — open
