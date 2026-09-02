@@ -160,6 +160,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [158](./158-pr1329-manifest-callback-concurrency.md) | PR #1332 — The GitHub App Manifest Callback Server Could Drop a Code | [#1332](https://github.com/nikhilsoman/synlynk/pull/1332) | 2026-09-02 |
 | [159](./159-pr1333-grok-always-approve-dedup.md) | PR #1335 — Deduplicating Grok's Boolean Dispatch Flags | [#1335](https://github.com/nikhilsoman/synlynk/pull/1335) | 2026-09-02 |
 | [160](./160-pr1334-token-bloat-sentinel-guard.md) | PR #1336 — Sentinel Guard for Token Bloat and Cost Inflation | [#1336](https://github.com/nikhilsoman/synlynk/pull/1336) | 2026-09-02 |
+| [161](./161-pr1337-subscription-cost-amortization.md) | PR #1337 — Subscription Cost Amortization and True-Up | [#1337](https://github.com/nikhilsoman/synlynk/pull/1337) | 2026-09-02 |
 
 ## Per-PR Post Template
 

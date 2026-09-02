@@ -1264,6 +1264,7 @@ _VALID_COST_SOURCES = {
     "estimated_tshirt",
     "estimated_manual",
     "legacy_unknown",
+    "true_up_reconciliation",
 }
 
 

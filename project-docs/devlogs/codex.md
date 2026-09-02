@@ -1,5 +1,14 @@
 # Codex Devlog
 
+## 2026-09-02 - Subscription Cost Amortization and True-Up (#787)
+
+- Added `harness_billing` configuration with subscription, metered overage,
+  and zero-cost modes while retaining legacy payment-model compatibility.
+- Implemented prior-month subscription amortization, capped extra usage, and
+  `synlynk cost true-up` reconciliation rows.
+- Added focused cost tests and blog post 161.
+[@codex]
+
 ## 2026-09-02 — CLI Version Drift Warning (#1188)
 
 - Added the design spec and implementation plan for detecting a stale

@@ -391,6 +391,16 @@ passed twice while preserving repeatable option/value pairs. See
 `docs/superpowers/specs/2026-09-02-grok-always-approve-dedup-design.md`.
 [@codex]
 
+## Subscription Cost Ledger (#787, 2026-09-02)
+
+`harness_billing` is the preferred configuration for payment mode, monthly
+subscription fee, projected tokens, extra usage, and overage caps. The cost
+ledger preserves API-equivalent value separately from realized cash outlay;
+`synlynk cost true-up --month YYYY-MM` records the end-of-cycle variance as a
+`true_up_reconciliation` entry. Local `zero_cost` harnesses always record
+`actual_usd=0.0`.
+[@codex]
+
 ## Conventions
 - Attribution: `[@username]` on all team-mode entries.
 - Session protocol: read last 3 devlog entries at session start. Surface any open threads.

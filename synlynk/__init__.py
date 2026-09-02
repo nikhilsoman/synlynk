@@ -1712,6 +1712,7 @@ def load_config() -> dict:
         "review_stall_timeout_minutes": 90,
         "agents": {},
         "payment_models": {},
+        "harness_billing": {},
         "capability_sweep": {"cost_cap_usd": 10.0},
         "roles": capability_roles if capability_roles is not None else _default_roles_map(),
         "story_classification": {"method": "heuristic"},
@@ -1739,6 +1740,15 @@ def load_config() -> dict:
         for key, val in defaults["nudges"].items():
             if key not in config.get("nudges", {}):
                 config.setdefault("nudges", {})[key] = val
+        if not isinstance(config.get("harness_billing"), dict):
+            config["harness_billing"] = {}
+        for billing in config["harness_billing"].values():
+            if isinstance(billing, dict):
+                billing.setdefault("payment_mode", "pay_as_you_go")
+                billing.setdefault("monthly_base_fee_usd", 0.0)
+                billing.setdefault("projected_monthly_tokens", 10_000_000)
+                billing.setdefault("allow_extra_usage", False)
+                billing.setdefault("extra_usage_cap_usd", None)
         return config
     except (json.JSONDecodeError, IOError):
         return defaults

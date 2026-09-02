@@ -440,6 +440,11 @@ class PaymentValue:
 def _payment_model_config_for_agent(agent: str) -> dict:
     """Return the configured payment model block for a harness."""
     config = _pkg("load_config")() or {}
+    harness_billing = config.get("harness_billing", {})
+    if isinstance(harness_billing, dict) and isinstance(harness_billing.get(agent), dict):
+        billing = dict(harness_billing[agent])
+        billing["mode"] = billing.get("payment_mode", billing.get("mode", "pay_as_you_go"))
+        return billing
     payment_models = config.get("payment_models", {})
     if not isinstance(payment_models, dict):
         return {"mode": "pay_as_you_go"}
@@ -475,10 +480,28 @@ def _subscription_actual_usd(
     prior_used_in = int(row_in[0]) if row_in else 0
     prior_used_out = int(row_out[0]) if row_out else 0
 
-    tier_quota_in = int(pm_config.get("tier_quota_tokens_in") or 0)
-    tier_quota_out = int(pm_config.get("tier_quota_tokens_out") or 0)
-    overage_rate_in = float(pm_config.get("overage_rate_per_1k_in") or 0.0)
-    overage_rate_out = float(pm_config.get("overage_rate_per_1k_out") or 0.0)
+    projected = int(pm_config.get("projected_monthly_tokens") or 10_000_000)
+    now = time.localtime()
+    prior_month = now.tm_mon - 1 or 12
+    prior_year = now.tm_year if now.tm_mon > 1 else now.tm_year - 1
+    prior_prefix = f"{prior_year:04d}-{prior_month:02d}%"
+    conn = get_db()
+    try:
+        prior_total = conn.execute(
+            "SELECT COALESCE(SUM(input_tokens + output_tokens), 0) FROM cost_entries "
+            "WHERE (harness=? OR agent=?) AND session_date LIKE ? "
+            "AND cost_source != 'true_up_reconciliation'",
+            (agent, agent, prior_prefix),
+        ).fetchone()[0]
+    finally:
+        conn.close()
+    projected = max(1, int(prior_total or 0) or projected)
+    amortized_rate = float(pm_config.get("monthly_base_fee_usd") or 0.0) / (projected / 1000.0)
+    tier_quota_in = int(pm_config.get("tier_quota_tokens_in") or projected)
+    tier_quota_out = int(pm_config.get("tier_quota_tokens_out") or projected)
+    rates = _model_rate_for_version(extract_model_version("", agent=agent), agent=agent)
+    overage_rate_in = float(pm_config.get("overage_rate_per_1k_in") or rates["input"])
+    overage_rate_out = float(pm_config.get("overage_rate_per_1k_out") or rates["output"])
 
     cumulative_in = prior_used_in + int(tokens_in or 0)
     cumulative_out = prior_used_out + int(tokens_out or 0)
@@ -489,9 +512,14 @@ def _subscription_actual_usd(
     new_over_out = max(0, cumulative_out - tier_quota_out)
     marginal_over_in = new_over_in - prior_over_in
     marginal_over_out = new_over_out - prior_over_out
-    actual_usd = (marginal_over_in / 1000 * overage_rate_in) + (
-        marginal_over_out / 1000 * overage_rate_out
-    )
+    base_tokens = max(0, min(cumulative_in, tier_quota_in) - min(prior_used_in, tier_quota_in))
+    base_tokens += max(0, min(cumulative_out, tier_quota_out) - min(prior_used_out, tier_quota_out))
+    actual_usd = base_tokens / 1000 * amortized_rate
+    if pm_config.get("allow_extra_usage", False):
+        actual_usd += (marginal_over_in / 1000 * overage_rate_in) + (marginal_over_out / 1000 * overage_rate_out)
+        cap = pm_config.get("extra_usage_cap_usd")
+        if cap is not None:
+            actual_usd = min(actual_usd, base_tokens / 1000 * amortized_rate + float(cap))
 
     pct_in = (cumulative_in / tier_quota_in) if tier_quota_in else 0.0
     pct_out = (cumulative_out / tier_quota_out) if tier_quota_out else 0.0
@@ -590,11 +618,70 @@ def resolve_payment_value(agent: str, tokens_in: int, tokens_out: int) -> Paymen
             credit_remaining_usd=credit_remaining_usd,
         )
 
+    if mode == "zero_cost":
+        return PaymentValue(api_equivalent_usd=api_equivalent_usd, actual_usd=0.0, mode=mode)
+
     return PaymentValue(
         api_equivalent_usd=api_equivalent_usd,
         actual_usd=api_equivalent_usd,
         mode="pay_as_you_go",
     )
+
+
+def cmd_cost_true_up(month: str = None, harness: str = None) -> dict:
+    """Reconcile subscription cash outlay for a calendar month."""
+    from synlynk.db import _insert_cost_row
+
+    month = month or time.strftime("%Y-%m")
+    if not re.match(r"^\d{4}-\d{2}$", month):
+        raise ValueError("month must use YYYY-MM format")
+    config = _pkg("load_config")() or {}
+    billing = config.get("harness_billing", {})
+    billing = billing if isinstance(billing, dict) else {}
+    agents = [harness] if harness else list(billing)
+    agents = [a for a in agents if isinstance(billing.get(a), dict) and billing[a].get("payment_mode", billing[a].get("mode")) == "subscription"]
+    conn = _pkg("_get_db")()
+    try:
+        where = ["session_date LIKE ?", "cost_source != 'true_up_reconciliation'"]
+        params = [month + "%"]
+        if harness:
+            where.append("(harness=? OR agent=?)")
+            params.extend([harness, harness])
+        actual = float(conn.execute("SELECT COALESCE(SUM(actual_usd), 0) FROM cost_entries WHERE " + " AND ".join(where), params).fetchone()[0] or 0.0)
+    finally:
+        conn.close()
+    billed = 0.0
+    conn = _pkg("_get_db")()
+    try:
+        for agent_name in agents:
+            cfg = billing[agent_name]
+            billed += float(cfg.get("monthly_base_fee_usd") or 0.0)
+            if not cfg.get("allow_extra_usage", False):
+                continue
+            total_tokens = conn.execute(
+                "SELECT COALESCE(SUM(input_tokens + output_tokens), 0) FROM cost_entries "
+                "WHERE (harness=? OR agent=?) AND session_date LIKE ? "
+                "AND cost_source != 'true_up_reconciliation'",
+                (agent_name, agent_name, month + "%"),
+            ).fetchone()[0]
+            threshold = int(cfg.get("projected_monthly_tokens") or 10_000_000)
+            overage_tokens = max(0, int(total_tokens or 0) - threshold)
+            rates = _model_rate_for_version(extract_model_version("", agent=agent_name), agent=agent_name)
+            extra = overage_tokens / 1000.0 * ((rates["input"] + rates["output"]) / 2.0)
+            cap = cfg.get("extra_usage_cap_usd")
+            billed += min(extra, float(cap)) if cap is not None else extra
+    finally:
+        conn.close()
+    variance = billed - actual
+    note = f"End-of-month subscription true-up reconciliation for {month}"
+    _insert_cost_row(session_date=month + "-01", agent=harness, harness=harness,
+                     cost_source="true_up_reconciliation", total_cost_usd=variance,
+                     api_equivalent_usd=0.0, actual_usd=variance,
+                     payment_mode="subscription", notes=note)
+    _pkg("_generate_costs_md")()
+    _pkg("_dr_sync")("costs.md")
+    print(f"True-up {month}: billed ${billed:.4f}, recorded ${actual:.4f}, variance ${variance:.4f}")
+    return {"month": month, "billed_usd": billed, "recorded_usd": actual, "variance_usd": variance}
 
 
 _FIXED_DEFAULT_TOKENS_IN = 5000
