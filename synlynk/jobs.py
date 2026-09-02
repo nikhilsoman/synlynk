@@ -1355,6 +1355,18 @@ def _reconcile_jobs() -> None:
                 out_tokens,
                 model_version,
             )
+            check_token_bloat = _pkg("check_token_bloat")
+            if check_token_bloat:
+                files_touched_list = _pkg("_worktree_files_touched")(job.get("worktree_path")) or []
+                check_token_bloat(
+                    in_tokens=in_tokens,
+                    out_tokens=out_tokens,
+                    cost_usd=cost_usd,
+                    files_touched=len(files_touched_list),
+                    job_id=job.get("id", ""),
+                    agent=job.get("agent", ""),
+                    sentinel_path=sentinel_path,
+                )
             task_sha256, task_preview = _task_sha256_and_preview(job.get("task"))
             summary = _pkg("_write_job_summary")(
                 job.get("id", ""),
@@ -1783,6 +1795,18 @@ def _reconcile_jobs() -> None:
                 else:
                     _finalize_completed_worktree_job(job, git_state)
                     _apply_dispatch_gate(job)
+            check_token_bloat = _pkg("check_token_bloat")
+            if check_token_bloat:
+                files_count = len(summary_files_touched) if isinstance(summary_files_touched, (list, tuple, set)) else int(summary_files_touched or 0)
+                check_token_bloat(
+                    in_tokens=in_tokens,
+                    out_tokens=out_tokens,
+                    cost_usd=cost_usd,
+                    files_touched=files_count,
+                    job_id=job.get("id", ""),
+                    agent=job.get("agent", ""),
+                    sentinel_path=sentinel_path,
+                )
             task_sha256, task_preview = _task_sha256_and_preview(job.get("task"))
             summary = _pkg("_write_job_summary")(
                 job.get("id", ""),
@@ -2503,6 +2527,17 @@ def _reconcile_daemon_jobs() -> None:
                     emitted_by="_reconcile_daemon_jobs",
                 )
                 cost_usd = _job_cost_usd(agent, in_tokens, out_tokens, model_version)
+                check_token_bloat = _pkg("check_token_bloat")
+                if check_token_bloat:
+                    files_count = len(files_touched) if isinstance(files_touched, (list, tuple, set)) else int(files_touched or 0)
+                    check_token_bloat(
+                        in_tokens=in_tokens,
+                        out_tokens=out_tokens,
+                        cost_usd=cost_usd,
+                        files_touched=files_count,
+                        job_id=job_id,
+                        agent=agent,
+                    )
                 if status == "failed_unverified" and not summary_status:
                     summary_status = terminal_status_for_unknown_exit()
                 task_sha256, task_preview = _task_sha256_and_preview(task)

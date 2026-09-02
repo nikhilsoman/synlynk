@@ -1,5 +1,13 @@
 # synlynk Memory
 
+## Sentinel Guard: Token Bloat & Cost Inflation Detection (decided/shipped 2026-09-02)
+- **Shipped:** PR #1334 (closes #1073, story `story-a4b90a20`, relates to #1068). Adds Sentinel pattern and telemetry checks to detect anomalous token-per-file-touched ratios and cost inflation on completed and historical jobs. [@agy]
+- **Root Cause Resolution (Incident `job-cf837848`):** Investigated $5.26 / 7.6M input token bloat on issue #1068. Root cause identified as `--context-mode full` monotonic context expansion across multi-turn headless stall with zero files touched.
+- **Sentinel Anomaly Detection:** Implemented `check_token_bloat()` in `synlynk/sentinel.py` configured with default thresholds (`500k` tokens with 0 files touched, `500k` tokens/file ratio, `$3.00` WARN / `$5.00` CRITICAL cost inflation).
+- **Integration & Scanning:** Wired into `_reconcile_jobs()` and `_reconcile_daemon_jobs()` in `synlynk/jobs.py` and `check_sentinel_patterns()` in `synlynk/sentinel.py` with telemetry fallback scanning across `.synlynk/telemetry.json`.
+- **Verification:** Unit tests in `tests/test_sentinel.py`, regression test `test_investigate_rootcause_costtoken_bloat_on_jobcf837848_and_add_costratio_sentinel_guard_1073` in `tests/test_agent_cli.py`. All tests pass.
+- **Blog Post:** `docs/blog/160-pr1334-token-bloat-sentinel-guard.md`.
+
 ## Fleet Parity: Add Grok to agent_slots in Default Config Templates (decided/shipped 2026-09-02)
 - **Shipped:** PR #1327 (closes #863, story `story-1744cccb`). Adds `grok` to default `agent_slots` in `load_config()` and verifies clean dispatch slot resolution and diagnostic profile checks. [@agy]
 - **Core 4 Fleet Parity:** `agent_slots` defaults in `synlynk/__init__.py` now explicitly include `{"claude": "claude", "agy": "agy", "codex": "codex", "grok": "grok"}`, aligning runtime fallback behavior with `instructions.py` generated templates.
