@@ -1701,7 +1701,7 @@ def load_config() -> dict:
         "project_id": None,
         "identity_slug": None,
         "project_docs_dir": "project-docs",
-        "agent_slots": {"claude": "claude", "agy": "agy", "codex": "codex"},  # AGY CLI binary is named 'agy' — update when binary is renamed
+        "agent_slots": {"claude": "claude", "agy": "agy", "codex": "codex", "grok": "grok"},  # AGY CLI binary is named 'agy' — update when binary is renamed
         "workgroup_agents": [],
         "last_housekeeping_date": None,
         "team": None,

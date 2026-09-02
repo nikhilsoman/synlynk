@@ -1,5 +1,12 @@
 # synlynk Memory
 
+## Fleet Parity: Add Grok to agent_slots in Default Config Templates (decided/shipped 2026-09-02)
+- **Shipped:** PR #1327 (closes #863, story `story-1744cccb`). Adds `grok` to default `agent_slots` in `load_config()` and verifies clean dispatch slot resolution and diagnostic profile checks. [@agy]
+- **Core 4 Fleet Parity:** `agent_slots` defaults in `synlynk/__init__.py` now explicitly include `{"claude": "claude", "agy": "agy", "codex": "codex", "grok": "grok"}`, aligning runtime fallback behavior with `instructions.py` generated templates.
+- **Diagnostics & Slot Resolution:** Ensures `.agents/` profile validation (`_hc_agent_profiles`) in `synlynk doctor` and CLI slot resolutions recognize Grok consistently across initialized and uninitialized environments.
+- **Verification:** Unit test `test_config_add_grok_to_agent_slots_in_synlynk_and_default_config_templates` in `tests/test_agent_cli.py`, updated `test_load_config_has_new_defaults` in `tests/test_synlynk.py`. All tests pass.
+- **Blog Post:** `docs/blog/156-pr1327-agent-slots-grok.md`.
+
 ## Research: Multi-Agent Swarms & Fleet Orchestration Engine (opened 2026-09-02)
 - **Filed:** Issue #1326 (story `story-95238497`, linked to `goal-005ea87d`). Explores an accelerated multi-agent swarm/fleet engine across all 5 harnesses (Claude, Codex, Agy, Grok, and Local). [@agy]
 - **Lifecycle & Deployment Matrix:** Evaluates initialization, tracking, messaging, and termination across home (interactive CLI/TUI) and away (headless) modes, abstracting harness-specific delegation models.
