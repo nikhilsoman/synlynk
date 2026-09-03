@@ -1,6 +1,6 @@
 # Strategic Review Integration — Design
 
-**Status:** Draft, awaiting user sign-off
+**Status:** Approved (2026-09-03)
 **Branch:** `docs/book-strategic-review-integration` (stacked on `docs/book-part3-field-notebook`, PR #1368, still open — this work depends on the Part III foundry chapters that only exist on that branch)
 **Governs:** New content added to `docs/book/the-supervised-machine-v0.5-DRAFT.html`, sourced from `/Users/nikhilsoman/My Drive/My Companies/Synlynk/Synlynk - August-end Strategic Review.md` (12-exchange strategy discussion, read in full 2026-08-29/09-02), plus fresh domain research into the two sibling "foundry" repos (rxcc, cc-videoreframing).
 
@@ -77,6 +77,22 @@ Project: `RxCC.me — Patient Health Timeline` (Stitch project ID `2056778402899
 3. **GDPR Article 9 consent screen** (mobile) — plain-language data explanation, explicit special-category consent statement, retention/right-to-be-forgotten link, consent toggle defaulting off, a Continue button disabled until consent is given, NEN 7510/audit-log footer note.
 
 **Not yet done, needed before manuscript embedding:** download the screenshot assets locally (`read_asset`-equivalent via Stitch's screenshot download URLs) and land them as static image files under `docs/book/assets/` (new directory — none exists yet), referenced via relative `<img>` src in the HTML chapter rather than the ephemeral Stitch-hosted URLs, which should not be treated as stable/permanent links.
+
+## 4a. Cold-open — "The Gap Lights Up" (added 2026-09-03, post-review)
+
+Not sourced from the Strategic Review document — a separate creative addition raised directly by the user mid-review, brainstormed inline, then drafted on the terms agreed below and committed at `653f7e7` on this branch.
+
+**Origin of the idea:** the user proposed opening the entire book with a dramatic neuron/synapse "epiphany" narrative — dormant neurons, a stray excited neuron reaching threshold and firing, adjacent threat/survival/motor neurons picking up the cue via chemical or electrical transmission per their functional role, ending on the synapse as the bridge that carries context of something important, and an explicit critique that this bridging function is missing in AI today (harnesses/stakeholders optimizing only for their own funnels), building toward what the user's own brief called a collective "singularity."
+
+**Reframing applied before drafting, agreed by the user (not a literal restaging of the brief):**
+- Placed as a short, unlabeled, italicized frame **before** Part 0's divider, not as a numbered narrative arc inside a chapter.
+- Deliberately does **not** resolve into "singularity" as its closing beat. Part 0 already exists specifically to defuse the "AI as god/rapture" register (`"You have two popular settings for this, and both of them are wrong in the same way"`); an unresolved cold-open lets Part 0's actual opening line function as a direct rebuttal to the dramatic register the reader was just put in, rather than the book asserting the rapture framing and then arguing against itself.
+- Point 7 of the original brief (harnesses/stakeholders protecting only their own interests) is folded in only as a scoped, single-sentence closing observation the book can stand behind, not a sweeping unsourced claim about the industry.
+- Grounded in real electrical-vs-chemical-synapse neuroscience (resting potential ≈ −70mV, threshold ≈ −55mV, all-or-none firing, gap-junction speed vs. chemical-synapse modifiability) rather than loosely metaphorical language — checked against general neuroscience knowledge, not against a cited paper; if this draft moves toward a less-informal published version, a citation pass would be worth doing then.
+
+**Placement in the manuscript:** inserted directly ahead of the existing `<div class="part-divider">` for Part 0, as a new `.cold-open` CSS block (page-break before/after, centered, italic serif) — not a `<chapter>` element, no byline, no chapter label, consistent with it functioning as authorial frame rather than one of the four contributors' bylined chapters. Also saved as a standalone fragment at `docs/book/fragments/cold-open-the-gap-lights-up.html`, matching the repo's existing fragment-file convention for new content that gets inlined into the main manuscript.
+
+**Payoff already in the manuscript:** the Prologue chapter "The Gap Between Neurons" (existing, unchanged) later makes the synapse↔harness mapping explicit and literal (`.synlynk/context.md` as neurotransmitter, `policy.json` as receptor, telemetry as the confirmation the signal landed) — so the cold-open's image is planted once, dramatically and unresolved, and paid off once, literally and mechanically, rather than repeated.
 
 ## 5. Sourcing discipline
 
