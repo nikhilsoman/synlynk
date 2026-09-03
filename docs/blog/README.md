@@ -4,8 +4,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 
 ## Series Index
 
-| [168](./168-pr1351-ephemeral-swarm-cloud-runners.md) | PR #1351 - Ephemeral Swarm Cloud Runners | [#1351](https://github.com/nikhilsoman/synlynk/pull/1351) | 2026-09-02 |
-
+| [169](./169-pr1352-zero-risk-onboarding-first-win.md) | PR #1352 - Zero-Risk Onboarding & Instant First-Win Experience | [#1352](https://github.com/nikhilsoman/synlynk/pull/1352) | 2026-09-03 |
 | [168](./168-pr1351-ephemeral-swarm-cloud-runners.md) | PR #1351 - Ephemeral Swarm Cloud Runners | [#1351](https://github.com/nikhilsoman/synlynk/pull/1351) | 2026-09-02 |
 
 | Post | Title | PR | Date |

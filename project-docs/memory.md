@@ -1,5 +1,13 @@
 # synlynk Memory
 
+## Zero-Risk Onboarding & Instant First-Win Experience (decided/shipped 2026-09-03)
+- **Shipped:** PR #1352 (story `story-7a81f33f`, linked to `goal-85656c82`, `goal-06758149`, `goal-6733bbf1`). Implements non-destructive dirty-tree safety guard, streamlined zero-config onboarding (<5s), and diagnostic first-win auto-remediation PR (<2m). [@agy]
+- **Non-Destructive Dirty-Tree Guard:** `guard_dirty_worktree()` in `synlynk/wizard.py` checks `git status --porcelain` before writing workspace configs or charters. If dirty or untracked state is detected, it archives the repository into `.synlynk/backups/init-<timestamp>.tar.gz` and records a git stash (`synlynk-init-safety-backup-<timestamp>`) excluding backup artifacts, ensuring zero developer data loss.
+- **Streamlined Zero-Config Onboarding:** `cmd_wizard_init()` auto-probes installed harnesses (`claude`, `codex`, `agy`, `grok`, `local`), fingerprints codebase tech stacks, provisions all 8 standard workspace agent charters (`dev`, `qa`, `pm`, `architect`, `tpm`, `designer`, `marketing`, `synlynk-bot`) in `.synlynk/agents/` in `<5s`, and auto-invokes `synlynk backlog ingest --sync-github`.
+- **First-Win Diagnostic Remediation Demo:** `synlynk/launch.py` scans for the highest-confidence low-hanging improvements (missing `.gitignore` rules, test coverage gaps, documentation voids), offering 1-click confirmation to dispatch an isolated worktree fix and open a verified GitHub PR in `<2m`.
+- **Verification:** Unit tests in `tests/test_onboarding_safety.py` and regression/e2e test `test_featonboarding_implement_zerorisk_dirty_worktree_and_first_win__story_7a81f33f` in `tests/test_agent_cli.py`.
+- **Blog Post:** `docs/blog/169-pr1352-zero-risk-onboarding-first-win.md`.
+
 ## Ephemeral swarm runners (2026-09-02)
 
 Ephemeral swarm execution uses a pluggable `SwarmRunnerDriver` contract with
