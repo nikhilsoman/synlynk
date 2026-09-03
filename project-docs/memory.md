@@ -1,5 +1,10 @@
 # synlynk Memory
 
+## Autonomous Heal and Strategic Advisory (2026-09-03)
+- Added `synlynk heal` to compose scanning, backlog triage, TPM/swarm dispatch, QA verification, and opt-in PR merging.
+- Added `synlynk decide --audit` to write a four-dimension executive architecture brief and query the configured harness panel.
+- Added autonomous daemon ticks for heal and TPM sweep with SRE heartbeat telemetry. [@codex]
+
 ## Zero-Risk Onboarding & Instant First-Win Experience (decided/shipped 2026-09-03)
 - **Shipped:** PR #1352 (story `story-7a81f33f`, linked to `goal-85656c82`, `goal-06758149`, `goal-6733bbf1`). Implements non-destructive dirty-tree safety guard, streamlined zero-config onboarding (<5s), and diagnostic first-win auto-remediation PR (<2m). [@agy]
 - **Non-Destructive Dirty-Tree Guard:** `guard_dirty_worktree()` in `synlynk/wizard.py` checks `git status --porcelain` before writing workspace configs or charters. If dirty or untracked state is detected, it archives the repository into `.synlynk/backups/init-<timestamp>.tar.gz` and records a git stash (`synlynk-init-safety-backup-<timestamp>`) excluding backup artifacts, ensuring zero developer data loss.

@@ -204,6 +204,7 @@ def build_parser() -> argparse.ArgumentParser:
         cmd_harness_run,
         cmd_audit_docs,
         cmd_decide,
+        cmd_heal,
         cmd_doctor,
         cmd_exit,
         cmd_identity_init,
@@ -305,15 +306,20 @@ def build_parser() -> argparse.ArgumentParser:
     decide_parser = subparsers.add_parser(
         "decide", help="Convene a multi-agent panel and optionally record a Decision"
     )
-    decide_parser.add_argument("topic", help="Decision topic (quoted string)")
+    decide_parser.add_argument("topic", nargs="?", default="Executive architecture audit", help="Decision topic (quoted string)")
     decide_parser.add_argument(
-        "--panel", required=True,
+        "--panel", required=False, default="claude,agy,codex,grok",
         help="Comma-separated harness names, e.g. claude,agy,codex"
     )
     decide_parser.add_argument(
         "--record", action="store_true",
         help="Write the Decision record to project-docs/decisions/"
     )
+    decide_parser.add_argument("--audit", action="store_true", help="Write an executive architecture audit brief")
+
+    heal_parser = subparsers.add_parser("heal", help="Scan, remediate, verify, and optionally merge fixes")
+    heal_parser.add_argument("--auto-merge", action="store_true", help="Merge verified pull requests")
+    heal_parser.add_argument("--batch-size", type=int, default=1, help="Maximum findings to remediate")
 
     audit_docs_parser = subparsers.add_parser(
         "audit-docs", help="Detect (and optionally fix) devlog author-identity drift"
@@ -613,6 +619,10 @@ def build_parser() -> argparse.ArgumentParser:
     daemon_parser.add_argument(
         "--uninstall-service", action="store_true", dest="uninstall_service",
         help="Deregister daemon service"
+    )
+    daemon_parser.add_argument(
+        "--autonomous", action="store_true",
+        help="Enable the continuous heal and TPM sweep loop"
     )
 
     subparsers.add_parser("checkpoint",
@@ -1208,6 +1218,7 @@ def main(argv=None) -> None:
         cmd_harness_run,
         cmd_audit_docs,
         cmd_decide,
+        cmd_heal,
         cmd_doctor,
         cmd_exit,
         cmd_identity_init,
@@ -1309,7 +1320,8 @@ def main(argv=None) -> None:
         else:
             swarm_parser.print_help()
     elif args.command == "daemon":
-        d = SynlynkDaemon()
+        d = (SynlynkDaemon(autonomous=True) if getattr(args, "autonomous", False)
+             else SynlynkDaemon())
         if getattr(args, "install_service", False):
             _daemon_install_service(d)
         elif getattr(args, "uninstall_service", False):
@@ -1793,7 +1805,9 @@ def main(argv=None) -> None:
             help_parsers.get("team", parser).print_help()
     elif args.command == "decide":
         panel_members = [p.strip() for p in args.panel.split(",") if p.strip()]
-        cmd_decide(args.topic, panel=panel_members, record=args.record)
+        cmd_decide(args.topic, panel=panel_members, record=args.record, audit=args.audit)
+    elif args.command == "heal":
+        cmd_heal(args)
     elif args.command == "audit-docs":
         findings = cmd_audit_docs(json_output=args.json, fix=args.fix)
         if findings and not args.fix:
