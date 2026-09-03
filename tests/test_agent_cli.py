@@ -1708,6 +1708,88 @@ def test_feat_pm_autonomous_backlog_triaging__story_c70350f9(tmp_path, monkeypat
     assert "backlog auto-promote" in cmds
 
 
+def test_featonboarding_implement_zerorisk_dirty_worktree_and_first_win__story_7a81f33f(tmp_path, monkeypatch, capsys):
+    """Verify zero-risk onboarding dirty-tree safety guard, streamlined wizard init, and first-win PR remediation."""
+    import time
+    from unittest.mock import MagicMock
+    from synlynk.wizard import guard_dirty_worktree, cmd_wizard_init
+    from synlynk.launch import find_top_scan_finding, dispatch_first_win_remediation, prompt_first_win_remediation
+
+    # 1. Verify dirty-tree safety guard creates backup tar.gz and git stash
+    subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, check=True, capture_output=True)
+    base_file = tmp_path / "README.md"
+    base_file.write_text("# Project\n")
+    subprocess.run(["git", "add", "README.md"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=tmp_path, check=True, capture_output=True)
+
+    # Introduce dirty and untracked changes
+    base_file.write_text("# Project - dirty state\n")
+    (tmp_path / "dirty.py").write_text("print('dirty')\n")
+
+    guard_res = guard_dirty_worktree(repo_dir=str(tmp_path))
+    assert guard_res is not None
+    assert guard_res.dirty is True
+    assert guard_res.stash_created is True
+    assert os.path.exists(guard_res.backup_path)
+    assert ".synlynk/backups/init-" in guard_res.backup_path
+
+    # 2. Verify streamlined cmd_wizard_init (<5s, 8 charters, probes, backlog ingest)
+    monkeypatch.setattr(
+        "synlynk.scan._detect_harnesses_on_path",
+        lambda *a, **kw: [{"name": "claude", "cli": "claude", "version": "1.0", "path": "/bin/claude"}]
+    )
+    monkeypatch.setattr(
+        "synlynk.backlog.ingest_backlog",
+        lambda *a, **kw: {"ingested": 4, "fetched": 4, "duplicates": 0}
+    )
+
+    t0 = time.time()
+    init_res = cmd_wizard_init(
+        repo_dir=str(tmp_path),
+        dry_run=False,
+        sync_github=True,
+        prompt_remediation=False,
+    )
+    t_elapsed = time.time() - t0
+
+    assert t_elapsed < 5.0
+    assert init_res["elapsed_seconds"] < 5.0
+    assert len(init_res["charters_provisioned"]) == 8
+    assert "dev" in init_res["charters_provisioned"]
+    assert "qa" in init_res["charters_provisioned"]
+    assert "pm" in init_res["charters_provisioned"]
+
+    # Verify standard charters minted in .synlynk/agents/
+    agents_dir = tmp_path / ".synlynk" / "agents"
+    assert agents_dir.exists()
+    for role in ["dev", "qa", "pm", "architect", "tpm", "designer", "marketing", "synlynk-bot"]:
+        cf = agents_dir / f"{role}.md"
+        assert cf.exists()
+        assert f"role: {role}" in cf.read_text()
+
+    # Verify backlog ingest auto-invoked
+    assert init_res["backlog_ingest"]["ingested"] == 4
+
+    # 3. Verify First-Win top finding discovery and PR dispatch
+    finding = find_top_scan_finding(repo_dir=str(tmp_path))
+    assert finding is not None
+    assert "title" in finding
+    assert "description" in finding
+
+    mock_dispatch = MagicMock(return_value={"job_id": "job-fw-test"})
+    monkeypatch.setattr("synlynk.dispatch.dispatch_agent", mock_dispatch)
+
+    remed_res = dispatch_first_win_remediation(finding=finding, repo_dir=str(tmp_path))
+    assert remed_res["status"] == "dispatched"
+    assert remed_res["job_id"] == "job-fw-test"
+    mock_dispatch.assert_called_once()
+    _, kw = mock_dispatch.call_args
+    assert kw.get("requires_gh_write") is True
+
+
+
 
 
 
