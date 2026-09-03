@@ -856,6 +856,24 @@
 <p>Unlike rxcc, cc-videoreframing has a real, dated, and later self-corrected market document trail. An early strategy note pitched the product broadly as an "intelligence layer for video." A later, more disciplined strategic review walked that framing back into something narrower and more defensible: an API-first, batch-scale aspect-ratio reframing service built around a programmatically verified crop guarantee, positioned directly against named competitors (OpusClip, Cloudinary's video APIs, Adobe and DaVinci's auto-reframe features) rather than an undifferentiated "video AI" market. The corrective move itself is the more interesting artifact: a market thesis that got narrower and more falsifiable on review, not broader and more impressive-sounding, is the same discipline this book has praised in every technical postmortem in the fleet, applied one layer up, to strategy rather than code.</p>
 </div>
 
+<h3>The Nine Modules</h3>
+
+<p>The verifier that got #98 and #99 wrong does not run alone. It is module eight of nine in a pipeline that starts with a raw file and ends with a rendered, reframed video plus a claim about whether that render is correct. Reading the pipeline in order makes clear why a bug in module eight is a bug the whole system inherits, not a local defect that stays contained.</p>
+
+<ol>
+<li><strong>ingestion</strong> — accepts the raw source video and its declared metadata, including the frame rate that the corrected #99 finding just showed cannot always be trusted at face value.</li>
+<li><strong>attention</strong> — determines which regions of each frame are the visual subject — faces, motion, points of interest — that reframing has to keep in view.</li>
+<li><strong>scene_detection</strong> — segments the source into distinct shots, so reframing decisions don't blend continuity across a cut.</li>
+<li><strong>effect_classifier</strong> — identifies existing camera effects already present in the source (pans, zooms, cuts), so the reframe doesn't fight or duplicate them.</li>
+<li><strong>motion_solver</strong> — computes the actual crop/pan/zoom path, per frame, needed to keep the attention target in frame.</li>
+<li><strong>edl_generator</strong> — turns the motion solver's per-frame path into an edit-decision-list the renderer can consume.</li>
+<li><strong>renderer</strong> — executes the EDL, producing the actual output video.</li>
+<li><strong>verifier</strong> — checks the rendered output against expected timing, duration, and content, using whatever ground-truth clock it's given.</li>
+<li><strong>narrative_validator</strong> — a higher-level check that the reframed output still tells a coherent visual story — subject continuity across cuts, no jarring reframe jumps — beyond just technical correctness.</li>
+</ol>
+
+<p>Both #98 and #99 live in module eight, and that is not a coincidence worth glossing over. Issue #98's fragile single-sample duration tolerance and issue #99's wrong-clock timing comparison are two separate defects with one shared address: the module whose entire job is deciding whether everything upstream of it — ingestion through renderer — actually did what it claimed. A bug in <code>motion_solver</code> or <code>renderer</code> produces a visibly wrong video. A bug in <code>verifier</code> produces a video of unknown correctness wearing a passing test suite. That is why both issues were root-caused together in the same investigation rather than treated as two unrelated tickets: they are the same failure category — the checker itself was untrustworthy — expressed as two independent defects in the one module whose entire purpose is being trustworthy.</p>
+
 <div class="autonomy-box">
 <div class="label">What a Fully Autonomous synlynk Could Do Here</div>
 <p>Module 8 already proves the domain-specific case for non-bypassable verification. What a fully autonomous synlynk adds is the fleet-level version of the same discipline applied to the surrounding process: dispatching the LIVE-5-style resubmission-as-real-retest as a standing, scheduled check rather than something manually triggered after every merge; treating "the fix's own stated acceptance criterion actually ran" as a gate synlynk enforces before a PR is closeable; and extending the same cross-project pattern that caught issue #895 in synlynk's own worktree code to cc-videoreframing's pipeline — an independent, fleet-operated auditor checking the checker, the way Module 8 checks the render.</p>
