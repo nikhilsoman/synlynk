@@ -760,6 +760,51 @@
 <p>This book's own sourcing discipline requires saying plainly what the research for this chapter did not find: no formal market-sizing document, no TAM estimate, no competitive-landscape memo exists anywhere in rxcc's repository. What exists instead is narrower and more honest — a set of concrete, dated decisions about pricing and monetization that were deferred rather than guessed at, and a founding narrative (the cardiologist's ninety-second visit) that functions as a product thesis rather than a market-sizing exercise. For a healthcare-adjacent, India-first longitudinal-records product, that gap is not unusual — the real market test is regulatory and trust-based, not addressable-population arithmetic — but this book would be doing exactly what it criticizes elsewhere if it filled the gap with an invented number.</p>
 </div>
 
+<h3>What the Pipeline Actually Touches</h3>
+
+<p>The ninety-second visit that founded rxcc is not an abstraction once you look at what the product actually ingests. A patient's longitudinal record, in rxcc's own domain, is built from clinical notes (a physician's free-text summary of a visit), lab reports (structured or semi-structured test results), prescriptions (medication, dosage, duration), and referral letters (one provider handing a patient's context to another). Each of those four document types arrives in a different shape — a scanned page, a photographed prescription pad, a PDF export from a lab's own system — and each has to be reconciled into one coherent, patient-owned timeline rather than four disconnected piles.</p>
+
+<p>Reconciliation only works if the extracted data lands somewhere standardized rather than in a format bespoke to rxcc alone. Four standards do that work in this pipeline. FHIR (Fast Healthcare Interoperability Resources) is the interoperable exchange format itself — the shape a record has to take to be readable by another system, in principle even a hospital's own, without a custom integration. LOINC (Logical Observation Identifiers Names and Codes) is what turns "the lab result labeled 'Hemoglobin A1c' on this particular lab's printout" into a single, unambiguous, universally-referenceable code for that specific observation. SNOMED CT is the clinical terminology underneath diagnoses and findings — the difference between a free-text note saying "possible early-stage diabetes" and a coded, queryable clinical concept. RxNorm does the equivalent work for medication names, collapsing brand names, generic names, and dosage-form variants of the same drug into one normalized identifier. rxcc's own data model maps onto all four rather than inventing a fifth: extracted structured data is coded against LOINC and SNOMED at the observation/diagnosis level, medications are normalized through RxNorm, and the assembled record as a whole is FHIR-shaped so it is, in principle, portable to a system rxcc did not build.</p>
+
+<div class="mapping-box">
+<div class="label">Two Regimes, One Codebase</div>
+<p><strong>India — ABDM + DPDP.</strong> rxcc's primary market operates under the Ayushman Bharat Digital Mission's health-data-exchange framework alongside the Digital Personal Data Protection Act 2023. Consent here is modeled as a discrete, revocable grant tied to a specific purpose and a specific requesting party — closer to a series of scoped permissions than a blanket opt-in — and data residency expectations favor India-based storage for health data collected from Indian patients.</p>
+<p><strong>EU/Netherlands — GDPR + NEN 7510.</strong> Any patient or provider relationship touching EU jurisdiction brings GDPR Article 9's special-category protection for health data — a stricter default than ordinary personal data, requiring an explicit legal basis beyond simple consent in most cases — layered with NEN 7510, the Dutch national standard for information security specifically in healthcare, plus a hard, stated 30-day soft-delete window: a deletion request is honored within 30 days, with a defined recovery grace period before the data is unrecoverable, rather than either instant hard-deletion or an indefinite retention default.</p>
+<p><strong>What actually differs, operationally.</strong> The two regimes disagree on where data may physically live, how granular and revocable consent has to be recorded, and what "deleted" is allowed to mean. rxcc's architecture cannot treat "comply with privacy law" as a single feature — it has to carry two distinct consent models and two distinct deletion semantics through the same codebase, active by jurisdiction, not by feature flag choice at build time.</p>
+</div>
+
+<p>None of that regulatory apparatus means anything without a verifiable record of who actually looked at a given patient's data and when. rxcc's answer is a synchronous AccessLog: every read of patient data is logged inside the same database transaction as the read itself, not queued for later, not best-effort, not eventually-consistent.</p>
+
+<blockquote>"An access and its log entry either both commit or neither does — there is no transaction boundary in which the first happens without the second."<cite>rxcc's AccessLog design rationale, as recorded in the project's own architecture notes</cite></blockquote>
+
+<p>The design choice trades a small amount of latency on every read for a much larger guarantee: a tamper-evident audit trail cannot have a gap, because the database itself will not let an access commit without its corresponding log row committing alongside it. An asynchronous log — write the data first, log the access "soon after" on a queue — is faster and is also, structurally, a system that can silently lose the one record a patient or a regulator would most want to trust.</p>
+
+<h3>From Scanned Page to Coded Record</h3>
+
+<p>The ingestion pipeline that turns a photographed prescription into a FHIR-shaped, coded record runs through four stages. A Cloudflare Worker sits at the edge and handles intake — receiving the uploaded document close to the user, before it ever reaches rxcc's own infrastructure. From there, AWS Textract performs the first pass of OCR and document-structure extraction, pulling text and layout out of what is often a scanned or photographed page rather than a clean digital original. When Textract's own confidence score on a given document falls below threshold, the document falls through to Google Document AI as a fallback extractor rather than being accepted at low confidence or rejected outright — a second, differently-trained model gets a turn before a human has to. Whatever structured text survives extraction is then passed to Amazon Nova Pro for the classification and structuring step: deciding which of the four document types this is, and mapping its content onto the LOINC/SNOMED/RxNorm-coded fields the rest of the system expects.</p>
+
+<p>Accuracy through that pipeline is tracked across six separate tracks rather than reported as one aggregate number — per-document-type and per-field measurement, so a strong average on prescriptions cannot quietly paper over a weak one on referral letters. That granularity exists because of a discipline rxcc's own team is explicit about, and this book has no interest in softening on their behalf.</p>
+
+<div class="primitive-contrast">
+<div class="label">The Honest Denominator</div>
+<p>100% accuracy is not a property of the pipeline. It's a property of the reviewed subset. A claim like "our extraction accuracy is 99%" means nothing on its own — the real question is 99% of what, measured against what ground truth, over what fraction of total volume actually had a human check the machine's work. An accuracy figure quoted without its denominator is not a metric. It is marketing wearing a metric's clothes.</p>
+</div>
+
+<div style="text-align:center; margin: 2em 0;">
+<img src="assets/rxcc-mockup-1.png" alt="rxcc patient health timeline mockup" style="max-width:100%; border:1px solid #ccc; margin-bottom: 0.5em;">
+<p style="font-size:0.9em; color:#666; font-style:italic;">The patient-facing timeline view: clinical notes, lab reports, prescriptions, and referral letters reconciled into one continuous, patient-owned thread — the direct product answer to the ninety-second visit this chapter opened with.</p>
+</div>
+
+<div style="text-align:center; margin: 2em 0;">
+<img src="assets/rxcc-mockup-2.png" alt="rxcc document verification workspace mockup" style="max-width:100%; border:1px solid #ccc; margin-bottom: 0.5em;">
+<p style="font-size:0.9em; color:#666; font-style:italic;">The document-review workspace where a human reviewer checks a machine-extracted record against the source document — the interface where "reviewed subset" stops being an abstract denominator and becomes a specific person's specific decision.</p>
+</div>
+
+<div style="text-align:center; margin: 2em 0;">
+<img src="assets/rxcc-mockup-3.png" alt="rxcc consent and data privacy flow mockup" style="max-width:100%; border:1px solid #ccc; margin-bottom: 0.5em;">
+<p style="font-size:0.9em; color:#666; font-style:italic;">The consent and data-privacy flow: a plain-language explanation of jurisdiction, access, and deletion rights, built to read as respectful disclosure rather than the checkbox wall this category of product too often defaults to.</p>
+</div>
+
 <div class="autonomy-box">
 <div class="label">What a Fully Autonomous synlynk Could Do Here</div>
 <p>rxcc's own devlog protocol already gestures at the shape of the answer: a rescue-note discipline that exists because no automated system was watching context pressure and cost drift across sessions for the human. A fully autonomous synlynk closes that loop instead of asking a person to re-run it by hand every session — dispatching devlog checkpoints, cost-ledger updates, and roadmap-freshness checks as scheduled fleet work, and, more ambitiously, treating a healthcare-records product's own domain-specific verification needs (data provenance, provider-workflow correctness) as a first-class dispatch target the way the next chapter's Module 8 verifier already treats video-frame correctness. rxcc's real constraint has never been a shortage of ideas about what to build next; its own record shows the constraint is context surviving the gap between sessions — almost too neatly, the exact gap this book's Prologue argued synlynk exists to bridge.</p>
