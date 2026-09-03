@@ -60,6 +60,7 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `models list` (secondary) — sustain
 - `models show` (secondary) — sustain
 - `models discover` (secondary) — sustain
+- `heal` (primary) — sustain
 - `dispatch` (primary) — execute
 - `backfill-capability-ratings` (secondary) — execute
 - `charters adapt` (secondary) — sustain

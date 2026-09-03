@@ -4,6 +4,8 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 
 ## Series Index
 
+| [170](./170-pr1353-autonomous-heal-and-strategic-advisory.md) | PR #1353 - Autonomous Heal and Strategic Advisory | [#1353](https://github.com/nikhilsoman/synlynk/pull/1353) | 2026-09-03 |
+
 | [168](./168-pr1351-ephemeral-swarm-cloud-runners.md) | PR #1351 - Ephemeral Swarm Cloud Runners | [#1351](https://github.com/nikhilsoman/synlynk/pull/1351) | 2026-09-02 |
 
 | [168](./168-pr1351-ephemeral-swarm-cloud-runners.md) | PR #1351 - Ephemeral Swarm Cloud Runners | [#1351](https://github.com/nikhilsoman/synlynk/pull/1351) | 2026-09-02 |

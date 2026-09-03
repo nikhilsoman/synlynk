@@ -1,5 +1,10 @@
 # synlynk Memory
 
+## Autonomous Heal and Strategic Advisory (2026-09-03)
+- Added `synlynk heal` to compose scanning, backlog triage, TPM/swarm dispatch, QA verification, and opt-in PR merging.
+- Added `synlynk decide --audit` to write a four-dimension executive architecture brief and query the configured harness panel.
+- Added autonomous daemon ticks for heal and TPM sweep with SRE heartbeat telemetry. [@codex]
+
 ## Ephemeral swarm runners (2026-09-02)
 
 Ephemeral swarm execution uses a pluggable `SwarmRunnerDriver` contract with

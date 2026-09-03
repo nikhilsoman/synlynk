@@ -728,13 +728,26 @@ class SynlynkDaemon(WatchDaemon):
 
     HTTP_PORT = 27471
 
-    def __init__(self):
+    def __init__(self, autonomous: bool = False):
         import threading as _threading
         super().__init__()
         self.pidfile = _daemon_state_path("daemon.pid")
         self.logfile = _daemon_state_path("daemon.log")
         self._start_time = time.time()
         self._context_lock = _threading.Lock()
+        self.autonomous = autonomous
+        self._last_autonomous_run = 0.0
+
+    def _autonomous_tick(self) -> None:
+        """Run one bounded heal/TPM pass and leave an SRE heartbeat."""
+        try:
+            from synlynk.heal import cmd_heal
+            from synlynk.tpm_sweep import run_sweep_pass
+            cmd_heal(batch_size=1, auto_merge=False)
+            run_sweep_pass()
+            log_telemetry_event({"event": "sre_heartbeat", "status": "ok", "component": "autonomous_loop"})
+        except Exception as exc:
+            log_telemetry_event({"event": "sre_heartbeat", "status": "degraded", "component": "autonomous_loop", "error": str(exc)})
 
     def start(self) -> None:
         if self._is_running():
@@ -745,6 +758,8 @@ class SynlynkDaemon(WatchDaemon):
             print("  ⚠ synlynk watch is also running — both will poll project-docs/.")
         if os.path.exists(self.pidfile):
             os.remove(self.pidfile)
+        if self.autonomous:
+            os.environ["SYNLYNK_AUTONOMOUS"] = "1"
         _daemonize_via_reexec("synlynk.daemon._synlynk_daemon_child_main", self.logfile)
         print("  ● synlynk daemon started.")
 
@@ -836,6 +851,9 @@ class SynlynkDaemon(WatchDaemon):
                 except Exception:
                     _traceback.print_exc()
                 last_mtimes = self._get_mtimes("project-docs")
+            if self.autonomous and time.time() - self._last_autonomous_run >= max(interval, 60):
+                self._autonomous_tick()
+                self._last_autonomous_run = time.time()
             try:
                 _reconcile_daemon_jobs()
                 _dispatch_ready_jobs(max_parallel=max_parallel)
@@ -847,7 +865,7 @@ class SynlynkDaemon(WatchDaemon):
 
 
 def _synlynk_daemon_child_main() -> None:
-    d = SynlynkDaemon()
+    d = SynlynkDaemon(autonomous=os.environ.get("SYNLYNK_AUTONOMOUS") == "1")
     with open(d.pidfile, "w") as f:
         f.write(str(os.getpid()))
     start_time = time.time()
