@@ -155,6 +155,7 @@ from synlynk.team import (
     get_mode,
     get_username,
 )
+from synlynk.heal import cmd_heal
 from synlynk.support_engineer import (
     _attempt_fix,
     _collect_capability_drop,

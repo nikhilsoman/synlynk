@@ -52,6 +52,8 @@ COMMAND_TAXONOMY = [
     {"command": "scan", "governs_stage": "open", "maturity_tier": 0, "prominence": "primary",
      "orientation_gateway": False, "audience": "human",
      "trigger_phrases": ["scan this repo", "inventory this codebase"], "hook_event": None},
+    {"command": "heal", "governs_stage": "sustain", "maturity_tier": 2, "prominence": "primary",
+     "orientation_gateway": False, "audience": "human", "trigger_phrases": ["fix repository gaps automatically", "run autonomous remediation"], "hook_event": None},
     {"command": "join", "governs_stage": "open", "maturity_tier": 0, "prominence": "primary",
      "orientation_gateway": False, "audience": "human",
      "trigger_phrases": ["add me to this project", "onboard me"], "hook_event": None},
