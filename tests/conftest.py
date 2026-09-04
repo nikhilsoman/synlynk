@@ -14,6 +14,15 @@ def isolated_db(tmp_path, monkeypatch):
     monkeypatch.setattr(synlynk, "DB_PATH", str(tmp_path / "state.db"))
 
 
+@pytest.fixture(autouse=True)
+def isolate_local_http_token(tmp_path, monkeypatch):
+    """Keep daemon/Vizor HTTP tokens out of the real home directory."""
+    import synlynk.local_http_auth as http_auth
+
+    token_path = str(tmp_path / ".synlynk-http" / "daemon.token")
+    monkeypatch.setattr(http_auth, "http_token_path", lambda: token_path)
+
+
 @pytest.fixture
 def git_worktree_repo(project_dir):
     """Create a real git repo for worktree-isolation tests."""

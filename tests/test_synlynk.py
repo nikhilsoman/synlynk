@@ -6891,10 +6891,12 @@ def test_synlynk_daemon_stop_idempotent(project_dir, capsys):
 
 # ── HTTP handler tests ───────────────────────────────────────────────────────
 
-def _invoke_daemon_handler(project_dir, method, path, body=b"", headers=None):
+def _invoke_daemon_handler(project_dir, method, path, body=b"", headers=None, authenticate=True):
     """Run the daemon HTTP handler in-process without binding a socket."""
     import io
     import time as _time
+
+    from synlynk.local_http_auth import TOKEN_HEADER, ensure_local_token
 
     daemon = synlynk.SynlynkDaemon()
     daemon._start_time = _time.time()
@@ -6902,7 +6904,10 @@ def _invoke_daemon_handler(project_dir, method, path, body=b"", headers=None):
     handler = handler_class.__new__(handler_class)
     handler._daemon = daemon
     handler.path = path
-    handler.headers = headers or {}
+    headers = dict(headers or {})
+    if authenticate and TOKEN_HEADER not in headers:
+        headers[TOKEN_HEADER] = ensure_local_token()
+    handler.headers = headers
     handler.rfile = io.BytesIO(body)
     handler.wfile = io.BytesIO()
     response = {"status": None, "headers": []}
@@ -6972,6 +6977,84 @@ def test_http_dispatch_endpoint_enqueues_job(project_dir):
     ).fetchone()
     conn2.close()
     assert row[0] == "queued"
+
+
+def test_http_dispatch_without_token_returns_401(project_dir):
+    import json
+
+    body = json.dumps({"agent": "claude", "task": "do something"}).encode()
+    status, _, response_body, _ = _invoke_daemon_handler(
+        project_dir,
+        "POST",
+        "/dispatch",
+        body=body,
+        headers={"Content-Type": "application/json", "Content-Length": str(len(body))},
+        authenticate=False,
+    )
+    assert status == 401
+    conn = synlynk._get_db()
+    count = conn.execute("SELECT COUNT(*) FROM daemon_jobs").fetchone()[0]
+    conn.close()
+    assert count == 0
+    assert b"unauthorized" in response_body
+
+
+def test_http_dispatch_wrong_token_returns_401(project_dir):
+    import json
+    from synlynk.local_http_auth import TOKEN_HEADER, ensure_local_token
+
+    ensure_local_token()
+    body = json.dumps({"agent": "claude", "task": "do something"}).encode()
+    status, _, _, _ = _invoke_daemon_handler(
+        project_dir,
+        "POST",
+        "/dispatch",
+        body=body,
+        headers={
+            "Content-Type": "application/json",
+            "Content-Length": str(len(body)),
+            TOKEN_HEADER: "stale-or-wrong-token",
+        },
+        authenticate=False,
+    )
+    assert status == 401
+    conn = synlynk._get_db()
+    count = conn.execute("SELECT COUNT(*) FROM daemon_jobs").fetchone()[0]
+    conn.close()
+    assert count == 0
+
+
+def test_http_jobs_without_token_returns_401(project_dir):
+    status, _, body, _ = _invoke_daemon_handler(
+        project_dir, "GET", "/jobs", authenticate=False
+    )
+    assert status == 401
+    assert b"unauthorized" in body
+
+
+def test_http_dispatch_cross_origin_is_forbidden(project_dir):
+    import json
+    from synlynk.local_http_auth import TOKEN_HEADER, ensure_local_token
+
+    body = json.dumps({"agent": "claude", "task": "do something"}).encode()
+    status, _, _, _ = _invoke_daemon_handler(
+        project_dir,
+        "POST",
+        "/dispatch",
+        body=body,
+        headers={
+            "Content-Type": "application/json",
+            "Content-Length": str(len(body)),
+            TOKEN_HEADER: ensure_local_token(),
+            "Origin": "https://evil.example",
+        },
+        authenticate=False,
+    )
+    assert status == 403
+    conn = synlynk._get_db()
+    count = conn.execute("SELECT COUNT(*) FROM daemon_jobs").fetchone()[0]
+    conn.close()
+    assert count == 0
 
 
 def test_http_dispatch_missing_agent_returns_400(project_dir):
