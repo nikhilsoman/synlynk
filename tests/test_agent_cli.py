@@ -2747,3 +2747,23 @@ def test_research_3way_ast_semantic_merge_algorithms_and_speculative_rebase_tree
     assert node.node_id == "spec-root-1"
     assert node.pre_verified is True
     assert len(node.applied_branches) == 2
+
+
+def test_ast_3way_merge_python_uses_python_38_unparse_fallback(monkeypatch):
+    import ast
+
+    from synlynk.rebase import ast_3way_merge_python
+
+    monkeypatch.delattr(ast, "unparse", raising=False)
+    merged_code, meta = ast_3way_merge_python(
+        "def base():\n    return 1\n",
+        "def base():\n    return 1\n\ndef ours(value):\n    return value * 2\n",
+        "def base():\n    return 1\n\ndef theirs(value):\n    return value.strip()\n",
+    )
+
+    assert meta["resolvable"] is True
+    assert ast.parse(merged_code)
+    namespace = {}
+    exec(compile(ast.parse(merged_code), "<merged>", "exec"), namespace)
+    assert namespace["ours"](3) == 6
+    assert namespace["theirs"](" value ") == "value"
