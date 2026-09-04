@@ -1,9 +1,9 @@
 ---
-title: "PR TBD — Daemon Orphan Reap and Start Lock (#349)"
+title: "PR #1417 — Daemon Orphan Reap and Start Lock (#349)"
 date: 2026-09-04
 series: "Building the OS for Multi-Agent Development"
 post: 173
-pr: "TBD"
+pr: "#1417"
 merged: —
 ---
 
