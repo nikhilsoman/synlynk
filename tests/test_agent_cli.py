@@ -4,6 +4,7 @@ import re
 import os
 import stat
 import copy
+import time
 
 import pytest
 
@@ -380,6 +381,162 @@ def test_job_status_daemon_jobs_sqlite_and_jobsjs_live_gh_write(project_dir, mon
     ).fetchone()
     conn.close()
     assert row == ("done", "true")
+
+
+@pytest.mark.parametrize(
+    "scenario",
+    ["pr_open", "killed_zombie", "timed_out", "review_posted"],
+)
+def test_job_status_add_realghwrite_endtoend_regr(project_dir, monkeypatch, capsys, scenario):
+    """A real child gh write has one truth in every terminalization path (#1414).
+
+    The fake gh binary is an in-process CI substitute for GitHub: writes update a
+    durable state file and reads return that state.  The harness and gh commands
+    still run as real child processes, so this covers dispatch, child exit, GTV,
+    verification, daemon_jobs, jobs.json, and the jobs CLI together.
+    """
+    import datetime
+    import json
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+    import synlynk.jobs as jobs_mod
+
+    state_path = project_dir / "fake-github.json"
+    state_path.write_text(json.dumps({"written": False, "state": "OPEN", "reviews": []}))
+    fake_bin = project_dir / "fake-bin"
+    fake_bin.mkdir()
+    fake_gh = fake_bin / "gh"
+    fake_gh.write_text(
+        "#!/usr/bin/env python3\n"
+        "import datetime, json, os, sys\n"
+        "path = os.environ['SYNLYNK_FAKE_GH_STATE']\n"
+        "with open(path) as f: state = json.load(f)\n"
+        "args = sys.argv[1:]\n"
+        "if len(args) >= 2 and args[1] in ('close', 'create', 'review'):\n"
+        "    state['written'] = True\n"
+        "    state['action'] = args[1]\n"
+        "    if args[1] == 'close': state['state'] = 'CLOSED'\n"
+        "    elif args[1] == 'create': state['state'] = 'OPEN'\n"
+        "    else: state['reviews'] = [{'submittedAt': (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=1)).isoformat(), 'author': {'login': 'test-bot'}}]\n"
+        "    with open(path, 'w') as f: json.dump(state, f)\n"
+        "    raise SystemExit(0)\n"
+        "if len(args) >= 4 and args[1] == 'view':\n"
+        "    field = args[4]\n"
+        "    print(json.dumps({field: state.get(field, state.get('state'))}))\n"
+        "    raise SystemExit(0)\n"
+        "raise SystemExit('unsupported fake gh command: ' + repr(args))\n"
+    )
+    fake_gh.chmod(fake_gh.stat().st_mode | stat.S_IXUSR)
+
+    commands = {
+        "pr_open": ["pr", "create", "--title", "#1414 regression"],
+        "killed_zombie": ["issue", "close", "1414", "--yes"],
+        "timed_out": ["issue", "close", "1414", "--yes"],
+        "review_posted": ["pr", "review", "1414", "--approve"],
+    }
+    harness = project_dir / "fake-harness"
+    harness.write_text(
+        "#!/usr/bin/env python3\n"
+        "import os, subprocess\n"
+        f"raise SystemExit(subprocess.run(['gh'] + {commands[scenario]!r}).returncode)\n"
+    )
+    harness.chmod(harness.stat().st_mode | stat.S_IXUSR)
+    monkeypatch.setenv("SYNLYNK_FAKE_GH_STATE", str(state_path))
+    monkeypatch.setenv("PATH", str(fake_bin) + os.pathsep + os.environ["PATH"])
+
+    baseline = copy.deepcopy(dispatch_mod.HARNESS_CAPABILITY_BASELINES["codex"])
+    baseline.update({
+        "cli": str(harness), "non_interactive_flags": [],
+        "prompt_file_flag": None, "prompt_via_arg": False, "prompt_flag": None,
+        "env_passthrough": ["SYNLYNK_FAKE_GH_STATE"],
+    })
+    monkeypatch.setitem(dispatch_mod.HARNESS_CAPABILITY_BASELINES, "codex", baseline)
+    monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_gh_token", lambda role: "test-gh-token")
+    monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_gh_bot_login", lambda role: "test-bot")
+
+    target_kind = "pr" if scenario in ("pr_open", "review_posted") else "issue"
+    task = "open PR #1414" if scenario == "pr_open" else (
+        "post a review on PR #1414" if scenario == "review_posted" else "close issue #1414"
+    )
+    job = dispatch_mod.dispatch_agent(
+        "codex", task, force_agent=True, requires_gh_write=True, issue=1414,
+        gh_write_target_kind=target_kind, role="dev", skip_preflight=True,
+        context_mode="none",
+    )
+
+    # The dispatch return only means the child was started.  Reap the actual child
+    # without relying on Python 3.9's os.waitstatus_to_exitcode or an unbounded
+    # blocking wait on a loaded CI runner.
+    wait_deadline = time.monotonic() + 30
+    while True:
+        waited_pid, wait_status = os.waitpid(job["pid"], os.WNOHANG)
+        if waited_pid == job["pid"]:
+            break
+        remaining = wait_deadline - time.monotonic()
+        if remaining <= 0:
+            pytest.fail(f"child process {job['pid']} did not exit within 30 seconds")
+        time.sleep(min(0.05, remaining))
+    assert os.WIFEXITED(wait_status), f"child process {job['pid']} did not exit cleanly"
+    assert os.WEXITSTATUS(wait_status) == 0
+    truth = json.loads(state_path.read_text())
+    assert truth["written"] is True, f"fake GitHub ground truth did not record {scenario}"
+    if scenario == "pr_open":
+        assert truth["state"] == "OPEN"
+    elif scenario in ("killed_zombie", "timed_out"):
+        assert truth["state"] == "CLOSED"
+    else:
+        assert truth["reviews"] and truth["reviews"][0]["author"]["login"] == "test-bot"
+
+    conn = sl._get_db()
+    if scenario == "killed_zombie":
+        worktree = project_dir / "leaked-worktree"
+        (worktree / ".git").mkdir(parents=True)
+        monkeypatch.setattr(jobs_mod, "_pid_is_alive", lambda pid: False)
+        monkeypatch.setattr(jobs_mod, "_daemon_job_worktree_path", lambda *args: str(worktree))
+        monkeypatch.setattr(jobs_mod, "_reap_zombie_worktree", lambda *args: True)
+        monkeypatch.setattr(sl, "_inspect_worktree_git_state", lambda *args, **kwargs: {
+            "has_activity": False, "remote_has_activity": False,
+            "changed_files": [], "remote_files_touched": [],
+        })
+        conn.execute("UPDATE daemon_jobs SET status='running', pid=? WHERE job_id=?", (999999, job["id"]))
+    elif scenario == "timed_out":
+        conn.execute("UPDATE daemon_jobs SET status='running', pid=NULL WHERE job_id=?", (job["id"],))
+        exit_marker = str(job["log_file"]) + ".exit"
+        if os.path.exists(exit_marker):
+            os.unlink(exit_marker)
+    conn.commit()
+    conn.close()
+
+    # This is the product surface under test: it reconciles before rendering.
+    sl.cmd_jobs(all_jobs=True)
+    output = capsys.readouterr().out
+    assert job["id"] in output
+    assert "done" in output
+
+    conn = sl._get_db()
+    row = conn.execute(
+        "SELECT status, exit_code, gh_write_verified FROM daemon_jobs WHERE job_id=?",
+        (job["id"],),
+    ).fetchone()
+    conn.close()
+    assert row == ("done", 0, "true"), f"daemon_jobs disagrees with GitHub for {scenario}: {row}"
+    projection = next(item for item in sl._load_jobs() if item["id"] == job["id"])
+    assert projection["status"] == "running"
+
+    # Exercise the #1388 convergence event after each terminal path.  A terminal
+    # jobs.json event must repair a deliberately stale SQLite row and remain done.
+    projection.update({"status": "completed", "exit_code": 0,
+                       "ended_at": datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S")})
+    sl._save_jobs([projection])
+    conn = sl._get_db()
+    conn.execute("UPDATE daemon_jobs SET status='running' WHERE job_id=?", (job["id"],))
+    conn.commit()
+    conn.close()
+    sl.cmd_jobs(all_jobs=True)
+    conn = sl._get_db()
+    assert conn.execute("SELECT status FROM daemon_jobs WHERE job_id=?", (job["id"],)).fetchone()[0] == "done"
+    conn.close()
+    assert next(item for item in sl._load_jobs() if item["id"] == job["id"])["status"] == "completed"
 
 
 def test_codex_dispatch_workspacewrite_sandbox_bl_network_permission_adds_override():
