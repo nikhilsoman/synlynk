@@ -262,6 +262,7 @@ def _ensure_daemon_job_gh_write_columns(conn) -> None:
         "gh_write_verified": "TEXT",
         "gh_write_author": "TEXT",
         "gh_write_expect": "TEXT DEFAULT 'closed'",
+        "gh_write_evidence": "TEXT",
     }
     for name, definition in definitions.items():
         if name not in cols:
@@ -810,12 +811,22 @@ def _check_job_stall(job: dict, config: dict, sentinel_path: str) -> bool:
     if job.get("requires_gh_write"):
         target = job.get("gh_write_target")
         expect = job.get("gh_write_expect") or "closed"
-        verified = gh_write_verified(
-            target,
-            expect=expect,
-            since=job.get("started_at"),
-            expect_author=job.get("gh_write_author"),
-        )
+        evidence = {}
+        try:
+            verified = gh_write_verified(
+                target, expect=expect, since=job.get("started_at"),
+                expect_author=job.get("gh_write_author"), evidence=evidence,
+            )
+        except TypeError as exc:
+            # Preserve compatibility with test/third-party verifier shims using
+            # the pre-evidence signature.
+            if "evidence" not in str(exc):
+                raise
+            verified = gh_write_verified(
+                target, expect=expect, since=job.get("started_at"),
+                expect_author=job.get("gh_write_author"),
+            )
+        job["gh_write_evidence"] = evidence or None
         job["gh_write_verified"] = (
             "true" if verified is True else ("false" if verified is False else "unknown")
         )
