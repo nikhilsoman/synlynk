@@ -1,4 +1,23 @@
 
+## 2026-09-04 — PR #1374 merge verification + #1274 Codex network-access regression: RCA → fix (PR #1375) → review → merge
+
+### Shipped
+- **PR #1374 verified merged** (book manuscript integration): job-ed3cd02c self-reported `timed_out` (exit -9), but `gh pr view 1374` confirmed `state: MERGED`, mergeCommit `2985300d`, mergedAt `2026-09-04T03:03:11Z` — never trust job status alone (#202) held again. Worktree Hygiene Protocol executed: parent worktree + 4 nested job worktrees pruned, 5 local branches deleted, 3 stale remote branches deleted.
+- **Issue #1274 root-caused** (Agy RCA, job-be37d788, posted to the issue): a routine Codex review dispatch on PR #1374 failed twice with `error connecting to api.github.com`, reproducing a symptom PR #1271/#1275 had supposedly closed. Traced to PR #1331 (fixing #937, merged 2026-09-02): it forced Codex review dispatches into `-s read-only` plus a fabricated config key `sandbox_workspace_read_only.network_access=true` that Codex's real CLI (v0.150.1) doesn't recognize — `-s read-only` unconditionally blocks all outbound network (DNS + TCP layers) regardless of `-c` overrides. Live-probed via `codex sandbox --log-denials`. Independently spot-verified against `main` (`git blame` on `8995ae1f581b`).
+- **Fix dispatched to Codex** (job-d64ca6d5, `--task-type cli-plumbing`) as **PR #1375**: swapped `-s read-only` + broken key for `-s workspace-write` + `sandbox_workspace_write.network_access=true` + `sandbox_workspace_write.writable_roots=[]` across 3 call sites in `synlynk/dispatch.py`. 144/144 tests passed. Self-reported `succeeded_gh_write_failed` — again inaccurate; PR opened cleanly, verified via `gh pr view`/`gh pr diff`.
+- **Reviewed by Agy** (job-cca87a0b, non-authoring per PR Review Discipline — Codex can't review its own PR, and a Codex review dispatch would hit the very bug being fixed while unmerged): posted a formal COMMENT review with a 6-point checklist. Surfaced a documentation nuance — `writable_roots=[]` does not seal the workspace's own CWD at the Seatbelt level; the real write-isolation guarantee for review dispatches is `_resolve_dispatch_permissions()` stripping `write:*` grants for `task_type == "review"`, independent of the sandbox config. Live-probed (`touch` inside vs. outside the workspace). Non-blocking; concluded "ready for PM review and merge." Self-reported `succeeded_gh_write_failed` — inaccurate a third time; the review had actually posted.
+- **Blog post 171** written and committed directly on `fix/1274-codex-review-network-access` (PR #1375 was still open — Blog Post Protocol requires same-branch commit, not `main`). Indexed in `docs/blog/README.md`.
+- **Merge dispatched to Agy** (job-cfc0c1a8, `--task-type review --role qa`) to merge PR #1375 per merge-authority policy (`qa` only).
+
+### Finding worth keeping
+Three dispatched jobs this session self-reported failure/timeout while the underlying GitHub-write action had actually succeeded — 3/3 mismatches, all caught by direct `gh` verification rather than trusting `synlynk jobs` output. This sharpens the standing #202 rule: the gap isn't harness capability, it's job-status reliability specifically for gh-write-target dispatches. Saved to memory.
+
+### Next
+- Confirm job-cfc0c1a8 merge outcome via `gh pr view 1375` (in progress as of this entry).
+- Close issue #1274 with resolution comment once merge confirmed (PM-owned step).
+- Worktree Hygiene cleanup for `fix/1274-codex-review-network-access` chain once merged.
+[@claude]
+
 ## 2026-09-02 — Fix YAML Frontmatter in Blog Post 103 (PR #1322, closes #941)
 
 ### Shipped
