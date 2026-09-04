@@ -2470,6 +2470,10 @@ def _reconcile_daemon_jobs() -> None:
     so jobs that landed real work are not summarized as unknown/0-files.
     """
     conn = _pkg("_get_db")()
+    ensure_worktree_columns = _pkg("_ensure_daemon_job_worktree_columns")
+    if ensure_worktree_columns is None:
+        from synlynk.dispatch import _ensure_daemon_job_worktree_columns as ensure_worktree_columns
+    ensure_worktree_columns(conn)
     # Repair the split-brain window before selecting running rows.  This is
     # deliberately conditional/idempotent so a late daemon update cannot be
     # clobbered by an older flat-file event.
@@ -2770,6 +2774,10 @@ def _dispatch_ready_jobs(max_parallel: int = 4) -> int:
     """
     import json as _json
     conn = _pkg("_get_db")()
+    ensure_worktree_columns = _pkg("_ensure_daemon_job_worktree_columns")
+    if ensure_worktree_columns is None:
+        from synlynk.dispatch import _ensure_daemon_job_worktree_columns as ensure_worktree_columns
+    ensure_worktree_columns(conn)
     try:
         running_count = conn.execute(
             "SELECT COUNT(*) FROM daemon_jobs WHERE status='running'"
