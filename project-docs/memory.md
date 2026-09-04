@@ -1,5 +1,10 @@
 # synlynk Memory
 
+## Virtualized VCS Workspace Backends for Multi-Agent Dispatch (researched 2026-09-04)
+- **Researched:** Issue #1390 (story `story-ebdc2894`, relates to #1341, `goal-005ea87d`, `goal-abecd18c`). Research notes and design specification documented in `docs/superpowers/specs/2026-09-04-vcs-virtualization-research.md`. [@agy]
+- **Technology Evaluation:** Evaluated EdenFS (Meta virtual FUSE filesystem), Sapling VCS (`sl`), Git Sparse-Checkouts with `extensions.worktreeConfig`, and OS-level CoW (APFS reflinks / Linux OverlayFS).
+- **Core Architecture Decision:** Adopt a tiered virtualization strategy. Tier 1 (immediate/zero-dependency default) uses Git Sparse Checkouts with cone mode and per-worktree configuration derived from task permissions, delivering 90%+ disk and checkout I/O reduction without external daemons or kernel extensions. Tier 2 integrates OverlayFS for ephemeral swarm cloud runners (#1341). Tier 3 provides a pluggable `WorkspaceBackend` driver interface for enterprise monorepos evaluating Sapling/EdenFS.
+
 ## Autonomous Heal and Strategic Advisory (2026-09-03)
 - Added `synlynk heal` to compose scanning, backlog triage, TPM/swarm dispatch, QA verification, and opt-in PR merging.
 - Added `synlynk decide --audit` to write a four-dimension executive architecture brief and query the configured harness panel.
