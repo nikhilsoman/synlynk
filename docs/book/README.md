@@ -30,6 +30,18 @@ the reviewer's seat) and a Codex fact-check/rigor annotation layer running acros
 five chapters. See
 `docs/superpowers/specs/2026-08-29-book-multiauthor-repositioning-design.md` Section 4.
 
+This draft incorporates the Strategic Review integration — see
+`docs/superpowers/specs/2026-09-03-book-strategic-review-integration-design.md` — adding
+the Part Two Neutral Layer chapter (new Chapter Ten) and the Part Four Three Positions in
+the Sun chapter (new Chapter Eighteen), deep-dive expansions of the rxcc and
+cc-videoreframing Part III chapters (including a LIVE-5/#99 framing correction, from a
+fabricated-timestamps account to the actual root cause, a variable-frame-rate
+declared-vs-true timing mismatch), expansions of Chapter Sixteen (a competitive
+product-stack scorecard) and the closing chapter (Gartner-sourced market sizing), and
+embedded Stitch UI mockups for the rxcc chapter (`docs/book/assets/`). Also adds the
+pre-Part-0 cold-open, written per the same spec's Section 4a ahead of this plan's own
+execution.
+
 ## Rebuilding the PDF
 
 ```bash
