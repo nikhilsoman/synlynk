@@ -4,6 +4,7 @@ import re
 import os
 import stat
 import copy
+import time
 
 import pytest
 
@@ -463,9 +464,20 @@ def test_job_status_add_realghwrite_endtoend_regr(project_dir, monkeypatch, caps
         context_mode="none",
     )
 
-    # The dispatch return only means the child was started.  Reap the actual child.
-    _, wait_status = os.waitpid(job["pid"], 0)
-    assert os.waitstatus_to_exitcode(wait_status) == 0
+    # The dispatch return only means the child was started.  Reap the actual child
+    # without relying on Python 3.9's os.waitstatus_to_exitcode or an unbounded
+    # blocking wait on a loaded CI runner.
+    wait_deadline = time.monotonic() + 30
+    while True:
+        waited_pid, wait_status = os.waitpid(job["pid"], os.WNOHANG)
+        if waited_pid == job["pid"]:
+            break
+        remaining = wait_deadline - time.monotonic()
+        if remaining <= 0:
+            pytest.fail(f"child process {job['pid']} did not exit within 30 seconds")
+        time.sleep(min(0.05, remaining))
+    assert os.WIFEXITED(wait_status), f"child process {job['pid']} did not exit cleanly"
+    assert os.WEXITSTATUS(wait_status) == 0
     truth = json.loads(state_path.read_text())
     assert truth["written"] is True, f"fake GitHub ground truth did not record {scenario}"
     if scenario == "pr_open":
