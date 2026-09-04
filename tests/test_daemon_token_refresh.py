@@ -384,6 +384,7 @@ def test_watch_daemon_start_spawns_detached_child_and_returns_immediately(tmp_pa
     (tmp_path / ".synlynk").mkdir()
     import synlynk.daemon as daemon_mod
     monkeypatch.setattr(daemon_mod.WatchDaemon, "_is_running", lambda self: False)
+    monkeypatch.setattr(daemon_mod.WatchDaemon, "_await_child_pidfile", lambda self, timeout=2.0: None)
     daemon = daemon_mod.WatchDaemon()
     captured = {}
 
@@ -413,6 +414,7 @@ def test_watch_daemon_child_main_writes_pidfile_then_runs_loop(tmp_path, monkeyp
     daemon_mod._watch_daemon_child_main()
     assert (tmp_path / ".synlynk" / "watch.pid").read_text() == "12345"
     assert call_order == ["set_state:watching", "run_loop"]
+    assert (tmp_path / ".synlynk" / "watch.pid.lock").exists()
 
 
 def test_synlynk_daemon_start_spawns_detached_child_and_returns_immediately(tmp_path, monkeypatch):
@@ -420,6 +422,7 @@ def test_synlynk_daemon_start_spawns_detached_child_and_returns_immediately(tmp_
     (tmp_path / ".synlynk").mkdir()
     import synlynk.daemon as daemon_mod
     monkeypatch.setattr(daemon_mod.SynlynkDaemon, "_is_running", lambda self: False)
+    monkeypatch.setattr(daemon_mod.SynlynkDaemon, "_await_child_pidfile", lambda self, timeout=2.0: None)
     daemon = daemon_mod.SynlynkDaemon()
     captured = {}
 
@@ -441,12 +444,18 @@ def test_synlynk_daemon_child_main_writes_pidfile_and_start_file_then_runs_loop(
     (tmp_path / ".synlynk").mkdir()
     import synlynk.daemon as daemon_mod
     call_order = []
+    monkeypatch.setattr(
+        daemon_mod.SynlynkDaemon,
+        "_reconcile_orphans_on_startup",
+        lambda self: call_order.append("reconcile_orphans"),
+    )
     monkeypatch.setattr(daemon_mod.SynlynkDaemon, "_run_loop", lambda self: call_order.append("run_loop"))
     monkeypatch.setattr(os, "getpid", lambda: 54321)
     daemon_mod._synlynk_daemon_child_main()
     assert (tmp_path / ".synlynk" / "daemon.pid").read_text() == "54321"
     assert (tmp_path / ".synlynk" / "daemon.start").exists()
-    assert call_order == ["run_loop"]
+    assert call_order == ["reconcile_orphans", "run_loop"]
+    assert (tmp_path / ".synlynk" / "daemon.pid.lock").exists()
 
 
 def test_refresh_github_tokens_passes_apps_dir_through_to_refresh_call(tmp_path, monkeypatch):
