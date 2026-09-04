@@ -30,6 +30,15 @@ _ORG_ROLE_TO_BASELINE_ROLE = {
 
 _GH_WRITE_HARNESS_PRIORITY = ("claude", "agy")
 _STARTUP_FAILOVER_ORDER = ("codex", "agy", "claude")
+_CODEX_REVIEW_WRITABLE_ROOTS = "sandbox_workspace_write.writable_roots=[]"
+
+
+def _codex_network_flags(read_only: bool = False) -> list:
+    """Enable Codex network access while keeping review worktrees unwritable."""
+    flags = ["-c", "sandbox_workspace_write.network_access=true"]
+    if read_only:
+        flags += ["-c", _CODEX_REVIEW_WRITABLE_ROOTS]
+    return flags
 
 
 def _secondary_harness(agent: str, baselines_map: dict = None) -> Optional[str]:
@@ -549,14 +558,15 @@ def _permissions_to_flags(agent: str, permissions: list, read_only: bool = False
     if agent == "codex":
         has_write = any((perm or "").startswith("write:") for perm in (permissions or []))
         flags = []
-        if read_only or (not has_write and _CODEX_NETWORK_PERMISSION not in (permissions or [])):
+        if read_only and _CODEX_NETWORK_PERMISSION in (permissions or []):
+            # Codex's read-only profile also blocks networking. workspace-write
+            # plus an empty writable-roots override provides the required split:
+            # network egress without repository working-tree writes.
+            flags = ["-s", "workspace-write"]
+        elif read_only or (not has_write and _CODEX_NETWORK_PERMISSION not in (permissions or [])):
             flags = ["-s", "read-only"]
         if _CODEX_NETWORK_PERMISSION in (permissions or []):
-            network_sandbox = (
-                "sandbox_workspace_read_only.network_access=true"
-                if read_only else "sandbox_workspace_write.network_access=true"
-            )
-            flags += ["-c", network_sandbox]
+            flags += _codex_network_flags(read_only=read_only)
         return flags
     if agent == "grok":
         return _grok_permission_flags(permissions)
@@ -2797,11 +2807,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         if _CODEX_NETWORK_PERMISSION in permissions and not any(
             "network_access=true" in flag for flag in flags
         ):
-            network_sandbox = (
-                "sandbox_workspace_read_only.network_access=true"
-                if task_type == "review" else "sandbox_workspace_write.network_access=true"
-            )
-            flags = flags + ["-c", network_sandbox]
+            flags = flags + _codex_network_flags(read_only=task_type == "review")
         try:
             result = subprocess.run(
                 ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
