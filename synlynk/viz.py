@@ -25,15 +25,26 @@ DEFAULT_PORT = 8721
 
 
 def _live_js(port: int) -> str:
+    from synlynk.local_http_auth import ensure_local_token
+
+    token_js = json.dumps(ensure_local_token())
     return f"""
 <script>
 (function() {{
   const PORT = {port};
+  window.VIZOR_TOKEN = {token_js};
+  window.vizorAuthHeaders = function(extra) {{
+    const headers = {{'X-Synlynk-Token': window.VIZOR_TOKEN || ''}};
+    if (extra) {{
+      Object.keys(extra).forEach(function(k) {{ headers[k] = extra[k]; }});
+    }}
+    return headers;
+  }};
   let lastUpdated = null;
 
   async function checkManifest() {{
     try {{
-      const r = await fetch(`http://localhost:${{PORT}}/manifest.json?_=${{Date.now()}}`);
+      const r = await fetch('/manifest.json?_=' + Date.now(), {{ headers: window.vizorAuthHeaders() }});
       if (!r.ok) return;
       const m = await r.json();
       if (lastUpdated === null) {{
@@ -1162,9 +1173,9 @@ async function saveNote() {
   const tags = noteTagsFromButtons();
   const existing = noteData(currentNoteTarget);
   const derivedState = existing && existing.state ? existing.state : ((text || tags.length) ? 'info' : null);
-  const response = await fetch('http://localhost:' + PORT + '/note', {
+  const response = await fetch('/note', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: window.vizorAuthHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ id: currentNoteTarget, text, tags, state: derivedState }),
   });
   if (!response.ok) throw new Error('note save failed');
@@ -1777,9 +1788,9 @@ function setArchitectView(view) {
     renderTree();
     window._treeRendered = true;
   }
-  fetch('http://localhost:' + window.VIZOR_PORT + '/architect-map/view-pref', {
+  fetch('/architect-map/view-pref', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: window.vizorAuthHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ view: view }),
   }).catch(() => {});
 }
@@ -1817,9 +1828,9 @@ async function drawerDispatch() {
   if (!currentDrawerNode) return;
   const task = prompt('Task to dispatch in ' + currentDrawerNode.label + ':');
   if (!task) return;
-  await fetch('http://localhost:' + window.VIZOR_PORT + '/dispatch', {
+  await fetch('/dispatch', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: window.vizorAuthHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ repo_path: currentDrawerNode.path, task: task }),
   });
   closeDrawer();
@@ -4525,20 +4536,32 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=os.path.abspath(VIZ_CACHE_DIR), **kwargs)
 
-    def _send_cors_headers(self):
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
-
     def _read_json_body(self):
         length = int(self.headers.get("Content-Length", 0))
         body = self.rfile.read(length)
         return json.loads(body)
 
+    def _drain_body(self) -> None:
+        try:
+            length = int(self.headers.get("Content-Length", 0) or 0)
+        except (TypeError, ValueError):
+            length = 0
+        if length > 0:
+            self.rfile.read(length)
+
+    def _authorize_write(self) -> bool:
+        from synlynk.local_http_auth import authorize_local_request
+
+        ok, code, message = authorize_local_request(self.headers)
+        if ok:
+            return True
+        self._drain_body()
+        self.send_error(code, message)
+        return False
+
     def _send_json_ok(self, payload: dict):
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
-        self._send_cors_headers()
         self.end_headers()
         self.wfile.write(json.dumps(payload).encode("utf-8"))
 
@@ -4547,10 +4570,11 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
             self.send_error(404)
             return
         self.send_response(204)
-        self._send_cors_headers()
         self.end_headers()
 
     def do_POST(self):
+        if not self._authorize_write():
+            return
         if self.path == "/note":
             self._handle_note_request()
         elif self.path == "/dispatch":
@@ -4701,6 +4725,9 @@ def _server_is_running() -> bool:
 
 
 def _start_server(port: int) -> http.server.HTTPServer:
+    from synlynk.local_http_auth import ensure_local_token
+
+    ensure_local_token()
     server = http.server.HTTPServer(("127.0.0.1", port), VizorHandler)
     meta = {"port": port, "serving": True}
     with open(VIZ_META_PATH, "w") as f:

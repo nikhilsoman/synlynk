@@ -1714,6 +1714,108 @@ def test_fix_1250_dispatch_job_summaries_silently_report_zero_files_touched(
     assert _worktree_files_touched(job["worktree_path"]) == ["touched.txt"]
 
 
+def test_job_lifecycle_epic_fix_didnt_cover_the_daemon_missing_sentinel_uses_git_truth(
+    project_dir, tmp_path, monkeypatch
+):
+    """Daemon reconciliation preserves the CLI path's failed_unverified result."""
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    worktree = tmp_path / "daemon-worktree"
+    (worktree / ".git").mkdir(parents=True)
+    job_id = "daemon-gtv-missing-sentinel"
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, pid, enqueued_at, "
+        "started_at, log_path, worktree_path, worktree_branch) VALUES (?,?,?,?,?,?,?,?,?,?)",
+        (job_id, "codex", "task", "running", 99999999, "2026-09-04T00:00:00",
+         "2026-09-04T00:00:01", str(tmp_path / "missing.log"), str(worktree),
+         "dispatch/codex/" + job_id),
+    )
+    conn.commit()
+    conn.close()
+
+    monkeypatch.setattr(jobs_mod, "_pid_is_alive", lambda pid: False)
+    monkeypatch.setattr(
+        sl, "_inspect_worktree_git_state",
+        lambda *args, **kwargs: {
+            "has_activity": True, "remote_has_activity": False,
+            "changed_files": ["synlynk/jobs.py"],
+        },
+    )
+    jobs_mod._reconcile_daemon_jobs()
+
+    conn = sl._get_db()
+    row = conn.execute(
+        "SELECT status, exit_code FROM daemon_jobs WHERE job_id=?", (job_id,)
+    ).fetchone()
+    conn.close()
+    assert row == ("failed_unverified", None)
+
+
+def test_job_lifecycle_epic_fix_didnt_cover_the_daemon_dispatch_isolated_worktree(
+    project_dir, monkeypatch
+):
+    """Daemon dispatch passes its newly-created worktree as subprocess cwd."""
+    import synlynk as sl
+    captured = {}
+
+    class FakeProc:
+        pid = 12345
+
+        def poll(self):
+            return None
+
+    def fake_popen(*args, **kwargs):
+        captured["cwd"] = kwargs["cwd"]
+        return FakeProc()
+
+    monkeypatch.setattr("subprocess.Popen", fake_popen)
+    job = sl.dispatch_agent("claude", "daemon isolation task", skip_preflight=True)
+    assert captured["cwd"] == job["worktree_path"]
+
+    conn = sl._get_db()
+    row = conn.execute(
+        "SELECT worktree_path, worktree_branch FROM daemon_jobs WHERE job_id=?",
+        (job["id"],),
+    ).fetchone()
+    conn.close()
+    assert row == (job["worktree_path"], job["worktree_branch"])
+
+
+def test_job_lifecycle_epic_fix_didnt_cover_the_daemon_summary_uses_touched_files(
+    project_dir, tmp_path, monkeypatch
+):
+    """Daemon completion summaries report the real worktree diff."""
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    job_id = "daemon-files-touched"
+    worktree = tmp_path / "daemon-worktree-files"
+    (worktree / ".git").mkdir(parents=True)
+    log_path = tmp_path / "daemon-files.log"
+    log_path.write_text("Input tokens: 1 Output tokens: 1\n")
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, pid, enqueued_at, "
+        "started_at, log_path, worktree_path, worktree_branch) VALUES (?,?,?,?,?,?,?,?,?,?)",
+        (job_id, "codex", "task", "running", 99999998, "2026-09-04T00:00:00",
+         "2026-09-04T00:00:01", str(log_path), str(worktree), "dispatch/codex/" + job_id),
+    )
+    conn.commit()
+    conn.close()
+    monkeypatch.setattr(jobs_mod, "_pid_is_alive", lambda pid: False)
+    monkeypatch.setattr(sl, "_inspect_worktree_git_state", lambda *a, **k: {
+        "has_activity": True, "remote_has_activity": False,
+        "changed_files": [],
+    })
+    monkeypatch.setattr(sl, "_worktree_files_touched", lambda path: ["real-change.py"])
+    captured = {}
+    monkeypatch.setattr(sl, "_write_job_summary", lambda *args, **kwargs: captured.update({"files": args[8]}) or "")
+    jobs_mod._reconcile_daemon_jobs()
+    assert captured["files"] == ["real-change.py"]
+
+
 def test_agy_headless_parity_pass_printtimeout_30(project_dir, monkeypatch):
     import synlynk.dispatch as dispatch_mod
 
@@ -2144,6 +2246,116 @@ def test_featonboarding_implement_zerorisk_dirty_worktree_and_first_win__story_7
     mock_dispatch.assert_called_once()
     _, kw = mock_dispatch.call_args
     assert kw.get("requires_gh_write") is True
+
+
+def test_vizor_and_daemon_http_servers_have_zero_unauthenticated_access_blocked(project_dir):
+    """gh#355: local HTTP write/read surfaces require X-Synlynk-Token."""
+    import inspect
+    import json
+    from unittest.mock import patch
+
+    import synlynk
+    from synlynk.local_http_auth import TOKEN_HEADER, ensure_local_token
+    from synlynk.viz import VizorHandler
+    from tests.test_synlynk import _invoke_daemon_handler
+    from tests.test_viz_serve import _make_handler
+
+    body = json.dumps({"agent": "codex", "task": "billable dispatch"}).encode()
+    status, _, _, _ = _invoke_daemon_handler(
+        project_dir,
+        "POST",
+        "/dispatch",
+        body=body,
+        headers={"Content-Type": "application/json", "Content-Length": str(len(body))},
+        authenticate=False,
+    )
+    assert status == 401
+    conn = synlynk._get_db()
+    assert conn.execute("SELECT COUNT(*) FROM daemon_jobs").fetchone()[0] == 0
+    conn.close()
+
+    status, _, _, _ = _invoke_daemon_handler(
+        project_dir,
+        "POST",
+        "/dispatch",
+        body=body,
+        headers={"Content-Type": "application/json", "Content-Length": str(len(body))},
+    )
+    assert status == 200
+
+    os.makedirs(".synlynk/viz-cache", exist_ok=True)
+    handler = _make_handler(body, path="/dispatch", authenticate=False)
+    with patch.object(VizorHandler, "_handle_dispatch") as mock_dispatch:
+        VizorHandler.do_POST(handler)
+        mock_dispatch.assert_not_called()
+    assert handler.errors == [(401, "unauthorized")]
+
+    handler = _make_handler(body, path="/dispatch")
+    with patch.object(
+        VizorHandler,
+        "_handle_dispatch",
+        return_value={"ok": True, "message": "", "job_id": "job-1"},
+    ) as mock_dispatch:
+        VizorHandler.do_POST(handler)
+        mock_dispatch.assert_called_once()
+    assert handler.responses == [200]
+
+    from synlynk.local_http_auth import http_token_path
+
+    token = ensure_local_token()
+    token_path = http_token_path()
+    assert os.path.isfile(token_path)
+    assert (os.stat(token_path).st_mode & 0o777) == 0o600
+    assert token
+    src = inspect.getsource(VizorHandler._send_json_ok)
+    assert "Access-Control-Allow-Origin" not in src
+    assert TOKEN_HEADER == "X-Synlynk-Token"
+
+
+def test_daemon_child_main_holds_start_lock_and_mints_http_token_before_server(
+    project_dir, monkeypatch
+):
+    """gh:#355 + gh:#349: lifetime lock, auth token, then HTTP bind — no deadlock."""
+    import synlynk.daemon as daemon_mod
+    import synlynk.local_http_auth as http_auth
+
+    constructed = []
+
+    class FakeHTTPServer:
+        allow_reuse_address = True
+
+        def __init__(self, server_address, RequestHandlerClass, bind_and_activate=True):
+            constructed.append(server_address)
+            self.server_address = server_address
+            self.RequestHandlerClass = RequestHandlerClass
+
+        def serve_forever(self, poll_interval=0.5):
+            return
+
+        def server_close(self):
+            return
+
+    monkeypatch.setattr(daemon_mod.http.server, "HTTPServer", FakeHTTPServer)
+    monkeypatch.setattr(
+        daemon_mod.SynlynkDaemon, "_refresh_github_tokens", lambda self: None
+    )
+    def _exit_loop(*_args, **_kwargs):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(daemon_mod.time, "sleep", _exit_loop)
+    monkeypatch.setattr(os, "getpid", lambda: 515151)
+
+    with pytest.raises(KeyboardInterrupt):
+        daemon_mod._synlynk_daemon_child_main()
+
+    assert constructed == [("127.0.0.1", daemon_mod.SynlynkDaemon.HTTP_PORT)]
+    token_path = http_auth.http_token_path()
+    assert os.path.isfile(token_path)
+    assert (os.stat(token_path).st_mode & 0o777) == 0o600
+    lock_path = os.path.join(str(project_dir), ".synlynk", "daemon.pid.lock")
+    assert os.path.isfile(lock_path)
+    still_exclusive = daemon_mod._try_acquire_daemon_lock(lock_path, blocking=False)
+    assert still_exclusive is None
 
 
 # --- gh:#349 daemon orphan reap + start lock ---------------------------------

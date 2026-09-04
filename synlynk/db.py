@@ -724,6 +724,16 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
                 conn.execute("ALTER TABLE daemon_jobs ADD COLUMN role TEXT")
             except sqlite3.OperationalError:
                 pass
+        if "worktree_path" not in daemon_job_cols:
+            try:
+                conn.execute("ALTER TABLE daemon_jobs ADD COLUMN worktree_path TEXT")
+            except sqlite3.OperationalError:
+                pass
+        if "worktree_branch" not in daemon_job_cols:
+            try:
+                conn.execute("ALTER TABLE daemon_jobs ADD COLUMN worktree_branch TEXT")
+            except sqlite3.OperationalError:
+                pass
         try:
             conn.execute("UPDATE daemon_jobs SET harness = agent WHERE (harness IS NULL OR harness = '') AND agent IS NOT NULL")
         except sqlite3.OperationalError:
