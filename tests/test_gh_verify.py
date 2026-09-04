@@ -1,5 +1,7 @@
 import subprocess
 
+import pytest
+
 from synlynk.gh_verify import _parse_iso8601, gh_write_verified
 
 
@@ -27,6 +29,16 @@ def test_gh_write_verified_true_when_pr_merged(monkeypatch):
 
     monkeypatch.setattr(subprocess, "run", fake_run)
     assert gh_write_verified("pr:964", expect="merged") is True
+
+
+@pytest.mark.parametrize("expect", ["pr_open", "created"])
+def test_gh_write_verified_true_when_pr_open_or_created(monkeypatch, expect):
+    def fake_run(cmd, **kwargs):
+        assert cmd == ["gh", "pr", "view", "1375", "--json", "state"]
+        return subprocess.CompletedProcess(cmd, 0, stdout='{"state":"OPEN"}', stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    assert gh_write_verified("pr:1375", expect=expect) is True
 
 
 def test_gh_write_verified_unknown_when_target_none():

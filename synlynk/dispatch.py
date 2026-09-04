@@ -1102,6 +1102,32 @@ _REVIEW_TASK_RE = re.compile(
     re.IGNORECASE,
 )
 
+_PR_OPEN_TASK_RE = re.compile(
+    r"\b(?:gh\s+pr\s+create|(?:create|open)\s+(?:(?:a|an)\s+)?(?:new\s+)?(?:github\s+)?(?:pr|pull\s+request))\b",
+    re.IGNORECASE,
+)
+
+
+def _task_opens_pr(task: str) -> bool:
+    return bool(_PR_OPEN_TASK_RE.search(task or ""))
+
+
+def _gh_write_expectation(task: str, task_type: str = None) -> str:
+    """Return the delivery effect expected from a GitHub-writing task."""
+    if task_type == "review" or _REVIEW_TASK_RE.search(task or ""):
+        return "review_posted"
+    if _task_opens_pr(task):
+        return "pr_open"
+    text = task or ""
+    if re.search(r"\b(?:gh\s+)?pr\s+merge\b|\bmerge\s+(?:the\s+)?(?:github\s+)?(?:pr|pull\s+request)\b", text, re.IGNORECASE):
+        return "merged"
+    if re.search(r"\b(?:gh\s+)?(?:pr|issue)\s+comment\b|\b(?:comment|post\s+(?:a\s+)?comment)\s+(?:on|to)\b", text, re.IGNORECASE):
+        return "comment_posted"
+    if re.search(r"\b(?:gh\s+)?(?:pr|issue)\s+(?:close|reopen)\b|\bclose\s+", text, re.IGNORECASE):
+        return "closed"
+    # Preserve the historical contract for explicitly targeted legacy writes.
+    return "closed"
+
 
 def _task_requires_gh_write(task: str, task_type: str = None) -> bool:
     """Infer GitHub-write intent so operators do not have to remember a flag.
@@ -3059,7 +3085,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         gh_write_target_value = f"{target_prefix}:{gh_write_target_number}"
         gh_write_role = resolved_agent_role or _role_for_story(story_id)
         gh_write_author_value = _resolve_dispatch_gh_bot_login(gh_write_role)
-        gh_write_expect_value = "review_posted" if task_type == "review" else "closed"
+        gh_write_expect_value = _gh_write_expectation(task, task_type)
     gh_write_expect_for_job = gh_write_expect_value or "closed"
 
     proc = subprocess.Popen(

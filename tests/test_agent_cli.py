@@ -977,6 +977,31 @@ def test_cli_dispatch_explicit_task_type_and_non_review_gh_write_remain_unchange
     assert calls[1]["gh_write_target_kind"] == "issue"
 
 
+def test_job_status_propen_ghwrite_jobs_hardcode_pr_open_expectation(project_dir, monkeypatch):
+    import synlynk.dispatch as dispatch_mod
+
+    class FakeProc:
+        pid = 1379
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_gh_token", lambda role: "test-gh-token")
+    monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_gh_bot_login", lambda role: "test-bot")
+    real_pkg = dispatch_mod._pkg
+    monkeypatch.setattr(dispatch_mod, "_pkg", lambda name, default=None: (
+        (lambda *a, **kw: "story-test")
+        if name == "resolve_or_create_story_id" else real_pkg(name, default)
+    ))
+
+    job = dispatch_mod.dispatch_agent(
+        "codex", "open a GitHub PR for the completed fix", force_agent=True,
+        requires_gh_write=True, role="dev", issue=1375, gh_write_target_kind="pr",
+        skip_preflight=True,
+    )
+
+    assert job["gh_write_target"] == "pr:1375"
+    assert job["gh_write_expect"] == "pr_open"
+
+
 def test_cli_dispatch_dry_run_as_agent_without_explicit_harness_shows_resolved_agent(project_dir, capsys):
     from synlynk.cli import main
 
@@ -1787,9 +1812,6 @@ def test_featonboarding_implement_zerorisk_dirty_worktree_and_first_win__story_7
     mock_dispatch.assert_called_once()
     _, kw = mock_dispatch.call_args
     assert kw.get("requires_gh_write") is True
-
-
-
 
 
 

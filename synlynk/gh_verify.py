@@ -11,6 +11,7 @@ _TARGET_RE = re.compile(r"^(issue|pr):(\d+)$")
 _EXPECT_FIELD = {
     "closed": ("state", "CLOSED"),
     "merged": ("state", "MERGED"),
+    "pr_open": ("state", "OPEN"),
 }
 _LIST_EXPECT_FIELD = {
     "review_posted": "reviews",
@@ -45,8 +46,9 @@ def gh_write_verified(
 ) -> Optional[bool]:
     """Return whether a declared GitHub target reached the expected state, or None if unknown.
 
-    ``expect='closed'``/``'merged'`` checks a scalar state field (original
-    #701 behavior). ``expect='review_posted'``/``'comment_posted'`` checks
+    ``expect='closed'``/``'merged'``/``'pr_open'`` checks a scalar state field
+    (original #701 behavior). ``expect='created'`` checks that the target
+    exists, regardless of its current state. ``expect='review_posted'``/``'comment_posted'`` checks
     whether a reviews/comments list entry exists at or after ``since``,
     optionally matching ``expect_author``'s login.
 
@@ -62,7 +64,10 @@ def gh_write_verified(
     kind, number = match.groups()
     subcommand = "issue" if kind == "issue" else "pr"
 
-    if expect in _EXPECT_FIELD:
+    if expect == "created":
+        field = "state"
+        cmd = ["gh", subcommand, "view", number, "--json", field]
+    elif expect in _EXPECT_FIELD:
         field, expected_value = _EXPECT_FIELD[expect]
         cmd = ["gh", subcommand, "view", number, "--json", field]
     elif expect in _LIST_EXPECT_FIELD:
@@ -83,6 +88,9 @@ def gh_write_verified(
         payload = json.loads(result.stdout)
     except (json.JSONDecodeError, ValueError):
         return None
+
+    if expect == "created":
+        return payload.get("state") is not None
 
     if expect in _EXPECT_FIELD:
         actual = payload.get(field)
