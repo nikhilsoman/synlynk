@@ -92,7 +92,7 @@ from synlynk.github_app_auth import read_cached_installation_token
 from synlynk.fencing import FenceData, is_fenced_command, render_task_fence
 from synlynk.git_ref_lock import git_ref_operation_lock
 from synlynk.gh_verify import gh_write_verified
-from synlynk.sentinel import _read_sentinel_alerts, _write_sentinel_alert
+from synlynk.sentinel import _read_sentinel_alerts, _write_sentinel_alert, capture_process_identity
 from synlynk.policy import check_authority
 from synlynk.capability import expected_value as _capability_expected_value, route_expected_value
 
@@ -3142,6 +3142,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         "task": task,
         "cycle": cycle,
         "pid": proc.pid,
+        "pid_identity": capture_process_identity(proc.pid),
         "log_file": log_file,
         "prompt_file": prompt_file,
         "context_file": context_file if context_mode != "none" else "",

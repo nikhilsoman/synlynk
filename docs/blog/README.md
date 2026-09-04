@@ -4,6 +4,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 
 ## Series Index
 
+| [173](./173-pr352-stall-kill-pid-identity.md) | PR #TBD - Stall-Kill Must Prove Which Process It Is Killing | TBD | 2026-09-04 |
 | [172](./172-pr1409-book-brand-restyle.md) | PR #1409 - Giving the Book a Brand, Without Breaking Its Spine | [#1409](https://github.com/nikhilsoman/synlynk/pull/1409) | 2026-09-04 |
 | [170](./170-pr1353-autonomous-heal-and-strategic-advisory.md) | PR #1353 - Autonomous Heal and Strategic Advisory | [#1353](https://github.com/nikhilsoman/synlynk/pull/1353) | 2026-09-03 |
 | [169](./169-pr1352-zero-risk-onboarding-first-win.md) | PR #1352 - Zero-Risk Onboarding & Instant First-Win Experience | [#1352](https://github.com/nikhilsoman/synlynk/pull/1352) | 2026-09-03 |
