@@ -3,6 +3,7 @@
 import json
 import re
 import subprocess
+import time
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -17,6 +18,8 @@ _LIST_EXPECT_FIELD = {
     "review_posted": "reviews",
     "comment_posted": "comments",
 }
+_LIST_VERIFY_ATTEMPTS = 3
+_LIST_VERIFY_BACKOFF_SECONDS = (0.1, 0.25)
 
 
 def _parse_iso8601(value: Optional[str]):
@@ -43,6 +46,7 @@ def gh_write_verified(
     timeout: int = 10,
     since: Optional[str] = None,
     expect_author: Optional[str] = None,
+    evidence: Optional[dict] = None,
 ) -> Optional[bool]:
     """Return whether a declared GitHub target reached the expected state, or None if unknown.
 
@@ -78,36 +82,74 @@ def gh_write_verified(
     else:
         return None
 
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
-    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-        return None
-    if result.returncode != 0:
-        return None
-    try:
-        payload = json.loads(result.stdout)
-    except (json.JSONDecodeError, ValueError):
-        return None
+    is_list_expect = expect in _LIST_EXPECT_FIELD
+    attempts = _LIST_VERIFY_ATTEMPTS if is_list_expect else 1
+    if evidence is not None:
+        evidence.update({"target": target, "expect": expect, "field": field, "attempts": []})
 
-    if expect == "created":
-        return payload.get("state") is not None
+    for attempt in range(attempts):
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as exc:
+            if evidence is not None:
+                evidence["attempts"].append({"error": type(exc).__name__, "matched": None})
+            payload = None
+        else:
+            try:
+                payload = json.loads(result.stdout) if result.returncode == 0 else None
+            except (json.JSONDecodeError, ValueError):
+                payload = None
+            if evidence is not None:
+                evidence["attempts"].append({
+                    "raw": result.stdout,
+                    "reviews": (payload or {}).get(field) if isinstance(payload, dict) else None,
+                    "matched": None,
+                })
+        if payload is None:
+            if attempt + 1 < attempts:
+                time.sleep(_LIST_VERIFY_BACKOFF_SECONDS[min(attempt, len(_LIST_VERIFY_BACKOFF_SECONDS) - 1)])
+                continue
+            return None
 
-    if expect in _EXPECT_FIELD:
-        actual = payload.get(field)
-        return None if actual is None else actual == expected_value
+        if expect == "created":
+            return payload.get("state") is not None
 
-    entries = payload.get(field)
-    if entries is None:
-        return None
-    since_dt = _parse_iso8601(since)
-    if since_dt is None:
-        return None
-    for entry in entries:
-        entry_time = entry.get("submittedAt") or entry.get("createdAt")
-        entry_dt = _parse_iso8601(entry_time)
-        if entry_dt is None or entry_dt < since_dt:
+        if expect in _EXPECT_FIELD:
+            actual = payload.get(field)
+            return None if actual is None else actual == expected_value
+
+        entries = payload.get(field)
+        if entries is None:
+            matched = None
+        else:
+            since_dt = _parse_iso8601(since)
+            matched = False if since_dt is not None else None
+            if since_dt is not None:
+                for entry in entries:
+                    entry_time = entry.get("submittedAt") or entry.get("createdAt")
+                    entry_dt = _parse_iso8601(entry_time)
+                    if entry_dt is None or entry_dt < since_dt:
+                        continue
+                    if expect_author and (entry.get("author") or {}).get("login") != expect_author:
+                        continue
+                    matched = True
+                    break
+        if evidence is not None:
+            evidence["attempts"][-1]["matched"] = matched
+        if matched is True:
+            if evidence is not None:
+                evidence["matched"] = True
+                evidence["attempt_count"] = attempt + 1
+            return True
+        if matched is None:
+            if attempt + 1 < attempts:
+                time.sleep(_LIST_VERIFY_BACKOFF_SECONDS[min(attempt, len(_LIST_VERIFY_BACKOFF_SECONDS) - 1)])
+                continue
+            return None
+        if attempt + 1 < attempts:
+            time.sleep(_LIST_VERIFY_BACKOFF_SECONDS[min(attempt, len(_LIST_VERIFY_BACKOFF_SECONDS) - 1)])
             continue
-        if expect_author and (entry.get("author") or {}).get("login") != expect_author:
-            continue
-        return True
-    return False
+        if evidence is not None:
+            evidence["matched"] = False
+            evidence["attempt_count"] = attempt + 1
+        return False

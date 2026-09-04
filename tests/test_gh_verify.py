@@ -231,3 +231,44 @@ def test_gh_write_verified_closed_behavior_unchanged_after_extension(monkeypatch
 
     monkeypatch.setattr(subprocess, "run", fake_run)
     assert gh_write_verified("issue:701", expect="closed") is True
+
+
+def test_gh_write_verified_review_posted_retries_delayed_reviews_and_records_evidence(monkeypatch):
+    responses = iter([
+        '{"reviews":[]}',
+        '{"reviews":[{"author":{"login":"bot"},'
+        '"submittedAt":"2026-08-18T11:00:00Z"}]}',
+    ])
+    evidence = {}
+    monkeypatch.setattr(subprocess, "run", lambda cmd, **kwargs: subprocess.CompletedProcess(
+        cmd, 0, stdout=next(responses), stderr=""
+    ))
+    monkeypatch.setattr("synlynk.gh_verify.time.sleep", lambda seconds: None)
+
+    assert gh_write_verified(
+        "pr:1038", expect="review_posted", since="2026-08-18T10:00:00Z",
+        evidence=evidence,
+    ) is True
+    assert evidence["attempt_count"] == 2
+    assert evidence["attempts"][0]["reviews"] == []
+    assert evidence["attempts"][0]["matched"] is False
+    assert evidence["attempts"][1]["matched"] is True
+
+
+def test_gh_write_verified_review_posted_records_non_match_evidence(monkeypatch):
+    raw = '{"reviews":[{"author":{"login":"other"},"submittedAt":"2026-08-18T11:00:00Z"}]}'
+    evidence = {}
+    monkeypatch.setattr(subprocess, "run", lambda cmd, **kwargs: subprocess.CompletedProcess(
+        cmd, 0, stdout=raw, stderr=""
+    ))
+    monkeypatch.setattr("synlynk.gh_verify.time.sleep", lambda seconds: None)
+
+    assert gh_write_verified(
+        "pr:1038", expect="review_posted", since="2026-08-18T10:00:00Z",
+        expect_author="bot", evidence=evidence,
+    ) is False
+    assert evidence["matched"] is False
+    assert evidence["attempt_count"] == 3
+    assert all(attempt["matched"] is False for attempt in evidence["attempts"])
+    assert all(attempt["reviews"] == [{"author": {"login": "other"}, "submittedAt": "2026-08-18T11:00:00Z"}]
+               for attempt in evidence["attempts"])

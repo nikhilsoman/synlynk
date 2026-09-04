@@ -2297,17 +2297,29 @@ def _apply_gh_write_verification(
     # it before handing it to the verifier so all timestamp inputs use UTC.
     since_dt = _parse_iso8601(since)
     normalized_since = since_dt.isoformat() if since_dt is not None else since
-    verified = gh_write_verified(
-        gh_write_target, expect=expect, since=normalized_since,
-        expect_author=expect_author,
-    )
+    evidence = {}
+    try:
+        verified = gh_write_verified(
+            gh_write_target, expect=expect, since=normalized_since,
+            expect_author=expect_author, evidence=evidence,
+        )
+    except TypeError as exc:
+        if "evidence" not in str(exc):
+            raise
+        verified = gh_write_verified(
+            gh_write_target, expect=expect, since=normalized_since,
+            expect_author=expect_author,
+        )
     verified_str = "true" if verified is True else ("false" if verified is False else "unknown")
     if verified is False and status in ("done", "failed_unverified"):
         status = "succeeded_gh_write_failed"
-    conn.execute(
-        "UPDATE daemon_jobs SET gh_write_verified=? WHERE job_id=?",
-        (verified_str, job_id),
-    )
+    try:
+        conn.execute(
+            "UPDATE daemon_jobs SET gh_write_verified=?, gh_write_evidence=? WHERE job_id=?",
+            (verified_str, json.dumps(evidence) if evidence else None, job_id),
+        )
+    except sqlite3.OperationalError:
+        conn.execute("UPDATE daemon_jobs SET gh_write_verified=? WHERE job_id=?", (verified_str, job_id))
     return status, verified_str
 
 
