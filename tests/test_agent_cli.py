@@ -2553,3 +2553,39 @@ def test_research_virtualized_vcs_workspace_backends__story_ebdc2894():
     assert "multi-agent" in content.lower()
     assert "#1390" in content
     assert "worktree" in content.lower()
+
+
+def test_research_oslevel_sandboxing_bubblewrap_rootless_docker_sandbox_exec__story_f6e126fd():
+    """Verify research specification on OS-level sandboxing, evaluation matrix, and credential isolation."""
+    from pathlib import Path
+
+    spec_path = Path("docs/superpowers/specs/2026-09-04-sandboxing-research.md")
+    assert spec_path.exists(), "Research spec docs/superpowers/specs/2026-09-04-sandboxing-research.md must exist"
+
+    content = spec_path.read_text(encoding="utf-8")
+
+    # 1. Metadata and tracking
+    assert "#1393" in content
+    assert "goal-abecd18c" in content
+    assert "story-f6e126fd" in content
+
+    # 2. Key sandboxing technologies evaluated
+    assert "Bubblewrap" in content
+    assert "bwrap" in content
+    assert "sandbox-exec" in content or "Seatbelt" in content
+    assert "Rootless Docker" in content or "Podman" in content
+
+    # 3. Evaluation Matrix present
+    assert "| Evaluation Dimension |" in content or "| Technology |" in content
+    assert "Startup Latency" in content or "Startup" in content
+    assert "Filesystem" in content
+
+    # 4. Credential isolation & secret masking mechanisms
+    assert "SSH_AUTH_SOCK" in content
+    assert ".ssh" in content
+    assert ".aws" in content
+    assert "tmpfs" in content or "Synthetic" in content
+
+    # 5. Network egress mediation and execution overhead
+    assert "unshare-net" in content or "network" in content
+    assert "pytest" in content or "Throughput" in content
