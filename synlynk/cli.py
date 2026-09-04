@@ -1398,7 +1398,7 @@ def main(argv=None) -> None:
             if not args.agent and not resolved_agent_id:
                 dispatch_parser.error("the following arguments are required: agent (unless --as-agent is given)")
 
-            from synlynk.dispatch import _infer_task_type, _task_requires_gh_write
+            from synlynk.dispatch import _infer_task_type, _task_opens_pr, _task_requires_gh_write
             _effective_requires_gh_write = bool(
                 getattr(args, "requires_gh_write", False)
                 or _task_requires_gh_write(args.task, getattr(args, "task_type", None))
@@ -1413,7 +1413,7 @@ def main(argv=None) -> None:
                 )
             _explicit_gh_write_target_kind = getattr(args, "gh_write_target_kind", None)
             _resolved_gh_write_target_kind = _explicit_gh_write_target_kind or (
-                "pr" if _effective_task_type == "review" else "issue"
+                "pr" if _effective_task_type == "review" or _task_opens_pr(args.task) else "issue"
             )
 
             if getattr(args, "dry_run", False):
