@@ -336,6 +336,9 @@ def test_job_status_daemon_jobs_sqlite_and_jobsjs(project_dir, capsys):
     assert "done" in out
 
 
+test_fix_reconcile_terminal_jobs_across_sqlite = test_job_status_daemon_jobs_sqlite_and_jobsjs
+
+
 @pytest.mark.skipif(
     not os.environ.get("SYNLYNK_LIVE_GH_WRITE_ISSUE"),
     reason="set SYNLYNK_LIVE_GH_WRITE_ISSUE to run the live GitHub-write integration test",
@@ -1123,6 +1126,44 @@ def test_job_status_killed_zombie_hardcodes_failure_only_when_gh_write_unverifie
             "remote_files_touched": ["synlynk/jobs.py"],
         },
     )
+    monkeypatch.setattr(jobs_mod, "gh_write_verified", lambda target, expect, **kw: True)
+
+    jobs_mod._reconcile_daemon_jobs()
+
+    conn = sl._get_db()
+    row = conn.execute(
+        "SELECT status, exit_code, gh_write_verified FROM daemon_jobs WHERE job_id=?",
+        (job_id,),
+    ).fetchone()
+    conn.close()
+    assert row == ("done", 0, "true")
+
+
+def test_job_status_timed_out_is_finalized_before_exit_marker_gh_write_succeeds(
+    project_dir, monkeypatch, tmp_path
+):
+    """A dead PID must not hide a successful GH write during the exit-file race (#1381)."""
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    job_id = "job-timed-out-ghw"
+    log_path = str(tmp_path / "job.log")
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, story_id, status, pid, enqueued_at, "
+        "started_at, log_path, requires_gh_write, gh_write_target, gh_write_expect) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+        (
+            job_id, "codex", "open PR", "story-timeout", "running", 999999,
+            "2026-09-04T00:00:00", "2026-09-04T00:00:01", log_path, 1,
+            "pr:1381", "pr_open",
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+    # The harness has died, but its shell wrapper has not written job.log.exit yet.
+    monkeypatch.setattr(jobs_mod, "_pid_is_alive", lambda pid: False)
     monkeypatch.setattr(jobs_mod, "gh_write_verified", lambda target, expect, **kw: True)
 
     jobs_mod._reconcile_daemon_jobs()
