@@ -25,6 +25,7 @@ def _dispatch_git_worktree_job(monkeypatch):
         "story_id": "",
         "task": "fix bug",
         "pid": 4242,
+        "pid_identity": {"start_time": "dispatch-time"},
         "log_file": log_file,
         "prompt_file": os.path.abspath(os.path.join(worktree_path, ".synlynk", "prompts", f"{job_id}.md")),
         "context_file": os.path.abspath(os.path.join(worktree_path, ".synlynk", "contexts", f"{job_id}.md")),
@@ -39,6 +40,7 @@ def _dispatch_git_worktree_job(monkeypatch):
         "micro_rework": 0,
         "model_at_dispatch": "unknown",
     }
+    monkeypatch.setattr(dispatch_mod, "process_identity_check", lambda pid, expected: "safe to kill")
     sl._save_jobs([job])
     return job
 

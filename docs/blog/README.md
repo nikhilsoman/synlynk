@@ -4,6 +4,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 
 ## Series Index
 
+| [173](./173-pr352-stall-kill-pid-identity.md) | PR #TBD - Stall-Kill Must Prove Which Process It Is Killing | TBD | 2026-09-04 |
 | [174](./174-prTBD-daemon-vizor-http-auth.md) | PR TBD - Local HTTP Auth for the Daemon and Vizor | TBD | 2026-09-04 |
 | [173](./173-prTBD-daemon-orphan-reap-and-start-lock.md) | PR #1417 - Daemon Orphan Reap and Start Lock (#349) | [#1417](https://github.com/nikhilsoman/synlynk/pull/1417) | 2026-09-04 |
 | [172](./172-pr1409-book-brand-restyle.md) | PR #1409 - Giving the Book a Brand, Without Breaking Its Spine | [#1409](https://github.com/nikhilsoman/synlynk/pull/1409) | 2026-09-04 |

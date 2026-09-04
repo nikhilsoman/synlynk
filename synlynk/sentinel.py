@@ -8,6 +8,8 @@ import time
 import traceback
 from typing import Optional
 
+_REAL_POPEN_TYPE = subprocess.Popen
+
 from synlynk._constants import QUOTA_PATTERNS
 
 _SENTINEL_ALERT_RE = re.compile(
@@ -78,6 +80,57 @@ def _write_sentinel_alert(severity: str, code: str, message: str, sentinel_path:
             auto_reap_job_from_sentinel(code, message)
         except Exception:
             pass
+
+
+def capture_process_identity(pid: int, process=None) -> Optional[dict]:
+    """Capture stable, OS-provided identity metadata for a process.
+
+    ``ps`` is available on macOS and Linux and keeps this guard dependency-free.
+    The start time is authoritative when available; the command is a fallback
+    for platforms where ``ps`` cannot provide a start time.
+    """
+    # Dispatch tests and callers may provide a lightweight process double.  Do
+    # not let the identity probe turn that double's mocked Popen into a `ps`
+    # invocation (or mistake an invalid PID for a real process).
+    if isinstance(pid, bool) or not isinstance(pid, int) or pid <= 0:
+        return None
+    if process is not None and not isinstance(process, _REAL_POPEN_TYPE):
+        return None
+    try:
+        start = subprocess.run(
+            ["ps", "-o", "lstart=", "-p", str(int(pid))],
+            capture_output=True, text=True, check=False,
+        )
+        command = subprocess.run(
+            ["ps", "-o", "command=", "-p", str(int(pid))],
+            capture_output=True, text=True, check=False,
+        )
+    except (OSError, TypeError, ValueError):
+        return None
+    start_time = (start.stdout or "").strip() if start.returncode == 0 else ""
+    command_line = (command.stdout or "").strip() if command.returncode == 0 else ""
+    identity = {}
+    if start_time:
+        identity["start_time"] = start_time
+    if command_line:
+        identity["command"] = command_line
+    return identity or None
+
+
+def process_identity_check(pid: int, expected: Optional[dict]) -> str:
+    """Return ``safe to kill`` only when *pid* still identifies the job."""
+    if not expected:
+        return "do not kill"
+    current = capture_process_identity(pid)
+    if not current:
+        return "do not kill"
+    expected_start = expected.get("start_time")
+    if expected_start:
+        return "safe to kill" if current.get("start_time") == expected_start else "do not kill"
+    expected_command = expected.get("command")
+    if expected_command:
+        return "safe to kill" if expected_command in current.get("command", "") else "do not kill"
+    return "do not kill"
 
 
 def _read_sentinel_alerts(severity: Optional[str] = None) -> list:
@@ -457,19 +510,33 @@ def enforce_job_circuit_breaker(job: dict, process=None, *, sentinel_path: Optio
     if reason is None:
         return False
     proc = process
+    kill_skipped = False
     if proc is None and job.get("pid"):
+        pid = int(job["pid"])
         try:
-            os.kill(int(job["pid"]), 15)
+            if process_identity_check(pid, job.get("pid_identity")) == "safe to kill":
+                os.kill(pid, 15)
+            else:
+                kill_skipped = True
         except (ProcessLookupError, PermissionError, TypeError, ValueError, OSError):
             pass
     elif proc is not None:
+        pid = getattr(proc, "pid", None)
         try:
-            proc.terminate()
+            if pid is not None and process_identity_check(pid, job.get("pid_identity")) == "safe to kill":
+                proc.terminate()
+            else:
+                kill_skipped = True
         except (AttributeError, OSError):
             try:
-                os.kill(int(proc.pid), 15)
+                if process_identity_check(int(proc.pid), job.get("pid_identity")) == "safe to kill":
+                    os.kill(int(proc.pid), 15)
+                else:
+                    kill_skipped = True
             except (AttributeError, OSError, TypeError, ValueError):
                 pass
+    if kill_skipped:
+        reason = f"{reason}; PID recycled, skipped kill"
     job["status"] = "stalled_aborted"
     job["exit_code"] = -15
     job["circuit_breaker_reason"] = reason
