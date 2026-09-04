@@ -2379,10 +2379,34 @@ def _reconcile_daemon_jobs() -> None:
 
             if exited:
                 if zombie:
+                    # A leaked worktree is evidence that cleanup is needed, not
+                    # evidence that a required GitHub write failed.  Run the
+                    # same GTV/verifier path as other terminal outcomes before
+                    # using the irreversible killed_zombie fallback.
+                    worktree_path = _daemon_job_worktree_path(job_id, log_path)
+                    worktree_branch = f"dispatch/{agent}/{job_id}" if agent else None
+                    git_state = None
+                    if worktree_path:
+                        inspect_fn = _pkg("_inspect_worktree_git_state") or _inspect_worktree_git_state
+                        try:
+                            git_state = inspect_fn(worktree_path, worktree_branch, started_at)
+                        except Exception:
+                            git_state = None
+                    zombie_status, zombie_exit_code, _, _ = _gtv_status_for_daemon_exit(
+                        None, git_state
+                    )
+                    zombie_status, gh_write_verified_str = _apply_gh_write_verification(
+                        conn, job_id, requires_gh_write, gh_write_target, zombie_status,
+                        since=started_at, expect_author=gh_write_author,
+                        expect=gh_write_expect or "closed",
+                    )
+                    if not requires_gh_write or gh_write_verified_str != "true":
+                        zombie_status, zombie_exit_code = "killed_zombie", -9
                     _reap_zombie_worktree(job_id, log_path)
                     conn.execute(
-                        "UPDATE daemon_jobs SET status='killed_zombie', exit_code=-9, completed_at=? "
-                        "WHERE job_id=? AND status='running'", (now, job_id)
+                        "UPDATE daemon_jobs SET status=?, exit_code=?, completed_at=? "
+                        "WHERE job_id=? AND status='running'",
+                        (zombie_status, zombie_exit_code, now, job_id),
                     )
                     conn.commit()
                     continue

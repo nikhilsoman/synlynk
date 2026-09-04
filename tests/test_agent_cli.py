@@ -1002,6 +1002,57 @@ def test_job_status_propen_ghwrite_jobs_hardcode_pr_open_expectation(project_dir
     assert job["gh_write_expect"] == "pr_open"
 
 
+def test_job_status_killed_zombie_hardcodes_failure_only_when_gh_write_unverified(
+    project_dir, monkeypatch, tmp_path
+):
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    job_id = "job-killed-zombie-ghw"
+    worktree = tmp_path / "worktree"
+    (worktree / ".git").mkdir(parents=True)
+    log_path = str(tmp_path / "job.log")
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, story_id, status, pid, enqueued_at, "
+        "started_at, log_path, requires_gh_write, gh_write_target, gh_write_expect) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+        (
+            job_id, "codex", "open PR", "story-zombie", "running", 999999,
+            "2026-09-04T00:00:00", "2026-09-04T00:00:01", log_path, 1,
+            "pr:1384", "pr_open",
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+    monkeypatch.setattr(jobs_mod, "_pid_is_alive", lambda pid: False)
+    monkeypatch.setattr(jobs_mod, "_daemon_job_worktree_path", lambda *a: str(worktree))
+    monkeypatch.setattr(jobs_mod, "_reap_zombie_worktree", lambda *a: True)
+    monkeypatch.setattr(
+        sl,
+        "_inspect_worktree_git_state",
+        lambda *a, **kw: {
+            "has_activity": False,
+            "remote_has_activity": True,
+            "remote_ref": "origin/dispatch/codex/" + job_id,
+            "changed_files": [],
+            "remote_files_touched": ["synlynk/jobs.py"],
+        },
+    )
+    monkeypatch.setattr(jobs_mod, "gh_write_verified", lambda target, expect, **kw: True)
+
+    jobs_mod._reconcile_daemon_jobs()
+
+    conn = sl._get_db()
+    row = conn.execute(
+        "SELECT status, exit_code, gh_write_verified FROM daemon_jobs WHERE job_id=?",
+        (job_id,),
+    ).fetchone()
+    conn.close()
+    assert row == ("done", 0, "true")
+
+
 def test_cli_dispatch_dry_run_as_agent_without_explicit_harness_shows_resolved_agent(project_dir, capsys):
     from synlynk.cli import main
 
@@ -1812,6 +1863,5 @@ def test_featonboarding_implement_zerorisk_dirty_worktree_and_first_win__story_7
     mock_dispatch.assert_called_once()
     _, kw = mock_dispatch.call_args
     assert kw.get("requires_gh_write") is True
-
 
 
