@@ -813,7 +813,7 @@ def _check_job_stall(job: dict, config: dict, sentinel_path: str) -> bool:
     if stale_minutes < timeout:
         return False
 
-    def kill_stalled_process() -> tuple[bool, bool]:
+    def kill_stalled_process() -> Tuple[bool, bool]:
         """Kill only the process whose dispatch-time identity still matches."""
         pid = job.get("pid")
         if isinstance(pid, bool) or not isinstance(pid, int) or pid <= 0:
