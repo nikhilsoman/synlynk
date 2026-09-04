@@ -4,6 +4,7 @@ import re
 import os
 import stat
 import copy
+import time
 
 import pytest
 
@@ -380,6 +381,162 @@ def test_job_status_daemon_jobs_sqlite_and_jobsjs_live_gh_write(project_dir, mon
     ).fetchone()
     conn.close()
     assert row == ("done", "true")
+
+
+@pytest.mark.parametrize(
+    "scenario",
+    ["pr_open", "killed_zombie", "timed_out", "review_posted"],
+)
+def test_job_status_add_realghwrite_endtoend_regr(project_dir, monkeypatch, capsys, scenario):
+    """A real child gh write has one truth in every terminalization path (#1414).
+
+    The fake gh binary is an in-process CI substitute for GitHub: writes update a
+    durable state file and reads return that state.  The harness and gh commands
+    still run as real child processes, so this covers dispatch, child exit, GTV,
+    verification, daemon_jobs, jobs.json, and the jobs CLI together.
+    """
+    import datetime
+    import json
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+    import synlynk.jobs as jobs_mod
+
+    state_path = project_dir / "fake-github.json"
+    state_path.write_text(json.dumps({"written": False, "state": "OPEN", "reviews": []}))
+    fake_bin = project_dir / "fake-bin"
+    fake_bin.mkdir()
+    fake_gh = fake_bin / "gh"
+    fake_gh.write_text(
+        "#!/usr/bin/env python3\n"
+        "import datetime, json, os, sys\n"
+        "path = os.environ['SYNLYNK_FAKE_GH_STATE']\n"
+        "with open(path) as f: state = json.load(f)\n"
+        "args = sys.argv[1:]\n"
+        "if len(args) >= 2 and args[1] in ('close', 'create', 'review'):\n"
+        "    state['written'] = True\n"
+        "    state['action'] = args[1]\n"
+        "    if args[1] == 'close': state['state'] = 'CLOSED'\n"
+        "    elif args[1] == 'create': state['state'] = 'OPEN'\n"
+        "    else: state['reviews'] = [{'submittedAt': (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=1)).isoformat(), 'author': {'login': 'test-bot'}}]\n"
+        "    with open(path, 'w') as f: json.dump(state, f)\n"
+        "    raise SystemExit(0)\n"
+        "if len(args) >= 4 and args[1] == 'view':\n"
+        "    field = args[4]\n"
+        "    print(json.dumps({field: state.get(field, state.get('state'))}))\n"
+        "    raise SystemExit(0)\n"
+        "raise SystemExit('unsupported fake gh command: ' + repr(args))\n"
+    )
+    fake_gh.chmod(fake_gh.stat().st_mode | stat.S_IXUSR)
+
+    commands = {
+        "pr_open": ["pr", "create", "--title", "#1414 regression"],
+        "killed_zombie": ["issue", "close", "1414", "--yes"],
+        "timed_out": ["issue", "close", "1414", "--yes"],
+        "review_posted": ["pr", "review", "1414", "--approve"],
+    }
+    harness = project_dir / "fake-harness"
+    harness.write_text(
+        "#!/usr/bin/env python3\n"
+        "import os, subprocess\n"
+        f"raise SystemExit(subprocess.run(['gh'] + {commands[scenario]!r}).returncode)\n"
+    )
+    harness.chmod(harness.stat().st_mode | stat.S_IXUSR)
+    monkeypatch.setenv("SYNLYNK_FAKE_GH_STATE", str(state_path))
+    monkeypatch.setenv("PATH", str(fake_bin) + os.pathsep + os.environ["PATH"])
+
+    baseline = copy.deepcopy(dispatch_mod.HARNESS_CAPABILITY_BASELINES["codex"])
+    baseline.update({
+        "cli": str(harness), "non_interactive_flags": [],
+        "prompt_file_flag": None, "prompt_via_arg": False, "prompt_flag": None,
+        "env_passthrough": ["SYNLYNK_FAKE_GH_STATE"],
+    })
+    monkeypatch.setitem(dispatch_mod.HARNESS_CAPABILITY_BASELINES, "codex", baseline)
+    monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_gh_token", lambda role: "test-gh-token")
+    monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_gh_bot_login", lambda role: "test-bot")
+
+    target_kind = "pr" if scenario in ("pr_open", "review_posted") else "issue"
+    task = "open PR #1414" if scenario == "pr_open" else (
+        "post a review on PR #1414" if scenario == "review_posted" else "close issue #1414"
+    )
+    job = dispatch_mod.dispatch_agent(
+        "codex", task, force_agent=True, requires_gh_write=True, issue=1414,
+        gh_write_target_kind=target_kind, role="dev", skip_preflight=True,
+        context_mode="none",
+    )
+
+    # The dispatch return only means the child was started.  Reap the actual child
+    # without relying on Python 3.9's os.waitstatus_to_exitcode or an unbounded
+    # blocking wait on a loaded CI runner.
+    wait_deadline = time.monotonic() + 30
+    while True:
+        waited_pid, wait_status = os.waitpid(job["pid"], os.WNOHANG)
+        if waited_pid == job["pid"]:
+            break
+        remaining = wait_deadline - time.monotonic()
+        if remaining <= 0:
+            pytest.fail(f"child process {job['pid']} did not exit within 30 seconds")
+        time.sleep(min(0.05, remaining))
+    assert os.WIFEXITED(wait_status), f"child process {job['pid']} did not exit cleanly"
+    assert os.WEXITSTATUS(wait_status) == 0
+    truth = json.loads(state_path.read_text())
+    assert truth["written"] is True, f"fake GitHub ground truth did not record {scenario}"
+    if scenario == "pr_open":
+        assert truth["state"] == "OPEN"
+    elif scenario in ("killed_zombie", "timed_out"):
+        assert truth["state"] == "CLOSED"
+    else:
+        assert truth["reviews"] and truth["reviews"][0]["author"]["login"] == "test-bot"
+
+    conn = sl._get_db()
+    if scenario == "killed_zombie":
+        worktree = project_dir / "leaked-worktree"
+        (worktree / ".git").mkdir(parents=True)
+        monkeypatch.setattr(jobs_mod, "_pid_is_alive", lambda pid: False)
+        monkeypatch.setattr(jobs_mod, "_daemon_job_worktree_path", lambda *args: str(worktree))
+        monkeypatch.setattr(jobs_mod, "_reap_zombie_worktree", lambda *args: True)
+        monkeypatch.setattr(sl, "_inspect_worktree_git_state", lambda *args, **kwargs: {
+            "has_activity": False, "remote_has_activity": False,
+            "changed_files": [], "remote_files_touched": [],
+        })
+        conn.execute("UPDATE daemon_jobs SET status='running', pid=? WHERE job_id=?", (999999, job["id"]))
+    elif scenario == "timed_out":
+        conn.execute("UPDATE daemon_jobs SET status='running', pid=NULL WHERE job_id=?", (job["id"],))
+        exit_marker = str(job["log_file"]) + ".exit"
+        if os.path.exists(exit_marker):
+            os.unlink(exit_marker)
+    conn.commit()
+    conn.close()
+
+    # This is the product surface under test: it reconciles before rendering.
+    sl.cmd_jobs(all_jobs=True)
+    output = capsys.readouterr().out
+    assert job["id"] in output
+    assert "done" in output
+
+    conn = sl._get_db()
+    row = conn.execute(
+        "SELECT status, exit_code, gh_write_verified FROM daemon_jobs WHERE job_id=?",
+        (job["id"],),
+    ).fetchone()
+    conn.close()
+    assert row == ("done", 0, "true"), f"daemon_jobs disagrees with GitHub for {scenario}: {row}"
+    projection = next(item for item in sl._load_jobs() if item["id"] == job["id"])
+    assert projection["status"] == "running"
+
+    # Exercise the #1388 convergence event after each terminal path.  A terminal
+    # jobs.json event must repair a deliberately stale SQLite row and remain done.
+    projection.update({"status": "completed", "exit_code": 0,
+                       "ended_at": datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S")})
+    sl._save_jobs([projection])
+    conn = sl._get_db()
+    conn.execute("UPDATE daemon_jobs SET status='running' WHERE job_id=?", (job["id"],))
+    conn.commit()
+    conn.close()
+    sl.cmd_jobs(all_jobs=True)
+    conn = sl._get_db()
+    assert conn.execute("SELECT status FROM daemon_jobs WHERE job_id=?", (job["id"],)).fetchone()[0] == "done"
+    conn.close()
+    assert next(item for item in sl._load_jobs() if item["id"] == job["id"])["status"] == "completed"
 
 
 def test_codex_dispatch_workspacewrite_sandbox_bl_network_permission_adds_override():
@@ -2089,3 +2246,179 @@ def test_featonboarding_implement_zerorisk_dirty_worktree_and_first_win__story_7
     mock_dispatch.assert_called_once()
     _, kw = mock_dispatch.call_args
     assert kw.get("requires_gh_write") is True
+
+
+# --- gh:#349 daemon orphan reap + start lock ---------------------------------
+
+def test_orphaned_dispatched_child_process_survives_daemon_crash_alive_pid_is_adopted(
+    project_dir, monkeypatch
+):
+    """Startup reconcile must adopt a still-alive orphaned job PID (#349)."""
+    import subprocess
+    import synlynk as sl
+    import synlynk.daemon as daemon_mod
+    import synlynk.jobs as jobs_mod
+
+    # Real subprocess that outlives the "prior daemon" — sleep briefly so the
+    # startup reconcile pass observes it as alive and leaves status='running'.
+    orphan = subprocess.Popen(
+        [daemon_mod.sys.executable, "-c", "import time; time.sleep(30)"],
+        start_new_session=True,
+    )
+    try:
+        conn = sl._get_db()
+        conn.execute(
+            "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, "
+            "depends_on, pid, enqueued_at, started_at) VALUES (?,?,?,?,?,?,?,?,?)",
+            (
+                "job-orphan-alive",
+                "codex",
+                "orphaned alive child",
+                "running",
+                5,
+                "[]",
+                orphan.pid,
+                "2026-09-04T00:00:00",
+                "2026-09-04T00:00:01",
+            ),
+        )
+        conn.commit()
+        conn.close()
+
+        call_order = []
+        monkeypatch.setattr(
+            daemon_mod.SynlynkDaemon,
+            "_run_loop",
+            lambda self: call_order.append("run_loop"),
+        )
+        monkeypatch.setattr(os, "getpid", lambda: 424242)
+        daemon_mod._synlynk_daemon_child_main()
+
+        assert call_order == ["run_loop"]
+        conn = sl._get_db()
+        row = conn.execute(
+            "SELECT status, pid FROM daemon_jobs WHERE job_id=?",
+            ("job-orphan-alive",),
+        ).fetchone()
+        conn.close()
+        assert row == ("running", orphan.pid)
+        assert jobs_mod._pid_is_alive(orphan.pid) is True
+    finally:
+        orphan.terminate()
+        try:
+            orphan.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            orphan.kill()
+            orphan.wait(timeout=5)
+
+
+def test_orphaned_dispatched_child_process_survives_daemon_crash_dead_pid_is_reaped(
+    project_dir, monkeypatch
+):
+    """Startup reconcile must reap a dead orphaned job PID via shared logic (#349)."""
+    import synlynk as sl
+    import synlynk.daemon as daemon_mod
+
+    dead_pid = 99999999
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, "
+        "depends_on, pid, enqueued_at, started_at) VALUES (?,?,?,?,?,?,?,?,?)",
+        (
+            "job-orphan-dead",
+            "codex",
+            "orphaned dead child",
+            "running",
+            5,
+            "[]",
+            dead_pid,
+            "2026-09-04T00:00:00",
+            "2026-09-04T00:00:01",
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+    call_order = []
+    monkeypatch.setattr(
+        daemon_mod.SynlynkDaemon,
+        "_run_loop",
+        lambda self: call_order.append("run_loop"),
+    )
+    monkeypatch.setattr(os, "getpid", lambda: 434343)
+    daemon_mod._synlynk_daemon_child_main()
+
+    assert call_order == ["run_loop"]
+    conn = sl._get_db()
+    row = conn.execute(
+        "SELECT status, exit_code FROM daemon_jobs WHERE job_id=?",
+        ("job-orphan-dead",),
+    ).fetchone()
+    conn.close()
+    # Shared _reconcile_daemon_jobs GTV path: dead PID, no exit marker, no git
+    # evidence → timed_out / -9 (same as normal-loop reconcile).
+    assert row == ("timed_out", -9)
+
+
+def test_daemon_start_lock_rejects_concurrent_second_start(project_dir, monkeypatch, capsys):
+    """Exclusive flock serializes concurrent SynlynkDaemon.start() calls (#349)."""
+    import threading
+    import time as time_mod
+    import synlynk.daemon as daemon_mod
+
+    monkeypatch.setattr(daemon_mod.SynlynkDaemon, "_is_running", lambda self: False)
+    monkeypatch.setattr(daemon_mod.SynlynkDaemon, "_await_child_pidfile", lambda self, timeout=2.0: None)
+
+    started = []
+    barrier = threading.Barrier(2)
+    hold_spawn = threading.Event()
+    release_spawn = threading.Event()
+
+    def _blocking_reexec(entry_point, logfile):
+        # Hold inside the locked critical section (after flock, before release)
+        # so a concurrent start() must fail LOCK_NB rather than also spawning.
+        started.append((entry_point, logfile))
+        hold_spawn.set()
+        release_spawn.wait(timeout=5)
+
+    monkeypatch.setattr(daemon_mod, "_daemonize_via_reexec", _blocking_reexec)
+
+    results = []
+
+    def _start():
+        barrier.wait(timeout=5)
+        daemon_mod.SynlynkDaemon().start()
+        results.append("returned")
+
+    t1 = threading.Thread(target=_start)
+    t2 = threading.Thread(target=_start)
+    t1.start()
+    t2.start()
+
+    assert hold_spawn.wait(timeout=5)
+    # Give the loser a moment to attempt LOCK_NB and print already-running.
+    time_mod.sleep(0.2)
+    release_spawn.set()
+    t1.join(timeout=5)
+    t2.join(timeout=5)
+
+    assert len(started) == 1
+    assert started[0][0] == "synlynk.daemon._synlynk_daemon_child_main"
+    out = capsys.readouterr().out
+    assert "already running" in out
+    assert results.count("returned") == 2
+
+
+def test_try_acquire_daemon_lock_is_exclusive(tmp_path):
+    """Direct lock-helper coverage: second LOCK_NB fails while first is held (#349)."""
+    import synlynk.daemon as daemon_mod
+
+    lock_path = str(tmp_path / ".synlynk" / "daemon.pid.lock")
+    first = daemon_mod._try_acquire_daemon_lock(lock_path, blocking=False)
+    assert first is not None
+    second = daemon_mod._try_acquire_daemon_lock(lock_path, blocking=False)
+    assert second is None
+    daemon_mod._release_daemon_lock(first)
+    third = daemon_mod._try_acquire_daemon_lock(lock_path, blocking=False)
+    assert third is not None
+    daemon_mod._release_daemon_lock(third)

@@ -2468,6 +2468,10 @@ def _reconcile_daemon_jobs() -> None:
 
     Epic A1 / #331: applies ground-truth verification (git worktree evidence)
     so jobs that landed real work are not summarized as unknown/0-files.
+
+    Also invoked once on SynlynkDaemon child startup (#349) so orphans left
+    behind by a prior daemon crash are adopted (still-alive PID) or settled
+    through this same path rather than a divergent startup-only rule.
     """
     conn = _pkg("_get_db")()
     ensure_worktree_columns = _pkg("_ensure_daemon_job_worktree_columns")
