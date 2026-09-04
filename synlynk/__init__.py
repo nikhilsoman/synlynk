@@ -155,6 +155,7 @@ from synlynk.team import (
     get_mode,
     get_username,
 )
+from synlynk.heal import cmd_heal
 from synlynk.support_engineer import (
     _attempt_fix,
     _collect_capability_drop,
@@ -348,7 +349,14 @@ from synlynk.wizard import (
     _wiz_screen_workspace_confirm,
     _wiz_screen_workspace_name_pick,
     cmd_launch_ftue,
+    cmd_wizard_init,
+    guard_dirty_worktree,
     wizard_init,
+)
+from synlynk.launch import (
+    find_top_scan_finding,
+    dispatch_first_win_remediation,
+    prompt_first_win_remediation,
 )
 
 CYCLE_COLORS = {

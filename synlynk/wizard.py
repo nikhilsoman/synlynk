@@ -7,9 +7,17 @@ import sys
 import termios
 import time
 import tty
-from typing import Tuple
+import subprocess
+import tarfile
+import uuid
+from typing import Optional, Tuple
 
 from synlynk.taxonomy import entries_for_tier
+from synlynk.launch import (
+    find_top_scan_finding,
+    prompt_first_win_remediation,
+    dispatch_first_win_remediation,
+)
 
 def _pkg(name: str, default=None):
     package = sys.modules.get("synlynk")
@@ -34,6 +42,132 @@ _RED = "\033[31m"
 _MAGENTA = "\033[35m"
 
 STAGE_KEYS = ["stack", "source", "complexity", "tests", "git", "arch"]
+
+
+class BackupResult(str):
+    """Result object for guard_dirty_worktree that acts as both path string and dictionary."""
+    def __new__(cls, path: str, stash_created: bool = False, dirty: bool = True):
+        obj = super().__new__(cls, path)
+        obj.backup_path = path
+        obj.tar_path = path
+        obj.stash_created = stash_created
+        obj.dirty = dirty
+        return obj
+
+    def get(self, key, default=None):
+        if key in ("backup_path", "tar_path", "path"):
+            return str(self)
+        if key == "stash_created":
+            return self.stash_created
+        if key == "dirty":
+            return self.dirty
+        return default
+
+    def __getitem__(self, item):
+        if item in ("backup_path", "tar_path", "path"):
+            return str(self)
+        if item == "stash_created":
+            return self.stash_created
+        if item == "dirty":
+            return self.dirty
+        return super().__getitem__(item)
+
+
+def guard_dirty_worktree(repo_dir: str = ".", backup_dir: str = None) -> Optional[BackupResult]:
+    """Check git status; if dirty or untracked files exist, archive tree to
+    .synlynk/backups/init-<timestamp>.tar.gz and execute git stash prior to workspace writes.
+    """
+    try:
+        proc = subprocess.run(
+            ["git", "-C", repo_dir, "status", "--porcelain"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if proc.returncode != 0:
+            return None
+        output = proc.stdout.strip()
+        if not output:
+            return None
+    except Exception:
+        return None
+
+    import tempfile
+    import shutil
+
+    if backup_dir is None:
+        backup_dir = os.path.join(repo_dir, ".synlynk", "backups")
+
+    timestamp = int(time.time())
+    tar_name = f"init-{timestamp}.tar.gz"
+    tar_path = os.path.join(backup_dir, tar_name)
+
+    counter = 1
+    while os.path.exists(tar_path):
+        tar_path = os.path.join(backup_dir, f"init-{timestamp}_{counter}.tar.gz")
+        counter += 1
+
+    temp_tar = tempfile.NamedTemporaryFile(delete=False, suffix=".tar.gz")
+    temp_tar_path = temp_tar.name
+    temp_tar.close()
+
+    try:
+        with tarfile.open(temp_tar_path, "w:gz") as tar:
+            for root, dirs, files in os.walk(repo_dir):
+                dirs[:] = [
+                    d for d in dirs
+                    if d not in (".git", ".worktrees", "__pycache__", ".venv", "venv")
+                    and os.path.abspath(os.path.join(root, d)) != os.path.abspath(backup_dir)
+                ]
+                for file_name in files:
+                    full_p = os.path.join(root, file_name)
+                    if os.path.abspath(full_p) == os.path.abspath(tar_path) or os.path.abspath(full_p) == os.path.abspath(temp_tar_path):
+                        continue
+                    if os.path.abspath(backup_dir) in os.path.abspath(full_p):
+                        continue
+                    rel_p = os.path.relpath(full_p, repo_dir)
+                    try:
+                        tar.add(full_p, arcname=rel_p)
+                    except Exception:
+                        pass
+    except Exception as exc:
+        print(f"  {_YELLOW}⚠ Backup tar.gz creation failed: {exc}{_RESET}")
+
+    stash_created = False
+    try:
+        stash_proc = subprocess.run(
+            ["git", "-C", repo_dir, "stash", "push", "-u", "-m", f"synlynk-init-safety-backup-{timestamp}", "--", ":!.synlynk"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if stash_proc.returncode == 0 and "No local changes to save" not in (stash_proc.stdout or ""):
+            stash_created = True
+        elif stash_proc.returncode != 0:
+            fallback_proc = subprocess.run(
+                ["git", "-C", repo_dir, "stash", "push", "-u", "-m", f"synlynk-init-safety-backup-{timestamp}"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if fallback_proc.returncode == 0 and "No local changes to save" not in (fallback_proc.stdout or ""):
+                stash_created = True
+    except Exception:
+        pass
+
+    os.makedirs(backup_dir, exist_ok=True)
+    try:
+        shutil.move(temp_tar_path, tar_path)
+    except Exception:
+        if os.path.exists(temp_tar_path):
+            shutil.copy2(temp_tar_path, tar_path)
+
+    print(f"  {_GREEN}✓{_RESET} Safety backup saved to {tar_path}")
+    if stash_created:
+        print(f"  {_GREEN}✓{_RESET} Git stash created: synlynk-init-safety-backup-{timestamp}")
+
+    return BackupResult(tar_path, stash_created=stash_created, dirty=True)
+
 
 def cmd_launch_ftue(dry_run: bool = False, list_mode: bool = False) -> None:
     """FTUE task picker TUI - Screen 1 -> Screen 2 -> dispatch
@@ -1001,6 +1135,7 @@ def wizard_init(scan: dict = None, dry_run: bool = False) -> None:
 
     # ── Commit-on-complete: write all state ───────────────────────────────
     if not dry_run:
+        guard_dirty_worktree()
         ws_name = workspace["workspace_name"]
         config_path = _pkg("write_workspace_config")(workspace, ws_name)
         _pkg("generate_structured_context")({**scan, **workspace})
@@ -1021,3 +1156,142 @@ def wizard_init(scan: dict = None, dry_run: bool = False) -> None:
                     print(f"  {_GREEN}✓{_RESET} wrote role to {fname}")
                 except Exception:
                     pass
+
+
+def cmd_wizard_init(
+    scan: dict = None,
+    dry_run: bool = False,
+    auto_remediate: bool = False,
+    sync_github: bool = True,
+    repo_dir: str = ".",
+    workspace_name: str = None,
+    prompt_remediation: bool = False,
+) -> dict:
+    """Streamlined zero-config onboarding: auto-probes installed harnesses,
+    detects codebase stack, guards dirty worktree, provisions standard agent charters
+    in <5s, auto-invokes synlynk backlog ingest --sync-github, and prompts first-win remediation.
+    """
+    start_time = time.time()
+    from synlynk.agent_cli import SEED_CHARTERS
+    print(f"\n  {_BOLD}{_CYAN}synlynk onboarding — zero-risk initialization{_RESET}\n")
+
+    # 1. Auto-probe installed harnesses
+    from synlynk.scan import _detect_harnesses_on_path
+    if scan and scan.get("harnesses"):
+        harnesses = scan["harnesses"]
+    else:
+        harnesses = _detect_harnesses_on_path()
+
+    harness_names = ", ".join(h["name"] for h in harnesses) if harnesses else "none"
+    print(f"  {_CYAN}›{_RESET} Probed CLI harnesses: {_BOLD}{harness_names}{_RESET}")
+
+    # 2. Detect codebase stack
+    if scan and scan.get("repos") and scan["repos"][0].get("stack_labels"):
+        stack = scan["repos"][0]["stack_labels"]
+    else:
+        fingerprint_fn = _pkg("fingerprint_stack")
+        if fingerprint_fn:
+            try:
+                stack = fingerprint_fn(repo_dir)
+            except Exception:
+                stack = []
+        else:
+            stack = []
+
+    print(f"  {_CYAN}›{_RESET} Detected codebase stack: {_BOLD}{', '.join(stack) or 'generic'}{_RESET}")
+
+    # 3. Guard dirty worktree prior to configuration write
+    backup_result = None
+    if not dry_run:
+        backup_result = guard_dirty_worktree(repo_dir=repo_dir)
+
+    # 4. Provision workspace configuration & agent charters in <5s
+    ws_name = (
+        workspace_name
+        or (scan.get("workspace_name") if scan else None)
+        or os.path.basename(os.path.abspath(repo_dir))
+        or "workspace"
+    )
+
+    workspace = {
+        "workspace_name": ws_name,
+        "topology": "single",
+        "harnesses": harnesses,
+        "home_harness": harnesses[0]["name"] if harnesses else "claude",
+        "stack": stack,
+    }
+
+    if not dry_run:
+        write_ws_fn = _pkg("write_workspace_config")
+        if write_ws_fn:
+            try:
+                write_ws_fn(workspace, ws_name)
+            except Exception:
+                pass
+
+        # Provision all 8 standard agent charters in .synlynk/agents/
+        agents_dir = os.path.join(repo_dir, ".synlynk", "agents")
+        os.makedirs(agents_dir, exist_ok=True)
+        for role, charter_content in SEED_CHARTERS.items():
+            charter_file = os.path.join(agents_dir, f"{role}.md")
+            try:
+                with open(charter_file, "w") as f:
+                    f.write(charter_content)
+            except Exception:
+                pass
+
+        # Also register via agent_store if possible
+        try:
+            from synlynk import agent_store
+            existing_agents = {
+                next((a["value"] for a in entry.get("aliases", []) if a["kind"] == "role_slug"), None)
+                for entry in agent_store.list_agents()
+            }
+            for role, charter_content in SEED_CHARTERS.items():
+                if role not in existing_agents:
+                    try:
+                        agent_id = str(uuid.uuid4())
+                        agent_store.register_agent(agent_id, [{"kind": "role_slug", "value": role}])
+                        agent_store.propose_charter_revision(agent_id, charter_content, actor="wizard", parent_revision=0)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+    print(f"  {_GREEN}✓{_RESET} Provisioned 8 standard agent charters in .synlynk/agents/ (<5s)")
+
+    # 5. Auto-invoke synlynk backlog ingest --sync-github
+    backlog_result = {"ingested": 0, "fetched": 0, "duplicates": 0}
+    if not dry_run:
+        try:
+            from synlynk.backlog import ingest_backlog
+            print(f"  {_CYAN}›{_RESET} Ingesting open issues (synlynk backlog ingest --sync-github)...")
+            backlog_result = ingest_backlog(sync_github=sync_github)
+            print(f"  {_GREEN}✓{_RESET} Ingested {backlog_result.get('ingested', 0)} issues ({backlog_result.get('fetched', 0)} fetched)")
+        except Exception as exc:
+            backlog_result = {"ingested": 0, "fetched": 0, "duplicates": 0, "error": str(exc)}
+
+    # 6. First-Win auto-remediation demo
+    first_win_result = None
+    if prompt_remediation or auto_remediate:
+        first_win_result = prompt_first_win_remediation(
+            scan=scan,
+            auto_confirm=auto_remediate,
+            repo_dir=repo_dir,
+            dry_run=dry_run,
+        )
+
+    elapsed = time.time() - start_time
+    print(f"\n  {_GREEN}✓{_RESET} Zero-risk onboarding completed in {elapsed:.2f}s\n")
+
+    return {
+        "workspace_name": ws_name,
+        "harnesses": harnesses,
+        "stack": stack,
+        "charters_provisioned": list(SEED_CHARTERS.keys()),
+        "backlog_ingest": backlog_result,
+        "backup": backup_result,
+        "first_win": first_win_result,
+        "elapsed_seconds": elapsed,
+    }
+

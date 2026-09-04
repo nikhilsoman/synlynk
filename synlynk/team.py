@@ -505,8 +505,45 @@ def _run_agent_sync(agent: str, prompt: str, timeout: int | None = None) -> str:
                 pass
 
 
-def cmd_decide(topic: str, panel: list, record: bool = False) -> None:
+def _audit_metrics() -> dict:
+    """Collect explainable local architecture signals for the advisory brief."""
+    from pathlib import Path
+    py_files = list(Path("synlynk").glob("*.py")) if Path("synlynk").is_dir() else []
+    test_files = list(Path("tests").glob("test_*.py")) if Path("tests").is_dir() else []
+    return {
+        "Codebase Modularity": {"python_modules": len(py_files), "test_modules": len(test_files)},
+        "AI-Readiness": {"configured_harnesses": list(HARNESS_CAPABILITY_BASELINES)},
+        "Tech Debt": {"todo_markers": sum(p.read_text(errors="ignore").count("TODO") for p in py_files)},
+        "Cost Efficiency": {"telemetry_file": ".synlynk/telemetry.json"},
+    }
+
+
+def _cmd_decide_audit(panel: list) -> str:
+    metrics = _audit_metrics()
+    metrics["Cost Efficiency"]["panel_size"] = len(panel)
+    inputs = {member: _pkg("_run_agent_sync")(member, "Audit modularity, AI-readiness, technical debt, and cost efficiency. Return evidence and recommendations.") for member in panel}
+    inputs = {k: v for k, v in inputs.items() if v}
+    today = time.strftime("%Y-%m-%d")
+    docs_dir = _pkg("_synlynk_project_docs_dir")() if _pkg("_is_migrated")() else _pkg("_docs_dir")()
+    output_dir = Path(docs_dir) / "decisions"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    path = output_dir / f"{today}-executive-architecture-audit.md"
+    lines = ["# Executive Architecture Audit", "", f"Date: {today}", "", "## Executive Recommendation", "", "Prioritize the highest-risk debt items while preserving the existing state.db and policy gates.", "", "## Evidence"]
+    for dimension, data in metrics.items():
+        lines += [f"### {dimension}", ""] + [f"- **{key}:** {value}" for key, value in data.items()]
+    lines += ["", "## Harness Advisory Inputs", ""]
+    for member, text in inputs.items():
+        lines += [f"### {member}", "", text, ""]
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print(f"  {_GREEN}✓{_RESET} Executive brief written: {path}")
+    return str(path)
+
+
+def cmd_decide(topic: str, panel: list, record: bool = False, audit: bool = False) -> None:
     """Convene a multi-agent panel on topic and optionally record the Decision."""
+    if audit:
+        _cmd_decide_audit(panel)
+        return
     print(f"\n  {_CYAN}▶{_RESET} Convening panel on: {topic}")
     print(f"  Panel: {', '.join(panel)}\n")
 
