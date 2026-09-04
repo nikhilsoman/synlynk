@@ -1,5 +1,17 @@
 # synlynk Memory
 
+## Virtualized VCS Workspace Backends for Multi-Agent Dispatch (researched 2026-09-04)
+- **Researched:** Issue #1390 (story `story-ebdc2894`, relates to #1341, `goal-005ea87d`, `goal-abecd18c`). Research notes and design specification documented in `docs/superpowers/specs/2026-09-04-vcs-virtualization-research.md`. [@agy]
+- **Technology Evaluation:** Evaluated EdenFS (Meta virtual FUSE filesystem), Sapling VCS (`sl`), Git Sparse-Checkouts with `extensions.worktreeConfig`, and OS-level CoW (APFS reflinks / Linux OverlayFS).
+- **Core Architecture Decision:** Adopt a tiered virtualization strategy. Tier 1 (immediate/zero-dependency default) uses Git Sparse Checkouts with cone mode and per-worktree configuration derived from task permissions, delivering 90%+ disk and checkout I/O reduction without external daemons or kernel extensions. Tier 2 integrates OverlayFS for ephemeral swarm cloud runners (#1341). Tier 3 provides a pluggable `WorkspaceBackend` driver interface for enterprise monorepos evaluating Sapling/EdenFS.
+
+## Research: OS-Level Sandboxing & Credential Isolation for Agent Execution (researched 2026-09-04)
+- **Specification:** `docs/superpowers/specs/2026-09-04-sandboxing-research.md` (closes #1393, story `story-f6e126fd`, linked to `goal-abecd18c`, parent epic #1392). Evaluates containerized and OS-level sandboxing technologies (Bubblewrap, Rootless Docker, macOS Seatbelt sandbox-exec) for multi-agent CLI subprocess isolation. [@agy]
+- **Mechanism Evaluation:** Bubblewrap (`bwrap` on Linux via unprivileged user namespaces) and Apple Seatbelt (`sandbox-exec` on macOS via kernel Scheme profiles) demonstrate near-zero startup latency (<4ms) and native filesystem throughput (0-3% overhead vs host), making them optimal for high-frequency TDD loops. Rootless Docker/Podman introduces 250-800ms invocation latency and 2x-5x slower filesystem performance on macOS VMs.
+- **3-Tier Credential Isolation:** Designed defense-in-depth model: (1) Environment sanitization removing `SSH_AUTH_SOCK` and provisioning ephemeral synthetic `HOME` per job; (2) OS-level filesystem masking overlaying `~/.ssh`, `~/.aws`, `~/.kube`, `~/.gnupg` with empty `tmpfs` mounts / deny rules; (3) Default `--unshare-net` network isolation with localhost domain-filtered egress proxy for authorized network dispatches (blocking cloud metadata `169.254.169.254` and RFC-1918 subnets).
+- **Target Architecture:** Modular `synlynk/sandbox/` provider pattern (`BubblewrapProvider`, `SeatbeltProvider`, `RootlessDockerProvider`, `FallbackProvider`), `.synlynk/config.json` schema, and execution hooks in `synlynk/dispatch.py:dispatch_agent()`.
+- **Verification:** Unit and spec verification test `test_research_oslevel_sandboxing_bubblewrap_rootless_docker_sandbox_exec__story_f6e126fd` in `tests/test_agent_cli.py`.
+
 ## Autonomous Heal and Strategic Advisory (2026-09-03)
 - Added `synlynk heal` to compose scanning, backlog triage, TPM/swarm dispatch, QA verification, and opt-in PR merging.
 - Added `synlynk decide --audit` to write a four-dimension executive architecture brief and query the configured harness panel.

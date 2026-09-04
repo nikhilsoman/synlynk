@@ -2532,3 +2532,101 @@ def test_try_acquire_daemon_lock_is_exclusive(tmp_path):
     third = daemon_mod._try_acquire_daemon_lock(lock_path, blocking=False)
     assert third is not None
     daemon_mod._release_daemon_lock(third)
+
+
+def test_research_virtualized_vcs_workspace_backends__story_ebdc2894():
+    """Verify research spec for virtualized VCS workspace backends (EdenFS, Sapling, sparse checkouts)."""
+    spec_path = os.path.join(
+        os.path.dirname(os.path.dirname(__file__)),
+        "docs",
+        "superpowers",
+        "specs",
+        "2026-09-04-vcs-virtualization-research.md",
+    )
+    assert os.path.exists(spec_path), f"Research spec not found at {spec_path}"
+    with open(spec_path, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    assert "EdenFS" in content
+    assert "Sapling" in content
+    assert "sparse" in content.lower()
+    assert "multi-agent" in content.lower()
+    assert "#1390" in content
+    assert "worktree" in content.lower()
+
+
+def test_research_oslevel_sandboxing_bubblewrap_rootless_docker_sandbox_exec__story_f6e126fd():
+    """Verify research specification on OS-level sandboxing, evaluation matrix, and credential isolation."""
+    from pathlib import Path
+
+    spec_path = Path("docs/superpowers/specs/2026-09-04-sandboxing-research.md")
+    assert spec_path.exists(), "Research spec docs/superpowers/specs/2026-09-04-sandboxing-research.md must exist"
+
+    content = spec_path.read_text(encoding="utf-8")
+
+    # 1. Metadata and tracking
+    assert "#1393" in content
+    assert "goal-abecd18c" in content
+    assert "story-f6e126fd" in content
+
+    # 2. Key sandboxing technologies evaluated
+    assert "Bubblewrap" in content
+    assert "bwrap" in content
+    assert "sandbox-exec" in content or "Seatbelt" in content
+    assert "Rootless Docker" in content or "Podman" in content
+
+    # 3. Evaluation Matrix present
+    assert "| Evaluation Dimension |" in content or "| Technology |" in content
+    assert "Startup Latency" in content or "Startup" in content
+    assert "Filesystem" in content
+
+    # 4. Credential isolation & secret masking mechanisms
+    assert "SSH_AUTH_SOCK" in content
+    assert ".ssh" in content
+    assert ".aws" in content
+    assert "tmpfs" in content or "Synthetic" in content
+
+    # 5. Network egress mediation and execution overhead
+    assert "unshare-net" in content or "network" in content
+    assert "pytest" in content or "Throughput" in content
+
+
+def test_research_scip_indexers_treesitter_symbol__story_4949989b():
+    """Verify research notes on SCIP, Tree-sitter, and Glean code intelligence for context assembly exist and cover required architectural dimensions."""
+    spec_path = os.path.join(
+        os.path.dirname(os.path.dirname(__file__)),
+        "docs", "superpowers", "specs", "2026-09-04-scip-code-graph-research.md",
+    )
+    assert os.path.exists(spec_path), f"Spec file not found at {spec_path}"
+
+    content = open(spec_path, encoding="utf-8").read()
+
+    # Verify metadata & reference tracking
+    assert "story-4949989b" in content
+    assert "#1396" in content
+    assert "SCIP" in content
+    assert "Tree-sitter" in content
+    assert "Glean" in content
+
+    # Verify SCIP deep evaluation
+    assert "Sourcegraph Code Intelligence Protocol" in content
+    assert "scip-python" in content
+    assert "index.scip" in content
+    assert "compiler" in content.lower()
+
+    # Verify Tree-sitter AST & symbol graphs
+    assert "incremental" in content.lower()
+    assert ".scm" in content or "query" in content.lower()
+    assert "dirty" in content.lower() or "error" in content.lower()
+    assert "repomap" in content.lower() or "pagerank" in content.lower()
+
+    # Verify Glean relational facts
+    assert "Angle" in content or "datalog" in content.lower()
+    assert "fact" in content.lower()
+    assert "subgraph" in content.lower() or "call graph" in content.lower()
+
+    # Verify Synlynk Tri-Tier Architecture & Context Assembly
+    assert "Tri-Tier" in content or "tri-tier" in content.lower()
+    assert "code_entities" in content
+    assert "code_facts" in content
+    assert "token" in content.lower()
