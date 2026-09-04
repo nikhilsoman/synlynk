@@ -1,5 +1,6 @@
 """synlynk daemon: background watch daemon, HTTP context server, SSE relay broker."""
 
+import fcntl
 import glob
 import http.server
 import json
@@ -61,6 +62,48 @@ def _daemon_state_path(*parts: str) -> str:
     return os.path.join(_repo_common_dir(), ".synlynk", *parts)
 
 
+def _daemon_lock_path(pidfile: str) -> str:
+    """Return the exclusive-lock path sibling to a daemon pidfile (#349)."""
+    return pidfile + ".lock"
+
+
+def _try_acquire_daemon_lock(lock_path: str, *, blocking: bool = False):
+    """Acquire an exclusive flock on *lock_path*.
+
+    Returns an open file object holding the lock, or ``None`` if the lock
+    could not be acquired (another starter/daemon already holds it).
+    The caller must keep the returned file open for as long as exclusivity
+    is required; closing it (or process exit) releases the lock.
+    """
+    parent = os.path.dirname(lock_path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    fh = open(lock_path, "a+")
+    flags = fcntl.LOCK_EX
+    if not blocking:
+        flags |= fcntl.LOCK_NB
+    try:
+        fcntl.flock(fh.fileno(), flags)
+    except (BlockingIOError, OSError):
+        fh.close()
+        return None
+    return fh
+
+
+def _release_daemon_lock(lock_fh) -> None:
+    """Release and close a lock file returned by ``_try_acquire_daemon_lock``."""
+    if lock_fh is None:
+        return
+    try:
+        fcntl.flock(lock_fh.fileno(), fcntl.LOCK_UN)
+    except OSError:
+        pass
+    try:
+        lock_fh.close()
+    except OSError:
+        pass
+
+
 def _daemonize_via_reexec(entry_point: str, logfile: str) -> None:
     """Spawn a detached child process running a module-level entry point."""
     module_path, func_name = entry_point.rsplit(".", 1)
@@ -85,20 +128,50 @@ class WatchDaemon:
     Subclass and override on_change() for the v1.3.0 LCP JSON-RPC daemon.
     """
 
+    _already_running_message = "  synlynk watch is already running."
+    _started_message = "  ● synlynk watch started."
+    _child_entry_point = "synlynk.daemon._watch_daemon_child_main"
+
     def __init__(self):
         self.pidfile = _daemon_state_path("watch.pid")
         self.logfile = _daemon_state_path("watch.log")
         self.settle_seconds = 3
         self.token_refresh_interval_seconds = 50 * 60
+        self._lock_fh = None
 
     def start(self) -> None:
-        if self._is_running():
-            print("  synlynk watch is already running.")
+        lock_path = _daemon_lock_path(self.pidfile)
+        lock_fh = _try_acquire_daemon_lock(lock_path, blocking=False)
+        if lock_fh is None:
+            print(self._already_running_message)
             return
-        if os.path.exists(self.pidfile):
-            os.remove(self.pidfile)
-        _daemonize_via_reexec("synlynk.daemon._watch_daemon_child_main", self.logfile)
-        print("  ● synlynk watch started.")
+        try:
+            if self._is_running():
+                print(self._already_running_message)
+                return
+            if os.path.exists(self.pidfile):
+                os.remove(self.pidfile)
+            self._prepare_start()
+            _daemonize_via_reexec(self._child_entry_point, self.logfile)
+            # Hold the start lock until the child writes its pidfile (or we
+            # time out) so a concurrent start() cannot also pass the
+            # not-running check and double-spawn (#349).
+            self._await_child_pidfile()
+            print(self._started_message)
+        finally:
+            _release_daemon_lock(lock_fh)
+
+    def _prepare_start(self) -> None:
+        """Hook for subclasses (e.g. autonomous env) before re-exec spawn."""
+        return
+
+    def _await_child_pidfile(self, timeout: float = 2.0) -> None:
+        """Wait briefly for the re-exec child to publish a live pidfile."""
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            if self._is_running():
+                return
+            time.sleep(0.05)
 
     def stop(self) -> None:
         if not os.path.exists(self.pidfile):
@@ -227,8 +300,11 @@ class WatchDaemon:
 
 def _watch_daemon_child_main() -> None:
     d = WatchDaemon()
+    # Publish pidfile before taking the lifetime lock so the parent start()
+    # waiter can observe readiness and release its start-time lock (#349).
     with open(d.pidfile, "w") as f:
         f.write(str(os.getpid()))
+    d._lock_fh = _try_acquire_daemon_lock(_daemon_lock_path(d.pidfile), blocking=True)
     _pkg("set_state")("watching")
     d._run_loop()
 
@@ -749,6 +825,9 @@ class SynlynkDaemon(WatchDaemon):
     """
 
     HTTP_PORT = 27471
+    _already_running_message = "  synlynk daemon is already running."
+    _started_message = "  ● synlynk daemon started."
+    _child_entry_point = "synlynk.daemon._synlynk_daemon_child_main"
 
     def __init__(self, autonomous: bool = False):
         import threading as _threading
@@ -771,19 +850,26 @@ class SynlynkDaemon(WatchDaemon):
         except Exception as exc:
             log_telemetry_event({"event": "sre_heartbeat", "status": "degraded", "component": "autonomous_loop", "error": str(exc)})
 
-    def start(self) -> None:
-        if self._is_running():
-            print("  synlynk daemon is already running.")
-            return
+    def _prepare_start(self) -> None:
         watch_pid = _daemon_state_path("watch.pid")
         if os.path.exists(watch_pid):
             print("  ⚠ synlynk watch is also running — both will poll project-docs/.")
-        if os.path.exists(self.pidfile):
-            os.remove(self.pidfile)
         if self.autonomous:
             os.environ["SYNLYNK_AUTONOMOUS"] = "1"
-        _daemonize_via_reexec("synlynk.daemon._synlynk_daemon_child_main", self.logfile)
-        print("  ● synlynk daemon started.")
+
+    def _reconcile_orphans_on_startup(self) -> None:
+        """Reap dead orphaned daemon_jobs left behind by a prior daemon crash (#349).
+
+        Alive orphans are adopted in place: ``_reconcile_daemon_jobs`` leaves
+        still-running PIDs as ``status='running'`` so the new daemon monitors
+        them. Dead PIDs are settled via the shared GTV path (failed /
+        failed_unverified / timed_out / …) rather than a divergent local rule.
+        """
+        try:
+            _reconcile_daemon_jobs()
+        except Exception:
+            import traceback as _traceback
+            _traceback.print_exc()
 
     def stop(self) -> None:
         if not os.path.exists(self.pidfile):
@@ -889,6 +975,8 @@ class SynlynkDaemon(WatchDaemon):
 
 def _synlynk_daemon_child_main() -> None:
     d = SynlynkDaemon(autonomous=os.environ.get("SYNLYNK_AUTONOMOUS") == "1")
+    # Publish pidfile/start marker before taking the lifetime lock so the
+    # parent start() waiter can observe readiness and release (#349).
     with open(d.pidfile, "w") as f:
         f.write(str(os.getpid()))
     start_time = time.time()
@@ -896,6 +984,11 @@ def _synlynk_daemon_child_main() -> None:
     start_file = d.pidfile.replace(".pid", ".start")
     with open(start_file, "w") as f:
         f.write(str(start_time))
+    d._lock_fh = _try_acquire_daemon_lock(_daemon_lock_path(d.pidfile), blocking=True)
+    # Crash-recovery pass: settle dead orphans / adopt still-alive ones before
+    # the poll loop begins, so reconciliation is not stuck waiting for a
+    # daemon that already died (#349).
+    d._reconcile_orphans_on_startup()
     d._run_loop()
 
 def cmd_relay_start(port: int = None) -> None:

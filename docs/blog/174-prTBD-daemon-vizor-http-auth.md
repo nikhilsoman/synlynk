@@ -2,7 +2,7 @@
 title: "PR TBD — Local HTTP Auth for the Daemon and Vizor"
 date: 2026-09-04
 series: "Building the OS for Multi-Agent Development"
-post: 173
+post: 174
 pr: "TBD"
 merged: status: open
 ---
@@ -10,6 +10,8 @@ merged: status: open
 ## The Broader Goal at the End of the Previous PR
 
 The previous post closed a presentation gap on the book: brand skin without brand skeleton. The longer-arc goalpost around that work was still operational reliability — sandboxing, credential masking, and making local agent surfaces safe enough to leave running. The daemon HTTP server on `127.0.0.1:27471` and Vizor on `127.0.0.1:8721` were still the unauthenticated local APIs they had been since v0.9.3 / BS-21: fine while "localhost means me," not fine once any other process or browser tab on the same machine can `POST /dispatch`.
+
+PR #1417 (gh:#349) then landed the daemon's exclusive start-lock and orphan-reap path, taking series slot 173. This post is the HTTP-auth half of that same daemon-hardening pair.
 
 ## Strategic Shifts in This PR
 
