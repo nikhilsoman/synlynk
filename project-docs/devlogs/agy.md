@@ -67,4 +67,16 @@
 - Added unit tests in `tests/test_sentinel.py` and regression test `test_investigate_rootcause_costtoken_bloat_on_jobcf837848_and_add_costratio_sentinel_guard_1073` in `tests/test_agent_cli.py`.
 - Authored design spec `docs/superpowers/specs/2026-09-02-token-bloat-sentinel-guard-design.md`, plan `docs/superpowers/plans/2026-09-02-token-bloat-sentinel-guard.md`, and blog post `docs/blog/160-pr1334-token-bloat-sentinel-guard.md` indexed in `docs/blog/README.md`.
 
+## 2026-09-04 — Non-authoring PR Review & Merge for PR #1415 (Job status truth regression, #1414)
 
+### Shipped
+- Reviewed PR #1415 (`dispatch/codex/job-be18ebe7`), closing issue #1414.
+- Ran `synlynk pr check` from within the PR's own worktree (`worktrees/job-be18ebe7`); confirmed all model versions attested and no blocking drift.
+- Verified test suite: `pytest tests/test_agent_cli.py -k 'job_status_add_realghwrite_endtoend_regr' -v` (all 4 scenarios `pr_open`, `killed_zombie`, `timed_out`, `review_posted` passed cleanly in 3.07s).
+- Verified the fake-gh subprocess end-to-end regression genuinely exercises the full job-status truth pipeline:
+  - Spawns `fake-harness` and `fake-gh` as real child subprocesses via `dispatch_agent` and awaits process exit cleanly.
+  - Verifies ground truth against `fake-github.json` state transitions.
+  - Genuine path-specific reconciliation: `pr_open` scalar state, `killed_zombie` leaked worktree rescue (#1385), `timed_out` dead PID rescue (#1387), `review_posted` list verification (#1386).
+  - Verifies storage convergence between `daemon_jobs` SQLite and `jobs.json` (#1388).
+- Submitted formal approval review via `gh pr review 1415 --approve` as `synlynk-synlynk-qa[bot]`.
+- Squash-merged PR #1415 into `main` via `gh pr merge 1415 --squash --delete-branch`, successfully closing issue #1414.
