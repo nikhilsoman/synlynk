@@ -2589,3 +2589,44 @@ def test_research_oslevel_sandboxing_bubblewrap_rootless_docker_sandbox_exec__st
     # 5. Network egress mediation and execution overhead
     assert "unshare-net" in content or "network" in content
     assert "pytest" in content or "Throughput" in content
+
+
+def test_research_scip_indexers_treesitter_symbol__story_4949989b():
+    """Verify research notes on SCIP, Tree-sitter, and Glean code intelligence for context assembly exist and cover required architectural dimensions."""
+    spec_path = os.path.join(
+        os.path.dirname(os.path.dirname(__file__)),
+        "docs", "superpowers", "specs", "2026-09-04-scip-code-graph-research.md",
+    )
+    assert os.path.exists(spec_path), f"Spec file not found at {spec_path}"
+
+    content = open(spec_path, encoding="utf-8").read()
+
+    # Verify metadata & reference tracking
+    assert "story-4949989b" in content
+    assert "#1396" in content
+    assert "SCIP" in content
+    assert "Tree-sitter" in content
+    assert "Glean" in content
+
+    # Verify SCIP deep evaluation
+    assert "Sourcegraph Code Intelligence Protocol" in content
+    assert "scip-python" in content
+    assert "index.scip" in content
+    assert "compiler" in content.lower()
+
+    # Verify Tree-sitter AST & symbol graphs
+    assert "incremental" in content.lower()
+    assert ".scm" in content or "query" in content.lower()
+    assert "dirty" in content.lower() or "error" in content.lower()
+    assert "repomap" in content.lower() or "pagerank" in content.lower()
+
+    # Verify Glean relational facts
+    assert "Angle" in content or "datalog" in content.lower()
+    assert "fact" in content.lower()
+    assert "subgraph" in content.lower() or "call graph" in content.lower()
+
+    # Verify Synlynk Tri-Tier Architecture & Context Assembly
+    assert "Tri-Tier" in content or "tri-tier" in content.lower()
+    assert "code_entities" in content
+    assert "code_facts" in content
+    assert "token" in content.lower()
