@@ -2152,6 +2152,81 @@ def _daemon_job_worktree_path(job_id: str, log_path: Optional[str] = None) -> Op
             return path
     return None
 
+
+def _reconcile_terminal_jobs_json(conn) -> int:
+    """Apply terminal flat-file events to still-running daemon rows.
+
+    ``jobs.json`` is a legacy event/projection store, while ``daemon_jobs`` is
+    the store used by ``synlynk jobs``.  A process can finish after writing the
+    flat-file record but before the daemon updates SQLite, leaving the latter
+    permanently running because normal daemon reconciliation only scans running
+    processes.  Treat terminal flat-file records as idempotent terminal events:
+    update only rows still marked running, and never overwrite an already
+    terminal SQLite result.
+    """
+    terminal_statuses = {
+        "completed": "done",
+        "done": "done",
+        "failed": "failed",
+        "failed_unverified": "failed",
+        "permission_denied": "permission_denied",
+        "task_delivery_failed": "failed",
+        "SCOPE_VIOLATION": "failed",
+        "succeeded_gh_write_failed": "succeeded_gh_write_failed",
+    }
+    terminal_jobs = {}
+    for job in _load_jobs():
+        job_id = job.get("id") or job.get("job_id")
+        status = terminal_statuses.get(job.get("status"))
+        if job_id and status:
+            terminal_jobs[job_id] = (job, status)
+
+    repaired = 0
+    for job_id, (job, status) in terminal_jobs.items():
+        row = conn.execute(
+            "SELECT requires_gh_write, gh_write_target, gh_write_author, gh_write_expect "
+            "FROM daemon_jobs WHERE job_id=? AND status='running'",
+            (job_id,),
+        ).fetchone()
+        if not row:
+            continue
+        requires_gh_write, target, author, expect = row
+        if requires_gh_write:
+            status, verified = _apply_gh_write_verification(
+                conn,
+                job_id,
+                requires_gh_write,
+                target or job.get("gh_write_target"),
+                status,
+                since=job.get("started_at"),
+                expect_author=author or job.get("gh_write_author"),
+                expect=expect or job.get("gh_write_expect") or "closed",
+            )
+        else:
+            verified = None
+        exit_code = job.get("exit_code")
+        completed_at = job.get("ended_at") or time.strftime("%Y-%m-%dT%H:%M:%S")
+        result = conn.execute(
+            "UPDATE daemon_jobs SET status=?, exit_code=?, completed_at=? "
+            "WHERE job_id=? AND status='running'",
+            (status, exit_code, completed_at, job_id),
+        )
+        if result.rowcount:
+            repaired += 1
+            emit_event(
+                "job_terminal",
+                {
+                    "job_id": job_id,
+                    "status": status,
+                    "gh_write_verified": verified,
+                    "source": "jobs.json",
+                },
+                emitted_by="_reconcile_terminal_jobs_json",
+            )
+    if repaired:
+        conn.commit()
+    return repaired
+
 def _ensure_daemon_job_cost_entry(
     job_id: str,
     agent: str,
@@ -2339,6 +2414,10 @@ def _reconcile_daemon_jobs() -> None:
     so jobs that landed real work are not summarized as unknown/0-files.
     """
     conn = _pkg("_get_db")()
+    # Repair the split-brain window before selecting running rows.  This is
+    # deliberately conditional/idempotent so a late daemon update cannot be
+    # clobbered by an older flat-file event.
+    _reconcile_terminal_jobs_json(conn)
     rows = conn.execute(
         "SELECT job_id, agent, story_id, task, pid, started_at, completed_at, log_path, "
         "dispatch_context, requires_gh_write, gh_write_target, gh_write_author, gh_write_expect "
