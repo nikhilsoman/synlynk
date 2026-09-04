@@ -2144,3 +2144,179 @@ def test_featonboarding_implement_zerorisk_dirty_worktree_and_first_win__story_7
     mock_dispatch.assert_called_once()
     _, kw = mock_dispatch.call_args
     assert kw.get("requires_gh_write") is True
+
+
+# --- gh:#349 daemon orphan reap + start lock ---------------------------------
+
+def test_orphaned_dispatched_child_process_survives_daemon_crash_alive_pid_is_adopted(
+    project_dir, monkeypatch
+):
+    """Startup reconcile must adopt a still-alive orphaned job PID (#349)."""
+    import subprocess
+    import synlynk as sl
+    import synlynk.daemon as daemon_mod
+    import synlynk.jobs as jobs_mod
+
+    # Real subprocess that outlives the "prior daemon" — sleep briefly so the
+    # startup reconcile pass observes it as alive and leaves status='running'.
+    orphan = subprocess.Popen(
+        [daemon_mod.sys.executable, "-c", "import time; time.sleep(30)"],
+        start_new_session=True,
+    )
+    try:
+        conn = sl._get_db()
+        conn.execute(
+            "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, "
+            "depends_on, pid, enqueued_at, started_at) VALUES (?,?,?,?,?,?,?,?,?)",
+            (
+                "job-orphan-alive",
+                "codex",
+                "orphaned alive child",
+                "running",
+                5,
+                "[]",
+                orphan.pid,
+                "2026-09-04T00:00:00",
+                "2026-09-04T00:00:01",
+            ),
+        )
+        conn.commit()
+        conn.close()
+
+        call_order = []
+        monkeypatch.setattr(
+            daemon_mod.SynlynkDaemon,
+            "_run_loop",
+            lambda self: call_order.append("run_loop"),
+        )
+        monkeypatch.setattr(os, "getpid", lambda: 424242)
+        daemon_mod._synlynk_daemon_child_main()
+
+        assert call_order == ["run_loop"]
+        conn = sl._get_db()
+        row = conn.execute(
+            "SELECT status, pid FROM daemon_jobs WHERE job_id=?",
+            ("job-orphan-alive",),
+        ).fetchone()
+        conn.close()
+        assert row == ("running", orphan.pid)
+        assert jobs_mod._pid_is_alive(orphan.pid) is True
+    finally:
+        orphan.terminate()
+        try:
+            orphan.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            orphan.kill()
+            orphan.wait(timeout=5)
+
+
+def test_orphaned_dispatched_child_process_survives_daemon_crash_dead_pid_is_reaped(
+    project_dir, monkeypatch
+):
+    """Startup reconcile must reap a dead orphaned job PID via shared logic (#349)."""
+    import synlynk as sl
+    import synlynk.daemon as daemon_mod
+
+    dead_pid = 99999999
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, "
+        "depends_on, pid, enqueued_at, started_at) VALUES (?,?,?,?,?,?,?,?,?)",
+        (
+            "job-orphan-dead",
+            "codex",
+            "orphaned dead child",
+            "running",
+            5,
+            "[]",
+            dead_pid,
+            "2026-09-04T00:00:00",
+            "2026-09-04T00:00:01",
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+    call_order = []
+    monkeypatch.setattr(
+        daemon_mod.SynlynkDaemon,
+        "_run_loop",
+        lambda self: call_order.append("run_loop"),
+    )
+    monkeypatch.setattr(os, "getpid", lambda: 434343)
+    daemon_mod._synlynk_daemon_child_main()
+
+    assert call_order == ["run_loop"]
+    conn = sl._get_db()
+    row = conn.execute(
+        "SELECT status, exit_code FROM daemon_jobs WHERE job_id=?",
+        ("job-orphan-dead",),
+    ).fetchone()
+    conn.close()
+    # Shared _reconcile_daemon_jobs GTV path: dead PID, no exit marker, no git
+    # evidence → timed_out / -9 (same as normal-loop reconcile).
+    assert row == ("timed_out", -9)
+
+
+def test_daemon_start_lock_rejects_concurrent_second_start(project_dir, monkeypatch, capsys):
+    """Exclusive flock serializes concurrent SynlynkDaemon.start() calls (#349)."""
+    import threading
+    import time as time_mod
+    import synlynk.daemon as daemon_mod
+
+    monkeypatch.setattr(daemon_mod.SynlynkDaemon, "_is_running", lambda self: False)
+    monkeypatch.setattr(daemon_mod.SynlynkDaemon, "_await_child_pidfile", lambda self, timeout=2.0: None)
+
+    started = []
+    barrier = threading.Barrier(2)
+    hold_spawn = threading.Event()
+    release_spawn = threading.Event()
+
+    def _blocking_reexec(entry_point, logfile):
+        # Hold inside the locked critical section (after flock, before release)
+        # so a concurrent start() must fail LOCK_NB rather than also spawning.
+        started.append((entry_point, logfile))
+        hold_spawn.set()
+        release_spawn.wait(timeout=5)
+
+    monkeypatch.setattr(daemon_mod, "_daemonize_via_reexec", _blocking_reexec)
+
+    results = []
+
+    def _start():
+        barrier.wait(timeout=5)
+        daemon_mod.SynlynkDaemon().start()
+        results.append("returned")
+
+    t1 = threading.Thread(target=_start)
+    t2 = threading.Thread(target=_start)
+    t1.start()
+    t2.start()
+
+    assert hold_spawn.wait(timeout=5)
+    # Give the loser a moment to attempt LOCK_NB and print already-running.
+    time_mod.sleep(0.2)
+    release_spawn.set()
+    t1.join(timeout=5)
+    t2.join(timeout=5)
+
+    assert len(started) == 1
+    assert started[0][0] == "synlynk.daemon._synlynk_daemon_child_main"
+    out = capsys.readouterr().out
+    assert "already running" in out
+    assert results.count("returned") == 2
+
+
+def test_try_acquire_daemon_lock_is_exclusive(tmp_path):
+    """Direct lock-helper coverage: second LOCK_NB fails while first is held (#349)."""
+    import synlynk.daemon as daemon_mod
+
+    lock_path = str(tmp_path / ".synlynk" / "daemon.pid.lock")
+    first = daemon_mod._try_acquire_daemon_lock(lock_path, blocking=False)
+    assert first is not None
+    second = daemon_mod._try_acquire_daemon_lock(lock_path, blocking=False)
+    assert second is None
+    daemon_mod._release_daemon_lock(first)
+    third = daemon_mod._try_acquire_daemon_lock(lock_path, blocking=False)
+    assert third is not None
+    daemon_mod._release_daemon_lock(third)
