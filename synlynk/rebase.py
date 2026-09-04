@@ -207,6 +207,115 @@ def extract_python_ast_symbols(source_code: str) -> dict:
     return {"symbols": symbols, "imports": imports}
 
 
+class _MinimalAstUnparser(ast.NodeVisitor):
+    """Small Python 3.8-compatible unparser for the merged AST node subset."""
+
+    def __init__(self):
+        self.lines = []
+        self.indent = 0
+
+    def emit(self, line=""):
+        self.lines.append("    " * self.indent + line)
+
+    def visit_Module(self, node):
+        for child in node.body:
+            self.visit(child)
+
+    def visit_Import(self, node):
+        names = [alias.name + (" as " + alias.asname if alias.asname else "") for alias in node.names]
+        self.emit("import " + ", ".join(names))
+
+    def visit_ImportFrom(self, node):
+        prefix = "." * node.level + (node.module or "")
+        names = [alias.name + (" as " + alias.asname if alias.asname else "") for alias in node.names]
+        self.emit("from " + prefix + " import " + ", ".join(names))
+
+    def visit_FunctionDef(self, node):
+        self._visit_function(node, "def")
+
+    def visit_AsyncFunctionDef(self, node):
+        self._visit_function(node, "async def")
+
+    def _visit_function(self, node, keyword):
+        for decorator in node.decorator_list:
+            self.emit("@" + self.expr(decorator))
+        args = [self.expr(arg) for arg in node.args.args]
+        if node.args.vararg:
+            args.append("*" + self.expr(node.args.vararg))
+        if node.args.kwarg:
+            args.append("**" + self.expr(node.args.kwarg))
+        result = " " + self.expr(node.returns) if node.returns else ""
+        self.emit(keyword + " " + node.name + "(" + ", ".join(args) + ")" + result + ":")
+        self.visit_body(node.body)
+
+    def visit_ClassDef(self, node):
+        for decorator in node.decorator_list:
+            self.emit("@" + self.expr(decorator))
+        bases = "(" + ", ".join(self.expr(base) for base in node.bases) + ")" if node.bases else ""
+        self.emit("class " + node.name + bases + ":")
+        self.visit_body(node.body)
+
+    def visit_Assign(self, node):
+        self.emit(" = ".join(self.expr(target) for target in node.targets) + " = " + self.expr(node.value))
+
+    def visit_Return(self, node):
+        self.emit("return" + (" " + self.expr(node.value) if node.value else ""))
+
+    def visit_Expr(self, node):
+        self.emit(self.expr(node.value))
+
+    def visit_Pass(self, node):
+        self.emit("pass")
+
+    def visit_body(self, body):
+        self.indent += 1
+        if body:
+            for child in body:
+                self.visit(child)
+        else:
+            self.emit("pass")
+        self.indent -= 1
+
+    def expr(self, node):
+        if isinstance(node, ast.Name):
+            return node.id
+        if isinstance(node, ast.Constant):
+            return repr(node.value)
+        if isinstance(node, ast.Attribute):
+            return self.expr(node.value) + "." + node.attr
+        if isinstance(node, ast.Call):
+            args = [self.expr(arg) for arg in node.args]
+            args.extend(keyword.arg + "=" + self.expr(keyword.value) for keyword in node.keywords if keyword.arg)
+            return self.expr(node.func) + "(" + ", ".join(args) + ")"
+        if isinstance(node, ast.BinOp):
+            operators = {ast.Add: "+", ast.Sub: "-", ast.Mult: "*", ast.Div: "/", ast.Mod: "%"}
+            return "(" + self.expr(node.left) + " " + operators[type(node.op)] + " " + self.expr(node.right) + ")"
+        if isinstance(node, ast.UnaryOp):
+            operators = {ast.USub: "-", ast.UAdd: "+", ast.Not: "not "}
+            return operators[type(node.op)] + self.expr(node.operand)
+        if isinstance(node, ast.List):
+            return "[" + ", ".join(self.expr(element) for element in node.elts) + "]"
+        if isinstance(node, ast.Tuple):
+            return "(" + ", ".join(self.expr(element) for element in node.elts) + ",)"
+        if isinstance(node, ast.keyword):
+            return (node.arg + "=" if node.arg else "**") + self.expr(node.value)
+        if isinstance(node, ast.arg):
+            annotation = ": " + self.expr(node.annotation) if node.annotation else ""
+            return node.arg + annotation
+        raise ValueError("Unsupported AST expression: " + type(node).__name__)
+
+    def source(self, tree):
+        self.visit(tree)
+        return "\n".join(self.lines)
+
+
+def _unparse_python_ast(tree):
+    """Use stdlib unparse where available, with a Python 3.8 fallback."""
+    if hasattr(ast, "unparse"):
+        return ast.unparse(tree)
+    return _MinimalAstUnparser().source(tree)
+
+
 def ast_3way_merge_python(base_src: str, ours_src: str, theirs_src: str) -> Tuple[Optional[str], dict]:
     """Perform a 3-way AST semantic merge on Python source code (Ours + Theirs relative to Base).
 
@@ -331,7 +440,7 @@ def ast_3way_merge_python(base_src: str, ours_src: str, theirs_src: str) -> Tupl
     new_module = ast.Module(body=merged_imports + merged_declarations, type_ignores=[])
     try:
         ast.fix_missing_locations(new_module)
-        merged_code = ast.unparse(new_module)
+        merged_code = _unparse_python_ast(new_module)
         ast.parse(merged_code)
         return merged_code, {
             "resolvable": True,
