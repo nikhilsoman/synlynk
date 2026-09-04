@@ -2532,3 +2532,24 @@ def test_try_acquire_daemon_lock_is_exclusive(tmp_path):
     third = daemon_mod._try_acquire_daemon_lock(lock_path, blocking=False)
     assert third is not None
     daemon_mod._release_daemon_lock(third)
+
+
+def test_research_virtualized_vcs_workspace_backends__story_ebdc2894():
+    """Verify research spec for virtualized VCS workspace backends (EdenFS, Sapling, sparse checkouts)."""
+    spec_path = os.path.join(
+        os.path.dirname(os.path.dirname(__file__)),
+        "docs",
+        "superpowers",
+        "specs",
+        "2026-09-04-vcs-virtualization-research.md",
+    )
+    assert os.path.exists(spec_path), f"Research spec not found at {spec_path}"
+    with open(spec_path, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    assert "EdenFS" in content
+    assert "Sapling" in content
+    assert "sparse" in content.lower()
+    assert "multi-agent" in content.lower()
+    assert "#1390" in content
+    assert "worktree" in content.lower()
