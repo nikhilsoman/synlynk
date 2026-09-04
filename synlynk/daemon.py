@@ -16,6 +16,7 @@ from synlynk.jobs import _dispatch_ready_jobs, _reconcile_daemon_jobs
 from synlynk.sentinel import _write_sentinel_alert, log_telemetry_event
 from synlynk.team import get_username
 from synlynk import github_app_auth
+from synlynk import local_http_auth
 
 
 def _pkg(name: str, default=None):
@@ -263,7 +264,26 @@ def _make_daemon_handler(daemon_instance):
             parsed = _urlparse.urlparse(self.path)
             return parsed.path, dict(_urlparse.parse_qsl(parsed.query))
 
+        def _drain_body(self) -> None:
+            try:
+                length = int(self.headers.get("Content-Length", 0) or 0)
+            except (TypeError, ValueError):
+                length = 0
+            if length > 0:
+                self.rfile.read(length)
+
+        def _authorize(self, drain: bool = False) -> bool:
+            ok, code, message = local_http_auth.authorize_local_request(self.headers)
+            if ok:
+                return True
+            if drain:
+                self._drain_body()
+            self._send_json(code, {"error": message})
+            return False
+
         def do_GET(self):
+            if not self._authorize():
+                return
             path, params = self._parse_path()
             try:
                 if path == "/context":
@@ -288,6 +308,8 @@ def _make_daemon_handler(daemon_instance):
                 self._send_json(500, {"error": str(e)})
 
         def do_POST(self):
+            if not self._authorize(drain=True):
+                return
             path, _ = self._parse_path()
             try:
                 if path == "/dispatch":
@@ -824,6 +846,7 @@ class SynlynkDaemon(WatchDaemon):
         class _ReuseAddrHTTPServer(_http_server.HTTPServer):
             allow_reuse_address = True
 
+        local_http_auth.ensure_local_token()
         handler_class = _make_daemon_handler(self)
         http_server = _ReuseAddrHTTPServer(("127.0.0.1", self.HTTP_PORT), handler_class)
         t = _threading.Thread(target=http_server.serve_forever, daemon=True)

@@ -1987,3 +1987,67 @@ def test_featonboarding_implement_zerorisk_dirty_worktree_and_first_win__story_7
     mock_dispatch.assert_called_once()
     _, kw = mock_dispatch.call_args
     assert kw.get("requires_gh_write") is True
+
+
+def test_vizor_and_daemon_http_servers_have_zero_unauthenticated_access_blocked(project_dir):
+    """gh#355: local HTTP write/read surfaces require X-Synlynk-Token."""
+    import inspect
+    import json
+    from unittest.mock import patch
+
+    import synlynk
+    from synlynk.local_http_auth import TOKEN_HEADER, ensure_local_token
+    from synlynk.viz import VizorHandler
+    from tests.test_synlynk import _invoke_daemon_handler
+    from tests.test_viz_serve import _make_handler
+
+    body = json.dumps({"agent": "codex", "task": "billable dispatch"}).encode()
+    status, _, _, _ = _invoke_daemon_handler(
+        project_dir,
+        "POST",
+        "/dispatch",
+        body=body,
+        headers={"Content-Type": "application/json", "Content-Length": str(len(body))},
+        authenticate=False,
+    )
+    assert status == 401
+    conn = synlynk._get_db()
+    assert conn.execute("SELECT COUNT(*) FROM daemon_jobs").fetchone()[0] == 0
+    conn.close()
+
+    status, _, _, _ = _invoke_daemon_handler(
+        project_dir,
+        "POST",
+        "/dispatch",
+        body=body,
+        headers={"Content-Type": "application/json", "Content-Length": str(len(body))},
+    )
+    assert status == 200
+
+    os.makedirs(".synlynk/viz-cache", exist_ok=True)
+    handler = _make_handler(body, path="/dispatch", authenticate=False)
+    with patch.object(VizorHandler, "_handle_dispatch") as mock_dispatch:
+        VizorHandler.do_POST(handler)
+        mock_dispatch.assert_not_called()
+    assert handler.errors == [(401, "unauthorized")]
+
+    handler = _make_handler(body, path="/dispatch")
+    with patch.object(
+        VizorHandler,
+        "_handle_dispatch",
+        return_value={"ok": True, "message": "", "job_id": "job-1"},
+    ) as mock_dispatch:
+        VizorHandler.do_POST(handler)
+        mock_dispatch.assert_called_once()
+    assert handler.responses == [200]
+
+    from synlynk.local_http_auth import http_token_path
+
+    token = ensure_local_token()
+    token_path = http_token_path()
+    assert os.path.isfile(token_path)
+    assert (os.stat(token_path).st_mode & 0o777) == 0o600
+    assert token
+    src = inspect.getsource(VizorHandler._send_json_ok)
+    assert "Access-Control-Allow-Origin" not in src
+    assert TOKEN_HEADER == "X-Synlynk-Token"
