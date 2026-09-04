@@ -1708,6 +1708,37 @@ def test_reconcile_daemon_jobs_sets_succeeded_gh_write_failed_when_verified_fals
     assert row[1] == "false"
 
 
+def test_apply_gh_write_verification_persists_evidence(project_dir, monkeypatch):
+    import json
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, enqueued_at) "
+        "VALUES ('job-ghw-evidence', 'codex', 'review pr 1038', 'running', '2026-08-18T10:00:00')"
+    )
+    conn.commit()
+
+    def fake_verified(target, expect, since=None, expect_author=None, evidence=None, **kwargs):
+        evidence.update({"target": target, "reviews": [{"submittedAt": "2026-08-18T11:00:00Z"}], "matched": False})
+        return False
+
+    monkeypatch.setattr(jobs_mod, "gh_write_verified", fake_verified)
+    jobs_mod._apply_gh_write_verification(
+        conn, "job-ghw-evidence", True, "pr:1038", "done",
+        since="2026-08-18T10:00:00", expect="review_posted",
+    )
+    row = conn.execute(
+        "SELECT gh_write_verified, gh_write_evidence FROM daemon_jobs WHERE job_id=?",
+        ("job-ghw-evidence",),
+    ).fetchone()
+    conn.close()
+    assert row[0] == "false"
+    assert json.loads(row[1])["matched"] is False
+    assert json.loads(row[1])["reviews"][0]["submittedAt"] == "2026-08-18T11:00:00Z"
+
+
 def test_reconcile_daemon_jobs_leaves_status_unchanged_when_gh_write_verified_true(project_dir, monkeypatch):
     import synlynk as sl
     import synlynk.jobs as jobs_mod
