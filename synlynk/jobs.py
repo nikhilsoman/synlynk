@@ -1902,7 +1902,51 @@ def auto_reap_job_from_sentinel(code: str, message: str) -> Optional[str]:
     except Exception:
         return None
     try:
-        if mark_daemon_job_terminal(conn, job_id, status="timed_out", exit_code=-9):
+        row = conn.execute(
+            "SELECT agent, started_at, log_path, requires_gh_write, gh_write_target, "
+            "gh_write_author, gh_write_expect FROM daemon_jobs "
+            "WHERE job_id=? AND status='running'",
+            (job_id,),
+        ).fetchone()
+        if not row:
+            return None
+
+        agent, started_at, log_path, requires_gh_write, target, author, expect = row
+        exit_code = None
+        exit_marker_present = bool(log_path and os.path.exists(log_path + ".exit"))
+        if exit_marker_present:
+            try:
+                with open(log_path + ".exit") as f:
+                    exit_code = int(f.read().strip())
+            except (OSError, TypeError, ValueError):
+                pass
+
+        worktree_path = _daemon_job_worktree_path(job_id, log_path)
+        git_state = None
+        if worktree_path:
+            inspect_fn = _pkg("_inspect_worktree_git_state") or _inspect_worktree_git_state
+            try:
+                git_state = inspect_fn(
+                    worktree_path, f"dispatch/{agent}/{job_id}", started_at
+                )
+            except Exception:
+                git_state = None
+        status, terminal_exit_code, _, _ = _gtv_status_for_daemon_exit(exit_code, git_state)
+        status, verified = _apply_gh_write_verification(
+            conn, job_id, requires_gh_write, target, status,
+            since=started_at, expect_author=author, expect=expect or "closed",
+        )
+        # A sentinel can race the shell wrapper's `.exit` write.  A verified
+        # GitHub effect is success evidence, not evidence of a timeout.
+        if (
+            requires_gh_write and verified == "true" and
+            status == "timed_out"
+        ):
+            status, terminal_exit_code = "done", 0
+
+        if mark_daemon_job_terminal(
+            conn, job_id, status=status, exit_code=terminal_exit_code
+        ):
             conn.commit()
             return job_id
         return None
@@ -2412,6 +2456,11 @@ def _reconcile_daemon_jobs() -> None:
                         since=started_at, expect_author=gh_write_author,
                         expect=gh_write_expect or "closed",
                     )
+                    if (
+                        requires_gh_write and gh_write_verified_str == "true"
+                        and zombie_status == "timed_out"
+                    ):
+                        zombie_status, zombie_exit_code = "done", 0
                     if not requires_gh_write or gh_write_verified_str != "true":
                         zombie_status, zombie_exit_code = "killed_zombie", -9
                     _reap_zombie_worktree(job_id, log_path)
@@ -2424,11 +2473,13 @@ def _reconcile_daemon_jobs() -> None:
                     continue
                 exit_code = None
                 exit_file = None
+                exit_marker_present = False
                 if raw_exit_status is not None:
                     exit_code = _exit_code_from_wait_status(raw_exit_status)
                 elif log_path:
                     exit_file = log_path + ".exit"
                 if exit_file and os.path.exists(exit_file):
+                    exit_marker_present = True
                     try:
                         with open(exit_file) as f:
                             exit_code = int(f.read().strip())
@@ -2504,6 +2555,11 @@ def _reconcile_daemon_jobs() -> None:
                     since=started_at, expect_author=gh_write_author,
                     expect=gh_write_expect or "closed",
                 )
+                if (
+                    requires_gh_write and gh_write_verified_str == "true"
+                    and status == "timed_out" and not exit_marker_present
+                ):
+                    status, exit_code = "done", 0
 
                 files_touched = []
                 if git_state:
