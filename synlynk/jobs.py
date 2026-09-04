@@ -2476,7 +2476,8 @@ def _reconcile_daemon_jobs() -> None:
     _reconcile_terminal_jobs_json(conn)
     rows = conn.execute(
         "SELECT job_id, agent, story_id, task, pid, started_at, completed_at, log_path, "
-        "dispatch_context, requires_gh_write, gh_write_target, gh_write_author, gh_write_expect "
+        "dispatch_context, requires_gh_write, gh_write_target, gh_write_author, gh_write_expect, "
+        "worktree_path, worktree_branch "
         "FROM daemon_jobs WHERE status='running'"
     ).fetchall()
     now = time.strftime("%Y-%m-%dT%H:%M:%S")
@@ -2487,7 +2488,7 @@ def _reconcile_daemon_jobs() -> None:
     try:
         for (job_id, agent, story_id, task, pid, started_at, completed_at, log_path,
              dispatch_context, requires_gh_write, gh_write_target, gh_write_author,
-             gh_write_expect) in rows:
+             gh_write_expect, persisted_worktree_path, persisted_worktree_branch) in rows:
             exited = False
             zombie = False
             raw_exit_status = None
@@ -2518,8 +2519,8 @@ def _reconcile_daemon_jobs() -> None:
                     # evidence that a required GitHub write failed.  Run the
                     # same GTV/verifier path as other terminal outcomes before
                     # using the irreversible killed_zombie fallback.
-                    worktree_path = _daemon_job_worktree_path(job_id, log_path)
-                    worktree_branch = f"dispatch/{agent}/{job_id}" if agent else None
+                    worktree_path = persisted_worktree_path or _daemon_job_worktree_path(job_id, log_path)
+                    worktree_branch = persisted_worktree_branch or (f"dispatch/{agent}/{job_id}" if agent else None)
                     git_state = None
                     if worktree_path:
                         inspect_fn = _pkg("_inspect_worktree_git_state") or _inspect_worktree_git_state
@@ -2616,8 +2617,8 @@ def _reconcile_daemon_jobs() -> None:
                     continue
 
                 # --- Ground-truth verification (#331 / #579) ---
-                worktree_path = _daemon_job_worktree_path(job_id, log_path)
-                worktree_branch = f"dispatch/{agent}/{job_id}" if agent else None
+                worktree_path = persisted_worktree_path or _daemon_job_worktree_path(job_id, log_path)
+                worktree_branch = persisted_worktree_branch or (f"dispatch/{agent}/{job_id}" if agent else None)
                 git_state = None
                 if worktree_path:
                     inspect_fn = _pkg("_inspect_worktree_git_state") or _inspect_worktree_git_state
@@ -2862,12 +2863,15 @@ def _dispatch_ready_jobs(max_parallel: int = 4) -> int:
             # dispatch_agent updates daemon_jobs when the row already exists; re-apply
             # on this connection so the per-job commit contract remains visible here.
             conn.execute(
-                "UPDATE daemon_jobs SET status='running', pid=?, started_at=?, log_path=? "
+                "UPDATE daemon_jobs SET status='running', pid=?, started_at=?, log_path=?, "
+                "worktree_path=?, worktree_branch=? "
                 "WHERE job_id=?",
                 (
                     job.get("pid"),
                     job.get("started_at") or now,
                     job.get("log_file") or log_path,
+                    job.get("worktree_path"),
+                    job.get("worktree_branch"),
                     job_id,
                 ),
             )

@@ -292,6 +292,22 @@ def _ensure_daemon_job_harness_columns(conn) -> None:
                 pass
 
 
+def _ensure_daemon_job_worktree_columns(conn) -> None:
+    """Add persisted worktree metadata for legacy daemon schemas."""
+    try:
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)").fetchall()}
+    except Exception:
+        return
+    if not cols:
+        return
+    for name in ("worktree_path", "worktree_branch"):
+        if name not in cols:
+            try:
+                conn.execute(f"ALTER TABLE daemon_jobs ADD COLUMN {name} TEXT")
+            except Exception:
+                pass
+
+
 def _context_mode_hint(context_mode: str, task: str) -> Optional[str]:
     if context_mode != "full":
         return None
@@ -3199,6 +3215,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             _ensure_daemon_job_agent_id_column(dconn)
             _ensure_daemon_job_gh_write_columns(dconn)
             _ensure_daemon_job_harness_columns(dconn)
+            _ensure_daemon_job_worktree_columns(dconn)
             existing = dconn.execute(
                 "SELECT 1 FROM daemon_jobs WHERE job_id=?", (job_id,)
             ).fetchone()
@@ -3207,7 +3224,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 dispatch_context = _dispatch_context()
                 dconn.execute(
                     "UPDATE daemon_jobs SET status='running', pid=?, started_at=?, "
-                    "log_path=?, agent=?, harness=?, role=?, task=?, story_id=?, "
+                    "log_path=?, worktree_path=?, worktree_branch=?, agent=?, harness=?, role=?, task=?, story_id=?, "
                     "dispatch_context=COALESCE(dispatch_context, ?), "
                     "context_mode=?, context_bytes=?, "
                     "session_id=COALESCE(session_id, ?), "
@@ -3218,6 +3235,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                         proc.pid,
                         job["started_at"],
                         log_file,
+                        worktree_path,
+                        worktree_branch,
                         agent,
                         agent,
                         resolved_agent_role or None,
@@ -3238,9 +3257,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 dconn.execute(
                     "INSERT OR REPLACE INTO daemon_jobs "
                     "(job_id, agent, harness, role, task, story_id, status, priority, depends_on, pid, "
-                    "enqueued_at, started_at, log_path, dispatch_context, context_mode, context_bytes, session_id, "
+                    "enqueued_at, started_at, log_path, worktree_path, worktree_branch, dispatch_context, context_mode, context_bytes, session_id, "
                     "agent_id, requires_gh_write, gh_write_target, gh_write_author, gh_write_expect) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         job_id,
                         agent,
@@ -3255,6 +3274,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                         job["started_at"],
                         job["started_at"],
                         log_file,
+                        worktree_path,
+                        worktree_branch,
                         dispatch_context,
                         context_mode,
                         context_bytes,
