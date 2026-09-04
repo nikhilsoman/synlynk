@@ -2,6 +2,8 @@ import sqlite3
 import subprocess
 import re
 import os
+import stat
+import copy
 
 import pytest
 
@@ -294,6 +296,90 @@ def test_jobs_all_crashes_typeerror_comparing_offset_naive_and_aware(monkeypatch
     assert gh_write_verified(
         "pr:1038", expect="review_posted", since="2026-08-18T10:00:00"
     ) is True
+
+
+def test_job_status_daemon_jobs_sqlite_and_jobsjs(project_dir, capsys):
+    """A terminal jobs.json event repairs a stale daemon_jobs running row."""
+    import synlynk as sl
+
+    job_id = "job-split-brain-1383"
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, pid, enqueued_at, started_at) "
+        "VALUES (?, ?, ?, 'running', ?, ?, ?)",
+        (job_id, "codex", "finish the GitHub write", 999999,
+         "2026-09-04T10:00:00", "2026-09-04T10:00:00"),
+    )
+    conn.commit()
+    conn.close()
+    sl._save_jobs([{
+        "id": job_id,
+        "agent": "codex",
+        "task": "finish the GitHub write",
+        "status": "completed",
+        "exit_code": 0,
+        "started_at": "2026-09-04T10:00:00",
+        "ended_at": "2026-09-04T10:01:00",
+    }])
+
+    sl.cmd_jobs(all_jobs=True)
+    out = capsys.readouterr().out
+
+    conn = sl._get_db()
+    row = conn.execute(
+        "SELECT status, exit_code, completed_at FROM daemon_jobs WHERE job_id=?",
+        (job_id,),
+    ).fetchone()
+    conn.close()
+    assert row == ("done", 0, "2026-09-04T10:01:00")
+    assert job_id in out
+    assert "done" in out
+
+
+test_fix_reconcile_terminal_jobs_across_sqlite = test_job_status_daemon_jobs_sqlite_and_jobsjs
+
+
+@pytest.mark.skipif(
+    not os.environ.get("SYNLYNK_LIVE_GH_WRITE_ISSUE"),
+    reason="set SYNLYNK_LIVE_GH_WRITE_ISSUE to run the live GitHub-write integration test",
+)
+def test_job_status_daemon_jobs_sqlite_and_jobsjs_live_gh_write(project_dir, monkeypatch):
+    """A real child gh write is reflected by ``synlynk jobs --all``."""
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+    from synlynk.gh_verify import gh_write_verified
+
+    target = int(os.environ["SYNLYNK_LIVE_GH_WRITE_ISSUE"])
+    repo = os.environ.get("SYNLYNK_LIVE_GH_WRITE_REPO", "")
+    script = project_dir / "live-gh-write"
+    repo_arg = f" --repo {repo!r}" if repo else ""
+    script.write_text(
+        "#!/bin/sh\n"
+        f"exec gh issue close {target}{repo_arg} --reason completed --yes\n"
+    )
+    script.chmod(script.stat().st_mode | stat.S_IXUSR)
+
+    baseline = copy.deepcopy(dispatch_mod.HARNESS_CAPABILITY_BASELINES["codex"])
+    baseline.update({"cli": str(script), "non_interactive_flags": [], "prompt_file_flag": None,
+                     "prompt_via_arg": False, "prompt_flag": None})
+    monkeypatch.setitem(dispatch_mod.HARNESS_CAPABILITY_BASELINES, "codex", baseline)
+    job = dispatch_mod.dispatch_agent(
+        "codex", f"close issue #{target}", force_agent=True,
+        requires_gh_write=True, issue=target, role="dev", skip_preflight=True,
+        context_mode="none",
+    )
+    os.waitpid(job["pid"], 0)
+    sl._reconcile_jobs()
+    sl.cmd_jobs(all_jobs=True)
+
+    assert gh_write_verified(f"issue:{target}", expect="closed") is True
+    conn = sl._get_db()
+    row = conn.execute(
+        "SELECT status, gh_write_verified FROM daemon_jobs WHERE job_id=?",
+        (job["id"],),
+    ).fetchone()
+    conn.close()
+    assert row == ("done", "true")
 
 
 def test_codex_dispatch_workspacewrite_sandbox_bl_network_permission_adds_override():
@@ -1901,4 +1987,3 @@ def test_featonboarding_implement_zerorisk_dirty_worktree_and_first_win__story_7
     mock_dispatch.assert_called_once()
     _, kw = mock_dispatch.call_args
     assert kw.get("requires_gh_write") is True
-
