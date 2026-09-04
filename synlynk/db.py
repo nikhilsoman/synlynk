@@ -709,6 +709,11 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
                 conn.execute("ALTER TABLE daemon_jobs ADD COLUMN gh_write_expect TEXT DEFAULT 'closed'")
             except sqlite3.OperationalError:
                 pass
+        if "gh_write_evidence" not in daemon_job_cols:
+            try:
+                conn.execute("ALTER TABLE daemon_jobs ADD COLUMN gh_write_evidence TEXT")
+            except sqlite3.OperationalError:
+                pass
         if "harness" not in daemon_job_cols:
             try:
                 conn.execute("ALTER TABLE daemon_jobs ADD COLUMN harness TEXT")
