@@ -1069,9 +1069,24 @@ def test_review_codex_gh_write_keeps_repository_read_only(project_dir, monkeypat
     )
 
     command = " ".join(captured["command"])
-    assert "read-only" in command
-    assert "sandbox_workspace_read_only.network_access=true" in command
-    assert "sandbox_workspace_write.network_access=true" not in command
+    assert "-s workspace-write" in command
+    assert "-c sandbox_workspace_write.network_access=true" in command
+    assert "sandbox_workspace_write.writable_roots=[]" in command
+    assert "-s read-only" not in command
+    assert "sandbox_workspace_read_only" not in command
+
+
+def test_codex_review_permission_flags_match_live_network_no_write_probe():
+    from synlynk._constants import _CODEX_NETWORK_PERMISSION
+    from synlynk.dispatch import _permissions_to_flags
+
+    assert _permissions_to_flags(
+        "codex", ["read:*", "run:shell", _CODEX_NETWORK_PERMISSION], read_only=True
+    ) == [
+        "-s", "workspace-write",
+        "-c", "sandbox_workspace_write.network_access=true",
+        "-c", "sandbox_workspace_write.writable_roots=[]",
+    ]
 
 
 @pytest.mark.parametrize("task_type", [None, "", "implement"])
