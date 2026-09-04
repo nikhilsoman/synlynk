@@ -8,6 +8,8 @@ import time
 import traceback
 from typing import Optional
 
+_REAL_POPEN_TYPE = subprocess.Popen
+
 from synlynk._constants import QUOTA_PATTERNS
 
 _SENTINEL_ALERT_RE = re.compile(
@@ -80,13 +82,20 @@ def _write_sentinel_alert(severity: str, code: str, message: str, sentinel_path:
             pass
 
 
-def capture_process_identity(pid: int) -> Optional[dict]:
+def capture_process_identity(pid: int, process=None) -> Optional[dict]:
     """Capture stable, OS-provided identity metadata for a process.
 
     ``ps`` is available on macOS and Linux and keeps this guard dependency-free.
     The start time is authoritative when available; the command is a fallback
     for platforms where ``ps`` cannot provide a start time.
     """
+    # Dispatch tests and callers may provide a lightweight process double.  Do
+    # not let the identity probe turn that double's mocked Popen into a `ps`
+    # invocation (or mistake an invalid PID for a real process).
+    if isinstance(pid, bool) or not isinstance(pid, int) or pid <= 0:
+        return None
+    if process is not None and not isinstance(process, _REAL_POPEN_TYPE):
+        return None
     try:
         start = subprocess.run(
             ["ps", "-o", "lstart=", "-p", str(int(pid))],

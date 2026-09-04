@@ -8074,6 +8074,7 @@ def test_agy_dispatch_injects_pythonunbuffered(project_dir, monkeypatch):
 def test_reconcile_detects_stall_and_kills_process(tmp_path, monkeypatch):
     import signal, time, json, os
     import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
 
     job_id = "job-stall-test"
     log_file = tmp_path / f"{job_id}.log"
@@ -8084,6 +8085,7 @@ def test_reconcile_detects_stall_and_kills_process(tmp_path, monkeypatch):
     job = {
         "id": job_id, "agent": "agy", "status": "running",
         "pid": 99999,  # non-existent PID
+        "pid_identity": {"start_time": "dispatch-time"},
         "started_at": old_time,
         "log_file": str(log_file),
     }
@@ -8095,6 +8097,7 @@ def test_reconcile_detects_stall_and_kills_process(tmp_path, monkeypatch):
     def mock_kill(pid, sig):
         killed.append((pid, sig))
     monkeypatch.setattr(os, "kill", mock_kill)
+    monkeypatch.setattr(dispatch_mod, "process_identity_check", lambda pid, expected: "safe to kill")
 
     result = sl._check_job_stall(job, config, str(sentinel_path))
 

@@ -1111,6 +1111,7 @@ def test_check_job_stall_uses_review_timeout_without_changing_default(
     import signal
     import time
     import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
 
     log_file = tmp_path / "job-stall.log"
     log_file.write_bytes(b"")
@@ -1121,6 +1122,7 @@ def test_check_job_stall_uses_review_timeout_without_changing_default(
         "agent": "codex",
         "status": "running",
         "pid": 12345,
+        "pid_identity": {"start_time": "dispatch-time"},
         "started_at": old_time,
         "log_file": str(log_file),
     }
@@ -1129,6 +1131,7 @@ def test_check_job_stall_uses_review_timeout_without_changing_default(
 
     killed = []
     monkeypatch.setattr(sl.os, "kill", lambda pid, sig: killed.append((pid, sig)))
+    monkeypatch.setattr(dispatch_mod, "process_identity_check", lambda pid, expected: "safe to kill")
     monkeypatch.setattr(sl, "_inspect_worktree_git_state", lambda *a, **kw: None)
 
     result = sl._check_job_stall(
@@ -1186,6 +1189,42 @@ def test_check_job_stall_kills_when_gh_write_verified_false(project_dir, monkeyp
     assert stalled is True
     assert job["status"] == "failed"
     assert job.get("gh_write_verified") == "false"
+
+
+@pytest.mark.parametrize("requires_gh_write", [True, False])
+def test_check_job_stall_skips_kill_when_pid_identity_mismatches(
+    project_dir, monkeypatch, tmp_path, requires_gh_write,
+):
+    import os
+    import time as _time
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+
+    log_file = tmp_path / "job.log"
+    log_file.write_text("working...")
+    old_mtime = _time.time() - 3600
+    os.utime(log_file, (old_mtime, old_mtime))
+    job = {
+        "id": "job-recycled-pid", "status": "running", "log_file": str(log_file),
+        "agent": "grok", "pid": 4242,
+        "pid_identity": {"start_time": "original process"},
+        "requires_gh_write": requires_gh_write,
+        "gh_write_target": "issue:701",
+    }
+    if requires_gh_write:
+        monkeypatch.setattr(dispatch_mod, "gh_write_verified", lambda *args, **kwargs: False)
+    monkeypatch.setattr(dispatch_mod, "process_identity_check", lambda pid, expected: "do not kill")
+    monkeypatch.setattr(sl, "_inspect_worktree_git_state", lambda *args, **kwargs: None)
+    killed = []
+    monkeypatch.setattr(dispatch_mod.os, "kill", lambda pid, sig: killed.append((pid, sig)))
+    stalled = dispatch_mod._check_job_stall(
+        job, {"stall_timeout_minutes": 30}, str(tmp_path / "sentinel.md")
+    )
+
+    assert stalled is True
+    assert killed == []
+    assert job["pid_identity_kill_skipped"] is True
+    assert "kill skipped" in (tmp_path / "sentinel.md").read_text()
 
 
 def test_check_job_stall_falls_through_to_git_state_when_gh_write_unknown(project_dir, monkeypatch, tmp_path):
