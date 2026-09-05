@@ -8,6 +8,7 @@ A nonfiction book grounded in synlynk's real build history and three sister proj
 
 - `the-supervised-machine-v0.5-DRAFT.html` — source of truth. Single-file, self-contained HTML (inline CSS, no external assets).
 - `the-supervised-machine-v0.5-DRAFT.pdf` — rendered output, regenerated from the HTML. Do not hand-edit the PDF.
+- `the-supervised-machine-v0.5-DRAFT.epub` — rendered output, regenerated from the HTML. Do not hand-edit the EPUB.
 
 ## Editorial history
 
@@ -51,4 +52,25 @@ execution.
   "file://$(pwd)/docs/book/the-supervised-machine-v0.5-DRAFT.html"
 ```
 
-Regenerate the PDF and commit both files together whenever the HTML changes — never let them drift. When cutting a new minor version, rename both files (`vX.Y-DRAFT`), update the cover/title/preface version strings in the HTML, and update this README.
+## Rebuilding the EPUB
+
+Requires `pandoc` (`brew install pandoc`). Chapters split at `<h2>` (the manuscript's actual
+chapter-heading level — splitting at `<h1>` produces one giant chapter). Run from `docs/book/`
+so relative image paths under `assets/` resolve:
+
+```bash
+cd docs/book
+pandoc the-supervised-machine-v0.5-DRAFT.html \
+  -o the-supervised-machine-v0.5-DRAFT.epub \
+  --metadata title="The Supervised Machine" \
+  --metadata author="Claude, Codex, Grok, Agy" \
+  --resource-path=. \
+  --split-level=2 \
+  --toc --toc-depth=2
+```
+
+**Regenerate the PDF and EPUB together and commit all three files whenever the HTML changes —
+never let them drift.** The EPUB build is now a standard, default step alongside the PDF for
+every book write/update, not an occasional extra. When cutting a new minor version, rename all
+three files (`vX.Y-DRAFT`), update the cover/title/preface version strings in the HTML, and
+update this README.
