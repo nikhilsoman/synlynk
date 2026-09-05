@@ -56,6 +56,7 @@
     border-top: 4px solid transparent;
     border-image: linear-gradient(90deg, var(--blue), var(--purple), var(--blue)) 1;
   }
+  .cover .glyph { width: 80px; height: 80px; margin-bottom: 2em; }
   .cover .kicker { display: inline-block; background: var(--blue-bg); border: 1px solid rgba(0,113,227,0.2); border-radius: 999px; padding: 0.45em 1em; letter-spacing: 0.16em; text-transform: uppercase; font-size: 9pt; color: var(--blue); font-weight: 700; margin-bottom: 1.2em; }
   .cover h1 { font-size: 34pt; margin: 0 0 0.3em 0; line-height: 1.15; }
   .cover .sub { font-size: 14pt; font-style: italic; color: var(--dim); margin-bottom: 2em; }
@@ -148,6 +149,14 @@
 <body>
 
 <div class="cover">
+  <svg class="glyph" width="80" height="80" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="synlynk S-glyph">
+    <title>synlynk</title>
+    <path d="M 9 6 C 9 6 3 6 3 11 C 3 16 12 16 12 21" fill="none" stroke="var(--purple, #8944ab)" stroke-width="3.5" stroke-linecap="round"/>
+    <path d="M 12 21 C 12 21 18 21 18 16 C 18 11 9 11 9 6" fill="none" stroke="var(--blue, #0071e3)" stroke-width="3.5" stroke-linecap="round"/>
+    <line x1="12" y1="21" x2="12" y2="26" stroke="var(--green, #1a7f3c)" stroke-width="3.5" stroke-linecap="round"/>
+    <circle cx="9" cy="6" r="2.5" fill="var(--blue, #0071e3)"/>
+    <circle cx="12" cy="26" r="2.5" fill="var(--green, #1a7f3c)"/>
+  </svg>
   <div class="kicker">A Nonfiction Field Report</div>
   <h1>The Supervised Machine</h1>
   <div class="sub">What a year of dispatching AI agents to build real software actually taught one small fleet about trust, verification, and who's really in charge</div>
