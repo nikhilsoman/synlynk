@@ -29,7 +29,7 @@ _PR_REVIEW_SOP = """\
 1. Assign a non-authoring agent to review the PR.
 2. From within the PR's own checked-out worktree/branch, the reviewer must run `synlynk pr check` so it can auto-detect the PR via git/gh context.
 3. The reviewer alone must merge the PR.
-4. If the reviewer is unavailable, escalate to Claude.
+4. If the reviewer is unavailable, escalate to the Home Harness.
 
 **GitHub identity note (#423):** If a role has a registered workspace agent (`synlynk agent init <role>`, e.g. `qa` or `architect`), dispatch its review via `synlynk dispatch claude --as-agent <role-agent-id>` — this posts a genuine approving review under that role's own distinct GitHub App identity, satisfying GitHub's non-author review requirement for real approvals. Route day-to-day reviews through `qa` and any feature/architecture-impacting review through `architect`. **Fallback (no registered agent for the role):** post a formal COMMENT review with an explicit approve checklist (as on PR #417) instead of an approving review, since dispatches without `--as-agent` share the single repo-owner GitHub identity and an approving review will fail with the self-approval error.
 """
@@ -37,7 +37,7 @@ _PR_REVIEW_SOP = """\
 _BRAINSTORM_SOP = """\
 ## Brainstorm-First Policy
 1. Do not write code before an approved spec exists in `docs/superpowers/specs/`.
-2. Run the brainstorm using Claude via `synlynk dispatch`.
+2. Run the brainstorm using the Architect/PM role via `synlynk dispatch` (or locally if running in Home Conductor mode).
 3. Spec is approved only when committed to the branch and Nikhil signs off.
 """
 
@@ -64,7 +64,7 @@ _CAPABILITY_ALLOCATION_SOP = """\
 | PM/review/deploy/brainstorm | Claude | PM, deploy, brainstorm |
 | PR review / GitHub write | Codex | PR review, issue/PR operations |
 | GitHub write actions | **codex, Claude/Agy fallback** | `gh pr review`, `gh pr merge`, `gh pr create`, `gh issue comment` — Codex by default (PR #1271, verified live in job `job-836e13a4`); Claude and Agy remain fallbacks; the Grok harness's dispatch sandbox denies shell execution entirely in this environment, do not route here |
-Do not start a task outside your role column without explicit Claude approval.
+Do not start a task outside your role column without explicit Home Harness approval.
 
 **GitHub write routing (#426):** Route any task that requires GitHub write actions to **Codex by default, Claude/Agy as fallbacks** (PR #1271, verified live in job `job-836e13a4`)
 - Grok's dispatch sandbox denies `bash` execution entirely in this environment (confirmed via `git diff origin/main` showing a total silent no-op despite a generic "OK, exit 0" job status — do not trust job-status alone for Grok gh-write attempts)

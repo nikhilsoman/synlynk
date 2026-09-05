@@ -388,3 +388,15 @@ def test_probe_queues_sweep_for_new_model(tmp_path, monkeypatch):
     probe._diff_and_queue_new_models("codex", ["gpt-5", "gpt-5.5"], conn)
     assert queued == [("codex", "gpt-5.5")]
 
+
+def test_sop_blocks_no_hardcoded_claude_authority():
+    from synlynk.probe import SOP_BLOCKS
+
+    combined_sops = "\n".join(SOP_BLOCKS)
+    assert "without explicit Claude approval" not in combined_sops
+    assert "escalate to Claude" not in combined_sops
+    assert "Run the brainstorm using Claude via synlynk dispatch" not in combined_sops
+    assert "without explicit Home Harness approval" in combined_sops
+    assert "escalate to the Home Harness" in combined_sops
+
+
