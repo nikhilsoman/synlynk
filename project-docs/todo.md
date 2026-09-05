@@ -1,6 +1,7 @@
 # Task Execution Order and Dependencies
 
 ## Recently Landed (since last sync)
+- [x] #1440 (PR #1440) — Dynamic Home Harness Orchestrator Parity & Dual-Mode Directives (Governs goal-250b6fb2; spec & plan committed, constitutional precedence, dual-mode instructions across 4 harnesses, runtime home detection banner, synlynk home CLI verb, probe legacy repair, docs sync)
 - [x] v0.15.0 — Workspace Policy Layer
 - [x] v0.16.0 — Autonomous Loop
 - [x] v0.17.0 — Ticket-Driven Approval Auto-Resume
@@ -46,4 +47,4 @@
 - [x] #1263 / #1264 — synlynk daemon crashed immediately on macOS (raw `os.fork()` double-fork tripped `objc_initializeAfterForkError`, matched live `.ips` crash reports), which meant the daemon never survived long enough to run a single token-refresh cycle — the true explanation for #1264's "qa-role GH App token cache writer uses CWD-relative path, not `_daemon_state_path()`'s worktree-aware resolution" symptom. Fixed together in PR #1282 (merged 2026-08-30): `_daemonize_via_reexec()` replaces the double-fork with a detached `subprocess.Popen` re-exec spawn; `refresh_installation_token()` now threads `apps_dir` through explicitly. Merge required `gh pr merge --admin` — both qa-role dispatch attempts (Codex: unrelated CLI config bug; Grok: silent gh-write no-op) failed, CI was green, and required-approval count structurally can't clear with all harnesses sharing one GitHub identity.
 
 ## Review Queue
-- (empty — #1195/#1214/#1215 all merged, 2026-08-29)
+- PR #1440 (`feat/agy/dynamic-home-directives`): Dynamic home harness orchestrator parity — Dispatched to Claude (architect) via `job-927d474f`

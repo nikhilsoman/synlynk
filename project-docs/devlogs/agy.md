@@ -67,4 +67,22 @@
 - Added unit tests in `tests/test_sentinel.py` and regression test `test_investigate_rootcause_costtoken_bloat_on_jobcf837848_and_add_costratio_sentinel_guard_1073` in `tests/test_agent_cli.py`.
 - Authored design spec `docs/superpowers/specs/2026-09-02-token-bloat-sentinel-guard-design.md`, plan `docs/superpowers/plans/2026-09-02-token-bloat-sentinel-guard.md`, and blog post `docs/blog/160-pr1334-token-bloat-sentinel-guard.md` indexed in `docs/blog/README.md`.
 
+## 2026-09-05 — Dynamic Home Harness Orchestrator Parity & Dual-Mode Directives (#1440 / PR #1440)
+
+### Motivation & Root Cause Analysis
+- Investigated systemic paralysis of non-Claude interactive home harnesses (specifically Agy, but also Codex and Grok).
+- Identified root cause across 3 failure vectors:
+  1. Static Markdown Directives encoded hardcoded subservience (`"Do not start a task outside your role column without explicit Claude approval"`), causing interactive harnesses to self-censor and refuse to drive lifecycle loops.
+  2. The Genesis vs. Fluidity flaw: templates generated only at `init` fail when an operator switches home harnesses mid-stream on an existing repo.
+  3. Absence of constitutional precedence: static files lacked a rule declaring active session runtime context as governing.
+
+### Shipped
+- **Goal & Governance:** Tracked under `goal-250b6fb2`. Authored comprehensive design spec and RCA at `docs/superpowers/specs/2026-09-05-dynamic-home-harness-orchestrator-parity-design.md` and TDD plan at `docs/superpowers/plans/2026-09-05-dynamic-home-harness-orchestrator-parity.md`.
+- **Constitutional Precedence & Dual-Mode Instructions:** Updated `synlynk/instructions.py` across `CLAUDE.md`, `GEMINI.md`, `AGENTS.md`, and `GROK.md` with explicit Mode A (Home Conductor) vs. Mode B (Away Worker) directives and constitutional precedence clause.
+- **Dynamic Runtime Home Detection:** Implemented `detect_active_home_harness()` in `synlynk/context.py` inspecting caller process tree, terminal environments, and config slots, rendering an authoritative runtime banner at the top of `.synlynk/context.md`.
+- **`synlynk home` CLI Verb:** Implemented `synlynk home [harness]` in `synlynk/cli.py` and registered in `COMMAND_TAXONOMY` (`synlynk/taxonomy.py`), enabling zero-touch home harness switching and immediate context regeneration.
+- **Legacy Directive Repair:** Purged hardcoded Claude-centrism from `_PR_REVIEW_SOP`, `_BRAINSTORM_SOP`, and `_CAPABILITY_ALLOCATION_SOP` in `synlynk/probe.py`. Enhanced `_repair_sops_only` to automatically detect legacy Claude references and upgrade them to Home Harness authority.
+- **Verification:** Unit tests added in `tests/test_instructions.py`, `tests/test_context.py`, `tests/test_home_cmd.py`, and `tests/test_probe.py`. Full test suite passing (2584 passed).
+- **PR & Review:** Pushed `feat/agy/dynamic-home-directives` and opened PR #1440; dispatched Claude (`architect` identity via `job-927d474f`) for non-authoring review.
+
 
