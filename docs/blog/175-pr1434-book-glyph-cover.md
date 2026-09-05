@@ -17,8 +17,8 @@ to the project that writes and maintains it.
 ## Strategic Shifts in This PR
 
 None — another small, deliberate gap-close. The user asked for the synlynk glyph to appear on the
-book's cover across all editions, matching the visual system PR #1409 had already established for
-the manuscript's interior styling.
+book's cover across all three output formats, matching the visual system PR #1409 had already
+established for the manuscript's interior styling.
 
 ## What This PR Shipped
 
@@ -46,16 +46,16 @@ and branch-protection's formal-approval requirement forced an `--admin` override
 qa-role self-approval. That gap is now filed as
 [issue #1436](https://github.com/nikhilsoman/synlynk/issues/1436) for review, not fixed here.
 
-## What This PR Shipped (follow-up: #1437)
+## Follow-Up in Progress: #1437
 
 The HTML cover update alone left the PDF and EPUB stale — both were rendered from the
-cover-less HTML and needed a straight rebuild. PR #1437 regenerated both via the exact commands
-in `docs/book/README.md` (no content changes, binary rebuild only), closing out "add the glyph
-cover to all book editions" across all three formats.
+cover-less HTML and need a straight rebuild. PR #1437 (open as of this writing) regenerates both
+via the exact commands in `docs/book/README.md` — no content changes, binary rebuild only —
+which will bring the glyph cover across all three formats once merged.
 
 ## Strategic Note: The Goal at the End of This PR
 
-All three book formats now carry the synlynk glyph on their cover, generated and committed
-together. The next open thread isn't book-related — it's the identity-routing gap in #1436:
-whether dispatches should go through pm/tpm role handles so qa can approve PRs without the shared
-human identity ever entering the loop.
+The HTML cover carries the synlynk glyph now; the PDF and EPUB will follow once #1437 merges.
+The next open thread isn't book-related — it's the identity-routing gap in #1436: whether
+dispatches should go through pm/tpm role handles so qa can approve PRs without the shared human
+identity ever entering the loop.
