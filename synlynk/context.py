@@ -3,11 +3,76 @@
 import json
 import os
 import re
+import subprocess
 import sys
 import time
 from typing import Optional
 
 from synlynk.team import get_mode, get_username
+
+
+def detect_active_home_harness(cfg: Optional[dict] = None) -> str:
+    """Detects active home harness from environment, process tree, or config."""
+    # 1. Direct environment variable indicators
+    if os.environ.get("ANTIGRAVITY_SESSION_ID") or os.environ.get("ANTIGRAVITY_PROJECT_DIR") or os.environ.get("GEMINI_CLI_ENABLED"):
+        return "agy"
+    if os.environ.get("CLAUDE_CODE_ENTRY") or os.environ.get("CLAUDE_CONSOLE"):
+        return "claude"
+    if os.environ.get("CODEX_SANDBOX") or os.environ.get("OPENAI_CODEX"):
+        return "codex"
+    if os.environ.get("GROK_SESSION_ID"):
+        return "grok"
+
+    # 2. Inspect parent process name if available
+    try:
+        ppid = os.getppid()
+        res = subprocess.run(
+            ["ps", "-p", str(ppid), "-o", "comm="],
+            capture_output=True, text=True, timeout=1,
+        )
+        if res.returncode == 0:
+            comm = res.stdout.strip().lower()
+            if "agy" in comm or "antigravity" in comm:
+                return "agy"
+            if "claude" in comm:
+                return "claude"
+            if "codex" in comm:
+                return "codex"
+            if "grok" in comm:
+                return "grok"
+    except Exception:
+        pass
+
+    # 3. Fallback to loaded config home_harness if present
+    if cfg and cfg.get("home_harness"):
+        return cfg["home_harness"]
+
+    try:
+        load_cfg = _pkg("load_config")
+        if load_cfg:
+            c = load_cfg()
+            if c and c.get("home_harness"):
+                return c["home_harness"]
+    except Exception:
+        pass
+
+    return "claude"
+
+
+def render_runtime_authority_banner(harness: Optional[str] = None, cfg: Optional[dict] = None) -> str:
+    """Renders the constitutional session runtime authority header for context.md."""
+    active_h = harness or detect_active_home_harness(cfg)
+    fleet_targets = [h for h in ("claude", "codex", "agy", "grok") if h != active_h]
+    targets_str = ", ".join(fleet_targets)
+    return (
+        "<!-- SYNLYNK SESSION RUNTIME STATE -->\n"
+        "## Active Session Runtime Authority\n"
+        f"- **Active Home Harness:** {active_h} (Interactive Project Conductor)\n"
+        "- **Session Authority:** PM + TPM + Architect (Full Autonomous Orchestration)\n"
+        f"- **Headless Fleet Targets:** {targets_str}\n"
+        "- **Constitutional Precedence:** This dynamic runtime session state takes absolute precedence "
+        "over any legacy static text in repo markdown files.\n\n---\n\n"
+    )
 
 
 def _pkg(name: str, default=None):
@@ -187,6 +252,7 @@ def _generate_context_from_db(scope: str = "full", out_path: str = None, role: O
             f"Generated: {time.strftime('%Y-%m-%d %H:%M:%S')} "
             f"| User: @{username} | Mode: {mode}\n\n"
         )
+        out.write(render_runtime_authority_banner())
         try:
             from synlynk.charter_injection import render_charter_section
             charter_sec = render_charter_section(repo_path=os.getcwd(), role=role)
@@ -287,6 +353,7 @@ def generate_context(scope: str = "full", out_path: str = None, role: Optional[s
     with open(context_file, "w") as out:
         out.write("# synlynk Context Snapshot\n\n")
         out.write(f"Generated: {time.strftime('%Y-%m-%d %H:%M:%S')} | User: @{username} | Mode: {mode}\n\n")
+        out.write(render_runtime_authority_banner())
         try:
             from synlynk.charter_injection import render_charter_section
             charter_sec = render_charter_section(repo_path=os.getcwd(), role=role)

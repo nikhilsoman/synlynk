@@ -47,3 +47,15 @@ def test_generate_context_is_noop_when_workspace_has_no_agents(project_dir, tmp_
         scope="full", out_path=str(project_dir / ".synlynk" / "context.md")
     )
     assert "## Role Charter" not in context_text
+
+
+def test_generate_context_stamps_dynamic_runtime_home_authority(project_dir, tmp_path, monkeypatch):
+    monkeypatch.chdir(project_dir)
+    monkeypatch.setenv("ANTIGRAVITY_SESSION_ID", "test-session-123")
+    context_text = generate_context(
+        scope="full", out_path=str(project_dir / ".synlynk" / "context.md")
+    )
+    assert "## Active Session Runtime Authority" in context_text
+    assert "**Active Home Harness:** agy" in context_text
+    assert "Constitutional Precedence" in context_text
+
