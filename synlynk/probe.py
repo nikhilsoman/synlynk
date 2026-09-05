@@ -1330,7 +1330,7 @@ def _repair_escalation_target(cfg: dict) -> str:
 
 
 def _repair_pr_review_sop(cfg: dict) -> str:
-    escalation_target = _repair_escalation_target(cfg) or "the configured PM/reviewer"
+    escalation_target = _repair_escalation_target(cfg) or "the Home Harness"
     return (
         "## PR Review Discipline\n"
         "1. Assign a non-authoring agent to review the PR.\n"
@@ -1372,7 +1372,8 @@ def _repair_capability_allocation_sop(cfg: dict) -> str:
             "GitHub write routing (#1271): Codex by default, Claude/Agy as fallbacks.\n"
         )
 
-    escalation_target = _repair_escalation_target(cfg) or "the configured PM/reviewer"
+    escalation_target = _repair_escalation_target(cfg) or "the Home Harness"
+    approval_suffix = "Home Harness approval" if escalation_target == "the Home Harness" else f"approval from {escalation_target}"
     table = "\n".join([
         "## Capability-Based Task Allocation",
         "",
@@ -1382,7 +1383,7 @@ def _repair_capability_allocation_sop(cfg: dict) -> str:
         "| Role | Harness | Tasks |",
         "| :--- | :--- | :--- |",
         *rows,
-        f"Do not start a task outside your role column without explicit approval from {escalation_target}.",
+        f"Do not start a task outside your role column without explicit {approval_suffix}.",
         "",
         "**GitHub write routing (#426):** Route any task that requires GitHub write actions to **Codex by default, Claude/Agy as fallbacks** (PR #1271, verified live in job `job-836e13a4`)\n- Grok's dispatch sandbox denies `bash` execution entirely in this environment (confirmed via `git diff origin/main` showing a total silent no-op despite a generic \"OK, exit 0\" job status — do not trust job-status alone for Grok gh-write attempts)\n- Codex receives network access only for explicit `--requires-gh-write` dispatches\n- Pass `--requires-gh-write` on synlynk dispatch to enforce the routing hint automatically; it now also auto-implies the `run:shell` permission grant and fails closed with a `RuntimeError` if no role is resolvable via `--as-agent`, `--story`, or `--role` (#569)",
         "",
@@ -1481,21 +1482,26 @@ def _repair_sops_only(
         if has_harness_fence and existing_body:
             stale_candidates = [
                 "## PR Review Discipline",
+                "## Brainstorm-First Policy",
                 "## Capability-Based Task Allocation",
             ]
             for header in stale_candidates:
                 canonical = _build_repair_sop_block(header, cfg).rstrip("\n")
                 current = _extract_sop_section(existing_body, header)
-                # Only replace a PR-review section when it contains the known
-                # incompatible command shape; preserve repo-specific wording.
+                # Replace PR-review or brainstorm sections when they contain known
+                # incompatible command shapes or hardcoded Claude authority.
                 pr_review_is_stale = (
                     header == "## PR Review Discipline"
-                    and "synlynk pr check <pr#>" in current
+                    and ("synlynk pr check <pr#>" in current or "escalate to Claude" in current)
+                )
+                brainstorm_is_stale = (
+                    header == "## Brainstorm-First Policy"
+                    and "Run the brainstorm using Claude" in current
                 )
                 if current and (
                     pr_review_is_stale
                     if header == "## PR Review Discipline"
-                    else current != canonical
+                    else (brainstorm_is_stale if header == "## Brainstorm-First Policy" else current != canonical)
                 ):
                     stale_headers.append(header)
                     if header in fill_headers:

@@ -400,3 +400,29 @@ def test_sop_blocks_no_hardcoded_claude_authority():
     assert "escalate to the Home Harness" in combined_sops
 
 
+def test_repair_sops_detects_legacy_claude_references(tmp_path, monkeypatch):
+    from synlynk import probe
+
+    gemini_file = tmp_path / "GEMINI.md"
+    gemini_file.write_text(
+        "<!-- synlynk:harness v1.0.0 verified:2026-08-01T00:00:00Z -->\n"
+        "# Harness Instructions (synlynk-managed — do not edit)\n\n"
+        "## Your Role\nimplement, test\n\n"
+        "## PR Review Discipline\n1. If the reviewer is unavailable, escalate to Claude.\n\n"
+        "## Brainstorm-First Policy\n2. Run the brainstorm using Claude via synlynk dispatch.\n\n"
+        "## Capability-Based Task Allocation\nDo not start a task outside your role column without explicit Claude approval.\n"
+        "<!-- /synlynk:harness -->\n"
+    )
+    monkeypatch.chdir(tmp_path)
+    cfg = {"agent_slots": {"agy": "agy"}, "roles": {"agy": ["implement", "test"]}}
+    probe._repair_sops_only(harness_name="agy", cfg=cfg, dry_run=False)
+
+    updated = gemini_file.read_text()
+    assert "escalate to Claude" not in updated
+    assert "escalate to the Home Harness" in updated
+    assert "Run the brainstorm using Claude" not in updated
+    assert "without explicit Claude approval" not in updated
+    assert "without explicit Home Harness approval" in updated
+
+
+
