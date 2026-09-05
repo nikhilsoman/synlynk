@@ -2767,3 +2767,30 @@ def test_ast_3way_merge_python_uses_python_38_unparse_fallback(monkeypatch):
     exec(compile(ast.parse(merged_code), "<merged>", "exec"), namespace)
     assert namespace["ours"](3) == 6
     assert namespace["theirs"](" value ") == "value"
+
+
+def test_research_distributed_statedb_synchronization__story_d58e5033():
+    """Verify research spec for distributed state.db synchronization and enterprise cost aggregation."""
+    from pathlib import Path
+
+    spec_path = Path("docs/superpowers/specs/2026-09-04-distributed-sync-research.md")
+    assert spec_path.exists(), f"Expected research spec file {spec_path} to exist"
+
+    content = spec_path.read_text(encoding="utf-8")
+    assert len(content) > 2000, "Research notes must be comprehensive"
+
+    # Core issue and story references
+    assert "#1402" in content or "closes #1402" in content.lower()
+    assert "story-d58e5033" in content
+
+    # Key synchronization protocols investigated
+    assert "LiteFS" in content
+    assert "CRDT" in content or "Conflict-free Replicated Data Type" in content
+    assert "gRPC" in content
+
+    # Key cost aggregation and architectural concepts
+    assert "state.db" in content
+    assert "cost" in content.lower()
+    assert "aggregation" in content.lower()
+    assert "tradeoff" in content.lower() or "comparison" in content.lower()
+    assert "roadmap" in content.lower() or "phased" in content.lower()
