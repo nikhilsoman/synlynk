@@ -12,6 +12,7 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 
 ## Tier 0 — First-Time Setup
 
+- `home` (primary) — open
 - `init` (primary) — open
 - `start` (primary) — open
 - `scan` (primary) — open

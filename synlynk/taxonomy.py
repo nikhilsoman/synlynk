@@ -43,6 +43,9 @@ COMMAND_TAXONOMY = [
     {"command": "models discover", "governs_stage": "sustain", "maturity_tier": 2, "prominence": "secondary",
      "orientation_gateway": False, "audience": "human", "trigger_phrases": ["discover installed models"], "hook_event": None},
     # --- Tier 0: FTUE ---
+    {"command": "home", "governs_stage": "open", "maturity_tier": 0, "prominence": "primary",
+     "orientation_gateway": False, "audience": "human",
+     "trigger_phrases": ["switch home harness", "set home harness", "what is our home harness"], "hook_event": None},
     {"command": "init", "governs_stage": "open", "maturity_tier": 0, "prominence": "primary",
      "orientation_gateway": False, "audience": "human",
      "trigger_phrases": ["set up synlynk here", "get started with synlynk"], "hook_event": None},

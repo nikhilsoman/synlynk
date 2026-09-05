@@ -298,6 +298,8 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser(
         "start", help="Cold-start entry point: detect new vs existing project and guide setup"
     )
+    home_parser = subparsers.add_parser("home", help="Display or switch the active home harness")
+    home_parser.add_argument("harness", nargs="?", choices=["claude", "agy", "codex", "grok", "local"], help="Harness to set as home")
 
     team_parser = subparsers.add_parser("team", help="Team status and management")
     team_sub = team_parser.add_subparsers(dest="team_action")
@@ -1180,6 +1182,28 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def cmd_home(args) -> None:
+    """Display or switch the active home harness."""
+    from synlynk import _update_config, load_config
+    from synlynk.context import detect_active_home_harness, generate_context
+
+    cfg = load_config() if callable(load_config) else {}
+    target = getattr(args, "harness", None)
+
+    if target:
+        _update_config({"home_harness": target})
+        generate_context()
+        print(f"  ✓ Home harness switched to: {target}")
+        print(f"  ✓ .synlynk/context.md refreshed with {target} as Active Home Conductor")
+    else:
+        current_cfg = cfg.get("home_harness", "not configured")
+        detected = detect_active_home_harness(cfg)
+        print("Home Harness Status:")
+        print(f"  Configured in .synlynk/config.json : {current_cfg}")
+        print(f"  Detected in current session       : {detected}")
+        print("  To switch: synlynk home <claude|agy|codex|grok>")
+
+
 def _warn_deprecated_harness_flag(argv) -> None:
     if "--agent" in argv and "--harness" not in argv:
         print("  warning: --agent is deprecated, use --harness instead", file=sys.stderr)
@@ -1226,6 +1250,7 @@ def main(argv=None) -> None:
         cmd_identity_list,
         cmd_instructions_ack,
         cmd_instructions_diff,
+        cmd_instructions_register,
         cmd_instructions_status,
         cmd_instructions_update,
         cmd_jobs,
@@ -1347,6 +1372,8 @@ def main(argv=None) -> None:
         else:
             from synlynk import _get_db
             cmd_ecosystem_status(db_conn=_get_db(), json_output=args.json_output)
+    elif args.command == "home":
+        cmd_home(args)
     elif args.command == "selftest":
         from synlynk.selftest import cmd_selftest
 

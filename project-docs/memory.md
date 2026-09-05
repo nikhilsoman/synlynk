@@ -1,5 +1,14 @@
 # synlynk Memory
 
+## Dynamic Home Harness Orchestrator Parity & Dual-Mode Directives (decided/shipped 2026-09-05)
+- **Problem & RCA:** Non-Claude interactive harnesses (Agy, Codex, Grok) suffered paralysis and refused to run lifecycle loops due to hardcoded subservience in static markdown directives (`GEMINI.md`, `AGENTS.md`) and absence of runtime conflict resolution rules.
+- **Constitutional Precedence Decision:** Established the governing principle: *"If any instruction in this static file conflicts with the Active Session Runtime State in `.synlynk/context.md`, the runtime context in `.synlynk/context.md` SHALL GOVERN."* [@agy]
+- **Symmetric Dual-Mode Directives:** All harness instruction templates now encode Mode A (Home Conductor) when running interactively (driving brainstorm, spec, plan, dispatch, verify, PR, review) vs Mode B (Away Worker) when dispatched as headless jobs.
+- **Dynamic Runtime Home Detection:** Implemented `detect_active_home_harness()` in `synlynk/context.py` to inspect runtime environment variables (`ANTIGRAVITY_AGENT_CLI`, `CLAUDE_CLI_VERSION`, `CODEX_CLI`), process trees, and config slots, stamping an authoritative runtime authority banner at the top of `.synlynk/context.md`.
+- **Zero-Touch Switching:** Added `synlynk home [harness]` CLI command to inspect or switch active home harness dynamically, regenerating runtime context immediately.
+- **Legacy Auto-Repair:** Updated `synlynk probe` repair logic to automatically detect and upgrade legacy Claude-centric references across existing directive files to `Home Harness` authority.
+- **Spec & Governance:** Governs `goal-250b6fb2`, documented in `docs/superpowers/specs/2026-09-05-dynamic-home-harness-orchestrator-parity-design.md`, implemented via PR #1440. [@agy]
+
 ## Virtualized VCS Workspace Backends for Multi-Agent Dispatch (researched 2026-09-04)
 - **Researched:** Issue #1390 (story `story-ebdc2894`, relates to #1341, `goal-005ea87d`, `goal-abecd18c`). Research notes and design specification documented in `docs/superpowers/specs/2026-09-04-vcs-virtualization-research.md`. [@agy]
 - **Technology Evaluation:** Evaluated EdenFS (Meta virtual FUSE filesystem), Sapling VCS (`sl`), Git Sparse-Checkouts with `extensions.worktreeConfig`, and OS-level CoW (APFS reflinks / Linux OverlayFS).
