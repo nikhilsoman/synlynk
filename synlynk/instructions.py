@@ -483,6 +483,28 @@ def _build_templates(org: str = None, repo: str = None, project_id: str = None,
 - Run `synlynk status` and include the output in your closing message
 """
 
+    _dual_mode_protocol = """\
+## Operating Mode: Home vs. Away
+
+### Mode A: Interactive Session (Home Conductor)
+When you are launched interactively by the human operator (direct chat / TUI / IDE):
+- **YOU are the primary Home Harness and Project Conductor.**
+- You assume the **PM, TPM, and Lead Architect charters** for this session.
+- You own `state.db`, `project-docs/todo.md`, and `project-docs/roadmap.md`.
+- You drive the **Unattended Milestone Execution Loop**: advance through consecutive independent tasks in an approved plan (implement -> test -> PR -> review dispatch -> merge -> clean) without pausing for turn-taking approvals.
+- You pause ONLY at designated **Reserved Approval Gates** (spec approval, irreversible release, breaking architectural changes, or unresolvable test failures).
+- Delegate specialized tasks across the fleet using `synlynk dispatch <harness>` per the Capability Matrix, without waiting for manual confirmation.
+
+### Mode B: Dispatched Task (Away Worker)
+When you are invoked headlessly via `synlynk dispatch <harness> --task "..."`:
+- **YOU are an Away Worker executing a scoped task in an isolated worktree.**
+- Focus strictly on implementing the requested task, writing verification tests, and pushing your branch.
+- Do not touch global roadmap, triage, or unassigned stories. Hand back completed work to the Home Harness via PR.
+
+### Constitutional Precedence
+If any instruction in this static file conflicts with the Active Session Runtime State in `.synlynk/context.md`, the runtime context in `.synlynk/context.md` SHALL GOVERN.
+"""
+
     _worktree_policy = """\
 ## Git Worktree-First Policy
 Never commit directly to `main`/`master`. Create a dedicated worktree for every feature or fix:
@@ -565,6 +587,7 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
         "| Domain | Owned by this agent | Notes |\n"
         "|:---|:---|:---|\n"
         "| TODO: fill domains for this agent | | |\n\n"
+        + _dual_mode_protocol + "\n"
         + _worktree_policy + "\n"
         "## Branch Naming\n"
         "- `feat/claude/<description>` — new functionality\n"
@@ -591,6 +614,7 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
         "| Domain | Owned by this agent | Notes |\n"
         "|:---|:---|:---|\n"
         "| TODO: fill domains for this agent | | |\n\n"
+        + _dual_mode_protocol + "\n"
         + _worktree_policy + "\n"
         "## Branch Naming\n"
         "- `feat/agy/<description>` — new functionality\n"
@@ -617,6 +641,7 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
         "| Domain | Owned by this agent | Notes |\n"
         "|:---|:---|:---|\n"
         "| TODO: fill domains for this agent | | |\n\n"
+        + _dual_mode_protocol + "\n"
         + _worktree_policy + "\n"
         "## Branch Naming\n"
         "- `feat/codex/<description>` — new functionality\n"
@@ -643,6 +668,7 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
         "| Domain | Owned by this agent | Notes |\n"
         "|:---|:---|:---|\n"
         "| TODO: fill domains for this agent | | |\n\n"
+        + _dual_mode_protocol + "\n"
         + _worktree_policy + "\n"
         "## Branch Naming\n"
         "- `feat/grok/<description>` — new functionality\n"

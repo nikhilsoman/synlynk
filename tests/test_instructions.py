@@ -255,3 +255,18 @@ def test_instruction_templates_prohibit_direct_todo_edits():
         if "todo.md" in tmpl:
             assert "state.db" in tmpl
             assert "synlynk story done" in tmpl or "synlynk checkpoint" in tmpl
+
+
+def test_instruction_templates_have_symmetric_dual_mode_protocol():
+    from synlynk.instructions import _build_templates
+
+    templates = _build_templates()
+    for name in ("CLAUDE.md", "GEMINI.md", "AGENTS.md", "GROK.md"):
+        tmpl = templates[name]
+        assert "## Operating Mode: Home vs. Away" in tmpl
+        assert "Mode A: Interactive Session (Home Conductor)" in tmpl
+        assert "Mode B: Dispatched Task (Away Worker)" in tmpl
+        assert "Constitutional Precedence" in tmpl
+        assert "What you hand back to Claude" not in tmpl
+        assert "without explicit Claude approval" not in tmpl
+
