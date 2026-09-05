@@ -2630,3 +2630,140 @@ def test_research_scip_indexers_treesitter_symbol__story_4949989b():
     assert "code_entities" in content
     assert "code_facts" in content
     assert "token" in content.lower()
+
+
+def test_research_3way_ast_semantic_merge_algorithms_and_speculative_rebase_trees__story_1b212bfd():
+    """Verify research spec for 3-way AST semantic merge and speculative rebase trees (#1399)."""
+    from synlynk.rebase import (
+        SpeculativeRebaseNode,
+        BranchInterference,
+        compute_branch_interference,
+        extract_python_ast_symbols,
+        ast_3way_merge_python,
+    )
+
+    # 1. Verify research notes document exists and contains required technical sections
+    spec_path = os.path.join("docs", "superpowers", "specs", "2026-09-04-speculative-rebase-research.md")
+    assert os.path.exists(spec_path), f"Expected research notes spec at {spec_path}"
+
+    with open(spec_path, "r", encoding="utf-8") as f:
+        spec_text = f.read()
+
+    assert len(spec_text) > 3000
+    assert "#1399" in spec_text
+    assert "story-1b212bfd" in spec_text
+    assert "3-Way AST Semantic Merge Algorithms" in spec_text
+    assert "Speculative Rebase Trees" in spec_text
+    assert "Mathematical Foundations" in spec_text
+    assert "GumTree" in spec_text
+    assert "Branch Interference Analysis" in spec_text
+    assert "Pipelined Shadow Execution & Pre-Verification" in spec_text
+    assert "Empirical Benchmarks & Complexity Analysis" in spec_text
+
+    # 2. Functional verification of 3-way AST semantic merge (non-conflicting parallel additions)
+    base_src = (
+        "import sys\n\n"
+        "def base_util():\n"
+        "    return 'base'\n"
+    )
+    ours_src = (
+        "import sys\n"
+        "import json\n\n"
+        "def base_util():\n"
+        "    return 'base'\n\n"
+        "def agent_a_worker(x):\n"
+        "    return x * 2\n"
+    )
+    theirs_src = (
+        "import sys\n"
+        "import os\n\n"
+        "def base_util():\n"
+        "    return 'base'\n\n"
+        "def agent_b_worker(s):\n"
+        "    return s.strip()\n"
+    )
+
+    merged_code, meta = ast_3way_merge_python(base_src, ours_src, theirs_src)
+    assert meta["resolvable"] is True
+    assert meta["conflicts"] == []
+    assert "agent_a_worker" in merged_code
+    assert "agent_b_worker" in merged_code
+    assert "base_util" in merged_code
+    assert "json" in merged_code
+    assert "os" in merged_code
+
+    # Verify true conflict detection when both agents modify the same function differently
+    conflict_ours = "def base_util():\n    return 'changed_by_a'\n"
+    conflict_theirs = "def base_util():\n    return 'changed_by_b'\n"
+    c_merged, c_meta = ast_3way_merge_python(base_src, conflict_ours, conflict_theirs)
+    assert c_merged is None
+    assert c_meta["resolvable"] is False
+    assert "base_util" in c_meta["conflicts"]
+
+    # 3. Functional verification of pairwise branch interference analysis
+    # Disjoint
+    interf_disjoint = compute_branch_interference(
+        branch_a_name="dispatch/agy/job-1",
+        branch_b_name="dispatch/codex/job-2",
+        branch_a_files=["synlynk/dispatch.py"],
+        branch_b_files=["synlynk/hud.py"],
+    )
+    assert interf_disjoint.classification == "disjoint"
+    assert interf_disjoint.auto_resolvable is True
+
+    # AST-Compatible (files overlap, but separate symbols)
+    interf_ast = compute_branch_interference(
+        branch_a_name="dispatch/agy/job-1",
+        branch_b_name="dispatch/codex/job-2",
+        branch_a_files=["synlynk/dispatch.py"],
+        branch_b_files=["synlynk/dispatch.py"],
+        branch_a_symbols={"synlynk/dispatch.py": ["dispatch_agent"]},
+        branch_b_symbols={"synlynk/dispatch.py": ["_preflight_dispatch"]},
+    )
+    assert interf_ast.classification == "ast_compatible"
+    assert interf_ast.auto_resolvable is True
+
+    # Semantic Conflict (same symbol modified)
+    interf_conflict = compute_branch_interference(
+        branch_a_name="dispatch/agy/job-1",
+        branch_b_name="dispatch/codex/job-2",
+        branch_a_files=["synlynk/dispatch.py"],
+        branch_b_files=["synlynk/dispatch.py"],
+        branch_a_symbols={"synlynk/dispatch.py": ["dispatch_agent"]},
+        branch_b_symbols={"synlynk/dispatch.py": ["dispatch_agent"]},
+    )
+    assert interf_conflict.classification == "semantic_conflict"
+    assert interf_conflict.auto_resolvable is False
+    assert "dispatch_agent" in interf_conflict.conflicting_symbols
+
+    # 4. Verify SpeculativeRebaseNode dataclass representation
+    node = SpeculativeRebaseNode(
+        node_id="spec-root-1",
+        base_sha="commit-001",
+        applied_branches=["dispatch/agy/job-1", "dispatch/codex/job-2"],
+        status="speculative_merged",
+        pre_verified=True,
+    )
+    assert node.node_id == "spec-root-1"
+    assert node.pre_verified is True
+    assert len(node.applied_branches) == 2
+
+
+def test_ast_3way_merge_python_uses_python_38_unparse_fallback(monkeypatch):
+    import ast
+
+    from synlynk.rebase import ast_3way_merge_python
+
+    monkeypatch.delattr(ast, "unparse", raising=False)
+    merged_code, meta = ast_3way_merge_python(
+        "def base():\n    return 1\n",
+        "def base():\n    return 1\n\ndef ours(value):\n    return value * 2\n",
+        "def base():\n    return 1\n\ndef theirs(value):\n    return value.strip()\n",
+    )
+
+    assert meta["resolvable"] is True
+    assert ast.parse(merged_code)
+    namespace = {}
+    exec(compile(ast.parse(merged_code), "<merged>", "exec"), namespace)
+    assert namespace["ours"](3) == 6
+    assert namespace["theirs"](" value ") == "value"
