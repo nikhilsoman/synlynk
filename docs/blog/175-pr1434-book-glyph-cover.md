@@ -46,16 +46,16 @@ and branch-protection's formal-approval requirement forced an `--admin` override
 qa-role self-approval. That gap is now filed as
 [issue #1436](https://github.com/nikhilsoman/synlynk/issues/1436) for review, not fixed here.
 
-## Follow-Up in Progress: #1437
+## Follow-Up Shipped: #1437
 
 The HTML cover update alone left the PDF and EPUB stale — both were rendered from the
-cover-less HTML and need a straight rebuild. PR #1437 (open as of this writing) regenerates both
-via the exact commands in `docs/book/README.md` — no content changes, binary rebuild only —
-which will bring the glyph cover across all three formats once merged.
+cover-less HTML and needed a straight rebuild. PR #1437 regenerated both via the exact commands
+in `docs/book/README.md` — no content changes, binary rebuild only — and has since merged,
+bringing the glyph cover across all three formats.
 
 ## Strategic Note: The Goal at the End of This PR
 
-The HTML cover carries the synlynk glyph now; the PDF and EPUB will follow once #1437 merges.
+The HTML, PDF, and EPUB all carry the synlynk glyph cover now.
 The next open thread isn't book-related — it's the identity-routing gap in #1436: whether
 dispatches should go through pm/tpm role handles so qa can approve PRs without the shared human
 identity ever entering the loop.
