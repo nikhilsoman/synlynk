@@ -174,6 +174,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [166](./166-pr1349-pm-backlog-triage-engine.md) | PR #1349 — PM Autonomous Backlog Triaging & Story Formation Engine | [#1349](https://github.com/nikhilsoman/synlynk/pull/1349) | 2026-09-02 |
 | [167](./167-pr1350-living-charter-adaptive-routing.md) | Living Charters and Capability-Gated Adaptive Routing | #1350 | 2026-09-02 |
 | [171](./171-pr1375-codex-review-network-access-regression.md) | PR #1375 — The Fix That Broke the Fix It Was Fixing | [#1375](https://github.com/nikhilsoman/synlynk/pull/1375) | 2026-09-04 |
+| [174](./174-pr1430-book-epub-default-output.md) | PR #1430 — EPUB Joins the Book's Default Output Set | [#1430](https://github.com/nikhilsoman/synlynk/pull/1430) | 2026-09-05 |
 
 ## Per-PR Post Template
 
