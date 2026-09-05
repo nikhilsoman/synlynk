@@ -1,3 +1,5 @@
+import subprocess
+import sys
 from unittest.mock import patch
 
 from synlynk.sentinel import _extract_verified_by_ci
@@ -98,7 +100,7 @@ def test_check_token_bloat_triggers_on_zero_files_with_high_tokens(tmp_path):
     assert "job-cf837848" in content
 
 
-def test_active_job_circuit_breaker_terminates_zero_file_job(tmp_path):
+def test_active_job_circuit_breaker_terminates_zero_file_job(tmp_path, monkeypatch):
     from synlynk.sentinel import enforce_job_circuit_breaker
 
     class Process:
@@ -110,9 +112,53 @@ def test_active_job_circuit_breaker_terminates_zero_file_job(tmp_path):
 
     process = Process()
     job = {"id": "job-runaway", "in_tokens": 500_000, "out_tokens": 1, "files_touched": 0}
+    monkeypatch.setattr("synlynk.sentinel.process_identity_check", lambda pid, expected: "safe to kill")
     assert enforce_job_circuit_breaker(job, process, sentinel_path=str(tmp_path / "sentinel.md"))
     assert process.terminated
     assert job["status"] == "stalled_aborted"
+
+
+def test_process_identity_check_rejects_recycled_pid_and_accepts_matching_process():
+    from synlynk.sentinel import capture_process_identity, process_identity_check
+
+    short_lived = subprocess.Popen([sys.executable, "-c", "pass"])
+    pid = short_lived.pid
+    expected = capture_process_identity(pid)
+    if expected is None:
+        short_lived.wait(timeout=5)
+        import pytest
+        pytest.skip("the host does not expose process identity metadata")
+    short_lived.wait(timeout=5)
+    assert process_identity_check(pid, expected) == "do not kill"
+
+    live = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(5)"])
+    try:
+        live_identity = capture_process_identity(live.pid)
+        assert live_identity
+        assert process_identity_check(live.pid, live_identity) == "safe to kill"
+        mismatched = dict(live_identity)
+        mismatched["start_time"] = "a different process start time"
+        assert process_identity_check(live.pid, mismatched) == "do not kill"
+    finally:
+        live.terminate()
+        live.wait(timeout=5)
+
+
+def test_circuit_breaker_skips_kill_when_pid_identity_fails(tmp_path, monkeypatch):
+    from synlynk.sentinel import enforce_job_circuit_breaker
+
+    job = {
+        "id": "job-recycled-pid",
+        "pid": 321,
+        "pid_identity": {"start_time": "original process"},
+        "in_tokens": 500_000,
+        "files_touched": 0,
+    }
+    monkeypatch.setattr("synlynk.sentinel.process_identity_check", lambda pid, expected: "do not kill")
+    with patch("synlynk.sentinel.os.kill") as kill:
+        assert enforce_job_circuit_breaker(job, sentinel_path=str(tmp_path / "sentinel.md"))
+    kill.assert_not_called()
+    assert "PID recycled, skipped kill" in job["circuit_breaker_reason"]
 
 
 def test_check_token_bloat_triggers_on_high_token_per_file_ratio(tmp_path):

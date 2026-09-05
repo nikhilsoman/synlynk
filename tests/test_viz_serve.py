@@ -6,6 +6,8 @@ import time as real_time
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 import synlynk.viz
 from synlynk.viz import VizorHandler
 
@@ -27,12 +29,19 @@ class _DummyVizorHandler(VizorHandler):
         pass
 
 
-def _make_handler(payload: bytes):
+def _make_handler(payload: bytes, path="/note", extra_headers=None, authenticate=True):
+    from synlynk.local_http_auth import TOKEN_HEADER, ensure_local_token
+
     handler = object.__new__(_DummyVizorHandler)
-    handler.path = "/note"
+    handler.path = path
     handler.rfile = io.BytesIO(payload)
     handler.wfile = io.BytesIO()
-    handler.headers = {"Content-Length": str(len(payload))}
+    headers = {"Content-Length": str(len(payload))}
+    if extra_headers:
+        headers.update(extra_headers)
+    if authenticate and TOKEN_HEADER not in headers:
+        headers[TOKEN_HEADER] = ensure_local_token()
+    handler.headers = headers
     handler.errors = []
     handler.responses = []
     handler.headers_sent = []
@@ -84,6 +93,81 @@ def test_post_invalid_json_returns_400(tmp_path, monkeypatch):
     VizorHandler.do_POST(handler)
 
     assert handler.errors == [(400, "Invalid JSON")]
+
+
+def test_post_note_without_token_returns_401(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk/viz-cache", exist_ok=True)
+
+    payload = json.dumps({"id": "story-bs21", "text": "needs work"}).encode()
+    handler = _make_handler(payload, authenticate=False)
+    VizorHandler.do_POST(handler)
+
+    assert handler.errors == [(401, "unauthorized")]
+    assert not os.path.exists(".synlynk/viz-notes.json")
+
+
+def test_post_note_wrong_token_returns_401(tmp_path, monkeypatch):
+    from synlynk.local_http_auth import TOKEN_HEADER, ensure_local_token
+
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk/viz-cache", exist_ok=True)
+    ensure_local_token()
+
+    payload = json.dumps({"id": "story-bs21", "text": "needs work"}).encode()
+    handler = _make_handler(
+        payload, extra_headers={TOKEN_HEADER: "stale-or-wrong-token"}, authenticate=False
+    )
+    VizorHandler.do_POST(handler)
+
+    assert handler.errors == [(401, "unauthorized")]
+    assert not os.path.exists(".synlynk/viz-notes.json")
+
+
+def test_post_note_cross_origin_is_forbidden(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk/viz-cache", exist_ok=True)
+
+    payload = json.dumps({"id": "story-bs21", "text": "needs work"}).encode()
+    handler = _make_handler(payload, extra_headers={"Origin": "https://evil.example"})
+    VizorHandler.do_POST(handler)
+
+    assert handler.errors == [(403, "forbidden origin")]
+    assert not os.path.exists(".synlynk/viz-notes.json")
+
+
+def test_post_dispatch_without_token_does_not_dispatch(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk/viz-cache", exist_ok=True)
+
+    payload = json.dumps({"agent": "codex", "task": "fix bug"}).encode()
+    handler = _make_handler(payload, path="/dispatch", authenticate=False)
+    with patch.object(VizorHandler, "_handle_dispatch") as mock_dispatch:
+        VizorHandler.do_POST(handler)
+        mock_dispatch.assert_not_called()
+    assert handler.errors == [(401, "unauthorized")]
+
+
+@pytest.mark.parametrize("path", ["/kill", "/approve", "/architect-map/view-pref"])
+def test_vizor_write_routes_require_token(tmp_path, monkeypatch, path):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk/viz-cache", exist_ok=True)
+    handler = _make_handler(b"{}", path=path, authenticate=False)
+    VizorHandler.do_POST(handler)
+    assert handler.errors == [(401, "unauthorized")]
+
+
+def test_post_json_ok_does_not_set_wildcard_cors(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk/viz-cache", exist_ok=True)
+
+    handler = _make_handler(
+        json.dumps({"id": "story-bs21", "text": "needs work", "tags": ["redo"], "state": "action"}).encode()
+    )
+    VizorHandler.do_POST(handler)
+
+    assert handler.responses == [200]
+    assert ("Access-Control-Allow-Origin", "*") not in handler.headers_sent
 
 
 def test_cmd_viz_serve_keeps_server_alive_and_shuts_down_cleanly(tmp_path, monkeypatch):

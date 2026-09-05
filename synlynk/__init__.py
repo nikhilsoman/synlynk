@@ -1098,6 +1098,8 @@ CREATE TABLE IF NOT EXISTS daemon_jobs (
     completed_at TEXT,
     exit_code    INTEGER,
     log_path     TEXT,
+    worktree_path TEXT,
+    worktree_branch TEXT,
     handoff_count INTEGER NOT NULL DEFAULT 0,
     previous_agents TEXT,
     dispatch_context TEXT,

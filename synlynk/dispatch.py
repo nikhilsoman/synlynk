@@ -92,7 +92,12 @@ from synlynk.github_app_auth import read_cached_installation_token
 from synlynk.fencing import FenceData, is_fenced_command, render_task_fence
 from synlynk.git_ref_lock import git_ref_operation_lock
 from synlynk.gh_verify import gh_write_verified
-from synlynk.sentinel import _read_sentinel_alerts, _write_sentinel_alert
+from synlynk.sentinel import (
+    _read_sentinel_alerts,
+    _write_sentinel_alert,
+    capture_process_identity,
+    process_identity_check,
+)
 from synlynk.policy import check_authority
 from synlynk.capability import expected_value as _capability_expected_value, route_expected_value
 
@@ -288,6 +293,22 @@ def _ensure_daemon_job_harness_columns(conn) -> None:
         if name not in cols:
             try:
                 conn.execute(f"ALTER TABLE daemon_jobs ADD COLUMN {name} {definition}")
+            except Exception:
+                pass
+
+
+def _ensure_daemon_job_worktree_columns(conn) -> None:
+    """Add persisted worktree metadata for legacy daemon schemas."""
+    try:
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)").fetchall()}
+    except Exception:
+        return
+    if not cols:
+        return
+    for name in ("worktree_path", "worktree_branch"):
+        if name not in cols:
+            try:
+                conn.execute(f"ALTER TABLE daemon_jobs ADD COLUMN {name} TEXT")
             except Exception:
                 pass
 
@@ -808,6 +829,21 @@ def _check_job_stall(job: dict, config: dict, sentinel_path: str) -> bool:
     if stale_minutes < timeout:
         return False
 
+    def kill_stalled_process() -> Tuple[bool, bool]:
+        """Kill only the process whose dispatch-time identity still matches."""
+        pid = job.get("pid")
+        if isinstance(pid, bool) or not isinstance(pid, int) or pid <= 0:
+            return False, False
+        try:
+            if process_identity_check(pid, job.get("pid_identity")) != "safe to kill":
+                return False, True
+            os.kill(pid, signal.SIGKILL)
+            return True, False
+        except ProcessLookupError:
+            return False, False
+        except (PermissionError, TypeError, ValueError, OSError):
+            return False, False
+
     if job.get("requires_gh_write"):
         target = job.get("gh_write_target")
         expect = job.get("gh_write_expect") or "closed"
@@ -837,12 +873,9 @@ def _check_job_stall(job: dict, config: dict, sentinel_path: str) -> bool:
             )
             return False
         if verified is False:
-            pid = job.get("pid")
-            if pid:
-                try:
-                    os.kill(pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
+            killed, kill_skipped = kill_stalled_process()
+            if kill_skipped:
+                job["pid_identity_kill_skipped"] = True
             job["status"] = "failed"
             job["exit_code"] = -1
             job["ended_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
@@ -850,7 +883,8 @@ def _check_job_stall(job: dict, config: dict, sentinel_path: str) -> bool:
             write_alert(
                 "CRITICAL", "STALL_GH_WRITE_UNVERIFIED",
                 f"Job {job.get('id')} on agent '{job.get('agent', '')}' stalled and its "
-                f"declared gh-write target {target} was confirmed NOT delivered. Process killed.",
+                f"declared gh-write target {target} was confirmed NOT delivered. "
+                f"Process {'killed' if killed else 'kill skipped' if kill_skipped else 'not found'}.",
                 sentinel_path,
             )
             return True
@@ -889,12 +923,9 @@ def _check_job_stall(job: dict, config: dict, sentinel_path: str) -> bool:
         )
         return False
 
-    pid = job.get("pid")
-    if pid:
-        try:
-            os.kill(pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
+    killed, kill_skipped = kill_stalled_process()
+    if kill_skipped:
+        job["pid_identity_kill_skipped"] = True
 
     job["status"] = "failed"
     job["exit_code"] = -1
@@ -903,7 +934,8 @@ def _check_job_stall(job: dict, config: dict, sentinel_path: str) -> bool:
     write_alert = _pkg("_write_sentinel_alert", _write_sentinel_alert)
     write_alert(
         "CRITICAL", "STALL_NO_OUTPUT",
-        f"Job {job.get('id')} on agent '{agent}' stalled with zero output after {timeout}min. Process killed.",
+        f"Job {job.get('id')} on agent '{agent}' stalled with zero output after {timeout}min. "
+        f"Process {'killed' if killed else 'kill skipped' if kill_skipped else 'not found'}.",
         sentinel_path,
     )
     write_alert(
@@ -3142,6 +3174,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         "task": task,
         "cycle": cycle,
         "pid": proc.pid,
+        "pid_identity": capture_process_identity(proc.pid, proc),
         "log_file": log_file,
         "prompt_file": prompt_file,
         "context_file": context_file if context_mode != "none" else "",
@@ -3199,6 +3232,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             _ensure_daemon_job_agent_id_column(dconn)
             _ensure_daemon_job_gh_write_columns(dconn)
             _ensure_daemon_job_harness_columns(dconn)
+            _ensure_daemon_job_worktree_columns(dconn)
             existing = dconn.execute(
                 "SELECT 1 FROM daemon_jobs WHERE job_id=?", (job_id,)
             ).fetchone()
@@ -3207,7 +3241,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 dispatch_context = _dispatch_context()
                 dconn.execute(
                     "UPDATE daemon_jobs SET status='running', pid=?, started_at=?, "
-                    "log_path=?, agent=?, harness=?, role=?, task=?, story_id=?, "
+                    "log_path=?, worktree_path=?, worktree_branch=?, agent=?, harness=?, role=?, task=?, story_id=?, "
                     "dispatch_context=COALESCE(dispatch_context, ?), "
                     "context_mode=?, context_bytes=?, "
                     "session_id=COALESCE(session_id, ?), "
@@ -3218,6 +3252,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                         proc.pid,
                         job["started_at"],
                         log_file,
+                        worktree_path,
+                        worktree_branch,
                         agent,
                         agent,
                         resolved_agent_role or None,
@@ -3238,9 +3274,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 dconn.execute(
                     "INSERT OR REPLACE INTO daemon_jobs "
                     "(job_id, agent, harness, role, task, story_id, status, priority, depends_on, pid, "
-                    "enqueued_at, started_at, log_path, dispatch_context, context_mode, context_bytes, session_id, "
+                    "enqueued_at, started_at, log_path, worktree_path, worktree_branch, dispatch_context, context_mode, context_bytes, session_id, "
                     "agent_id, requires_gh_write, gh_write_target, gh_write_author, gh_write_expect) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         job_id,
                         agent,
@@ -3255,6 +3291,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                         job["started_at"],
                         job["started_at"],
                         log_file,
+                        worktree_path,
+                        worktree_branch,
                         dispatch_context,
                         context_mode,
                         context_bytes,

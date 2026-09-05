@@ -665,7 +665,8 @@ def test_generate_gantt_html_renders_dreams_and_notes():
     assert "Gantt view" in html
     assert "note-info" in html
     assert "note-urgent" in html
-    assert "http://localhost:' + PORT + '/note" in html
+    assert "fetch('/note'" in html
+    assert "vizorAuthHeaders" in html
 
 
 def test_generate_gantt_html_empty_state():
