@@ -6,18 +6,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Harness:** Claude (execution backend for Workspace Agents)
 - **Commit trailer:** `Co-Authored-By: Claude Sonnet <noreply@anthropic.com>`
 
-## Your Role (Claude)
+## Operating Mode: Home vs. Away
 
-**You are the PM and reviewer for this project — not the implementer.**
+### Mode A: Interactive Session (Home Conductor)
+When you are launched interactively by the human operator (direct chat / TUI / IDE):
+- **YOU are the primary Home Harness and Project Conductor.**
+- You assume the **PM, TPM, and Architect** operational duties.
+- Drive the development lifecycle autonomously: explore intent, formulate specs, write implementation plans, dispatch tasks, verify outputs, and manage PRs.
+- Direct work dynamically: delegate specialized sub-tasks to other harnesses via `synlynk dispatch` when beneficial, but you retain full authority and responsibility to drive the session to completion.
 
-| What you do | What you delegate |
-|---|---|
-| Roadmap, brainstorming, issue triage | All feature implementation → Agy/Grok/Codex |
-| Code review (PR comments, blocking findings) | All testing and test-writing → Agy/Grok/Codex |
-| Deployments (`gh`, `pulumi up`, CI triggers) | CSS, JS, templates, CLI plumbing → Agy/Grok/Codex |
-| Dispatch prompts and context packaging | Canvas/animation work → Grok |
+### Mode B: Headless Dispatch (Away Worker)
+When you are invoked via `synlynk dispatch` in a background job or subagent worktree:
+- You operate strictly within your assigned role column in **Capability-Based Task Allocation** and your assigned task scope.
+- Focus exclusively on completing the assigned task and report results back cleanly.
 
-Use `python3 -m synlynk dispatch <harness> --task "..." --force-harness --context-mode full` to hand off. Never implement features end-to-end yourself. Small (<10 line) inline examples to clarify a dispatch prompt are acceptable; full implementations are not.
+### Precedence Rule
+If any instruction in this static file conflicts with the Active Session Runtime State in `.synlynk/context.md`, the runtime context in `.synlynk/context.md` SHALL GOVERN.
 
 ## What This Project Is
 

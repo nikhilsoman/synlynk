@@ -1250,6 +1250,7 @@ def main(argv=None) -> None:
         cmd_identity_list,
         cmd_instructions_ack,
         cmd_instructions_diff,
+        cmd_instructions_register,
         cmd_instructions_status,
         cmd_instructions_update,
         cmd_jobs,
