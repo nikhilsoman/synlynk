@@ -4,6 +4,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 
 ## Series Index
 
+| [183](./183-prTBD-parent-auto-pr-role-token.md) | #1436 Hole A - Parent auto-PR uses role App token | TBD | 2026-09-06 |
 | [181](./181-prTBD-pr-check-job-branch.md) | #1432 - pr check from a dispatch job branch | TBD | 2026-09-06 |
 | [180](./180-prTBD-pr-check-sandbox-todo-pytest-k.md) | #1446 - pr check sandbox todo write + guessed pytest -k | TBD | 2026-09-06 |
 | [179](./179-prTBD-agy-permissions-pr-title.md) | #1427 - Auto-PR titles skip injected ## Permissions | TBD | 2026-09-06 |
