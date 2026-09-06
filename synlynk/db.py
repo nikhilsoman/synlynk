@@ -20,10 +20,10 @@ def detect_remote_owner_repo() -> tuple:
     return _detect_remote_owner_repo()
 
 
-def qa_gate_verdict(owner: str, repo: str) -> dict:
+def qa_gate_verdict(owner: str, repo: str, **kwargs) -> dict:
     from synlynk.qa_gate import qa_gate_verdict as _qa_gate_verdict
 
-    return _qa_gate_verdict(owner, repo)
+    return _qa_gate_verdict(owner, repo, **kwargs)
 
 
 def _qa_gate_mode() -> str:
