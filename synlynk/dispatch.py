@@ -350,6 +350,9 @@ def _resolve_github_apps_dir() -> str:
     if os.path.isdir(cwd_apps_dir):
         return cwd_apps_dir
 
+    if not os.path.exists(".git"):
+        return cwd_apps_dir
+
     try:
         result = subprocess.run(
             ["git", "rev-parse", "--git-common-dir"],

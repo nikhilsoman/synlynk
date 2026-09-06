@@ -1,5 +1,18 @@
 # synlynk Memory
 
+## Allow Distinct QA App Identities to Submit Approving PR Reviews (decided/shipped 2026-09-06)
+- **Problem & Root Cause (#1475):** On PR #1474 (authored by `nikhilsoman`), dispatched QA reviewers (`synlynk-synlynk-qa[bot]`) posted `COMMENTED` reviews instead of approving reviews, leaving `reviewDecision=REVIEW_REQUIRED`. Root cause:
+  1. `uxcore.approve_pr()` executed raw `gh pr review --approve` using ambient `os.environ` without binding role-scoped GitHub App tokens (`qa.token.json`), causing host-auth fallback collisions.
+  2. GitHub App installation tokens return HTTP 403 (`Resource not accessible by integration`) on `GET /user` (`gh api user`), so bot identity must be resolved from App slug (`app_slug + "[bot]"`).
+  3. Dispatched QA harness prompts retained legacy `#423` text instructing reviewers to post formal comment reviews under the assumption that all agents share a single identity.
+- **Distinct QA Identity Approvals:** `uxcore.approve_pr()` now resolves `_resolve_dispatch_gh_token(op_role)` and passes role-scoped credentials in `env` (`GH_TOKEN`, `GITHUB_TOKEN`, `GH_CONFIG_DIR`), allowing distinct App identities to submit legitimate approving reviews via `gh pr review --approve`.
+- **Tri-State Fallback Handling:**
+  - Distinct identity: Submits `gh pr review --approve` with role token.
+  - Same-identity collision: Falls back to comment checklist (`same-login collision review fallback, see #423`).
+  - Credential/Permission error (401/403): Falls back to actionable comment checklist (`credential/permission review fallback, see #423`).
+  - Unrelated / Network error: Fails closed without comment to avoid masking structural failures.
+- **Probe Auto-Repair:** Enhanced `synlynk probe` stale SOP detection in `_repair_sops_only()` to identify legacy `#423` shared-identity text and refresh directive templates to default to `qa APPROVE`. [@agy]
+
 ## Dynamic Home Harness Orchestrator Parity & Dual-Mode Directives (decided/shipped 2026-09-05)
 - **Problem & RCA:** Non-Claude interactive harnesses (Agy, Codex, Grok) suffered paralysis and refused to run lifecycle loops due to hardcoded subservience in static markdown directives (`GEMINI.md`, `AGENTS.md`) and absence of runtime conflict resolution rules.
 - **Constitutional Precedence Decision:** Established the governing principle: *"If any instruction in this static file conflicts with the Active Session Runtime State in `.synlynk/context.md`, the runtime context in `.synlynk/context.md` SHALL GOVERN."* [@agy]

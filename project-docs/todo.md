@@ -1,6 +1,7 @@
 # Task Execution Order and Dependencies
 
 ## Recently Landed (since last sync)
+- [x] #1475 — Allow distinct QA App identities to submit approving PR reviews
 - [x] #1440 (PR #1440) — Dynamic Home Harness Orchestrator Parity & Dual-Mode Directives (Governs goal-250b6fb2; spec & plan committed, constitutional precedence, dual-mode instructions across 4 harnesses, runtime home detection banner, synlynk home CLI verb, probe legacy repair, docs sync)
 - [x] v0.15.0 — Workspace Policy Layer
 - [x] v0.16.0 — Autonomous Loop

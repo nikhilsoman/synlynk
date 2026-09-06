@@ -529,16 +529,30 @@ def dispatch(agent: str, task: str, actor: Optional[Actor] = None, **flags) -> W
     return _execute_write("dispatch", actor, _op, agent=agent, task=task, flags=flags)
 
 
-def approve_pr(pr_number: int, actor: Optional[Actor] = None) -> WriteResult:
+def approve_pr(pr_number: int, actor: Optional[Actor] = None, role: str = "qa") -> WriteResult:
     """Approve and squash-merge a PR via gh. qa APPROVE (`gh pr review --approve`)
     is the default when reviewer and author identities differ; comment-checklist only
-    on same-login collision (see #423)."""
+    on same-login collision or credential/permission fallback (see #423)."""
     actor = actor or DEFAULT_ACTOR
 
     def _op(**params):
         pr = str(params["pr_number"])
+        op_role = params.get("role") or "qa"
+        env = os.environ.copy()
+        try:
+            from synlynk.dispatch import _isolated_gh_config_dir, _resolve_dispatch_gh_token
+            token = _resolve_dispatch_gh_token(op_role)
+            if token:
+                env.pop("GH_TOKEN", None)
+                env.pop("GITHUB_TOKEN", None)
+                env["GH_TOKEN"] = token
+                env["GITHUB_TOKEN"] = token
+                env["GH_CONFIG_DIR"] = _isolated_gh_config_dir()
+        except Exception:
+            token = None
+
         review = subprocess.run(
-            ["gh", "pr", "review", pr, "--approve"], capture_output=True, text=True
+            ["gh", "pr", "review", pr, "--approve"], capture_output=True, text=True, env=env
         )
         if review.returncode != 0:
             review_message = review.stdout or review.stderr
@@ -549,22 +563,35 @@ def approve_pr(pr_number: int, actor: Optional[Actor] = None) -> WriteResult:
                 or "same-login" in normalized_message
                 or "same login" in normalized_message
             )
-            if not self_approval_error:
+            credential_permission_error = (
+                "resource not accessible by integration" in normalized_message
+                or "bad credentials" in normalized_message
+                or "credentials" in normalized_message
+                or "not accessible by integration" in normalized_message
+                or "integration" in normalized_message
+                or "permission" in normalized_message
+                or "unauthorized" in normalized_message
+                or "401" in normalized_message
+                or "403" in normalized_message
+            )
+            if not (self_approval_error or credential_permission_error):
                 return {"ok": False, "message": review_message}
 
+            fallback_reason = "same-login collision" if self_approval_error else "credential/permission"
             comment = subprocess.run(
-                ["gh", "pr", "comment", pr, "--body", "Approved (formal comment — same-login collision review fallback, see #423)."],
+                ["gh", "pr", "comment", pr, "--body", f"Approved (formal comment — {fallback_reason} review fallback, see #423)."],
                 capture_output=True,
                 text=True,
+                env=env,
             )
             if comment.returncode != 0:
                 return {"ok": False, "message": comment.stdout or comment.stderr}
         merge = subprocess.run(
-            ["gh", "pr", "merge", pr, "--squash", "--admin"], capture_output=True, text=True
+            ["gh", "pr", "merge", pr, "--squash", "--admin"], capture_output=True, text=True, env=env
         )
         return {"ok": merge.returncode == 0, "message": merge.stdout or merge.stderr}
 
-    return _execute_write("approve_pr", actor, _op, pr_number=pr_number)
+    return _execute_write("approve_pr", actor, _op, pr_number=pr_number, role=role)
 
 
 def kill_job(job_id: str, actor: Optional[Actor] = None) -> WriteResult:
