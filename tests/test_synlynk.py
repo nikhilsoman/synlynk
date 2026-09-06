@@ -3210,6 +3210,8 @@ def test_reconcile_auto_finalizes_dirty_worktree_excluding_generated_files(proje
     import synlynk as sl
     import synlynk.jobs as jobs_mod
 
+    monkeypatch.setenv("SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH", "1")
+
     worktree_path = project_dir / "worktrees" / "job-finalize-dirty"
     worktree_path.mkdir(parents=True)
     log_file = project_dir / ".synlynk" / "logs" / "job-finalize-dirty.log"
@@ -3422,6 +3424,8 @@ def test_reconcile_auto_finalizes_clean_worktree_with_local_commits(project_dir,
     import synlynk as sl
     import synlynk.jobs as jobs_mod
 
+    monkeypatch.setenv("SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH", "1")
+
     worktree_path = project_dir / "worktrees" / "job-finalize-clean"
     worktree_path.mkdir(parents=True)
     log_file = project_dir / ".synlynk" / "logs" / "job-finalize-clean.log"
@@ -3496,6 +3500,8 @@ def test_reconcile_auto_finalize_is_idempotent_when_pr_exists(project_dir, monke
     import synlynk as sl
     import synlynk.jobs as jobs_mod
 
+    monkeypatch.setenv("SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH", "1")
+
     worktree_path = project_dir / "worktrees" / "job-finalize-idempotent"
     worktree_path.mkdir(parents=True)
     log_file = project_dir / ".synlynk" / "logs" / "job-finalize-idempotent.log"
@@ -3560,6 +3566,8 @@ def test_reconcile_auto_finalize_is_idempotent_when_pr_exists(project_dir, monke
 def test_reconcile_auto_finalize_logs_gh_failure_without_crashing(project_dir, monkeypatch, capsys):
     import synlynk as sl
     import synlynk.jobs as jobs_mod
+
+    monkeypatch.setenv("SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH", "1")
 
     worktree_path = project_dir / "worktrees" / "job-finalize-gh-failure"
     worktree_path.mkdir(parents=True)
@@ -3674,6 +3682,8 @@ def test_finalize_still_opens_pr_for_scope_declared_job_with_requires_gh_write(t
     import synlynk as sl
     import synlynk.jobs as jobs_mod
 
+    monkeypatch.setenv("SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH", "1")
+
     worktree_path = tmp_path / "worktrees" / "job-scope-withpr"
     worktree_path.mkdir(parents=True)
     branch = "dispatch/codex/job-scope-withpr"
@@ -3721,6 +3731,8 @@ def test_finalize_uses_default_dispatch_branch_when_unchanged(tmp_path, monkeypa
     """(a) Worktree still on dispatch/<agent>/<job_id> — finalize/PR use that name (no regression)."""
     import subprocess
     import synlynk as sl
+
+    monkeypatch.setenv("SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH", "1")
     import synlynk.jobs as jobs_mod
 
     worktree_path = tmp_path / "worktrees" / "job-default-branch"
@@ -3774,6 +3786,8 @@ def test_finalize_detects_custom_branch_for_push_and_pr(tmp_path, monkeypatch):
     """(b) Agent switched mid-task — finalize uses custom branch, not stale dispatch name."""
     import subprocess
     import synlynk as sl
+
+    monkeypatch.setenv("SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH", "1")
     import synlynk.jobs as jobs_mod
 
     worktree_path = tmp_path / "worktrees" / "job-custom-branch"
@@ -3831,6 +3845,8 @@ def test_finalize_detached_head_falls_back_to_recorded_branch(tmp_path, monkeypa
     """(d) Detached HEAD → fall back to recorded worktree_branch without crashing."""
     import subprocess
     import synlynk as sl
+
+    monkeypatch.setenv("SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH", "1")
     import synlynk.jobs as jobs_mod
 
     worktree_path = tmp_path / "worktrees" / "job-detached"
@@ -3884,6 +3900,8 @@ def test_finalize_pr_dedupe_uses_real_custom_branch(tmp_path, monkeypatch):
     """(e) gh pr list dedupe runs against the real branch — no double-create when PR exists."""
     import subprocess
     import synlynk as sl
+
+    monkeypatch.setenv("SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH", "1")
     import synlynk.jobs as jobs_mod
 
     worktree_path = tmp_path / "worktrees" / "job-dedupe-custom"

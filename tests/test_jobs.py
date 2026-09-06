@@ -1024,6 +1024,7 @@ def test_maybe_open_worktree_pr_title_skips_permissions_heading(tmp_path, monkey
     import subprocess
     import synlynk.jobs as jobs_mod
 
+    monkeypatch.setenv("SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH", "1")
     worktree_path = tmp_path / "repo"
     worktree_path.mkdir()
     captured = []
