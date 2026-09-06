@@ -66,3 +66,27 @@ jobs:
         run: python3 bin/synlynk.py pr gate-status
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  epubcheck:
+    name: EPUBCheck 5.3.0
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Download EPUBCheck 5.3.0
+        run: |
+          curl --fail --location --retry 3 \
+            --output /tmp/epubcheck.zip \
+            https://github.com/w3c/epubcheck/releases/download/v5.3.0/epubcheck-5.3.0.zip
+          unzip -q /tmp/epubcheck.zip -d /tmp/epubcheck
+
+      - name: Validate EPUB package
+        run: |
+          java -jar /tmp/epubcheck/epubcheck-5.3.0/epubcheck.jar \
+            docs/book/the-supervised-machine-v0.5-DRAFT.epub
