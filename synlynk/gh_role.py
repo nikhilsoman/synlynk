@@ -16,6 +16,9 @@ from synlynk.dispatch import (
 
 def cmd_gh(role: str, gh_args: list) -> int:
     """Execute `gh` with the role App token. Fail closed if none is cached."""
+    if not role:
+        print("  usage: synlynk gh --role <role> -- <gh-args>", file=sys.stderr)
+        raise SystemExit(1)
     if role not in KNOWN_ROLES:
         print(
             f"  unknown role {role!r}. Known roles: {', '.join(KNOWN_ROLES)}",

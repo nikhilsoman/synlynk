@@ -629,40 +629,20 @@ def _gh_write_allow_host_auth() -> bool:
 
 
 def _create_exec_gh_shim() -> Tuple[tempfile.TemporaryDirectory, str]:
-    """Create the short-lived ``gh`` guard used only by ``synlynk exec``."""
+    """Create the short-lived shared ``gh`` guard used by ``synlynk exec``."""
+    from synlynk.gh_shim import write_shim
+
     shim_dir = tempfile.TemporaryDirectory(prefix="synlynk-exec-")
     shim_path = os.path.join(shim_dir.name, "gh")
-    script = f'''#!{sys.executable}
-import os
-import shutil
-import sys
-
-shim_dir = os.path.dirname(os.path.realpath(__file__))
-path_entries = os.environ.get("PATH", "").split(os.pathsep)
-real_path = os.pathsep.join(p for p in path_entries if os.path.realpath(p) != shim_dir)
-
-if not (os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")):
-    allowed = (os.environ.get("SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH") or "").strip().lower()
-    if allowed not in ("1", "true", "yes", "on"):
-        print("synlynk gh refused: use synlynk gh --role <role> -- …; host identity is not used", file=sys.stderr)
-        raise SystemExit(1)
-
-real_gh = shutil.which("gh", path=real_path)
-if not real_gh:
-    print("synlynk gh shim: real gh binary not found on PATH", file=sys.stderr)
-    raise SystemExit(127)
-os.execv(real_gh, [real_gh] + sys.argv[1:])
-'''
-    with open(shim_path, "w", encoding="utf-8") as handle:
-        handle.write(script)
-    os.chmod(shim_path, 0o700)
+    write_shim(shim_path)
     return shim_dir, shim_path
 
 
 def _exec_child_env() -> Tuple[dict, tempfile.TemporaryDirectory]:
-    """Return the inherited env with an exec-only GitHub CLI PATH guard."""
+    """Return the inherited env with the shared GitHub CLI PATH guard."""
     shim_dir, _shim_path = _create_exec_gh_shim()
     env = os.environ.copy()
+    env["SYNLYNK_HARNESS"] = "1"
     env["PATH"] = shim_dir.name + os.pathsep + env.get("PATH", "")
     return env, shim_dir
 
