@@ -4,6 +4,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 
 ## Series Index
 
+| [184](./184-prTBD-synlynk-gh-role.md) | #1436 Hole B - synlynk gh --role | TBD | 2026-09-06 |
 | [183](./183-prTBD-parent-auto-pr-role-token.md) | #1436 Hole A - Parent auto-PR uses role App token | TBD | 2026-09-06 |
 | [182](./182-prTBD-identity-routing-assessment.md) | #1436 - Workspace agent identity routing assessment | TBD | 2026-09-06 |
 | [181](./181-prTBD-pr-check-job-branch.md) | #1432 - pr check from a dispatch job branch | TBD | 2026-09-06 |
