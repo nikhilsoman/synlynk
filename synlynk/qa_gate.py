@@ -38,10 +38,12 @@ def _gh_pr_changed_files(pr_number) -> list:
     return [p for p in (result.stdout or "").splitlines() if p]
 
 
-def _qa_gate_ci_status(worktree_path=None, worktree_branch=None) -> Optional[bool]:
-    """True/False/None (undeterminable) CI matrix status for the active branch."""
+def _qa_gate_ci_status(worktree_path=None, worktree_branch=None, pr_number=None) -> Optional[bool]:
+    """True/False/None (undeterminable) CI matrix status for the active PR/branch."""
     return _extract_verified_by_ci(
-        worktree_path=worktree_path, worktree_branch=worktree_branch
+        worktree_path=worktree_path,
+        worktree_branch=worktree_branch,
+        pr_number=pr_number,
     )
 
 
@@ -95,10 +97,12 @@ def _qa_gate_sentinel_health(owner: str, repo: str) -> Optional[bool]:
     return True
 
 
-def qa_gate_verdict(owner: str, repo: str, worktree_path=None, worktree_branch=None) -> dict:
+def qa_gate_verdict(owner: str, repo: str, worktree_path=None, worktree_branch=None, pr_number=None) -> dict:
     """Combines CI status and sentinel health into one fail-closed verdict."""
     ci_status = _qa_gate_ci_status(
-        worktree_path=worktree_path, worktree_branch=worktree_branch
+        worktree_path=worktree_path,
+        worktree_branch=worktree_branch,
+        pr_number=pr_number,
     )
     sentinel_status = _qa_gate_sentinel_health(owner, repo)
 

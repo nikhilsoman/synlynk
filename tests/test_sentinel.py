@@ -60,6 +60,29 @@ def test_extract_verified_by_ci_none_when_a_test_job_is_pending():
         assert _extract_verified_by_ci(worktree_branch="feat/qa-gate-ci-workflow") is None
 
 
+def test_extract_verified_by_ci_uses_pr_number_not_job_branch():
+    """#1432: gh pr checks <number> works from a dispatch/ job branch."""
+    stdout = _pr_checks_output([
+        ("test (3.8)", "pass"),
+        ("test (3.10)", "pass"),
+        ("test (3.12)", "pass"),
+    ])
+    seen = []
+
+    def _fake_run(cmd, **_kwargs):
+        seen.append(cmd)
+        if len(cmd) >= 4 and cmd[:3] == ["gh", "pr", "checks"] and cmd[3] == "1430":
+            return _run_result(stdout=stdout, returncode=0)
+        return _run_result(returncode=1)
+
+    with patch("synlynk.sentinel.subprocess.run", side_effect=_fake_run):
+        assert _extract_verified_by_ci(
+            worktree_branch="dispatch/codex/job-2614fd19",
+            pr_number=1430,
+        ) is True
+    assert any(cmd[:4] == ["gh", "pr", "checks", "1430"] for cmd in seen)
+
+
 def test_extract_verified_by_ci_falls_through_when_no_test_lines():
     stdout = _pr_checks_output([
         ("qa-gate", "pending"),

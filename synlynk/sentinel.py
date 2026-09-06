@@ -299,16 +299,17 @@ def _extract_pr_review_cycles(worktree_path=None, worktree_branch=None):
     return cycles
 
 
-def _extract_verified_by_ci(worktree_path=None, worktree_branch=None):
-    """Returns CI outcome for the active branch when GH status data is available."""
+def _extract_verified_by_ci(worktree_path=None, worktree_branch=None, pr_number=None):
+    """Returns CI outcome for the active PR/branch when GH status data is available."""
     branch = worktree_branch or _worktree_branch_name(worktree_path)
-    if not branch:
+    ref = str(pr_number) if pr_number is not None else branch
+    if not ref:
         return None
     root = worktree_path or os.getcwd()
 
     try:
         result = subprocess.run(
-            ["gh", "pr", "checks", branch],
+            ["gh", "pr", "checks", ref],
             capture_output=True,
             text=True,
             check=False,

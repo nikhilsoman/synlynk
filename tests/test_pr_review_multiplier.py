@@ -188,3 +188,49 @@ def test_current_pr_number_returns_none_when_gh_fails(monkeypatch):
 
     monkeypatch.setattr(subprocess, "run", fake_run)
     assert pr_multiplier._current_pr_number() is None
+
+
+def test_current_pr_number_uses_explicit_override(monkeypatch):
+    import subprocess
+
+    from synlynk import pr_multiplier
+
+    def fail_run(*_a, **_k):
+        raise AssertionError("gh should not be called when pr_number is explicit")
+
+    monkeypatch.setattr(subprocess, "run", fail_run)
+    assert pr_multiplier._current_pr_number(pr_number=1430) == 1430
+
+
+def test_current_pr_number_falls_back_to_head_commit_pulls(monkeypatch):
+    """#1432: dispatch job branches have no PR; look up by HEAD SHA."""
+    import subprocess
+
+    from synlynk import pr_multiplier
+
+    def fake_run(cmd, **kwargs):
+        class FakeResult:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        result = FakeResult()
+        if cmd[:3] == ["gh", "pr", "view"]:
+            result.returncode = 1
+            result.stderr = "no pull requests found"
+            return result
+        if cmd[:2] == ["git", "rev-parse"]:
+            result.stdout = "abc123deadbeef\n"
+            return result
+        if cmd[:2] == ["gh", "api"] and "/commits/" in cmd[-1] and cmd[-1].endswith("/pulls"):
+            result.stdout = '[{"number": 1430, "state": "open"}]'
+            return result
+        result.returncode = 1
+        return result
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        "synlynk.detect_remote_owner_repo",
+        lambda: ("nikhilsoman", "synlynk"),
+    )
+    assert pr_multiplier._current_pr_number() == 1430

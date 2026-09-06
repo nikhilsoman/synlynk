@@ -1078,7 +1078,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     pr_parser = subparsers.add_parser("pr", help="PR workflow commands")
     pr_sub = pr_parser.add_subparsers(dest="pr_action")
-    pr_sub.add_parser("check", help="Block PR if model versions are unattested")
+    pr_check_parser = pr_sub.add_parser("check", help="Block PR if model versions are unattested")
+    pr_check_parser.add_argument(
+        "--pr",
+        type=int,
+        dest="pr_number",
+        default=None,
+        help="PR number (dispatch job branches cannot auto-detect via gh pr view)",
+    )
     pr_sub.add_parser("gate-status", help="qa block-only merge gate (CI matrix + sentinel health)")
 
     capability_parser = subparsers.add_parser("capability", help="Capability ledger commands")
@@ -1770,7 +1777,7 @@ def main(argv=None) -> None:
         cmd_schedule(execute=args.execute, max_stories=args.max_stories)
     elif args.command == "pr":
         if args.pr_action == "check":
-            cmd_pr_check()
+            cmd_pr_check(pr_number=getattr(args, "pr_number", None))
         elif args.pr_action == "gate-status":
             from synlynk.qa_gate import cmd_pr_gate_status
             cmd_pr_gate_status()

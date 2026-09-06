@@ -74,6 +74,32 @@ def test_pr_check_blocks_on_red_qa_gate(project_dir):
     assert exc_info.value.code == 1
 
 
+def test_cmd_pr_check_forwards_pr_number_through_db_wrapper(project_dir):
+    """#1432: db.qa_gate_verdict must forward pr_number or CLI TypeErrors."""
+    from unittest.mock import patch
+
+    from synlynk.db import cmd_pr_check
+
+    seen = {}
+
+    def fake_gate(owner, repo, **kwargs):
+        seen["args"] = (owner, repo)
+        seen["kwargs"] = kwargs
+        return {
+            "verdict": "green",
+            "ci_status": True,
+            "sentinel_status": True,
+            "reason": "CI green",
+        }
+
+    with patch("synlynk.pr_multiplier._is_github_remote", return_value=True), \
+         patch("synlynk.db.detect_remote_owner_repo", return_value=("nikhilsoman", "synlynk")), \
+         patch("synlynk.qa_gate.qa_gate_verdict", side_effect=fake_gate):
+        cmd_pr_check(pr_number=1450)
+    assert seen["args"] == ("nikhilsoman", "synlynk")
+    assert seen["kwargs"].get("pr_number") == 1450
+
+
 def test_pr_check_passes_on_green_qa_gate(project_dir, capsys):
     from synlynk.db import cmd_pr_check
 

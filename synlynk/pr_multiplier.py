@@ -49,8 +49,17 @@ def _apply_review_cycle_multiplier(conn, pr_number: int, changes_requested_count
     conn.commit()
 
 
-def _current_pr_number() -> Optional[int]:
-    """Resolves the current branch PR number via gh, or None if unavailable."""
+def _current_pr_number(pr_number: Optional[int] = None) -> Optional[int]:
+    """Resolves the current PR number via gh, or None if unavailable.
+
+    Dispatch review jobs check out `dispatch/<harness>/job-<id>`, which has no
+    PR of its own. Fall back to the GitHub commit-pulls API for HEAD (#1432).
+    """
+    if pr_number is not None:
+        try:
+            return int(pr_number)
+        except (TypeError, ValueError):
+            return None
     try:
         result = subprocess.run(
             ["gh", "pr", "view", "--json", "number"],
@@ -59,19 +68,72 @@ def _current_pr_number() -> Optional[int]:
             check=False,
         )
     except FileNotFoundError:
+        result = None
+    except Exception:
+        result = None
+    if result is not None and result.returncode == 0:
+        try:
+            payload = json.loads((result.stdout or "").strip() or "{}")
+        except json.JSONDecodeError:
+            payload = {}
+        if isinstance(payload, dict):
+            number = payload.get("number")
+            if isinstance(number, int):
+                return number
+    return _current_pr_number_from_head_sha()
+
+
+def _current_pr_number_from_head_sha() -> Optional[int]:
+    """Look up an open (or any) PR that contains HEAD — job-branch fallback."""
+    try:
+        sha_proc = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except Exception:
         return None
+    if sha_proc.returncode != 0:
+        return None
+    sha = (sha_proc.stdout or "").strip()
+    if not sha:
+        return None
+    try:
+        from synlynk import detect_remote_owner_repo
+        owner, repo = detect_remote_owner_repo()
+    except Exception:
+        owner, repo = None, None
+    if not owner or not repo:
+        return None
+    try:
+        result = subprocess.run(
+            ["gh", "api", f"repos/{owner}/{repo}/commits/{sha}/pulls"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
     except Exception:
         return None
     if result.returncode != 0:
         return None
     try:
-        payload = json.loads((result.stdout or "").strip() or "{}")
+        pulls = json.loads((result.stdout or "").strip() or "[]")
     except json.JSONDecodeError:
         return None
-    if not isinstance(payload, dict):
+    if not isinstance(pulls, list):
         return None
-    number = payload.get("number")
-    return number if isinstance(number, int) else None
+    open_nums = [
+        p.get("number") for p in pulls
+        if isinstance(p, dict) and isinstance(p.get("number"), int)
+        and str(p.get("state") or "").lower() == "open"
+    ]
+    if open_nums:
+        return open_nums[0]
+    for p in pulls:
+        if isinstance(p, dict) and isinstance(p.get("number"), int):
+            return p["number"]
+    return None
 
 
 def _is_github_remote() -> bool:
