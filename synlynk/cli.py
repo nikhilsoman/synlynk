@@ -593,6 +593,21 @@ def build_parser() -> argparse.ArgumentParser:
     exec_parser.add_argument("--force", action="store_true",
                              help="Bypass CRITICAL sentinel gate")
 
+    gh_parser = subparsers.add_parser(
+        "gh",
+        help="Run gh as a role-scoped GitHub App (not host nikhilsoman)",
+    )
+    gh_parser.add_argument(
+        "--role",
+        required=True,
+        help="Workspace role whose App token to use (qa, pm, dev, ...)",
+    )
+    gh_parser.add_argument(
+        "gh_args",
+        nargs=argparse.REMAINDER,
+        help="Arguments passed to gh (put -- before gh flags)",
+    )
+
     watch_parser = subparsers.add_parser("watch", help="Live workspace HUD (synlynk watch)")
     watch_parser.add_argument("--live", action="store_true",
                               help="Active-job stream mode (3s refresh, no sidebar)")
@@ -1337,6 +1352,9 @@ def main(argv=None) -> None:
     elif args.command == "exec":
         force = getattr(args, 'force', False)
         sys.exit(exec_command(args.cmd, force=force))
+    elif args.command == "gh":
+        from synlynk.gh_role import cmd_gh
+        sys.exit(cmd_gh(args.role, getattr(args, "gh_args", []) or []))
     elif args.command == "upgrade":
         upgrade(dry_run=getattr(args, "dry_run", False))
     elif args.command == "watch":
