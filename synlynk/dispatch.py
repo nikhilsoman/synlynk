@@ -628,7 +628,7 @@ def _gh_write_allow_host_auth() -> bool:
     return raw in ("1", "true", "yes", "on")
 
 
-def _create_exec_gh_shim() -> tuple[tempfile.TemporaryDirectory, str]:
+def _create_exec_gh_shim() -> Tuple[tempfile.TemporaryDirectory, str]:
     """Create the short-lived ``gh`` guard used only by ``synlynk exec``."""
     shim_dir = tempfile.TemporaryDirectory(prefix="synlynk-exec-")
     shim_path = os.path.join(shim_dir.name, "gh")
@@ -659,7 +659,7 @@ os.execv(real_gh, [real_gh] + sys.argv[1:])
     return shim_dir, shim_path
 
 
-def _exec_child_env() -> tuple[dict, tempfile.TemporaryDirectory]:
+def _exec_child_env() -> Tuple[dict, tempfile.TemporaryDirectory]:
     """Return the inherited env with an exec-only GitHub CLI PATH guard."""
     shim_dir, _shim_path = _create_exec_gh_shim()
     env = os.environ.copy()
