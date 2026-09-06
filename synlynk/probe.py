@@ -31,7 +31,7 @@ _PR_REVIEW_SOP = """\
 3. The reviewer alone must merge the PR.
 4. If the reviewer is unavailable, escalate to the Home Harness.
 
-**GitHub identity note (#423):** If a role has a registered workspace agent (`synlynk agent init <role>`, e.g. `qa` or `architect`), dispatch its review via `synlynk dispatch claude --as-agent <role-agent-id>` — this posts a genuine approving review under that role's own distinct GitHub App identity, satisfying GitHub's non-author review requirement for real approvals. Route day-to-day reviews through `qa` and any feature/architecture-impacting review through `architect`. **Fallback (no registered agent for the role):** post a formal COMMENT review with an explicit approve checklist (as on PR #417) instead of an approving review, since dispatches without `--as-agent` share the single repo-owner GitHub identity and an approving review will fail with the self-approval error.
+**GitHub identity note (#423):** qa APPROVE (`gh pr review --approve`) is the default whenever the reviewer identity differs from the PR author login (e.g. role App reviewing a human or sibling App PR). Dispatches under role App identities satisfy GitHub's non-author review requirement for real approvals. Route day-to-day reviews through `qa` and any feature/architecture-impacting review through `architect`. **Fallback (same-identity collision only):** post a formal COMMENT review with an explicit approve checklist (as on PR #417) only when the reviewer GitHub login equals the PR author login, where GitHub rejects self-approval. Do not tell sessions to skip `--approve` by default.
 """
 
 _BRAINSTORM_SOP = """\
@@ -1337,16 +1337,14 @@ def _repair_pr_review_sop(cfg: dict) -> str:
         "2. From within the PR's own checked-out worktree/branch, the reviewer must run `synlynk pr check` so it can auto-detect the PR via git/gh context.\n"
         "3. The reviewer alone must merge the PR.\n"
         f"4. If the reviewer is unavailable, escalate to {escalation_target}.\n\n"
-        "**GitHub identity note (#423):** If a role has a registered workspace agent "
-        "(`synlynk agent init <role>`, e.g. `qa` or `architect`), dispatch its review via "
-        "`synlynk dispatch claude --as-agent <role-agent-id>` — this posts a genuine approving "
-        "review under that role's own distinct GitHub App identity, satisfying GitHub's non-author "
+        "**GitHub identity note (#423):** qa APPROVE (`gh pr review --approve`) is the default "
+        "whenever the reviewer identity differs from the PR author login (e.g. role App reviewing "
+        "a human or sibling App PR). Dispatches under role App identities satisfy GitHub's non-author "
         "review requirement for real approvals. Route day-to-day reviews through `qa` and any "
-        "feature/architecture-impacting review through `architect`. **Fallback (no registered "
-        "agent for the role):** post a formal COMMENT review with an explicit approve checklist "
-        "(as on PR #417) instead of an approving review, since dispatches without `--as-agent` "
-        "share the single repo-owner GitHub identity and an approving review will fail with the "
-        "self-approval error.\n"
+        "feature/architecture-impacting review through `architect`. **Fallback (same-identity "
+        "collision only):** post a formal COMMENT review with an explicit approve checklist "
+        "(as on PR #417) only when the reviewer GitHub login equals the PR author login, where "
+        "GitHub rejects self-approval. Do not tell sessions to skip `--approve` by default.\n"
     )
 
 

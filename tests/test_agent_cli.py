@@ -2794,3 +2794,36 @@ def test_research_distributed_statedb_synchronization__story_d58e5033():
     assert "aggregation" in content.lower()
     assert "tradeoff" in content.lower() or "comparison" in content.lower()
     assert "roadmap" in content.lower() or "phased" in content.lower()
+
+
+def test_implement_1436_leftover_charter_patch_so_review_fallback_same_identity():
+    """Verify #1436 leftover: review_fallback is same-identity only, not the default for qa App approvals."""
+    import json
+    from pathlib import Path
+    from synlynk.policy import DEFAULT_WORKSPACE_POLICY, load_policy
+    from synlynk.probe import _PR_REVIEW_SOP, _repair_pr_review_sop
+    import synlynk.uxcore as uxcore
+
+    # 1. DEFAULT_WORKSPACE_POLICY default
+    assert DEFAULT_WORKSPACE_POLICY["defaults"]["merge_authority"]["review_fallback"] == "same_identity_comment_checklist"
+
+    # 2. repo .synlynk/policy.json
+    repo_root = Path(__file__).resolve().parent.parent
+    policy_json_path = repo_root / ".synlynk" / "policy.json"
+    policy_doc = json.loads(policy_json_path.read_text())
+    assert policy_doc["overrides"]["merge_authority"]["review_fallback"] == "same_identity_comment_checklist"
+
+    # 3. load_policy output
+    loaded = load_policy(str(repo_root))
+    assert loaded["merge_authority"]["review_fallback"] == "same_identity_comment_checklist"
+
+    # 4. synlynk.probe identity note strings
+    for sop in (_PR_REVIEW_SOP, _repair_pr_review_sop({"roles": {}})):
+        assert "qa APPROVE (`gh pr review --approve`) is the default" in sop
+        assert "Fallback (same-identity collision only)" in sop
+        assert "Do not tell sessions to skip `--approve` by default" in sop
+
+    # 5. synlynk.uxcore approve_pr strings
+    assert "qa APPROVE (`gh pr review --approve`)" in uxcore.approve_pr.__doc__
+    assert "same-login collision" in uxcore.approve_pr.__doc__
+

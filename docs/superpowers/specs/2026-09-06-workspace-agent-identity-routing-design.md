@@ -70,7 +70,7 @@ Source: `docs/superpowers/specs/2026-08-09-synlynk-agent-roles-charters-design.m
 | **marketing** | Blog/docs/site | content → Agy | Blog posts in this arc were written by Grok in the authoring session (`nikhilsoman`) |
 | **synlynk-bot** | Not a role; catch-all automation identity | token fallback in `_resolve_dispatch_gh_token` | Fallback if a role App is missing |
 
-`policy.json` `review_fallback: comment_checklist` encodes #423. After §2, that fallback should be **conditional** (same GitHub login as author), not the default for qa App reviews.
+`policy.json` `review_fallback: same_identity_comment_checklist` encodes #423 — comment-checklist fallback is **conditional** (same GitHub login as author), not the default for qa App reviews — **addressed in this PR (#1436 leftover)**.
 
 ## 6. Target end-state
 
@@ -90,7 +90,7 @@ Do not start these until Nikhil signs this spec.
 
 - **Hole A — parent auto-PR identity:** `jobs.py` finalize uses role `GH_TOKEN`. Closes nikhilsoman auto-PRs from merge/review jobs.
 - **Hole B — interactive `gh`:** a `synlynk gh --role <role> -- …` (or `synlynk exec` env) so Grok/Claude sessions cannot `gh pr create` as the human by default.
-- **Policy — review fallback:** `comment_checklist` only when author login equals reviewer login.
+- **Policy — review fallback:** `same_identity_comment_checklist` (comment-checklist only when author login equals reviewer login) — **addressed in this PR (#1436 leftover)**: `.synlynk/policy.json` and `synlynk/policy.py` defaults updated.
 - **Charter patch:** architect merge sentence vs `can_merge` — **addressed in this PR (#1436 leftover)**: living charters aligned to qa-only merge.
 - **Optional:** qa `actions: write` for `gh run rerun`.
 - **Live cell:** one PR authored by a role bot, approved by qa bot.
