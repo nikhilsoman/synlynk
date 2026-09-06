@@ -19,7 +19,7 @@ This design reconciles all three into one coherent 8-role org chart, defines eac
 | Role | Charter | Durability |
 |---|---|---|
 | **pm** | Represents the human user in everything built: brainstorming, issuing work, major decisions based on other roles' reports, keeping course. Owns Named Releases (final sign-off + narrative). | **Durable, narrowly scoped.** Runs a continuous triage loop — responds to inbound signals/reports, re-prioritizes the backlog, dispatches tpm on already-approved work — to prevent workspace dormancy when unattended. Anything matching a "major decision" (spec approval, budget/release sign-off, charter changes) queues and blocks for the human. pm never commits the human to something they haven't seen. |
-| **architect** | Technical custodian of build quality, design, and performance — "everything technical." Owns the full technical design surface: writes/approves both the Spec and the Plan. Does PR code review and holds merge authority. | Session-only, human-in-the-loop by design. |
+| **architect** | Technical custodian of build quality, design, and performance — "everything technical." Owns the full technical design surface: reviews/owns spec+plan; does PR code review; **merge authority is qa only** (`can_merge: ["qa"]`). | Session-only, human-in-the-loop by design. |
 | **tpm** | Operations role: turns architect's finished plan into tracked, dispatched tickets; does actual tasking/tracking; reports status back to pm. Does not decide technical approach. | **Durable.** Continuous tasking/tracking/reporting loop. Consumes GOVERNS' existing lifecycle-enforcement event contract (PR #817) as its data source rather than building independent tracking — see §4. Lightweight periodic reconciliation is kept only as a correctness backstop, never the primary source of truth. |
 | **dev** | Implementation — writes the code. | Dispatch-triggered only, no autonomous loop. |
 | **designer** | UI/UX specialist: maintains end-user-facing interfaces, journeys, and look & feel. | Dispatch-triggered only. |
@@ -38,7 +38,7 @@ Role → tool-agent mapping is **flexible**: each role owns the *what* and accou
 | Role | Typical dispatch targets |
 |---|---|
 | pm | Claude only — represents the human, not delegated out |
-| architect | Claude only — technical judgment + review/merge authority, not delegated out |
+| architect | Claude only — technical judgment + review authority (merge authority is qa only), not delegated out |
 | tpm | Claude (durable loop) |
 | dev | Codex (refactor/CLI-plumbing), Grok (canvas/JS/infra/data-structures), Agy (general implementation) |
 | designer | Agy (CSS/templates/content/subpages) |
@@ -89,7 +89,7 @@ Decision confirmed via `synlynk decide` panel (claude, agy, codex — unanimous)
 | Task breakdown / tracking | tpm | Turns architect's finished plan into tracked, dispatched tickets; does not decide technical approach (§4) |
 | Build | dev / designer, dispatch-triggered | Routed via §3's dispatch policy + live holdback calibration. GitHub-write tasks route per §3.2 (capability-fit, Codex excluded) |
 | Review | architect | PR code review for build quality/correctness against the plan; non-authoring-reviewer discipline still applies — architect never reviews its own dispatch |
-| Merge | architect | Merge authority sits with architect following successful review |
+| Merge | qa | Merge authority sits with qa only (`can_merge: ["qa"]`) following successful review |
 | CI/CD gate + Deploy | qa | Owns pipeline health and deploy mechanics per qa's explicit charter |
 | Named Release cut | pm | pm's durable triage loop queues release sign-off as a "major decision" — blocks for human even though pm is durable (§2's narrow-scope rule) |
 | Blog post / docs | marketing | dev/architect leave a technical summary in the PR description at merge time; marketing turns it into `docs/blog/NN-prN-*.md` and owns the series template |

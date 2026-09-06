@@ -15,7 +15,7 @@ synlynk's 8 Agents (defined in the design spec's §2) are:
 | Agent | Charter |
 |---|---|
 | pm | Represents the human user; owns major decisions and Named Release sign-off |
-| architect | Owns Spec + Plan; does PR review and holds merge authority |
+| architect | Owns Spec + Plan; does PR review (merge authority is qa only) |
 | tpm | Tasking, tracking, and reporting |
 | dev | Implementation |
 | designer | UI/UX |

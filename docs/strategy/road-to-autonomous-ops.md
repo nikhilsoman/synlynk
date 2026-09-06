@@ -48,10 +48,10 @@ The primary gap is orchestration continuity: session capture, goal attribution, 
 ## Operating ownership
 
 - **PM:** represents the human, owns strategic intent, prioritization, and major decisions.
-- **Architect:** owns technical design, spec/plan approval, review, and merge authority.
+- **Architect:** owns technical design, spec/plan approval, and review (merge authority is qa only).
 - **TPM:** owns the durable tasking, tracking, reconciliation, reporting, and escalation loop.
 - **Dev/designer:** execute bounded implementation work through routed harnesses.
-- **QA:** owns verification, CI/CD, and deployment quality.
+- **QA:** owns verification, CI/CD, deployment quality, and merge authority.
 - **GOVERNS:** remains the lifecycle enforcement and attention authority.
 - **SQLite:** remains the shared canonical state store.
 - **Devlog:** remains the narrative continuity record.
