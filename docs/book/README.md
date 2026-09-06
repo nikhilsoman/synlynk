@@ -9,6 +9,9 @@ A nonfiction book grounded in synlynk's real build history and three sister proj
 - `the-supervised-machine-v0.5-DRAFT.html` — source of truth. Single-file, self-contained HTML (inline CSS, no external assets).
 - `the-supervised-machine-v0.5-DRAFT.pdf` — rendered output, regenerated from the HTML. Do not hand-edit the PDF.
 - `the-supervised-machine-v0.5-DRAFT.epub` — rendered output, regenerated from the HTML. Do not hand-edit the EPUB.
+- `epub-metadata.yaml` — stable EPUB publication metadata used by the build.
+- `epub.css` — reflow-safe Apple Books stylesheet; it is separate from print CSS by design.
+- `assets/supervised-machine-cover.png` — RGB cover art used by the EPUB cover page.
 
 ## Editorial history
 
@@ -62,12 +65,32 @@ so relative image paths under `assets/` resolve:
 cd docs/book
 pandoc the-supervised-machine-v0.5-DRAFT.html \
   -o the-supervised-machine-v0.5-DRAFT.epub \
-  --metadata title="The Supervised Machine" \
-  --metadata author="Claude, Codex, Grok, Agy" \
+  --metadata-file=epub-metadata.yaml \
+  --css=epub.css \
+  --epub-cover-image=assets/supervised-machine-cover.png \
+  --epub-title-page=false \
   --resource-path=. \
   --split-level=2 \
   --toc --toc-depth=2
 ```
+
+The EPUB build intentionally uses a dedicated cover image and a separate inside title page. The
+cover image is RGB PNG at 1024x1536 (under Apple Books' 5.6-million-pixel interior-image limit),
+while the title and subtitle remain live XHTML text. This bundled image is the interior EPUB cover;
+the separate Apple Books marketing image must be supplied at 1400 pixels or more on its shortest
+axis without upscaling a low-resolution source. The Apple delivery `metadata.xml` file, when needed
+for Transporter, belongs in the external `.itmsp` delivery package rather than inside this EPUB.
+
+## EPUB validation
+
+Run the official W3C EPUBCheck 5.3.0 validator before distribution:
+
+```bash
+epubcheck docs/book/the-supervised-machine-v0.5-DRAFT.epub
+```
+
+The current EPUB passes with zero fatals, errors, warnings, or informational messages.
+The same command runs in the required `EPUBCheck 5.3.0` GitHub Actions check for pull requests.
 
 **Regenerate the PDF and EPUB together and commit all three files whenever the HTML changes —
 never let them drift.** The EPUB build is now a standard, default step alongside the PDF for

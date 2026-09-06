@@ -1,0 +1,8 @@
+<svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="synlynk S-glyph">
+  <title>synlynk</title>
+  <path d="M 9 6 C 9 6 3 6 3 11 C 3 16 12 16 12 21" fill="none" stroke="#A259F7" stroke-width="3.5" stroke-linecap="round"/>
+  <path d="M 12 21 C 12 21 18 21 18 16 C 18 11 9 11 9 6" fill="none" stroke="#5B8DEF" stroke-width="3.5" stroke-linecap="round"/>
+  <line x1="12" y1="21" x2="12" y2="26" stroke="#2EC4A0" stroke-width="3.5" stroke-linecap="round"/>
+  <circle cx="9" cy="6" r="2.5" fill="#5B8DEF"/>
+  <circle cx="12" cy="26" r="2.5" fill="#2EC4A0"/>
+</svg>
