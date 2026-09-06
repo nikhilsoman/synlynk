@@ -4,6 +4,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 
 ## Series Index
 
+| [180](./180-prTBD-pr-check-sandbox-todo-pytest-k.md) | #1446 - pr check sandbox todo write + guessed pytest -k | TBD | 2026-09-06 |
 | [179](./179-prTBD-agy-permissions-pr-title.md) | #1427 - Auto-PR titles skip injected ## Permissions | TBD | 2026-09-06 |
 | [178](./178-pr1415-job-status-endtoend-regression.md) | PR #1415 - Job status end-to-end regression test | [#1415](https://github.com/nikhilsoman/synlynk/pull/1415) | 2026-09-04 |
 | [177](./177-prTBD-gh-write-verifier-live-1429-leftovers.md) | LIVE-1429 leftovers - gh-write verifier target/expect/author/time | TBD | 2026-09-06 |
