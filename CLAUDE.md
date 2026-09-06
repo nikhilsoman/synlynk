@@ -5,6 +5,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Identity & Attribution
 - **Harness:** Claude (execution backend for Workspace Agents)
 - **Commit trailer:** `Co-Authored-By: Claude Sonnet <noreply@anthropic.com>`
+- Autonomous / session GitHub writes (`gh pr create`, `gh pr merge`, `gh issue close`, `gh run rerun`, `gh pr review`) MUST use `synlynk gh --role <role> -- …` so they authenticate as the role App, not `nikhilsoman`.
+- `nikhilsoman` is reserved for Nikhil at the keyboard.
+- Host `gh` is allowed only when `SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH=1`.
+- qa APPROVE is the default when reviewer login ≠ PR author login. Keep the #423 comment-checklist only for same-identity collisions. Do not type the two-word phrase that names a GitHub pull-request review action.
 
 ## Operating Mode: Home vs. Away
 
