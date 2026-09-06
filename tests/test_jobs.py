@@ -1249,6 +1249,76 @@ def test_maybe_open_worktree_pr_skips_without_role_token(tmp_path, monkeypatch, 
     assert "token" in text
 
 
+def test_role_gh_env_for_job_strips_inherited_tokens_without_role_token(monkeypatch):
+    import synlynk.dispatch as dispatch_mod
+    import synlynk.jobs as jobs_mod
+
+    monkeypatch.setenv("GH_TOKEN", "host-pat")
+    monkeypatch.setenv("GITHUB_TOKEN", "host-pat-2")
+    monkeypatch.delenv("SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH", raising=False)
+    monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_gh_token", lambda role: None)
+
+    env = jobs_mod._role_gh_env_for_job({"role": "dev"})
+
+    assert "GH_TOKEN" not in env
+    assert "GITHUB_TOKEN" not in env
+
+
+def test_maybe_open_worktree_pr_uses_role_token_over_inherited_host_token(tmp_path, monkeypatch):
+    import subprocess
+    import synlynk.dispatch as dispatch_mod
+    import synlynk.jobs as jobs_mod
+
+    worktree_path = tmp_path / "repo"
+    worktree_path.mkdir()
+    monkeypatch.setenv("GH_TOKEN", "host-pat")
+    monkeypatch.setenv("GITHUB_TOKEN", "host-pat-2")
+    monkeypatch.delenv("SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH", raising=False)
+    monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_gh_token", lambda role: "role-token")
+    monkeypatch.setattr(jobs_mod, "_pkg", lambda name, default=None: (
+        (lambda: ("octo", "repo")) if name == "detect_remote_owner_repo" else default
+    ))
+    seen_env = []
+
+    def fake_run(cmd, **kwargs):
+        if cmd[:3] == ["gh", "pr", "list"]:
+            seen_env.append(kwargs["env"])
+            return subprocess.CompletedProcess(cmd, 0, stdout="[]\n", stderr="")
+        if cmd[:3] == ["gh", "pr", "create"]:
+            seen_env.append(kwargs["env"])
+            return subprocess.CompletedProcess(cmd, 0, stdout="https://github.com/octo/repo/pull/77\n", stderr="")
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    monkeypatch.setattr(jobs_mod.subprocess, "run", fake_run)
+    monkeypatch.setattr(jobs_mod, "_resolve_worktree_pr_base_branch", lambda *a, **k: "main")
+
+    assert jobs_mod._maybe_open_worktree_pr({"id": "job", "role": "qa", "task": "write docs"}, str(worktree_path), "feat/example") == 77
+    assert seen_env
+    assert all(env["GH_TOKEN"] == "role-token" for env in seen_env)
+    assert all(env["GITHUB_TOKEN"] == "role-token" for env in seen_env)
+
+
+def test_maybe_open_worktree_pr_skips_merge_job_even_with_changed_worktree(tmp_path, monkeypatch):
+    import synlynk.jobs as jobs_mod
+
+    worktree_path = tmp_path / "repo"
+    worktree_path.mkdir()
+
+    def fail_run(*args, **kwargs):
+        raise AssertionError("merge jobs must not invoke subprocess")
+
+    monkeypatch.setattr(jobs_mod.subprocess, "run", fail_run)
+    monkeypatch.setattr(jobs_mod, "_pkg", lambda name, default=None: (
+        (lambda: ("octo", "repo")) if name == "detect_remote_owner_repo" else default
+    ))
+
+    assert jobs_mod._maybe_open_worktree_pr(
+        {"id": "job", "task": "Squash-merge GitHub PR #1456", "task_type": "implement"},
+        str(worktree_path),
+        "feat/example",
+    ) is None
+
+
 # --- #753 jobs reap -----------------------------------------------------------
 
 def _seed_daemon_job(conn, job_id, agent="agy", status="running", pid=None, started_at="2026-08-07T07:00:00"):
