@@ -81,6 +81,16 @@ the separate Apple Books marketing image must be supplied at 1400 pixels or more
 axis without upscaling a low-resolution source. The Apple delivery `metadata.xml` file, when needed
 for Transporter, belongs in the external `.itmsp` delivery package rather than inside this EPUB.
 
+## EPUB validation
+
+Run the official W3C EPUBCheck 5.3.0 validator before distribution:
+
+```bash
+epubcheck docs/book/the-supervised-machine-v0.5-DRAFT.epub
+```
+
+The current EPUB passes with zero fatals, errors, warnings, or informational messages.
+
 **Regenerate the PDF and EPUB together and commit all three files whenever the HTML changes —
 never let them drift.** The EPUB build is now a standard, default step alongside the PDF for
 every book write/update, not an occasional extra. When cutting a new minor version, rename all
