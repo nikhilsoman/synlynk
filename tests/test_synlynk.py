@@ -6462,6 +6462,143 @@ def test_reconcile_daemon_jobs_ignores_denial_shape_when_log_shows_earlier_tool_
     assert row[0] != "permission_denied"
 
 
+def test_reconcile_daemon_jobs_ignores_denial_shape_when_git_work_landed(
+    project_dir, monkeypatch,
+):
+    """LIVE-1429: daemon_jobs must not overwrite GTV `done` with permission_denied
+    when the log looks like a headless auto-denial but the worktree has real work.
+
+    `_reconcile_jobs` already has this `_job_has_real_work_landed` guard.
+    `_reconcile_daemon_jobs` did not — job-be18ebe7 printed OK (exit 0) with
+    files touched, then persisted status=permission_denied.
+    """
+    import synlynk.jobs as jobs_mod
+
+    worktree = project_dir / "wt-djob-git-corroborated"
+    worktree.mkdir()
+
+    def fake_inspect(*args, **kwargs):
+        return {
+            "has_activity": True,
+            "remote_has_activity": False,
+            "changed_files": ["tests/test_agent_cli.py"],
+            "remote_files_touched": [],
+        }
+
+    monkeypatch.setattr(synlynk, "_inspect_worktree_git_state", fake_inspect)
+    monkeypatch.setattr(jobs_mod, "_inspect_worktree_git_state", fake_inspect)
+
+    log_path = str(project_dir / ".synlynk" / "logs" / "djob-git-corroborated.log")
+    os.makedirs(os.path.dirname(log_path), exist_ok=True)
+    with open(log_path, "w") as f:
+        f.write(
+            "jetski: no output produced - a tool required the \"command\" permission that "
+            "headless mode cannot prompt for, so it was auto-denied\n"
+        )
+    with open(log_path + ".exit", "w") as f:
+        f.write("0")
+
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, "
+        "depends_on, pid, enqueued_at, started_at, log_path, worktree_path, "
+        "worktree_branch) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+        ("djob-git-corroborated", "codex", "implement #1414", "running", 5, "[]",
+         99999999, "2026-09-04T22:05:38", "2026-09-04T22:05:38", log_path,
+         str(worktree), "work"),
+    )
+    conn.commit()
+    conn.close()
+
+    synlynk._reconcile_daemon_jobs()
+
+    conn2 = synlynk._get_db()
+    row = conn2.execute(
+        "SELECT status, exit_code FROM daemon_jobs WHERE job_id=?",
+        ("djob-git-corroborated",),
+    ).fetchone()
+    conn2.close()
+    assert row[0] != "permission_denied"
+    assert row[0] == "done"
+    assert row[1] == 0
+
+
+def test_reconcile_daemon_jobs_ignores_denial_shape_when_gh_write_verified(
+    project_dir, monkeypatch,
+):
+    """LIVE-1429 companion: a verified GitHub write beats a log denial signature."""
+    import synlynk.jobs as jobs_mod
+
+    log_path = str(project_dir / ".synlynk" / "logs" / "djob-ghw-corroborated.log")
+    os.makedirs(os.path.dirname(log_path), exist_ok=True)
+    with open(log_path, "w") as f:
+        f.write(
+            "jetski: no output produced - a tool required the \"command\" permission that "
+            "headless mode cannot prompt for, so it was auto-denied\n"
+        )
+    with open(log_path + ".exit", "w") as f:
+        f.write("0")
+
+    monkeypatch.setattr(jobs_mod, "gh_write_verified", lambda *a, **kw: True)
+
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, "
+        "depends_on, pid, enqueued_at, started_at, log_path, requires_gh_write, "
+        "gh_write_target, gh_write_expect) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        ("djob-ghw-corroborated", "codex", "open a pull request", "running", 5, "[]",
+         99999999, "2026-09-04T22:05:38", "2026-09-04T22:05:38", log_path,
+         1, "pr:1415", "pr_open"),
+    )
+    conn.commit()
+    conn.close()
+
+    synlynk._reconcile_daemon_jobs()
+
+    conn2 = synlynk._get_db()
+    row = conn2.execute(
+        "SELECT status, exit_code, gh_write_verified FROM daemon_jobs WHERE job_id=?",
+        ("djob-ghw-corroborated",),
+    ).fetchone()
+    conn2.close()
+    assert row[0] != "permission_denied"
+    assert row[0] == "done"
+    assert row[1] == 0
+    assert row[2] == "true"
+
+
+def test_reconcile_daemon_jobs_still_marks_permission_denied_without_corroboration(project_dir):
+    """Genuine headless auto-denial with no git/GitHub corroboration stays denied."""
+    log_path = str(project_dir / ".synlynk" / "logs" / "djob-denied.log")
+    os.makedirs(os.path.dirname(log_path), exist_ok=True)
+    with open(log_path, "w") as f:
+        f.write(
+            "jetski: no output produced - a tool required the \"command\" permission that "
+            "headless mode cannot prompt for, so it was auto-denied\n"
+        )
+    with open(log_path + ".exit", "w") as f:
+        f.write("0")
+
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, "
+        "depends_on, pid, enqueued_at, started_at, log_path) VALUES (?,?,?,?,?,?,?,?,?,?)",
+        ("djob-denied", "agy", "review the PR", "running", 5, "[]", 99999999,
+         "2026-07-19T18:00:00", "2026-07-19T18:00:01", log_path),
+    )
+    conn.commit()
+    conn.close()
+
+    synlynk._reconcile_daemon_jobs()
+
+    conn2 = synlynk._get_db()
+    row = conn2.execute(
+        "SELECT status FROM daemon_jobs WHERE job_id=?", ("djob-denied",)
+    ).fetchone()
+    conn2.close()
+    assert row[0] == "permission_denied"
+
+
 def test_reconcile_jobs_uses_model_rate_table_for_completed_job_cost(project_dir, monkeypatch):
     import synlynk as sl
     import synlynk.jobs as jobs_mod
