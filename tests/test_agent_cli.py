@@ -165,6 +165,85 @@ def test_wire_charter_content_into_dispatchexecut(project_dir, tmp_path, monkeyp
     assert "Charter injection regression." in context_text
 
 
+def test_implement_1436_leftover_charter_patch_so_exec_gh_shim_refuses_host_auth_and_allows_tokens(
+    project_dir, tmp_path, monkeypatch, capsys
+):
+    """Hole B: only synlynk exec's child PATH must guard raw gh."""
+    import synlynk
+    from synlynk.dispatch import exec_command
+
+    monkeypatch.chdir(project_dir)
+    fake_bin = tmp_path / "fake-bin"
+    fake_bin.mkdir()
+    fake_gh = fake_bin / "gh"
+    fake_gh.write_text(
+        "#!/bin/sh\nprintf 'gh-ran:%s' \"$GH_TOKEN\"\nexit 0\n"
+    )
+    fake_gh.chmod(stat.S_IRWXU)
+    monkeypatch.setenv("PATH", str(fake_bin))
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    monkeypatch.delenv("SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH", raising=False)
+    monkeypatch.setattr(synlynk, "generate_context", lambda: None)
+    monkeypatch.setattr(synlynk, "check_budgets", lambda: None)
+    monkeypatch.setattr(synlynk, "_check_pre_exec_gate", lambda force=False: True)
+    monkeypatch.setattr(synlynk, "set_state", lambda *a, **kw: None)
+    monkeypatch.setattr(synlynk, "_check_costs_freshness", lambda: None)
+    monkeypatch.setattr(synlynk, "log_telemetry_event", lambda *a, **kw: None)
+    monkeypatch.setattr(synlynk, "check_sentinel_patterns", lambda **kw: None)
+    monkeypatch.setattr(synlynk, "_check_instruction_drift", lambda: None)
+    monkeypatch.setattr(synlynk, "WatchDaemon", None)
+    monkeypatch.setattr(synlynk, "update_costs", lambda *a, **kw: None)
+
+    assert exec_command(["gh", "--no-tty"]) == 1
+    refused = capsys.readouterr()
+    assert "gh-ran" not in refused.out
+    assert "synlynk gh --role" in refused.out
+
+    monkeypatch.setenv("GH_TOKEN", "app-token")
+    assert exec_command(["gh", "--no-tty"]) == 0
+    assert "gh-ran:app-token" in capsys.readouterr().out
+
+    monkeypatch.delenv("GH_TOKEN")
+    monkeypatch.setenv("GITHUB_TOKEN", "github-token")
+    assert exec_command(["gh", "--no-tty"]) == 0
+    assert "gh-ran:" in capsys.readouterr().out
+
+    monkeypatch.delenv("GITHUB_TOKEN")
+    monkeypatch.setenv("SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH", "yes")
+    assert exec_command(["gh", "--no-tty"]) == 0
+    assert "gh-ran:" in capsys.readouterr().out
+
+
+def test_implement_1436_leftover_charter_patch_so_exec_non_gh_command_is_unchanged(
+    tmp_path, monkeypatch, capsys
+):
+    import synlynk
+    from synlynk.dispatch import exec_command
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("PATH", str(tmp_path))
+    command = tmp_path / "command"
+    command.write_text("#!/bin/sh\nprintf 'ok'\n")
+    command.chmod(stat.S_IRWXU)
+    for name, value in {
+        "generate_context": lambda: None,
+        "check_budgets": lambda: None,
+        "_check_pre_exec_gate": lambda force=False: True,
+        "set_state": lambda *a, **kw: None,
+        "_check_costs_freshness": lambda: None,
+        "log_telemetry_event": lambda *a, **kw: None,
+        "check_sentinel_patterns": lambda **kw: None,
+        "_check_instruction_drift": lambda: None,
+        "update_costs": lambda *a, **kw: None,
+    }.items():
+        monkeypatch.setattr(synlynk, name, value)
+    monkeypatch.setattr(synlynk, "WatchDaemon", None)
+
+    assert exec_command([str(command)]) == 0
+    assert "ok" in capsys.readouterr().out
+
+
 def _quiet_checkpoint(monkeypatch):
     import synlynk
 
