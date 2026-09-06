@@ -228,8 +228,47 @@ def _collect_worktree_status_paths(worktree_path: str) -> list:
     return paths
 
 
+_INJECTED_TASK_HEADINGS = frozenset({
+    "permissions",
+    "working directory",
+    "stitch mcp tool usage note",
+})
+
+
+def _task_summary_line(task: str) -> str:
+    """First real task line, skipping Agy-injected markdown sections (#1427).
+
+    Dispatch prepends ``## Permissions`` plus a bullet list to Agy tasks.
+    Auto-finalize used to take ``splitlines()[0]``, producing titles like
+    ``fix: ## Permissions (job-…)``.
+    """
+    lines = (task or "").splitlines()
+    index = 0
+    while index < len(lines):
+        stripped = lines[index].strip()
+        if not stripped:
+            index += 1
+            continue
+        heading = None
+        if stripped.startswith("## "):
+            heading = stripped[3:].strip().lower()
+        elif stripped.startswith("# "):
+            heading = stripped[2:].strip().lower()
+        if heading in _INJECTED_TASK_HEADINGS:
+            index += 1
+            while index < len(lines):
+                item = lines[index].strip()
+                if not item or item.startswith("- ") or item.startswith("* "):
+                    index += 1
+                    continue
+                break
+            continue
+        return stripped
+    return "auto-finalized worktree changes"
+
+
 def _commit_subject_for_job(job: dict) -> str:
-    task = (job.get("task") or "").splitlines()[0].strip() or "auto-finalized worktree changes"
+    task = _task_summary_line(job.get("task") or "")
     suffix = f" ({job.get('id', 'job-unknown')})"
     max_task_len = max(0, 72 - len("fix: ") - len(suffix))
     if len(task) > max_task_len:
@@ -458,7 +497,7 @@ def _maybe_open_worktree_pr(job: dict, worktree_path: str, worktree_branch: Opti
     if existing_prs:
         return existing_prs[0].get("number")
 
-    task_line = (job.get("task") or "").splitlines()[0].strip() or "Auto-finalized worktree changes"
+    task_line = _task_summary_line(job.get("task") or "")
     title = _commit_subject_for_job(job)
     body = (
         f"Auto-finalized by synlynk for job `{job.get('id', 'job-unknown')}`.\n\n"
