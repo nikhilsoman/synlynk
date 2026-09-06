@@ -44,10 +44,10 @@ def _is_github_remote() -> bool:
     return is_github_remote()
 
 
-def _current_pr_number():
+def _current_pr_number(pr_number=None):
     from synlynk.pr_multiplier import _current_pr_number as current_pr_number
 
-    return current_pr_number()
+    return current_pr_number(pr_number=pr_number)
 
 
 def _extract_pr_review_cycles():
@@ -3458,7 +3458,7 @@ def cmd_audit_docs(json_output: bool = False, fix: bool = False) -> list:
 
     return findings
 
-def cmd_pr_check() -> None:
+def cmd_pr_check(pr_number=None) -> None:
     """Hard-blocks merge if any capability_ratings row has model_version='unknown'.
 
     Exit code 1 if blocked. Exit code 0 if clean.
@@ -3474,14 +3474,14 @@ def cmd_pr_check() -> None:
 
     conn = _get_db()
     if _is_github_remote():
-        pr_number = _current_pr_number()
+        pr_number = _current_pr_number(pr_number=pr_number)
         if pr_number is not None:
             changes_requested_count = _extract_pr_review_cycles() or 0
             _apply_review_cycle_multiplier(conn, pr_number, changes_requested_count)
 
         owner, repo = detect_remote_owner_repo()
         if owner and repo:
-            gate = qa_gate_verdict(owner, repo)
+            gate = qa_gate_verdict(owner, repo, pr_number=pr_number)
             if gate["verdict"] == "red":
                 conn.close()
                 print(f"\n  🚫 [PR CHECK BLOCKED] qa gate is red: {gate['reason']}")
