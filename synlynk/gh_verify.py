@@ -22,11 +22,19 @@ _LIST_VERIFY_ATTEMPTS = 3
 _LIST_VERIFY_BACKOFF_SECONDS = (0.1, 0.25)
 
 
-def _parse_iso8601(value: Optional[str]):
+def _naive_local_tz():
+    """Timezone used when daemon_jobs.started_at is stored without an offset."""
+    return datetime.now().astimezone().tzinfo
+
+
+def _parse_iso8601(value: Optional[str], naive_as: str = "utc"):
     """Parse an ISO8601 timestamp, normalizing a trailing ``Z`` for Python <3.11.
 
     Return None for missing or malformed input. Callers treat an unparseable
     timestamp as unknown, matching the contract of the rest of this module.
+
+    ``naive_as`` is ``utc`` (default, historical contract) or ``local``
+    (daemon_jobs.started_at is local wall time with no offset).
     """
     if not value:
         return None
@@ -34,10 +42,88 @@ def _parse_iso8601(value: Optional[str]):
     try:
         parsed = datetime.fromisoformat(normalized)
         if parsed.tzinfo is None:
-            return parsed.replace(tzinfo=timezone.utc)
+            tz = timezone.utc if naive_as != "local" else _naive_local_tz()
+            parsed = parsed.replace(tzinfo=tz)
         return parsed.astimezone(timezone.utc)
     except (ValueError, TypeError):
         return None
+
+
+def _normalize_gh_login(login: Optional[str]) -> str:
+    value = (login or "").strip().lower()
+    if value.endswith("[bot]"):
+        return value[:-5]
+    return value
+
+
+def _gh_logins_match(actual: Optional[str], expected: Optional[str]) -> bool:
+    if not expected:
+        return True
+    actual_n = _normalize_gh_login(actual)
+    expected_n = _normalize_gh_login(expected)
+    return bool(actual_n) and actual_n == expected_n
+
+
+def _author_login(entry: dict) -> Optional[str]:
+    author = entry.get("author") if isinstance(entry, dict) else None
+    if isinstance(author, dict):
+        return author.get("login")
+    if isinstance(author, str):
+        return author
+    return None
+
+
+def _verify_pr_opened_for_issue(
+    issue_number: str,
+    since: Optional[str],
+    expect_author: Optional[str],
+    timeout: int,
+    evidence: Optional[dict],
+) -> Optional[bool]:
+    """#1442: ``pr:<issue>`` is not a pull request; find a PR linked to that issue."""
+    cmd = [
+        "gh", "pr", "list",
+        "--state", "all",
+        "--limit", "20",
+        "--search", f"linked:issue-{issue_number}",
+        "--json", "number,createdAt,author,body,title",
+    ]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as exc:
+        if evidence is not None:
+            evidence.setdefault("attempts", []).append(
+                {"error": type(exc).__name__, "fallback": "linked-issue", "matched": None}
+            )
+        return None
+    if result.returncode != 0:
+        if evidence is not None:
+            evidence.setdefault("attempts", []).append(
+                {"raw": result.stderr or result.stdout, "fallback": "linked-issue", "matched": None}
+            )
+        return None
+    try:
+        rows = json.loads(result.stdout or "[]")
+    except (json.JSONDecodeError, ValueError):
+        return None
+    if not isinstance(rows, list):
+        return None
+    since_dt = _parse_iso8601(since, naive_as="local") if since else None
+    matched = False
+    for row in rows:
+        created = _parse_iso8601(row.get("createdAt"), naive_as="utc") if isinstance(row, dict) else None
+        if since_dt is not None and (created is None or created < since_dt):
+            continue
+        if expect_author and not _gh_logins_match(_author_login(row or {}), expect_author):
+            continue
+        matched = True
+        break
+    if evidence is not None:
+        evidence.setdefault("attempts", []).append(
+            {"fallback": "linked-issue", "matched": matched, "raw": result.stdout}
+        )
+        evidence["matched"] = matched
+    return matched
 
 
 def gh_write_verified(
@@ -106,6 +192,14 @@ def gh_write_verified(
                     "matched": None,
                 })
         if payload is None:
+            if expect == "pr_open" and kind == "pr":
+                linked = _verify_pr_opened_for_issue(
+                    number, since, expect_author, timeout, evidence,
+                )
+                if linked is True:
+                    return True
+                if linked is False:
+                    return False
             if attempt + 1 < attempts:
                 time.sleep(_LIST_VERIFY_BACKOFF_SECONDS[min(attempt, len(_LIST_VERIFY_BACKOFF_SECONDS) - 1)])
                 continue
@@ -122,7 +216,7 @@ def gh_write_verified(
         if entries is None:
             matched = None
         else:
-            since_dt = _parse_iso8601(since)
+            since_dt = _parse_iso8601(since, naive_as="local")
             matched = False if since_dt is not None else None
             if since_dt is not None:
                 for entry in entries:
@@ -130,7 +224,7 @@ def gh_write_verified(
                     entry_dt = _parse_iso8601(entry_time)
                     if entry_dt is None or entry_dt < since_dt:
                         continue
-                    if expect_author and (entry.get("author") or {}).get("login") != expect_author:
+                    if expect_author and not _gh_logins_match(_author_login(entry), expect_author):
                         continue
                     matched = True
                     break
