@@ -572,6 +572,7 @@ def test_fix_issue_616__maybe_open_worktree_pr_sy_prefers_recorded_base_branch_w
     import subprocess
     import synlynk.jobs as jobs_mod
 
+    monkeypatch.setenv("SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH", "1")
     worktree_path = tmp_path / "repo"
     worktree_path.mkdir()
     calls = []
@@ -632,6 +633,7 @@ def test_fix_issue_616__maybe_open_worktree_pr_sy_preserves_multisegment_remote_
     import subprocess
     import synlynk.jobs as jobs_mod
 
+    monkeypatch.setenv("SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH", "1")
     worktree_path = tmp_path / "repo"
     worktree_path.mkdir()
     calls = []
@@ -693,6 +695,7 @@ def test_fix_issue_616__maybe_open_worktree_pr_sy_falls_back_to_default_base_whe
     import subprocess
     import synlynk.jobs as jobs_mod
 
+    monkeypatch.setenv("SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH", "1")
     worktree_path = tmp_path / "repo"
     worktree_path.mkdir()
     calls = []
@@ -737,6 +740,7 @@ def test_fix_issue_616__maybe_open_worktree_pr_sy_falls_back_when_recorded_base_
     import subprocess
     import synlynk.jobs as jobs_mod
 
+    monkeypatch.setenv("SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH", "1")
     worktree_path = tmp_path / "repo"
     worktree_path.mkdir()
     calls = []

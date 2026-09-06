@@ -487,6 +487,18 @@ def _maybe_open_worktree_pr(job: dict, worktree_path: str, worktree_branch: Opti
     repo_slug = f"{owner}/{repo}"
     gh_env = _role_gh_env_for_job(job)
     try:
+        from synlynk.dispatch import _gh_write_allow_host_auth
+        allow_host = _gh_write_allow_host_auth()
+    except Exception:
+        allow_host = False
+    if not (gh_env or {}).get("GH_TOKEN") and not allow_host:
+        print(
+            f"  ⚠ skipping automatic PR creation for {worktree_branch}: "
+            "no role App token (refusing host gh). "
+            "Set SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH=1 to override."
+        )
+        return
+    try:
         list_result = subprocess.run(
             [
                 "gh", "pr", "list",

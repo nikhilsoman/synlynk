@@ -955,6 +955,7 @@ def test_maybe_open_worktree_pr_uses_resolved_base_branch(tmp_path, monkeypatch)
     import subprocess
     import synlynk.jobs as jobs_mod
 
+    monkeypatch.setenv("SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH", "1")
     worktree_path = tmp_path / "repo"
     worktree_path.mkdir()
     captured = []
@@ -1023,6 +1024,7 @@ def test_maybe_open_worktree_pr_title_skips_permissions_heading(tmp_path, monkey
     import subprocess
     import synlynk.jobs as jobs_mod
 
+    monkeypatch.setenv("SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH", "1")
     worktree_path = tmp_path / "repo"
     worktree_path.mkdir()
     captured = []
@@ -1115,6 +1117,7 @@ def test_maybe_open_worktree_pr_does_not_skip_for_changed_requires_gh_write_work
     import subprocess
     import synlynk.jobs as jobs_mod
 
+    monkeypatch.setenv("SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH", "1")
     worktree_path = tmp_path / "repo"
     worktree_path.mkdir()
 
@@ -1206,6 +1209,44 @@ def test_maybe_open_worktree_pr_injects_role_app_token(tmp_path, monkeypatch):
     for env in seen_env:
         assert env.get("GH_TOKEN") == "ghs_test_qa_token"
         assert env.get("GH_CONFIG_DIR") == "/tmp/synlynk-gh-config-test"
+
+
+def test_maybe_open_worktree_pr_skips_without_role_token(tmp_path, monkeypatch, capsys):
+    """#1436: no App token and no host-auth opt-in → do not use nikhilsoman gh."""
+    import subprocess
+    import synlynk.jobs as jobs_mod
+
+    worktree_path = tmp_path / "repo"
+    worktree_path.mkdir()
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, stdout="[]\n", stderr="")
+
+    monkeypatch.setattr(jobs_mod.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        jobs_mod,
+        "_pkg",
+        lambda name, default=None: (lambda: ("octo", "repo")) if name == "detect_remote_owner_repo" else default,
+    )
+    monkeypatch.setattr(
+        jobs_mod,
+        "_role_gh_env_for_job",
+        lambda job: {"PATH": "/usr/bin"},
+        raising=False,
+    )
+    monkeypatch.delenv("SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH", raising=False)
+
+    pr_number = jobs_mod._maybe_open_worktree_pr(
+        {"id": "job-x", "task": "write docs", "role": "dev"},
+        str(worktree_path),
+        "feat/example",
+    )
+    assert pr_number is None
+    assert not any(len(cmd) >= 2 and cmd[0] == "gh" for cmd in calls)
+    text = capsys.readouterr().out.lower()
+    assert "token" in text
 
 
 # --- #753 jobs reap -----------------------------------------------------------
