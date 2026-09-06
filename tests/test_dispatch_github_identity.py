@@ -315,6 +315,18 @@ def test_dispatch_agent_review_task_uses_review_posted_expectation(tmp_path, mon
     assert job["gh_write_expect"] == "review_posted"
 
 
+def test_gh_write_expectation_merge_not_pr_open_when_prompt_says_do_not_open():
+    """job-be622768: 'Do not open a new PR' must not beat an explicit merge task."""
+    from synlynk.dispatch import _gh_write_expectation
+
+    task = (
+        "Merge PR #1441. Confirm it is OPEN and APPROVED. "
+        "Then `gh pr merge 1441 --squash --delete-branch`. "
+        "Do not open a new PR."
+    )
+    assert _gh_write_expectation(task) == "merged"
+
+
 def test_dispatch_agent_injects_gh_token_and_isolates_config_dir(tmp_path, monkeypatch):
     """#569: role token path also sets GH_CONFIG_DIR so host keyring is unused."""
     dispatch_mod, job, captured_env = _dispatch_with_fake_popen(

@@ -1157,13 +1157,15 @@ def _task_opens_pr(task: str) -> bool:
 
 def _gh_write_expectation(task: str, task_type: str = None) -> str:
     """Return the delivery effect expected from a GitHub-writing task."""
-    if task_type == "review" or _REVIEW_TASK_RE.search(task or ""):
-        return "review_posted"
-    if _task_opens_pr(task):
-        return "pr_open"
     text = task or ""
+    if task_type == "review" or _REVIEW_TASK_RE.search(text):
+        return "review_posted"
+    # Merge before open: prompts often say "Do not open a new PR" after a merge
+    # instruction (job-be622768 stored pr_open and never verified the squash).
     if re.search(r"\b(?:gh\s+)?pr\s+merge\b|\bmerge\s+(?:the\s+)?(?:github\s+)?(?:pr|pull\s+request)\b", text, re.IGNORECASE):
         return "merged"
+    if _task_opens_pr(text):
+        return "pr_open"
     if re.search(r"\b(?:gh\s+)?(?:pr|issue)\s+comment\b|\b(?:comment|post\s+(?:a\s+)?comment)\s+(?:on|to)\b", text, re.IGNORECASE):
         return "comment_posted"
     if re.search(r"\b(?:gh\s+)?(?:pr|issue)\s+(?:close|reopen)\b|\bclose\s+", text, re.IGNORECASE):

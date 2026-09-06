@@ -1,4 +1,5 @@
 import subprocess
+from datetime import timedelta, timezone
 
 import pytest
 
@@ -177,6 +178,88 @@ def test_gh_write_verified_review_posted_true_with_matching_author(monkeypatch):
         expect_author="synlynk-synlynk-dev[bot]",
     )
     assert result is True
+
+
+def test_gh_write_verified_review_posted_true_when_author_omits_bot_suffix(monkeypatch):
+    """job-1c68bfd4: GraphQL login is synlynk-synlynk-qa, stored author is …[bot]."""
+    def fake_run(cmd, **kwargs):
+        return subprocess.CompletedProcess(
+            cmd,
+            0,
+            stdout='{"reviews":[{"author":{"login":"synlynk-synlynk-qa"},'
+            '"submittedAt":"2026-09-06T03:54:11Z","state":"APPROVED"}]}',
+            stderr="",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    result = gh_write_verified(
+        "pr:1441",
+        expect="review_posted",
+        since="2026-09-06T03:49:00Z",
+        expect_author="synlynk-synlynk-qa[bot]",
+    )
+    assert result is True
+
+
+def test_gh_write_verified_review_posted_true_when_naive_since_is_local(monkeypatch):
+    """daemon_jobs.started_at is local naive; GitHub reviews are UTC.
+
+    job-1c68bfd4 started 09:19 local (IST) and the qa bot approved at 03:54Z.
+    Treating naive since as UTC makes the review look stale and returns false.
+    """
+    def fake_run(cmd, **kwargs):
+        return subprocess.CompletedProcess(
+            cmd,
+            0,
+            stdout='{"reviews":[{"author":{"login":"synlynk-synlynk-qa[bot]"},'
+            '"submittedAt":"2026-09-06T03:54:11Z","state":"APPROVED"}]}',
+            stderr="",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        "synlynk.gh_verify._naive_local_tz",
+        lambda: timezone(timedelta(hours=5, minutes=30)),
+    )
+    result = gh_write_verified(
+        "pr:1441",
+        expect="review_posted",
+        since="2026-09-06T09:19:58",
+        expect_author="synlynk-synlynk-qa[bot]",
+    )
+    assert result is True
+
+
+def test_gh_write_verified_pr_open_resolves_issue_number_to_created_pr(monkeypatch):
+    """#1442 / job-be18ebe7: stored target pr:1414 is the issue; the PR is 1415."""
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        if cmd[:4] == ["gh", "pr", "view", "1414"]:
+            return subprocess.CompletedProcess(
+                cmd, 1, stdout="", stderr="Could not resolve to a PullRequest",
+            )
+        if cmd[:3] == ["gh", "pr", "list"]:
+            return subprocess.CompletedProcess(
+                cmd,
+                0,
+                stdout='[{"number":1415,"createdAt":"2026-09-04T16:39:57Z",'
+                '"author":{"login":"synlynk-synlynk-dev[bot]"},'
+                '"body":"Fixes #1414"}]',
+                stderr="",
+            )
+        raise AssertionError(f"unexpected gh command: {cmd}")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    result = gh_write_verified(
+        "pr:1414",
+        expect="pr_open",
+        since="2026-09-04T16:00:00Z",
+        expect_author="synlynk-synlynk-dev[bot]",
+    )
+    assert result is True
+    assert any(cmd[:3] == ["gh", "pr", "list"] for cmd in calls)
 
 
 def test_gh_write_verified_review_posted_false_when_author_mismatch(monkeypatch):
