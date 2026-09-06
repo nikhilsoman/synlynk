@@ -2,7 +2,7 @@
 title: "PR #1415 — Testing the Thing That Keeps Lying About Itself"
 date: 2026-09-04
 series: "Building the OS for Multi-Agent Development"
-post: 175
+post: 178
 pr: "#1415"
 merged: 2026-09-04
 ---
