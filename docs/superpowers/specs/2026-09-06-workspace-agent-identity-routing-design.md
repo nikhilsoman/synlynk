@@ -63,7 +63,7 @@ Source: `docs/superpowers/specs/2026-08-09-synlynk-agent-roles-charters-design.m
 |---|---|---|---|
 | **pm** | Represents the human; Named Releases; durable triage. Does not silently commit the human. | `pm` / `brainstorm` → Claude | No pm-bot PRs this session; interactive `gh` is `nikhilsoman` |
 | **tpm** | Turns plans into dispatched tickets; no technical approach | not in `can_merge` / `can_cut_release` | App exists; unused for writes here |
-| **architect** | Spec/plan; charter still says “holds merge authority” | `can_merge` is **qa only** | Charter text is stale vs policy |
+| **architect** | Spec/plan; charter patched to qa-only merge in this PR | `can_merge` is **qa only** | Charter text patched to match policy in this PR (#1436 leftover) |
 | **dev** | Implementation | implement/test → Codex/Grok/Agy | Should author PRs as `synlynk-synlynk-dev[bot]` if auto-PR used the child token; today auto-PR/parent `gh` is `nikhilsoman` |
 | **qa** | Tests, CI/CD, merge | `can_merge: ["qa"]`; review → Codex | Approve + squash-merge as qa bot: **proven**. Actions rerun: **not granted** |
 | **designer** | UI/UX | css/templates → Agy | App unused here |
@@ -91,7 +91,7 @@ Do not start these until Nikhil signs this spec.
 - **Hole A — parent auto-PR identity:** `jobs.py` finalize uses role `GH_TOKEN`. Closes nikhilsoman auto-PRs from merge/review jobs.
 - **Hole B — interactive `gh`:** a `synlynk gh --role <role> -- …` (or `synlynk exec` env) so Grok/Claude sessions cannot `gh pr create` as the human by default.
 - **Policy — review fallback:** `comment_checklist` only when author login equals reviewer login.
-- **Charter patch:** architect merge sentence vs `can_merge`.
+- **Charter patch:** architect merge sentence vs `can_merge` — **addressed in this PR (#1436 leftover)**: living charters aligned to qa-only merge.
 - **Optional:** qa `actions: write` for `gh run rerun`.
 - **Live cell:** one PR authored by a role bot, approved by qa bot.
 
