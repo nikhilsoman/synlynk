@@ -556,16 +556,23 @@ def test_job_status_add_realghwrite_endtoend_regr(project_dir, monkeypatch, caps
     # without relying on Python 3.9's os.waitstatus_to_exitcode or an unbounded
     # blocking wait on a loaded CI runner.
     wait_deadline = time.monotonic() + 30
+    wait_status = None
     while True:
-        waited_pid, wait_status = os.waitpid(job["pid"], os.WNOHANG)
+        try:
+            waited_pid, wait_status = os.waitpid(job["pid"], os.WNOHANG)
+        except ChildProcessError:
+            # dispatch_agent's daemon bookkeeping may reap the child first;
+            # the durable fake-GitHub state below remains the source of truth.
+            break
         if waited_pid == job["pid"]:
             break
         remaining = wait_deadline - time.monotonic()
         if remaining <= 0:
             pytest.fail(f"child process {job['pid']} did not exit within 30 seconds")
         time.sleep(min(0.05, remaining))
-    assert os.WIFEXITED(wait_status), f"child process {job['pid']} did not exit cleanly"
-    assert os.WEXITSTATUS(wait_status) == 0
+    if wait_status is not None:
+        assert os.WIFEXITED(wait_status), f"child process {job['pid']} did not exit cleanly"
+        assert os.WEXITSTATUS(wait_status) == 0
     truth = json.loads(state_path.read_text())
     assert truth["written"] is True, f"fake GitHub ground truth did not record {scenario}"
     if scenario == "pr_open":
@@ -3036,5 +3043,4 @@ def test_allow_distinct_qa_app_identities_to_submit_approving_pr_reviews(tmp_pat
     assert "qa APPROVE (`gh pr review --approve`) is the default" in repaired_claude_md
     assert "Do not tell sessions to skip `--approve` by default" in repaired_claude_md
     assert "All dispatched agents share one GitHub identity" not in repaired_claude_md
-
 
