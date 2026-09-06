@@ -599,8 +599,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     gh_parser.add_argument(
         "--role",
-        required=True,
+        required=False,
         help="Workspace role whose App token to use (qa, pm, dev, ...)",
+    )
+    gh_parser.add_argument(
+        "--shim-env",
+        action="store_true",
+        help="Install the raw-gh harness shim and print a PATH export",
+    )
+    gh_parser.add_argument(
+        "--shim-install",
+        action="store_true",
+        help="Install the raw-gh harness shim",
     )
     gh_parser.add_argument(
         "gh_args",
@@ -1354,6 +1364,13 @@ def main(argv=None) -> None:
         sys.exit(exec_command(args.cmd, force=force))
     elif args.command == "gh":
         from synlynk.gh_role import cmd_gh
+        if getattr(args, "shim_env", False) or getattr(args, "shim_install", False):
+            from synlynk import gh_shim
+            if getattr(args, "shim_env", False):
+                print(gh_shim.shim_env())
+            else:
+                print(f"Installed gh shim in {gh_shim.install_shim()}")
+            sys.exit(0)
         sys.exit(cmd_gh(args.role, getattr(args, "gh_args", []) or []))
     elif args.command == "upgrade":
         upgrade(dry_run=getattr(args, "dry_run", False))
