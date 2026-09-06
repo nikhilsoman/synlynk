@@ -5,10 +5,19 @@ import os
 import stat
 import copy
 import time
+from pathlib import Path
 
 import pytest
 
 from synlynk.agent_cli import SEED_CHARTERS
+
+
+def test_isolate_archived_pytest_modules():
+    config = (Path(__file__).parents[1] / "pytest.ini").read_text(encoding="utf-8")
+
+    assert "testpaths = tests" in config
+    assert "norecursedirs = docs/archive" in config
+    assert "collect_imported_tests = false" in config
 
 
 def test_fixdispatch_deduplicate_boolean_cli_flag():
