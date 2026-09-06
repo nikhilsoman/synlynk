@@ -85,4 +85,24 @@
 - **Verification:** Unit tests added in `tests/test_instructions.py`, `tests/test_context.py`, `tests/test_home_cmd.py`, and `tests/test_probe.py`. Full test suite passing (2584 passed).
 - **PR & Review:** Pushed `feat/agy/dynamic-home-directives` and opened PR #1440; dispatched Claude (`architect` identity via `job-927d474f`) for non-authoring review.
 
+## 2026-09-06 — Allow Distinct QA App Identities to Submit Approving PR Reviews (#1475)
+
+### Root Cause Analysis
+- Investigated issue #1475 where distinct provisioned QA App identities (`synlynk-synlynk-qa[bot]`) still produced `COMMENTED` reviews on human-authored PRs (#1474), leaving `reviewDecision=REVIEW_REQUIRED`.
+- Discovered 3 core findings:
+  1. `GET /user` (`gh api user`) returns HTTP 403 (`Resource not accessible by integration`) when authenticated as a GitHub App installation token. The App identity must be derived directly from `app_slug` (`synlynk-synlynk-qa[bot]`) rather than calling `gh api user`.
+  2. Dispatched QA reviewers received prompts instructing them to post comment reviews because `AGENTS.md` and `GEMINI.md` contained legacy `#423` text claiming all agents share a single identity.
+  3. `uxcore.approve_pr()` ran raw `gh pr review --approve` with ambient `os.environ`, ignoring role-scoped GitHub App tokens (`qa.token.json`).
+
+### Shipped
+- **Role Token Binding:** Updated `uxcore.approve_pr()` to resolve role-scoped GitHub tokens (`_resolve_dispatch_gh_token("qa")`) and pass `GH_TOKEN`, `GITHUB_TOKEN`, and `GH_CONFIG_DIR` in subprocess environments.
+- **Tri-State Fallback Handling:**
+  - Distinct QA App identities execute `gh pr review --approve` cleanly.
+  - Same-identity collisions fall back to comment checklist (`same-login collision review fallback, see #423`).
+  - Credential/Permission rejections (401/403) fall back to actionable comment checklist (`credential/permission review fallback, see #423`).
+  - Unrelated / Network errors fail closed without posting spurious comments.
+- **Subprocess Git Path Optimization:** In `synlynk/dispatch.py:_resolve_github_apps_dir()`, added early check for `.git` to avoid unnecessary `git rev-parse` subprocess calls in non-git test fixtures.
+- **Probe Stale SOP Detection:** Updated `synlynk probe` stale SOP detection in `_repair_sops_only()` to catch legacy `#423` shared-identity text and upgrade directive templates to `qa APPROVE` defaults.
+- **Regression Tests:** Added `test_allow_distinct_qa_app_identities_to_submit_approving_pr_reviews` in `tests/test_agent_cli.py` covering all branches.
+
 

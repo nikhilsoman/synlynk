@@ -2923,3 +2923,109 @@ def test_nonauthoring_qa_of_pr_1465_httpsgithubco_approve_pr_only_falls_back_on_
     assert result.ok is False
     assert "network unavailable" in result.message
     assert len(mock_run.call_args_list) == 1
+
+
+def test_allow_distinct_qa_app_identities_to_submit_approving_pr_reviews(tmp_path, monkeypatch):
+    """Deep-dive issue #1475: distinct QA App identities submit approvals,
+    same-identity and credential/permission failures produce actionable fallback,
+    unrelated errors fail closed."""
+    import subprocess
+    from unittest.mock import patch
+    import synlynk.uxcore as uxcore
+    from synlynk.dispatch import _resolve_dispatch_gh_bot_login
+
+    monkeypatch.chdir(tmp_path)
+
+    # 1. Identity resolution: QA App bot login derives from app slug, not gh api user
+    qa_apps_dir = tmp_path / ".synlynk" / "github_apps"
+    qa_apps_dir.mkdir(parents=True, exist_ok=True)
+    (qa_apps_dir / "qa.json").write_text('{"app_slug": "synlynk-synlynk-qa", "installation_id": 12345}')
+    (qa_apps_dir / "qa.token.json").write_text('{"token": "fake-qa-token", "expires_at": 9999999999}')
+
+    bot_login = _resolve_dispatch_gh_bot_login("qa")
+    assert bot_login == "synlynk-synlynk-qa[bot]"
+
+    # 2. Distinct identity approval: passes role-scoped token and runs gh pr review --approve
+    success_review = subprocess.CompletedProcess(args=["gh", "pr", "review"], returncode=0, stdout="", stderr="")
+    success_merge = subprocess.CompletedProcess(args=["gh", "pr", "merge"], returncode=0, stdout="Merged", stderr="")
+
+    with patch("subprocess.run", side_effect=[success_review, success_merge]) as mock_run:
+        result = uxcore.approve_pr(pr_number=1475)
+        assert result.ok is True
+        assert len(mock_run.call_args_list) == 2
+        review_call, merge_call = mock_run.call_args_list
+        assert review_call.args[0] == ["gh", "pr", "review", "1475", "--approve"]
+        assert review_call.kwargs.get("env", {}).get("GH_TOKEN") == "fake-qa-token"
+        assert merge_call.args[0] == ["gh", "pr", "merge", "1475", "--squash", "--admin"]
+        assert merge_call.kwargs.get("env", {}).get("GH_TOKEN") == "fake-qa-token"
+
+    # 3. Same-identity collision: review fails with self-approval error -> falls back to comment checklist
+    self_approve_fail = subprocess.CompletedProcess(
+        args=["gh", "pr", "review"],
+        returncode=1,
+        stdout="",
+        stderr="GraphQL: Can not approve your own pull request (approvePullRequest)",
+    )
+    success_comment = subprocess.CompletedProcess(args=["gh", "pr", "comment"], returncode=0, stdout="", stderr="")
+    with patch("subprocess.run", side_effect=[self_approve_fail, success_comment, success_merge]) as mock_run:
+        result = uxcore.approve_pr(pr_number=1475)
+        assert result.ok is True
+        assert len(mock_run.call_args_list) == 3
+        review_call, comment_call, merge_call = mock_run.call_args_list
+        assert review_call.args[0] == ["gh", "pr", "review", "1475", "--approve"]
+        assert comment_call.args[0][:4] == ["gh", "pr", "comment", "1475"]
+        assert "same-login collision review fallback" in comment_call.args[0][5]
+        assert merge_call.args[0] == ["gh", "pr", "merge", "1475", "--squash", "--admin"]
+
+    # 4. Credential / permission failure: falls back to actionable comment
+    integration_fail = subprocess.CompletedProcess(
+        args=["gh", "pr", "review"],
+        returncode=1,
+        stdout="",
+        stderr="HTTP 403: Resource not accessible by integration",
+    )
+    with patch("subprocess.run", side_effect=[integration_fail, success_comment, success_merge]) as mock_run:
+        result = uxcore.approve_pr(pr_number=1475)
+        assert result.ok is True
+        assert len(mock_run.call_args_list) == 3
+        review_call, comment_call, merge_call = mock_run.call_args_list
+        assert review_call.args[0] == ["gh", "pr", "review", "1475", "--approve"]
+        assert comment_call.args[0][:4] == ["gh", "pr", "comment", "1475"]
+        assert "credential/permission review fallback" in comment_call.args[0][5]
+        assert merge_call.args[0] == ["gh", "pr", "merge", "1475", "--squash", "--admin"]
+
+    # 5. Unrelated failure (e.g. network failure): fails closed, no comment posted
+    network_fail = subprocess.CompletedProcess(
+        args=["gh", "pr", "review"],
+        returncode=1,
+        stdout="",
+        stderr="fatal: unable to access 'https://github.com/': Could not resolve host",
+    )
+    with patch("subprocess.run", return_value=network_fail) as mock_run:
+        result = uxcore.approve_pr(pr_number=1475)
+        assert result.ok is False
+        assert "Could not resolve host" in result.message
+        assert len(mock_run.call_args_list) == 1
+
+    # 6. Probe stale SOP repair: legacy #423 text without qa APPROVE default is detected as stale
+    from synlynk.probe import _repair_sops_only
+    (tmp_path / ".agents").mkdir(exist_ok=True)
+    legacy_claude_md = (
+        "<!-- synlynk:harness v0.1 verified:2026-01-01T00:00:00Z -->\n"
+        "# Harness Instructions (synlynk-managed — do not edit)\n\n"
+        "## PR Review Discipline\n"
+        "1. Assign a non-authoring agent to review the PR.\n"
+        "2. From within the PR's own checked-out worktree/branch, the reviewer must run `synlynk pr check` so it can auto-detect the PR via git/gh context.\n"
+        "3. The reviewer alone must merge the PR.\n"
+        "4. If the reviewer is unavailable, escalate to the Home Harness.\n\n"
+        "**GitHub identity caveat (#423):** All dispatched agents share one GitHub identity (gh under the repo owner), so GitHub cannot verify a different reviewer and gh pr review --approve fails with \"Can not approve your own pull request\". Sanctioned fallback: post a formal COMMENT review with an explicit approve checklist instead of gh pr review --approve.\n\n"
+        "<!-- /synlynk:harness -->\n"
+    )
+    (tmp_path / "CLAUDE.md").write_text(legacy_claude_md)
+    _repair_sops_only(dry_run=False, harness_name="claude", cfg={"roles": {"claude": ["pm", "review"]}})
+    repaired_claude_md = (tmp_path / "CLAUDE.md").read_text()
+    assert "qa APPROVE (`gh pr review --approve`) is the default" in repaired_claude_md
+    assert "Do not tell sessions to skip `--approve` by default" in repaired_claude_md
+    assert "All dispatched agents share one GitHub identity" not in repaired_claude_md
+
+

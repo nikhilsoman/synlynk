@@ -1490,7 +1490,13 @@ def _repair_sops_only(
                 # incompatible command shapes or hardcoded Claude authority.
                 pr_review_is_stale = (
                     header == "## PR Review Discipline"
-                    and ("synlynk pr check <pr#>" in current or "escalate to Claude" in current)
+                    and (
+                        "synlynk pr check <pr#>" in current
+                        or "escalate to Claude" in current
+                        or "All dispatched agents share one GitHub identity" in current
+                        or "Can not approve your own pull request" in current
+                        or "qa APPROVE (`gh pr review --approve`) is the default" not in current
+                    )
                 )
                 brainstorm_is_stale = (
                     header == "## Brainstorm-First Policy"
