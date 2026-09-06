@@ -2827,3 +2827,20 @@ def test_implement_1436_leftover_charter_patch_so_review_fallback_same_identity(
     assert "qa APPROVE (`gh pr review --approve`)" in uxcore.approve_pr.__doc__
     assert "same-login collision" in uxcore.approve_pr.__doc__
 
+
+def test_nonauthoring_qa_of_pr_1465_httpsgithubco_approve_pr_only_falls_back_on_self_approval(tmp_path, monkeypatch):
+    """PR #1465: unrelated gh approval errors must not become approvals."""
+    import subprocess
+    from unittest.mock import patch
+    import synlynk.uxcore as uxcore
+
+    monkeypatch.chdir(tmp_path)
+    failure = subprocess.CompletedProcess(
+        args=["gh", "pr", "review"], returncode=1, stdout="", stderr="network unavailable"
+    )
+    with patch("subprocess.run", return_value=failure) as mock_run:
+        result = uxcore.approve_pr(pr_number=1465)
+
+    assert result.ok is False
+    assert "network unavailable" in result.message
+    assert len(mock_run.call_args_list) == 1

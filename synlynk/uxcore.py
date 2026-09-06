@@ -541,11 +541,24 @@ def approve_pr(pr_number: int, actor: Optional[Actor] = None) -> WriteResult:
             ["gh", "pr", "review", pr, "--approve"], capture_output=True, text=True
         )
         if review.returncode != 0:
-            subprocess.run(
+            review_message = review.stdout or review.stderr
+            normalized_message = review_message.lower()
+            self_approval_error = (
+                "can not approve your own pull request" in normalized_message
+                or "cannot approve your own pull request" in normalized_message
+                or "same-login" in normalized_message
+                or "same login" in normalized_message
+            )
+            if not self_approval_error:
+                return {"ok": False, "message": review_message}
+
+            comment = subprocess.run(
                 ["gh", "pr", "comment", pr, "--body", "Approved (formal comment — same-login collision review fallback, see #423)."],
                 capture_output=True,
                 text=True,
             )
+            if comment.returncode != 0:
+                return {"ok": False, "message": comment.stdout or comment.stderr}
         merge = subprocess.run(
             ["gh", "pr", "merge", pr, "--squash", "--admin"], capture_output=True, text=True
         )
