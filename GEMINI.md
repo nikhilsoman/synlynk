@@ -9,9 +9,10 @@ This file provides guidance to Agy (the `agy` CLI, powered by Gemini) when worki
 - **Engine:** agy-2.x
 - **Commit trailer:** `Co-Authored-By: AGY <noreply@antigravity.dev>`
 - **Branch prefix:** `feat/agy/` or `fix/agy/`
-- Autonomous / session GitHub writes (`gh pr create`, `gh pr merge`, `gh issue close`, `gh run rerun`, `gh pr review`) MUST use `synlynk gh --role <role> -- …` so they authenticate as the role App, not `nikhilsoman`.
-- `nikhilsoman` is reserved for Nikhil at the keyboard.
-- Host `gh` is allowed only when `SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH=1`.
+- In a harness/session shell, prepend the synlynk gh shim: `eval "$(synlynk gh --shim-env)"` (or equivalent PATH prepend of `~/.synlynk/gh-shim`).
+- Then raw `gh` is refused unless a role `GH_TOKEN` is already injected, `SYNLYNK_GH_ROLE` is set, or `SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH=1`.
+- Prefer `synlynk gh --role <role> -- …` for session GitHub writes.
+- Nikhil at a normal login shell (no harness env) is unchanged.
 - qa APPROVE is the default when reviewer login ≠ PR author login. Keep the #423 comment-checklist only for same-identity collisions.
 
 ## Domain Ownership
