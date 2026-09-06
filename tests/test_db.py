@@ -508,6 +508,38 @@ def test_detect_hand_edit_no_warning_on_pull_then_resync_case(tmp_path, monkeypa
     assert warning is None
 
 
+def test_detect_hand_edit_does_not_open_live_file_for_write(tmp_path, monkeypatch):
+    """#1446: pr check must not write shared project-docs in a review sandbox."""
+    from tests.test_migrate import _setup_migrated
+    from synlynk.db import _generate_costs_md
+
+    _setup_migrated(tmp_path, monkeypatch)
+    _generate_costs_md()
+
+    live = os.path.abspath(os.path.join(".synlynk", "project-docs", "costs.md"))
+    before = open(live).read()
+    writes = []
+    real_open = open
+
+    def tracking_open(file, mode="r", *args, **kwargs):
+        path = file if isinstance(file, str) else getattr(file, "name", "")
+        try:
+            abspath = os.path.abspath(path)
+        except Exception:
+            abspath = ""
+        if abspath == live and any(flag in str(mode) for flag in "wa+"):
+            writes.append(str(mode))
+            raise PermissionError(1, "Operation not permitted", live)
+        return real_open(file, mode, *args, **kwargs)
+
+    monkeypatch.setattr("builtins.open", tracking_open)
+    warning = _detect_hand_edit("costs.md")
+    assert writes == []
+    assert warning is None
+    monkeypatch.undo()
+    assert open(live).read() == before
+
+
 def test_find_ticket_returns_none_when_absent(project_dir):
     from synlynk.db import _find_ticket
 

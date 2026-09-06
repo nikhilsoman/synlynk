@@ -5089,15 +5089,39 @@ def test_dispatch_agent_profile_context_max_bytes_truncates(project_dir, monkeyp
     assert "x" * 51 not in prompt
 
 
-def test_verify_contract_derives_pattern_from_story_title(project_dir):
-    """_verify_contract_for_story derives a lowercase underscore pattern."""
+def test_verify_contract_does_not_guess_k_selector_from_title(project_dir):
+    """#1446: guessed pytest -k from the story title matches 0 tests (exit 5)."""
     import synlynk as sl
     (project_dir / "tests").mkdir()
     (project_dir / "tests" / "test_things.py").write_text("")
     story_id = sl.cmd_story_create("Fix Auth Timeout")
     section = sl._verify_contract_for_story(story_id, "fix it")
-    assert "fix_auth_timeout" in section
+    assert "## How to Verify" in section
     assert "pytest" in section
+    assert "-k '" not in section
+    assert '-k "' not in section
+    assert "fix_auth_timeout" not in section
+
+
+def test_verify_contract_runs_changed_test_files(project_dir):
+    """#1446: verify command should name tests the change actually touched."""
+    import synlynk as sl
+    tests_dir = project_dir / "tests"
+    tests_dir.mkdir()
+    (tests_dir / "test_things.py").write_text("def test_ok():\n    assert True\n")
+    subprocess.run(["git", "init", "-q"], check=True)
+    subprocess.run(["git", "add", "tests/test_things.py"], check=True)
+    subprocess.run(
+        ["git", "-c", "user.email=t@t.com", "-c", "user.name=t", "commit", "-q", "-m", "seed"],
+        check=True,
+    )
+    (tests_dir / "test_new.py").write_text("def test_new():\n    assert True\n")
+    subprocess.run(["git", "add", "tests/test_new.py"], check=True)
+    story_id = sl.cmd_story_create("Fix Auth Timeout")
+    section = sl._verify_contract_for_story(story_id, "fix skip injected permissions")
+    assert "tests/test_new.py" in section
+    assert "-k '" not in section
+    assert '-k "' not in section
 
 
 def test_format_prompt_for_claude_is_narrative(project_dir):

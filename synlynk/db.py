@@ -2215,21 +2215,35 @@ def _detect_hand_edit(filename: str) -> str | None:
     if not callable(generator):
         return None
 
+    # Render into a temp dir so review sandboxes (writable_roots=[]) never
+    # need write access to the live shared project-docs path (#1446).
+    import tempfile
+    import synlynk as sl
+
+    tmp = tempfile.mkdtemp(prefix="synlynk-hand-edit-")
+    orig_syn = sl._synlynk_project_docs_dir
+    orig_docs = sl._docs_dir
+    orig_sync = getattr(sl, "_dr_sync", None)
     try:
+        sl._synlynk_project_docs_dir = lambda: tmp
+        sl._docs_dir = lambda: tmp
+        if orig_sync is not None:
+            sl._dr_sync = lambda *_a, **_k: None
         generator()
-        if os.path.exists(file_path):
-            with open(file_path) as f:
+        tmp_path = os.path.join(tmp, filename)
+        if os.path.exists(tmp_path):
+            with open(tmp_path) as f:
                 regenerated_content = f.read()
         else:
             regenerated_content = ""
     except Exception:
         regenerated_content = None
     finally:
-        try:
-            with open(file_path, "w") as f:
-                f.write(working_tree_content)
-        except OSError:
-            pass
+        sl._synlynk_project_docs_dir = orig_syn
+        sl._docs_dir = orig_docs
+        if orig_sync is not None:
+            sl._dr_sync = orig_sync
+        shutil.rmtree(tmp, ignore_errors=True)
 
     if regenerated_content is None:
         return None

@@ -510,51 +510,55 @@ def _relevant_files_for_story(story_id: str) -> list:
             relevant.append(path)
     return relevant[:10]
 
+def _test_files_for_verify_contract() -> list:
+    """Test files this worktree actually changed (staged, unstaged, untracked, or vs main)."""
+    found = []
+    seen = set()
+    commands = (
+        ["git", "diff", "--name-only", "--cached", "--", "tests"],
+        ["git", "diff", "--name-only", "--", "tests"],
+        ["git", "ls-files", "--others", "--exclude-standard", "--", "tests"],
+        ["git", "diff", "--name-only", "origin/main...HEAD", "--", "tests"],
+        ["git", "diff", "--name-only", "main...HEAD", "--", "tests"],
+    )
+    for cmd in commands:
+        try:
+            proc = subprocess.run(cmd, capture_output=True, text=True)
+        except Exception:
+            continue
+        if proc.returncode != 0:
+            continue
+        for line in proc.stdout.splitlines():
+            path = line.strip().replace("\\", "/")
+            if not path.endswith(".py"):
+                continue
+            base = os.path.basename(path)
+            if not (base.startswith("test_") or base.endswith("_test.py")):
+                continue
+            if path not in seen:
+                seen.add(path)
+                found.append(path)
+    return found
+
+
 def _verify_contract_for_story(story_id: str, task: str) -> str:
     """Returns a ## How to Verify section with a pytest invocation. Empty string if no tests/ dir."""
     if not os.path.exists("tests"):
         return ""
 
-    get_db = _pkg("_get_db")
-    if get_db is None:
-        return ""
-    conn = get_db()
-    if conn is None:
-        return ""
-    try:
-        row = conn.execute(
-            "SELECT title FROM stories WHERE story_id=?", (story_id,)
-        ).fetchone() if story_id else None
-    except Exception:
-        return ""
-    finally:
-        try:
-            conn.close()
-        except Exception:
-            pass
-    title = (row[0] if row else "") or task
-
-    # Derive test pattern: lowercase, alphanumeric + underscores, max 40 chars
-    pattern = re.sub(r"[^a-z0-9_]", "", title.lower().replace(" ", "_"))[:40]
-    if not pattern:
-        return ""
-
-    # Find first test file
-    test_file = None
-    for root, _dirs, files in os.walk("tests"):
-        for f in sorted(files):
-            if f.startswith("test_") and f.endswith(".py"):
-                test_file = os.path.join(root, f)
-                break
-        if test_file:
-            break
-
-    if not test_file:
-        return ""
-
-    cmd = f"pytest {test_file} -k '{pattern}' -v" if pattern else f"pytest {test_file} -v"
+    changed = _test_files_for_verify_contract()
+    if changed:
+        cmd = "pytest " + " ".join(changed) + " -v"
+        return (
+            "\n\n## How to Verify\n"
+            f"Run: `{cmd}`\n"
+            "Expected: all matched tests pass, no new failures.\n"
+            "Do not pass a guessed pytest -k selector derived from the task title.\n"
+        )
     return (
         "\n\n## How to Verify\n"
-        f"Run: `{cmd}`\n"
+        "Run pytest on the test files this change adds or modifies.\n"
+        "Do not pass a guessed pytest -k selector derived from the task title "
+        "(that matches 0 tests and exits 5).\n"
         "Expected: all matched tests pass, no new failures.\n"
     )
