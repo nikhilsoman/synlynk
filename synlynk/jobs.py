@@ -437,6 +437,13 @@ def _worktree_has_no_diff_against_base_branch(job: dict, worktree_path: str) -> 
 def _role_gh_env_for_job(job: dict) -> dict:
     """Env for parent-process `gh` so auto-PR uses the role App, not host keyring (#1436)."""
     env = os.environ.copy()
+    host_tokens = {
+        key: env[key]
+        for key in ("GH_TOKEN", "GITHUB_TOKEN")
+        if key in env
+    }
+    env.pop("GH_TOKEN", None)
+    env.pop("GITHUB_TOKEN", None)
     role = (
         job.get("role")
         or job.get("resolved_agent_role")
@@ -444,18 +451,37 @@ def _role_gh_env_for_job(job: dict) -> dict:
         or job.get("charter_role")
     )
     if not role:
+        if _host_gh_auth_allowed():
+            env.update(host_tokens)
         return env
     try:
-        from synlynk.dispatch import _isolated_gh_config_dir, _resolve_dispatch_gh_token
+        from synlynk.dispatch import (
+            _gh_write_allow_host_auth,
+            _isolated_gh_config_dir,
+            _resolve_dispatch_gh_token,
+        )
     except Exception:
+        if _host_gh_auth_allowed():
+            env.update(host_tokens)
         return env
     token = _resolve_dispatch_gh_token(str(role))
     if not token:
+        if _gh_write_allow_host_auth():
+            env.update(host_tokens)
         return env
     env["GH_TOKEN"] = token
     env["GITHUB_TOKEN"] = token
     env["GH_CONFIG_DIR"] = _isolated_gh_config_dir()
     return env
+
+
+def _host_gh_auth_allowed() -> bool:
+    """Return whether explicit host GitHub auth opt-in permits ambient tokens."""
+    try:
+        from synlynk.dispatch import _gh_write_allow_host_auth
+    except Exception:
+        return False
+    return _gh_write_allow_host_auth()
 
 
 def _maybe_open_worktree_pr(job: dict, worktree_path: str, worktree_branch: Optional[str]) -> Optional[int]:
@@ -464,14 +490,16 @@ def _maybe_open_worktree_pr(job: dict, worktree_path: str, worktree_branch: Opti
         return
 
     is_review_task = job.get("task_type") == "review"
+    task_text = str(job.get("task") or "").lower()
+    is_merge_task = "gh pr merge" in task_text or "squash-merge github pr" in task_text
     is_empty_gh_write_worktree = (
         job.get("requires_gh_write")
         and _worktree_has_no_diff_against_base_branch(job, worktree_path)
     )
-    if is_review_task or is_empty_gh_write_worktree:
+    if is_review_task or is_merge_task or is_empty_gh_write_worktree:
         print(
             f"  ⚠ skipping automatic PR creation for {worktree_branch}: "
-            f"job is review/empty-gh-write (task_type={job.get('task_type') or 'none'}, "
+            f"job is review/merge/empty-gh-write (task_type={job.get('task_type') or 'none'}, "
             f"requires_gh_write={bool(job.get('requires_gh_write'))})"
         )
         return
