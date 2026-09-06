@@ -89,6 +89,43 @@ def test_approve_pr_runs_gh_commands(tmp_path, monkeypatch):
     assert any("merge" in cmd for cmd in called_cmds)
 
 
+def test_approve_pr_propagates_non_self_approval_failure(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    review = type("Completed", (), {
+        "returncode": 1,
+        "stdout": "",
+        "stderr": "network unavailable",
+    })()
+    with patch("subprocess.run", return_value=review) as mock_run:
+        result = uxcore.approve_pr(pr_number=1465)
+
+    assert result.ok is False
+    assert "network unavailable" in result.message
+    assert [tuple(call.args[0][1:3]) for call in mock_run.call_args_list] == [
+        ("pr", "review"),
+    ]
+
+
+def test_approve_pr_uses_comment_fallback_only_for_self_approval_failure(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    review = type("Completed", (), {
+        "returncode": 1,
+        "stdout": "",
+        "stderr": "Can not approve your own pull request",
+    })()
+    comment = type("Completed", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+    merge = type("Completed", (), {"returncode": 0, "stdout": "merged", "stderr": ""})()
+    with patch("subprocess.run", side_effect=[review, comment, merge]) as mock_run:
+        result = uxcore.approve_pr(pr_number=1465)
+
+    assert result.ok is True
+    assert [tuple(call.args[0][1:3]) for call in mock_run.call_args_list] == [
+        ("pr", "review"),
+        ("pr", "comment"),
+        ("pr", "merge"),
+    ]
+
+
 def test_kill_job_sends_sigterm_to_tracked_pid(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     os.makedirs(".synlynk")

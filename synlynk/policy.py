@@ -40,7 +40,7 @@ DEFAULT_WORKSPACE_POLICY: Dict[str, Any] = {
         "merge_authority": {
             "can_merge": ["qa"],
             "require_non_authoring_review": True,
-            "review_fallback": "comment_checklist",
+            "review_fallback": "same_identity_comment_checklist",
         },
         "release_authority": {"can_cut_release": ["pm"], "requires_human_approval": True},
         "human_authority_role": {"role": "pm", "requires_human_approval": True},

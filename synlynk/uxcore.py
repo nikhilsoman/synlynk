@@ -530,10 +530,9 @@ def dispatch(agent: str, task: str, actor: Optional[Actor] = None, **flags) -> W
 
 
 def approve_pr(pr_number: int, actor: Optional[Actor] = None) -> WriteResult:
-    """Approve and squash-merge a PR via gh. Falls back to a formal comment
-    approval if `gh pr review --approve` fails on the shared-identity
-    self-approval error unless dispatched via `--as-agent` with a registered role identity
-    (see CLAUDE.md "GitHub identity note #423")."""
+    """Approve and squash-merge a PR via gh. qa APPROVE (`gh pr review --approve`)
+    is the default when reviewer and author identities differ; comment-checklist only
+    on same-login collision (see #423)."""
     actor = actor or DEFAULT_ACTOR
 
     def _op(**params):
@@ -542,11 +541,24 @@ def approve_pr(pr_number: int, actor: Optional[Actor] = None) -> WriteResult:
             ["gh", "pr", "review", pr, "--approve"], capture_output=True, text=True
         )
         if review.returncode != 0:
-            subprocess.run(
-                ["gh", "pr", "comment", pr, "--body", "Approved (formal comment — shared GitHub identity, see #423)."],
+            review_message = review.stdout or review.stderr
+            normalized_message = review_message.lower()
+            self_approval_error = (
+                "can not approve your own pull request" in normalized_message
+                or "cannot approve your own pull request" in normalized_message
+                or "same-login" in normalized_message
+                or "same login" in normalized_message
+            )
+            if not self_approval_error:
+                return {"ok": False, "message": review_message}
+
+            comment = subprocess.run(
+                ["gh", "pr", "comment", pr, "--body", "Approved (formal comment — same-login collision review fallback, see #423)."],
                 capture_output=True,
                 text=True,
             )
+            if comment.returncode != 0:
+                return {"ok": False, "message": comment.stdout or comment.stderr}
         merge = subprocess.run(
             ["gh", "pr", "merge", pr, "--squash", "--admin"], capture_output=True, text=True
         )

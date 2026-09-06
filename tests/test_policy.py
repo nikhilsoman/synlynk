@@ -82,6 +82,7 @@ def test_load_policy_falls_back_to_hardcoded_defaults_when_no_files_exist(tmp_pa
     repo.mkdir()
     policy = load_policy(repo_path=str(repo), workspace_name="default")
     assert policy["merge_authority"]["can_merge"] == DEFAULT_WORKSPACE_POLICY["defaults"]["merge_authority"]["can_merge"]
+    assert policy["merge_authority"]["review_fallback"] == "same_identity_comment_checklist"
 
 
 def test_load_policy_reads_workspace_defaults(tmp_path, monkeypatch):
@@ -91,13 +92,14 @@ def test_load_policy_reads_workspace_defaults(tmp_path, monkeypatch):
         "schema_version": 1,
         "org": {"org_id": "acme", "teams": [], "sso_provider": None, "seat_limits": None},
         "defaults": {
-            "merge_authority": {"can_merge": ["qa"], "require_non_authoring_review": True, "review_fallback": "comment_checklist"},
+            "merge_authority": {"can_merge": ["qa"], "require_non_authoring_review": True, "review_fallback": "same_identity_comment_checklist"},
         },
     })
     repo = tmp_path / "repo"
     repo.mkdir()
     policy = load_policy(repo_path=str(repo), workspace_name="acme")
     assert policy["merge_authority"]["can_merge"] == ["qa"]
+    assert policy["merge_authority"]["review_fallback"] == "same_identity_comment_checklist"
     assert policy["org"]["org_id"] == "acme"
 
 
@@ -108,7 +110,7 @@ def test_load_policy_repo_override_replaces_whole_object(tmp_path, monkeypatch):
         "schema_version": 1,
         "org": {"org_id": "acme", "teams": [], "sso_provider": None, "seat_limits": None},
         "defaults": {
-            "merge_authority": {"can_merge": ["qa"], "require_non_authoring_review": True, "review_fallback": "comment_checklist"},
+            "merge_authority": {"can_merge": ["qa"], "require_non_authoring_review": True, "review_fallback": "same_identity_comment_checklist"},
             "release_authority": {"can_cut_release": ["pm"], "requires_human_approval": True},
         },
     })
@@ -118,7 +120,7 @@ def test_load_policy_repo_override_replaces_whole_object(tmp_path, monkeypatch):
         "schema_version": 1,
         "repo_id": "rxcc",
         "overrides": {
-            "merge_authority": {"can_merge": ["qa", "architect"], "require_non_authoring_review": True, "review_fallback": "comment_checklist"},
+            "merge_authority": {"can_merge": ["qa", "architect"], "require_non_authoring_review": True, "review_fallback": "same_identity_comment_checklist"},
         },
     })
     policy = load_policy(repo_path=str(repo), workspace_name="acme")
@@ -188,7 +190,7 @@ def test_load_policy_missing_repo_override_file_inherits_workspace_defaults(tmp_
     _write_json(ws_policy_path, {
         "schema_version": 1,
         "org": {"org_id": "acme", "teams": [], "sso_provider": None, "seat_limits": None},
-        "defaults": {"merge_authority": {"can_merge": ["architect"], "require_non_authoring_review": True, "review_fallback": "comment_checklist"}},
+        "defaults": {"merge_authority": {"can_merge": ["architect"], "require_non_authoring_review": True, "review_fallback": "same_identity_comment_checklist"}},
     })
     repo = tmp_path / "repo"
     repo.mkdir()  # no .synlynk/policy.json created here
