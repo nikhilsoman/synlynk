@@ -15,7 +15,7 @@ def _manifest_from_url(url):
     return json.loads(html.unescape(match.group(1)))
 
 
-def test_build_app_manifest_url_adds_administration_only_for_merge_roles(
+def test_implement_1436_leftover_charter_patch_so_merge_roles_request_actions_write(
     tmp_path, monkeypatch
 ):
     monkeypatch.chdir(tmp_path)
@@ -33,4 +33,6 @@ def test_build_app_manifest_url_adds_administration_only_for_merge_roles(
     )
 
     assert qa_manifest["default_permissions"]["administration"] == "write"
+    assert qa_manifest["default_permissions"]["actions"] == "write"
     assert "administration" not in dev_manifest["default_permissions"]
+    assert "actions" not in dev_manifest["default_permissions"]

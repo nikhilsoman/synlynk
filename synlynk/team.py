@@ -203,6 +203,7 @@ def _build_app_manifest_url(
     )
     if role in merge_roles:
         manifest["default_permissions"]["administration"] = "write"
+        manifest["default_permissions"]["actions"] = "write"
     manifest_json = json.dumps(manifest)
     escaped_manifest = html.escape(manifest_json, quote=True)
     form_action = (
