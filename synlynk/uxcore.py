@@ -530,10 +530,9 @@ def dispatch(agent: str, task: str, actor: Optional[Actor] = None, **flags) -> W
 
 
 def approve_pr(pr_number: int, actor: Optional[Actor] = None) -> WriteResult:
-    """Approve and squash-merge a PR via gh. Falls back to a formal comment
-    approval if `gh pr review --approve` fails on the shared-identity
-    self-approval error unless dispatched via `--as-agent` with a registered role identity
-    (see CLAUDE.md "GitHub identity note #423")."""
+    """Approve and squash-merge a PR via gh. qa APPROVE (`gh pr review --approve`)
+    is the default when reviewer and author identities differ; comment-checklist only
+    on same-login collision (see #423)."""
     actor = actor or DEFAULT_ACTOR
 
     def _op(**params):
@@ -543,7 +542,7 @@ def approve_pr(pr_number: int, actor: Optional[Actor] = None) -> WriteResult:
         )
         if review.returncode != 0:
             subprocess.run(
-                ["gh", "pr", "comment", pr, "--body", "Approved (formal comment — shared GitHub identity, see #423)."],
+                ["gh", "pr", "comment", pr, "--body", "Approved (formal comment — same-login collision review fallback, see #423)."],
                 capture_output=True,
                 text=True,
             )
