@@ -1150,6 +1150,64 @@ def test_maybe_open_worktree_pr_does_not_skip_for_changed_requires_gh_write_work
     assert pr_number == 99
 
 
+def test_maybe_open_worktree_pr_injects_role_app_token(tmp_path, monkeypatch):
+    """#1436 Hole A: parent gh pr create must use the job role App token, not host gh."""
+    import subprocess
+    import synlynk.jobs as jobs_mod
+
+    worktree_path = tmp_path / "repo"
+    worktree_path.mkdir()
+    seen_env = []
+
+    def fake_run(cmd, **kwargs):
+        if cmd[:3] in (["gh", "pr", "list"], ["gh", "pr", "create"]):
+            seen_env.append(kwargs.get("env") or {})
+        if cmd[:4] == ["git", "-C", str(worktree_path), "symbolic-ref"]:
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="")
+        if cmd[:5] == ["git", "-C", str(worktree_path), "rev-parse", "--verify"]:
+            candidate = cmd[5]
+            if candidate == "origin/main":
+                return subprocess.CompletedProcess(cmd, 0, stdout="deadbeef\n", stderr="")
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="")
+        if cmd[:3] == ["gh", "pr", "list"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="[]\n", stderr="")
+        if cmd[:3] == ["gh", "pr", "create"]:
+            return subprocess.CompletedProcess(
+                cmd, 0, stdout="https://github.com/octo/repo/pull/77\n", stderr=""
+            )
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    monkeypatch.setattr(jobs_mod.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        jobs_mod,
+        "_pkg",
+        lambda name, default=None: (lambda: ("octo", "repo")) if name == "detect_remote_owner_repo" else default,
+    )
+    monkeypatch.setattr(
+        jobs_mod,
+        "_role_gh_env_for_job",
+        lambda job: {
+            "GH_TOKEN": "ghs_test_qa_token",
+            "GITHUB_TOKEN": "ghs_test_qa_token",
+            "GH_CONFIG_DIR": "/tmp/synlynk-gh-config-test",
+            "PATH": "/usr/bin",
+        },
+        raising=False,
+    )
+
+    pr_number = jobs_mod._maybe_open_worktree_pr(
+        {"id": "job-qa", "task": "write docs", "role": "qa"},
+        str(worktree_path),
+        "feat/example",
+    )
+
+    assert pr_number == 77
+    assert seen_env
+    for env in seen_env:
+        assert env.get("GH_TOKEN") == "ghs_test_qa_token"
+        assert env.get("GH_CONFIG_DIR") == "/tmp/synlynk-gh-config-test"
+
+
 # --- #753 jobs reap -----------------------------------------------------------
 
 def _seed_daemon_job(conn, job_id, agent="agy", status="running", pid=None, started_at="2026-08-07T07:00:00"):

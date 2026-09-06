@@ -434,6 +434,30 @@ def _worktree_has_no_diff_against_base_branch(job: dict, worktree_path: str) -> 
     return diff_result.returncode == 0
 
 
+def _role_gh_env_for_job(job: dict) -> dict:
+    """Env for parent-process `gh` so auto-PR uses the role App, not host keyring (#1436)."""
+    env = os.environ.copy()
+    role = (
+        job.get("role")
+        or job.get("resolved_agent_role")
+        or job.get("agent_role")
+        or job.get("charter_role")
+    )
+    if not role:
+        return env
+    try:
+        from synlynk.dispatch import _isolated_gh_config_dir, _resolve_dispatch_gh_token
+    except Exception:
+        return env
+    token = _resolve_dispatch_gh_token(str(role))
+    if not token:
+        return env
+    env["GH_TOKEN"] = token
+    env["GITHUB_TOKEN"] = token
+    env["GH_CONFIG_DIR"] = _isolated_gh_config_dir()
+    return env
+
+
 def _maybe_open_worktree_pr(job: dict, worktree_path: str, worktree_branch: Optional[str]) -> Optional[int]:
     """Opens a PR for a finalized worktree if one does not already exist."""
     if not worktree_path or not worktree_branch:
@@ -461,6 +485,7 @@ def _maybe_open_worktree_pr(job: dict, worktree_path: str, worktree_branch: Opti
         return
 
     repo_slug = f"{owner}/{repo}"
+    gh_env = _role_gh_env_for_job(job)
     try:
         list_result = subprocess.run(
             [
@@ -472,6 +497,7 @@ def _maybe_open_worktree_pr(job: dict, worktree_path: str, worktree_branch: Opti
             capture_output=True,
             text=True,
             check=False,
+            env=gh_env,
         )
     except FileNotFoundError:
         print(f"  ⚠ gh pr list skipped for {worktree_branch}: gh binary not available")
@@ -518,6 +544,7 @@ def _maybe_open_worktree_pr(job: dict, worktree_path: str, worktree_branch: Opti
             capture_output=True,
             text=True,
             check=False,
+            env=gh_env,
         )
     except FileNotFoundError:
         print(f"  ⚠ gh pr create skipped for {worktree_branch}: gh binary not available")
