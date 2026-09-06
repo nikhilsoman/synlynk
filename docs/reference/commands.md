@@ -73,6 +73,7 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `pm sweep` (primary) — execute
 - `release` (primary) — release
 - `pr check` (primary) — release
+- `gh` (primary) — execute
 - `pr gate-status` (secondary) — release
 - `policy check-merge` (secondary) — release
 - `policy show` (secondary) — sustain
