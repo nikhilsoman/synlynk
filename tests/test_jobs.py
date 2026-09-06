@@ -993,6 +993,77 @@ def test_maybe_open_worktree_pr_uses_resolved_base_branch(tmp_path, monkeypatch)
     assert create_call[create_call.index("--base") + 1] == "master"
 
 
+def test_commit_subject_skips_injected_permissions_heading():
+    """#1427: Agy prepends `## Permissions`; auto-finalize must not use that as the PR title."""
+    from synlynk.jobs import _commit_subject_for_job, _task_summary_line
+
+    task = (
+        "## Permissions\n"
+        "- write:docs/\n"
+        "- run:tests\n"
+        "\n"
+        "Implement grok agent_slots in default config templates\n"
+    )
+    job = {"id": "job-e73d175d", "task": task}
+    assert _task_summary_line(task) == "Implement grok agent_slots in default config templates"
+    subject = _commit_subject_for_job(job)
+    assert subject.startswith("fix: Implement grok agent_slots")
+    assert "## Permissions" not in subject
+    assert "job-e73d175d" in subject
+
+
+def test_commit_subject_plain_task_unchanged():
+    from synlynk.jobs import _commit_subject_for_job
+
+    job = {"id": "job-plain", "task": "close stale issue #1188"}
+    assert _commit_subject_for_job(job) == "fix: close stale issue #1188 (job-plain)"
+
+
+def test_maybe_open_worktree_pr_title_skips_permissions_heading(tmp_path, monkeypatch):
+    import subprocess
+    import synlynk.jobs as jobs_mod
+
+    worktree_path = tmp_path / "repo"
+    worktree_path.mkdir()
+    captured = []
+
+    def fake_run(cmd, **kwargs):
+        captured.append(cmd)
+        if cmd[:3] == ["gh", "pr", "list"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="[]\n", stderr="")
+        if cmd[:3] == ["gh", "pr", "create"]:
+            return subprocess.CompletedProcess(
+                cmd, 0, stdout="https://github.com/octo/repo/pull/1330\n", stderr=""
+            )
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    monkeypatch.setattr(jobs_mod.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        jobs_mod,
+        "_pkg",
+        lambda name, default=None: (lambda: ("octo", "repo")) if name == "detect_remote_owner_repo" else default,
+    )
+    monkeypatch.setattr(jobs_mod, "_resolve_worktree_pr_base_branch", lambda *a, **k: "main")
+
+    pr_number = jobs_mod._maybe_open_worktree_pr(
+        {
+            "id": "job-e73d175d",
+            "task": "## Permissions\n- write:docs/\n\nImplement grok agent_slots\n",
+        },
+        str(worktree_path),
+        "dispatch/agy/job-e73d175d",
+    )
+
+    assert pr_number == 1330
+    create_call = next(cmd for cmd in captured if cmd[:3] == ["gh", "pr", "create"])
+    title = create_call[create_call.index("--title") + 1]
+    body = create_call[create_call.index("--body") + 1]
+    assert title.startswith("fix: Implement grok agent_slots")
+    assert "## Permissions" not in title
+    assert "Task: Implement grok agent_slots" in body
+    assert "Task: ## Permissions" not in body
+
+
 def test_maybe_open_worktree_pr_skips_for_review_task_type(tmp_path, monkeypatch):
     import synlynk.jobs as jobs_mod
 
