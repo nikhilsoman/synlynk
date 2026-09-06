@@ -12,6 +12,7 @@ import signal
 import subprocess
 import sys
 import threading
+import tempfile
 import time
 from typing import Optional, Tuple
 
@@ -625,6 +626,45 @@ def _gh_write_allow_host_auth() -> bool:
     """Operator opt-in to use host `gh` keyring when no App token is available (#569)."""
     raw = (os.environ.get("SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH") or "").strip().lower()
     return raw in ("1", "true", "yes", "on")
+
+
+def _create_exec_gh_shim() -> tuple[tempfile.TemporaryDirectory, str]:
+    """Create the short-lived ``gh`` guard used only by ``synlynk exec``."""
+    shim_dir = tempfile.TemporaryDirectory(prefix="synlynk-exec-")
+    shim_path = os.path.join(shim_dir.name, "gh")
+    script = f'''#!{sys.executable}
+import os
+import shutil
+import sys
+
+shim_dir = os.path.dirname(os.path.realpath(__file__))
+path_entries = os.environ.get("PATH", "").split(os.pathsep)
+real_path = os.pathsep.join(p for p in path_entries if os.path.realpath(p) != shim_dir)
+
+if not (os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")):
+    allowed = (os.environ.get("SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH") or "").strip().lower()
+    if allowed not in ("1", "true", "yes", "on"):
+        print("synlynk gh refused: use synlynk gh --role <role> -- …; host identity is not used", file=sys.stderr)
+        raise SystemExit(1)
+
+real_gh = shutil.which("gh", path=real_path)
+if not real_gh:
+    print("synlynk gh shim: real gh binary not found on PATH", file=sys.stderr)
+    raise SystemExit(127)
+os.execv(real_gh, [real_gh] + sys.argv[1:])
+'''
+    with open(shim_path, "w", encoding="utf-8") as handle:
+        handle.write(script)
+    os.chmod(shim_path, 0o700)
+    return shim_dir, shim_path
+
+
+def _exec_child_env() -> tuple[dict, tempfile.TemporaryDirectory]:
+    """Return the inherited env with an exec-only GitHub CLI PATH guard."""
+    shim_dir, _shim_path = _create_exec_gh_shim()
+    env = os.environ.copy()
+    env["PATH"] = shim_dir.name + os.pathsep + env.get("PATH", "")
+    return env, shim_dir
 
 
 def _isolated_gh_config_dir() -> str:
@@ -3365,11 +3405,12 @@ def exec_command(cmd_args: list, force: bool = False) -> int:
     start_time = time.time()
     exit_code = 0
     output_text = ""
+    child_env, gh_shim_dir = _exec_child_env()
 
     try:
         interactive = _is_interactive(cmd_args)
         if interactive:
-            process = subprocess.Popen(cmd_args)
+            process = subprocess.Popen(cmd_args, env=child_env)
             process.wait()
             exit_code = process.returncode
         else:
@@ -3377,6 +3418,7 @@ def exec_command(cmd_args: list, force: bool = False) -> int:
                 cmd_args,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
+                env=child_env,
             )
             buffer: list = []
             stream_meta = {"first_output_at": None, "output_bytes": 0}
@@ -3393,6 +3435,7 @@ def exec_command(cmd_args: list, force: bool = False) -> int:
         exit_code = 1
         print(f"  Error: {e}")
     finally:
+        gh_shim_dir.cleanup()
         duration = time.time() - start_time
         print(f"\n  ✓ Execution finished in {duration:.2f}s")
 
