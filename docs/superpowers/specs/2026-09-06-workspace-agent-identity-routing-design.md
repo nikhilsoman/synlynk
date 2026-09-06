@@ -92,7 +92,7 @@ Do not start these until Nikhil signs this spec.
 - **Hole B — interactive `gh`:** a `synlynk gh --role <role> -- …` (or `synlynk exec` env) so Grok/Claude sessions cannot `gh pr create` as the human by default.
 - **Policy — review fallback:** `same_identity_comment_checklist` (comment-checklist only when author login equals reviewer login) — **addressed in this PR (#1436 leftover)**: `.synlynk/policy.json` and `synlynk/policy.py` defaults updated.
 - **Charter patch:** architect merge sentence vs `can_merge` — **addressed in this PR (#1436 leftover)**: living charters aligned to qa-only merge.
-- **Optional:** qa `actions: write` for `gh run rerun`.
+- **Optional:** qa `actions: write` for `gh run rerun`. In #1458, `_build_app_manifest_url` was updated to request `actions: write` for `can_merge` roles. Because manifest updates do not modify existing installations, re-enabling this on the installed `synlynk-synlynk-qa` App requires manual installer re-approval in the GitHub UI; see the operator runbook in `docs/qa/1436-qa-actions-write-reapproval.md`.
 - **Live cell:** one PR authored by a role bot, approved by qa bot.
 
 ## 8. What this PR does not do
