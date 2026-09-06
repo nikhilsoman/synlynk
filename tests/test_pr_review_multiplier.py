@@ -10,6 +10,8 @@ def test_maybe_open_worktree_pr_returns_pr_number(tmp_path, monkeypatch):
 
     from synlynk import jobs as jobs_mod
 
+    monkeypatch.setenv("SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH", "1")
+
     def fake_run(cmd, **kwargs):
         class FakeResult:
             pass
