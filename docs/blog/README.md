@@ -4,6 +4,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 
 ## Series Index
 
+| [179](./179-prTBD-agy-permissions-pr-title.md) | #1427 - Auto-PR titles skip injected ## Permissions | TBD | 2026-09-06 |
 | [177](./177-prTBD-gh-write-verifier-live-1429-leftovers.md) | LIVE-1429 leftovers - gh-write verifier target/expect/author/time | TBD | 2026-09-06 |
 | [176](./176-prTBD-live-1429-permission-denied-false-negative.md) | LIVE-1429 - Daemon permission_denied false-negative | [#1441](https://github.com/nikhilsoman/synlynk/pull/1441) | 2026-09-06 |
 | [173](./173-pr352-stall-kill-pid-identity.md) | PR #TBD - Stall-Kill Must Prove Which Process It Is Killing | TBD | 2026-09-04 |
