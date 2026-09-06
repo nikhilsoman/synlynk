@@ -8,7 +8,7 @@
 - Autonomous / session GitHub writes (`gh pr create`, `gh pr merge`, `gh issue close`, `gh run rerun`, `gh pr review`) MUST use `synlynk gh --role <role> -- …` so they authenticate as the role App, not `nikhilsoman`.
 - `nikhilsoman` is reserved for Nikhil at the keyboard.
 - Host `gh` is allowed only when `SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH=1`.
-- qa APPROVE is the default when reviewer login ≠ PR author login. Keep the #423 comment-checklist only for same-identity collisions. Do not type the two-word phrase that names a GitHub pull-request review action.
+- qa APPROVE is the default when reviewer login ≠ PR author login. Keep the #423 comment-checklist only for same-identity collisions.
 
 ## Domain Ownership
 | Domain | Owned by this agent | Notes |
