@@ -2691,7 +2691,17 @@ def _reconcile_daemon_jobs() -> None:
                             log_text = f.read()
                     except Exception:
                         log_text = ""
-                if log_text and _log_has_permission_denied_signature(log_text):
+                if (
+                    log_text
+                    and _log_has_permission_denied_signature(log_text)
+                    and not _job_has_real_work_landed(git_state)
+                    and gh_write_verified_str != "true"
+                ):
+                    # Match `_reconcile_jobs`: a log-shaped denial is not
+                    # terminal when real work already landed, or when GitHub
+                    # independently confirms the required write (LIVE-1429 /
+                    # job-be18ebe7: OK exit 0 + files touched, then
+                    # daemon_jobs.status overwritten to permission_denied).
                     status = "permission_denied"
                     conn.execute(
                         "UPDATE daemon_jobs SET status=? WHERE job_id=?",
