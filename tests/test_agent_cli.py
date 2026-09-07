@@ -2794,3 +2794,52 @@ def test_research_distributed_statedb_synchronization__story_d58e5033():
     assert "aggregation" in content.lower()
     assert "tradeoff" in content.lower() or "comparison" in content.lower()
     assert "roadmap" in content.lower() or "phased" in content.lower()
+
+
+def test_reconcile_a_merge_conflict_in_a_unionmerged_markdown_file_advanced():
+    """Advanced synlynk-bot calibration: reconcile union-merge markdown artifacts.
+
+    Covers residual conflict markers, exact-line duplicates from merge=union,
+    and checkbox state pairs that union merge keeps as separate lines.
+    """
+    from synlynk.rebase import UNION_MERGED_PATHS, reconcile_union_merged_markdown
+
+    assert "project-docs/todo.md" in UNION_MERGED_PATHS
+    assert "project-docs/costs.md" in UNION_MERGED_PATHS
+
+    messy = (
+        "# Costs\n"
+        "\n"
+        "\n"
+        "| Date | Note | Amount |\n"
+        "| --- | --- | --- |\n"
+        "| 2026-09-01 | session A | $1.00 |\n"
+        "| 2026-09-01 | session A | $1.00 |\n"
+        "| 2026-09-02 | session B | $2.00 |\n"
+        "\n"
+        "# Todo\n"
+        "- [ ] Ship feature X\n"
+        "- [x] Ship feature X\n"
+        "- [ ] Write docs\n"
+        "\n"
+        "<<<<<<< HEAD\n"
+        "| PR #200 | ours |\n"
+        "=======\n"
+        "| PR #199 | theirs |\n"
+        ">>>>>>> origin/main\n"
+    )
+
+    resolved = reconcile_union_merged_markdown(messy)
+
+    assert "<<<<<<<" not in resolved
+    assert "=======" not in resolved
+    assert ">>>>>>>" not in resolved
+    assert resolved.count("| 2026-09-01 | session A | $1.00 |\n") == 1
+    assert "- [x] Ship feature X\n" in resolved
+    assert "- [ ] Ship feature X\n" not in resolved
+    assert "- [ ] Write docs\n" in resolved
+    assert "| PR #199 | theirs |\n" in resolved
+    assert "| PR #200 | ours |\n" in resolved
+    # PR rows ordered ascending when conflict block was a table
+    assert resolved.index("| PR #199 | theirs |") < resolved.index("| PR #200 | ours |")
+    assert "\n\n\n" not in resolved

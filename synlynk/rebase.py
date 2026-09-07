@@ -13,8 +13,16 @@ MARKDOWN_INDEX_PATHS = (
     "project-docs/memory.md",
     "CHANGELOG.md",
 )
+# Paths declared merge=union in root .gitattributes. Git keeps unique lines
+# from both sides without markers, but concurrent edits still leave semantic
+# duplicates (checkbox state pairs, repeated ledger rows) that need cleanup.
+UNION_MERGED_PATHS = (
+    "project-docs/todo.md",
+    "project-docs/costs.md",
+)
 _CONFLICT = re.compile(r"^<<<<<<< .*$", re.M)
 _PR_NUMBER = re.compile(r"(?:PR|#)(\d+)", re.I)
+_CHECKBOX = re.compile(r"^(\s*[-*]\s+)\[([ xX])\](\s+.*)$")
 
 
 def _merge_markdown_conflict(text: str) -> Optional[str]:
@@ -50,6 +58,78 @@ def _merge_markdown_conflict(text: str) -> Optional[str]:
         output.extend(combined)
         i += 1
     return "".join(output)
+
+
+def _checkbox_key_and_checked(line: str) -> Optional[Tuple[str, bool]]:
+    """Return (normalized body text, is_checked) for a markdown checkbox line."""
+    raw = line[:-1] if line.endswith("\n") else line
+    match = _CHECKBOX.match(raw)
+    if not match:
+        return None
+    body = match.group(3).strip()
+    checked = match.group(2).lower() == "x"
+    return body, checked
+
+
+def _dedupe_union_lines(lines: List[str]) -> List[str]:
+    """Stable exact-line dedupe, preferring checked checkbox over unchecked twin."""
+    output: List[str] = []
+    seen_exact: Set[str] = set()
+    checkbox_index: Dict[str, int] = {}  # body -> index in output
+
+    for line in lines:
+        checkbox = _checkbox_key_and_checked(line)
+        if checkbox is not None:
+            body, checked = checkbox
+            if body in checkbox_index:
+                idx = checkbox_index[body]
+                existing_cb = _checkbox_key_and_checked(output[idx])
+                if existing_cb and not existing_cb[1] and checked:
+                    seen_exact.discard(output[idx])
+                    output[idx] = line
+                    seen_exact.add(line)
+                # else: keep existing (already checked, or duplicate unchecked)
+                continue
+            if line in seen_exact:
+                continue
+            checkbox_index[body] = len(output)
+            output.append(line)
+            seen_exact.add(line)
+            continue
+
+        if line.strip() == "":
+            if output and output[-1].strip() == "":
+                continue
+            output.append(line)
+            continue
+
+        if line in seen_exact:
+            continue
+        output.append(line)
+        seen_exact.add(line)
+    return output
+
+
+def reconcile_union_merged_markdown(text: str) -> str:
+    """Reconcile a union-merged (or marker-conflicted) markdown ledger/todo file.
+
+    Advanced cleanup for files under ``merge=union``:
+    1. Resolve any residual ``<<<<<<<`` conflict markers via unique-line merge.
+    2. Deduplicate exact lines while preserving first-seen order.
+    3. Collapse checkbox state pairs (``[ ]`` vs ``[x]``) to the checked form.
+    4. Collapse consecutive blank lines.
+    """
+    if _CONFLICT.search(text):
+        resolved = _merge_markdown_conflict(text)
+        if resolved is None:
+            raise ValueError("unresolvable markdown conflict markers")
+        text = resolved
+
+    lines = text.splitlines(keepends=True)
+    result = "".join(_dedupe_union_lines(lines))
+    if text.endswith("\n") and result and not result.endswith("\n"):
+        result += "\n"
+    return result
 
 
 def auto_rebase_markdown_conflicts(repo_path: str, branch: str, target_branch: str = "main") -> bool:
