@@ -3044,3 +3044,44 @@ def test_allow_distinct_qa_app_identities_to_submit_approving_pr_reviews(tmp_pat
     assert "Do not tell sessions to skip `--approve` by default" in repaired_claude_md
     assert "All dispatched agents share one GitHub identity" not in repaired_claude_md
 
+
+def test_design_a_regression_test_strategy_for_a_flaky_integration_test_a_general_scenario_at_advanced_difficulty():
+    """QA advanced calibration: regression strategy for flaky integration tests exists and is complete."""
+    from pathlib import Path
+
+    spec_path = Path("docs/qa/2026-09-07-flaky-integration-regression-strategy.md")
+    assert spec_path.exists(), f"Strategy doc missing at {spec_path}"
+
+    content = spec_path.read_text(encoding="utf-8")
+    assert "story-adhoc-1788746015" in content
+    assert "advanced" in content.lower()
+
+    # Taxonomy covers the major flake classes
+    for flake_class in (
+        "Timing / race",
+        "Shared mutable state",
+        "External service",
+        "Environment",
+        "Resource leak",
+        "Non-deterministic input",
+    ):
+        assert flake_class in content, f"missing flake class: {flake_class}"
+
+    # Phased plan with quarantine retirement
+    assert "Phase A" in content
+    assert "Phase B" in content
+    assert "Phase C" in content
+    assert "Phase D" in content
+    assert "quarantine" in content.lower()
+    assert "retirement" in content.lower() or "retire" in content.lower()
+
+    # Anti-patterns reject blind retries / sleep hacks
+    assert "Anti-patterns" in content
+    assert "rerun" in content.lower() or "reruns" in content.lower()
+    assert "sleep" in content.lower()
+
+    # Layered regression suite + ground-truth assertion guidance
+    assert "Unit pin" in content
+    assert "ground truth" in content.lower()
+    assert "deterministic" in content.lower()
+
