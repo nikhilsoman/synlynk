@@ -499,6 +499,82 @@ def test_live_status_scenario_initializes_full_schema(monkeypatch, tmp_path):
     assert "status rendered" in result.detail
 
 
+def test_cli_live_selftest_provisions_probe_data_before_dispatch_and_exec(
+    monkeypatch, tmp_path, capsys
+):
+    """Exercise the live CLI orchestration from an empty source ledger."""
+    import sqlite3
+    import synlynk
+    from synlynk import selftest as selftest_mod
+
+    monkeypatch.chdir(tmp_path)
+    source_db = tmp_path / "fresh-source.db"
+    monkeypatch.setattr(synlynk, "DB_PATH", str(source_db))
+    entries = [
+        entry for entry in selftest_mod.COMMAND_TAXONOMY
+        if entry["command"] in {"dispatch", "exec"}
+    ]
+    monkeypatch.setattr(selftest_mod, "COMMAND_TAXONOMY", entries)
+    discovered = lambda: [{"name": "codex"}]
+    monkeypatch.setattr(selftest_mod, "discover_agents", discovered)
+    monkeypatch.setattr(synlynk, "discover_agents", discovered)
+
+    probe_calls = []
+
+    def fake_probe(*, write_fence):
+        probe_calls.append(write_fence)
+        conn = synlynk._get_db()
+        try:
+            conn.execute(
+                "INSERT INTO harness_records "
+                "(harness_name, installed_version, compliance_status, active_contract, "
+                "active_flags, last_probe_at, capability_hash) VALUES "
+                "('codex', 'cli-test', 'ok', '{}', '{}', "
+                "'2026-09-08T00:00:00Z', 'cli-test-hash')"
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def fake_dispatch(agent, task, **kwargs):
+        conn = sqlite3.connect(synlynk.DB_PATH)
+        try:
+            row = conn.execute(
+                "SELECT compliance_status FROM harness_records WHERE harness_name=?",
+                (agent,),
+            ).fetchone()
+        finally:
+            conn.close()
+        if not row:
+            raise RuntimeError(f"no probe data for agent; run synlynk probe {agent}")
+        return {"id": "job-live", "pid": None, "fence": None}
+
+    def fake_exec(argv):
+        conn = sqlite3.connect(synlynk.DB_PATH)
+        try:
+            row = conn.execute(
+                "SELECT compliance_status FROM harness_records WHERE harness_name=?",
+                (argv[0],),
+            ).fetchone()
+        finally:
+            conn.close()
+        return 0 if row else 1
+
+    monkeypatch.setattr(selftest_mod, "cmd_probe", fake_probe)
+    monkeypatch.setattr(selftest_mod, "dispatch_agent", fake_dispatch)
+    monkeypatch.setattr(selftest_mod, "exec_command", fake_exec)
+    monkeypatch.setattr(selftest_mod, "_scenario_gh_write_actions", lambda *args: [])
+
+    exit_code = selftest_mod.cmd_selftest(live=True)
+    output = capsys.readouterr().out
+
+    assert probe_calls == [False]
+    assert exit_code == 0
+    assert "PASS    dispatch[codex]" in output
+    assert "PASS    exec[codex]" in output
+    assert "no probe data" not in output
+
+
 def test_all_paid_commands_have_registered_scenarios():
     from synlynk.selftest import SELFTEST_SCENARIOS
 

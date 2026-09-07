@@ -19,6 +19,7 @@ from unittest.mock import patch
 from synlynk.dispatch import dispatch_agent, exec_command
 from synlynk.cli import build_parser
 from synlynk import discover_agents
+from synlynk.probe import cmd_probe
 from synlynk.jobs import _resolve_worktree_pr_base_branch
 from synlynk.taxonomy import COMMAND_TAXONOMY
 
@@ -121,17 +122,26 @@ def _provision_probe_metadata(workspace: Path) -> int:
     """
     import synlynk as synlynk_pkg
 
-    source_conn = synlynk_pkg._get_db()
-    try:
-        rows = source_conn.execute(
-            "SELECT harness_name, installed_version, compliance_status, "
-            "active_contract, active_flags, last_probe_at, capability_hash "
-            "FROM harness_records"
-        ).fetchall()
-    except sqlite3.Error:
-        rows = []
-    finally:
-        source_conn.close()
+    def _read_rows() -> list:
+        source_conn = synlynk_pkg._get_db()
+        try:
+            return source_conn.execute(
+                "SELECT harness_name, installed_version, compliance_status, "
+                "active_contract, active_flags, last_probe_at, capability_hash "
+                "FROM harness_records"
+            ).fetchall()
+        except sqlite3.Error:
+            return []
+        finally:
+            source_conn.close()
+
+    rows = _read_rows()
+
+    if not rows:
+        # A fresh clone/worktree has no source-ledger rows to copy. Establish
+        # the preflight input with the real probe, preserving actual failures.
+        cmd_probe(write_fence=False)
+        rows = _read_rows()
 
     if not rows:
         return 0
