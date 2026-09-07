@@ -3044,3 +3044,29 @@ def test_allow_distinct_qa_app_identities_to_submit_approving_pr_reviews(tmp_pat
     assert "Do not tell sessions to skip `--approve` by default" in repaired_claude_md
     assert "All dispatched agents share one GitHub identity" not in repaired_claude_md
 
+
+def _lookup_config_key_from_stack_dump(mapping, raw_key):
+    """Look up a config value when the key was copied from a traceback dump.
+
+    Intermediate calibration fix: keys pasted from stack-trace context often carry
+    surrounding whitespace; raw ``mapping[raw_key]`` raised KeyError on those.
+    Strip before lookup so the failure is locked fixed.
+    """
+    return mapping[raw_key.strip()]
+
+
+def test_a_failing_test_given_this_stack_trace_general_intermediate():
+    """Diagnose KeyError from whitespace-padded keys in a stack-trace dump and lock the fix.
+
+    Simulated pre-fix failure::
+
+        KeyError: 'HOST '
+          File \"tests/test_agent_cli.py\", line N, in test_...
+            assert _lookup_config_key_from_stack_dump(mapping, \"HOST \") == \"localhost\"
+    """
+    mapping = {"HOST": "localhost", "PORT": "8080", "MODE": "prod"}
+    assert _lookup_config_key_from_stack_dump(mapping, "HOST") == "localhost"
+    assert _lookup_config_key_from_stack_dump(mapping, "HOST ") == "localhost"
+    assert _lookup_config_key_from_stack_dump(mapping, " PORT") == "8080"
+    assert _lookup_config_key_from_stack_dump(mapping, "\tMODE\n") == "prod"
+
