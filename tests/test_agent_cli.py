@@ -1440,6 +1440,37 @@ def test_cli_dispatch_dry_run_as_agent_without_explicit_harness_shows_resolved_a
     assert "agent:        agy" in captured.out
 
 
+def test_identify_an_edge_case_this_test_suite_misses_dry_run_rejects_disabled_as_agent(
+    project_dir, capsys
+):
+    """Dry-run must reject --as-agent for a disabled agent, matching live dispatch.
+
+    Coverage gap: live dispatch rejects disabled agent_ids
+    (test_dispatch_agent_with_disabled_agent_id_raises), and dry-run's happy path
+    resolves --as-agent here, but nothing asserts that --dry-run --as-agent still
+    hits resolve_dispatch_harness's disabled-agent ValueError (preview/live parity).
+    """
+    from synlynk.cli import main
+
+    main(["agent", "init", "qa"])
+    main(["agent", "disable", "qa"])
+    capsys.readouterr()
+
+    with pytest.raises(SystemExit) as exc_info:
+        main([
+            "dispatch",
+            "--task",
+            "run the test suite",
+            "--as-agent",
+            "qa",
+            "--dry-run",
+        ])
+    assert exc_info.value.code == 1
+    captured = capsys.readouterr()
+    combined = (captured.out + captured.err).lower()
+    assert "disabled" in combined
+
+
 def _docs_keep_readme_synchronized_readme(
     root,
     version,
