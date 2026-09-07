@@ -128,6 +128,41 @@ nav {
   opacity: 0.85;
 }
 
+/* Mobile menu toggle — hidden on desktop; shown under 768px */
+.nav-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 5px;
+  width: 40px;
+  height: 40px;
+  margin-left: auto;
+  margin-right: 12px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+}
+.nav-toggle-bar {
+  display: block;
+  width: 18px;
+  height: 2px;
+  border-radius: 1px;
+  background: #fff;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+.nav-toggle[aria-expanded="true"] .nav-toggle-bar:nth-child(1) {
+  transform: translateY(7px) rotate(45deg);
+}
+.nav-toggle[aria-expanded="true"] .nav-toggle-bar:nth-child(2) {
+  opacity: 0;
+}
+.nav-toggle[aria-expanded="true"] .nav-toggle-bar:nth-child(3) {
+  transform: translateY(-7px) rotate(-45deg);
+}
+
 /* Section primitives (alternating dark/light) */
 section {
   padding: 80px 48px;
@@ -185,18 +220,49 @@ footer a:hover {
   color: #fff;
 }
 
-/* Basic responsive */
+/*
+ * Mobile/desktop nav conflict resolution:
+ * Desktop keeps a single-row horizontal link list.
+ * Mobile used to wrap .nav-links onto a second row (flex-wrap + order:3),
+ * which doubled fixed-nav height while content offsets (e.g. blog padding-top:60px)
+ * still assumed one row — links covered page content.
+ * Resolution: collapse links behind a hamburger; keep nav chrome single-row;
+ * overlay the menu so content offsets stay valid.
+ */
 @media (max-width: 768px) {
   nav {
     padding: 12px 20px;
-    flex-wrap: wrap;
-    gap: 12px;
+    flex-wrap: nowrap;
+    gap: 8px;
+  }
+  .nav-toggle {
+    display: inline-flex;
+    order: 2;
+  }
+  .nav-cta {
+    order: 3;
   }
   .nav-links {
-    gap: 16px;
-    order: 3;
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    order: initial;
     width: 100%;
-    justify-content: center;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    padding: 8px 0 12px;
+    background: rgba(14, 14, 15, 0.97);
+    border-bottom: 1px solid var(--border);
+    backdrop-filter: blur(20px);
+  }
+  .nav-links.is-open {
+    display: flex;
+  }
+  .nav-links a {
+    padding: 12px 20px;
   }
   section {
     padding: 60px 20px;

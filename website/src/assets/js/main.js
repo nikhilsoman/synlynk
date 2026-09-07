@@ -76,6 +76,32 @@
     });
   }
 
+  function initMobileNav() {
+    const toggle = document.querySelector('.nav-toggle');
+    const links = document.getElementById('primary-nav');
+    if (!toggle || !links) return;
+
+    function setOpen(open) {
+      links.classList.toggle('is-open', open);
+      toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+      toggle.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
+    }
+
+    toggle.addEventListener('click', (e) => {
+      e.preventDefault();
+      setOpen(!links.classList.contains('is-open'));
+    });
+
+    // Close after navigating; keep desktop layout undisturbed
+    links.querySelectorAll('a').forEach((a) => {
+      a.addEventListener('click', () => setOpen(false));
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') setOpen(false);
+    });
+  }
+
   function initDocsSidebar() {
     const sidebar = document.querySelector('.docs-sidebar');
     if (!sidebar) return; // only runs on /docs/ page
@@ -137,6 +163,7 @@
   function init() {
     initCopyButtons();
     initWaitlistForm();
+    initMobileNav();
     initDocsSidebar();
     initFeaturesToggle();
   }

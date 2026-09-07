@@ -2794,3 +2794,38 @@ def test_research_distributed_statedb_synchronization__story_d58e5033():
     assert "aggregation" in content.lower()
     assert "tradeoff" in content.lower() or "comparison" in content.lower()
     assert "roadmap" in content.lower() or "phased" in content.lower()
+
+def test_resolve_a_usability_conflict_between_mob_and_desktop_layouts():
+    """Designer calibration: mobile wrap-nav conflict resolved via hamburger overlay.
+
+    Conflict: mobile flex-wrap pushed .nav-links onto a second row while fixed
+    content offsets still assumed a single-row nav, covering page content.
+    Resolution: collapse links behind .nav-toggle; overlay the menu; keep nav
+    chrome single-row on both viewports.
+    """
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    base = (root / "website/src/_includes/base.njk").read_text(encoding="utf-8")
+    css = (root / "website/src/assets/css/main.css").read_text(encoding="utf-8")
+    js = (root / "website/src/assets/js/main.js").read_text(encoding="utf-8")
+
+    assert 'class="nav-toggle"' in base
+    assert 'aria-controls="primary-nav"' in base
+    assert 'id="primary-nav"' in base
+
+    assert ".nav-toggle" in css
+    assert ".nav-links.is-open" in css
+    assert "flex-wrap: nowrap" in css
+
+    # First mobile nav media block must not restore the old wrap layout
+    after = css.split("@media (max-width: 768px)", 1)[1]
+    mobile_chunk = after.split("/* --- Agy")[0] if "/* --- Agy" in after else after.split("@media", 1)[0]
+    assert "flex-wrap: wrap" not in mobile_chunk
+    assert "display: none" in mobile_chunk
+    assert "position: absolute" in mobile_chunk
+
+    assert "function initMobileNav()" in js
+    assert "initMobileNav()" in js
+    assert "aria-expanded" in js
+    assert "is-open" in js
