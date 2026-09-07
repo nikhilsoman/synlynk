@@ -928,6 +928,51 @@ def test_cmd_agent_init_creates_registry_entry_and_charter(project_dir):
     assert content == agent_cli.SEED_CHARTERS["dev"]
 
 
+def test_refactor_this_function_to_remove_duplication_preserves_behavior(project_dir, capsys):
+    """Calibration/advanced: shared helpers must preserve seed bytes and CLI output."""
+    from synlynk import agent_cli, agent_store
+
+    # Seed charter envelope helper preserves per-role body text exactly.
+    rebuilt = agent_cli._build_seed_charter(
+        "dev",
+        "Implementation — writes the code.",
+        "dispatch-only",
+        "Implementation work: turn an approved plan or ticket into working, tested\n"
+        "code. Dispatch-triggered only — no autonomous loop. Follow the plan's task\n"
+        "breakdown; do not redesign architecture mid-implementation.",
+        "Decides implementation details (naming, file layout, test structure) within\n"
+        "an approved plan unilaterally. Escalates to whoever holds\n"
+        "`human_authority_role` before deviating from the plan's architecture or\n"
+        "scope.",
+        "Owns the Implement stage of the end-to-end workflow.",
+    )
+    assert rebuilt == agent_cli.SEED_CHARTERS["dev"]
+    assert rebuilt.startswith("---\nschema_version: 1\nrole: dev\n")
+    assert "## Instructions\n\n" in rebuilt
+    assert "## Authority & Escalation\n\n" in rebuilt
+    assert "## Workflow Ownership\n\n" in rebuilt
+
+    agent_id = agent_cli.cmd_agent_init("dev")
+    entry = agent_cli._agent_entry(agent_id)
+    assert agent_cli._role_slug(entry) == "dev"
+    assert agent_cli._role_slug({"aliases": []}, default="") == ""
+    assert agent_cli._status_label(entry) == "active"
+    assert agent_cli._status_label({**entry, "disabled": True}) == "disabled"
+
+    capsys.readouterr()
+    agent_cli.cmd_agent_list()
+    listed = capsys.readouterr().out
+    assert "dev" in listed
+    assert "active" in listed
+
+    agent_cli.cmd_agent_show("dev")
+    shown = capsys.readouterr().out
+    assert agent_id in shown
+    assert "role:       dev" in shown
+    assert "status:     active" in shown
+    assert agent_store.read_charter(agent_id)[0] == agent_cli.SEED_CHARTERS["dev"]
+
+
 def test_cmd_agent_init_rejects_duplicate_role(project_dir, capsys):
     from synlynk import agent_cli
 

@@ -9,196 +9,118 @@ import uuid
 from synlynk import agent_store
 from synlynk import charter_schema
 
+
+def _build_seed_charter(
+    role: str,
+    description: str,
+    durability: str,
+    instructions: str,
+    authority: str,
+    workflow: str,
+) -> str:
+    """Assemble a seed charter, sharing the YAML/section envelope across roles."""
+    return (
+        "---\n"
+        "schema_version: 1\n"
+        f"role: {role}\n"
+        f'description: "{description}"\n'
+        f"durability: {durability}\n"
+        "tools: []\n"
+        "credentials: []\n"
+        "---\n\n"
+        "## Instructions\n\n"
+        f"{instructions}\n\n"
+        "## Authority & Escalation\n\n"
+        f"{authority}\n\n"
+        "## Workflow Ownership\n\n"
+        f"{workflow}\n"
+    )
+
+
 SEED_CHARTERS = {
-    "dev": (
-        "---\n"
-        "schema_version: 1\n"
-        "role: dev\n"
-        'description: "Implementation — writes the code."\n'
-        "durability: dispatch-only\n"
-        "tools: []\n"
-        "credentials: []\n"
-        "---\n\n"
-        "## Instructions\n\n"
-        "Implementation work: turn an approved plan or ticket into working, tested\n"
-        "code. Dispatch-triggered only — no autonomous loop. Follow the plan's task\n"
-        "breakdown; do not redesign architecture mid-implementation.\n\n"
-        "## Authority & Escalation\n\n"
-        "Decides implementation details (naming, file layout, test structure) within\n"
-        "an approved plan unilaterally. Escalates to whoever holds\n"
-        "`human_authority_role` before deviating from the plan's architecture or\n"
-        "scope.\n\n"
-        "## Workflow Ownership\n\n"
-        "Owns the Implement stage of the end-to-end workflow.\n"
+    'dev': _build_seed_charter(
+        'dev',
+        'Implementation — writes the code.',
+        'dispatch-only',
+        "Implementation work: turn an approved plan or ticket into working, tested\ncode. Dispatch-triggered only — no autonomous loop. Follow the plan's task\nbreakdown; do not redesign architecture mid-implementation.",
+        "Decides implementation details (naming, file layout, test structure) within\nan approved plan unilaterally. Escalates to whoever holds\n`human_authority_role` before deviating from the plan's architecture or\nscope.",
+        'Owns the Implement stage of the end-to-end workflow.',
     ),
-    "qa": (
-        "---\n"
-        "schema_version: 1\n"
-        "role: qa\n"
-        'description: "Quality assurance — tests and verifies work."\n'
-        "durability: durable\n"
-        "tools: []\n"
-        "credentials: []\n"
-        "---\n\n"
-        "## Instructions\n\n"
-        "Quality assurance: writes and runs tests, verifies implementation work\n"
-        "against its plan/spec before merge, and evaluates merge readiness. Its\n"
-        "merge authority is limited by `.synlynk/policy.json` and is currently\n"
-        "demonstrated for the merge-restricted docs-only class.\n\n"
-        "## Authority & Escalation\n\n"
-        "Decides pass/fail on verification unilaterally, including blocking a\n"
-        "merge on missing test coverage. May merge only classes allowed by the\n"
-        "policy gate; harder PR classes remain subject to the assigned reviewer\n"
-        "and human authority. Escalates when a fix requires descoping or\n"
-        "renegotiating the original plan.\n\n"
-        "## Workflow Ownership\n\n"
-        "Owns implementation verification, the CI/CD gate, and the\n"
-        "policy-defined merge gate of the end-to-end workflow.\n"
+    'qa': _build_seed_charter(
+        'qa',
+        'Quality assurance — tests and verifies work.',
+        'durable',
+        'Quality assurance: writes and runs tests, verifies implementation work\nagainst its plan/spec before merge, and evaluates merge readiness. Its\nmerge authority is limited by `.synlynk/policy.json` and is currently\ndemonstrated for the merge-restricted docs-only class.',
+        'Decides pass/fail on verification unilaterally, including blocking a\nmerge on missing test coverage. May merge only classes allowed by the\npolicy gate; harder PR classes remain subject to the assigned reviewer\nand human authority. Escalates when a fix requires descoping or\nrenegotiating the original plan.',
+        'Owns implementation verification, the CI/CD gate, and the\npolicy-defined merge gate of the end-to-end workflow.',
     ),
-    "pm": (
-        "---\n"
-        "schema_version: 1\n"
-        "role: pm\n"
-        'description: "Program management — roadmap, brainstorming, issue triage."\n'
-        "durability: durable\n"
-        "tools: []\n"
-        "credentials: []\n"
-        "---\n\n"
-        "## Instructions\n\n"
-        "Represents the human user in everything built: brainstorming, issuing\n"
-        "work, major decisions based on other roles' reports, keeping course.\n"
-        "Runs a continuous triage loop — responds to inbound signals/reports,\n"
-        "re-prioritizes the backlog, dispatches tpm on already-approved work —\n"
-        "to prevent workspace dormancy when unattended.\n\n"
-        "Runs a weekly competitive-intelligence sweep: tracks products serving\n"
-        "synlynk's user segments, maintains a living capability/marketing-gap comparison doc,\n"
-        "opens research tickets for candidate features, convenes\n"
-        "harness-maintainer decide rounds, and escalates strong-fit candidates\n"
-        "to the user as feature proposals.\n\n"
-        "## Authority & Escalation\n\n"
-        "Durable, narrowly scoped. Anything matching a major decision (spec\n"
-        "approval, budget/release sign-off, charter changes) queues and blocks\n"
-        "for whoever holds `human_authority_role` — pm never commits the human\n"
-        "to something they haven't seen.\n\n"
-        "## Workflow Ownership\n\n"
-        "Owns Named Releases (final sign-off + narrative).\n"
+    'pm': _build_seed_charter(
+        'pm',
+        'Program management — roadmap, brainstorming, issue triage.',
+        'durable',
+        "Represents the human user in everything built: brainstorming, issuing\nwork, major decisions based on other roles' reports, keeping course.\nRuns a continuous triage loop — responds to inbound signals/reports,\nre-prioritizes the backlog, dispatches tpm on already-approved work —\nto prevent workspace dormancy when unattended.\n\nRuns a weekly competitive-intelligence sweep: tracks products serving\nsynlynk's user segments, maintains a living capability/marketing-gap comparison doc,\nopens research tickets for candidate features, convenes\nharness-maintainer decide rounds, and escalates strong-fit candidates\nto the user as feature proposals.",
+        "Durable, narrowly scoped. Anything matching a major decision (spec\napproval, budget/release sign-off, charter changes) queues and blocks\nfor whoever holds `human_authority_role` — pm never commits the human\nto something they haven't seen.",
+        'Owns Named Releases (final sign-off + narrative).',
     ),
-    "architect": (
-        "---\n"
-        "schema_version: 1\n"
-        "role: architect\n"
-        'description: "System design — architecture and technical direction."\n'
-        "durability: session-only\n"
-        "tools: []\n"
-        "credentials: []\n"
-        "---\n\n"
-        "## Instructions\n\n"
-        "System design: is provisioned to write and approve the Spec and Plan for\n"
-        "non-trivial work and to review technical changes. The project corpus so\n"
-        "far records those activities under Claude's pm/reviewer role rather than\n"
-        "a separately exercised architect identity.\n\n"
-        "## Authority & Escalation\n\n"
-        "Session-only, human-in-the-loop by design. It does not claim independent\n"
-        "merge authority on the current corpus; review and merge authority follow\n"
-        "the explicit policy and assigned non-authoring reviewer. Architect never\n"
-        "reviews its own dispatch. Escalates architectural tradeoffs with\n"
-        "cost/scope implications to whoever holds `human_authority_role`.\n\n"
-        "## Workflow Ownership\n\n"
-        "Is available for the Spec, Plan, and Review stages of the end-to-end\n"
-        "workflow; the current corpus does not show a separately exercised\n"
-        "architect identity owning those stages.\n"
+    'architect': _build_seed_charter(
+        'architect',
+        'System design — architecture and technical direction.',
+        'session-only',
+        "System design: is provisioned to write and approve the Spec and Plan for\nnon-trivial work and to review technical changes. The project corpus so\nfar records those activities under Claude's pm/reviewer role rather than\na separately exercised architect identity.",
+        'Session-only, human-in-the-loop by design. It does not claim independent\nmerge authority on the current corpus; review and merge authority follow\nthe explicit policy and assigned non-authoring reviewer. Architect never\nreviews its own dispatch. Escalates architectural tradeoffs with\ncost/scope implications to whoever holds `human_authority_role`.',
+        'Is available for the Spec, Plan, and Review stages of the end-to-end\nworkflow; the current corpus does not show a separately exercised\narchitect identity owning those stages.',
     ),
-    "tpm": (
-        "---\n"
-        "schema_version: 1\n"
-        "role: tpm\n"
-        'description: "Technical program management — cross-cutting coordination, GOVERNS integration."\n'
-        "durability: durable\n"
-        "tools: []\n"
-        "credentials: []\n"
-        "---\n\n"
-        "## Instructions\n\n"
-        "Operations: scans ready stories without an active or completed job,\n"
-        "checks policy authority, files or maintains approval tickets for blocked\n"
-        "dispatches, and dispatches work once authority is available. Reports\n"
-        "status back to pm and does not decide technical approach.\n\n"
-        "## Authority & Escalation\n\n"
-        "Decides ticket sequencing and dispatch scheduling within the ready-story\n"
-        "sweep. Does not bypass policy or approval requirements. Escalates to\n"
-        "whoever holds `human_authority_role` when tracked work reveals a scope or\n"
-        "architecture gap the plan didn't anticipate.\n\n"
-        "## Workflow Ownership\n\n"
-        "Runs the tasking/tracking/reporting loop through `tpm sweep`, using story\n"
-        "and daemon-job state plus the approval-ticket resolution state written by\n"
-        "the lifecycle event scanner as its data source.\n"
+    'tpm': _build_seed_charter(
+        'tpm',
+        'Technical program management — cross-cutting coordination, GOVERNS integration.',
+        'durable',
+        'Operations: scans ready stories without an active or completed job,\nchecks policy authority, files or maintains approval tickets for blocked\ndispatches, and dispatches work once authority is available. Reports\nstatus back to pm and does not decide technical approach.',
+        "Decides ticket sequencing and dispatch scheduling within the ready-story\nsweep. Does not bypass policy or approval requirements. Escalates to\nwhoever holds `human_authority_role` when tracked work reveals a scope or\narchitecture gap the plan didn't anticipate.",
+        'Runs the tasking/tracking/reporting loop through `tpm sweep`, using story\nand daemon-job state plus the approval-ticket resolution state written by\nthe lifecycle event scanner as its data source.',
     ),
-    "designer": (
-        "---\n"
-        "schema_version: 1\n"
-        "role: designer\n"
-        'description: "Design — visual and interaction design."\n'
-        "durability: dispatch-only\n"
-        "tools: []\n"
-        "credentials: []\n"
-        "---\n\n"
-        "## Instructions\n\n"
-        "UI/UX: maintains end-user-facing interfaces, journeys, and look & feel.\n"
-        "Dispatch-triggered only, routed to Agy (CSS/templates/content/subpages).\n\n"
-        "## Authority & Escalation\n\n"
-        "Decides visual/interaction details within an approved design direction\n"
-        "unilaterally. Escalates to whoever holds `human_authority_role` before a\n"
-        "change that alters user-facing information architecture.\n\n"
-        "## Workflow Ownership\n\n"
-        "Owns the design pass within the Implement stage for user-facing surfaces.\n"
+    'designer': _build_seed_charter(
+        'designer',
+        'Design — visual and interaction design.',
+        'dispatch-only',
+        'UI/UX: maintains end-user-facing interfaces, journeys, and look & feel.\nDispatch-triggered only, routed to Agy (CSS/templates/content/subpages).',
+        'Decides visual/interaction details within an approved design direction\nunilaterally. Escalates to whoever holds `human_authority_role` before a\nchange that alters user-facing information architecture.',
+        'Owns the design pass within the Implement stage for user-facing surfaces.',
     ),
-    "marketing": (
-        "---\n"
-        "schema_version: 1\n"
-        "role: marketing\n"
-        'description: "Marketing — external communication and positioning."\n'
-        "durability: dispatch-only\n"
-        "tools: []\n"
-        "credentials: []\n"
-        "---\n\n"
-        "## Instructions\n\n"
-        "All end-user-facing comms: docs, blogs, website, plus outbound digital\n"
-        "marketing. For an explicitly dispatched comms task, turns an approved\n"
-        "technical summary into the actual post or other content, following\n"
-        "`docs/blog/README.md`'s series template and Named Release content rules.\n"
-        "Dispatch-triggered only, routed to Agy (docs/templates/content).\n\n"
-        "## Authority & Escalation\n\n"
-        "Decides post structure, tone, and framing unilaterally within the series\n"
-        "template. Escalates to whoever holds `human_authority_role` before\n"
-        "publishing anything that commits to a roadmap claim not yet approved.\n\n"
-        "## Workflow Ownership\n\n"
-        "Owns the Blog/Comms pass of the Named Release stage. Also owns the\n"
-        "standing readership-growth outcome tracked as goal-0c4e96ff (book\n"
-        "manuscript + blog series), fed by stories the PM links to that goal —\n"
-        "dispatched automatically per the TPM sweep's role-based routing (see\n"
-        "synlynk/tpm_sweep.py), not on every PR.\n"
+    'marketing': _build_seed_charter(
+        'marketing',
+        'Marketing — external communication and positioning.',
+        'dispatch-only',
+        "All end-user-facing comms: docs, blogs, website, plus outbound digital\nmarketing. For an explicitly dispatched comms task, turns an approved\ntechnical summary into the actual post or other content, following\n`docs/blog/README.md`'s series template and Named Release content rules.\nDispatch-triggered only, routed to Agy (docs/templates/content).",
+        'Decides post structure, tone, and framing unilaterally within the series\ntemplate. Escalates to whoever holds `human_authority_role` before\npublishing anything that commits to a roadmap claim not yet approved.',
+        "Owns the Blog/Comms pass of the Named Release stage. Also owns the\nstanding readership-growth outcome tracked as goal-0c4e96ff (book\nmanuscript + blog series), fed by stories the PM links to that goal —\ndispatched automatically per the TPM sweep's role-based routing (see\nsynlynk/tpm_sweep.py), not on every PR.",
     ),
-    "synlynk-bot": (
-        "---\n"
-        "schema_version: 1\n"
-        "role: synlynk-bot\n"
-        'description: "Catch-all workspace automation identity."\n'
-        "durability: durable\n"
-        "tools: []\n"
-        "credentials: []\n"
-        "---\n\n"
-        "## Instructions\n\n"
-        "Infra automation identity for workspace-level jobs with no natural owner\n"
-        "among the seven org-chart roles (e.g. scheduled housekeeping, projection\n"
-        "regeneration). Not a decision-making role.\n\n"
-        "## Authority & Escalation\n\n"
-        "Holds no unilateral decision authority. Any action beyond routine\n"
-        "housekeeping escalates to whoever holds `human_authority_role`.\n\n"
-        "## Workflow Ownership\n\n"
-        "Owns no workflow stage; supports other roles' stages as infrastructure.\n"
+    'synlynk-bot': _build_seed_charter(
+        'synlynk-bot',
+        'Catch-all workspace automation identity.',
+        'durable',
+        'Infra automation identity for workspace-level jobs with no natural owner\namong the seven org-chart roles (e.g. scheduled housekeeping, projection\nregeneration). Not a decision-making role.',
+        'Holds no unilateral decision authority. Any action beyond routine\nhousekeeping escalates to whoever holds `human_authority_role`.',
+        "Owns no workflow stage; supports other roles' stages as infrastructure.",
     ),
 }
-
 ROLES = list(charter_schema.KNOWN_ROLES)
+
+
+
+def _role_slug(entry: dict, default: str = "?") -> str:
+    return next(
+        (a["value"] for a in entry["aliases"] if a["kind"] == "role_slug"),
+        default,
+    )
+
+
+def _status_label(entry: dict) -> str:
+    return "disabled" if entry.get("disabled") else "active"
+
+
+def _agent_entry(agent_id: str) -> dict:
+    return next(a for a in agent_store.list_agents() if a["agent_id"] == agent_id)
+
 
 
 def _resolve_or_exit(id_or_alias: str) -> str:
@@ -215,14 +137,13 @@ def _resolve_or_exit(id_or_alias: str) -> str:
 
 def cmd_agent_init(role: str) -> str:
     for entry in agent_store.list_agents():
-        for alias in entry["aliases"]:
-            if alias["kind"] == "role_slug" and alias["value"] == role:
-                print(
-                    f"Role '{role}' already has an agent ({entry['agent_id']}). "
-                    "Only one agent per role is supported.",
-                    file=sys.stderr,
-                )
-                raise SystemExit(1)
+        if _role_slug(entry, default="") == role:
+            print(
+                f"Role '{role}' already has an agent ({entry['agent_id']}). "
+                "Only one agent per role is supported.",
+                file=sys.stderr,
+            )
+            raise SystemExit(1)
 
     agent_id = str(uuid.uuid4())
     agent_store.register_agent(agent_id, [{"kind": "role_slug", "value": role}])
@@ -240,20 +161,16 @@ def cmd_agent_list() -> None:
         return
     print(f"{'AGENT_ID':<38}{'ROLE':<13}{'STATUS':<11}CREATED_AT")
     for entry in agents:
-        role = next(
-            (a["value"] for a in entry["aliases"] if a["kind"] == "role_slug"), "?"
-        )
-        status = "disabled" if entry.get("disabled") else "active"
+        role = _role_slug(entry)
+        status = _status_label(entry)
         print(f"{entry['agent_id']:<38}{role:<13}{status:<11}{entry['created_at']}")
 
 
 def cmd_agent_show(id_or_alias: str) -> None:
     agent_id = _resolve_or_exit(id_or_alias)
-    entry = next(a for a in agent_store.list_agents() if a["agent_id"] == agent_id)
-    role = next(
-        (a["value"] for a in entry["aliases"] if a["kind"] == "role_slug"), "?"
-    )
-    status = "disabled" if entry.get("disabled") else "active"
+    entry = _agent_entry(agent_id)
+    role = _role_slug(entry)
+    status = _status_label(entry)
     content, revision = agent_store.read_charter(agent_id)
 
     print(f"agent_id:   {agent_id}")
@@ -299,10 +216,8 @@ def cmd_agent_edit(id_or_alias: str, charter_path: str) -> None:
 
 def cmd_agent_sync_routing(id_or_alias: str) -> None:
     agent_id = _resolve_or_exit(id_or_alias)
-    entry = next(a for a in agent_store.list_agents() if a["agent_id"] == agent_id)
-    role = next(
-        (a["value"] for a in entry["aliases"] if a["kind"] == "role_slug"), ""
-    )
+    entry = _agent_entry(agent_id)
+    role = _role_slug(entry, default="")
     _, revision_before = agent_store.read_charter(agent_id)
     new_revision = agent_store.sync_dispatch_routing(agent_id, role, actor="cli")
     if new_revision == revision_before:
@@ -313,7 +228,7 @@ def cmd_agent_sync_routing(id_or_alias: str) -> None:
 
 def cmd_agent_disable(id_or_alias: str) -> None:
     agent_id = _resolve_or_exit(id_or_alias)
-    entry = next(a for a in agent_store.list_agents() if a["agent_id"] == agent_id)
+    entry = _agent_entry(agent_id)
     if entry.get("disabled"):
         print(f"Agent {agent_id} is already disabled.")
         return
