@@ -77,6 +77,50 @@ def test_codex_harness_baseline_includes_verifier_role_and_can_gh_write():
     assert codex["can_gh_write"] is True
 
 
+def test_make_live_selftest_provision_probe_metadata(tmp_path, monkeypatch):
+    import synlynk
+    from synlynk.selftest import ScenarioContext, _ensure_workspace_scaffold
+
+    source_db = tmp_path / "source-state.db"
+    source_conn = sqlite3.connect(source_db)
+    synlynk._migrate_db(source_conn)
+    source_conn.execute(
+        """
+        INSERT INTO harness_records (
+            harness_name, installed_version, compliance_status,
+            active_contract, active_flags, last_probe_at, capability_hash
+        ) VALUES ('codex', 'test-version', 'ok', '{}', '{}',
+                  '2026-09-07T00:00:00Z', 'test-capability-hash')
+        """
+    )
+    source_conn.commit()
+    source_conn.close()
+
+    monkeypatch.setattr(synlynk, "DB_PATH", str(source_db))
+    workspace = tmp_path / "scratch"
+    ctx = ScenarioContext(
+        repo_path=str(workspace), live=True, state={"workspace_dir": workspace}
+    )
+
+    _ensure_workspace_scaffold(ctx)
+
+    scratch_conn = sqlite3.connect(workspace / ".synlynk" / "state.db")
+    row = scratch_conn.execute(
+        "SELECT harness_name, installed_version, compliance_status, "
+        "last_probe_at, capability_hash FROM harness_records "
+        "WHERE harness_name='codex'"
+    ).fetchone()
+    scratch_conn.close()
+
+    assert row == (
+        "codex",
+        "test-version",
+        "ok",
+        "2026-09-07T00:00:00Z",
+        "test-capability-hash",
+    )
+
+
 def test_cli_detect_and_warn_on_stale_pipxinstall(tmp_path, monkeypatch, capsys):
     from synlynk import cli
 
@@ -3043,4 +3087,3 @@ def test_allow_distinct_qa_app_identities_to_submit_approving_pr_reviews(tmp_pat
     assert "qa APPROVE (`gh pr review --approve`) is the default" in repaired_claude_md
     assert "Do not tell sessions to skip `--approve` by default" in repaired_claude_md
     assert "All dispatched agents share one GitHub identity" not in repaired_claude_md
-
