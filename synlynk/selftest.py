@@ -105,7 +105,52 @@ def _ensure_workspace_scaffold(ctx: ScenarioContext) -> Path:
             cwd=workspace,
             check=True,
         )
+    if ctx.live and not ctx.state.get("probe_metadata_provisioned"):
+        _provision_probe_metadata(workspace)
+        ctx.state["probe_metadata_provisioned"] = True
     return workspace
+
+
+def _provision_probe_metadata(workspace: Path) -> int:
+    """Copy current workspace probe records into an isolated live-test DB.
+
+    Live scenarios run with ``DB_PATH`` pointed at the scratch repository. Copy
+    the already-probed harness metadata there so dispatch preflight evaluates
+    harness capability rather than treating the fixture as unprobed. Never
+    synthesize records: an absent or failing real probe must remain visible.
+    """
+    import synlynk as synlynk_pkg
+
+    source_conn = synlynk_pkg._get_db()
+    try:
+        rows = source_conn.execute(
+            "SELECT harness_name, installed_version, compliance_status, "
+            "active_contract, active_flags, last_probe_at, capability_hash "
+            "FROM harness_records"
+        ).fetchall()
+    except sqlite3.Error:
+        rows = []
+    finally:
+        source_conn.close()
+
+    if not rows:
+        return 0
+
+    db_path = workspace / ".synlynk" / "state.db"
+    with patch.object(synlynk_pkg, "DB_PATH", str(db_path)):
+        destination_conn = synlynk_pkg._get_db()
+        try:
+            destination_conn.executemany(
+                "INSERT OR REPLACE INTO harness_records "
+                "(harness_name, installed_version, compliance_status, "
+                "active_contract, active_flags, last_probe_at, capability_hash) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                rows,
+            )
+            destination_conn.commit()
+        finally:
+            destination_conn.close()
+    return len(rows)
 
 
 def _capture_call(command: str, action: Callable[[], object]) -> tuple[ScenarioResult, str, object | None]:
