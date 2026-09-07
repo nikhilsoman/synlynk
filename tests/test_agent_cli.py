@@ -3044,3 +3044,54 @@ def test_allow_distinct_qa_app_identities_to_submit_approving_pr_reviews(tmp_pat
     assert "Do not tell sessions to skip `--approve` by default" in repaired_claude_md
     assert "All dispatched agents share one GitHub identity" not in repaired_claude_md
 
+
+def test_reconcile_a_slipping_deadline_against_two_blocked_dependencies_general_advanced():
+    """TPM advanced calibration: reconcile a slipping deadline vs two blocked deps."""
+    from synlynk.tpm_hooks import tpm_reconcile_slipping_deadline
+
+    plan = tpm_reconcile_slipping_deadline(
+        milestone="goal-250b6fb2 Home Harness Parity demo",
+        days_to_deadline=5.0,
+        remaining_work_days=6.0,
+        parallel_capacity=1.0,
+        blocked_dependencies=[
+            {
+                "id": "dep-charter-sync",
+                "title": "Charter dual-mode sync across harnesses",
+                "unblock_days": 3.0,
+                "owner": "architect",
+                "severity": "high",
+                "can_bypass": False,
+            },
+            {
+                "id": "dep-agy-unattended",
+                "title": "Agy unattended multi-task conductor proof",
+                "unblock_days": 4.0,
+                "owner": "agy",
+                "severity": "high",
+                "can_bypass": True,
+                "bypass_cost_days": 1.5,
+            },
+        ],
+    )
+
+    assert plan["status"] == "slipped"
+    assert plan["slip_days"] > 0
+    assert plan["longest_block_days"] == 4.0
+    assert plan["critical_path_dependency_ids"] == ["dep-agy-unattended"]
+    assert len(plan["blocked_dependencies"]) == 2
+    assert {d["id"] for d in plan["blocked_dependencies"]} == {
+        "dep-charter-sync",
+        "dep-agy-unattended",
+    }
+    assert plan["recommended"]["id"] in {
+        "escalate_blockers",
+        "bypass_blockers",
+        "rescope_work",
+        "extend_deadline",
+    }
+    assert plan["recommended"]["residual_slip_days"] <= plan["slip_days"]
+    assert len(plan["action_plan"]) >= 4
+    assert "Home Harness Parity" in plan["narrative"]
+    assert "two blocked dependencies" in plan["narrative"].lower() or "Two blocked" in plan["narrative"]
+

@@ -6,6 +6,10 @@ reservation ledger, instead of touching harness_reservations / daemon_jobs
 directly.
 """
 
+from __future__ import annotations
+
+from typing import Any, Dict, List, Optional
+
 
 def tpm_observe_reservations(conn, scope: str = None, scope_id: str = None) -> list:
     """Read open reservations plus live headroom, optionally scope-filtered."""
@@ -94,4 +98,234 @@ def tpm_reallocate(conn, job_id: str, new_harness: str) -> dict:
         "job_id": job_id,
         "new_harness": new_harness,
         "new_reservation_id": new_reservation_id,
+    }
+
+
+def tpm_reconcile_slipping_deadline(
+    *,
+    milestone: str,
+    days_to_deadline: float,
+    remaining_work_days: float,
+    blocked_dependencies: List[Dict[str, Any]],
+    parallel_capacity: float = 1.0,
+) -> Dict[str, Any]:
+    """Reconcile a slipping deadline against blocked dependencies (TPM advanced).
+
+    Pure planning helper: no DB writes. Takes a milestone with remaining work,
+    calendar runway, and the currently blocked deps, then returns a structured
+    reconciliation — status, slip estimate, ranked options, and a recommended
+    action plan.
+
+    ``blocked_dependencies`` entries accept:
+      id, title, unblock_days (required), owner, can_bypass (bool),
+      bypass_cost_days (float), severity ('high'|'medium'|'low').
+    """
+    if days_to_deadline < 0:
+        raise ValueError("days_to_deadline must be >= 0")
+    if remaining_work_days < 0:
+        raise ValueError("remaining_work_days must be >= 0")
+    if parallel_capacity <= 0:
+        raise ValueError("parallel_capacity must be > 0")
+    if not isinstance(blocked_dependencies, list) or len(blocked_dependencies) < 1:
+        raise ValueError("blocked_dependencies must contain at least one entry")
+
+    deps: List[Dict[str, Any]] = []
+    for raw in blocked_dependencies:
+        if "unblock_days" not in raw:
+            raise ValueError(f"dependency {raw.get('id')!r} missing unblock_days")
+        unblock = float(raw["unblock_days"])
+        if unblock < 0:
+            raise ValueError(f"dependency {raw.get('id')!r} unblock_days must be >= 0")
+        deps.append(
+            {
+                "id": str(raw.get("id") or raw.get("title") or "dep"),
+                "title": str(raw.get("title") or raw.get("id") or "dependency"),
+                "unblock_days": unblock,
+                "owner": raw.get("owner"),
+                "can_bypass": bool(raw.get("can_bypass", False)),
+                "bypass_cost_days": float(raw.get("bypass_cost_days") or 0.0),
+                "severity": str(raw.get("severity") or "medium").lower(),
+            }
+        )
+
+    # Critical path: longest unblock gate, then residual work under capacity.
+    longest_block = max(d["unblock_days"] for d in deps)
+    work_elapsed = remaining_work_days / parallel_capacity
+    # Work cannot start on the critical path until the longest blocker clears
+    # unless a bypass exists for that blocker.
+    critical_deps = [d for d in deps if d["unblock_days"] == longest_block]
+    projected_finish = longest_block + work_elapsed
+    slip_days = max(0.0, projected_finish - days_to_deadline)
+
+    if slip_days <= 0:
+        status = "on_track"
+    elif slip_days <= max(1.0, days_to_deadline * 0.15):
+        status = "at_risk"
+    else:
+        status = "slipped"
+
+    options: List[Dict[str, Any]] = []
+
+    # Option A: escalate / crash the blockers in parallel.
+    escalate_days = max(0.5, longest_block * 0.5)
+    escalate_finish = escalate_days + work_elapsed
+    escalate_slip = max(0.0, escalate_finish - days_to_deadline)
+    options.append(
+        {
+            "id": "escalate_blockers",
+            "label": "Escalate both blocked dependencies in parallel",
+            "description": (
+                "Daily unblock standups with owners; swap assignees if stalled; "
+                "treat the longest gate as the single critical-path constraint."
+            ),
+            "projected_finish_days": round(escalate_finish, 2),
+            "residual_slip_days": round(escalate_slip, 2),
+            "requires_human_authority": False,
+            "targets": [d["id"] for d in deps],
+        }
+    )
+
+    # Option B: bypass one or both blockers when allowed.
+    bypassable = [d for d in deps if d["can_bypass"]]
+    if bypassable:
+        # Bypass every bypassable dep; remaining gates still apply.
+        remaining_gates = [
+            0.0 if d["can_bypass"] else d["unblock_days"] for d in deps
+        ]
+        bypass_gate = max(remaining_gates) if remaining_gates else 0.0
+        bypass_cost = sum(d["bypass_cost_days"] for d in bypassable)
+        bypass_finish = bypass_gate + work_elapsed + bypass_cost
+        bypass_slip = max(0.0, bypass_finish - days_to_deadline)
+        options.append(
+            {
+                "id": "bypass_blockers",
+                "label": "Ship a temporary bypass around unblockable gates",
+                "description": (
+                    "Accept known tech-debt / reduced scope on "
+                    + ", ".join(d["id"] for d in bypassable)
+                    + f" (+{bypass_cost:.1f}d rework later)."
+                ),
+                "projected_finish_days": round(bypass_finish, 2),
+                "residual_slip_days": round(bypass_slip, 2),
+                "requires_human_authority": any(
+                    d["severity"] == "high" for d in bypassable
+                ),
+                "targets": [d["id"] for d in bypassable],
+            }
+        )
+
+    # Option C: re-scope remaining work to fit the runway after gates clear.
+    available_after_gate = max(0.0, days_to_deadline - longest_block)
+    capacity_after_gate = available_after_gate * parallel_capacity
+    cut_days = max(0.0, remaining_work_days - capacity_after_gate)
+    if cut_days > 0:
+        rescope_finish = longest_block + (remaining_work_days - cut_days) / parallel_capacity
+        options.append(
+            {
+                "id": "rescope_work",
+                "label": "Cut scope so remaining work fits post-unblock runway",
+                "description": (
+                    f"Defer or drop ~{cut_days:.1f}d of non-critical work so the "
+                    "milestone still lands on the original date."
+                ),
+                "projected_finish_days": round(rescope_finish, 2),
+                "residual_slip_days": 0.0,
+                "requires_human_authority": True,
+                "scope_cut_days": round(cut_days, 2),
+                "targets": [d["id"] for d in critical_deps],
+            }
+        )
+
+    # Option D: extend the deadline (always available; needs human sign-off).
+    extend_by = round(slip_days, 2) if slip_days > 0 else 0.0
+    options.append(
+        {
+            "id": "extend_deadline",
+            "label": "Move the milestone date",
+            "description": (
+                f"Extend deadline by {extend_by:.1f}d to absorb the longest "
+                "blocked dependency plus remaining work."
+                if extend_by > 0
+                else "No extension needed under the current projection."
+            ),
+            "projected_finish_days": round(projected_finish, 2),
+            "residual_slip_days": 0.0 if extend_by > 0 else round(slip_days, 2),
+            "requires_human_authority": True,
+            "extend_by_days": extend_by,
+            "targets": [d["id"] for d in critical_deps],
+        }
+    )
+
+    # Prefer the option that clears slip without human authority when possible;
+    # otherwise the lowest residual slip among authority-gated options.
+    def _rank_key(opt: Dict[str, Any]) -> tuple:
+        return (
+            0 if opt["residual_slip_days"] <= 0 else 1,
+            0 if not opt["requires_human_authority"] else 1,
+            opt["residual_slip_days"],
+            opt["projected_finish_days"],
+        )
+
+    ranked = sorted(options, key=_rank_key)
+    recommended = ranked[0]
+
+    action_plan = [
+        {
+            "step": 1,
+            "action": "freeze_scope",
+            "detail": (
+                f"Freeze new scope on '{milestone}'. Treat the two blocked "
+                "dependencies as the only gates that may move the date."
+            ),
+        },
+        {
+            "step": 2,
+            "action": "attack_critical_path",
+            "detail": (
+                "Unblock "
+                + ", ".join(d["id"] for d in critical_deps)
+                + f" first (longest gate = {longest_block:.1f}d). Run the second "
+                "blocker in parallel so it is not a serial surprise."
+            ),
+        },
+        {
+            "step": 3,
+            "action": "execute_recommendation",
+            "detail": f"{recommended['id']}: {recommended['description']}",
+        },
+        {
+            "step": 4,
+            "action": "reforecast_daily",
+            "detail": (
+                "Recompute slip each day from live unblock_days. Escalate to "
+                "human_authority_role only if residual_slip stays > 0 after "
+                "non-authority options are exhausted."
+            ),
+        },
+    ]
+
+    narrative = (
+        f"Milestone '{milestone}' has {days_to_deadline:.1f}d of runway against "
+        f"{remaining_work_days:.1f}d remaining work (capacity {parallel_capacity:.1f}x). "
+        f"Two blocked dependencies gate the critical path; the longest unblock is "
+        f"{longest_block:.1f}d, projecting finish at {projected_finish:.1f}d "
+        f"({status}, slip {slip_days:.1f}d). Recommended: {recommended['id']} — "
+        f"{recommended['description']}"
+    )
+
+    return {
+        "milestone": milestone,
+        "status": status,
+        "days_to_deadline": float(days_to_deadline),
+        "remaining_work_days": float(remaining_work_days),
+        "parallel_capacity": float(parallel_capacity),
+        "longest_block_days": float(longest_block),
+        "projected_finish_days": round(projected_finish, 2),
+        "slip_days": round(slip_days, 2),
+        "blocked_dependencies": deps,
+        "critical_path_dependency_ids": [d["id"] for d in critical_deps],
+        "options": ranked,
+        "recommended": recommended,
+        "action_plan": action_plan,
+        "narrative": narrative,
     }

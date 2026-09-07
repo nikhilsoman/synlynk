@@ -100,3 +100,43 @@ def test_cli_quota_tpm_view_prints_reservations(project_dir, capsys, monkeypatch
     out = capsys.readouterr().out
     assert "claude" in out
     assert "4,500" in out or "4500" in out
+
+
+def test_tpm_reconcile_slipping_deadline_prefers_non_authority_clear():
+    from synlynk.tpm_hooks import tpm_reconcile_slipping_deadline
+
+    # Baseline projection: longest gate 6d + 4d work = 10d vs 7d runway → slipped.
+    # Bypassing both gates (+1d rework) finishes in 5d and clears slip without
+    # human authority (severity defaults to medium).
+    plan = tpm_reconcile_slipping_deadline(
+        milestone="ship-v0",
+        days_to_deadline=7.0,
+        remaining_work_days=4.0,
+        blocked_dependencies=[
+            {"id": "a", "unblock_days": 2.0, "can_bypass": True, "bypass_cost_days": 0.5},
+            {"id": "b", "unblock_days": 6.0, "can_bypass": True, "bypass_cost_days": 0.5},
+        ],
+    )
+    assert plan["status"] == "slipped"
+    assert plan["recommended"]["id"] == "bypass_blockers"
+    assert plan["recommended"]["residual_slip_days"] == 0.0
+    assert plan["recommended"]["requires_human_authority"] is False
+
+
+def test_tpm_reconcile_slipping_deadline_requires_two_deps_and_validates():
+    from synlynk.tpm_hooks import tpm_reconcile_slipping_deadline
+
+    with pytest.raises(ValueError):
+        tpm_reconcile_slipping_deadline(
+            milestone="x",
+            days_to_deadline=1,
+            remaining_work_days=1,
+            blocked_dependencies=[],
+        )
+    with pytest.raises(ValueError):
+        tpm_reconcile_slipping_deadline(
+            milestone="x",
+            days_to_deadline=-1,
+            remaining_work_days=1,
+            blocked_dependencies=[{"id": "a", "unblock_days": 1}],
+        )
