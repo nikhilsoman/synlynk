@@ -228,6 +228,78 @@ def _parse_roadmap_md(content: str) -> tuple:
                            'status': status, 'priority': priority, 'story_id': None, 'notes': None})
     return arcs, phases
 
+
+def detect_roadmap_doc_drift(old_content: str, new_content: str) -> dict:
+    """Compare two roadmap.md versions and report structural drift.
+
+    Uses ``_parse_roadmap_md`` so arc/phase identity follows the same rules as
+    migrate/import. Phase identity is ``(arc_version, normalized title)`` where
+    the title is stripped of checkbox/status markers for stable matching.
+    """
+    old_arcs, old_phases = _parse_roadmap_md(old_content)
+    new_arcs, new_phases = _parse_roadmap_md(new_content)
+
+    def _norm_phase_title(title: str) -> str:
+        text = re.sub(r"^\[[ xX]\]\s*", "", title.strip())
+        text = text.replace("✅", "").replace("🚧", "")
+        text = re.sub(r"\s*\((P0|P1|daily-driver)\)\s*", " ", text)
+        text = re.sub(r"\s*\[(P0|P1|daily-driver)\]\s*", " ", text)
+        return re.sub(r"\s+", " ", text).strip().lower()
+
+    old_arc_map = {a["version"]: a for a in old_arcs}
+    new_arc_map = {a["version"]: a for a in new_arcs}
+    old_versions = set(old_arc_map)
+    new_versions = set(new_arc_map)
+
+    added_arcs = sorted(new_versions - old_versions)
+    removed_arcs = sorted(old_versions - new_versions)
+    changed_arcs = []
+    for version in sorted(old_versions & new_versions):
+        old_a, new_a = old_arc_map[version], new_arc_map[version]
+        for field in ("title", "status", "goal_id"):
+            if old_a.get(field) != new_a.get(field):
+                changed_arcs.append({
+                    "version": version,
+                    "field": field,
+                    "old": old_a.get(field),
+                    "new": new_a.get(field),
+                })
+
+    def _phase_key(phase: dict) -> tuple:
+        return (phase["arc_version"], _norm_phase_title(phase["phase_title"]))
+
+    old_phase_map = {_phase_key(p): p for p in old_phases}
+    new_phase_map = {_phase_key(p): p for p in new_phases}
+    old_keys = set(old_phase_map)
+    new_keys = set(new_phase_map)
+
+    added_phases = [
+        new_phase_map[k]["phase_title"] for k in sorted(new_keys - old_keys)
+    ]
+    removed_phases = [
+        old_phase_map[k]["phase_title"] for k in sorted(old_keys - new_keys)
+    ]
+    changed_phases = []
+    for key in sorted(old_keys & new_keys):
+        old_p, new_p = old_phase_map[key], new_phase_map[key]
+        if old_p.get("status") != new_p.get("status") or old_p.get("priority") != new_p.get("priority"):
+            changed_phases.append(new_p["phase_title"])
+
+    has_drift = bool(
+        added_arcs or removed_arcs or changed_arcs
+        or added_phases or removed_phases or changed_phases
+    )
+    return {
+        "has_drift": has_drift,
+        "added_arcs": added_arcs,
+        "removed_arcs": removed_arcs,
+        "changed_arcs": changed_arcs,
+        "added_phases": added_phases,
+        "removed_phases": removed_phases,
+        "changed_phases": changed_phases,
+    }
+
+
 def _parse_costs_md(content: str) -> list:
     rows = []
     for line in content.splitlines():

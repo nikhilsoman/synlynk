@@ -3044,3 +3044,49 @@ def test_allow_distinct_qa_app_identities_to_submit_approving_pr_reviews(tmp_pat
     assert "Do not tell sessions to skip `--approve` by default" in repaired_claude_md
     assert "All dispatched agents share one GitHub identity" not in repaired_claude_md
 
+
+def test_detect_drift_between_two_versions_of_a_roadmap_doc():
+    """synlynk-bot intermediate calibration: structural drift across roadmap versions."""
+    from synlynk.db import detect_roadmap_doc_drift
+
+    old = """# Roadmap
+
+## v0.1.0 — Bootstrap ✅
+- [x] Init scaffolding ✅
+- [ ] Capability sweep (P1)
+
+## v0.2.0 — Fleet 🚧
+- [ ] Dispatch queue (P0)
+"""
+    new = """# Roadmap
+
+## v0.1.0 — Bootstrap ✅
+- [x] Init scaffolding ✅
+- [x] Capability sweep (P1) ✅
+
+## v0.2.0 — Fleet ✅ shipped
+- [x] Dispatch queue (P0) ✅
+- [ ] Worktree hygiene (P1)
+
+## v0.3.0 — Observability
+- [ ] Cost ledger (P0)
+"""
+
+    identical = detect_roadmap_doc_drift(old, old)
+    assert identical["has_drift"] is False
+    assert identical["added_arcs"] == []
+    assert identical["removed_arcs"] == []
+    assert identical["changed_arcs"] == []
+    assert identical["added_phases"] == []
+    assert identical["removed_phases"] == []
+    assert identical["changed_phases"] == []
+
+    report = detect_roadmap_doc_drift(old, new)
+    assert report["has_drift"] is True
+    assert report["added_arcs"] == ["v0.3.0"]
+    assert report["removed_arcs"] == []
+    assert any(c["version"] == "v0.2.0" and c["field"] == "status" for c in report["changed_arcs"])
+    assert any("Capability sweep" in p for p in report["changed_phases"])
+    assert any("Worktree hygiene" in p for p in report["added_phases"])
+    assert any("Cost ledger" in p for p in report["added_phases"])
+
