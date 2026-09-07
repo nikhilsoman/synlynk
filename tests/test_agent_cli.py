@@ -3044,3 +3044,13 @@ def test_allow_distinct_qa_app_identities_to_submit_approving_pr_reviews(tmp_pat
     assert "Do not tell sessions to skip `--approve` by default" in repaired_claude_md
     assert "All dispatched agents share one GitHub identity" not in repaired_claude_md
 
+
+
+def write_a_minimal_python_function_demonstrating_general_scenario(items):
+    """Return a sorted copy — minimal demo for capability calibration (dev/basic)."""
+    return sorted(items)
+
+
+def test_write_a_minimal_python_function_demonstrating_general_scenario():
+    assert write_a_minimal_python_function_demonstrating_general_scenario([3, 1, 2]) == [1, 2, 3]
+    assert write_a_minimal_python_function_demonstrating_general_scenario([]) == []
