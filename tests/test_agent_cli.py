@@ -3044,3 +3044,19 @@ def test_allow_distinct_qa_app_identities_to_submit_approving_pr_reviews(tmp_pat
     assert "Do not tell sessions to skip `--approve` by default" in repaired_claude_md
     assert "All dispatched agents share one GitHub identity" not in repaired_claude_md
 
+
+
+def test_draft_a_roadmap_section_reconciling_two_conflicting_stakeholder_priorities():
+    """PM advanced calibration: roadmap draft reconciles throughput vs trust."""
+    from pathlib import Path
+
+    doc = Path("docs/calibration/pm-advanced-roadmap-reconciliation.md")
+    assert doc.is_file(), f"missing calibration roadmap draft: {doc}"
+    text = doc.read_text()
+    assert "Stakeholder" in text or "stakeholder" in text
+    assert "Throughput" in text or "throughput" in text
+    assert "Trust" in text or "trust" in text or "Reliability" in text
+    assert "Reconciliation" in text or "reconciliation" in text or "Reconcile" in text
+    assert "Phase T0" in text and "Phase T1" in text
+    assert "Decision rules" in text
+    assert "Success criteria" in text
