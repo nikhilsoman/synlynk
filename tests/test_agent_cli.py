@@ -121,6 +121,87 @@ def test_make_live_selftest_provision_probe_metadata(tmp_path, monkeypatch):
     )
 
 
+def test_live_selftest_probes_empty_source_before_copying_metadata(tmp_path, monkeypatch):
+    import synlynk
+    import synlynk.selftest as selftest_mod
+    from synlynk.selftest import ScenarioContext, _ensure_workspace_scaffold
+
+    source_db = tmp_path / "source-state.db"
+    source_conn = sqlite3.connect(source_db)
+    synlynk._migrate_db(source_conn)
+    source_conn.close()
+    monkeypatch.setattr(synlynk, "DB_PATH", str(source_db))
+
+    def fake_probe(*, write_fence):
+        assert write_fence is False
+        conn = synlynk._get_db()
+        try:
+            conn.execute(
+                "INSERT INTO harness_records "
+                "(harness_name, installed_version, compliance_status, "
+                "active_contract, active_flags, last_probe_at, capability_hash) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                ("codex", "fresh-version", "ok", "{}", "{}",
+                 "2026-09-08T00:00:00Z", "fresh-capability-hash"),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    monkeypatch.setattr(selftest_mod, "cmd_probe", fake_probe)
+    workspace = tmp_path / "scratch"
+    ctx = ScenarioContext(
+        repo_path=str(workspace), live=True, state={"workspace_dir": workspace}
+    )
+
+    _ensure_workspace_scaffold(ctx)
+
+    scratch_conn = sqlite3.connect(workspace / ".synlynk" / "state.db")
+    row = scratch_conn.execute(
+        "SELECT harness_name, installed_version, compliance_status, "
+        "last_probe_at, capability_hash FROM harness_records"
+    ).fetchone()
+    scratch_conn.close()
+
+    assert row == (
+        "codex",
+        "fresh-version",
+        "ok",
+        "2026-09-08T00:00:00Z",
+        "fresh-capability-hash",
+    )
+
+
+def test_live_selftest_does_not_reprobe_populated_source(tmp_path, monkeypatch):
+    import synlynk
+    import synlynk.selftest as selftest_mod
+    from synlynk.selftest import ScenarioContext, _ensure_workspace_scaffold
+
+    source_db = tmp_path / "source-state.db"
+    source_conn = sqlite3.connect(source_db)
+    synlynk._migrate_db(source_conn)
+    source_conn.execute(
+        "INSERT INTO harness_records "
+        "(harness_name, installed_version, compliance_status, active_contract, "
+        "active_flags, last_probe_at, capability_hash) VALUES "
+        "('codex', 'existing-version', 'ok', '{}', '{}', "
+        "'2026-09-08T00:00:00Z', 'existing-hash')"
+    )
+    source_conn.commit()
+    source_conn.close()
+    monkeypatch.setattr(synlynk, "DB_PATH", str(source_db))
+    calls = []
+    monkeypatch.setattr(selftest_mod, "cmd_probe", lambda **kwargs: calls.append(kwargs))
+    workspace = tmp_path / "scratch"
+    ctx = ScenarioContext(
+        repo_path=str(workspace), live=True, state={"workspace_dir": workspace}
+    )
+
+    _ensure_workspace_scaffold(ctx)
+
+    assert calls == []
+
+
 def test_cli_detect_and_warn_on_stale_pipxinstall(tmp_path, monkeypatch, capsys):
     from synlynk import cli
 
