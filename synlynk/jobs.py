@@ -9,6 +9,7 @@ import sqlite3
 import subprocess
 import sys
 import time
+import uuid
 from typing import Optional
 
 from synlynk.sentinel import _write_sentinel_alert
@@ -1962,17 +1963,80 @@ def _pid_is_alive(pid) -> bool:
         return False
 
 
+_UNSET_TERMINAL_CLAIM = object()
+
+
 def _persist_daemon_job_terminal(
     conn, job_id: str, status: str, exit_code: Optional[int], completed_at: str,
-    *, only_running: bool = False,
+    *, only_running: bool = False, terminal_claim_token=_UNSET_TERMINAL_CLAIM,
 ) -> bool:
     """Persist a daemon job's terminal state with the requested row scope."""
-    where_clause = "WHERE job_id=? AND status='running'" if only_running else "WHERE job_id=?"
+    predicates = ["job_id=?"]
+    params = [job_id]
+    if only_running:
+        predicates.append("status='running'")
+    if terminal_claim_token is not _UNSET_TERMINAL_CLAIM:
+        if terminal_claim_token is None:
+            # An explicit null token means the caller failed to claim the row;
+            # it must never be treated as an unclaimed-row match because that
+            # would let a losing reconciler settle a zombie.
+            return False
+        else:
+            predicates.append("terminal_claim_token=?")
+            params.append(terminal_claim_token)
+    where_clause = "WHERE " + " AND ".join(predicates)
     cursor = conn.execute(
         "UPDATE daemon_jobs SET status=?, exit_code=?, completed_at=? " + where_clause,
-        (status, exit_code, completed_at, job_id),
+        (status, exit_code, completed_at, *params),
     )
     return (cursor.rowcount or 0) > 0
+
+
+def _settle_daemon_job_terminal(
+    conn,
+    job_id: str,
+    status: str,
+    exit_code: Optional[int],
+    completed_at: str,
+    *,
+    only_running: bool = True,
+    terminal_claim_token=_UNSET_TERMINAL_CLAIM,
+    release_reservation: bool = False,
+) -> bool:
+    """Persist and commit a daemon terminal transition atomically for callers."""
+    settled = _persist_daemon_job_terminal(
+        conn,
+        job_id,
+        status,
+        exit_code,
+        completed_at,
+        only_running=only_running,
+        terminal_claim_token=terminal_claim_token,
+    )
+    conn.commit()
+    if settled and release_reservation:
+        _release_daemon_job_reservation(conn, job_id)
+    return settled
+
+
+def _claim_daemon_job_terminal(conn, job_id: str) -> Optional[str]:
+    """Claim one running job generation before destructive zombie cleanup."""
+    token = uuid.uuid4().hex
+    cursor = conn.execute(
+        "UPDATE daemon_jobs SET terminal_claim_token=? "
+        "WHERE job_id=? AND status='running' AND terminal_claim_token IS NULL",
+        (token, job_id),
+    )
+    return token if (cursor.rowcount or 0) == 1 else None
+
+
+def _release_daemon_job_terminal_claim(conn, job_id: str, token: str) -> None:
+    """Release a zombie claim when terminal evaluation could not complete."""
+    conn.execute(
+        "UPDATE daemon_jobs SET terminal_claim_token=NULL "
+        "WHERE job_id=? AND status='running' AND terminal_claim_token=?",
+        (job_id, token),
+    )
 
 
 def _release_daemon_job_reservation(conn, job_id: str) -> None:
@@ -2365,15 +2429,15 @@ def _reconcile_terminal_jobs_json(conn) -> int:
             continue
         requires_gh_write, target, author, expect = row
         if requires_gh_write:
-            status, verified = _apply_gh_write_verification(
+            status, verified = _verify_daemon_terminal_status(
                 conn,
                 job_id,
                 requires_gh_write,
                 target or job.get("gh_write_target"),
                 status,
-                since=job.get("started_at"),
-                expect_author=author or job.get("gh_write_author"),
-                expect=expect or job.get("gh_write_expect") or "closed",
+                job.get("started_at"),
+                author or job.get("gh_write_author"),
+                expect or job.get("gh_write_expect"),
             )
         else:
             verified = None
@@ -2728,14 +2792,12 @@ def _reconcile_daemon_jobs() -> None:
                         conn, job_id, requires_gh_write, gh_write_target, status,
                         started_at, gh_write_author, gh_write_expect,
                     )
-                    settled = _persist_daemon_job_terminal(
-                        conn, job_id, status, exit_code, now, only_running=True
+                    settled = _settle_daemon_job_terminal(
+                        conn, job_id, status, exit_code, now, release_reservation=True
                     )
-                    conn.commit()
                     if not settled:
                         # Another actor already committed a terminal status.
                         continue
-                    _release_daemon_job_reservation(conn, job_id)
                     # Do not rewrite summary — but ensure a cost_entries row exists (#752 A2).
                     log_text_pref = ""
                     if log_path and os.path.exists(log_path):
@@ -2778,29 +2840,38 @@ def _reconcile_daemon_jobs() -> None:
                     and not _job_has_real_work_landed(git_state)
                     and (has_leaked_worktree(job_id, log_path) or pid is None)
                 ):
-                    zombie_status, zombie_exit_code, _, _ = _gtv_status_for_daemon_exit(
-                        None, git_state
-                    )
-                    zombie_status, gh_write_verified_str = _verify_daemon_terminal_status(
-                        conn, job_id, requires_gh_write, gh_write_target, zombie_status,
-                        started_at, gh_write_author, gh_write_expect,
-                    )
-                    if (
-                        requires_gh_write and gh_write_verified_str == "true"
-                        and zombie_status == "timed_out"
-                    ):
-                        zombie_status, zombie_exit_code = "done", 0
-                    if not requires_gh_write or gh_write_verified_str != "true":
-                        zombie_status, zombie_exit_code = "killed_zombie", -9
-                    # Claim terminal status before deleting the worktree so a
-                    # concurrent reconciler that already settled the job as
-                    # done/failed cannot lose its workspace to a late reap.
-                    settled = _persist_daemon_job_terminal(
-                        conn, job_id, zombie_status, zombie_exit_code, now, only_running=True
-                    )
-                    conn.commit()
-                    if settled:
-                        _reap_zombie_worktree(job_id, log_path)
+                    terminal_claim_token = _claim_daemon_job_terminal(conn, job_id)
+                    if terminal_claim_token is None:
+                        continue
+                    try:
+                        zombie_status, zombie_exit_code, _, _ = _gtv_status_for_daemon_exit(
+                            None, git_state
+                        )
+                        zombie_status, gh_write_verified_str = _verify_daemon_terminal_status(
+                            conn, job_id, requires_gh_write, gh_write_target, zombie_status,
+                            started_at, gh_write_author, gh_write_expect,
+                        )
+                        if (
+                            requires_gh_write and gh_write_verified_str == "true"
+                            and zombie_status == "timed_out"
+                        ):
+                            zombie_status, zombie_exit_code = "done", 0
+                        if not requires_gh_write or gh_write_verified_str != "true":
+                            zombie_status, zombie_exit_code = "killed_zombie", -9
+                        # Claim terminal status before deleting the worktree so a
+                        # concurrent reconciler that already settled the job as
+                        # done/failed cannot lose its workspace to a late reap.
+                        settled = _settle_daemon_job_terminal(
+                            conn, job_id, zombie_status, zombie_exit_code, now,
+                            only_running=True, terminal_claim_token=terminal_claim_token,
+                        )
+                        if settled and zombie_status == "killed_zombie":
+                            _reap_zombie_worktree(job_id, log_path)
+                    except Exception:
+                        conn.rollback()
+                        _release_daemon_job_terminal_claim(conn, job_id, terminal_claim_token)
+                        conn.commit()
+                        raise
                     continue
 
                 status, exit_code, summary_status, summary_note = _gtv_status_for_daemon_exit(
@@ -2833,16 +2904,14 @@ def _reconcile_daemon_jobs() -> None:
                 # Reconciliation can overlap with the sentinel path or a
                 # second daemon pass.  Do not let a stale inspection overwrite
                 # a terminal state that another actor already committed.
-                settled = _persist_daemon_job_terminal(
-                    conn, job_id, status, exit_code, now, only_running=True
+                settled = _settle_daemon_job_terminal(
+                    conn, job_id, status, exit_code, now, release_reservation=True
                 )
-                conn.commit()
                 if not settled:
                     # Another reconciler/sentinel won the terminal-state
                     # race.  Its status is authoritative; avoid emitting
                     # stale summaries, costs, or permission classifications.
                     continue
-                _release_daemon_job_reservation(conn, job_id)
                 duration_s = None
                 try:
                     end_ts = time.mktime(time.strptime(now, "%Y-%m-%dT%H:%M:%S"))
