@@ -11,12 +11,16 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Breaking Changes
 
-- **Dispatch jobs now distinguish completed work from true zombie termination.**
-  Jobs whose process has exited and left a completion marker or real work behind
-  are reported using their terminal result instead of `killed_zombie`; consumers
-  that treated `killed_zombie` as the only signal for cleanup or retry should
-  switch to the job's terminal status and exit code. Logs are also retained in
-  the daemon's central state directory when a disposable worktree is removed.
+- **Dispatch jobs now distinguish completed work from true zombie termination (#1498).**
+  Previously, any exited worker that still had a disposable worktree could be
+  classified as `killed_zombie` (exit `-9`) before the reconciler read the
+  `{log}.exit` marker or inspected real output — including clean design/review
+  jobs. That also deleted worktree-local logs.
+  **Migration:** treat `killed_zombie` as a true orphan only (dead PID, no exit
+  marker, no completion receipt / meaningful work). For cleanup and retry,
+  prefer the job's terminal `status` and `exit_code` (`done` / `failed`).
+  Worker logs now live under the daemon's central `.synlynk/logs/` directory and
+  are preserved when a disposable worktree is reaped.
 
 ### Added
 
