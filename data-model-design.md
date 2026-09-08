@@ -1,6 +1,6 @@
 # Data Model Design: Online Marketplace Orders
 
-**Story:** story-adhoc-1788866309  
+**Story:** story-adhoc-1788892533
 **Difficulty:** Intermediate  
 **Scenario:** An online marketplace lets customers place orders containing multiple products. Inventory is tracked, and each order records the price and quantity agreed at checkout.
 

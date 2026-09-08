@@ -11,6 +11,12 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Breaking Changes
 
+- **[Draft] The default output format for status commands is now structured JSON instead of human-readable text.**
+  Scripts that parse the previous line-oriented output may fail or consume
+  incorrect values after upgrading. **Migration:** request the documented
+  machine-readable fields explicitly, update parsers to read the JSON schema,
+  and reserve the text format for interactive use.
+
 - **[Draft] Commands that operate on a workspace now require an explicit workspace context when run outside the repository root.**
   Automation launched from a different working directory may fail instead of
   silently reading or writing state for the wrong workspace. **Migration:** run

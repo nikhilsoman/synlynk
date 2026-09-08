@@ -4,6 +4,24 @@
 
 Make Synlynk a reliable local session ledger and context compiler for Codex users across CLI, Desktop App, and third-party IDE shells.
 
+## Stakeholder Priority Reconciliation: Broad Adoption and Advanced Capability
+
+Two stakeholder priorities shape the roadmap: make the common workflow dependable for the broadest set of users, while also preserving a credible path to advanced, high-leverage automation. These priorities are compatible when reliability is the entry criterion and advanced behavior is layered on top of stable contracts rather than allowed to increase the baseline burden.
+
+Roadmap policy:
+
+- **Protect the general case first.** Setup, diagnostics, portability, and stable output schemas remain the critical path. A change that makes the common workflow less predictable does not advance solely because it benefits an advanced scenario.
+- **Invest in advanced capability behind explicit opt-ins.** Non-interactive execution, richer telemetry, and IDE-specific helpers can progress in parallel when they are isolated behind documented flags, profiles, or integrations and preserve safe defaults.
+- **Use evidence to rebalance.** Promote advanced work when it demonstrates repeatable user value without degrading baseline success criteria; otherwise keep it as an experiment or research item rather than widening the core contract.
+
+Sequencing:
+
+1. Deliver the general-purpose setup and reliability foundations in v0.3.0-v0.4.0.
+2. Build advanced automation and usage capture in v0.5.0-v0.7.0 as opt-in layers with fake-agent coverage and reversible configuration.
+3. Harden portability in v0.8.0, then consolidate both paths into the stable contract targeted by 1.0.0.
+
+Success is measured by both sides of the trade-off: a first-time user can configure and diagnose Synlynk without advanced knowledge, while an advanced user can automate repeatable Codex workflows without wrappers that bypass Synlynk's safety, cost, or telemetry guarantees.
+
 ## v0.3.0: Codex-Native Setup
 
 Goal: Codex users should get the right instructions automatically after `synlynk init`.

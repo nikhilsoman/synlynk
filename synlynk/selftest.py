@@ -108,14 +108,22 @@ def _ensure_workspace_scaffold(ctx: ScenarioContext) -> Path:
             check=True,
         )
     if ctx.live and not ctx.state.get("probe_metadata_provisioned"):
-        if ctx.probe_mode == "live":
-            _provision_probe_metadata(workspace)
-        elif ctx.probe_mode == "synthetic":
-            _provision_synthetic_probe_metadata(workspace)
-        else:
-            raise ValueError(f"unsupported selftest probe mode: {ctx.probe_mode!r}")
+        _provision_probe_metadata_for_mode(workspace, ctx.probe_mode)
         ctx.state["probe_metadata_provisioned"] = True
     return workspace
+
+
+def _provision_probe_metadata_for_mode(workspace: Path, probe_mode: str) -> int:
+    """Provision probe metadata using the requested live or synthetic source."""
+    provisioners = {
+        "live": _provision_probe_metadata,
+        "synthetic": _provision_synthetic_probe_metadata,
+    }
+    try:
+        provision = provisioners[probe_mode]
+    except KeyError as exc:
+        raise ValueError(f"unsupported selftest probe mode: {probe_mode!r}") from exc
+    return provision(workspace)
 
 
 def _provision_probe_metadata(workspace: Path) -> int:
