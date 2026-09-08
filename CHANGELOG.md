@@ -11,6 +11,19 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Breaking Changes
 
+- **[Draft] Commands that operate on a workspace now require an explicit workspace context when run outside the repository root.**
+  Automation launched from a different working directory may fail instead of
+  silently reading or writing state for the wrong workspace. **Migration:** run
+  the command from the intended repository root or pass its `--workspace`
+  option explicitly, and update wrappers that previously relied on the current
+  directory being inferred.
+
+- **[Draft] The command-line configuration flag `--config` now accepts only a file path, not an inline JSON object.**
+  Scripts that pass configuration directly on the command line will fail
+  validation after upgrading instead of being parsed as before. **Migration:**
+  write inline configuration to a file and pass that file's path to `--config`,
+  or use the equivalent environment-based configuration mechanism.
+
 - **[Draft] The default configuration directory is now resolved relative to the workspace root.**
   Deployments that relied on the process working directory may load a different
   configuration after upgrading, which can change dispatch and storage

@@ -1,8 +1,10 @@
 # Union-Merge Conflict Reconciliation — Advanced / General
 
-**Scenario:** A union-merge-style append-only markdown ledger contains both sides of a conflict, with narrative entries, related PR rows, and cost rows interleaved.
+**Scenario:** A general union-merge-style append-only markdown ledger contains both sides of a conflict, with narrative entries, related PR rows, and cost rows interleaved. The line-level union preserved the content but left the markdown structure ambiguous, so this reconciliation restores the semantic sections without dropping either append.
 
 ## Reconciled ledger
+
+The conflict markers are removed from the committed document. Unique content is retained in arrival order for narrative entries, while the interleaved PR and cost records are normalized into one table per record type.
 
 ### Shared preamble
 
@@ -41,7 +43,7 @@
 ## Reconciliation rules
 
 1. Preserve both unique narrative sections in arrival order; neither append is discarded.
-2. Collapse duplicate table headers into one canonical header.
+2. Collapse duplicate table headers and separators into one canonical header.
 3. Sort PR body rows by PR number so the merged table is scannable.
 4. Merge cost rows under one ledger section with stable columns.
 5. Preserve shared preamble and trailer content unchanged.

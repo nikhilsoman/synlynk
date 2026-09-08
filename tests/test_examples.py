@@ -77,3 +77,26 @@ def test_active_items_preserves_metadata_on_selected_items():
     assert result == [item]
     assert result[0]["name"] == "visible"
     assert result[0]["tags"] == ["basic"]
+
+
+def test_active_items_returns_all_items_when_every_item_is_active():
+    items = [{"id": 1, "active": True}, {"id": 2, "active": True}]
+
+    assert active_items(items) == items
+
+
+def test_active_items_returns_only_the_active_item_from_a_two_item_list():
+    active = {"id": 1, "active": True}
+    inactive = {"id": 2, "active": False}
+
+    assert active_items([active, inactive]) == [active]
+
+
+def test_active_items_keeps_the_input_order_of_active_items():
+    items = [
+        {"id": 3, "active": True},
+        {"id": 1, "active": True},
+        {"id": 2, "active": False},
+    ]
+
+    assert active_items(items) == [items[0], items[1]]

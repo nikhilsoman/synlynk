@@ -2834,6 +2834,64 @@ def test_zombie_terminal_claim_is_released_after_evaluation_error(
     conn.close()
 
 
+def test_zombie_terminal_claim_is_released_after_git_state_reread_error(
+    tmp_path, project_dir, monkeypatch
+):
+    """A failed post-claim Git read must leave the zombie eligible for retry."""
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    wt = tmp_path / "worktrees" / "job-git-read-retry"
+    wt.mkdir(parents=True)
+    (wt / ".git").mkdir()
+    log_file = tmp_path / "logs" / "job-git-read-retry.log"
+    log_file.parent.mkdir()
+    log_file.write_text("")
+
+    monkeypatch.setattr(jobs_mod, "_pid_is_alive", lambda pid: False)
+    monkeypatch.setattr(jobs_mod, "_daemon_job_worktree_path", lambda *a, **kw: str(wt))
+    monkeypatch.setattr(jobs_mod, "_job_has_real_work_landed", lambda git_state: False)
+    calls = {"count": 0}
+
+    def inspect_git_state(*args):
+        calls["count"] += 1
+        if calls["count"] == 2:
+            raise OSError("temporary git inspection failure")
+        return {"changed_files": []}
+
+    # Patch the jobs module directly so both the initial scan and the
+    # post-claim reread use the same deterministic inspector, regardless of
+    # package-facade stubs installed by other tests.
+    monkeypatch.setattr(jobs_mod, "_inspect_worktree_git_state", inspect_git_state)
+
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, story_id, task, status, pid, enqueued_at, "
+        "started_at, log_path, requires_gh_write, worktree_path) "
+        "VALUES ('job-git-read-retry', 'codex', 's-git-read', 'implement', 'running', "
+        "88889, '2026-09-08T00:00:00', '2026-09-08T00:00:00', ?, 0, ?)",
+        (str(log_file), str(wt)),
+    )
+    conn.commit()
+    conn.close()
+
+    jobs_mod._reconcile_daemon_jobs()
+
+    conn = sl._get_db()
+    assert conn.execute(
+        "SELECT status, terminal_claim_token FROM daemon_jobs WHERE job_id='job-git-read-retry'"
+    ).fetchone() == ("running", None)
+    conn.close()
+
+    jobs_mod._reconcile_daemon_jobs()
+
+    conn = sl._get_db()
+    assert conn.execute(
+        "SELECT status, exit_code FROM daemon_jobs WHERE job_id='job-git-read-retry'"
+    ).fetchone() == ("killed_zombie", -9)
+    conn.close()
+
+
 def test_zombie_claim_rechecks_late_exit_marker_before_cleanup(
     tmp_path, project_dir, monkeypatch
 ):

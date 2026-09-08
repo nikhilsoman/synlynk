@@ -961,6 +961,17 @@ def _inspect_worktree_git_state(
     }
 
 
+_DEFAULT_INSPECT_WORKTREE_GIT_STATE = _inspect_worktree_git_state
+
+
+def _worktree_git_state_inspector():
+    """Resolve the inspector while honoring local and package-level overrides."""
+    local_inspector = _inspect_worktree_git_state
+    if local_inspector is not _DEFAULT_INSPECT_WORKTREE_GIT_STATE:
+        return local_inspector
+    return _pkg("_inspect_worktree_git_state") or local_inspector
+
+
 def _inspect_origin_branch_activity(
     worktree_path: Optional[str],
     worktree_branch: Optional[str],
@@ -2060,6 +2071,45 @@ def _release_daemon_job_terminal_claim(conn, job_id: str, token: str) -> None:
     )
 
 
+def _release_daemon_job_terminal_claim_and_commit(conn, job_id: str, token: str) -> None:
+    """Release a zombie claim and persist the retryable running state."""
+    _release_daemon_job_terminal_claim(conn, job_id, token)
+    conn.commit()
+
+
+def _has_leaked_worktree(job_id: str, log_path: Optional[str]) -> bool:
+    """Return whether a daemon job still has a worktree to clean up."""
+    path = _daemon_job_worktree_path(job_id, log_path)
+    return bool(path and os.path.exists(os.path.join(path, ".git")))
+
+
+def _post_claim_zombie_evidence_is_valid(
+    pid: Optional[int],
+    exit_file: Optional[str],
+    worktree_path: Optional[str],
+    worktree_branch: Optional[str],
+    started_at: Optional[str],
+    inspect_fn,
+    job_id: str,
+    log_path: Optional[str],
+) -> bool:
+    """Return whether the post-claim evidence still supports zombie cleanup."""
+    if exit_file and os.path.exists(exit_file):
+        return False
+    if pid is not None and _pid_is_alive(pid):
+        return False
+    if worktree_path:
+        try:
+            post_claim_git_state = inspect_fn(worktree_path, worktree_branch, started_at)
+        except Exception:
+            # An unavailable second read is uncertainty, not evidence of a
+            # zombie.  Fail closed and let a later reconciliation retry.
+            return False
+        if _job_has_real_work_landed(post_claim_git_state):
+            return False
+    return bool(_has_leaked_worktree(job_id, log_path) or pid is None)
+
+
 def _release_daemon_job_reservation(conn, job_id: str) -> None:
     """Release the open reservation associated with a terminal daemon job."""
     release_fn = _pkg("_release_reservation")
@@ -2138,7 +2188,7 @@ def auto_reap_job_from_sentinel(code: str, message: str) -> Optional[str]:
         worktree_path = _daemon_job_worktree_path(job_id, log_path)
         git_state = None
         if worktree_path:
-            inspect_fn = _pkg("_inspect_worktree_git_state") or _inspect_worktree_git_state
+            inspect_fn = _worktree_git_state_inspector()
             try:
                 git_state = inspect_fn(
                     worktree_path, f"dispatch/{agent}/{job_id}", started_at
@@ -2749,10 +2799,6 @@ def _reconcile_daemon_jobs() -> None:
         "FROM daemon_jobs WHERE status='running'"
     ).fetchall()
     now = time.strftime("%Y-%m-%dT%H:%M:%S")
-    def has_leaked_worktree(job_id, log_path):
-        path = _daemon_job_worktree_path(job_id, log_path)
-        return bool(path and os.path.exists(os.path.join(path, ".git")))
-
     try:
         for (job_id, agent, story_id, task, pid, started_at, completed_at, log_path,
              dispatch_context, requires_gh_write, gh_write_target, gh_write_author,
@@ -2839,7 +2885,7 @@ def _reconcile_daemon_jobs() -> None:
                 worktree_branch = persisted_worktree_branch or (f"dispatch/{agent}/{job_id}" if agent else None)
                 git_state = None
                 if worktree_path:
-                    inspect_fn = _pkg("_inspect_worktree_git_state") or _inspect_worktree_git_state
+                    inspect_fn = _worktree_git_state_inspector()
                     try:
                         git_state = inspect_fn(worktree_path, worktree_branch, started_at)
                     except Exception:
@@ -2850,7 +2896,7 @@ def _reconcile_daemon_jobs() -> None:
                     exit_code is None
                     and not exit_marker_present
                     and not _job_has_real_work_landed(git_state)
-                    and (has_leaked_worktree(job_id, log_path) or pid is None)
+                    and (_has_leaked_worktree(job_id, log_path) or pid is None)
                 ):
                     terminal_claim_token = _claim_daemon_job_terminal(conn, job_id)
                     if terminal_claim_token is None:
@@ -2865,28 +2911,19 @@ def _reconcile_daemon_jobs() -> None:
                         # activity cannot be mistaken for the same dead
                         # observation and trigger destructive cleanup.
                         post_claim_exit_file = (log_path + ".exit") if log_path else None
-                        if post_claim_exit_file and os.path.exists(post_claim_exit_file):
-                            _release_daemon_job_terminal_claim(conn, job_id, terminal_claim_token)
-                            conn.commit()
-                            continue
-                        if pid is not None and _pid_is_alive(pid):
-                            _release_daemon_job_terminal_claim(conn, job_id, terminal_claim_token)
-                            conn.commit()
-                            continue
-                        if worktree_path:
-                            try:
-                                post_claim_git_state = inspect_fn(
-                                    worktree_path, worktree_branch, started_at
-                                )
-                            except Exception:
-                                post_claim_git_state = None
-                            if _job_has_real_work_landed(post_claim_git_state):
-                                _release_daemon_job_terminal_claim(conn, job_id, terminal_claim_token)
-                                conn.commit()
-                                continue
-                        if not (has_leaked_worktree(job_id, log_path) or pid is None):
-                            _release_daemon_job_terminal_claim(conn, job_id, terminal_claim_token)
-                            conn.commit()
+                        if not _post_claim_zombie_evidence_is_valid(
+                            pid,
+                            post_claim_exit_file,
+                            worktree_path,
+                            worktree_branch,
+                            started_at,
+                            _worktree_git_state_inspector(),
+                            job_id,
+                            log_path,
+                        ):
+                            _release_daemon_job_terminal_claim_and_commit(
+                                conn, job_id, terminal_claim_token
+                            )
                             continue
                         zombie_status, zombie_exit_code, _, _ = _gtv_status_for_daemon_exit(
                             None, git_state
