@@ -2867,6 +2867,9 @@ def _reconcile_daemon_jobs() -> None:
                         files_touched=files_count,
                         job_id=job_id,
                         agent=agent,
+                        sentinel_path=os.path.join(
+                            persisted_worktree_path or worktree_path or os.getcwd(),
+                            ".synlynk", "sentinel.md"),
                     )
                 if status == "failed_unverified" and not summary_status:
                     summary_status = terminal_status_for_unknown_exit()

@@ -35,6 +35,7 @@ from synlynk.sentinel import (
     _extract_auto_signals,
     _extract_compliance_tags,
     _read_sentinel_alerts,
+    _iter_sentinel_alerts,
     _summarize_sentinel_alerts,
     _write_sentinel_alert,
     check_model_rates_freshness,
@@ -1779,6 +1780,10 @@ def load_config() -> dict:
         "roles": capability_roles if capability_roles is not None else _default_roles_map(),
         "story_classification": {"method": "heuristic"},
         "qa_gate_mode": "block-only",
+        "sentinel": {
+            "dedup_window_seconds": 86400,
+            "active_ttl_seconds": {"CRITICAL": 180 * 86400, "WARN": 180 * 86400, "INFO": 180 * 86400},
+        },
     }
     config_file = ".synlynk/config.json"
     if not os.path.exists(config_file):
@@ -3425,13 +3430,8 @@ def cmd_status(json_output: bool = False, platform: bool = False) -> None:
             break
 
     # Sentinel alerts
-    sentinel_alerts = []
     sentinel_file = ".synlynk/sentinel.md"
-    if os.path.exists(sentinel_file):
-        with open(sentinel_file) as f:
-            for line in f:
-                if line.startswith("- ["):
-                    sentinel_alerts.append(line.strip())
+    sentinel_alerts = _read_sentinel_alerts(sentinel_path=sentinel_file)
 
     # Budget
     total_usd, total_requests = parse_costs_md()
@@ -3520,8 +3520,9 @@ def cmd_status(json_output: bool = False, platform: bool = False) -> None:
     state = "Running" if watcher_running else "Stopped"
     trigger = f"  ·  last trigger {last_trigger_file}" if last_trigger_file else ""
     print(f" WATCHER\n   {icon} {state}{trigger}")
-    check_daemon_health()
-    check_stall()
+    sentinel_path = os.path.join(os.getcwd(), ".synlynk", "sentinel.md")
+    check_daemon_health(sentinel_path=sentinel_path)
+    check_stall(sentinel_path=sentinel_path)
     if mode == "team" and teammates:
         print()
         print(" TEAMMATES")

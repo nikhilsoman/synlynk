@@ -277,27 +277,15 @@ def generate_viz_data() -> dict:
 
     def _load_sentinel_alerts() -> list:
         sentinel_path = ".synlynk/sentinel.md"
-        if not os.path.exists(sentinel_path):
-            return []
+        from synlynk.sentinel import _iter_sentinel_alerts
         alerts = []
-        pattern = re.compile(
-            r"^\-\s*(?:\[(?P<severity>[A-Z]+)\]\s*)?\[(?P<ts>\d{4}-\d{2}-\d{2} \d{2}:\d{2}(?::\d{2})?)\]\s*(?P<pattern>[A-Z_]+):"
-        )
-        try:
-            with open(sentinel_path) as f:
-                for line in f:
-                    text = line.strip()
-                    m = pattern.match(text)
-                    if not m:
-                        continue
-                    alerts.append({
-                        "ts": m.group("ts"),
-                        "pattern": m.group("pattern"),
-                        "severity": m.group("severity") or "WARNING",
-                        "resolved": "[RESOLVED]" in text,
-                    })
-        except Exception:
-            return []
+        for alert in _iter_sentinel_alerts(sentinel_path, active_only=True):
+            alerts.append({
+                "ts": alert.get("timestamp", ""),
+                "pattern": alert.get("code", ""),
+                "severity": alert.get("original_severity") or alert.get("severity", "INFO"),
+                "resolved": "[RESOLVED]" in alert.get("raw_line", ""),
+            })
         return alerts
 
     def _load_spec_verifications(limit: int = 20) -> list:

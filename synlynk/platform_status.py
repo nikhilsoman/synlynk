@@ -108,8 +108,8 @@ def _load_platform_drift_agents() -> tuple:
     if not os.path.exists(path):
         return set(), []
     try:
-        with open(path) as f:
-            lines = [line.strip() for line in f if "DRIFT" in line]
+        alerts = _pkg("_iter_sentinel_alerts")(path, active_only=True)
+        lines = [alert["raw_line"] for alert in alerts if "DRIFT" in alert.get("raw_line", "")]
     except IOError:
         return set(), []
     agents = set()
