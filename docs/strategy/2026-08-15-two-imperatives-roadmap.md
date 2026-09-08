@@ -17,9 +17,17 @@ Stakeholders are asking for two outcomes that can pull in opposite directions: s
 
 This keeps the execution-autonomy stakeholder moving toward visible capability while giving the context-accuracy stakeholder a veto over unsafe expansion. Success is not maximum automation; it is automation that earns a wider operating envelope by remaining observable and correct.
 
+### Completed feature status: dispatch reliability under advanced workloads (2026-09-08)
+
+- **Scenario:** An advanced multi-harness dispatch runs a design or review job that exits while its worktree still exists; reconciliation now checks exit evidence and wait status before treating the job as a zombie, preserving truthful completion state.
+- **Priority reconciliation:** The autonomy priority is protected by continuing to reap genuinely abandoned workers, while the context-accuracy priority is protected by central logs, preserved worktree logs, per-job exception isolation, and absolute GitHub App key paths.
+- **Outcome:** The roadmap can expand autonomous dispatch with a bounded, auditable recovery contract: completed work remains inspectable, failed jobs remain diagnosable, and only confirmed dead workers are cleaned up.
+
 ### Positioning boundary
 
-Here, **execution autonomy** describes the operating outcome, not a new product category. Synlynk coordinates, routes, measures, and verifies work performed by external coding harnesses; it does not become a harness, workflow engine, or agent vendor. The product message remains the measurement and arbitration layer for heterogeneous coding agents, with reliable context and job evidence as the mechanism that makes greater autonomy safe.
+Here, **execution autonomy** describes the operating outcome, not a new product category. The positioning is consistent at two levels: Synlynk is the OS/control plane for multi-agent development, and its concrete product wedge is measurement and arbitration across heterogeneous coding harnesses. Synlynk coordinates, routes, measures, and verifies external work; it does not become a harness, workflow engine, or agent vendor. Reliable context and job evidence are the mechanism that makes greater autonomy safe.
+
+Use the short message when a single sentence is needed: **Synlynk is the control plane for multi-agent development, using measured cross-harness routing to make autonomous execution trustworthy.** “OS for multi-agent development” names the category and long-term ambition; “measurement and arbitration layer” names the differentiated capability inside that category. They are not competing claims.
 
 Every item below is ordered by how directly it closes one or both gaps. See the 2026-08-15 recap conversation for the full audit this roadmap is built from (specs without plans, plans pending implementation, open issues categorized against the two imperatives).
 
