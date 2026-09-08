@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """Small examples for common Python tasks."""
 
 

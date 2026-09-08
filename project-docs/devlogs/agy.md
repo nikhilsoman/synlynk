@@ -124,5 +124,9 @@
 - **Correct Exit Resolution Order:** In `synlynk/jobs.py:_reconcile_daemon_jobs`, inspected waitpid and `{log_path}.exit` before evaluating zombie criteria. Jobs with exit status or work are classified as `done` / `failed` rather than `killed_zombie`.
 - **Comprehensive Test Suite:** Added unit tests across `tests/test_gh_verify.py`, `tests/test_github_app_auth.py`, `tests/test_daemon_token_refresh.py`, `tests/test_dispatch.py`, `tests/test_gh_write_guard.py`, and `tests/test_jobs.py`.
 
+### Dispatched
+- Dispatched PR #1504 review to Codex (`job-a6544a1d`, PID 88111) anchored to `fix/agy/dispatch-zombie-termination-1498` with `--task-type review`, `--requires-gh-write`, and `--role qa`.
+
+
 
 
