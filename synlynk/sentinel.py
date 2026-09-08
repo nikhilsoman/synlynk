@@ -266,11 +266,16 @@ def _write_sentinel_alert(severity: str, code: str, message: str, sentinel_path:
             if _alert_identity(prior) != identity or prior.get("timestamp_dt") is None:
                 continue
             elapsed = (now - prior["timestamp_dt"]).total_seconds()
-            if 0 <= elapsed <= float(_sentinel_policy()["dedup_window_seconds"]):
+            # Canonical timestamps have minute precision, so tolerate the
+            # current minute's small apparent clock skew while rejecting
+            # genuinely future-dated history.
+            if -60 <= elapsed <= float(_sentinel_policy()["dedup_window_seconds"]):
                 return {"status": "deduplicated", "identity": identity}
         if "# Sentinel Alerts" not in existing:
             existing = "# Sentinel Alerts\n" + existing
-        ts = time.strftime('%Y-%m-%d %H:%M')
+        # Store UTC consistently; parsed naive legacy timestamps are treated
+        # as UTC, avoiding local-time skew during immediate deduplication.
+        ts = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')
         line = f"- [{severity}] [{ts}] {code}: {message}\n"
         fd, tmp_file = tempfile.mkstemp(prefix=".sentinel-", dir=parent, text=True)
         try:

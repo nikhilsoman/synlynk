@@ -35,6 +35,7 @@ from synlynk.sentinel import (
     _extract_auto_signals,
     _extract_compliance_tags,
     _read_sentinel_alerts,
+    _iter_sentinel_alerts,
     _summarize_sentinel_alerts,
     _write_sentinel_alert,
     check_model_rates_freshness,
