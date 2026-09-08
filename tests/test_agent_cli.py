@@ -156,6 +156,23 @@ def test_test_context_uses_synthetic_probe_metadata_without_running_probe(
     assert all(row[1:] == ("synthetic-test", "ok") for row in rows)
 
 
+def test_live_selftest_rejects_unknown_probe_mode_without_marking_provisioned(
+    tmp_path,
+):
+    from synlynk.selftest import ScenarioContext, _ensure_workspace_scaffold
+
+    ctx = ScenarioContext(
+        repo_path=str(tmp_path / "scratch"),
+        live=True,
+        probe_mode="fixture",
+    )
+
+    with pytest.raises(ValueError, match="unsupported selftest probe mode: 'fixture'"):
+        _ensure_workspace_scaffold(ctx)
+
+    assert "probe_metadata_provisioned" not in ctx.state
+
+
 def test_live_selftest_probes_empty_source_before_copying_metadata(tmp_path, monkeypatch):
     import synlynk
     import synlynk.selftest as selftest_mod
