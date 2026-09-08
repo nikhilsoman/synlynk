@@ -232,7 +232,8 @@ def _collect_sentinel_alerts(signal_cfg: dict) -> list:
     path = signal_cfg.get("path", ".synlynk/sentinel.md")
     if not os.path.exists(path):
         return []
-    lines = [l for l in open(path).read().splitlines() if "⚠" in l]
+    alerts = _pkg("_iter_sentinel_alerts")(path, active_only=True)
+    lines = [alert["raw_line"] for alert in alerts if "⚠" in alert.get("raw_line", "")]
     findings = []
     for line in lines:
         upper = line.upper()

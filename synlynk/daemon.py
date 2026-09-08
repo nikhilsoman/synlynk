@@ -11,6 +11,7 @@ import subprocess
 import sys
 import threading
 import time
+from typing import Optional
 
 from synlynk.context import generate_context
 from synlynk.jobs import _dispatch_ready_jobs, _reconcile_daemon_jobs
@@ -1013,19 +1014,19 @@ def cmd_relay_broadcast(kind: str, body: str, relay_url: str = None) -> None:
         print(f"  {_pkg('_YELLOW')}⚠{_pkg('_RESET')} relay not reachable: {e}")
         print(f"  Start relay: synlynk relay start")
 
-def check_daemon_health() -> None:
+def check_daemon_health(sentinel_path: Optional[str] = None) -> None:
     """Writes CRITICAL alert if watch daemon pidfile exists but process is dead."""
     daemon = WatchDaemon()
     if daemon._health() == "zombie":
         _write_sentinel_alert(
             "CRITICAL", "ZOMBIE_DAEMON",
             "Watch daemon pidfile exists but process is dead. "
-            "Run: synlynk watch stop && synlynk watch start"
+            "Run: synlynk watch stop && synlynk watch start", sentinel_path=sentinel_path
         )
         print("  🚨 [ZOMBIE_DAEMON] Watch daemon is dead — "
               "run: synlynk watch stop && synlynk watch start")
 
-def check_stall() -> None:
+def check_stall(sentinel_path: Optional[str] = None) -> None:
     """Writes WARN alert if .synlynk/state has been 'active' longer than exec_timeout_minutes."""
     state_file = ".synlynk/state"
     if not os.path.exists(state_file):
@@ -1041,7 +1042,7 @@ def check_stall() -> None:
             _write_sentinel_alert(
                 "WARN", "STALL",
                 f"Exec has been running for {age_minutes:.0f} min "
-                f"(threshold: {timeout} min). May be stalled."
+                f"(threshold: {timeout} min). May be stalled.", sentinel_path=sentinel_path
             )
             print(f"  ⚠ [STALL] Exec has been active for {age_minutes:.0f} min — "
                   f"consider checking or restarting.")

@@ -265,8 +265,8 @@ def _write_sentinel_alert(severity: str, code: str, message: str, sentinel_path:
         for prior in _iter_sentinel_alerts(sentinel_file):
             if _alert_identity(prior) != identity or prior.get("timestamp_dt") is None:
                 continue
-            if (now - prior["timestamp_dt"]).total_seconds() <= float(
-                    _sentinel_policy()["dedup_window_seconds"]):
+            elapsed = (now - prior["timestamp_dt"]).total_seconds()
+            if 0 <= elapsed <= float(_sentinel_policy()["dedup_window_seconds"]):
                 return {"status": "deduplicated", "identity": identity}
         if "# Sentinel Alerts" not in existing:
             existing = "# Sentinel Alerts\n" + existing

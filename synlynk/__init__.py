@@ -3519,8 +3519,9 @@ def cmd_status(json_output: bool = False, platform: bool = False) -> None:
     state = "Running" if watcher_running else "Stopped"
     trigger = f"  ·  last trigger {last_trigger_file}" if last_trigger_file else ""
     print(f" WATCHER\n   {icon} {state}{trigger}")
-    check_daemon_health()
-    check_stall()
+    sentinel_path = os.path.join(os.getcwd(), ".synlynk", "sentinel.md")
+    check_daemon_health(sentinel_path=sentinel_path)
+    check_stall(sentinel_path=sentinel_path)
     if mode == "team" and teammates:
         print()
         print(" TEAMMATES")
