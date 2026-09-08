@@ -9,6 +9,85 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Breaking Changes
+
+- **[Draft] Commands that operate on a workspace now require an explicit workspace context when run outside the repository root.**
+  Automation launched from a different working directory may fail instead of
+  silently reading or writing state for the wrong workspace. **Migration:** run
+  the command from the intended repository root or pass its `--workspace`
+  option explicitly, and update wrappers that previously relied on the current
+  directory being inferred.
+
+- **[Draft] The command-line configuration flag `--config` now accepts only a file path, not an inline JSON object.**
+  Scripts that pass configuration directly on the command line will fail
+  validation after upgrading instead of being parsed as before. **Migration:**
+  write inline configuration to a file and pass that file's path to `--config`,
+  or use the equivalent environment-based configuration mechanism.
+
+- **[Draft] The default configuration directory is now resolved relative to the workspace root.**
+  Deployments that relied on the process working directory may load a different
+  configuration after upgrading, which can change dispatch and storage
+  behavior. **Migration:** move workspace configuration into the repository's
+  `.synlynk/` directory, or pass an explicit configuration path wherever the
+  command is run from outside the workspace.
+
+- **[Draft] Resource lookup commands now exit non-zero when no match is found.**
+  Automation that treats an empty result as a successful no-op will begin
+  failing fast, making missing resources visible instead of silently masking
+  typos or stale identifiers. **Migration:** handle the documented not-found
+  exit code explicitly when an empty result is expected, and reserve other
+  non-zero codes for actual command failures.
+
+- **[Draft] List-command responses now return an object with `items` and `next_cursor` instead of a bare array.**
+  Clients that iterate over the response directly or deserialize it as an array
+  will fail after upgrading, while the wrapper leaves room for pagination and
+  future metadata. **Migration:** read records from `items`, treat a missing or
+  null `next_cursor` as the end of the result set, and follow the cursor when
+  fetching subsequent pages.
+
+- **[Draft] JSON output for `synlynk jobs --json` now wraps records under a `jobs` key.**
+  Consumers that read the previous top-level array will no longer receive a
+  compatible response, making the output extensible without changing its
+  meaning. **Migration:** read the `jobs` field and handle an empty list when
+  no jobs are available.
+
+- **[Draft] Event payloads now require an explicit `event_version`.**
+  Consumers that omit the field will be rejected instead of receiving a
+  best-effort payload, making incompatible contract changes visible at the
+  boundary. **Migration:** update producers to send the supported version and
+  update consumers to validate it before processing events.
+
+- **[Draft] Dispatch task definitions now require an explicit `task_type`.**
+  Definitions that omit the field will be rejected instead of being inferred
+  from task text, which makes routing failures visible before a job starts.
+  **Migration:** add the appropriate `task_type` to each existing definition
+  (for example, `implement`, `test`, or `review`) before upgrading.
+
+- **[Draft] Configuration files now require an explicit schema version.**
+  Unversioned configuration files will no longer be loaded implicitly, which
+  prevents older layouts from being interpreted as current settings.
+  **Migration:** add the supported `schema_version` value to existing files
+  and run `synlynk migrate` before upgrading; invalid or unsupported versions
+  should be corrected before dispatch can resume.
+
+- **[Draft] The default retry policy now fails closed for unknown error types.**
+  Jobs that encounter an error not covered by the configured retry policy will
+  stop instead of being retried automatically, preventing non-idempotent work
+  from running more than once. **Migration:** review custom retry policies,
+  add explicit handling for errors that are safe to retry, and re-run stopped
+  jobs only after confirming that their side effects are safe to repeat.
+
+- **Dispatch jobs now distinguish completed work from true zombie termination (#1498).**
+  Previously, any exited worker that still had a disposable worktree could be
+  classified as `killed_zombie` (exit `-9`) before the reconciler read the
+  `{log}.exit` marker or inspected real output — including clean design/review
+  jobs. That also deleted worktree-local logs.
+  **Migration:** treat `killed_zombie` as a true orphan only (dead PID, no exit
+  marker, no completion receipt / meaningful work). For cleanup and retry,
+  prefer the job's terminal `status` and `exit_code` (`done` / `failed`).
+  Worker logs now live under the daemon's central `.synlynk/logs/` directory and
+  are preserved when a disposable worktree is reaped.
+
 ### Added
 
 - **Cadence-breaker resilience engine:** markdown append conflict auto-rebase,

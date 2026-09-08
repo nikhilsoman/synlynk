@@ -49,8 +49,10 @@ def test_all_terminal_status_functions_consult_gh_write_verified():
         if func_name in _DOCUMENTED_EXCEPTIONS:
             continue
         func = getattr(module, func_name)
-        if not _source_calls_name(func, "gh_write_verified") and not _source_calls_name(
-            func, "_apply_gh_write_verification"
+        if (
+            not _source_calls_name(func, "gh_write_verified")
+            and not _source_calls_name(func, "_apply_gh_write_verification")
+            and not _source_calls_name(func, "_verify_daemon_terminal_status")
         ):
             missing.append(f"{module.__name__}.{func_name}")
     assert not missing, (

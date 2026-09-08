@@ -9,6 +9,7 @@ import sqlite3
 import subprocess
 import sys
 import time
+import uuid
 from typing import Optional
 
 from synlynk.sentinel import _write_sentinel_alert
@@ -104,6 +105,27 @@ def _job_has_real_work_landed(git_state: Optional[dict]) -> bool:
     if not git_state:
         return False
     return bool(git_state.get("has_activity") or git_state.get("remote_has_activity"))
+
+
+def _git_state_files_touched(git_state: Optional[dict]) -> list:
+    """Return local changed files, falling back to files touched remotely."""
+    if not git_state:
+        return []
+    files = list(git_state.get("changed_files") or [])
+    if not files and git_state.get("remote_files_touched"):
+        files = list(git_state.get("remote_files_touched") or [])
+    return files
+
+
+def _read_job_log(log_path: Optional[str]) -> str:
+    """Read a job log when it is available, treating unavailable logs as empty."""
+    if not log_path or not os.path.exists(log_path):
+        return ""
+    try:
+        with open(log_path) as f:
+            return f.read()
+    except Exception:
+        return ""
 
 
 def _check_scope_compliance(changed_files: list, scope_paths: list) -> bool:
@@ -937,6 +959,17 @@ def _inspect_worktree_git_state(
         "remote_has_activity": remote_branch_has_activity,
         "changed_files": sorted(set(changed_files)),
     }
+
+
+_DEFAULT_INSPECT_WORKTREE_GIT_STATE = _inspect_worktree_git_state
+
+
+def _worktree_git_state_inspector():
+    """Resolve the inspector while honoring local and package-level overrides."""
+    local_inspector = _inspect_worktree_git_state
+    if local_inspector is not _DEFAULT_INSPECT_WORKTREE_GIT_STATE:
+        return local_inspector
+    return _pkg("_inspect_worktree_git_state") or local_inspector
 
 
 def _inspect_origin_branch_activity(
@@ -1962,6 +1995,134 @@ def _pid_is_alive(pid) -> bool:
         return False
 
 
+_UNSET_TERMINAL_CLAIM = object()
+
+
+def _persist_daemon_job_terminal(
+    conn, job_id: str, status: str, exit_code: Optional[int], completed_at: str,
+    *, only_running: bool = False, terminal_claim_token=_UNSET_TERMINAL_CLAIM,
+) -> bool:
+    """Persist a daemon job's terminal state with the requested row scope."""
+    predicates = ["job_id=?"]
+    params = [job_id]
+    if only_running:
+        predicates.append("status='running'")
+    if terminal_claim_token is not _UNSET_TERMINAL_CLAIM:
+        if terminal_claim_token is None:
+            # An explicit null token means the caller failed to claim the row;
+            # it must never be treated as an unclaimed-row match because that
+            # would let a losing reconciler settle a zombie.
+            return False
+        else:
+            predicates.append("terminal_claim_token=?")
+            params.append(terminal_claim_token)
+    where_clause = "WHERE " + " AND ".join(predicates)
+    cursor = conn.execute(
+        "UPDATE daemon_jobs SET status=?, exit_code=?, completed_at=? " + where_clause,
+        (status, exit_code, completed_at, *params),
+    )
+    return (cursor.rowcount or 0) > 0
+
+
+def _settle_daemon_job_terminal(
+    conn,
+    job_id: str,
+    status: str,
+    exit_code: Optional[int],
+    completed_at: str,
+    *,
+    only_running: bool = True,
+    terminal_claim_token=_UNSET_TERMINAL_CLAIM,
+    release_reservation: bool = False,
+) -> bool:
+    """Persist and commit a daemon terminal transition atomically for callers."""
+    settled = _persist_daemon_job_terminal(
+        conn,
+        job_id,
+        status,
+        exit_code,
+        completed_at,
+        only_running=only_running,
+        terminal_claim_token=terminal_claim_token,
+    )
+    conn.commit()
+    if settled and release_reservation:
+        _release_daemon_job_reservation(conn, job_id)
+    return settled
+
+
+def _claim_daemon_job_terminal(conn, job_id: str) -> Optional[str]:
+    """Claim one running job generation before destructive zombie cleanup."""
+    token = uuid.uuid4().hex
+    cursor = conn.execute(
+        "UPDATE daemon_jobs SET terminal_claim_token=? "
+        "WHERE job_id=? AND status='running' AND terminal_claim_token IS NULL",
+        (token, job_id),
+    )
+    return token if (cursor.rowcount or 0) == 1 else None
+
+
+def _release_daemon_job_terminal_claim(conn, job_id: str, token: str) -> None:
+    """Release a zombie claim when terminal evaluation could not complete."""
+    conn.execute(
+        "UPDATE daemon_jobs SET terminal_claim_token=NULL "
+        "WHERE job_id=? AND status='running' AND terminal_claim_token=?",
+        (job_id, token),
+    )
+
+
+def _release_daemon_job_terminal_claim_and_commit(conn, job_id: str, token: str) -> None:
+    """Release a zombie claim and persist the retryable running state."""
+    _release_daemon_job_terminal_claim(conn, job_id, token)
+    conn.commit()
+
+
+def _has_leaked_worktree(job_id: str, log_path: Optional[str]) -> bool:
+    """Return whether a daemon job still has a worktree to clean up."""
+    path = _daemon_job_worktree_path(job_id, log_path)
+    return bool(path and os.path.exists(os.path.join(path, ".git")))
+
+
+def _post_claim_zombie_evidence_is_valid(
+    pid: Optional[int],
+    exit_file: Optional[str],
+    worktree_path: Optional[str],
+    worktree_branch: Optional[str],
+    started_at: Optional[str],
+    inspect_fn,
+    job_id: str,
+    log_path: Optional[str],
+) -> bool:
+    """Return whether the post-claim evidence still supports zombie cleanup."""
+    if exit_file and os.path.exists(exit_file):
+        return False
+    if pid is not None and _pid_is_alive(pid):
+        return False
+    if worktree_path:
+        try:
+            post_claim_git_state = inspect_fn(worktree_path, worktree_branch, started_at)
+        except Exception:
+            # An unavailable second read is uncertainty, not evidence of a
+            # zombie.  Fail closed and let a later reconciliation retry.
+            return False
+        if _job_has_real_work_landed(post_claim_git_state):
+            return False
+    return bool(_has_leaked_worktree(job_id, log_path) or pid is None)
+
+
+def _release_daemon_job_reservation(conn, job_id: str) -> None:
+    """Release the open reservation associated with a terminal daemon job."""
+    release_fn = _pkg("_release_reservation")
+    if not release_fn:
+        return
+    reservation = conn.execute(
+        "SELECT id FROM harness_reservations WHERE job_id=? AND status='open'",
+        (job_id,),
+    ).fetchone()
+    if reservation:
+        release_fn(conn, reservation[0])
+
+
 def mark_daemon_job_terminal(
     conn: sqlite3.Connection,
     job_id: str,
@@ -1979,12 +2140,9 @@ def mark_daemon_job_terminal(
     if not job_id:
         return False
     now = completed_at or time.strftime("%Y-%m-%dT%H:%M:%S")
-    cur = conn.execute(
-        "UPDATE daemon_jobs SET status=?, exit_code=?, completed_at=? "
-        "WHERE job_id=? AND status='running'",
-        (status, exit_code, now, job_id),
+    return _persist_daemon_job_terminal(
+        conn, job_id, status, exit_code, now, only_running=True
     )
-    return (cur.rowcount or 0) > 0
 
 
 def auto_reap_job_from_sentinel(code: str, message: str) -> Optional[str]:
@@ -2030,7 +2188,7 @@ def auto_reap_job_from_sentinel(code: str, message: str) -> Optional[str]:
         worktree_path = _daemon_job_worktree_path(job_id, log_path)
         git_state = None
         if worktree_path:
-            inspect_fn = _pkg("_inspect_worktree_git_state") or _inspect_worktree_git_state
+            inspect_fn = _worktree_git_state_inspector()
             try:
                 git_state = inspect_fn(
                     worktree_path, f"dispatch/{agent}/{job_id}", started_at
@@ -2342,26 +2500,23 @@ def _reconcile_terminal_jobs_json(conn) -> int:
             continue
         requires_gh_write, target, author, expect = row
         if requires_gh_write:
-            status, verified = _apply_gh_write_verification(
+            status, verified = _verify_daemon_terminal_status(
                 conn,
                 job_id,
                 requires_gh_write,
                 target or job.get("gh_write_target"),
                 status,
-                since=job.get("started_at"),
-                expect_author=author or job.get("gh_write_author"),
-                expect=expect or job.get("gh_write_expect") or "closed",
+                job.get("started_at"),
+                author or job.get("gh_write_author"),
+                expect or job.get("gh_write_expect"),
             )
         else:
             verified = None
         exit_code = job.get("exit_code")
         completed_at = job.get("ended_at") or time.strftime("%Y-%m-%dT%H:%M:%S")
-        result = conn.execute(
-            "UPDATE daemon_jobs SET status=?, exit_code=?, completed_at=? "
-            "WHERE job_id=? AND status='running'",
-            (status, exit_code, completed_at, job_id),
-        )
-        if result.rowcount:
+        if _persist_daemon_job_terminal(
+            conn, job_id, status, exit_code, completed_at, only_running=True
+        ):
             repaired += 1
             emit_event(
                 "job_terminal",
@@ -2461,12 +2616,9 @@ def _gtv_status_for_daemon_exit(
     Returns ``(status, exit_code, summary_status, summary_note)``.
     Never leaves successful work as open-ended ``unknown`` with 0 files.
     """
+    files = _git_state_files_touched(git_state)
     work_landed = _job_has_real_work_landed(git_state)
-    files = []
-    if git_state:
-        files = list(git_state.get("changed_files") or [])
-        if not files and git_state.get("remote_files_touched"):
-            files = list(git_state.get("remote_files_touched") or [])
+    has_git_activity = work_landed or bool(files)
 
     if exit_code == 0:
         return ("done", 0, None, None)
@@ -2481,7 +2633,7 @@ def _gtv_status_for_daemon_exit(
                 "exit code missing but git shows activity (#331 GTV)"
             )
             return ("done", 0, "OK (exit 0)", note)
-        if work_landed or files:
+        if has_git_activity:
             note = (
                 "process died without exit code, but worktree/origin has git activity "
                 "(#579/#331 GTV) — inspect before discarding"
@@ -2501,7 +2653,7 @@ def _gtv_status_for_daemon_exit(
         )
 
     # Non-zero exit
-    if work_landed or files:
+    if has_git_activity:
         note = (
             f"exit {exit_code}, but worktree/origin has git activity "
             "(#331 GTV) — outcome may still be usable"
@@ -2523,18 +2675,28 @@ def _apply_gh_write_verification(
     since_dt = _parse_iso8601(since)
     normalized_since = since_dt.isoformat() if since_dt is not None else since
     evidence = {}
+    verification_kwargs = {
+        "expect": expect,
+        "since": normalized_since,
+        "expect_author": expect_author,
+        "evidence": evidence,
+    }
     try:
-        verified = gh_write_verified(
-            gh_write_target, expect=expect, since=normalized_since,
-            expect_author=expect_author, evidence=evidence,
-        )
+        verified = gh_write_verified(gh_write_target, **verification_kwargs)
     except TypeError as exc:
-        if "evidence" not in str(exc):
-            raise
-        verified = gh_write_verified(
-            gh_write_target, expect=expect, since=normalized_since,
-            expect_author=expect_author,
-        )
+        if "evidence" in str(exc):
+            try:
+                verification_kwargs.pop("evidence")
+                verified = gh_write_verified(gh_write_target, **verification_kwargs)
+            except Exception as e:
+                print(f"  ⚠ gh_write_verified fallback failed for {job_id}: {e}", file=sys.stderr)
+                verified = None
+        else:
+            print(f"  ⚠ gh_write_verified TypeError for {job_id}: {exc}", file=sys.stderr)
+            verified = None
+    except Exception as exc:
+        print(f"  ⚠ gh_write_verified failed for {job_id}: {exc}", file=sys.stderr)
+        verified = None
     verified_str = "true" if verified is True else ("false" if verified is False else "unknown")
     if verified is False and status in ("done", "failed_unverified"):
         status = "succeeded_gh_write_failed"
@@ -2548,11 +2710,53 @@ def _apply_gh_write_verification(
     return status, verified_str
 
 
+def _verify_daemon_terminal_status(
+    conn,
+    job_id: str,
+    requires_gh_write: bool,
+    gh_write_target: Optional[str],
+    status: str,
+    started_at: Optional[str],
+    gh_write_author: Optional[str],
+    gh_write_expect: Optional[str],
+) -> tuple:
+    """Apply the configured GitHub-write check using daemon job metadata."""
+    return _apply_gh_write_verification(
+        conn,
+        job_id,
+        requires_gh_write,
+        gh_write_target,
+        status,
+        since=started_at,
+        expect_author=gh_write_author,
+        expect=gh_write_expect or "closed",
+    )
+
+
 def _reap_zombie_worktree(job_id: str, log_path: Optional[str]) -> bool:
     """Remove a leaked worktree recorded by a dead daemon job."""
     path = _daemon_job_worktree_path(job_id, log_path)
     if not path or not os.path.exists(path):
         return False
+    # Preserve any log files located inside the worktree before deleting it
+    if log_path and os.path.exists(log_path):
+        try:
+            norm_log = os.path.abspath(log_path)
+            norm_path = os.path.abspath(path)
+            if norm_log.startswith(norm_path + os.sep):
+                import shutil
+                from synlynk.daemon import _daemon_state_path
+                central_logs_dir = _daemon_state_path("logs")
+                os.makedirs(central_logs_dir, exist_ok=True)
+                dest = os.path.join(central_logs_dir, os.path.basename(log_path))
+                if not os.path.exists(dest):
+                    shutil.copy2(log_path, dest)
+                if os.path.exists(log_path + ".exit"):
+                    dest_exit = dest + ".exit"
+                    if not os.path.exists(dest_exit):
+                        shutil.copy2(log_path + ".exit", dest_exit)
+        except Exception:
+            pass
     result = subprocess.run(
         ["git", "-C", os.path.dirname(path), "worktree", "remove", "--force", path],
         capture_output=True, text=True, check=False,
@@ -2595,76 +2799,37 @@ def _reconcile_daemon_jobs() -> None:
         "FROM daemon_jobs WHERE status='running'"
     ).fetchall()
     now = time.strftime("%Y-%m-%dT%H:%M:%S")
-    def has_leaked_worktree(job_id, log_path):
-        path = _daemon_job_worktree_path(job_id, log_path)
-        return bool(path and os.path.exists(os.path.join(path, ".git")))
-
     try:
         for (job_id, agent, story_id, task, pid, started_at, completed_at, log_path,
              dispatch_context, requires_gh_write, gh_write_target, gh_write_author,
              gh_write_expect, persisted_worktree_path, persisted_worktree_branch) in rows:
-            exited = False
-            zombie = False
-            raw_exit_status = None
-            if pid is None:
-                # Null PID while "running" is always a zombie (#753).
-                exited = True
-            else:
-                try:
-                    wpid, wstatus = os.waitpid(pid, os.WNOHANG)
-                    if wpid != 0:
+            try:
+                exited = False
+                raw_exit_status = None
+                if pid is None:
+                    # Null PID while "running" is always a zombie (#753).
+                    exited = True
+                else:
+                    try:
+                        wpid, wstatus = os.waitpid(pid, os.WNOHANG)
+                        if wpid != 0:
+                            exited = True
+                            raw_exit_status = wstatus
+                    except ChildProcessError:
+                        # Not our child (daemon restart / external spawn) — probe liveness.
+                        if not _pid_is_alive(pid):
+                            exited = True
+                    except Exception:
+                        if not _pid_is_alive(pid):
+                            exited = True
+                    # Double-check: waitpid can return 0 for non-children on some paths;
+                    # if still not exited, trust kill(0).
+                    if not exited and not _pid_is_alive(pid):
                         exited = True
-                        raw_exit_status = wstatus
-                except ChildProcessError:
-                    # Not our child (daemon restart / external spawn) — probe liveness.
-                    if not _pid_is_alive(pid):
-                        exited = True; zombie = has_leaked_worktree(job_id, log_path)
-                except Exception:
-                    if not _pid_is_alive(pid):
-                        exited = True; zombie = has_leaked_worktree(job_id, log_path)
-                # Double-check: waitpid can return 0 for non-children on some paths;
-                # if still not exited, trust kill(0).
-                if not exited and not _pid_is_alive(pid):
-                    exited = True; zombie = has_leaked_worktree(job_id, log_path)
 
-            if exited:
-                if zombie:
-                    # A leaked worktree is evidence that cleanup is needed, not
-                    # evidence that a required GitHub write failed.  Run the
-                    # same GTV/verifier path as other terminal outcomes before
-                    # using the irreversible killed_zombie fallback.
-                    worktree_path = persisted_worktree_path or _daemon_job_worktree_path(job_id, log_path)
-                    worktree_branch = persisted_worktree_branch or (f"dispatch/{agent}/{job_id}" if agent else None)
-                    git_state = None
-                    if worktree_path:
-                        inspect_fn = _pkg("_inspect_worktree_git_state") or _inspect_worktree_git_state
-                        try:
-                            git_state = inspect_fn(worktree_path, worktree_branch, started_at)
-                        except Exception:
-                            git_state = None
-                    zombie_status, zombie_exit_code, _, _ = _gtv_status_for_daemon_exit(
-                        None, git_state
-                    )
-                    zombie_status, gh_write_verified_str = _apply_gh_write_verification(
-                        conn, job_id, requires_gh_write, gh_write_target, zombie_status,
-                        since=started_at, expect_author=gh_write_author,
-                        expect=gh_write_expect or "closed",
-                    )
-                    if (
-                        requires_gh_write and gh_write_verified_str == "true"
-                        and zombie_status == "timed_out"
-                    ):
-                        zombie_status, zombie_exit_code = "done", 0
-                    if not requires_gh_write or gh_write_verified_str != "true":
-                        zombie_status, zombie_exit_code = "killed_zombie", -9
-                    _reap_zombie_worktree(job_id, log_path)
-                    conn.execute(
-                        "UPDATE daemon_jobs SET status=?, exit_code=?, completed_at=? "
-                        "WHERE job_id=? AND status='running'",
-                        (zombie_status, zombie_exit_code, now, job_id),
-                    )
-                    conn.commit()
+                if not exited:
                     continue
+
                 exit_code = None
                 exit_file = None
                 exit_marker_present = False
@@ -2687,33 +2852,18 @@ def _reconcile_daemon_jobs() -> None:
 
                 if preferred is not None:
                     status, exit_code = preferred
-                    status, gh_write_verified_str = _apply_gh_write_verification(
+                    status, gh_write_verified_str = _verify_daemon_terminal_status(
                         conn, job_id, requires_gh_write, gh_write_target, status,
-                        since=started_at, expect_author=gh_write_author,
-                        expect=gh_write_expect or "closed",
+                        started_at, gh_write_author, gh_write_expect,
                     )
-                    conn.execute(
-                        "UPDATE daemon_jobs SET status=?, exit_code=?, completed_at=? "
-                        "WHERE job_id=? AND status='running'",
-                        (status, exit_code, now, job_id),
+                    settled = _settle_daemon_job_terminal(
+                        conn, job_id, status, exit_code, now, release_reservation=True
                     )
-                    conn.commit()
-                    release_fn = _pkg("_release_reservation")
-                    if release_fn:
-                        _res_row = conn.execute(
-                            "SELECT id FROM harness_reservations WHERE job_id=? AND status='open'",
-                            (job_id,),
-                        ).fetchone()
-                        if _res_row:
-                            release_fn(conn, _res_row[0])
+                    if not settled:
+                        # Another actor already committed a terminal status.
+                        continue
                     # Do not rewrite summary — but ensure a cost_entries row exists (#752 A2).
-                    log_text_pref = ""
-                    if log_path and os.path.exists(log_path):
-                        try:
-                            with open(log_path) as f:
-                                log_text_pref = f.read()
-                        except Exception:
-                            log_text_pref = ""
+                    log_text_pref = _read_job_log(log_path)
                     cost_recorded = _ensure_daemon_job_cost_entry(
                         job_id, agent, story_id, log_text_pref, conn=conn
                     )
@@ -2735,19 +2885,82 @@ def _reconcile_daemon_jobs() -> None:
                 worktree_branch = persisted_worktree_branch or (f"dispatch/{agent}/{job_id}" if agent else None)
                 git_state = None
                 if worktree_path:
-                    inspect_fn = _pkg("_inspect_worktree_git_state") or _inspect_worktree_git_state
+                    inspect_fn = _worktree_git_state_inspector()
                     try:
                         git_state = inspect_fn(worktree_path, worktree_branch, started_at)
                     except Exception:
                         git_state = None
 
+                # If no exit signal, no exit file, and no git activity, handle true zombie reap
+                if (
+                    exit_code is None
+                    and not exit_marker_present
+                    and not _job_has_real_work_landed(git_state)
+                    and (_has_leaked_worktree(job_id, log_path) or pid is None)
+                ):
+                    terminal_claim_token = _claim_daemon_job_terminal(conn, job_id)
+                    if terminal_claim_token is None:
+                        continue
+                    try:
+                        # The initial scan only established that this row was
+                        # *eligible* for zombie handling.  It is not proof
+                        # that the worker stayed silent while we waited for
+                        # the SQLite claim.  Re-read all external evidence
+                        # after acquiring the claim so a late exit marker,
+                        # process revival/PID reuse, or newly-visible git
+                        # activity cannot be mistaken for the same dead
+                        # observation and trigger destructive cleanup.
+                        post_claim_exit_file = (log_path + ".exit") if log_path else None
+                        if not _post_claim_zombie_evidence_is_valid(
+                            pid,
+                            post_claim_exit_file,
+                            worktree_path,
+                            worktree_branch,
+                            started_at,
+                            _worktree_git_state_inspector(),
+                            job_id,
+                            log_path,
+                        ):
+                            _release_daemon_job_terminal_claim_and_commit(
+                                conn, job_id, terminal_claim_token
+                            )
+                            continue
+                        zombie_status, zombie_exit_code, _, _ = _gtv_status_for_daemon_exit(
+                            None, git_state
+                        )
+                        zombie_status, gh_write_verified_str = _verify_daemon_terminal_status(
+                            conn, job_id, requires_gh_write, gh_write_target, zombie_status,
+                            started_at, gh_write_author, gh_write_expect,
+                        )
+                        if (
+                            requires_gh_write and gh_write_verified_str == "true"
+                            and zombie_status == "timed_out"
+                        ):
+                            zombie_status, zombie_exit_code = "done", 0
+                        if not requires_gh_write or gh_write_verified_str != "true":
+                            zombie_status, zombie_exit_code = "killed_zombie", -9
+                        # Claim terminal status before deleting the worktree so a
+                        # concurrent reconciler that already settled the job as
+                        # done/failed cannot lose its workspace to a late reap.
+                        settled = _settle_daemon_job_terminal(
+                            conn, job_id, zombie_status, zombie_exit_code, now,
+                            only_running=True, terminal_claim_token=terminal_claim_token,
+                        )
+                        if settled and zombie_status == "killed_zombie":
+                            _reap_zombie_worktree(job_id, log_path)
+                    except Exception:
+                        conn.rollback()
+                        _release_daemon_job_terminal_claim(conn, job_id, terminal_claim_token)
+                        conn.commit()
+                        raise
+                    continue
+
                 status, exit_code, summary_status, summary_note = _gtv_status_for_daemon_exit(
                     exit_code, git_state
                 )
-                status, gh_write_verified_str = _apply_gh_write_verification(
+                status, gh_write_verified_str = _verify_daemon_terminal_status(
                     conn, job_id, requires_gh_write, gh_write_target, status,
-                    since=started_at, expect_author=gh_write_author,
-                    expect=gh_write_expect or "closed",
+                    started_at, gh_write_author, gh_write_expect,
                 )
                 if (
                     requires_gh_write and gh_write_verified_str == "true"
@@ -2755,11 +2968,7 @@ def _reconcile_daemon_jobs() -> None:
                 ):
                     status, exit_code = "done", 0
 
-                files_touched = []
-                if git_state:
-                    files_touched = list(git_state.get("changed_files") or [])
-                    if not files_touched and git_state.get("remote_files_touched"):
-                        files_touched = list(git_state.get("remote_files_touched") or [])
+                files_touched = _git_state_files_touched(git_state)
                 if not files_touched and worktree_path:
                     files_fn = _pkg("_worktree_files_touched")
                     if files_fn:
@@ -2768,21 +2977,17 @@ def _reconcile_daemon_jobs() -> None:
                         except Exception:
                             files_touched = []
 
-                log_text = ""
-                conn.execute(
-                    "UPDATE daemon_jobs SET status=?, exit_code=?, completed_at=? "
-                    "WHERE job_id=?",
-                    (status, exit_code, now, job_id)
+                # Reconciliation can overlap with the sentinel path or a
+                # second daemon pass.  Do not let a stale inspection overwrite
+                # a terminal state that another actor already committed.
+                settled = _settle_daemon_job_terminal(
+                    conn, job_id, status, exit_code, now, release_reservation=True
                 )
-                conn.commit()
-                release_fn = _pkg("_release_reservation")
-                if release_fn:
-                    _res_row = conn.execute(
-                        "SELECT id FROM harness_reservations WHERE job_id=? AND status='open'",
-                        (job_id,),
-                    ).fetchone()
-                    if _res_row:
-                        release_fn(conn, _res_row[0])
+                if not settled:
+                    # Another reconciler/sentinel won the terminal-state
+                    # race.  Its status is authoritative; avoid emitting
+                    # stale summaries, costs, or permission classifications.
+                    continue
                 duration_s = None
                 try:
                     end_ts = time.mktime(time.strptime(now, "%Y-%m-%dT%H:%M:%S"))
@@ -2790,13 +2995,7 @@ def _reconcile_daemon_jobs() -> None:
                     duration_s = max(0.0, end_ts - start_ts)
                 except Exception:
                     duration_s = None
-                log_text = ""
-                if log_path and os.path.exists(log_path):
-                    try:
-                        with open(log_path) as f:
-                            log_text = f.read()
-                    except Exception:
-                        log_text = ""
+                log_text = _read_job_log(log_path)
                 if (
                     log_text
                     and _log_has_permission_denied_signature(log_text)
@@ -2883,6 +3082,9 @@ def _reconcile_daemon_jobs() -> None:
                     task_sha256=task_sha256, task_preview=task_preview,
                     log_text=log_text,
                 )
+            except Exception as exc:
+                print(f"  ⚠ exception reconciling job {job_id}: {exc}", file=sys.stderr)
+                continue
         conn.commit()
     finally:
         conn.close()

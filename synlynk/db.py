@@ -228,6 +228,60 @@ def _parse_roadmap_md(content: str) -> tuple:
                            'status': status, 'priority': priority, 'story_id': None, 'notes': None})
     return arcs, phases
 
+
+def detect_roadmap_doc_drift(old_content: str, new_content: str) -> dict:
+    """Compare two roadmap.md versions and report structural drift."""
+    old_arcs, old_phases = _parse_roadmap_md(old_content)
+    new_arcs, new_phases = _parse_roadmap_md(new_content)
+
+    def _norm_phase_title(title: str) -> str:
+        text = re.sub(r"^\[[ xX]\]\s*", "", title.strip())
+        text = text.replace("✅", "").replace("🚧", "")
+        text = re.sub(r"\s*\((P0|P1|daily-driver)\)\s*", " ", text)
+        text = re.sub(r"\s*\[(P0|P1|daily-driver)\]\s*", " ", text)
+        return re.sub(r"\s+", " ", text).strip().lower()
+
+    old_arc_map = {arc["version"]: arc for arc in old_arcs}
+    new_arc_map = {arc["version"]: arc for arc in new_arcs}
+    old_versions = set(old_arc_map)
+    new_versions = set(new_arc_map)
+    added_arcs = sorted(new_versions - old_versions)
+    removed_arcs = sorted(old_versions - new_versions)
+    changed_arcs = []
+    for version in sorted(old_versions & new_versions):
+        old_arc, new_arc = old_arc_map[version], new_arc_map[version]
+        for field in ("title", "status", "goal_id"):
+            if old_arc.get(field) != new_arc.get(field):
+                changed_arcs.append({
+                    "version": version, "field": field,
+                    "old": old_arc.get(field), "new": new_arc.get(field),
+                })
+
+    def _phase_key(phase: dict) -> tuple:
+        return (phase["arc_version"], _norm_phase_title(phase["phase_title"]))
+
+    old_phase_map = {_phase_key(phase): phase for phase in old_phases}
+    new_phase_map = {_phase_key(phase): phase for phase in new_phases}
+    old_keys = set(old_phase_map)
+    new_keys = set(new_phase_map)
+    added_phases = [new_phase_map[key]["phase_title"] for key in sorted(new_keys - old_keys)]
+    removed_phases = [old_phase_map[key]["phase_title"] for key in sorted(old_keys - new_keys)]
+    changed_phases = []
+    for key in sorted(old_keys & new_keys):
+        old_phase, new_phase = old_phase_map[key], new_phase_map[key]
+        if (old_phase.get("status") != new_phase.get("status")
+                or old_phase.get("priority") != new_phase.get("priority")):
+            changed_phases.append(new_phase["phase_title"])
+
+    return {
+        "has_drift": bool(added_arcs or removed_arcs or changed_arcs
+                           or added_phases or removed_phases or changed_phases),
+        "added_arcs": added_arcs, "removed_arcs": removed_arcs,
+        "changed_arcs": changed_arcs, "added_phases": added_phases,
+        "removed_phases": removed_phases, "changed_phases": changed_phases,
+    }
+
+
 def _parse_costs_md(content: str) -> list:
     rows = []
     for line in content.splitlines():
@@ -732,6 +786,11 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
         if "worktree_branch" not in daemon_job_cols:
             try:
                 conn.execute("ALTER TABLE daemon_jobs ADD COLUMN worktree_branch TEXT")
+            except sqlite3.OperationalError:
+                pass
+        if "terminal_claim_token" not in daemon_job_cols:
+            try:
+                conn.execute("ALTER TABLE daemon_jobs ADD COLUMN terminal_claim_token TEXT")
             except sqlite3.OperationalError:
                 pass
         try:

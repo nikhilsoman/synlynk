@@ -180,3 +180,63 @@ def test_refresh_installation_token_writes_to_explicit_apps_dir(monkeypatch, tmp
     assert cache_path.exists()
     assert json.loads(cache_path.read_text())["token"] == "worktree-token"
     assert not (other_cwd / ".synlynk" / "github_apps" / "qa.token.json").exists()
+
+
+def test_resolve_private_key_path_from_worktree(tmp_path, monkeypatch):
+    from synlynk import github_app_auth as gh_auth
+
+    repo_dir = tmp_path / "main_repo"
+    apps_dir = repo_dir / ".synlynk" / "github_apps"
+    apps_dir.mkdir(parents=True)
+    pem_file = apps_dir / "architect.pem"
+    pem_file.write_text("fake-pem-key")
+
+    worktree_dir = tmp_path / "worktrees" / "job-12345"
+    worktree_dir.mkdir(parents=True)
+    monkeypatch.chdir(worktree_dir)
+
+    # 1. Given relative path .synlynk/github_apps/architect.pem and explicit apps_dir
+    resolved = gh_auth._resolve_private_key_path(".synlynk/github_apps/architect.pem", apps_dir=str(apps_dir))
+    assert os.path.isabs(resolved)
+    assert os.path.samefile(resolved, pem_file)
+
+    # 2. Given just filename architect.pem and explicit apps_dir
+    resolved2 = gh_auth._resolve_private_key_path("architect.pem", apps_dir=str(apps_dir))
+    assert os.path.isabs(resolved2)
+    assert os.path.samefile(resolved2, pem_file)
+
+    # 3. Already absolute path
+    resolved3 = gh_auth._resolve_private_key_path(str(pem_file))
+    assert resolved3 == str(pem_file)
+
+
+def test_refresh_installation_token_resolves_relative_pem_path_to_absolute(tmp_path, monkeypatch):
+    from synlynk import github_app_auth as gh_auth
+
+    apps_dir = tmp_path / "repo" / ".synlynk" / "github_apps"
+    apps_dir.mkdir(parents=True)
+    pem_file = apps_dir / "architect.pem"
+    pem_file.write_text("fake-pem-key")
+
+    worktree_dir = tmp_path / "worktree"
+    worktree_dir.mkdir()
+    monkeypatch.chdir(worktree_dir)
+
+    minted_pem_paths = []
+    monkeypatch.setattr(
+        gh_auth,
+        "_mint_installation_token",
+        lambda app_id, inst_id, pem_path: minted_pem_paths.append(pem_path) or ("tok", time.time() + 300)
+    )
+
+    app_config = {
+        "app_id": "4536677",
+        "installation_id": "12345",
+        "private_key_path": ".synlynk/github_apps/architect.pem",
+    }
+    gh_auth.refresh_installation_token("architect", app_config, apps_dir=str(apps_dir))
+
+    assert len(minted_pem_paths) == 1
+    assert os.path.isabs(minted_pem_paths[0])
+    assert os.path.samefile(minted_pem_paths[0], pem_file)
+
