@@ -1781,7 +1781,7 @@ def load_config() -> dict:
         "qa_gate_mode": "block-only",
         "sentinel": {
             "dedup_window_seconds": 86400,
-            "active_ttl_seconds": {"CRITICAL": 86400, "WARN": 3600, "INFO": 3600},
+            "active_ttl_seconds": {"CRITICAL": 180 * 86400, "WARN": 180 * 86400, "INFO": 180 * 86400},
         },
     }
     config_file = ".synlynk/config.json"

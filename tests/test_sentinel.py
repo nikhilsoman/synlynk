@@ -331,7 +331,10 @@ def test_sentinel_expiry_boundary_and_legacy_are_fail_safe(tmp_path):
         "malformed historical note\n"
     )
     now = datetime(2026, 9, 8, 10, 0, tzinfo=timezone.utc)
-    alerts = _iter_sentinel_alerts(str(path), active_only=True, now=now)
+    alerts = _iter_sentinel_alerts(
+        str(path), active_only=True, now=now,
+        policy={"active_ttl_seconds": {"CRITICAL": 24 * 60 * 60}},
+    )
     assert [alert["code"] for alert in alerts] == ["NEW", "LEGACY"]
     exact = _iter_sentinel_alerts(str(path))[0]
     assert _alert_is_active(exact, now=now, expiry_seconds=24 * 60 * 60) is False

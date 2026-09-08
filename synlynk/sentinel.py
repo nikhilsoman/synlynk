@@ -31,9 +31,11 @@ _SENTINEL_VERSION_DRIFT_AGENT_RE = re.compile(
 
 DEFAULT_SENTINEL_DEDUP_WINDOW_SECONDS = 24 * 60 * 60
 DEFAULT_SENTINEL_ACTIVE_TTL_SECONDS = {
-    "CRITICAL": 24 * 60 * 60,
-    "WARN": 60 * 60,
-    "INFO": 60 * 60,
+    # Long enough to preserve existing workspaces during rollout; operators
+    # can tighten this through sentinel.active_ttl_seconds in config.
+    "CRITICAL": 180 * 24 * 60 * 60,
+    "WARN": 180 * 24 * 60 * 60,
+    "INFO": 180 * 24 * 60 * 60,
 }
 
 
@@ -65,6 +67,10 @@ def _sentinel_policy() -> dict:
                 policy["active_ttl_seconds"][str(severity).upper()] = max(0, float(value))
             except (TypeError, ValueError):
                 continue
+    # Keep the earlier private key names available to integrations while the
+    # descriptive names are used by the new readers and writer.
+    policy["dedup_seconds"] = policy["dedup_window_seconds"]
+    policy["ttl_seconds"] = policy["active_ttl_seconds"]
     return policy
 
 
@@ -103,7 +109,9 @@ def _parse_sentinel_alert(line: str) -> Optional[dict]:
     severity = _normalize_sentinel_severity(groups.get("severity") or "INFO")
     return {
         "raw_line": raw,
+        "line": raw,
         "severity": severity,
+        "normalized_severity": severity,
         "original_severity": groups.get("severity") or None,
         "timestamp": groups.get("timestamp"),
         "timestamp_dt": _parse_sentinel_timestamp(groups.get("timestamp")),
@@ -144,7 +152,7 @@ def _alert_is_active(alert: dict, now=None, expiry_seconds=None) -> bool:
     return (now - timestamp).total_seconds() < float(expiry_seconds)
 
 
-def _iter_sentinel_alerts(path: Optional[str] = None, *, active_only: bool = False,
+def _iter_sentinel_alerts(path: Optional[str] = None, active_only: bool = False,
                           now=None, policy: Optional[dict] = None):
     """Return parsed alerts from *path*, optionally applying active expiry."""
     sentinel_file = path or ".synlynk/sentinel.md"
@@ -156,8 +164,29 @@ def _iter_sentinel_alerts(path: Optional[str] = None, *, active_only: bool = Fal
             for line in handle:
                 alert = _parse_sentinel_alert(line)
                 if alert is None:
-                    continue
-                if active_only and not _alert_is_active(alert, now=now):
+                    # Preserve older/free-form bullets for active consumers.
+                    # They have no trustworthy timestamp and therefore remain
+                    # fail-safe until explicitly cleared.
+                    raw = line.strip()
+                    if not raw.startswith("- ["):
+                        continue
+                    severity_match = re.match(r"^- \[([A-Z]+)\]", raw)
+                    alert = {
+                        "raw_line": raw,
+                        "severity": _normalize_sentinel_severity(
+                            severity_match.group(1) if severity_match else "INFO"
+                        ),
+                        "original_severity": severity_match.group(1) if severity_match else None,
+                        "timestamp": None,
+                        "timestamp_dt": None,
+                        "code": "",
+                        "message": raw,
+                        "legacy": True,
+                    }
+                expiry = None
+                if policy and isinstance(policy.get("active_ttl_seconds"), dict):
+                    expiry = policy["active_ttl_seconds"].get(alert.get("severity"))
+                if active_only and not _alert_is_active(alert, now=now, expiry_seconds=expiry):
                     continue
                 alerts.append(alert)
     except (OSError, UnicodeError):
