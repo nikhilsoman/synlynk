@@ -51,3 +51,29 @@ def test_active_items_preserves_order_and_duplicate_ids_with_extra_metadata():
     assert result == [first, second]
     assert result[0] is first
     assert result[1] is second
+
+
+def test_active_items_returns_a_single_active_item_unchanged():
+    item = {"id": 42, "active": True}
+
+    assert active_items([item]) == [item]
+
+
+def test_active_items_returns_no_items_when_every_item_is_inactive():
+    items = [
+        {"id": 1, "active": False},
+        {"id": 2, "active": None},
+        {"id": 3, "active": 0},
+    ]
+
+    assert active_items(items) == []
+
+
+def test_active_items_preserves_metadata_on_selected_items():
+    item = {"id": 9, "active": True, "name": "visible", "tags": ["basic"]}
+
+    result = active_items([item, {"id": 10, "active": False, "name": "hidden"}])
+
+    assert result == [item]
+    assert result[0]["name"] == "visible"
+    assert result[0]["tags"] == ["basic"]

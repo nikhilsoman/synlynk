@@ -264,8 +264,15 @@ Changes to agent directive files pending outcome of BS-14 brainstorm. Do not app
 
 ## Positioning (decided 2026-06-06)
 - **Name:** synlynk — "The OS for multi-agent development." [@nikhilsoman]
-- **Framing:** Not a context injector, skill package, or SaaS dashboard. An OS layer beneath every
-  AI tool, giving agents persistent memory, structured coordination, and a stable shared substrate.
+- **Framing:** Not a context injector, skill package, SaaS dashboard, harness, or agent vendor. Synlynk
+  is the OS/control plane beneath multi-agent development: it gives agents persistent memory,
+  structured coordination, and a stable shared substrate while measuring and arbitrating work across
+  heterogeneous coding harnesses.
+- **Messaging hierarchy:** “OS for multi-agent development” is the category and long-term ambition;
+  “measurement and arbitration across harnesses” is the concrete differentiated wedge; trustworthy
+  autonomy is the resulting operating outcome. Use the combined message when the distinction matters:
+  “Synlynk is the control plane for multi-agent development, using measured cross-harness routing to
+  make autonomous execution trustworthy.” [@nikhilsoman]
 - **Tier model retired:** Solo/Team/Enterprise tiers replaced by the OS layer model — one product,
   increasing capability as you move up the stack.
 
@@ -511,6 +518,20 @@ startup failure, and daemon reconciliation marks dead-PID jobs
 `killed_zombie` while removing leaked worktrees. Unsupported conflicts and
 uncertain process ownership remain fail-closed.
 [@codex]
+
+## Dispatch Zombie Worker Prevention & Daemon Exception Isolation (#1498, 2026-09-08)
+
+Daemon job reconciliation now inspects exit code markers and process waitpid status before evaluating zombie reap conditions. This prevents non-gh-write completed jobs (e.g. design/review tasks) with existing worktrees from being erroneously classified as `killed_zombie`. Job logs are placed in the central `.synlynk/logs` directory outside disposable worktrees, and any worktree-local logs are preserved during reap. Per-job iteration in `_reconcile_daemon_jobs` is wrapped in per-job exception handling, preventing unhandled errors from terminating daemon reconciliation. GitHub App private keys resolve to absolute paths across worktrees.
+[@nikhilsoman]
+
+## Advanced Scenario Priority Reconciliation (2026-09-08)
+
+When roadmap stakeholders disagree between faster autonomous delivery and more
+accurate workspace state, use a bounded lane with explicit rollback and
+ownership controls. Treat durable completion, failure, cleanup, and cost
+evidence as hard gates, then expand only when throughput improves without
+degrading stale-state, verification, recovery, or intervention metrics.
+[@nikhilsoman]
 
 ## Conventions
 - Attribution: `[@username]` on all team-mode entries.

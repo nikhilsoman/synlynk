@@ -1431,3 +1431,32 @@ implementation plan.
 - Merged PR #1081, documenting the durable agent runtime, and PR #1175, adding the missing `review` task-allocation override to `synlynk/policy.json`'s `dev_authority` configuration to close the LIVE-8/#1166 policy gap.
 - Confirmed that PR #1172's task-type inference fix and PR #1175's policy override together make the daemon's `gh_write_verified` signal reliable for future runs of LIVE-8 (#1166, Grok gh-write stalls).
 - Planned a fresh Grok dispatch to obtain a real pass/fail result for the gh-write terminal action before deciding whether Grok's gh-write capability profile should be downgraded.
+
+## 2026-09-08 — Session: Reconcile multi-agent positioning
+
+### Completed
+- Reconciled the “OS for multi-agent development” category message with the “measurement and arbitration layer” product wedge in the roadmap and canonical memory.
+- Established the single-sentence message: “Synlynk is the control plane for multi-agent development, using measured cross-harness routing to make autonomous execution trustworthy.”
+- Ran the requested regression suite: 408 passed, 1 skipped, and 2 sandbox-blocked failures (loopback binding and read-only `.synlynk` paths).
+
+## 2026-09-08 — Session: Dispatch zombie termination hardening
+
+### Completed
+- Distinguished completed or failed workers from true zombie terminations by reading exit markers and process state before cleanup.
+- Made zombie cleanup race-safe with a terminal claim token, preserving worktrees when another reconciler settles the job first.
+- Centralized daemon logs and isolated per-job reconciliation failures so one malformed job cannot stop the remaining cleanup pass.
+
+## 2026-09-08 — Session: Union-merged status reconciliation
+
+### Completed
+- Preserved the positioning update and the dispatch-hardening update as separate, complementary records rather than choosing one side of the merged markdown additions.
+- Kept the positioning decision focused on the product message and the zombie-hardening decision focused on worker lifecycle correctness.
+- Confirmed the shared outcome: measured cross-harness execution is trustworthy when terminal state, cleanup ownership, and supporting documentation remain explicit.
+
+## 2026-09-08 — Session: Advanced-priority roadmap contract
+
+### Completed
+
+- Added a reusable roadmap section for advanced scenarios where delivery speed and workspace-state accuracy compete.
+- Defined bounded execution, evidence-backed trust gates, and shared review metrics as the reconciliation mechanism.
+- Kept the existing dispatch-reliability feature status intact while making the scale-up decision rule explicit.

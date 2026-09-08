@@ -17,6 +17,16 @@ Stakeholders are asking for two outcomes that can pull in opposite directions: s
 
 This keeps the execution-autonomy stakeholder moving toward visible capability while giving the context-accuracy stakeholder a veto over unsafe expansion. Success is not maximum automation; it is automation that earns a wider operating envelope by remaining observable and correct.
 
+### Roadmap decision for competing priorities
+
+For any advanced scenario where one stakeholder optimizes for faster autonomous delivery and another optimizes for trustworthy workspace state, ship the smallest end-to-end slice that serves both objectives:
+
+- **Advance capability in a bounded lane:** allow the scenario to run behind explicit scope, quota, ownership, and rollback controls so progress remains visible and reversible.
+- **Make trust a hard exit criterion:** require durable evidence for completion, failure, cleanup, and cost before widening the lane; missing or conflicting evidence pauses expansion rather than being inferred away.
+- **Reconcile with shared measures:** review throughput alongside stale-state rate, verification success, recovery time, and operator intervention. Expand only when capability improves without degrading the trust floor.
+
+This turns a priority conflict into a staged roadmap contract: autonomy supplies the next learning opportunity, while context accuracy determines whether that opportunity is safe to scale.
+
 ### Completed feature status: dispatch reliability under advanced workloads (2026-09-08)
 
 - **Scenario:** An advanced multi-harness dispatch runs a design or review job that exits while its worktree still exists; reconciliation now checks exit evidence and wait status before treating the job as a zombie, preserving truthful completion state.

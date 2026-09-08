@@ -107,6 +107,27 @@ def _job_has_real_work_landed(git_state: Optional[dict]) -> bool:
     return bool(git_state.get("has_activity") or git_state.get("remote_has_activity"))
 
 
+def _git_state_files_touched(git_state: Optional[dict]) -> list:
+    """Return local changed files, falling back to files touched remotely."""
+    if not git_state:
+        return []
+    files = list(git_state.get("changed_files") or [])
+    if not files and git_state.get("remote_files_touched"):
+        files = list(git_state.get("remote_files_touched") or [])
+    return files
+
+
+def _read_job_log(log_path: Optional[str]) -> str:
+    """Read a job log when it is available, treating unavailable logs as empty."""
+    if not log_path or not os.path.exists(log_path):
+        return ""
+    try:
+        with open(log_path) as f:
+            return f.read()
+    except Exception:
+        return ""
+
+
 def _check_scope_compliance(changed_files: list, scope_paths: list) -> bool:
     """True if every changed file matches at least one declared scope glob.
 
@@ -2545,12 +2566,9 @@ def _gtv_status_for_daemon_exit(
     Returns ``(status, exit_code, summary_status, summary_note)``.
     Never leaves successful work as open-ended ``unknown`` with 0 files.
     """
+    files = _git_state_files_touched(git_state)
     work_landed = _job_has_real_work_landed(git_state)
-    files = []
-    if git_state:
-        files = list(git_state.get("changed_files") or [])
-        if not files and git_state.get("remote_files_touched"):
-            files = list(git_state.get("remote_files_touched") or [])
+    has_git_activity = work_landed or bool(files)
 
     if exit_code == 0:
         return ("done", 0, None, None)
@@ -2565,7 +2583,7 @@ def _gtv_status_for_daemon_exit(
                 "exit code missing but git shows activity (#331 GTV)"
             )
             return ("done", 0, "OK (exit 0)", note)
-        if work_landed or files:
+        if has_git_activity:
             note = (
                 "process died without exit code, but worktree/origin has git activity "
                 "(#579/#331 GTV) — inspect before discarding"
@@ -2585,7 +2603,7 @@ def _gtv_status_for_daemon_exit(
         )
 
     # Non-zero exit
-    if work_landed or files:
+    if has_git_activity:
         note = (
             f"exit {exit_code}, but worktree/origin has git activity "
             "(#331 GTV) — outcome may still be usable"
@@ -2799,13 +2817,7 @@ def _reconcile_daemon_jobs() -> None:
                         # Another actor already committed a terminal status.
                         continue
                     # Do not rewrite summary — but ensure a cost_entries row exists (#752 A2).
-                    log_text_pref = ""
-                    if log_path and os.path.exists(log_path):
-                        try:
-                            with open(log_path) as f:
-                                log_text_pref = f.read()
-                        except Exception:
-                            log_text_pref = ""
+                    log_text_pref = _read_job_log(log_path)
                     cost_recorded = _ensure_daemon_job_cost_entry(
                         job_id, agent, story_id, log_text_pref, conn=conn
                     )
@@ -2844,6 +2856,38 @@ def _reconcile_daemon_jobs() -> None:
                     if terminal_claim_token is None:
                         continue
                     try:
+                        # The initial scan only established that this row was
+                        # *eligible* for zombie handling.  It is not proof
+                        # that the worker stayed silent while we waited for
+                        # the SQLite claim.  Re-read all external evidence
+                        # after acquiring the claim so a late exit marker,
+                        # process revival/PID reuse, or newly-visible git
+                        # activity cannot be mistaken for the same dead
+                        # observation and trigger destructive cleanup.
+                        post_claim_exit_file = (log_path + ".exit") if log_path else None
+                        if post_claim_exit_file and os.path.exists(post_claim_exit_file):
+                            _release_daemon_job_terminal_claim(conn, job_id, terminal_claim_token)
+                            conn.commit()
+                            continue
+                        if pid is not None and _pid_is_alive(pid):
+                            _release_daemon_job_terminal_claim(conn, job_id, terminal_claim_token)
+                            conn.commit()
+                            continue
+                        if worktree_path:
+                            try:
+                                post_claim_git_state = inspect_fn(
+                                    worktree_path, worktree_branch, started_at
+                                )
+                            except Exception:
+                                post_claim_git_state = None
+                            if _job_has_real_work_landed(post_claim_git_state):
+                                _release_daemon_job_terminal_claim(conn, job_id, terminal_claim_token)
+                                conn.commit()
+                                continue
+                        if not (has_leaked_worktree(job_id, log_path) or pid is None):
+                            _release_daemon_job_terminal_claim(conn, job_id, terminal_claim_token)
+                            conn.commit()
+                            continue
                         zombie_status, zombie_exit_code, _, _ = _gtv_status_for_daemon_exit(
                             None, git_state
                         )
@@ -2887,11 +2931,7 @@ def _reconcile_daemon_jobs() -> None:
                 ):
                     status, exit_code = "done", 0
 
-                files_touched = []
-                if git_state:
-                    files_touched = list(git_state.get("changed_files") or [])
-                    if not files_touched and git_state.get("remote_files_touched"):
-                        files_touched = list(git_state.get("remote_files_touched") or [])
+                files_touched = _git_state_files_touched(git_state)
                 if not files_touched and worktree_path:
                     files_fn = _pkg("_worktree_files_touched")
                     if files_fn:
@@ -2900,7 +2940,6 @@ def _reconcile_daemon_jobs() -> None:
                         except Exception:
                             files_touched = []
 
-                log_text = ""
                 # Reconciliation can overlap with the sentinel path or a
                 # second daemon pass.  Do not let a stale inspection overwrite
                 # a terminal state that another actor already committed.
@@ -2919,13 +2958,7 @@ def _reconcile_daemon_jobs() -> None:
                     duration_s = max(0.0, end_ts - start_ts)
                 except Exception:
                     duration_s = None
-                log_text = ""
-                if log_path and os.path.exists(log_path):
-                    try:
-                        with open(log_path) as f:
-                            log_text = f.read()
-                    except Exception:
-                        log_text = ""
+                log_text = _read_job_log(log_path)
                 if (
                     log_text
                     and _log_has_permission_denied_signature(log_text)

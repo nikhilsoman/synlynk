@@ -3016,6 +3016,32 @@ def test_research_distributed_statedb_synchronization__story_d58e5033():
     assert "roadmap" in content.lower() or "phased" in content.lower()
 
 
+def test_resolve_a_usability_conflict_between_mobile_and_desktop_layouts():
+    """Keep the fixed nav single-row while preserving mobile navigation access."""
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    base = (root / "website/src/_includes/base.njk").read_text(encoding="utf-8")
+    css = (root / "website/src/assets/css/main.css").read_text(encoding="utf-8")
+    js = (root / "website/src/assets/js/main.js").read_text(encoding="utf-8")
+
+    assert 'class="nav-toggle"' in base
+    assert 'aria-controls="primary-nav"' in base
+    assert 'id="primary-nav"' in base
+    assert ".nav-toggle" in css
+    assert ".nav-links.is-open" in css
+    assert "flex-wrap: nowrap" in css
+
+    mobile_chunk = css.split("@media (max-width: 768px)", 1)[1]
+    assert "flex-wrap: wrap" not in mobile_chunk.split("/* --- Agy", 1)[0]
+    assert "display: none" in mobile_chunk
+    assert "position: absolute" in mobile_chunk
+
+    assert "function initMobileNav()" in js
+    assert "aria-expanded" in js
+    assert "is-open" in js
+
+
 def test_implement_1436_leftover_charter_patch_so_review_fallback_same_identity():
     """Verify #1436 leftover: review_fallback is same-identity only, not the default for qa App approvals."""
     import json
@@ -3168,3 +3194,50 @@ def test_allow_distinct_qa_app_identities_to_submit_approving_pr_reviews(tmp_pat
     assert "qa APPROVE (`gh pr review --approve`) is the default" in repaired_claude_md
     assert "Do not tell sessions to skip `--approve` by default" in repaired_claude_md
     assert "All dispatched agents share one GitHub identity" not in repaired_claude_md
+
+
+def test_detect_drift_between_two_versions_of_a_roadmap_doc():
+    """Compare roadmap versions at the synlynk-bot intermediate difficulty."""
+    from synlynk.db import detect_roadmap_doc_drift
+
+    old = """# Roadmap
+
+## v0.1.0 — Bootstrap ✅
+- [x] Init scaffolding ✅
+- [ ] Capability sweep (P1)
+
+## v0.2.0 — Fleet 🚧
+- [ ] Dispatch queue (P0)
+"""
+    new = """# Roadmap
+
+## v0.1.0 — Bootstrap ✅
+- [x] Init scaffolding ✅
+- [x] Capability sweep (P1) ✅
+
+## v0.2.0 — Fleet ✅ shipped
+- [x] Dispatch queue (P0) ✅
+- [ ] Worktree hygiene (P1)
+
+## v0.3.0 — Observability
+- [ ] Cost ledger (P0)
+"""
+
+    identical = detect_roadmap_doc_drift(old, old)
+    assert identical["has_drift"] is False
+    assert identical["added_arcs"] == []
+    assert identical["removed_arcs"] == []
+    assert identical["changed_arcs"] == []
+    assert identical["added_phases"] == []
+    assert identical["removed_phases"] == []
+    assert identical["changed_phases"] == []
+
+    report = detect_roadmap_doc_drift(old, new)
+    assert report["has_drift"] is True
+    assert report["added_arcs"] == ["v0.3.0"]
+    assert report["removed_arcs"] == []
+    assert any(change["version"] == "v0.2.0" and change["field"] == "status"
+               for change in report["changed_arcs"])
+    assert any("Capability sweep" in phase for phase in report["changed_phases"])
+    assert any("Worktree hygiene" in phase for phase in report["added_phases"])
+    assert any("Cost ledger" in phase for phase in report["added_phases"])

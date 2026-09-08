@@ -86,6 +86,22 @@ When `github_app_auth.refresh_installation_token()` passes `app_config["private_
 `openssl dgst -sha256 -sign .synlynk/github_apps/architect.pem`
 If the current working directory is a worktree (`/worktrees/job-xxxx`), openssl cannot open `.synlynk/github_apps/architect.pem` because that directory does not exist in the worktree.
 
+### 2.5 Remaining TOCTOU Race During Zombie Cleanup
+
+The remediation must also protect the destructive cleanup itself. A reconciler
+can observe a dead PID and a clean worktree, then pause while GitHub-write
+verification, filesystem inspection, or cost accounting runs. During that
+pause, a second reconciler (or the sentinel timeout path) can settle the row,
+or a wrapper can finish writing the exit marker. The first reconciler would
+then continue with its stale observation and remove a worktree that no longer
+belongs to the terminal outcome it inspected. The current ordering of
+"update terminal status, then remove worktree" prevents one narrow lost-update
+case, but the terminal update is not an ownership claim: it does not identify
+which observation is authorized to perform the subsequent deletion.
+
+This is a classic check-then-act race across processes; an in-process lock is
+insufficient because daemon and sentinel paths may use different processes.
+
 ---
 
 ## 3. Remediation Architecture & Design
@@ -155,3 +171,34 @@ for (...) in rows:
 4. **App Auth Path Independence:** GitHub App token refresh functions identically whether CWD is the repo root, a linked worktree, or a subdirectory.
 5. **Reconciler Resilience:** An injected exception in one job row does not prevent subsequent jobs in the same batch from being reconciled.
 6. **Zero Bypass:** No Sentinel gates bypassed; no fallback to personal host credentials.
+
+## 5. Race-Safe Cleanup Extension
+
+Add a nullable `terminal_claim_token` (and, optionally, a claim timestamp) to
+`daemon_jobs`, with an idempotent migration for existing databases. After
+observing a dead PID, atomically claim the row with SQLite:
+
+```sql
+UPDATE daemon_jobs
+SET terminal_claim_token=?
+WHERE job_id=? AND status='running' AND terminal_claim_token IS NULL
+```
+
+Continue only when exactly one row changed. The token identifies the generation
+of this observation; it must not be inferred from `job_id` or PID because PIDs
+can be reused. Re-read the exit marker, PID liveness, and git state after
+acquiring the claim. If new evidence says the worker completed, abandon the
+claim and never remove the worktree.
+
+Before removal, atomically transition to the terminal state only when
+`job_id`, `status='running'`, and `terminal_claim_token=?` all match. If that
+update affects zero rows, the lease was lost (for example, the sentinel won),
+so skip `_reap_zombie_worktree`. Keep the token until cleanup completes, or
+record a separate `cleanup_complete` flag; stale claims can be reclaimed after
+a bounded lease timeout using a fresh token and evidence scan.
+
+The invariant is: **only the process holding the claim token for the same
+running-row generation may delete the worktree**. Add a two-reconciler
+regression test that settles the row between the initial scan and cleanup, and
+assert both that the terminal winner is preserved and that the worktree remains
+intact.

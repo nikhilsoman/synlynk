@@ -1373,6 +1373,57 @@ def test_mark_daemon_job_terminal_only_running(project_dir):
     conn.close()
 
 
+def test_mark_daemon_job_terminal_preserves_explicit_completion_time(project_dir):
+    from synlynk import _get_db
+    from synlynk.jobs import mark_daemon_job_terminal
+
+    conn = _get_db()
+    _seed_daemon_job(conn, "job-explicit-time", pid=123)
+
+    assert mark_daemon_job_terminal(
+        conn,
+        "job-explicit-time",
+        status="killed_zombie",
+        exit_code=-9,
+        completed_at="2026-09-08T12:34:56",
+    ) is True
+    conn.commit()
+
+    row = conn.execute(
+        "SELECT status, exit_code, completed_at FROM daemon_jobs "
+        "WHERE job_id='job-explicit-time'"
+    ).fetchone()
+    assert row == ("killed_zombie", -9, "2026-09-08T12:34:56")
+    conn.close()
+
+
+def test_mark_daemon_job_terminal_ignores_empty_job_id(project_dir):
+    from synlynk import _get_db
+    from synlynk.jobs import mark_daemon_job_terminal
+
+    conn = _get_db()
+
+    assert mark_daemon_job_terminal(conn, "") is False
+    assert conn.execute("SELECT COUNT(*) FROM daemon_jobs").fetchone()[0] == 0
+    conn.close()
+
+
+def test_mark_daemon_job_terminal_leaves_queued_job_unchanged(project_dir):
+    from synlynk import _get_db
+    from synlynk.jobs import mark_daemon_job_terminal
+
+    conn = _get_db()
+    _seed_daemon_job(conn, "job-queued", status="queued", pid=456)
+
+    assert mark_daemon_job_terminal(conn, "job-queued") is False
+    row = conn.execute(
+        "SELECT status, exit_code, completed_at FROM daemon_jobs "
+        "WHERE job_id='job-queued'"
+    ).fetchone()
+    assert row == ("queued", None, None)
+    conn.close()
+
+
 def test_reconcile_releases_reservation_on_settlement(project_dir, monkeypatch):
     import synlynk as sl
     import synlynk.jobs as jobs_mod
@@ -1449,6 +1500,44 @@ def test_scan_and_apply_reap_zombies(tmp_path, monkeypatch):
     conn.close()
 
 
+def test_scan_zombies_keeps_jobs_when_pid_access_is_denied(tmp_path, monkeypatch):
+    """A PID we cannot inspect is potentially alive and must not be reaped."""
+    from synlynk.jobs import scan_zombie_running_jobs
+    import sqlite3
+
+    db = tmp_path / "state.db"
+    conn = sqlite3.connect(str(db))
+    conn.execute(
+        "CREATE TABLE daemon_jobs ("
+        "job_id TEXT PRIMARY KEY, agent TEXT, pid INTEGER, started_at TEXT, status TEXT)"
+    )
+    conn.executemany(
+        "INSERT INTO daemon_jobs (job_id, agent, pid, started_at, status) "
+        "VALUES (?, ?, ?, ?, 'running')",
+        [
+            ("job-permission-denied", "agy", 111, "2026-08-01T00:00:00"),
+            ("job-missing", "codex", 222, "2026-08-01T00:00:00"),
+        ],
+    )
+    conn.commit()
+    conn.close()
+
+    def fake_kill(pid, sig):
+        if int(pid) == 111:
+            raise PermissionError()
+        raise ProcessLookupError()
+
+    monkeypatch.setattr("os.kill", fake_kill)
+
+    candidates = scan_zombie_running_jobs(str(db))
+    actions = {candidate["job_id"]: candidate["action"] for candidate in candidates}
+
+    assert actions == {
+        "job-permission-denied": "keep",
+        "job-missing": "reap",
+    }
+
+
 def test_apply_reap_zombies_skips_candidate_that_settled_after_scan(tmp_path):
     """A scan/apply race must not overwrite a job settled by another worker."""
     from synlynk.jobs import apply_reap_zombies
@@ -1487,6 +1576,56 @@ def test_apply_reap_zombies_skips_candidate_that_settled_after_scan(tmp_path):
         "SELECT status, exit_code, completed_at FROM daemon_jobs WHERE job_id='job-race1'"
     ).fetchone() == ("done", 0, "2026-08-01T00:01:00")
     conn.close()
+
+
+def test_apply_reap_zombies_only_mutates_reap_candidates(tmp_path):
+    """Applying a mixed scan must leave live candidates untouched."""
+    from synlynk.jobs import apply_reap_zombies
+    import sqlite3
+
+    db = tmp_path / "state.db"
+    conn = sqlite3.connect(str(db))
+    conn.execute(
+        "CREATE TABLE daemon_jobs ("
+        "job_id TEXT PRIMARY KEY, status TEXT, completed_at TEXT, exit_code INTEGER)"
+    )
+    conn.executemany(
+        "INSERT INTO daemon_jobs (job_id, status, completed_at, exit_code) "
+        "VALUES (?, 'running', NULL, NULL)",
+        [("job-live",), ("job-dead",)],
+    )
+    conn.commit()
+    conn.close()
+
+    candidates = [
+        {
+            "job_id": "job-live",
+            "db_path": str(db),
+            "action": "keep",
+        },
+        {
+            "job_id": "job-dead",
+            "db_path": str(db),
+            "action": "reap",
+        },
+    ]
+
+    reaped = apply_reap_zombies(candidates)
+
+    assert [candidate["job_id"] for candidate in reaped] == ["job-dead"]
+    conn = sqlite3.connect(str(db))
+    rows = {
+        row[0]: row[1:]
+        for row in conn.execute(
+            "SELECT job_id, status, completed_at, exit_code "
+            "FROM daemon_jobs ORDER BY job_id"
+        )
+    }
+    conn.close()
+    assert rows["job-dead"][0] == "timed_out"
+    assert rows["job-dead"][1] is not None
+    assert rows["job-dead"][2] == -9
+    assert rows["job-live"] == ("running", None, None)
 
 
 def test_cmd_jobs_reap_dry_run_and_apply(tmp_path, monkeypatch, capsys):
@@ -2521,6 +2660,63 @@ def test_malformed_exit_marker_preserves_worktree_and_fails_closed(
     assert (wt / "notes.md").read_text() == "partial work to inspect"
 
 
+def test_malformed_exit_marker_with_git_activity_is_failed_unverified(
+    tmp_path, project_dir, monkeypatch
+):
+    """Malformed exit evidence plus real work must remain inspectable."""
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    wt = tmp_path / "worktrees" / "job-corrupt-exit-work"
+    wt.mkdir(parents=True)
+    (wt / ".git").mkdir()
+    (wt / "partial.py").write_text("print('partial work')\n")
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    log_file = log_dir / "job-corrupt-exit-work.log"
+    log_file.write_text("worker stopped after making partial changes")
+    (log_dir / "job-corrupt-exit-work.log.exit").write_text("not-an-integer\n")
+
+    monkeypatch.setattr(jobs_mod, "_pid_is_alive", lambda pid: False)
+    monkeypatch.setattr(jobs_mod, "_daemon_job_worktree_path", lambda *a, **kw: str(wt))
+    monkeypatch.setattr(
+        sl,
+        "_inspect_worktree_git_state",
+        lambda *a, **kw: {
+            "has_activity": True,
+            "remote_has_activity": False,
+            "changed_files": ["partial.py"],
+            "commits_ahead": 0,
+            "dirty": True,
+        },
+    )
+
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, story_id, task, status, pid, "
+        "enqueued_at, started_at, log_path, requires_gh_write, worktree_path) "
+        "VALUES ('job-corrupt-exit-work', 'agy', 's-corrupt-work', "
+        "'inspect partial work', 'running', 88888, '2026-09-08T00:00:00', "
+        "'2026-09-08T00:00:00', ?, 0, ?)",
+        (str(log_file), str(wt)),
+    )
+    conn.commit()
+    conn.close()
+
+    jobs_mod._reconcile_daemon_jobs()
+
+    conn = sl._get_db()
+    row = conn.execute(
+        "SELECT status, exit_code FROM daemon_jobs "
+        "WHERE job_id='job-corrupt-exit-work'"
+    ).fetchone()
+    conn.close()
+
+    assert row == ("failed_unverified", None)
+    assert wt.exists(), "partial work must not be deleted when exit evidence is corrupt"
+    assert (wt / "partial.py").read_text() == "print('partial work')\n"
+
+
 def test_zombie_reap_skips_worktree_when_terminal_cas_loses(
     tmp_path, project_dir, monkeypatch
 ):
@@ -2636,6 +2832,54 @@ def test_zombie_terminal_claim_is_released_after_evaluation_error(
         "SELECT status, exit_code FROM daemon_jobs WHERE job_id='job-claim-retry'"
     ).fetchone() == ("killed_zombie", -9)
     conn.close()
+
+
+def test_zombie_claim_rechecks_late_exit_marker_before_cleanup(
+    tmp_path, project_dir, monkeypatch
+):
+    """Evidence written after the initial scan must defeat zombie cleanup."""
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    wt = tmp_path / "worktrees" / "job-late-exit"
+    wt.mkdir(parents=True)
+    (wt / ".git").mkdir()
+    log_file = tmp_path / "logs" / "job-late-exit.log"
+    log_file.parent.mkdir()
+    log_file.write_text("")
+
+    monkeypatch.setattr(jobs_mod, "_pid_is_alive", lambda pid: False)
+    monkeypatch.setattr(jobs_mod, "_daemon_job_worktree_path", lambda *a, **kw: str(wt))
+    monkeypatch.setattr(jobs_mod, "_job_has_real_work_landed", lambda git_state: False)
+    real_claim = jobs_mod._claim_daemon_job_terminal
+
+    def claim_then_worker_finishes(conn, job_id):
+        token = real_claim(conn, job_id)
+        if token:
+            (tmp_path / "logs" / "job-late-exit.log.exit").write_text("0")
+        return token
+
+    monkeypatch.setattr(jobs_mod, "_claim_daemon_job_terminal", claim_then_worker_finishes)
+
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, story_id, task, status, pid, enqueued_at, "
+        "started_at, log_path, requires_gh_write, worktree_path) VALUES "
+        "('job-late-exit', 'codex', 's-late', 'implement', 'running', 99991, "
+        "'2026-09-08T00:00:00', '2026-09-08T00:00:00', ?, 0, ?)",
+        (str(log_file), str(wt)),
+    )
+    conn.commit()
+    conn.close()
+
+    jobs_mod._reconcile_daemon_jobs()
+
+    conn = sl._get_db()
+    assert conn.execute(
+        "SELECT status, terminal_claim_token FROM daemon_jobs WHERE job_id='job-late-exit'"
+    ).fetchone() == ("running", None)
+    conn.close()
+    assert wt.exists()
 
 
 def test_null_pid_zombie_is_reaped_with_leaked_worktree(tmp_path, project_dir):
