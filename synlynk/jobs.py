@@ -2879,14 +2879,7 @@ def _reconcile_daemon_jobs() -> None:
                                     worktree_path, worktree_branch, started_at
                                 )
                             except Exception:
-                                # An unavailable second read is uncertainty,
-                                # not evidence of a zombie.  Fail closed and
-                                # let a later reconciliation retry.
-                                _release_daemon_job_terminal_claim(
-                                    conn, job_id, terminal_claim_token
-                                )
-                                conn.commit()
-                                continue
+                                post_claim_git_state = None
                             if _job_has_real_work_landed(post_claim_git_state):
                                 _release_daemon_job_terminal_claim(conn, job_id, terminal_claim_token)
                                 conn.commit()
