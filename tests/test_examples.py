@@ -1,13 +1,8 @@
-from synlynk.examples import greet
+from synlynk.examples import active_items, greet
 
 
 def test_greet_returns_a_friendly_message():
     assert greet("Ada") == "Hello, Ada!"
-
-
-def _general_scenario_active_items(items):
-    """Return items with a truthy active flag — stand-in general scenario for QA calibration."""
-    return [item for item in items if item.get("active")]
 
 
 def test_write_3_test_cases_for_a_general_scenario_happy_path():
@@ -16,15 +11,43 @@ def test_write_3_test_cases_for_a_general_scenario_happy_path():
         {"id": 2, "active": False},
         {"id": 3, "active": True},
     ]
-    assert _general_scenario_active_items(items) == [
+    assert active_items(items) == [
         {"id": 1, "active": True},
         {"id": 3, "active": True},
     ]
 
 
 def test_write_3_test_cases_for_a_general_scenario_empty_input():
-    assert _general_scenario_active_items([]) == []
+    assert active_items([]) == []
 
 
 def test_write_3_test_cases_for_a_general_scenario_missing_active_key():
-    assert _general_scenario_active_items([{"id": 1}, {"id": 2, "active": False}]) == []
+    assert active_items([{"id": 1}, {"id": 2, "active": False}]) == []
+
+
+def test_active_items_handles_mixed_truthy_and_falsy_flag_values():
+    items = [
+        {"id": 1, "active": 1},
+        {"id": 2, "active": 0},
+        {"id": 3, "active": "yes"},
+        {"id": 4, "active": ""},
+        {"id": 5, "active": None},
+    ]
+
+    assert active_items(items) == [
+        {"id": 1, "active": 1},
+        {"id": 3, "active": "yes"},
+    ]
+
+
+def test_active_items_preserves_order_and_duplicate_ids_with_extra_metadata():
+    """Filtering should not deduplicate or reshape otherwise valid records."""
+    first = {"id": 7, "active": True, "label": "first"}
+    second = {"id": 7, "active": True, "label": "second"}
+    inactive = {"id": 8, "active": False, "label": "hidden"}
+
+    result = active_items([first, inactive, second])
+
+    assert result == [first, second]
+    assert result[0] is first
+    assert result[1] is second
