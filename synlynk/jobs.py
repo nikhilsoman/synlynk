@@ -2543,18 +2543,19 @@ def _apply_gh_write_verification(
     since_dt = _parse_iso8601(since)
     normalized_since = since_dt.isoformat() if since_dt is not None else since
     evidence = {}
+    verification_kwargs = {
+        "expect": expect,
+        "since": normalized_since,
+        "expect_author": expect_author,
+        "evidence": evidence,
+    }
     try:
-        verified = gh_write_verified(
-            gh_write_target, expect=expect, since=normalized_since,
-            expect_author=expect_author, evidence=evidence,
-        )
+        verified = gh_write_verified(gh_write_target, **verification_kwargs)
     except TypeError as exc:
         if "evidence" in str(exc):
             try:
-                verified = gh_write_verified(
-                    gh_write_target, expect=expect, since=normalized_since,
-                    expect_author=expect_author,
-                )
+                verification_kwargs.pop("evidence")
+                verified = gh_write_verified(gh_write_target, **verification_kwargs)
             except Exception as e:
                 print(f"  ⚠ gh_write_verified fallback failed for {job_id}: {e}", file=sys.stderr)
                 verified = None
