@@ -2600,13 +2600,14 @@ def _reap_zombie_worktree(job_id: str, log_path: Optional[str]) -> bool:
 def _persist_daemon_job_terminal(
     conn, job_id: str, status: str, exit_code: Optional[int], completed_at: str,
     *, only_running: bool = False,
-) -> None:
+) -> bool:
     """Persist a daemon job's terminal state with the requested row scope."""
     where_clause = "WHERE job_id=? AND status='running'" if only_running else "WHERE job_id=?"
-    conn.execute(
+    cursor = conn.execute(
         "UPDATE daemon_jobs SET status=?, exit_code=?, completed_at=? " + where_clause,
         (status, exit_code, completed_at, job_id),
     )
+    return (cursor.rowcount or 0) > 0
 
 
 def _release_daemon_job_reservation(conn, job_id: str) -> None:
@@ -2807,8 +2808,18 @@ def _reconcile_daemon_jobs() -> None:
                             files_touched = []
 
                 log_text = ""
-                _persist_daemon_job_terminal(conn, job_id, status, exit_code, now)
+                # Reconciliation can overlap with the sentinel path or a
+                # second daemon pass.  Do not let a stale inspection overwrite
+                # a terminal state that another actor already committed.
+                settled = _persist_daemon_job_terminal(
+                    conn, job_id, status, exit_code, now, only_running=True
+                )
                 conn.commit()
+                if not settled:
+                    # Another reconciler/sentinel won the terminal-state
+                    # race.  Its status is authoritative; avoid emitting
+                    # stale summaries, costs, or permission classifications.
+                    continue
                 _release_daemon_job_reservation(conn, job_id)
                 duration_s = None
                 try:

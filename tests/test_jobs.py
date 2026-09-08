@@ -1632,6 +1632,29 @@ def test_gtv_status_no_exit_no_git_is_timed_out():
     assert exit_code == -9
 
 
+def test_terminal_reconciliation_does_not_overwrite_settled_row(tmp_path):
+    """A stale reconciler pass must lose the terminal-state CAS race."""
+    import sqlite3
+    from synlynk.jobs import _persist_daemon_job_terminal
+
+    conn = sqlite3.connect(str(tmp_path / "state.db"))
+    conn.execute("CREATE TABLE daemon_jobs (job_id TEXT PRIMARY KEY, status TEXT, exit_code INTEGER, completed_at TEXT)")
+    conn.execute(
+        "INSERT INTO daemon_jobs VALUES ('job-cas', 'done', 0, '2026-09-08T12:00:00')"
+    )
+    conn.commit()
+
+    settled = _persist_daemon_job_terminal(
+        conn, "job-cas", "timed_out", -9, "2026-09-08T12:01:00", only_running=True
+    )
+
+    assert settled is False
+    assert conn.execute(
+        "SELECT status, exit_code FROM daemon_jobs WHERE job_id='job-cas'"
+    ).fetchone() == ("done", 0)
+    conn.close()
+
+
 def test_reconcile_daemon_jobs_and_reconcile_jobs_agree_on_terminal_status(project_dir, monkeypatch, tmp_path):
     """Parity regression test for #331/#579: both reconciliation mechanisms
     must reach the same terminal status for equivalent job evidence (real
@@ -2259,5 +2282,4 @@ def test_reap_zombie_worktree_preserves_log(tmp_path, project_dir, monkeypatch):
     assert open(central_log).read() == "worker output before reap"
     assert os.path.exists(central_exit)
     assert open(central_exit).read().strip() == "137"
-
 
