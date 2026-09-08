@@ -267,3 +267,80 @@ def test_check_token_bloat_scans_telemetry_file(tmp_path, monkeypatch):
     assert "TOKEN_BLOAT" in content
     assert "COST_INFLATION" in content
     assert "job-cf837848" in content
+
+
+def test_sentinel_write_deduplicates_recent_alerts(tmp_path):
+    from synlynk.sentinel import _read_sentinel_alerts, _write_sentinel_alert
+
+    sentinel_file = tmp_path / "sentinel.md"
+    first = _write_sentinel_alert("WARNING", "REPEAT", "same finding", str(sentinel_file))
+    second = _write_sentinel_alert("WARN", "REPEAT", "same finding", str(sentinel_file))
+
+    assert first["status"] == "written"
+    assert second["status"] == "deduplicated"
+    assert len(_read_sentinel_alerts(sentinel_path=str(sentinel_file))) == 1
+
+
+def test_sentinel_expiry_applies_to_active_reads_but_preserves_history(tmp_path):
+    from synlynk.sentinel import _iter_sentinel_alerts, _read_sentinel_alerts
+
+    sentinel_file = tmp_path / "sentinel.md"
+    sentinel_file.write_text(
+        "# Sentinel Alerts\n"
+        "- [CRITICAL] [2020-01-01 00:00] OLD: expired\n"
+        "- [CRITICAL] [2099-01-01 00:00] NEW: future\n"
+    )
+
+    assert len(_read_sentinel_alerts(sentinel_path=str(sentinel_file))) == 1
+    assert len(_iter_sentinel_alerts(str(sentinel_file), active_only=False)) == 2
+
+
+def test_sentinel_parser_accepts_legacy_and_normalizes_warning():
+    from synlynk.sentinel import _parse_sentinel_alert
+
+    canonical = _parse_sentinel_alert("- [WARNING] [2026-09-08 10:00] STALL: waiting")
+    legacy = _parse_sentinel_alert("- [2026-09-08 10:00] STALL: waiting")
+    assert canonical["severity"] == "WARN"
+    assert canonical["original_severity"] == "WARNING"
+    assert legacy["legacy"] is True
+    assert legacy["severity"] == "INFO"
+
+
+def test_sentinel_write_deduplicates_within_window_but_keeps_distinct_jobs(tmp_path):
+    from synlynk.sentinel import _read_sentinel_alerts, _write_sentinel_alert
+
+    path = tmp_path / "nested" / "sentinel.md"
+    first = _write_sentinel_alert("CRITICAL", "TOKEN_BLOAT", "Job job-a consumed too many tokens", str(path))
+    duplicate = _write_sentinel_alert("CRITICAL", "TOKEN_BLOAT", "Job job-a consumed too many tokens", str(path))
+    _write_sentinel_alert("CRITICAL", "TOKEN_BLOAT", "Job job-b consumed too many tokens", str(path))
+    assert first["status"] == "written"
+    assert duplicate["status"] == "deduplicated"
+    assert len(_read_sentinel_alerts(sentinel_path=str(path))) == 2
+
+
+def test_sentinel_expiry_boundary_and_legacy_are_fail_safe(tmp_path):
+    from datetime import datetime, timezone
+    from synlynk.sentinel import _alert_is_active, _iter_sentinel_alerts
+
+    path = tmp_path / "sentinel.md"
+    path.write_text(
+        "# Sentinel Alerts\n"
+        "- [CRITICAL] [2026-09-07 10:00] OLD: expired\n"
+        "- [CRITICAL] [2026-09-08 09:00] NEW: fresh\n"
+        "- [CRITICAL] LEGACY: no timestamp\n"
+        "malformed historical note\n"
+    )
+    now = datetime(2026, 9, 8, 10, 0, tzinfo=timezone.utc)
+    alerts = _iter_sentinel_alerts(str(path), active_only=True, now=now)
+    assert [alert["code"] for alert in alerts] == ["NEW", "LEGACY"]
+    exact = _iter_sentinel_alerts(str(path))[0]
+    assert _alert_is_active(exact, now=now, expiry_seconds=24 * 60 * 60) is False
+
+
+def test_sentinel_clear_preserves_malformed_history(tmp_path):
+    from synlynk.sentinel import _clear_sentinel_alerts
+
+    path = tmp_path / "sentinel.md"
+    path.write_text("# Sentinel Alerts\nmalformed historical note\n- [WARN] [2026-09-08 10:00] STALL: old\n")
+    assert _clear_sentinel_alerts(code="STALL", sentinel_file=str(path)) == 1
+    assert "malformed historical note" in path.read_text()

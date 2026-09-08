@@ -1779,6 +1779,10 @@ def load_config() -> dict:
         "roles": capability_roles if capability_roles is not None else _default_roles_map(),
         "story_classification": {"method": "heuristic"},
         "qa_gate_mode": "block-only",
+        "sentinel": {
+            "dedup_window_seconds": 86400,
+            "active_ttl_seconds": {"CRITICAL": 86400, "WARN": 3600, "INFO": 3600},
+        },
     }
     config_file = ".synlynk/config.json"
     if not os.path.exists(config_file):
@@ -3425,13 +3429,8 @@ def cmd_status(json_output: bool = False, platform: bool = False) -> None:
             break
 
     # Sentinel alerts
-    sentinel_alerts = []
     sentinel_file = ".synlynk/sentinel.md"
-    if os.path.exists(sentinel_file):
-        with open(sentinel_file) as f:
-            for line in f:
-                if line.startswith("- ["):
-                    sentinel_alerts.append(line.strip())
+    sentinel_alerts = _read_sentinel_alerts(sentinel_path=sentinel_file)
 
     # Budget
     total_usd, total_requests = parse_costs_md()

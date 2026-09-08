@@ -557,13 +557,7 @@ def _make_daemon_handler(daemon_instance):
 
         def _handle_sentinel(self):
             sentinel_file = ".synlynk/sentinel.md"
-            alerts = []
-            if os.path.exists(sentinel_file):
-                with open(sentinel_file) as f:
-                    for line in f:
-                        line = line.strip()
-                        if line.startswith("- ["):
-                            alerts.append(line)
+            alerts = _pkg("_read_sentinel_alerts")(sentinel_path=sentinel_file)
             self._send_json(200, alerts)
 
         def _handle_checkpoint(self):
