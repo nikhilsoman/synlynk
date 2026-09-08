@@ -230,9 +230,9 @@ def _collect_sentinel_alerts(signal_cfg: dict) -> list:
     """Read sentinel.md, return a finding per ⚠ alert line."""
     import hashlib as _hashlib
     path = signal_cfg.get("path", ".synlynk/sentinel.md")
-    if not os.path.exists(path):
-        return []
-    lines = [l for l in open(path).read().splitlines() if "⚠" in l]
+    from synlynk.sentinel import _iter_sentinel_alerts
+    lines = [alert["line"] for alert in _iter_sentinel_alerts(path, active_only=True)
+             if "⚠" in alert["line"]]
     findings = []
     for line in lines:
         upper = line.upper()

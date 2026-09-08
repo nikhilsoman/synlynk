@@ -4,8 +4,10 @@ import json
 import os
 import re
 import subprocess
+import tempfile
 import time
 import traceback
+from datetime import datetime, timezone
 from typing import Optional
 
 _REAL_POPEN_TYPE = subprocess.Popen
@@ -17,11 +19,152 @@ _SENTINEL_ALERT_RE = re.compile(
     r"(?P<code>[A-Z0-9_]+): (?P<message>.*)$"
 )
 _SENTINEL_ALERT_LEGACY_RE = re.compile(
-    r"^- \[(?P<timestamp>[^\]]+)\] (?P<code>[A-Z0-9_]+): (?P<message>.*)$"
+    r"^- \[(?P<timestamp>[^\]]+)\] (?:[⚠🚨ℹ]\s*)?"
+    r"(?P<code>[A-Z0-9_]+): (?P<message>.*)$"
 )
 _SENTINEL_VERSION_DRIFT_AGENT_RE = re.compile(
     r"^Agent ['\"](?P<agent>[^'\"]+)['\"] version changed:"
 )
+
+_DEFAULT_SENTINEL_DEDUP_WINDOW = 24 * 60 * 60
+_DEFAULT_SENTINEL_TTL = {
+    "CRITICAL": 24 * 60 * 60,
+    "WARN": 60 * 60,
+    "INFO": 60 * 60,
+}
+
+
+def _sentinel_policy() -> dict:
+    """Return the configured persistence/active-alert policy.
+
+    Configuration is optional so older workspaces keep the safe defaults.
+    Values are deliberately read at call time, like the rest of synlynk's
+    configuration helpers.
+    """
+    policy = {
+        "dedup_window_seconds": _DEFAULT_SENTINEL_DEDUP_WINDOW,
+        "active_ttl_seconds": dict(_DEFAULT_SENTINEL_TTL),
+    }
+    try:
+        from synlynk import load_config
+        configured = load_config().get("sentinel", {}) or {}
+        if isinstance(configured, dict):
+            dedup = configured.get("dedup_window_seconds")
+            if dedup is not None:
+                policy["dedup_window_seconds"] = max(0, float(dedup))
+            ttl = configured.get("active_ttl_seconds")
+            if isinstance(ttl, (int, float)):
+                policy["active_ttl_seconds"] = {k: float(ttl) for k in _DEFAULT_SENTINEL_TTL}
+            elif isinstance(ttl, dict):
+                for severity, value in ttl.items():
+                    normalized = _normalize_sentinel_severity(severity)
+                    if normalized in policy["active_ttl_seconds"]:
+                        policy["active_ttl_seconds"][normalized] = max(0, float(value))
+    except (ImportError, TypeError, ValueError, AttributeError):
+        pass
+    return policy
+
+
+def _normalize_sentinel_severity(severity: Optional[str]) -> str:
+    normalized = str(severity or "INFO").strip().upper()
+    return "WARN" if normalized == "WARNING" else normalized
+
+
+def _parse_sentinel_timestamp(value: Optional[str]) -> Optional[datetime]:
+    if not value:
+        return None
+    raw = str(value).strip().replace("Z", "+00:00")
+    for candidate in (raw, raw.replace(" ", "T")):
+        try:
+            parsed = datetime.fromisoformat(candidate)
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            return parsed
+        except ValueError:
+            continue
+    for fmt, sample in (("%Y-%m-%d %H:%M", raw[:16]),
+                        ("%Y-%m-%d %H:%M:%S", raw[:19]),
+                        ("%Y-%m-%d", raw[:10])):
+        try:
+            return datetime.strptime(sample, fmt).replace(tzinfo=timezone.utc)
+        except ValueError:
+            continue
+    return None
+
+
+def _parse_sentinel_alert(line: str) -> Optional[dict]:
+    """Parse canonical and legacy alert bullets without altering the source line."""
+    raw_line = (line or "").strip()
+    match = _SENTINEL_ALERT_RE.match(raw_line)
+    legacy = False
+    if not match:
+        match = _SENTINEL_ALERT_LEGACY_RE.match(raw_line)
+        legacy = bool(match)
+    if not match:
+        return None
+    values = match.groupdict()
+    raw_severity = values.get("severity") or "INFO"
+    return {
+        "line": raw_line,
+        "severity": _normalize_sentinel_severity(raw_severity),
+        "raw_severity": raw_severity,
+        "timestamp": values.get("timestamp"),
+        "timestamp_dt": _parse_sentinel_timestamp(values.get("timestamp")),
+        "code": values.get("code", ""),
+        "message": values.get("message", ""),
+        "legacy": legacy,
+    }
+
+
+def _alert_identity(alert: dict) -> tuple:
+    """Return a stable identity that intentionally excludes write time."""
+    return (
+        _normalize_sentinel_severity(alert.get("severity")),
+        str(alert.get("code") or "").strip().upper(),
+        str(alert.get("message") or "").strip(),
+    )
+
+
+def _alert_is_active(alert: dict, now: Optional[datetime] = None,
+                     expiry_seconds: Optional[float] = None) -> bool:
+    """Apply the shared active policy; unknown legacy timestamps fail safe."""
+    # Legacy bullets predate the severity/expiry contract. Keep their
+    # historical fail-safe behavior until an operator explicitly clears them.
+    if alert.get("legacy"):
+        return True
+    timestamp = alert.get("timestamp_dt")
+    if timestamp is None:
+        return True
+    now = now or datetime.now(timezone.utc)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+    if timestamp > now:
+        return True
+    if expiry_seconds is None:
+        expiry_seconds = _sentinel_policy()["active_ttl_seconds"].get(
+            _normalize_sentinel_severity(alert.get("severity")),
+            _DEFAULT_SENTINEL_TTL["INFO"],
+        )
+    return (now - timestamp).total_seconds() < float(expiry_seconds)
+
+
+def _iter_sentinel_alerts(path: str = ".synlynk/sentinel.md", *,
+                          active_only: bool = False, now: Optional[datetime] = None,
+                          policy: Optional[dict] = None):
+    """Yield parsed alerts from *path*, retaining malformed lines for callers."""
+    if not os.path.exists(path):
+        return
+    policy = policy or _sentinel_policy()
+    with open(path) as f:
+        for raw_line in f:
+            alert = _parse_sentinel_alert(raw_line)
+            if alert is None:
+                continue
+            if active_only:
+                ttl = policy.get("active_ttl_seconds", {}).get(alert["severity"])
+                if not _alert_is_active(alert, now=now, expiry_seconds=ttl):
+                    continue
+            yield alert
 
 
 def log_telemetry_event(event: dict) -> None:
@@ -53,25 +196,66 @@ def _check_costs_freshness() -> None:
         print("  ⚠ costs.md not updated this session — AI may have missed logging")
 
 
-def _write_sentinel_alert(severity: str, code: str, message: str, sentinel_path: Optional[str] = None) -> None:
-    """Appends a structured alert line to .synlynk/sentinel.md."""
+def _write_sentinel_alert(severity: str, code: str, message: str, sentinel_path: Optional[str] = None) -> dict:
+    """Persist an alert idempotently while preserving the markdown history."""
     sentinel_file = sentinel_path or ".synlynk/sentinel.md"
     if not sentinel_path and not os.path.exists(".synlynk"):
-        return
-    existing = ""
-    if os.path.exists(sentinel_file):
-        with open(sentinel_file) as f:
-            existing = f.read()
-    if "# Sentinel Alerts" not in existing:
-        existing = "# Sentinel Alerts\n"
-    ts = time.strftime('%Y-%m-%d %H:%M')
-    line = f"- [{severity}] [{ts}] {code}: {message}\n"
+        return {"written": False, "deduplicated": False, "path": sentinel_file}
     if sentinel_path:
         parent = os.path.dirname(sentinel_path)
         if parent and not os.path.exists(parent):
             os.makedirs(parent, exist_ok=True)
-    with open(sentinel_file, "w") as f:
-        f.write(existing + line)
+    parent = os.path.dirname(os.path.abspath(sentinel_file)) or "."
+    os.makedirs(parent, exist_ok=True)
+    lock_path = sentinel_file + ".lock"
+    lock = None
+    try:
+        lock = open(lock_path, "a+")
+        try:
+            import fcntl
+            fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        except (ImportError, OSError):
+            pass
+        existing = ""
+        if os.path.exists(sentinel_file):
+            with open(sentinel_file) as f:
+                existing = f.read()
+        timestamp = time.strftime('%Y-%m-%d %H:%M')
+        candidate = {
+            "severity": _normalize_sentinel_severity(severity),
+            "code": code,
+            "message": message,
+            "timestamp_dt": datetime.now(timezone.utc),
+        }
+        window = _sentinel_policy()["dedup_window_seconds"]
+        now = candidate["timestamp_dt"]
+        for prior in (_parse_sentinel_alert(line) for line in existing.splitlines()):
+            if prior is None or _alert_identity(prior) != _alert_identity(candidate):
+                continue
+            prior_ts = prior.get("timestamp_dt")
+            if prior_ts is not None and (now - prior_ts).total_seconds() <= window:
+                return {"written": False, "deduplicated": True, "path": sentinel_file}
+        if "# Sentinel Alerts" not in existing:
+            existing = "# Sentinel Alerts\n"
+        line = f"- [{_normalize_sentinel_severity(severity)}] [{timestamp}] {code}: {message}\n"
+        fd, temp_path = tempfile.mkstemp(prefix=".sentinel-", dir=parent, text=True)
+        try:
+            with os.fdopen(fd, "w") as temp_file:
+                temp_file.write(existing + line)
+                temp_file.flush()
+                os.fsync(temp_file.fileno())
+            os.replace(temp_path, sentinel_file)
+        finally:
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+    finally:
+        if lock is not None:
+            try:
+                import fcntl
+                fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+            except (ImportError, OSError):
+                pass
+            lock.close()
     # #753: STALL / internal-timeout alerts must flip daemon_jobs off "running"
     # immediately — do not wait for the next manual `jobs reap` pass.
     if code in ("STALL_NO_OUTPUT", "HARNESS_INTERNAL_TIMEOUT"):
@@ -80,6 +264,7 @@ def _write_sentinel_alert(severity: str, code: str, message: str, sentinel_path:
             auto_reap_job_from_sentinel(code, message)
         except Exception:
             pass
+    return {"written": True, "deduplicated": False, "path": sentinel_file}
 
 
 def capture_process_identity(pid: int, process=None) -> Optional[dict]:
@@ -133,24 +318,13 @@ def process_identity_check(pid: int, expected: Optional[dict]) -> str:
     return "do not kill"
 
 
-def _read_sentinel_alerts(severity: Optional[str] = None) -> list:
-    """Returns alert lines from sentinel.md, optionally filtered by severity."""
-    sentinel_file = ".synlynk/sentinel.md"
-    if not os.path.exists(sentinel_file):
-        return []
-    alerts = []
-    with open(sentinel_file) as f:
-        for line in f:
-            line = line.strip()
-            if not line.startswith("- ["):
-                continue
-            if severity is None:
-                alerts.append(line)
-            else:
-                m = re.match(r'^- \[([A-Z]+)\]', line)
-                if m and m.group(1) == severity:
-                    alerts.append(line)
-    return alerts
+def _read_sentinel_alerts(severity: Optional[str] = None, *,
+                          sentinel_path: str = ".synlynk/sentinel.md",
+                          active_only: bool = True) -> list:
+    """Return alert lines, using the shared active policy by default."""
+    normalized = _normalize_sentinel_severity(severity) if severity else None
+    parsed = _iter_sentinel_alerts(sentinel_path, active_only=active_only)
+    return [a["line"] for a in parsed if normalized is None or a["severity"] == normalized]
 
 
 def _summarize_sentinel_alerts(alert_lines: list, max_alert_types: int = 20) -> list:
@@ -666,10 +840,10 @@ def check_token_bloat(
 
 
 def check_sentinel_patterns(output_text: str = "", exit_code: int = 0,
-                             cmd: str = "") -> None:
+                             cmd: str = "", sentinel_path: Optional[str] = None) -> None:
     """Detects flatline, success loop, quota-exhausted, and token bloat; writes sentinel alerts."""
     check_model_rates_freshness()
-    check_token_bloat()
+    check_token_bloat(sentinel_path=sentinel_path)
     telemetry_file = ".synlynk/telemetry.json"
     data = []
     if os.path.exists(telemetry_file):
@@ -688,7 +862,8 @@ def check_sentinel_patterns(output_text: str = "", exit_code: int = 0,
             fail_cmd = last3[0].get("command", "unknown")
             _write_sentinel_alert(
                 "CRITICAL", "FLATLINE",
-                f"`{fail_cmd}` failed 3 times in a row — possible hallucination loop."
+                f"`{fail_cmd}` failed 3 times in a row — possible hallucination loop.",
+                sentinel_path,
             )
             print(f"\n  \U0001f6a8 [FLATLINE] `{fail_cmd}` failed 3x — consider manual intervention.")
 
@@ -703,7 +878,8 @@ def check_sentinel_patterns(output_text: str = "", exit_code: int = 0,
                 _write_sentinel_alert(
                     "WARN", "SUCCESS_LOOP",
                     f"Same command succeeded 5x in {window_min:.1f} min — "
-                    "possible automated loop burning tokens."
+                    "possible automated loop burning tokens.",
+                    sentinel_path,
                 )
                 print(f"\n  ⚠ [SUCCESS_LOOP] Same command 5x in {window_min:.1f} min.")
 
@@ -715,7 +891,8 @@ def check_sentinel_patterns(output_text: str = "", exit_code: int = 0,
                 _write_sentinel_alert(
                     "CRITICAL", "QUOTA_EXHAUSTED",
                     f"`{cli}` — matched \"{phrase}\". "
-                    "Check plan limits or switch agent CLI."
+                    "Check plan limits or switch agent CLI.",
+                    sentinel_path,
                 )
                 print(f"\n  \U0001f6a8 [QUOTA_EXHAUSTED] Matched \"{phrase}\" in output.")
                 try:
@@ -735,7 +912,8 @@ def check_sentinel_patterns(output_text: str = "", exit_code: int = 0,
             _write_sentinel_alert(
                 "INFO", "VERIFY_SKIP",
                 "Job exited 0 but no test or verify evidence found in output. "
-                "Review before commit and capture verification signals next time."
+                "Review before commit and capture verification signals next time.",
+                sentinel_path,
             )
             print("  ℹ [VERIFY_SKIP] No test/verify evidence (informational — see sentinel.md)")
 

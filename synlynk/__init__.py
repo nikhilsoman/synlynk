@@ -3425,13 +3425,7 @@ def cmd_status(json_output: bool = False, platform: bool = False) -> None:
             break
 
     # Sentinel alerts
-    sentinel_alerts = []
-    sentinel_file = ".synlynk/sentinel.md"
-    if os.path.exists(sentinel_file):
-        with open(sentinel_file) as f:
-            for line in f:
-                if line.startswith("- ["):
-                    sentinel_alerts.append(line.strip())
+    sentinel_alerts = _read_sentinel_alerts(active_only=True)
 
     # Budget
     total_usd, total_requests = parse_costs_md()

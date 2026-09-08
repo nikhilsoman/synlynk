@@ -1,5 +1,6 @@
 import subprocess
 import sys
+from datetime import datetime, timezone
 from unittest.mock import patch
 
 from synlynk.sentinel import _extract_verified_by_ci
@@ -165,6 +166,65 @@ def test_process_identity_check_rejects_recycled_pid_and_accepts_matching_proces
     finally:
         live.terminate()
         live.wait(timeout=5)
+
+
+def test_sentinel_parser_accepts_canonical_and_legacy_lines():
+    from synlynk.sentinel import _parse_sentinel_alert
+
+    canonical = _parse_sentinel_alert("- [WARNING] [2026-09-08 10:00] CODE: message")
+    legacy = _parse_sentinel_alert("- [2026-09-08 10:00] CODE: message")
+    assert canonical["severity"] == "WARN"
+    assert canonical["legacy"] is False
+    assert legacy["severity"] == "INFO"
+    assert legacy["legacy"] is True
+    assert _parse_sentinel_alert("- malformed") is None
+
+
+def test_sentinel_write_deduplicates_within_window_and_keeps_distinct_jobs(tmp_path, monkeypatch):
+    from synlynk.sentinel import _write_sentinel_alert
+
+    path = tmp_path / "sentinel.md"
+    monkeypatch.setattr("synlynk.sentinel._sentinel_policy", lambda: {
+        "dedup_window_seconds": 3600,
+        "active_ttl_seconds": {"CRITICAL": 86400, "WARN": 3600, "INFO": 3600},
+    })
+    first = _write_sentinel_alert("CRITICAL", "TOKEN_BLOAT", "Job one consumed too much", str(path))
+    duplicate = _write_sentinel_alert("CRITICAL", "TOKEN_BLOAT", "Job one consumed too much", str(path))
+    distinct = _write_sentinel_alert("CRITICAL", "TOKEN_BLOAT", "Job two consumed too much", str(path))
+    assert first["written"] is True
+    assert duplicate["deduplicated"] is True
+    assert distinct["written"] is True
+    assert path.read_text().count("TOKEN_BLOAT") == 2
+
+
+def test_sentinel_active_policy_expires_timestamped_but_not_legacy(tmp_path):
+    from synlynk.sentinel import _iter_sentinel_alerts
+
+    path = tmp_path / "sentinel.md"
+    path.write_text(
+        "# Sentinel Alerts\n"
+        "- [CRITICAL] [2026-09-07 09:00] OLD: stale\n"
+        "- [CRITICAL] [2026-09-08 09:30] NEW: fresh\n"
+        "- [legacy] LEGACY: no timestamp\n"
+    )
+    now = datetime(2026, 9, 8, 10, 0, tzinfo=timezone.utc)
+    active = list(_iter_sentinel_alerts(str(path), active_only=True, now=now,
+                                        policy={"active_ttl_seconds": {"CRITICAL": 3600}}))
+    assert [alert["code"] for alert in active] == ["NEW", "LEGACY"]
+
+
+def test_sentinel_atomic_replace_failure_preserves_previous_file(tmp_path, monkeypatch):
+    from synlynk.sentinel import _write_sentinel_alert
+
+    path = tmp_path / "sentinel.md"
+    _write_sentinel_alert("WARN", "FIRST", "original", str(path))
+    monkeypatch.setattr("synlynk.sentinel.os.replace", lambda *_args: (_ for _ in ()).throw(OSError("no replace")))
+    try:
+        _write_sentinel_alert("WARN", "SECOND", "new", str(path))
+    except OSError:
+        pass
+    assert "FIRST" in path.read_text()
+    assert "SECOND" not in path.read_text()
 
 
 def test_circuit_breaker_skips_kill_when_pid_identity_fails(tmp_path, monkeypatch):

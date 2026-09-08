@@ -1463,16 +1463,16 @@ def test_generate_context_includes_sentinel_alerts(project_dir):
 def test_generate_context_dedupes_repeated_sentinel_alerts(project_dir):
     (project_dir / ".synlynk" / "sentinel.md").write_text(
         "# Sentinel Alerts\n"
-        "- [WARNING] [2026-07-01 13:23] HARNESS_VERSION_DRIFT: Agent 'agy' version changed: 1.0.0 -> 2.0.0. Run synlynk probe to update.\n"
-        "- [WARNING] [2026-07-01 13:34] HARNESS_VERSION_DRIFT: Agent 'agy' version changed: 1.0.0 -> 2.0.0. Run synlynk probe to update.\n"
-        "- [WARNING] [2026-07-01 13:35] HARNESS_VERSION_DRIFT: Agent 'agy' version changed: 1.0.0 -> 2.0.0. Run synlynk probe to update.\n"
-        "- [CRITICAL] [2026-07-01 14:10] HARNESS_PREFLIGHT_FAIL: Required endpoint unreachable\n"
+        "- [WARNING] [2099-07-01 13:23] HARNESS_VERSION_DRIFT: Agent 'agy' version changed: 1.0.0 -> 2.0.0. Run synlynk probe to update.\n"
+        "- [WARNING] [2099-07-01 13:34] HARNESS_VERSION_DRIFT: Agent 'agy' version changed: 1.0.0 -> 2.0.0. Run synlynk probe to update.\n"
+        "- [WARNING] [2099-07-01 13:35] HARNESS_VERSION_DRIFT: Agent 'agy' version changed: 1.0.0 -> 2.0.0. Run synlynk probe to update.\n"
+        "- [CRITICAL] [2099-07-01 14:10] HARNESS_PREFLIGHT_FAIL: Required endpoint unreachable\n"
     )
     synlynk.generate_context()
     ctx = (project_dir / ".synlynk" / "context.md").read_text()
     assert ctx.count("HARNESS_VERSION_DRIFT") == 1
     assert "3 occurrences" in ctx
-    assert "most recent 2026-07-01 13:35" in ctx
+    assert "most recent 2099-07-01 13:35" in ctx
     assert "HARNESS_PREFLIGHT_FAIL" in ctx
 
 def test_generate_context_omits_sentinel_section_when_empty(project_dir):

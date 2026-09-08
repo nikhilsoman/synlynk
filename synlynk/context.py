@@ -364,9 +364,9 @@ def generate_context(scope: str = "full", out_path: str = None, role: Optional[s
 
         # Sentinel alerts at top (omit section if empty)
         if os.path.exists(sentinel_file):
-            content = open(sentinel_file).read().strip()
+            read_alerts = _pkg("_read_sentinel_alerts")
+            lines = read_alerts(sentinel_path=sentinel_file, active_only=True) if read_alerts else []
             summarize_alerts = _pkg("_summarize_sentinel_alerts")
-            lines = [l for l in content.splitlines() if l.startswith("- [")]
             if summarize_alerts:
                 lines = summarize_alerts(lines)
             if lines:

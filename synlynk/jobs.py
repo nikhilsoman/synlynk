@@ -2860,6 +2860,7 @@ def _reconcile_daemon_jobs() -> None:
                 check_token_bloat = _pkg("check_token_bloat")
                 if check_token_bloat:
                     files_count = len(files_touched) if isinstance(files_touched, (list, tuple, set)) else int(files_touched or 0)
+                    daemon_sentinel_path = os.path.join(worktree_path or ".", ".synlynk", "sentinel.md")
                     check_token_bloat(
                         in_tokens=in_tokens,
                         out_tokens=out_tokens,
@@ -2867,6 +2868,7 @@ def _reconcile_daemon_jobs() -> None:
                         files_touched=files_count,
                         job_id=job_id,
                         agent=agent,
+                        sentinel_path=daemon_sentinel_path,
                     )
                 if status == "failed_unverified" and not summary_status:
                     summary_status = terminal_status_for_unknown_exit()

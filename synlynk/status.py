@@ -404,7 +404,7 @@ def cmd_status(db_conn=None, json_output: bool = False) -> str:
             row.setdefault("fleet_tier", "—")
     cycle_map = _load_cycle_capability_rows(db_conn)
     efficiency = _headless_efficiency_ratio(_load_exec_jobs_from_telemetry())
-    sentinels_active = len(_read_sentinel_alerts())
+    sentinels_active = len(_read_sentinel_alerts(active_only=True))
     rates_updated_at = _load_model_rates().get("rates_updated_at")
     worktree_hint = _worktree_status_hint()
     output = _format_status_terminal(
