@@ -33,6 +33,7 @@ class ScenarioContext:
     state: dict = field(default_factory=dict)
     mode: str = "home"
     harness: str | None = None
+    probe_mode: str = "synthetic"
 
     def remaining_budget(self) -> float:
         return max(0.0, self.budget_cap_usd - self.spent_usd)
@@ -107,7 +108,12 @@ def _ensure_workspace_scaffold(ctx: ScenarioContext) -> Path:
             check=True,
         )
     if ctx.live and not ctx.state.get("probe_metadata_provisioned"):
-        _provision_probe_metadata(workspace)
+        if ctx.probe_mode == "live":
+            _provision_probe_metadata(workspace)
+        elif ctx.probe_mode == "synthetic":
+            _provision_synthetic_probe_metadata(workspace)
+        else:
+            raise ValueError(f"unsupported selftest probe mode: {ctx.probe_mode!r}")
         ctx.state["probe_metadata_provisioned"] = True
     return workspace
 
@@ -143,6 +149,13 @@ def _provision_probe_metadata(workspace: Path) -> int:
         cmd_probe(write_fence=False)
         rows = _read_rows()
 
+    return _copy_probe_metadata_rows(workspace, rows)
+
+
+def _copy_probe_metadata_rows(workspace: Path, rows: list) -> int:
+    """Copy probe rows into the scratch workspace database."""
+    import synlynk as synlynk_pkg
+
     if not rows:
         return 0
 
@@ -161,6 +174,25 @@ def _provision_probe_metadata(workspace: Path) -> int:
         finally:
             destination_conn.close()
     return len(rows)
+
+
+def _provision_synthetic_probe_metadata(workspace: Path) -> int:
+    """Seed scratch metadata without invoking probes, CLIs, or the network."""
+    from synlynk._constants import HARNESS_CAPABILITY_BASELINES
+
+    rows = [
+        (
+            harness_name,
+            "synthetic-test",
+            "ok",
+            "{}",
+            "{}",
+            "2099-01-01T00:00:00Z",
+            "synthetic-test",
+        )
+        for harness_name in sorted(HARNESS_CAPABILITY_BASELINES)
+    ]
+    return _copy_probe_metadata_rows(workspace, rows)
 
 
 def _capture_call(command: str, action: Callable[[], object]) -> tuple[ScenarioResult, str, object | None]:
@@ -1422,7 +1454,9 @@ _TAXONOMY_INDEX = {entry["command"]: idx for idx, entry in enumerate(COMMAND_TAX
 def run_selftest(live: bool = False) -> List[ScenarioResult]:
     """Run the selftest scenarios for every taxonomy command."""
     parser = build_parser()
-    ctx = ScenarioContext(repo_path=".", live=live)
+    ctx = ScenarioContext(
+        repo_path=".", live=live, probe_mode="live" if live else "synthetic"
+    )
     results: List[ScenarioResult] = []
     if live:
         with tempfile.TemporaryDirectory(prefix="synlynk-selftest-") as scratch_dir:

@@ -99,7 +99,8 @@ def test_make_live_selftest_provision_probe_metadata(tmp_path, monkeypatch):
     monkeypatch.setattr(synlynk, "DB_PATH", str(source_db))
     workspace = tmp_path / "scratch"
     ctx = ScenarioContext(
-        repo_path=str(workspace), live=True, state={"workspace_dir": workspace}
+        repo_path=str(workspace), live=True, probe_mode="live",
+        state={"workspace_dir": workspace}
     )
 
     _ensure_workspace_scaffold(ctx)
@@ -119,6 +120,40 @@ def test_make_live_selftest_provision_probe_metadata(tmp_path, monkeypatch):
         "2026-09-07T00:00:00Z",
         "test-capability-hash",
     )
+
+
+def test_test_context_uses_synthetic_probe_metadata_without_running_probe(
+    tmp_path, monkeypatch
+):
+    import sqlite3
+    import synlynk.selftest as selftest_mod
+    from synlynk.selftest import ScenarioContext, _ensure_workspace_scaffold
+
+    monkeypatch.setattr(
+        selftest_mod,
+        "cmd_probe",
+        lambda **kwargs: (_ for _ in ()).throw(
+            AssertionError("synthetic test setup must not run a real probe")
+        ),
+    )
+    workspace = tmp_path / "scratch"
+    ctx = ScenarioContext(
+        repo_path=str(workspace), live=True, state={"workspace_dir": workspace}
+    )
+
+    _ensure_workspace_scaffold(ctx)
+
+    conn = sqlite3.connect(workspace / ".synlynk" / "state.db")
+    try:
+        rows = conn.execute(
+            "SELECT harness_name, installed_version, compliance_status "
+            "FROM harness_records ORDER BY harness_name"
+        ).fetchall()
+    finally:
+        conn.close()
+
+    assert rows
+    assert all(row[1:] == ("synthetic-test", "ok") for row in rows)
 
 
 def test_live_selftest_probes_empty_source_before_copying_metadata(tmp_path, monkeypatch):
@@ -151,7 +186,8 @@ def test_live_selftest_probes_empty_source_before_copying_metadata(tmp_path, mon
     monkeypatch.setattr(selftest_mod, "cmd_probe", fake_probe)
     workspace = tmp_path / "scratch"
     ctx = ScenarioContext(
-        repo_path=str(workspace), live=True, state={"workspace_dir": workspace}
+        repo_path=str(workspace), live=True, probe_mode="live",
+        state={"workspace_dir": workspace}
     )
 
     _ensure_workspace_scaffold(ctx)
@@ -194,7 +230,8 @@ def test_live_selftest_does_not_reprobe_populated_source(tmp_path, monkeypatch):
     monkeypatch.setattr(selftest_mod, "cmd_probe", lambda **kwargs: calls.append(kwargs))
     workspace = tmp_path / "scratch"
     ctx = ScenarioContext(
-        repo_path=str(workspace), live=True, state={"workspace_dir": workspace}
+        repo_path=str(workspace), live=True, probe_mode="live",
+        state={"workspace_dir": workspace}
     )
 
     _ensure_workspace_scaffold(ctx)
