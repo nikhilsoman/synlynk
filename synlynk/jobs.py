@@ -2577,6 +2577,29 @@ def _apply_gh_write_verification(
     return status, verified_str
 
 
+def _verify_daemon_terminal_status(
+    conn,
+    job_id: str,
+    requires_gh_write: bool,
+    gh_write_target: Optional[str],
+    status: str,
+    started_at: Optional[str],
+    gh_write_author: Optional[str],
+    gh_write_expect: Optional[str],
+) -> tuple:
+    """Apply the configured GitHub-write check using daemon job metadata."""
+    return _apply_gh_write_verification(
+        conn,
+        job_id,
+        requires_gh_write,
+        gh_write_target,
+        status,
+        since=started_at,
+        expect_author=gh_write_author,
+        expect=gh_write_expect or "closed",
+    )
+
+
 def _reap_zombie_worktree(job_id: str, log_path: Optional[str]) -> bool:
     """Remove a leaked worktree recorded by a dead daemon job."""
     path = _daemon_job_worktree_path(job_id, log_path)
@@ -2700,10 +2723,9 @@ def _reconcile_daemon_jobs() -> None:
 
                 if preferred is not None:
                     status, exit_code = preferred
-                    status, gh_write_verified_str = _apply_gh_write_verification(
+                    status, gh_write_verified_str = _verify_daemon_terminal_status(
                         conn, job_id, requires_gh_write, gh_write_target, status,
-                        since=started_at, expect_author=gh_write_author,
-                        expect=gh_write_expect or "closed",
+                        started_at, gh_write_author, gh_write_expect,
                     )
                     settled = _persist_daemon_job_terminal(
                         conn, job_id, status, exit_code, now, only_running=True
@@ -2758,10 +2780,9 @@ def _reconcile_daemon_jobs() -> None:
                     zombie_status, zombie_exit_code, _, _ = _gtv_status_for_daemon_exit(
                         None, git_state
                     )
-                    zombie_status, gh_write_verified_str = _apply_gh_write_verification(
+                    zombie_status, gh_write_verified_str = _verify_daemon_terminal_status(
                         conn, job_id, requires_gh_write, gh_write_target, zombie_status,
-                        since=started_at, expect_author=gh_write_author,
-                        expect=gh_write_expect or "closed",
+                        started_at, gh_write_author, gh_write_expect,
                     )
                     if (
                         requires_gh_write and gh_write_verified_str == "true"
@@ -2784,10 +2805,9 @@ def _reconcile_daemon_jobs() -> None:
                 status, exit_code, summary_status, summary_note = _gtv_status_for_daemon_exit(
                     exit_code, git_state
                 )
-                status, gh_write_verified_str = _apply_gh_write_verification(
+                status, gh_write_verified_str = _verify_daemon_terminal_status(
                     conn, job_id, requires_gh_write, gh_write_target, status,
-                    since=started_at, expect_author=gh_write_author,
-                    expect=gh_write_expect or "closed",
+                    started_at, gh_write_author, gh_write_expect,
                 )
                 if (
                     requires_gh_write and gh_write_verified_str == "true"
