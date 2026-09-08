@@ -2562,6 +2562,25 @@ def _reap_zombie_worktree(job_id: str, log_path: Optional[str]) -> bool:
     path = _daemon_job_worktree_path(job_id, log_path)
     if not path or not os.path.exists(path):
         return False
+    # Preserve any log files located inside the worktree before deleting it
+    if log_path and os.path.exists(log_path):
+        try:
+            norm_log = os.path.abspath(log_path)
+            norm_path = os.path.abspath(path)
+            if norm_log.startswith(norm_path + os.sep):
+                import shutil
+                from synlynk.daemon import _daemon_state_path
+                central_logs_dir = _daemon_state_path("logs")
+                os.makedirs(central_logs_dir, exist_ok=True)
+                dest = os.path.join(central_logs_dir, os.path.basename(log_path))
+                if not os.path.exists(dest):
+                    shutil.copy2(log_path, dest)
+                if os.path.exists(log_path + ".exit"):
+                    dest_exit = dest + ".exit"
+                    if not os.path.exists(dest_exit):
+                        shutil.copy2(log_path + ".exit", dest_exit)
+        except Exception:
+            pass
     result = subprocess.run(
         ["git", "-C", os.path.dirname(path), "worktree", "remove", "--force", path],
         capture_output=True, text=True, check=False,
@@ -2612,68 +2631,33 @@ def _reconcile_daemon_jobs() -> None:
         for (job_id, agent, story_id, task, pid, started_at, completed_at, log_path,
              dispatch_context, requires_gh_write, gh_write_target, gh_write_author,
              gh_write_expect, persisted_worktree_path, persisted_worktree_branch) in rows:
-            exited = False
-            zombie = False
-            raw_exit_status = None
-            if pid is None:
-                # Null PID while "running" is always a zombie (#753).
-                exited = True
-            else:
-                try:
-                    wpid, wstatus = os.waitpid(pid, os.WNOHANG)
-                    if wpid != 0:
+            try:
+                exited = False
+                raw_exit_status = None
+                if pid is None:
+                    # Null PID while "running" is always a zombie (#753).
+                    exited = True
+                else:
+                    try:
+                        wpid, wstatus = os.waitpid(pid, os.WNOHANG)
+                        if wpid != 0:
+                            exited = True
+                            raw_exit_status = wstatus
+                    except ChildProcessError:
+                        # Not our child (daemon restart / external spawn) — probe liveness.
+                        if not _pid_is_alive(pid):
+                            exited = True
+                    except Exception:
+                        if not _pid_is_alive(pid):
+                            exited = True
+                    # Double-check: waitpid can return 0 for non-children on some paths;
+                    # if still not exited, trust kill(0).
+                    if not exited and not _pid_is_alive(pid):
                         exited = True
-                        raw_exit_status = wstatus
-                except ChildProcessError:
-                    # Not our child (daemon restart / external spawn) — probe liveness.
-                    if not _pid_is_alive(pid):
-                        exited = True; zombie = has_leaked_worktree(job_id, log_path)
-                except Exception:
-                    if not _pid_is_alive(pid):
-                        exited = True; zombie = has_leaked_worktree(job_id, log_path)
-                # Double-check: waitpid can return 0 for non-children on some paths;
-                # if still not exited, trust kill(0).
-                if not exited and not _pid_is_alive(pid):
-                    exited = True; zombie = has_leaked_worktree(job_id, log_path)
 
-            if exited:
-                if zombie:
-                    # A leaked worktree is evidence that cleanup is needed, not
-                    # evidence that a required GitHub write failed.  Run the
-                    # same GTV/verifier path as other terminal outcomes before
-                    # using the irreversible killed_zombie fallback.
-                    worktree_path = persisted_worktree_path or _daemon_job_worktree_path(job_id, log_path)
-                    worktree_branch = persisted_worktree_branch or (f"dispatch/{agent}/{job_id}" if agent else None)
-                    git_state = None
-                    if worktree_path:
-                        inspect_fn = _pkg("_inspect_worktree_git_state") or _inspect_worktree_git_state
-                        try:
-                            git_state = inspect_fn(worktree_path, worktree_branch, started_at)
-                        except Exception:
-                            git_state = None
-                    zombie_status, zombie_exit_code, _, _ = _gtv_status_for_daemon_exit(
-                        None, git_state
-                    )
-                    zombie_status, gh_write_verified_str = _apply_gh_write_verification(
-                        conn, job_id, requires_gh_write, gh_write_target, zombie_status,
-                        since=started_at, expect_author=gh_write_author,
-                        expect=gh_write_expect or "closed",
-                    )
-                    if (
-                        requires_gh_write and gh_write_verified_str == "true"
-                        and zombie_status == "timed_out"
-                    ):
-                        zombie_status, zombie_exit_code = "done", 0
-                    if not requires_gh_write or gh_write_verified_str != "true":
-                        zombie_status, zombie_exit_code = "killed_zombie", -9
-                    _reap_zombie_worktree(job_id, log_path)
-                    conn.execute(
-                        "UPDATE daemon_jobs SET status=?, exit_code=?, completed_at=? "
-                        "WHERE job_id=? AND status='running'",
-                        (zombie_status, zombie_exit_code, now, job_id),
-                    )
-                    conn.commit()
+                if not exited:
                     continue
+
                 exit_code = None
                 exit_file = None
                 exit_marker_present = False
@@ -2749,6 +2733,37 @@ def _reconcile_daemon_jobs() -> None:
                         git_state = inspect_fn(worktree_path, worktree_branch, started_at)
                     except Exception:
                         git_state = None
+
+                # If no exit signal, no exit file, and no git activity, handle true zombie reap
+                if (
+                    exit_code is None
+                    and not exit_marker_present
+                    and not _job_has_real_work_landed(git_state)
+                    and (has_leaked_worktree(job_id, log_path) or pid is None)
+                ):
+                    zombie_status, zombie_exit_code, _, _ = _gtv_status_for_daemon_exit(
+                        None, git_state
+                    )
+                    zombie_status, gh_write_verified_str = _apply_gh_write_verification(
+                        conn, job_id, requires_gh_write, gh_write_target, zombie_status,
+                        since=started_at, expect_author=gh_write_author,
+                        expect=gh_write_expect or "closed",
+                    )
+                    if (
+                        requires_gh_write and gh_write_verified_str == "true"
+                        and zombie_status == "timed_out"
+                    ):
+                        zombie_status, zombie_exit_code = "done", 0
+                    if not requires_gh_write or gh_write_verified_str != "true":
+                        zombie_status, zombie_exit_code = "killed_zombie", -9
+                    _reap_zombie_worktree(job_id, log_path)
+                    conn.execute(
+                        "UPDATE daemon_jobs SET status=?, exit_code=?, completed_at=? "
+                        "WHERE job_id=? AND status='running'",
+                        (zombie_status, zombie_exit_code, now, job_id),
+                    )
+                    conn.commit()
+                    continue
 
                 status, exit_code, summary_status, summary_note = _gtv_status_for_daemon_exit(
                     exit_code, git_state
@@ -2892,6 +2907,9 @@ def _reconcile_daemon_jobs() -> None:
                     task_sha256=task_sha256, task_preview=task_preview,
                     log_text=log_text,
                 )
+            except Exception as exc:
+                print(f"  ⚠ exception reconciling job {job_id}: {exc}", file=sys.stderr)
+                continue
         conn.commit()
     finally:
         conn.close()

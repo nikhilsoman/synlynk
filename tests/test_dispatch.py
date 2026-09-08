@@ -2414,3 +2414,41 @@ def test_dispatch_agent_populates_harness_and_role_in_daemon_jobs(project_dir, m
     ).fetchone()
     conn.close()
     assert row == ("codex", "codex", "dev")
+
+
+def test_job_logs_outside_worktree(tmp_path, monkeypatch):
+    import os
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+    from synlynk.daemon import _daemon_state_path
+
+    monkeypatch.chdir(tmp_path)
+    worktree_dir = tmp_path / "worktrees" / "job-test-123"
+    worktree_dir.mkdir(parents=True)
+
+    monkeypatch.setattr(
+        dispatch_mod,
+        "_create_job_worktree",
+        lambda *a, **kw: {
+            "path": str(worktree_dir),
+            "branch": "dispatch/codex/job-test-123",
+            "base_branch": "main",
+            "base_sha": "deadbeef",
+        },
+    )
+    monkeypatch.setattr(sl, "generate_context", lambda *a, **kw: "context")
+    monkeypatch.setattr(
+        dispatch_mod.subprocess,
+        "Popen",
+        lambda *a, **kw: type("P", (), {"pid": 99999999})(),
+    )
+
+    job = dispatch_mod.dispatch_agent("codex", "test task", force_agent=True, skip_preflight=True, context_mode="none")
+    log_path = job["log_file"]
+
+    # Log must NOT be located inside the disposable worktree directory
+    assert not log_path.startswith(str(worktree_dir) + os.sep)
+    # Log must be located inside the central .synlynk/logs directory
+    expected_logs_dir = os.path.abspath(_daemon_state_path("logs"))
+    assert os.path.dirname(os.path.abspath(log_path)) == expected_logs_dir
+

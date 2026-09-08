@@ -2107,3 +2107,118 @@ def test_stage0_explore_bonus_excludes_nonmatching_discipline_model(tmp_path, mo
     )
 
     assert "gpt-frontend" not in {model for _agent, _score, model in result}
+
+
+def test_reconcile_daemon_jobs_isolates_exceptions(project_dir, monkeypatch, capsys):
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    monkeypatch.setattr(jobs_mod, "_pid_is_alive", lambda pid: False)
+    monkeypatch.setattr(jobs_mod, "_daemon_job_worktree_path", lambda *a, **kw: None)
+
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, story_id, task, status, pid, enqueued_at, started_at) "
+        "VALUES ('job-fail1', 'codex', 's1', 'task1', 'running', 11111, '2026-09-08T00:00:00', '2026-09-08T00:00:00')"
+    )
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, story_id, task, status, pid, enqueued_at, started_at) "
+        "VALUES ('job-succ2', 'codex', 's2', 'task2', 'running', 22222, '2026-09-08T00:00:00', '2026-09-08T00:00:00')"
+    )
+    conn.commit()
+    conn.close()
+
+    real_gtv = jobs_mod._gtv_status_for_daemon_exit
+
+    def failing_gtv(exit_code, git_state):
+        # Inspect caller frame or simulate error on first job
+        frame = __import__("inspect").currentframe()
+        outer = frame.f_back
+        job_id = outer.f_locals.get("job_id")
+        if job_id == "job-fail1":
+            raise RuntimeError("Injected exception reconciling job-fail1")
+        return real_gtv(exit_code, git_state)
+
+    monkeypatch.setattr(jobs_mod, "_gtv_status_for_daemon_exit", failing_gtv)
+
+    jobs_mod._reconcile_daemon_jobs()
+
+    conn = sl._get_db()
+    st1 = conn.execute("SELECT status FROM daemon_jobs WHERE job_id='job-fail1'").fetchone()[0]
+    st2 = conn.execute("SELECT status FROM daemon_jobs WHERE job_id='job-succ2'").fetchone()[0]
+    conn.close()
+
+    # job-fail1 remains running because its reconciliation threw
+    assert st1 == "running"
+    # job-succ2 MUST have been reconciled and transitioned to terminal status
+    assert st2 != "running"
+    err = capsys.readouterr().err
+    assert "exception reconciling job job-fail1" in err
+
+
+def test_design_job_with_worktree_not_classified_as_zombie(tmp_path, project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    wt = tmp_path / "worktrees" / "job-design1"
+    wt.mkdir(parents=True)
+    (wt / ".git").mkdir()
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir(parents=True)
+    log_file = log_dir / "job-design1.log"
+    log_file.write_text("design completed successfully")
+    exit_file = log_dir / "job-design1.log.exit"
+    exit_file.write_text("0\n")
+
+    monkeypatch.setattr(jobs_mod, "_pid_is_alive", lambda pid: False)
+    monkeypatch.setattr(jobs_mod, "_daemon_job_worktree_path", lambda *a, **kw: str(wt))
+
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, story_id, task, status, pid, enqueued_at, started_at, log_path, requires_gh_write, worktree_path) "
+        "VALUES ('job-design1', 'agy', 's-design', 'brainstorm spec', 'running', 44444, '2026-09-08T00:00:00', '2026-09-08T00:00:00', ?, 0, ?)",
+        (str(log_file), str(wt))
+    )
+    conn.commit()
+    conn.close()
+
+    jobs_mod._reconcile_daemon_jobs()
+
+    conn = sl._get_db()
+    row = conn.execute("SELECT status, exit_code FROM daemon_jobs WHERE job_id='job-design1'").fetchone()
+    conn.close()
+
+    assert row[0] == "done", f"Expected status 'done', got {row[0]!r}"
+    assert row[1] == 0, f"Expected exit code 0, got {row[1]!r}"
+
+
+def test_reap_zombie_worktree_preserves_log(tmp_path, project_dir, monkeypatch):
+    import synlynk.jobs as jobs_mod
+    from synlynk.daemon import _daemon_state_path
+
+    wt = tmp_path / "worktrees" / "job-reap1"
+    log_dir = wt / ".synlynk" / "logs"
+    log_dir.mkdir(parents=True)
+    log_file = log_dir / "job-reap1.log"
+    log_file.write_text("worker output before reap")
+    exit_file = log_dir / "job-reap1.log.exit"
+    exit_file.write_text("137\n")
+
+    monkeypatch.setattr(jobs_mod, "_daemon_job_worktree_path", lambda *a, **kw: str(wt))
+
+    reaped = jobs_mod._reap_zombie_worktree("job-reap1", str(log_file))
+    assert reaped is True
+
+    # Worktree was deleted
+    assert not wt.exists()
+
+    # Log was preserved in central logs directory
+    central_log = os.path.join(_daemon_state_path("logs"), "job-reap1.log")
+    central_exit = os.path.join(_daemon_state_path("logs"), "job-reap1.log.exit")
+    assert os.path.exists(central_log)
+    assert open(central_log).read() == "worker output before reap"
+    assert os.path.exists(central_exit)
+    assert open(central_exit).read().strip() == "137"
+
+
+
