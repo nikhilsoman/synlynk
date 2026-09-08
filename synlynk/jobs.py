@@ -2597,6 +2597,31 @@ def _reap_zombie_worktree(job_id: str, log_path: Optional[str]) -> bool:
     return False
 
 
+def _persist_daemon_job_terminal(
+    conn, job_id: str, status: str, exit_code: Optional[int], completed_at: str,
+    *, only_running: bool = False,
+) -> None:
+    """Persist a daemon job's terminal state with the requested row scope."""
+    where_clause = "WHERE job_id=? AND status='running'" if only_running else "WHERE job_id=?"
+    conn.execute(
+        "UPDATE daemon_jobs SET status=?, exit_code=?, completed_at=? " + where_clause,
+        (status, exit_code, completed_at, job_id),
+    )
+
+
+def _release_daemon_job_reservation(conn, job_id: str) -> None:
+    """Release the open reservation associated with a terminal daemon job."""
+    release_fn = _pkg("_release_reservation")
+    if not release_fn:
+        return
+    reservation = conn.execute(
+        "SELECT id FROM harness_reservations WHERE job_id=? AND status='open'",
+        (job_id,),
+    ).fetchone()
+    if reservation:
+        release_fn(conn, reservation[0])
+
+
 def _reconcile_daemon_jobs() -> None:
     """Reaps finished daemon_jobs; updates status/exit_code/completed_at in state.db.
 
@@ -2685,20 +2710,11 @@ def _reconcile_daemon_jobs() -> None:
                         since=started_at, expect_author=gh_write_author,
                         expect=gh_write_expect or "closed",
                     )
-                    conn.execute(
-                        "UPDATE daemon_jobs SET status=?, exit_code=?, completed_at=? "
-                        "WHERE job_id=? AND status='running'",
-                        (status, exit_code, now, job_id),
+                    _persist_daemon_job_terminal(
+                        conn, job_id, status, exit_code, now, only_running=True
                     )
                     conn.commit()
-                    release_fn = _pkg("_release_reservation")
-                    if release_fn:
-                        _res_row = conn.execute(
-                            "SELECT id FROM harness_reservations WHERE job_id=? AND status='open'",
-                            (job_id,),
-                        ).fetchone()
-                        if _res_row:
-                            release_fn(conn, _res_row[0])
+                    _release_daemon_job_reservation(conn, job_id)
                     # Do not rewrite summary — but ensure a cost_entries row exists (#752 A2).
                     log_text_pref = ""
                     if log_path and os.path.exists(log_path):
@@ -2757,10 +2773,8 @@ def _reconcile_daemon_jobs() -> None:
                     if not requires_gh_write or gh_write_verified_str != "true":
                         zombie_status, zombie_exit_code = "killed_zombie", -9
                     _reap_zombie_worktree(job_id, log_path)
-                    conn.execute(
-                        "UPDATE daemon_jobs SET status=?, exit_code=?, completed_at=? "
-                        "WHERE job_id=? AND status='running'",
-                        (zombie_status, zombie_exit_code, now, job_id),
+                    _persist_daemon_job_terminal(
+                        conn, job_id, zombie_status, zombie_exit_code, now, only_running=True
                     )
                     conn.commit()
                     continue
@@ -2793,20 +2807,9 @@ def _reconcile_daemon_jobs() -> None:
                             files_touched = []
 
                 log_text = ""
-                conn.execute(
-                    "UPDATE daemon_jobs SET status=?, exit_code=?, completed_at=? "
-                    "WHERE job_id=?",
-                    (status, exit_code, now, job_id)
-                )
+                _persist_daemon_job_terminal(conn, job_id, status, exit_code, now)
                 conn.commit()
-                release_fn = _pkg("_release_reservation")
-                if release_fn:
-                    _res_row = conn.execute(
-                        "SELECT id FROM harness_reservations WHERE job_id=? AND status='open'",
-                        (job_id,),
-                    ).fetchone()
-                    if _res_row:
-                        release_fn(conn, _res_row[0])
+                _release_daemon_job_reservation(conn, job_id)
                 duration_s = None
                 try:
                     end_ts = time.mktime(time.strptime(now, "%Y-%m-%dT%H:%M:%S"))

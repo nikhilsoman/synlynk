@@ -95,6 +95,24 @@ def test_parse_iso8601_returns_none_for_none():
     assert _parse_iso8601(None) is None
 
 
+def test_parse_iso8601_converts_positive_offset_to_utc():
+    dt = _parse_iso8601("2026-08-18T15:30:00+05:30")
+    assert dt is not None
+    assert dt.isoformat() == "2026-08-18T10:00:00+00:00"
+
+
+def test_parse_iso8601_returns_none_for_invalid_date():
+    assert _parse_iso8601("2026-02-30T10:00:00Z") is None
+
+
+def test_gh_write_verified_returns_none_for_unknown_expectation(monkeypatch):
+    def fake_run(cmd, **kwargs):
+        raise AssertionError("GitHub CLI should not run for an unknown expectation")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    assert gh_write_verified("issue:701", expect="not-a-real-expectation") is None
+
+
 def test_gh_write_verified_review_posted_true_after_since_no_author_filter(monkeypatch):
     def fake_run(cmd, **kwargs):
         assert cmd[:3] == ["gh", "pr", "view"]
@@ -392,4 +410,3 @@ def test_gh_write_verified_survives_incompatible_timestamp_types_without_crashin
         "pr:1038", expect="review_posted", since="2026-08-18T10:00:00Z",
         expect_author="bot",
     ) is False
-

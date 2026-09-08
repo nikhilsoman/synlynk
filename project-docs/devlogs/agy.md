@@ -105,4 +105,24 @@
 - **Probe Stale SOP Detection:** Updated `synlynk probe` stale SOP detection in `_repair_sops_only()` to catch legacy `#423` shared-identity text and upgrade directive templates to `qa APPROVE` defaults.
 - **Regression Tests:** Added `test_allow_distinct_qa_app_identities_to_submit_approving_pr_reviews` in `tests/test_agent_cli.py` covering all branches.
 
+## 2026-09-08 — Diagnose and Prevent Zombie Worker Termination (#1498)
+
+### Root Cause Analysis
+- Investigated issue #1498 where design and review dispatches (non-gh-write tasks) terminated after 3–5 minutes with status `killed_zombie` and exit code `-9`, destroying worker logs.
+- Discovered 4 core failure modes:
+  1. **Premature Zombie Reaping:** In `synlynk/jobs.py:_reconcile_daemon_jobs`, any worktree contains `.git`, so `has_leaked_worktree()` evaluated to True. When the worker process exited, it bypassed reading `{log_path}.exit` and ground-truth verification, unconditionally marking non-gh-write jobs as `killed_zombie` (-9) and deleting the worktree.
+  2. **Worktree Log Loss:** `dispatch.py` placed `logs_dir` at `worktree/.synlynk/logs/`. When a zombie worktree was reaped, the worker log and exit marker were destroyed.
+  3. **Offset-naive vs. Offset-aware Datetime TypeError:** In `synlynk/gh_verify.py` and `synlynk/jobs.py`, GitHub timestamps parsed as UTC-aware datetimes were compared against naive `started_at` datetimes, raising an unhandled `TypeError` that crashed the reconciler.
+  4. **Unprotected Reconciler Loop Boundary:** `_reconcile_daemon_jobs` had a single `try` wrapping the entire loop over all jobs; an exception on any single job aborted reconciliation for all remaining jobs.
+  5. **Relative `.pem` Key Path Resolution:** In `synlynk/github_app_auth.py`, relative `.pem` paths in app config failed when openssl ran with CWD set to a worktree.
+
+### Shipped
+- **Timezone-Aware Normalization & Exception Safety:** Added `_to_utc_dt()` in `synlynk/gh_verify.py` to normalize datetimes to timezone-aware UTC. Wrapped comparisons with `_compare_dt_lt` and added fallback in `_apply_gh_write_verification` in `synlynk/jobs.py`.
+- **Absolute App Key Resolution:** Added `_resolve_private_key_path` in `synlynk/github_app_auth.py` to resolve private keys relative to `apps_dir` or `_daemon_state_path("github_apps")` regardless of process CWD.
+- **Reconciler Exception Boundary:** Wrapped per-job iteration in `_reconcile_daemon_jobs` in a `try...except Exception as exc:` block to ensure one failing job cannot abort the daemon loop.
+- **Persistent Central Logs & Reap Preservation:** Moved worker `logs_dir` in `synlynk/dispatch.py` to `_daemon_state_path("logs")` outside the disposable worktree. Enhanced `_reap_zombie_worktree` in `synlynk/jobs.py` to preserve any logs before worktree removal.
+- **Correct Exit Resolution Order:** In `synlynk/jobs.py:_reconcile_daemon_jobs`, inspected waitpid and `{log_path}.exit` before evaluating zombie criteria. Jobs with exit status or work are classified as `done` / `failed` rather than `killed_zombie`.
+- **Comprehensive Test Suite:** Added unit tests across `tests/test_gh_verify.py`, `tests/test_github_app_auth.py`, `tests/test_daemon_token_refresh.py`, `tests/test_dispatch.py`, and `tests/test_jobs.py`.
+
+
 

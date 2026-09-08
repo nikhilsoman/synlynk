@@ -9,6 +9,15 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Breaking Changes
+
+- **Dispatch jobs now distinguish completed work from true zombie termination.**
+  Jobs whose process has exited and left a completion marker or real work behind
+  are reported using their terminal result instead of `killed_zombie`; consumers
+  that treated `killed_zombie` as the only signal for cleanup or retry should
+  switch to the job's terminal status and exit code. Logs are also retained in
+  the daemon's central state directory when a disposable worktree is removed.
+
 ### Added
 
 - **Cadence-breaker resilience engine:** markdown append conflict auto-rebase,

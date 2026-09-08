@@ -1449,6 +1449,46 @@ def test_scan_and_apply_reap_zombies(tmp_path, monkeypatch):
     conn.close()
 
 
+def test_apply_reap_zombies_skips_candidate_that_settled_after_scan(tmp_path):
+    """A scan/apply race must not overwrite a job settled by another worker."""
+    from synlynk.jobs import apply_reap_zombies
+    import sqlite3
+
+    db = tmp_path / "state.db"
+    conn = sqlite3.connect(str(db))
+    conn.execute(
+        "CREATE TABLE daemon_jobs ("
+        "job_id TEXT PRIMARY KEY, agent TEXT, task TEXT, story_id TEXT, status TEXT, "
+        "priority INTEGER, depends_on TEXT, pid INTEGER, enqueued_at TEXT, started_at TEXT, "
+        "completed_at TEXT, exit_code INTEGER, log_path TEXT, handoff_count INTEGER DEFAULT 0)"
+    )
+    conn.execute(
+        "INSERT INTO daemon_jobs VALUES "
+        "('job-race1','agy','t',NULL,'done',5,'[]',111,'2026-08-01T00:00:00',"
+        "'2026-08-01T00:00:00','2026-08-01T00:01:00',0,NULL,0)"
+    )
+    conn.commit()
+    conn.close()
+
+    candidates = [{
+        "job_id": "job-race1",
+        "agent": "agy",
+        "pid": 111,
+        "started_at": "2026-08-01T00:00:00",
+        "project": "test-project",
+        "db_path": str(db),
+        "action": "reap",
+    }]
+
+    assert apply_reap_zombies(candidates) == []
+
+    conn = sqlite3.connect(str(db))
+    assert conn.execute(
+        "SELECT status, exit_code, completed_at FROM daemon_jobs WHERE job_id='job-race1'"
+    ).fetchone() == ("done", 0, "2026-08-01T00:01:00")
+    conn.close()
+
+
 def test_cmd_jobs_reap_dry_run_and_apply(tmp_path, monkeypatch, capsys):
     from synlynk.jobs import cmd_jobs_reap
     import sqlite3
@@ -2219,6 +2259,5 @@ def test_reap_zombie_worktree_preserves_log(tmp_path, project_dir, monkeypatch):
     assert open(central_log).read() == "worker output before reap"
     assert os.path.exists(central_exit)
     assert open(central_exit).read().strip() == "137"
-
 
 

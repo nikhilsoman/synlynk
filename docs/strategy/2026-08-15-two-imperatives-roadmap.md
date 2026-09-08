@@ -7,6 +7,20 @@
 1. **Execution autonomy** — workspace agents (dev/qa/designer/marketing) execute implementation and verification tasks through autonomous harnesses (Codex/Grok/Agy); Claude stays PM/review/deploy only.
 2. **Workspace context accuracy** — tracked project state (`state.db`, `project-docs/*`, devlogs, memory, roadmap) stays accurate and drift-free, with no silent divergence between what's tracked and reality.
 
+## Priority reconciliation: move quickly without losing trust
+
+Stakeholders are asking for two outcomes that can pull in opposite directions: ship more autonomous execution quickly, while keeping workspace state accurate enough for people to trust the system's decisions. The roadmap resolves this as a sequencing decision rather than a choice between outcomes. Reliability is the release gate; autonomy is the product direction.
+
+- **Near term:** prioritize the smallest reliability slice that protects truth in the pipe (job status, attribution, context, and cleanup). Defer autonomous breadth that would make state harder to inspect or recover.
+- **In parallel:** run autonomy as a bounded pilot behind explicit scope, quota, and verification gates. Pilot work can expand only when it produces auditable diffs, accurate completion signals, and repeatable rollback or handoff behavior.
+- **Decision rule:** when speed and trust conflict, choose the option that preserves a reversible path and measurable evidence. Revisit the trade-off at each release using delivery throughput, stale-state rate, verification success, and operator intervention as shared metrics.
+
+This keeps the execution-autonomy stakeholder moving toward visible capability while giving the context-accuracy stakeholder a veto over unsafe expansion. Success is not maximum automation; it is automation that earns a wider operating envelope by remaining observable and correct.
+
+### Positioning boundary
+
+Here, **execution autonomy** describes the operating outcome, not a new product category. Synlynk coordinates, routes, measures, and verifies work performed by external coding harnesses; it does not become a harness, workflow engine, or agent vendor. The product message remains the measurement and arbitration layer for heterogeneous coding agents, with reliable context and job evidence as the mechanism that makes greater autonomy safe.
+
 Every item below is ordered by how directly it closes one or both gaps. See the 2026-08-15 recap conversation for the full audit this roadmap is built from (specs without plans, plans pending implementation, open issues categorized against the two imperatives).
 
 ## Why this order
