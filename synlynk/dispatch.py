@@ -2939,8 +2939,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     if agent == "codex" and worktree_path and "-C" not in flags and "--cd" not in flags:
         flags = flags + ["-C", worktree_path]
     worktree_synlynk_dir = os.path.join(worktree_path, ".synlynk")
-    from synlynk.daemon import _daemon_state_path
-    logs_dir = _daemon_state_path("logs")
+    logs_dir = os.path.join(worktree_synlynk_dir, "logs")
     prompts_dir = os.path.join(worktree_synlynk_dir, "prompts")
     contexts_dir = os.path.join(worktree_synlynk_dir, "contexts")
     os.makedirs(logs_dir, exist_ok=True)

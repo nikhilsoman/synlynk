@@ -2416,10 +2416,11 @@ def test_dispatch_agent_populates_harness_and_role_in_daemon_jobs(project_dir, m
     assert row == ("codex", "codex", "dev")
 
 
-def test_job_logs_outside_worktree(tmp_path, monkeypatch):
+def test_dispatch_logs_isolated_and_preserved_on_reap(tmp_path, monkeypatch):
     import os
     import synlynk as sl
     import synlynk.dispatch as dispatch_mod
+    import synlynk.jobs as jobs_mod
     from synlynk.daemon import _daemon_state_path
 
     monkeypatch.chdir(tmp_path)
@@ -2437,18 +2438,42 @@ def test_job_logs_outside_worktree(tmp_path, monkeypatch):
         },
     )
     monkeypatch.setattr(sl, "generate_context", lambda *a, **kw: "context")
-    monkeypatch.setattr(
-        dispatch_mod.subprocess,
-        "Popen",
-        lambda *a, **kw: type("P", (), {"pid": 99999999})(),
-    )
+    class FakeProc:
+        def __init__(self, *args, **kwargs):
+            self.args = args
+            self.pid = 99999999
+            self.returncode = 0
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            pass
+        def communicate(self, *a, **kw):
+            return ("", "")
+        def poll(self):
+            return 0
+        def wait(self, *a, **kw):
+            return 0
+
+    orig_popen = dispatch_mod.subprocess.Popen
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **kw: FakeProc(*a, **kw))
 
     job = dispatch_mod.dispatch_agent("codex", "test task", force_agent=True, skip_preflight=True, context_mode="none")
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", orig_popen)
     log_path = job["log_file"]
 
-    # Log must NOT be located inside the disposable worktree directory
-    assert not log_path.startswith(str(worktree_dir) + os.sep)
-    # Log must be located inside the central .synlynk/logs directory
-    expected_logs_dir = os.path.abspath(_daemon_state_path("logs"))
-    assert os.path.dirname(os.path.abspath(log_path)) == expected_logs_dir
+    # Log is isolated inside the worktree during execution
+    assert log_path.startswith(str(worktree_dir) + os.sep)
+    assert os.path.exists(os.path.dirname(log_path))
+    with open(log_path, "w") as f:
+        f.write("dispatched worker output")
+
+    # When zombie worktree is reaped, log is preserved in central .synlynk/logs
+    monkeypatch.setattr(jobs_mod, "_daemon_job_worktree_path", lambda *a, **kw: str(worktree_dir))
+    reaped = jobs_mod._reap_zombie_worktree(job["id"], log_path)
+    assert reaped is True
+    assert not worktree_dir.exists()
+
+    preserved_log = os.path.join(_daemon_state_path("logs"), os.path.basename(log_path))
+    assert os.path.exists(preserved_log)
+    assert open(preserved_log).read() == "dispatched worker output"
 

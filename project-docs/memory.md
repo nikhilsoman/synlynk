@@ -1,5 +1,19 @@
 # synlynk Memory
 
+## Eliminate Premature Zombie Worker Termination & Datetime Comparison Errors (decided/shipped 2026-09-08)
+- **Problem & Root Cause (#1498):** Dispatched non-gh-write workers (design, review, spec tasks) were prematurely classified as `killed_zombie` with exit code `-9` after 3–5 minutes, destroying worker logs.
+  1. `_reconcile_daemon_jobs` in `synlynk/jobs.py` evaluated `has_leaked_worktree()` as True because any worktree contains `.git`. When the worker process exited, it bypassed `{log_path}.exit` inspection and marked the job as a zombie, deleting the worktree.
+  2. `dispatch.py` wrote `logs_dir` into the worktree directory, which was deleted when the worktree was reaped.
+  3. Offset-naive vs. offset-aware datetime comparisons in `gh_verify.py` and `jobs.py` crashed the reconciler with an unhandled `TypeError`.
+  4. Per-job exceptions in `_reconcile_daemon_jobs` aborted reconciliation for all remaining jobs.
+  5. Relative GitHub App `.pem` private key paths failed to resolve during openssl JWT signing when CWD was set to a worktree.
+- **Architectural Resolution:**
+  1. Correct Exit Resolution Order: Inspect waitpid and `{log_path}.exit` before checking zombie fallback criteria. Non-gh-write completed jobs settle as `done` / `failed` rather than `killed_zombie`.
+  2. Worktree Log Isolation & Reap Preservation: Worker `logs_dir` remains inside the worktree (`worktree/.synlynk/logs/`) during execution to preserve clean parent repository state, and `_reap_zombie_worktree` copies any logs to `_daemon_state_path("logs")` before deleting the worktree.
+  3. Timezone-Aware UTC Normalization: `_to_utc_dt()` and `_compare_dt_lt` normalize all ISO-8601 strings and datetimes to timezone-aware UTC.
+  4. Reconciler Exception Boundary: Wrapped per-job iteration in `try...except Exception as exc:` to isolate failures.
+  5. Absolute App Key Resolution: `_resolve_private_key_path` in `github_app_auth.py` resolves private keys relative to `apps_dir` or central state dir. [@nikhilsoman]
+
 ## Allow Distinct QA App Identities to Submit Approving PR Reviews (decided/shipped 2026-09-06)
 - **Problem & Root Cause (#1475):** On PR #1474 (authored by `nikhilsoman`), dispatched QA reviewers (`synlynk-synlynk-qa[bot]`) posted `COMMENTED` reviews instead of approving reviews, leaving `reviewDecision=REVIEW_REQUIRED`. Root cause:
   1. `uxcore.approve_pr()` executed raw `gh pr review --approve` using ambient `os.environ` without binding role-scoped GitHub App tokens (`qa.token.json`), causing host-auth fallback collisions.
