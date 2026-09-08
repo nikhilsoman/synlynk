@@ -557,7 +557,7 @@ def _make_daemon_handler(daemon_instance):
             self._send_json(200, result)
 
         def _handle_sentinel(self):
-            sentinel_file = ".synlynk/sentinel.md"
+            sentinel_file = daemon_instance.sentinel_path
             alerts = _pkg("_read_sentinel_alerts")(sentinel_path=sentinel_file)
             self._send_json(200, alerts)
 
@@ -833,6 +833,10 @@ class SynlynkDaemon(WatchDaemon):
         self._context_lock = _threading.Lock()
         self.autonomous = autonomous
         self._last_autonomous_run = 0.0
+        # Bind request handlers to the workspace that created this daemon;
+        # relative CWD resolution is unsafe for linked worktrees.
+        self.workspace_root = os.path.abspath(os.getcwd())
+        self.sentinel_path = os.path.join(self.workspace_root, ".synlynk", "sentinel.md")
 
     def _autonomous_tick(self) -> None:
         """Run one bounded heal/TPM pass and leave an SRE heartbeat."""
