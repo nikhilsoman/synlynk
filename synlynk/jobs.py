@@ -1962,6 +1962,32 @@ def _pid_is_alive(pid) -> bool:
         return False
 
 
+def _persist_daemon_job_terminal(
+    conn, job_id: str, status: str, exit_code: Optional[int], completed_at: str,
+    *, only_running: bool = False,
+) -> bool:
+    """Persist a daemon job's terminal state with the requested row scope."""
+    where_clause = "WHERE job_id=? AND status='running'" if only_running else "WHERE job_id=?"
+    cursor = conn.execute(
+        "UPDATE daemon_jobs SET status=?, exit_code=?, completed_at=? " + where_clause,
+        (status, exit_code, completed_at, job_id),
+    )
+    return (cursor.rowcount or 0) > 0
+
+
+def _release_daemon_job_reservation(conn, job_id: str) -> None:
+    """Release the open reservation associated with a terminal daemon job."""
+    release_fn = _pkg("_release_reservation")
+    if not release_fn:
+        return
+    reservation = conn.execute(
+        "SELECT id FROM harness_reservations WHERE job_id=? AND status='open'",
+        (job_id,),
+    ).fetchone()
+    if reservation:
+        release_fn(conn, reservation[0])
+
+
 def mark_daemon_job_terminal(
     conn: sqlite3.Connection,
     job_id: str,
@@ -1979,12 +2005,9 @@ def mark_daemon_job_terminal(
     if not job_id:
         return False
     now = completed_at or time.strftime("%Y-%m-%dT%H:%M:%S")
-    cur = conn.execute(
-        "UPDATE daemon_jobs SET status=?, exit_code=?, completed_at=? "
-        "WHERE job_id=? AND status='running'",
-        (status, exit_code, now, job_id),
+    return _persist_daemon_job_terminal(
+        conn, job_id, status, exit_code, now, only_running=True
     )
-    return (cur.rowcount or 0) > 0
 
 
 def auto_reap_job_from_sentinel(code: str, message: str) -> Optional[str]:
@@ -2356,12 +2379,9 @@ def _reconcile_terminal_jobs_json(conn) -> int:
             verified = None
         exit_code = job.get("exit_code")
         completed_at = job.get("ended_at") or time.strftime("%Y-%m-%dT%H:%M:%S")
-        result = conn.execute(
-            "UPDATE daemon_jobs SET status=?, exit_code=?, completed_at=? "
-            "WHERE job_id=? AND status='running'",
-            (status, exit_code, completed_at, job_id),
-        )
-        if result.rowcount:
+        if _persist_daemon_job_terminal(
+            conn, job_id, status, exit_code, completed_at, only_running=True
+        ):
             repaired += 1
             emit_event(
                 "job_terminal",
@@ -2597,32 +2617,6 @@ def _reap_zombie_worktree(job_id: str, log_path: Optional[str]) -> bool:
     return False
 
 
-def _persist_daemon_job_terminal(
-    conn, job_id: str, status: str, exit_code: Optional[int], completed_at: str,
-    *, only_running: bool = False,
-) -> bool:
-    """Persist a daemon job's terminal state with the requested row scope."""
-    where_clause = "WHERE job_id=? AND status='running'" if only_running else "WHERE job_id=?"
-    cursor = conn.execute(
-        "UPDATE daemon_jobs SET status=?, exit_code=?, completed_at=? " + where_clause,
-        (status, exit_code, completed_at, job_id),
-    )
-    return (cursor.rowcount or 0) > 0
-
-
-def _release_daemon_job_reservation(conn, job_id: str) -> None:
-    """Release the open reservation associated with a terminal daemon job."""
-    release_fn = _pkg("_release_reservation")
-    if not release_fn:
-        return
-    reservation = conn.execute(
-        "SELECT id FROM harness_reservations WHERE job_id=? AND status='open'",
-        (job_id,),
-    ).fetchone()
-    if reservation:
-        release_fn(conn, reservation[0])
-
-
 def _reconcile_daemon_jobs() -> None:
     """Reaps finished daemon_jobs; updates status/exit_code/completed_at in state.db.
 
@@ -2711,10 +2705,13 @@ def _reconcile_daemon_jobs() -> None:
                         since=started_at, expect_author=gh_write_author,
                         expect=gh_write_expect or "closed",
                     )
-                    _persist_daemon_job_terminal(
+                    settled = _persist_daemon_job_terminal(
                         conn, job_id, status, exit_code, now, only_running=True
                     )
                     conn.commit()
+                    if not settled:
+                        # Another actor already committed a terminal status.
+                        continue
                     _release_daemon_job_reservation(conn, job_id)
                     # Do not rewrite summary — but ensure a cost_entries row exists (#752 A2).
                     log_text_pref = ""
@@ -2773,11 +2770,15 @@ def _reconcile_daemon_jobs() -> None:
                         zombie_status, zombie_exit_code = "done", 0
                     if not requires_gh_write or gh_write_verified_str != "true":
                         zombie_status, zombie_exit_code = "killed_zombie", -9
-                    _reap_zombie_worktree(job_id, log_path)
-                    _persist_daemon_job_terminal(
+                    # Claim terminal status before deleting the worktree so a
+                    # concurrent reconciler that already settled the job as
+                    # done/failed cannot lose its workspace to a late reap.
+                    settled = _persist_daemon_job_terminal(
                         conn, job_id, zombie_status, zombie_exit_code, now, only_running=True
                     )
                     conn.commit()
+                    if settled:
+                        _reap_zombie_worktree(job_id, log_path)
                     continue
 
                 status, exit_code, summary_status, summary_note = _gtv_status_for_daemon_exit(
