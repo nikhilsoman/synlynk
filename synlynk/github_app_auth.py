@@ -116,12 +116,57 @@ def _build_jwt_signing_input(app_id: str, now: float = None) -> tuple:
     return header + b"." + payload, header, payload
 
 
+def _resolve_private_key_path(private_key_path: str, apps_dir: Optional[str] = None) -> str:
+    """Resolve a GitHub App private key path to an absolute path.
+
+    Handles relative paths configured in role JSON (e.g.
+    ``.synlynk/github_apps/architect.pem`` or ``architect.pem``) across
+    git worktrees where the current working directory is not the repo root.
+    """
+    if not private_key_path:
+        return private_key_path
+    if os.path.isabs(private_key_path) and os.path.exists(private_key_path):
+        return private_key_path
+
+    basename = os.path.basename(private_key_path)
+
+    # 1. Try relative to explicit apps_dir if provided
+    if apps_dir:
+        candidate = os.path.join(apps_dir, basename)
+        if os.path.exists(candidate):
+            return os.path.abspath(candidate)
+        candidate2 = os.path.join(apps_dir, private_key_path)
+        if os.path.exists(candidate2):
+            return os.path.abspath(candidate2)
+
+    # 2. Try git-common-dir / repo-aware resolution
+    try:
+        from synlynk.dispatch import _resolve_github_apps_dir
+        common_apps_dir = _resolve_github_apps_dir()
+        if common_apps_dir:
+            cand = os.path.join(common_apps_dir, basename)
+            if os.path.exists(cand):
+                return os.path.abspath(cand)
+    except Exception:
+        pass
+
+    # 3. Try relative to CWD
+    if os.path.exists(private_key_path):
+        return os.path.abspath(private_key_path)
+
+    # 4. Fallback: absolute path against apps_dir if provided else abspath
+    if apps_dir:
+        return os.path.abspath(os.path.join(apps_dir, basename))
+    return os.path.abspath(private_key_path)
+
+
 def _sign_jwt(app_id: str, private_key_path: str) -> str:
     """Sign a GitHub App JWT by shelling out to openssl for RS256."""
+    resolved_key_path = _resolve_private_key_path(private_key_path)
     signing_input, _, _ = _build_jwt_signing_input(app_id)
     openssl = _resolve_openssl_path()
     result = subprocess.run(
-        [openssl, "dgst", "-sha256", "-sign", private_key_path],
+        [openssl, "dgst", "-sha256", "-sign", resolved_key_path],
         input=signing_input,
         capture_output=True,
         check=False,
@@ -167,8 +212,9 @@ def refresh_installation_token(role: str, app_config: dict, apps_dir: Optional[s
     it only reads the cache via read_cached_installation_token().
     ``apps_dir``, when given, overrides the default cwd-relative lookup.
     """
+    pem_path = _resolve_private_key_path(app_config.get("private_key_path", ""), apps_dir=apps_dir)
     token, expires_at = _mint_installation_token(
-        app_config["app_id"], app_config["installation_id"], app_config["private_key_path"],
+        app_config["app_id"], app_config["installation_id"], pem_path,
     )
     cache_path = _role_token_cache_path(role, apps_dir=apps_dir)
     os.makedirs(os.path.dirname(cache_path), exist_ok=True)

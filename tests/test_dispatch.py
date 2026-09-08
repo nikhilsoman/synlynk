@@ -2414,3 +2414,66 @@ def test_dispatch_agent_populates_harness_and_role_in_daemon_jobs(project_dir, m
     ).fetchone()
     conn.close()
     assert row == ("codex", "codex", "dev")
+
+
+def test_dispatch_logs_isolated_and_preserved_on_reap(tmp_path, monkeypatch):
+    import os
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+    import synlynk.jobs as jobs_mod
+    from synlynk.daemon import _daemon_state_path
+
+    monkeypatch.chdir(tmp_path)
+    worktree_dir = tmp_path / "worktrees" / "job-test-123"
+    worktree_dir.mkdir(parents=True)
+
+    monkeypatch.setattr(
+        dispatch_mod,
+        "_create_job_worktree",
+        lambda *a, **kw: {
+            "path": str(worktree_dir),
+            "branch": "dispatch/codex/job-test-123",
+            "base_branch": "main",
+            "base_sha": "deadbeef",
+        },
+    )
+    monkeypatch.setattr(sl, "generate_context", lambda *a, **kw: "context")
+    class FakeProc:
+        def __init__(self, *args, **kwargs):
+            self.args = args
+            self.pid = 99999999
+            self.returncode = 0
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            pass
+        def communicate(self, *a, **kw):
+            return ("", "")
+        def poll(self):
+            return 0
+        def wait(self, *a, **kw):
+            return 0
+
+    orig_popen = dispatch_mod.subprocess.Popen
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **kw: FakeProc(*a, **kw))
+
+    job = dispatch_mod.dispatch_agent("codex", "test task", force_agent=True, skip_preflight=True, context_mode="none")
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", orig_popen)
+    log_path = job["log_file"]
+
+    # Log is isolated inside the worktree during execution
+    assert log_path.startswith(str(worktree_dir) + os.sep)
+    assert os.path.exists(os.path.dirname(log_path))
+    with open(log_path, "w") as f:
+        f.write("dispatched worker output")
+
+    # When zombie worktree is reaped, log is preserved in central .synlynk/logs
+    monkeypatch.setattr(jobs_mod, "_daemon_job_worktree_path", lambda *a, **kw: str(worktree_dir))
+    reaped = jobs_mod._reap_zombie_worktree(job["id"], log_path)
+    assert reaped is True
+    assert not worktree_dir.exists()
+
+    preserved_log = os.path.join(_daemon_state_path("logs"), os.path.basename(log_path))
+    assert os.path.exists(preserved_log)
+    assert open(preserved_log).read() == "dispatched worker output"
+

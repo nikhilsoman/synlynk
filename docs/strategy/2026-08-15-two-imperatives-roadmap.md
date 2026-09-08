@@ -7,6 +7,38 @@
 1. **Execution autonomy** — workspace agents (dev/qa/designer/marketing) execute implementation and verification tasks through autonomous harnesses (Codex/Grok/Agy); Claude stays PM/review/deploy only.
 2. **Workspace context accuracy** — tracked project state (`state.db`, `project-docs/*`, devlogs, memory, roadmap) stays accurate and drift-free, with no silent divergence between what's tracked and reality.
 
+## Priority reconciliation: move quickly without losing trust
+
+Stakeholders are asking for two outcomes that can pull in opposite directions: ship more autonomous execution quickly, while keeping workspace state accurate enough for people to trust the system's decisions. The roadmap resolves this as a sequencing decision rather than a choice between outcomes. Reliability is the release gate; autonomy is the product direction.
+
+- **Near term:** prioritize the smallest reliability slice that protects truth in the pipe (job status, attribution, context, and cleanup). Defer autonomous breadth that would make state harder to inspect or recover.
+- **In parallel:** run autonomy as a bounded pilot behind explicit scope, quota, and verification gates. Pilot work can expand only when it produces auditable diffs, accurate completion signals, and repeatable rollback or handoff behavior.
+- **Decision rule:** when speed and trust conflict, choose the option that preserves a reversible path and measurable evidence. Revisit the trade-off at each release using delivery throughput, stale-state rate, verification success, and operator intervention as shared metrics.
+
+This keeps the execution-autonomy stakeholder moving toward visible capability while giving the context-accuracy stakeholder a veto over unsafe expansion. Success is not maximum automation; it is automation that earns a wider operating envelope by remaining observable and correct.
+
+### Roadmap decision for competing priorities
+
+For any advanced scenario where one stakeholder optimizes for faster autonomous delivery and another optimizes for trustworthy workspace state, ship the smallest end-to-end slice that serves both objectives:
+
+- **Advance capability in a bounded lane:** allow the scenario to run behind explicit scope, quota, ownership, and rollback controls so progress remains visible and reversible.
+- **Make trust a hard exit criterion:** require durable evidence for completion, failure, cleanup, and cost before widening the lane; missing or conflicting evidence pauses expansion rather than being inferred away.
+- **Reconcile with shared measures:** review throughput alongside stale-state rate, verification success, recovery time, and operator intervention. Expand only when capability improves without degrading the trust floor.
+
+This turns a priority conflict into a staged roadmap contract: autonomy supplies the next learning opportunity, while context accuracy determines whether that opportunity is safe to scale.
+
+### Completed feature status: dispatch reliability under advanced workloads (2026-09-08)
+
+- **Scenario:** An advanced multi-harness dispatch runs a design or review job that exits while its worktree still exists; reconciliation now checks exit evidence and wait status before treating the job as a zombie, preserving truthful completion state.
+- **Priority reconciliation:** The autonomy priority is protected by continuing to reap genuinely abandoned workers, while the context-accuracy priority is protected by central logs, preserved worktree logs, per-job exception isolation, and absolute GitHub App key paths.
+- **Outcome:** The roadmap can expand autonomous dispatch with a bounded, auditable recovery contract: completed work remains inspectable, failed jobs remain diagnosable, and only confirmed dead workers are cleaned up.
+
+### Positioning boundary
+
+Here, **execution autonomy** describes the operating outcome, not a new product category. The positioning is consistent at two levels: Synlynk is the OS/control plane for multi-agent development, and its concrete product wedge is measurement and arbitration across heterogeneous coding harnesses. Synlynk coordinates, routes, measures, and verifies external work; it does not become a harness, workflow engine, or agent vendor. Reliable context and job evidence are the mechanism that makes greater autonomy safe.
+
+Use the short message when a single sentence is needed: **Synlynk is the control plane for multi-agent development, using measured cross-harness routing to make autonomous execution trustworthy.** “OS for multi-agent development” names the category and long-term ambition; “measurement and arbitration layer” names the differentiated capability inside that category. They are not competing claims.
+
 Every item below is ordered by how directly it closes one or both gaps. See the 2026-08-15 recap conversation for the full audit this roadmap is built from (specs without plans, plans pending implementation, open issues categorized against the two imperatives).
 
 ## Why this order

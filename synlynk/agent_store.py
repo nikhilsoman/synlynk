@@ -11,6 +11,7 @@ from synlynk import _write_json_atomic
 from synlynk import charter_schema
 
 _CONFIG_PATH = os.path.join(".synlynk", "config.json")
+_FALLBACK_WORKSPACE_ROOTS = {}
 
 
 def _now_iso() -> str:
@@ -44,7 +45,31 @@ def get_workspace_id() -> str:
 
 
 def _workspace_root(workspace_id: str) -> str:
+    fallback = _FALLBACK_WORKSPACE_ROOTS.get(workspace_id)
+    if fallback:
+        return fallback
     return os.path.expanduser(os.path.join("~", ".synlynk", "workspaces", workspace_id))
+
+
+def _local_workspace_root(workspace_id: str) -> str:
+    return os.path.abspath(os.path.join(".synlynk", "workspaces", workspace_id))
+
+
+def _write_registry_with_fallback(registry: dict, workspace_id: str) -> None:
+    """Persist the registry, falling back when a dispatched home is read-only."""
+    path = _registry_path()
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        _write_json_atomic(path, registry)
+        return
+    except OSError as primary_error:
+        fallback = _local_workspace_root(workspace_id)
+        try:
+            os.makedirs(os.path.dirname(os.path.join(fallback, "agents", "registry.json")), exist_ok=True)
+            _write_json_atomic(os.path.join(fallback, "agents", "registry.json"), registry)
+        except OSError:
+            raise primary_error
+        _FALLBACK_WORKSPACE_ROOTS[workspace_id] = fallback
 
 
 def agent_store_path(agent_id: str) -> str:
@@ -74,6 +99,7 @@ def register_agent(agent_id: str, aliases: list) -> None:
 
     aliases: list of {"kind": str, "value": str} dicts.
     """
+    workspace_id = get_workspace_id()
     registry = _load_registry()
     existing_ids = {a["agent_id"] for a in registry["agents"]}
     if agent_id in existing_ids:
@@ -92,9 +118,7 @@ def register_agent(agent_id: str, aliases: list) -> None:
         "aliases": aliases,
         "history": [{"event": "created", "at": _now_iso()}],
     })
-    path = _registry_path()
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    _write_json_atomic(path, registry)
+    _write_registry_with_fallback(registry, workspace_id)
 
 
 def resolve_agent_id(alias: str) -> str:

@@ -95,6 +95,24 @@ def test_parse_iso8601_returns_none_for_none():
     assert _parse_iso8601(None) is None
 
 
+def test_parse_iso8601_converts_positive_offset_to_utc():
+    dt = _parse_iso8601("2026-08-18T15:30:00+05:30")
+    assert dt is not None
+    assert dt.isoformat() == "2026-08-18T10:00:00+00:00"
+
+
+def test_parse_iso8601_returns_none_for_invalid_date():
+    assert _parse_iso8601("2026-02-30T10:00:00Z") is None
+
+
+def test_gh_write_verified_returns_none_for_unknown_expectation(monkeypatch):
+    def fake_run(cmd, **kwargs):
+        raise AssertionError("GitHub CLI should not run for an unknown expectation")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    assert gh_write_verified("issue:701", expect="not-a-real-expectation") is None
+
+
 def test_gh_write_verified_review_posted_true_after_since_no_author_filter(monkeypatch):
     def fake_run(cmd, **kwargs):
         assert cmd[:3] == ["gh", "pr", "view"]
@@ -355,3 +373,40 @@ def test_gh_write_verified_review_posted_records_non_match_evidence(monkeypatch)
     assert all(attempt["matched"] is False for attempt in evidence["attempts"])
     assert all(attempt["reviews"] == [{"author": {"login": "other"}, "submittedAt": "2026-08-18T11:00:00Z"}]
                for attempt in evidence["attempts"])
+
+
+def test_gh_write_verified_handles_naive_and_aware_datetimes_without_type_error(monkeypatch):
+    from datetime import datetime
+    # An aware timestamp returned by GitHub
+    raw = '{"reviews":[{"author":{"login":"bot"},"submittedAt":"2026-08-18T11:00:00Z"}]}'
+    monkeypatch.setattr(subprocess, "run", lambda cmd, **kwargs: subprocess.CompletedProcess(
+        cmd, 0, stdout=raw, stderr=""
+    ))
+    # Test with offset-naive string
+    assert gh_write_verified(
+        "pr:1038", expect="review_posted", since="2026-08-18 10:00:00",
+        expect_author="bot",
+    ) is True
+
+    # Test with datetime object (both naive and aware)
+    assert gh_write_verified(
+        "pr:1038", expect="review_posted", since=datetime(2026, 8, 18, 10, 0),
+        expect_author="bot",
+    ) is True
+    assert gh_write_verified(
+        "pr:1038", expect="review_posted", since=datetime(2026, 8, 18, 10, 0, tzinfo=timezone.utc),
+        expect_author="bot",
+    ) is True
+
+
+def test_gh_write_verified_survives_incompatible_timestamp_types_without_crashing(monkeypatch):
+    # What if submittedAt is unexpected type or corrupt
+    raw = '{"reviews":[{"author":{"login":"bot"},"submittedAt":123456789}]}'
+    monkeypatch.setattr(subprocess, "run", lambda cmd, **kwargs: subprocess.CompletedProcess(
+        cmd, 0, stdout=raw, stderr=""
+    ))
+    monkeypatch.setattr("synlynk.gh_verify.time.sleep", lambda seconds: None)
+    assert gh_write_verified(
+        "pr:1038", expect="review_posted", since="2026-08-18T10:00:00Z",
+        expect_author="bot",
+    ) is False

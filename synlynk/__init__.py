@@ -1101,6 +1101,7 @@ CREATE TABLE IF NOT EXISTS daemon_jobs (
     log_path     TEXT,
     worktree_path TEXT,
     worktree_branch TEXT,
+    terminal_claim_token TEXT,
     handoff_count INTEGER NOT NULL DEFAULT 0,
     previous_agents TEXT,
     dispatch_context TEXT,
