@@ -2529,12 +2529,21 @@ def _apply_gh_write_verification(
             expect_author=expect_author, evidence=evidence,
         )
     except TypeError as exc:
-        if "evidence" not in str(exc):
-            raise
-        verified = gh_write_verified(
-            gh_write_target, expect=expect, since=normalized_since,
-            expect_author=expect_author,
-        )
+        if "evidence" in str(exc):
+            try:
+                verified = gh_write_verified(
+                    gh_write_target, expect=expect, since=normalized_since,
+                    expect_author=expect_author,
+                )
+            except Exception as e:
+                print(f"  ⚠ gh_write_verified fallback failed for {job_id}: {e}", file=sys.stderr)
+                verified = None
+        else:
+            print(f"  ⚠ gh_write_verified TypeError for {job_id}: {exc}", file=sys.stderr)
+            verified = None
+    except Exception as exc:
+        print(f"  ⚠ gh_write_verified failed for {job_id}: {exc}", file=sys.stderr)
+        verified = None
     verified_str = "true" if verified is True else ("false" if verified is False else "unknown")
     if verified is False and status in ("done", "failed_unverified"):
         status = "succeeded_gh_write_failed"

@@ -27,8 +27,9 @@ def _naive_local_tz():
     return datetime.now().astimezone().tzinfo
 
 
-def _parse_iso8601(value: Optional[str], naive_as: str = "utc"):
+def _parse_iso8601(value, naive_as: str = "utc"):
     """Parse an ISO8601 timestamp, normalizing a trailing ``Z`` for Python <3.11.
+    Also accepts datetime instances and normalizes to timezone-aware UTC.
 
     Return None for missing or malformed input. Callers treat an unparseable
     timestamp as unknown, matching the contract of the rest of this module.
@@ -37,6 +38,13 @@ def _parse_iso8601(value: Optional[str], naive_as: str = "utc"):
     (daemon_jobs.started_at is local wall time with no offset).
     """
     if not value:
+        return None
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            tz = timezone.utc if naive_as != "local" else _naive_local_tz()
+            value = value.replace(tzinfo=tz)
+        return value.astimezone(timezone.utc)
+    if not isinstance(value, str):
         return None
     normalized = value[:-1] + "+00:00" if value.endswith("Z") else value
     try:
@@ -47,6 +55,18 @@ def _parse_iso8601(value: Optional[str], naive_as: str = "utc"):
         return parsed.astimezone(timezone.utc)
     except (ValueError, TypeError):
         return None
+
+
+def _compare_dt_lt(a: Optional[datetime], b: Optional[datetime]) -> bool:
+    """Return True if a < b, safely normalizing both operands to timezone-aware UTC."""
+    if a is None or b is None:
+        return False
+    try:
+        a_utc = a if a.tzinfo is not None else a.replace(tzinfo=timezone.utc)
+        b_utc = b if b.tzinfo is not None else b.replace(tzinfo=timezone.utc)
+        return a_utc.astimezone(timezone.utc) < b_utc.astimezone(timezone.utc)
+    except (TypeError, ValueError):
+        return False
 
 
 def _normalize_gh_login(login: Optional[str]) -> str:
@@ -112,7 +132,7 @@ def _verify_pr_opened_for_issue(
     matched = False
     for row in rows:
         created = _parse_iso8601(row.get("createdAt"), naive_as="utc") if isinstance(row, dict) else None
-        if since_dt is not None and (created is None or created < since_dt):
+        if since_dt is not None and (created is None or _compare_dt_lt(created, since_dt)):
             continue
         if expect_author and not _gh_logins_match(_author_login(row or {}), expect_author):
             continue
@@ -222,7 +242,7 @@ def gh_write_verified(
                 for entry in entries:
                     entry_time = entry.get("submittedAt") or entry.get("createdAt")
                     entry_dt = _parse_iso8601(entry_time)
-                    if entry_dt is None or entry_dt < since_dt:
+                    if entry_dt is None or _compare_dt_lt(entry_dt, since_dt):
                         continue
                     if expect_author and not _gh_logins_match(_author_login(entry), expect_author):
                         continue
