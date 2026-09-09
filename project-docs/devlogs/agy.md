@@ -127,6 +127,22 @@
 ### Dispatched
 - Dispatched PR #1504 review to Codex (`job-a6544a1d`, PID 88111) anchored to `fix/agy/dispatch-zombie-termination-1498` with `--task-type review`, `--requires-gh-write`, and `--role qa`.
 
+## 2026-09-09 — Home Harness Takeover, Daemon Lifecycle Recovery, Dual-Ledger Sync & BS-6 Spec Landing (#1533)
+
+### Shipped & Resolved
+- **Home Harness Registration:** Executed `synlynk home agy`, updating `.synlynk/config.json` and refreshing `.synlynk/context.md` with Agy as Active Home Conductor.
+- **Daemon Lifecycle Recovery:** Root-caused historic daemon status inconsistency to an orphaned detached child process (PID 45569) running since 12:28 PM under pre-#1523 code. The process held `fcntl.flock` on `.synlynk/daemon.pid.lock` without a live `.synlynk/daemon.pid` on disk. Terminated PID 45569, verified lock and port 27471 release, and verified clean daemon lifecycle (`start`, `status`, `stop`) under post-#1523 PID-tagged locking.
+- **Dual-Ledger Preflight Sync:** Discovered that `./.synlynk/state.db` (the fallback ledger for sandboxed away workers unable to reach `~/.synlynk/projects/13267207/state.db`) held stale records marking all four core harnesses as `degraded`, triggering false TC-2 preflight rejections. Synchronized `harness_records` and `harness_status` from the authoritative database to the local fallback ledger.
+- **Worktree Hygiene:** Executed `synlynk worktree clean --apply` to cleanly remove the single audited SAFE worktree (`dispatch/claude/job-d0457323`).
+- **BS-6 Visualization Spec Landed (PR #1533):**
+  - Inspected Grok's ad-hoc brainstorm output in `worktrees/job-2a0e66f5` (commit `4c1c14ac`).
+  - Authored PR #1533 via `synlynk gh --role architect` with formal design specification (`docs/superpowers/specs/2026-09-09-bs6-repo-workspace-visualization-design.md`) and spec verification test (`tests/test_bs6_workspace_views_spec.py`).
+  - CI test matrix executed green (EPUBCheck, Python 3.10, Python 3.12, and qa-gate).
+  - Submitted formal non-authoring review approval via `synlynk gh --role qa` (`synlynk-synlynk-qa[bot]`).
+  - Squash-merged PR #1533 into `main` (`5ed7363b`), pulled `main`, removed worktree `worktrees/job-2a0e66f5`, and deleted branch `dispatch/grok/job-2a0e66f5`.
+[@agy]
+
+
 
 
 
