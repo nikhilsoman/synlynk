@@ -88,7 +88,33 @@ def _try_acquire_daemon_lock(lock_path: str, *, blocking: bool = False):
     except (BlockingIOError, OSError):
         fh.close()
         return None
+    try:
+        fh.seek(0)
+        fh.truncate()
+        fh.write(f"{os.getpid()}\n")
+        fh.flush()
+    except OSError:
+        pass
     return fh
+
+
+def _daemon_lock_owner_pid(lock_path: str) -> Optional[int]:
+    """Return the diagnostic PID recorded by the current lock owner."""
+    try:
+        with open(lock_path) as fh:
+            return int(fh.read().strip())
+    except (OSError, TypeError, ValueError):
+        return None
+
+
+def _pid_is_alive(pid: Optional[int]) -> bool:
+    if not pid or pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+    except (ProcessLookupError, ValueError, OSError):
+        return False
+    return True
 
 
 def _release_daemon_lock(lock_fh) -> None:
@@ -105,12 +131,15 @@ def _release_daemon_lock(lock_fh) -> None:
         pass
 
 
-def _daemonize_via_reexec(entry_point: str, logfile: str) -> None:
+def _daemonize_via_reexec(entry_point: str, logfile: str, cwd: Optional[str] = None) -> None:
     """Spawn a detached child process running a module-level entry point."""
+    cwd = os.path.abspath(cwd or os.getcwd())
     module_path, func_name = entry_point.rsplit(".", 1)
     code = f"from {module_path} import {func_name}; {func_name}()"
     log = open(logfile, "a")
     env = {**os.environ, "_SYNLYNK_DAEMON_CHILD": "1"}
+    if cwd:
+        env["SYNLYNK_DAEMON_WORKSPACE_ROOT"] = os.path.abspath(cwd)
     subprocess.Popen(
         [sys.executable, "-c", code],
         stdin=subprocess.DEVNULL,
@@ -119,6 +148,7 @@ def _daemonize_via_reexec(entry_point: str, logfile: str) -> None:
         start_new_session=True,
         close_fds=True,
         env=env,
+        cwd=cwd,
     )
     log.close()
 
@@ -136,6 +166,7 @@ class WatchDaemon:
     def __init__(self):
         self.pidfile = _daemon_state_path("watch.pid")
         self.logfile = _daemon_state_path("watch.log")
+        self.workspace_root = _repo_common_dir()
         self.settle_seconds = 3
         self.token_refresh_interval_seconds = 50 * 60
         self._lock_fh = None
@@ -144,8 +175,16 @@ class WatchDaemon:
         lock_path = _daemon_lock_path(self.pidfile)
         lock_fh = _try_acquire_daemon_lock(lock_path, blocking=False)
         if lock_fh is None:
-            print(self._already_running_message)
-            return
+            owner_pid = _daemon_lock_owner_pid(lock_path)
+            if self._is_running() or _pid_is_alive(owner_pid):
+                print(self._already_running_message)
+                return
+            # Recover deterministically from stale lock metadata. A real
+            # flock held by a live starter/daemon still fails this retry.
+            lock_fh = _try_acquire_daemon_lock(lock_path, blocking=False)
+            if lock_fh is None:
+                print(self._already_running_message)
+                return
         try:
             if self._is_running():
                 print(self._already_running_message)
@@ -153,7 +192,9 @@ class WatchDaemon:
             if os.path.exists(self.pidfile):
                 os.remove(self.pidfile)
             self._prepare_start()
-            _daemonize_via_reexec(self._child_entry_point, self.logfile)
+            _daemonize_via_reexec(
+                self._child_entry_point, self.logfile, cwd=self.workspace_root
+            )
             # Hold the start lock until the child writes its pidfile (or we
             # time out) so a concurrent start() cannot also pass the
             # not-running check and double-spawn (#349).
@@ -300,6 +341,9 @@ class WatchDaemon:
 
 
 def _watch_daemon_child_main() -> None:
+    workspace_root = os.environ.get("SYNLYNK_DAEMON_WORKSPACE_ROOT")
+    if workspace_root:
+        os.chdir(workspace_root)
     d = WatchDaemon()
     # Publish pidfile before taking the lifetime lock so the parent start()
     # waiter can observe readiness and release its start-time lock (#349).
@@ -573,6 +617,7 @@ def _daemon_install_service(daemon_instance) -> None:
 
     synlynk_path = shutil.which("synlynk") or sys.argv[0]
     home = os.path.expanduser("~")
+    workspace_root = os.path.abspath(getattr(daemon_instance, "workspace_root", os.getcwd()))
 
     try:
         if sys.platform == "darwin":
@@ -595,6 +640,8 @@ def _daemon_install_service(daemon_instance) -> None:
                       <string>daemon</string>
                       <string>start</string>
                     </array>
+                    <key>WorkingDirectory</key>
+                    <string>{workspace_root}</string>
                     <key>RunAtLoad</key>
                     <true/>
                     <key>KeepAlive</key>
@@ -628,6 +675,7 @@ def _daemon_install_service(daemon_instance) -> None:
 
                 [Service]
                 Type=forking
+                WorkingDirectory={workspace_root}
                 ExecStart={synlynk_path} daemon start
                 PIDFile=%h/.synlynk/daemon.pid
                 Restart=on-failure
@@ -973,6 +1021,9 @@ class SynlynkDaemon(WatchDaemon):
 
 
 def _synlynk_daemon_child_main() -> None:
+    workspace_root = os.environ.get("SYNLYNK_DAEMON_WORKSPACE_ROOT")
+    if workspace_root:
+        os.chdir(workspace_root)
     d = SynlynkDaemon(autonomous=os.environ.get("SYNLYNK_AUTONOMOUS") == "1")
     # Publish pidfile/start marker before taking the lifetime lock so the
     # parent start() waiter can observe readiness and release (#349).
