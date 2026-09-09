@@ -61,8 +61,7 @@ class TestSchedulerLocalConcurrency(unittest.TestCase):
             "CREATE TABLE daemon_jobs ("
             "job_id TEXT PRIMARY KEY, agent TEXT, task TEXT, story_id TEXT, "
             "status TEXT, priority INTEGER, depends_on TEXT, enqueued_at TEXT, "
-            "log_path TEXT, pid INTEGER, started_at TEXT, worktree_path TEXT, "
-            "worktree_branch TEXT)"
+            "log_path TEXT)"
         )
         conn.execute(
             "INSERT INTO daemon_jobs "
