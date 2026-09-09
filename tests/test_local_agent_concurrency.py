@@ -125,7 +125,10 @@ class TestSchedulerLocalConcurrency(unittest.TestCase):
                 return None
 
         def fake_popen(*args, **kwargs):
-            popen_calls.append(1)
+            # subprocess.run() also uses the module-level Popen object. Count
+            # only the detached process launch performed by dispatch_agent.
+            if kwargs.get("start_new_session"):
+                popen_calls.append(1)
             return FakeProcess()
 
         def dispatch_once(job_id):
