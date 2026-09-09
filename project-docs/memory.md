@@ -561,3 +561,7 @@ degrading stale-state, verification, recovery, or intervention metrics.
 - Session protocol: read last 3 devlog entries at session start. Surface any open threads.
 - AI maintains these docs without user prompting at natural pause points.
 - PR Reviews: When reviewing a pull request, only comment with observations and suggestions. Do not make code fixes on the branch or commit changes directly; the original author must implement corrections to learn and retain ownership.
+
+# [@nikhilsoman] 2026-09-09 — #1523 daemon lifecycle recovery
+
+Daemon lifecycle locks retain durable PID diagnostics, but advisory flock remains the ownership authority. Start retries stale-owner metadata only when no daemon/lock owner is alive; re-exec and service launches pin the originating workspace cwd so GitHub App paths and token caches remain stable.
