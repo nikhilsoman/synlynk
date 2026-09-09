@@ -1,3 +1,8 @@
+## 2026-09-09 — Daemon lifecycle recovery (#1523)
+
+- Added PID-tagged daemon lock diagnostics and stale-owner recovery while preserving live lock ownership.
+- Pinned detached daemon/service execution to the originating workspace and documented the design decision in `docs/decisions/2026-09-09-daemon-lifecycle-recovery-1523.md`.
+- Added regression coverage for stale/live lock behavior and cwd propagation; focused suite is being verified.
 
 ## 2026-09-04 — PR #1374 merge verification + #1274 Codex network-access regression: RCA → fix (PR #1375) → review → merge
 

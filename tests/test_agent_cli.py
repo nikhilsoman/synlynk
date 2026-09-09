@@ -2793,6 +2793,43 @@ def test_daemon_start_lock_rejects_concurrent_second_start(project_dir, monkeypa
     assert results.count("returned") == 2
 
 
+def test_daemon_start_recovers_stale_lock_owner(project_dir, monkeypatch):
+    import synlynk.daemon as daemon_mod
+
+    daemon = daemon_mod.SynlynkDaemon()
+    monkeypatch.setattr(daemon, "_is_running", lambda: False)
+    lock_path = daemon_mod._daemon_lock_path(daemon.pidfile)
+    os.makedirs(os.path.dirname(lock_path), exist_ok=True)
+    with open(lock_path, "w") as fh:
+        fh.write("99999999\n")
+
+    spawned = []
+    monkeypatch.setattr(daemon_mod, "_daemonize_via_reexec", lambda *args: spawned.append(args))
+    monkeypatch.setattr(daemon, "_await_child_pidfile", lambda *args, **kwargs: None)
+    daemon.start()
+
+    assert spawned == [(daemon._child_entry_point, daemon.logfile)]
+
+
+def test_daemon_start_preserves_lock_owned_by_live_process(project_dir, monkeypatch, capsys):
+    import synlynk.daemon as daemon_mod
+
+    daemon = daemon_mod.SynlynkDaemon()
+    monkeypatch.setattr(daemon, "_is_running", lambda: False)
+    owner = daemon_mod._try_acquire_daemon_lock(
+        daemon_mod._daemon_lock_path(daemon.pidfile), blocking=False
+    )
+    assert owner is not None
+    try:
+        spawned = []
+        monkeypatch.setattr(daemon_mod, "_daemonize_via_reexec", lambda *args: spawned.append(args))
+        daemon.start()
+        assert spawned == []
+        assert "already running" in capsys.readouterr().out
+    finally:
+        daemon_mod._release_daemon_lock(owner)
+
+
 def test_try_acquire_daemon_lock_is_exclusive(tmp_path):
     """Direct lock-helper coverage: second LOCK_NB fails while first is held (#349)."""
     import synlynk.daemon as daemon_mod

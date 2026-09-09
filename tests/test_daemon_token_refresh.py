@@ -379,6 +379,26 @@ def test_daemonize_via_reexec_spawns_detached_subprocess(tmp_path, monkeypatch):
     assert os.path.exists(logfile)
 
 
+def test_daemonize_via_reexec_pins_workspace_cwd(tmp_path, monkeypatch):
+    import synlynk.daemon as daemon_mod
+
+    monkeypatch.chdir(tmp_path)
+    captured = {}
+
+    class FakePopen:
+        def __init__(self, args, **kwargs):
+            captured["kwargs"] = kwargs
+
+    monkeypatch.setattr(daemon_mod.subprocess, "Popen", FakePopen)
+    logfile = str(tmp_path / "test.log")
+    daemon_mod._daemonize_via_reexec(
+        "synlynk.daemon._watch_daemon_child_main", logfile, str(tmp_path)
+    )
+
+    assert captured["kwargs"]["cwd"] == str(tmp_path)
+    assert captured["kwargs"]["env"]["SYNLYNK_DAEMON_WORKSPACE_ROOT"] == str(tmp_path)
+
+
 def test_watch_daemon_start_spawns_detached_child_and_returns_immediately(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".synlynk").mkdir()
