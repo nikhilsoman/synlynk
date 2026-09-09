@@ -714,7 +714,7 @@ def _scenario_status(entry: dict, ctx: ScenarioContext) -> ScenarioResult:
             ("claude", 1.0, 1, 0.8, "1.0.0", "1.0.0"),
         )
         conn.execute(
-            "INSERT INTO cycle_capability (harness_name, cycle, support, verb_count, full_count, partial_count, updated_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))",
+            "INSERT OR REPLACE INTO cycle_capability (harness_name, cycle, support, verb_count, full_count, partial_count, updated_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))",
             ("claude", "execute", "full", 1, 1, 0),
         )
         conn.commit()

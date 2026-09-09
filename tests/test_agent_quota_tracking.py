@@ -2011,6 +2011,7 @@ def test_synlynk_selftest_live_clobbers_real_repo(monkeypatch, tmp_path):
         "dispatch_agent",
         lambda *args, **kwargs: {"id": "job-selftest", "pid": 1, "fence": None},
     )
+    monkeypatch.setattr(selftest_mod, "cmd_probe", lambda *, write_fence: None)
     monkeypatch.setattr(selftest_mod, "exec_command", lambda argv: 0)
     monkeypatch.setattr(scheduler_mod, "cmd_schedule", lambda execute=True, max_stories=1: None)
 
