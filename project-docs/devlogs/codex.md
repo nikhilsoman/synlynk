@@ -72,3 +72,15 @@
   regression test requested by the verification command in `tests/test_agent_cli.py`.
 - Added the design spec, plan, blog post 159, and blog index entry.
 [@codex]
+
+## 2026-09-09 — State DB and reconciliation resilience (#1525)
+
+- Added a non-mutating write-capability probe so automatic state DB selection
+  rejects inaccessible/read-only central paths and uses a writable fallback;
+  explicit overrides remain fail-fast and the selected path is observable.
+- Isolated cost/telemetry and capability-rating persistence failures per job,
+  preserving structured Sentinel visibility for degraded and integrity cases.
+- Serialized flat-file reconciliation across concurrent callers and added
+  regression coverage for fallback, persistence failure, concurrency, and
+  continued operation.
+[@codex]

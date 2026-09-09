@@ -644,6 +644,9 @@ def _should_isolate_worktree_db(db_path: str) -> bool:
 
 
 DB_PATH = _resolve_db_path()
+# The configured path is intentionally distinct from the path selected by the
+# last successful connection.  Away sandboxes may need the local fallback.
+ACTIVE_DB_PATH = None
 
 _DB_SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
@@ -1010,15 +1013,50 @@ def _get_db() -> _sqlite3.Connection:
     SYNLYNK_ALLOW_SHARED_STATE_DB=1 only for tests that explicitly exercise
     shared-DB behavior.
     """
+    global ACTIVE_DB_PATH
+    ACTIVE_DB_PATH = None
+
+    def _check_write_capability(path: str) -> None:
+        """Check access to *path* without opening SQLite or changing it."""
+        parent = os.path.dirname(path) or "."
+        if os.path.exists(path):
+            fd = os.open(path, os.O_RDWR)
+            os.close(fd)
+            return
+
+        # A new database has no file to open yet.  Probe the parent directory
+        # with a disposable file instead of creating the candidate database
+        # before its write capability has been established.
+        fd, probe = tempfile.mkstemp(dir=parent, prefix=".synlynk-write-probe-")
+        os.close(fd)
+        os.unlink(probe)
+
+    def _connect(path: str) -> _sqlite3.Connection:
+        global ACTIVE_DB_PATH
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        _check_write_capability(path)
+        conn = _sqlite3.connect(path, timeout=30.0)
+        try:
+            conn.isolation_level = None
+            # Do this before WAL setup or migrations.  BEGIN IMMEDIATE only
+            # acquires a write reservation; rolling it back leaves the
+            # candidate database and its sidecars byte-identical on failure.
+            conn.execute("BEGIN IMMEDIATE")
+            conn.execute("ROLLBACK")
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA foreign_keys=ON")
+            _migrate_db(conn)
+        except Exception:
+            conn.close()
+            raise
+        ACTIVE_DB_PATH = os.path.abspath(path)
+        return conn
+
     override = os.environ.get("SYNLYNK_STATE_DB_PATH")
     if override:
-        os.makedirs(os.path.dirname(override), exist_ok=True)
-        conn = _sqlite3.connect(override, timeout=30.0)
-        conn.isolation_level = None
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA foreign_keys=ON")
-        _migrate_db(conn)
-        return conn
+        # Explicit overrides remain authoritative: failures propagate and do
+        # not silently select another ledger.
+        return _connect(override)
 
     from synlynk.fleet import assert_not_nested_product_ledger, sandbox_fallback_db_path
 
@@ -1038,13 +1076,7 @@ def _get_db() -> _sqlite3.Connection:
             # Refuse nested worktree product ledger on the primary attempt only.
             if not tried_fallback:
                 assert_not_nested_product_ledger(db_path, home_writable=True)
-            os.makedirs(os.path.dirname(db_path), exist_ok=True)
-            conn = _sqlite3.connect(db_path, timeout=30.0)
-            conn.isolation_level = None
-            conn.execute("PRAGMA journal_mode=WAL")
-            conn.execute("PRAGMA foreign_keys=ON")
-            _migrate_db(conn)
-            return conn
+            return _connect(db_path)
         # OSError covers PermissionError, EROFS (read-only mounts), ENOSPC, etc.
         # OperationalError covers "unable to open database file" when the dir
         # exists but the file/FS is still unwritable (sandbox case in #648).
@@ -1060,6 +1092,13 @@ def _get_db() -> _sqlite3.Connection:
             )
             db_path = fallback_path
             tried_fallback = True
+
+
+def get_state_db_path() -> str:
+    """Return the effective state DB path, including the last fallback choice."""
+    return os.path.abspath(
+        os.environ.get("SYNLYNK_STATE_DB_PATH") or ACTIVE_DB_PATH or DB_PATH
+    )
 
 
 
