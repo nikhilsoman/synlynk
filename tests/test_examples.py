@@ -100,3 +100,15 @@ def test_active_items_keeps_the_input_order_of_active_items():
     ]
 
     assert active_items(items) == [items[0], items[1]]
+
+
+def test_greet_handles_a_name_with_spaces():
+    assert greet("Ada Lovelace") == "Hello, Ada Lovelace!"
+
+
+def test_greet_handles_an_empty_name():
+    assert greet("") == "Hello, !"
+
+
+def test_greet_preserves_punctuation_in_a_name():
+    assert greet("O'Connor") == "Hello, O'Connor!"
