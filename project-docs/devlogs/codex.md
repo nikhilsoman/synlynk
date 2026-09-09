@@ -1,5 +1,18 @@
 # Codex Devlog
 
+## 2026-09-09 - Local Capability Envelope and Concurrency Guard (Task Group 2)
+
+- Made local capability seeding available on direct local dispatch, preserving
+  idempotency and avoiding a mandatory `local doctor` prerequisite.
+- Changed local-at-capacity dispatches to return a queued/deferred outcome and
+  enforced the configured cap in the scheduler launch loop as well as direct
+  dispatch.
+- Added a safe default for malformed concurrency configuration and regression
+  coverage for scheduler deferral.
+- Verification: 180 dispatch/local-agent tests and 135 scheduler/jobs tests
+  passed.
+[@codex]
+
 ## 2026-09-02 - Subscription Cost Amortization and True-Up (#787)
 
 - Added `harness_billing` configuration with subscription, metered overage,
