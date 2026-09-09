@@ -1,5 +1,18 @@
 # synlynk Memory
 
+## BS-6 Repo / Workspace Visualization Design Spec Landed (decided/shipped 2026-09-09)
+- **Specification Shipped (#1533):** Shipped formal Design Spec (`docs/superpowers/specs/2026-09-09-bs6-repo-workspace-visualization-design.md`) and spec verification test (`tests/test_bs6_workspace_views_spec.py`) resolving BS-6 continuation (story `story-adhoc-1788972982` / `story-f5513a93`).
+- **Core Architecture Decisions:**
+  1. Standardizes 3 synchronized workspace views in Vizor: Product (user journeys/screens), Logical (package/symbol graph), and Infra (containers/deployables).
+  2. Adheres strictly to Vizor's self-contained HTML architecture (no external CDNs, no Cytoscape.js runtime dependency).
+  3. Decouples visualization from OKF conformance/export tracks.
+  4. Design-only phase: implementation planning gated until explicit PM/Architect sign-off.
+- **Verification & Governance:** PR #1533 authored by `synlynk-synlynk-architect[bot]`, approved via genuine `gh pr review --approve` by `synlynk-synlynk-qa[bot]`, passed all matrix checks (EPUBCheck, Python 3.10, Python 3.12, qa-gate), and squash-merged into `main` (`5ed7363b`). [@agy]
+
+## Platform Health: Dual Ledger Synchronization & Daemon Orphan Recovery (decided 2026-09-09)
+- **Dual-Ledger Preflight Traps Resolved:** Investigated TC-2 preflight rejections where sandbox-local fallback DB (`./.synlynk/state.db`) reported all core harnesses as `degraded` despite authoritative ledger (`~/.synlynk/projects/13267207/state.db`) reporting `ok`. Synchronized probe compliance records between ledgers to prevent away workers and restricted environments from hitting false degraded gates.
+- **Daemon Lifecycle Orphan Recovery:** Root-caused the historic daemon status inconsistency to an unmanaged child process (PID 45569) running since midday holding `daemon.pid.lock` without a live `.synlynk/daemon.pid` on disk. Because `status()` and `stop()` only checked `self.pidfile` existence, the daemon appeared stopped while actively running and blocking `start()`. Terminated the orphan, released the kernel lock, and verified clean daemon lifecycle under post-#1523 PID-tagged locking. [@agy]
+
 ## Eliminate Premature Zombie Worker Termination & Datetime Comparison Errors (decided/shipped 2026-09-08)
 - **Problem & Root Cause (#1498):** Dispatched non-gh-write workers (design, review, spec tasks) were prematurely classified as `killed_zombie` with exit code `-9` after 3–5 minutes, destroying worker logs.
   1. `_reconcile_daemon_jobs` in `synlynk/jobs.py` evaluated `has_leaked_worktree()` as True because any worktree contains `.git`. When the worker process exited, it bypassed `{log_path}.exit` inspection and marked the job as a zombie, deleting the worktree.
