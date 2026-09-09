@@ -123,6 +123,26 @@ def test_check_token_bloat_triggers_on_zero_files_with_high_tokens(tmp_path):
     assert "job-cf837848" in content
 
 
+def test_issue_1531_cached_input_inflation_is_actionable(tmp_path):
+    """The observed multi-million-token shape must raise a critical signal."""
+    from synlynk.sentinel import check_token_bloat
+
+    alerts = check_token_bloat(
+        in_tokens=4_375_124,
+        out_tokens=14_459,
+        cost_usd=13.42,
+        files_touched=1,
+        job_id="job-a4196776",
+        agent="codex",
+        sentinel_path=str(tmp_path / "sentinel.md"),
+    )
+
+    codes = {alert["code"]: alert for alert in alerts}
+    assert codes["TOKEN_BLOAT"]["severity"] == "CRITICAL"
+    assert "4,389,583 tokens" in codes["TOKEN_BLOAT"]["message"]
+    assert codes["COST_INFLATION"]["severity"] == "CRITICAL"
+
+
 def test_active_job_circuit_breaker_terminates_zero_file_job(tmp_path, monkeypatch):
     from synlynk.sentinel import enforce_job_circuit_breaker
 

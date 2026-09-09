@@ -565,3 +565,12 @@ degrading stale-state, verification, recovery, or intervention metrics.
 # [@nikhilsoman] 2026-09-09 — #1523 daemon lifecycle recovery
 
 Daemon lifecycle locks retain durable PID diagnostics, but advisory flock remains the ownership authority. Start retries stale-owner metadata only when no daemon/lock owner is alive; re-exec and service launches pin the originating workspace cwd so GitHub App paths and token caches remain stable.
+
+## Issue #1531 dispatch token inflation
+
+The 2026-09-09 4.3M-input incident was provider transcript replay, not
+dispatch-context or daemon log polling: Codex reported 4,375,124 input tokens
+with 4,247,552 cached input tokens while the per-job task context was 3,579
+bytes. Receipt failures are a separate evidence-ordering gap for remote review
+work because local git activity is not sufficient corroboration.
+[@nikhilsoman]
