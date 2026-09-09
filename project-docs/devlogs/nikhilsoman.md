@@ -1465,3 +1465,16 @@ implementation plan.
 - Added a reusable roadmap section for advanced scenarios where delivery speed and workspace-state accuracy compete.
 - Defined bounded execution, evidence-backed trust gates, and shared review metrics as the reconciliation mechanism.
 - Kept the existing dispatch-reliability feature status intact while making the scale-up decision rule explicit.
+
+## 2026-09-09 — Issue #1531 platform-health RCA
+
+- Traced `job-a4196776`'s 4,375,124 input tokens to model-turn transcript
+  replay: 4,247,552 were cached input tokens; the one-shot dispatch context
+  was only 3,579 bytes in `task` mode.
+- Confirmed daemon log polling and state reconciliation do not replay context
+  into the worker prompt. Separated this cost signal from receipt-based
+  `task_delivery_failed` classifications that lack remote GitHub-effect
+  corroboration.
+- Added the concise RCA/design note and a Sentinel regression test; deferred
+  live usage checkpoints and GitHub-effect receipt corroboration as follow-up
+  design work.
