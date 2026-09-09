@@ -182,90 +182,12 @@ def cmd_watch(args) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     from synlynk._constants import CORE_FLEET
-    from synlynk import (
-        HARNESS_CAPABILITY_BASELINES,
-        VERSION,
-        SynlynkDaemon,
-        SynlynkRelay,
-        _CYAN,
-        _GREEN,
-        _RESET,
-        _daemon_install_service,
-        _daemon_uninstall_service,
-        _update_config,
-        checkpoint,
-        cmd_agent_add,
-        cmd_agent_configure,
-        cmd_agent_list,
-        cmd_agent_run,
-        cmd_harness_add,
-        cmd_harness_configure,
-        cmd_harness_list,
-        cmd_harness_run,
-        cmd_audit_docs,
-        cmd_decide,
-        cmd_heal,
-        cmd_doctor,
-        cmd_exit,
-        cmd_identity_init,
-        cmd_instructions_ack,
-        cmd_instructions_diff,
-        cmd_instructions_register,
-        cmd_instructions_status,
-        cmd_instructions_update,
-        cmd_jobs,
-        cmd_jobs_handoff,
-        cmd_jobs_reap,
-        cmd_backfill_capability_ratings,
-        cmd_join,
-        cmd_launch,
-        cmd_launch_ftue,
-        cmd_logs,
-        cmd_migrate,
-        cmd_pr_check,
-        cmd_probe,
-        cmd_relay_broadcast,
-        cmd_relay_start,
-        cmd_release,
-        cmd_repair,
-        cmd_roles,
-        cmd_run_trio,
-        cmd_scan,
-        cmd_cost_log,
-        cmd_quota,
-        cmd_quota_tpm_view,
-        cmd_roadmap_add,
-        cmd_score_add,
-        cmd_score_attest,
-        cmd_score_list,
-        cmd_shell,
-        cmd_status as cmd_project_status,
-        cmd_story_create,
-        cmd_story_draft,
-        cmd_story_list,
-        cmd_story_ready,
-        cmd_sync,
-        cmd_configure_agent,
-        cmd_team_status,
-        cmd_identity_init_role,
-        cmd_identity_list,
-        cmd_watch,
-        dispatch_agent,
-        exec_command,
-        init,
-        sentinel_clear,
-        sentinel_list,
-        upgrade,
-        wizard_init,
-    )
-    from synlynk.events import cmd_events_tail
-    from synlynk.status import cmd_status as cmd_ecosystem_status
-    from synlynk.viz import cmd_viz
-    from synlynk.scheduler import cmd_schedule
 
     parser = argparse.ArgumentParser(
         description="synlynk: The Universal Context Switchboard for AI Devs"
     )
+    from synlynk._constants import VERSION, HARNESS_CAPABILITY_BASELINES
+
     parser.add_argument("--version", action="version", version=f"synlynk {VERSION}")
     subparsers = parser.add_subparsers(dest="command")
 
@@ -1246,6 +1168,18 @@ def _warn_deprecated_harness_flag(argv) -> None:
 
 
 def main(argv=None) -> None:
+    import synlynk as _package
+
+    if _package._FAST_CLI:
+        # Parse first so --help, --version, and invalid-command paths do not
+        # import the full compatibility export graph. Real commands load it
+        # only after argparse has accepted the command line.
+        parser = build_parser()
+        parser.parse_args(argv)
+        _package._load_legacy_imports()
+        _package._FAST_CLI = False
+        return main(argv)
+
     from synlynk.capability_sweep import cmd_capability_sweep
     from synlynk.db import cmd_story_done
     from synlynk.policy_cli import cmd_policy_check_merge, cmd_policy_show, cmd_policy_sync_branch_protection

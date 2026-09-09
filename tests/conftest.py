@@ -65,7 +65,12 @@ def stub_dispatch_worktree(monkeypatch, request):
             "base_sha": None,
         },
     )
-    monkeypatch.setattr(synlynk, "_inspect_worktree_git_state", lambda *args, **kwargs: None)
+    # The CLI fast path intentionally leaves legacy package exports unloaded.
+    # Dispatch resolves this helper from its owning module when it is absent.
+    monkeypatch.setattr(
+        synlynk, "_inspect_worktree_git_state", lambda *args, **kwargs: None,
+        raising=False,
+    )
     monkeypatch.setattr(dispatch_mod, "_worktree_files_touched", lambda worktree_path: [])
 
 
