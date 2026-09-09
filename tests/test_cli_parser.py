@@ -1,4 +1,7 @@
 import pytest
+import os
+import subprocess
+import sys
 
 import synlynk.cli as cli_mod
 
@@ -80,3 +83,40 @@ def test_probe_harness_flag_new():
     parser = cli_mod.build_parser()
     args = parser.parse_args(["probe", "--harness", "codex"])
     assert args.harness == "codex"
+
+
+def test_fast_cli_import_defers_command_graph():
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import sys; import synlynk.cli; "
+            "print('synlynk.db' in sys.modules); synlynk.cli.build_parser()",
+        ],
+        capture_output=True,
+        text=True,
+        env={**os.environ, "SYNLYNK_CLI_ENTRYPOINT": "1"},
+        check=True,
+    )
+
+    assert result.stdout.strip() == "False"
+
+
+def test_fast_cli_preserves_help_and_invalid_command_paths():
+    help_result = subprocess.run(
+        [sys.executable, "-m", "synlynk", "--help"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    invalid_result = subprocess.run(
+        [sys.executable, "-m", "synlynk", "not-a-real-command"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert help_result.returncode == 0
+    assert "sentinel" in help_result.stdout
+    assert invalid_result.returncode == 2
+    assert "invalid choice" in invalid_result.stderr

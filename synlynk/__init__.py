@@ -14,6 +14,7 @@ import urllib.request
 from pathlib import Path
 from typing import Optional, Tuple
 import sqlite3 as _sqlite3
+import importlib as _importlib
 
 from synlynk._constants import (
     HARNESS_CAPABILITY_BASELINES,
@@ -22,343 +23,54 @@ from synlynk._constants import (
     VERSION,
     _INSTALL_SCRIPT_URL,
 )
-from synlynk.upgrade import (
-    _detect_install_type,
-    _get_pipx_source,
-    _run_upgrade,
-    _ver_tuple,
-    _warn_stale_script_install,
-    upgrade,
-)
-from synlynk.sentinel import (
-    _check_costs_freshness,
-    _extract_auto_signals,
-    _extract_compliance_tags,
-    _read_sentinel_alerts,
-    _iter_sentinel_alerts,
-    _summarize_sentinel_alerts,
-    _write_sentinel_alert,
-    check_model_rates_freshness,
-    check_sentinel_patterns,
-    check_token_bloat,
-    log_telemetry_event,
-    sentinel_clear,
-    sentinel_list,
-)
-from synlynk.probe import (
-    _compute_capability_hash,
-    _scan_command_palette,
-    _scan_repo_requirements,
-    _build_fence_content,
-    _upsert_harness_fence,
-    _write_scan_fences,
-    _build_fence_body_from_record,
-    _probe_agent,
-    _run_tc0,
-    _run_tc1,
-    _run_tc2,
-    _run_tc3,
-    _run_tc4,
-    _run_tc5,
-    _run_tc6,
-    _run_tc9,
-    _get_harness_gh_write_capability,
-    _repair_capability_allocation_sop,
-    _repair_sops_only,
-    cmd_probe,
-    _fence_exists,
-    _probe_model_version,
-    _diff_and_queue_new_models,
-    _queue_calibration_sweep,
-)
-from synlynk.fencing import FenceData, render_task_fence
-from synlynk.dispatch import (
-    _spawn_with_pty_fallback,
-    _is_interactive,
-    _inject_grok_rules,
-    _tee_process,
-    _check_pre_exec_gate,
-    _check_job_stall,
-    _resolve_worktree_base_commit,
-    _worktree_files_touched,
-    _job_summary_path,
-    _format_job_summary,
-    _write_job_summary,
-    _format_prompt_for_agent,
-    _warn_context_size,
-    _preflight_dispatch,
-    dispatch_agent,
-    exec_command,
-)
-from synlynk.quota import (
-    _estimate_story_cost_usd,
-    _force_exhaust_quota,
-    _open_reservation,
-    _open_reservations_sum,
-    _project_request_quota_from_config,
-    _quota_headroom,
-    _quota_status_for_agent,
-    _read_agent_quota_rows,
-    _refresh_agent_quotas_from_telemetry,
-    _release_reservation,
-    _upsert_agent_quota,
-    cmd_quota,
-    cmd_quota_tpm_view,
-    refresh_agent_quotas_from_telemetry,
-)
-from synlynk.costs import (
-    _TokenCounts,
-    _compute_burn_rate,
-    _model_rate_for_version,
-    check_budgets,
-    extract_model_version,
-    extract_tokens,
-    extract_verifier_meta,
-    _log_has_permission_denied_signature,
-    parse_costs_md,
-    update_costs,
-)
-from synlynk.capability_roles import _load_capability_roles
-from synlynk.taxonomy import entries_for_tier
-from synlynk.doctor import (
-    HEALTH_CHECKS,
-    HealthCheck,
-    _doctor_fix_menu,
-    _doctor_maybe_escalate,
-    _hc_agent_profiles,
-    _hc_docs_dir,
-    _hc_identity_key,
-    _hc_instruction_files,
-    _hc_model_rates,
-    _hc_pr_review_cycles,
-    _hc_project_init,
-    _hc_python_version,
-    _hc_todo_drift,
-    _hc_version_current,
-    cmd_doctor,
-)
-from synlynk.team import (
-    _build_team_digest,
-    _build_app_manifest_url,
-    _run_manifest_callback_server,
-    _ensure_identity_key,
-    _exchange_manifest_code,
-    _confirm_installation,
-    _run_agent_sync,
-    _sign_capability_rating,
-    _write_role_app_config,
-    cmd_decide,
-    cmd_identity_init,
-    cmd_identity_init_role,
-    cmd_identity_list,
-    cmd_join,
-    cmd_team_status,
-    get_mode,
-    get_username,
-)
-from synlynk.heal import cmd_heal
-from synlynk.support_engineer import (
-    _attempt_fix,
-    _collect_capability_drop,
-    _collect_github_issues,
-    _collect_sentinel_alerts,
-    _collect_telemetry_anomaly,
-    _collect_test_suite,
-    _dedup_findings,
-    _extract_diff,
-    _file_gh_issue,
-    _install_cron_entry,
-    _recommend_handoff_agent,
-    _run_investigation,
-    _stalled_job_ids_from_sentinel,
-    cmd_agent_list,
-    cmd_agent_run,
-    cmd_harness_list,
-    cmd_harness_run,
-)
-from synlynk.backlog import (
-    check_duplicate,
-    compute_fingerprint,
-    list_staged_backlog,
-    stage_discovered_work,
-    sync_backlog_to_github,
-)
-from synlynk.backlog_extractor import (
-    extract_from_devlog_content,
-    extract_from_doctor_failures,
-    extract_from_job_summary,
-)
-from synlynk.charter_injection import (
-    CharterInjectionError,
-    render_charter_section,
-    resolve_role_charter,
-)
-from synlynk.context import (
-    _append_vizor_notes,
-    _generate_context_from_db,
-    _generate_task_context,
-    _get_last_devlog_date,
-    _relevant_files_for_story,
-    _verify_contract_for_story,
-    _write_last_devlog_section,
-    _write_recent_devlog_entries,
-    generate_context,
-)
-from synlynk.jobs import (
-    _STAGE0_BASELINE_SCORE,
-    _STAGE0_EXPLORE_BONUS,
-    _apply_stage0_explore_bonus,
-    _best_agent_for_story,
-    _capability_candidates_for_story,
-    _count_dispatch_rework,
-    _count_tool_calls,
-    _dispatch_ready_jobs,
-    _ensure_role_dispatch_story,
-    _extract_micro_rework,
-    _inspect_worktree_git_state,
-    _load_jobs,
-    _reconcile_daemon_jobs,
-    _reconcile_jobs,
-    _save_jobs,
-    _write_capability_rating,
-    cmd_jobs,
-    cmd_jobs_handoff,
-    cmd_jobs_reap,
-)
-from synlynk.story_provisioning import (
-    _classify_heuristic,
-    _detect_issue_number,
-    classify_story,
-    cmd_backfill_capability_ratings,
-    resolve_or_create_story_id,
-)
-from synlynk.daemon import (
-    SynlynkDaemon,
-    SynlynkRelay,
-    WatchDaemon,
-    _daemon_install_service,
-    _daemon_uninstall_service,
-    _make_daemon_handler,
-    _make_relay_handler,
-    check_daemon_health,
-    check_stall,
-    cmd_relay_broadcast,
-    cmd_relay_start,
+
+_FAST_CLI = os.environ.get("SYNLYNK_CLI_ENTRYPOINT") == "1" or (
+    Path(sys.argv[0]).name in {"synlynk", "synlynk.py", "__main__.py"}
+) or any(flag in sys.argv[1:] for flag in ("-h", "--help", "--version"))
+_LEGACY_MODULES = (
+    "upgrade", "sentinel", "probe", "fencing", "dispatch", "quota", "costs",
+    "capability_roles", "taxonomy", "doctor", "team", "heal", "support_engineer",
+    "backlog", "backlog_extractor", "charter_injection", "context", "jobs",
+    "story_provisioning", "daemon", "instructions", "scan", "hud", "platform_status",
+    "logs", "wizard", "launch",
 )
 
-from synlynk.instructions import (
-    _build_copilot_instructions,
-    _build_cursor_mdc,
-    _build_templates,
-    _build_windsurf_rules,
-    _check_instruction_drift,
-    _compute_section_sha,
-    _extract_gh_ids,
-    _extract_synlynk_section,
-    _find_existing_doc,
-    _generate_ai_context_files,
-    _is_evolved_repo,
-    _is_section_covered,
-    _llm_enrich,
-    _load_instruction_manifest,
-    _strip_synlynk_section,
-    _write_informed_skeleton,
-    _write_instruction_file,
-    _write_instruction_manifest,
-    install_pre_commit_hook,
-    cmd_instructions_ack,
-    cmd_instructions_diff,
-    cmd_instructions_register,
-    cmd_instructions_status,
-    cmd_instructions_update,
-)
 
-from synlynk.scan import (
-    _check_scan_cache,
-    _extract_symbols,
-    _format_source_architecture,
-    _git_head_sha,
-    _infer_industry,
-    _load_scan_meta,
-    _query_repo_file_tree,
-    _save_scan_meta,
-    _scan_full_repo,
-    _scan_repo_for_docs,
-    _detect_harnesses_on_path,
-    _scan_source_skeleton,
-    _scan_stage_arch,
-    _scan_stage_complexity,
-    _scan_stage_git,
-    _scan_stage_source,
-    _scan_stage_stack,
-    _scan_stage_tests,
-    _score_source_files,
-    _static_scan,
-    _workspace_config_dir,
-    cmd_scan,
-    detect_home_harness,
-    find_git_roots,
-    fingerprint_stack,
-    generate_structured_context,
-    parse_context_sections,
-    run_workspace_scan,
-    scan_skills,
-    write_workspace_config,
-)
+def _load_legacy_imports():
+    """Load the historical package-level exports on demand.
 
-# Fallback roadmap text still includes "## Business Goals".
-from synlynk.hud import CYCLES
-from synlynk.platform_status import (
-    _humanize_ago,
-    _load_platform_budget_pulse,
-    _load_platform_drift_agents,
-    _load_platform_harness_rows,
-    _load_telemetry_events,
-    _parse_status_timestamp,
-    _print_platform_health,
-    _print_platform_table,
-)
-from synlynk.logs import (
-    _redact_active_tokens,
-    _redact_secret_patterns,
-    _render_claude_log_line,
-    _render_codex_log_line,
-    cmd_logs,
-)
+    The package has long re-exported nearly every CLI implementation symbol.
+    Keep that API, but avoid importing the entire command graph while argparse
+    is only constructing or displaying the parser.
+    """
+    for module_name in _LEGACY_MODULES:
+        module = _importlib.import_module(f"synlynk.{module_name}")
+        globals().update({
+            name: value
+            for name, value in vars(module).items()
+            if not name.startswith("__") and name not in globals()
+        })
+    # Importing a submodule also installs it as a package attribute. Restore
+    # the historical function export where the names intentionally collide.
+    globals()["upgrade"] = _importlib.import_module("synlynk.upgrade").upgrade
+    globals()["cmd_ecosystem_status"] = _importlib.import_module("synlynk.status").cmd_status
+    globals()["cmd_viz"] = _importlib.import_module("synlynk.viz").cmd_viz
+    globals()["cmd_schedule"] = _importlib.import_module("synlynk.scheduler").cmd_schedule
+    globals()["main"], globals()["cmd_watch"] = (
+        _importlib.import_module("synlynk.cli").main,
+        _importlib.import_module("synlynk.cli").cmd_watch,
+    )
+    db = _importlib.import_module("synlynk.db")
+    globals().update({
+        name: value
+        for name, value in vars(db).items()
+        if not name.startswith("__") and name not in globals()
+    })
 
-from synlynk.wizard import (
-    _card_summary,
-    _kbhit,
-    _launch_screen_cycles,
-    _launch_screen_preview,
-    _launch_screen_tasks,
-    _render_expanded_card,
-    _render_one_card,
-    _render_scan_cards,
-    _run_scan_tui,
-    _wiz_clear,
-    _wiz_header,
-    _wiz_prompt,
-    _wiz_read_key,
-    _wiz_screen_agents,
-    _wiz_screen_harness,
-    _wiz_screen_landing,
-    _wiz_screen_launch,
-    _wiz_screen_roles,
-    _wiz_screen_skills,
-    _wiz_screen_topology,
-    _wiz_screen_workspace_confirm,
-    _wiz_screen_workspace_name_pick,
-    cmd_launch_ftue,
-    cmd_wizard_init,
-    guard_dirty_worktree,
-    wizard_init,
-)
-from synlynk.launch import (
-    find_top_scan_finding,
-    dispatch_first_win_remediation,
-    prompt_first_win_remediation,
-)
+
+def main(argv=None):
+    """Lazy compatibility entry point for installed console scripts."""
+    return _importlib.import_module("synlynk.cli").main(argv)
 
 CYCLE_COLORS = {
     "dream":   "#a78bfa",
@@ -3868,34 +3580,7 @@ def init(force: bool = False, agents: list = None,
     print(f"\n  Next: {_DIM}synlynk status  ·  synlynk jobs  ·  synlynk dispatch --help{_RESET}\n")
 
 # --- module extractions (backwards compat) ---
-from synlynk.cli import main, cmd_watch  # noqa: E402
-from synlynk.db import (  # noqa: E402
-    _detect_hand_edit,
-    _generate_costs_md,
-    _generate_todo_md,
-    _import_todo_to_stories,
-    _migrate_db,
-    _migrate_import,
-    _insert_cost_row,
-    _parse_costs_md,
-    _parse_devlog_file,
-    _parse_memory_md,
-    _parse_roadmap_md,
-    _parse_todo_metadata,
-    cmd_devlog_append,
-    cmd_decision_record,
-    cmd_cost_log,
-    cmd_audit_docs,
-    cmd_remediation_log,
-    cmd_roadmap_add,
-    cmd_memory_add,
-    cmd_migrate,
-    cmd_pr_check,
-    cmd_score_add,
-    cmd_score_attest,
-    cmd_score_list,
-    cmd_story_create,
-    cmd_story_draft,
-    cmd_story_list,
-    cmd_story_ready,
-)
+# Normal library imports retain the historical package-level exports. CLI
+# startup skips this fan-out until after argparse has parsed the command.
+if not _FAST_CLI:
+    _load_legacy_imports()
