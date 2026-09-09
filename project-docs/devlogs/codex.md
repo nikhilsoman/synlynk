@@ -1,5 +1,13 @@
 # Codex Devlog
 
+## 2026-09-09 - PR #1518 QA follow-up
+
+- Serialized local capability-envelope seeding and the final local dispatch
+  capacity check with SQLite write transactions.
+- Made local deferral fail loudly when its queue-row persistence fails.
+- Verification: focused local-agent and dispatch/jobs tests passed (265 tests).
+[@codex]
+
 ## 2026-09-09 - Local Capability Envelope and Concurrency Guard (Task Group 2)
 
 - Made local capability seeding available on direct local dispatch, preserving

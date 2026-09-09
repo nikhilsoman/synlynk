@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from synlynk.dispatch import _local_concurrency_exceeded
+from synlynk.dispatch import _defer_local_concurrency, _local_concurrency_exceeded
 
 
 def _db_with_running_jobs(count, agent="local"):
@@ -38,6 +38,14 @@ class TestLocalConcurrencyGuard(unittest.TestCase):
     def test_invalid_limit_fails_safe_to_one(self):
         conn = _db_with_running_jobs(1)
         self.assertTrue(_local_concurrency_exceeded(conn, max_concurrent="bad"))
+
+    def test_defer_propagates_persistence_errors(self):
+        conn = sqlite3.connect(":memory:")
+        with self.assertRaises(sqlite3.OperationalError):
+            _defer_local_concurrency(
+                conn, job_id="job-1", agent="local", task="wait", story_id=None,
+                reason="local_concurrency",
+            )
 
 
 class TestSchedulerLocalConcurrency(unittest.TestCase):

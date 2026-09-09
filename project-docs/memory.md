@@ -548,6 +548,12 @@ for agent `local`, with capacity represented as a transient queued/deferred
 state rather than a failure or quota exhaustion.
 [@codex]
 
+For PR #1518 follow-up, first-use envelope seeding uses `BEGIN IMMEDIATE` so
+separate local dispatch connections cannot duplicate calibration rows. Local
+dispatch holds the SQLite write transaction from its final capacity check
+through the running-row claim; deferred queue persistence errors propagate.
+[@codex]
+
 ## Advanced Scenario Priority Reconciliation (2026-09-08)
 
 When roadmap stakeholders disagree between faster autonomous delivery and more

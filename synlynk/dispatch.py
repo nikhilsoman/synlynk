@@ -488,9 +488,12 @@ def _defer_local_concurrency(conn, *, job_id: str, agent: str, task: str,
             )
         conn.commit()
     except Exception:
-        # A legacy/unit-test connection may not expose the full queue schema;
-        # the return value still gives callers a clean transient outcome.
-        pass
+        # A deferred result is only truthful if the queue row was persisted.
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        raise
     return {"deferred": True, "reason": reason, "job_id": job_id}
 
 
@@ -3209,14 +3212,48 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         gh_write_expect_value = _gh_write_expectation(task, task_type)
     gh_write_expect_for_job = gh_write_expect_value or "closed"
 
-    proc = subprocess.Popen(
-        ["sh", "-c", shell_cmd],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        start_new_session=True,
-        cwd=worktree_path,
-        env=proc_env,
-    )
+    local_slot_claimed = False
+    if agent == "local" and dconn is not None:
+        # Serialize the final capacity check with the running-row claim. The
+        # transaction stays open through Popen and the row update below, so a
+        # direct dispatch and a scheduler dispatch cannot both take the slot.
+        dconn.execute("BEGIN IMMEDIATE")
+        if _local_concurrency_exceeded(dconn, max_concurrent=_local_max_concurrent()):
+            dconn.rollback()
+            result = _defer_local_concurrency(
+                dconn, job_id=job_id, agent=agent, task=task, story_id=story_id,
+                reason="local_concurrency",
+            )
+            if owns_dconn:
+                dconn.close()
+            return result
+        _ensure_daemon_job_context_columns(dconn)
+        _ensure_daemon_job_session_column(dconn)
+        _ensure_daemon_job_agent_id_column(dconn)
+        _ensure_daemon_job_gh_write_columns(dconn)
+        _ensure_daemon_job_harness_columns(dconn)
+        _ensure_daemon_job_worktree_columns(dconn)
+        dconn.execute(
+            "INSERT OR IGNORE INTO daemon_jobs "
+            "(job_id, agent, task, story_id, status, priority, depends_on, enqueued_at) "
+            "VALUES (?, ?, ?, ?, 'running', 5, '[]', ?)",
+            (job_id, agent, task, story_id, time.strftime("%Y-%m-%dT%H:%M:%S")),
+        )
+        local_slot_claimed = True
+
+    try:
+        proc = subprocess.Popen(
+            ["sh", "-c", shell_cmd],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+            cwd=worktree_path,
+            env=proc_env,
+        )
+    except Exception:
+        if local_slot_claimed:
+            dconn.rollback()
+        raise
 
     # A process that has already exited failed during CLI startup (bad flag,
     # missing binary, or sandbox setup). Give the task one deterministic
@@ -3230,6 +3267,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         secondary = _secondary_harness(agent, baselines_map)
         touched = _worktree_files_touched(worktree_path) if worktree_path else []
         if secondary and not touched:
+            if local_slot_claimed:
+                dconn.rollback()
             print(f"  ↪ startup failure on '{agent}' (exit {startup_exit}); failing over to '{secondary}'")
             return dispatch_agent(
                 secondary, task, story_id=story_id, agent_id=agent_id,

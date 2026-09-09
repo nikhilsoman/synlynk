@@ -3,6 +3,8 @@ capability_scores is a VIEW over capability_ratings — seeding means inserting
 synthetic calibration stories + capability_ratings rows for a narrow starter
 whitelist (docs/testing discipline, execute stage, small estimated_tokens)."""
 import sqlite3
+import tempfile
+import threading
 import unittest
 
 from synlynk.local_agent_seed import seed_local_capability_envelope, STARTER_WHITELIST
@@ -53,6 +55,42 @@ class TestSeedLocalCapabilityEnvelope(unittest.TestCase):
             "SELECT COUNT(*) FROM capability_ratings WHERE agent='local'"
         ).fetchone()[0]
         self.assertEqual(rows, len(STARTER_WHITELIST))
+
+    def test_concurrent_first_use_is_atomic_and_idempotent(self):
+        with tempfile.NamedTemporaryFile() as db_file:
+            setup = _fresh_db()
+            destination = sqlite3.connect(db_file.name)
+            setup.backup(destination)
+            destination.close()
+            setup.close()
+            barrier = threading.Barrier(2)
+            errors = []
+
+            def seed_once():
+                conn = sqlite3.connect(db_file.name, timeout=5)
+                try:
+                    barrier.wait()
+                    seed_local_capability_envelope(conn)
+                except Exception as exc:  # surfaced by the assertion below
+                    errors.append(exc)
+                finally:
+                    conn.close()
+
+            threads = [threading.Thread(target=seed_once) for _ in range(2)]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+
+            self.assertEqual(errors, [])
+            conn = sqlite3.connect(db_file.name)
+            self.assertEqual(
+                conn.execute(
+                    "SELECT COUNT(*) FROM capability_ratings WHERE agent='local'"
+                ).fetchone()[0],
+                len(STARTER_WHITELIST),
+            )
+            conn.close()
 
 
 if __name__ == "__main__":
