@@ -458,3 +458,72 @@ def test_status_json_includes_worktrees_field():
     )
     payload = _json.loads(output)
     assert payload["worktrees"] == {"local": 6, "stale_hint": 2}
+
+
+def test_gh_pr_for_branch_empty_or_none_returns_none(monkeypatch):
+    import synlynk.worktree as worktree_mod
+
+    def _unexpected_run(*args, **kwargs):
+        raise AssertionError("subprocess.run must not be called when branch is empty")
+
+    monkeypatch.setattr(worktree_mod.subprocess, "run", _unexpected_run)
+    assert worktree_mod._gh_pr_for_branch("") is None
+    assert worktree_mod._gh_pr_for_branch(None) is None
+    assert worktree_mod._gh_pr_for_branch("   ") is None
+
+
+def test_classify_patch_equivalent_is_safe():
+    v = _classify_worktree(
+        _entry(), worktree_missing=False, is_dirty=False, dirty_summary="",
+        is_ancestor=False, gh_available=True,
+        pr_info=None, net_diff_lines=None, commits_ahead=3, patch_equivalent=True,
+    )
+    assert v.verdict == "safe"
+    assert v.reason == "merged (patch-equivalent to main)"
+
+
+def test_classify_patch_equivalent_but_open_pr_is_unsafe():
+    v = _classify_worktree(
+        _entry(), worktree_missing=False, is_dirty=False, dirty_summary="",
+        is_ancestor=False, gh_available=True,
+        pr_info={"number": 999, "state": "OPEN"}, net_diff_lines=None, commits_ahead=1, patch_equivalent=True,
+    )
+    assert v.verdict == "unsafe"
+    assert v.reason == "PR #999 open — active work"
+
+
+def test_classify_detached_head_is_ancestor_is_safe():
+    entry = WorktreeEntry(path="/repo/detached", branch="")
+    v = _classify_worktree(
+        entry, worktree_missing=False, is_dirty=False, dirty_summary="",
+        is_ancestor=True, gh_available=True,
+        pr_info=None, net_diff_lines=None, commits_ahead=0,
+    )
+    assert v.verdict == "safe"
+    assert v.branch == "(detached)"
+    assert v.reason == "merged, direct ancestor"
+
+
+def test_classify_detached_head_patch_equivalent_is_safe():
+    entry = WorktreeEntry(path="/repo/detached", branch="")
+    v = _classify_worktree(
+        entry, worktree_missing=False, is_dirty=False, dirty_summary="",
+        is_ancestor=False, gh_available=True,
+        pr_info=None, net_diff_lines=None, commits_ahead=2, patch_equivalent=True,
+    )
+    assert v.verdict == "safe"
+    assert v.branch == "(detached)"
+    assert v.reason == "merged (patch-equivalent to main)"
+
+
+def test_classify_detached_head_unmerged_is_needs_review():
+    entry = WorktreeEntry(path="/repo/detached", branch="")
+    v = _classify_worktree(
+        entry, worktree_missing=False, is_dirty=False, dirty_summary="",
+        is_ancestor=False, gh_available=True,
+        pr_info=None, net_diff_lines=None, commits_ahead=2, patch_equivalent=False,
+    )
+    assert v.verdict == "needs-review"
+    assert v.branch == "(detached)"
+    assert v.reason == "detached HEAD, 2 commits ahead of main"
+

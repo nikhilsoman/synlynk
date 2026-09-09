@@ -85,33 +85,45 @@ def _classify_worktree(
     pr_info,
     net_diff_lines,
     commits_ahead: int,
+    patch_equivalent: bool = False,
 ) -> WorktreeVerdict:
     """Pure classifier — rules 1-3 of the spec's ordered algorithm (dirty
     override → ancestor check → PR state). Takes pre-fetched git/gh signals
     as arguments; does not shell out itself."""
+    display_branch = entry.branch or "(detached)"
     if worktree_missing:
         return WorktreeVerdict(
-            entry.path, entry.branch, "safe",
+            entry.path, display_branch, "safe",
             "worktree directory missing — stale registration", entry.nested_under,
         )
     if is_dirty:
         return WorktreeVerdict(
-            entry.path, entry.branch, "needs-review",
+            entry.path, display_branch, "needs-review",
             f"dirty: {dirty_summary}", entry.nested_under,
         )
     if is_ancestor:
         return WorktreeVerdict(
-            entry.path, entry.branch, "safe",
+            entry.path, display_branch, "safe",
             "merged, direct ancestor", entry.nested_under,
+        )
+    if patch_equivalent and (pr_info is None or pr_info.get("state") != "OPEN"):
+        return WorktreeVerdict(
+            entry.path, display_branch, "safe",
+            "merged (patch-equivalent to main)", entry.nested_under,
         )
     if not gh_available:
         return WorktreeVerdict(
-            entry.path, entry.branch, "needs-review",
+            entry.path, display_branch, "needs-review",
             "could not verify PR state — gh unavailable", entry.nested_under,
         )
     if pr_info is None:
+        if not entry.branch:
+            return WorktreeVerdict(
+                entry.path, display_branch, "needs-review",
+                f"detached HEAD, {commits_ahead} commits ahead of main", entry.nested_under,
+            )
         return WorktreeVerdict(
-            entry.path, entry.branch, "needs-review",
+            entry.path, display_branch, "needs-review",
             f"no PR found, {commits_ahead} commits ahead of main", entry.nested_under,
         )
 
@@ -119,25 +131,30 @@ def _classify_worktree(
     number = pr_info.get("number")
     if state == "MERGED":
         return WorktreeVerdict(
-            entry.path, entry.branch, "safe", f"PR #{number} merged", entry.nested_under,
+            entry.path, display_branch, "safe", f"PR #{number} merged", entry.nested_under,
         )
     if state == "CLOSED":
         net = net_diff_lines if net_diff_lines is not None else 0
-        if net <= 0:
+        if net <= 0 or patch_equivalent:
             return WorktreeVerdict(
-                entry.path, entry.branch, "safe",
+                entry.path, display_branch, "safe",
                 f"PR #{number} closed, stale — no unique content vs main", entry.nested_under,
             )
         return WorktreeVerdict(
-            entry.path, entry.branch, "needs-review",
+            entry.path, display_branch, "needs-review",
             f"PR #{number} closed, {net} net lines of unmerged content", entry.nested_under,
         )
     if state == "OPEN":
         return WorktreeVerdict(
-            entry.path, entry.branch, "unsafe", f"PR #{number} open — active work", entry.nested_under,
+            entry.path, display_branch, "unsafe", f"PR #{number} open — active work", entry.nested_under,
+        )
+    if not entry.branch:
+        return WorktreeVerdict(
+            entry.path, display_branch, "needs-review",
+            f"detached HEAD, {commits_ahead} commits ahead of main", entry.nested_under,
         )
     return WorktreeVerdict(
-        entry.path, entry.branch, "needs-review",
+        entry.path, display_branch, "needs-review",
         f"no PR found, {commits_ahead} commits ahead of main", entry.nested_under,
     )
 
@@ -188,24 +205,27 @@ def _git_status_dirty(path: str):
 
 
 def _git_is_ancestor(branch: str, path: str) -> bool:
+    ref = branch if branch else "HEAD"
     result = subprocess.run(
-        ["git", "merge-base", "--is-ancestor", branch, "origin/main"],
+        ["git", "merge-base", "--is-ancestor", ref, "origin/main"],
         cwd=path, capture_output=True, text=True, timeout=10,
     )
     return result.returncode == 0
 
 
 def _git_commits_ahead(branch: str, path: str) -> int:
+    ref = branch if branch else "HEAD"
     result = subprocess.run(
-        ["git", "log", f"origin/main..{branch}", "--oneline"],
+        ["git", "log", f"origin/main..{ref}", "--oneline"],
         cwd=path, capture_output=True, text=True, timeout=10,
     )
     return len([line for line in result.stdout.splitlines() if line.strip()])
 
 
 def _git_net_diff_lines(branch: str, path: str) -> int:
+    ref = branch if branch else "HEAD"
     result = subprocess.run(
-        ["git", "diff", f"origin/main..{branch}", "--shortstat"],
+        ["git", "diff", f"origin/main..{ref}", "--shortstat"],
         cwd=path, capture_output=True, text=True, timeout=10,
     )
     text = result.stdout.strip()
@@ -216,7 +236,21 @@ def _git_net_diff_lines(branch: str, path: str) -> int:
     return insertions - deletions
 
 
+def _git_unmerged_cherry_count(branch: str, path: str) -> Optional[int]:
+    ref = branch if branch else "HEAD"
+    result = subprocess.run(
+        ["git", "cherry", "origin/main", ref],
+        cwd=path, capture_output=True, text=True, timeout=10,
+    )
+    if result.returncode != 0:
+        return None
+    lines = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+    return len([line for line in lines if line.startswith("+")])
+
+
 def _gh_pr_for_branch(branch: str):
+    if not branch or not branch.strip():
+        return None
     result = subprocess.run(
         [
             "gh",
@@ -254,13 +288,17 @@ def _gather_worktree_signals(entry: WorktreeEntry, gh_available: bool) -> dict:
         if is_ancestor:
             return {"worktree_missing": False, "is_dirty": False, "is_ancestor": True}
 
+        commits_ahead = _git_commits_ahead(entry.branch, entry.path)
+        unmerged_cherries = _git_unmerged_cherry_count(entry.branch, entry.path)
+        patch_equivalent = (commits_ahead > 0 and unmerged_cherries == 0)
+
         pr_info = None
         net_diff_lines = None
-        if gh_available:
+        if gh_available and entry.branch:
             pr_info = _gh_pr_for_branch(entry.branch)
             if pr_info and pr_info.get("state") == "CLOSED":
                 net_diff_lines = _git_net_diff_lines(entry.branch, entry.path)
-        commits_ahead = _git_commits_ahead(entry.branch, entry.path)
+
         return {
             "worktree_missing": False,
             "is_dirty": False,
@@ -269,14 +307,16 @@ def _gather_worktree_signals(entry: WorktreeEntry, gh_available: bool) -> dict:
             "pr_info": pr_info,
             "net_diff_lines": net_diff_lines,
             "commits_ahead": commits_ahead,
+            "patch_equivalent": patch_equivalent,
         }
     except (subprocess.SubprocessError, OSError) as exc:
         return {"error": str(exc)}
 
 
 def _verdict_from_signals(entry: WorktreeEntry, signals: dict, gh_available: bool) -> WorktreeVerdict:
+    display_branch = entry.branch or "(detached)"
     if signals.get("error"):
-        return WorktreeVerdict(entry.path, entry.branch, "needs-review", signals["error"], entry.nested_under)
+        return WorktreeVerdict(entry.path, display_branch, "needs-review", signals["error"], entry.nested_under)
     return _classify_worktree(
         entry,
         worktree_missing=signals.get("worktree_missing", False),
@@ -287,6 +327,7 @@ def _verdict_from_signals(entry: WorktreeEntry, signals: dict, gh_available: boo
         pr_info=signals.get("pr_info"),
         net_diff_lines=signals.get("net_diff_lines"),
         commits_ahead=signals.get("commits_ahead", 0),
+        patch_equivalent=signals.get("patch_equivalent", False),
     )
 
 
