@@ -3174,6 +3174,12 @@ def _dispatch_ready_jobs(max_parallel: int = 4) -> int:
 
         launched = 0
         now = time.strftime("%Y-%m-%dT%H:%M:%S")
+        local_running = conn.execute(
+            "SELECT COUNT(*) FROM daemon_jobs "
+            "WHERE status='running' AND agent='local'"
+        ).fetchone()[0]
+        from synlynk.dispatch import _local_max_concurrent
+        local_max = _local_max_concurrent()
         for job_id, agent, task, story_id, depends_on_json, log_path in candidates:
             if launched >= slots:
                 break
@@ -3195,6 +3201,12 @@ def _dispatch_ready_jobs(max_parallel: int = 4) -> int:
                 done_ids = {jid for jid, st in dep_statuses.items() if st == "done"}
                 if done_ids != set(deps):
                     continue
+
+            if agent == "local" and local_running >= local_max:
+                # Capacity is a normal transient state. Leave the job queued
+                # for the next daemon tick and continue considering other
+                # harnesses in this pass.
+                continue
 
             dispatch_fn = _pkg("dispatch_agent")
             if dispatch_fn is None:
@@ -3265,6 +3277,8 @@ def _dispatch_ready_jobs(max_parallel: int = 4) -> int:
             )
             conn.commit()
             launched += 1
+            if agent == "local":
+                local_running += 1
 
         return launched
     finally:

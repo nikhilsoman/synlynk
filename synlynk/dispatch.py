@@ -441,11 +441,60 @@ def _role_for_story(story_id: str) -> Optional[str]:
 
 def _local_concurrency_exceeded(conn, max_concurrent: int = 1) -> bool:
     """True if the 'local' agent already has max_concurrent running jobs."""
+    try:
+        max_concurrent = max(1, int(max_concurrent))
+    except (TypeError, ValueError):
+        max_concurrent = 1
     row = conn.execute(
         "SELECT COUNT(*) FROM daemon_jobs WHERE status='running' AND agent='local'"
     ).fetchone()
     running = row[0] if row else 0
     return running >= max_concurrent
+
+
+def _local_max_concurrent(config_path: str = None) -> int:
+    """Read the local agent's concurrency cap, defaulting safely to one."""
+    path = config_path or os.path.join(".agents", "local.json")
+    try:
+        with open(path) as fh:
+            value = json.load(fh).get("max_concurrent", 1)
+        return max(1, int(value))
+    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        return 1
+
+
+def _defer_local_concurrency(conn, *, job_id: str, agent: str, task: str,
+                             story_id: str, reason: str) -> dict:
+    """Keep an at-capacity local dispatch queued for a later scheduler tick."""
+    now = time.strftime("%Y-%m-%dT%H:%M:%S")
+    try:
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)").fetchall()}
+        if "blocked_reason" not in cols:
+            conn.execute("ALTER TABLE daemon_jobs ADD COLUMN blocked_reason TEXT")
+        existing = conn.execute(
+            "SELECT 1 FROM daemon_jobs WHERE job_id=?", (job_id,)
+        ).fetchone()
+        if existing:
+            conn.execute(
+                "UPDATE daemon_jobs SET status='queued', blocked_reason=? WHERE job_id=?",
+                (reason, job_id),
+            )
+        else:
+            conn.execute(
+                "INSERT INTO daemon_jobs "
+                "(job_id, agent, task, story_id, status, priority, depends_on, "
+                "enqueued_at, blocked_reason) VALUES (?, ?, ?, ?, 'queued', 5, '[]', ?, ?)",
+                (job_id, agent, task, story_id, now, reason),
+            )
+        conn.commit()
+    except Exception:
+        # A deferred result is only truthful if the queue row was persisted.
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        raise
+    return {"deferred": True, "reason": reason, "job_id": job_id}
 
 
 def _resolve_dispatch_permissions(
@@ -2654,6 +2703,28 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         dconn = dconn()
         owns_dconn = True
 
+    if agent == "local" and dconn is not None:
+        # Direct dispatch is a valid first-use path; do not require the
+        # operator to run `local doctor` before the router can see local.
+        from synlynk.local_agent_seed import seed_local_capability_envelope
+        seed_local_capability_envelope(dconn)
+        max_concurrent = _local_max_concurrent()
+        if _local_concurrency_exceeded(dconn, max_concurrent=max_concurrent):
+            result = _defer_local_concurrency(
+                dconn,
+                job_id=job_id,
+                agent=agent,
+                task=task,
+                story_id=story_id,
+                reason="local_concurrency",
+            )
+            if owns_dconn:
+                try:
+                    dconn.close()
+                except Exception:
+                    pass
+            return result
+
     if dconn is not None:
         resolve_story_fn = _pkg("resolve_or_create_story_id")
         _est_tokens = None
@@ -2742,21 +2813,6 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             )
         else:
             story_id = resolve_or_create_story_id(task, issue=issue, timestamp=dispatch_time)
-
-    if agent == "local":
-        get_db = _pkg("_get_db")
-        conn = get_db() if get_db else None
-        if conn is not None:
-            try:
-                local_config = json.load(open(os.path.join(".agents", "local.json")))
-            except (OSError, json.JSONDecodeError):
-                local_config = {}
-            max_concurrent = local_config.get("max_concurrent", 1)
-            if _local_concurrency_exceeded(conn, max_concurrent=max_concurrent):
-                raise RuntimeError(
-                    f"local agent at max concurrency ({max_concurrent}); "
-                    "wait for the running job to finish"
-                )
 
     baselines = baselines_map[agent]
     cli = baselines["cli"]
@@ -3156,14 +3212,48 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         gh_write_expect_value = _gh_write_expectation(task, task_type)
     gh_write_expect_for_job = gh_write_expect_value or "closed"
 
-    proc = subprocess.Popen(
-        ["sh", "-c", shell_cmd],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        start_new_session=True,
-        cwd=worktree_path,
-        env=proc_env,
-    )
+    local_slot_claimed = False
+    if agent == "local" and dconn is not None:
+        # Serialize the final capacity check with the running-row claim. The
+        # transaction stays open through Popen and the row update below, so a
+        # direct dispatch and a scheduler dispatch cannot both take the slot.
+        dconn.execute("BEGIN IMMEDIATE")
+        if _local_concurrency_exceeded(dconn, max_concurrent=_local_max_concurrent()):
+            dconn.rollback()
+            result = _defer_local_concurrency(
+                dconn, job_id=job_id, agent=agent, task=task, story_id=story_id,
+                reason="local_concurrency",
+            )
+            if owns_dconn:
+                dconn.close()
+            return result
+        _ensure_daemon_job_context_columns(dconn)
+        _ensure_daemon_job_session_column(dconn)
+        _ensure_daemon_job_agent_id_column(dconn)
+        _ensure_daemon_job_gh_write_columns(dconn)
+        _ensure_daemon_job_harness_columns(dconn)
+        _ensure_daemon_job_worktree_columns(dconn)
+        dconn.execute(
+            "INSERT OR IGNORE INTO daemon_jobs "
+            "(job_id, agent, task, story_id, status, priority, depends_on, enqueued_at) "
+            "VALUES (?, ?, ?, ?, 'running', 5, '[]', ?)",
+            (job_id, agent, task, story_id, time.strftime("%Y-%m-%dT%H:%M:%S")),
+        )
+        local_slot_claimed = True
+
+    try:
+        proc = subprocess.Popen(
+            ["sh", "-c", shell_cmd],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+            cwd=worktree_path,
+            env=proc_env,
+        )
+    except Exception:
+        if local_slot_claimed:
+            dconn.rollback()
+        raise
 
     # A process that has already exited failed during CLI startup (bad flag,
     # missing binary, or sandbox setup). Give the task one deterministic
@@ -3177,6 +3267,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         secondary = _secondary_harness(agent, baselines_map)
         touched = _worktree_files_touched(worktree_path) if worktree_path else []
         if secondary and not touched:
+            if local_slot_claimed:
+                dconn.rollback()
             print(f"  ↪ startup failure on '{agent}' (exit {startup_exit}); failing over to '{secondary}'")
             return dispatch_agent(
                 secondary, task, story_id=story_id, agent_id=agent_id,
