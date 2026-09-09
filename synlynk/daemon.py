@@ -192,7 +192,9 @@ class WatchDaemon:
             if os.path.exists(self.pidfile):
                 os.remove(self.pidfile)
             self._prepare_start()
-            _daemonize_via_reexec(self._child_entry_point, self.logfile)
+            _daemonize_via_reexec(
+                self._child_entry_point, self.logfile, cwd=self.workspace_root
+            )
             # Hold the start lock until the child writes its pidfile (or we
             # time out) so a concurrent start() cannot also pass the
             # not-running check and double-spawn (#349).

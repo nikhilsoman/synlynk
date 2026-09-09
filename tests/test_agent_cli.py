@@ -2758,7 +2758,7 @@ def test_daemon_start_lock_rejects_concurrent_second_start(project_dir, monkeypa
     hold_spawn = threading.Event()
     release_spawn = threading.Event()
 
-    def _blocking_reexec(entry_point, logfile):
+    def _blocking_reexec(entry_point, logfile, cwd=None):
         # Hold inside the locked critical section (after flock, before release)
         # so a concurrent start() must fail LOCK_NB rather than also spawning.
         started.append((entry_point, logfile))
@@ -2804,7 +2804,11 @@ def test_daemon_start_recovers_stale_lock_owner(project_dir, monkeypatch):
         fh.write("99999999\n")
 
     spawned = []
-    monkeypatch.setattr(daemon_mod, "_daemonize_via_reexec", lambda *args: spawned.append(args))
+    monkeypatch.setattr(
+        daemon_mod,
+        "_daemonize_via_reexec",
+        lambda *args, **kwargs: spawned.append(args),
+    )
     monkeypatch.setattr(daemon, "_await_child_pidfile", lambda *args, **kwargs: None)
     daemon.start()
 

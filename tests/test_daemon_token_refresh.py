@@ -419,6 +419,12 @@ def test_watch_daemon_start_spawns_detached_child_and_returns_immediately(tmp_pa
         daemon_mod.sys.executable, "-c",
         "from synlynk.daemon import _watch_daemon_child_main; _watch_daemon_child_main()",
     ]
+    assert captured["kwargs"]["cwd"] == daemon.workspace_root
+    assert captured["kwargs"]["env"]["_SYNLYNK_DAEMON_CHILD"] == "1"
+    assert (
+        captured["kwargs"]["env"]["SYNLYNK_DAEMON_WORKSPACE_ROOT"]
+        == daemon.workspace_root
+    )
 
 
 def test_watch_daemon_child_main_writes_pidfile_then_runs_loop(tmp_path, monkeypatch):
