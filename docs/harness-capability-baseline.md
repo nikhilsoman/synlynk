@@ -54,3 +54,13 @@ See "Harness Capability Reassessment Protocol" in `CLAUDE.md`. Short version: at
 least every ~25 dispatched jobs or monthly (whichever comes first), scan recent
 job telemetry for failure patterns per harness, compare against this table, and
 file findings + policy.json updates in the same PR as this doc's edits.
+
+## Test execution baseline (2026-09-09)
+
+Issue #1496 evaluated pytest-xdist after the #1494/#1495 CI changes. The current
+CI baseline is serial: the comparable post-#1495 run took 231s on Python 3.10
+and 165s on Python 3.12. A local Python 3.12 run took 426.78s serial, 180.40s
+with four workers, and 162.07s with `-n auto` (16 workers), but all three runs
+shared the same pre-existing live-selftest mutation failure. Keep CI serial;
+see `docs/testing/pytest-xdist-evaluation-1496.md` for the classification and
+scoped experiment command.
