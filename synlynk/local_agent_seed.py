@@ -23,26 +23,33 @@ SEED_QUALITY = 0.6
 
 
 def seed_local_capability_envelope(conn) -> None:
-    """Idempotent: re-running does not duplicate rows (checks by story_id)."""
-    for i, (discipline, org_domain, role, stage, engg_domain, industry, phase,
-            est_tokens) in enumerate(STARTER_WHITELIST):
-        story_id = f"local-seed-{i:02d}"
-        exists = conn.execute(
-            "SELECT 1 FROM stories WHERE story_id=?", (story_id,)
-        ).fetchone()
-        if exists:
-            continue
-        conn.execute(
-            "INSERT INTO stories (story_id, engg_domain, org_domain, industry, "
-            "phase, estimated_tokens) VALUES (?, ?, ?, ?, ?, ?)",
-            (story_id, engg_domain, org_domain, industry, phase, est_tokens),
-        )
-        conn.execute(
-            "INSERT INTO capability_ratings (story_id, agent, model_version, "
-            "split_model, engg_domain, discipline, org_domain, role, stage, "
-            "industry, phase, signal_source, quality) VALUES "
-            "(?, 'local', ?, 0, ?, ?, ?, ?, ?, ?, ?, 'seed', ?)",
-            (story_id, MODEL_VERSION, engg_domain, discipline, org_domain, role,
-             stage, industry, phase, SEED_QUALITY),
-        )
-    conn.commit()
+    """Idempotently seed the envelope, including concurrent first use."""
+    owns_transaction = not conn.in_transaction
+    if owns_transaction:
+        conn.execute("BEGIN IMMEDIATE")
+    try:
+        for i, (discipline, org_domain, role, stage, engg_domain, industry, phase,
+                est_tokens) in enumerate(STARTER_WHITELIST):
+            story_id = f"local-seed-{i:02d}"
+            conn.execute(
+                "INSERT OR IGNORE INTO stories "
+                "(story_id, engg_domain, org_domain, industry, phase, estimated_tokens) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (story_id, engg_domain, org_domain, industry, phase, est_tokens),
+            )
+            conn.execute(
+                "INSERT INTO capability_ratings (story_id, agent, model_version, "
+                "split_model, engg_domain, discipline, org_domain, role, stage, "
+                "industry, phase, signal_source, quality) "
+                "SELECT ?, 'local', ?, 0, ?, ?, ?, ?, ?, ?, ?, 'seed', ? "
+                "WHERE NOT EXISTS (SELECT 1 FROM capability_ratings "
+                "WHERE story_id=? AND agent='local' AND signal_source='seed')",
+                (story_id, MODEL_VERSION, engg_domain, discipline, org_domain, role,
+                 stage, industry, phase, SEED_QUALITY, story_id),
+            )
+        if owns_transaction:
+            conn.commit()
+    except Exception:
+        if owns_transaction:
+            conn.rollback()
+        raise

@@ -547,6 +547,22 @@ uncertain process ownership remain fail-closed.
 Daemon job reconciliation now inspects exit code markers and process waitpid status before evaluating zombie reap conditions. This prevents non-gh-write completed jobs (e.g. design/review tasks) with existing worktrees from being erroneously classified as `killed_zombie`. Job logs are placed in the central `.synlynk/logs` directory outside disposable worktrees, and any worktree-local logs are preserved during reap. Per-job iteration in `_reconcile_daemon_jobs` is wrapped in per-job exception handling, preventing unhandled errors from terminating daemon reconciliation. GitHub App private keys resolve to absolute paths across worktrees.
 [@nikhilsoman]
 
+## Local Agent Capacity (#b1499985, 2026-09-09)
+
+Local capability seeding remains synthetic calibration data layered onto
+`capability_ratings`; direct `local` dispatch seeds it idempotently so routing
+does not depend on a prior doctor command. Local concurrency is instantaneous
+resource state, so it is guarded by counting `daemon_jobs.status='running'`
+for agent `local`, with capacity represented as a transient queued/deferred
+state rather than a failure or quota exhaustion.
+[@codex]
+
+For PR #1518 follow-up, first-use envelope seeding uses `BEGIN IMMEDIATE` so
+separate local dispatch connections cannot duplicate calibration rows. Local
+dispatch holds the SQLite write transaction from its final capacity check
+through the running-row claim; deferred queue persistence errors propagate.
+[@codex]
+
 ## Advanced Scenario Priority Reconciliation (2026-09-08)
 
 When roadmap stakeholders disagree between faster autonomous delivery and more
