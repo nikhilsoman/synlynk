@@ -215,3 +215,28 @@ def test_get_db_unset_override_preserves_existing_behavior(tmp_path, monkeypatch
         assert primary.exists()
     finally:
         conn.close()
+
+
+def test_get_db_rejects_readonly_primary_before_returning_connection(tmp_path, monkeypatch, capsys):
+    """A readable but non-writable central DB must select the local fallback."""
+    import synlynk
+
+    primary = tmp_path / "central" / "state.db"
+    primary.parent.mkdir()
+    conn = sqlite3.connect(primary)
+    conn.execute("CREATE TABLE marker (value TEXT)")
+    conn.commit()
+    conn.close()
+    primary.chmod(0o444)
+    monkeypatch.setattr(synlynk, "DB_PATH", str(primary))
+    monkeypatch.chdir(tmp_path)
+
+    selected = synlynk._get_db()
+    try:
+        assert (tmp_path / ".synlynk" / "state.db").exists()
+        assert synlynk.get_state_db_path() == str(tmp_path / ".synlynk" / "state.db")
+    finally:
+        selected.close()
+        primary.chmod(0o644)
+
+    assert "falling back" in capsys.readouterr().err.lower()

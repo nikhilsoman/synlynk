@@ -10,6 +10,7 @@ import subprocess
 import sys
 import time
 import uuid
+from contextlib import contextmanager
 from typing import Optional
 
 from synlynk.sentinel import _write_sentinel_alert
@@ -81,6 +82,29 @@ def _save_jobs(jobs: list) -> None:
     os.makedirs(os.path.dirname(jobs_file), exist_ok=True)
     with open(jobs_file, "w") as f:
         json.dump(jobs, f, indent=2)
+
+
+@contextmanager
+def _reconciliation_lock():
+    """Serialize flat-file reconciliation across concurrent CLI processes."""
+    jobs_file = _pkg("JOBS_FILE")
+    lock_path = f"{jobs_file}.reconcile.lock"
+    os.makedirs(os.path.dirname(lock_path), exist_ok=True)
+    handle = open(lock_path, "a+")
+    try:
+        try:
+            import fcntl
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        except (ImportError, OSError):
+            pass
+        yield
+    finally:
+        try:
+            import fcntl
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        except (ImportError, OSError):
+            pass
+        handle.close()
 
 
 def _job_retry_count(job: dict) -> int:
@@ -1430,7 +1454,36 @@ def _best_agent_for_story(story_id: str) -> Optional[str]:
     finally:
         conn.close()
 
-def _reconcile_jobs() -> None:
+def _reconciliation_persistence_warning(job: dict, operation: str, exc: Exception, sentinel_path: str) -> None:
+    """Surface best-effort persistence failures without stopping reconciliation."""
+    integrity = isinstance(exc, sqlite3.IntegrityError)
+    code = "RECONCILIATION_DATA_INTEGRITY_FAILURE" if integrity else "RECONCILIATION_PERSISTENCE_DEGRADED"
+    severity = "CRITICAL" if integrity else "WARN"
+    message = (
+        f"Job {job.get('id', '')}: {operation} failed ({type(exc).__name__}: {exc}); "
+        "job reconciliation continued, but this persistence signal requires review."
+    )
+    try:
+        _write_sentinel_alert(severity, code, message, sentinel_path)
+    except Exception as sentinel_exc:
+        print(
+            f"  ⚠ {message} Sentinel write also failed: {sentinel_exc}",
+            file=sys.stderr,
+        )
+
+
+def _try_write_capability_rating(job: dict, log_text: str, sentinel_path: str) -> None:
+    """Write one rating, isolating its DB/telemetry failure to this job."""
+    try:
+        _pkg("_write_capability_rating")(job, log_text)
+    except Exception as exc:
+        _reconciliation_persistence_warning(job, "capability rating persistence", exc, sentinel_path)
+        print(
+            f"  ⚠ capability rating skipped for job {job.get('id', '')}: {exc}"
+        )
+
+
+def _reconcile_jobs_unlocked() -> None:
     """Probes PIDs of running jobs; marks unreachable ones as failed or completed.
 
     Called on every synlynk invocation before any command runs.
@@ -1480,14 +1533,20 @@ def _reconcile_jobs() -> None:
                     harness=job.get("harness") or job.get("agent", ""),
                     agent_role=job.get("resolved_agent_role") or job.get("role"),
                 )
-            except sqlite3.IntegrityError:
-                _write_sentinel_alert(
-                    "WARN",
-                    "ORPHANED_STORY_COST",
-                    f"Skipped cost entry for job {job.get('id', '')} with missing story "
-                    f"{job.get('story_id')!r}; reconciliation will continue.",
-                    sentinel_path,
-                )
+            except Exception as exc:
+                if isinstance(exc, sqlite3.IntegrityError):
+                    try:
+                        _write_sentinel_alert(
+                            "WARN",
+                            "ORPHANED_STORY_COST",
+                            f"Skipped cost entry for job {job.get('id', '')} with missing story "
+                            f"{job.get('story_id')!r}; reconciliation will continue.",
+                            sentinel_path,
+                        )
+                    except Exception as sentinel_exc:
+                        _reconciliation_persistence_warning(job, "cost persistence", sentinel_exc, sentinel_path)
+                else:
+                    _reconciliation_persistence_warning(job, "cost/telemetry persistence", exc, sentinel_path)
             cost_usd = _job_cost_usd(
                 job.get("agent", ""),
                 in_tokens,
@@ -1623,12 +1682,7 @@ def _reconcile_jobs() -> None:
             job["ended_at"] = now
             if log_text:
                 job["micro_rework"] = _extract_micro_rework(log_text)
-                try:
-                    _pkg("_write_capability_rating")(job, log_text)
-                except ValueError as exc:
-                    print(
-                        f"  ⚠ capability rating skipped for job {job.get('id', '')}: {exc}"
-                    )
+                _try_write_capability_rating(job, log_text, sentinel_path)
             in_tokens, out_tokens = _pkg("extract_tokens")(log_text, agent=job.get("agent", ""))
             cost_usd = _job_cost_usd(
                 job.get("agent", ""),
@@ -1827,12 +1881,7 @@ def _reconcile_jobs() -> None:
                                 )
                             break
                 job["micro_rework"] = _extract_micro_rework(log_text)
-                try:
-                    _pkg("_write_capability_rating")(job, log_text)
-                except ValueError as exc:
-                    print(
-                        f"  ⚠ capability rating skipped for job {job.get('id', '')}: {exc}"
-                    )
+                _try_write_capability_rating(job, log_text, sentinel_path)
             else:
                 log_text = ""
 
@@ -1975,6 +2024,12 @@ def _reconcile_jobs() -> None:
             pass
     if changed:
         _save_jobs(jobs)
+
+
+def _reconcile_jobs() -> None:
+    """Reconcile jobs while preventing concurrent flat-file lost updates."""
+    with _reconciliation_lock():
+        _reconcile_jobs_unlocked()
 
 def _pid_is_alive(pid) -> bool:
     """True if *pid* refers to a live process we can observe.

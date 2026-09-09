@@ -1,6 +1,7 @@
 import os
 import sys
 import sqlite3
+import threading
 import time
 import pytest
 
@@ -533,6 +534,73 @@ def test_reconcile_jobs_orphaned_story_cost_does_not_abort(tmp_path, monkeypatch
     assert job["status"] == "failed"
     assert "job-orphan" in (tmp_path / ".synlynk" / "sentinel.md").read_text()
     assert "story-missing" in (tmp_path / ".synlynk" / "sentinel.md").read_text()
+
+
+def test_reconcile_jobs_isolates_capability_persistence_failure_per_job(tmp_path, monkeypatch):
+    """A failed rating write is visible but does not block other jobs or status reads."""
+    monkeypatch.chdir(tmp_path)
+    import synlynk
+
+    log_dir = tmp_path / ".synlynk" / "logs"
+    log_dir.mkdir(parents=True)
+    jobs = []
+    for job_id in ("job-rating-1", "job-rating-2"):
+        log_path = log_dir / f"{job_id}.log"
+        log_path.write_text("Input tokens: 1\nOutput tokens: 2\n")
+        (log_dir / f"{job_id}.log.exit").write_text("0")
+        jobs.append({
+            "id": job_id, "agent": "claude", "story_id": f"story-{job_id}",
+            "pid": 99999, "log_file": str(log_path),
+            "started_at": "2026-09-09T01:00:00", "ended_at": None,
+            "status": "running", "exit_code": None,
+        })
+    synlynk._save_jobs(jobs)
+    monkeypatch.setattr(synlynk.os, "waitpid", lambda pid, opts: (pid, 0))
+    monkeypatch.setattr(
+        synlynk, "_write_capability_rating",
+        lambda *args, **kwargs: (_ for _ in ()).throw(sqlite3.OperationalError("readonly database")),
+    )
+
+    synlynk._reconcile_jobs()
+
+    assert {job["status"] for job in synlynk._load_jobs()} == {"completed"}
+    sentinel = (tmp_path / ".synlynk" / "sentinel.md").read_text()
+    assert "RECONCILIATION_PERSISTENCE_DEGRADED" in sentinel
+    assert "job-rating-1" in sentinel
+    assert "job-rating-2" in sentinel
+
+
+def test_reconcile_jobs_concurrent_callers_do_not_crash_or_lose_job_state(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    import synlynk
+
+    log_path = tmp_path / ".synlynk" / "logs" / "job-concurrent.log"
+    log_path.parent.mkdir(parents=True)
+    log_path.write_text("Input tokens: 1\nOutput tokens: 2\n")
+    (log_path.parent / "job-concurrent.log.exit").write_text("0")
+    synlynk._save_jobs([{
+        "id": "job-concurrent", "agent": "claude", "story_id": "story-concurrent",
+        "pid": 99999, "log_file": str(log_path),
+        "started_at": "2026-09-09T01:00:00", "ended_at": None,
+        "status": "running", "exit_code": None,
+    }])
+    monkeypatch.setattr(synlynk.os, "waitpid", lambda pid, opts: (pid, 0))
+
+    errors = []
+    def run():
+        try:
+            synlynk._reconcile_jobs()
+        except Exception as exc:  # pragma: no cover - assertion records regressions
+            errors.append(exc)
+
+    threads = [threading.Thread(target=run) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert errors == []
+    assert synlynk._load_jobs()[0]["status"] == "completed"
 
 
 def test_reconcile_jobs_marks_permission_denied_headless_auto_denial(tmp_path, monkeypatch, capsys):
