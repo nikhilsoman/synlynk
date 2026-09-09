@@ -151,13 +151,20 @@ def _provision_probe_metadata(workspace: Path) -> int:
 
     rows = _read_rows()
 
-    if not rows:
-        # A fresh clone/worktree has no source-ledger rows to copy. Establish
-        # the preflight input with the real probe, preserving actual failures.
-        cmd_probe(write_fence=False)
-        rows = _read_rows()
+    if rows:
+        return _copy_probe_metadata_rows(workspace, rows)
 
-    return _copy_probe_metadata_rows(workspace, rows)
+    # A fresh clone/worktree has no source-ledger rows to copy. Establish the
+    # preflight input with the real probe, but redirect both its DB path and
+    # cwd first. A live selftest must never probe or write the caller's DB.
+    db_path = workspace / ".synlynk" / "state.db"
+    with _chdir(workspace), patch.object(synlynk_pkg, "DB_PATH", str(db_path)):
+        cmd_probe(write_fence=False)
+        conn = synlynk_pkg._get_db()
+        try:
+            return conn.execute("SELECT COUNT(*) FROM harness_records").fetchone()[0]
+        finally:
+            conn.close()
 
 
 def _copy_probe_metadata_rows(workspace: Path, rows: list) -> int:
@@ -1469,6 +1476,7 @@ def run_selftest(live: bool = False) -> List[ScenarioResult]:
     if live:
         with tempfile.TemporaryDirectory(prefix="synlynk-selftest-") as scratch_dir:
             scratch_workspace = Path(scratch_dir)
+            print(f"live selftest scratch workspace: {scratch_workspace}")
             ctx.state["workspace_dir"] = scratch_workspace
             scratch_workspace = _ensure_workspace_scaffold(ctx)
             ctx.repo_path = str(scratch_workspace)
