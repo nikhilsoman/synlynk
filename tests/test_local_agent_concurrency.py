@@ -61,7 +61,8 @@ class TestSchedulerLocalConcurrency(unittest.TestCase):
             "CREATE TABLE daemon_jobs ("
             "job_id TEXT PRIMARY KEY, agent TEXT, task TEXT, story_id TEXT, "
             "status TEXT, priority INTEGER, depends_on TEXT, enqueued_at TEXT, "
-            "log_path TEXT)"
+            "log_path TEXT, pid INTEGER, started_at TEXT, worktree_path TEXT, "
+            "worktree_branch TEXT)"
         )
         conn.execute(
             "INSERT INTO daemon_jobs "
@@ -97,7 +98,9 @@ class TestSchedulerLocalConcurrency(unittest.TestCase):
             "CREATE TABLE daemon_jobs ("
             "job_id TEXT PRIMARY KEY, agent TEXT, task TEXT, story_id TEXT, "
             "status TEXT, priority INTEGER, depends_on TEXT, enqueued_at TEXT, "
-            "log_path TEXT)"
+            "log_path TEXT, pid INTEGER, started_at TEXT, completed_at TEXT, "
+            "dispatch_context TEXT, "
+            "worktree_path TEXT, worktree_branch TEXT)"
         )
         setup.commit()
         setup.close()
@@ -134,7 +137,7 @@ class TestSchedulerLocalConcurrency(unittest.TestCase):
                         "local",
                         "run a local task",
                         job_id=job_id,
-                        db_conn=conn,
+                        db_conn=lambda conn=conn: conn,
                         context_mode="none",
                         skip_preflight=True,
                     )
@@ -157,9 +160,7 @@ class TestSchedulerLocalConcurrency(unittest.TestCase):
                  "base_sha": "deadbeef",
              }), \
              patch.object(dispatch_module.subprocess, "Popen", side_effect=fake_popen), \
-             patch.object(synlynk, "load_config", return_value={}), \
-             patch.object(synlynk, "_quota_status_for_agent", return_value={"status": "ok"}), \
-             patch.object(synlynk, "_count_dispatch_rework", return_value=0):
+             patch.object(synlynk, "load_config", return_value={}):
             for thread in threads:
                 thread.start()
             for thread in threads:
