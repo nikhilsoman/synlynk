@@ -1016,20 +1016,36 @@ def _get_db() -> _sqlite3.Connection:
     global ACTIVE_DB_PATH
     ACTIVE_DB_PATH = None
 
+    def _check_write_capability(path: str) -> None:
+        """Check access to *path* without opening SQLite or changing it."""
+        parent = os.path.dirname(path) or "."
+        if os.path.exists(path):
+            fd = os.open(path, os.O_RDWR)
+            os.close(fd)
+            return
+
+        # A new database has no file to open yet.  Probe the parent directory
+        # with a disposable file instead of creating the candidate database
+        # before its write capability has been established.
+        fd, probe = tempfile.mkstemp(dir=parent, prefix=".synlynk-write-probe-")
+        os.close(fd)
+        os.unlink(probe)
+
     def _connect(path: str) -> _sqlite3.Connection:
         global ACTIVE_DB_PATH
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        _check_write_capability(path)
         conn = _sqlite3.connect(path, timeout=30.0)
         try:
             conn.isolation_level = None
+            # Do this before WAL setup or migrations.  BEGIN IMMEDIATE only
+            # acquires a write reservation; rolling it back leaves the
+            # candidate database and its sidecars byte-identical on failure.
+            conn.execute("BEGIN IMMEDIATE")
+            conn.execute("ROLLBACK")
             conn.execute("PRAGMA journal_mode=WAL")
             conn.execute("PRAGMA foreign_keys=ON")
             _migrate_db(conn)
-            # A read-only SQLite file can connect and even pass migrations when
-            # its schema is current.  Probe a transaction without changing data
-            # so write-capable commands never accept that path by accident.
-            conn.execute("BEGIN IMMEDIATE")
-            conn.execute("ROLLBACK")
         except Exception:
             conn.close()
             raise
