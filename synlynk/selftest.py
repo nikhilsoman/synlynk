@@ -151,13 +151,20 @@ def _provision_probe_metadata(workspace: Path) -> int:
 
     rows = _read_rows()
 
-    if not rows:
-        # A fresh clone/worktree has no source-ledger rows to copy. Establish
-        # the preflight input with the real probe, preserving actual failures.
-        cmd_probe(write_fence=False)
-        rows = _read_rows()
+    if rows:
+        return _copy_probe_metadata_rows(workspace, rows)
 
-    return _copy_probe_metadata_rows(workspace, rows)
+    # A fresh clone/worktree has no source-ledger rows to copy. Establish the
+    # preflight input with the real probe, but redirect both its DB path and
+    # cwd first. A live selftest must never probe or write the caller's DB.
+    db_path = workspace / ".synlynk" / "state.db"
+    with _chdir(workspace), patch.object(synlynk_pkg, "DB_PATH", str(db_path)):
+        cmd_probe(write_fence=False)
+        conn = synlynk_pkg._get_db()
+        try:
+            return conn.execute("SELECT COUNT(*) FROM harness_records").fetchone()[0]
+        finally:
+            conn.close()
 
 
 def _copy_probe_metadata_rows(workspace: Path, rows: list) -> int:
@@ -707,7 +714,7 @@ def _scenario_status(entry: dict, ctx: ScenarioContext) -> ScenarioResult:
             ("claude", 1.0, 1, 0.8, "1.0.0", "1.0.0"),
         )
         conn.execute(
-            "INSERT INTO cycle_capability (harness_name, cycle, support, verb_count, full_count, partial_count, updated_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))",
+            "INSERT OR REPLACE INTO cycle_capability (harness_name, cycle, support, verb_count, full_count, partial_count, updated_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))",
             ("claude", "execute", "full", 1, 1, 0),
         )
         conn.commit()
@@ -1469,6 +1476,7 @@ def run_selftest(live: bool = False) -> List[ScenarioResult]:
     if live:
         with tempfile.TemporaryDirectory(prefix="synlynk-selftest-") as scratch_dir:
             scratch_workspace = Path(scratch_dir)
+            print(f"live selftest scratch workspace: {scratch_workspace}")
             ctx.state["workspace_dir"] = scratch_workspace
             scratch_workspace = _ensure_workspace_scaffold(ctx)
             ctx.repo_path = str(scratch_workspace)

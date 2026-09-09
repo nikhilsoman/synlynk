@@ -467,6 +467,7 @@ def test_live_paid_selftest_scenarios_use_scratch_workspace(monkeypatch, tmp_pat
         "dispatch_agent",
         lambda *args, **kwargs: {"id": "job-selftest", "pid": 1, "fence": None},
     )
+    monkeypatch.setattr(selftest_mod, "cmd_probe", lambda *, write_fence: None)
     monkeypatch.setattr(selftest_mod, "exec_command", lambda argv: 0)
     monkeypatch.setattr(scheduler_mod, "cmd_schedule", lambda execute=True, max_stories=1: None)
 
@@ -570,6 +571,12 @@ def test_cli_live_selftest_provisions_probe_data_before_dispatch_and_exec(
 
     assert probe_calls == [False]
     assert exit_code == 0
+    source_conn = sqlite3.connect(source_db)
+    try:
+        assert source_conn.execute("SELECT COUNT(*) FROM harness_records").fetchone()[0] == 0
+    finally:
+        source_conn.close()
+    assert "live selftest scratch workspace:" in output
     assert "PASS    dispatch[codex]" in output
     assert "PASS    exec[codex]" in output
     assert "no probe data" not in output
