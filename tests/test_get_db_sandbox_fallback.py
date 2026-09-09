@@ -9,8 +9,10 @@ instead of crashing with sqlite3.OperationalError / uncaught OSError.
 from __future__ import annotations
 
 import errno
+import hashlib
 import os
 import sqlite3
+from pathlib import Path
 
 import pytest
 
@@ -215,3 +217,87 @@ def test_get_db_unset_override_preserves_existing_behavior(tmp_path, monkeypatch
         assert primary.exists()
     finally:
         conn.close()
+
+
+def test_get_db_rejects_readonly_primary_before_returning_connection(tmp_path, monkeypatch, capsys):
+    """A readable but non-writable central DB must select the local fallback."""
+    import synlynk
+
+    primary = tmp_path / "central" / "state.db"
+    primary.parent.mkdir()
+    conn = sqlite3.connect(primary)
+    conn.execute("CREATE TABLE marker (value TEXT)")
+    conn.commit()
+    conn.close()
+    primary.chmod(0o444)
+    monkeypatch.setattr(synlynk, "DB_PATH", str(primary))
+    monkeypatch.chdir(tmp_path)
+
+    selected = synlynk._get_db()
+    try:
+        assert (tmp_path / ".synlynk" / "state.db").exists()
+        assert synlynk.get_state_db_path() == str(tmp_path / ".synlynk" / "state.db")
+    finally:
+        selected.close()
+        primary.chmod(0o644)
+
+    assert "falling back" in capsys.readouterr().err.lower()
+
+
+def test_get_db_failed_primary_probe_preserves_db_and_sidecars(tmp_path, monkeypatch, capsys):
+    """A failed primary write probe must not mutate its database artifacts."""
+    import synlynk
+
+    primary = tmp_path / "central" / "state.db"
+    primary.parent.mkdir()
+    seed = sqlite3.connect(primary)
+    seed.execute("CREATE TABLE marker (value TEXT)")
+    seed.execute("INSERT INTO marker VALUES ('keep')")
+    seed.commit()
+    seed.close()
+    sidecars = {
+        primary: primary.read_bytes(),
+        Path(str(primary) + "-wal"): b"wal-before-probe",
+        Path(str(primary) + "-shm"): b"shm-before-probe",
+    }
+    for artifact, contents in sidecars.items():
+        if not artifact.exists():
+            artifact.write_bytes(contents)
+    before = {
+        str(path): hashlib.sha256(path.read_bytes()).digest()
+        for path in sidecars
+    }
+    monkeypatch.setattr(synlynk, "DB_PATH", str(primary))
+    monkeypatch.chdir(tmp_path)
+
+    real_connect = synlynk._sqlite3.connect
+
+    class ProbeFailsConnection:
+        def __init__(self, connection):
+            self._connection = connection
+
+        def execute(self, sql, *args):
+            if sql == "BEGIN IMMEDIATE":
+                raise sqlite3.OperationalError("readonly database")
+            return self._connection.execute(sql, *args)
+
+        def __getattr__(self, name):
+            return getattr(self._connection, name)
+
+    def fake_connect(path, *args, **kwargs):
+        connection = real_connect(path, *args, **kwargs)
+        if os.path.abspath(str(path)) == os.path.abspath(str(primary)):
+            return ProbeFailsConnection(connection)
+        return connection
+
+    monkeypatch.setattr(synlynk._sqlite3, "connect", fake_connect)
+    selected = synlynk._get_db()
+    selected.close()
+
+    after = {
+        str(path): hashlib.sha256(path.read_bytes()).digest()
+        for path in sidecars
+    }
+    assert after == before
+    assert (tmp_path / ".synlynk" / "state.db").exists()
+    assert "falling back" in capsys.readouterr().err.lower()
