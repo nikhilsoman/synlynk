@@ -937,9 +937,11 @@ git commit -m "test(local-agent): opt-in real-hardware Aider+oMLX inference tier
 
 **Branch:** `feat/local-agent-4-docs`
 
+**Status:** Shipped in PR #208 (commit `ac992a99`). Blog post renumbered to post 55 (`docs/blog/55-pr204-205-207-local-agent-mlx-driver.md`) to avoid collision with existing posts 53/54.
+
 **Files:**
-- Modify: `docs/reference/capability-matrix-taxonomy.md`
-- Create: `docs/blog/53-prTBD-local-agent-mlx-driver.md`
+- Modify: `docs/reference/capability-matrix-taxonomy.md` (completed in PR #208)
+- Create: `docs/blog/55-pr204-205-207-local-agent-mlx-driver.md` (completed in PR #208 as post 55)
 
 ### Step 1: Add the local-agent worked example
 
@@ -962,7 +964,7 @@ tasks until real job completions widen the envelope. See
 ### Step 2: Write the blog post
 
 Follow this repo's Blog Post Protocol (`CLAUDE.md`) and the template in
-`docs/blog/README.md`. Create `docs/blog/53-prTBD-local-agent-mlx-driver.md` covering:
+`docs/blog/README.md`. Create `docs/blog/55-pr204-205-207-local-agent-mlx-driver.md` covering:
 goal at end of previous PR (BS-8 goal hierarchy shipped, GOVERNS rollout in progress),
 what shifted in this PR (Ornith turned out to have MLX conversions after initial belief
 it was GGUF-only, which changed the driver recommendation from llama.cpp to oMLX
@@ -974,7 +976,7 @@ consider widening the starter whitelist and/or adding a second Linux/Windows dri
 ### Step 3: Commit
 
 ```bash
-git add docs/reference/capability-matrix-taxonomy.md docs/blog/53-prTBD-local-agent-mlx-driver.md
+git add docs/reference/capability-matrix-taxonomy.md docs/blog/55-pr204-205-207-local-agent-mlx-driver.md
 git commit -m "docs(local-agent): taxonomy worked example + blog post"
 ```
 
