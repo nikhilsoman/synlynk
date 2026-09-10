@@ -179,11 +179,8 @@ class WatchDaemon:
             if self._is_running() or _pid_is_alive(owner_pid):
                 print(self._already_running_message)
                 return
-            # Recover deterministically from stale lock metadata.
-            try:
-                os.remove(lock_path)
-            except OSError:
-                pass
+            # Recover deterministically from stale lock metadata. A real
+            # flock held by a live starter/daemon still fails this retry.
             lock_fh = _try_acquire_daemon_lock(lock_path, blocking=False)
             if lock_fh is None:
                 print(self._already_running_message)
