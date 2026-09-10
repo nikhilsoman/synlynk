@@ -252,7 +252,11 @@ class WatchDaemon:
 
     def _health(self) -> str:
         """Returns 'running', 'stopped', or 'zombie' (pidfile exists but process dead)."""
+        lock_path = _daemon_lock_path(self.pidfile)
+        owner_pid = _daemon_lock_owner_pid(lock_path)
         if not os.path.exists(self.pidfile):
+            if _pid_is_alive(owner_pid):
+                return "running"
             return "stopped"
         try:
             with open(self.pidfile) as f:
@@ -260,6 +264,8 @@ class WatchDaemon:
             os.kill(pid, 0)
             return "running"
         except (ProcessLookupError, ValueError, OSError):
+            if _pid_is_alive(owner_pid):
+                return "running"
             return "zombie"
 
     def _is_running(self) -> bool:
@@ -919,22 +925,75 @@ class SynlynkDaemon(WatchDaemon):
             _traceback.print_exc()
 
     def stop(self) -> None:
-        if not os.path.exists(self.pidfile):
-            print("  ✦ daemon not running")
+        lock_path = _daemon_lock_path(self.pidfile)
+        owner_pid = _daemon_lock_owner_pid(lock_path)
+        pid = None
+        if os.path.exists(self.pidfile):
+            try:
+                with open(self.pidfile) as f:
+                    pid = int(f.read().strip())
+            except (OSError, ValueError):
+                pass
+
+        target_pid = pid if (pid and _pid_is_alive(pid)) else (owner_pid if _pid_is_alive(owner_pid) else None)
+        start_file = self.pidfile.replace(".pid", ".start")
+
+        if not target_pid:
+            cleaned = False
+            if os.path.exists(self.pidfile):
+                try:
+                    os.remove(self.pidfile)
+                    cleaned = True
+                except OSError:
+                    pass
+            if os.path.exists(start_file):
+                try:
+                    os.remove(start_file)
+                    cleaned = True
+                except OSError:
+                    pass
+            if os.path.exists(lock_path):
+                lock_fh = _try_acquire_daemon_lock(lock_path, blocking=False)
+                if lock_fh is not None:
+                    _release_daemon_lock(lock_fh)
+                    try:
+                        os.remove(lock_path)
+                        cleaned = True
+                    except OSError:
+                        pass
+            if cleaned:
+                print("  ✦ daemon not running (cleaned stale lock/pidfile).")
+            else:
+                print("  ✦ daemon not running")
             return
+
         try:
-            with open(self.pidfile) as f:
-                pid = int(f.read().strip())
-            os.kill(pid, 15)
-            os.remove(self.pidfile)
-            start_file = self.pidfile.replace(".pid", ".start")
+            os.kill(target_pid, 15)
+            for _ in range(10):
+                if not _pid_is_alive(target_pid):
+                    break
+                time.sleep(0.1)
+            if _pid_is_alive(target_pid):
+                try:
+                    os.kill(target_pid, 9)
+                except OSError:
+                    pass
+            if os.path.exists(self.pidfile):
+                os.remove(self.pidfile)
             if os.path.exists(start_file):
                 os.remove(start_file)
+            if os.path.exists(lock_path):
+                lock_fh = _try_acquire_daemon_lock(lock_path, blocking=False)
+                if lock_fh is not None:
+                    _release_daemon_lock(lock_fh)
+                    try:
+                        os.remove(lock_path)
+                    except OSError:
+                        pass
             print("  ✓ synlynk daemon stopped.")
         except (ProcessLookupError, ValueError):
             if os.path.exists(self.pidfile):
                 os.remove(self.pidfile)
-            start_file = self.pidfile.replace(".pid", ".start")
             if os.path.exists(start_file):
                 os.remove(start_file)
             print("  ✦ daemon not running (cleaned stale pidfile).")

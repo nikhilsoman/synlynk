@@ -338,6 +338,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--harness", "--agent", default=None, dest="harness",
         help="Probe a single harness instead of all known harnesses (--agent is deprecated, use --harness)",
     )
+    probe_parser.add_argument(
+        "--no-fence", action="store_true", dest="no_fence",
+        help="Probe harness capabilities without rewriting capability fences in directive files",
+    )
 
     doctor_parser = subparsers.add_parser("doctor", help="Run health checks on your synlynk installation")
     doctor_parser.add_argument("--fix", default=None,
@@ -541,6 +545,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     watch_parser = subparsers.add_parser("watch", help="Live workspace HUD (synlynk watch)")
+    watch_parser.add_argument(
+        "action", nargs="?", choices=["start", "stop", "status", "restart"],
+        default=None, help="Watch daemon control action (start, stop, status, restart)",
+    )
     watch_parser.add_argument("--live", action="store_true",
                               help="Active-job stream mode (3s refresh, no sidebar)")
 
@@ -1309,7 +1317,21 @@ def main(argv=None) -> None:
     elif args.command == "upgrade":
         upgrade(dry_run=getattr(args, "dry_run", False))
     elif args.command == "watch":
-        cmd_watch(args)
+        action = getattr(args, "action", None)
+        if action:
+            from synlynk.daemon import WatchDaemon
+            w = WatchDaemon()
+            if action == "start":
+                w.start()
+            elif action == "stop":
+                w.stop()
+            elif action == "status":
+                w.status()
+            elif action == "restart":
+                w.stop()
+                w.start()
+        else:
+            cmd_watch(args)
     elif args.command == "swarm":
         from synlynk.swarm import cmd_swarm_destroy, cmd_swarm_dispatch, cmd_swarm_status
         if args.swarm_action == "dispatch":
@@ -1886,7 +1908,10 @@ def main(argv=None) -> None:
         )
     elif args.command == "probe":
         _warn_deprecated_harness_flag(cli_tokens)
-        cmd_probe(agent=getattr(args, "harness", None))
+        cmd_probe(
+            agent=getattr(args, "harness", None),
+            write_fence=not getattr(args, "no_fence", False),
+        )
     elif args.command == "doctor":
         sys.exit(cmd_doctor(args))
     elif args.command == "worktree":

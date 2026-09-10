@@ -702,6 +702,49 @@ def cleanup_selftest_workspaces(temp_root: str = None) -> int:
     return removed
 
 
+def _check_dual_ledger_sync() -> dict:
+    """Check synchronization between authoritative state.db and fallback state.db (#1535)."""
+    try:
+        from synlynk import get_state_db_path, _project_root
+        active_path = get_state_db_path()
+        root = _project_root()
+        if not root:
+            return {"passed": True, "detail": "not a project root"}
+        fallback_path = os.path.abspath(os.path.join(root, ".synlynk", "state.db"))
+        if not os.path.exists(fallback_path) or os.path.abspath(fallback_path) == os.path.abspath(active_path):
+            return {"passed": True, "detail": "single ledger active"}
+        import sqlite3 as _sqlite3
+        conn_primary = _sqlite3.connect(active_path, timeout=5.0)
+        conn_fallback = _sqlite3.connect(fallback_path, timeout=5.0)
+        try:
+            primary_records = dict(conn_primary.execute("SELECT harness_name, installed_version FROM harness_records").fetchall())
+            fallback_records = dict(conn_fallback.execute("SELECT harness_name, installed_version FROM harness_records").fetchall())
+        finally:
+            conn_primary.close()
+            conn_fallback.close()
+        drift = []
+        for harness, ver in primary_records.items():
+            if harness in fallback_records and fallback_records[harness] != ver:
+                drift.append(f"{harness} (primary={ver}, fallback={fallback_records[harness]})")
+        if drift:
+            return {"passed": False, "detail": ", ".join(drift)}
+        return {"passed": True, "detail": "synchronized"}
+    except Exception as exc:
+        return {"passed": True, "detail": f"skipped ({exc})"}
+
+
+def _hc_dual_ledger_sync() -> HealthCheck:
+    sync_res = _check_dual_ledger_sync()
+    if not sync_res["passed"]:
+        return HealthCheck(
+            "dual_ledger_sync",
+            "warn",
+            f"state.db drift detected: {sync_res['detail']}",
+            fix="run `synlynk probe` to re-synchronize harness records across ledgers",
+        )
+    return HealthCheck("dual_ledger_sync", "ok", sync_res["detail"])
+
+
 HEALTH_CHECKS = [
     _hc_python_version,
     _hc_project_init,
@@ -716,6 +759,7 @@ HEALTH_CHECKS = [
     _hc_model_rates,
     _hc_pr_review_cycles,
     _hc_version_current,
+    _hc_dual_ledger_sync,
 ]
 
 
