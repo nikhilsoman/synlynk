@@ -147,14 +147,41 @@ def _resolve_private_key_path(private_key_path: str, apps_dir: Optional[str] = N
             cand = os.path.join(common_apps_dir, basename)
             if os.path.exists(cand):
                 return os.path.abspath(cand)
+            cand2 = os.path.join(common_apps_dir, private_key_path)
+            if os.path.exists(cand2):
+                return os.path.abspath(cand2)
     except Exception:
         pass
 
-    # 3. Try relative to CWD
+    # 3. Try daemon workspace root environment override
+    daemon_root = os.environ.get("SYNLYNK_DAEMON_WORKSPACE_ROOT")
+    if daemon_root:
+        d_cand = os.path.join(daemon_root, ".synlynk", "github_apps", basename)
+        if os.path.exists(d_cand):
+            return os.path.abspath(d_cand)
+        d_cand2 = os.path.join(daemon_root, private_key_path)
+        if os.path.exists(d_cand2):
+            return os.path.abspath(d_cand2)
+
+    # 4. Try project root if discoverable
+    try:
+        from synlynk import _project_root
+        root = _project_root()
+        if root:
+            r_cand = os.path.join(root, ".synlynk", "github_apps", basename)
+            if os.path.exists(r_cand):
+                return os.path.abspath(r_cand)
+            r_cand2 = os.path.join(root, private_key_path)
+            if os.path.exists(r_cand2):
+                return os.path.abspath(r_cand2)
+    except Exception:
+        pass
+
+    # 5. Try relative to CWD
     if os.path.exists(private_key_path):
         return os.path.abspath(private_key_path)
 
-    # 4. Fallback: absolute path against apps_dir if provided else abspath
+    # 6. Fallback: absolute path against apps_dir if provided else abspath
     if apps_dir:
         return os.path.abspath(os.path.join(apps_dir, basename))
     return os.path.abspath(private_key_path)
