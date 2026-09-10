@@ -24,6 +24,12 @@ classifiers = [
     "Topic :: Utilities",
 ]
 dependencies = []
+ 
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0.0",
+    "pytest-xdist>=3.0.0",
+]
 
 [project.urls]
 Homepage = "https://synlynk.com"
