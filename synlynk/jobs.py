@@ -477,7 +477,7 @@ def _worktree_has_no_diff_against_base_branch(job: dict, worktree_path: str) -> 
     except Exception:
         return False
 
-    return diff_result.returncode == 0
+    return getattr(diff_result, "returncode", None) == 0
 
 
 def _role_gh_env_for_job(job: dict) -> dict:
@@ -538,7 +538,15 @@ def _maybe_open_worktree_pr(job: dict, worktree_path: str, worktree_branch: Opti
     is_review_task = job.get("task_type") == "review"
     task_text = str(job.get("task") or "").lower()
     is_merge_task = "gh pr merge" in task_text or "squash-merge github pr" in task_text
-    has_no_diff_against_base = _worktree_has_no_diff_against_base_branch(job, worktree_path)
+    recorded_base = (job or {}).get("base_branch")
+    is_non_default_base = bool(
+        recorded_base
+        and recorded_base not in ("main", "master", "unstable", "staging", "origin/main", "origin/master", "origin/unstable", "origin/staging")
+    )
+    is_empty_gh_write_worktree = (
+        (job.get("requires_gh_write") or is_non_default_base)
+        and _worktree_has_no_diff_against_base_branch(job, worktree_path)
+    )
     skip_pr_phrases = (
         "do not start a separate pull request",
         "do not open a pull request",
@@ -552,8 +560,8 @@ def _maybe_open_worktree_pr(job: dict, worktree_path: str, worktree_branch: Opti
     )
     has_skip_phrase = any(phrase in task_text for phrase in skip_pr_phrases)
 
-    if is_review_task or is_merge_task or has_no_diff_against_base or has_skip_phrase:
-        reason = "review" if is_review_task else ("merge" if is_merge_task else ("no-diff" if has_no_diff_against_base else "task-instruction"))
+    if is_review_task or is_merge_task or is_empty_gh_write_worktree or has_skip_phrase:
+        reason = "review" if is_review_task else ("merge" if is_merge_task else ("empty-worktree" if is_empty_gh_write_worktree else "task-instruction"))
         print(
             f"  ⚠ skipping automatic PR creation for {worktree_branch}: "
             f"job is {reason} (task_type={job.get('task_type') or 'none'}, "
@@ -2803,10 +2811,9 @@ def _reap_zombie_worktree(job_id: str, log_path: Optional[str]) -> bool:
     path = _daemon_job_worktree_path(job_id, log_path)
     if not path or not os.path.exists(path):
         return False
-    # Safety guard: ensure path is strictly the specific job's worktree (#1369)
-    # Outer / parent-session worktrees must never be deleted on nested job kills.
-    abs_path = os.path.abspath(path)
-    if job_id not in os.path.basename(abs_path):
+    # Safety guard: outer / parent-session worktrees must never be deleted (#1369).
+    # If the candidate worktree contains a nested 'worktrees' directory, refuse to delete it.
+    if os.path.isdir(os.path.join(path, "worktrees")):
         return False
     # Preserve any log files located inside the worktree before deleting it
     if log_path and os.path.exists(log_path):

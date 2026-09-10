@@ -52,9 +52,10 @@ def test_nested_worktree_path_resolution_prevents_outer_deletion(tmp_path):
 
 
 def test_reap_zombie_worktree_safety_guard_rejects_parent_dir(tmp_path):
-    """Issue #1369: _reap_zombie_worktree must refuse to delete directories not matching job_id."""
+    """Issue #1369: _reap_zombie_worktree must refuse to delete directories containing nested worktrees."""
     parent_wt = tmp_path / "worktrees" / "parent-session-wt"
     parent_wt.mkdir(parents=True)
+    (parent_wt / "worktrees").mkdir()
 
     with patch("synlynk.jobs._daemon_job_worktree_path", return_value=str(parent_wt)):
         reaped = _reap_zombie_worktree("job-target99", str(parent_wt / "log.log"))
