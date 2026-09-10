@@ -633,15 +633,20 @@ def _permissions_to_flags(agent: str, permissions: list, read_only: bool = False
     if agent == "codex":
         has_write = any((perm or "").startswith("write:") for perm in (permissions or []))
         flags = []
-        if read_only and _CODEX_NETWORK_PERMISSION in (permissions or []):
+        if read_only and _CODEX_NETWORK_PERMISSION in (permissions or []) and not has_write:
             # Codex's read-only profile also blocks networking. workspace-write
             # plus an empty writable-roots override provides the required split:
             # network egress without repository working-tree writes.
             flags = ["-s", "workspace-write"]
+        elif has_write:
+            # Decouple local workspace writes from network permission (#1351).
+            # If the task has explicit write:* grants, allow workspace-write even
+            # in review tasks so assessment notes/patches can be written.
+            flags = ["-s", "workspace-write"]
         elif read_only or (not has_write and _CODEX_NETWORK_PERMISSION not in (permissions or [])):
             flags = ["-s", "read-only"]
         if _CODEX_NETWORK_PERMISSION in (permissions or []):
-            flags += _codex_network_flags(read_only=read_only)
+            flags += _codex_network_flags(read_only=read_only and not has_write)
         return flags
     if agent == "grok":
         return _grok_permission_flags(permissions)
