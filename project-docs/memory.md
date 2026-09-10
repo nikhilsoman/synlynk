@@ -200,6 +200,16 @@ relay as `runner_progress` events. [@codex]
 - **Verification:** Implemented by Claude (`job-56f6ecec`, commit `cada628`), covered by `test_claude_harness_alignment_update_baseline`, verified across all matrix runners (Python 3.8, 3.10, 3.12, `qa-gate`), and merged to `main`.
 - **Blog Post:** `docs/blog/138-pr1288-claude-harness-alignment.md`.
 
+## Worktree Audit Detached HEAD Guard & Patch Equivalence (decided/shipped 2026-09-10)
+- **Shipped:** PR #1540 (closes #1536). Fixes detached HEAD false matches and squash-merge invisibility in `synlynk worktree audit`. [@nikhilsoman via Agy]
+- **Detached HEAD Guard:** `_gh_pr_for_branch(branch)` now guards against empty/whitespace branch strings, preventing unbounded `head:` searches in `gh` that falsely returned open PR #1530.
+- **Squash-Merge Patch Equivalence:** Added `_git_unmerged_cherry_count(branch, path)` using `git cherry origin/main` to detect branches whose patches were squash-merged to `main` under different commit SHAs, classifying them as `safe` (`merged (patch-equivalent to main)`).
+- **Pruned Stale Worktrees:** Pruned broken registrations and cleaned 25 verified-merged worktrees, reducing local worktrees from 77 to 51.
+
+## Sentinel Alerts Triage & Retention Policy (decided/shipped 2026-09-10)
+- **Shipped:** Archived 1,429 historical sentinel alerts (dating back to 2026-08-02) to `.synlynk/archive/sentinel-pre-triage-2026-09-09.md`. [@nikhilsoman via Agy]
+- **Retention Applied:** Retained 33 CRITICAL alerts from the last 48 hours (all known/resolved issues) and 645 non-CRITICAL alerts from the last 7 days, dropping 751 stale alerts. Active alert count reduced to 678 in `.synlynk/sentinel.md`.
+
 ## Agy Headless Parity: Timeout, Plan Mode, & Prompt Cache Telemetry (decided/shipped 2026-08-30)
 - **Shipped:** PR #1286 (closes #1283, relates to #750, #162, #437, #1106). Establishes headless execution parity for Google Antigravity (`agy`). [@agy]
 - **Eliminate 5-Minute Headless Timeout:** Added `--print-timeout` to `HARNESS_CAPABILITY_BASELINES["agy"]["dispatch_flags"]["valid_flags"]` in `synlynk/_constants.py` and dynamically injects `["--print-timeout", "30m0s"]` on all headless Agy dispatches in `synlynk/dispatch.py:dispatch_agent()`, eliminating the 5-minute timeout boundary (#750 / #162).

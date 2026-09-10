@@ -142,6 +142,36 @@
   - Squash-merged PR #1533 into `main` (`5ed7363b`), pulled `main`, removed worktree `worktrees/job-2a0e66f5`, and deleted branch `dispatch/grok/job-2a0e66f5`.
 [@agy]
 
+## 2026-09-10 — Sentinel Triage, Worktree Pruning, Worktree Audit Fix (#1540), and Codex Handoff Ticket Creation
+
+### Shipped & Resolved
+- **Sentinel Alerts Triage:**
+  - Archived complete 1,429-line alert history to `.synlynk/archive/sentinel-pre-triage-2026-09-09.md`.
+  - Applied standard retention filter: kept 33 CRITICAL alerts (≤ 48h) and 645 non-CRITICAL alerts (≤ 7d); pruned 751 stale alerts.
+  - Formatted `.synlynk/sentinel.md` with structured triage header; verified 678 active alerts with `synlynk sentinel list`.
+- **Worktree Hygiene & Pruning:**
+  - Pruned orphaned broken registration `/private/tmp/synlynk-pr-1371` via `git worktree prune`.
+  - Removed 25 verified-merged / review worktrees (14 clean squash-merged jobs, 4 detached merged review checkouts, 5 merged PR checkouts with dirty blog README artifacts, 1 merged PR worktree in `/tmp`).
+  - Dropped total checked local worktrees from 77 down to 51.
+- **Worktree Audit Detached HEAD & Squash Merge Fix (PR #1540):**
+  - Root-caused false `UNSAFE: PR #1530 open` audit verdicts on detached HEAD worktrees: `_gh_pr_for_branch` called `gh pr list --search "head:"`, which GitHub evaluates as an unbounded search, returning PR #1530.
+  - Root-caused `NEEDS-REVIEW` verdicts on squash-merged branches: `_git_is_ancestor` tested only commit SHA ancestry, missing branches whose code was squashed into `main`.
+  - Fixed `synlynk/worktree.py`: guarded empty branch, added `HEAD` ref fallbacks, added `_git_unmerged_cherry_count` via `git cherry origin/main` to detect patch equivalence, and labeled detached worktrees as `(detached)`.
+  - Added 6 unit tests in `tests/test_worktree.py` (35/35 passed).
+  - Authored PR #1540 via `synlynk gh --role architect`, approved by `synlynk gh --role qa` (`synlynk-synlynk-qa[bot]`), and squash-merged to `main` at `94a667fb`.
+- **Codex Handoff Review & Ticket Creation:**
+  - Conducted independent review of all 8 concerns handed off by Codex.
+  - Filed 5 formal GitHub issues and synchronized matching stories in `state.db`:
+    - #1535 (`story-0367cc3b`): Dual-ledger state synchronization write-through in probe and doctor.
+    - #1536 (`story-7e09d930`): Worktree audit detached HEAD and patch-equivalence fix (resolved via PR #1540).
+    - #1537 (`story-44fce017`): Daemon recovery when pidfile is missing but flock is held.
+    - #1538 (`story-08607f73`): Probe `--no-fence` option to eliminate git churn on tracked docs.
+    - #1539 (`story-f8380ea0`): BS-6 Repo & Workspace Views implementation from approved spec.
+- **Daemon Operational State:**
+  - Started daemon (PID 63437) on port 27471. Verified automatic GitHub App token refreshing for all role identities.
+[@agy]
+
+
 
 
 
