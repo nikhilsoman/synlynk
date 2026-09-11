@@ -232,6 +232,29 @@
   - Updated Milestone v0.20.0 design spec and `tests/test_v0_20_0_milestone_spec.py` with the Marketing Release Ceremony contract (all tests green).
 [@agy]
 
+## 2026-09-11 — Marketing Release Ceremony Automation Shipped (PR #1557)
+
+### Shipped & Landed
+- **Core Marketing Ceremony Engine (`synlynk/release_marketing.py`):**
+  - Implemented `sync_docs_bundles()` replacing version markers and release dates across canonical documentation HTML files (`synlynk-quickstart-guide.html`, `synlynk-official-reference.html`, `synlynk-command-reference.html`, `synlynk-watching-at-work-guide.html`).
+  - Implemented `mirror_docs_pdfs_to_website()` copying canonical PDFs to `website/src/assets/docs/`.
+  - Implemented `update_website_metadata()` writing `website/src/_data/release.json`.
+  - Implemented `verify_website_build()` checking static Eleventy build output.
+  - Implemented `execute_release_ceremony()` orchestrating end-to-end collateral synchronization with dry-run support.
+- **CLI & Release Engine Integration:**
+  - Added standalone `synlynk marketing ceremony [--version <V>] [--dry-run] [--skip-build]` CLI command.
+  - Registered `marketing ceremony` in `COMMAND_TAXONOMY` and regenerated `docs/reference/commands.md`.
+  - Connected `execute_release_ceremony()` directly into `cmd_release()` in `synlynk/__init__.py`.
+- **Eleventy Static Site Repair:**
+  - Root-caused and resolved YAML frontmatter parser failures in historical blog posts (`docs/blog/*.md`) by quoting `merged: "status: open"`, restoring 100% clean builds across `website/`.
+- **Verification & Governance:**
+  - Created and passed 8 unit and integration tests in `tests/test_release_marketing.py`.
+  - Passed 115 regression tests across taxonomy, viz, and release test suites.
+  - Opened PR #1557; dispatched QA review to Codex (`job-c142fc38`), approved and squash-merged to `main`.
+  - Completed Cluster A in `project-docs/roadmap.md` and closed story `story-608ba4af`.
+[@agy]
+
+
 
 
 

@@ -1,5 +1,15 @@
 # synlynk Memory
 
+## Marketing Release Ceremony Automation Shipped (decided/shipped 2026-09-11)
+- **Implementation Shipped (PR #1557):** Shipped full Marketing Release Ceremony Automation (`story-608ba4af`) per approved design spec (`docs/superpowers/specs/2026-09-11-marketing-release-ceremony-automation-design.md`) and implementation plan (`docs/superpowers/plans/2026-09-11-marketing-release-ceremony-automation.md`).
+- **Core Capabilities:**
+  1. **Canonical Docs Bundles Version Synchronization:** Implemented `sync_docs_bundles()` updating document titles, cover version pills, release dates, and footers across all canonical guides (`synlynk-quickstart-guide.html`, `synlynk-official-reference.html`, `synlynk-command-reference.html`, `synlynk-watching-at-work-guide.html`).
+  2. **PDF Mirroring to Website:** Implemented `mirror_docs_pdfs_to_website()` copying canonical PDF bundles to `website/src/assets/docs/`.
+  3. **Website Metadata & Static Compilation:** Implemented `update_website_metadata()` writing `website/src/_data/release.json` and `verify_website_build()` checking Eleventy template compilation.
+  4. **Release Engine Hook & Standalone CLI:** Wired `execute_release_ceremony()` directly into `cmd_release()` and added the `synlynk marketing ceremony` CLI command, registered in `COMMAND_TAXONOMY`.
+  5. **Blog YAML Frontmatter Quality Repair:** Corrected unquoted YAML mapping entries (`merged: "status: open"`) across historical blog posts in `docs/blog/`, unlocking 100% clean Eleventy static builds.
+- **Verification & Review:** 8 unit and integration tests passing in `tests/test_release_marketing.py`, 115 regression tests green across viz, taxonomy, and release suites. Reviewed and merged by Codex (`qa`) on PR #1557. [@agy]
+
 ## Milestone v0.20.0 Sprint 1 Shipped: BS-6 Workspace Views, Role Studio, & Worktree Lifecycle (decided/shipped 2026-09-11)
 - **Implementation Shipped (PR #1556):** Completed autonomous fleet execution of Milestone v0.20.0 Sprint 1 (`story-304499f1`) per approved plan `docs/superpowers/plans/2026-09-11-v0-20-0-sprint1-vizor-enhancement.md`.
 - **Architectural Deliverables:**

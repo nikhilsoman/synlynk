@@ -42,6 +42,14 @@
 - Dispatched Task 2 (BS-6 HTML Renderers & Nav): Claude (`job-db909de0`), status OK, 9/9 tests passed, merged to `feat/agy/v0.20.0-sprint1-vizor`.
 - Dispatched Task 3 (Roles & Onboarding Studio): Codex (`job-2244087f`), $5.10 (1,631,402 in / 13,948 out), status OK, 12/12 tests passed, merged to `feat/agy/v0.20.0-sprint1-vizor`.
 - Dispatched Task 4 (Worktree Lifecycle & Clean Panel): Codex (`job-7922db90`), $5.31 (1,714,446 in / 11,143 out), status OK, 14/14 tests passed, merged to `feat/agy/v0.20.0-sprint1-vizor`.
-- Task 5 (Harness Sync & Full Regression): Agy, status OK, 85/85 tests passed, committed to `feat/agy/v0.20.0-sprint1-vizor` (`0a9297f7`), PR #1556 opened.
-- Dispatched QA Review & Merge: Codex (`job-621bd6f6`), ~$0.14 estimated, in progress.
+- Dispatched QA Review & Merge: Codex (`job-621bd6f6`), status OK, PR #1556 merged to `main`.
+
+## 2026-09-11 — Marketing Release Ceremony Automation (`story-608ba4af`)
+
+- Conductor: Agy (Gemini 2.5 Flash / Pro).
+- Authored design spec (`docs/superpowers/specs/2026-09-11-marketing-release-ceremony-automation-design.md`) and implementation plan (`docs/superpowers/plans/2026-09-11-marketing-release-ceremony-automation.md`).
+- Implemented `synlynk/release_marketing.py`, `synlynk marketing ceremony` CLI command, `cmd_release` hook, and 8 comprehensive unit/integration tests in `tests/test_release_marketing.py`.
+- Fixed 7 unquoted YAML frontmatter headers in `docs/blog/*.md` enabling 100% clean Eleventy static site builds.
+- Dispatched QA Review & Squash-Merge: Codex (`job-c142fc38`), ~$0.13 estimated, status OK, PR #1557 merged to `main`.
+
 
