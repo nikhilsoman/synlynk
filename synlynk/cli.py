@@ -1106,6 +1106,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     instr_ack_parser.add_argument("file", help="File to acknowledge drift for")
 
+    marketing_parser = subparsers.add_parser("marketing", help="Manage marketing automations and release collateral")
+    marketing_sub = marketing_parser.add_subparsers(dest="marketing_action")
+    ceremony_parser = marketing_sub.add_parser("ceremony", help="Execute marketing release ceremony")
+    ceremony_parser.add_argument("--version", help="Explicit version string e.g. 0.20.0")
+    ceremony_parser.add_argument("--dry-run", action="store_true", help="Report updates without modifying files")
+    ceremony_parser.add_argument("--skip-build", action="store_true", help="Skip static website build verification")
+
     parser._synlynk_help_parsers = {
         "harness": harness_parser,
         "agent": agent_parser,
@@ -1125,6 +1132,7 @@ def build_parser() -> argparse.ArgumentParser:
         "team": team_parser,
         "worktree": worktree_parser,
         "swarm": swarm_parser,
+        "marketing": marketing_parser,
     }
 
     roles_parser = subparsers.add_parser(
@@ -1257,6 +1265,7 @@ def main(argv=None) -> None:
         cmd_relay_broadcast,
         cmd_relay_start,
         cmd_release,
+        cmd_marketing_ceremony,
         cmd_repair,
         cmd_roadmap_add,
         cmd_roles,
@@ -1965,6 +1974,15 @@ def main(argv=None) -> None:
             check_docs=getattr(args, "check_docs", False),
             waive=getattr(args, "waive", None),
         )
+    elif args.command == "marketing":
+        if getattr(args, "marketing_action", None) == "ceremony":
+            cmd_marketing_ceremony(
+                version=getattr(args, "version", None),
+                dry_run=getattr(args, "dry_run", False),
+                skip_build=getattr(args, "skip_build", False),
+            )
+        else:
+            help_parsers.get("marketing", parser).print_help()
     elif args.command == "viz":
         cmd_viz(args)
     elif args.command == "exit":

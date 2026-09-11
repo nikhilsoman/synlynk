@@ -2970,6 +2970,20 @@ def cmd_release(dry_run: bool = False, version: Optional[str] = None, bump: bool
     if check_docs:
         return
 
+    # Execute marketing release ceremony across collateral
+    from synlynk.release_marketing import execute_release_ceremony
+    print(f"🚀 [Marketing Ceremony] Executing release ceremony for v{next_version}...")
+    ceremony_res = execute_release_ceremony(
+        root=root,
+        version=next_version,
+        dry_run=dry_run,
+        skip_build=False,
+    )
+    if not ceremony_res.ok:
+        print(f"⚠️ [Marketing Ceremony] Notice: {', '.join(ceremony_res.errors)}")
+    else:
+        print(f"✅ [Marketing Ceremony] Collateral synchronized (README, {len(ceremony_res.docs_updated)} docs bundles, website)")
+
     # Step b: Read merged stories since last git tag
     try:
         tag_cmd = "git describe --tags --abbrev=0 2>/dev/null || echo ''"
@@ -3160,13 +3174,55 @@ merged: YYYY-MM-DD (or status: open)
     print("[x] CHANGELOG entry written")
     print(f"[x] Blog post stub: docs/blog/{blog_filename}")
     print("[x] README synchronized (version, collected test-count not pass/fail, hero, install, links, commands)")
-    print("[ ] Marketing Release Ceremony dispatched (PM/TPM):")
+    print("[x] Marketing Release Ceremony completed:")
     print("    - [x] GitHub README synchronized")
-    print("    - [ ] Synlynk.com website (website/) updated for release")
-    print("    - [ ] Synlynk Docs bundles compiled: Quick Start, Official Reference, Command Ref (HTML & PDF)")
+    print(f"    - [{'x' if ceremony_res.website_updated else ' '}] Synlynk.com website (website/) updated for release")
+    print(f"    - [{'x' if ceremony_res.docs_updated else ' '}] Synlynk Docs bundles synchronized: Quick Start, Official Reference, Command Ref (HTML & PDF)")
     print(f"[ ] git tag v{next_version} && git push --tags")
     print(f"[ ] gh release create v{next_version}")
     print("[ ] Roadmap row marked shipped")
+
+
+def cmd_marketing_ceremony(
+    version: Optional[str] = None,
+    dry_run: bool = False,
+    skip_build: bool = False,
+) -> None:
+    """Execute the Marketing Release Ceremony across README, docs bundles, and website."""
+    from synlynk.release_marketing import execute_release_ceremony
+
+    root = os.getcwd()
+    if not os.path.exists(os.path.join(root, "VERSION")):
+        try:
+            root = _get_project_root()
+        except Exception:
+            root = os.getcwd()
+
+    if not version:
+        version_file = os.path.join(root, "VERSION")
+        if os.path.isfile(version_file):
+            with open(version_file, "r", encoding="utf-8") as f:
+                version = f.read().strip()
+        else:
+            version = "0.20.0"
+
+    print(f"🚀 Executing Marketing Release Ceremony for v{version.lstrip('v')} (dry_run={dry_run})...")
+    res = execute_release_ceremony(
+        root=root,
+        version=version,
+        dry_run=dry_run,
+        skip_build=skip_build,
+    )
+    if not res.ok:
+        print(f"❌ Marketing Release Ceremony failed: {', '.join(res.errors)}")
+        sys.exit(1)
+
+    prefix = "[DRY-RUN] " if res.dry_run else ""
+    print(f"✅ {prefix}Marketing Release Ceremony completed successfully for v{res.version}.")
+    print(f"  - README updated: {res.readme_updated}")
+    print(f"  - Docs bundles updated: {len(res.docs_updated)} files ({', '.join(res.docs_updated) if res.docs_updated else 'none'})")
+    print(f"  - Website metadata updated: {res.website_updated}")
+    print(f"  - Website build ok: {res.website_build_ok}")
 
 
 def cmd_status(json_output: bool = False, platform: bool = False) -> None:

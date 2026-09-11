@@ -7,7 +7,7 @@ post: 170
 pr: "#1353"
 version: "0.19.0"
 tags: ["autonomy", "heal", "advisory", "daemon", "observability"]
-merged: status: open
+merged: "status: open"
 ---
 
 ## Closing the loop

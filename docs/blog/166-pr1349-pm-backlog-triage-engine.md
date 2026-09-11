@@ -7,7 +7,7 @@ post: 166
 pr: "#1349"
 version: "0.19.0"
 tags: ["pm", "backlog", "triage", "governs", "automation", "story-formation"]
-merged: status: open
+merged: "status: open"
 ---
 
 ## The Broader Goal at the End of the Previous PR
