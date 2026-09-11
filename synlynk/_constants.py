@@ -223,12 +223,53 @@ HARNESS_CAPABILITY_BASELINES = {
         "env_passthrough": ["OPENAI_API_KEY"],
         "strengths": ["zero-cost inference", "on-device", "granular tasks"],
     },
+    "muse": {
+        "cli": "muse",
+        "can_gh_write": True,
+        "non_interactive_flags": ["run", "--non-interactive"],
+        "prompt_flag": "--prompt",
+        "prompt_via_arg": True,
+        "dispatch_flags": {
+            "valid_flags": [
+                "--prompt",
+                "--model",
+                "--non-interactive",
+                "-C",
+                "--output-format",
+            ],
+            "invalid_flags": ["--dangerously-skip-permissions", "--always-approve"],
+            "required_flags": ["--non-interactive"],
+        },
+        "headless_contract": {
+            "requires_pty": False,
+            "stdout_flush_method": "native",
+            "env_vars_required": [],
+            "non_interactive_flag": "--non-interactive",
+        },
+        "network_deps": {
+            "required_endpoints": ["api.muse.meta.com:443"],
+            "optional_endpoints": [],
+        },
+        "auth_check": {
+            "probe": ["muse", "--version"],
+            "unauthenticated_markers": [
+                "not logged in",
+                "login required",
+                "missing api key",
+            ],
+        },
+        "roles": ["builder", "verifier", "architect"],
+        "env_passthrough": ["MUSE_API_KEY", "META_API_KEY"],
+        "strengths": ["surgical refactoring", "algorithmic synthesis", "automated unit testing", "high throughput"],
+    },
 }
 
 # Core fleet = product-supported interactive + dispatch agents.
-# local remains dispatchable via experimental path but is not in CORE_FLEET.
+# local and muse remain dispatchable via experimental/next-gen paths.
 CORE_FLEET = frozenset({"claude", "agy", "codex", "grok"})
 EXPERIMENTAL_FLEET = frozenset({"local"})
+NEXT_GEN_FLEET = frozenset({"muse"})
+EXTENDED_FLEET = frozenset({"local", "muse"})
 PROVEN_FRESHNESS_DAYS = 7
 MATRIX_LIVE_BUDGET_USD = 10.0
 AGENT_BUILDER_ONLY = frozenset({"codex"})

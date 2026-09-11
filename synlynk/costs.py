@@ -128,6 +128,38 @@ def _extract_agy_structured(output_text: str) -> Optional[_TokenCounts]:
     return _TokenCounts(in_tokens, out_tokens, cache_read_tokens, "structured_output")
 
 
+def _extract_muse_structured(output_text: str) -> Optional[_TokenCounts]:
+    """Parses muse run --output-format json output (single JSON or event stream).
+
+    Extracts usage object with input_tokens, output_tokens, and cached_tokens.
+    """
+    usage = None
+    for line in output_text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            event = json.loads(line)
+        except (ValueError, TypeError):
+            continue
+        if isinstance(event, dict):
+            if "usage" in event and isinstance(event["usage"], dict):
+                usage = event["usage"]
+            elif event.get("type") in ("result", "turn.completed", "response.done", "turn_complete"):
+                cand = event.get("usage")
+                if isinstance(cand, dict):
+                    usage = cand
+    if usage is None:
+        return None
+    try:
+        in_tokens = int(usage.get("input_tokens", usage.get("prompt_tokens", 0)))
+        out_tokens = int(usage.get("output_tokens", usage.get("completion_tokens", 0)))
+        cache_read_tokens = int(usage.get("cached_tokens", usage.get("cache_read_tokens", 0)))
+    except (KeyError, TypeError, ValueError):
+        return None
+    return _TokenCounts(in_tokens, out_tokens, cache_read_tokens, "structured_output")
+
+
 
 def _event_shows_real_activity(event) -> bool:
     """True if a parsed log event is direct evidence the job did real work."""
@@ -262,6 +294,10 @@ def extract_tokens(output_text: str, agent: str = None) -> tuple:
             return structured
     if agent == "grok":
         structured = _extract_grok_structured(output_text)
+        if structured is not None:
+            return structured
+    if agent == "muse":
+        structured = _extract_muse_structured(output_text)
         if structured is not None:
             return structured
 

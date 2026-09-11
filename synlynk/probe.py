@@ -618,7 +618,7 @@ def _probe_agent(harness_name: str, db_conn, fast_path_ok: bool = True, write_fe
 
         return text.split()[-1]
 
-    harness_map = {"claude": "claude-cli", "agy": "agy", "grok": "grok", "codex": "codex"}
+    harness_map = {"claude": "claude-cli", "agy": "agy", "grok": "grok", "codex": "codex", "muse": "muse"}
     baseline = HARNESS_CAPABILITY_BASELINES.get(harness_name, {})
     record_harness_name = harness_map.get(harness_name, harness_name)
     schema_result = _run_tc0(harness_name, baseline)

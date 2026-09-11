@@ -1667,6 +1667,19 @@ def _format_prompt_for_agent(agent: str, context_text: str, story_id: str,
             f"\n\n## Your Task\n{task}"
             f"{verify_section}\n"
         )
+    if agent == "muse":
+        working_dir = cwd_hint or os.getcwd()
+        return (
+            f"{headers}"
+            f"{gh_write_instruction}"
+            f"## Working Directory\n{working_dir}\n"
+            f"All file edits MUST be in this directory.\n\n"
+            f"{context_text}"
+            f"{story_ref}"
+            f"{file_section}"
+            f"\n\n## Your Task\n{task}"
+            f"{verify_section}\n"
+        )
     return (
         f"{headers}"
         f"{gh_write_instruction}"
@@ -3111,6 +3124,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             flags = flags + ["--print-timeout", "30m0s"]
     if agent == "codex":
         flags = flags + ["--json"]
+    if agent == "muse":
+        if "--output-format" not in flags:
+            flags = flags + ["--output-format", "json"]
         if _CODEX_NETWORK_PERMISSION in permissions and not any(
             "network_access=true" in flag for flag in flags
         ):
@@ -3150,6 +3166,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     if agent == "grok" and worktree_path and "--cwd" not in flags:
         flags = flags + ["--cwd", worktree_path]
     if agent == "codex" and worktree_path and "-C" not in flags and "--cd" not in flags:
+        flags = flags + ["-C", worktree_path]
+    if agent == "muse" and worktree_path and "-C" not in flags:
         flags = flags + ["-C", worktree_path]
     worktree_synlynk_dir = os.path.join(worktree_path, ".synlynk")
     logs_dir = os.path.join(worktree_synlynk_dir, "logs")
