@@ -201,6 +201,38 @@
   - Closed issues #1500, #1501, #1502, #1511, #1527, and closed Master Epic #1543.
 [@agy]
 
+## 2026-09-11 — Milestone v0.20.0 Architectural Specification & Release v0.19.0 Stamping
+
+### Shipped & Landed
+- **Milestone v0.20.0 Architectural Design Specification:**
+  - Authored comprehensive architecture document `docs/superpowers/specs/2026-09-11-v0.20.0-visual-workspace-autonomous-onboarding-design.md` covering all 4 consolidated clusters:
+    - **Cluster A:** BS-6 Vizor Views (Product, Logical, Infra), In-Browser GitHub App Role Setup Wizard, and Visual Worktree Sweep Tooling (#1539, #1346, #1350, #1479).
+    - **Cluster B:** Adaptive Scope-Bounded Sparse Worktrees (`git sparse-checkout --cone`), Sibling Branch Auto-Pruning, Lineage Tracking (`superseded_by`), and Deterministic Build Timestamp Freezing (#1389, #1390, #1391, #1348, #1347, #1349).
+    - **Cluster C:** Fleet Diagnostic Truth & Concurrency Resilience — Consolidated 4-Point Readiness Matrix in `synlynk doctor --readiness`, Grok Write Sandbox Fail-Closed Canary, Post-Claim Story Un-Stranding, and SQLite 30s Busy Timeout / WAL configuration (#1521, #1522, #1507, #1503).
+    - **Cluster D:** Next-Gen Harness Onboarding — Meta Muse Commercial CLI Adapter, Capability Scoring, and Discovery Probe (#1508, DE Review §3.1).
+  - Authored spec verification unit test `tests/test_v0_20_0_milestone_spec.py` (passed).
+- **Fast CLI Pytest Environment Guard:**
+  - Root-caused test collection failure where `Path(sys.argv[0]).name == "__main__.py"` in `python -m pytest` triggered `_FAST_CLI = True`, bypassing legacy module exports in `synlynk/__init__.py`.
+  - Added `_IS_TESTING` guard to ensure full module exports remain active under pytest test collection.
+- **Named Release v0.19.0 Stamped on `main`:**
+  - Updated `VERSION` and `synlynk/_constants.py` to `0.19.0`.
+  - Synchronized `README.md` version badges (`0.19.0`, 2,734 collected tests) and hero summary.
+  - Enhanced `cmd_release` in `synlynk/__init__.py` to update `synlynk/_constants.py` automatically alongside `__init__.py`.
+  - Executed `python3 -m synlynk release --version 0.19.0 --role pm`, successfully updating `CHANGELOG.md` and generating blog post stub `docs/blog/196-prTBD-v0.19.0.md`.
+  - Authored comprehensive blog post narrative in `docs/blog/196-prTBD-v0.19.0.md`.
+  - Initialized `project-docs/roadmap.md` aligning `v0.19.0` (shipped), `v0.20.0` (active), and `v1.0.0` (01 October Developer Preview target).
+  - All targeted unit and spec tests passing (134 passed, 1 skipped).
+- **Marketing Workspace Agent Charter & Release Ceremony Integration:**
+  - Expanded `marketing` charter in `synlynk/agent_cli.py` and live workspace (`state.db`, revision 5) to explicitly mandate:
+    1. Automated continuous and release-time GitHub README maintenance (badges, test counts, hero summary, taxonomy block).
+    2. Synlynk.com website (`website/`) maintenance.
+    3. Automated compilation and export of the 3 Synlynk Docs bundles (Quick Start Guide, Official Reference / Manual, Command Reference HTML & PDF).
+    4. Execution of the Release Ceremony dispatched by PM/TPM upon every named release.
+  - Implemented `sync_readme_for_release()` in `synlynk/release_readme.py` and wired auto-synchronization into `cmd_release` in `synlynk/__init__.py`.
+  - Updated Milestone v0.20.0 design spec and `tests/test_v0_20_0_milestone_spec.py` with the Marketing Release Ceremony contract (all tests green).
+[@agy]
+
+
 
 
 

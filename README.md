@@ -6,15 +6,15 @@
 <p align="center"><a href="https://synlynk.com">synlynk.com</a></p>
 
 <p align="center">
-  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/tests-2346%20collected-brightgreen" alt="Tests"></a>
-  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/version-0.18.0-blue" alt="Version"></a>
+  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/tests-2734%20collected-brightgreen" alt="Tests"></a>
+  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/version-0.19.0-blue" alt="Version"></a>
   <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/license-MIT-green" alt="License"></a>
   <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/python-3.9%2B-blue" alt="Python"></a>
 </p>
 
 synlynk is a Python CLI that turns your terminal into a hybrid workgroup — one human, multiple AI harnesses, shared project state. It injects scoped project context into every dispatch, routes tasks to the best available harness using a live capability ledger, and tracks costs and hallucination loops. A shared `project-docs/` directory keeps every tool in sync: Claude Code, Codex, and AGY all read the same context, decisions, and progress.
 
-**v0.18.0:** QA merge-gate authority, GitHub-write brokering, harness capability registry v2, and dispatch reliability hardening, with 2346 tests collected.
+**v0.19.0:** Layered release protocol (unstable/staging/main), autonomous unattended DAG loop, daemon lifecycle recovery, absolute App key resolution, and dual-ledger state sync, with 2734 tests collected.
 
 ## Documentation
 

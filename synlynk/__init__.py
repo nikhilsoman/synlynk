@@ -24,9 +24,13 @@ from synlynk._constants import (
     _INSTALL_SCRIPT_URL,
 )
 
-_FAST_CLI = os.environ.get("SYNLYNK_CLI_ENTRYPOINT") == "1" or (
-    Path(sys.argv[0]).name in {"synlynk", "synlynk.py", "__main__.py"}
-) or any(flag in sys.argv[1:] for flag in ("-h", "--help", "--version"))
+_IS_TESTING = "pytest" in sys.modules or any("pytest" in str(arg) for arg in sys.argv)
+_FAST_CLI = not _IS_TESTING and (
+    os.environ.get("SYNLYNK_CLI_ENTRYPOINT") == "1" or (
+        Path(sys.argv[0]).name in {"synlynk", "synlynk.py"}
+        or (Path(sys.argv[0]).name == "__main__.py" and "synlynk" in str(sys.argv[0]))
+    ) or any(flag in sys.argv[1:] for flag in ("-h", "--help", "--version"))
+)
 _LEGACY_MODULES = (
     "upgrade", "sentinel", "probe", "fencing", "dispatch", "quota", "costs",
     "capability_roles", "taxonomy", "doctor", "team", "heal", "support_engineer",
@@ -2943,6 +2947,15 @@ def cmd_release(dry_run: bool = False, version: Optional[str] = None, bump: bool
     findings = validate_readme_for_release(
         root, expected_readme_version, waivers=waivers
     )
+    if findings and not check_docs:
+        print(f"⚡ [Marketing Ceremony] Auto-synchronizing README.md for v{expected_readme_version}...")
+        from synlynk.release_readme import collect_pytest_test_count, sync_readme_for_release
+        collected = collect_pytest_test_count(root)
+        sync_readme_for_release(root, expected_readme_version, collected_count=collected)
+        findings = validate_readme_for_release(
+            root, expected_readme_version, waivers=waivers
+        )
+
     report = format_readme_check_report(
         findings, expected_readme_version, waivers=waivers
     )
@@ -3101,19 +3114,20 @@ merged: YYYY-MM-DD (or status: open)
         with open(version_path, "w") as f:
             f.write(next_version + "\n")
             
-        # Write to synlynk/__init__.py VERSION if it exists
-        init_py_path = os.path.join(root, "synlynk", "__init__.py")
-        if os.path.exists(init_py_path):
-            with open(init_py_path, "r") as f:
-                init_content = f.read()
-            new_init_content = re.sub(
-                r'^VERSION\s*=\s*".*"',
-                f'VERSION = "{next_version}"',
-                init_content,
-                flags=re.MULTILINE
-            )
-            with open(init_py_path, "w") as f:
-                f.write(new_init_content)
+        # Write to synlynk/__init__.py and synlynk/_constants.py VERSION if they exist
+        for target_module in ("__init__.py", "_constants.py"):
+            target_path = os.path.join(root, "synlynk", target_module)
+            if os.path.exists(target_path):
+                with open(target_path, "r") as f:
+                    content = f.read()
+                new_content = re.sub(
+                    r'^VERSION\s*=\s*".*"',
+                    f'VERSION = "{next_version}"',
+                    content,
+                    flags=re.MULTILINE
+                )
+                with open(target_path, "w") as f:
+                    f.write(new_content)
 
         # Prepend to CHANGELOG.md (create if missing)
         if os.path.exists(changelog_path):
@@ -3146,6 +3160,10 @@ merged: YYYY-MM-DD (or status: open)
     print("[x] CHANGELOG entry written")
     print(f"[x] Blog post stub: docs/blog/{blog_filename}")
     print("[x] README synchronized (version, collected test-count not pass/fail, hero, install, links, commands)")
+    print("[ ] Marketing Release Ceremony dispatched (PM/TPM):")
+    print("    - [x] GitHub README synchronized")
+    print("    - [ ] Synlynk.com website (website/) updated for release")
+    print("    - [ ] Synlynk Docs bundles compiled: Quick Start, Official Reference, Command Ref (HTML & PDF)")
     print(f"[ ] git tag v{next_version} && git push --tags")
     print(f"[ ] gh release create v{next_version}")
     print("[ ] Roadmap row marked shipped")
