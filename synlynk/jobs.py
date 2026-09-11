@@ -10,8 +10,9 @@ import subprocess
 import sys
 import time
 import uuid
+from datetime import datetime
 from contextlib import contextmanager
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 from synlynk.sentinel import _write_sentinel_alert
 from synlynk._constants import HARNESS_CAPABILITY_BASELINES
@@ -2501,6 +2502,88 @@ def cmd_jobs_reap(apply: bool = False, all_projects: bool = False) -> int:
         f"\n  {_GREEN}Reaped {len(reaped)}{_RESET} → status=timed_out exit_code=-9"
         f"  (kept alive: {len(to_keep)})\n"
     )
+    return 0
+
+
+def reclaim_stranded_stories(
+    max_age_minutes: int = 30,
+    dry_run: bool = False,
+    conn=None,
+) -> List[Dict[str, Any]]:
+    """Detect and revert orphaned claimed stories ('in_progress') to 'ready' (#1507).
+
+    A story is stranded when:
+    1. It is marked 'in_progress'.
+    2. No daemon job exists for it, or all associated running jobs have a dead PID.
+    """
+    owns_conn = False
+    if conn is None:
+        from synlynk import _get_db
+        conn = _get_db()
+        owns_conn = True
+
+    now = time.time()
+    reclaimed = []
+
+    try:
+        rows = conn.execute(
+            "SELECT story_id, title FROM stories WHERE status='in_progress' OR readiness='in_progress'"
+        ).fetchall()
+
+        for story_id, title in rows:
+            job_rows = conn.execute(
+                "SELECT job_id, agent, status, pid, started_at FROM daemon_jobs "
+                "WHERE story_id=? AND status IN ('running', 'queued') ORDER BY rowid DESC",
+                (story_id,),
+            ).fetchall()
+
+            has_active_worker = False
+            for job_id, agent, j_status, pid, started_at in job_rows:
+                if j_status == "running" and pid is not None:
+                    if _pid_is_alive(pid):
+                        has_active_worker = True
+                        break
+
+            if not has_active_worker:
+                reclaimed.append({
+                    "story_id": story_id,
+                    "title": title,
+                    "reclaimed": not dry_run,
+                })
+                if not dry_run:
+                    conn.execute(
+                        "UPDATE stories SET status='ready', readiness='ready' WHERE story_id=?",
+                        (story_id,),
+                    )
+                    for job_id, agent, j_status, pid, started_at in job_rows:
+                        if j_status == "running":
+                            conn.execute(
+                                "UPDATE daemon_jobs SET status='failed', exit_code=137, completed_at=? WHERE job_id=?",
+                                (time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), job_id),
+                            )
+
+        if not dry_run and reclaimed:
+            conn.commit()
+            try:
+                from synlynk import _generate_todo_md
+                _generate_todo_md()
+            except Exception:
+                pass
+    finally:
+        if owns_conn:
+            conn.close()
+
+    return reclaimed
+
+
+def cmd_story_reclaim(max_age_minutes: int = 30, dry_run: bool = False) -> int:
+    """CLI handler for `synlynk story reclaim`."""
+    reclaimed = reclaim_stranded_stories(max_age_minutes=max_age_minutes, dry_run=dry_run)
+    mode = "DRY-RUN" if dry_run else "RECLAIMED"
+    print(f"\n  {_BOLD}synlynk story reclaim{_RESET}  [{mode}]  found={len(reclaimed)}")
+    for r in reclaimed:
+        print(f"  ✓ {r['story_id']:16}  {r['title']}")
+    print()
     return 0
 
 

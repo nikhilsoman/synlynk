@@ -35,10 +35,10 @@
 - [x] **Deterministic Build Timestamp Freezing:** Configuring `SOURCE_DATE_EPOCH` for reproducible test caches (#1349, PR #1558).
 
 ### Cluster C: Fleet Diagnostic Truth & Concurrency Resilience
-- [ ] **Consolidated 4-Point Readiness Matrix:** Unified attestation in `synlynk doctor --readiness` and Vizor (#1521).
-- [ ] **Grok Write Sandbox Canary Validation:** Fail-closed write probe before Grok dispatch (#1522).
-- [ ] **Post-Claim Story Un-Stranding:** Automatic timeout reclamation of abandoned in-progress stories (#1507).
-- [ ] **SQLite Concurrency & Busy-Timeout Tuning:** Standardizing WAL mode and 30s busy-timeout across all connections (#1503).
+- [x] **Consolidated 4-Point Readiness Matrix:** Unified attestation in `synlynk doctor --readiness` and Vizor (#1521).
+- [x] **Grok Write Sandbox Canary Validation:** Fail-closed write probe before Grok dispatch (#1522).
+- [x] **Post-Claim Story Un-Stranding:** Automatic timeout reclamation of abandoned in-progress stories (#1507).
+- [x] **SQLite Concurrency & Busy-Timeout Tuning:** Standardizing WAL mode and 30s busy-timeout across all connections (#1503).
 
 ### Cluster D: Next-Gen Harness Onboarding (Meta Muse)
 - [ ] **Meta Muse CLI Adapter:** First-class dispatch adapter in `synlynk/dispatch.py` with closed-loop receipt check (#1508).

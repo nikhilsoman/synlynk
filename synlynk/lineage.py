@@ -56,6 +56,17 @@ def ensure_lineage_schema(conn: sqlite3.Connection) -> None:
         pass
 
 
+def _connect_lineage_db(db_file: str) -> sqlite3.Connection:
+    conn = sqlite3.connect(db_file, timeout=30.0)
+    try:
+        conn.execute("PRAGMA journal_mode = WAL")
+        conn.execute("PRAGMA busy_timeout = 30000")
+        conn.execute("PRAGMA synchronous = NORMAL")
+    except Exception:
+        pass
+    return conn
+
+
 def record_job_superseded(
     old_job_id: str,
     new_job_id: str,
@@ -67,7 +78,7 @@ def record_job_superseded(
         return False
 
     try:
-        conn = sqlite3.connect(db_file)
+        conn = _connect_lineage_db(db_file)
         with conn:
             ensure_lineage_schema(conn)
 
@@ -106,7 +117,7 @@ def record_story_superseded(
         return False
 
     try:
-        conn = sqlite3.connect(db_file)
+        conn = _connect_lineage_db(db_file)
         with conn:
             ensure_lineage_schema(conn)
             conn.execute(
@@ -126,7 +137,7 @@ def get_job_lineage(job_id: str, db_path: Optional[str] = None) -> List[Dict[str
         return []
 
     try:
-        conn = sqlite3.connect(db_file)
+        conn = _connect_lineage_db(db_file)
         ensure_lineage_schema(conn)
 
         # 1. Find the root: walk backwards if any job points to job_id as superseded_by

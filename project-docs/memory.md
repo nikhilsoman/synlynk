@@ -1,5 +1,14 @@
 # synlynk Memory
 
+## Milestone v0.20.0 Cluster C Shipped: Fleet Diagnostic Truth & Concurrency Resilience (decided/shipped 2026-09-11)
+- **Implementation Shipped (PR #1559):** Completed Milestone v0.20.0 Cluster C (`story-8ef9c847`) per approved design spec (`docs/superpowers/specs/2026-09-11-v0.20.0-visual-workspace-autonomous-onboarding-design.md` §5) and implementation plan (`docs/superpowers/plans/2026-09-11-cluster-c-fleet-diagnostic-truth-concurrency.md`).
+- **Architectural Deliverables:**
+  1. **Consolidated 4-Point Fleet Readiness Matrix (`synlynk/readiness.py`, #1521):** Implemented `evaluate_readiness_matrix()` consolidating 4 diagnostic vectors: Point 1 (GitHub App Role tokens `qa`, `pm`, `architect`, `dev`, `marketing` with expiration check), Point 2 (Socket network egress to `api.github.com:443` measuring latency), Point 3 (Policy authority rules in `.synlynk/policy.json`), and Point 4 (Git shim `~/.synlynk/gh-shim/gh` existence, executable mode, and PATH precedence). Exposed via CLI `synlynk doctor --readiness` with clean ANSI status table.
+  2. **Grok Write Sandbox Canary Validation (`synlynk/dispatch.py`, #1522):** Implemented `task_requires_write()` and `check_grok_sandbox_write_capability()`. Before dispatching tasks requiring file or shell writes to Grok, evaluates a preflight canary. If the environment sandbox denies writes, it fails closed or auto-fails over to `codex` fallback while logging a `GROK_WRITE_SANDBOX_DENIED` sentinel alert.
+  3. **Post-Claim Story Un-Stranding (`synlynk/jobs.py`, `synlynk/cli.py`, #1507):** Implemented `reclaim_stranded_stories()`. Automatically scans stories stuck in `in_progress` without an active worker PID and reverts them to `ready` status with an audit trail, preventing stranded backlog tasks when worker processes crash or reboot. Added `synlynk story reclaim [--max-age <M>] [--dry-run]` command.
+  4. **SQLite Concurrency & Busy-Timeout Tuning (`synlynk/__init__.py`, `synlynk/lineage.py`, #1503):** Configured `PRAGMA busy_timeout = 30000;` and `PRAGMA synchronous = NORMAL;` across all database connections in `synlynk/__init__.py` and `synlynk/lineage.py`. Verified zero lock contention under high-concurrency 12-thread simultaneous read/write stress testing.
+- **Verification & Review:** 21 unit and multi-threaded stress tests passing. [@agy]
+
 ## Milestone v0.20.0 Cluster B Shipped: Worktree Lifecycle & Rebase Concurrency (decided/shipped 2026-09-11)
 - **Implementation Shipped (PR #1558):** Completed Milestone v0.20.0 Cluster B (`story-dfb61aea`) per approved design spec (`docs/superpowers/specs/2026-09-11-cluster-b-worktree-lifecycle-concurrency-design.md`) and implementation plan (`docs/superpowers/plans/2026-09-11-cluster-b-worktree-lifecycle-concurrency.md`).
 - **Architectural Deliverables:**

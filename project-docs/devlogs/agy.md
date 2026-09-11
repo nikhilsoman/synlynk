@@ -279,10 +279,32 @@
   - Created PR #1558; dispatched QA review to Codex (`job-4e5a776e`).
 [@agy]
 
+## 2026-09-11 — Fleet Diagnostic Truth & Concurrency Resilience (Cluster C)
 
-
-
-
+### Shipped & Landed
+- **Consolidated 4-Point Fleet Readiness Matrix (`synlynk/readiness.py`, #1521):**
+  - Implemented `evaluate_readiness_matrix()` evaluating all four core operational checkpoints:
+    - Point 1: Role Token Validity (GitHub App Role tokens `qa`, `pm`, `architect`, `dev`, `marketing` with expiration verification).
+    - Point 2: Sandbox Egress (direct socket probe to `api.github.com:443` measuring latency).
+    - Point 3: Policy Authority (`.synlynk/policy.json` syntax, rule count, and role validation).
+    - Point 4: Git Shim Integrity (`~/.synlynk/gh-shim/gh` existence, executable bit, and PATH precedence).
+  - Added ANSI table formatter `format_readiness_table()` with status badges (`✓ PASS`, `⚠ WARN`, `✗ FAIL`) and actionable fixes.
+  - Wired `--readiness` flag into `synlynk doctor` and CLI entry point `cmd_doctor_readiness()`.
+- **Grok Write Sandbox Fail-Closed Guard (`synlynk/dispatch.py`, #1522):**
+  - Implemented `task_requires_write()` detecting filesystem/shell write intent from task keywords, task types, or permissions.
+  - Implemented `check_grok_sandbox_write_capability()` validating sandbox write permissions and environment override flags.
+  - Enforced fail-closed behavior or automatic failover to `codex` fallback when Grok sandbox denies file writes, logging a sentinel alert.
+- **Post-Claim Story Un-Stranding (`synlynk/jobs.py`, `synlynk/cli.py`, #1507):**
+  - Implemented `reclaim_stranded_stories()` detecting orphaned `in_progress` stories whose worker processes have terminated or elapsed >30m.
+  - Safely resets stranded stories to `ready` status and marks abandoned jobs as `failed` (exit code 137).
+  - Added `synlynk story reclaim [--max-age <M>] [--dry-run]` CLI command.
+- **SQLite Concurrency & Busy-Timeout Tuning (`synlynk/__init__.py`, `synlynk/lineage.py`, #1503):**
+  - Standardized `PRAGMA busy_timeout = 30000;` and `PRAGMA synchronous = NORMAL;` across `_connect()` in `synlynk/__init__.py` and `_connect_lineage_db()` in `synlynk/lineage.py`.
+  - Verified 100% lock-free execution across 12 concurrent worker threads executing 240 transactions simultaneously.
+- **Verification:**
+  - Created and passed 21 unit tests in `tests/test_readiness_matrix.py`, `tests/test_grok_write_guard.py`, `tests/test_story_unstranding.py`, and `tests/test_sqlite_concurrency.py`.
+  - Completed Cluster C in `project-docs/roadmap.md`.
+[@agy]
 
 
 

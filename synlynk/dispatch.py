@@ -46,6 +46,10 @@ def _codex_network_flags(read_only: bool = False) -> list:
 def _secondary_harness(agent: str, baselines_map: dict = None) -> Optional[str]:
     """Return the next configured harness for a launch-time failover."""
     available = baselines_map or HARNESS_CAPABILITY_BASELINES
+    if agent == "grok":
+        for candidate in ("codex", "agy", "claude"):
+            if candidate in available:
+                return candidate
     try:
         index = _STARTUP_FAILOVER_ORDER.index(agent)
     except ValueError:
@@ -54,6 +58,53 @@ def _secondary_harness(agent: str, baselines_map: dict = None) -> Optional[str]:
         if candidate in available:
             return candidate
     return None
+
+
+def task_requires_write(
+    task: str,
+    task_type: Optional[str] = None,
+    permissions: Optional[list] = None,
+    requires_gh_write: bool = False,
+) -> bool:
+    """Return True if the task or permissions demand filesystem or shell write access."""
+    if requires_gh_write:
+        return True
+    if permissions and any(p in permissions for p in ("run:shell", "run:tests", "workspace:write")):
+        return True
+    if task_type in ("fix", "feat", "code", "build", "refactor", "implement"):
+        return True
+    if task_type in ("read", "research", "audit", "view", "inspect"):
+        return False
+    keywords = {"implement", "fix", "create", "write", "update", "refactor", "add", "delete", "remove", "patch"}
+    words = {w.lower().strip(".,:;!?") for w in (task or "").split()}
+    return bool(keywords & words)
+
+
+def check_grok_sandbox_write_capability(worktree_path: Optional[str] = None) -> bool:
+    """Validate Grok execution sandbox write capability (#1522).
+    
+    Returns False if environment flags or disk canary indicate that
+    sandboxed write operations will be denied or fail closed.
+    """
+    if os.environ.get("SYNLYNK_GROK_DENY_WRITE") in ("1", "true", "yes"):
+        return False
+    capable_env = os.environ.get("SYNLYNK_GROK_WRITE_CAPABLE", "").strip().lower()
+    if capable_env in ("0", "false", "no"):
+        return False
+
+    probe_dir = worktree_path or os.getcwd()
+    if not os.path.exists(probe_dir) or not os.path.isdir(probe_dir):
+        return True
+
+    canary_file = os.path.join(probe_dir, f".synlynk-write-canary-{os.getpid()}")
+    try:
+        with open(canary_file, "w") as f:
+            f.write("probe")
+        os.unlink(canary_file)
+        return True
+    except (OSError, PermissionError):
+        return False
+
 
 
 def _harness_for_org_role(org_role: str, baselines_map: dict, requires_gh_write: bool = False):
@@ -2767,6 +2818,28 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 "or dispatch to a different agent (Codex/Grok)."
             )
             raise SystemExit(1)
+    if agent == "grok" and task_requires_write(
+        task, task_type=task_type, permissions=grants, requires_gh_write=requires_gh_write
+    ):
+        if not check_grok_sandbox_write_capability():
+            sentinel_path = os.path.join(".synlynk", "sentinel.md")
+            write_alert = _pkg("_write_sentinel_alert", _write_sentinel_alert)
+            write_alert(
+                "WARNING",
+                "GROK_WRITE_SANDBOX_DENIED",
+                "Grok sandbox denies write capability for write-required task",
+                sentinel_path,
+            )
+            if not force_agent and _startup_failover:
+                secondary = _secondary_harness("grok", baselines_map) or "codex"
+                print(
+                    f"  ↪ Grok sandbox write denied (#1522); failing over to '{secondary}'"
+                )
+                agent = secondary
+            else:
+                raise RuntimeError(
+                    "Dispatch refused: Grok sandbox denies write capability for write-required task (see #1522)."
+                )
 
     if agent not in baselines_map:
         raise ValueError(f"Unknown agent: '{agent}'. Known: {list(baselines_map)}")

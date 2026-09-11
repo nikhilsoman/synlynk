@@ -350,6 +350,8 @@ def build_parser() -> argparse.ArgumentParser:
                                help="Write the proposed remediation without prompting")
     doctor_parser.add_argument("--live-probe", action="store_true",
                                help="Execute live in-sandbox gh-write probe during health checks")
+    doctor_parser.add_argument("--readiness", action="store_true",
+                               help="Evaluate and display the consolidated 4-point fleet readiness matrix")
 
     worktree_parser = subparsers.add_parser(
         "worktree", help="Audit and clean up stale git worktrees/branches"
@@ -901,6 +903,9 @@ def build_parser() -> argparse.ArgumentParser:
     story_draft_parser.add_argument("story_id")
     story_done_parser = story_sub.add_parser("done", help="Mark a story done")
     story_done_parser.add_argument("story_id")
+    story_reclaim_parser = story_sub.add_parser("reclaim", help="Reclaim orphaned in_progress stories")
+    story_reclaim_parser.add_argument("--max-age", type=int, default=30, help="Maximum age in minutes (default: 30)")
+    story_reclaim_parser.add_argument("--dry-run", action="store_true", help="Print stranded stories without modifying")
 
     pm_parser = subparsers.add_parser("pm", help="PM agent commands")
     pm_subparsers = pm_parser.add_subparsers(dest="pm_command")
@@ -1660,6 +1665,9 @@ def main(argv=None) -> None:
             cmd_story_draft(args.story_id)
         elif args.story_action == "done":
             cmd_story_done(args.story_id)
+        elif args.story_action == "reclaim":
+            from synlynk.jobs import cmd_story_reclaim
+            cmd_story_reclaim(max_age_minutes=getattr(args, "max_age", 30), dry_run=getattr(args, "dry_run", False))
     elif args.command == "pm" and args.pm_command == "sweep":
         from synlynk.pm_agent import cmd_pm_sweep
 
