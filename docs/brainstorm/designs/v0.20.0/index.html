@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Synlynk v0.20.0 Design Review — Obsidian Control Plane & Cockpit</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-base: #09090d;
+      --bg-surface: #0e0e13;
+      --bg-card: #15151c;
+      --bg-card-hover: #1c1b24;
+      --border-subtle: #242430;
+      --border-focus: #6366f1;
+      --text-main: #e4e1e9;
+      --text-muted: #9592a3;
+      --accent-indigo: #6366f1;
+      --accent-emerald: #10b981;
+      --accent-amber: #f59e0b;
+      --accent-ruby: #ef4444;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg-base);
+      color: var(--text-main);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      background-color: var(--bg-surface);
+      border-bottom: 1px solid var(--border-subtle);
+      padding: 1rem 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+    .brand-section {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    .brand-logo {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, #6366f1 0%, #4338ca 100%);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 1rem;
+      color: white;
+      box-shadow: 0 0 16px rgba(99, 102, 241, 0.4);
+    }
+    .brand-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      font-weight: 500;
+    }
+    .badge-milestone {
+      background: rgba(99, 102, 241, 0.15);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      color: #a5b4fc;
+    }
+    .badge-status {
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      color: #6ee7b7;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+    .pulse-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #10b981;
+      box-shadow: 0 0 8px #10b981;
+    }
+    nav.screen-tabs {
+      display: flex;
+      gap: 0.5rem;
+      background: var(--bg-base);
+      padding: 0.25rem;
+      border-radius: 6px;
+      border: 1px solid var(--border-subtle);
+    }
+    .tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 0.5rem 1rem;
+      font-size: 0.85rem;
+      font-weight: 500;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .tab-btn:hover {
+      color: var(--text-main);
+      background: rgba(255, 255, 255, 0.05);
+    }
+    .tab-btn.active {
+      background: var(--bg-card);
+      color: #ffffff;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+      border: 1px solid var(--border-subtle);
+    }
+    .actions-section {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .view-mode-btn {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-main);
+      padding: 0.45rem 0.85rem;
+      font-size: 0.8rem;
+      font-weight: 500;
+      border-radius: 5px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+    .view-mode-btn:hover {
+      border-color: var(--accent-indigo);
+    }
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 1.5rem 2rem;
+      gap: 1.5rem;
+    }
+    .banner {
+      background: linear-gradient(90deg, rgba(99, 102, 241, 0.08) 0%, rgba(16, 185, 129, 0.04) 100%);
+      border: 1px solid rgba(99, 102, 241, 0.2);
+      border-radius: 8px;
+      padding: 1rem 1.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .banner-text h2 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+    }
+    .banner-text p {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+    .meta-tags {
+      display: flex;
+      gap: 0.5rem;
+    }
+    .screen-container {
+      display: none;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    .screen-container.active {
+      display: flex;
+    }
+    .screen-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: 1.25rem 1.5rem;
+    }
+    .screen-title h3 {
+      font-size: 1.2rem;
+      font-weight: 600;
+      margin-bottom: 0.35rem;
+    }
+    .screen-title p {
+      font-size: 0.875rem;
+      color: var(--text-muted);
+      max-width: 800px;
+      line-height: 1.45;
+    }
+    .screen-actions {
+      display: flex;
+      gap: 0.75rem;
+    }
+    .action-btn {
+      padding: 0.5rem 1rem;
+      font-size: 0.82rem;
+      font-weight: 600;
+      border-radius: 6px;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      cursor: pointer;
+    }
+    .action-primary {
+      background: var(--accent-indigo);
+      color: white;
+      border: none;
+      box-shadow: 0 0 12px rgba(99, 102, 241, 0.35);
+    }
+    .action-secondary {
+      background: var(--bg-card);
+      color: var(--text-main);
+      border: 1px solid var(--border-subtle);
+    }
+    .action-primary:hover { opacity: 0.9; }
+    .action-secondary:hover { border-color: var(--accent-indigo); }
+    .preview-frame-wrapper {
+      background: #000;
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      overflow: hidden;
+      height: 780px;
+      position: relative;
+    }
+    iframe.preview-iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      background: var(--bg-base);
+    }
+    img.preview-image {
+      width: 100%;
+      height: auto;
+      display: block;
+      border-radius: 8px;
+      border: 1px solid var(--border-subtle);
+    }
+    .architecture-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+    .arch-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: 6px;
+      padding: 1rem;
+    }
+    .arch-card h4 {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #c7c4d7;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .arch-card ul {
+      list-style: none;
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+    .arch-card code {
+      font-family: 'JetBrains Mono', monospace;
+      color: #a5b4fc;
+      background: rgba(99, 102, 241, 0.1);
+      padding: 0.1rem 0.3rem;
+      border-radius: 3px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand-section">
+      <div class="brand-logo">S</div>
+      <div class="brand-title">
+        Synlynk Cockpit Visuals
+        <span class="badge badge-milestone">v0.20.0 Sprint 1</span>
+        <span class="badge badge-status"><span class="pulse-dot"></span>Stitch MCP Generated</span>
+      </div>
+    </div>
+
+    <nav class="screen-tabs">
+      <button class="tab-btn active" onclick="switchTab(0)">
+        <span>1. BS-6 Tri-Directional Visualizer</span>
+      </button>
+      <button class="tab-btn" onclick="switchTab(1)">
+        <span>2. Agent Role & GitHub App Onboarding</span>
+      </button>
+      <button class="tab-btn" onclick="switchTab(2)">
+        <span>3. Worktree Sweep Control Panel</span>
+      </button>
+    </nav>
+
+    <div class="actions-section">
+      <button class="view-mode-btn" id="mode-toggle" onclick="toggleViewMode()">
+        Switch to High-Res Screenshot Mode
+      </button>
+    </div>
+  </header>
+
+  <main>
+    <div class="banner">
+      <div class="banner-text">
+        <h2>SOP Confirmation Gate: Operator Visual Review</h2>
+        <p>Generated via Google Stitch MCP (Project ID: <code>3671496916099756142</code>). Review layout, information density, obsidian palette, and developer workflows before proceeding to code implementation.</p>
+      </div>
+      <div class="meta-tags">
+        <span class="badge badge-milestone">Theme: Obsidian Kinetic</span>
+        <span class="badge badge-milestone">Fonts: Inter + JetBrains Mono</span>
+        <span class="badge badge-status">Sprint 1: Ready</span>
+      </div>
+    </div>
+
+    <!-- SCREEN 1 -->
+    <div class="screen-container active" id="screen-0">
+      <div class="screen-header">
+        <div class="screen-title">
+          <h3>Screen 1: BS-6 Tri-Directional Workspace Visualizer (Product View)</h3>
+          <p>Interactive graph canvas mapping high-level user touchpoints and journeys. Shows 3-way view toggle (Product / Logical / Infra), journey hierarchy rail, live route nodes with linked code symbols (<code>synlynk/viz.py</code>, socket :8888), and real-time AST inspector drawer.</p>
+        </div>
+        <div class="screen-actions">
+          <a class="action-btn action-secondary" href="screen1_bs6_product_view.png" target="_blank">View Fullscreen PNG</a>
+          <a class="action-btn action-primary" href="screen1_bs6_product_view.html" target="_blank">Open Standalone HTML ↗</a>
+        </div>
+      </div>
+      <div class="preview-frame-wrapper" id="frame-wrapper-0">
+        <iframe class="preview-iframe" src="screen1_bs6_product_view.html"></iframe>
+      </div>
+      <div class="architecture-grid">
+        <div class="arch-card">
+          <h4>Tri-Directional Switching</h4>
+          <ul>
+            <li>• <b>Product View:</b> Journey maps, route nodes, user touchpoints</li>
+            <li>• <b>Logical View:</b> Module imports, symbol references, AST hierarchy</li>
+            <li>• <b>Infra View:</b> Daemon processes, socket allocations, container ports</li>
+          </ul>
+        </div>
+        <div class="arch-card">
+          <h4>Code Symbol Binding</h4>
+          <ul>
+            <li>• Gateway: <code>synlynk.cli.entrypoint</code> (:8081)</li>
+            <li>• Dashboard: <code>synlynk.viz</code> (WebSocket streaming :8888)</li>
+            <li>• Relay: <code>events.dispatch_hook</code> (GitHub webhook queue)</li>
+          </ul>
+        </div>
+        <div class="arch-card">
+          <h4>Inspector Telemetry</h4>
+          <ul>
+            <li>• Governed stories: <code>story-304499f1</code>, <code>story-2891bb02</code></li>
+            <li>• Cross-links to logical graph IDs: <code>#L-402</code>, <code>#L-118</code></li>
+            <li>• Latency: 14ms avg, 248 msg/s, 0.00% error rate</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 2 -->
+    <div class="screen-container" id="screen-1">
+      <div class="screen-header">
+        <div class="screen-title">
+          <h3>Screen 2: Autonomous Agent Role & GitHub App Onboarding Wizard</h3>
+          <p>Guided 4-step wizard embedded directly into Synlynk Cockpit. Allows developers to provision scoped GitHub App roles without leaving the browser: Manifest Generation -> Permission Scoping Matrix -> PEM Key Attestation -> Role Charter Binding.</p>
+        </div>
+        <div class="screen-actions">
+          <a class="action-btn action-secondary" href="screen2_github_app_onboarding.png" target="_blank">View Fullscreen PNG</a>
+          <a class="action-btn action-primary" href="screen2_github_app_onboarding.html" target="_blank">Open Standalone HTML ↗</a>
+        </div>
+      </div>
+      <div class="preview-frame-wrapper" id="frame-wrapper-1">
+        <iframe class="preview-iframe" src="screen2_github_app_onboarding.html"></iframe>
+      </div>
+      <div class="architecture-grid">
+        <div class="arch-card">
+          <h4>Linear 4-Step Stepper</h4>
+          <ul>
+            <li>• <b>Step 1:</b> App Manifest (Auto-configured for target repo)</li>
+            <li>• <b>Step 2 (Active):</b> Scoped Permission Configuration Matrix</li>
+            <li>• <b>Step 3:</b> Credential, PEM Private Key & Webhook Secret</li>
+            <li>• <b>Step 4:</b> Charter Binding & Sentinel Policy Lock</li>
+          </ul>
+        </div>
+        <div class="arch-card">
+          <h4>Least-Privilege Scoping</h4>
+          <ul>
+            <li>• <code>contents:write</code> (Branch & worktree writes)</li>
+            <li>• <code>pull_requests:write</code> (Review comments & gate check)</li>
+            <li>• <code>administration:read</code> (Strictly denied secret access)</li>
+            <li>• Warning badge on auto-approval without policy check</li>
+          </ul>
+        </div>
+        <div class="arch-card">
+          <h4>Role Target Identity</h4>
+          <ul>
+            <li>• Role handle: <code>@synlynk-qa</code> (Quality Assurance)</li>
+            <li>• Engine backend: <code>Codex (Agy fallback)</code></li>
+            <li>• Durability: Durable operating loop</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 3 -->
+    <div class="screen-container" id="screen-2">
+      <div class="screen-header">
+        <div class="screen-title">
+          <h3>Screen 3: Interactive Worktree Sweep & Lifecycle Control Panel</h3>
+          <p>Real-time visual sweep engine categorizing active fleet worktrees into 4 states: Active Working, Safe to Prune, Needs Review, and Dirty/Orphan. Features 1-click batch cleanup with auto-stash safety protections.</p>
+        </div>
+        <div class="screen-actions">
+          <a class="action-btn action-secondary" href="screen3_worktree_sweep_panel.png" target="_blank">View Fullscreen PNG</a>
+          <a class="action-btn action-primary" href="screen3_worktree_sweep_panel.html" target="_blank">Open Standalone HTML ↗</a>
+        </div>
+      </div>
+      <div class="preview-frame-wrapper" id="frame-wrapper-2">
+        <iframe class="preview-iframe" src="screen3_worktree_sweep_panel.html"></iframe>
+      </div>
+      <div class="architecture-grid">
+        <div class="arch-card">
+          <h4>Categorized Metric Cards</h4>
+          <ul>
+            <li>• <span style="color: var(--accent-indigo)">■</span> <b>Active Working (2):</b> Live daemons (PID 41829, 42104)</li>
+            <li>• <span style="color: var(--accent-emerald)">■</span> <b>Safe to Prune (3):</b> Merged branches, 89MB reclaimable</li>
+            <li>• <span style="color: var(--accent-amber)">■</span> <b>Needs Review (1):</b> 2 unpushed diverged commits</li>
+            <li>• <span style="color: var(--accent-ruby)">■</span> <b>Dirty / Orphan (1):</b> Zombie directory, 128MB</li>
+          </ul>
+        </div>
+        <div class="arch-card">
+          <h4>Batch Actions & Safety</h4>
+          <ul>
+            <li>• 1-Click <code>Clean 3 Safe Worktrees</code> batch CTA</li>
+            <li>• Dry-run safety diff preview before destructive deletion</li>
+            <li>• Auto-stash safeguard prevents dirty file loss</li>
+          </ul>
+        </div>
+        <div class="arch-card">
+          <h4>Card Quick Actions</h4>
+          <ul>
+            <li>• <code>[Open Shell]</code>: Drops directly into worktree terminal</li>
+            <li>• <code>[View Diff]</code>: Inspect uncommitted or diverged code</li>
+            <li>• <code>[Prune Now]</code>: Surgical deletion of single merged worktree</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    let currentTab = 0;
+    let isImageMode = false;
+
+    const screens = [
+      { html: 'screen1_bs6_product_view.html', img: 'screen1_bs6_product_view.png' },
+      { html: 'screen2_github_app_onboarding.html', img: 'screen2_github_app_onboarding.png' },
+      { html: 'screen3_worktree_sweep_panel.html', img: 'screen3_worktree_sweep_panel.png' }
+    ];
+
+    function switchTab(index) {
+      currentTab = index;
+      document.querySelectorAll('.tab-btn').forEach((btn, i) => {
+        btn.classList.toggle('active', i === index);
+      });
+      document.querySelectorAll('.screen-container').forEach((container, i) => {
+        container.classList.toggle('active', i === index);
+      });
+    }
+
+    function toggleViewMode() {
+      isImageMode = !isImageMode;
+      const btn = document.getElementById('mode-toggle');
+      btn.textContent = isImageMode ? 'Switch to Interactive HTML Mode' : 'Switch to High-Res Screenshot Mode';
+
+      screens.forEach((screen, i) => {
+        const wrapper = document.getElementById(`frame-wrapper-${i}`);
+        if (isImageMode) {
+          wrapper.style.height = 'auto';
+          wrapper.innerHTML = `<img class="preview-image" src="${screen.img}" alt="Screenshot preview">`;
+        } else {
+          wrapper.style.height = '780px';
+          wrapper.innerHTML = `<iframe class="preview-iframe" src="${screen.html}"></iframe>`;
+        }
+      });
+    }
+  </script>
+</body>
+</html>

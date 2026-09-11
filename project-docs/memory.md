@@ -1,5 +1,13 @@
 # synlynk Memory
 
+## Milestone v0.20.0 Stitch Visual Designs Archived & Vizor Direct Enhancement Strategy (decided 2026-09-11)
+- **Stitch Visual Prototypes Archived for Future Reference:** Preserved Stitch project `Synlynk — Visual Workspace Cockpit & Agent Role Studio` (ID `3671496916099756142`), design system asset `assets/14807108601568982212` (`Synlynk Obsidian Cockpit`), standalone interactive HTML prototypes (`screen1_bs6_product_view.html`, `screen2_github_app_onboarding.html`, `screen3_worktree_sweep_panel.html`), and master review portal in `docs/brainstorm/designs/v0.20.0/`.
+- **Simplified Onboarding Model Adopted:** Rejected low-level 4-step GitHub App permission matrices and raw PEM key wizards as excessively complex for developers. Re-anchored onboarding to a high-level, goal-driven flow: Repository scan -> Goal/Persona identification -> PM/TPM autonomous role recommendation (e.g. film vs. software engineering) -> 1-click role provisioning.
+- **Direct Vizor Enhancement Strategy:** Rather than building a detached or overly complex standalone cockpit UI, enhance the existing `synlynk viz` (Vizor) engine directly:
+  1. Upgrade `tube.html` (Architect Map) and `journeys.html` into the full BS-6 Tri-Directional Visualizer (Product / Logical / Infra views).
+  2. Integrate a streamlined **Workspace Agent Studio** into Vizor for viewing living charters and 1-click role creation.
+  3. Integrate **Worktree Lifecycle & Sweep Engine** directly into `observatory.html` for 1-click clean and safety audits. [@agy]
+
 ## BS-6 Repo / Workspace Visualization Design Spec Landed (decided/shipped 2026-09-09)
 - **Specification Shipped (#1533):** Shipped formal Design Spec (`docs/superpowers/specs/2026-09-09-bs6-repo-workspace-visualization-design.md`) and spec verification test (`tests/test_bs6_workspace_views_spec.py`) resolving BS-6 continuation (story `story-adhoc-1788972982` / `story-f5513a93`).
 - **Core Architecture Decisions:**
@@ -476,6 +484,9 @@ flat-file reconciliation is serialized. [@codex]
 - Full design spec: `docs/superpowers/specs/2026-08-30-harness-agent-separation-design.md`.
 [@agy]
 
+## BS-6 Projection Engine (2026-09-11)
+- [@nikhilsoman] Task 1 adds refreshable SQLite projections for product, logical, and infra workspace views. Extractors return JSON-ready records and persist nodes, edges, and per-view metadata; filesystem extraction remains safe when scanner state is absent.
+
 ## Superseded Decisions
 - ~~Tier model (Solo/Team/Enterprise)~~ → retired 2026-06-06. Replaced by OS layer model.
 - ~~"Context Switchboard" framing~~ → retired 2026-06-06. Replaced by "OS for multi-agent development."
@@ -637,5 +648,4 @@ work because local git activity is not sufficient corroboration.
   - Mandated synlynk.com (`website/`) maintenance and automated compilation/export of the three canonical Synlynk Docs bundles in `docs/` (`synlynk-quickstart-guide.html/.pdf`, `synlynk-official-reference.html/.pdf`, `synlynk-command-reference.html/.pdf`).
   - Integrated `sync_readme_for_release()` into `synlynk release`, establishing the Marketing Release Ceremony dispatched by PM/TPM as a prerequisite gate before public release tagging.
 [@agy]
-
 

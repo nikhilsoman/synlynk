@@ -8,20 +8,23 @@ import subprocess
 import sys
 import threading
 import time
+import uuid
 import webbrowser
-from typing import Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 from synlynk import _get_db, _query_repo_file_tree
 from synlynk.observatory import (
     build_job_observatory_snapshot,
     write_observatory_snapshot,
 )
+from synlynk.viz_views import build_workspace_views_snapshot
 
 VIZ_CACHE_DIR = ".synlynk/viz-cache"
 VIZ_NOTES_PATH = ".synlynk/viz-notes.json"
 VIZ_META_PATH = ".synlynk/viz-meta.json"
 VIZ_WORKSPACE_MAP_PATH = ".synlynk/vizor-workspace-map.json"
 DEFAULT_PORT = 8721
+_KNOWN_AGENTS = {"claude", "agy", "codex", "grok", "muse"}
 
 
 def _live_js(port: int) -> str:
@@ -166,8 +169,55 @@ def generate_viz_data() -> dict:
             pass
         return actions
 
+    def _collect_worktrees() -> dict:
+        """Project the worktree audit into the Observatory JSON shape."""
+        empty = {
+            "items": [],
+            "active": 0,
+            "safe": 0,
+            "needs_review": 0,
+            "dirty_orphan": 0,
+        }
+        try:
+            from synlynk.worktree import _collect_verdicts, _get_repo_root
+
+            main_repo_path = _get_repo_root()
+            verdicts = _collect_verdicts(main_repo_path, os.getcwd())
+        except Exception:
+            return empty
+
+        items = []
+        counts = {key: 0 for key in empty if key != "items"}
+        for verdict in verdicts:
+            raw_verdict = str(getattr(verdict, "verdict", "") or "")
+            reason = str(getattr(verdict, "reason", "") or "")
+            if raw_verdict == "safe":
+                status = "safe"
+            elif raw_verdict == "needs-review":
+                status = "needs-review"
+            elif any(token in reason.lower() for token in ("dirty", "artifact", "orphan", "missing")):
+                status = "dirty-artifact"
+            else:
+                status = "active"
+            counts[{
+                "safe": "safe",
+                "needs-review": "needs_review",
+                "dirty-artifact": "dirty_orphan",
+                "active": "active",
+            }[status]] += 1
+            items.append({
+                "path": getattr(verdict, "path", ""),
+                "branch": getattr(verdict, "branch", ""),
+                "verdict": raw_verdict,
+                "status": status,
+                "reason": reason,
+                "nested_under": getattr(verdict, "nested_under", None),
+            })
+        return {"items": items, **counts}
+
     def _base_data() -> dict:
         observatory = build_job_observatory_snapshot()
+        observatory["worktrees"] = _collect_worktrees()
         try:
             file_tree = _query_repo_file_tree()
         except Exception:
@@ -175,17 +225,31 @@ def generate_viz_data() -> dict:
         repos = list(workspace_repos)
         for repo in repos:
             repo["active_dream_count"] = active_story_count if len(repos) == 1 else 0
+        try:
+            views_conn = _get_db()
+            try:
+                workspace_views = build_workspace_views_snapshot(views_conn, os.getcwd())
+            finally:
+                views_conn.close()
+        except Exception:
+            workspace_views = {
+                "product": {"nodes": [], "edges": []},
+                "logical": {"nodes": [], "edges": []},
+                "infra": {"nodes": [], "edges": []},
+            }
         return {
             "workspace": {
                 "name": _workspace_name(),
                 "updated_at": _ts(),
                 "repos": repos,
             },
+            "workspace_views": workspace_views,
             "goals": [],
             "spec_verifications": _load_spec_verifications(),
             "dreams": [],
             "costs": {"total_usd": 0.0, "total_usd_estimated": 0.0, "by_agent": {}, "by_stage": {}},
             "agents": {},
+            "workspace_agents": _load_workspace_agents(),
             "workspace_map": _load_workspace_map(),
             "file_tree": file_tree,
             "notes": _load_json_optional(VIZ_NOTES_PATH, default={}),
@@ -215,6 +279,52 @@ def generate_viz_data() -> dict:
         except Exception:
             return {}
 
+    def _load_workspace_agents() -> list:
+        """Project the durable agent registry into the Vizor data shape."""
+        from synlynk import agent_store, charter_schema
+
+        try:
+            registry = agent_store.list_agents()
+        except Exception:
+            return []
+        projected = []
+        for entry in registry:
+            if not isinstance(entry, dict):
+                continue
+            aliases = entry.get("aliases") or []
+            role = next(
+                (alias.get("value") for alias in aliases
+                 if isinstance(alias, dict) and alias.get("kind") == "role_slug"),
+                "",
+            )
+            if not role:
+                continue
+            try:
+                charter, revision = agent_store.read_charter(entry.get("agent_id", ""))
+            except Exception:
+                charter, revision = "", 0
+            metadata = {}
+            body = charter
+            if charter.startswith("---\n"):
+                _, metadata_text, body = charter.partition("---\n")
+                metadata_text, _, body = metadata_text.partition("---\n")
+                metadata = charter_schema.parse_frontmatter(metadata_text)
+            harnesses = metadata.get("harnesses") or metadata.get("target_harnesses") or []
+            if isinstance(harnesses, str):
+                harnesses = [item.strip() for item in harnesses.strip("[]").split(",") if item.strip()]
+            projected.append({
+                "agent_id": entry.get("agent_id", ""),
+                "role": role,
+                "durability": metadata.get("durability", "dispatch-only"),
+                "target_harnesses": list(harnesses) if isinstance(harnesses, list) else [],
+                "charter": charter,
+                "charter_excerpt": " ".join(body.strip().split())[:220],
+                "charter_revision": revision,
+                "disabled": bool(entry.get("disabled")),
+                "created_at": entry.get("created_at", ""),
+            })
+        return projected
+
     def _normalize_stage(name: str) -> str:
         key = (name or "").strip().lower()
         aliases = {
@@ -229,7 +339,7 @@ def generate_viz_data() -> dict:
         }
         return aliases.get(key, key)
 
-    _KNOWN_AGENTS = {"claude", "agy", "codex", "grok"}
+    _KNOWN_AGENTS = {"claude", "agy", "codex", "grok", "muse"}
 
     def _looks_like_stage_label(name: str) -> bool:
         # Reject anything that isn't a known agent name — stories.phase is repurposed
@@ -279,13 +389,25 @@ def generate_viz_data() -> dict:
         sentinel_path = ".synlynk/sentinel.md"
         from synlynk.sentinel import _iter_sentinel_alerts
         alerts = []
-        for alert in _iter_sentinel_alerts(sentinel_path, active_only=True):
-            alerts.append({
-                "ts": alert.get("timestamp", ""),
-                "pattern": alert.get("code", ""),
-                "severity": alert.get("original_severity") or alert.get("severity", "INFO"),
-                "resolved": "[RESOLVED]" in alert.get("raw_line", ""),
-            })
+        try:
+            for alert in _iter_sentinel_alerts(sentinel_path, active_only=False):
+                sev = alert.get("original_severity") or alert.get("severity") or "INFO"
+                sev_upper = str(sev).strip().upper()
+                if sev_upper in ("CRITICAL", "CRIT"):
+                    severity_out = "CRITICAL"
+                elif sev_upper in ("WARNING", "WARN"):
+                    severity_out = "WARNING"
+                else:
+                    severity_out = "INFO"
+                alerts.append({
+                    "ts": alert.get("timestamp") or "",
+                    "pattern": alert.get("code") or "",
+                    "severity": severity_out,
+                    "resolved": "[RESOLVED]" in alert.get("raw_line", "") or alert.get("code") == "RESOLVED",
+                    "message": alert.get("message") or "",
+                })
+        except Exception:
+            pass
         return alerts
 
     def _load_spec_verifications(limit: int = 20) -> list:
@@ -622,8 +744,11 @@ def generate_index_html(data: dict, port: int) -> str:
 
     nav_items = [
         ("gantt", "📅", "Gantt", "gantt.html", True),
-        ("journeys", "🗺", "Journeys", "journeys.html", False),
+        ("product", "🗺", "Product View", "product.html", False),
+        ("logical", "🧩", "Logical View", "logical.html", False),
         ("tube", "🚇", "Architect Map", "tube.html", False),
+        ("infra", "⚙️", "Infra View", "infra.html", False),
+        ("roles", "🤖", "Agent Roles", "roles.html", False),
         ("effort", "💰", "Effort & Cost", "effort.html", False),
         ("observatory", "◉", "Observatory", "observatory.html", False),
         ("efficiency", "📊", "Efficiency", "efficiency.html", False),
@@ -657,6 +782,7 @@ def generate_index_html(data: dict, port: int) -> str:
       --ag-agy-bg:  #e8f0fe;--ag-agy-bd:  #4285f4;--ag-agy-tx:  #1a56c7;
       --ag-codex-bg:#e6f4f0;--ag-codex-bd:#10a37f;--ag-codex-tx:#0b7a60;
       --ag-grok-bg: #f0f0f0;--ag-grok-bd: #666;   --ag-grok-tx: #333;
+      --ag-muse-bg: #fdf2f8;--ag-muse-bd: #db2777;--ag-muse-tx: #9d174d;
     }
     [data-theme="dark"] {
       --bg:#0d0f14; --bg2:#0a0c10; --bg3:#13171f;
@@ -676,6 +802,7 @@ def generate_index_html(data: dict, port: int) -> str:
       --ag-agy-bg:  #0d1a3a;--ag-agy-bd:  #4285f4;--ag-agy-tx:  #4285f4;
       --ag-codex-bg:#0a1f18;--ag-codex-bd:#10a37f;--ag-codex-tx:#10a37f;
       --ag-grok-bg: #1a1a1a;--ag-grok-bd: #e0e0e0;--ag-grok-tx: #e0e0e0;
+      --ag-muse-bg: #2e081d;--ag-muse-bd: #f472b6;--ag-muse-tx: #f472b6;
     }
 
     * { box-sizing:border-box; margin:0; padding:0; }
@@ -1985,6 +2112,176 @@ __LIVE_JS_HTML__
     )
 
 
+_BS6_VIEW_JS = """
+function bs6LayoutGraph(nodes, edges) {
+  const W = 900, H = 620, ITER = 200;
+  const positions = {};
+  nodes.forEach((n, i) => {
+    const angle = (2 * Math.PI * i) / Math.max(nodes.length, 1);
+    positions[n.id] = { x: W / 2 + 260 * Math.cos(angle), y: H / 2 + 220 * Math.sin(angle) };
+  });
+  for (let iter = 0; iter < ITER; iter++) {
+    nodes.forEach(a => {
+      let fx = 0, fy = 0;
+      nodes.forEach(b => {
+        if (a.id === b.id) return;
+        const dx = positions[a.id].x - positions[b.id].x;
+        const dy = positions[a.id].y - positions[b.id].y;
+        const dist = Math.max(Math.sqrt(dx * dx + dy * dy), 1);
+        const repel = 4000 / (dist * dist);
+        fx += (dx / dist) * repel;
+        fy += (dy / dist) * repel;
+      });
+      edges.forEach(e => {
+        if (e.from_id !== a.id && e.to_id !== a.id) return;
+        const otherId = e.from_id === a.id ? e.to_id : e.from_id;
+        if (!positions[otherId]) return;
+        const dx = positions[otherId].x - positions[a.id].x;
+        const dy = positions[otherId].y - positions[a.id].y;
+        const dist = Math.max(Math.sqrt(dx * dx + dy * dy), 1);
+        const attract = dist * 0.01;
+        fx += (dx / dist) * attract;
+        fy += (dy / dist) * attract;
+      });
+      positions[a.id].x = Math.min(W - 70, Math.max(70, positions[a.id].x + fx));
+      positions[a.id].y = Math.min(H - 40, Math.max(40, positions[a.id].y + fy));
+    });
+  }
+  return positions;
+}
+
+function bs6RenderGraph() {
+  const svg = document.getElementById('bs6-svg');
+  if (!svg) return;
+  const nodes = window.BS6_NODES || [];
+  const edges = window.BS6_EDGES || [];
+  const pos = bs6LayoutGraph(nodes, edges);
+  let markup = '';
+  edges.forEach(e => {
+    const a = pos[e.from_id], b = pos[e.to_id];
+    if (!a || !b) return;
+    markup += '<line class="am-edge" x1="' + a.x + '" y1="' + a.y + '" x2="' + b.x + '" y2="' + b.y + '" stroke="#94a3b8"></line>';
+  });
+  nodes.forEach(n => {
+    const p = pos[n.id];
+    if (!p) return;
+    const label = String(n.label || n.id || '');
+    const w = Math.max(90, label.length * 7 + 20);
+    markup += '<g class="am-node" transform="translate(' + (p.x - w / 2) + ',' + (p.y - 18) + ')" onclick="bs6OpenDrawer(\\'' + n.id + '\\')">' +
+      '<rect width="' + w + '" height="36" rx="8"></rect>' +
+      '<text x="' + (w / 2) + '" y="22" text-anchor="middle">' + label + '</text>' +
+      '</g>';
+  });
+  svg.innerHTML = markup;
+}
+
+function bs6OpenDrawer(nodeId) {
+  const node = (window.BS6_NODES || []).find(n => n.id === nodeId);
+  if (!node) return;
+  document.getElementById('am-drawer-title').textContent = node.label;
+  let attrs = {};
+  try { attrs = JSON.parse(node.attrs_json || '{}'); } catch (e) {}
+  const attrLines = Object.keys(attrs).map(k => '<div>' + k + ': <code>' + attrs[k] + '</code></div>').join('');
+  document.getElementById('am-drawer-body').innerHTML =
+    '<div>Kind: ' + (node.kind || '') + '</div>' +
+    '<div>Source: <code>' + (node.source_path || '') + '</code></div>' +
+    '<div>Provenance: ' + (node.provenance || '') + '</div>' +
+    attrLines;
+  document.getElementById('am-drawer').classList.add('open');
+  document.getElementById('am-ov').classList.add('open');
+}
+
+function bs6CloseDrawer() {
+  document.getElementById('am-drawer').classList.remove('open');
+  document.getElementById('am-ov').classList.remove('open');
+}
+
+bs6RenderGraph();
+"""
+
+
+def _generate_bs6_view_html(data: dict, port: int, view_key: str, view_title: str) -> str:
+    """Shared self-contained node/edge SVG view renderer for the BS-6 Product/Logical/Infra views."""
+    workspace = data.get("workspace", {})
+    workspace_name = str(workspace.get("name") or "workspace")
+    workspace_views = data.get("workspace_views") or {}
+    view_data = workspace_views.get(view_key) or {"nodes": [], "edges": []}
+    nodes = view_data.get("nodes") or []
+    edges = view_data.get("edges") or []
+
+    nodes_json = json.dumps(nodes)
+    edges_json = json.dumps(edges)
+    live_js_html = _live_js(port)
+
+    kind_counts: Dict[str, int] = {}
+    for n in nodes:
+        kind = str(n.get("kind") or "unknown")
+        kind_counts[kind] = kind_counts.get(kind, 0) + 1
+    legend_html = "".join(
+        f'<div class="legend-item"><span class="legend-dot"></span>{html.escape(kind.title())} ({count})</div>'
+        for kind, count in sorted(kind_counts.items())
+    )
+
+    template = """<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<title>synlynk Vizor — __VIEW_TITLE__</title>
+<style>
+__STYLE_CONTENT__
+</style>
+</head>
+<body>
+<div class="am-header">
+  <h1>__VIEW_TITLE__ — __WORKSPACE_NAME__</h1>
+</div>
+<div class="am-legend">__LEGEND_HTML__</div>
+<div id="bs6-graph-view" class="am-view active">
+  <svg id="bs6-svg" width="100%" height="640"></svg>
+</div>
+<div class="ov" id="am-ov" onclick="bs6CloseDrawer()"></div>
+<div class="am-drawer" id="am-drawer">
+  <div class="am-drawer-header">
+    <span id="am-drawer-title">—</span>
+    <button onclick="bs6CloseDrawer()">✕</button>
+  </div>
+  <div class="am-drawer-body" id="am-drawer-body"></div>
+</div>
+<script>
+window.BS6_NODES = __NODES_JSON__;
+window.BS6_EDGES = __EDGES_JSON__;
+window.VIZOR_PORT = __PORT__;
+__BS6_VIEW_JS__
+</script>
+__LIVE_JS_HTML__
+</body>
+</html>"""
+    return (
+        template
+        .replace("__STYLE_CONTENT__", _ARCHITECT_MAP_STYLE)
+        .replace("__VIEW_TITLE__", html.escape(view_title))
+        .replace("__WORKSPACE_NAME__", html.escape(workspace_name))
+        .replace("__LEGEND_HTML__", legend_html)
+        .replace("__NODES_JSON__", nodes_json)
+        .replace("__EDGES_JSON__", edges_json)
+        .replace("__PORT__", str(port))
+        .replace("__BS6_VIEW_JS__", _BS6_VIEW_JS)
+        .replace("__LIVE_JS_HTML__", live_js_html)
+    )
+
+
+def generate_product_html(data: dict, port: int) -> str:
+    return _generate_bs6_view_html(data, port, "product", "Product View")
+
+
+def generate_logical_html(data: dict, port: int) -> str:
+    return _generate_bs6_view_html(data, port, "logical", "Logical View")
+
+
+def generate_infra_html(data: dict, port: int) -> str:
+    return _generate_bs6_view_html(data, port, "infra", "Infra View")
+
+
 def generate_journeys_html(data: dict, port: int) -> str:
     data_json = json.dumps(data)
     live_js_block = _live_js(port)
@@ -2015,6 +2312,7 @@ def generate_journeys_html(data: dict, port: int) -> str:
   --ag-agy-bg:  #e8f0fe;--ag-agy-bd:  #4285f4;--ag-agy-tx:  #1a56c7;
   --ag-codex-bg:#e6f4f0;--ag-codex-bd:#10a37f;--ag-codex-tx:#0b7a60;
   --ag-grok-bg: #f0f0f0;--ag-grok-bd: #666;   --ag-grok-tx: #333;
+  --ag-muse-bg: #fdf2f8;--ag-muse-bd: #db2777;--ag-muse-tx: #9d174d;
 }
 [data-theme="dark"] {
   --bg:#0d0f14; --bg2:#0a0c10; --bg3:#13171f;
@@ -2033,6 +2331,7 @@ def generate_journeys_html(data: dict, port: int) -> str:
   --ag-agy-bg:  #0d1a3a;--ag-agy-bd:  #4285f4;--ag-agy-tx:  #4285f4;
   --ag-codex-bg:#0a1f18;--ag-codex-bd:#10a37f;--ag-codex-tx:#10a37f;
   --ag-grok-bg: #1a1a1a;--ag-grok-bd: #e0e0e0;--ag-grok-tx: #e0e0e0;
+  --ag-muse-bg: #2e081d;--ag-muse-bd: #f472b6;--ag-muse-tx: #f472b6;
 }
 
 * { box-sizing:border-box; margin:0; padding:0; }
@@ -2286,6 +2585,7 @@ body {
 .aa-agy    { background: var(--ag-agy-bg);    border-color: var(--ag-agy-bd);    color: var(--ag-agy-tx);    }
 .aa-codex  { background: var(--ag-codex-bg);  border-color: var(--ag-codex-bd);  color: var(--ag-codex-tx);  font-size: 8px; }
 .aa-grok   { background: var(--ag-grok-bg);   border-color: var(--ag-grok-bd);   color: var(--ag-grok-tx);   }
+.aa-muse   { background: var(--ag-muse-bg);   border-color: var(--ag-muse-bd);   color: var(--ag-muse-tx);   }
 .aa-unknown { background: var(--bg3); border-color: var(--border); color: var(--text3); }
 
 .flow-arrow {
@@ -3114,6 +3414,7 @@ def generate_efficiency_html(data: dict, port: int) -> str:
       --ag-agy-bg:#e8f0fe; --ag-agy-bd:#4285f4; --ag-agy-tx:#1a56c7;
       --ag-codex-bg:#e6f4f0; --ag-codex-bd:#10a37f; --ag-codex-tx:#0b7a60;
       --ag-grok-bg:#f0f0f0; --ag-grok-bd:#666; --ag-grok-tx:#333;
+      --ag-muse-bg:#fdf2f8; --ag-muse-bd:#db2777; --ag-muse-tx:#9d174d;
       --ok:#16a34a; --warn:#d97706; --bad:#dc2626;
     }
     [data-theme="dark"] {
@@ -3127,6 +3428,7 @@ def generate_efficiency_html(data: dict, port: int) -> str:
       --ag-agy-bg:#0d1a3a; --ag-agy-bd:#4285f4; --ag-agy-tx:#4285f4;
       --ag-codex-bg:#0a1f18; --ag-codex-bd:#10a37f; --ag-codex-tx:#10a37f;
       --ag-grok-bg:#1a1a1a; --ag-grok-bd:#e0e0e0; --ag-grok-tx:#e0e0e0;
+      --ag-muse-bg:#2e081d; --ag-muse-bd:#f472b6; --ag-muse-tx:#f472b6;
       --ok:#3fb950; --warn:#f0883e; --bad:#f85149;
     }
     * { box-sizing:border-box; margin:0; padding:0; }
@@ -3270,6 +3572,7 @@ def generate_efficiency_html(data: dict, port: int) -> str:
     .agent-agy { background:linear-gradient(135deg, var(--ag-agy-bd), var(--ag-agy-tx)); }
     .agent-codex { background:linear-gradient(135deg, var(--ag-codex-bd), var(--ag-codex-tx)); }
     .agent-grok { background:linear-gradient(135deg, var(--ag-grok-bd), var(--ag-grok-tx)); }
+    .agent-muse { background:linear-gradient(135deg, var(--ag-muse-bd), var(--ag-muse-tx)); }
     .agent-unknown { background:linear-gradient(135deg, var(--accent), #0b7a60); }
     .agent-name {
       font-size:15px;
@@ -4286,6 +4589,69 @@ def generate_observatory_html(snapshot: dict) -> str:
         </section>
         """.strip()
 
+    def _worktree_model(value) -> tuple:
+        if isinstance(value, list):
+            items = value
+            counts = {"active": 0, "safe": 0, "needs_review": 0, "dirty_orphan": 0}
+            for item in items:
+                status = str(item.get("status") or item.get("verdict") or "active").lower()
+                if status in ("needs-review", "needs_review"):
+                    counts["needs_review"] += 1
+                elif status == "safe":
+                    counts["safe"] += 1
+                elif status in ("dirty-artifact", "dirty", "orphan"):
+                    counts["dirty_orphan"] += 1
+                else:
+                    counts["active"] += 1
+            return items, counts
+        value = value if isinstance(value, dict) else {}
+        return value.get("items") or [], {
+            "active": int(value.get("active", 0) or 0),
+            "safe": int(value.get("safe", 0) or 0),
+            "needs_review": int(value.get("needs_review", 0) or 0),
+            "dirty_orphan": int(value.get("dirty_orphan", 0) or 0),
+        }
+
+    def _worktree_status(item: dict) -> str:
+        status = str(item.get("status") or item.get("verdict") or "active").lower()
+        if status in ("needs-review", "needs_review"):
+            return "needs-review"
+        if status == "safe":
+            return "safe"
+        if status in ("dirty-artifact", "dirty", "orphan"):
+            return "dirty-artifact"
+        return "active"
+
+    worktree_items, worktree_counts = _worktree_model(snapshot.get("worktrees"))
+    worktree_rows = []
+    for item in worktree_items:
+        status = _worktree_status(item)
+        label = {"active": "ACTIVE", "safe": "SAFE", "needs-review": "NEEDS-REVIEW", "dirty-artifact": "DIRTY-ARTIFACT"}[status]
+        p_path = html.escape(str(item.get("path") or ""))
+        prune_btn = f' <button class="wt-prune" data-path="{p_path}">Prune</button>' if status == "safe" else ""
+        worktree_rows.append(
+            f'<tr><td><code>{html.escape(str(item.get("branch") or "—"))}</code></td>'
+            f'<td class="wt-path">{html.escape(str(item.get("path") or "—"))}</td>'
+            f'<td><span class="wt-pill wt-{status}">{label}</span></td>'
+            f'<td>{html.escape(str(item.get("reason") or "—"))}</td>'
+            f'<td><button class="wt-inspect" data-path="{p_path}">Inspect</button>'
+            f'{prune_btn}</td></tr>'
+        )
+    worktree_html = f'''<!-- Worktree Lifecycle & Fleet Health -->
+    <section class="wt-panel" id="worktree-lifecycle">
+      <header class="wt-header"><div><div class="wt-kicker">Fleet health</div><h2>Worktree Lifecycle &amp; Fleet Health</h2></div>
+        <button class="wt-clean" id="wt-clean">Clean Safe Worktrees</button></header>
+      <div class="wt-metrics">
+        <div class="wt-metric"><span>Active Working</span><strong>{worktree_counts["active"]}</strong></div>
+        <div class="wt-metric wt-safe"><span>Safe to Prune</span><strong>{worktree_counts["safe"]}</strong></div>
+        <div class="wt-metric wt-review"><span>Needs Review</span><strong>{worktree_counts["needs_review"]}</strong></div>
+        <div class="wt-metric wt-dirty"><span>Dirty / Orphan</span><strong>{worktree_counts["dirty_orphan"]}</strong></div>
+      </div>
+      <div class="wt-table-wrap"><table class="wt-table"><thead><tr><th>Branch</th><th>Path</th><th>Status</th><th>Reason</th><th></th></tr></thead>
+        <tbody>{''.join(worktree_rows) or '<tr><td colspan="5" class="obs-empty">No auxiliary worktrees found.</td></tr>'}</tbody></table></div>
+      <div class="wt-result" id="wt-result" aria-live="polite"></div>
+    </section>'''
+
     repos = snapshot.get("repos") or []
     rollups = snapshot.get("rollups") or {}
     repo_cards = "\n".join(_render_repo(repo) for repo in repos)
@@ -4369,12 +4735,22 @@ body {{ padding: 24px; }}
 .obs-job[data-stage="done"] .obs-job-stage {{ background: rgba(156, 163, 175, 0.16); color: var(--done); }}
 .obs-job-age, .obs-job-cost, .obs-job-tokens {{ color: var(--muted); }}
 .obs-empty-state, .obs-empty {{ padding: 18px 4px; color: var(--muted); }}
+.wt-panel {{ background: var(--panel); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; box-shadow: var(--shadow); }}
+.wt-header {{ display:flex; justify-content:space-between; align-items:center; gap:12px; padding:18px; background:var(--panel-2); border-bottom:1px solid var(--line); }}
+.wt-header h2 {{ margin:4px 0 0; font-size:18px; }} .wt-kicker {{ color:var(--accent); font-size:10px; text-transform:uppercase; letter-spacing:.14em; }}
+.wt-clean, .wt-inspect {{ cursor:pointer; border:1px solid rgba(71,215,177,.35); border-radius:8px; padding:8px 11px; background:rgba(71,215,177,.14); color:var(--accent); font:inherit; font-size:11px; font-weight:700; }}
+.wt-metrics {{ display:grid; grid-template-columns:repeat(4,1fr); gap:10px; padding:16px 18px; }} .wt-metric {{ padding:13px; border:1px solid var(--line); border-radius:12px; background:rgba(255,255,255,.035); }}
+.wt-metric span {{ display:block; color:var(--muted); font-size:10px; text-transform:uppercase; letter-spacing:.1em; }} .wt-metric strong {{ display:block; margin-top:7px; font-size:24px; }}
+.wt-safe strong, .wt-pill.wt-safe {{ color:var(--accent); }} .wt-review strong, .wt-pill.wt-needs-review {{ color:#ffd166; }} .wt-dirty strong, .wt-pill.wt-dirty-artifact {{ color:#ff7a90; }}
+.wt-table-wrap {{ overflow:auto; padding:0 18px 14px; }} .wt-table {{ width:100%; border-collapse:collapse; font-size:12px; }} .wt-table th {{ color:var(--muted); font-size:10px; text-align:left; text-transform:uppercase; letter-spacing:.1em; }} .wt-table th, .wt-table td {{ padding:11px 8px; border-top:1px solid rgba(255,255,255,.05); white-space:nowrap; }} .wt-path {{ color:var(--muted); max-width:300px; overflow:hidden; text-overflow:ellipsis; }}
+.wt-pill {{ display:inline-flex; padding:4px 8px; border-radius:999px; background:rgba(255,255,255,.07); font-size:10px; font-weight:700; letter-spacing:.04em; }} .wt-result {{ padding:0 18px 14px; color:var(--muted); font-size:12px; }}
 @media (max-width: 960px) {{
   body {{ padding: 16px; }}
   .obs-hero {{ flex-direction: column; align-items: flex-start; }}
   .obs-stats {{ justify-content: flex-start; }}
   .obs-job-head, .obs-job {{ grid-template-columns: 1fr 1fr; }}
   .obs-job-head span:nth-child(n+3), .obs-job > *:nth-child(n+3) {{ display: none; }}
+  .wt-metrics {{ grid-template-columns:repeat(2,1fr); }} .wt-header {{ align-items:flex-start; flex-direction:column; }}
 }}
 </style>
 </head>
@@ -4393,6 +4769,7 @@ body {{ padding: 24px; }}
     </div>
   </header>
   <div class="obs-grid" id="obs-grid">
+    {worktree_html}
     {repo_cards}
   </div>
 </div>
@@ -4475,8 +4852,19 @@ body {{ padding: 24px; }}
 
   function render(snapshot) {{
     const repos = snapshot.repos || [];
-    snapshotEl.innerHTML = repos.length ? repos.map(renderRepo).join('') : '<div class="obs-empty-state">No live jobs in this workspace.</div>';
+    // Keep the lifecycle panel stable while refreshing the job board.
+    const lifecycle = document.getElementById('worktree-lifecycle');
+    snapshotEl.innerHTML = (lifecycle ? lifecycle.outerHTML : '') + (repos.length ? repos.map(renderRepo).join('') : '<div class="obs-empty-state">No live jobs in this workspace.</div>');
     renderStats(snapshot);
+    const clean = document.getElementById('wt-clean');
+    const result = document.getElementById('wt-result');
+    if (clean && !clean.dataset.bound) {{
+      clean.dataset.bound = '1';
+      clean.addEventListener('click', async () => {{
+        result.textContent = 'Cleaning safe worktrees…';
+        try {{ const response = await fetch('/worktrees/clean', {{ method: 'POST', headers: Object.assign({{'Content-Type':'application/json'}}, window.vizorAuthHeaders ? window.vizorAuthHeaders() : {{}}), body: JSON.stringify({{apply:true}}) }}); const out = await response.json(); result.textContent = out.ok ? `Cleaned ${{out.cleaned_count}} safe worktree(s).` : (out.error || 'Cleanup failed.'); if (out.ok) setTimeout(refresh, 500); }} catch (err) {{ result.textContent = 'Cleanup failed: ' + err.message; }}
+      }});
+    }}
   }}
 
   async function refresh() {{
@@ -4498,6 +4886,58 @@ body {{ padding: 24px; }}
     return html_out
 
 
+def generate_roles_html(data: dict, port: int) -> str:
+    """Render the offline-first Workspace Agent Roles & Onboarding Studio."""
+    workspace = data.get("workspace") or {}
+    goals = data.get("goals") or []
+    agents = [agent for agent in (data.get("workspace_agents") or []) if not agent.get("disabled")]
+    cards = []
+    for agent in agents:
+        role = str(agent.get("role") or "unknown")
+        durability = str(agent.get("durability") or "dispatch-only")
+        badge = "Durable" if durability == "durable" else "Dispatch-only"
+        harnesses = agent.get("target_harnesses") or ["Unassigned"]
+        cards.append(f"""
+        <article class="role-card">
+          <div class="card-top"><span class="role-tag">@{html.escape(role)}</span>
+            <span class="durability">{badge}</span></div>
+          <h2>{html.escape(role.replace('-', ' ').title())}</h2>
+          <div class="meta"><span>Target Harnesses</span><strong>{html.escape(', '.join(map(str, harnesses)))}</strong></div>
+          <p class="excerpt">{html.escape(str(agent.get('charter_excerpt') or 'No charter excerpt available.'))}</p>
+          <button class="edit" data-agent-id="{html.escape(str(agent.get('agent_id') or ''))}">Edit Charter</button>
+        </article>""")
+    cards_html = "\n".join(cards) or '<div class="empty">No active workspace roles yet. Provision the first one below.</div>'
+    goal_summary = " · ".join(
+        html.escape(str(goal.get("outcome") or goal.get("criterion") or ""))
+        for goal in goals[:3] if isinstance(goal, dict)
+    ) or "No active goals recorded"
+    workspace_name = html.escape(str(workspace.get("name") or "workspace"))
+    live = _live_js(port)
+    return f"""<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>synlynk Vizor — Workspace Agent Roles</title>
+<style>
+:root{{--bg:#f6f8fa;--panel:#fff;--ink:#1f2328;--muted:#667085;--line:#d8dee4;--accent:#0d9e87;--accent-bg:#e6f7f4}}
+*{{box-sizing:border-box}}body{{margin:0;background:var(--bg);color:var(--ink);font:14px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}}
+main{{max-width:1180px;margin:0 auto;padding:34px 28px 70px}}.eyebrow{{color:var(--accent);font-weight:700;letter-spacing:.08em;text-transform:uppercase;font-size:11px}}
+h1{{font-size:34px;margin:8px 0}}.subtitle{{color:var(--muted);margin:0 0 24px}}.summary{{display:flex;gap:18px;align-items:center;justify-content:space-between;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px 22px;margin-bottom:30px}}
+.summary strong{{display:block;font-size:16px;margin-bottom:5px}}.summary span{{color:var(--muted)}}.summary .goals{{max-width:56%;text-align:right}}.section-head{{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}}h2{{margin:0 0 12px;font-size:19px}}.grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}}
+.role-card,.empty{{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:0 4px 15px #1f23280d}}.card-top{{display:flex;justify-content:space-between;align-items:center}}.role-tag{{color:var(--accent);font-weight:700}}.durability{{background:var(--accent-bg);border-radius:99px;color:#087462;padding:5px 9px;font-size:11px;font-weight:700}}.role-card h2{{margin-top:17px;text-transform:capitalize}}.meta{{border-top:1px solid var(--line);padding-top:12px;color:var(--muted);font-size:11px}}.meta strong{{display:block;color:var(--ink);font-size:13px;margin-top:4px}}.excerpt{{color:var(--muted);line-height:1.5;min-height:64px}}button{{cursor:pointer;border:0;border-radius:8px;padding:9px 13px;font-weight:700}}.edit,.primary{{background:var(--accent);color:#fff}}.empty{{color:var(--muted);padding:28px;text-align:center}}
+.drawer{{margin-top:34px;background:#102a2d;color:#eefcf8;border-radius:16px;padding:24px}}.drawer h2{{color:#fff}}.drawer p{{color:#b7d4ce}}.options{{display:flex;flex-wrap:wrap;gap:9px;margin:18px 0}}.option{{background:#1b4546;color:#d6f5ef;border:1px solid #2b6463}}.option.selected{{background:#3de0c0;color:#082b2a}}form{{display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end}}label{{display:flex;flex-direction:column;gap:6px;color:#b7d4ce;font-size:11px}}input,select{{border:1px solid #47736f;background:#0c2225;color:#fff;border-radius:7px;padding:10px;font:inherit}}@media(max-width:700px){{.summary,form{{display:block}}.summary .goals{{max-width:none;text-align:left;margin-top:12px}}form>*{{margin-top:10px;width:100%}}}}
+</style></head><body><main>
+<div class="eyebrow">Vizor / Living Workspace</div><h1>Workspace Agent Roles</h1>
+<p class="subtitle">Living Charters for <strong>{workspace_name}</strong> — durable identities with visible ownership.</p>
+<section class="summary"><div><strong>Workspace Persona &amp; Goals</strong><span>{len(agents)} active role(s) · governed by living charters</span></div><div class="goals"><strong>Active goals</strong><span>{goal_summary}</span></div></section>
+<section><div class="section-head"><h2>Living Charters</h2><span>{len(agents)} active</span></div><div class="grid">{cards_html}</div></section>
+<section class="drawer" id="provision"><h2>Onboard Workspace Role</h2><p>Choose an archetype to provision a governed identity in one click.</p>
+<div class="options">{''.join(f'<button type="button" class="option{" selected" if value == "fullstack-builder" else ""}" data-archetype="{value}">{label}</button>' for value, label in (("fullstack-builder", "Fullstack Builder"), ("qa-reviewer", "QA Reviewer"), ("architect", "Architect"), ("marketing", "Marketing"), ("custom", "Custom")))}</div>
+<form id="role-form"><label>Role slug<input id="role" name="role" value="fullstack-builder" required></label><label>Durability<select id="durability" name="durability"><option value="durable">Durable</option><option value="dispatch-only">Dispatch-only</option><option value="session-only">Session-only</option></select></label><button class="primary" type="submit">Provision role</button></form><div id="role-result" aria-live="polite"></div></section>
+</main>{live}<script>
+const options=document.querySelectorAll('.option');options.forEach(b=>b.addEventListener('click',()=>{{options.forEach(x=>x.classList.remove('selected'));b.classList.add('selected');document.querySelector('#role').value=b.dataset.archetype;}}));
+document.querySelector('#role-form').addEventListener('submit',async e=>{{e.preventDefault();const result=document.querySelector('#role-result');const payload={{role:document.querySelector('#role').value.trim(),durability:document.querySelector('#durability').value}};try{{const r=await fetch('/roles/create',{{method:'POST',headers:Object.assign({{'Content-Type':'application/json'}},window.vizorAuthHeaders?window.vizorAuthHeaders():{{}}),body:JSON.stringify(payload)}});const out=await r.json();result.textContent=out.ok?'Provisioned '+out.agent_id:(out.error||'Provisioning failed');if(out.ok)setTimeout(()=>location.reload(),500);}}catch(err){{result.textContent='Provisioning failed: '+err.message;}}}});
+</script></body></html>"""
+
+
 def _write_cache(data: dict, port: int) -> None:
     """Generate all views and write to viz-cache/."""
     os.makedirs(VIZ_CACHE_DIR, exist_ok=True)
@@ -4505,7 +4945,18 @@ def _write_cache(data: dict, port: int) -> None:
         "index.html": generate_index_html(data, port),
         "gantt.html": generate_gantt_html(data, port),
         "tube.html": generate_architect_map_html(data, port),
-        "journeys.html": generate_journeys_html(data, port),
+        "product.html": generate_product_html(data, port),
+        "logical.html": generate_logical_html(data, port),
+        "infra.html": generate_infra_html(data, port),
+        "roles.html": generate_roles_html(data, port),
+        "journeys.html": (
+            '<!DOCTYPE html><html><head><meta charset="UTF-8">'
+            '<meta http-equiv="refresh" content="0; url=product.html">'
+            '<title>synlynk Vizor — Redirecting</title></head>'
+            '<body>Redirecting to <a href="product.html">Product View</a>...'
+            '<script>window.location.replace("product.html");</script>'
+            "</body></html>"
+        ),
         "effort.html": generate_effort_html(data, port),
         "efficiency.html": generate_efficiency_html(data, port),
         "observatory.html": generate_observatory_html(data.get("observatory") or {}),
@@ -4554,7 +5005,7 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
         self.wfile.write(json.dumps(payload).encode("utf-8"))
 
     def do_OPTIONS(self):
-        if self.path not in ("/note", "/dispatch", "/approve", "/kill", "/architect-map/view-pref"):
+        if self.path not in ("/note", "/dispatch", "/approve", "/kill", "/architect-map/view-pref", "/roles/create", "/worktrees/clean"):
             self.send_error(404)
             return
         self.send_response(204)
@@ -4573,8 +5024,102 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
             self._handle_kill_request()
         elif self.path == "/architect-map/view-pref":
             self._handle_view_pref_request()
+        elif self.path == "/roles/create":
+            self._handle_role_create_request()
+        elif self.path == "/worktrees/clean":
+            self._handle_worktree_clean_request()
         else:
             self.send_error(404)
+
+    def _handle_worktree_clean(self, payload: dict) -> dict:
+        """Run the guarded worktree cleaner and return a small UI-friendly result."""
+        from synlynk.worktree import cmd_worktree_clean
+
+        apply = bool(payload.get("apply")) and not bool(payload.get("dry_run"))
+        output = cmd_worktree_clean(apply=apply, json_output=True)
+        if isinstance(output, dict):
+            details = output
+            output = json.dumps(output)
+        else:
+            details = None
+        try:
+            details = details or json.loads(output)
+        except (TypeError, json.JSONDecodeError):
+            details = {}
+        if apply:
+            cleaned_count = len(details.get("results") or [])
+        else:
+            cleaned_count = int(details.get("would_remove", 0) or 0)
+        return {
+            "ok": True,
+            "dry_run": not apply,
+            "cleaned_count": cleaned_count,
+            "output": output,
+        }
+
+    def _handle_worktree_clean_request(self):
+        try:
+            payload = self._read_json_body()
+        except (json.JSONDecodeError, TypeError, ValueError):
+            self.send_error(400, "Invalid JSON")
+            return
+        try:
+            result = self._handle_worktree_clean(payload)
+        except Exception as exc:
+            self.send_error(500, str(exc))
+            return
+        self._send_json_ok(result)
+
+    def _handle_role_create(self, payload: dict) -> dict:
+        """Provision a role identity and its first living charter."""
+        from synlynk import agent_store, agent_cli, charter_schema
+
+        role = str(payload.get("role") or "").strip().lower()
+        durability = str(payload.get("durability") or "durable").strip().lower()
+        if not re.fullmatch(r"[a-z0-9][a-z0-9-]{1,48}", role):
+            return {"ok": False, "error": "role must be a lowercase slug"}
+        if durability not in charter_schema.VALID_DURABILITY:
+            return {"ok": False, "error": "invalid durability"}
+        for entry in agent_store.list_agents():
+            for alias in entry.get("aliases", []):
+                if alias.get("kind") == "role_slug" and alias.get("value") == role:
+                    return {"ok": True, "agent_id": entry.get("agent_id"), "existing": True}
+        agent_id = f"{role}-{uuid.uuid4().hex[:10]}"
+        seed = agent_cli.SEED_CHARTERS.get(role)
+        if seed:
+            charter = re.sub(r"^durability: .*?$", f"durability: {durability}", seed, count=1, flags=re.MULTILINE)
+        else:
+            charter = (
+                "---\n"
+                "schema_version: 1\n"
+                "role: dev\n"
+                f'description: "Workspace role {role}"\n'
+                f"durability: {durability}\n"
+                "tools: []\ncredentials: []\n"
+                "---\n\n"
+                "## Instructions\n\n"
+                f"Act as the {role} workspace persona according to the approved task brief.\n\n"
+                "## Authority & Escalation\n\n"
+                "Operate within workspace policy and escalate decisions outside the brief.\n\n"
+                "## Workflow Ownership\n\n"
+                f"Own work assigned to the {role} role.\n"
+            )
+        agent_store.register_agent(agent_id, [{"kind": "role_slug", "value": role}])
+        agent_store.propose_charter_revision(agent_id, charter, actor="vizor", parent_revision=0)
+        return {"ok": True, "agent_id": agent_id}
+
+    def _handle_role_create_request(self):
+        try:
+            payload = self._read_json_body()
+        except (json.JSONDecodeError, TypeError, ValueError):
+            self.send_error(400, "Invalid JSON")
+            return
+        try:
+            result = self._handle_role_create(payload)
+        except Exception as exc:
+            self.send_error(500, str(exc))
+            return
+        self._send_json_ok(result)
 
     def _handle_note_request(self):
         try:
