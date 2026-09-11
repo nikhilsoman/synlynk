@@ -95,6 +95,7 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `credit grant` (secondary) — sustain
 - `quota` (secondary) — sustain
 - `capability sweep` (secondary) — sustain
+- `run` (primary) — execute
 - `run --trio` (secondary) — execute
 - `local doctor` (secondary) — sustain
 - `upgrade` (secondary) — sustain
