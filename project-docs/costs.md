@@ -70,5 +70,15 @@
 - Standardized SQLite WAL mode, 30s busy-timeout, and NORMAL synchronous across `synlynk/__init__.py` and `synlynk/lineage.py` (#1503).
 - 21 unit and multi-threaded stress tests passing; zero external fee-bearing dispatch spend.
 
+## 2026-09-11 — Next-Gen Harness Onboarding: Meta Muse Integration (`story-996159c6`)
+
+- Conductor: Agy (Gemini 2.5 Flash / Pro).
+- Authored implementation plan (`docs/superpowers/plans/2026-09-11-cluster-d-muse-harness-onboarding.md`).
+- Implemented Meta Muse harness capability baseline (`synlynk/_constants.py`, #1508).
+- Implemented Meta Muse dispatch CLI adapter and prompt formatting (`synlynk/dispatch.py`).
+- Implemented structured token and cost extraction for single and streaming JSON (`synlynk/costs.py`).
+- Updated capability probing and documentation (`synlynk/probe.py`, `docs/harness-capability-baseline.md`).
+- 5 comprehensive unit tests passing in `tests/test_muse_harness.py`; 147 dispatch tests and 26 probe tests verified; zero external fee-bearing dispatch spend.
+
 
 

@@ -12,7 +12,7 @@
 | :--- | :--- | :--- | :--- |
 | **v0.18.0** | 2026-08-30 | Dispatch reliability, QA merge-gate authority, Codex parity, Grok headless approval. | **SHIPPED** (2,346 tests) |
 | **v0.19.0** | 2026-09-11 | Layered release protocol (`unstable`/`staging`/`main`), autonomous unattended DAG loop (`synlynk run --milestone <M>`), daemon lifecycle recovery, absolute App key paths, dual-ledger state sync. | **SHIPPED** (2,734 tests) |
-| **v0.20.0** | 2026-09-18 | Visual Workspace, Autonomous Onboarding & Fleet Resilience: BS-6 Vizor views (Product, Logical, Infra), In-browser GitHub App role creation wizard, scope-bounded sparse worktrees (`git sparse-checkout --cone`), 4-point readiness matrix in `synlynk doctor --readiness`, Meta Muse CLI harness adapter. | **IN PLANNING / EXECUTION** |
+| **v0.20.0** | 2026-09-18 | Visual Workspace, Autonomous Onboarding & Fleet Resilience: BS-6 Vizor views (Product, Logical, Infra), In-browser GitHub App role creation wizard, scope-bounded sparse worktrees (`git sparse-checkout --cone`), 4-point readiness matrix in `synlynk doctor --readiness`, Meta Muse CLI harness adapter. | **SHIPPED** (2,792 tests) |
 | **v0.21.0** | 2026-09-25 | Fleet Swarm Engine & Memory Compaction: Ephemeral cloud swarm runners (#1341), prompt cache telemetry true-up, automatic mid-session context compaction, living charter adaptation loops. | Planned |
 | **v1.0.0** | **2026-10-01** | **Developer Preview Public Launch (Time-to-Wow):** 15-minute zero-risk onboarding pipeline, signed GA release on PyPI/pipx, full documentation release, commercial marketing launch. | Target GA Release |
 | **v1.1.0** | Q4 2026 | Cross-workgroup team collaboration, community relay server, multi-tenant quota arbitration. | Post-GA |
@@ -41,6 +41,6 @@
 - [x] **SQLite Concurrency & Busy-Timeout Tuning:** Standardizing WAL mode and 30s busy-timeout across all connections (#1503).
 
 ### Cluster D: Next-Gen Harness Onboarding (Meta Muse)
-- [ ] **Meta Muse CLI Adapter:** First-class dispatch adapter in `synlynk/dispatch.py` with closed-loop receipt check (#1508).
-- [ ] **Muse Capability Scoring & Probe:** Registered in taxonomy, probe, and baseline matrix.
+- [x] **Meta Muse CLI Adapter:** First-class dispatch adapter in `synlynk/dispatch.py` with closed-loop receipt check (#1508, PR #1560).
+- [x] **Muse Capability Scoring & Probe:** Registered in taxonomy, probe, and baseline matrix (PR #1560).
 - [ ] *(Deferred)* DeepSeek harness evaluation parked until local harness maturation.

@@ -1,5 +1,14 @@
 # synlynk Memory
 
+## Milestone v0.20.0 Cluster D Shipped: Next-Gen Harness Onboarding (Meta Muse Integration) (decided/shipped 2026-09-11)
+- **Implementation Shipped (PR #1560):** Completed Milestone v0.20.0 Cluster D (`story-996159c6`) per approved design spec (`docs/superpowers/specs/2026-09-11-v0.20.0-visual-workspace-autonomous-onboarding-design.md` §6) and implementation plan (`docs/superpowers/plans/2026-09-11-cluster-d-muse-harness-onboarding.md`).
+- **Architectural Deliverables:**
+  1. **Meta Muse Capability Baseline (`synlynk/_constants.py`, #1508):** Registered `"muse"` in `HARNESS_CAPABILITY_BASELINES` with `can_gh_write: True`, `builder`, `verifier`, and `architect` roles, and non-interactive execution contract (`muse run --non-interactive -C <worktree> --prompt ...`). Added to `NEXT_GEN_FLEET` and `EXTENDED_FLEET`.
+  2. **Dispatch CLI Adapter & Prompt Formatting (`synlynk/dispatch.py`):** Injected `-C worktree_path` and `--output-format json` into CLI invocation flags. Implemented dedicated `agent == "muse"` prompt formatting template with `SYNLYNK_TASK_RECEIVED` digest echo, working directory constraint block, and verification targets.
+  3. **Structured Token & Cost Extraction (`synlynk/costs.py`):** Implemented `_extract_muse_structured()` parsing single JSON objects and streaming JSON event lines with `input_tokens`, `output_tokens`, and `cached_tokens`. Connected to `extract_tokens(..., agent="muse")`.
+  4. **Probe & Baseline Documentation (`synlynk/probe.py`, `docs/harness-capability-baseline.md`):** Mapped `"muse"` in `harness_map` for `synlynk probe muse` support. Documented Meta Muse architecture and capability profile in `docs/harness-capability-baseline.md`.
+- **Verification & Review:** 5 unit tests passing in `tests/test_muse_harness.py`, 147 dispatch tests and 26 probe tests verified. [@agy]
+
 ## Milestone v0.20.0 Cluster C Shipped: Fleet Diagnostic Truth & Concurrency Resilience (decided/shipped 2026-09-11)
 - **Implementation Shipped (PR #1559):** Completed Milestone v0.20.0 Cluster C (`story-8ef9c847`) per approved design spec (`docs/superpowers/specs/2026-09-11-v0.20.0-visual-workspace-autonomous-onboarding-design.md` §5) and implementation plan (`docs/superpowers/plans/2026-09-11-cluster-c-fleet-diagnostic-truth-concurrency.md`).
 - **Architectural Deliverables:**

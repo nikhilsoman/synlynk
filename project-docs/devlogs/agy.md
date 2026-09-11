@@ -306,5 +306,34 @@
   - Completed Cluster C in `project-docs/roadmap.md`.
 [@agy]
 
+## 2026-09-11 — Next-Gen Harness Onboarding: Meta Muse Integration (Cluster D)
+
+### Shipped & Landed
+- **Meta Muse Harness Registration (`synlynk/_constants.py`, #1508):**
+  - Added `"muse"` capability baseline definition to `HARNESS_CAPABILITY_BASELINES`:
+    - CLI binary: `muse`
+    - Full GitHub write authority: `can_gh_write: True`
+    - Non-interactive flags: `["run", "--non-interactive"]`
+    - Prompt via argument flag: `prompt_flag: "--prompt"`, `prompt_via_arg: True`
+    - Roles: `["builder", "verifier", "architect"]`
+    - Valid dispatch flags: `["--prompt", "--model", "--non-interactive", "-C", "--output-format"]`
+    - Required flags: `["--non-interactive"]`
+    - Network dependency: `api.muse.meta.com:443`
+    - Strengths: surgical refactoring, algorithmic synthesis, automated unit testing, high throughput.
+  - Defined `NEXT_GEN_FLEET = frozenset({"muse"})` and updated `EXTENDED_FLEET = frozenset({"local", "muse"})`.
+- **Dispatch Engine Integration (`synlynk/dispatch.py`):**
+  - Injected `-C worktree_path` and `--output-format json` into CLI invocation flags.
+  - Added specialized `agent == "muse"` prompt formatting template with closed-loop `SYNLYNK_TASK_RECEIVED` digest header, working directory constraint block, and verification targets.
+- **Structured Token & Cost Extraction (`synlynk/costs.py`):**
+  - Implemented `_extract_muse_structured()` supporting both single JSON payloads and streaming JSON event lines with `input_tokens`, `output_tokens`, and `cached_tokens`.
+  - Wired into canonical `extract_tokens(..., agent="muse")` dispatch.
+- **Probe & Baseline Documentation (`synlynk/probe.py`, `docs/harness-capability-baseline.md`):**
+  - Mapped `"muse"` in `harness_map` for `synlynk probe muse` support.
+  - Documented Meta Muse architecture and capability profile in `docs/harness-capability-baseline.md`.
+- **Verification:**
+  - Passed 5 comprehensive unit tests in `tests/test_muse_harness.py` covering TC-0 schema compliance, dispatch CLI flag generation, prompt formatting, token extraction, and probe execution.
+  - Passed full suite of 147 dispatch tests and 26 probe tests.
+[@agy]
+
 
 
