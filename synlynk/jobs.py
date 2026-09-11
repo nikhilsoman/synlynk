@@ -2365,10 +2365,18 @@ def scan_zombie_running_jobs(db_path: str) -> list:
         return out
     try:
         try:
-            rows = conn.execute(
-                "SELECT job_id, agent, pid, started_at FROM daemon_jobs "
-                "WHERE status='running'"
-            ).fetchall()
+            cols = {r[1] for r in conn.execute("PRAGMA table_info(daemon_jobs)")}
+            if "superseded_by" in cols:
+                query = (
+                    "SELECT job_id, agent, pid, started_at FROM daemon_jobs "
+                    "WHERE status='running' AND (superseded_by IS NULL OR superseded_by = '')"
+                )
+            else:
+                query = (
+                    "SELECT job_id, agent, pid, started_at FROM daemon_jobs "
+                    "WHERE status='running'"
+                )
+            rows = conn.execute(query).fetchall()
         except sqlite3.Error:
             return out
         for job_id, agent, pid, started_at in rows:
@@ -2385,6 +2393,9 @@ def scan_zombie_running_jobs(db_path: str) -> list:
     finally:
         conn.close()
     return out
+
+
+find_reapable_zombies = scan_zombie_running_jobs
 
 
 def apply_reap_zombies(
