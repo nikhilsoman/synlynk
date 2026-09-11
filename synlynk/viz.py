@@ -9,13 +9,14 @@ import sys
 import threading
 import time
 import webbrowser
-from typing import Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 from synlynk import _get_db, _query_repo_file_tree
 from synlynk.observatory import (
     build_job_observatory_snapshot,
     write_observatory_snapshot,
 )
+from synlynk.viz_views import build_workspace_views_snapshot
 
 VIZ_CACHE_DIR = ".synlynk/viz-cache"
 VIZ_NOTES_PATH = ".synlynk/viz-notes.json"
@@ -175,12 +176,25 @@ def generate_viz_data() -> dict:
         repos = list(workspace_repos)
         for repo in repos:
             repo["active_dream_count"] = active_story_count if len(repos) == 1 else 0
+        try:
+            views_conn = _get_db()
+            try:
+                workspace_views = build_workspace_views_snapshot(views_conn, os.getcwd())
+            finally:
+                views_conn.close()
+        except Exception:
+            workspace_views = {
+                "product": {"nodes": [], "edges": []},
+                "logical": {"nodes": [], "edges": []},
+                "infra": {"nodes": [], "edges": []},
+            }
         return {
             "workspace": {
                 "name": _workspace_name(),
                 "updated_at": _ts(),
                 "repos": repos,
             },
+            "workspace_views": workspace_views,
             "goals": [],
             "spec_verifications": _load_spec_verifications(),
             "dreams": [],
@@ -622,8 +636,10 @@ def generate_index_html(data: dict, port: int) -> str:
 
     nav_items = [
         ("gantt", "📅", "Gantt", "gantt.html", True),
-        ("journeys", "🗺", "Journeys", "journeys.html", False),
+        ("product", "🗺", "Product View", "product.html", False),
+        ("logical", "🧩", "Logical View", "logical.html", False),
         ("tube", "🚇", "Architect Map", "tube.html", False),
+        ("infra", "⚙️", "Infra View", "infra.html", False),
         ("effort", "💰", "Effort & Cost", "effort.html", False),
         ("observatory", "◉", "Observatory", "observatory.html", False),
         ("efficiency", "📊", "Efficiency", "efficiency.html", False),
@@ -1983,6 +1999,176 @@ __LIVE_JS_HTML__
         .replace("__ARCHITECT_MAP_JS__", _ARCHITECT_MAP_JS)
         .replace("__LIVE_JS_HTML__", live_js_html)
     )
+
+
+_BS6_VIEW_JS = """
+function bs6LayoutGraph(nodes, edges) {
+  const W = 900, H = 620, ITER = 200;
+  const positions = {};
+  nodes.forEach((n, i) => {
+    const angle = (2 * Math.PI * i) / Math.max(nodes.length, 1);
+    positions[n.id] = { x: W / 2 + 260 * Math.cos(angle), y: H / 2 + 220 * Math.sin(angle) };
+  });
+  for (let iter = 0; iter < ITER; iter++) {
+    nodes.forEach(a => {
+      let fx = 0, fy = 0;
+      nodes.forEach(b => {
+        if (a.id === b.id) return;
+        const dx = positions[a.id].x - positions[b.id].x;
+        const dy = positions[a.id].y - positions[b.id].y;
+        const dist = Math.max(Math.sqrt(dx * dx + dy * dy), 1);
+        const repel = 4000 / (dist * dist);
+        fx += (dx / dist) * repel;
+        fy += (dy / dist) * repel;
+      });
+      edges.forEach(e => {
+        if (e.from_id !== a.id && e.to_id !== a.id) return;
+        const otherId = e.from_id === a.id ? e.to_id : e.from_id;
+        if (!positions[otherId]) return;
+        const dx = positions[otherId].x - positions[a.id].x;
+        const dy = positions[otherId].y - positions[a.id].y;
+        const dist = Math.max(Math.sqrt(dx * dx + dy * dy), 1);
+        const attract = dist * 0.01;
+        fx += (dx / dist) * attract;
+        fy += (dy / dist) * attract;
+      });
+      positions[a.id].x = Math.min(W - 70, Math.max(70, positions[a.id].x + fx));
+      positions[a.id].y = Math.min(H - 40, Math.max(40, positions[a.id].y + fy));
+    });
+  }
+  return positions;
+}
+
+function bs6RenderGraph() {
+  const svg = document.getElementById('bs6-svg');
+  if (!svg) return;
+  const nodes = window.BS6_NODES || [];
+  const edges = window.BS6_EDGES || [];
+  const pos = bs6LayoutGraph(nodes, edges);
+  let markup = '';
+  edges.forEach(e => {
+    const a = pos[e.from_id], b = pos[e.to_id];
+    if (!a || !b) return;
+    markup += '<line class="am-edge" x1="' + a.x + '" y1="' + a.y + '" x2="' + b.x + '" y2="' + b.y + '" stroke="#94a3b8"></line>';
+  });
+  nodes.forEach(n => {
+    const p = pos[n.id];
+    if (!p) return;
+    const label = String(n.label || n.id || '');
+    const w = Math.max(90, label.length * 7 + 20);
+    markup += '<g class="am-node" transform="translate(' + (p.x - w / 2) + ',' + (p.y - 18) + ')" onclick="bs6OpenDrawer(\\'' + n.id + '\\')">' +
+      '<rect width="' + w + '" height="36" rx="8"></rect>' +
+      '<text x="' + (w / 2) + '" y="22" text-anchor="middle">' + label + '</text>' +
+      '</g>';
+  });
+  svg.innerHTML = markup;
+}
+
+function bs6OpenDrawer(nodeId) {
+  const node = (window.BS6_NODES || []).find(n => n.id === nodeId);
+  if (!node) return;
+  document.getElementById('am-drawer-title').textContent = node.label;
+  let attrs = {};
+  try { attrs = JSON.parse(node.attrs_json || '{}'); } catch (e) {}
+  const attrLines = Object.keys(attrs).map(k => '<div>' + k + ': <code>' + attrs[k] + '</code></div>').join('');
+  document.getElementById('am-drawer-body').innerHTML =
+    '<div>Kind: ' + (node.kind || '') + '</div>' +
+    '<div>Source: <code>' + (node.source_path || '') + '</code></div>' +
+    '<div>Provenance: ' + (node.provenance || '') + '</div>' +
+    attrLines;
+  document.getElementById('am-drawer').classList.add('open');
+  document.getElementById('am-ov').classList.add('open');
+}
+
+function bs6CloseDrawer() {
+  document.getElementById('am-drawer').classList.remove('open');
+  document.getElementById('am-ov').classList.remove('open');
+}
+
+bs6RenderGraph();
+"""
+
+
+def _generate_bs6_view_html(data: dict, port: int, view_key: str, view_title: str) -> str:
+    """Shared self-contained node/edge SVG view renderer for the BS-6 Product/Logical/Infra views."""
+    workspace = data.get("workspace", {})
+    workspace_name = str(workspace.get("name") or "workspace")
+    workspace_views = data.get("workspace_views") or {}
+    view_data = workspace_views.get(view_key) or {"nodes": [], "edges": []}
+    nodes = view_data.get("nodes") or []
+    edges = view_data.get("edges") or []
+
+    nodes_json = json.dumps(nodes)
+    edges_json = json.dumps(edges)
+    live_js_html = _live_js(port)
+
+    kind_counts: Dict[str, int] = {}
+    for n in nodes:
+        kind = str(n.get("kind") or "unknown")
+        kind_counts[kind] = kind_counts.get(kind, 0) + 1
+    legend_html = "".join(
+        f'<div class="legend-item"><span class="legend-dot"></span>{html.escape(kind.title())} ({count})</div>'
+        for kind, count in sorted(kind_counts.items())
+    )
+
+    template = """<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<title>synlynk Vizor — __VIEW_TITLE__</title>
+<style>
+__STYLE_CONTENT__
+</style>
+</head>
+<body>
+<div class="am-header">
+  <h1>__VIEW_TITLE__ — __WORKSPACE_NAME__</h1>
+</div>
+<div class="am-legend">__LEGEND_HTML__</div>
+<div id="bs6-graph-view" class="am-view active">
+  <svg id="bs6-svg" width="100%" height="640"></svg>
+</div>
+<div class="ov" id="am-ov" onclick="bs6CloseDrawer()"></div>
+<div class="am-drawer" id="am-drawer">
+  <div class="am-drawer-header">
+    <span id="am-drawer-title">—</span>
+    <button onclick="bs6CloseDrawer()">✕</button>
+  </div>
+  <div class="am-drawer-body" id="am-drawer-body"></div>
+</div>
+<script>
+window.BS6_NODES = __NODES_JSON__;
+window.BS6_EDGES = __EDGES_JSON__;
+window.VIZOR_PORT = __PORT__;
+__BS6_VIEW_JS__
+</script>
+__LIVE_JS_HTML__
+</body>
+</html>"""
+    return (
+        template
+        .replace("__STYLE_CONTENT__", _ARCHITECT_MAP_STYLE)
+        .replace("__VIEW_TITLE__", html.escape(view_title))
+        .replace("__WORKSPACE_NAME__", html.escape(workspace_name))
+        .replace("__LEGEND_HTML__", legend_html)
+        .replace("__NODES_JSON__", nodes_json)
+        .replace("__EDGES_JSON__", edges_json)
+        .replace("__PORT__", str(port))
+        .replace("__BS6_VIEW_JS__", _BS6_VIEW_JS)
+        .replace("__LIVE_JS_HTML__", live_js_html)
+    )
+
+
+def generate_product_html(data: dict, port: int) -> str:
+    return _generate_bs6_view_html(data, port, "product", "Product View")
+
+
+def generate_logical_html(data: dict, port: int) -> str:
+    return _generate_bs6_view_html(data, port, "logical", "Logical View")
+
+
+def generate_infra_html(data: dict, port: int) -> str:
+    return _generate_bs6_view_html(data, port, "infra", "Infra View")
 
 
 def generate_journeys_html(data: dict, port: int) -> str:
@@ -4505,7 +4691,17 @@ def _write_cache(data: dict, port: int) -> None:
         "index.html": generate_index_html(data, port),
         "gantt.html": generate_gantt_html(data, port),
         "tube.html": generate_architect_map_html(data, port),
-        "journeys.html": generate_journeys_html(data, port),
+        "product.html": generate_product_html(data, port),
+        "logical.html": generate_logical_html(data, port),
+        "infra.html": generate_infra_html(data, port),
+        "journeys.html": (
+            '<!DOCTYPE html><html><head><meta charset="UTF-8">'
+            '<meta http-equiv="refresh" content="0; url=product.html">'
+            '<title>synlynk Vizor — Redirecting</title></head>'
+            '<body>Redirecting to <a href="product.html">Product View</a>...'
+            '<script>window.location.replace("product.html");</script>'
+            "</body></html>"
+        ),
         "effort.html": generate_effort_html(data, port),
         "efficiency.html": generate_efficiency_html(data, port),
         "observatory.html": generate_observatory_html(data.get("observatory") or {}),
