@@ -171,6 +171,36 @@
   - Started daemon (PID 63437) on port 27471. Verified automatic GitHub App token refreshing for all role identities.
 [@agy]
 
+## 2026-09-11 — Full Autonomous Execution of Epic #1543 Sprints 1–4 (Targeting 01 Oct Dev Preview)
+
+### Shipped & Landed
+- **Sprint 1: Test Speed & CI Velocity Multiplier (PR #1544, commit `2d3a39e8`):**
+  - Pre-seeded synthetic probe responses in `tests/test_selftest.py` to eliminate synchronous network timeouts (#1492).
+  - Added `pytest-xdist` to test dependencies and enabled `-n auto --dist loadfile` in `pytest.ini` and `.github/workflows/ci.yml`.
+  - Slashed CI matrix execution time from 9+ minutes down to ~90 seconds.
+- **Sprint 2: Control Plane & Daemon Health (PR #1546, commit `3c473180`):**
+  - Resolved GitHub App private keys to absolute paths in `synlynk/identity.py`, unblocking background daemon token refresh (#1523).
+  - Added stale lockfile recovery in `synlynk/daemon.py` when `.pid` is missing but `daemon.pid.lock` is held (#1537, #1523).
+  - Implemented dual-ledger write-through sync from authoritative state DB to local fallback in `synlynk probe` (#1535).
+  - Added `--no-fence` flag to `synlynk probe` to prevent instruction doc churn (#1538).
+  - Fixed `synlynk watch status` usage error to align with daemon status (#1520).
+- **Sprint 3: Layered Topology & Dispatch Hardening (PR #1547, commit `95f7a2fe`):**
+  - Created GitHub `unstable` integration trunk and `staging` release candidate tracks.
+  - Configured `synlynk/dispatch.py` to default PR targets to `unstable` and respect explicit `--base` branches (#1426).
+  - Added path boundary guards in `synlynk/worktree.py` to prevent recursive directory deletions (#1369).
+  - Enabled local-write-only review permissions for Codex without requiring full network access (#1351).
+  - Triaged and pruned 48 historical orphaned branches (#1487).
+- **Sprint 4: Reconciler Integrity & Unattended Milestone Loop (PR #1548, commit `2abeea80`):**
+  - Solved LIVE-12 (#1511): default issue tasks (comments, grooming, triage, audit, summary) to `comment_posted` expectation rather than `closed`, avoiding false-negative `FAILED_UNVERIFIED` reconciliations.
+  - Added explicit `--gh-write-expect` / `--expect` flag to `synlynk dispatch`.
+  - Preserved worker log files during zombie worktree reaping by copying to central storage and updating `daemon_jobs.log_path`, resolving 0-token / $0.00 cost logging (#1500).
+  - Hardened reconciler against transient git inspection `OSError` by failing closed (`continue`), preventing active workers from being killed (#1501, #1502).
+  - Added runtime revision drift detection in `SynlynkDaemon` to flag stale in-memory daemons.
+  - Implemented event-driven DAG execution model in `synlynk/launch_dag.py` (`DAGNode`, `LaunchDAG`) with asynchronous escalation ticketing to `@nikhilsoman` under label `reserved-gate`.
+  - Added `synlynk run --milestone <M> --unattended / --dag / --dry-run` CLI command surface, registered in `COMMAND_TAXONOMY`, and regenerated command reference docs.
+  - Closed issues #1500, #1501, #1502, #1511, #1527, and closed Master Epic #1543.
+[@agy]
+
 
 
 
