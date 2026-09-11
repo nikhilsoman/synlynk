@@ -350,6 +350,8 @@ def build_parser() -> argparse.ArgumentParser:
                                help="Write the proposed remediation without prompting")
     doctor_parser.add_argument("--live-probe", action="store_true",
                                help="Execute live in-sandbox gh-write probe during health checks")
+    doctor_parser.add_argument("--readiness", action="store_true",
+                               help="Evaluate and display the consolidated 4-point fleet readiness matrix")
 
     worktree_parser = subparsers.add_parser(
         "worktree", help="Audit and clean up stale git worktrees/branches"

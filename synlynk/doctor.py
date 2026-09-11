@@ -795,6 +795,9 @@ def cmd_doctor(args=None, checks: _List = None) -> int:
     """
     if args is not None and getattr(args, "fix", None):
         return cmd_doctor_fix(getattr(args, "fix"), args=args)
+    if args is not None and getattr(args, "readiness", False):
+        from synlynk.readiness import cmd_doctor_readiness
+        return cmd_doctor_readiness(args=args)
     if checks is not None:
         return 1 if _print_health_check_report(checks) else 0
 
