@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Review jobs that could not run pr check or the tests they were told to run | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Sep 06, 2026</span>
+        
+          <span class="blog-post-pr">PR TBD</span>
+        
+      </div>
+      <h1 class="blog-post-title">Review jobs that could not run pr check or the tests they were told to run</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>#1447 closed the Agy <code>## Permissions</code> title leak (#1427 / #1421). Review dispatch still could not finish its own contract: <code>synlynk pr check</code> died writing a shared todo file, and the injected pytest <code>-k</code> selector matched 0 tests.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>None. #1446 already named both fingerprints from live QA reviews. This PR implements that direction rather than treating the failures as defects in the PRs under review.</p>
+<h2>What This PR Shipped</h2>
+<p><code>_detect_hand_edit</code> renders generators into a temp directory and never opens the live <code>.synlynk/project-docs/*.md</code> path for write, so Codex <code>writable_roots=[]</code> review sandboxes can run <code>synlynk pr check</code>. <code>_verify_contract_for_story</code> no longer derives a pytest <code>-k</code> slug from the story title; it points at test files the worktree actually changed, or tells the agent to run those files without a guessed selector.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>None.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>QA review jobs can evaluate CI and run real tests instead of failing closed on sandbox writes and pytest exit 5.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>#1446 closed. Remaining review-dispatch hygiene: #1432 (<code>pr check</code> from the reviewer's own job branch) and #1436 (workspace identity, including QA <code>actions:read</code> unable to rerun flaky CI).</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

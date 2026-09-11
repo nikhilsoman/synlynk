@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #TBD — v0.19.0 Release | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Sep 11, 2026</span>
+        
+          <span class="blog-post-pr">PR #TBD</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #TBD — v0.19.0 Release</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>At the conclusion of <code>v0.18.0</code>, synlynk established harness capability scoring, dispatch reliability, and QA merge-gate authority. However, execution velocity remained gated by conversational turn-taking: agents frequently paused for human reassurance at every micro-step, PRs merged directly into production <code>main</code>, and daemon crashes on macOS could leave role tokens unrefreshed.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>Milestone <code>v0.19.0</code> adopted the <strong>Autonomy Trinity</strong> codified in <code>docs/superpowers/specs/2026-09-10-layered-release-autonomous-operations-design.md</code>:</p>
+<ol>
+<li><strong>Layered Release Topology:</strong> Introduced <code>unstable</code> as the multi-agent automated integration trunk, <code>staging</code> as the 48-hour soak track, and <code>main</code> as the GA release baseline.</li>
+<li><strong>Launch DAG &amp; Unattended Milestone Loop:</strong> Transformed milestone execution from manual task-by-task prompting into an event-driven DAG runner (<code>synlynk run --milestone &lt;M&gt; --unattended</code>) that autonomously dispatches, verifies, reviews, and merges independent tasks.</li>
+<li><strong>Control Plane Self-Healing:</strong> Eradicated silent daemon failures by resolving GitHub App keys to absolute paths, recovering orphaned flock locks, and enabling dual-ledger write-through synchronization to local fallback databases.</li>
+</ol>
+<h2>What This PR Shipped</h2>
+<ul>
+<li><strong>Sprint 1 (CI Multiplier):</strong> Added <code>pytest-xdist</code> with parallel test execution (<code>-n auto --dist loadfile</code>), slashing CI execution time from 9+ minutes down to 90 seconds.</li>
+<li><strong>Sprint 2 (Control Plane Resilience):</strong> Hardened <code>synlynk/daemon.py</code> with stale lockfile recovery, absolute RSA key resolution across worktrees, and dual-ledger state sync in <code>synlynk probe</code> and <code>synlynk doctor</code>.</li>
+<li><strong>Sprint 3 (Topology &amp; Dispatch Hardening):</strong> Directed default dispatch targets to <code>unstable</code>, added path boundary guards in <code>synlynk/worktree.py</code>, and cleaned up 48 orphaned branches.</li>
+<li><strong>Sprint 4 (Reconciler &amp; DAG Engine):</strong> Fixed LIVE-12 with <code>--gh-write-expect</code> support, protected log paths during zombie worktree reaping, guarded against transient git OS errors, and delivered <code>synlynk/launch_dag.py</code> with the <code>synlynk run --milestone &lt;M&gt;</code> CLI verb.</li>
+<li><strong>Spec Verification:</strong> Added comprehensive test suites across all new subsystems, bringing the collected test count to 2,734 tests.</li>
+</ul>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>Human operators are no longer required to babysit multi-stage milestone execution. By routing all autonomous dispatches to <code>unstable</code> and reserving human escalation strictly for designated reserved approval gates (via assigned GitHub issues under <code>reserved-gate</code>), synlynk can run overnight milestone sprints with complete trunk protection.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>With the control plane, layered topology, and DAG engine in place, the focus shifts to <strong>Milestone v0.20.0: Visual Workspace, Autonomous Onboarding &amp; Fleet Resilience</strong>: delivering BS-6 visual cockpit views (Product, Logical, Infra), an in-browser 1-click GitHub App role creation wizard, scope-bounded sparse worktrees (<code>git sparse-checkout --cone</code>), unified 4-point diagnostic attestation in <code>synlynk doctor --readiness</code>, and first-class Meta Muse harness support.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #TBD - #1436: Parent Auto-PRs Must Not Inherit Host GitHub Tokens | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-2">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Sep 06, 2026</span>
+        
+          <span class="blog-post-pr">PR TBD</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #TBD - #1436: Parent Auto-PRs Must Not Inherit Host GitHub Tokens</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Remaining Identity-Routing Hole</h2>
+<p>Child dispatch already removed ambient GitHub tokens, but the parent daemon's
+auto-finalization path still copied its full environment. When a role App token
+was unavailable, an inherited <code>GH_TOKEN</code> could make <code>gh</code> authenticate as the
+human operator.</p>
+<h2>What This PR Shipped</h2>
+<p>Parent auto-PR environments now remove <code>GH_TOKEN</code> and <code>GITHUB_TOKEN</code> before
+role-token resolution. A role token is injected only when one is available;
+host authentication remains an explicit opt-in. Merge-shaped jobs also skip
+automatic PR creation, so a merge operation cannot create a second PR from its
+worktree.</p>
+<h2>Verification</h2>
+<p>Regression tests cover missing role tokens, role-token precedence over an
+inherited host token, and merge jobs with changed worktrees. The targeted test
+command is:</p>
+<pre><code class="language-text">pytest tests/test_agent_cli.py -k 'implement_1436_leftover_charter_patch_so' -v
+</code></pre>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>Parent and child GitHub-write paths now share the same fail-closed identity
+boundary: role-scoped credentials are used when available, and a human token
+cannot be selected accidentally.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

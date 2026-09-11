@@ -11,13 +11,18 @@
   <link rel="stylesheet" href="/assets/css/main.css">
 </head>
 <body>
-  <!-- Fixed nav -->
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
   <nav>
     <a href="/" class="nav-logo">
       <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
       <span class="nav-brand">synlynk</span>
     </a>
-    <div class="nav-links">
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
       <a href="/docs/">Docs</a>
       <a href="/features/">Features</a>
       <a href="/blog/">Blog</a>
@@ -37,69 +42,6 @@
     <div class="blog-grid">
       
         <article class="blog-card">
-          <a href="/blog/94-prTBD-omlx-api-key/" class="blog-card-img-link">
-            <div class="blog-card-hero-fallback fallback-grad-0">
-              <span class="fallback-post-num">#00</span>
-            </div>
-          </a>
-          <div class="blog-card-content">
-            <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
-              
-            </div>
-            <h2 class="blog-card-title">
-              <a href="/blog/94-prTBD-omlx-api-key/"></a>
-            </h2>
-            <p class="blog-card-excerpt">
-              94: oMLX needs an API key, and the roster ID was wrong too Where we left off PR #665 fixed the oMLX endpoint&#39;s port literal —...
-            </p>
-            <a href="/blog/94-prTBD-omlx-api-key/" class="blog-card-link">Read Post →</a>
-          </div>
-        </article>
-      
-        <article class="blog-card">
-          <a href="/blog/95-prTBD-omlx-litellm-provider-prefix/" class="blog-card-img-link">
-            <div class="blog-card-hero-fallback fallback-grad-0">
-              <span class="fallback-post-num">#00</span>
-            </div>
-          </a>
-          <div class="blog-card-content">
-            <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
-              
-            </div>
-            <h2 class="blog-card-title">
-              <a href="/blog/95-prTBD-omlx-litellm-provider-prefix/"></a>
-            </h2>
-            <p class="blog-card-excerpt">
-              95: exit 0 lied — a real dispatch never reached Ornith Where we left off PR #672 fixed two independent gaps in the local-agent stack: the...
-            </p>
-            <a href="/blog/95-prTBD-omlx-litellm-provider-prefix/" class="blog-card-link">Read Post →</a>
-          </div>
-        </article>
-      
-        <article class="blog-card">
-          <a href="/blog/96-prTBD-omlx-aider-edit-format/" class="blog-card-img-link">
-            <div class="blog-card-hero-fallback fallback-grad-0">
-              <span class="fallback-post-num">#00</span>
-            </div>
-          </a>
-          <div class="blog-card-content">
-            <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
-              
-            </div>
-            <h2 class="blog-card-title">
-              <a href="/blog/96-prTBD-omlx-aider-edit-format/"></a>
-            </h2>
-            <p class="blog-card-excerpt">
-              96: the request finally landed — and the model tried to delete a test file Where we left off PR #678 fixed the litellm provider-prefix bug:...
-            </p>
-            <a href="/blog/96-prTBD-omlx-aider-edit-format/" class="blog-card-link">Read Post →</a>
-          </div>
-        </article>
-      
-        <article class="blog-card">
           <a href="/blog/97-pr697-local-agent-parity-config/" class="blog-card-img-link">
             <div class="blog-card-hero-fallback fallback-grad-0">
               <span class="fallback-post-num">#00</span>
@@ -107,7 +49,7 @@
           </a>
           <div class="blog-card-content">
             <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
+              <span class="blog-card-date">Sep 11, 2026</span>
               
             </div>
             <h2 class="blog-card-title">
@@ -128,7 +70,7 @@
           </a>
           <div class="blog-card-content">
             <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
+              <span class="blog-card-date">Sep 11, 2026</span>
               
             </div>
             <h2 class="blog-card-title">
@@ -142,23 +84,65 @@
         </article>
       
         <article class="blog-card">
-          <a href="/blog/64-v012-measurement-and-reliability/" class="blog-card-img-link">
+          <a href="/blog/94-prTBD-omlx-api-key/" class="blog-card-img-link">
             <div class="blog-card-hero-fallback fallback-grad-0">
               <span class="fallback-post-num">#00</span>
             </div>
           </a>
           <div class="blog-card-content">
             <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
+              <span class="blog-card-date">Sep 11, 2026</span>
               
             </div>
             <h2 class="blog-card-title">
-              <a href="/blog/64-v012-measurement-and-reliability/"></a>
+              <a href="/blog/94-prTBD-omlx-api-key/"></a>
             </h2>
             <p class="blog-card-excerpt">
-              v0.12.0 — Measurement &amp;amp; Reliability Date: 2026-07-15 Tag: v0.12.0 PRs: #122–#267 (71 PRs since v0.11.0) One sentence: the operational...
+              94: oMLX needs an API key, and the roster ID was wrong too Where we left off PR #665 fixed the oMLX endpoint&#39;s port literal —...
             </p>
-            <a href="/blog/64-v012-measurement-and-reliability/" class="blog-card-link">Read Post →</a>
+            <a href="/blog/94-prTBD-omlx-api-key/" class="blog-card-link">Read Post →</a>
+          </div>
+        </article>
+      
+        <article class="blog-card">
+          <a href="/blog/95-prTBD-omlx-litellm-provider-prefix/" class="blog-card-img-link">
+            <div class="blog-card-hero-fallback fallback-grad-0">
+              <span class="fallback-post-num">#00</span>
+            </div>
+          </a>
+          <div class="blog-card-content">
+            <div class="blog-card-meta">
+              <span class="blog-card-date">Sep 11, 2026</span>
+              
+            </div>
+            <h2 class="blog-card-title">
+              <a href="/blog/95-prTBD-omlx-litellm-provider-prefix/"></a>
+            </h2>
+            <p class="blog-card-excerpt">
+              95: exit 0 lied — a real dispatch never reached Ornith Where we left off PR #672 fixed two independent gaps in the local-agent stack: the...
+            </p>
+            <a href="/blog/95-prTBD-omlx-litellm-provider-prefix/" class="blog-card-link">Read Post →</a>
+          </div>
+        </article>
+      
+        <article class="blog-card">
+          <a href="/blog/96-prTBD-omlx-aider-edit-format/" class="blog-card-img-link">
+            <div class="blog-card-hero-fallback fallback-grad-0">
+              <span class="fallback-post-num">#00</span>
+            </div>
+          </a>
+          <div class="blog-card-content">
+            <div class="blog-card-meta">
+              <span class="blog-card-date">Sep 11, 2026</span>
+              
+            </div>
+            <h2 class="blog-card-title">
+              <a href="/blog/96-prTBD-omlx-aider-edit-format/"></a>
+            </h2>
+            <p class="blog-card-excerpt">
+              96: the request finally landed — and the model tried to delete a test file Where we left off PR #678 fixed the litellm provider-prefix bug:...
+            </p>
+            <a href="/blog/96-prTBD-omlx-aider-edit-format/" class="blog-card-link">Read Post →</a>
           </div>
         </article>
       
@@ -170,7 +154,7 @@
           </a>
           <div class="blog-card-content">
             <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
+              <span class="blog-card-date">Sep 11, 2026</span>
               
             </div>
             <h2 class="blog-card-title">
@@ -184,107 +168,23 @@
         </article>
       
         <article class="blog-card">
-          <a href="/blog/53-pr167-vizor-architect-map-v2/" class="blog-card-img-link">
+          <a href="/blog/64-v012-measurement-and-reliability/" class="blog-card-img-link">
             <div class="blog-card-hero-fallback fallback-grad-0">
               <span class="fallback-post-num">#00</span>
             </div>
           </a>
           <div class="blog-card-content">
             <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
+              <span class="blog-card-date">Sep 11, 2026</span>
               
             </div>
             <h2 class="blog-card-title">
-              <a href="/blog/53-pr167-vizor-architect-map-v2/"></a>
+              <a href="/blog/64-v012-measurement-and-reliability/"></a>
             </h2>
             <p class="blog-card-excerpt">
-              Architect Map v2 — From Static Tube Map to Live Workspace Graph Date: 2026-07-12 PR: #167 (merged) Branch:...
+              v0.12.0 — Measurement &amp;amp; Reliability Date: 2026-07-15 Tag: v0.12.0 PRs: #122–#267 (71 PRs since v0.11.0) One sentence: the operational...
             </p>
-            <a href="/blog/53-pr167-vizor-architect-map-v2/" class="blog-card-link">Read Post →</a>
-          </div>
-        </article>
-      
-        <article class="blog-card">
-          <a href="/blog/46-pr118-bs22-vizor-efficiency/" class="blog-card-img-link">
-            <div class="blog-card-hero-fallback fallback-grad-0">
-              <span class="fallback-post-num">#00</span>
-            </div>
-          </a>
-          <div class="blog-card-content">
-            <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
-              
-            </div>
-            <h2 class="blog-card-title">
-              <a href="/blog/46-pr118-bs22-vizor-efficiency/"></a>
-            </h2>
-            <p class="blog-card-excerpt">
-              PR #118 — BS-22: Vizor Gets Its Eyes Date: 2026-07-05 PR: #118 Branch: feat/bs22-vizor-efficiency → main The Goal at the End of the Previous...
-            </p>
-            <a href="/blog/46-pr118-bs22-vizor-efficiency/" class="blog-card-link">Read Post →</a>
-          </div>
-        </article>
-      
-        <article class="blog-card">
-          <a href="/blog/47-pr119-bs12-agent-autonomy-bridge/" class="blog-card-img-link">
-            <div class="blog-card-hero-fallback fallback-grad-0">
-              <span class="fallback-post-num">#00</span>
-            </div>
-          </a>
-          <div class="blog-card-content">
-            <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
-              
-            </div>
-            <h2 class="blog-card-title">
-              <a href="/blog/47-pr119-bs12-agent-autonomy-bridge/"></a>
-            </h2>
-            <p class="blog-card-excerpt">
-              PR #119 — BS-12: The Agent Autonomy Bridge Date: 2026-07-05 PR: #119 Branch: feat/bs12-agent-autonomy-bridge → main The Goal at the End of...
-            </p>
-            <a href="/blog/47-pr119-bs12-agent-autonomy-bridge/" class="blog-card-link">Read Post →</a>
-          </div>
-        </article>
-      
-        <article class="blog-card">
-          <a href="/blog/48-v011-agent-ecosystem-operational-layer/" class="blog-card-img-link">
-            <div class="blog-card-hero-fallback fallback-grad-0">
-              <span class="fallback-post-num">#00</span>
-            </div>
-          </a>
-          <div class="blog-card-content">
-            <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
-              
-            </div>
-            <h2 class="blog-card-title">
-              <a href="/blog/48-v011-agent-ecosystem-operational-layer/"></a>
-            </h2>
-            <p class="blog-card-excerpt">
-              v0.11.0 — The Agent Ecosystem Operational Layer Date: 2026-07-05 Tag: v0.11.0 PRs: #110, #113–#119 One sentence: synlynk v0.11.0 is the...
-            </p>
-            <a href="/blog/48-v011-agent-ecosystem-operational-layer/" class="blog-card-link">Read Post →</a>
-          </div>
-        </article>
-      
-        <article class="blog-card">
-          <a href="/blog/49-prTBD-bs8-goal-hierarchy/" class="blog-card-img-link">
-            <div class="blog-card-hero-fallback fallback-grad-0">
-              <span class="fallback-post-num">#00</span>
-            </div>
-          </a>
-          <div class="blog-card-content">
-            <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
-              
-            </div>
-            <h2 class="blog-card-title">
-              <a href="/blog/49-prTBD-bs8-goal-hierarchy/"></a>
-            </h2>
-            <p class="blog-card-excerpt">
-              BS-8: The Business Goal Layer Date: 2026-07-11 PR: TBD Branch: feat/bs8-goal-hierarchy → main The Goal at the End of the Previous PR v0.11.0...
-            </p>
-            <a href="/blog/49-prTBD-bs8-goal-hierarchy/" class="blog-card-link">Read Post →</a>
+            <a href="/blog/64-v012-measurement-and-reliability/" class="blog-card-link">Read Post →</a>
           </div>
         </article>
       
@@ -296,7 +196,7 @@
           </a>
           <div class="blog-card-content">
             <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
+              <span class="blog-card-date">Sep 11, 2026</span>
               
             </div>
             <h2 class="blog-card-title">
@@ -317,7 +217,7 @@
           </a>
           <div class="blog-card-content">
             <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
+              <span class="blog-card-date">Sep 11, 2026</span>
               
             </div>
             <h2 class="blog-card-title">
@@ -338,7 +238,7 @@
           </a>
           <div class="blog-card-content">
             <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
+              <span class="blog-card-date">Sep 11, 2026</span>
               
             </div>
             <h2 class="blog-card-title">
@@ -359,7 +259,7 @@
           </a>
           <div class="blog-card-content">
             <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
+              <span class="blog-card-date">Sep 11, 2026</span>
               
             </div>
             <h2 class="blog-card-title">
@@ -373,130 +273,107 @@
         </article>
       
         <article class="blog-card">
-          <a href="/blog/34-pr82-bs14-harness-compatibility/" class="blog-card-img-link">
-            <div class="blog-card-hero-fallback fallback-grad-2">
-              <span class="fallback-post-num">#34</span>
-            </div>
-          </a>
-          <div class="blog-card-content">
-            <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
-              
-                <span class="blog-card-pr">#82</span>
-              
-            </div>
-            <h2 class="blog-card-title">
-              <a href="/blog/34-pr82-bs14-harness-compatibility/"></a>
-            </h2>
-            <p class="blog-card-excerpt">
-              PR #82 — BS-14 Harness Compatibility System The Broader Goal at the End of the Previous PR At the close of the BS-5 website sprint (PRs...
-            </p>
-            <a href="/blog/34-pr82-bs14-harness-compatibility/" class="blog-card-link">Read Post →</a>
-          </div>
-        </article>
-      
-        <article class="blog-card">
-          <a href="/blog/19-v0.9.0-kernel-fixes/" class="blog-card-img-link">
+          <a href="/blog/53-pr167-vizor-architect-map-v2/" class="blog-card-img-link">
             <div class="blog-card-hero-fallback fallback-grad-0">
               <span class="fallback-post-num">#00</span>
             </div>
           </a>
           <div class="blog-card-content">
             <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
+              <span class="blog-card-date">Sep 11, 2026</span>
               
             </div>
             <h2 class="blog-card-title">
-              <a href="/blog/19-v0.9.0-kernel-fixes/"></a>
+              <a href="/blog/53-pr167-vizor-architect-map-v2/"></a>
             </h2>
             <p class="blog-card-excerpt">
-              19 — v0.9.0 Kernel Fixes: Dispatch Quality + Package Structure PR branch: feat/v0.9.0-kernel-fixes Commits: 8 (Tasks 1–7 + plan docs) Tests:...
+              Architect Map v2 — From Static Tube Map to Live Workspace Graph Date: 2026-07-12 PR: #167 (merged) Branch:...
             </p>
-            <a href="/blog/19-v0.9.0-kernel-fixes/" class="blog-card-link">Read Post →</a>
+            <a href="/blog/53-pr167-vizor-architect-map-v2/" class="blog-card-link">Read Post →</a>
           </div>
         </article>
       
         <article class="blog-card">
-          <a href="/blog/23-fix-dispatch-context-scoping/" class="blog-card-img-link">
+          <a href="/blog/46-pr118-bs22-vizor-efficiency/" class="blog-card-img-link">
             <div class="blog-card-hero-fallback fallback-grad-0">
               <span class="fallback-post-num">#00</span>
             </div>
           </a>
           <div class="blog-card-content">
             <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
+              <span class="blog-card-date">Sep 11, 2026</span>
               
             </div>
             <h2 class="blog-card-title">
-              <a href="/blog/23-fix-dispatch-context-scoping/"></a>
+              <a href="/blog/46-pr118-bs22-vizor-efficiency/"></a>
             </h2>
             <p class="blog-card-excerpt">
-              Post 23 — P0 Fix: Dispatch Context Scoping Branch: fix/dispatch-context-scoping Version target: patch on top of v0.9.3 Where we were At the...
+              PR #118 — BS-22: Vizor Gets Its Eyes Date: 2026-07-05 PR: #118 Branch: feat/bs22-vizor-efficiency → main The Goal at the End of the Previous...
             </p>
-            <a href="/blog/23-fix-dispatch-context-scoping/" class="blog-card-link">Read Post →</a>
+            <a href="/blog/46-pr118-bs22-vizor-efficiency/" class="blog-card-link">Read Post →</a>
           </div>
         </article>
       
         <article class="blog-card">
-          <a href="/blog/24-pr31-v0.9.4-context-dispatch-relay/" class="blog-card-img-link">
+          <a href="/blog/47-pr119-bs12-agent-autonomy-bridge/" class="blog-card-img-link">
             <div class="blog-card-hero-fallback fallback-grad-0">
               <span class="fallback-post-num">#00</span>
             </div>
           </a>
           <div class="blog-card-content">
             <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
+              <span class="blog-card-date">Sep 11, 2026</span>
               
             </div>
             <h2 class="blog-card-title">
-              <a href="/blog/24-pr31-v0.9.4-context-dispatch-relay/"></a>
+              <a href="/blog/47-pr119-bs12-agent-autonomy-bridge/"></a>
             </h2>
             <p class="blog-card-excerpt">
-              Post 24 — v0.9.4: Context, Dispatch, and Relay Branch: feat/v0.9.4-context-dispatch-relay Version: v0.9.4 Where we were At the end of PR #59...
+              PR #119 — BS-12: The Agent Autonomy Bridge Date: 2026-07-05 PR: #119 Branch: feat/bs12-agent-autonomy-bridge → main The Goal at the End of...
             </p>
-            <a href="/blog/24-pr31-v0.9.4-context-dispatch-relay/" class="blog-card-link">Read Post →</a>
+            <a href="/blog/47-pr119-bs12-agent-autonomy-bridge/" class="blog-card-link">Read Post →</a>
           </div>
         </article>
       
         <article class="blog-card">
-          <a href="/blog/25-pr64-v0.9.7-grok-agent-support/" class="blog-card-img-link">
+          <a href="/blog/48-v011-agent-ecosystem-operational-layer/" class="blog-card-img-link">
             <div class="blog-card-hero-fallback fallback-grad-0">
               <span class="fallback-post-num">#00</span>
             </div>
           </a>
           <div class="blog-card-content">
             <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
+              <span class="blog-card-date">Sep 11, 2026</span>
               
             </div>
             <h2 class="blog-card-title">
-              <a href="/blog/25-pr64-v0.9.7-grok-agent-support/"></a>
+              <a href="/blog/48-v011-agent-ecosystem-operational-layer/"></a>
             </h2>
             <p class="blog-card-excerpt">
-              Post 25 — v0.9.7: Grok as a First-Class Agent Peer PR: #62, #63, #64 Branch: feat/v0.9.7-grok-agent-support Version: v0.9.7 Where we were At...
+              v0.11.0 — The Agent Ecosystem Operational Layer Date: 2026-07-05 Tag: v0.11.0 PRs: #110, #113–#119 One sentence: synlynk v0.11.0 is the...
             </p>
-            <a href="/blog/25-pr64-v0.9.7-grok-agent-support/" class="blog-card-link">Read Post →</a>
+            <a href="/blog/48-v011-agent-ecosystem-operational-layer/" class="blog-card-link">Read Post →</a>
           </div>
         </article>
       
         <article class="blog-card">
-          <a href="/blog/26-pr68-v0.9.8-pipx-packaging/" class="blog-card-img-link">
+          <a href="/blog/49-prTBD-bs8-goal-hierarchy/" class="blog-card-img-link">
             <div class="blog-card-hero-fallback fallback-grad-0">
               <span class="fallback-post-num">#00</span>
             </div>
           </a>
           <div class="blog-card-content">
             <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
+              <span class="blog-card-date">Sep 11, 2026</span>
               
             </div>
             <h2 class="blog-card-title">
-              <a href="/blog/26-pr68-v0.9.8-pipx-packaging/"></a>
+              <a href="/blog/49-prTBD-bs8-goal-hierarchy/"></a>
             </h2>
             <p class="blog-card-excerpt">
-              Blog Post 26 — PR #68: pipx/pip Packaging (v0.9.8 prep) Series: Building synlynk — The Coordination OS for Multi-Agent Development PR: #68 —...
+              BS-8: The Business Goal Layer Date: 2026-07-11 PR: TBD Branch: feat/bs8-goal-hierarchy → main The Goal at the End of the Previous PR v0.11.0...
             </p>
-            <a href="/blog/26-pr68-v0.9.8-pipx-packaging/" class="blog-card-link">Read Post →</a>
+            <a href="/blog/49-prTBD-bs8-goal-hierarchy/" class="blog-card-link">Read Post →</a>
           </div>
         </article>
       
@@ -508,7 +385,7 @@
           </a>
           <div class="blog-card-content">
             <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
+              <span class="blog-card-date">Sep 11, 2026</span>
               
             </div>
             <h2 class="blog-card-title">
@@ -529,7 +406,7 @@
           </a>
           <div class="blog-card-content">
             <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
+              <span class="blog-card-date">Sep 11, 2026</span>
               
             </div>
             <h2 class="blog-card-title">
@@ -550,7 +427,7 @@
           </a>
           <div class="blog-card-content">
             <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
+              <span class="blog-card-date">Sep 11, 2026</span>
               
             </div>
             <h2 class="blog-card-title">
@@ -564,65 +441,151 @@
         </article>
       
         <article class="blog-card">
-          <a href="/blog/154-pr1322-fix-blog-post-103-frontmatter/" class="blog-card-img-link">
-            <div class="blog-card-hero-fallback fallback-grad-0">
-              <span class="fallback-post-num">#00</span>
+          <a href="/blog/34-pr82-bs14-harness-compatibility/" class="blog-card-img-link">
+            <div class="blog-card-hero-fallback fallback-grad-2">
+              <span class="fallback-post-num">#34</span>
             </div>
           </a>
           <div class="blog-card-content">
             <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
+              <span class="blog-card-date">Sep 11, 2026</span>
+              
+                <span class="blog-card-pr">#82</span>
               
             </div>
             <h2 class="blog-card-title">
-              <a href="/blog/154-pr1322-fix-blog-post-103-frontmatter/"></a>
+              <a href="/blog/34-pr82-bs14-harness-compatibility/"></a>
             </h2>
             <p class="blog-card-excerpt">
-              Post 154: Fix YAML Frontmatter in Blog Post 103 (PR #1322, Issue #941) PR: #1322 Issue: #941 Author: Agy (Gemini) [@agy] Reviewer: Codex...
+              PR #82 — BS-14 Harness Compatibility System The Broader Goal at the End of the Previous PR At the close of the BS-5 website sprint (PRs...
             </p>
-            <a href="/blog/154-pr1322-fix-blog-post-103-frontmatter/" class="blog-card-link">Read Post →</a>
+            <a href="/blog/34-pr82-bs14-harness-compatibility/" class="blog-card-link">Read Post →</a>
           </div>
         </article>
       
         <article class="blog-card">
-          <a href="/blog/16-pr-capability-dogfood/" class="blog-card-img-link">
+          <a href="/blog/23-fix-dispatch-context-scoping/" class="blog-card-img-link">
             <div class="blog-card-hero-fallback fallback-grad-0">
               <span class="fallback-post-num">#00</span>
             </div>
           </a>
           <div class="blog-card-content">
             <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
+              <span class="blog-card-date">Sep 11, 2026</span>
               
             </div>
             <h2 class="blog-card-title">
-              <a href="/blog/16-pr-capability-dogfood/"></a>
+              <a href="/blog/23-fix-dispatch-context-scoping/"></a>
             </h2>
             <p class="blog-card-excerpt">
-              Blog Post 16 — Capability Dogfood: Seeding the Routing Brain Broader Goal (End of Previous PR) At the end of v0.7.0 (Static Scan Quality),...
+              Post 23 — P0 Fix: Dispatch Context Scoping Branch: fix/dispatch-context-scoping Version target: patch on top of v0.9.3 Where we were At the...
             </p>
-            <a href="/blog/16-pr-capability-dogfood/" class="blog-card-link">Read Post →</a>
+            <a href="/blog/23-fix-dispatch-context-scoping/" class="blog-card-link">Read Post →</a>
           </div>
         </article>
       
         <article class="blog-card">
-          <a href="/blog/17-pr-codex-headless-dispatch/" class="blog-card-img-link">
+          <a href="/blog/24-pr31-v0.9.4-context-dispatch-relay/" class="blog-card-img-link">
             <div class="blog-card-hero-fallback fallback-grad-0">
               <span class="fallback-post-num">#00</span>
             </div>
           </a>
           <div class="blog-card-content">
             <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
+              <span class="blog-card-date">Sep 11, 2026</span>
               
             </div>
             <h2 class="blog-card-title">
-              <a href="/blog/17-pr-codex-headless-dispatch/"></a>
+              <a href="/blog/24-pr31-v0.9.4-context-dispatch-relay/"></a>
             </h2>
             <p class="blog-card-excerpt">
-              Blog Post 17 — Codex Headless Dispatch: codex exec Unlocks the Third Agent Broader Goal (End of Previous PR) PR #50 seeded the capability...
+              Post 24 — v0.9.4: Context, Dispatch, and Relay Branch: feat/v0.9.4-context-dispatch-relay Version: v0.9.4 Where we were At the end of PR #59...
             </p>
-            <a href="/blog/17-pr-codex-headless-dispatch/" class="blog-card-link">Read Post →</a>
+            <a href="/blog/24-pr31-v0.9.4-context-dispatch-relay/" class="blog-card-link">Read Post →</a>
+          </div>
+        </article>
+      
+        <article class="blog-card">
+          <a href="/blog/25-pr64-v0.9.7-grok-agent-support/" class="blog-card-img-link">
+            <div class="blog-card-hero-fallback fallback-grad-0">
+              <span class="fallback-post-num">#00</span>
+            </div>
+          </a>
+          <div class="blog-card-content">
+            <div class="blog-card-meta">
+              <span class="blog-card-date">Sep 11, 2026</span>
+              
+            </div>
+            <h2 class="blog-card-title">
+              <a href="/blog/25-pr64-v0.9.7-grok-agent-support/"></a>
+            </h2>
+            <p class="blog-card-excerpt">
+              Post 25 — v0.9.7: Grok as a First-Class Agent Peer PR: #62, #63, #64 Branch: feat/v0.9.7-grok-agent-support Version: v0.9.7 Where we were At...
+            </p>
+            <a href="/blog/25-pr64-v0.9.7-grok-agent-support/" class="blog-card-link">Read Post →</a>
+          </div>
+        </article>
+      
+        <article class="blog-card">
+          <a href="/blog/26-pr68-v0.9.8-pipx-packaging/" class="blog-card-img-link">
+            <div class="blog-card-hero-fallback fallback-grad-0">
+              <span class="fallback-post-num">#00</span>
+            </div>
+          </a>
+          <div class="blog-card-content">
+            <div class="blog-card-meta">
+              <span class="blog-card-date">Sep 11, 2026</span>
+              
+            </div>
+            <h2 class="blog-card-title">
+              <a href="/blog/26-pr68-v0.9.8-pipx-packaging/"></a>
+            </h2>
+            <p class="blog-card-excerpt">
+              Blog Post 26 — PR #68: pipx/pip Packaging (v0.9.8 prep) Series: Building synlynk — The Coordination OS for Multi-Agent Development PR: #68 —...
+            </p>
+            <a href="/blog/26-pr68-v0.9.8-pipx-packaging/" class="blog-card-link">Read Post →</a>
+          </div>
+        </article>
+      
+        <article class="blog-card">
+          <a href="/blog/19-v0.9.0-kernel-fixes/" class="blog-card-img-link">
+            <div class="blog-card-hero-fallback fallback-grad-0">
+              <span class="fallback-post-num">#00</span>
+            </div>
+          </a>
+          <div class="blog-card-content">
+            <div class="blog-card-meta">
+              <span class="blog-card-date">Sep 11, 2026</span>
+              
+            </div>
+            <h2 class="blog-card-title">
+              <a href="/blog/19-v0.9.0-kernel-fixes/"></a>
+            </h2>
+            <p class="blog-card-excerpt">
+              19 — v0.9.0 Kernel Fixes: Dispatch Quality + Package Structure PR branch: feat/v0.9.0-kernel-fixes Commits: 8 (Tasks 1–7 + plan docs) Tests:...
+            </p>
+            <a href="/blog/19-v0.9.0-kernel-fixes/" class="blog-card-link">Read Post →</a>
+          </div>
+        </article>
+      
+        <article class="blog-card">
+          <a href="/blog/191-prTBD-exec-gh-shim/" class="blog-card-img-link">
+            <div class="blog-card-hero-fallback fallback-grad-0">
+              <span class="fallback-post-num">#00</span>
+            </div>
+          </a>
+          <div class="blog-card-content">
+            <div class="blog-card-meta">
+              <span class="blog-card-date">Sep 11, 2026</span>
+              
+            </div>
+            <h2 class="blog-card-title">
+              <a href="/blog/191-prTBD-exec-gh-shim/"></a>
+            </h2>
+            <p class="blog-card-excerpt">
+              The synlynk exec GitHub CLI guard synlynk exec now places a short-lived gh shim at the front of the child process&#39;s PATH. This closes the...
+            </p>
+            <a href="/blog/191-prTBD-exec-gh-shim/" class="blog-card-link">Read Post →</a>
           </div>
         </article>
       
@@ -634,7 +597,7 @@
           </a>
           <div class="blog-card-content">
             <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
+              <span class="blog-card-date">Sep 11, 2026</span>
               
             </div>
             <h2 class="blog-card-title">
@@ -648,128 +611,86 @@
         </article>
       
         <article class="blog-card">
-          <a href="/blog/147-pr1314-doctor-warn-todo-drift/" class="blog-card-img-link">
+          <a href="/blog/163-pr1346-cadence-breaker-resilience/" class="blog-card-img-link">
             <div class="blog-card-hero-fallback fallback-grad-0">
               <span class="fallback-post-num">#00</span>
             </div>
           </a>
           <div class="blog-card-content">
             <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
+              <span class="blog-card-date">Sep 11, 2026</span>
               
             </div>
             <h2 class="blog-card-title">
-              <a href="/blog/147-pr1314-doctor-warn-todo-drift/"></a>
+              <a href="/blog/163-pr1346-cadence-breaker-resilience/"></a>
             </h2>
             <p class="blog-card-excerpt">
-              Post 147: Doctor Check for todo.md Hand-Edit Drift (#1220 / PR #1314) Author: Agy (Gemini) Date: 2026-09-01 Category: Reliability /...
+              PR #1346 - Cadence-Breaker Resilience Autonomous systems fail in surprisingly ordinary ways: two agents append to the same markdown index, a...
             </p>
-            <a href="/blog/147-pr1314-doctor-warn-todo-drift/" class="blog-card-link">Read Post →</a>
+            <a href="/blog/163-pr1346-cadence-breaker-resilience/" class="blog-card-link">Read Post →</a>
           </div>
         </article>
       
         <article class="blog-card">
-          <a href="/blog/148-pr1315-decide-record-worktree-docs-path/" class="blog-card-img-link">
+          <a href="/blog/168-pr1351-ephemeral-swarm-cloud-runners/" class="blog-card-img-link">
             <div class="blog-card-hero-fallback fallback-grad-0">
               <span class="fallback-post-num">#00</span>
             </div>
           </a>
           <div class="blog-card-content">
             <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
+              <span class="blog-card-date">Sep 11, 2026</span>
               
             </div>
             <h2 class="blog-card-title">
-              <a href="/blog/148-pr1315-decide-record-worktree-docs-path/"></a>
+              <a href="/blog/168-pr1351-ephemeral-swarm-cloud-runners/"></a>
             </h2>
             <p class="blog-card-excerpt">
-              Post 148: Fix Decision Record Path in Migrated Workspaces &amp;amp; Worktrees (#1226, #1194 / PR #1315) Author: Agy (Gemini) Date: 2026-09-01...
+              PR #1351 - Ephemeral Swarm Cloud Runners Synlynk&#39;s swarm engine now has a small, explicit contract for ephemeral execution. A runner driver...
             </p>
-            <a href="/blog/148-pr1315-decide-record-worktree-docs-path/" class="blog-card-link">Read Post →</a>
+            <a href="/blog/168-pr1351-ephemeral-swarm-cloud-runners/" class="blog-card-link">Read Post →</a>
           </div>
         </article>
       
         <article class="blog-card">
-          <a href="/blog/149-pr1316-doctor-tc9-live-gh-write-probe/" class="blog-card-img-link">
+          <a href="/blog/169-pr1352-zero-risk-onboarding-first-win/" class="blog-card-img-link">
             <div class="blog-card-hero-fallback fallback-grad-0">
               <span class="fallback-post-num">#00</span>
             </div>
           </a>
           <div class="blog-card-content">
             <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
+              <span class="blog-card-date">Sep 11, 2026</span>
               
             </div>
             <h2 class="blog-card-title">
-              <a href="/blog/149-pr1316-doctor-tc9-live-gh-write-probe/"></a>
+              <a href="/blog/169-pr1352-zero-risk-onboarding-first-win/"></a>
             </h2>
             <p class="blog-card-excerpt">
-              Post 149: Doctor TC-9 In-Sandbox GitHub Write Capability Probe (#1213 / PR #1316) Author: Agy (Gemini) Date: 2026-09-01 Category:...
+              PR #1352 - Zero-Risk Onboarding &amp;amp; Instant First-Win Experience Early adopters evaluating multi-agent development tools face an...
             </p>
-            <a href="/blog/149-pr1316-doctor-tc9-live-gh-write-probe/" class="blog-card-link">Read Post →</a>
+            <a href="/blog/169-pr1352-zero-risk-onboarding-first-win/" class="blog-card-link">Read Post →</a>
           </div>
         </article>
       
         <article class="blog-card">
-          <a href="/blog/15-pr-v0.7.0-static-scan-quality/" class="blog-card-img-link">
+          <a href="/blog/17-pr-codex-headless-dispatch/" class="blog-card-img-link">
             <div class="blog-card-hero-fallback fallback-grad-0">
               <span class="fallback-post-num">#00</span>
             </div>
           </a>
           <div class="blog-card-content">
             <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
+              <span class="blog-card-date">Sep 11, 2026</span>
               
             </div>
             <h2 class="blog-card-title">
-              <a href="/blog/15-pr-v0.7.0-static-scan-quality/"></a>
+              <a href="/blog/17-pr-codex-headless-dispatch/"></a>
             </h2>
             <p class="blog-card-excerpt">
-              Blog 15 — v0.7.0: Static Scan Quality PR: feat/v0.7.0-static-scan-quality Date: 2026-06-18 The Previous Goalpost At the end of PR #47...
+              Blog Post 17 — Codex Headless Dispatch: codex exec Unlocks the Third Agent Broader Goal (End of Previous PR) PR #50 seeded the capability...
             </p>
-            <a href="/blog/15-pr-v0.7.0-static-scan-quality/" class="blog-card-link">Read Post →</a>
-          </div>
-        </article>
-      
-        <article class="blog-card">
-          <a href="/blog/150-pr1303-qa-app-administration-permission/" class="blog-card-img-link">
-            <div class="blog-card-hero-fallback fallback-grad-0">
-              <span class="fallback-post-num">#00</span>
-            </div>
-          </a>
-          <div class="blog-card-content">
-            <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
-              
-            </div>
-            <h2 class="blog-card-title">
-              <a href="/blog/150-pr1303-qa-app-administration-permission/"></a>
-            </h2>
-            <p class="blog-card-excerpt">
-              Post 150: Grant Administration:Write Permission to Merge Roles in GitHub App Manifests (PR #1303, Issue #1295) PR: #1303 Issue: #1295...
-            </p>
-            <a href="/blog/150-pr1303-qa-app-administration-permission/" class="blog-card-link">Read Post →</a>
-          </div>
-        </article>
-      
-        <article class="blog-card">
-          <a href="/blog/151-pr1319-readme-sync-test-synthetic-fixture/" class="blog-card-img-link">
-            <div class="blog-card-hero-fallback fallback-grad-0">
-              <span class="fallback-post-num">#00</span>
-            </div>
-          </a>
-          <div class="blog-card-content">
-            <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
-              
-            </div>
-            <h2 class="blog-card-title">
-              <a href="/blog/151-pr1319-readme-sync-test-synthetic-fixture/"></a>
-            </h2>
-            <p class="blog-card-excerpt">
-              Post 151: Decouple README Sync Validator Unit Tests from Live Repo Root (PR #1319, Issue #1270) PR: #1319 Issue: #1270 Author: Agy (Gemini)...
-            </p>
-            <a href="/blog/151-pr1319-readme-sync-test-synthetic-fixture/" class="blog-card-link">Read Post →</a>
+            <a href="/blog/17-pr-codex-headless-dispatch/" class="blog-card-link">Read Post →</a>
           </div>
         </article>
       
@@ -781,7 +702,7 @@
           </a>
           <div class="blog-card-content">
             <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
+              <span class="blog-card-date">Sep 11, 2026</span>
               
             </div>
             <h2 class="blog-card-title">
@@ -802,7 +723,7 @@
           </a>
           <div class="blog-card-content">
             <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
+              <span class="blog-card-date">Sep 11, 2026</span>
               
             </div>
             <h2 class="blog-card-title">
@@ -816,6 +737,195 @@
         </article>
       
         <article class="blog-card">
+          <a href="/blog/154-pr1322-fix-blog-post-103-frontmatter/" class="blog-card-img-link">
+            <div class="blog-card-hero-fallback fallback-grad-0">
+              <span class="fallback-post-num">#00</span>
+            </div>
+          </a>
+          <div class="blog-card-content">
+            <div class="blog-card-meta">
+              <span class="blog-card-date">Sep 11, 2026</span>
+              
+            </div>
+            <h2 class="blog-card-title">
+              <a href="/blog/154-pr1322-fix-blog-post-103-frontmatter/"></a>
+            </h2>
+            <p class="blog-card-excerpt">
+              Post 154: Fix YAML Frontmatter in Blog Post 103 (PR #1322, Issue #941) PR: #1322 Issue: #941 Author: Agy (Gemini) [@agy] Reviewer: Codex...
+            </p>
+            <a href="/blog/154-pr1322-fix-blog-post-103-frontmatter/" class="blog-card-link">Read Post →</a>
+          </div>
+        </article>
+      
+        <article class="blog-card">
+          <a href="/blog/16-pr-capability-dogfood/" class="blog-card-img-link">
+            <div class="blog-card-hero-fallback fallback-grad-0">
+              <span class="fallback-post-num">#00</span>
+            </div>
+          </a>
+          <div class="blog-card-content">
+            <div class="blog-card-meta">
+              <span class="blog-card-date">Sep 11, 2026</span>
+              
+            </div>
+            <h2 class="blog-card-title">
+              <a href="/blog/16-pr-capability-dogfood/"></a>
+            </h2>
+            <p class="blog-card-excerpt">
+              Blog Post 16 — Capability Dogfood: Seeding the Routing Brain Broader Goal (End of Previous PR) At the end of v0.7.0 (Static Scan Quality),...
+            </p>
+            <a href="/blog/16-pr-capability-dogfood/" class="blog-card-link">Read Post →</a>
+          </div>
+        </article>
+      
+        <article class="blog-card">
+          <a href="/blog/147-pr1314-doctor-warn-todo-drift/" class="blog-card-img-link">
+            <div class="blog-card-hero-fallback fallback-grad-0">
+              <span class="fallback-post-num">#00</span>
+            </div>
+          </a>
+          <div class="blog-card-content">
+            <div class="blog-card-meta">
+              <span class="blog-card-date">Sep 11, 2026</span>
+              
+            </div>
+            <h2 class="blog-card-title">
+              <a href="/blog/147-pr1314-doctor-warn-todo-drift/"></a>
+            </h2>
+            <p class="blog-card-excerpt">
+              Post 147: Doctor Check for todo.md Hand-Edit Drift (#1220 / PR #1314) Author: Agy (Gemini) Date: 2026-09-01 Category: Reliability /...
+            </p>
+            <a href="/blog/147-pr1314-doctor-warn-todo-drift/" class="blog-card-link">Read Post →</a>
+          </div>
+        </article>
+      
+        <article class="blog-card">
+          <a href="/blog/148-pr1315-decide-record-worktree-docs-path/" class="blog-card-img-link">
+            <div class="blog-card-hero-fallback fallback-grad-0">
+              <span class="fallback-post-num">#00</span>
+            </div>
+          </a>
+          <div class="blog-card-content">
+            <div class="blog-card-meta">
+              <span class="blog-card-date">Sep 11, 2026</span>
+              
+            </div>
+            <h2 class="blog-card-title">
+              <a href="/blog/148-pr1315-decide-record-worktree-docs-path/"></a>
+            </h2>
+            <p class="blog-card-excerpt">
+              Post 148: Fix Decision Record Path in Migrated Workspaces &amp;amp; Worktrees (#1226, #1194 / PR #1315) Author: Agy (Gemini) Date: 2026-09-01...
+            </p>
+            <a href="/blog/148-pr1315-decide-record-worktree-docs-path/" class="blog-card-link">Read Post →</a>
+          </div>
+        </article>
+      
+        <article class="blog-card">
+          <a href="/blog/149-pr1316-doctor-tc9-live-gh-write-probe/" class="blog-card-img-link">
+            <div class="blog-card-hero-fallback fallback-grad-0">
+              <span class="fallback-post-num">#00</span>
+            </div>
+          </a>
+          <div class="blog-card-content">
+            <div class="blog-card-meta">
+              <span class="blog-card-date">Sep 11, 2026</span>
+              
+            </div>
+            <h2 class="blog-card-title">
+              <a href="/blog/149-pr1316-doctor-tc9-live-gh-write-probe/"></a>
+            </h2>
+            <p class="blog-card-excerpt">
+              Post 149: Doctor TC-9 In-Sandbox GitHub Write Capability Probe (#1213 / PR #1316) Author: Agy (Gemini) Date: 2026-09-01 Category:...
+            </p>
+            <a href="/blog/149-pr1316-doctor-tc9-live-gh-write-probe/" class="blog-card-link">Read Post →</a>
+          </div>
+        </article>
+      
+        <article class="blog-card">
+          <a href="/blog/15-pr-v0.7.0-static-scan-quality/" class="blog-card-img-link">
+            <div class="blog-card-hero-fallback fallback-grad-0">
+              <span class="fallback-post-num">#00</span>
+            </div>
+          </a>
+          <div class="blog-card-content">
+            <div class="blog-card-meta">
+              <span class="blog-card-date">Sep 11, 2026</span>
+              
+            </div>
+            <h2 class="blog-card-title">
+              <a href="/blog/15-pr-v0.7.0-static-scan-quality/"></a>
+            </h2>
+            <p class="blog-card-excerpt">
+              Blog 15 — v0.7.0: Static Scan Quality PR: feat/v0.7.0-static-scan-quality Date: 2026-06-18 The Previous Goalpost At the end of PR #47...
+            </p>
+            <a href="/blog/15-pr-v0.7.0-static-scan-quality/" class="blog-card-link">Read Post →</a>
+          </div>
+        </article>
+      
+        <article class="blog-card">
+          <a href="/blog/150-pr1303-qa-app-administration-permission/" class="blog-card-img-link">
+            <div class="blog-card-hero-fallback fallback-grad-0">
+              <span class="fallback-post-num">#00</span>
+            </div>
+          </a>
+          <div class="blog-card-content">
+            <div class="blog-card-meta">
+              <span class="blog-card-date">Sep 11, 2026</span>
+              
+            </div>
+            <h2 class="blog-card-title">
+              <a href="/blog/150-pr1303-qa-app-administration-permission/"></a>
+            </h2>
+            <p class="blog-card-excerpt">
+              Post 150: Grant Administration:Write Permission to Merge Roles in GitHub App Manifests (PR #1303, Issue #1295) PR: #1303 Issue: #1295...
+            </p>
+            <a href="/blog/150-pr1303-qa-app-administration-permission/" class="blog-card-link">Read Post →</a>
+          </div>
+        </article>
+      
+        <article class="blog-card">
+          <a href="/blog/151-pr1319-readme-sync-test-synthetic-fixture/" class="blog-card-img-link">
+            <div class="blog-card-hero-fallback fallback-grad-0">
+              <span class="fallback-post-num">#00</span>
+            </div>
+          </a>
+          <div class="blog-card-content">
+            <div class="blog-card-meta">
+              <span class="blog-card-date">Sep 11, 2026</span>
+              
+            </div>
+            <h2 class="blog-card-title">
+              <a href="/blog/151-pr1319-readme-sync-test-synthetic-fixture/"></a>
+            </h2>
+            <p class="blog-card-excerpt">
+              Post 151: Decouple README Sync Validator Unit Tests from Live Repo Root (PR #1319, Issue #1270) PR: #1319 Issue: #1270 Author: Agy (Gemini)...
+            </p>
+            <a href="/blog/151-pr1319-readme-sync-test-synthetic-fixture/" class="blog-card-link">Read Post →</a>
+          </div>
+        </article>
+      
+        <article class="blog-card">
+          <a href="/blog/132-pr1202-harness-agent-terminology-sweep/" class="blog-card-img-link">
+            <div class="blog-card-hero-fallback fallback-grad-0">
+              <span class="fallback-post-num">#00</span>
+            </div>
+          </a>
+          <div class="blog-card-content">
+            <div class="blog-card-meta">
+              <span class="blog-card-date">Sep 11, 2026</span>
+              
+            </div>
+            <h2 class="blog-card-title">
+              <a href="/blog/132-pr1202-harness-agent-terminology-sweep/"></a>
+            </h2>
+            <p class="blog-card-excerpt">
+              PR #1202 — Saying What We Mean: Harness vs. Agent Where we left off The previous #1198 sub-issue, #1200 (doctor check for elevated PR review...
+            </p>
+            <a href="/blog/132-pr1202-harness-agent-terminology-sweep/" class="blog-card-link">Read Post →</a>
+          </div>
+        </article>
+      
+        <article class="blog-card">
           <a href="/blog/134-pr1271-codex-direct-gh-write-network-access/" class="blog-card-img-link">
             <div class="blog-card-hero-fallback fallback-grad-0">
               <span class="fallback-post-num">#00</span>
@@ -823,7 +933,7 @@
           </a>
           <div class="blog-card-content">
             <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
+              <span class="blog-card-date">Sep 11, 2026</span>
               
             </div>
             <h2 class="blog-card-title">
@@ -844,7 +954,7 @@
           </a>
           <div class="blog-card-content">
             <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
+              <span class="blog-card-date">Sep 11, 2026</span>
               
             </div>
             <h2 class="blog-card-title">
@@ -865,7 +975,7 @@
           </a>
           <div class="blog-card-content">
             <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
+              <span class="blog-card-date">Sep 11, 2026</span>
               
             </div>
             <h2 class="blog-card-title">
@@ -886,7 +996,7 @@
           </a>
           <div class="blog-card-content">
             <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
+              <span class="blog-card-date">Sep 11, 2026</span>
               
             </div>
             <h2 class="blog-card-title">
@@ -900,6 +1010,27 @@
         </article>
       
         <article class="blog-card">
+          <a href="/blog/121-pr1030-agent-roles-phase2-memory-gated-learning/" class="blog-card-img-link">
+            <div class="blog-card-hero-fallback fallback-grad-0">
+              <span class="fallback-post-num">#00</span>
+            </div>
+          </a>
+          <div class="blog-card-content">
+            <div class="blog-card-meta">
+              <span class="blog-card-date">Sep 11, 2026</span>
+              
+            </div>
+            <h2 class="blog-card-title">
+              <a href="/blog/121-pr1030-agent-roles-phase2-memory-gated-learning/"></a>
+            </h2>
+            <p class="blog-card-excerpt">
+              PR #1030 — Agent-Roles-Charters Phase 2: Making Capability Grants Mean Something The Goal at the End of the Previous PR PR #1022 (post #120)...
+            </p>
+            <a href="/blog/121-pr1030-agent-roles-phase2-memory-gated-learning/" class="blog-card-link">Read Post →</a>
+          </div>
+        </article>
+      
+        <article class="blog-card">
           <a href="/blog/124-pr1100-1101-qa-completion-tracker-and-merge-restricted-classes/" class="blog-card-img-link">
             <div class="blog-card-hero-fallback fallback-grad-0">
               <span class="fallback-post-num">#00</span>
@@ -907,7 +1038,7 @@
           </a>
           <div class="blog-card-content">
             <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
+              <span class="blog-card-date">Sep 11, 2026</span>
               
             </div>
             <h2 class="blog-card-title">
@@ -928,7 +1059,7 @@
           </a>
           <div class="blog-card-content">
             <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
+              <span class="blog-card-date">Sep 11, 2026</span>
               
             </div>
             <h2 class="blog-card-title">
@@ -949,7 +1080,7 @@
           </a>
           <div class="blog-card-content">
             <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
+              <span class="blog-card-date">Sep 11, 2026</span>
               
             </div>
             <h2 class="blog-card-title">
@@ -970,7 +1101,7 @@
           </a>
           <div class="blog-card-content">
             <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
+              <span class="blog-card-date">Sep 11, 2026</span>
               
             </div>
             <h2 class="blog-card-title">
@@ -991,7 +1122,7 @@
           </a>
           <div class="blog-card-content">
             <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
+              <span class="blog-card-date">Sep 11, 2026</span>
               
             </div>
             <h2 class="blog-card-title">
@@ -1012,7 +1143,7 @@
           </a>
           <div class="blog-card-content">
             <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
+              <span class="blog-card-date">Sep 11, 2026</span>
               
             </div>
             <h2 class="blog-card-title">
@@ -1033,7 +1164,7 @@
           </a>
           <div class="blog-card-content">
             <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
+              <span class="blog-card-date">Sep 11, 2026</span>
               
             </div>
             <h2 class="blog-card-title">
@@ -1047,27 +1178,6 @@
         </article>
       
         <article class="blog-card">
-          <a href="/blog/132-pr1202-harness-agent-terminology-sweep/" class="blog-card-img-link">
-            <div class="blog-card-hero-fallback fallback-grad-0">
-              <span class="fallback-post-num">#00</span>
-            </div>
-          </a>
-          <div class="blog-card-content">
-            <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
-              
-            </div>
-            <h2 class="blog-card-title">
-              <a href="/blog/132-pr1202-harness-agent-terminology-sweep/"></a>
-            </h2>
-            <p class="blog-card-excerpt">
-              PR #1202 — Saying What We Mean: Harness vs. Agent Where we left off The previous #1198 sub-issue, #1200 (doctor check for elevated PR review...
-            </p>
-            <a href="/blog/132-pr1202-harness-agent-terminology-sweep/" class="blog-card-link">Read Post →</a>
-          </div>
-        </article>
-      
-        <article class="blog-card">
           <a href="/blog/116-v0.13.1-operational-reliability-patch/" class="blog-card-img-link">
             <div class="blog-card-hero-fallback fallback-grad-0">
               <span class="fallback-post-num">#00</span>
@@ -1075,7 +1185,7 @@
           </a>
           <div class="blog-card-content">
             <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
+              <span class="blog-card-date">Sep 11, 2026</span>
               
             </div>
             <h2 class="blog-card-title">
@@ -1096,7 +1206,7 @@
           </a>
           <div class="blog-card-content">
             <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
+              <span class="blog-card-date">Sep 11, 2026</span>
               
             </div>
             <h2 class="blog-card-title">
@@ -1117,7 +1227,7 @@
           </a>
           <div class="blog-card-content">
             <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
+              <span class="blog-card-date">Sep 11, 2026</span>
               
             </div>
             <h2 class="blog-card-title">
@@ -1138,7 +1248,7 @@
           </a>
           <div class="blog-card-content">
             <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
+              <span class="blog-card-date">Sep 11, 2026</span>
               
             </div>
             <h2 class="blog-card-title">
@@ -1159,7 +1269,7 @@
           </a>
           <div class="blog-card-content">
             <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
+              <span class="blog-card-date">Sep 11, 2026</span>
               
             </div>
             <h2 class="blog-card-title">
@@ -1173,27 +1283,6 @@
         </article>
       
         <article class="blog-card">
-          <a href="/blog/121-pr1030-agent-roles-phase2-memory-gated-learning/" class="blog-card-img-link">
-            <div class="blog-card-hero-fallback fallback-grad-0">
-              <span class="fallback-post-num">#00</span>
-            </div>
-          </a>
-          <div class="blog-card-content">
-            <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
-              
-            </div>
-            <h2 class="blog-card-title">
-              <a href="/blog/121-pr1030-agent-roles-phase2-memory-gated-learning/"></a>
-            </h2>
-            <p class="blog-card-excerpt">
-              PR #1030 — Agent-Roles-Charters Phase 2: Making Capability Grants Mean Something The Goal at the End of the Previous PR PR #1022 (post #120)...
-            </p>
-            <a href="/blog/121-pr1030-agent-roles-phase2-memory-gated-learning/" class="blog-card-link">Read Post →</a>
-          </div>
-        </article>
-      
-        <article class="blog-card">
           <a href="/blog/101-pr853-watching-synlynk-guide/" class="blog-card-img-link">
             <div class="blog-card-hero-fallback fallback-grad-0">
               <span class="fallback-post-num">#00</span>
@@ -1201,7 +1290,7 @@
           </a>
           <div class="blog-card-content">
             <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
+              <span class="blog-card-date">Sep 11, 2026</span>
               
             </div>
             <h2 class="blog-card-title">
@@ -1222,7 +1311,7 @@
           </a>
           <div class="blog-card-content">
             <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
+              <span class="blog-card-date">Sep 11, 2026</span>
               
             </div>
             <h2 class="blog-card-title">
@@ -1243,7 +1332,7 @@
           </a>
           <div class="blog-card-content">
             <div class="blog-card-meta">
-              <span class="blog-card-date">Sep 02, 2026</span>
+              <span class="blog-card-date">Sep 11, 2026</span>
               
             </div>
             <h2 class="blog-card-title">
@@ -1253,6 +1342,673 @@
               100. PRs #850/#851 — Closing the two bugs the onboarding guide surfaced Goal at the end of the previous PR PR #731 (post #99) shipped...
             </p>
             <a href="/blog/100-pr850-851-tui-slack-bugfixes/" class="blog-card-link">Read Post →</a>
+          </div>
+        </article>
+      
+        <article class="blog-card">
+          <a href="/blog/196-prTBD-v0.19.0/" class="blog-card-img-link">
+            <div class="blog-card-hero-fallback fallback-grad-0">
+              <span class="fallback-post-num">#196</span>
+            </div>
+          </a>
+          <div class="blog-card-content">
+            <div class="blog-card-meta">
+              <span class="blog-card-date">Sep 11, 2026</span>
+              
+                <span class="blog-card-pr">#TBD</span>
+              
+            </div>
+            <h2 class="blog-card-title">
+              <a href="/blog/196-prTBD-v0.19.0/">PR #TBD — v0.19.0 Release</a>
+            </h2>
+            <p class="blog-card-excerpt">
+              The Broader Goal at the End of the Previous PR At the conclusion of v0.18.0, synlynk established harness capability scoring, dispatch...
+            </p>
+            <a href="/blog/196-prTBD-v0.19.0/" class="blog-card-link">Read Post →</a>
+          </div>
+        </article>
+      
+        <article class="blog-card">
+          <a href="/blog/176-prTBD-live-1429-permission-denied-false-negative/" class="blog-card-img-link">
+            <div class="blog-card-hero-fallback fallback-grad-0">
+              <span class="fallback-post-num">#176</span>
+            </div>
+          </a>
+          <div class="blog-card-content">
+            <div class="blog-card-meta">
+              <span class="blog-card-date">Sep 06, 2026</span>
+              
+                <span class="blog-card-pr">TBD</span>
+              
+            </div>
+            <h2 class="blog-card-title">
+              <a href="/blog/176-prTBD-live-1429-permission-denied-false-negative/">LIVE-1429 — The Classifier That Overwrote a Real Success</a>
+            </h2>
+            <p class="blog-card-excerpt">
+              The Broader Goal at the End of the Previous PR PR #1440 made every home harness a conductor, not just Claude: dual-mode directives,...
+            </p>
+            <a href="/blog/176-prTBD-live-1429-permission-denied-false-negative/" class="blog-card-link">Read Post →</a>
+          </div>
+        </article>
+      
+        <article class="blog-card">
+          <a href="/blog/177-prTBD-gh-write-verifier-live-1429-leftovers/" class="blog-card-img-link">
+            <div class="blog-card-hero-fallback fallback-grad-1">
+              <span class="fallback-post-num">#177</span>
+            </div>
+          </a>
+          <div class="blog-card-content">
+            <div class="blog-card-meta">
+              <span class="blog-card-date">Sep 06, 2026</span>
+              
+                <span class="blog-card-pr">TBD</span>
+              
+            </div>
+            <h2 class="blog-card-title">
+              <a href="/blog/177-prTBD-gh-write-verifier-live-1429-leftovers/">LIVE-1429 leftovers — the verifier still could not see the write</a>
+            </h2>
+            <p class="blog-card-excerpt">
+              The Broader Goal at the End of the Previous PR PR #1441 stopped _reconcile_daemon_jobs from overwriting a corroborated done with...
+            </p>
+            <a href="/blog/177-prTBD-gh-write-verifier-live-1429-leftovers/" class="blog-card-link">Read Post →</a>
+          </div>
+        </article>
+      
+        <article class="blog-card">
+          <a href="/blog/179-prTBD-agy-permissions-pr-title/" class="blog-card-img-link">
+            <div class="blog-card-hero-fallback fallback-grad-3">
+              <span class="fallback-post-num">#179</span>
+            </div>
+          </a>
+          <div class="blog-card-content">
+            <div class="blog-card-meta">
+              <span class="blog-card-date">Sep 06, 2026</span>
+              
+                <span class="blog-card-pr">TBD</span>
+              
+            </div>
+            <h2 class="blog-card-title">
+              <a href="/blog/179-prTBD-agy-permissions-pr-title/">PR titles that said Permissions and meant a real feature</a>
+            </h2>
+            <p class="blog-card-excerpt">
+              The Broader Goal at the End of the Previous PR The #1435 open-PR sweep closed a pile of fix: ## Permissions (job-…) siblings whose code had...
+            </p>
+            <a href="/blog/179-prTBD-agy-permissions-pr-title/" class="blog-card-link">Read Post →</a>
+          </div>
+        </article>
+      
+        <article class="blog-card">
+          <a href="/blog/180-prTBD-pr-check-sandbox-todo-pytest-k/" class="blog-card-img-link">
+            <div class="blog-card-hero-fallback fallback-grad-0">
+              <span class="fallback-post-num">#180</span>
+            </div>
+          </a>
+          <div class="blog-card-content">
+            <div class="blog-card-meta">
+              <span class="blog-card-date">Sep 06, 2026</span>
+              
+                <span class="blog-card-pr">TBD</span>
+              
+            </div>
+            <h2 class="blog-card-title">
+              <a href="/blog/180-prTBD-pr-check-sandbox-todo-pytest-k/">Review jobs that could not run pr check or the tests they were told to run</a>
+            </h2>
+            <p class="blog-card-excerpt">
+              The Broader Goal at the End of the Previous PR #1447 closed the Agy ## Permissions title leak (#1427 / #1421). Review dispatch still could...
+            </p>
+            <a href="/blog/180-prTBD-pr-check-sandbox-todo-pytest-k/" class="blog-card-link">Read Post →</a>
+          </div>
+        </article>
+      
+        <article class="blog-card">
+          <a href="/blog/181-prTBD-pr-check-job-branch/" class="blog-card-img-link">
+            <div class="blog-card-hero-fallback fallback-grad-1">
+              <span class="fallback-post-num">#181</span>
+            </div>
+          </a>
+          <div class="blog-card-content">
+            <div class="blog-card-meta">
+              <span class="blog-card-date">Sep 06, 2026</span>
+              
+                <span class="blog-card-pr">TBD</span>
+              
+            </div>
+            <h2 class="blog-card-title">
+              <a href="/blog/181-prTBD-pr-check-job-branch/">pr check from a job branch that is not the PR</a>
+            </h2>
+            <p class="blog-card-excerpt">
+              The Broader Goal at the End of the Previous PR #1449 let review sandboxes run synlynk pr check without writing shared todo.md. The remaining...
+            </p>
+            <a href="/blog/181-prTBD-pr-check-job-branch/" class="blog-card-link">Read Post →</a>
+          </div>
+        </article>
+      
+        <article class="blog-card">
+          <a href="/blog/182-prTBD-identity-routing-assessment/" class="blog-card-img-link">
+            <div class="blog-card-hero-fallback fallback-grad-2">
+              <span class="fallback-post-num">#182</span>
+            </div>
+          </a>
+          <div class="blog-card-content">
+            <div class="blog-card-meta">
+              <span class="blog-card-date">Sep 06, 2026</span>
+              
+                <span class="blog-card-pr">TBD</span>
+              
+            </div>
+            <h2 class="blog-card-title">
+              <a href="/blog/182-prTBD-identity-routing-assessment/">The human GitHub login is still doing autonomous work</a>
+            </h2>
+            <p class="blog-card-excerpt">
+              The Broader Goal at the End of the Previous PR #1450 taught synlynk pr check to find a PR from a dispatch job branch. Review dispatch can...
+            </p>
+            <a href="/blog/182-prTBD-identity-routing-assessment/" class="blog-card-link">Read Post →</a>
+          </div>
+        </article>
+      
+        <article class="blog-card">
+          <a href="/blog/183-prTBD-parent-auto-pr-role-token/" class="blog-card-img-link">
+            <div class="blog-card-hero-fallback fallback-grad-3">
+              <span class="fallback-post-num">#183</span>
+            </div>
+          </a>
+          <div class="blog-card-content">
+            <div class="blog-card-meta">
+              <span class="blog-card-date">Sep 06, 2026</span>
+              
+                <span class="blog-card-pr">TBD</span>
+              
+            </div>
+            <h2 class="blog-card-title">
+              <a href="/blog/183-prTBD-parent-auto-pr-role-token/">Auto-PRs were still the human, even when the child was the bot</a>
+            </h2>
+            <p class="blog-card-excerpt">
+              The Broader Goal at the End of the Previous PR #1436&#39;s spec recorded that dispatched --requires-gh-write children already use role Apps,...
+            </p>
+            <a href="/blog/183-prTBD-parent-auto-pr-role-token/" class="blog-card-link">Read Post →</a>
+          </div>
+        </article>
+      
+        <article class="blog-card">
+          <a href="/blog/184-prTBD-synlynk-gh-role/" class="blog-card-img-link">
+            <div class="blog-card-hero-fallback fallback-grad-0">
+              <span class="fallback-post-num">#184</span>
+            </div>
+          </a>
+          <div class="blog-card-content">
+            <div class="blog-card-meta">
+              <span class="blog-card-date">Sep 06, 2026</span>
+              
+                <span class="blog-card-pr">TBD</span>
+              
+            </div>
+            <h2 class="blog-card-title">
+              <a href="/blog/184-prTBD-synlynk-gh-role/">synlynk gh --role so interactive writes are not the human</a>
+            </h2>
+            <p class="blog-card-excerpt">
+              The Broader Goal at the End of the Previous PR #1452 closed Hole A: parent auto-PR uses the job App token. Interactive Grok/Claude shells...
+            </p>
+            <a href="/blog/184-prTBD-synlynk-gh-role/" class="blog-card-link">Read Post →</a>
+          </div>
+        </article>
+      
+        <article class="blog-card">
+          <a href="/blog/185-prTBD-parent-auto-pr-fail-closed/" class="blog-card-img-link">
+            <div class="blog-card-hero-fallback fallback-grad-1">
+              <span class="fallback-post-num">#185</span>
+            </div>
+          </a>
+          <div class="blog-card-content">
+            <div class="blog-card-meta">
+              <span class="blog-card-date">Sep 06, 2026</span>
+              
+                <span class="blog-card-pr">TBD</span>
+              
+            </div>
+            <h2 class="blog-card-title">
+              <a href="/blog/185-prTBD-parent-auto-pr-fail-closed/">No token, no auto-PR — not nikhilsoman</a>
+            </h2>
+            <p class="blog-card-excerpt">
+              The Broader Goal at the End of the Previous PR #1453 shipped synlynk gh --role. Parent auto-PR already injected a role token when one...
+            </p>
+            <a href="/blog/185-prTBD-parent-auto-pr-fail-closed/" class="blog-card-link">Read Post →</a>
+          </div>
+        </article>
+      
+        <article class="blog-card">
+          <a href="/blog/186-prTBD-architect-charter-qa-merge/" class="blog-card-img-link">
+            <div class="blog-card-hero-fallback fallback-grad-2">
+              <span class="fallback-post-num">#186</span>
+            </div>
+          </a>
+          <div class="blog-card-content">
+            <div class="blog-card-meta">
+              <span class="blog-card-date">Sep 06, 2026</span>
+              
+                <span class="blog-card-pr">TBD</span>
+              
+            </div>
+            <h2 class="blog-card-title">
+              <a href="/blog/186-prTBD-architect-charter-qa-merge/">Charter Patch: Architect Does Not Hold Merge Authority</a>
+            </h2>
+            <p class="blog-card-excerpt">
+              The Broader Goal at the End of the Previous PR Earlier PRs in the #1436 arc audited workspace agent identity routing, enforced role App...
+            </p>
+            <a href="/blog/186-prTBD-architect-charter-qa-merge/" class="blog-card-link">Read Post →</a>
+          </div>
+        </article>
+      
+        <article class="blog-card">
+          <a href="/blog/187-prTBD-synlynk-gh-default-docs/" class="blog-card-img-link">
+            <div class="blog-card-hero-fallback fallback-grad-3">
+              <span class="fallback-post-num">#187</span>
+            </div>
+          </a>
+          <div class="blog-card-content">
+            <div class="blog-card-meta">
+              <span class="blog-card-date">Sep 06, 2026</span>
+              
+                <span class="blog-card-pr">TBD</span>
+              
+            </div>
+            <h2 class="blog-card-title">
+              <a href="/blog/187-prTBD-synlynk-gh-default-docs/">Documenting synlynk gh --role as the Default for GitHub Writes</a>
+            </h2>
+            <p class="blog-card-excerpt">
+              The Broader Goal at the End of the Previous PR PR #1453 implemented synlynk gh --role &amp;lt;role&amp;gt; -- &amp;lt;gh-args&amp;gt; to route interactive...
+            </p>
+            <a href="/blog/187-prTBD-synlynk-gh-default-docs/" class="blog-card-link">Read Post →</a>
+          </div>
+        </article>
+      
+        <article class="blog-card">
+          <a href="/blog/188-prTBD-qa-actions-write-manifest/" class="blog-card-img-link">
+            <div class="blog-card-hero-fallback fallback-grad-0">
+              <span class="fallback-post-num">#188</span>
+            </div>
+          </a>
+          <div class="blog-card-content">
+            <div class="blog-card-meta">
+              <span class="blog-card-date">Sep 06, 2026</span>
+              
+                <span class="blog-card-pr">TBD</span>
+              
+            </div>
+            <h2 class="blog-card-title">
+              <a href="/blog/188-prTBD-qa-actions-write-manifest/">The qa App can now rerun failed Actions</a>
+            </h2>
+            <p class="blog-card-excerpt">
+              The Broader Goal at the End of the Previous PR The #1436 identity-routing work gave merge-authority roles their required administration:...
+            </p>
+            <a href="/blog/188-prTBD-qa-actions-write-manifest/" class="blog-card-link">Read Post →</a>
+          </div>
+        </article>
+      
+        <article class="blog-card">
+          <a href="/blog/189-prTBD-1436-bot-authored-live-cell/" class="blog-card-img-link">
+            <div class="blog-card-hero-fallback fallback-grad-1">
+              <span class="fallback-post-num">#189</span>
+            </div>
+          </a>
+          <div class="blog-card-content">
+            <div class="blog-card-meta">
+              <span class="blog-card-date">Sep 06, 2026</span>
+              
+                <span class="blog-card-pr">TBD</span>
+              
+            </div>
+            <h2 class="blog-card-title">
+              <a href="/blog/189-prTBD-1436-bot-authored-live-cell/">PR #TBD - #1436: Proving a Bot-Authored Live Cell</a>
+            </h2>
+            <p class="blog-card-excerpt">
+              The Broader Goal at the End of the Previous PR The identity-routing work in #1436 moved autonomous GitHub writes onto role App tokens. The...
+            </p>
+            <a href="/blog/189-prTBD-1436-bot-authored-live-cell/" class="blog-card-link">Read Post →</a>
+          </div>
+        </article>
+      
+        <article class="blog-card">
+          <a href="/blog/190-prTBD-parent-auto-pr-no-host-token/" class="blog-card-img-link">
+            <div class="blog-card-hero-fallback fallback-grad-2">
+              <span class="fallback-post-num">#190</span>
+            </div>
+          </a>
+          <div class="blog-card-content">
+            <div class="blog-card-meta">
+              <span class="blog-card-date">Sep 06, 2026</span>
+              
+                <span class="blog-card-pr">TBD</span>
+              
+            </div>
+            <h2 class="blog-card-title">
+              <a href="/blog/190-prTBD-parent-auto-pr-no-host-token/">PR #TBD - #1436: Parent Auto-PRs Must Not Inherit Host GitHub Tokens</a>
+            </h2>
+            <p class="blog-card-excerpt">
+              The Remaining Identity-Routing Hole Child dispatch already removed ambient GitHub tokens, but the parent daemon&#39;s auto-finalization path...
+            </p>
+            <a href="/blog/190-prTBD-parent-auto-pr-no-host-token/" class="blog-card-link">Read Post →</a>
+          </div>
+        </article>
+      
+        <article class="blog-card">
+          <a href="/blog/192-prTBD-review-fallback-same-identity/" class="blog-card-img-link">
+            <div class="blog-card-hero-fallback fallback-grad-0">
+              <span class="fallback-post-num">#192</span>
+            </div>
+          </a>
+          <div class="blog-card-content">
+            <div class="blog-card-meta">
+              <span class="blog-card-date">Sep 06, 2026</span>
+              
+                <span class="blog-card-pr">TBD</span>
+              
+            </div>
+            <h2 class="blog-card-title">
+              <a href="/blog/192-prTBD-review-fallback-same-identity/">Review Fallback is Conditional on Same-Identity Collisions</a>
+            </h2>
+            <p class="blog-card-excerpt">
+              The Broader Goal at the End of the Previous PR The #1436 identity-routing arc separated autonomous GitHub operations across distinct role...
+            </p>
+            <a href="/blog/192-prTBD-review-fallback-same-identity/" class="blog-card-link">Read Post →</a>
+          </div>
+        </article>
+      
+        <article class="blog-card">
+          <a href="/blog/193-prTBD-qa-actions-write-reapproval-runbook/" class="blog-card-img-link">
+            <div class="blog-card-hero-fallback fallback-grad-1">
+              <span class="fallback-post-num">#193</span>
+            </div>
+          </a>
+          <div class="blog-card-content">
+            <div class="blog-card-meta">
+              <span class="blog-card-date">Sep 06, 2026</span>
+              
+                <span class="blog-card-pr">TBD</span>
+              
+            </div>
+            <h2 class="blog-card-title">
+              <a href="/blog/193-prTBD-qa-actions-write-reapproval-runbook/">PR #TBD - #1436: Operator Runbook for qa App Actions Write Re-approval</a>
+            </h2>
+            <p class="blog-card-excerpt">
+              The Broader Goal at the End of the Previous PR PR #1458 updated the GitHub App manifest builder (synlynk/team.py) so new installations for...
+            </p>
+            <a href="/blog/193-prTBD-qa-actions-write-reapproval-runbook/" class="blog-card-link">Read Post →</a>
+          </div>
+        </article>
+      
+        <article class="blog-card">
+          <a href="/blog/194-prTBD-harness-gh-shim/" class="blog-card-img-link">
+            <div class="blog-card-hero-fallback fallback-grad-2">
+              <span class="fallback-post-num">#194</span>
+            </div>
+          </a>
+          <div class="blog-card-content">
+            <div class="blog-card-meta">
+              <span class="blog-card-date">Sep 06, 2026</span>
+              
+                <span class="blog-card-pr">TBD</span>
+              
+            </div>
+            <h2 class="blog-card-title">
+              <a href="/blog/194-prTBD-harness-gh-shim/">Harness-session gh shim (shared with synlynk exec)</a>
+            </h2>
+            <p class="blog-card-excerpt">
+              The Broader Goal at the End of the Previous PR #1464 guarded synlynk exec with a temp PATH gh shim. Interactive harness shells still called...
+            </p>
+            <a href="/blog/194-prTBD-harness-gh-shim/" class="blog-card-link">Read Post →</a>
+          </div>
+        </article>
+      
+        <article class="blog-card">
+          <a href="/blog/195-prTBD-harness-gh-shim-docs/" class="blog-card-img-link">
+            <div class="blog-card-hero-fallback fallback-grad-3">
+              <span class="fallback-post-num">#195</span>
+            </div>
+          </a>
+          <div class="blog-card-content">
+            <div class="blog-card-meta">
+              <span class="blog-card-date">Sep 06, 2026</span>
+              
+                <span class="blog-card-pr">TBD</span>
+              
+            </div>
+            <h2 class="blog-card-title">
+              <a href="/blog/195-prTBD-harness-gh-shim-docs/">Documenting the Harness Session gh Shim Environment</a>
+            </h2>
+            <p class="blog-card-excerpt">
+              The Broader Goal at the End of the Previous PR PR #1464 shipped the synlynk exec PATH shim to guard child dispatches against accidental host...
+            </p>
+            <a href="/blog/195-prTBD-harness-gh-shim-docs/" class="blog-card-link">Read Post →</a>
+          </div>
+        </article>
+      
+        <article class="blog-card">
+          <a href="/blog/174-pr1430-book-epub-default-output/" class="blog-card-img-link">
+            <div class="blog-card-hero-fallback fallback-grad-2">
+              <span class="fallback-post-num">#174</span>
+            </div>
+          </a>
+          <div class="blog-card-content">
+            <div class="blog-card-meta">
+              <span class="blog-card-date">Sep 05, 2026</span>
+              
+                <span class="blog-card-pr">#1430</span>
+              
+            </div>
+            <h2 class="blog-card-title">
+              <a href="/blog/174-pr1430-book-epub-default-output/">PR #1430 — EPUB Joins the Book&#39;s Default Output Set</a>
+            </h2>
+            <p class="blog-card-excerpt">
+              The Broader Goal at the End of the Previous PR By PR #1409, &amp;quot;The Supervised Machine&amp;quot; had a real visual identity layered onto the...
+            </p>
+            <a href="/blog/174-pr1430-book-epub-default-output/" class="blog-card-link">Read Post →</a>
+          </div>
+        </article>
+      
+        <article class="blog-card">
+          <a href="/blog/175-pr1434-book-glyph-cover/" class="blog-card-img-link">
+            <div class="blog-card-hero-fallback fallback-grad-3">
+              <span class="fallback-post-num">#175</span>
+            </div>
+          </a>
+          <div class="blog-card-content">
+            <div class="blog-card-meta">
+              <span class="blog-card-date">Sep 05, 2026</span>
+              
+                <span class="blog-card-pr">#1434</span>
+              
+            </div>
+            <h2 class="blog-card-title">
+              <a href="/blog/175-pr1434-book-glyph-cover/">PR #1434 — The Book Gets Its Cover</a>
+            </h2>
+            <p class="blog-card-excerpt">
+              The Broader Goal at the End of the Previous PR By PR #1430, &amp;quot;The Supervised Machine&amp;quot; had settled its default output set: HTML...
+            </p>
+            <a href="/blog/175-pr1434-book-glyph-cover/" class="blog-card-link">Read Post →</a>
+          </div>
+        </article>
+      
+        <article class="blog-card">
+          <a href="/blog/171-pr1375-codex-review-network-access-regression/" class="blog-card-img-link">
+            <div class="blog-card-hero-fallback fallback-grad-3">
+              <span class="fallback-post-num">#171</span>
+            </div>
+          </a>
+          <div class="blog-card-content">
+            <div class="blog-card-meta">
+              <span class="blog-card-date">Sep 04, 2026</span>
+              
+                <span class="blog-card-pr">#1375</span>
+              
+            </div>
+            <h2 class="blog-card-title">
+              <a href="/blog/171-pr1375-codex-review-network-access-regression/">PR #1375 — The Fix That Broke the Fix It Was Fixing</a>
+            </h2>
+            <p class="blog-card-excerpt">
+              The Broader Goal at the End of the Previous PR PR #1271 and PR #1275 (posts 134 and 135) had closed the book on Codex&#39;s GitHub-write network...
+            </p>
+            <a href="/blog/171-pr1375-codex-review-network-access-regression/" class="blog-card-link">Read Post →</a>
+          </div>
+        </article>
+      
+        <article class="blog-card">
+          <a href="/blog/172-pr1409-book-brand-restyle/" class="blog-card-img-link">
+            <div class="blog-card-hero-fallback fallback-grad-0">
+              <span class="fallback-post-num">#172</span>
+            </div>
+          </a>
+          <div class="blog-card-content">
+            <div class="blog-card-meta">
+              <span class="blog-card-date">Sep 04, 2026</span>
+              
+                <span class="blog-card-pr">#1409</span>
+              
+            </div>
+            <h2 class="blog-card-title">
+              <a href="/blog/172-pr1409-book-brand-restyle/">PR #1409 — Giving the Book a Brand, Without Breaking Its Spine</a>
+            </h2>
+            <p class="blog-card-excerpt">
+              The Broader Goal at the End of the Previous PR Draft v0.5 of &amp;quot;The Supervised Machine&amp;quot; had just absorbed the Strategic Review...
+            </p>
+            <a href="/blog/172-pr1409-book-brand-restyle/" class="blog-card-link">Read Post →</a>
+          </div>
+        </article>
+      
+        <article class="blog-card">
+          <a href="/blog/173-pr352-stall-kill-pid-identity/" class="blog-card-img-link">
+            <div class="blog-card-hero-fallback fallback-grad-1">
+              <span class="fallback-post-num">#173</span>
+            </div>
+          </a>
+          <div class="blog-card-content">
+            <div class="blog-card-meta">
+              <span class="blog-card-date">Sep 04, 2026</span>
+              
+                <span class="blog-card-pr">#TBD</span>
+              
+            </div>
+            <h2 class="blog-card-title">
+              <a href="/blog/173-pr352-stall-kill-pid-identity/">PR #TBD — Stall-Kill Must Prove Which Process It Is Killing</a>
+            </h2>
+            <p class="blog-card-excerpt">
+              The Broader Goal at the End of the Previous PR The previous work continued hardening synlynk&#39;s autonomous dispatch loop: agents should be...
+            </p>
+            <a href="/blog/173-pr352-stall-kill-pid-identity/" class="blog-card-link">Read Post →</a>
+          </div>
+        </article>
+      
+        <article class="blog-card">
+          <a href="/blog/173-prTBD-daemon-job-lifecycle-parity/" class="blog-card-img-link">
+            <div class="blog-card-hero-fallback fallback-grad-1">
+              <span class="fallback-post-num">#173</span>
+            </div>
+          </a>
+          <div class="blog-card-content">
+            <div class="blog-card-meta">
+              <span class="blog-card-date">Sep 04, 2026</span>
+              
+                <span class="blog-card-pr">TBD</span>
+              
+            </div>
+            <h2 class="blog-card-title">
+              <a href="/blog/173-prTBD-daemon-job-lifecycle-parity/">Daemon Jobs Learn the Same Ground Truth as CLI Dispatch</a>
+            </h2>
+            <p class="blog-card-excerpt">
+              The Broader Goal at the End of the Previous PR The Job Lifecycle Ground-Truth Verification epic (PRs #126, #127, and #129) established that...
+            </p>
+            <a href="/blog/173-prTBD-daemon-job-lifecycle-parity/" class="blog-card-link">Read Post →</a>
+          </div>
+        </article>
+      
+        <article class="blog-card">
+          <a href="/blog/173-prTBD-daemon-orphan-reap-and-start-lock/" class="blog-card-img-link">
+            <div class="blog-card-hero-fallback fallback-grad-1">
+              <span class="fallback-post-num">#173</span>
+            </div>
+          </a>
+          <div class="blog-card-content">
+            <div class="blog-card-meta">
+              <span class="blog-card-date">Sep 04, 2026</span>
+              
+                <span class="blog-card-pr">#1417</span>
+              
+            </div>
+            <h2 class="blog-card-title">
+              <a href="/blog/173-prTBD-daemon-orphan-reap-and-start-lock/">PR #1417 — Daemon Orphan Reap and Start Lock (#349)</a>
+            </h2>
+            <p class="blog-card-excerpt">
+              The Broader Goal at the End of the Previous PR Recent work hardened onboarding, heal/TPM autonomy, and ephemeral swarm execution. The...
+            </p>
+            <a href="/blog/173-prTBD-daemon-orphan-reap-and-start-lock/" class="blog-card-link">Read Post →</a>
+          </div>
+        </article>
+      
+        <article class="blog-card">
+          <a href="/blog/174-prTBD-daemon-vizor-http-auth/" class="blog-card-img-link">
+            <div class="blog-card-hero-fallback fallback-grad-2">
+              <span class="fallback-post-num">#174</span>
+            </div>
+          </a>
+          <div class="blog-card-content">
+            <div class="blog-card-meta">
+              <span class="blog-card-date">Sep 04, 2026</span>
+              
+                <span class="blog-card-pr">TBD</span>
+              
+            </div>
+            <h2 class="blog-card-title">
+              <a href="/blog/174-prTBD-daemon-vizor-http-auth/">PR TBD — Local HTTP Auth for the Daemon and Vizor</a>
+            </h2>
+            <p class="blog-card-excerpt">
+              The Broader Goal at the End of the Previous PR The previous post closed a presentation gap on the book: brand skin without brand skeleton....
+            </p>
+            <a href="/blog/174-prTBD-daemon-vizor-http-auth/" class="blog-card-link">Read Post →</a>
+          </div>
+        </article>
+      
+        <article class="blog-card">
+          <a href="/blog/178-pr1415-job-status-endtoend-regression/" class="blog-card-img-link">
+            <div class="blog-card-hero-fallback fallback-grad-2">
+              <span class="fallback-post-num">#178</span>
+            </div>
+          </a>
+          <div class="blog-card-content">
+            <div class="blog-card-meta">
+              <span class="blog-card-date">Sep 04, 2026</span>
+              
+                <span class="blog-card-pr">#1415</span>
+              
+            </div>
+            <h2 class="blog-card-title">
+              <a href="/blog/178-pr1415-job-status-endtoend-regression/">PR #1415 — Testing the Thing That Keeps Lying About Itself</a>
+            </h2>
+            <p class="blog-card-excerpt">
+              The Broader Goal at the End of the Previous PR The #1377 RCA had just closed: five independent false-negative fingerprints in job-status...
+            </p>
+            <a href="/blog/178-pr1415-job-status-endtoend-regression/" class="blog-card-link">Read Post →</a>
+          </div>
+        </article>
+      
+        <article class="blog-card">
+          <a href="/blog/170-pr1353-autonomous-heal-and-strategic-advisory/" class="blog-card-img-link">
+            <div class="blog-card-hero-fallback fallback-grad-2">
+              <span class="fallback-post-num">#170</span>
+            </div>
+          </a>
+          <div class="blog-card-content">
+            <div class="blog-card-meta">
+              <span class="blog-card-date">Sep 03, 2026</span>
+              
+                <span class="blog-card-pr">#1353</span>
+              
+            </div>
+            <h2 class="blog-card-title">
+              <a href="/blog/170-pr1353-autonomous-heal-and-strategic-advisory/">PR #1353 - Autonomous Heal and Strategic Advisory</a>
+            </h2>
+            <p class="blog-card-excerpt">
+              Closing the loop synlynk now has a single remediation path from repository diagnosis to verified work. synlynk heal turns scan findings into...
+            </p>
+            <a href="/blog/170-pr1353-autonomous-heal-and-strategic-advisory/" class="blog-card-link">Read Post →</a>
           </div>
         </article>
       
@@ -1391,6 +2147,142 @@
               The Broader Goal at the End of the Previous PR Prior to this investigation, synlynk focused on establishing full fleet parity and...
             </p>
             <a href="/blog/160-pr1334-token-bloat-sentinel-guard/" class="blog-card-link">Read Post →</a>
+          </div>
+        </article>
+      
+        <article class="blog-card">
+          <a href="/blog/161-pr1337-subscription-cost-amortization/" class="blog-card-img-link">
+            <div class="blog-card-hero-fallback fallback-grad-1">
+              <span class="fallback-post-num">#161</span>
+            </div>
+          </a>
+          <div class="blog-card-content">
+            <div class="blog-card-meta">
+              <span class="blog-card-date">Sep 02, 2026</span>
+              
+                <span class="blog-card-pr">#1337</span>
+              
+            </div>
+            <h2 class="blog-card-title">
+              <a href="/blog/161-pr1337-subscription-cost-amortization/">PR #1337 - Subscription Cost Amortization and True-Up</a>
+            </h2>
+            <p class="blog-card-excerpt">
+              The Broader Goal at the End of the Previous PR The cost ledger needed to distinguish the commercial value of tokens from the cash actually...
+            </p>
+            <a href="/blog/161-pr1337-subscription-cost-amortization/" class="blog-card-link">Read Post →</a>
+          </div>
+        </article>
+      
+        <article class="blog-card">
+          <a href="/blog/162-pr1339-first-class-model-registry/" class="blog-card-img-link">
+            <div class="blog-card-hero-fallback fallback-grad-2">
+              <span class="fallback-post-num">#162</span>
+            </div>
+          </a>
+          <div class="blog-card-content">
+            <div class="blog-card-meta">
+              <span class="blog-card-date">Sep 02, 2026</span>
+              
+                <span class="blog-card-pr">#1339</span>
+              
+            </div>
+            <h2 class="blog-card-title">
+              <a href="/blog/162-pr1339-first-class-model-registry/">First-Class Models: Giving Dispatch a Real Registry</a>
+            </h2>
+            <p class="blog-card-excerpt">
+              The Broader Goal at the End of the Previous PR Synlynk had reliable harness and workspace-agent boundaries, but model identity was still...
+            </p>
+            <a href="/blog/162-pr1339-first-class-model-registry/" class="blog-card-link">Read Post →</a>
+          </div>
+        </article>
+      
+        <article class="blog-card">
+          <a href="/blog/164-pr1347-autonomous-growth-engine/" class="blog-card-img-link">
+            <div class="blog-card-hero-fallback fallback-grad-0">
+              <span class="fallback-post-num">#164</span>
+            </div>
+          </a>
+          <div class="blog-card-content">
+            <div class="blog-card-meta">
+              <span class="blog-card-date">Sep 02, 2026</span>
+              
+                <span class="blog-card-pr">#1347</span>
+              
+            </div>
+            <h2 class="blog-card-title">
+              <a href="/blog/164-pr1347-autonomous-growth-engine/">PR #1347 — Autonomous Growth &amp; Marketing Engine</a>
+            </h2>
+            <p class="blog-card-excerpt">
+              The Broader Goal at the End of the Previous PR Following the model registry baseline (PR #1339), multi-agent fleet parity (PR #1308–#1310),...
+            </p>
+            <a href="/blog/164-pr1347-autonomous-growth-engine/" class="blog-card-link">Read Post →</a>
+          </div>
+        </article>
+      
+        <article class="blog-card">
+          <a href="/blog/165-pr1348-cross-harness-event-relay/" class="blog-card-img-link">
+            <div class="blog-card-hero-fallback fallback-grad-0">
+              <span class="fallback-post-num">#00</span>
+            </div>
+          </a>
+          <div class="blog-card-content">
+            <div class="blog-card-meta">
+              <span class="blog-card-date">Sep 02, 2026</span>
+              
+            </div>
+            <h2 class="blog-card-title">
+              <a href="/blog/165-pr1348-cross-harness-event-relay/">Cross-Harness Event Relay</a>
+            </h2>
+            <p class="blog-card-excerpt">
+              Cross-Harness Event Relay Agents increasingly work across harnesses, but disk polling makes progress and handoffs slow to observe. This...
+            </p>
+            <a href="/blog/165-pr1348-cross-harness-event-relay/" class="blog-card-link">Read Post →</a>
+          </div>
+        </article>
+      
+        <article class="blog-card">
+          <a href="/blog/166-pr1349-pm-backlog-triage-engine/" class="blog-card-img-link">
+            <div class="blog-card-hero-fallback fallback-grad-2">
+              <span class="fallback-post-num">#166</span>
+            </div>
+          </a>
+          <div class="blog-card-content">
+            <div class="blog-card-meta">
+              <span class="blog-card-date">Sep 02, 2026</span>
+              
+                <span class="blog-card-pr">#1349</span>
+              
+            </div>
+            <h2 class="blog-card-title">
+              <a href="/blog/166-pr1349-pm-backlog-triage-engine/">PR #1349 — PM Autonomous Backlog Triaging &amp; Story Formation Engine</a>
+            </h2>
+            <p class="blog-card-excerpt">
+              The Broader Goal at the End of the Previous PR Following the cross-harness inter-agent event relay (PR #1348), autonomous growth engine (PR...
+            </p>
+            <a href="/blog/166-pr1349-pm-backlog-triage-engine/" class="blog-card-link">Read Post →</a>
+          </div>
+        </article>
+      
+        <article class="blog-card">
+          <a href="/blog/167-pr1350-living-charter-adaptive-routing/" class="blog-card-img-link">
+            <div class="blog-card-hero-fallback fallback-grad-3">
+              <span class="fallback-post-num">#167</span>
+            </div>
+          </a>
+          <div class="blog-card-content">
+            <div class="blog-card-meta">
+              <span class="blog-card-date">Sep 02, 2026</span>
+              
+                <span class="blog-card-pr">#1350</span>
+              
+            </div>
+            <h2 class="blog-card-title">
+              <a href="/blog/167-pr1350-living-charter-adaptive-routing/">Living Charters and Capability-Gated Adaptive Routing</a>
+            </h2>
+            <p class="blog-card-excerpt">
+              The Broader Goal at the End of the Previous PR Dispatch had reliable harness metadata and cost telemetry, but its role guidance still...
+            </p>
+            <a href="/blog/167-pr1350-living-charter-adaptive-routing/" class="blog-card-link">Read Post →</a>
           </div>
         </article>
       

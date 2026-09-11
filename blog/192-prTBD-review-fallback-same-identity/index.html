@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Review Fallback is Conditional on Same-Identity Collisions | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Sep 06, 2026</span>
+        
+          <span class="blog-post-pr">PR TBD</span>
+        
+      </div>
+      <h1 class="blog-post-title">Review Fallback is Conditional on Same-Identity Collisions</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>The #1436 identity-routing arc separated autonomous GitHub operations across distinct role GitHub Apps (<code>qa</code>, <code>dev</code>, <code>pm</code>, etc.), ensuring autonomous writes no longer leak into the human operator's personal GitHub identity. Live verification proved that <code>synlynk-synlynk-qa[bot]</code> successfully submits approving reviews (<code>gh pr review --approve</code>) and squash-merges PRs authored by both human and sibling role bots (#1455).</p>
+<p>However, historical configurations encoded a blanket <code>#423</code> fallback (<code>review_fallback: comment_checklist</code>), originally introduced when all dispatches shared the repository owner's GitHub identity and self-approval failed. With distinct App identities in place, qa App approvals are the default when reviewer and author identities differ; comment-checklist fallback is needed only on same-login collisions.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>None. Reconciles policy and instructions with the target end-state defined in §5, §6.4, and §7 of <code>docs/superpowers/specs/2026-09-06-workspace-agent-identity-routing-design.md</code>.</p>
+<h2>What This PR Shipped</h2>
+<ol>
+<li>
+<p><strong>Policy Configuration:</strong></p>
+<ul>
+<li>Updated <code>.synlynk/policy.json</code> and default workspace policy in <code>synlynk/policy.py</code> to set <code>review_fallback: &quot;same_identity_comment_checklist&quot;</code>.</li>
+<li>Updated policy test fixtures in <code>tests/test_policy.py</code> to reflect the new default value and added assertions validating it.</li>
+</ul>
+</li>
+<li>
+<p><strong>Living Instructions and SOPs:</strong></p>
+<ul>
+<li>Updated <code>_PR_REVIEW_SOP</code> and <code>_repair_pr_review_sop</code> in <code>synlynk/probe.py</code> so the <code>#423</code> identity note explicitly documents that <code>qa APPROVE</code> (<code>gh pr review --approve</code>) is the default whenever reviewer identity differs from PR author login, reserving comment-checklist fallback strictly for same-identity collisions. Sessions are instructed never to skip <code>--approve</code> by default.</li>
+<li>Synchronized living agent directives (<code>GEMINI.md</code>, <code>GROK.md</code>, <code>AGENTS.md</code>) with the updated PR review discipline SOP.</li>
+</ul>
+</li>
+<li>
+<p><strong>UX Core Helper:</strong></p>
+<ul>
+<li>Updated <code>synlynk/uxcore.py</code>'s <code>approve_pr</code> docstring and comment-checklist message to reflect that <code>--approve</code> is the default and formal comment review is triggered only upon same-login collision.</li>
+</ul>
+</li>
+<li>
+<p><strong>Design Spec Alignment:</strong></p>
+<ul>
+<li>Marked §5's <code>#423</code> sentence and §7's Policy follow-up item in <code>docs/superpowers/specs/2026-09-06-workspace-agent-identity-routing-design.md</code> as addressed in this PR (#1436 leftover).</li>
+</ul>
+</li>
+</ol>
+<h2>Brainstorm Visuals Used</h2>
+<p>None. Spec: <code>docs/superpowers/specs/2026-09-06-workspace-agent-identity-routing-design.md</code>.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>Formal approvals are now the unambiguous default across both policy configuration and agent directives when reviewing across distinct personas. The <code>#423</code> comment fallback is properly scoped to true identity collisions (same author and reviewer logins), ensuring GitHub pull request review gates receive real approvals from authorized verification agents.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>With the <code>review_fallback</code> policy, living SOPs, and spec tracking reconciled, #1436 leftover tasks are resolved without modifying <code>jobs.py</code>, dispatch environments, or sibling execution paths.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

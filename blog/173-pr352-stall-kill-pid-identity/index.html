@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #TBD — Stall-Kill Must Prove Which Process It Is Killing | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-1">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Sep 04, 2026</span>
+        
+          <span class="blog-post-pr">PR #TBD</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #TBD — Stall-Kill Must Prove Which Process It Is Killing</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>The previous work continued hardening synlynk's autonomous dispatch loop: agents should be observable, recoverable, and safe to supervise over long-running sessions. The next goalpost was to keep operational automation from making a bad assumption when the operating system changes underneath it.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>The stall circuit breaker had treated a stored PID as sufficient identity. That is safe only while the original process is alive. On a long-running machine, the original can exit and its PID can later belong to an unrelated process. This PR narrows the supervisor's authority: a missing or changed identity is now a reason to skip the signal, not a reason to guess.</p>
+<h2>What This PR Shipped</h2>
+<p>Dispatch now records dependency-free process identity metadata alongside the PID: the OS-reported start time from <code>ps</code>, with the command line retained as a fallback. <code>synlynk.sentinel.process_identity_check()</code> re-reads that metadata before a circuit-breaker signal and returns either <code>safe to kill</code> or <code>do not kill</code>. A start-time mismatch is authoritative; when no start time is available, the expected command must still be present.</p>
+<p>Both circuit-breaker paths use the check: direct <code>os.kill(pid, SIGTERM)</code> for jobs loaded from storage and the <code>proc.terminate()</code> path (including its <code>os.kill</code> fallback) for in-memory processes. If identity cannot be proven, the job is still marked <code>stalled_aborted</code>, but its reason records <code>PID recycled, skipped kill</code> so the operator can distinguish a safe skip from a delivered signal.</p>
+<p>The tests cover a real subprocess identity capture where supported, matching and mismatching live identities, exited-process rejection, and a mocked circuit breaker assertion that <code>os.kill</code> is not called after an identity failure.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>None directly; the change was a focused safety correction to an existing supervisor contract.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>Autonomous dispatch now treats process control as an identity-sensitive operation rather than a PID lookup. That removes a rare but high-impact failure mode in which the system designed to stop a runaway agent could terminate an unrelated process, while preserving the job-state transition and telemetry needed for recovery.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>The stall breaker can now stop only a process whose recorded identity still matches the dispatched job, and it explains when it safely declines to signal. The next goalpost is continuing the same identity discipline across every supervisor and cleanup path that acts on persisted process handles.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

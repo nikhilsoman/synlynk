@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Synlynk — Visual Workspace Cockpit</title>
+<!-- Google Fonts: Inter & JetBrains Mono -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;500;600&amp;family=Public+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols Outlined -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "on-primary-fixed-variant": "#2f2ebe",
+            "on-primary-container": "#0d0096",
+            "secondary": "#4edea3",
+            "on-surface-variant": "#c7c4d7",
+            "on-secondary-container": "#00311f",
+            "on-surface": "#e4e1e9",
+            "inverse-surface": "#e4e1e9",
+            "surface-container-lowest": "#0e0e13",
+            "surface-bright": "#39383e",
+            "on-tertiary": "#472a00",
+            "primary-fixed": "#e1e0ff",
+            "outline-variant": "#464554",
+            "surface-container-high": "#2a292f",
+            "surface-container": "#1f1f24",
+            "tertiary-fixed-dim": "#ffb95f",
+            "surface-dim": "#131318",
+            "surface-container-low": "#1b1b20",
+            "surface": "#131318",
+            "secondary-container": "#00a572",
+            "on-tertiary-fixed": "#2a1700",
+            "surface-tint": "#c0c1ff",
+            "tertiary-container": "#ca8100",
+            "error-container": "#93000a",
+            "on-secondary-fixed": "#002113",
+            "inverse-primary": "#494bd6",
+            "tertiary-fixed": "#ffddb8",
+            "on-primary-fixed": "#07006c",
+            "surface-container-highest": "#35343a",
+            "on-tertiary-container": "#3e2400",
+            "primary-container": "#8083ff",
+            "on-error-container": "#ffdad6",
+            "inverse-on-surface": "#303035",
+            "on-background": "#e4e1e9",
+            "on-secondary": "#003824",
+            "background": "#131318",
+            "primary-fixed-dim": "#c0c1ff",
+            "on-secondary-fixed-variant": "#005236",
+            "outline": "#908fa0",
+            "tertiary": "#ffb95f",
+            "primary": "#c0c1ff",
+            "on-tertiary-fixed-variant": "#653e00",
+            "surface-variant": "#35343a",
+            "secondary-fixed-dim": "#4edea3",
+            "on-primary": "#1000a9",
+            "on-error": "#690005",
+            "secondary-fixed": "#6ffbbe",
+            "error": "#ffb4ab"
+          },
+          "borderRadius": {
+            "DEFAULT": "0.125rem",
+            "lg": "0.25rem",
+            "xl": "0.5rem",
+            "full": "0.75rem"
+          },
+          "fontFamily": {
+            "headline": ["Inter", "sans-serif"],
+            "display": ["Inter", "sans-serif"],
+            "body": ["Inter", "sans-serif"],
+            "label": ["Public Sans", "sans-serif"],
+            "mono": ["JetBrains Mono", "monospace"]
+          }
+        },
+      },
+    }
+  </script>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+      font-size: 18px;
+      line-height: 1;
+      display: inline-block;
+      vertical-align: middle;
+    }
+    .flow-dash {
+      stroke-dasharray: 6, 6;
+      animation: dash 12s linear infinite;
+    }
+    @keyframes dash {
+      to {
+        stroke-dashoffset: -120;
+      }
+    }
+    .pulse-glow {
+      box-shadow: 0 0 16px rgba(99, 102, 241, 0.4);
+    }
+    /* Blueprint dot background */
+    .bg-grid-dots {
+      background-image: radial-gradient(rgba(144, 143, 160, 0.12) 1px, transparent 1px);
+      background-size: 24px 24px;
+    }
+  </style>
+</head>
+<body class="bg-background text-on-surface font-body antialiased h-screen w-screen overflow-hidden flex flex-col select-none">
+<!-- TOP APP BAR (Shared Component Source of Truth) -->
+<header class="flex justify-between items-center w-full px-4 h-14 bg-surface-container-lowest z-40 border-b border-outline-variant/20 flex-shrink-0">
+<!-- Left: Brand + Breadcrumb + Conductor -->
+<div class="flex items-center space-x-3">
+<div class="flex items-center space-x-2">
+<div class="w-7 h-7 rounded bg-primary/10 border border-primary/40 flex items-center justify-center text-primary font-mono font-bold text-sm shadow-[0_0_10px_rgba(192,193,255,0.2)]">
+<span class="material-symbols-outlined text-primary">hub</span>
+</div>
+<span class="font-display font-bold text-base tracking-tight text-on-surface">Synlynk</span>
+</div>
+<div class="h-4 w-px bg-outline-variant/30"></div>
+<div class="flex items-center space-x-2 text-xs font-mono">
+<span class="material-symbols-outlined text-outline text-sm">commit</span>
+<span class="text-on-surface font-medium">synlynk (main)</span>
+<span class="px-1.5 py-0.5 rounded bg-surface-container-high text-on-surface-variant text-[10px] border border-outline-variant/30">git:4e92a</span>
+</div>
+<div class="h-4 w-px bg-outline-variant/30"></div>
+<!-- Orchestrator Pill -->
+<div class="flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-surface-container border border-outline-variant/20 text-xs">
+<span class="w-2 h-2 rounded-full bg-secondary animate-pulse shadow-[0_0_8px_#4edea3]"></span>
+<span class="text-on-surface-variant font-mono text-[11px]">Home Conductor: <strong class="text-on-surface font-medium">agy</strong></span>
+</div>
+</div>
+<!-- Center: Tri-Directional Segmented Switch -->
+<div class="flex items-center bg-surface-container-low p-1 rounded-lg border border-outline-variant/30 font-display font-medium text-sm">
+<button class="flex items-center space-x-1.5 px-3 py-1 rounded bg-surface-container text-primary font-semibold border-b-2 border-primary transition-all duration-150 active:scale-98">
+<span class="w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_6px_#c0c1ff]"></span>
+<span>Product View</span>
+</button>
+<button class="flex items-center space-x-1.5 px-3 py-1 rounded text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors duration-150">
+<span>Logical View</span>
+</button>
+<button class="flex items-center space-x-1.5 px-3 py-1 rounded text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors duration-150">
+<span>Infra View</span>
+</button>
+</div>
+<!-- Right: Telemetry & Actions -->
+<div class="flex items-center space-x-3 text-xs">
+<!-- Live Status Pill -->
+<div class="flex items-center space-x-1.5 px-2 py-1 rounded bg-secondary-container/20 border border-secondary/30 text-secondary font-mono text-[11px]">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+<span>Live (pid 41829)</span>
+</div>
+<!-- Trigger Re-sync Button -->
+<button class="flex items-center space-x-1.5 px-2.5 py-1 rounded bg-surface-container hover:bg-surface-container-high border border-outline-variant/30 text-on-surface font-medium transition-colors duration-150 active:scale-98">
+<span class="material-symbols-outlined text-primary text-sm">sync</span>
+<span>Trigger Re-sync</span>
+<kbd class="ml-1 px-1 py-0.2 rounded bg-surface-container-highest text-on-surface-variant text-[10px] font-mono">⌘R</kbd>
+</button>
+<!-- Quick Command Bar Trigger -->
+<div class="hidden lg:flex items-center space-x-1.5 px-2 py-1 rounded bg-surface-container-low border border-outline-variant/20 text-on-surface-variant">
+<span class="material-symbols-outlined text-sm">search</span>
+<span class="font-mono text-[11px]">Jump to Node</span>
+<kbd class="px-1 py-0.2 rounded bg-surface-container text-outline text-[10px] font-mono">⌘K</kbd>
+</div>
+<div class="h-4 w-px bg-outline-variant/30"></div>
+<!-- Trailing Icon Actions -->
+<div class="flex items-center space-x-1">
+<button class="p-1.5 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high rounded transition-colors duration-150" title="Hub Registry">
+<span class="material-symbols-outlined">hub</span>
+</button>
+<button class="p-1.5 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high rounded transition-colors duration-150" title="Terminal Readout">
+<span class="material-symbols-outlined">terminal</span>
+</button>
+<button class="p-1.5 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high rounded transition-colors duration-150" title="Settings">
+<span class="material-symbols-outlined">settings</span>
+</button>
+</div>
+<!-- Operator Avatar -->
+<div class="w-7 h-7 rounded-full bg-primary-container text-on-primary-container font-mono font-bold text-xs flex items-center justify-center ring-1 ring-primary/40" title="Operator Avatar">
+        AG
+      </div>
+</div>
+</header>
+<!-- MAIN WORKSPACE LAYOUT: Left Hierarchy, Center Canvas, Right Inspector -->
+<div class="flex-1 flex overflow-hidden relative">
+<!-- LEFT SIDEBAR: Journey Hierarchy & Workflows (Shared SideNavBar Specs) -->
+<aside class="w-72 bg-surface-dim border-r border-outline-variant/15 flex flex-col justify-between flex-shrink-0 z-20 font-body text-xs leading-relaxed">
+<!-- Section Header -->
+<div class="p-3 border-b border-outline-variant/15 flex items-center justify-between">
+<div class="flex items-center space-x-2">
+<span class="material-symbols-outlined text-primary text-sm">account_tree</span>
+<span class="font-display font-bold text-xs text-on-surface tracking-wide">Workflows &amp; Journeys</span>
+</div>
+<span class="px-1.5 py-0.5 rounded bg-surface-container text-on-surface-variant font-mono text-[10px] border border-outline-variant/20">4 Active</span>
+</div>
+<!-- Search / Filter Mini-box -->
+<div class="px-3 pt-2">
+<div class="flex items-center bg-surface-container-low border border-outline-variant/20 rounded px-2 py-1 text-on-surface-variant">
+<span class="material-symbols-outlined text-xs mr-1 text-outline">filter_list</span>
+<input class="bg-transparent border-none text-[11px] p-0 focus:ring-0 w-full placeholder:text-outline text-on-surface font-mono" placeholder="Filter specs, workflows..." type="text"/>
+</div>
+</div>
+<!-- Navigation Tree Items -->
+<div class="flex-1 overflow-y-auto px-2 py-2 space-y-1">
+<!-- Journey 1: Developer Workflow (ACTIVE MATCH) -->
+<div class="rounded border border-primary/30 bg-surface-container/60 overflow-hidden">
+<div class="bg-surface-container text-primary font-medium border-l-2 border-primary px-3 py-2 flex items-center justify-between cursor-pointer">
+<div class="flex items-center space-x-2">
+<span class="material-symbols-outlined text-primary">account_tree</span>
+<span class="font-medium text-xs text-on-surface">Developer Workflow</span>
+</div>
+<span class="px-1.5 py-0.2 rounded bg-secondary-container/20 text-secondary font-mono text-[10px] border border-secondary/30">100% PASS</span>
+</div>
+<!-- Sub-steps / Run breakdown -->
+<div class="pl-7 pr-3 py-2 space-y-1.5 text-[11px] font-mono bg-surface-container-lowest/50 border-t border-outline-variant/10">
+<div class="flex items-center justify-between text-on-surface-variant">
+<div class="flex items-center space-x-1.5">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+<span>Local Setup &amp; Symlinks</span>
+</div>
+<span class="text-outline text-[10px]">12ms</span>
+</div>
+<div class="flex items-center justify-between text-on-surface-variant">
+<div class="flex items-center space-x-1.5">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+<span>Hot-Reload Hook</span>
+</div>
+<span class="text-outline text-[10px]">live</span>
+</div>
+<div class="flex items-center justify-between text-on-surface-variant">
+<div class="flex items-center space-x-1.5">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+<span>Unit Spec Pass</span>
+</div>
+<span class="text-outline text-[10px]">68/68</span>
+</div>
+<div class="flex items-center justify-between text-on-surface-variant">
+<div class="flex items-center space-x-1.5">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+<span>Pre-flight Check</span>
+</div>
+<span class="text-outline text-[10px]">14 runs</span>
+</div>
+</div>
+</div>
+<!-- Journey 2: Autonomous Ticket Loop -->
+<div class="rounded border border-outline-variant/15 hover:border-outline-variant/30 transition-colors">
+<div class="text-on-surface-variant hover:text-on-surface px-3 py-2 flex items-center justify-between cursor-pointer hover:bg-surface-container-low transition-colors duration-150">
+<div class="flex items-center space-x-2">
+<span class="material-symbols-outlined text-outline">smart_toy</span>
+<span class="text-xs">Autonomous Ticket Loop</span>
+</div>
+<span class="px-1.5 py-0.2 rounded bg-tertiary-container/30 text-tertiary font-mono text-[10px]">3 PENDING</span>
+</div>
+</div>
+<!-- Journey 3: Named Release Ceremony -->
+<div class="rounded border border-outline-variant/15 hover:border-outline-variant/30 transition-colors">
+<div class="text-on-surface-variant hover:text-on-surface px-3 py-2 flex items-center justify-between cursor-pointer hover:bg-surface-container-low transition-colors duration-150">
+<div class="flex items-center space-x-2">
+<span class="material-symbols-outlined text-outline">verified</span>
+<span class="text-xs">Named Release Ceremony</span>
+</div>
+<span class="px-1.5 py-0.2 rounded bg-surface-container-high text-on-surface-variant font-mono text-[10px]">v2.14-rc3</span>
+</div>
+</div>
+<!-- Journey 4: Sentinel Recovery -->
+<div class="rounded border border-outline-variant/15 hover:border-outline-variant/30 transition-colors">
+<div class="text-on-surface-variant hover:text-on-surface px-3 py-2 flex items-center justify-between cursor-pointer hover:bg-surface-container-low transition-colors duration-150">
+<div class="flex items-center space-x-2">
+<span class="material-symbols-outlined text-outline">healing</span>
+<span class="text-xs">Sentinel Recovery</span>
+</div>
+<span class="text-secondary font-mono text-[10px]">0 INCIDENT</span>
+</div>
+</div>
+</div>
+<!-- Action CTA & Local Environment Metrics -->
+<div class="p-3 border-t border-outline-variant/15 bg-surface-container-lowest/80 space-y-2.5">
+<button class="w-full py-1.5 px-3 rounded bg-surface-container hover:bg-surface-container-high border border-outline-variant/30 text-on-surface font-medium text-xs flex items-center justify-center space-x-2 transition-colors duration-150 active:scale-98">
+<span class="material-symbols-outlined text-primary text-sm">cleaning_services</span>
+<span>Sweep Worktrees</span>
+</button>
+<!-- System Resource Telemetry -->
+<div class="bg-surface-container-low p-2 rounded border border-outline-variant/15 space-y-1.5 font-mono text-[11px]">
+<div class="flex justify-between items-center text-outline">
+<span>DAEMON TELEMETRY</span>
+<span class="text-secondary">HEALTHY</span>
+</div>
+<div class="flex justify-between items-center text-on-surface-variant">
+<span>CPU Load (Orch)</span>
+<span class="text-on-surface">12.4%</span>
+</div>
+<div class="w-full bg-surface-container-highest h-1 rounded-full overflow-hidden">
+<div class="bg-primary h-full w-[12%]"></div>
+</div>
+<div class="flex justify-between items-center text-on-surface-variant pt-0.5">
+<span>Mem / Active Trees</span>
+<span class="text-on-surface">1.4GB / 5 Trees</span>
+</div>
+</div>
+<!-- Footer tabs from Shared JSON -->
+<div class="flex items-center justify-between pt-1 text-on-surface-variant text-[11px]">
+<a class="flex items-center space-x-1 hover:text-on-surface transition-colors" href="#">
+<span class="material-symbols-outlined text-xs">menu_book</span>
+<span>Documentation</span>
+</a>
+<a class="flex items-center space-x-1 hover:text-on-surface transition-colors" href="#">
+<span class="material-symbols-outlined text-xs">code</span>
+<span>Terminal Logs</span>
+</a>
+</div>
+</div>
+</aside>
+<!-- CENTER VISUALIZER CANVAS (Interactive Node Graph & Journey Map) -->
+<main class="flex-1 bg-surface-container-lowest relative overflow-hidden bg-grid-dots flex flex-col">
+<!-- Top Canvas Overlay HUD: Breadcrumb & Viewport Controls -->
+<div class="absolute top-4 left-4 z-10 flex items-center space-x-3 pointer-events-auto">
+<div class="bg-surface-container/90 backdrop-blur-md px-3 py-1.5 rounded-md border border-outline-variant/30 flex items-center space-x-2 text-xs font-mono shadow-lg">
+<span class="text-primary font-bold">BS-6:</span>
+<span class="text-on-surface">Tri-Directional Workspace Visualizer</span>
+<span class="text-outline">/</span>
+<span class="text-primary font-semibold">Product View</span>
+</div>
+<!-- Touchpoint Mode Indicator -->
+<div class="bg-surface-container/90 backdrop-blur-md px-2.5 py-1.5 rounded-md border border-outline-variant/30 flex items-center space-x-2 text-[11px] font-mono text-secondary">
+<span class="w-2 h-2 rounded-full bg-secondary animate-ping"></span>
+<span>AST Stream Synced</span>
+</div>
+</div>
+<!-- Top Right Canvas Control Panel -->
+<div class="absolute top-4 right-4 z-10 flex items-center space-x-2 pointer-events-auto">
+<!-- Layer Filters -->
+<div class="bg-surface-container/90 backdrop-blur-md px-2 py-1 rounded-md border border-outline-variant/30 flex items-center space-x-1 text-xs font-mono">
+<button class="px-2 py-0.5 rounded bg-primary/20 text-primary border border-primary/40 text-[11px]">Touchpoints</button>
+<button class="px-2 py-0.5 rounded text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high text-[11px]">Code Refs</button>
+<button class="px-2 py-0.5 rounded text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high text-[11px]">Data Flow</button>
+</div>
+<!-- Zoom / Viewport Buttons -->
+<div class="bg-surface-container/90 backdrop-blur-md p-1 rounded-md border border-outline-variant/30 flex items-center space-x-1 text-on-surface-variant">
+<button class="p-1 hover:text-on-surface hover:bg-surface-container-high rounded" title="Zoom In">
+<span class="material-symbols-outlined text-sm">add</span>
+</button>
+<span class="text-[11px] font-mono px-1">100%</span>
+<button class="p-1 hover:text-on-surface hover:bg-surface-container-high rounded" title="Zoom Out">
+<span class="material-symbols-outlined text-sm">remove</span>
+</button>
+<div class="h-3 w-px bg-outline-variant/30 mx-1"></div>
+<button class="p-1 hover:text-on-surface hover:bg-surface-container-high rounded" title="Fit to View">
+<span class="material-symbols-outlined text-sm">fit_screen</span>
+</button>
+<button class="p-1 hover:text-on-surface hover:bg-surface-container-high rounded text-primary" title="Snap to Grid">
+<span class="material-symbols-outlined text-sm">grid_view</span>
+</button>
+</div>
+</div>
+<!-- Interactive SVG Canvas Layer (Connection Curves & Particles) -->
+<svg class="absolute inset-0 w-full h-full pointer-events-none z-0">
+<defs>
+<lineargradient id="grad-active" x1="0%" x2="100%" y1="0%" y2="100%">
+<stop offset="0%" stop-color="#8083ff" stop-opacity="0.8"></stop>
+<stop offset="100%" stop-color="#4edea3" stop-opacity="0.8"></stop>
+</lineargradient>
+<lineargradient id="grad-idle" x1="0%" x2="100%" y1="0%" y2="100%">
+<stop offset="0%" stop-color="#908fa0" stop-opacity="0.3"></stop>
+<stop offset="100%" stop-color="#464554" stop-opacity="0.3"></stop>
+</lineargradient>
+<filter height="140%" id="glow" width="140%" x="-20%" y="-20%">
+<fegaussianblur result="blur" stddeviation="3"></fegaussianblur>
+<fecomposite in="SourceGraphic" in2="blur" operator="over"></fecomposite>
+</filter>
+</defs>
+<!-- Curve 1: CLI Gateway -> Cockpit UI -->
+<path class="flow-dash" d="M 230 180 C 330 180, 310 320, 410 320" fill="none" filter="url(#glow)" stroke="url(#grad-active)" stroke-width="2"></path>
+<!-- Curve 2: Cockpit UI -> GitHub Dispatch Relay -->
+<path class="flow-dash" d="M 680 320 C 770 320, 750 180, 830 180" fill="none" stroke="url(#grad-active)" stroke-width="2"></path>
+<!-- Curve 3: Cockpit UI -> Documentation Portal -->
+<path d="M 680 340 C 770 340, 750 470, 830 470" fill="none" stroke="url(#grad-idle)" stroke-width="1.5"></path>
+<!-- Flow Midpoint Badges rendered via SVG foreignObject -->
+<foreignobject height="30" width="130" x="275" y="225">
+<div class="px-1.5 py-0.5 rounded bg-surface-container-high/90 border border-outline-variant/30 text-[9px] font-mono text-primary-fixed-dim text-center backdrop-blur">
+            JSON-RPC :8081
+          </div>
+</foreignobject>
+<foreignobject height="30" width="140" x="710" y="225">
+<div class="px-1.5 py-0.5 rounded bg-surface-container-high/90 border border-outline-variant/30 text-[9px] font-mono text-secondary-fixed-dim text-center backdrop-blur">
+            Hook Dispatches
+          </div>
+</foreignobject>
+<foreignobject height="30" width="140" x="710" y="405">
+<div class="px-1.5 py-0.5 rounded bg-surface-container-high/90 border border-outline-variant/30 text-[9px] font-mono text-outline text-center backdrop-blur">
+            Markdown Sync
+          </div>
+</foreignobject>
+</svg>
+<!-- GRAPH NODES (Interactive absolute positioning inside Canvas) -->
+<div class="relative w-full h-full pointer-events-auto overflow-auto">
+<!-- NODE 1: CLI Gateway (synlynk) -->
+<div class="absolute left-16 top-32 w-64 bg-surface-container/85 backdrop-blur-md rounded-lg border border-outline-variant/30 p-3.5 hover:border-primary/50 transition-all shadow-xl group cursor-pointer">
+<div class="flex items-center justify-between pb-2 mb-2 border-b border-outline-variant/20">
+<div class="flex items-center space-x-2">
+<span class="w-6 h-6 rounded bg-surface-container-high flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-sm">terminal</span>
+</span>
+<span class="font-display font-semibold text-xs text-on-surface">CLI Gateway</span>
+</div>
+<span class="px-1.5 py-0.5 rounded bg-secondary-container/20 text-secondary text-[9px] font-mono font-medium">Running</span>
+</div>
+<div class="space-y-1.5 font-mono text-[10px]">
+<div class="text-outline flex justify-between">
+<span>Source:</span>
+<span class="text-on-surface">cli/entrypoint.rs</span>
+</div>
+<div class="text-outline flex justify-between">
+<span>Socket:</span>
+<span class="text-primary">:8081 (ipc)</span>
+</div>
+<div class="text-outline flex justify-between">
+<span>Latency:</span>
+<span class="text-secondary font-medium">1.4ms</span>
+</div>
+</div>
+</div>
+<!-- NODE 2: Cockpit UI (/viz) (FOCUSED / ACTIVE STATE) -->
+<div class="absolute left-80 top-64 w-80 bg-surface-container-high/95 backdrop-blur-lg rounded-lg border-2 border-primary p-4 shadow-[0_0_30px_rgba(192,193,255,0.25)] ring-1 ring-primary cursor-pointer transition-transform duration-200">
+<!-- Active Focus Header Pill -->
+<div class="flex items-center justify-between pb-2 mb-2.5 border-b border-outline-variant/30">
+<div class="flex items-center space-x-2">
+<div class="w-7 h-7 rounded bg-primary text-on-primary flex items-center justify-center font-bold">
+<span class="material-symbols-outlined text-base">web</span>
+</div>
+<div>
+<h3 class="font-display font-bold text-sm text-on-surface leading-tight">Cockpit UI (/viz)</h3>
+<span class="text-[10px] font-mono text-outline-variant">Route: /viz/cockpit</span>
+</div>
+</div>
+<span class="px-2 py-0.5 rounded-full bg-primary/20 text-primary border border-primary/50 text-[10px] font-mono font-bold tracking-wider animate-pulse">
+              ACTIVE FOCUS
+            </span>
+</div>
+<!-- Active Node Metrics & Details -->
+<div class="space-y-2 font-mono text-xs">
+<div class="p-2 rounded bg-surface-container-lowest/80 border border-outline-variant/20 space-y-1 text-[11px]">
+<div class="flex justify-between items-center text-on-surface-variant">
+<span class="text-outline">Live WebSocket:</span>
+<span class="text-secondary truncate max-w-[150px]">ws://localhost:8888/stream</span>
+</div>
+<div class="flex justify-between items-center text-on-surface-variant">
+<span class="text-outline">Engine Handler:</span>
+<span class="text-on-surface">synlynk/viz.py</span>
+</div>
+<div class="flex justify-between items-center text-on-surface-variant">
+<span class="text-outline">Traffic Load:</span>
+<span class="text-primary font-bold">4.2k req/min</span>
+</div>
+</div>
+<div class="flex items-center justify-between pt-1 text-[10px] text-outline">
+<span>Port: <strong class="text-on-surface">8888</strong></span>
+<span>PID: <strong class="text-on-surface">41829</strong></span>
+<span>Status: <strong class="text-secondary">Pass</strong></span>
+</div>
+</div>
+</div>
+<!-- NODE 3: GitHub Dispatch Relay -->
+<div class="absolute right-36 top-32 w-64 bg-surface-container/85 backdrop-blur-md rounded-lg border border-outline-variant/30 p-3.5 hover:border-primary/50 transition-all shadow-xl group cursor-pointer">
+<div class="flex items-center justify-between pb-2 mb-2 border-b border-outline-variant/20">
+<div class="flex items-center space-x-2">
+<span class="w-6 h-6 rounded bg-surface-container-high flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-sm">alt_route</span>
+</span>
+<span class="font-display font-semibold text-xs text-on-surface">GitHub Dispatch Relay</span>
+</div>
+<span class="px-1.5 py-0.5 rounded bg-secondary-container/20 text-secondary text-[9px] font-mono font-medium">Healthy</span>
+</div>
+<div class="space-y-1.5 font-mono text-[10px]">
+<div class="text-outline flex justify-between">
+<span>Relay:</span>
+<span class="text-on-surface truncate max-w-[120px]">dispatch_hook.go</span>
+</div>
+<div class="text-outline flex justify-between">
+<span>Endpoint:</span>
+<span class="text-primary">api.github.com</span>
+</div>
+<div class="text-outline flex justify-between">
+<span>Event Queue:</span>
+<span class="text-on-surface">0 items (idle)</span>
+</div>
+</div>
+</div>
+<!-- NODE 4: Documentation Portal -->
+<div class="absolute right-36 top-96 w-64 bg-surface-container/85 backdrop-blur-md rounded-lg border border-outline-variant/30 p-3.5 hover:border-primary/50 transition-all shadow-xl group cursor-pointer">
+<div class="flex items-center justify-between pb-2 mb-2 border-b border-outline-variant/20">
+<div class="flex items-center space-x-2">
+<span class="w-6 h-6 rounded bg-surface-container-high flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-sm">menu_book</span>
+</span>
+<span class="font-display font-semibold text-xs text-on-surface">Documentation Portal</span>
+</div>
+<span class="px-1.5 py-0.5 rounded bg-surface-container-highest text-on-surface-variant text-[9px] font-mono font-medium">Synced</span>
+</div>
+<div class="space-y-1.5 font-mono text-[10px]">
+<div class="text-outline flex justify-between">
+<span>Route:</span>
+<span class="text-on-surface">/docs/conductor</span>
+</div>
+<div class="text-outline flex justify-between">
+<span>Spec Ref:</span>
+<span class="text-primary">docs/spec.md</span>
+</div>
+<div class="text-outline flex justify-between">
+<span>Cache Ratio:</span>
+<span class="text-secondary font-medium">304 Hit (99.8%)</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Bottom Mini-Map Canvas Overlay -->
+<div class="absolute bottom-4 left-4 z-10 pointer-events-auto bg-surface-container-low/90 backdrop-blur-md border border-outline-variant/30 rounded-lg p-2 shadow-2xl w-48 font-mono">
+<div class="flex items-center justify-between text-[10px] text-outline mb-1.5">
+<span>CANVAS RADAR</span>
+<span class="text-primary">4 NODES</span>
+</div>
+<div class="w-full h-24 bg-surface-container-lowest rounded border border-outline-variant/20 relative overflow-hidden">
+<!-- Mini representation of nodes -->
+<div class="absolute left-3 top-4 w-3 h-2 rounded-sm bg-outline/50"></div>
+<div class="absolute left-16 top-10 w-4 h-3 rounded-sm bg-primary ring-1 ring-primary"></div>
+<div class="absolute right-4 top-4 w-3 h-2 rounded-sm bg-outline/50"></div>
+<div class="absolute right-4 bottom-4 w-3 h-2 rounded-sm bg-outline/50"></div>
+<!-- Viewport indicator rectangle -->
+<div class="absolute left-8 top-6 w-28 h-14 border border-primary/60 bg-primary/5 rounded"></div>
+</div>
+</div>
+</main>
+<!-- RIGHT INSPECTOR DRAWER (Selected Node: Cockpit UI /viz) -->
+<aside class="w-84 bg-surface border-l border-outline-variant/15 flex flex-col justify-between flex-shrink-0 z-20 font-body text-xs overflow-y-auto">
+<!-- Drawer Header -->
+<div class="p-3 border-b border-outline-variant/15 flex items-center justify-between bg-surface-container-lowest">
+<div>
+<div class="flex items-center space-x-1.5 text-[10px] font-mono text-outline mb-0.5">
+<span>Product View</span>
+<span>&gt;</span>
+<span class="text-primary">Cockpit UI</span>
+</div>
+<span class="font-display font-bold text-xs text-on-surface">Node Inspector</span>
+</div>
+<div class="flex items-center space-x-1">
+<button class="p-1 text-on-surface-variant hover:text-on-surface hover:bg-surface-container rounded" title="Pin Drawer">
+<span class="material-symbols-outlined text-sm">push_pin</span>
+</button>
+<button class="p-1 text-on-surface-variant hover:text-on-surface hover:bg-surface-container rounded" title="Collapse Drawer">
+<span class="material-symbols-outlined text-sm">close</span>
+</button>
+</div>
+</div>
+<!-- Drawer Content -->
+<div class="p-4 space-y-5 flex-1">
+<!-- Selected Node Profile Card -->
+<div class="bg-surface-container rounded-lg p-3 border border-outline-variant/20 space-y-3">
+<div class="flex items-start justify-between">
+<div>
+<h2 class="font-display font-bold text-sm text-on-surface">Cockpit UI (/viz)</h2>
+<p class="text-outline text-[11px] font-mono mt-0.5">synlynk/conductor/visualizer</p>
+</div>
+<span class="px-2 py-0.5 rounded bg-secondary-container/20 text-secondary border border-secondary/30 font-mono text-[10px] font-semibold">
+              Online &amp; Serving
+            </span>
+</div>
+<!-- Quick Stats Grid -->
+<div class="grid grid-cols-3 gap-2 pt-1 font-mono text-center">
+<div class="bg-surface-container-lowest p-1.5 rounded border border-outline-variant/15">
+<span class="text-[9px] text-outline block">PORT</span>
+<span class="text-xs font-bold text-on-surface">8888</span>
+</div>
+<div class="bg-surface-container-lowest p-1.5 rounded border border-outline-variant/15">
+<span class="text-[9px] text-outline block">PID</span>
+<span class="text-xs font-bold text-primary">41829</span>
+</div>
+<div class="bg-surface-container-lowest p-1.5 rounded border border-outline-variant/15">
+<span class="text-[9px] text-outline block">UPTIME</span>
+<span class="text-xs font-bold text-secondary">4d 18h</span>
+</div>
+</div>
+</div>
+<!-- Real-Time Telemetry Sparklines -->
+<div class="space-y-2">
+<div class="flex items-center justify-between text-xs font-mono">
+<span class="font-display font-bold text-on-surface">Real-Time Telemetry</span>
+<span class="text-secondary text-[11px]">248 msg/sec</span>
+</div>
+<div class="bg-surface-container p-2.5 rounded-lg border border-outline-variant/20 space-y-2 font-mono text-[11px]">
+<div class="flex justify-between items-center text-on-surface-variant">
+<span>Avg Ingestion Latency</span>
+<span class="text-primary font-bold">14.2 ms</span>
+</div>
+<!-- Simulated latency bar -->
+<div class="w-full bg-surface-container-highest h-1.5 rounded-full overflow-hidden flex">
+<div class="bg-secondary h-full w-[82%]"></div>
+<div class="bg-tertiary h-full w-[14%]"></div>
+<div class="bg-error h-full w-[4%]"></div>
+</div>
+<div class="flex justify-between items-center text-on-surface-variant pt-1">
+<span>Websocket Buffer Error</span>
+<span class="text-secondary font-bold">0.00%</span>
+</div>
+<div class="flex justify-between items-center text-on-surface-variant">
+<span>Active Subscriptions</span>
+<span class="text-on-surface">6 agents, 1 GUI</span>
+</div>
+</div>
+</div>
+<!-- Governed Stories Section -->
+<div class="space-y-2">
+<div class="flex items-center justify-between">
+<span class="font-display font-bold text-xs text-on-surface">Governed Stories (Specs)</span>
+<span class="text-outline font-mono text-[10px]">2 Linked</span>
+</div>
+<!-- Story 1: Active -->
+<div class="bg-surface-container p-2.5 rounded border border-primary/40 space-y-1.5">
+<div class="flex items-center justify-between">
+<span class="font-mono text-primary text-[11px] font-semibold">story-304499f1</span>
+<span class="px-1.5 py-0.2 rounded bg-secondary-container/20 text-secondary font-mono text-[9px]">Verified</span>
+</div>
+<p class="text-xs text-on-surface font-medium leading-snug">
+              Tri-directional visualizer canvas sync over JSON-RPC socket
+            </p>
+<div class="flex items-center justify-between font-mono text-[10px] text-outline pt-1">
+<span>Commit: <strong class="text-on-surface">7f2a1b9</strong></span>
+<span>Assignee: <strong class="text-primary">agy</strong></span>
+</div>
+</div>
+<!-- Story 2 -->
+<div class="bg-surface-container p-2.5 rounded border border-outline-variant/20 space-y-1.5 opacity-80 hover:opacity-100 transition-opacity">
+<div class="flex items-center justify-between">
+<span class="font-mono text-on-surface-variant text-[11px]">story-2891bb02</span>
+<span class="px-1.5 py-0.2 rounded bg-surface-container-highest text-on-surface-variant font-mono text-[9px]">Complete</span>
+</div>
+<p class="text-xs text-on-surface-variant leading-snug">
+              Live AST inspection over persistent WebSocket stream
+            </p>
+</div>
+</div>
+<!-- Cross-Links to Logical View Modules -->
+<div class="space-y-2">
+<div class="flex items-center justify-between">
+<span class="font-display font-bold text-xs text-on-surface">Logical Module Ties</span>
+<span class="text-primary font-mono text-[10px]">Cross-Link</span>
+</div>
+<div class="space-y-1.5 font-mono text-[11px]">
+<a class="flex items-center justify-between p-2 rounded bg-surface-container-low hover:bg-surface-container border border-outline-variant/20 text-on-surface group transition-colors" href="#">
+<div class="flex items-center space-x-1.5 truncate">
+<span class="material-symbols-outlined text-outline group-hover:text-primary text-xs">schema</span>
+<span class="truncate">synlynk.conductor.ast_stream</span>
+</div>
+<span class="text-outline text-[10px]">#L-402</span>
+</a>
+<a class="flex items-center justify-between p-2 rounded bg-surface-container-low hover:bg-surface-container border border-outline-variant/20 text-on-surface group transition-colors" href="#">
+<div class="flex items-center space-x-1.5 truncate">
+<span class="material-symbols-outlined text-outline group-hover:text-primary text-xs">schema</span>
+<span class="truncate">synlynk.ui.render_engine</span>
+</div>
+<span class="text-outline text-[10px]">#L-118</span>
+</a>
+</div>
+</div>
+</div>
+<!-- Action Footer Drawer Buttons -->
+<div class="p-3 border-t border-outline-variant/15 bg-surface-container-lowest space-y-2">
+<button class="w-full py-2 px-3 rounded bg-primary hover:bg-primary-fixed text-on-primary font-display font-semibold text-xs flex items-center justify-center space-x-2 transition-all duration-150 active:scale-98 shadow-[0_0_12px_rgba(192,193,255,0.3)]">
+<span class="material-symbols-outlined text-sm">open_in_new</span>
+<span>Open in Browser</span>
+<span class="font-mono text-[10px] opacity-80">:8888</span>
+</button>
+<div class="grid grid-cols-2 gap-2">
+<button class="py-1.5 px-2.5 rounded bg-surface-container hover:bg-surface-container-high border border-outline-variant/30 text-on-surface font-mono text-xs flex items-center justify-center space-x-1.5 transition-colors active:scale-98">
+<span class="material-symbols-outlined text-xs text-primary">code</span>
+<span>Inspect Code</span>
+</button>
+<button class="py-1.5 px-2.5 rounded bg-surface-container hover:bg-surface-container-high border border-outline-variant/30 text-on-surface font-mono text-xs flex items-center justify-center space-x-1.5 transition-colors active:scale-98">
+<span class="material-symbols-outlined text-xs text-secondary">sync</span>
+<span>Trigger Re-sync</span>
+</button>
+</div>
+</div>
+</aside>
+</div>
+</body></html>

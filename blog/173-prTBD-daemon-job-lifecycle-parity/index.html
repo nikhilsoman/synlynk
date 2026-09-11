@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Daemon Jobs Learn the Same Ground Truth as CLI Dispatch | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-1">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Sep 04, 2026</span>
+        
+          <span class="blog-post-pr">PR TBD</span>
+        
+      </div>
+      <h1 class="blog-post-title">Daemon Jobs Learn the Same Ground Truth as CLI Dispatch</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>The Job Lifecycle Ground-Truth Verification epic (PRs <a href="https://github.com/nikhilsoman/synlynk/pull/126">#126</a>, <a href="https://github.com/nikhilsoman/synlynk/pull/127">#127</a>, and <a href="https://github.com/nikhilsoman/synlynk/pull/129">#129</a>) established that a dispatched job's status must be checked against the work it actually left behind. The remaining goal was to make every execution engine obey that contract, including the daemon queue.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>No strategic shift was needed. Issue #136 exposed a parity gap: the CLI reconciliation path had received the epic's isolation, git-state verification, and touched-file fixes, while daemon-dispatched jobs still used older state-only assumptions. This PR treats the two paths as one lifecycle contract.</p>
+<h2>What This PR Shipped</h2>
+<p>Daemon jobs now persist <code>worktree_path</code> and <code>worktree_branch</code> in the SQLite <code>daemon_jobs</code> table. New databases receive the columns in the canonical schema, and existing databases receive guarded <code>ALTER TABLE</code> migrations following the repository's <code>PRAGMA table_info</code> pattern.</p>
+<p><code>dispatch_agent()</code> and <code>_dispatch_ready_jobs()</code> now write the per-job worktree metadata when a daemon job is launched. The subprocess already receives the isolated worktree as <code>cwd</code>; persisting that identity lets reconciliation survive daemon restarts without guessing from log paths.</p>
+<p>When a daemon PID has disappeared and neither a raw wait status nor an exit sentinel is available, <code>_reconcile_daemon_jobs()</code> inspects the recorded worktree. Git activity produces the existing <code>failed_unverified</code> status instead of a false hard failure. Completion summaries use the real worktree touched-file list, preserving the same evidence used by the CLI path.</p>
+<p>Regression tests cover missing-sentinel git evidence, isolated subprocess cwd and persisted metadata, and non-empty daemon touched-file summaries. The focused lifecycle selector and daemon reconciliation tests pass.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>None — this work follows the approved lifecycle verification design contract.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>The daemon can now recover truth after process loss or restart using the repository state that agents actually changed. Concurrent background jobs also have durable worktree identity, reducing cross-job interference and making their results inspectable instead of conflating queue bookkeeping with execution reality.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>CLI and daemon dispatch now share the essential lifecycle guarantees: isolated execution, git-backed ambiguity detection, and evidence-backed file reporting. The next goalpost is operationally validating those guarantees across long-running daemon restarts and concurrent queue workloads.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

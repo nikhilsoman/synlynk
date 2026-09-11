@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #1434 — The Book Gets Its Cover | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-3">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Sep 05, 2026</span>
+        
+          <span class="blog-post-pr">PR #1434</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #1434 — The Book Gets Its Cover</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>By PR #1430, &quot;The Supervised Machine&quot; had settled its default output set: HTML source of truth,
+PDF and EPUB rendered together on every change. The book was structurally complete across three
+formats, but its cover page still carried no visual identity beyond text — no mark tying it back
+to the project that writes and maintains it.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>None — another small, deliberate gap-close. The user asked for the synlynk glyph to appear on the
+book's cover across all three output formats, matching the visual system PR #1409 had already
+established for the manuscript's interior styling.</p>
+<h2>What This PR Shipped</h2>
+<ul>
+<li>Added the synlynk S-glyph as an inline SVG (<code>viewBox=&quot;0 0 28 28&quot;</code>, <code>role=&quot;img&quot;</code>,
+<code>aria-label=&quot;synlynk S-glyph&quot;</code>) directly into the <code>.cover</code> block of
+<code>docs/book/the-supervised-machine-v0.5-DRAFT.html</code>, sized via the existing <code>.cover .glyph</code> CSS
+rule already present from the PR #1409 restyle.</li>
+<li>Kept the change scoped to the HTML source only — 9 lines, no prose or structural edits.</li>
+<li>Reviewed via the project's standard non-authoring dispatch path; CI hit a pre-existing,
+unrelated flake twice (<code>test_job_status_add_realghwrite_endtoend_regr</code>,
+<code>ChildProcessError: [Errno 10] No child processes</code> in <code>tests/test_agent_cli.py</code>, confirmed
+reproducing independently on <code>main</code> itself) before merging clean on rerun.</li>
+</ul>
+<h2>Brainstorm Visuals Used</h2>
+<p>None — a single inline SVG glyph, not new manuscript content.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>Nothing autonomy-related directly. Worth noting for the record: merging this PR (and its
+sibling #1430) surfaced a real structural gap in the platform's own identity model — dispatched
+review actions already run under distinct per-role GitHub App identities, but Claude's own direct
+<code>gh pr create</code>/<code>gh pr merge</code> calls in a PM session still author under the shared human identity,
+and branch-protection's formal-approval requirement forced an <code>--admin</code> override rather than a
+qa-role self-approval. That gap is now filed as
+<a href="https://github.com/nikhilsoman/synlynk/issues/1436">issue #1436</a> for review, not fixed here.</p>
+<h2>Follow-Up Shipped: #1437</h2>
+<p>The HTML cover update alone left the PDF and EPUB stale — both were rendered from the
+cover-less HTML and needed a straight rebuild. PR #1437 regenerated both via the exact commands
+in <code>docs/book/README.md</code> — no content changes, binary rebuild only — and has since merged,
+bringing the glyph cover across all three formats.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>The HTML, PDF, and EPUB all carry the synlynk glyph cover now.
+The next open thread isn't book-related — it's the identity-routing gap in #1436: whether
+dispatches should go through pm/tpm role handles so qa can approve PRs without the shared human
+identity ever entering the loop.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #1409 — Giving the Book a Brand, Without Breaking Its Spine | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Sep 04, 2026</span>
+        
+          <span class="blog-post-pr">PR #1409</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #1409 — Giving the Book a Brand, Without Breaking Its Spine</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>Draft v0.5 of &quot;The Supervised Machine&quot; had just absorbed the Strategic Review integration — new chapters, deep-dive expansions, the pre-Part-0 cold open — landing it at its most structurally complete state yet. The goalpost at the end of that work was editorial: the book's content was right. Its presentation was an afterthought — Georgia serif, ad hoc grays and golds, nothing tying it visually to synlynk itself.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>The trigger was simple: the manuscript didn't look like it came from the same project as the Synlynk Quick Start Guide and Manual, both of which share a deliberate brand system (Inter + JetBrains Mono, a fixed color-token palette, terminal-block styling, pill badges). The instinct might have been to port that system wholesale — but the Quick Start/Manual layout is built on fixed-height A4 &quot;slide&quot; pages with <code>overflow:hidden</code>, designed for short curated docs where every page is hand-fit to its content. The book is ~30,000 words of flowing narrative prose across 19 chapters. Forcing it into that mechanic would silently clip or truncate text.</p>
+<p>Presented with that trade-off directly, the call was: keep the book's natural flowing, print-media pagination (<code>page-break-before</code>/<code>after</code>, no fixed heights), and layer the brand's visual language on top of it — fonts, palette, cover treatment, section labels, callout and terminal styling, page-header chrome. Brand skin, not brand skeleton.</p>
+<p>Mid-implementation, a second-order risk surfaced: a separate, directly-authored PR (#1411) had independently restyled the same file using the <em>opposite</em>, previously-rejected layout choice — strict fixed-height A4 slides, plus a new Puppeteer npm dependency for PDF generation. Two PRs solving the same problem with incompatible designs is exactly the kind of redundant/conflicting work this project's dispatch discipline exists to catch. The resolution: keep the flowing-layout PR (#1409), close #1411 with an explanation (branch left intact, not deleted, since the Puppeteer PDF-pipeline idea has independent merit worth revisiting separately), and clean up the <code>node_modules/</code> #1411's <code>npm install</code> had left behind in the main worktree.</p>
+<h2>What This PR Shipped</h2>
+<p>The restyle itself was dispatched to Codex (<code>job-ff609558</code>, based explicitly off <code>origin/main</code> to avoid a documented stale-branch-basing pitfall), scoped to touch only the <code>&lt;style&gt;</code> block of <code>the-supervised-machine-v0.5-DRAFT.html</code> — a 73-line-addition/38-line-deletion diff, with the manuscript content outside <code>&lt;style&gt;</code> verified byte-for-byte unchanged against HEAD. It adopted the shared brand <code>:root</code> token set (<code>--blue</code>, <code>--purple</code>, <code>--green</code>, <code>--bg</code>, <code>--text</code>, etc.), Inter/JetBrains Mono typography, the gradient cover accent bar, uppercase-letterspaced &quot;kicker&quot; section labels, and the terminal/callout card styling from the Quick Start guide — while leaving the print-media pagination model exactly as the design decision called for.</p>
+<p>The one piece the dispatch job couldn't finish: regenerating the tracked PDF. Headless Chrome inside the dispatch sandbox aborted with <code>SIGABRT</code> (<code>HIServices _RegisterApplication</code> → <code>TransformProcessType</code>, an <code>SCClientSession</code>/CoreServicesd XPC check-in failure) on even <code>about:blank</code> — a macOS sandbox restriction, not a content bug. This is the same crash signature independently reported from a different, unrelated session around the same time, which turned out to trace back to #1411's Puppeteer-based Chrome invocation rather than this dispatch. Per this project's PM/reviewer split, this was native (non-dispatched) work: the PDF was regenerated locally with real, unsandboxed Chrome using the documented command in <code>docs/book/README.md</code>, then committed as a follow-up on the dispatch branch. <code>pdffonts</code> confirmed Inter and JetBrains Mono variants (Regular, Bold, SemiBold, ExtraBold) actually embedded as subsetted Type 3 fonts with Unicode mapping — ruling out a silent fallback to a system serif, which an initial low-resolution <code>pdftoppm</code> preview render had misleadingly suggested (a Poppler Type-3-glyph rendering artifact, resolved at 150dpi).</p>
+<p>Review followed the project's identity-sharing fallback (#423): since all dispatched harnesses share one GitHub identity, self-approval isn't possible, so verification was posted as a formal <code>gh pr review --comment</code> covering the scoped diff, the preserved pagination model, the visually-verified brand adoption (cover, TOC, a chapter opener, a part divider, a body page with inline code and callouts), and the PDF font-embedding check. Merge required <code>qa</code>-role authority per <code>.synlynk/policy.json</code>'s <code>merge_authority</code>; branch protection then required an approving (not comment) review that the shared identity structurally can't produce, so the merge used the disclosed <code>--admin</code> fallback rather than working around the protection silently.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>None directly — the design decision (flowing pages, brand skin) was resolved through a direct trade-off question rather than a visual brainstorm session.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>This is a small but concrete instance of the project's redundant-work detection working as intended: two independently-produced PRs targeting the same file were caught and reconciled via direct GitHub inspection (<code>gh pr list</code>/<code>gh pr view</code>) rather than either job's self-reported status, consistent with this project's standing &quot;never trust job status alone&quot; discipline. It's also another data point for the identity-sharing caveat from #423 — every merge on a dispatch- or Claude-authored PR in this repo is going to keep needing either a comment-review fallback plus <code>qa</code>-role sign-off, or an explicit <code>--admin</code> override, until GitHub App-scoped identities per role actually land.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>The book now visually belongs to the same project as its own documentation, without sacrificing the long-form reading experience a 30k-word manuscript needs. The next goalpost is narrower: a real (non-Puppeteer-sandbox-fighting) PDF regeneration story that doesn't depend on a human running real Chrome locally every time the HTML changes — the problem #1411 was reaching for, now scoped as its own follow-up rather than bundled into the brand restyle.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Charter Patch: Architect Does Not Hold Merge Authority | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-2">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Sep 06, 2026</span>
+        
+          <span class="blog-post-pr">PR TBD</span>
+        
+      </div>
+      <h1 class="blog-post-title">Charter Patch: Architect Does Not Hold Merge Authority</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>Earlier PRs in the #1436 arc audited workspace agent identity routing, enforced role App tokens on parent auto-PRs, and eliminated fallback to host GitHub credentials for unattended tasks. Live verification already proved that <code>synlynk-synlynk-qa[bot]</code> successfully approves and squash-merges PRs under <code>.synlynk/policy.json</code> (<code>can_merge: [&quot;qa&quot;]</code>). However, living documentation—specifically the agent roles and charters design spec, the glossary, and the road to autonomous operations roadmap—still contained legacy prose claiming that the architect role holds merge authority.</p>
+<h2>Strategic Shifts in This PR (if any)</h2>
+<p>None. Policy truth has been <code>merge_authority.can_merge: [&quot;qa&quot;]</code> since v0.18.0. This PR executes the charter patch identified in §5–§7 of the workspace agent identity routing design spec (<code>docs/superpowers/specs/2026-09-06-workspace-agent-identity-routing-design.md</code>) to reconcile living documentation with runtime policy truth, ensuring architect only owns spec/plan review while merge authority is explicitly qa-only.</p>
+<h2>What This PR Shipped</h2>
+<p>Living document reconciliation across four canonical references:</p>
+<ol>
+<li><code>docs/superpowers/specs/2026-08-09-synlynk-agent-roles-charters-design.md</code>: Updated the architect charter row, dispatch target table, and end-to-end workflow table so architect owns spec and plan review without claiming merge authority, and explicitly noted that merge authority is qa only (<code>can_merge: [&quot;qa&quot;]</code>).</li>
+<li><code>docs/glossary-agent-vs-harness.md</code>: Updated the architect row to clarify that PR code review sits with architect while merge authority is qa only.</li>
+<li><code>docs/strategy/road-to-autonomous-ops.md</code>: Aligned the Operating Ownership section so architect owns technical design, spec/plan approval, and review, while qa holds merge authority alongside CI/CD and verification.</li>
+<li><code>docs/superpowers/specs/2026-09-06-workspace-agent-identity-routing-design.md</code>: Marked the charter patch in §5 and §7 as addressed in this PR.</li>
+</ol>
+<p>Historical plans recording point-in-time design evolution were preserved untouched.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>None.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>Eliminates policy-to-charter contradictions across agent instruction surfaces. When agents read their roles, charters, and glossary definitions, they encounter an unambiguous division of labor: architect provides technical judgment, design spec approval, and code review, while unattended PR merge execution is governed strictly by qa under policy gates.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>With the charter patch complete and parent auto-PR token injection hardened, remaining items in the #1436 arc include completing live verification of a role-bot-authored PR approved by qa bot and optional qa <code>actions: write</code> permission for test rerun workflows.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

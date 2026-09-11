@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Documenting the Harness Session gh Shim Environment | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-3">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Sep 06, 2026</span>
+        
+          <span class="blog-post-pr">PR TBD</span>
+        
+      </div>
+      <h1 class="blog-post-title">Documenting the Harness Session gh Shim Environment</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>PR #1464 shipped the <code>synlynk exec</code> PATH shim to guard child dispatches against accidental host GitHub credential leakage. In parallel, issue #1436 and its sibling implementation establish the session-level <code>gh</code> shim via <code>synlynk gh --shim-env</code> (<code>~/.synlynk/gh-shim/gh</code>). While the underlying shim mechanism prevents raw <code>gh</code> calls from silently authenticating as the human operator (<code>nikhilsoman</code>), harness instruction files needed to be aligned across the fleet so interactive sessions know to activate the shim and follow the updated identity protocol.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>None. Spec #1436 §6.3 / Hole B: document the <code>synlynk gh --shim-env</code> environment setup as the standard rule across all agent instruction files, ensuring interactive harness sessions fail closed on unauthorized raw <code>gh</code> invocations without altering the operator's personal login shell.</p>
+<h2>What This PR Shipped</h2>
+<p>Added an identical, standardized rule across the human-maintained sections of all four primary harness directive files (<code>GROK.md</code>, <code>CLAUDE.md</code>, <code>AGENTS.md</code>, and <code>GEMINI.md</code>):</p>
+<ul>
+<li>In a harness/session shell, prepend the synlynk gh shim: <code>eval &quot;$(synlynk gh --shim-env)&quot;</code> (or equivalent PATH prepend of <code>~/.synlynk/gh-shim</code>).</li>
+<li>Then raw <code>gh</code> is refused unless a role <code>GH_TOKEN</code> is already injected, <code>SYNLYNK_GH_ROLE</code> is set, or <code>SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH=1</code>.</li>
+<li>Prefer <code>synlynk gh --role &lt;role&gt; -- …</code> for session GitHub writes.</li>
+<li>Nikhil at a normal login shell (no harness env) is unchanged.</li>
+</ul>
+<h2>Brainstorm Visuals Used</h2>
+<p>None. Spec: <code>docs/superpowers/specs/2026-09-06-workspace-agent-identity-routing-design.md</code>.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>Unifies harness guidance across Claude, Codex, Grok, and Agy around the new session shim environment. With the shim prepended, agents operating in harness shells cannot accidentally fall through to host credentials on unauthenticated <code>gh</code> calls, establishing fail-closed safety while preserving seamless role-scoped operations via <code>synlynk gh --role</code>.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>With both child dispatch (<code>synlynk exec</code>) and interactive harness session shells documented to use the <code>gh</code> shim, Hole B in #1436 identity routing is fully closed at the documentation and harness guidance level.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

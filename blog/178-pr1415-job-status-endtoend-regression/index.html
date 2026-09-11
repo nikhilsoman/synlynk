@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #1415 — Testing the Thing That Keeps Lying About Itself | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-2">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Sep 04, 2026</span>
+        
+          <span class="blog-post-pr">PR #1415</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #1415 — Testing the Thing That Keeps Lying About Itself</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>The #1377 RCA had just closed: five independent false-negative fingerprints in job-status reporting (#1379–#1383), each root-caused and fixed in its own PR (#1384–#1388). The goalpost at that point was verification, not code — confirm every fix actually landed on <code>origin/main</code> and the fixes hold under the real test suite, rather than trusting the tickets' own &quot;closed&quot; labels. That validation passed. But the RCA itself flagged an acknowledged gap: none of the five fixes had an end-to-end regression test proving the <em>whole</em> status pipeline — dispatch → child process → GitHub ground truth → <code>daemon_jobs</code> row → <code>synlynk jobs</code> output — agrees with reality across all four ways a dispatched job can actually end.</p>
+<h2>Strategic Shift in This PR</h2>
+<p>The instinct after closing an RCA is to move on. The call here was the opposite: file the missing regression test as its own tracked issue (#1414) <em>before</em> closing #1377, then close #1377 referencing it — so the gap the RCA itself admitted to wouldn't quietly disappear the moment the ticket closed. #1414 was then dispatched to Codex, consistent with this project's PM/implementer split.</p>
+<h2>What This PR Shipped</h2>
+<p><code>tests/test_agent_cli.py</code> gained a parametrized end-to-end test (<code>test_job_status_add_realghwrite_endtoend_regr</code>) exercising all four terminal states a <code>--requires-gh-write</code> dispatch can land in: <code>pr_open</code>, <code>killed_zombie</code>, <code>timed_out</code>, <code>review_posted</code>. Rather than mocking <code>gh</code> at the Python level, the test fakes it at the process boundary — a JSON state file plus a fake executable <code>gh</code> script that reads/writes that state based on argv, and a fake harness binary that shells out to it with scenario-specific fixed arguments. <code>dispatch_mod.HARNESS_CAPABILITY_BASELINES[&quot;codex&quot;]</code> gets monkeypatched to point at the fake harness, <code>dispatch_agent(...)</code> is called for real, and the test reaps the actual spawned child process to assert its exit code and the resulting status convergence against fake-GitHub ground truth.</p>
+<p>This design choice — testing against the process boundary instead of a Python-level mock — was also exactly what surfaced this PR's own CI failures. The first dispatch (<code>job-be18ebe7</code>) shipped a working test that called <code>os.waitstatus_to_exitcode(wait_status)</code> to check the reaped child's exit code — a function that doesn't exist before Python 3.9. CI's <code>test (3.8)</code> matrix leg failed deterministically with <code>AttributeError</code>; <code>test (3.10)</code> failed too, but with no captured traceback (<code>gh run view --log-failed</code> came back empty), because GitHub Actions had cancelled the job mid-run rather than a real assertion failing. Reproducing the same four scenarios locally on both the default interpreter (3.14) and a genuine pyenv-managed 3.10.20 passed cleanly, twice — evidence pointing at CI-timing flakiness in the blocking <code>os.waitpid(pid, 0)</code> call rather than a logic bug, though not conclusive proof.</p>
+<p>A second dispatch (<code>job-ea80bad9</code>), stacked on the same branch via <code>--base</code> rather than opened as a new PR, fixed both: the 3.8 incompatibility was replaced with a 3.8-safe <code>os.WIFEXITED</code>/<code>os.WEXITSTATUS</code>/<code>os.WIFSIGNALED</code> decode of the raw <code>waitpid</code> status tuple, and the single blocking wait was replaced with a bounded <code>os.WNOHANG</code> poll loop so CI timing variance can't produce a false failure. <code>gh pr checks 1415</code> went green across <code>test (3.8)</code>, <code>test (3.10)</code>, <code>test (3.12)</code>, and <code>qa-gate</code> after the second dispatch.</p>
+<p>Review and merge landed cleanly through the project's <code>qa</code>-role GitHub App identity — genuinely distinct from the <code>dev</code>-role identity that authored the dispatch work, so for the first time in this whole PR sequence, no <code>--admin</code> merge fallback was needed for the identity-sharing caveat (#423).</p>
+<h2>What This Surfaced, Unplanned</h2>
+<p>While verifying <code>job-be18ebe7</code>'s outcome independently rather than trusting its self-reported status (standing project discipline), a live example of exactly the bug class under test showed up: the job's own status was internally inconsistent — <code>OK (exit 0)</code> in one output block, <code>permission_denied</code> in the jobs table, and <code>permission_denied</code> persisted directly in the <code>daemon_jobs.status</code> column — despite <code>gh_write_verified=1</code> and a real, correctly-scoped PR having opened. This is a sixth false-negative fingerprint, structurally similar to but not yet root-caused as the same bug as #1379–#1383, so it's tracked fresh as #1429 rather than folded back into the closed #1377 RCA.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>None — this was a diagnosis-and-fix cycle, not a design decision.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>The status pipeline this project depends on for trusting dispatched work now has an end-to-end regression test covering all four terminal paths, closing the one gap the #1377 RCA itself flagged as open. It also produced fresh, concrete evidence (#1429) that the underlying bug class isn't fully closed — which is the point of writing the test in the first place: it's already doing its job of catching what manual verification alone would eventually have missed.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>The next goalpost is #1429 itself: root-cause the specific <code>daemon_jobs.status</code> code path that can persist <code>permission_denied</code> on a job with <code>gh_write_verified=1</code> and a real merged PR — a narrower, now well-evidenced target rather than the broad &quot;job status is sometimes wrong&quot; framing #1377 started from.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

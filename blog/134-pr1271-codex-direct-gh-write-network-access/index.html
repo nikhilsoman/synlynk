@@ -11,13 +11,18 @@
   <link rel="stylesheet" href="/assets/css/main.css">
 </head>
 <body>
-  <!-- Fixed nav -->
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
   <nav>
     <a href="/" class="nav-logo">
       <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
       <span class="nav-brand">synlynk</span>
     </a>
-    <div class="nav-links">
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
       <a href="/docs/">Docs</a>
       <a href="/features/">Features</a>
       <a href="/blog/">Blog</a>

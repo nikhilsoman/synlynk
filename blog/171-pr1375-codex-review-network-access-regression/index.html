@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #1375 — The Fix That Broke the Fix It Was Fixing | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-3">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Sep 04, 2026</span>
+        
+          <span class="blog-post-pr">PR #1375</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #1375 — The Fix That Broke the Fix It Was Fixing</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>PR #1271 and PR #1275 (posts <a href="./134-pr1271-codex-direct-gh-write-network-access.md">134</a> and <a href="./135-pr1275-codex-full-harness-parity.md">135</a>) had closed the book on Codex's GitHub-write network access: a live sandbox probe proved the block was a configurable Codex CLI option, not a structural sandbox limitation, and <code>-c sandbox_workspace_write.network_access=true</code> gave Codex full harness parity with Claude, Grok, and Agy on review and gh-write tasks. That finding shipped as a high-confidence, tested fix. The goalpost at the end of #1275 was: Codex can now do everything the other three harnesses can do for GitHub writes — case closed.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>It wasn't closed. Three days later, a routine review dispatch on PR #1374 (the book-manuscript integration branch) sent Codex to post a <code>gh pr review</code>, and it failed twice with <code>error connecting to api.github.com</code> — the exact symptom #1271/#1275 had supposedly eliminated. The instinct was to treat this as a flaky-environment retry. Instead, per the repo's own systematic-debugging discipline, the dispatched RCA task refused that shortcut and root-caused it properly, per the standing Harness Capability Reassessment Protocol's rule that a regression discovered during a live-issue investigation is an ad hoc trigger for reassessment, not something to patch blind.</p>
+<p>The actual cause turned out to be a second, unrelated PR: #1331 (post <a href="./157-pr1328-review-dispatch-readonly-scope.md">157</a>), merged 2026-09-02 to fix issue #937 — a review-dispatch job that had written files outside its intended read-only scope. To close that hole, #1331 forced Codex review dispatches into <code>-s read-only</code> and, in the process, invented a config key that doesn't exist in the real Codex CLI: <code>sandbox_workspace_read_only.network_access=true</code>. Codex's <code>v0.150.1</code> binary has no <code>sandbox_workspace_read_only</code> struct at all — it silently ignores the override — and its <code>-s read-only</code> Seatbelt profile unconditionally blocks all outbound network at both the DNS layer (the <code>mDNSResponder</code> socket denial) and the TCP layer (port 443 denial), regardless of any <code>-c</code> flag passed alongside it. #1271's fix and #1331's fix were both individually correct for the problem each was solving, and together they silently canceled each other out for exactly one case: Codex review dispatches that also need <code>--requires-gh-write</code>.</p>
+<p>The existing regression test added by #1331 (<code>test_review_codex_gh_write_keeps_repository_read_only</code>) had asserted only that the string <code>sandbox_workspace_read_only.network_access=true</code> appeared in the emitted command — via a mocked <code>subprocess.Popen</code>. It never asked whether Codex actually understood that string. It passed while shipping a config key that meant nothing to the tool it was configuring.</p>
+<h2>What This PR Shipped</h2>
+<p>The RCA (dispatched to Agy under <code>--task-type review --gh-write-target-kind issue</code>, posted to issue #1274) did the diagnostic work first: it inspected Codex's binary schema, ran <code>codex sandbox --log-denials</code> probes confirming the exact DNS/TCP denial mechanics, and traced the regression to <code>synlynk/dispatch.py</code>'s three call sites (<code>_permissions_to_flags()</code>, <code>dispatch_agent()</code>'s <code>read_only</code> resolution, and the flag-emission block) via <code>git blame</code> on commit <code>8995ae1f581b</code>.</p>
+<p>The fix, dispatched separately to Codex under <code>--task-type cli-plumbing</code>, replaces the broken combination with one Codex actually supports: <code>-s workspace-write</code> plus <code>sandbox_workspace_write.network_access=true</code> plus <code>sandbox_workspace_write.writable_roots=[]</code> — network egress allowed, external directory writes denied by an empty writable-roots list. Critically, <code>#937</code>'s original no-write guarantee for review dispatches doesn't depend on this Seatbelt configuration at all: <code>_resolve_dispatch_permissions()</code> already strips every <code>write:*</code> grant whenever <code>task_type == &quot;review&quot;</code>, at the synlynk permission layer, independent of whatever sandbox flag Codex is handed.</p>
+<p>The non-authoring reviewer dispatched to check this PR (Agy, since Codex can't review its own PR under the identity-sharing caveat from #423, and Codex-authored review dispatches would in any case still hit the very bug being fixed while it remained unmerged) surfaced one more layer worth recording: <code>writable_roots=[]</code> does <strong>not</strong> seal the workspace's own current directory at the OS Seatbelt level — Codex's <code>workspace-write</code> profile always treats the CWD as a default writable root, and <code>writable_roots</code> only controls <em>additional</em> directories outside it. The reviewer live-probed this directly: <code>touch &lt;workspace&gt;/test_probe_write.txt</code> under <code>writable_roots=[]</code> succeeded (exit 0); <code>touch /Users/nikhilsoman/dev/rxcc/test_probe.txt</code> from the same sandbox failed with <code>Operation not permitted</code>. So the real write-isolation guarantee for review dispatches was never the Seatbelt sandbox — it's synlynk's own permission-stripping code, and the sandbox config is only there to gate <em>network</em>, not writes. The PR's own description slightly overstated this (&quot;writes still structurally blocked via empty writable_roots&quot;); the review corrected the record without treating it as a blocker, since the actual guarantee (permission-layer grant stripping) was independently confirmed intact.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>None — this was a pure regression-diagnosis-and-fix chain, no design-phase visuals involved.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>This is the second time in this book's own Part Three material (see the harness-capability-baseline chapters and the LIVE-8/#1166 gh-write stall saga) that a fix in one place silently regressed a fix in another, and the second time the catch came from independently verifying a dispatched job's claimed outcome rather than trusting its self-reported status — except this time the pattern ran in <em>both</em> directions in the same session: the merge dispatch for PR #1374 self-reported <code>timed_out</code> (exit -9) after the merge had actually already landed, and the review dispatch for PR #1375 self-reported <code>succeeded_gh_write_failed</code> after the review had actually already posted. Neither job's own status label matched ground truth on GitHub. Every verification in this chain — the original regression, the RCA, the fix, and the fix's review — went through direct <code>gh</code> calls rather than <code>synlynk jobs</code> output, and every one of those checks caught something the job status alone would have missed or misreported. That gap (dispatched-job status reliability, not harness capability per se) is now the more interesting open question than anything about Codex's sandbox.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>Codex has real harness parity on review-and-gh-write tasks again, this time with the actual write-isolation mechanism documented correctly (permission-layer grant stripping, not Seatbelt sandboxing) rather than assumed. The next goalpost is narrower than &quot;does Codex have network access&quot; — it's &quot;can <code>synlynk jobs</code> status be trusted at all for gh-write-target dispatches,&quot; which this PR's own merge and review both quietly demonstrated it currently cannot.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

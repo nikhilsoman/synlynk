@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>pr check from a job branch that is not the PR | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-1">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Sep 06, 2026</span>
+        
+          <span class="blog-post-pr">PR TBD</span>
+        
+      </div>
+      <h1 class="blog-post-title">pr check from a job branch that is not the PR</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>#1449 let review sandboxes run <code>synlynk pr check</code> without writing shared <code>todo.md</code>. The remaining hole was that the same command still failed closed on every dispatched reviewer: the job worktree is on <code>dispatch/&lt;harness&gt;/job-&lt;id&gt;</code>, not the PR branch, so <code>gh pr view</code> and <code>gh pr checks &lt;branch&gt;</code> cannot see CI.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>None. #1432 already named the fix: do not depend on branch identity.</p>
+<h2>What This PR Shipped</h2>
+<p><code>_current_pr_number</code> still tries <code>gh pr view</code>, then looks up HEAD via <code>GET /repos/.../commits/{sha}/pulls</code>. <code>synlynk pr check --pr N</code> skips lookup. <code>_extract_verified_by_ci</code> / the QA gate use <code>gh pr checks &lt;number&gt;</code> when a PR number is known, so a <code>dispatch/codex/job-*</code> checkout of the same SHA sees the same CI as the PR branch.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>None.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>Dispatched QA can run <code>synlynk pr check</code> from the job worktree and get a real CI verdict instead of &quot;undeterminable — failing closed.&quot;</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>#1432 closed. Identity (#1436) is the remaining review-dispatch item: QA <code>actions:read</code> cannot rerun flaky CI, and merge jobs still classify as <code>review_posted</code> on the board.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

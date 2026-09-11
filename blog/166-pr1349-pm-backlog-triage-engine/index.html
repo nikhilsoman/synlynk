@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #1349 — PM Autonomous Backlog Triaging &amp; Story Formation Engine | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-2">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Sep 02, 2026</span>
+        
+          <span class="blog-post-pr">PR #1349</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #1349 — PM Autonomous Backlog Triaging &amp; Story Formation Engine</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>Following the cross-harness inter-agent event relay (PR #1348), autonomous growth engine (PR #1347), and model registry (PR #1339), synlynk had mature mechanisms for real-time messaging, public release narratives, and execution capabilities. However, backlog management and story synthesis remained manual: incoming GitHub issues and dynamic task discoveries were either manually converted into stories or left untracked.</p>
+<h2>Strategic Shifts in This PR (if any)</h2>
+<p>This PR activates the PM agent's durable loop to autonomously ingest GitHub issues, apply semantic and SHA-256 deduplication, synthesize testable acceptance criteria, assign GOVERNS roles and complexity tiers, and auto-promote ready stories directly into <code>state.db</code> and the TPM execution sweep:</p>
+<ol>
+<li>Multi-Layer Deduplication across <code>backlog_items</code>, <code>stories</code>, and merged PR/commit history.</li>
+<li>Structured Story Synthesizer generating role assignments (<code>dev</code>, <code>qa</code>, <code>architect</code>, <code>pm</code>, <code>marketing</code>, <code>tpm</code>), complexity tiers (Tier 1/2/3), testable acceptance criteria, and goal mappings.</li>
+<li>Dedicated CLI subcommands: <code>synlynk backlog ingest</code>, <code>synlynk backlog triage</code>, <code>synlynk backlog auto-promote</code>.</li>
+<li>Seamless integration with <code>synlynk tpm sweep</code> to autonomously promote and sweep ready work.</li>
+</ol>
+<h2>What This PR Shipped</h2>
+<ol>
+<li><strong>Backlog Database Schema &amp; Migration (<code>synlynk/db.py</code>):</strong>
+<ul>
+<li>Added <code>backlog_items</code> SQLite table with columns for <code>item_id</code>, <code>title</code>, <code>body</code>, <code>issue_number</code>, <code>gh_issue</code>, <code>author</code>, <code>labels</code>, <code>fingerprint</code>, <code>role</code>, <code>stage</code>, <code>governs_stage</code>, <code>complexity_tier</code>, <code>goal_id</code>, <code>acceptance_criteria</code>, <code>status</code>, and timestamps.</li>
+<li>Bumped DB migration version to 8 with automated index creation.</li>
+</ul>
+</li>
+<li><strong>Issue Fetching &amp; Deduplication Classifier (<code>synlynk/backlog.py</code>):</strong>
+<ul>
+<li>Implemented <code>fetch_open_github_issues()</code> to query open issues with structured metadata.</li>
+<li>Built <code>is_duplicate_issue()</code> checking fingerprints, issue numbers, normalized title similarity, and closed PRs / git commits.</li>
+</ul>
+</li>
+<li><strong>Semantic Goal Alignment &amp; Story Synthesizer:</strong>
+<ul>
+<li>Implemented <code>synthesize_story_from_issue()</code> to classify role charters, GOVERNS stages, complexity tiers (1 to 3), extract/synthesize testable acceptance criteria, and associate with active roadmap goals (<code>goal-005ea87d</code>, <code>goal-adb60ccc</code>, <code>goal-ef42902a</code>, <code>goal-6733bbf1</code>, <code>goal-0c4e96ff</code>).</li>
+</ul>
+</li>
+<li><strong>PM Autonomous Triage CLI &amp; Sweep Integration:</strong>
+<ul>
+<li>Exposed <code>synlynk backlog ingest [--sync-github]</code>, <code>synlynk backlog triage [--auto-promote]</code>, and <code>synlynk backlog auto-promote [--min-tier N]</code>.</li>
+<li>Registered backlog subcommands in <code>COMMAND_TAXONOMY</code> in <code>synlynk/taxonomy.py</code>.</li>
+<li>Wired <code>auto_promote_backlog()</code> into <code>run_sweep_pass()</code> in <code>synlynk/tpm_sweep.py</code>.</li>
+</ul>
+</li>
+<li><strong>Comprehensive Test Suite:</strong>
+<ul>
+<li>Added unit tests in <code>tests/test_backlog.py</code> covering ingestion, deduplication, synthesis, triage, promotion, and CLI integration.</li>
+<li>Added verification test <code>test_feat_pm_autonomous_backlog_triaging__story_c70350f9</code> in <code>tests/test_agent_cli.py</code>.</li>
+</ul>
+</li>
+</ol>
+<h2>Brainstorm Visuals Used</h2>
+<ul>
+<li><code>docs/superpowers/specs/2026-08-31-governs-backlog-automation-design.md</code> (GOVERNS Backlog Architecture &amp; Signal vs. Noise Filter)</li>
+<li><code>docs/superpowers/plans/2026-09-02-pm-backlog-triaging-and-story-formation.md</code> (PM Triage &amp; Story Formation Plan)</li>
+</ul>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>The PM agent can now operate a completely autonomous backlog triaging loop: open issues and newly discovered tasks are ingested, deduplicated, enriched with testable criteria and goal linkages, and promoted to ready status without requiring human intervention.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>Next up is closing the loop on living charter evolution (Issue #1342) and ephemeral swarm runners (Issue #1341), connecting autonomous backlog triaging directly to distributed execution fleets.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

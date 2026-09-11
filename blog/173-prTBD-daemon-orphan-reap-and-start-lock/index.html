@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #1417 — Daemon Orphan Reap and Start Lock (#349) | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-1">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Sep 04, 2026</span>
+        
+          <span class="blog-post-pr">PR #1417</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #1417 — Daemon Orphan Reap and Start Lock (#349)</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>Recent work hardened onboarding, heal/TPM autonomy, and ephemeral swarm execution. The broader goal remained containerized and OS-level agent sandboxing: credential masking and containment across every dispatch. That arc assumes the daemon is a trustworthy supervisor — if it dies, the workspace must still know which billed agent processes are alive and must not accidentally run two supervisors at once.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>No strategic shift. This is a correctness fix for two daemon-lifecycle gaps filed as gh:#349: orphaned children that survive a daemon crash with nobody left to reap them, and a classic check-then-act race on <code>daemon start</code> / <code>watch start</code> that can double-dispatch the same queued job.</p>
+<h2>What This PR Shipped</h2>
+<p><strong>Gap 1 — orphaned child after daemon death.</strong> Daemon-launched jobs use <code>subprocess.Popen(..., start_new_session=True)</code>, so the agent process is not in the daemon's process group. Reconciliation (<code>_reconcile_daemon_jobs()</code>) previously ran only inside the daemon poll loop. If the daemon itself died, running rows stayed <code>status='running'</code> forever and the live billed process disappeared from <code>synlynk status</code> / <code>daemon status</code>.</p>
+<p>Fix: <code>_synlynk_daemon_child_main()</code> now calls <code>SynlynkDaemon._reconcile_orphans_on_startup()</code> before entering <code>_run_loop()</code>. That path calls the shared <code>_reconcile_daemon_jobs()</code> logic (not a parallel judgment): still-alive PIDs stay <code>running</code> (adopted/monitored); dead PIDs settle through the existing GTV path (<code>timed_out</code> / <code>failed_unverified</code> / etc.). Parallel work on gh:#136 that extends the same reconciler therefore stays compatible.</p>
+<p><strong>Gap 2 — concurrent start TOCTOU.</strong> <code>WatchDaemon.start()</code> / <code>SynlynkDaemon.start()</code> checked <code>_is_running()</code> then later re-exec'd and wrote the pidfile. Two near-simultaneous starts could both pass the check.</p>
+<p>Fix: exclusive <code>fcntl.flock(LOCK_EX | LOCK_NB)</code> on a sibling lockfile (<code>&lt;pidfile&gt;.lock</code>, still resolved via <code>_daemon_state_path()</code> / <code>_repo_common_dir()</code>). The parent holds the lock across spawn until the child publishes a live pidfile (or a short timeout); the child then holds the lock for its lifetime. If the lock cannot be acquired, the existing &quot;already running&quot; message is printed — same UX, race closed.</p>
+<p>Tests cover: alive orphan adopted on child startup; dead orphan reaped to <code>timed_out</code>; concurrent <code>start()</code> threads produce a single spawn; direct lock-helper exclusivity.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>None.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>A crashed or OOM-killed daemon no longer leaves billed agent processes invisible until a human finds them in <code>ps</code>, and laptop wake / launchd <code>RunAtLoad</code> races can no longer start two job-dispatch loops against the same queue. That is table-stakes supervisor honesty for any sandboxing story that depends on the daemon as the containment boundary.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>Same active goal — containerized and OS-level agent execution sandboxing — with one fewer way for the supervisor itself to lie about what is running. Keep gh:#136 (git-state cross-check in the same reconciler) and gh:#355 (HTTP handler) merges narrowly scoped so they do not fight this change.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

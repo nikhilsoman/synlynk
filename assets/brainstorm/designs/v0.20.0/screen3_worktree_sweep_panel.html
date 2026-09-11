@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Synlynk — Visual Workspace Cockpit</title>
+<!-- Material Symbols Outlined -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Google Fonts: Inter & JetBrains Mono -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;500;600;700&amp;family=Public+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS CDN -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Theme Configuration -->
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "surface-container-high": "#2a292f",
+            "on-primary-fixed": "#07006c",
+            "on-primary-fixed-variant": "#2f2ebe",
+            "primary-fixed": "#e1e0ff",
+            "on-primary-container": "#0d0096",
+            "surface-container-lowest": "#0e0e13",
+            "primary": "#c0c1ff",
+            "tertiary-fixed-dim": "#ffb95f",
+            "secondary-container": "#00a572",
+            "surface-tint": "#c0c1ff",
+            "on-surface-variant": "#c7c4d7",
+            "secondary": "#4edea3",
+            "primary-container": "#8083ff",
+            "on-tertiary": "#472a00",
+            "on-secondary-fixed-variant": "#005236",
+            "surface-container": "#1f1f24",
+            "inverse-on-surface": "#303035",
+            "outline": "#908fa0",
+            "background": "#131318",
+            "surface-variant": "#35343a",
+            "outline-variant": "#464554",
+            "surface-container-highest": "#35343a",
+            "on-secondary-container": "#00311f",
+            "on-background": "#e4e1e9",
+            "error-container": "#93000a",
+            "secondary-fixed": "#6ffbbe",
+            "on-secondary-fixed": "#002113",
+            "surface-container-low": "#1b1b20",
+            "on-primary": "#1000a9",
+            "on-tertiary-container": "#3e2400",
+            "tertiary-fixed": "#ffddb8",
+            "surface": "#131318",
+            "on-tertiary-fixed": "#2a1700",
+            "inverse-primary": "#494bd6",
+            "tertiary": "#ffb95f",
+            "on-surface": "#e4e1e9",
+            "tertiary-container": "#ca8100",
+            "primary-fixed-dim": "#c0c1ff",
+            "on-error": "#690005",
+            "inverse-surface": "#e4e1e9",
+            "surface-bright": "#39383e",
+            "secondary-fixed-dim": "#4edea3",
+            "on-error-container": "#ffdad6",
+            "on-tertiary-fixed-variant": "#653e00",
+            "surface-dim": "#131318",
+            "on-secondary": "#003824",
+            "error": "#ffb4ab"
+          },
+          borderRadius: {
+            DEFAULT: "0.125rem",
+            lg: "0.25rem",
+            xl: "0.5rem",
+            full: "0.75rem"
+          },
+          fontFamily: {
+            headline: ["Inter", "sans-serif"],
+            display: ["Inter", "sans-serif"],
+            body: ["Inter", "sans-serif"],
+            label: ["Public Sans", "sans-serif"],
+            mono: ["JetBrains Mono", "monospace"]
+          }
+        }
+      }
+    }
+  </script>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+      font-size: 1.125rem;
+      line-height: 1;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      vertical-align: middle;
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 5px;
+      height: 5px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: #0e0e13;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #35343a;
+      border-radius: 2px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+      background: #464554;
+    }
+  </style>
+</head>
+<body class="bg-background text-on-surface font-body antialiased min-h-screen flex flex-col selection:bg-primary selection:text-on-primary">
+<!-- ================= TOP NAV BAR (Shared Component Anchor) ================= -->
+<header class="flex justify-between items-center w-full px-4 h-14 bg-surface-container-lowest border-b border-outline-variant/20 z-40 fixed top-0 left-0 right-0">
+<!-- Left branding & Navigation links -->
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-2.5">
+<div class="w-8 h-8 rounded bg-primary/10 border border-primary/30 flex items-center justify-center text-primary shadow-inner">
+<span class="material-symbols-outlined text-primary text-lg" data-icon="hub">hub</span>
+</div>
+<span class="font-display font-bold text-base tracking-tight text-on-surface">Synlynk</span>
+</div>
+<!-- Workspace Context Indicator -->
+<div class="hidden sm:flex items-center gap-2 px-2.5 py-1 rounded bg-surface-container border border-outline-variant/30 text-xs font-mono">
+<span class="material-symbols-outlined text-primary text-sm" data-icon="account_tree">account_tree</span>
+<span class="text-on-surface font-medium">synlynk</span>
+<span class="text-outline text-[11px]">(main)</span>
+<span class="text-outline-variant">/</span>
+<span class="text-secondary text-[11px] flex items-center gap-1 font-sans">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary inline-block animate-pulse"></span>
+          Fleet Health
+        </span>
+</div>
+<!-- Desktop Navigation Links from JSON -->
+<nav class="hidden lg:flex items-center gap-6 text-sm font-display font-medium ml-2">
+<a class="text-on-surface-variant hover:text-on-surface transition-colors duration-150" href="#product-view">Product View</a>
+<a class="text-on-surface-variant hover:text-on-surface transition-colors duration-150" href="#logical-view">Logical View</a>
+<a class="text-primary font-semibold border-b-2 border-primary pb-1" href="#infra-view">Infra View</a>
+</nav>
+</div>
+<!-- Right Controls: Telemetry, Action, and Icon Cluster -->
+<div class="flex items-center gap-3">
+<!-- Live Daemon Status Pill -->
+<div class="hidden md:flex items-center gap-2 px-2.5 py-1 rounded bg-surface-container-high/60 border border-outline-variant/25 text-xs">
+<span class="relative flex h-2 w-2">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-secondary opacity-75"></span>
+<span class="relative inline-flex rounded-full h-2 w-2 bg-secondary"></span>
+</span>
+<span class="font-mono text-on-surface-variant text-[11px]">Live (pid 41829)</span>
+</div>
+<!-- Attested Vault Badge -->
+<div class="hidden xl:flex items-center gap-1.5 px-2 py-0.5 rounded bg-surface-container border border-outline-variant/20 text-[11px] font-mono text-on-surface-variant">
+<span class="material-symbols-outlined text-secondary text-sm" data-icon="verified">verified</span>
+<span>VAULT: <strong class="text-secondary font-medium">ACTIVE</strong></span>
+</div>
+<!-- Primary Action: Trigger Re-sync -->
+<button class="flex items-center gap-1.5 px-3 py-1.5 rounded bg-surface-container-high hover:bg-surface-variant text-primary border border-primary/20 text-xs font-display font-medium transition-all duration-150 active:scale-98">
+<span class="material-symbols-outlined text-xs" data-icon="sync">sync</span>
+<span>Trigger Re-sync</span>
+</button>
+<!-- Trailing Action Icons -->
+<div class="flex items-center gap-1 border-l border-outline-variant/20 pl-2">
+<button class="p-1.5 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high rounded transition-colors duration-150" title="Hub Matrix">
+<span class="material-symbols-outlined" data-icon="hub">hub</span>
+</button>
+<button class="p-1.5 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high rounded transition-colors duration-150" title="Terminal Output">
+<span class="material-symbols-outlined" data-icon="terminal">terminal</span>
+</button>
+<button class="p-1.5 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high rounded transition-colors duration-150" title="Settings">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+</button>
+</div>
+<!-- Operator Avatar -->
+<div class="flex items-center gap-2 pl-2">
+<div class="w-7 h-7 rounded bg-surface-container-highest border border-outline-variant/40 flex items-center justify-center font-mono text-xs font-bold text-primary" title="Operator Avatar">
+          AG
+        </div>
+</div>
+</div>
+</header>
+<!-- ================= LAYOUT WRAPPER ================= -->
+<div class="flex pt-14 min-h-screen bg-background">
+<!-- ================= SIDE NAV BAR (Shared Component Anchor) ================= -->
+<aside class="fixed left-0 top-14 h-[calc(100vh-3.5rem)] w-64 bg-surface-dim border-r border-outline-variant/15 flex flex-col justify-between py-3 z-30 font-body text-xs leading-relaxed">
+<!-- Upper Section: Workspace Header & Primary Navigation -->
+<div class="flex flex-col gap-3 px-3">
+<!-- Header Info -->
+<div class="px-2 py-2 rounded bg-surface-container-lowest/60 border border-outline-variant/20 mb-1">
+<div class="flex items-center gap-2">
+<div class="w-6 h-6 rounded bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-sm" data-icon="hub">hub</span>
+</div>
+<div class="flex flex-col min-w-0">
+<div class="font-display font-bold text-sm text-on-surface truncate">synlynk (main)</div>
+<div class="text-[10px] text-outline font-mono truncate">Home Conductor: agy</div>
+</div>
+</div>
+</div>
+<!-- Section Label -->
+<div class="text-[10px] font-mono uppercase tracking-wider text-outline px-2">Workspaces &amp; Ops</div>
+<!-- Navigation Tabs from JSON -->
+<nav class="flex flex-col gap-0.5">
+<!-- Developer Workflow -->
+<a class="flex items-center gap-2.5 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors duration-150 px-3 py-2 rounded" href="#">
+<span class="material-symbols-outlined text-base" data-icon="account_tree">account_tree</span>
+<span class="font-medium">Developer Workflow</span>
+</a>
+<!-- Autonomous Ticket Loop -->
+<a class="flex items-center gap-2.5 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors duration-150 px-3 py-2 rounded" href="#">
+<span class="material-symbols-outlined text-base" data-icon="smart_toy">smart_toy</span>
+<span class="font-medium">Autonomous Ticket Loop</span>
+</a>
+<!-- Named Release Ceremony -->
+<a class="flex items-center gap-2.5 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors duration-150 px-3 py-2 rounded" href="#">
+<span class="material-symbols-outlined text-base" data-icon="verified">verified</span>
+<span class="font-medium">Named Release Ceremony</span>
+</a>
+<!-- Sentinel Recovery -->
+<a class="flex items-center gap-2.5 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors duration-150 px-3 py-2 rounded" href="#">
+<span class="material-symbols-outlined text-base" data-icon="healing">healing</span>
+<span class="font-medium">Sentinel Recovery</span>
+</a>
+</nav>
+<!-- Contextual CTA: Sweep Worktrees (Matching active destination) -->
+<div class="pt-2">
+<div class="text-[10px] font-mono uppercase tracking-wider text-outline px-2 mb-1.5">Fleet Lifecycle</div>
+<a class="flex items-center justify-between bg-surface-container text-primary font-medium border-l-2 border-primary px-3 py-2 rounded-r transition-colors duration-150" href="#">
+<div class="flex items-center gap-2.5">
+<span class="material-symbols-outlined text-base text-primary" data-icon="cleaning_services">cleaning_services</span>
+<span>Sweep Worktrees</span>
+</div>
+<span class="px-1.5 py-0.2 rounded bg-primary/20 text-primary font-mono text-[10px]">7</span>
+</a>
+</div>
+</div>
+<!-- Footer Section: System & Reference -->
+<div class="flex flex-col gap-2 px-3 border-t border-outline-variant/15 pt-3">
+<a class="flex items-center gap-2.5 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low px-3 py-1.5 rounded transition-colors duration-150" href="#">
+<span class="material-symbols-outlined text-base" data-icon="menu_book">menu_book</span>
+<span>Documentation</span>
+</a>
+<a class="flex items-center gap-2.5 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low px-3 py-1.5 rounded transition-colors duration-150" href="#">
+<span class="material-symbols-outlined text-base" data-icon="code">code</span>
+<span>Terminal Logs</span>
+</a>
+<!-- System Engine Footer Tag -->
+<div class="px-3 py-2 mt-1 rounded bg-surface-container-lowest border border-outline-variant/15 flex items-center justify-between text-[11px] font-mono text-outline">
+<span>Engine v0.20.0</span>
+<span class="text-secondary flex items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+            Synced
+          </span>
+</div>
+</div>
+</aside>
+<!-- ================= MAIN CONTENT CANVAS ================= -->
+<main class="ml-64 flex-1 p-6 flex flex-col gap-6 custom-scrollbar overflow-y-auto max-w-[1600px]">
+<!-- Breadcrumb & Cockpit Title Header -->
+<div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 border-b border-outline-variant/15">
+<div>
+<div class="flex items-center gap-2 text-xs font-mono text-outline mb-1">
+<a class="hover:text-on-surface transition-colors" href="#">Fleet Health</a>
+<span>/</span>
+<span class="text-primary font-medium">Worktree Lifecycle &amp; Sweep Engine</span>
+</div>
+<h1 class="font-display font-extrabold text-2xl tracking-tight text-on-surface flex items-center gap-3">
+            Interactive Worktree Sweep
+            <span class="text-xs font-mono font-normal px-2.5 py-0.5 rounded bg-surface-container-high border border-outline-variant/30 text-on-surface-variant">
+              Git FS Multi-Agent Controller
+            </span>
+</h1>
+</div>
+<!-- Telemetry Sync / Refresh Control -->
+<div class="flex items-center gap-3 self-start md:self-auto">
+<div class="flex items-center gap-2 text-xs font-mono text-outline bg-surface-container-low px-3 py-1.5 rounded border border-outline-variant/20">
+<span class="material-symbols-outlined text-sm text-outline" data-icon="schedule">schedule</span>
+<span>Last Scan: 14s ago</span>
+</div>
+<button class="flex items-center gap-1.5 px-3 py-1.5 rounded bg-surface-container-high hover:bg-surface-variant border border-outline-variant/30 text-xs font-mono text-on-surface transition-all active:scale-98">
+<span class="material-symbols-outlined text-sm" data-icon="refresh">refresh</span>
+<span>Re-scan Fleet (⌘S)</span>
+</button>
+</div>
+</div>
+<!-- ================= 4 HIGH-CONTRAST TELEMETRY STAT CARDS ================= -->
+<section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+<!-- Stat 1: Active Working (Indigo) -->
+<div class="p-4 rounded-xl bg-surface-container border border-outline-variant/20 relative overflow-hidden flex flex-col justify-between group hover:border-primary/50 transition-all duration-200">
+<div class="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-primary-container to-primary"></div>
+<div class="flex items-start justify-between">
+<div class="flex flex-col">
+<span class="text-xs font-mono uppercase tracking-wider text-outline">Active Working</span>
+<span class="text-2xl font-display font-bold text-on-surface mt-1">2 worktrees</span>
+</div>
+<div class="w-9 h-9 rounded bg-primary/10 border border-primary/30 flex items-center justify-center text-primary">
+<span class="relative flex h-2.5 w-2.5">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+<span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-primary"></span>
+</span>
+</div>
+</div>
+<div class="mt-4 pt-3 border-t border-outline-variant/15 flex items-center justify-between text-xs font-mono">
+<span class="text-on-surface-variant flex items-center gap-1.5">
+<span class="material-symbols-outlined text-sm text-primary" data-icon="smart_toy">smart_toy</span>
+              @agy, @codex
+            </span>
+<span class="text-outline">80 MB active</span>
+</div>
+</div>
+<!-- Stat 2: Safe to Prune (Emerald) -->
+<div class="p-4 rounded-xl bg-surface-container border border-outline-variant/20 relative overflow-hidden flex flex-col justify-between group hover:border-secondary/50 transition-all duration-200">
+<div class="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-secondary-container to-secondary"></div>
+<div class="flex items-start justify-between">
+<div class="flex flex-col">
+<span class="text-xs font-mono uppercase tracking-wider text-outline">Safe to Prune</span>
+<span class="text-2xl font-display font-bold text-secondary mt-1">3 worktrees</span>
+</div>
+<div class="w-9 h-9 rounded bg-secondary-container/20 border border-secondary/30 flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined text-lg" data-icon="verified">verified</span>
+</div>
+</div>
+<div class="mt-4 pt-3 border-t border-outline-variant/15 flex items-center justify-between text-xs font-mono">
+<span class="text-secondary flex items-center gap-1.5">
+<span class="material-symbols-outlined text-sm" data-icon="check_circle">check_circle</span>
+              All merged to main
+            </span>
+<span class="text-outline">Reclaimable: 89 MB</span>
+</div>
+</div>
+<!-- Stat 3: Needs Review (Amber) -->
+<div class="p-4 rounded-xl bg-surface-container border border-outline-variant/20 relative overflow-hidden flex flex-col justify-between group hover:border-tertiary/50 transition-all duration-200">
+<div class="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-tertiary-container to-tertiary"></div>
+<div class="flex items-start justify-between">
+<div class="flex flex-col">
+<span class="text-xs font-mono uppercase tracking-wider text-outline">Needs Review</span>
+<span class="text-2xl font-display font-bold text-tertiary mt-1">1 worktree</span>
+</div>
+<div class="w-9 h-9 rounded bg-tertiary-container/20 border border-tertiary/30 flex items-center justify-center text-tertiary">
+<span class="material-symbols-outlined text-lg" data-icon="warning">warning</span>
+</div>
+</div>
+<div class="mt-4 pt-3 border-t border-outline-variant/15 flex items-center justify-between text-xs font-mono">
+<span class="text-tertiary flex items-center gap-1.5">
+<span class="material-symbols-outlined text-sm" data-icon="north_east">north_east</span>
+              2 unpushed commits
+            </span>
+<span class="text-outline">diverged</span>
+</div>
+</div>
+<!-- Stat 4: Dirty / Orphan (Ruby) -->
+<div class="p-4 rounded-xl bg-surface-container border border-outline-variant/20 relative overflow-hidden flex flex-col justify-between group hover:border-error/50 transition-all duration-200">
+<div class="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-error-container to-error"></div>
+<div class="flex items-start justify-between">
+<div class="flex flex-col">
+<span class="text-xs font-mono uppercase tracking-wider text-outline">Dirty / Orphan</span>
+<span class="text-2xl font-display font-bold text-error mt-1">1 worktree</span>
+</div>
+<div class="w-9 h-9 rounded bg-error-container/20 border border-error/30 flex items-center justify-center text-error">
+<span class="material-symbols-outlined text-lg" data-icon="crisis_alert">crisis_alert</span>
+</div>
+</div>
+<div class="mt-4 pt-3 border-t border-outline-variant/15 flex items-center justify-between text-xs font-mono">
+<span class="text-error flex items-center gap-1.5">
+<span class="material-symbols-outlined text-sm" data-icon="delete_sweep">delete_sweep</span>
+              Zombie directory
+            </span>
+<span class="text-outline">128 MB reclaim</span>
+</div>
+</div>
+</section>
+<!-- ================= CONTROL & FILTER BAR ================= -->
+<section class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 p-3 rounded-xl bg-surface-container-low border border-outline-variant/20">
+<!-- Left: Filters & Search Input -->
+<div class="flex flex-wrap items-center gap-2">
+<div class="flex items-center bg-surface-container rounded p-0.5 border border-outline-variant/20 text-xs font-mono">
+<button class="px-3 py-1.5 rounded bg-primary/20 text-primary font-medium flex items-center gap-1.5">
+<span>All Worktrees</span>
+<span class="px-1.5 py-0.2 rounded-full bg-primary/30 text-[10px]">7</span>
+</button>
+<button class="px-3 py-1.5 rounded text-on-surface-variant hover:text-on-surface transition-colors flex items-center gap-1.5">
+<span>Safe</span>
+<span class="px-1.5 py-0.2 rounded-full bg-secondary-container/30 text-secondary text-[10px]">3</span>
+</button>
+<button class="px-3 py-1.5 rounded text-on-surface-variant hover:text-on-surface transition-colors flex items-center gap-1.5">
+<span>Needs Review</span>
+<span class="px-1.5 py-0.2 rounded-full bg-tertiary-container/30 text-tertiary text-[10px]">1</span>
+</button>
+<button class="px-3 py-1.5 rounded text-on-surface-variant hover:text-on-surface transition-colors flex items-center gap-1.5">
+<span>Dirty</span>
+<span class="px-1.5 py-0.2 rounded-full bg-error-container/30 text-error text-[10px]">1</span>
+</button>
+<button class="px-3 py-1.5 rounded text-on-surface-variant hover:text-on-surface transition-colors flex items-center gap-1.5">
+<span>Active</span>
+<span class="px-1.5 py-0.2 rounded-full bg-surface-container-high text-[10px]">2</span>
+</button>
+</div>
+<!-- Search Filter -->
+<div class="relative flex items-center min-w-[280px]">
+<span class="material-symbols-outlined absolute left-2.5 text-outline text-base" data-icon="search">search</span>
+<input class="w-full bg-surface-container pl-8 pr-3 py-1.5 rounded text-xs font-mono border border-outline-variant/25 text-on-surface placeholder:text-outline focus:outline-none focus:border-primary transition-colors" placeholder="Filter by branch, agent, or path... (⌘K)" type="text"/>
+</div>
+</div>
+<!-- Right: Primary 1-Click Sweep CTA -->
+<div class="flex items-center gap-3">
+<button class="flex items-center gap-2 px-4 py-2 rounded-lg bg-secondary text-on-secondary font-display font-semibold text-xs shadow-lg shadow-secondary/15 hover:bg-secondary-fixed transition-all active:scale-98">
+<span class="material-symbols-outlined text-base" data-icon="auto_fix_high">auto_fix_high</span>
+<span>Clean 3 Safe Worktrees</span>
+<span class="font-mono text-[11px] bg-on-secondary/15 px-1.5 py-0.5 rounded font-normal">(89 MB)</span>
+</button>
+</div>
+</section>
+<!-- ================= MAIN WORKTREE CARDS GRID ================= -->
+<section class="grid grid-cols-1 lg:grid-cols-2 gap-4 pb-12">
+<!-- CARD 1: [ACTIVE] feat+v0.20.0-cockpit -->
+<div class="p-5 rounded-xl bg-surface-container border border-outline-variant/20 hover:border-primary/40 transition-all flex flex-col justify-between gap-4 group">
+<div>
+<!-- Card Header: Status Tag & Path -->
+<div class="flex items-start justify-between gap-3 mb-2.5">
+<div class="flex items-center gap-2 flex-wrap">
+<span class="px-2 py-0.5 rounded bg-primary/15 border border-primary/30 text-primary font-mono text-[11px] font-semibold flex items-center gap-1.5">
+<span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
+                  ACTIVE
+                </span>
+<span class="font-mono text-xs text-on-surface font-semibold truncate max-w-[280px]">
+                  ../feat+v0.20.0-cockpit
+                </span>
+</div>
+<span class="font-mono text-xs text-outline bg-surface-container-high px-2 py-0.5 rounded">42 MB</span>
+</div>
+<!-- Branch & Commit Metas -->
+<div class="flex flex-wrap items-center gap-3 text-xs font-mono text-on-surface-variant mb-3">
+<div class="flex items-center gap-1 text-primary">
+<span class="material-symbols-outlined text-sm" data-icon="commit">commit</span>
+<span>feat/agy/v0.20.0-cockpit</span>
+</div>
+<span class="text-outline-variant">|</span>
+<span class="text-outline">rev: 7f2a1b9</span>
+<span class="text-outline-variant">|</span>
+<span class="px-1.5 py-0.5 rounded bg-surface-container-high border border-outline-variant/30 text-[10px] text-on-surface-variant">
+                story-304499f1
+              </span>
+</div>
+<!-- Agent & Daemon status banner -->
+<div class="p-2.5 rounded-lg bg-surface-container-lowest/80 border border-outline-variant/20 flex items-center justify-between text-xs font-mono">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-base" data-icon="psychology">psychology</span>
+<span class="text-on-surface font-medium">@agy (Home Conductor)</span>
+</div>
+<span class="text-secondary flex items-center gap-1 text-[11px]">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+                Healthy (PID 41829)
+              </span>
+</div>
+</div>
+<!-- Actions Footer -->
+<div class="flex items-center justify-between pt-3 border-t border-outline-variant/15 text-xs font-mono">
+<span class="text-[11px] text-outline">Modified 4 mins ago</span>
+<div class="flex items-center gap-2">
+<button class="px-2.5 py-1 rounded bg-surface-container-high hover:bg-surface-variant text-on-surface flex items-center gap-1.5 border border-outline-variant/20 transition-colors">
+<span class="material-symbols-outlined text-sm" data-icon="terminal">terminal</span>
+<span>Open Shell</span>
+</button>
+<button class="px-2.5 py-1 rounded bg-surface-container-high hover:bg-surface-variant text-primary flex items-center gap-1.5 border border-primary/25 transition-colors">
+<span class="material-symbols-outlined text-sm" data-icon="difference">difference</span>
+<span>View Diff</span>
+</button>
+</div>
+</div>
+</div>
+<!-- CARD 2: [SAFE] fix+1523-daemon-lock -->
+<div class="p-5 rounded-xl bg-surface-container border border-outline-variant/20 hover:border-secondary/40 transition-all flex flex-col justify-between gap-4 group">
+<div>
+<!-- Card Header: Status Tag & Path -->
+<div class="flex items-start justify-between gap-3 mb-2.5">
+<div class="flex items-center gap-2 flex-wrap">
+<span class="px-2 py-0.5 rounded bg-secondary/15 border border-secondary/30 text-secondary font-mono text-[11px] font-semibold flex items-center gap-1.5">
+<span class="material-symbols-outlined text-xs" data-icon="check">check</span>
+                  SAFE
+                </span>
+<span class="font-mono text-xs text-on-surface font-semibold truncate max-w-[280px]">
+                  ../fix+1523-daemon-lock
+                </span>
+</div>
+<span class="font-mono text-xs text-outline bg-surface-container-high px-2 py-0.5 rounded">38 MB</span>
+</div>
+<!-- Branch & PR Metas -->
+<div class="flex flex-wrap items-center gap-3 text-xs font-mono text-on-surface-variant mb-3">
+<div class="flex items-center gap-1 text-on-surface">
+<span class="material-symbols-outlined text-sm text-outline" data-icon="fork_right">fork_right</span>
+<span>fix/codex/daemon-lifecycle</span>
+</div>
+<span class="text-outline-variant">|</span>
+<span class="text-secondary font-medium">PR #1548 (MERGED)</span>
+</div>
+<!-- Status Banner -->
+<div class="p-2.5 rounded-lg bg-surface-container-lowest/80 border border-outline-variant/20 flex items-center justify-between text-xs font-mono">
+<div class="flex items-center gap-2 text-on-surface-variant">
+<span class="material-symbols-outlined text-outline text-base" data-icon="smart_toy">smart_toy</span>
+<span>@codex</span>
+</div>
+<span class="text-secondary flex items-center gap-1 text-[11px]">
+<span class="material-symbols-outlined text-xs" data-icon="done_all">done_all</span>
+                Clean / Merged to main
+              </span>
+</div>
+</div>
+<!-- Actions Footer -->
+<div class="flex items-center justify-between pt-3 border-t border-outline-variant/15 text-xs font-mono">
+<span class="text-[11px] text-outline">Reclaimable immediately</span>
+<button class="px-3 py-1.5 rounded bg-secondary/10 hover:bg-secondary/20 text-secondary border border-secondary/30 flex items-center gap-1.5 font-medium transition-colors">
+<span class="material-symbols-outlined text-sm" data-icon="delete">delete</span>
+<span>Prune Now</span>
+</button>
+</div>
+</div>
+<!-- CARD 3: [SAFE] chore+deps-cleanup -->
+<div class="p-5 rounded-xl bg-surface-container border border-outline-variant/20 hover:border-secondary/40 transition-all flex flex-col justify-between gap-4 group">
+<div>
+<!-- Card Header: Status Tag & Path -->
+<div class="flex items-start justify-between gap-3 mb-2.5">
+<div class="flex items-center gap-2 flex-wrap">
+<span class="px-2 py-0.5 rounded bg-secondary/15 border border-secondary/30 text-secondary font-mono text-[11px] font-semibold flex items-center gap-1.5">
+<span class="material-symbols-outlined text-xs" data-icon="check">check</span>
+                  SAFE
+                </span>
+<span class="font-mono text-xs text-on-surface font-semibold truncate max-w-[280px]">
+                  ../chore+deps-cleanup
+                </span>
+</div>
+<span class="font-mono text-xs text-outline bg-surface-container-high px-2 py-0.5 rounded">51 MB</span>
+</div>
+<!-- Branch & PR Metas -->
+<div class="flex flex-wrap items-center gap-3 text-xs font-mono text-on-surface-variant mb-3">
+<div class="flex items-center gap-1 text-on-surface">
+<span class="material-symbols-outlined text-sm text-outline" data-icon="fork_right">fork_right</span>
+<span>chore/codex/deps</span>
+</div>
+<span class="text-outline-variant">|</span>
+<span class="text-secondary font-medium">PR #1542 (MERGED)</span>
+</div>
+<!-- Status Banner -->
+<div class="p-2.5 rounded-lg bg-surface-container-lowest/80 border border-outline-variant/20 flex items-center justify-between text-xs font-mono">
+<div class="flex items-center gap-2 text-on-surface-variant">
+<span class="material-symbols-outlined text-outline text-base" data-icon="smart_toy">smart_toy</span>
+<span>@codex</span>
+</div>
+<span class="text-secondary flex items-center gap-1 text-[11px]">
+<span class="material-symbols-outlined text-xs" data-icon="verified">verified</span>
+                Safe to delete
+              </span>
+</div>
+</div>
+<!-- Actions Footer -->
+<div class="flex items-center justify-between pt-3 border-t border-outline-variant/15 text-xs font-mono">
+<span class="text-[11px] text-outline">Branch deleted upstream</span>
+<button class="px-3 py-1.5 rounded bg-secondary/10 hover:bg-secondary/20 text-secondary border border-secondary/30 flex items-center gap-1.5 font-medium transition-colors">
+<span class="material-symbols-outlined text-sm" data-icon="delete">delete</span>
+<span>Prune Now</span>
+</button>
+</div>
+</div>
+<!-- CARD 4: [NEEDS REVIEW] feat+sparse-worktrees -->
+<div class="p-5 rounded-xl bg-surface-container border border-outline-variant/20 hover:border-tertiary/40 transition-all flex flex-col justify-between gap-4 group">
+<div>
+<!-- Card Header: Status Tag & Path -->
+<div class="flex items-start justify-between gap-3 mb-2.5">
+<div class="flex items-center gap-2 flex-wrap">
+<span class="px-2 py-0.5 rounded bg-tertiary/15 border border-tertiary/30 text-tertiary font-mono text-[11px] font-semibold flex items-center gap-1.5">
+<span class="material-symbols-outlined text-xs" data-icon="warning">warning</span>
+                  NEEDS REVIEW
+                </span>
+<span class="font-mono text-xs text-on-surface font-semibold truncate max-w-[280px]">
+                  ../feat+sparse-worktrees
+                </span>
+</div>
+<span class="font-mono text-xs text-outline bg-surface-container-high px-2 py-0.5 rounded">65 MB</span>
+</div>
+<!-- Branch & Agent Metas -->
+<div class="flex flex-wrap items-center gap-3 text-xs font-mono text-on-surface-variant mb-3">
+<div class="flex items-center gap-1 text-tertiary">
+<span class="material-symbols-outlined text-sm" data-icon="fork_right">fork_right</span>
+<span>feat/grok/sparse-fs</span>
+</div>
+<span class="text-outline-variant">|</span>
+<span class="text-outline">Assigned: @grok</span>
+</div>
+<!-- Warning Notice Banner -->
+<div class="p-2.5 rounded-lg bg-tertiary-container/10 border border-tertiary/30 flex items-start gap-2.5 text-xs font-mono text-tertiary">
+<span class="material-symbols-outlined text-base mt-0.5" data-icon="report_problem">report_problem</span>
+<div class="flex flex-col">
+<span class="font-semibold">Local commits ahead of origin by 2 commits</span>
+<span class="text-[11px] text-tertiary/80 mt-0.5">Diverged from origin/main. Requires squash-merge or stash push.</span>
+</div>
+</div>
+</div>
+<!-- Actions Footer -->
+<div class="flex items-center justify-between pt-3 border-t border-outline-variant/15 text-xs font-mono">
+<span class="text-[11px] text-outline">Last commit: 2 hrs ago</span>
+<div class="flex items-center gap-2">
+<button class="px-2.5 py-1 rounded bg-surface-container-high hover:bg-surface-variant text-on-surface flex items-center gap-1.5 border border-outline-variant/20 transition-colors">
+<span class="material-symbols-outlined text-sm" data-icon="troubleshoot">troubleshoot</span>
+<span>Inspect Diff</span>
+</button>
+<button class="px-2.5 py-1 rounded bg-tertiary/15 hover:bg-tertiary/25 text-tertiary border border-tertiary/30 flex items-center gap-1.5 transition-colors">
+<span class="material-symbols-outlined text-sm" data-icon="call_merge">call_merge</span>
+<span>Resolve Divergence</span>
+</button>
+</div>
+</div>
+</div>
+<!-- CARD 5: [DIRTY / ORPHAN] job+8575a177-temp -->
+<div class="p-5 rounded-xl bg-surface-container border border-outline-variant/20 hover:border-error/40 transition-all flex flex-col justify-between gap-4 group">
+<div>
+<!-- Card Header: Status Tag & Path -->
+<div class="flex items-start justify-between gap-3 mb-2.5">
+<div class="flex items-center gap-2 flex-wrap">
+<span class="px-2 py-0.5 rounded bg-error/15 border border-error/30 text-error font-mono text-[11px] font-semibold flex items-center gap-1.5">
+<span class="material-symbols-outlined text-xs" data-icon="crisis_alert">crisis_alert</span>
+                  DIRTY / ORPHAN
+                </span>
+<span class="font-mono text-xs text-on-surface font-semibold truncate max-w-[280px]">
+                  ../job+8575a177-temp
+                </span>
+</div>
+<span class="font-mono text-xs text-error bg-error-container/20 px-2 py-0.5 rounded font-semibold">128 MB</span>
+</div>
+<!-- Branch & Agent Metas -->
+<div class="flex flex-wrap items-center gap-3 text-xs font-mono text-on-surface-variant mb-3">
+<div class="flex items-center gap-1 text-error">
+<span class="material-symbols-outlined text-sm" data-icon="link_off">link_off</span>
+<span>detached HEAD (6a24727)</span>
+</div>
+<span class="text-outline-variant">|</span>
+<span class="text-outline">Unassigned / Orphan</span>
+</div>
+<!-- Alert Notice Banner -->
+<div class="p-2.5 rounded-lg bg-error-container/15 border border-error/30 flex items-start gap-2.5 text-xs font-mono text-error">
+<span class="material-symbols-outlined text-base mt-0.5" data-icon="error">error</span>
+<div class="flex flex-col">
+<span class="font-semibold">Orphan worktree from killed daemon worker</span>
+<span class="text-[11px] text-error/80 mt-0.5">Untracked node_modules artifacts present. No matching active PID found.</span>
+</div>
+</div>
+</div>
+<!-- Actions Footer -->
+<div class="flex items-center justify-between pt-3 border-t border-outline-variant/15 text-xs font-mono">
+<span class="text-[11px] text-outline">Stale for 3 days</span>
+<button class="px-3 py-1.5 rounded bg-error/15 hover:bg-error/25 text-error border border-error/30 flex items-center gap-1.5 font-medium transition-colors">
+<span class="material-symbols-outlined text-sm" data-icon="delete_forever">delete_forever</span>
+<span>Force Delete</span>
+</button>
+</div>
+</div>
+<!-- CARD 6: [SAFE] docs+control-plane-spec -->
+<div class="p-5 rounded-xl bg-surface-container border border-outline-variant/20 hover:border-secondary/40 transition-all flex flex-col justify-between gap-4 group">
+<div>
+<!-- Card Header: Status Tag & Path -->
+<div class="flex items-start justify-between gap-3 mb-2.5">
+<div class="flex items-center gap-2 flex-wrap">
+<span class="px-2 py-0.5 rounded bg-secondary/15 border border-secondary/30 text-secondary font-mono text-[11px] font-semibold flex items-center gap-1.5">
+<span class="material-symbols-outlined text-xs" data-icon="check">check</span>
+                  SAFE
+                </span>
+<span class="font-mono text-xs text-on-surface font-semibold truncate max-w-[280px]">
+                  ../docs+control-plane-spec
+                </span>
+</div>
+<span class="font-mono text-xs text-outline bg-surface-container-high px-2 py-0.5 rounded">24 MB</span>
+</div>
+<!-- Branch & PR Metas -->
+<div class="flex flex-wrap items-center gap-3 text-xs font-mono text-on-surface-variant mb-3">
+<div class="flex items-center gap-1 text-on-surface">
+<span class="material-symbols-outlined text-sm text-outline" data-icon="fork_right">fork_right</span>
+<span>docs/agy/spec-v2</span>
+</div>
+<span class="text-outline-variant">|</span>
+<span class="text-secondary font-medium">PR #1539 (MERGED)</span>
+</div>
+<!-- Status Banner -->
+<div class="p-2.5 rounded-lg bg-surface-container-lowest/80 border border-outline-variant/20 flex items-center justify-between text-xs font-mono">
+<div class="flex items-center gap-2 text-on-surface-variant">
+<span class="material-symbols-outlined text-outline text-base" data-icon="psychology">psychology</span>
+<span>@agy</span>
+</div>
+<span class="text-secondary flex items-center gap-1 text-[11px]">
+<span class="material-symbols-outlined text-xs" data-icon="cloud_done">cloud_done</span>
+                Merged to main / upstream deleted
+              </span>
+</div>
+</div>
+<!-- Actions Footer -->
+<div class="flex items-center justify-between pt-3 border-t border-outline-variant/15 text-xs font-mono">
+<span class="text-[11px] text-outline">Ready for automated sweep</span>
+<button class="px-3 py-1.5 rounded bg-secondary/10 hover:bg-secondary/20 text-secondary border border-secondary/30 flex items-center gap-1.5 font-medium transition-colors">
+<span class="material-symbols-outlined text-sm" data-icon="delete">delete</span>
+<span>Prune Now</span>
+</button>
+</div>
+</div>
+<!-- CARD 7: [ACTIVE] infra+ast-cache-pipeline -->
+<div class="p-5 rounded-xl bg-surface-container border border-outline-variant/20 hover:border-primary/40 transition-all flex flex-col justify-between gap-4 group">
+<div>
+<!-- Card Header: Status Tag & Path -->
+<div class="flex items-start justify-between gap-3 mb-2.5">
+<div class="flex items-center gap-2 flex-wrap">
+<span class="px-2 py-0.5 rounded bg-primary/15 border border-primary/30 text-primary font-mono text-[11px] font-semibold flex items-center gap-1.5">
+<span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
+                  ACTIVE
+                </span>
+<span class="font-mono text-xs text-on-surface font-semibold truncate max-w-[280px]">
+                  ../infra+ast-cache-pipeline
+                </span>
+</div>
+<span class="font-mono text-xs text-outline bg-surface-container-high px-2 py-0.5 rounded">38 MB</span>
+</div>
+<!-- Branch & Commit Metas -->
+<div class="flex flex-wrap items-center gap-3 text-xs font-mono text-on-surface-variant mb-3">
+<div class="flex items-center gap-1 text-primary">
+<span class="material-symbols-outlined text-sm" data-icon="commit">commit</span>
+<span>infra/codex/ast-daemon</span>
+</div>
+<span class="text-outline-variant">|</span>
+<span class="text-outline">Assigned: @codex</span>
+</div>
+<!-- Status Banner -->
+<div class="p-2.5 rounded-lg bg-surface-container-lowest/80 border border-outline-variant/20 flex items-center justify-between text-xs font-mono">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-base" data-icon="memory">memory</span>
+<span class="text-on-surface font-medium">Running benchmark (PID 42104)</span>
+</div>
+<span class="text-primary flex items-center gap-1 text-[11px]">
+<span class="material-symbols-outlined text-xs" data-icon="sync">sync</span>
+                IO: 4.8 MB/s
+              </span>
+</div>
+</div>
+<!-- Actions Footer -->
+<div class="flex items-center justify-between pt-3 border-t border-outline-variant/15 text-xs font-mono">
+<span class="text-[11px] text-outline">Active CPU load: 12%</span>
+<div class="flex items-center gap-2">
+<button class="px-2.5 py-1 rounded bg-surface-container-high hover:bg-surface-variant text-on-surface flex items-center gap-1.5 border border-outline-variant/20 transition-colors">
+<span class="material-symbols-outlined text-sm" data-icon="terminal">terminal</span>
+<span>Open Shell</span>
+</button>
+<button class="px-2.5 py-1 rounded bg-surface-container-high hover:bg-surface-variant text-primary flex items-center gap-1.5 border border-primary/25 transition-colors">
+<span class="material-symbols-outlined text-sm" data-icon="difference">difference</span>
+<span>View Diff</span>
+</button>
+</div>
+</div>
+</div>
+</section>
+<!-- Safety Dry-Run Preview Modal Bar / Micro-terminal strip -->
+<section class="p-3 rounded-xl bg-surface-container-lowest border border-outline-variant/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs font-mono">
+<div class="flex items-center gap-2 text-outline">
+<span class="material-symbols-outlined text-base text-secondary" data-icon="shield">shield</span>
+<span>Git Safety Shield: <strong class="text-on-surface">Auto-stash protection enabled</strong></span>
+<span class="text-outline-variant">|</span>
+<span class="text-on-surface-variant">Zero branches will be deleted upstream</span>
+</div>
+<div class="flex items-center gap-3">
+<span class="text-outline">Cleanable footprint: <span class="text-secondary font-semibold">89 MB</span></span>
+<a class="text-primary hover:underline flex items-center gap-1" href="#">
+<span>Safety log</span>
+<span class="material-symbols-outlined text-xs" data-icon="arrow_forward">arrow_forward</span>
+</a>
+</div>
+</section>
+</main>
+</div>
+</body></html>

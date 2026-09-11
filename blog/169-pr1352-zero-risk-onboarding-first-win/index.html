@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>synlynk | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date"></span>
+        
+      </div>
+      <h1 class="blog-post-title"></h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>PR #1352 - Zero-Risk Onboarding &amp; Instant First-Win Experience</h1>
+<p>Early adopters evaluating multi-agent development tools face an understandable trust barrier: handing control of an existing repository to autonomous tooling carries the risk of overwritten uncommitted work, unwanted config churn, or silent state pollution. PR #1352 eliminates this friction with a non-destructive safety guard and delivers an immediate &quot;First Win&quot; demonstration within two minutes of onboarding.</p>
+<h3>1. Non-Destructive Dirty-Tree Safety Guard</h3>
+<p>Before writing any workspace configuration, context files, or agent charters, <code>synlynk.wizard:guard_dirty_worktree()</code> probes the repository state via <code>git status --porcelain</code>. If any uncommitted modifications or untracked files are detected:</p>
+<ul>
+<li>The full tree state is archived into a safety tarball at <code>.synlynk/backups/init-&lt;timestamp&gt;.tar.gz</code>.</li>
+<li>A dedicated git stash entry (<code>synlynk-init-safety-backup-&lt;timestamp&gt;</code>) is created while preserving backup artifacts.</li>
+<li>Zero developer data is ever overwritten or lost, allowing one-command rollbacks.</li>
+</ul>
+<h3>2. Streamlined Zero-Config Workspace Initialization (&lt;5s)</h3>
+<p><code>cmd_wizard_init()</code> orchestrates an instant onboarding flow that completes in less than five seconds:</p>
+<ul>
+<li><strong>Harness Auto-Probe:</strong> Detects installed CLI harnesses (<code>claude</code>, <code>codex</code>, <code>agy</code>, <code>grok</code>, <code>local</code>) on <code>$PATH</code>.</li>
+<li><strong>Codebase Stack Fingerprinting:</strong> Detects repository languages, frameworks, test suites, and package managers without manual prompts.</li>
+<li><strong>8 Standard Agent Charters:</strong> Instantly provisions standard workspace agent charters (<code>dev</code>, <code>qa</code>, <code>pm</code>, <code>architect</code>, <code>tpm</code>, <code>designer</code>, <code>marketing</code>, <code>synlynk-bot</code>) in <code>.synlynk/agents/</code> and registers durable agent identities in <code>agent_store</code>.</li>
+<li><strong>Automated Backlog Ingestion:</strong> Automatically invokes <code>synlynk backlog ingest --sync-github</code>, synchronizing open issues directly into <code>state.db</code>.</li>
+</ul>
+<h3>3. &quot;First Win&quot; Diagnostic Auto-Remediation PR (&lt;2m)</h3>
+<p>Through <code>synlynk.launch</code>, onboarding diagnoses the repository's highest-confidence low-hanging improvement—such as missing <code>.gitignore</code> hygiene rules, test coverage gaps, or documentation voids. The user is prompted for a 1-click confirmation to dispatch an automated fix:</p>
+<ul>
+<li>Executes in an isolated worktree.</li>
+<li>Runs local verification test suites.</li>
+<li>Dispatches via <code>--requires-gh-write</code> to open a clean GitHub PR with a descriptive summary in under two minutes.</li>
+</ul>
+<h3>Verification</h3>
+<ul>
+<li><code>tests/test_onboarding_safety.py</code>: Validates clean vs. dirty tree detection, tar.gz safety backups, git stash persistence, <code>&lt;5s</code> charter provisioning, and First-Win finding/dispatch mechanics.</li>
+<li><code>tests/test_agent_cli.py</code>: Verified with <code>pytest tests/test_agent_cli.py -k 'featonboarding_implement_zerorisk_dirty_' -v</code>.</li>
+</ul>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

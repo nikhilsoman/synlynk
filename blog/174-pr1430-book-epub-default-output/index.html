@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #1430 — EPUB Joins the Book&#39;s Default Output Set | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-2">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Sep 05, 2026</span>
+        
+          <span class="blog-post-pr">PR #1430</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #1430 — EPUB Joins the Book&#39;s Default Output Set</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>By PR #1409, &quot;The Supervised Machine&quot; had a real visual identity layered onto the HTML source of
+truth, and the PDF rebuild step was an established, documented ritual in <code>docs/book/README.md</code>.
+The book's distribution story was &quot;HTML source, PDF render&quot; — two formats, one manual Chrome
+headless-print command, committed together whenever the manuscript changed.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>None — this is a small, deliberate gap-close, not a repositioning. The book has been growing
+(multi-author chapters, Part II/III/IV expansions, embedded UI mockups) and PDF-only distribution
+doesn't serve e-readers well: no reflow, no adjustable type size, no proper e-reader TOC
+navigation. EPUB was the obvious missing format, and the user asked for it to become a <em>default</em>
+step, not an occasional extra — matching the existing &quot;regenerate the PDF and commit both files
+together&quot; discipline this project already holds for the HTML/PDF pair.</p>
+<h2>What This PR Shipped</h2>
+<ul>
+<li>Installed <code>pandoc</code> via Homebrew (not previously present in this environment).</li>
+<li>Generated <code>docs/book/the-supervised-machine-v0.5-DRAFT.epub</code> from the existing single-file HTML
+source, with <code>--resource-path=.</code> (run from <code>docs/book/</code>) so the three rxcc Stitch mockup PNGs
+under <code>assets/</code> embed correctly instead of producing <code>PandocResourceNotFound</code> warnings.</li>
+<li>The key technical catch: pandoc's EPUB writer splits into chapter files at <code>&lt;h1&gt;</code> by default, but
+this manuscript's real chapter headings are <code>&lt;h2 class=&quot;chap-title&quot;&gt;</code> — the manuscript wraps
+everything in a handful of top-level <code>&lt;h1&gt;</code>s (front matter, Part dividers) with actual chapters
+one level down. Splitting at the default level produced a single 216KB chapter file with no real
+per-chapter navigation. Passing <code>--split-level=2</code> fixed this, producing 36 properly split chapter
+files and a correct nav.xhtml TOC (verified by unzipping the EPUB and spot-checking that TOC
+entries map to the right chapter titles).</li>
+<li>Verified EPUB structural validity by hand (no <code>epubcheck</code> available in this environment):
+confirmed <code>mimetype</code>, <code>META-INF/container.xml</code>, <code>EPUB/content.opf</code>, <code>EPUB/toc.ncx</code>, and
+<code>EPUB/nav.xhtml</code> are all present and well-formed via <code>unzip -l</code> / <code>unzip -p</code>.</li>
+<li>Documented the exact rebuild command in <code>docs/book/README.md</code>, right alongside the existing PDF
+rebuild command, and updated the file list and &quot;regenerate together, never let them drift&quot;
+language to cover all three formats (HTML, PDF, EPUB) instead of two.</li>
+</ul>
+<h2>Brainstorm Visuals Used</h2>
+<p>None — this PR is build tooling, not new manuscript content.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>Nothing autonomy-related directly, but it closes a real distribution gap for a project asset that
+synlynk itself produces and maintains (the book is written by the same Claude/Codex/Grok/Agy fleet
+that builds synlynk). It also sets a precedent worth generalizing later: any generated-artifact
+pair (source + rendered output) in this repo should default to <em>every</em> commonly consumed target
+format, not just the first one someone thought to add.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>The book's default output set is now HTML (source of truth) + PDF + EPUB, generated and committed
+together on every content change. The next book-adjacent PR should treat EPUB regeneration as
+non-optional the same way PDF regeneration already is — no separate reminder needed, it's just
+part of &quot;the book changed.&quot;</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

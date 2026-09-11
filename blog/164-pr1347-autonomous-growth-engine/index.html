@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #1347 — Autonomous Growth &amp; Marketing Engine | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Sep 02, 2026</span>
+        
+          <span class="blog-post-pr">PR #1347</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #1347 — Autonomous Growth &amp; Marketing Engine</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>Following the model registry baseline (PR #1339), multi-agent fleet parity (PR #1308–#1310), and Sentinel guards against token bloat (PR #1334), synlynk operated with strong internal orchestration. However, external communication, promotion, documentation synchronization, and marketing remained manual or disconnected from the continuous delivery lifecycle.</p>
+<h2>Strategic Shifts in This PR (if any)</h2>
+<p>This PR activates the autonomous <strong>Growth and Promotion Engine</strong> operated by the <code>marketing</code> workspace agent (<code>f2039c38-37ef-4380-ae97-9954f0f7ed36</code>) across five external public surfaces:</p>
+<ol>
+<li>Per-PR Blog Post Automation &amp; Quality Gate with strict YAML schema validation.</li>
+<li>Living Documentation &amp; Command Reference automated synchronization.</li>
+<li>Social Announcement &amp; Changelog Snippet Extraction (<code>.synlynk/social_drafts.json</code>).</li>
+<li>Automated Media Asset Generation (<code>synlynk media generate</code>) producing high-resolution SVG architecture flowcharts and OpenGraph cards.</li>
+<li>Telemetry &amp; Readership Analytics feedback into <code>goal-0c4e96ff</code>.</li>
+</ol>
+<h2>What This PR Shipped</h2>
+<ol>
+<li><strong>Blog Frontmatter Validation &amp; Quality Gate (<code>synlynk/marketing.py</code>):</strong>
+<ul>
+<li>Implemented <code>validate_blog_post_frontmatter()</code> to enforce YAML schema compliance across all required fields (<code>title</code>, <code>author</code>, <code>date</code>, <code>pr</code>, <code>version</code>, <code>tags</code>).</li>
+<li>Integrated <code>update_blog_index()</code> into <code>synlynk pr check</code> to guarantee automated synchronization of <code>docs/blog/README.md</code>.</li>
+</ul>
+</li>
+<li><strong>Living Documentation Synchronization Hook:</strong>
+<ul>
+<li>Enhanced <code>scripts/generate_command_docs.py</code> to support seamless execution during <code>synlynk instructions update</code>.</li>
+<li>Wired command documentation updates into <code>cmd_instructions_update()</code> in <code>synlynk/instructions.py</code>.</li>
+</ul>
+</li>
+<li><strong>Social &amp; Changelog Snippet Extraction:</strong>
+<ul>
+<li>Implemented <code>extract_social_changelog_snippets()</code> to parse blog post frontmatter and body highlights, outputting structured announcement drafts to <code>.synlynk/social_drafts.json</code>.</li>
+</ul>
+</li>
+<li><strong>Media &amp; Visual Asset Generator (<code>synlynk/media.py</code>):</strong>
+<ul>
+<li>Added <code>synlynk media generate</code> CLI command in <code>synlynk/cli.py</code> and <code>synlynk/taxonomy.py</code>.</li>
+<li>Built vector SVG generators <code>generate_svg_diagram()</code> and <code>generate_og_card()</code> for high-res architecture flowcharts and 1200x630 OpenGraph cards.</li>
+</ul>
+</li>
+<li><strong>Comprehensive Test Coverage:</strong>
+<ul>
+<li>Added unit tests in <code>tests/test_marketing.py</code> and <code>tests/test_media.py</code>.</li>
+<li>Added regression and verification tests in <code>tests/test_agent_cli.py</code> (<code>test_featmarketing_implement_living_docs_sync</code>).</li>
+</ul>
+</li>
+</ol>
+<h2>Brainstorm Visuals Used</h2>
+<ul>
+<li><code>docs/superpowers/specs/2026-09-02-autonomous-growth-and-marketing-engine-design.md</code> (Marketing Agent Engine Architecture)</li>
+<li>Generated Media: <code>docs/media/architecture_diagram.svg</code> and <code>docs/media/og_card.svg</code></li>
+</ul>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>Every feature and PR shipped across the multi-agent fleet now automatically validates its public narrative, synchronizes its command documentation, extracts social broadcast snippets, and generates rich visual assets without manual human marketing overhead.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>The marketing agent engine will continue to track readership conversion signals and automate social distribution channels as synlynk expands toward complete autonomous multi-agent software development.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

@@ -59,6 +59,31 @@
     });
   }
 
+  function initMobileNav() {
+    const toggle = document.querySelector('.nav-toggle');
+    const links = document.getElementById('primary-nav');
+    if (!toggle || !links) return;
+
+    function setOpen(open) {
+      links.classList.toggle('is-open', open);
+      toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+      toggle.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
+    }
+
+    toggle.addEventListener('click', (e) => {
+      e.preventDefault();
+      setOpen(!links.classList.contains('is-open'));
+    });
+
+    links.querySelectorAll('a').forEach((a) => {
+      a.addEventListener('click', () => setOpen(false));
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') setOpen(false);
+    });
+  }
+
   function initWaitlistForm() {
     const form = document.querySelector('.waitlist-form');
     if (!form) return;
@@ -137,6 +162,7 @@
   function init() {
     initCopyButtons();
     initWaitlistForm();
+    initMobileNav();
     initDocsSidebar();
     initFeaturesToggle();
   }
@@ -147,4 +173,3 @@
     init();
   }
 })();
-

@@ -11,13 +11,18 @@
   <link rel="stylesheet" href="/assets/css/main.css">
 </head>
 <body>
-  <!-- Fixed nav -->
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
   <nav>
     <a href="/" class="nav-logo">
       <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
       <span class="nav-brand">synlynk</span>
     </a>
-    <div class="nav-links">
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
       <a href="/docs/">Docs</a>
       <a href="/features/">Features</a>
       <a href="/blog/">Blog</a>
@@ -40,9 +45,113 @@
 Versioning follows <a href="https://semver.org/spec/v2.0.0.html">Semantic Versioning</a>.</p>
 <hr>
 <h2><a href="https://github.com/nikhilsoman/synlynk/compare/v0.3.0...HEAD">Unreleased</a></h2>
+<h3>Breaking Changes</h3>
+<ul>
+<li>
+<p><strong>[Draft] The default output format for status commands is now structured JSON instead of human-readable text.</strong>
+Scripts that parse the previous line-oriented output may fail or consume
+incorrect values after upgrading. <strong>Migration:</strong> request the documented
+machine-readable fields explicitly, update parsers to read the JSON schema,
+and reserve the text format for interactive use.</p>
+</li>
+<li>
+<p><strong>[Draft] Commands that operate on a workspace now require an explicit workspace context when run outside the repository root.</strong>
+Automation launched from a different working directory may fail instead of
+silently reading or writing state for the wrong workspace. <strong>Migration:</strong> run
+the command from the intended repository root or pass its <code>--workspace</code>
+option explicitly, and update wrappers that previously relied on the current
+directory being inferred.</p>
+</li>
+<li>
+<p><strong>[Draft] The command-line configuration flag <code>--config</code> now accepts only a file path, not an inline JSON object.</strong>
+Scripts that pass configuration directly on the command line will fail
+validation after upgrading instead of being parsed as before. <strong>Migration:</strong>
+write inline configuration to a file and pass that file's path to <code>--config</code>,
+or use the equivalent environment-based configuration mechanism.</p>
+</li>
+<li>
+<p><strong>[Draft] The default configuration directory is now resolved relative to the workspace root.</strong>
+Deployments that relied on the process working directory may load a different
+configuration after upgrading, which can change dispatch and storage
+behavior. <strong>Migration:</strong> move workspace configuration into the repository's
+<code>.synlynk/</code> directory, or pass an explicit configuration path wherever the
+command is run from outside the workspace.</p>
+</li>
+<li>
+<p><strong>[Draft] Resource lookup commands now exit non-zero when no match is found.</strong>
+Automation that treats an empty result as a successful no-op will begin
+failing fast, making missing resources visible instead of silently masking
+typos or stale identifiers. <strong>Migration:</strong> handle the documented not-found
+exit code explicitly when an empty result is expected, and reserve other
+non-zero codes for actual command failures.</p>
+</li>
+<li>
+<p><strong>[Draft] List-command responses now return an object with <code>items</code> and <code>next_cursor</code> instead of a bare array.</strong>
+Clients that iterate over the response directly or deserialize it as an array
+will fail after upgrading, while the wrapper leaves room for pagination and
+future metadata. <strong>Migration:</strong> read records from <code>items</code>, treat a missing or
+null <code>next_cursor</code> as the end of the result set, and follow the cursor when
+fetching subsequent pages.</p>
+</li>
+<li>
+<p><strong>[Draft] JSON output for <code>synlynk jobs --json</code> now wraps records under a <code>jobs</code> key.</strong>
+Consumers that read the previous top-level array will no longer receive a
+compatible response, making the output extensible without changing its
+meaning. <strong>Migration:</strong> read the <code>jobs</code> field and handle an empty list when
+no jobs are available.</p>
+</li>
+<li>
+<p><strong>[Draft] Event payloads now require an explicit <code>event_version</code>.</strong>
+Consumers that omit the field will be rejected instead of receiving a
+best-effort payload, making incompatible contract changes visible at the
+boundary. <strong>Migration:</strong> update producers to send the supported version and
+update consumers to validate it before processing events.</p>
+</li>
+<li>
+<p><strong>[Draft] Dispatch task definitions now require an explicit <code>task_type</code>.</strong>
+Definitions that omit the field will be rejected instead of being inferred
+from task text, which makes routing failures visible before a job starts.
+<strong>Migration:</strong> add the appropriate <code>task_type</code> to each existing definition
+(for example, <code>implement</code>, <code>test</code>, or <code>review</code>) before upgrading.</p>
+</li>
+<li>
+<p><strong>[Draft] Configuration files now require an explicit schema version.</strong>
+Unversioned configuration files will no longer be loaded implicitly, which
+prevents older layouts from being interpreted as current settings.
+<strong>Migration:</strong> add the supported <code>schema_version</code> value to existing files
+and run <code>synlynk migrate</code> before upgrading; invalid or unsupported versions
+should be corrected before dispatch can resume.</p>
+</li>
+<li>
+<p><strong>[Draft] The default retry policy now fails closed for unknown error types.</strong>
+Jobs that encounter an error not covered by the configured retry policy will
+stop instead of being retried automatically, preventing non-idempotent work
+from running more than once. <strong>Migration:</strong> review custom retry policies,
+add explicit handling for errors that are safe to retry, and re-run stopped
+jobs only after confirming that their side effects are safe to repeat.</p>
+</li>
+<li>
+<p><strong>Dispatch jobs now distinguish completed work from true zombie termination (#1498).</strong>
+Previously, any exited worker that still had a disposable worktree could be
+classified as <code>killed_zombie</code> (exit <code>-9</code>) before the reconciler read the
+<code>{log}.exit</code> marker or inspected real output — including clean design/review
+jobs. That also deleted worktree-local logs.
+<strong>Migration:</strong> treat <code>killed_zombie</code> as a true orphan only (dead PID, no exit
+marker, no completion receipt / meaningful work). For cleanup and retry,
+prefer the job's terminal <code>status</code> and <code>exit_code</code> (<code>done</code> / <code>failed</code>).
+Worker logs now live under the daemon's central <code>.synlynk/logs/</code> directory and
+are preserved when a disposable worktree is reaped.</p>
+</li>
+</ul>
 <h3 class="tag-added">Added</h3>
 <ul>
-<li><strong>Charter Content &amp; Structure Schema</strong>
+<li>
+<p><strong>Cadence-breaker resilience engine:</strong> markdown append conflict auto-rebase,
+active-job circuit breaking at 500k zero-file tokens or $5, startup harness
+failover, and dead-PID daemon worktree cleanup.</p>
+</li>
+<li>
+<p><strong>Charter Content &amp; Structure Schema</strong></p>
 <ul>
 <li>Charters now require YAML frontmatter (<code>schema_version</code>, <code>role</code>, <code>description</code>, <code>durability</code>, <code>tools</code>, <code>credentials</code>) plus three markdown sections (<code>## Instructions</code>, <code>## Authority &amp; Escalation</code>, <code>## Workflow Ownership</code>), enforced via a new <code>synlynk/charter_schema.py</code> validator wired into <code>propose_charter_revision</code>.</li>
 <li>Retired the dead <code>.synlynk/agents/&lt;id&gt;.yaml</code> projection file and <code>regenerate_agent_projection()</code> — its only field (<code>capability_grants</code>) was write-only, never read.</li>
@@ -69,6 +178,196 @@ Versioning follows <a href="https://semver.org/spec/v2.0.0.html">Semantic Versio
 <li><code>synlynk/tpm_hooks.py</code> — narrow TPM hook surface (<code>tpm_observe_reservations</code>, <code>tpm_reorder_queue</code>, <code>tpm_reallocate</code>) plus a read-only <code>synlynk quota --tpm-view</code> CLI command to inspect open reservations across harnesses.</li>
 <li><strong>Not yet a shippable milestone:</strong> no active agents currently exercise the reservation ledger or TPM hooks in production dispatch flow. Held out of 0.13.1 and 0.14.0; will ship once agents actually consume it.</li>
 </ul>
+<div class="changelog-version-header"><span class="changelog-version">vv0.19.0</span><span class="changelog-date">2026-09-11</span></div>
+<h3 class="tag-added">Added</h3>
+- feat: harness-session gh shim shared with synlynk exec (#1472)
+- feat(book): make EPUB output Apple Books-ready (#1463)
+- feat: synlynk exec PATH shim refuses host gh without a token (#1464)
+- feat: synlynk gh --role runs gh as a role GitHub App (#1453)
+- feat(harness): dynamic home harness orchestrator parity and dual-mode directives (#1440) (#1440)
+- feat: research OS-level sandboxing and credential isolation (#1393) (#1405)
+- feat(onboarding): implement zero-risk dirty worktree guard and instant first-win demo (#1352) (#1372)
+- feat(swarm): implement ephemeral cloud runner drivers (Fly.io, K8s, local) (#1341) (#1366)
+- feat(costs): implement subscription cost amortization, extra usage, and true-up reconciler (#787) (#1338)
+- feat(doctor): add TC-9 in-sandbox gh-write capability probe (#1213) (#1316)
+- feat(doctor): warn on todo.md hand-edit drift after state.db regeneration (#1220) (#1314)
+- feat(backlog): GOVERNS backlog automation for discovered work (#1203) (#1313)
+- feat(dispatch): wire charter content into dispatch and execution context (#1201) (#1312)
+- feat(db): implement Phase 4 database schema dual-read / dual-write (#1307) (#1311)
+- feat(fleet): grant Codex full harness parity across review and gh-write tasks (#1274) (#1275)
+- feat: direct Codex GitHub-write network access via config override (#1268) (#1271)
+- feat: add doctor check for elevated PR review cycles (#1200) (#1245)
+- feat: wire charter authority into dispatch/exec context (#1201) (#1233)
+- feat: add Herdr workspace protocol SOP (#1229)
+<h3 class="tag-fixed">Fixed</h3>
+- fix(reconciler): harden worker exit detection, log preservation, and event-driven launch DAG (Sprint 4) (#1500, #1501, #1502, #1511, #1527) (#1548)
+- fix(dispatch): harden worktree deletion safety, auto-PR stacking, and Codex local-write review permissions (Sprint 3) (#1547)
+- fix(daemon): harden control-plane lock recovery, dual-ledger sync, and key resolution (Sprint 2) (#1546)
+- fix(worktree): guard empty branch in _gh_pr_for_branch and recognize squash-merged branches (#1536) (#1540)
+- fix: Task Group 2: capability envelope seeding + concurre (job-ecba9b0b) (#1518)
+- fix: Task Group 4: docs (job-424d106a) (#1519)
+- fix(state): harden sandbox DB fallback and reconciliation (#1526)
+- fix(daemon): recover stale lifecycle locks (#1523) (#1524)
+- fix(selftest): isolate live probe provisioning (#1517)
+- fix(ci): align test matrix with supported Python versions (#1505)
+- fix(dispatch): diagnose and prevent zombie worker termination (#1498) (#1504)
+- fix: enforce Sentinel lifecycle policy (#1488) (#1491)
+- fix(selftest): probe cold source ledger before live dispatch (#1490)
+- fix(selftest): provision probe metadata in live scratch DB (#1485)
+- fix(review): allow distinct QA App identities to submit approving PR reviews (#1475) (#1476)
+- fix: review fallback is same-identity comment-checklist only (#1465)
+- fix: isolate parent auto-pr github auth (#1467)
+- fix: request actions write for merge-authority apps (#1458)
+- fix: skip parent auto-PR when no role App token (#1454)
+- fix: parent auto-PR uses the job role App token (#1452)
+- fix: resolve PR number from HEAD when pr check runs on a job branch (#1450)
+- fix: pr check without writing shared todo; drop guessed pytest -k (#1449)
+- fix: skip injected ## Permissions when auto-finalizing PR titles (#1447)
+- fix: gh-write verifier leftovers from LIVE-1429 (#1444)
+- fix: do not mark daemon jobs permission_denied after corroborated success (#1441)
+- fix: ## Permissions (job-72bf6d52) (#1434)
+- fix: ## Permissions (job-7c8c84f5) (#1408)
+- fix: ## Permissions (job-4010ba49) (#1407)
+- fix: Fix gh:#352 — stall-kill signals a raw stored PID wi (job-93f3f401) (#1419)
+- fix: ## Permissions (job-d6b97dea) (#1404)
+- fix: require shared-secret auth on daemon and Vizor HTTP (#1418)
+- fix: Fix gh:#136 — the daemon_jobs reconciliation path ne (job-f1617bfc) (#1420)
+- fix: daemon orphan reap on start + exclusive start lock (#349) (#1417)
+- fix: reconcile terminal jobs across sqlite and jobs json (#1388)
+- fix: verify gh writes before timeout finalization (#1387)
+- fix: retry and capture gh review verification evidence (#1380) (#1386)
+- fix: verify gh writes before killed zombie status (#1385)
+- fix: verify PR-open GitHub writes (#1384)
+- fix: restore Codex review network access (#1375)
+- fix: Implement Autonomous Remediation Loop (synlynk heal) (job-89bd001e) (#1373)
+- fix: ## Permissions (job-e2061c9a) (#1362)
+- fix: Implement Living Charter Evolution & Capability-Gate (job-4bf9c7e6) (#1360)
+- fix: Implement Cross-Harness Inter-Agent Event Relay per (job-38bb3618) (#1358)
+- fix: ## Permissions (job-8575a177) (#1356)
+- fix: Implement Cadence-Breaker Resilience Engine per docs (job-25365d40) (#1355)
+- fix: Implement Phase 1 and Phase 2 of Issue #1343 per doc (job-d6812ef1) (#1345)
+- fix: ## Permissions (job-9c597160) (#1336)
+- fix: Implement issue #1327: Deduplicate boolean CLI flags (job-a24af5b3) (#1335)
+- fix: Implement issue #937: Review-dispatch permissions ha (job-455385e6) (#1331)
+- fix(team): prevent dropped OAuth codes in manifest callback loopback server (#906) (#1332)
+- fix: ## Permissions (job-e73d175d) (#1330)
+- fix(cli): detect and warn on stale pipx-installed synlynk binary vs repo VERSION (#1188) (#1325)
+- fix(blog): fix malformed YAML frontmatter in post 103 (#941) (#1322)
+- fix(roles): invoke _repair_sops_only during synlynk roles --fix (#1231) (#1321)
+- fix(dispatch): tighten _task_requires_gh_write heuristic to eliminate false positives (#1246) (#1320)
+- fix(tests): decouple README sync validator unit test from live repo root (#1270) (#1319)
+- fix: grant qa App administration:write for merge roles (gh:#1295) (#1303)
+- fix(decide): write decision records to tracked project-docs in worktree (#1226, #1194) (#1315)
+- fix(db): bump _DB_MIGRATION_VERSION to 4 to guarantee migration on pre-existing DBs
+- fix: replace hardcoded codex approval_policy=untrusted with -s read-only (#1302)
+- fix(harness): align Claude baseline roles with PM/deploy SOP and clean up permission flag handling (#1284) (#1288)
+- fix(harness): eliminate Agy headless 5m timeout, enable read-only plan mode, and capture prompt-cache tokens (#1283) (#1286)
+- fix: daemon re-exec fork-safety + worktree-aware token cache path (#1263, #1264) (#1282)
+- fix(dispatch): eliminate Grok headless cancellation by adopting --always-approve (#1277) (#1279)
+- fix: Resolve the remaining correction for ticket 1242 on (job-6e5d67d4) (#1247)
+- fix: Small follow-up to synlynk tracking item 1202 termin (job-aa57bd84) (#1254)
+- fix: Implement Task 2 of docs/superpowers/plans/2026-08-2 (job-f4c16542) (#1260)
+- fix: Fix gh:#1228 — synlynk daemon state paths are CWD-re (job-24507a4d) (#1232)
+- fix: keep daemon alive across bad job ticks (#1258)
+- fix: #1250 dispatch job summaries silently report 'files: 0 touched' (#1251)
+- fix: Fix #1140 (reopened): synlynk daemon start still doe (job-352c9929) (#1249)
+- fix: checkpoint() todo.md handling bypasses stories table + hardcodes migration-unaware path (#1218) (#1224)
+- fix: Fix issue #1211 on nikhilsoman/synlynk: the macOS la (job-64daff63) (#1212)
+- fix: Fix issue #1209 on nikhilsoman/synlynk: 'synlynk dis (job-b6b67e41) (#1210)
+- fix: repair blog frontmatter YAML (#1208)
+- fix: trigger site deploys for release content (#1207)
+- fix: skip harness fence rewrite when content is unchanged (#1204)
+- fix: #1197 restore org_domain remap on already-migrated connections (#1205)
+- fix: Fix #1191: add a backfill/registration path for the (job-5cede02f) (#1192)
+<h3 class="tag-changed">Changed</h3>
+- docs: checkpoint devlog, memory, and cost log for Sprints 1-4 (#1543) (#1549)
+- perf(ci): enable pytest-xdist parallel test execution and unstable triggers (#1492) (#1544)
+- docs: layered release protocol, autonomous operations & time-to-wow arch spec (#1542)
+- docs: session checkpoint — sentinel triage, worktree fix, and handoff tickets (#1541)
+- docs: mid-session checkpoint — daemon recovery, dual-ledger sync, and BS-6 landing (#1534)
+- docs: add BS-6 product/logical/infra visualization spec (#1533)
+- docs: investigate dispatch token inflation in #1531 (#1532)
+- perf(cli): profile and defer eager startup imports (#1513)
+- docs: evaluate pytest-xdist safety for test suite (#1496) (#1512)
+- perf(selftest): isolate probe metadata from unit-test runs (#1506)
+- test: isolate archived pytest modules
+- docs: harness sessions must prepend synlynk gh shim (#1436) (#1471)
+- docs: qa actions:write re-approval runbook (#1436) (#1466)
+- docs: synlynk gh --role is the default for session GitHub writes (#1457)
+- docs: charter patch aligning architect role with qa-only merge authority (#1436) (#1456)
+- docs: add #1436 bot-authored live cell (#1455)
+- docs: #1436 identity routing assessment spec (#1451)
+- docs: blog post for PR #1415 (job status end-to-end regression test) (#1431)
+- chore: archive unmerged blog-index backfill diff before worktree cleanup (#1364)
+- docs: update blog post — PR #1437 merged (#1439)
+- chore: regenerate PDF/EPUB with synlynk glyph cover (#1437)
+- docs: blog post for PR #1434 (book glyph cover) (#1438)
+- chore: add EPUB build as default book output alongside PDF (#1430)
+- docs: research SCIP indexers, Tree-sitter, and Glean code intelligence (closes #1396) (#1406)
+- test: add end-to-end job status truth regression (#1415)
+- chore: gitignore node_modules and stray state.db (#1410)
+- docs: distinguished engineer review + PM triage (#1413)
+- docs: blog post for PR #1409 (book brand restyle) (#1412)
+- style(book): align v0.5 draft with synlynk visual system (#1409)
+- docs: record decision-panel outcome for Model/ModelFamily as first-class citizens (#1378)
+- docs: devlog entry for PR #1374 merge verification + #1274 fix chain (#1376)
+- docs: integrate Strategic Review content into the book manuscript (#1374)
+- docs(specs): add design specs and plans for zero-risk onboarding and autonomous heal loop
+- docs(plans): add implementation plan for ephemeral swarm cloud runners (#1341)
+- docs: complete archive of PR 1304 (#1352)
+- docs(plans): add implementation plans for PM backlog triage (#1340) and living charter adaptive routing (#1342)
+- docs(plans): add implementation plan for cross-harness inter-agent event relay
+- docs(plans): add implementation plans for cadence-breaker resilience and marketing engine
+- docs(specs): add full architecture specs for self-healing, marketing engine, relay bus, swarm runners, and living charters
+- chore: archive superseded Codex implementation of #1203 (PR #1304, closed) (#1324)
+- docs(memory): link issue #1343 for First-Class Model Registry
+- docs(memory): record strategic initiative tickets #1339-#1342
+- docs(spec/plan): add first-class model registry and complexity dispatch spec
+- docs(spec/plan): add subscription cost amortization and true-up design for #787
+- docs(memory): record research ticket #1326 for multi-agent swarm engine
+- Hardening: Prohibit direct todo.md hand-edits across harness instruction templates (#1317) (#1318)
+- docs: record Phase 4 implementation and merge in agy devlog
+- docs(blog): record PR #1310 merged on 2026-08-31
+- Fleet Parity: Agy Stitch MCP Integration, Diagnostics, and Prompt Guidance (#573) (#1310)
+- docs(blog): mark post 142 (PR #1309) as merged
+- Fleet Parity: Instruction file preflight presence check and closed-loop receipt verification (#347) (#1309)
+- docs(blog): record PR #1308 merged on 2026-08-30
+- Fleet Parity: Enforce --cwd for Grok and -C for Codex with working-directory prompt header (#342) (#1308)
+- docs(todo): record #1307 / story-043eb9ee for Phase 4 DB migration
+- docs(blog): record PR #1306 merged on 2026-08-30
+- Standardize Harness vs Workspace Agent separation across CLI flags, configs, and docs (#1255) (#1306)
+- docs: spec, plan, blog post, and devlog close-out for daemon re-exec fix (#1263, #1264) (#1301)
+- docs: GOVERNS backlog automation design + plan (#1203) (#1281)
+- Marketing goal ownership: charter edit + role-based TPM sweep routing (#1299)
+- docs: design spec for marketing charter goal ownership (#1294)
+- docs(book): Part II Onboarding chapter, v0.4-DRAFT (#1292)
+- docs: author blog posts 137 & 138, sync memory, todo, and devlogs (#1289)
+- docs: author fleet harness parity reference manual (#1285)
+- docs: blog post and project-docs sync for PR #1279 (#1277) (#1280)
+- docs: blog post and project-docs sync for PR #1275 (#1274) (#1276)
+- docs: sync README with v0.18.0 (#1242) (#1269)
+- docs: blog post and project-docs sync for PR #1271 (#1268) (#1273)
+- docs: sync todo.md for 7-PR review backlog closure (#1267)
+- docs: blog post for #1199 charter corpus grounding (PR #1260) (#1266)
+- docs: sync todo.md for PR #1232 resolution, file #1264 for token-cache gap (#1265)
+- docs: sync todo.md for #1228 resolution (#1261)
+- docs: standardize Harness vs Agent terminology in synlynk/*.py (#1202) (#1256)
+- docs: sync todo.md — #1140/#1250 landed, review queue cleared (#1257)
+- docs(blog): PR #1239 post — The Book Gets Co-Authors (#1241)
+- docs(book): Part 0 + Part I multi-author chapters, v0.3-DRAFT (#1239)
+- chore: repair harness SOP fences to include Herdr Workspace Protocol (#1230)
+- docs: check in The Supervised Machine (v0.2 DRAFT) manuscript (#1227)
+- docs: archive superseded todo/devlog/decision authority spec (#1222)
+- docs: full RCA for LIVE-11 (checkpoint() todo.md migration-unaware path) (#1221)
+- docs: record editorial-review decision for The Supervised Machine 2nd Ed (#1225)
+- docs: ticket-driven approval auto-resume design spec + implementation plan (#1215)
+- docs: add session topic discipline & cross-harness context transfer design spec (#1214)
+- docs: recover 2 decision records lost to gitignored write path (#1195)
+- docs: resync todo.md with current project state (#1216)
+- docs: retroactive RCAs for LIVE-9 (#1184) and LIVE-10 (#1185) (#1206)
+- Charter content & structure schema (#1196)
+- docs: charter authority design — surfacing mechanism, harness-agnosticism, role-portability (#1193)
+<hr>
 <div class="changelog-version-header"><span class="changelog-version">v0.18.0</span><span class="changelog-date">2026-08-27</span></div>
 <p><strong>Release pitch:</strong> a backlog of already-shipped, undocumented work — QA merge-gate authority, the gh-write broker, harness capability registry v2, and a week of dispatch/gh-write reliability fixes — finally gets a version number, and today's own session shows why that matters: a live datetime-comparison crash (#1184) and a per-connection DB backup storm (#1087) both got root-caused and fixed in the same sitting this release closes out.</p>
 <h3 class="tag-added">Added</h3>

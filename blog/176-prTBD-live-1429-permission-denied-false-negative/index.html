@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LIVE-1429 — The Classifier That Overwrote a Real Success | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Sep 06, 2026</span>
+        
+          <span class="blog-post-pr">PR TBD</span>
+        
+      </div>
+      <h1 class="blog-post-title">LIVE-1429 — The Classifier That Overwrote a Real Success</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>PR #1440 made every home harness a conductor, not just Claude: dual-mode directives, constitutional precedence of runtime context over static <code>*.md</code>, and <code>synlynk home</code>. The goalpost at the end of that PR was that Agy, Codex, and Grok could drive dispatch → PR → review from an interactive session. That only works if <code>synlynk jobs</code> tells the truth about those writes.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>None on product shape. This is the sixth recurrence of the #1377 job-status false-negative class, filed as LIVE-1429 after the job that implemented #1414's own regression test (<code>job-be18ebe7</code>) printed <code>OK (exit 0)</code>, touched <code>tests/test_agent_cli.py</code>, opened PR #1415, and then persisted <code>daemon_jobs.status = permission_denied</code>.</p>
+<p>The issue claimed <code>gh_write_verified=1</code>. The live row is more precise: <code>requires_gh_write=1</code>, <code>gh_write_verified=unknown</code>, <code>gh_write_target=pr:1414</code>. 1414 is the <em>issue</em>; the PR that landed is #1415. <code>gh pr view 1414</code> cannot resolve a pull request, so the verifier correctly returns unknown. That targeting bug is a follow-up, not this fix. The status lie is independent of it.</p>
+<h2>What This PR Shipped</h2>
+<p>Root cause: <code>_reconcile_daemon_jobs</code> applies GTV (job would be <code>done</code>, exit 0), then unconditionally overwrites status to <code>permission_denied</code> if the log matches <code>_log_has_permission_denied_signature</code>. <code>_reconcile_jobs</code> (the jobs.json path) already refuses that overwrite when <code>_job_has_real_work_landed(git_state)</code>. The daemon path did not. <code>_reconcile_terminal_jobs_json</code> then refuses to repair an already-terminal SQLite row, so <code>jobs.json: completed</code> and <code>daemon_jobs: permission_denied</code> stay split.</p>
+<p>The fix applies the same corroboration the jobs.json path uses, plus the GitHub verifier: a log-shaped denial is not terminal when git work landed or <code>gh_write_verified == &quot;true&quot;</code>. Genuine denials with neither corroboration still mark <code>permission_denied</code>.</p>
+<p>Tests: daemon ignore-denial when git work landed; daemon ignore-denial when the write is verified; daemon still-denied without corroboration.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>None.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>Home-conductor mode from #1440 will dispatch more gh-write jobs from non-Claude sessions. If those jobs keep landing real PRs while the job board says <code>permission_denied</code>, heal, QA, and auto-resume will treat successes as failures. This closes the sixth fingerprint of that class on the daemon path. Remaining: <code>gh_write_target</code> bound to the issue number as if it were the opened PR (<code>pr:1414</code> vs PR #1415).</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p><code>synlynk jobs</code> daemon status should not call a corroborated success a permission denial. Next: execute the 24-PR triage (#1435), then the reviewer-worktree <code>pr check</code> miss (#1432). Do not start more home-harness features until those land.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

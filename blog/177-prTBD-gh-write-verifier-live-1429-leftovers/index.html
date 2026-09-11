@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LIVE-1429 leftovers — the verifier still could not see the write | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-1">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Sep 06, 2026</span>
+        
+          <span class="blog-post-pr">PR TBD</span>
+        
+      </div>
+      <h1 class="blog-post-title">LIVE-1429 leftovers — the verifier still could not see the write</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>PR #1441 stopped <code>_reconcile_daemon_jobs</code> from overwriting a corroborated <code>done</code> with <code>permission_denied</code>. LIVE-1429 closed. The goalpost was: job status should match GitHub ground truth for gh-write jobs.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>#1441 was necessary and not sufficient. The review and merge dispatches for #1441 itself proved it:</p>
+<ul>
+<li><code>job-1c68bfd4</code> posted an APPROVED review as <code>synlynk-synlynk-qa[bot]</code> and still stored <code>gh_write_verified=false</code> / <code>permission_denied</code>.</li>
+<li><code>job-be622768</code> squash-merged #1441 and stored <code>gh_write_expect=pr_open</code> / <code>gh_write_verified=unknown</code>.</li>
+<li><code>job-be18ebe7</code> (the original LIVE-1429 job) stored <code>gh_write_target=pr:1414</code> for an issue, while the PR was #1415.</li>
+</ul>
+<p>Those are verifier contract bugs, not classifier overwrites. Filed as #1442 plus two fingerprints found while checking whether #1441 actually closed the class.</p>
+<h2>What This PR Shipped</h2>
+<ol>
+<li><strong>#1442.</strong> When <code>expect=pr_open</code> and <code>gh pr view N</code> cannot resolve a pull request, search PRs <code>linked:issue-N</code> created after <code>since</code> (optional author match).</li>
+<li><strong>Author login.</strong> GraphQL <code>login</code> is <code>synlynk-synlynk-qa</code>; stored expect_author is <code>synlynk-synlynk-qa[bot]</code>. Compare after stripping a <code>[bot]</code> suffix.</li>
+<li><strong>Naive <code>since</code> is local wall time.</strong> <code>daemon_jobs.started_at</code> has no offset. Treating it as UTC made a 03:54Z review look older than a 09:19 IST start.</li>
+<li><strong>Expect order.</strong> Check merge before &quot;opens a PR&quot;. Prompts that say <code>Do not open a new PR</code> after a merge instruction no longer classify as <code>pr_open</code>.</li>
+</ol>
+<h2>Brainstorm Visuals Used</h2>
+<p>None.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>#1441 made a success stay <code>done</code> when corroboration exists. This PR makes corroboration actually fire for the three gh-write shapes we just ran (open a new PR for an issue, post a review, merge a PR). Without it, <code>synlynk jobs</code> still trains operators to ignore the board.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>Job-status truth for gh-write is one cluster: classifier guard (#1441) + target/expect/author/time (#1442 and this PR). Next P0 is still the 24-PR triage (#1435), after this lands.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

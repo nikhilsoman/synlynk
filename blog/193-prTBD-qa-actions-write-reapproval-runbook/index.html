@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #TBD - #1436: Operator Runbook for qa App Actions Write Re-approval | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-1">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Sep 06, 2026</span>
+        
+          <span class="blog-post-pr">PR TBD</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #TBD - #1436: Operator Runbook for qa App Actions Write Re-approval</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>PR #1458 updated the GitHub App manifest builder (<code>synlynk/team.py</code>) so new installations for merge-authority roles (<code>qa</code>) request <code>actions: write</code> alongside <code>administration: write</code>. However, GitHub's permission security boundary prevents newly requested permissions from being applied automatically to an already-installed GitHub App (<code>synlynk-synlynk-qa</code>).</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>None. The architectural boundary remains strictly intact: autonomous agents cannot self-escalate privileges. Adding <code>actions: write</code> for workflow rerun recovery requires the human installer (Nikhil) to re-approve the elevated permissions in the GitHub UI.</p>
+<h2>What This PR Shipped</h2>
+<p>A dedicated operational runbook and spec cross-reference:</p>
+<ul>
+<li><code>docs/qa/1436-qa-actions-write-reapproval.md</code>: A concise operator runbook detailing:
+<ul>
+<li>Why <code>gh run rerun --failed</code> failed with <code>Resource not accessible by integration</code> under <code>actions: read</code>.</li>
+<li>The exact UI navigation steps for Nikhil (GitHub → Settings → GitHub Apps → synlynk-synlynk-qa → Permissions &amp; events → Repository permissions → Actions → Read and write → Save → accept installation confirmation prompt).</li>
+<li>How to verify the updated permission (<code>synlynk gh --role qa -- api repos/nikhilsoman/synlynk/actions/runs --jq '.[0].id'</code> or a dry <code>gh run list</code>, avoiding the <code>/user</code> endpoint which 403s for App tokens).</li>
+<li>Explicit omission of PEMs, tokens, or installation IDs.</li>
+</ul>
+</li>
+<li><code>docs/superpowers/specs/2026-09-06-workspace-agent-identity-routing-design.md</code>: Cross-referenced the runbook under §7 Optional.</li>
+</ul>
+<h2>Brainstorm Visuals Used</h2>
+<p>None. Spec: <code>docs/superpowers/specs/2026-09-06-workspace-agent-identity-routing-design.md</code>.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>Documents the exact operator intervention required to unblock the qa role's flaky workflow rerun capability without compromising security or leaking credentials.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>Once Nikhil completes the manual re-approval in the GitHub UI and validates it with <code>synlynk gh --role qa -- api repos/nikhilsoman/synlynk/actions/runs</code>, the qa bot will have the necessary permissions to retrigger failed workflow runs autonomously during merge-gate execution.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
