@@ -613,3 +613,12 @@ with 4,247,552 cached input tokens while the per-job task context was 3,579
 bytes. Receipt failures are a separate evidence-ordering gap for remote review
 work because local git activity is not sufficient corroboration.
 [@nikhilsoman]
+
+## Layered Topology & Release Protocol (Epic #1543, 2026-09-11)
+- **Four-Tier Branch Architecture:** Feature worktrees (`feat/<harness>/...`) target `unstable` integration trunk by default. `staging` serves as 48-hour soak track before promotion to `main`.
+- **Worker Log Preservation & Cost Integrity (#1500, #1511):** Reconciler worktree reaping preserves worker stdout/stderr and exit code markers into central storage (`.synlynk/logs/`) and updates `daemon_jobs.log_path`, eliminating $0.00 / 0-token reporting on reaped workers.
+- **Fail-Closed Git State Inspection (#1501, #1502):** Reconciler inspection errors (such as `OSError` during lock contention) fail closed and retry, preventing active workers from being falsely settled as `killed_zombie`.
+- **Comment-Intent Verification (#1511):** Tasks involving PM grooming, triage, audit, and comments resolve write verification expectation to `comment_posted` rather than `closed`. Added `--gh-write-expect` for explicit caller attestation.
+- **Event-Driven Launch DAG & Unattended Loop (#1527):** `synlynk.launch_dag` (`DAGNode`, `LaunchDAG`) manages independent task parallelization and serialized merges under `synlynk run --milestone <ver> --unattended`. Reserved gates (spec approval, irreversible release, unresolvable test failure) raise asynchronous GitHub issues assigned to `@nikhilsoman` under label `reserved-gate` without halting independent parallel branches.
+[@nikhilsoman via Agy]
+

@@ -40,6 +40,14 @@ def _dispatch_git_worktree_job(monkeypatch):
         "micro_rework": 0,
         "model_at_dispatch": "unknown",
     }
+    real_kill = os.kill
+
+    def _mock_kill(p, sig):
+        if p == 4242 and sig == 0:
+            raise ProcessLookupError()
+        return real_kill(p, sig)
+
+    monkeypatch.setattr(os, "kill", _mock_kill)
     monkeypatch.setattr(dispatch_mod, "process_identity_check", lambda pid, expected: "safe to kill")
     sl._save_jobs([job])
     return job
