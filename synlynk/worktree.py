@@ -450,17 +450,30 @@ def _nesting_depth(verdict: WorktreeVerdict, by_path: dict) -> int:
     return depth
 
 
-def cmd_worktree_clean(apply: bool = False, json_output: bool = False) -> str:
+def cmd_worktree_clean(
+    apply: bool = False,
+    json_output: bool = False,
+    prune_siblings: bool = False,
+) -> str:
     main_repo_path = _get_repo_root()
     cwd_worktree_path = os.getcwd()
     verdicts = _collect_verdicts(main_repo_path, cwd_worktree_path)
 
+    sibling_candidates = []
+    if prune_siblings:
+        try:
+            from synlynk.worktree_prune import find_patch_equivalent_sibling_branches
+            sibling_candidates = find_patch_equivalent_sibling_branches(main_repo_path)
+        except Exception:
+            sibling_candidates = []
+
     if not apply:
         safe_count = sum(1 for v in verdicts if v.verdict == "safe")
+        total_remove = safe_count + len(sibling_candidates)
         if json_output:
             payload = {
                 "dry_run": True,
-                "would_remove": safe_count,
+                "would_remove": total_remove,
                 "items": [
                     {
                         "path": v.path,
@@ -471,12 +484,16 @@ def cmd_worktree_clean(apply: bool = False, json_output: bool = False) -> str:
                     }
                     for v in verdicts
                 ],
+                "sibling_branches": sibling_candidates,
             }
             output = json.dumps(payload, indent=2)
         else:
             report = _format_audit_report(verdicts, json_output=False)
-            summary = f"[dry-run] would remove {safe_count} worktrees + branches (use --apply)"
-            output = f"{report}\n\n{summary}" if report != "No stale worktrees — nothing to audit." else report
+            extra = ""
+            if sibling_candidates:
+                extra = f"\nSIBLING BRANCHES ({len(sibling_candidates)}) — patch-equivalent squashed branches:\n" + "\n".join(f"  {b}" for b in sibling_candidates)
+            summary = f"[dry-run] would remove {total_remove} worktrees + branches (use --apply)"
+            output = f"{report}{extra}\n\n{summary}" if report != "No stale worktrees — nothing to audit." or extra else report
         print(output)
         return output
 
@@ -520,6 +537,15 @@ def cmd_worktree_clean(apply: bool = False, json_output: bool = False) -> str:
                 remote_status = "remote-none/skip"
 
             result_lines.append(f"{v.branch}   wt={wt_status}   branch={branch_status}   {remote_status}")
+
+        if prune_siblings:
+            try:
+                from synlynk.worktree_prune import prune_sibling_branches
+                pruned_siblings = prune_sibling_branches(main_repo_path, dry_run=False)
+                for b in pruned_siblings:
+                    result_lines.append(f"{b}   sibling-branch=deleted")
+            except Exception as exc:
+                result_lines.append(f"sibling-prune failed: {exc}")
 
         subprocess.run(
             ["git", "worktree", "prune"],
