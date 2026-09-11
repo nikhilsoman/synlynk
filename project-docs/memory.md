@@ -1,5 +1,14 @@
 # synlynk Memory
 
+## Milestone v0.20.0 Cluster B Shipped: Worktree Lifecycle & Rebase Concurrency (decided/shipped 2026-09-11)
+- **Implementation Shipped (PR #1558):** Completed Milestone v0.20.0 Cluster B (`story-dfb61aea`) per approved design spec (`docs/superpowers/specs/2026-09-11-cluster-b-worktree-lifecycle-concurrency-design.md`) and implementation plan (`docs/superpowers/plans/2026-09-11-cluster-b-worktree-lifecycle-concurrency.md`).
+- **Architectural Deliverables:**
+  1. **Adaptive Scope-Bounded Sparse Worktrees (`synlynk/worktree_sparse.py`):** Cone-mode sparse checkout using `git config extensions.worktreeConfig true` and `git sparse-checkout init --cone` ensuring isolated sparse configuration under `.git/worktrees/<id>/config.worktree`. Mandatory inclusion of `.synlynk/`, `project-docs/`, `synlynk/`, and `tests/` guarantees zero instruction disruption for all AI harnesses. Dynamic cone expansion via `ensure_path_in_sparse_cone()` prevents out-of-cone file access failures mid-dispatch.
+  2. **Sibling Branch Auto-Pruning Engine (`synlynk/worktree_prune.py`):** Uses `git cherry <upstream> <branch>` to detect patch-equivalent commits from squash-merged feature branches. Safely removes attached worktrees and deletes local tracking branches via `synlynk worktree clean --prune-siblings` without touching unmerged or dirty worktrees.
+  3. **Multi-Task Lineage Tracking (`synlynk/lineage.py`):** Added `superseded_by` and `lineage_root` columns to SQLite `daemon_jobs` and `stories` tables. Added `record_job_superseded()` and `get_job_lineage()`. Excluded superseded jobs from zombie reaper loops.
+  4. **Deterministic Build Timestamp Freezing (`SOURCE_DATE_EPOCH`):** Implemented `get_worktree_epoch()` in `synlynk/dispatch.py` extracting HEAD commit timestamps and injecting `SOURCE_DATE_EPOCH` into all dispatched subprocess runs, preventing non-deterministic build artifact collisions.
+- **Verification & Review:** 56 unit and regression tests passing. Reviewed and merged by Codex (`qa`) on PR #1558. [@agy]
+
 ## Marketing Release Ceremony Automation Shipped (decided/shipped 2026-09-11)
 - **Implementation Shipped (PR #1557):** Shipped full Marketing Release Ceremony Automation (`story-608ba4af`) per approved design spec (`docs/superpowers/specs/2026-09-11-marketing-release-ceremony-automation-design.md`) and implementation plan (`docs/superpowers/plans/2026-09-11-marketing-release-ceremony-automation.md`).
 - **Core Capabilities:**

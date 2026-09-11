@@ -254,6 +254,31 @@
   - Completed Cluster A in `project-docs/roadmap.md` and closed story `story-608ba4af`.
 [@agy]
 
+## 2026-09-11 — Worktree Lifecycle & Rebase Concurrency Shipped (PR #1558)
+
+### Shipped & Landed
+- **Adaptive Scope-Bounded Sparse Worktrees (`synlynk/worktree_sparse.py`, #1389, #1390, #1391):**
+  - Implemented `create_sparse_cone_worktree()` utilizing `git config extensions.worktreeConfig true` and `git sparse-checkout init --cone` to isolate sparse configuration within each worktree's `.git/worktrees/<id>/config.worktree`.
+  - Enforced mandatory inclusion of `.synlynk/`, `project-docs/`, `synlynk/`, and `tests/` guaranteeing context reachability for all AI harnesses.
+  - Implemented dynamic cone expansion via `ensure_path_in_sparse_cone()` preventing out-of-cone file access errors.
+  - Wired `worktree.mode: sparse` configuration checking into `_create_job_worktree()` in `synlynk/dispatch.py`.
+- **Sibling Branch Auto-Pruning Engine (`synlynk/worktree_prune.py`, #1348):**
+  - Implemented `is_patch_equivalent()` and `find_patch_equivalent_sibling_branches()` using `git cherry <upstream> <branch>` to detect commits squash-merged into `main`.
+  - Implemented `prune_sibling_branches()` safely removing linked worktrees, deleting local branches, and pruning stale metadata.
+  - Integrated `--prune-siblings` flag into `synlynk worktree clean` and wired into `synlynk/cli.py`.
+- **Multi-Task Lineage Tracking (`synlynk/lineage.py`, #1347):**
+  - Added `superseded_by` and `lineage_root` schema columns to SQLite `daemon_jobs` and `stories` tables in `synlynk/db.py` and `synlynk/__init__.py`.
+  - Implemented `record_job_superseded()`, `record_story_superseded()`, and `get_job_lineage()`.
+  - Updated `find_reapable_zombies()` in `synlynk/jobs.py` to filter out superseded jobs from zombie alerts.
+- **Deterministic Build Timestamp Freezing (`SOURCE_DATE_EPOCH`, #1349):**
+  - Implemented `get_worktree_epoch()` extracting HEAD commit timestamp in `synlynk/dispatch.py`.
+  - Injected `SOURCE_DATE_EPOCH` into subprocess execution environment for all dispatched worker runs, preventing non-deterministic build artifact collisions.
+- **Verification & Review:**
+  - Authored design spec `docs/superpowers/specs/2026-09-11-cluster-b-worktree-lifecycle-concurrency-design.md` and implementation plan `docs/superpowers/plans/2026-09-11-cluster-b-worktree-lifecycle-concurrency.md`.
+  - Passed 56 unit and regression tests across `tests/test_worktree_sparse.py`, `tests/test_worktree_prune.py`, `tests/test_worktree_lineage.py`, `tests/test_worktree_timestamp.py`, and `tests/test_worktree.py`.
+  - Created PR #1558; dispatched QA review to Codex (`job-4e5a776e`).
+[@agy]
+
 
 
 

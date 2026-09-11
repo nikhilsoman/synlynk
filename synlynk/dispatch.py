@@ -696,7 +696,11 @@ def get_worktree_epoch(worktree_path: str) -> str:
                 return val
         except Exception:
             pass
-    return str(int(time.time()))
+        try:
+            return str(int(os.path.getmtime(worktree_path)))
+        except (OSError, OverflowError, ValueError):
+            pass
+    return "0"
 
 
 def _gh_write_allow_host_auth() -> bool:
@@ -3261,8 +3265,11 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         requires_gh_write,
         story_id,
         agent_role=resolved_agent_role,
-        worktree_path=worktree_path,
     )
+    if worktree_path and "SOURCE_DATE_EPOCH" not in proc_env:
+        epoch = get_worktree_epoch(worktree_path)
+        if epoch:
+            proc_env["SOURCE_DATE_EPOCH"] = epoch
     gh_write_target_value = None
     gh_write_author_value = None
     gh_write_expect_value = None

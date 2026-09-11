@@ -52,4 +52,12 @@
 - Fixed 7 unquoted YAML frontmatter headers in `docs/blog/*.md` enabling 100% clean Eleventy static site builds.
 - Dispatched QA Review & Squash-Merge: Codex (`job-c142fc38`), ~$0.13 estimated, status OK, PR #1557 merged to `main`.
 
+## 2026-09-11 — Worktree Lifecycle & Rebase Concurrency (`story-dfb61aea`)
+
+- Conductor: Agy (Gemini 2.5 Flash / Pro).
+- Authored design spec (`docs/superpowers/specs/2026-09-11-cluster-b-worktree-lifecycle-concurrency-design.md`) and implementation plan (`docs/superpowers/plans/2026-09-11-cluster-b-worktree-lifecycle-concurrency.md`).
+- Implemented scope-bounded sparse cone worktrees (`synlynk/worktree_sparse.py`, `synlynk/dispatch.py`), sibling branch patch-equivalence pruning (`synlynk/worktree_prune.py`, `synlynk/worktree.py`), multi-task lineage tracking (`synlynk/lineage.py`, `synlynk/jobs.py`), and deterministic build epoch injection (`SOURCE_DATE_EPOCH`).
+- Created and passed 56 unit and regression tests across `tests/test_worktree_sparse.py`, `tests/test_worktree_prune.py`, `tests/test_worktree_lineage.py`, `tests/test_worktree_timestamp.py`, and `tests/test_worktree.py`.
+- Dispatched QA Review & Squash-Merge: Codex (`job-4e5a776e`), ~$0.13 estimated.
+
 
