@@ -7,7 +7,7 @@ post: 164
 pr: "#1347"
 version: "0.19.0"
 tags: ["growth", "marketing", "automation", "media", "living-docs"]
-merged: status: open
+merged: "status: open"
 ---
 
 ## The Broader Goal at the End of the Previous PR
