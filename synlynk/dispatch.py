@@ -15,7 +15,7 @@ import sys
 import threading
 import tempfile
 import time
-from typing import Optional, Tuple
+from typing import List, Optional, Sequence, Tuple
 
 from synlynk._constants import HARNESS_CAPABILITY_BASELINES, _CODEX_NETWORK_PERMISSION
 
@@ -1998,7 +1998,12 @@ def _preflight_headless_permission_check(harness_name: str, permissions: list, d
     }
 
 
-def _create_job_worktree(job_id: str, agent: str, base: Optional[str] = None) -> dict:
+def _create_job_worktree(
+    job_id: str,
+    agent: str,
+    base: Optional[str] = None,
+    scoped_paths: Optional[Sequence[str]] = None,
+) -> dict:
     """Create the isolated git worktree for a dispatched job.
 
     Returns {"path": str, "branch": str, "base_branch": str, "base_sha": str}
@@ -2009,6 +2014,7 @@ def _create_job_worktree(job_id: str, agent: str, base: Optional[str] = None) ->
     load_config_fn = _pkg("load_config")
     config = load_config_fn() if load_config_fn else {}
     stacking_mode = (config.get("dispatch") or {}).get("stacking", "auto")
+    worktree_mode = (config.get("worktree") or {}).get("mode", "full")
 
     base_ref = _resolve_dispatch_worktree_base_ref(
         os.getcwd(), stacking_mode=stacking_mode, explicit_base=base
@@ -2029,6 +2035,28 @@ def _create_job_worktree(job_id: str, agent: str, base: Optional[str] = None) ->
         print(f"  worktree base resolving against {base_ref} @ {base_sha}")
     else:
         print(f"  worktree base resolving against {base_ref}")
+
+    if worktree_mode == "sparse":
+        try:
+            from synlynk.worktree_sparse import create_sparse_cone_worktree
+            with git_ref_operation_lock(os.getcwd()):
+                sparse_ok = create_sparse_cone_worktree(
+                    repo_root=os.getcwd(),
+                    worktree_path=worktree_path,
+                    branch=worktree_branch,
+                    base_ref=base_sha or (base_ref if base_ref and base_ref != "HEAD" else "HEAD"),
+                    scoped_paths=scoped_paths,
+                )
+            if sparse_ok:
+                _assert_dispatch_worktree_base_is_fresh(worktree_path, base_ref)
+                return {
+                    "path": worktree_path,
+                    "branch": worktree_branch,
+                    "base_branch": base_ref,
+                    "base_sha": base_sha,
+                }
+        except Exception as exc:
+            print(f"  warning: sparse worktree creation failed ({exc}); falling back to full worktree")
 
     worktree_cmd = ["git", "worktree", "add", worktree_path, "-b", worktree_branch]
     if base_sha:
