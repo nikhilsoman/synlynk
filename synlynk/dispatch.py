@@ -2817,6 +2817,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 "    Configure ~/.gemini/antigravity-cli/settings.json with these allowRules, "
                 "or dispatch to a different agent (Codex/Grok)."
             )
+            raise SystemExit(1)
     if agent == "grok" and task_requires_write(
         task, task_type=task_type, permissions=grants, requires_gh_write=requires_gh_write
     ):
