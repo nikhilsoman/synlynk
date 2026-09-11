@@ -622,3 +622,20 @@ work because local git activity is not sufficient corroboration.
 - **Event-Driven Launch DAG & Unattended Loop (#1527):** `synlynk.launch_dag` (`DAGNode`, `LaunchDAG`) manages independent task parallelization and serialized merges under `synlynk run --milestone <ver> --unattended`. Reserved gates (spec approval, irreversible release, unresolvable test failure) raise asynchronous GitHub issues assigned to `@nikhilsoman` under label `reserved-gate` without halting independent parallel branches.
 [@nikhilsoman via Agy]
 
+## Milestone v0.20.0 Architectural Specification & Release v0.19.0 Stamping (2026-09-11)
+- **4-Cluster Consolidation for v0.20.0:** Codified in `docs/superpowers/specs/2026-09-11-v0.20.0-visual-workspace-autonomous-onboarding-design.md`:
+  - *Cluster A (Visual Workspace & Role Onboarding):* BS-6 Vizor views (Product · Logical · Infra), in-browser 1-click GitHub App role creation wizard, and visual worktree sweep tooling (#1539, #1346, #1350, #1479).
+  - *Cluster B (Worktree Lifecycle & Concurrency):* Operator-configurable `worktree.mode` defaulting to scope-bounded sparse worktrees (`git sparse-checkout --cone` for `.synlynk/` + scoped paths), sibling branch auto-pruning, `superseded_by` lineage tracking, and timestamp freezing (#1389, #1390, #1391, #1348, #1347, #1349).
+  - *Cluster C (Fleet Diagnostic Truth & Concurrency):* Consolidated 4-point readiness matrix in `synlynk doctor --readiness` and Vizor (#1521), Grok write sandbox fail-closed validation canary (#1522), post-claim story un-stranding (#1507), and SQLite 30s busy-timeout / WAL mode tuning (#1503).
+  - *Cluster D (Next-Gen Harness Onboarding):* Meta Muse integrated as a first-class commercial CLI harness adapter alongside Claude, Codex, Agy, and Grok (#1508, DE Review §3.1). DeepSeek integration is explicitly parked until local harness (Aider+Ornith+oMLX) maturation.
+- **Workspace Agent Creation & Evolution Contract:** Formalized into two operational flows:
+  - *Onboarding Lifecycle:* Repo scan -> archetype detection (code topology vs blank template) -> goal elicitation -> SFIA 9-grounded role synthesis -> in-browser 1-click GitHub App creation wizard.
+  - *Continuous Evolution:* Reactive PM story-intake skill gap detection (staging role proposals) + Retrospective TPM milestone audit (pruning/adapting stagnant charters via `synlynk charters adapt`).
+- **Release v0.19.0 Stamped on main:** Stamped with `synlynk release --version 0.19.0 --role pm`, updating `VERSION`, `synlynk/_constants.py`, `CHANGELOG.md`, `README.md` (2,734 collected tests), and blog post 196.
+- **Marketing Workspace Agent Charter & Release Ceremony Mandate:**
+  - Expanded `marketing` charter (revision 5) to mandate continuous and release-time `README.md` synchronization (badges, collected test counts, hero highlights, and command reference).
+  - Mandated synlynk.com (`website/`) maintenance and automated compilation/export of the three canonical Synlynk Docs bundles in `docs/` (`synlynk-quickstart-guide.html/.pdf`, `synlynk-official-reference.html/.pdf`, `synlynk-command-reference.html/.pdf`).
+  - Integrated `sync_readme_for_release()` into `synlynk release`, establishing the Marketing Release Ceremony dispatched by PM/TPM as a prerequisite gate before public release tagging.
+[@agy]
+
+

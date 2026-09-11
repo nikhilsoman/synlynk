@@ -471,3 +471,53 @@ def format_readme_check_report(
                 "  - version cannot be waived; README must advertise the release version"
             )
     return "\n".join(lines)
+
+
+def sync_readme_for_release(
+    root: str,
+    version: str,
+    collected_count: Optional[int] = None,
+    hero_summary: Optional[str] = None,
+) -> bool:
+    """Automatically synchronizes README.md for a named release.
+
+    Updates:
+    1. Version badge (`badge/version-<version>`)
+    2. Collected test count badge and prose (if collected_count is provided)
+    3. Hero summary line for the version (if hero_summary is provided)
+    4. Generated command documentation block between COMMANDS_START and COMMANDS_END
+    """
+    readme_path = os.path.join(root, "README.md")
+    if not os.path.exists(readme_path):
+        return False
+    with open(readme_path, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    ver_clean = version.lstrip("v")
+    content = _VERSION_BADGE_RE.sub(f"badge/version-{ver_clean}", content)
+
+    if collected_count is not None:
+        content = _TEST_BADGE_RE.sub(f"tests-{collected_count}%20collected", content)
+        content = re.sub(
+            r"\b\d+\s+tests\s+(?:passing|collected)\b",
+            f"{collected_count} tests collected",
+            content,
+        )
+
+    if hero_summary:
+        content = re.sub(
+            r"\*\*v\d+\.\d+\.\d+:\*\*[^\n]*",
+            f"**v{ver_clean}:** {hero_summary}",
+            content,
+        )
+
+    if COMMANDS_START in content and COMMANDS_END in content:
+        generated = _generated_command_section().strip()
+        prefix = content.split(COMMANDS_START)[0] + COMMANDS_START + "\n"
+        suffix = "\n" + COMMANDS_END + content.split(COMMANDS_END)[1]
+        content = prefix + generated + suffix
+
+    with open(readme_path, "w", encoding="utf-8") as f:
+        f.write(content)
+    return True
+
