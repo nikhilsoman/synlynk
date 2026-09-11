@@ -992,7 +992,7 @@ WHERE split_model = 0
 GROUP BY agent, model_version, discipline, engg_domain, org_domain, role, stage, industry, phase;
 """
 
-def _get_db() -> _sqlite3.Connection:
+def _get_db(db_path: str = None) -> _sqlite3.Connection:
     """Returns a WAL-mode SQLite connection to state.db, running migrations.
 
     SYNLYNK_STATE_DB_PATH, if set, is used verbatim and takes precedence over
@@ -1051,6 +1051,8 @@ def _get_db() -> _sqlite3.Connection:
             conn.execute("BEGIN IMMEDIATE")
             conn.execute("ROLLBACK")
             conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA busy_timeout=30000")
+            conn.execute("PRAGMA synchronous=NORMAL")
             conn.execute("PRAGMA foreign_keys=ON")
             _migrate_db(conn)
         except Exception:
@@ -1058,6 +1060,9 @@ def _get_db() -> _sqlite3.Connection:
             raise
         ACTIVE_DB_PATH = os.path.abspath(path)
         return conn
+
+    if db_path is not None:
+        return _connect(db_path)
 
     override = os.environ.get("SYNLYNK_STATE_DB_PATH")
     if override:
