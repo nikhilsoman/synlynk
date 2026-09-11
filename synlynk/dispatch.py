@@ -3124,9 +3124,6 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             flags = flags + ["--print-timeout", "30m0s"]
     if agent == "codex":
         flags = flags + ["--json"]
-    if agent == "muse":
-        if "--output-format" not in flags:
-            flags = flags + ["--output-format", "json"]
         if _CODEX_NETWORK_PERMISSION in permissions and not any(
             "network_access=true" in flag for flag in flags
         ):
@@ -3145,6 +3142,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                     flags = flags + ["--add-dir", git_common_dir]
         except Exception:
             pass
+    if agent == "muse":
+        if "--output-format" not in flags:
+            flags = flags + ["--output-format", "json"]
 
     # Baseline, override, permission, and harness-specific sources can each
     # contribute the same boolean flag (notably Grok's --always-approve).
