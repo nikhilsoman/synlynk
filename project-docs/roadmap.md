@@ -23,7 +23,7 @@
 ## 2. Milestone v0.20.0 Breakdown (Current Milestone)
 
 ### Cluster A: Visual Workspace Views, Role Setup Wizard & Marketing Release Ceremony
-- [ ] **BS-6 Views in Vizor:** Product view (routes/screens), Logical view (module hierarchy/symbols), and Infra view (containers/deployables) per approved spec (#1539).
+- [ ] **BS-6 Views in Vizor:** Projection schema and Product/Logical/Infra extraction engine implemented in the Task 1 branch; Vizor renderers remain pending (#1539).
 - [ ] **1-Click GitHub App Onboarding Wizard:** Browser-guided manifest creation, callback handling, and automatic token refresh.
 - [ ] **Visual Worktree Sweep Tooling:** Interactive audit panel in Vizor with 1-click prune for safe/orphaned worktrees (#1346, #1350, #1479).
 - [ ] **Marketing Release Ceremony Automation:** Continuous GitHub README maintenance, synlynk.com (`website/`) site refresh, and compilation/export of the 3 Synlynk Doc bundles (Quick Start, Official Manual, Command Ref HTML & PDF) dispatched by PM/TPM upon named release.

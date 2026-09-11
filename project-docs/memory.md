@@ -484,6 +484,9 @@ flat-file reconciliation is serialized. [@codex]
 - Full design spec: `docs/superpowers/specs/2026-08-30-harness-agent-separation-design.md`.
 [@agy]
 
+## BS-6 Projection Engine (2026-09-11)
+- [@nikhilsoman] Task 1 adds refreshable SQLite projections for product, logical, and infra workspace views. Extractors return JSON-ready records and persist nodes, edges, and per-view metadata; filesystem extraction remains safe when scanner state is absent.
+
 ## Superseded Decisions
 - ~~Tier model (Solo/Team/Enterprise)~~ → retired 2026-06-06. Replaced by OS layer model.
 - ~~"Context Switchboard" framing~~ → retired 2026-06-06. Replaced by "OS for multi-agent development."
@@ -645,5 +648,4 @@ work because local git activity is not sufficient corroboration.
   - Mandated synlynk.com (`website/`) maintenance and automated compilation/export of the three canonical Synlynk Docs bundles in `docs/` (`synlynk-quickstart-guide.html/.pdf`, `synlynk-official-reference.html/.pdf`, `synlynk-command-reference.html/.pdf`).
   - Integrated `sync_readme_for_release()` into `synlynk release`, establishing the Marketing Release Ceremony dispatched by PM/TPM as a prerequisite gate before public release tagging.
 [@agy]
-
 

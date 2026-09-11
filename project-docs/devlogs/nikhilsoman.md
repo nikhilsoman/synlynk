@@ -1478,3 +1478,7 @@ implementation plan.
 - Added the concise RCA/design note and a Sentinel regression test; deferred
   live usage checkpoints and GitHub-effect receipt corroboration as follow-up
   design work.
+## 2026-09-11 - BS-6 Projection Engine Task 1
+
+- Implemented `synlynk.viz_views` with workspace view tables, product journey/route extraction, logical package/module extraction, infra service extraction, and snapshot orchestration.
+- Added five focused tests; `python3 -m pytest tests/test_viz_views.py -v` passes 5/5.
