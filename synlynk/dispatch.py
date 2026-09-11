@@ -677,7 +677,26 @@ _ENV_ALLOWLIST_BASE = [
     "GIT_COMMITTER_NAME",
     "GIT_COMMITTER_EMAIL",
     "GIT_SSH_COMMAND",
+    "SOURCE_DATE_EPOCH",
 ]
+
+
+def get_worktree_epoch(worktree_path: str) -> str:
+    """Returns the Unix timestamp of HEAD commit in the worktree for reproducible builds (#1349)."""
+    if worktree_path and os.path.exists(worktree_path):
+        try:
+            res = subprocess.run(
+                ["git", "-C", worktree_path, "log", "-1", "--format=%ct", "HEAD"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            val = res.stdout.strip()
+            if val and val.isdigit():
+                return val
+        except Exception:
+            pass
+    return str(int(time.time()))
 
 
 def _gh_write_allow_host_auth() -> bool:
@@ -717,7 +736,14 @@ def _isolated_gh_config_dir() -> str:
     return path
 
 
-def _build_subprocess_env(agent: str, overrides: dict, requires_gh_write: bool, story_id: str, agent_role: str = None) -> dict:
+def _build_subprocess_env(
+    agent: str,
+    overrides: dict,
+    requires_gh_write: bool,
+    story_id: str,
+    agent_role: str = None,
+    worktree_path: str = None,
+) -> dict:
     """Build a minimal, allowlisted environment for a dispatched subprocess.
 
     Replaces copying the full parent environment: only a fixed base set of
@@ -740,6 +766,11 @@ def _build_subprocess_env(agent: str, overrides: dict, requires_gh_write: bool, 
         if "=" in var:
             k, v = var.split("=", 1)
             proc_env[k] = v
+
+    if worktree_path:
+        proc_env["SOURCE_DATE_EPOCH"] = get_worktree_epoch(worktree_path)
+    elif "SOURCE_DATE_EPOCH" not in proc_env and os.environ.get("SOURCE_DATE_EPOCH"):
+        proc_env["SOURCE_DATE_EPOCH"] = os.environ["SOURCE_DATE_EPOCH"]
 
     if requires_gh_write:
         role = agent_role or _role_for_story(story_id)
@@ -3224,7 +3255,14 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         cmd_str = " ".join(_shlex.quote(c) for c in [cli] + flags)
         shell_cmd = f"{cmd_str} < {_shlex.quote(prompt_file)} > {_shlex.quote(log_file)} 2>&1; echo $? > {_shlex.quote(log_file)}.exit"
 
-    proc_env = _build_subprocess_env(agent, overrides, requires_gh_write, story_id, agent_role=resolved_agent_role)
+    proc_env = _build_subprocess_env(
+        agent,
+        overrides,
+        requires_gh_write,
+        story_id,
+        agent_role=resolved_agent_role,
+        worktree_path=worktree_path,
+    )
     gh_write_target_value = None
     gh_write_author_value = None
     gh_write_expect_value = None
