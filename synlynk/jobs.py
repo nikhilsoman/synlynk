@@ -143,13 +143,22 @@ def _git_state_files_touched(git_state: Optional[dict]) -> list:
 
 def _read_job_log(log_path: Optional[str]) -> str:
     """Read a job log when it is available, treating unavailable logs as empty."""
-    if not log_path or not os.path.exists(log_path):
-        return ""
-    try:
-        with open(log_path) as f:
-            return f.read()
-    except Exception:
-        return ""
+    if log_path and os.path.exists(log_path):
+        try:
+            with open(log_path) as f:
+                return f.read()
+        except Exception:
+            return ""
+    if log_path:
+        try:
+            from synlynk.daemon import _daemon_state_path
+            central = _daemon_state_path("logs", os.path.basename(log_path))
+            if os.path.exists(central):
+                with open(central) as f:
+                    return f.read()
+        except Exception:
+            pass
+    return ""
 
 
 def _check_scope_compliance(changed_files: list, scope_paths: list) -> bool:
@@ -2133,7 +2142,10 @@ def _claim_daemon_job_terminal(conn, job_id: str) -> Optional[str]:
         "WHERE job_id=? AND status='running' AND terminal_claim_token IS NULL",
         (token, job_id),
     )
-    return token if (cursor.rowcount or 0) == 1 else None
+    if (cursor.rowcount or 0) == 1:
+        conn.commit()
+        return token
+    return None
 
 
 def _release_daemon_job_terminal_claim(conn, job_id: str, token: str) -> None:
@@ -2794,6 +2806,8 @@ def _verify_daemon_terminal_status(
     gh_write_expect: Optional[str],
 ) -> tuple:
     """Apply the configured GitHub-write check using daemon job metadata."""
+    target_is_issue = bool(gh_write_target and gh_write_target.startswith("issue:"))
+    resolved_expect = gh_write_expect or ("comment_posted" if target_is_issue else "closed")
     return _apply_gh_write_verification(
         conn,
         job_id,
@@ -2802,11 +2816,11 @@ def _verify_daemon_terminal_status(
         status,
         since=started_at,
         expect_author=gh_write_author,
-        expect=gh_write_expect or "closed",
+        expect=resolved_expect,
     )
 
 
-def _reap_zombie_worktree(job_id: str, log_path: Optional[str]) -> bool:
+def _reap_zombie_worktree(job_id: str, log_path: Optional[str], conn=None) -> bool:
     """Remove a leaked worktree recorded by a dead daemon job."""
     path = _daemon_job_worktree_path(job_id, log_path)
     if not path or not os.path.exists(path):
@@ -2816,6 +2830,7 @@ def _reap_zombie_worktree(job_id: str, log_path: Optional[str]) -> bool:
     if os.path.isdir(os.path.join(path, "worktrees")):
         return False
     # Preserve any log files located inside the worktree before deleting it
+    central_log_path = None
     if log_path and os.path.exists(log_path):
         try:
             norm_log = os.path.abspath(log_path)
@@ -2828,6 +2843,7 @@ def _reap_zombie_worktree(job_id: str, log_path: Optional[str]) -> bool:
                 dest = os.path.join(central_logs_dir, os.path.basename(log_path))
                 if not os.path.exists(dest):
                     shutil.copy2(log_path, dest)
+                central_log_path = dest
                 if os.path.exists(log_path + ".exit"):
                     dest_exit = dest + ".exit"
                     if not os.path.exists(dest_exit):
@@ -2838,16 +2854,25 @@ def _reap_zombie_worktree(job_id: str, log_path: Optional[str]) -> bool:
         ["git", "-C", os.path.dirname(path), "worktree", "remove", "--force", path],
         capture_output=True, text=True, check=False,
     )
-    if result.returncode == 0:
-        return True
-    try:
-        if os.path.isdir(path):
-            import shutil
-            shutil.rmtree(path)
-            return True
-    except OSError:
-        pass
-    return False
+    reaped = (result.returncode == 0)
+    if not reaped:
+        try:
+            if os.path.isdir(path):
+                import shutil
+                shutil.rmtree(path)
+                reaped = True
+        except OSError:
+            pass
+    if reaped and central_log_path and conn:
+        try:
+            conn.execute(
+                "UPDATE daemon_jobs SET log_path=? WHERE job_id=?",
+                (central_log_path, job_id),
+            )
+            conn.commit()
+        except Exception:
+            pass
+    return reaped
 
 
 def _reconcile_daemon_jobs() -> None:
@@ -2912,8 +2937,19 @@ def _reconcile_daemon_jobs() -> None:
                 exit_marker_present = False
                 if raw_exit_status is not None:
                     exit_code = _exit_code_from_wait_status(raw_exit_status)
-                elif log_path:
+                if log_path:
                     exit_file = log_path + ".exit"
+                if not exit_file or not os.path.exists(exit_file):
+                    worktree_dir = persisted_worktree_path or _daemon_job_worktree_path(job_id, log_path)
+                    if worktree_dir:
+                        alt_exit = os.path.join(worktree_dir, ".synlynk", "logs", f"{job_id}.log.exit")
+                        if os.path.exists(alt_exit):
+                            exit_file = alt_exit
+                    if not exit_file or not os.path.exists(exit_file):
+                        from synlynk.daemon import _daemon_state_path
+                        central_exit = _daemon_state_path("logs", f"{job_id}.log.exit")
+                        if os.path.exists(central_exit):
+                            exit_file = central_exit
                 if exit_file and os.path.exists(exit_file):
                     exit_marker_present = True
                     try:
@@ -2961,16 +2997,23 @@ def _reconcile_daemon_jobs() -> None:
                 worktree_path = persisted_worktree_path or _daemon_job_worktree_path(job_id, log_path)
                 worktree_branch = persisted_worktree_branch or (f"dispatch/{agent}/{job_id}" if agent else None)
                 git_state = None
+                git_inspection_failed = False
                 if worktree_path:
                     inspect_fn = _worktree_git_state_inspector()
                     try:
                         git_state = inspect_fn(worktree_path, worktree_branch, started_at)
                     except Exception:
                         git_state = None
+                        git_inspection_failed = True
+
+                if git_inspection_failed:
+                    # An unavailable git read is uncertainty, not failure or zombie. Fail closed and retry.
+                    continue
 
                 # If no exit signal, no exit file, and no git activity, handle true zombie reap
                 if (
-                    exit_code is None
+                    not git_inspection_failed
+                    and exit_code is None
                     and not exit_marker_present
                     and not _job_has_real_work_landed(git_state)
                     and (_has_leaked_worktree(job_id, log_path) or pid is None)
@@ -3024,11 +3067,10 @@ def _reconcile_daemon_jobs() -> None:
                             only_running=True, terminal_claim_token=terminal_claim_token,
                         )
                         if settled and zombie_status == "killed_zombie":
-                            _reap_zombie_worktree(job_id, log_path)
+                            _reap_zombie_worktree(job_id, log_path, conn=conn)
                     except Exception:
                         conn.rollback()
-                        _release_daemon_job_terminal_claim(conn, job_id, terminal_claim_token)
-                        conn.commit()
+                        _release_daemon_job_terminal_claim_and_commit(conn, job_id, terminal_claim_token)
                         raise
                     continue
 

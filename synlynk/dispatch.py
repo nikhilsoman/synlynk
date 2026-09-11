@@ -9,6 +9,7 @@ import shutil
 from dataclasses import asdict
 import select
 import signal
+import sqlite3
 import subprocess
 import sys
 import threading
@@ -1232,7 +1233,19 @@ def _task_opens_pr(task: str) -> bool:
     return bool(_PR_OPEN_TASK_RE.search(task or ""))
 
 
-def _gh_write_expectation(task: str, task_type: str = None) -> str:
+_COMMENT_TASK_RE = re.compile(
+    r"\b(?:gh\s+)?(?:pr|issue)\s+comment\b|"
+    r"\b(?:comment|post\s+(?:a\s+)?comment)\s+(?:on|to)\b|"
+    r"\b(?:groom|grooming|triage|audit|summarize|summary|findings|note|post\s+update|leave\s+feedback)\b",
+    re.IGNORECASE,
+)
+_CLOSE_TASK_RE = re.compile(
+    r"\b(?:gh\s+)?(?:pr|issue)\s+(?:close|reopen)\b|\bclose\s+(?:issue|ticket|pr|#\d+)\b",
+    re.IGNORECASE,
+)
+
+
+def _gh_write_expectation(task: str, task_type: str = None, target: Optional[str] = None) -> str:
     """Return the delivery effect expected from a GitHub-writing task."""
     text = task or ""
     if task_type == "review" or _REVIEW_TASK_RE.search(text):
@@ -1243,10 +1256,12 @@ def _gh_write_expectation(task: str, task_type: str = None) -> str:
         return "merged"
     if _task_opens_pr(text):
         return "pr_open"
-    if re.search(r"\b(?:gh\s+)?(?:pr|issue)\s+comment\b|\b(?:comment|post\s+(?:a\s+)?comment)\s+(?:on|to)\b", text, re.IGNORECASE):
+    if _COMMENT_TASK_RE.search(text):
         return "comment_posted"
-    if re.search(r"\b(?:gh\s+)?(?:pr|issue)\s+(?:close|reopen)\b|\bclose\s+", text, re.IGNORECASE):
+    if _CLOSE_TASK_RE.search(text):
         return "closed"
+    if target and target.startswith("issue:"):
+        return "comment_posted"
     # Preserve the historical contract for explicitly targeted legacy writes.
     return "closed"
 
@@ -2589,6 +2604,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                    scope_paths: list = None,
                    session_id: str = None,
                    gh_write_target_kind: str = "issue",
+                   gh_write_expect: str = None,
                    model: str = None,
                    role: str = None,
                    task_domain: str = None,
@@ -2704,7 +2720,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         if get_db_fn:
             dconn = get_db_fn() if callable(get_db_fn) else get_db_fn
             owns_dconn = True
-    elif callable(dconn):
+    elif callable(dconn) and not isinstance(dconn, sqlite3.Connection):
         dconn = dconn()
         owns_dconn = True
 
@@ -3214,8 +3230,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         gh_write_target_value = f"{target_prefix}:{gh_write_target_number}"
         gh_write_role = resolved_agent_role or _role_for_story(story_id)
         gh_write_author_value = _resolve_dispatch_gh_bot_login(gh_write_role)
-        gh_write_expect_value = _gh_write_expectation(task, task_type)
-    gh_write_expect_for_job = gh_write_expect_value or "closed"
+        gh_write_expect_value = gh_write_expect or _gh_write_expectation(task, task_type, target=gh_write_target_value)
+    gh_write_expect_for_job = gh_write_expect or gh_write_expect_value or "closed"
 
     local_slot_claimed = False
     if agent == "local" and dconn is not None:

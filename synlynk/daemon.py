@@ -63,6 +63,23 @@ def _daemon_state_path(*parts: str) -> str:
     return os.path.join(_repo_common_dir(), ".synlynk", *parts)
 
 
+def _current_repo_revision(repo_dir: Optional[str] = None) -> Optional[str]:
+    """Return the current HEAD commit hash of the git repository."""
+    try:
+        res = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=repo_dir or _repo_common_dir(),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if res.returncode == 0 and res.stdout.strip():
+            return res.stdout.strip()
+    except Exception:
+        pass
+    return None
+
+
 def _daemon_lock_path(pidfile: str) -> str:
     """Return the exclusive-lock path sibling to a daemon pidfile (#349)."""
     return pidfile + ".lock"
@@ -891,6 +908,15 @@ class SynlynkDaemon(WatchDaemon):
         # relative CWD resolution is unsafe for linked worktrees.
         self.workspace_root = os.path.abspath(os.getcwd())
         self.sentinel_path = os.path.join(self.workspace_root, ".synlynk", "sentinel.md")
+        self.start_revision = _current_repo_revision(self.workspace_root)
+        self.revision_file = _daemon_state_path("daemon.revision")
+        if self.start_revision:
+            try:
+                os.makedirs(os.path.dirname(self.revision_file), exist_ok=True)
+                with open(self.revision_file, "w") as f:
+                    f.write(self.start_revision + "\n")
+            except OSError:
+                pass
 
     def _autonomous_tick(self) -> None:
         """Run one bounded heal/TPM pass and leave an SRE heartbeat."""
@@ -1074,6 +1100,18 @@ class SynlynkDaemon(WatchDaemon):
                 _dispatch_ready_jobs(max_parallel=max_parallel)
             except Exception:
                 _traceback.print_exc()
+            current_rev = _current_repo_revision(self.workspace_root)
+            if self.start_revision and current_rev and current_rev != self.start_revision:
+                try:
+                    _write_sentinel_alert(
+                        "WARN",
+                        "RUNTIME_REVISION_DRIFT",
+                        f"Daemon was started at commit {self.start_revision[:8]}, but repo HEAD is at {current_rev[:8]}. "
+                        "Restart daemon (synlynk watch restart) to load latest code.",
+                        self.sentinel_path,
+                    )
+                except Exception:
+                    pass
             if time.time() - last_token_refresh >= self.token_refresh_interval_seconds:
                 self._refresh_github_tokens()
                 last_token_refresh = time.time()

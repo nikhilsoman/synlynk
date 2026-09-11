@@ -691,6 +691,13 @@ def build_parser() -> argparse.ArgumentParser:
              "If omitted, defaults to 'pr' when --task-type review is set, else 'issue'.",
     )
     dispatch_parser.add_argument(
+        "--gh-write-expect", "--expect",
+        choices=["comment_posted", "review_posted", "pr_open", "merged", "closed", "created"],
+        default=None,
+        dest="gh_write_expect",
+        help="Explicitly set expected GitHub write effect (comment_posted, review_posted, pr_open, merged, closed, created).",
+    )
+    dispatch_parser.add_argument(
         "--requires",
         action="append",
         default=[],
@@ -843,6 +850,15 @@ def build_parser() -> argparse.ArgumentParser:
 
     run_parser = subparsers.add_parser(
         "run", help="Convenience wrappers for common dispatch patterns")
+    run_parser.add_argument("--milestone", default=None, help="Target milestone for unattended execution loop")
+    run_parser.add_argument("--unattended", "--autonomous", action="store_true", dest="unattended",
+                            help="Execute milestone DAG unattended without turn-taking approvals")
+    run_parser.add_argument("--dag", action="store_true", dest="dag_view",
+                            help="Render launch DAG and status without executing")
+    run_parser.add_argument("--dry-run", action="store_true", dest="dry_run",
+                            help="Simulate execution without modifying state")
+    run_parser.add_argument("--max-parallel", type=int, default=4, dest="max_parallel",
+                            help="Maximum parallel independent tasks")
     run_sub = run_parser.add_subparsers(dest="run_action")
     trio_parser = run_sub.add_parser("--trio",
         help="Dispatch all functional agents in parallel (not the sequential Trio pipeline)")
@@ -1486,6 +1502,7 @@ def main(argv=None) -> None:
                                  task_domain=getattr(args, "task_domain", None),
                                  criticality=getattr(args, "criticality", 1.0),
                                  gh_write_target_kind=_resolved_gh_write_target_kind,
+                                 gh_write_expect=getattr(args, "gh_write_expect", None),
                                  requires=getattr(args, "requires", []),
                                  context_mode=getattr(args, "context_mode", "task"),
                                  skip_preflight=getattr(args, "skip_preflight", False),
@@ -1593,6 +1610,15 @@ def main(argv=None) -> None:
         action = getattr(args, "run_action", None)
         if action == "--trio":
             cmd_run_trio(args.task, story_id=getattr(args, "story_id", None))
+        elif getattr(args, "unattended", False) or getattr(args, "dag_view", False) or getattr(args, "milestone", None):
+            from synlynk.launch_dag import cmd_run_dag
+            cmd_run_dag(
+                milestone=getattr(args, "milestone", None),
+                unattended=getattr(args, "unattended", False),
+                dag_view=getattr(args, "dag_view", False),
+                dry_run=getattr(args, "dry_run", False),
+                max_parallel=getattr(args, "max_parallel", 4),
+            )
         else:
             run_parser.print_help()
     elif args.command == "story":

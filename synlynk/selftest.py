@@ -1474,7 +1474,7 @@ def run_selftest(live: bool = False) -> List[ScenarioResult]:
     )
     results: List[ScenarioResult] = []
     if live:
-        with tempfile.TemporaryDirectory(prefix="synlynk-selftest-") as scratch_dir:
+        with tempfile.TemporaryDirectory(prefix="synlynk-selftest-", ignore_cleanup_errors=True) as scratch_dir:
             scratch_workspace = Path(scratch_dir)
             print(f"live selftest scratch workspace: {scratch_workspace}")
             ctx.state["workspace_dir"] = scratch_workspace
