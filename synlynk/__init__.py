@@ -22,6 +22,8 @@ from synlynk._constants import (
     QUOTA_PATTERNS,
     VERSION,
     _INSTALL_SCRIPT_URL,
+    NEXT_GEN_FLEET,
+    EXTENDED_FLEET,
 )
 
 _IS_TESTING = "pytest" in sys.modules or any("pytest" in str(arg) for arg in sys.argv)
