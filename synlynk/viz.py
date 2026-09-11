@@ -24,6 +24,7 @@ VIZ_NOTES_PATH = ".synlynk/viz-notes.json"
 VIZ_META_PATH = ".synlynk/viz-meta.json"
 VIZ_WORKSPACE_MAP_PATH = ".synlynk/vizor-workspace-map.json"
 DEFAULT_PORT = 8721
+_KNOWN_AGENTS = {"claude", "agy", "codex", "grok", "muse"}
 
 
 def _live_js(port: int) -> str:
@@ -338,7 +339,7 @@ def generate_viz_data() -> dict:
         }
         return aliases.get(key, key)
 
-    _KNOWN_AGENTS = {"claude", "agy", "codex", "grok"}
+    _KNOWN_AGENTS = {"claude", "agy", "codex", "grok", "muse"}
 
     def _looks_like_stage_label(name: str) -> bool:
         # Reject anything that isn't a known agent name — stories.phase is repurposed
@@ -388,13 +389,25 @@ def generate_viz_data() -> dict:
         sentinel_path = ".synlynk/sentinel.md"
         from synlynk.sentinel import _iter_sentinel_alerts
         alerts = []
-        for alert in _iter_sentinel_alerts(sentinel_path, active_only=True):
-            alerts.append({
-                "ts": alert.get("timestamp", ""),
-                "pattern": alert.get("code", ""),
-                "severity": alert.get("original_severity") or alert.get("severity", "INFO"),
-                "resolved": "[RESOLVED]" in alert.get("raw_line", ""),
-            })
+        try:
+            for alert in _iter_sentinel_alerts(sentinel_path, active_only=False):
+                sev = alert.get("original_severity") or alert.get("severity") or "INFO"
+                sev_upper = str(sev).strip().upper()
+                if sev_upper in ("CRITICAL", "CRIT"):
+                    severity_out = "CRITICAL"
+                elif sev_upper in ("WARNING", "WARN"):
+                    severity_out = "WARNING"
+                else:
+                    severity_out = "INFO"
+                alerts.append({
+                    "ts": alert.get("timestamp") or "",
+                    "pattern": alert.get("code") or "",
+                    "severity": severity_out,
+                    "resolved": "[RESOLVED]" in alert.get("raw_line", "") or alert.get("code") == "RESOLVED",
+                    "message": alert.get("message") or "",
+                })
+        except Exception:
+            pass
         return alerts
 
     def _load_spec_verifications(limit: int = 20) -> list:
@@ -769,6 +782,7 @@ def generate_index_html(data: dict, port: int) -> str:
       --ag-agy-bg:  #e8f0fe;--ag-agy-bd:  #4285f4;--ag-agy-tx:  #1a56c7;
       --ag-codex-bg:#e6f4f0;--ag-codex-bd:#10a37f;--ag-codex-tx:#0b7a60;
       --ag-grok-bg: #f0f0f0;--ag-grok-bd: #666;   --ag-grok-tx: #333;
+      --ag-muse-bg: #fdf2f8;--ag-muse-bd: #db2777;--ag-muse-tx: #9d174d;
     }
     [data-theme="dark"] {
       --bg:#0d0f14; --bg2:#0a0c10; --bg3:#13171f;
@@ -788,6 +802,7 @@ def generate_index_html(data: dict, port: int) -> str:
       --ag-agy-bg:  #0d1a3a;--ag-agy-bd:  #4285f4;--ag-agy-tx:  #4285f4;
       --ag-codex-bg:#0a1f18;--ag-codex-bd:#10a37f;--ag-codex-tx:#10a37f;
       --ag-grok-bg: #1a1a1a;--ag-grok-bd: #e0e0e0;--ag-grok-tx: #e0e0e0;
+      --ag-muse-bg: #2e081d;--ag-muse-bd: #f472b6;--ag-muse-tx: #f472b6;
     }
 
     * { box-sizing:border-box; margin:0; padding:0; }
@@ -2297,6 +2312,7 @@ def generate_journeys_html(data: dict, port: int) -> str:
   --ag-agy-bg:  #e8f0fe;--ag-agy-bd:  #4285f4;--ag-agy-tx:  #1a56c7;
   --ag-codex-bg:#e6f4f0;--ag-codex-bd:#10a37f;--ag-codex-tx:#0b7a60;
   --ag-grok-bg: #f0f0f0;--ag-grok-bd: #666;   --ag-grok-tx: #333;
+  --ag-muse-bg: #fdf2f8;--ag-muse-bd: #db2777;--ag-muse-tx: #9d174d;
 }
 [data-theme="dark"] {
   --bg:#0d0f14; --bg2:#0a0c10; --bg3:#13171f;
@@ -2315,6 +2331,7 @@ def generate_journeys_html(data: dict, port: int) -> str:
   --ag-agy-bg:  #0d1a3a;--ag-agy-bd:  #4285f4;--ag-agy-tx:  #4285f4;
   --ag-codex-bg:#0a1f18;--ag-codex-bd:#10a37f;--ag-codex-tx:#10a37f;
   --ag-grok-bg: #1a1a1a;--ag-grok-bd: #e0e0e0;--ag-grok-tx: #e0e0e0;
+  --ag-muse-bg: #2e081d;--ag-muse-bd: #f472b6;--ag-muse-tx: #f472b6;
 }
 
 * { box-sizing:border-box; margin:0; padding:0; }
@@ -2568,6 +2585,7 @@ body {
 .aa-agy    { background: var(--ag-agy-bg);    border-color: var(--ag-agy-bd);    color: var(--ag-agy-tx);    }
 .aa-codex  { background: var(--ag-codex-bg);  border-color: var(--ag-codex-bd);  color: var(--ag-codex-tx);  font-size: 8px; }
 .aa-grok   { background: var(--ag-grok-bg);   border-color: var(--ag-grok-bd);   color: var(--ag-grok-tx);   }
+.aa-muse   { background: var(--ag-muse-bg);   border-color: var(--ag-muse-bd);   color: var(--ag-muse-tx);   }
 .aa-unknown { background: var(--bg3); border-color: var(--border); color: var(--text3); }
 
 .flow-arrow {
@@ -3396,6 +3414,7 @@ def generate_efficiency_html(data: dict, port: int) -> str:
       --ag-agy-bg:#e8f0fe; --ag-agy-bd:#4285f4; --ag-agy-tx:#1a56c7;
       --ag-codex-bg:#e6f4f0; --ag-codex-bd:#10a37f; --ag-codex-tx:#0b7a60;
       --ag-grok-bg:#f0f0f0; --ag-grok-bd:#666; --ag-grok-tx:#333;
+      --ag-muse-bg:#fdf2f8; --ag-muse-bd:#db2777; --ag-muse-tx:#9d174d;
       --ok:#16a34a; --warn:#d97706; --bad:#dc2626;
     }
     [data-theme="dark"] {
@@ -3409,6 +3428,7 @@ def generate_efficiency_html(data: dict, port: int) -> str:
       --ag-agy-bg:#0d1a3a; --ag-agy-bd:#4285f4; --ag-agy-tx:#4285f4;
       --ag-codex-bg:#0a1f18; --ag-codex-bd:#10a37f; --ag-codex-tx:#10a37f;
       --ag-grok-bg:#1a1a1a; --ag-grok-bd:#e0e0e0; --ag-grok-tx:#e0e0e0;
+      --ag-muse-bg:#2e081d; --ag-muse-bd:#f472b6; --ag-muse-tx:#f472b6;
       --ok:#3fb950; --warn:#f0883e; --bad:#f85149;
     }
     * { box-sizing:border-box; margin:0; padding:0; }
@@ -3552,6 +3572,7 @@ def generate_efficiency_html(data: dict, port: int) -> str:
     .agent-agy { background:linear-gradient(135deg, var(--ag-agy-bd), var(--ag-agy-tx)); }
     .agent-codex { background:linear-gradient(135deg, var(--ag-codex-bd), var(--ag-codex-tx)); }
     .agent-grok { background:linear-gradient(135deg, var(--ag-grok-bd), var(--ag-grok-tx)); }
+    .agent-muse { background:linear-gradient(135deg, var(--ag-muse-bd), var(--ag-muse-tx)); }
     .agent-unknown { background:linear-gradient(135deg, var(--accent), #0b7a60); }
     .agent-name {
       font-size:15px;
