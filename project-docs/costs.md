@@ -60,4 +60,15 @@
 - Created and passed 56 unit and regression tests across `tests/test_worktree_sparse.py`, `tests/test_worktree_prune.py`, `tests/test_worktree_lineage.py`, `tests/test_worktree_timestamp.py`, and `tests/test_worktree.py`.
 - Dispatched QA Review & Squash-Merge: Codex (`job-4e5a776e`), ~$0.13 estimated.
 
+## 2026-09-11 — Fleet Diagnostic Truth & Concurrency Resilience (`story-8ef9c847`)
+
+- Conductor: Agy (Gemini 2.5 Flash / Pro).
+- Authored implementation plan (`docs/superpowers/plans/2026-09-11-cluster-c-fleet-diagnostic-truth-concurrency.md`).
+- Implemented 4-point readiness matrix (`synlynk/readiness.py`, `synlynk doctor --readiness`, #1521).
+- Implemented Grok write sandbox canary validation with automatic failover to Codex (#1522).
+- Implemented post-claim story un-stranding (`synlynk/jobs.py`, `synlynk story reclaim`, #1507).
+- Standardized SQLite WAL mode, 30s busy-timeout, and NORMAL synchronous across `synlynk/__init__.py` and `synlynk/lineage.py` (#1503).
+- 21 unit and multi-threaded stress tests passing; zero external fee-bearing dispatch spend.
+
+
 
