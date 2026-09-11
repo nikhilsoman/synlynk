@@ -168,8 +168,55 @@ def generate_viz_data() -> dict:
             pass
         return actions
 
+    def _collect_worktrees() -> dict:
+        """Project the worktree audit into the Observatory JSON shape."""
+        empty = {
+            "items": [],
+            "active": 0,
+            "safe": 0,
+            "needs_review": 0,
+            "dirty_orphan": 0,
+        }
+        try:
+            from synlynk.worktree import _collect_verdicts, _get_repo_root
+
+            main_repo_path = _get_repo_root()
+            verdicts = _collect_verdicts(main_repo_path, os.getcwd())
+        except Exception:
+            return empty
+
+        items = []
+        counts = {key: 0 for key in empty if key != "items"}
+        for verdict in verdicts:
+            raw_verdict = str(getattr(verdict, "verdict", "") or "")
+            reason = str(getattr(verdict, "reason", "") or "")
+            if raw_verdict == "safe":
+                status = "safe"
+            elif raw_verdict == "needs-review":
+                status = "needs-review"
+            elif any(token in reason.lower() for token in ("dirty", "artifact", "orphan", "missing")):
+                status = "dirty-artifact"
+            else:
+                status = "active"
+            counts[{
+                "safe": "safe",
+                "needs-review": "needs_review",
+                "dirty-artifact": "dirty_orphan",
+                "active": "active",
+            }[status]] += 1
+            items.append({
+                "path": getattr(verdict, "path", ""),
+                "branch": getattr(verdict, "branch", ""),
+                "verdict": raw_verdict,
+                "status": status,
+                "reason": reason,
+                "nested_under": getattr(verdict, "nested_under", None),
+            })
+        return {"items": items, **counts}
+
     def _base_data() -> dict:
         observatory = build_job_observatory_snapshot()
+        observatory["worktrees"] = _collect_worktrees()
         try:
             file_tree = _query_repo_file_tree()
         except Exception:
@@ -4521,6 +4568,67 @@ def generate_observatory_html(snapshot: dict) -> str:
         </section>
         """.strip()
 
+    def _worktree_model(value) -> tuple:
+        if isinstance(value, list):
+            items = value
+            counts = {"active": 0, "safe": 0, "needs_review": 0, "dirty_orphan": 0}
+            for item in items:
+                status = str(item.get("status") or item.get("verdict") or "active").lower()
+                if status in ("needs-review", "needs_review"):
+                    counts["needs_review"] += 1
+                elif status == "safe":
+                    counts["safe"] += 1
+                elif status in ("dirty-artifact", "dirty", "orphan"):
+                    counts["dirty_orphan"] += 1
+                else:
+                    counts["active"] += 1
+            return items, counts
+        value = value if isinstance(value, dict) else {}
+        return value.get("items") or [], {
+            "active": int(value.get("active", 0) or 0),
+            "safe": int(value.get("safe", 0) or 0),
+            "needs_review": int(value.get("needs_review", 0) or 0),
+            "dirty_orphan": int(value.get("dirty_orphan", 0) or 0),
+        }
+
+    def _worktree_status(item: dict) -> str:
+        status = str(item.get("status") or item.get("verdict") or "active").lower()
+        if status in ("needs-review", "needs_review"):
+            return "needs-review"
+        if status == "safe":
+            return "safe"
+        if status in ("dirty-artifact", "dirty", "orphan"):
+            return "dirty-artifact"
+        return "active"
+
+    worktree_items, worktree_counts = _worktree_model(snapshot.get("worktrees"))
+    worktree_rows = []
+    for item in worktree_items:
+        status = _worktree_status(item)
+        label = {"active": "ACTIVE", "safe": "SAFE", "needs-review": "NEEDS-REVIEW", "dirty-artifact": "DIRTY-ARTIFACT"}[status]
+        worktree_rows.append(
+            f'<tr><td><code>{html.escape(str(item.get("branch") or "—"))}</code></td>'
+            f'<td class="wt-path">{html.escape(str(item.get("path") or "—"))}</td>'
+            f'<td><span class="wt-pill wt-{status.replace("-", "-")}">{label}</span></td>'
+            f'<td>{html.escape(str(item.get("reason") or "—"))}</td>'
+            f'<td><button class="wt-inspect" data-path="{html.escape(str(item.get("path") or ""))}">Inspect</button>'
+            f'{" <button class=\"wt-prune\" data-path=\"" + html.escape(str(item.get("path") or "")) + "\">Prune</button>" if status == "safe" else ""}</td></tr>'
+        )
+    worktree_html = f'''<!-- Worktree Lifecycle & Fleet Health -->
+    <section class="wt-panel" id="worktree-lifecycle">
+      <header class="wt-header"><div><div class="wt-kicker">Fleet health</div><h2>Worktree Lifecycle &amp; Fleet Health</h2></div>
+        <button class="wt-clean" id="wt-clean">Clean Safe Worktrees</button></header>
+      <div class="wt-metrics">
+        <div class="wt-metric"><span>Active Working</span><strong>{worktree_counts["active"]}</strong></div>
+        <div class="wt-metric wt-safe"><span>Safe to Prune</span><strong>{worktree_counts["safe"]}</strong></div>
+        <div class="wt-metric wt-review"><span>Needs Review</span><strong>{worktree_counts["needs_review"]}</strong></div>
+        <div class="wt-metric wt-dirty"><span>Dirty / Orphan</span><strong>{worktree_counts["dirty_orphan"]}</strong></div>
+      </div>
+      <div class="wt-table-wrap"><table class="wt-table"><thead><tr><th>Branch</th><th>Path</th><th>Status</th><th>Reason</th><th></th></tr></thead>
+        <tbody>{''.join(worktree_rows) or '<tr><td colspan="5" class="obs-empty">No auxiliary worktrees found.</td></tr>'}</tbody></table></div>
+      <div class="wt-result" id="wt-result" aria-live="polite"></div>
+    </section>'''
+
     repos = snapshot.get("repos") or []
     rollups = snapshot.get("rollups") or {}
     repo_cards = "\n".join(_render_repo(repo) for repo in repos)
@@ -4604,12 +4712,22 @@ body {{ padding: 24px; }}
 .obs-job[data-stage="done"] .obs-job-stage {{ background: rgba(156, 163, 175, 0.16); color: var(--done); }}
 .obs-job-age, .obs-job-cost, .obs-job-tokens {{ color: var(--muted); }}
 .obs-empty-state, .obs-empty {{ padding: 18px 4px; color: var(--muted); }}
+.wt-panel {{ background: var(--panel); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; box-shadow: var(--shadow); }}
+.wt-header {{ display:flex; justify-content:space-between; align-items:center; gap:12px; padding:18px; background:var(--panel-2); border-bottom:1px solid var(--line); }}
+.wt-header h2 {{ margin:4px 0 0; font-size:18px; }} .wt-kicker {{ color:var(--accent); font-size:10px; text-transform:uppercase; letter-spacing:.14em; }}
+.wt-clean, .wt-inspect {{ cursor:pointer; border:1px solid rgba(71,215,177,.35); border-radius:8px; padding:8px 11px; background:rgba(71,215,177,.14); color:var(--accent); font:inherit; font-size:11px; font-weight:700; }}
+.wt-metrics {{ display:grid; grid-template-columns:repeat(4,1fr); gap:10px; padding:16px 18px; }} .wt-metric {{ padding:13px; border:1px solid var(--line); border-radius:12px; background:rgba(255,255,255,.035); }}
+.wt-metric span {{ display:block; color:var(--muted); font-size:10px; text-transform:uppercase; letter-spacing:.1em; }} .wt-metric strong {{ display:block; margin-top:7px; font-size:24px; }}
+.wt-safe strong, .wt-pill.wt-safe {{ color:var(--accent); }} .wt-review strong, .wt-pill.wt-needs-review {{ color:#ffd166; }} .wt-dirty strong, .wt-pill.wt-dirty-artifact {{ color:#ff7a90; }}
+.wt-table-wrap {{ overflow:auto; padding:0 18px 14px; }} .wt-table {{ width:100%; border-collapse:collapse; font-size:12px; }} .wt-table th {{ color:var(--muted); font-size:10px; text-align:left; text-transform:uppercase; letter-spacing:.1em; }} .wt-table th, .wt-table td {{ padding:11px 8px; border-top:1px solid rgba(255,255,255,.05); white-space:nowrap; }} .wt-path {{ color:var(--muted); max-width:300px; overflow:hidden; text-overflow:ellipsis; }}
+.wt-pill {{ display:inline-flex; padding:4px 8px; border-radius:999px; background:rgba(255,255,255,.07); font-size:10px; font-weight:700; letter-spacing:.04em; }} .wt-result {{ padding:0 18px 14px; color:var(--muted); font-size:12px; }}
 @media (max-width: 960px) {{
   body {{ padding: 16px; }}
   .obs-hero {{ flex-direction: column; align-items: flex-start; }}
   .obs-stats {{ justify-content: flex-start; }}
   .obs-job-head, .obs-job {{ grid-template-columns: 1fr 1fr; }}
   .obs-job-head span:nth-child(n+3), .obs-job > *:nth-child(n+3) {{ display: none; }}
+  .wt-metrics {{ grid-template-columns:repeat(2,1fr); }} .wt-header {{ align-items:flex-start; flex-direction:column; }}
 }}
 </style>
 </head>
@@ -4628,6 +4746,7 @@ body {{ padding: 24px; }}
     </div>
   </header>
   <div class="obs-grid" id="obs-grid">
+    {worktree_html}
     {repo_cards}
   </div>
 </div>
@@ -4710,8 +4829,19 @@ body {{ padding: 24px; }}
 
   function render(snapshot) {{
     const repos = snapshot.repos || [];
-    snapshotEl.innerHTML = repos.length ? repos.map(renderRepo).join('') : '<div class="obs-empty-state">No live jobs in this workspace.</div>';
+    // Keep the lifecycle panel stable while refreshing the job board.
+    const lifecycle = document.getElementById('worktree-lifecycle');
+    snapshotEl.innerHTML = (lifecycle ? lifecycle.outerHTML : '') + (repos.length ? repos.map(renderRepo).join('') : '<div class="obs-empty-state">No live jobs in this workspace.</div>');
     renderStats(snapshot);
+    const clean = document.getElementById('wt-clean');
+    const result = document.getElementById('wt-result');
+    if (clean && !clean.dataset.bound) {{
+      clean.dataset.bound = '1';
+      clean.addEventListener('click', async () => {{
+        result.textContent = 'Cleaning safe worktrees…';
+        try {{ const response = await fetch('/worktrees/clean', {{ method: 'POST', headers: Object.assign({{'Content-Type':'application/json'}}, window.vizorAuthHeaders ? window.vizorAuthHeaders() : {{}}), body: JSON.stringify({{apply:true}}) }}); const out = await response.json(); result.textContent = out.ok ? `Cleaned ${{out.cleaned_count}} safe worktree(s).` : (out.error || 'Cleanup failed.'); if (out.ok) setTimeout(refresh, 500); }} catch (err) {{ result.textContent = 'Cleanup failed: ' + err.message; }}
+      }});
+    }}
   }}
 
   async function refresh() {{
@@ -4852,7 +4982,7 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
         self.wfile.write(json.dumps(payload).encode("utf-8"))
 
     def do_OPTIONS(self):
-        if self.path not in ("/note", "/dispatch", "/approve", "/kill", "/architect-map/view-pref", "/roles/create"):
+        if self.path not in ("/note", "/dispatch", "/approve", "/kill", "/architect-map/view-pref", "/roles/create", "/worktrees/clean"):
             self.send_error(404)
             return
         self.send_response(204)
@@ -4873,8 +5003,49 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
             self._handle_view_pref_request()
         elif self.path == "/roles/create":
             self._handle_role_create_request()
+        elif self.path == "/worktrees/clean":
+            self._handle_worktree_clean_request()
         else:
             self.send_error(404)
+
+    def _handle_worktree_clean(self, payload: dict) -> dict:
+        """Run the guarded worktree cleaner and return a small UI-friendly result."""
+        from synlynk.worktree import cmd_worktree_clean
+
+        apply = bool(payload.get("apply")) and not bool(payload.get("dry_run"))
+        output = cmd_worktree_clean(apply=apply, json_output=True)
+        if isinstance(output, dict):
+            details = output
+            output = json.dumps(output)
+        else:
+            details = None
+        try:
+            details = details or json.loads(output)
+        except (TypeError, json.JSONDecodeError):
+            details = {}
+        if apply:
+            cleaned_count = len(details.get("results") or [])
+        else:
+            cleaned_count = int(details.get("would_remove", 0) or 0)
+        return {
+            "ok": True,
+            "dry_run": not apply,
+            "cleaned_count": cleaned_count,
+            "output": output,
+        }
+
+    def _handle_worktree_clean_request(self):
+        try:
+            payload = self._read_json_body()
+        except (json.JSONDecodeError, TypeError, ValueError):
+            self.send_error(400, "Invalid JSON")
+            return
+        try:
+            result = self._handle_worktree_clean(payload)
+        except Exception as exc:
+            self.send_error(500, str(exc))
+            return
+        self._send_json_ok(result)
 
     def _handle_role_create(self, payload: dict) -> dict:
         """Provision a role identity and its first living charter."""
