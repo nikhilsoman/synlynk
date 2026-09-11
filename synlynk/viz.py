@@ -8,6 +8,7 @@ import subprocess
 import sys
 import threading
 import time
+import uuid
 import webbrowser
 from typing import Dict, Optional, Tuple
 
@@ -200,6 +201,7 @@ def generate_viz_data() -> dict:
             "dreams": [],
             "costs": {"total_usd": 0.0, "total_usd_estimated": 0.0, "by_agent": {}, "by_stage": {}},
             "agents": {},
+            "workspace_agents": _load_workspace_agents(),
             "workspace_map": _load_workspace_map(),
             "file_tree": file_tree,
             "notes": _load_json_optional(VIZ_NOTES_PATH, default={}),
@@ -228,6 +230,52 @@ def generate_viz_data() -> dict:
                 return json.load(f)
         except Exception:
             return {}
+
+    def _load_workspace_agents() -> list:
+        """Project the durable agent registry into the Vizor data shape."""
+        from synlynk import agent_store, charter_schema
+
+        try:
+            registry = agent_store.list_agents()
+        except Exception:
+            return []
+        projected = []
+        for entry in registry:
+            if not isinstance(entry, dict):
+                continue
+            aliases = entry.get("aliases") or []
+            role = next(
+                (alias.get("value") for alias in aliases
+                 if isinstance(alias, dict) and alias.get("kind") == "role_slug"),
+                "",
+            )
+            if not role:
+                continue
+            try:
+                charter, revision = agent_store.read_charter(entry.get("agent_id", ""))
+            except Exception:
+                charter, revision = "", 0
+            metadata = {}
+            body = charter
+            if charter.startswith("---\n"):
+                _, metadata_text, body = charter.partition("---\n")
+                metadata_text, _, body = metadata_text.partition("---\n")
+                metadata = charter_schema.parse_frontmatter(metadata_text)
+            harnesses = metadata.get("harnesses") or metadata.get("target_harnesses") or []
+            if isinstance(harnesses, str):
+                harnesses = [item.strip() for item in harnesses.strip("[]").split(",") if item.strip()]
+            projected.append({
+                "agent_id": entry.get("agent_id", ""),
+                "role": role,
+                "durability": metadata.get("durability", "dispatch-only"),
+                "target_harnesses": list(harnesses) if isinstance(harnesses, list) else [],
+                "charter": charter,
+                "charter_excerpt": " ".join(body.strip().split())[:220],
+                "charter_revision": revision,
+                "disabled": bool(entry.get("disabled")),
+                "created_at": entry.get("created_at", ""),
+            })
+        return projected
 
     def _normalize_stage(name: str) -> str:
         key = (name or "").strip().lower()
@@ -640,6 +688,7 @@ def generate_index_html(data: dict, port: int) -> str:
         ("logical", "🧩", "Logical View", "logical.html", False),
         ("tube", "🚇", "Architect Map", "tube.html", False),
         ("infra", "⚙️", "Infra View", "infra.html", False),
+        ("roles", "🤖", "Agent Roles", "roles.html", False),
         ("effort", "💰", "Effort & Cost", "effort.html", False),
         ("observatory", "◉", "Observatory", "observatory.html", False),
         ("efficiency", "📊", "Efficiency", "efficiency.html", False),
@@ -4684,6 +4733,58 @@ body {{ padding: 24px; }}
     return html_out
 
 
+def generate_roles_html(data: dict, port: int) -> str:
+    """Render the offline-first Workspace Agent Roles & Onboarding Studio."""
+    workspace = data.get("workspace") or {}
+    goals = data.get("goals") or []
+    agents = [agent for agent in (data.get("workspace_agents") or []) if not agent.get("disabled")]
+    cards = []
+    for agent in agents:
+        role = str(agent.get("role") or "unknown")
+        durability = str(agent.get("durability") or "dispatch-only")
+        badge = "Durable" if durability == "durable" else "Dispatch-only"
+        harnesses = agent.get("target_harnesses") or ["Unassigned"]
+        cards.append(f"""
+        <article class="role-card">
+          <div class="card-top"><span class="role-tag">@{html.escape(role)}</span>
+            <span class="durability">{badge}</span></div>
+          <h2>{html.escape(role.replace('-', ' ').title())}</h2>
+          <div class="meta"><span>Target Harnesses</span><strong>{html.escape(', '.join(map(str, harnesses)))}</strong></div>
+          <p class="excerpt">{html.escape(str(agent.get('charter_excerpt') or 'No charter excerpt available.'))}</p>
+          <button class="edit" data-agent-id="{html.escape(str(agent.get('agent_id') or ''))}">Edit Charter</button>
+        </article>""")
+    cards_html = "\n".join(cards) or '<div class="empty">No active workspace roles yet. Provision the first one below.</div>'
+    goal_summary = " · ".join(
+        html.escape(str(goal.get("outcome") or goal.get("criterion") or ""))
+        for goal in goals[:3] if isinstance(goal, dict)
+    ) or "No active goals recorded"
+    workspace_name = html.escape(str(workspace.get("name") or "workspace"))
+    live = _live_js(port)
+    return f"""<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>synlynk Vizor — Workspace Agent Roles</title>
+<style>
+:root{{--bg:#f6f8fa;--panel:#fff;--ink:#1f2328;--muted:#667085;--line:#d8dee4;--accent:#0d9e87;--accent-bg:#e6f7f4}}
+*{{box-sizing:border-box}}body{{margin:0;background:var(--bg);color:var(--ink);font:14px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}}
+main{{max-width:1180px;margin:0 auto;padding:34px 28px 70px}}.eyebrow{{color:var(--accent);font-weight:700;letter-spacing:.08em;text-transform:uppercase;font-size:11px}}
+h1{{font-size:34px;margin:8px 0}}.subtitle{{color:var(--muted);margin:0 0 24px}}.summary{{display:flex;gap:18px;align-items:center;justify-content:space-between;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px 22px;margin-bottom:30px}}
+.summary strong{{display:block;font-size:16px;margin-bottom:5px}}.summary span{{color:var(--muted)}}.summary .goals{{max-width:56%;text-align:right}}.section-head{{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}}h2{{margin:0 0 12px;font-size:19px}}.grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}}
+.role-card,.empty{{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:0 4px 15px #1f23280d}}.card-top{{display:flex;justify-content:space-between;align-items:center}}.role-tag{{color:var(--accent);font-weight:700}}.durability{{background:var(--accent-bg);border-radius:99px;color:#087462;padding:5px 9px;font-size:11px;font-weight:700}}.role-card h2{{margin-top:17px;text-transform:capitalize}}.meta{{border-top:1px solid var(--line);padding-top:12px;color:var(--muted);font-size:11px}}.meta strong{{display:block;color:var(--ink);font-size:13px;margin-top:4px}}.excerpt{{color:var(--muted);line-height:1.5;min-height:64px}}button{{cursor:pointer;border:0;border-radius:8px;padding:9px 13px;font-weight:700}}.edit,.primary{{background:var(--accent);color:#fff}}.empty{{color:var(--muted);padding:28px;text-align:center}}
+.drawer{{margin-top:34px;background:#102a2d;color:#eefcf8;border-radius:16px;padding:24px}}.drawer h2{{color:#fff}}.drawer p{{color:#b7d4ce}}.options{{display:flex;flex-wrap:wrap;gap:9px;margin:18px 0}}.option{{background:#1b4546;color:#d6f5ef;border:1px solid #2b6463}}.option.selected{{background:#3de0c0;color:#082b2a}}form{{display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end}}label{{display:flex;flex-direction:column;gap:6px;color:#b7d4ce;font-size:11px}}input,select{{border:1px solid #47736f;background:#0c2225;color:#fff;border-radius:7px;padding:10px;font:inherit}}@media(max-width:700px){{.summary,form{{display:block}}.summary .goals{{max-width:none;text-align:left;margin-top:12px}}form>*{{margin-top:10px;width:100%}}}}
+</style></head><body><main>
+<div class="eyebrow">Vizor / Living Workspace</div><h1>Workspace Agent Roles</h1>
+<p class="subtitle">Living Charters for <strong>{workspace_name}</strong> — durable identities with visible ownership.</p>
+<section class="summary"><div><strong>Workspace Persona &amp; Goals</strong><span>{len(agents)} active role(s) · governed by living charters</span></div><div class="goals"><strong>Active goals</strong><span>{goal_summary}</span></div></section>
+<section><div class="section-head"><h2>Living Charters</h2><span>{len(agents)} active</span></div><div class="grid">{cards_html}</div></section>
+<section class="drawer" id="provision"><h2>Onboard Workspace Role</h2><p>Choose an archetype to provision a governed identity in one click.</p>
+<div class="options">{''.join(f'<button type="button" class="option{" selected" if value == "fullstack-builder" else ""}" data-archetype="{value}">{label}</button>' for value, label in (("fullstack-builder", "Fullstack Builder"), ("qa-reviewer", "QA Reviewer"), ("architect", "Architect"), ("marketing", "Marketing"), ("custom", "Custom")))}</div>
+<form id="role-form"><label>Role slug<input id="role" name="role" value="fullstack-builder" required></label><label>Durability<select id="durability" name="durability"><option value="durable">Durable</option><option value="dispatch-only">Dispatch-only</option><option value="session-only">Session-only</option></select></label><button class="primary" type="submit">Provision role</button></form><div id="role-result" aria-live="polite"></div></section>
+</main>{live}<script>
+const options=document.querySelectorAll('.option');options.forEach(b=>b.addEventListener('click',()=>{{options.forEach(x=>x.classList.remove('selected'));b.classList.add('selected');document.querySelector('#role').value=b.dataset.archetype;}}));
+document.querySelector('#role-form').addEventListener('submit',async e=>{{e.preventDefault();const result=document.querySelector('#role-result');const payload={{role:document.querySelector('#role').value.trim(),durability:document.querySelector('#durability').value}};try{{const r=await fetch('/roles/create',{{method:'POST',headers:Object.assign({{'Content-Type':'application/json'}},window.vizorAuthHeaders?window.vizorAuthHeaders():{{}}),body:JSON.stringify(payload)}});const out=await r.json();result.textContent=out.ok?'Provisioned '+out.agent_id:(out.error||'Provisioning failed');if(out.ok)setTimeout(()=>location.reload(),500);}}catch(err){{result.textContent='Provisioning failed: '+err.message;}}}});
+</script></body></html>"""
+
+
 def _write_cache(data: dict, port: int) -> None:
     """Generate all views and write to viz-cache/."""
     os.makedirs(VIZ_CACHE_DIR, exist_ok=True)
@@ -4694,6 +4795,7 @@ def _write_cache(data: dict, port: int) -> None:
         "product.html": generate_product_html(data, port),
         "logical.html": generate_logical_html(data, port),
         "infra.html": generate_infra_html(data, port),
+        "roles.html": generate_roles_html(data, port),
         "journeys.html": (
             '<!DOCTYPE html><html><head><meta charset="UTF-8">'
             '<meta http-equiv="refresh" content="0; url=product.html">'
@@ -4750,7 +4852,7 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
         self.wfile.write(json.dumps(payload).encode("utf-8"))
 
     def do_OPTIONS(self):
-        if self.path not in ("/note", "/dispatch", "/approve", "/kill", "/architect-map/view-pref"):
+        if self.path not in ("/note", "/dispatch", "/approve", "/kill", "/architect-map/view-pref", "/roles/create"):
             self.send_error(404)
             return
         self.send_response(204)
@@ -4769,8 +4871,61 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
             self._handle_kill_request()
         elif self.path == "/architect-map/view-pref":
             self._handle_view_pref_request()
+        elif self.path == "/roles/create":
+            self._handle_role_create_request()
         else:
             self.send_error(404)
+
+    def _handle_role_create(self, payload: dict) -> dict:
+        """Provision a role identity and its first living charter."""
+        from synlynk import agent_store, agent_cli, charter_schema
+
+        role = str(payload.get("role") or "").strip().lower()
+        durability = str(payload.get("durability") or "durable").strip().lower()
+        if not re.fullmatch(r"[a-z0-9][a-z0-9-]{1,48}", role):
+            return {"ok": False, "error": "role must be a lowercase slug"}
+        if durability not in charter_schema.VALID_DURABILITY:
+            return {"ok": False, "error": "invalid durability"}
+        for entry in agent_store.list_agents():
+            for alias in entry.get("aliases", []):
+                if alias.get("kind") == "role_slug" and alias.get("value") == role:
+                    return {"ok": True, "agent_id": entry.get("agent_id"), "existing": True}
+        agent_id = f"{role}-{uuid.uuid4().hex[:10]}"
+        seed = agent_cli.SEED_CHARTERS.get(role)
+        if seed:
+            charter = re.sub(r"^durability: .*?$", f"durability: {durability}", seed, count=1, flags=re.MULTILINE)
+        else:
+            charter = (
+                "---\n"
+                "schema_version: 1\n"
+                "role: dev\n"
+                f'description: "Workspace role {role}"\n'
+                f"durability: {durability}\n"
+                "tools: []\ncredentials: []\n"
+                "---\n\n"
+                "## Instructions\n\n"
+                f"Act as the {role} workspace persona according to the approved task brief.\n\n"
+                "## Authority & Escalation\n\n"
+                "Operate within workspace policy and escalate decisions outside the brief.\n\n"
+                "## Workflow Ownership\n\n"
+                f"Own work assigned to the {role} role.\n"
+            )
+        agent_store.register_agent(agent_id, [{"kind": "role_slug", "value": role}])
+        agent_store.propose_charter_revision(agent_id, charter, actor="vizor", parent_revision=0)
+        return {"ok": True, "agent_id": agent_id}
+
+    def _handle_role_create_request(self):
+        try:
+            payload = self._read_json_body()
+        except (json.JSONDecodeError, TypeError, ValueError):
+            self.send_error(400, "Invalid JSON")
+            return
+        try:
+            result = self._handle_role_create(payload)
+        except Exception as exc:
+            self.send_error(500, str(exc))
+            return
+        self._send_json_ok(result)
 
     def _handle_note_request(self):
         try:
