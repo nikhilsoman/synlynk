@@ -4627,13 +4627,15 @@ def generate_observatory_html(snapshot: dict) -> str:
     for item in worktree_items:
         status = _worktree_status(item)
         label = {"active": "ACTIVE", "safe": "SAFE", "needs-review": "NEEDS-REVIEW", "dirty-artifact": "DIRTY-ARTIFACT"}[status]
+        p_path = html.escape(str(item.get("path") or ""))
+        prune_btn = f' <button class="wt-prune" data-path="{p_path}">Prune</button>' if status == "safe" else ""
         worktree_rows.append(
             f'<tr><td><code>{html.escape(str(item.get("branch") or "—"))}</code></td>'
             f'<td class="wt-path">{html.escape(str(item.get("path") or "—"))}</td>'
-            f'<td><span class="wt-pill wt-{status.replace("-", "-")}">{label}</span></td>'
+            f'<td><span class="wt-pill wt-{status}">{label}</span></td>'
             f'<td>{html.escape(str(item.get("reason") or "—"))}</td>'
-            f'<td><button class="wt-inspect" data-path="{html.escape(str(item.get("path") or ""))}">Inspect</button>'
-            f'{" <button class=\"wt-prune\" data-path=\"" + html.escape(str(item.get("path") or "")) + "\">Prune</button>" if status == "safe" else ""}</td></tr>'
+            f'<td><button class="wt-inspect" data-path="{p_path}">Inspect</button>'
+            f'{prune_btn}</td></tr>'
         )
     worktree_html = f'''<!-- Worktree Lifecycle & Fleet Health -->
     <section class="wt-panel" id="worktree-lifecycle">
