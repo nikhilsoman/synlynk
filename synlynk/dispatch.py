@@ -15,7 +15,7 @@ import sys
 import threading
 import tempfile
 import time
-from typing import Optional, Tuple
+from typing import List, Optional, Sequence, Tuple
 
 from synlynk._constants import HARNESS_CAPABILITY_BASELINES, _CODEX_NETWORK_PERMISSION
 
@@ -677,7 +677,30 @@ _ENV_ALLOWLIST_BASE = [
     "GIT_COMMITTER_NAME",
     "GIT_COMMITTER_EMAIL",
     "GIT_SSH_COMMAND",
+    "SOURCE_DATE_EPOCH",
 ]
+
+
+def get_worktree_epoch(worktree_path: str) -> str:
+    """Returns the Unix timestamp of HEAD commit in the worktree for reproducible builds (#1349)."""
+    if worktree_path and os.path.exists(worktree_path):
+        try:
+            res = subprocess.run(
+                ["git", "-C", worktree_path, "log", "-1", "--format=%ct", "HEAD"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            val = res.stdout.strip()
+            if val and val.isdigit():
+                return val
+        except Exception:
+            pass
+        try:
+            return str(int(os.path.getmtime(worktree_path)))
+        except (OSError, OverflowError, ValueError):
+            pass
+    return "0"
 
 
 def _gh_write_allow_host_auth() -> bool:
@@ -717,7 +740,14 @@ def _isolated_gh_config_dir() -> str:
     return path
 
 
-def _build_subprocess_env(agent: str, overrides: dict, requires_gh_write: bool, story_id: str, agent_role: str = None) -> dict:
+def _build_subprocess_env(
+    agent: str,
+    overrides: dict,
+    requires_gh_write: bool,
+    story_id: str,
+    agent_role: str = None,
+    worktree_path: str = None,
+) -> dict:
     """Build a minimal, allowlisted environment for a dispatched subprocess.
 
     Replaces copying the full parent environment: only a fixed base set of
@@ -740,6 +770,11 @@ def _build_subprocess_env(agent: str, overrides: dict, requires_gh_write: bool, 
         if "=" in var:
             k, v = var.split("=", 1)
             proc_env[k] = v
+
+    if worktree_path:
+        proc_env["SOURCE_DATE_EPOCH"] = get_worktree_epoch(worktree_path)
+    elif "SOURCE_DATE_EPOCH" not in proc_env and os.environ.get("SOURCE_DATE_EPOCH"):
+        proc_env["SOURCE_DATE_EPOCH"] = os.environ["SOURCE_DATE_EPOCH"]
 
     if requires_gh_write:
         role = agent_role or _role_for_story(story_id)
@@ -1998,7 +2033,12 @@ def _preflight_headless_permission_check(harness_name: str, permissions: list, d
     }
 
 
-def _create_job_worktree(job_id: str, agent: str, base: Optional[str] = None) -> dict:
+def _create_job_worktree(
+    job_id: str,
+    agent: str,
+    base: Optional[str] = None,
+    scoped_paths: Optional[Sequence[str]] = None,
+) -> dict:
     """Create the isolated git worktree for a dispatched job.
 
     Returns {"path": str, "branch": str, "base_branch": str, "base_sha": str}
@@ -2009,6 +2049,7 @@ def _create_job_worktree(job_id: str, agent: str, base: Optional[str] = None) ->
     load_config_fn = _pkg("load_config")
     config = load_config_fn() if load_config_fn else {}
     stacking_mode = (config.get("dispatch") or {}).get("stacking", "auto")
+    worktree_mode = (config.get("worktree") or {}).get("mode", "full")
 
     base_ref = _resolve_dispatch_worktree_base_ref(
         os.getcwd(), stacking_mode=stacking_mode, explicit_base=base
@@ -2029,6 +2070,28 @@ def _create_job_worktree(job_id: str, agent: str, base: Optional[str] = None) ->
         print(f"  worktree base resolving against {base_ref} @ {base_sha}")
     else:
         print(f"  worktree base resolving against {base_ref}")
+
+    if worktree_mode == "sparse":
+        try:
+            from synlynk.worktree_sparse import create_sparse_cone_worktree
+            with git_ref_operation_lock(os.getcwd()):
+                sparse_ok = create_sparse_cone_worktree(
+                    repo_root=os.getcwd(),
+                    worktree_path=worktree_path,
+                    branch=worktree_branch,
+                    base_ref=base_sha or (base_ref if base_ref and base_ref != "HEAD" else "HEAD"),
+                    scoped_paths=scoped_paths,
+                )
+            if sparse_ok:
+                _assert_dispatch_worktree_base_is_fresh(worktree_path, base_ref)
+                return {
+                    "path": worktree_path,
+                    "branch": worktree_branch,
+                    "base_branch": base_ref,
+                    "base_sha": base_sha,
+                }
+        except Exception as exc:
+            print(f"  warning: sparse worktree creation failed ({exc}); falling back to full worktree")
 
     worktree_cmd = ["git", "worktree", "add", worktree_path, "-b", worktree_branch]
     if base_sha:
@@ -3196,7 +3259,17 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         cmd_str = " ".join(_shlex.quote(c) for c in [cli] + flags)
         shell_cmd = f"{cmd_str} < {_shlex.quote(prompt_file)} > {_shlex.quote(log_file)} 2>&1; echo $? > {_shlex.quote(log_file)}.exit"
 
-    proc_env = _build_subprocess_env(agent, overrides, requires_gh_write, story_id, agent_role=resolved_agent_role)
+    proc_env = _build_subprocess_env(
+        agent,
+        overrides,
+        requires_gh_write,
+        story_id,
+        agent_role=resolved_agent_role,
+    )
+    if worktree_path and "SOURCE_DATE_EPOCH" not in proc_env:
+        epoch = get_worktree_epoch(worktree_path)
+        if epoch:
+            proc_env["SOURCE_DATE_EPOCH"] = epoch
     gh_write_target_value = None
     gh_write_author_value = None
     gh_write_expect_value = None

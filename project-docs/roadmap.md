@@ -29,10 +29,10 @@
 - [x] **Marketing Release Ceremony Automation:** Continuous GitHub README maintenance, synlynk.com (`website/`) site refresh, and compilation/export of the 3 Synlynk Doc bundles (Quick Start, Official Manual, Command Ref HTML & PDF) dispatched by PM/TPM upon named release (#1557).
 
 ### Cluster B: Worktree Lifecycle & Rebase Concurrency
-- [ ] **Adaptive Scope-Bounded Sparse Worktrees:** `worktree.mode: sparse` using `git sparse-checkout --cone` for `.synlynk/` + scoped paths (#1389, #1390, #1391).
-- [ ] **Sibling Branch Auto-Pruning:** Auto-pruning patch-equivalent ancestor branches upon PR squash-merge (#1348).
-- [ ] **Multi-Task Lineage Tracking:** Recording `superseded_by` relationships across stacked dispatches (#1347).
-- [ ] **Deterministic Build Timestamp Freezing:** Configuring `SOURCE_DATE_EPOCH` for reproducible test caches (#1349).
+- [x] **Adaptive Scope-Bounded Sparse Worktrees:** `worktree.mode: sparse` using `git sparse-checkout --cone` for `.synlynk/` + scoped paths (#1389, #1390, #1391, PR #1558).
+- [x] **Sibling Branch Auto-Pruning:** Auto-pruning patch-equivalent ancestor branches upon PR squash-merge (#1348, PR #1558).
+- [x] **Multi-Task Lineage Tracking:** Recording `superseded_by` relationships across stacked dispatches (#1347, PR #1558).
+- [x] **Deterministic Build Timestamp Freezing:** Configuring `SOURCE_DATE_EPOCH` for reproducible test caches (#1349, PR #1558).
 
 ### Cluster C: Fleet Diagnostic Truth & Concurrency Resilience
 - [ ] **Consolidated 4-Point Readiness Matrix:** Unified attestation in `synlynk doctor --readiness` and Vizor (#1521).

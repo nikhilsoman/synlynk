@@ -664,6 +664,11 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
                 conn.execute("ALTER TABLE stories ADD COLUMN governs_stage TEXT NOT NULL DEFAULT 'open'")
             except sqlite3.OperationalError:
                 pass
+        if "superseded_by" not in story_cols:
+            try:
+                conn.execute("ALTER TABLE stories ADD COLUMN superseded_by TEXT DEFAULT NULL")
+            except sqlite3.OperationalError:
+                pass
         try:
             conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_stories_fingerprint ON stories(fingerprint) WHERE fingerprint IS NOT NULL")
         except sqlite3.OperationalError:
@@ -791,6 +796,16 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
         if "terminal_claim_token" not in daemon_job_cols:
             try:
                 conn.execute("ALTER TABLE daemon_jobs ADD COLUMN terminal_claim_token TEXT")
+            except sqlite3.OperationalError:
+                pass
+        if "superseded_by" not in daemon_job_cols:
+            try:
+                conn.execute("ALTER TABLE daemon_jobs ADD COLUMN superseded_by TEXT DEFAULT NULL")
+            except sqlite3.OperationalError:
+                pass
+        if "lineage_root" not in daemon_job_cols:
+            try:
+                conn.execute("ALTER TABLE daemon_jobs ADD COLUMN lineage_root TEXT DEFAULT NULL")
             except sqlite3.OperationalError:
                 pass
         try:

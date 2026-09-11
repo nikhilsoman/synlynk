@@ -373,6 +373,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--json", action="store_true", dest="json_output",
         help="Output machine-readable JSON"
     )
+    worktree_clean_parser.add_argument(
+        "--prune-siblings", action="store_true", default=False,
+        help="Detect and prune patch-equivalent sibling branches (e.g. squash-merged branches)"
+    )
 
     tui_parser = subparsers.add_parser("tui", help="Launch the curses terminal UI")
     tui_parser.set_defaults(
@@ -1955,7 +1959,11 @@ def main(argv=None) -> None:
         if action == "audit":
             cmd_worktree_audit(json_output=args.json_output)
         elif action == "clean":
-            cmd_worktree_clean(apply=args.apply, json_output=args.json_output)
+            cmd_worktree_clean(
+                apply=args.apply,
+                json_output=args.json_output,
+                prune_siblings=getattr(args, "prune_siblings", False),
+            )
         else:
             help_parsers.get("worktree", parser).print_help()
     elif args.command == "notify":

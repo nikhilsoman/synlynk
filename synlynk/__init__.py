@@ -679,6 +679,7 @@ CREATE TABLE IF NOT EXISTS stories (
     governs_stage TEXT DEFAULT 'open',
     gh_issue      TEXT,
     archived_at   TIMESTAMP,
+    superseded_by TEXT DEFAULT NULL,
     created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -828,6 +829,8 @@ CREATE TABLE IF NOT EXISTS daemon_jobs (
     context_mode TEXT,
     context_bytes INTEGER,
     session_id TEXT REFERENCES sessions(session_id),
+    superseded_by TEXT DEFAULT NULL,
+    lineage_root TEXT DEFAULT NULL,
     gh_write_evidence TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_daemon_jobs_status ON daemon_jobs(status);
