@@ -1,3 +1,16 @@
+## 2026-09-11 — Milestone v0.20.0 Sprint 1: BS-6 Workspace Views, Role Studio, & Worktree Lifecycle (PR #1556)
+
+### Shipped
+- **Milestone Execution & Autonomous Fleet Conductor:** As Home Conductor (Agy), orchestrated full milestone execution across the fleet (Codex, Claude, Agy) following plan `docs/superpowers/plans/2026-09-11-v0-20-0-sprint1-vizor-enhancement.md` (`story-304499f1`).
+- **Task 1 (BS-6 Models & DB Projection):** Codex (`job-b9c6b839`) implemented `synlynk/viz_views.py` with tables `workspace_view_nodes`, `workspace_view_edges`, `workspace_view_meta`, extractors for Product/Logical/Infra views, and `tests/test_viz_views.py` (5/5 passed).
+- **Task 2 (BS-6 HTML Renderers & Master Nav):** Claude (`job-db909de0`) implemented `generate_product_html()`, `generate_logical_html()`, `generate_infra_html()` with SVG force layout, node inspection drawer, master navigation tabs, and `tests/test_viz_bs6.py` (4/4 passed).
+- **Task 3 (Workspace Agent Roles & Onboarding Studio):** Codex (`job-2244087f`) implemented `generate_roles_html()` presenting living charters and 1-click archetype selector, `/roles/create` API handler in `VizorHandler`, and `tests/test_viz_roles.py` (3/3 passed).
+- **Task 4 (Worktree Lifecycle Audit & Safe Clean):** Codex (`job-7922db90`) implemented the 4-card metric banner, interactive audit table with status pills, `/worktrees/clean` endpoint, and `tests/test_viz_worktrees.py` (2/2 passed).
+- **Task 5 (Harness Styling Sync & Full Regression):** Agy implemented Meta Muse (`muse`) CSS tokens, avatar badges, Sentinel alert severity triage in `_load_sentinel_alerts`, and verified the full 85/85 viz regression suite passing cleanly.
+- **Python 3.10 Cross-Version Hardening:** Identified and fixed an f-string backslash syntax error in `synlynk/viz.py:4636` that caused Python 3.10 CI failure, restoring 100% green status across Python 3.10, 3.12, EPUBCheck, and qa-gate.
+- **PR Review & Integration:** PR #1556 approved by `synlynk-synlynk-qa` (`job-621bd6f6`), verified through all CI checks, and squash-merged to `main` (`0c004c78`). Interim stacked PRs (#1552, #1553, #1554, #1555) closed.
+[@agy]
+
 ## 2026-09-09 — Daemon lifecycle recovery (#1523)
 
 - Added PID-tagged daemon lock diagnostics and stale-owner recovery while preserving live lock ownership.

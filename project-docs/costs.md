@@ -35,3 +35,13 @@
 ## 2026-09-11 - BS-6 Projection Task 1
 
 - Codex implementation and pytest verification completed locally; no external fee-bearing dispatch spend.
+## 2026-09-11 — Milestone v0.20.0 Sprint 1 Fleet Execution (`story-304499f1`)
+
+- Interactive Conductor: Agy (Gemini 2.5 Flash / Pro).
+- Dispatched Task 1 (BS-6 Models & Extraction): Codex (`job-b9c6b839`), status OK, 5/5 tests passed, merged to `feat/agy/v0.20.0-sprint1-vizor`.
+- Dispatched Task 2 (BS-6 HTML Renderers & Nav): Claude (`job-db909de0`), status OK, 9/9 tests passed, merged to `feat/agy/v0.20.0-sprint1-vizor`.
+- Dispatched Task 3 (Roles & Onboarding Studio): Codex (`job-2244087f`), $5.10 (1,631,402 in / 13,948 out), status OK, 12/12 tests passed, merged to `feat/agy/v0.20.0-sprint1-vizor`.
+- Dispatched Task 4 (Worktree Lifecycle & Clean Panel): Codex (`job-7922db90`), $5.31 (1,714,446 in / 11,143 out), status OK, 14/14 tests passed, merged to `feat/agy/v0.20.0-sprint1-vizor`.
+- Task 5 (Harness Sync & Full Regression): Agy, status OK, 85/85 tests passed, committed to `feat/agy/v0.20.0-sprint1-vizor` (`0a9297f7`), PR #1556 opened.
+- Dispatched QA Review & Merge: Codex (`job-621bd6f6`), ~$0.14 estimated, in progress.
+

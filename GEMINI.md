@@ -298,7 +298,7 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
   ordinary command usage, not on phrase matches, not mid-brainstorm).
 <!-- synlynk:end -->
 
-<!-- synlynk:harness v2.0.0 verified:2026-08-31T12:05:27Z -->
+<!-- synlynk:harness v1.1.27 verified:2026-09-11T12:41:34Z -->
 # Harness Instructions (synlynk-managed — do not edit)
 
 ## Headless Execution Contract

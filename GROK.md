@@ -294,7 +294,7 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
   ordinary command usage, not on phrase matches, not mid-brainstorm).
 <!-- synlynk:end -->
 
-<!-- synlynk:harness vsop-repair verified:2026-08-29T07:09:44Z -->
+<!-- synlynk:harness v1.0.13 verified:2026-09-11T12:41:35Z -->
 # Harness Instructions (synlynk-managed — do not edit)
 
 ## Your Role
@@ -367,5 +367,17 @@ This table is generated from `.synlynk/config.json` so it tracks the repo's own 
 - **Precondition for all Herdr commands:** check `test "${HERDR_ENV:-}" = 1` before issuing any `herdr` command; if unset, this agent is not running inside Herdr and must not attempt to control a Herdr session from outside it.
 - Herdr is Apache-2.0 licensed (no NOTICE file) — free to reference/use without royalty or attribution beyond standard license retention.
 - Full CLI reference: https://github.com/herdrdev/herdr/blob/v0.8.2/skills/herdr/SKILL.md
+
+## Headless Execution Contract
+- Execution mode: pipe
+- Non-interactive flag: --single
+- Stdout flush: native
+
+## Active Dispatch Flags
+- Valid: --always-approve --permission-mode --output-format --model --single
+- Invalid (do not use): --yes --dangerously-skip-permissions --print --non-interactive
+
+## Network Dependencies
+- Required: cli-chat-proxy.grok.com:443
 
 <!-- /synlynk:harness -->

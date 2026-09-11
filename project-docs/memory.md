@@ -1,5 +1,15 @@
 # synlynk Memory
 
+## Milestone v0.20.0 Sprint 1 Shipped: BS-6 Workspace Views, Role Studio, & Worktree Lifecycle (decided/shipped 2026-09-11)
+- **Implementation Shipped (PR #1556):** Completed autonomous fleet execution of Milestone v0.20.0 Sprint 1 (`story-304499f1`) per approved plan `docs/superpowers/plans/2026-09-11-v0-20-0-sprint1-vizor-enhancement.md`.
+- **Architectural Deliverables:**
+  1. **BS-6 Views Projection & Storage:** Created `synlynk/viz_views.py` backed by SQLite tables (`workspace_view_nodes`, `workspace_view_edges`, `workspace_view_meta`). Implemented extractors for Product views (journeys & routes), Logical views (packages & modules), and Infra views (daemon & Vizor services).
+  2. **BS-6 HTML Renderers:** Implemented `product.html`, `logical.html`, and `infra.html` with zero external CDN dependencies, native SVG force layouts, node inspection drawer (`am-drawer`), and master navigation tabs.
+  3. **Streamlined Workspace Role Studio (`roles.html`):** In-browser living charter inspection and 1-click archetype provisioning (`/roles/create` API) eliminating complex RSA/PEM generation friction.
+  4. **Worktree Lifecycle & Fleet Health Panel:** Enhanced `observatory.html` with a 4-card metric banner (Active, Safe, Needs Review, Dirty) and interactive audit table with `/worktrees/clean` trigger.
+  5. **Fleet Parity & Hardening:** Registered Meta Muse harness (`muse`) with dedicated CSS variables and avatar badges, structured Sentinel alert severity triage in `_load_sentinel_alerts`, and verified 85/85 tests passing across all viz test suites.
+- **Fleet Collaboration:** Tasks orchestrated across Codex (`job-b9c6b839`, `job-2244087f`, `job-7922db90`), Claude (`job-db909de0`), and Agy (Task 5 & Conductor). PR #1556 created, approved by QA, and merged to `main`. [@agy]
+
 ## Milestone v0.20.0 Stitch Visual Designs Archived & Vizor Direct Enhancement Strategy (decided 2026-09-11)
 - **Stitch Visual Prototypes Archived for Future Reference:** Preserved Stitch project `Synlynk — Visual Workspace Cockpit & Agent Role Studio` (ID `3671496916099756142`), design system asset `assets/14807108601568982212` (`Synlynk Obsidian Cockpit`), standalone interactive HTML prototypes (`screen1_bs6_product_view.html`, `screen2_github_app_onboarding.html`, `screen3_worktree_sweep_panel.html`), and master review portal in `docs/brainstorm/designs/v0.20.0/`.
 - **Simplified Onboarding Model Adopted:** Rejected low-level 4-step GitHub App permission matrices and raw PEM key wizards as excessively complex for developers. Re-anchored onboarding to a high-level, goal-driven flow: Repository scan -> Goal/Persona identification -> PM/TPM autonomous role recommendation (e.g. film vs. software engineering) -> 1-click role provisioning.
@@ -7,6 +17,7 @@
   1. Upgrade `tube.html` (Architect Map) and `journeys.html` into the full BS-6 Tri-Directional Visualizer (Product / Logical / Infra views).
   2. Integrate a streamlined **Workspace Agent Studio** into Vizor for viewing living charters and 1-click role creation.
   3. Integrate **Worktree Lifecycle & Sweep Engine** directly into `observatory.html` for 1-click clean and safety audits. [@agy]
+
 
 ## BS-6 Repo / Workspace Visualization Design Spec Landed (decided/shipped 2026-09-09)
 - **Specification Shipped (#1533):** Shipped formal Design Spec (`docs/superpowers/specs/2026-09-09-bs6-repo-workspace-visualization-design.md`) and spec verification test (`tests/test_bs6_workspace_views_spec.py`) resolving BS-6 continuation (story `story-adhoc-1788972982` / `story-f5513a93`).
