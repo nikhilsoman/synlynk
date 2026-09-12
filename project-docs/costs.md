@@ -80,5 +80,11 @@
 - Updated capability probing and documentation (`synlynk/probe.py`, `docs/harness-capability-baseline.md`).
 - 5 comprehensive unit tests passing in `tests/test_muse_harness.py`; 147 dispatch tests and 26 probe tests verified; zero external fee-bearing dispatch spend.
 
+## 2026-09-12 — LIVE-12: Marketing Surface RCA & Dual-Treatment Protocol
 
-
+- Conductor: Agy (Gemini 2.5 Flash / Pro).
+- Completed deep forensic investigation into blog post date homogenization (`Sep 11, 2026`), `#00` badges, features page stagnation (`v0.13.1`), and unautomated PDF/EPUB compilation.
+- Authored comprehensive RCA in `docs/rca/2026-09-12-LIVE-12-marketing-surface-decoupling-and-blog-date-drift.md`.
+- Formulated 4-phase remediation roadmap (Surface Remediation, CI Gates, Two-Tier Blog & Autonomous PR Trigger, Automated PDF & EPUB Compilation Engine).
+- Updated marketing agent charter in `synlynk/agent_cli.py` and promoted live revision in `agent_store` to rev 1 for agent `f2039c38-37ef-4380-ae97-9954f0f7ed36`.
+- Zero external fee-bearing dispatch spend.

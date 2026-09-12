@@ -333,7 +333,22 @@
 - **Verification:**
   - Passed 5 comprehensive unit tests in `tests/test_muse_harness.py` covering TC-0 schema compliance, dispatch CLI flag generation, prompt formatting, token extraction, and probe execution.
   - Passed full suite of 147 dispatch tests and 26 probe tests.
+## 2026-09-12 — LIVE-12: Marketing Surface Decoupling, Blog Date Drift & Charter Update
+
+### Root Cause Analysis & Governance
+- **Recorded LIVE-12 RCA (`docs/rca/2026-09-12-LIVE-12-marketing-surface-decoupling-and-blog-date-drift.md`):**
+  - Confirmed root cause of blog post date homogenization (`Sep 11, 2026`) and `#00` badges: 61 historical blog posts in `docs/blog/` lacked YAML frontmatter (`---`), causing Eleventy to fall back to the CI runner checkout `mtime` and undefined `#{{ post.data.post or '00' }}` fallback badges, sorting them ahead of real posts.
+  - Confirmed features page stagnation at `v0.13.1`: `website/src/features.njk` was hardcoded in static HTML with no data-driven model or release update pipeline since August 14, 2026.
+  - Confirmed missing autonomous PR trigger loop and stale PDF/EPUB binary distribution in `docs/` and `website/src/assets/docs/`.
+- **Marketing Agent Charter Update (`synlynk/agent_cli.py`, `agent_store`):**
+  - Codified the **Dual-Treatment Protocol**:
+    1. *Named Releases (Full Treatment):* Consolidated strategic blog post (direction, evolutionary trend, future outlook) + rich visuals (terminal simulations, vizor architecture maps, metric charts) tagged `type: release` and featured on `synlynk.com/blog`; updated Features Matrix (`website/src/features.njk` / `_data/features.json`); recompiled HTML/PDF documentation bundles (Quick Start, Official Manual, Command Reference) and Book manuscript (`the-supervised-machine` PDF + EPUB); updated GitHub `README.md` (version badge, collected tests, release hero summary).
+    2. *Routine Feature PRs (Limited Treatment):* Strictly incremental per-PR blog post in `docs/blog/NN-prN-<slug>.md` with validated frontmatter (`title`, `author`, `date` matching PR merge date, `pr`, `post`, `tags`, `type: pr`) detailing what shipped, why, and how it was verified; updated `docs/blog/README.md` index; exported social snippets in `.synlynk/social_drafts.json`.
+  - Defined two-tier blog architecture on `synlynk.com/blog`: featured strategic release communications vs per-PR engineering build diary.
+  - Promoted marketing charter revision from rev 0 to rev 1 in `agent_store` for agent `f2039c38-37ef-4380-ae97-9954f0f7ed36`.
+- **4-Phase Remediation Roadmap Formulated:**
+  - Phase 1: Surface Remediation (Frontmatter backfill of 61+2 posts, `features.njk` refresh to v0.20.0, v0.20.0 release ceremony).
+  - Phase 2: CI & Preflight Quality Gate Hardening (`validate_all_blog_posts()` in `synlynk pr check`, Eleventy fallback defense).
+  - Phase 3: Autonomous PR Marketing Trigger & Two-Tier Blog Architecture (`synlynk marketing sync-pr <pr>`, `.github/workflows/marketing-pr-sync.yml`).
+  - Phase 4: Automated PDF & EPUB Compilation Engine (Headless Chrome for HTML->PDF, Pandoc for HTML->EPUB).
 [@agy]
-
-
-
