@@ -1,3 +1,14 @@
+---
+title: "101-pr853-watching-synlynk-guide"
+author: "synlynk team"
+date: 2026-08-09
+post: 101
+pr: "—"
+type: pr
+series: "Building the OS for Multi-Agent Development"
+tags: posts
+version: "0.13.1"
+---
 # 101. PR #853 — Watching Synlynk @Work, the 4th docs.njk document
 
 ## Goal at the end of the previous PR

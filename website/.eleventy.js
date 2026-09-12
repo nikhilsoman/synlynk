@@ -87,23 +87,75 @@ module.exports = function(eleventyConfig) {
     fs.writeFileSync(targetChangelogPath, frontmatter + content);
   }
 
+  // Helper: Extract true date defensively without leaking file mtime
+  function getEffectiveDate(item) {
+    if (item.data && item.data.date) {
+      if (item.data.date instanceof Date) return item.data.date;
+      const parsed = new Date(item.data.date + 'T00:00:00');
+      if (!isNaN(parsed.getTime())) return parsed;
+    }
+    // Fallback: look for YYYY-MM-DD in raw content
+    if (item.template && item.template.frontMatter && item.template.frontMatter.content) {
+      const match = item.template.frontMatter.content.match(/\b(202[0-9]-[0-1][0-9]-[0-3][0-9])\b/);
+      if (match) {
+        const parsed = new Date(match[1] + 'T00:00:00');
+        if (!isNaN(parsed.getTime())) return parsed;
+      }
+    }
+    // Fallback to stable early project epoch rather than CI checkout mtime
+    return new Date('2026-06-01T00:00:00');
+  }
+
   // Filters
-  eleventyConfig.addFilter("dateFilter", (date) => {
-    if (!date) return '';
-    const d = date instanceof Date ? date : new Date(date + 'T00:00:00');
+  eleventyConfig.addFilter("dateFilter", (date, item) => {
+    let d = null;
+    if (item && item.data && item.data.date) {
+      d = item.data.date instanceof Date ? item.data.date : new Date(item.data.date + 'T00:00:00');
+    } else if (date) {
+      d = date instanceof Date ? date : new Date(date + 'T00:00:00');
+    }
+    if (!d || isNaN(d.getTime())) return '';
     return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit' });
   });
 
   // Passthrough copies
   eleventyConfig.addPassthroughCopy("src/assets");
 
-  // Blog collection
-  eleventyConfig.addCollection("posts", (collectionApi) => {
-    return collectionApi.getFilteredByGlob("src/blog/posts/*.md").sort((a, b) => {
-      const dateA = a.date || new Date(0);
-      const dateB = b.date || new Date(0);
-      return dateB - dateA;
+  // Blog collections
+  function sortPosts(posts) {
+    return posts.sort((a, b) => {
+      const dateA = getEffectiveDate(a);
+      const dateB = getEffectiveDate(b);
+      const diff = dateB - dateA;
+      if (diff !== 0) return diff;
+      const postA = parseInt(a.data && a.data.post ? a.data.post : 0, 10);
+      const postB = parseInt(b.data && b.data.post ? b.data.post : 0, 10);
+      return postB - postA;
     });
+  }
+
+  function isReleasePost(item) {
+    const type = (item.data && item.data.type) || "";
+    const tags = (item.data && item.data.tags) || [];
+    const slug = item.fileSlug || "";
+    return type === "release" || (Array.isArray(tags) && tags.includes("release")) || /v0\.\d+\.0/.test(slug);
+  }
+
+  // All posts
+  eleventyConfig.addCollection("posts", (collectionApi) => {
+    return sortPosts(collectionApi.getFilteredByGlob("src/blog/posts/*.md"));
+  });
+
+  // Tier 1: Strategic Named Release Posts
+  eleventyConfig.addCollection("releasePosts", (collectionApi) => {
+    const all = collectionApi.getFilteredByGlob("src/blog/posts/*.md");
+    return sortPosts(all.filter(isReleasePost));
+  });
+
+  // Tier 2: Per-PR Engineering Build Diary Posts
+  eleventyConfig.addCollection("prPosts", (collectionApi) => {
+    const all = collectionApi.getFilteredByGlob("src/blog/posts/*.md");
+    return sortPosts(all.filter(item => !isReleasePost(item)));
   });
 
   return {

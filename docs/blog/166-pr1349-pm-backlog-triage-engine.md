@@ -8,8 +8,8 @@ pr: "#1349"
 version: "0.19.0"
 tags: ["pm", "backlog", "triage", "governs", "automation", "story-formation"]
 merged: "status: open"
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 Following the cross-harness inter-agent event relay (PR #1348), autonomous growth engine (PR #1347), and model registry (PR #1339), synlynk had mature mechanisms for real-time messaging, public release narratives, and execution capabilities. However, backlog management and story synthesis remained manual: incoming GitHub issues and dynamic task discoveries were either manually converted into stories or left untracked.

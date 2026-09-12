@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 189
 pr: "TBD"
 status: open
+author: "synlynk team"
+version: "0.19.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 The identity-routing work in #1436 moved autonomous GitHub writes onto role

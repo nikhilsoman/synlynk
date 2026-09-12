@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 59
 pr: "#252"
 merged: pending
+author: "synlynk team"
+version: "0.12.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 PR #244 shipped the first of four planned per-agent structured-output adapters — Codex — and validated the pattern end to end: `extract_tokens()` gains an `agent=` parameter, tries a per-agent `_extract_<agent>_structured()` function first, and falls through to the existing regex chain on any failure, silently and automatically. That PR's own closing note named the next goalpost explicitly: "the same pattern, three more times" — Claude, Gemini, Grok — each independently shippable, each requiring its own live-verified investigation of that CLI's actual structured-output shape rather than an assumption carried over from Codex's.

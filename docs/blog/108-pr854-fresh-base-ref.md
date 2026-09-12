@@ -4,8 +4,12 @@ date: 2026-08-09
 series: "Building the OS for Multi-Agent Development"
 post: 108
 issue: 832
+author: "synlynk team"
+version: "0.13.1"
+tags: [posts]
+pr: "#854"
+type: pr
 ---
-
 # Fresh `--base` — Stop Dispatching Against Stale `main`
 
 ## Broader goal

@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 139
 pr: "#1282"
 merged: 2026-08-30
+author: "synlynk team"
+version: "0.18.0"
+tags: [posts]
+type: pr
 ---
-
 # 139: Daemon Re-Exec — Fixing macOS Fork-Safety Crashes
 
 ## Where we left off

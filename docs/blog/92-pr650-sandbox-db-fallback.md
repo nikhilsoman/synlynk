@@ -6,8 +6,11 @@ post: 92
 pr: "#650"
 issue: "#648"
 merged: —
+author: "synlynk team"
+version: "0.13.1"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 synlynk's project state lives at `~/.synlynk/projects/<md5>/state.db` so all worktrees of one repo share a single ledger on one machine. That design is correct for local orchestration. What it never fully accounted for is a *dispatched agent running inside its own sandbox*: different `$HOME`, often a read-only mount outside the workspace, and no copy of the orchestrator's `.synlynk/config.json` or DB.

@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 32
 pr: "#78"
 merged: TBD
+author: "synlynk team"
+version: "0.10.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 Phase 2 (Agy + Grok) delivered the Tagline Hero, Relief, How-It-Works, Features spotlight, full terminal carousel for the four core commands, copy affordance, CSS design system (cards, terminals, buttons, labels), and macros. The homepage had a complete marketing surface and interactive "show don't tell" demo. The single remaining dramatic centerpiece specified in the BS-5 design was Section 6 — the OS Vision canvas that literally draws the "coordination OS" story.
 

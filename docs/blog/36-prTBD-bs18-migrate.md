@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 36
 pr: "#TBD"
 merged: —
+author: "synlynk team"
+version: "0.10.0"
+tags: [posts]
+type: pr
 ---
-
 # PR #TBD — v0.10.0: synlynk migrate — state.db Source of Truth
 
 ## The Broader Goal at the End of the Previous PR

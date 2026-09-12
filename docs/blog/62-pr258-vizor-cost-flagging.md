@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 62
 pr: "#258"
 merged: pending
+author: "synlynk team"
+version: "0.12.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 PR #257 closed epic #210's four-for-four structured-output adapter scope — Codex, Claude, Agy, and Grok all now extract real vendor-reported token usage into a uniform `_TokenCounts(basis="structured_output")` contract before ever falling back to regex or t-shirt heuristics. That PR's closing note named the one deliverable epic #210 still owed: the display layer. All four adapters, plus Measurement Ledger Phase 1's `cost_source`/`estimate_basis` columns, had been populating provenance data that nothing downstream actually showed a human. `project-docs/costs.md` already prefixed non-actual rows with `[est]`/`[legacy]`, but the Vizor web HUD's Effort & Cost tab — the place most people actually look — had zero references to `cost_source` anywhere in `synlynk/viz.py`. A structurally-measured row and a heuristically-estimated row rendered identically.

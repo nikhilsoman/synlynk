@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 66
 pr: "#293"
 merged: pending
+author: "synlynk team"
+version: "0.13.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 v0.12.0 closed the measurement-and-reliability arc: structured token adapters, a provenance-aware cost ledger, and a 3-stage capability → quota → cost router with a fleet batch scheduler. The quota stage shipped as schema + helpers (`agent_quotas`, `_upsert_agent_quota`, `_quota_headroom`, `_quota_status_for_agent`) in the #141 base matrix work — but the table stayed empty in production. Stage 2 was a real gate against a signal that was never written. Issue #291 named that gap: decorative plumbing, no CLI, no non-zero `used_tokens`.

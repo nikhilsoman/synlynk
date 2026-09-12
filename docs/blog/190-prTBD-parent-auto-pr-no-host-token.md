@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 190
 pr: "TBD"
 status: open
+author: "synlynk team"
+version: "0.19.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Remaining Identity-Routing Hole
 
 Child dispatch already removed ambient GitHub tokens, but the parent daemon's

@@ -1,3 +1,14 @@
+---
+title: "PR #715 — Local Agent A/B Test Results"
+author: "synlynk team"
+date: 2026-08-03
+post: 98
+pr: "#715"
+type: pr
+series: "Building the OS for Multi-Agent Development"
+tags: posts
+version: "0.13.1"
+---
 # 98: the A/B test ran, and the answer was hardware, not quality
 
 ## Where we left off

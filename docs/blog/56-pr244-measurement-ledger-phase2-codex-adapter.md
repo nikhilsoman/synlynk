@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 56
 pr: "#244"
 merged: 2026-07-14
+author: "synlynk team"
+version: "0.12.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 Measurement Ledger Hardening Phase 1 (PR #236/#241/#242) shipped the cost ledger's provenance system: every `cost_entries` row now carries an explicit `cost_source` tag (`actual`, `estimated_token_rate`, `estimated_tshirt`, `estimated_manual`, `legacy_unknown`) and an `estimate_basis` sub-tier, enforced through a single write chokepoint (`_insert_cost_row()`) that SQLite itself rejects if the tag is omitted. The user's stated invariant — *never miss capturing cost of any implementation, even as an estimate, and never blend a guess in silently as if it were metered billing* — was structurally guaranteed by that point.

@@ -4,8 +4,11 @@ date: 2026-09-06
 series: "Building the OS for Multi-Agent Development"
 post: 180
 pr: "TBD"
+author: "synlynk team"
+version: "0.19.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 #1447 closed the Agy `## Permissions` title leak (#1427 / #1421). Review dispatch still could not finish its own contract: `synlynk pr check` died writing a shared todo file, and the injected pytest `-k` selector matched 0 tests.

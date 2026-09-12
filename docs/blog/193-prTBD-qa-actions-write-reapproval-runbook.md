@@ -4,8 +4,11 @@ date: 2026-09-06
 series: "Building the OS for Multi-Agent Development"
 post: 193
 pr: "TBD"
+author: "synlynk team"
+version: "0.19.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 PR #1458 updated the GitHub App manifest builder (`synlynk/team.py`) so new installations for merge-authority roles (`qa`) request `actions: write` alongside `administration: write`. However, GitHub's permission security boundary prevents newly requested permissions from being applied automatically to an already-installed GitHub App (`synlynk-synlynk-qa`).

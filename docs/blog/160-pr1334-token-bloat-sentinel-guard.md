@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 160
 pr: "#1334"
 merged: status open
+author: "synlynk team"
+version: "0.18.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 Prior to this investigation, synlynk focused on establishing full fleet parity and operational stability across its four primary harnesses (Claude, Codex, Agy, and Grok). Sentinel monitors existed to catch command repetition loops (`SUCCESS_LOOP`), recurring subprocess crashes (`FLATLINE`), quota exhaustion (`QUOTA_EXHAUSTED`), and verification skips (`VERIFY_SKIP`). However, the system lacked a metric-driven guard to evaluate the economic efficiency and token intensity of individual job executions.

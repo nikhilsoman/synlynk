@@ -4,8 +4,11 @@ date: 2026-09-06
 series: "Building the OS for Multi-Agent Development"
 post: 186
 pr: "TBD"
+author: "synlynk team"
+version: "0.19.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 Earlier PRs in the #1436 arc audited workspace agent identity routing, enforced role App tokens on parent auto-PRs, and eliminated fallback to host GitHub credentials for unattended tasks. Live verification already proved that `synlynk-synlynk-qa[bot]` successfully approves and squash-merges PRs under `.synlynk/policy.json` (`can_merge: ["qa"]`). However, living documentation—specifically the agent roles and charters design spec, the glossary, and the road to autonomous operations roadmap—still contained legacy prose claiming that the architect role holds merge authority.

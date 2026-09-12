@@ -1,3 +1,14 @@
+---
+title: "PR #1346 — Cadence-Breaker Resilience Engine"
+author: "synlynk team"
+date: 2026-09-02
+post: 163
+pr: "#1346"
+type: pr
+series: "Building the OS for Multi-Agent Development"
+tags: posts
+version: "0.19.0"
+---
 # PR #1346 - Cadence-Breaker Resilience
 
 Autonomous systems fail in surprisingly ordinary ways: two agents append to

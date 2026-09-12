@@ -1,3 +1,14 @@
+---
+title: "Vizor Gets a Goals Panel"
+author: "synlynk team"
+date: 2026-07-11
+post: 51
+pr: "TBD"
+type: pr
+series: "Building the OS for Multi-Agent Development"
+tags: posts
+version: "0.12.0"
+---
 # Vizor Gets a Goals Panel
 
 **Date:** 2026-07-11

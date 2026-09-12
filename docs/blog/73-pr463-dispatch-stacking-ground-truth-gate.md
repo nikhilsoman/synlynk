@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 73
 pr: "#463"
 merged: 2026-07-23
+author: "synlynk team"
+version: "0.13.1"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 v0.13.0 ("Discoverability & Accounting", tag'd 2026-07-22 off PR #442) had just shipped the measurement and cost-visibility cluster — `synlynk status --json` as Vizor's data contract, payment-model-aware cost accounting, capability-sweep taxonomy. The dispatch mechanism itself — `synlynk dispatch <agent>` spawning Codex/Gemini/Grok jobs in isolated git worktrees — was functionally stable but had a known, unaddressed failure mode: every job branched fresh off `origin/main` regardless of what feature branch it was actually being dispatched *for*. That meant reviewers merging a sequence of task commits into a long-lived feature branch hit add/add conflicts on every file a prior task had already touched, requiring manual `--ours`/`--theirs` reconciliation each time. Job completion summaries were also not trustworthy — `synlynk jobs` self-reported status had produced false `PERMISSION_DENIED` verdicts on fully correct, committed work more than once.

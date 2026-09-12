@@ -1,3 +1,14 @@
+---
+title: "PR #1351 - Ephemeral Swarm Cloud Runners"
+author: "synlynk team"
+date: 2026-09-02
+post: 168
+pr: "#1351"
+type: pr
+series: "Building the OS for Multi-Agent Development"
+tags: posts
+version: "0.19.0"
+---
 # PR #1351 - Ephemeral Swarm Cloud Runners
 
 Synlynk's swarm engine now has a small, explicit contract for ephemeral

@@ -6,8 +6,11 @@ post: 146
 pr: "#1313"
 issue: "#1203"
 status: open
+author: "synlynk team"
+version: "0.18.0"
+tags: [posts]
+type: pr
 ---
-
 # PR #1313 — GOVERNS Backlog Automation: Auto-Associate Discovered and Planned Work
 
 ## The Broader Goal

@@ -1,0 +1,325 @@
+{
+  "versions": [
+    {
+      "label": "v0.20.0",
+      "isCurrent": true,
+      "installUrl": "https://install.synlynk.com",
+      "changelogUrl": "/changelog/#v0.20"
+    },
+    {
+      "label": "v0.19.0",
+      "isCurrent": false,
+      "changelogUrl": "/changelog/#v0.19"
+    },
+    {
+      "label": "v0.18.0",
+      "isCurrent": false,
+      "changelogUrl": "/changelog/#v0.18"
+    },
+    {
+      "label": "v0.17.0",
+      "isCurrent": false,
+      "changelogUrl": "/changelog/#v0.17"
+    },
+    {
+      "label": "v0.16.0",
+      "isCurrent": false,
+      "changelogUrl": "/changelog/#v0.16"
+    }
+  ],
+  "layerGroups": [
+    {
+      "name": "KERNEL — CONTEXT ENGINE",
+      "features": [
+        {
+          "name": "Context injection",
+          "desc": "Reads project-docs/ into .synlynk/context.md before each exec",
+          "link": "/blog/02-pr1-v0.2.0-the-kernel/",
+          "status": [true, true, true, true, true]
+        },
+        {
+          "name": "Multi-doc context",
+          "desc": "Merges memory.md + roadmap.md + todo.md into active snapshot",
+          "link": "/blog/12-pr42-v0.6.0-job-control/",
+          "status": [true, true, true, true, true]
+        },
+        {
+          "name": "Per-job context scoping",
+          "desc": "Writes job context to .synlynk/contexts/<job_id>.md, strictly isolating concurrent runs",
+          "link": "/blog/23-fix-dispatch-context-scoping/",
+          "status": [true, true, true, true, true]
+        },
+        {
+          "name": "DB-canonical project docs",
+          "desc": "roadmap.md, memory.md, and costs.md are generated write-through from state.db with mutation guards",
+          "link": "/blog/80-pr542-state-engine-pr1-db-canonical/",
+          "status": [true, true, true, true, true]
+        },
+        {
+          "name": "Scope-bounded sparse worktrees",
+          "desc": "worktree.mode: sparse uses git cone checkout for .synlynk/ + scoped paths, slashing disk I/O",
+          "link": "/blog/197-v0.20.0-visual-workspace-and-autonomous-fleet/",
+          "status": [true, false, false, false, false]
+        }
+      ]
+    },
+    {
+      "name": "KERNEL — DISPATCH & FLEET ENGINE",
+      "features": [
+        {
+          "name": "Background parallel dispatch",
+          "desc": "Spawns AI agent CLIs as background jobs with PID tracking and live status monitoring",
+          "link": "/blog/11-pr39-v0.4.0-hybrid-workgroup-bootstrap/",
+          "status": [true, true, true, true, true]
+        },
+        {
+          "name": "Unattended Milestone DAG Runner",
+          "desc": "synlynk run --milestone <M> executes multi-task dependency graphs autonomously to completion",
+          "link": "/blog/196-prTBD-v0.19.0/",
+          "status": [true, true, false, false, false]
+        },
+        {
+          "name": "Layered Release Protocol",
+          "desc": "Directs feature PRs to unstable trunk and staging soak track before promotion to main",
+          "link": "/blog/196-prTBD-v0.19.0/",
+          "status": [true, true, false, false, false]
+        },
+        {
+          "name": "Meta Muse commercial harness adapter",
+          "desc": "Orchestrates Meta Muse CLI alongside Claude Code, Codex, AGY, and Grok in one unified fleet",
+          "link": "/blog/197-v0.20.0-visual-workspace-and-autonomous-fleet/",
+          "status": [true, false, false, false, false]
+        },
+        {
+          "name": "Sibling branch auto-pruning & lineage",
+          "desc": "Automatically prunes patch-equivalent worktrees upon squash-merge and tracks multi-task lineage",
+          "link": "/blog/197-v0.20.0-visual-workspace-and-autonomous-fleet/",
+          "status": [true, false, false, false, false]
+        }
+      ]
+    },
+    {
+      "name": "KERNEL — SENTINEL & HEALTH",
+      "features": [
+        {
+          "name": "Sentinel real-time observability",
+          "desc": "Monitors runaways, detects cost/token inflation, and enforces fail-closed thresholds",
+          "link": "/blog/08-pr29-v0.3.1-sentinel-observability/",
+          "status": [true, true, true, true, true]
+        },
+        {
+          "name": "Self-healing daemon & dual-ledger sync",
+          "desc": "Eradicates lock contention, resolves absolute App RSA keys, and syncs to fallback database",
+          "link": "/blog/196-prTBD-v0.19.0/",
+          "status": [true, true, false, false, false]
+        },
+        {
+          "name": "Consolidated 4-point readiness matrix",
+          "desc": "Attests role tokens, sandbox network egress, policy syntax, and git shim precedence in one view",
+          "link": "/blog/197-v0.20.0-visual-workspace-and-autonomous-fleet/",
+          "status": [true, false, false, false, false]
+        },
+        {
+          "name": "Grok write sandbox canary validation",
+          "desc": "Validates filesystem write capability before Grok dispatch, failing over to Codex on denial",
+          "link": "/blog/197-v0.20.0-visual-workspace-and-autonomous-fleet/",
+          "status": [true, false, false, false, false]
+        },
+        {
+          "name": "Post-claim story un-stranding",
+          "desc": "synlynk story reclaim automatically recovers orphaned in-progress tasks on worker termination",
+          "link": "/blog/197-v0.20.0-visual-workspace-and-autonomous-fleet/",
+          "status": [true, false, false, false, false]
+        }
+      ]
+    },
+    {
+      "name": "COORDINATION, ROLES & GOVERNANCE",
+      "features": [
+        {
+          "name": "Living Charters & Role Authority",
+          "desc": "Autonomous workspace agent identities (qa, pm, architect, dev, marketing) with versioned charters",
+          "link": "/blog/117-pr1003-agent-roles-phase1-cli/",
+          "status": [true, true, true, true, true]
+        },
+        {
+          "name": "Per-role GitHub App identity broker (#423)",
+          "desc": "Dispatches agents under distinct GitHub App bot identities, satisfying non-author review rules",
+          "link": "/blog/125-pr1110-gh-write-identity-hardening/",
+          "status": [true, true, true, false, false]
+        },
+        {
+          "name": "QA merge-restricted classes gate mode",
+          "desc": "Permits automated QA merges on safe changes (docs/content) while gating high-risk classes",
+          "link": "/blog/124-pr1100-1101-qa-completion-tracker-and-merge-restricted-classes/",
+          "status": [true, true, true, false, false]
+        },
+        {
+          "name": "In-browser GitHub App role studio",
+          "desc": "1-click role provisioning directly from Vizor with automated cryptographic key minting",
+          "link": "/blog/197-v0.20.0-visual-workspace-and-autonomous-fleet/",
+          "status": [true, false, false, false, false]
+        },
+        {
+          "name": "Ticket-driven approval auto-resume",
+          "desc": "Resumes suspended DAG branches automatically upon human operator ticket approval",
+          "link": "/blog/128-pr1137-1151-v0.17.0-ticket-driven-approval-auto-resume/",
+          "status": [true, true, true, true, false]
+        }
+      ]
+    },
+    {
+      "name": "WORKSPACE & VISUAL OBSERVABILITY",
+      "features": [
+        {
+          "name": "Vizor BS-6 Visual Cockpit",
+          "desc": "Interactive spatial views: Product routes & mockups, Logical symbol AST graph, and Infra topology",
+          "link": "/blog/197-v0.20.0-visual-workspace-and-autonomous-fleet/",
+          "status": [true, false, false, false, false]
+        },
+        {
+          "name": "Visual worktree sweep panel",
+          "desc": "Interactive audit panel in Vizor Observatory with 1-click pruning for patch-equivalent worktrees",
+          "link": "/blog/197-v0.20.0-visual-workspace-and-autonomous-fleet/",
+          "status": [true, false, false, false, false]
+        },
+        {
+          "name": "Marketing release ceremony engine",
+          "desc": "Automated collateral sync (README badges, HTML/PDF guides, EPUB book, and release metadata)",
+          "link": "/blog/197-v0.20.0-visual-workspace-and-autonomous-fleet/",
+          "status": [true, false, false, false, false]
+        },
+        {
+          "name": "Terminal Curses UI (synlynk tui)",
+          "desc": "Interactive terminal dashboard displaying live active jobs, costs, and fleet health",
+          "link": "/blog/99-pr731-synlynk-ux-1.0-tui-vizor-uxcore/",
+          "status": [true, true, true, true, true]
+        },
+        {
+          "name": "Cross-harness event relay",
+          "desc": "Local SSE stream and JSON-RPC 2.0 endpoint for real-time inter-agent messaging and handoffs",
+          "link": "/blog/165-pr1348-cross-harness-event-relay/",
+          "status": [true, true, true, false, false]
+        }
+      ]
+    }
+  ],
+  "userGroups": [
+    {
+      "name": "INSTALL & SETUP",
+      "features": [
+        {
+          "name": "pipx global installation",
+          "desc": "One-line global install: pipx install git+https://github.com/nikhilsoman/synlynk",
+          "link": "/blog/26-pr68-v0.9.8-pipx-packaging/",
+          "status": [true, true, true, true, true]
+        },
+        {
+          "name": "Interactive onboarding wizard",
+          "desc": "synlynk init --wizard discovers installed CLI harnesses and bootstraps workspace state",
+          "link": "/blog/20-post-v0.9.0-install-init-hardening/",
+          "status": [true, true, true, true, true]
+        },
+        {
+          "name": "1-click role provisioning studio",
+          "desc": "Provision specialized agent roles directly inside Vizor browser without manual GitHub config",
+          "link": "/blog/197-v0.20.0-visual-workspace-and-autonomous-fleet/",
+          "status": [true, false, false, false, false]
+        },
+        {
+          "name": "Unified readiness attestation",
+          "desc": "synlynk doctor --readiness validates role tokens, network egress, policy, and git shims",
+          "link": "/blog/197-v0.20.0-visual-workspace-and-autonomous-fleet/",
+          "status": [true, false, false, false, false]
+        }
+      ]
+    },
+    {
+      "name": "EXEC & DISPATCH",
+      "features": [
+        {
+          "name": "Autonomous milestone DAG execution",
+          "desc": "synlynk run --milestone <M> drives multi-task milestone plans to completion unattended",
+          "link": "/blog/196-prTBD-v0.19.0/",
+          "status": [true, true, false, false, false]
+        },
+        {
+          "name": "Multi-harness orchestration",
+          "desc": "Dispatch tasks across Claude Code, OpenAI Codex, AGY (Gemini), Grok, and Meta Muse",
+          "link": "/blog/197-v0.20.0-visual-workspace-and-autonomous-fleet/",
+          "status": [true, true, true, true, true]
+        },
+        {
+          "name": "Scope-bounded sparse worktree isolation",
+          "desc": "Isolated worktrees clone only required paths, speeding up worker dispatch and preventing file conflicts",
+          "link": "/blog/197-v0.20.0-visual-workspace-and-autonomous-fleet/",
+          "status": [true, false, false, false, false]
+        },
+        {
+          "name": "PR verification & merge authority check",
+          "desc": "synlynk pr check attests model versioning, runs QA merge gates, and enforces policy",
+          "link": "/blog/129-v0.18.0-dispatch-reliability-and-qa-merge-gate/",
+          "status": [true, true, true, false, false]
+        }
+      ]
+    },
+    {
+      "name": "MONITORING & VISUAL COCKPIT",
+      "features": [
+        {
+          "name": "Vizor visual workspace (BS-6)",
+          "desc": "Explore application architecture via interactive Product, Logical, and Infra cockpits",
+          "link": "/blog/197-v0.20.0-visual-workspace-and-autonomous-fleet/",
+          "status": [true, false, false, false, false]
+        },
+        {
+          "name": "Interactive worktree sweep & clean panel",
+          "desc": "Audit and prune safe/merged worktrees directly in the browser with 1 click",
+          "link": "/blog/197-v0.20.0-visual-workspace-and-autonomous-fleet/",
+          "status": [true, false, false, false, false]
+        },
+        {
+          "name": "Terminal curses dashboard",
+          "desc": "synlynk tui renders live status, active jobs, burn rates, and alerts right in the terminal",
+          "link": "/blog/99-pr731-synlynk-ux-1.0-tui-vizor-uxcore/",
+          "status": [true, true, true, true, true]
+        },
+        {
+          "name": "Live Sentinel HUD & cost tracking",
+          "desc": "Real-time cost ledger, token monitoring, and automatic halt on anomalous runaway loops",
+          "link": "/blog/08-pr29-v0.3.1-sentinel-observability/",
+          "status": [true, true, true, true, true]
+        }
+      ]
+    },
+    {
+      "name": "COLLABORATION & PUBLISHING",
+      "features": [
+        {
+          "name": "Marketing release ceremony automation",
+          "desc": "Automatic synchronization of README badges, doc bundles, PDF/EPUB book, and website copy",
+          "link": "/blog/197-v0.20.0-visual-workspace-and-autonomous-fleet/",
+          "status": [true, false, false, false, false]
+        },
+        {
+          "name": "Two-tier blog publishing architecture",
+          "desc": "Featured strategic release communications with rich visuals alongside granular per-PR build diary",
+          "link": "/blog/197-v0.20.0-visual-workspace-and-autonomous-fleet/",
+          "status": [true, false, false, false, false]
+        },
+        {
+          "name": "Canonical documentation guides (HTML & PDF)",
+          "desc": "synlynk.com/docs distributes Quick Start Guide, Official Reference, and Command Reference",
+          "link": "/blog/197-v0.20.0-visual-workspace-and-autonomous-fleet/",
+          "status": [true, false, false, false, false]
+        },
+        {
+          "name": "Cross-harness event relay",
+          "desc": "synlynk relay start provides a shared event bus for autonomous multi-agent handoffs",
+          "link": "/blog/165-pr1348-cross-harness-event-relay/",
+          "status": [true, true, true, false, false]
+        }
+      ]
+    }
+  ]
+}

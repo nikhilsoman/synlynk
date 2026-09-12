@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 84
 pr: "#589"
 merged: 2026-07-29
+author: "synlynk team"
+version: "0.13.1"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 PR #584 (#339) had just merged, and PR #588 (#583) was in its review cycle. The plan was to move straight from there into the CLAUDE.md regeneration.

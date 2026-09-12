@@ -4,8 +4,11 @@ date: 2026-09-06
 series: "Building the OS for Multi-Agent Development"
 post: 182
 pr: "TBD"
+author: "synlynk team"
+version: "0.19.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 #1450 taught `synlynk pr check` to find a PR from a dispatch job branch. Review dispatch can now see CI. Identity was still wrong: PRs opened as `nikhilsoman`, while qa already reviewed and merged as `synlynk-synlynk-qa[bot]`.

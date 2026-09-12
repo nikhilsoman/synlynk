@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 86
 pr: "#TBD"
 merged: status open
+author: "synlynk team"
+version: "0.13.1"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 PR #587 corrected the harness-compatibility spec itself, but it also sharpened the operational requirement behind the spec's §2a remediation flow: any future `doctor --fix` write must leave behind a durable, append-only audit trail. The existing DB-canonical state engine had already solved that class of problem for `roadmap.md`, `memory.md`, and `costs.md`; the missing piece here was a write-only remediation ledger with no pruning behavior and no separate file-based shadow system.

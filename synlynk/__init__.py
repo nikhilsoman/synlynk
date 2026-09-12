@@ -3235,6 +3235,12 @@ def cmd_marketing_ceremony(
     print(f"  - Website build ok: {res.website_build_ok}")
 
 
+def cmd_marketing_sync_pr(pr_number: Union[int, str], dry_run: bool = False) -> None:
+    """Executes the limited-treatment marketing sync for a merged pull request."""
+    from synlynk.marketing import cmd_marketing_sync_pr as _impl
+    return _impl(pr_number=pr_number, dry_run=dry_run)
+
+
 def cmd_status(json_output: bool = False, platform: bool = False) -> None:
     """Displays project state dashboard. Exits 1 if sentinel active or budget exceeded."""
     if platform:

@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 77
 pr: "#517"
 merged: 2026-07-25
+author: "synlynk team"
+version: "0.13.1"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 By PR #476 (closing the brace-expansion CVE) and the surrounding work in that window, synlynk's dispatch and review pipeline was functionally solid but had a known integrity gap tracked as issue #423: every dispatched agent — Claude, Agy, Grok, Codex — writes to GitHub under the *same* `gh` identity, the repo owner's personal account. The PR Review Discipline rule ("a non-authoring agent must review before merge") was pure process discipline with no mechanism behind it. GitHub itself cannot tell dispatched agents apart, so it can't enforce anything, and every dispatch-authored PR hit "Can not approve your own pull request" the moment a reviewer tried to actually approve.

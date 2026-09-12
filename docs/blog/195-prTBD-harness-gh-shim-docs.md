@@ -4,8 +4,11 @@ date: 2026-09-06
 series: "Building the OS for Multi-Agent Development"
 post: 195
 pr: "TBD"
+author: "synlynk team"
+version: "0.19.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 PR #1464 shipped the `synlynk exec` PATH shim to guard child dispatches against accidental host GitHub credential leakage. In parallel, issue #1436 and its sibling implementation establish the session-level `gh` shim via `synlynk gh --shim-env` (`~/.synlynk/gh-shim/gh`). While the underlying shim mechanism prevents raw `gh` calls from silently authenticating as the human operator (`nikhilsoman`), harness instruction files needed to be aligned across the fleet so interactive sessions know to activate the shim and follow the updated identity protocol.

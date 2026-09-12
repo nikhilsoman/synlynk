@@ -1,5 +1,9 @@
 # Cost Log
 
+## 2026-09-12 — LIVE-12 Marketing Surface Decoupling & Dual-Treatment Engine
+- Interactive Conductor: Agy (Gemini 2.5 Pro / Flash).
+- Local TDD implementation, frontmatter backfill across 61 posts, Nunjucks features matrix refactoring, Two-Tier blog architecture, `synlynk marketing sync-pr` CLI & workflow, and headless Chrome PDF & Pandoc EPUB compilation engine. Zero external fee-bearing dispatch spend.
+
 ## 2026-09-09 — #1523 daemon lifecycle recovery
 
 - Manual Codex implementation and focused verification; no external model dispatch.

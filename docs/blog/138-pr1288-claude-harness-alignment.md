@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 138
 pr: "#1288"
 merged: 2026-08-30
+author: "synlynk team"
+version: "0.18.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 With Agy headless parity landed in PR #1286, the final standing fleet contradiction was Anthropic Claude's programmatic classification as a "builder" in `synlynk/_constants.py` despite project governance strictly locking Claude into a PM/deployer role.

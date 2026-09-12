@@ -4,8 +4,11 @@ date: 2026-09-04
 series: "Building the OS for Multi-Agent Development"
 post: 173
 pr: "#TBD"
+author: "synlynk team"
+version: "0.19.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 The previous work continued hardening synlynk's autonomous dispatch loop: agents should be observable, recoverable, and safe to supervise over long-running sessions. The next goalpost was to keep operational automation from making a bad assumption when the operating system changes underneath it.

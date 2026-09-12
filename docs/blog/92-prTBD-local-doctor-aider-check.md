@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 92
 pr: "TBD"
 merged: status open
+author: "synlynk team"
+version: "0.13.1"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 PR #641 (post #91) closed the fleet-parity security cluster, and with it the last of the eight fleet-parity audit issues that had a dedicated spec. Attention moved to a new goal — "Local Agents with Synlynk" — combining two threads: finishing the already-shipped aider+oMLX "Local" 5th agent rollout (design spec 2026-07-12, shipped as PR #204/205/207 per `docs/blog/55`), and evaluating herdr (a terminal multiplexer with agent-lifecycle awareness) as a possible new supervision layer. The user chose to sequence these: finish the rollout first, then brainstorm herdr.

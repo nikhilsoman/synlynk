@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 85
 pr: "#599"
 merged: status open
+author: "synlynk team"
+version: "0.13.1"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 PR #587 established the harness-compatibility goal in design form: synlynk should stop guessing at harness behavior and instead dispatch against confirmed capability surfaces, with loud failures and actionable remediation. The Grok branch of that spec exposed a concrete gap in the live code path: `_permissions_to_flags("grok", ...)` still fell through to `[]`, which meant synlynk could recognize Grok as a target but not translate any permission intent into Grok's own native flag surface.

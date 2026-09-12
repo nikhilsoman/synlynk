@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 105
 pr: "#816"
 status: open
+author: "synlynk team"
+version: "0.13.1"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 PR #783 closed out the safe-caller-construction hardening thread (#720/#769), which documented

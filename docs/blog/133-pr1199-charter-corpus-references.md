@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 133
 pr: "#1260"
 merged: true
+author: "synlynk team"
+version: "0.18.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 PR #1202 (post #132) finished a mechanical terminology sweep — replacing stray "agent" with

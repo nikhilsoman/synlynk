@@ -1,0 +1,49 @@
+name: Marketing PR Sync
+
+on:
+  pull_request_target:
+    types: [closed]
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  marketing-sync:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -e .
+
+      - name: Synchronize PR Blog Post & Collateral
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 -m synlynk marketing sync-pr ${{ github.event.pull_request.number }}
+
+      - name: Commit and push marketing updates
+        run: |
+          git config --global user.name "synlynk-marketing[bot]"
+          git config --global user.email "marketing@synlynk.com"
+          git add docs/blog/ .synlynk/social_drafts.json
+          if git diff --staged --quiet; then
+            echo "No marketing changes to commit."
+          else
+            git commit -m "docs(blog): synchronize limited-treatment post for PR #${{ github.event.pull_request.number }} [skip ci]" \
+                       -m "Co-Authored-By: Agy (Gemini) <noreply@antigravity.dev>"
+            git push origin main
+          fi

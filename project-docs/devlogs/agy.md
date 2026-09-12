@@ -346,9 +346,29 @@
     2. *Routine Feature PRs (Limited Treatment):* Strictly incremental per-PR blog post in `docs/blog/NN-prN-<slug>.md` with validated frontmatter (`title`, `author`, `date` matching PR merge date, `pr`, `post`, `tags`, `type: pr`) detailing what shipped, why, and how it was verified; updated `docs/blog/README.md` index; exported social snippets in `.synlynk/social_drafts.json`.
   - Defined two-tier blog architecture on `synlynk.com/blog`: featured strategic release communications vs per-PR engineering build diary.
   - Promoted marketing charter revision from rev 0 to rev 1 in `agent_store` for agent `f2039c38-37ef-4380-ae97-9954f0f7ed36`.
-- **4-Phase Remediation Roadmap Formulated:**
-  - Phase 1: Surface Remediation (Frontmatter backfill of 61+2 posts, `features.njk` refresh to v0.20.0, v0.20.0 release ceremony).
-  - Phase 2: CI & Preflight Quality Gate Hardening (`validate_all_blog_posts()` in `synlynk pr check`, Eleventy fallback defense).
-  - Phase 3: Autonomous PR Marketing Trigger & Two-Tier Blog Architecture (`synlynk marketing sync-pr <pr>`, `.github/workflows/marketing-pr-sync.yml`).
-  - Phase 4: Automated PDF & EPUB Compilation Engine (Headless Chrome for HTML->PDF, Pandoc for HTML->EPUB).
+- **4-Phase Remediation Roadmap Formulated & Executed:**
+  - **Phase 1 (Surface Remediation):**
+    - Backfilled validated YAML frontmatter across all 61 historical blog posts + 2 partial posts in `docs/blog/`. Verified 100% schema compliance across all 225 posts with `validate_all_blog_posts()`.
+    - Created `website/src/_data/features.json` data model covering v0.20.0 through v0.16.0 with all layer and user groups.
+    - Refactored `website/src/features.njk` to dynamically consume `features.json` data via Nunjucks loops, eliminating the stale static HTML table.
+    - Authored strategic named release blog post #197 (`docs/blog/197-v0.20.0-visual-workspace-and-autonomous-fleet.md`) featuring ASCII terminal observatory simulation and Vizor product/logical/infra architecture diagrams.
+    - Updated `VERSION` and `synlynk/_constants.py` to `0.20.0`.
+  - **Phase 2 (CI & Preflight Quality Gate):**
+    - Hardened `website/.eleventy.js` with defensive date resolution (`getEffectiveDate()`) to eliminate fallback leaks to CI runner checkout mtimes.
+    - Added blog post frontmatter validation check to `cmd_pr_check` in `synlynk/db.py`, blocking merge if any post has invalid or missing frontmatter.
+    - Added unit tests in `tests/test_marketing.py`.
+  - **Phase 3 (Autonomous PR Trigger & Two-Tier Blog Architecture):**
+    - Split `synlynk.com/blog` into Tier 1 (Featured Strategic Named Releases with visual badges and milestone metrics) and Tier 2 (Continuous Engineering Build Diary) in `website/src/blog/index.njk` and `website/src/assets/css/main.css`.
+    - Implemented `synlynk marketing sync-pr <pr>` in `synlynk/marketing.py`, `synlynk/cli.py`, `synlynk/__init__.py`, and registered in `synlynk/taxonomy.py`.
+    - Created `.github/workflows/marketing-pr-sync.yml` running on pull request merge to automatically generate per-PR blog posts and push to `main`.
+    - Backfilled missing blog posts #198 through #202 for merged PRs #1556, #1557, #1558, #1559, and #1560.
+  - **Phase 4 (Automated PDF & EPUB Compilation Engine):**
+    - Implemented headless Chrome PDF compilation (`compile_docs_pdfs`) for Quick Start Guide, Official Manual, Command Reference, and Book manuscript (`the-supervised-machine-v0.5-DRAFT.pdf`).
+    - Implemented Pandoc EPUB compilation (`compile_book_epub`) for `the-supervised-machine-v0.5-DRAFT.epub`.
+    - Wired compilation and mirroring to `website/src/assets/docs/` directly into `synlynk/release_marketing.py:execute_release_ceremony()`.
+    - Executed live release ceremony for v0.20.0 (`synlynk marketing ceremony --version v0.20.0`), compiling all binaries and updating `README.md` (2,804 tests collected).
+- **Verification:**
+  - 152 unit and regression tests passing across marketing, release, pr_check, and agent CLI suites.
+  - Clean Eleventy build (449 files written in 0.55s) with zero date homogenization or invalid `#00` badges.
 [@agy]
+

@@ -4,8 +4,12 @@ date: 2026-08-07
 series: "Building the OS for Multi-Agent Development"
 post: 100
 issue: 751
+author: "synlynk team"
+version: "0.13.1"
+tags: [posts]
+pr: "#762"
+type: pr
 ---
-
 # Windowed `sentinel_crit` — Stop Lifetime Logs from Keeping Ops RED
 
 ## Broader goal (end of previous PR)

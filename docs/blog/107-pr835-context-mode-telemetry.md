@@ -3,8 +3,12 @@ title: "PR #835 — Context-Mode Telemetry: Measuring Right-Sized Context"
 date: 2026-08-09
 series: "Building the OS for Multi-Agent Development"
 post: 107
+author: "synlynk team"
+version: "0.13.1"
+tags: [posts]
+pr: "#835"
+type: pr
 ---
-
 # Context-Mode Telemetry — Measuring Right-Sized Context
 
 ## Broader goal (previous)

@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 86
 pr: "#592"
 merged: 2026-07-30
+author: "synlynk team"
+version: "0.13.1"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 PR #591 fixed the last known bug blocking `synlynk sync --repair-sops --confirm` from producing a correctly-formatted regeneration of the harness-managed instruction files. Nothing remained in the way.

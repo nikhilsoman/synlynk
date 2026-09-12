@@ -228,6 +228,13 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [193](./193-prTBD-qa-actions-write-reapproval-runbook.md) | PR #TBD - #1436: Operator Runbook for qa App Actions Write Re-approval | TBD | 2026-09-06 |
 | [194](./194-prTBD-harness-gh-shim.md) | Harness-session gh shim (shared with synlynk exec) | TBD | 2026-09-06 |
 | [195](./195-prTBD-harness-gh-shim-docs.md) | Documenting the Harness Session gh Shim Environment | TBD | 2026-09-06 |
+| **[196](./196-prTBD-v0.19.0.md)** | **v0.19.0 — Layered Topology, Launch DAG & Autonomous Milestone Loop (Named Release)** | [v0.19.0](https://github.com/nikhilsoman/synlynk/releases/tag/v0.19.0) | **2026-09-11** |
+| **[197](./197-v0.20.0-visual-workspace-and-autonomous-fleet.md)** | **v0.20.0 — The Visual Workspace, Autonomous Fleet & Role Studio (Named Release)** | [v0.20.0](https://github.com/nikhilsoman/synlynk/releases/tag/v0.20.0) | **2026-09-12** |
+| [198](./198-pr1556-milestone-v0-20-0-sprint-1-bs-6-workspac.md) | PR #1556 — feat(viz): Milestone v0.20.0 Sprint 1 — BS-6 Workspace Views, Role Studio, and Worktree Lifecycle | [#1556](https://github.com/nikhilsoman/synlynk/pull/1556) | 2026-09-11 |
+| [199](./199-pr1557-marketing-release-ceremony-automation.md) | PR #1557 — Marketing Release Ceremony Automation | [#1557](https://github.com/nikhilsoman/synlynk/pull/1557) | 2026-09-11 |
+| [200](./200-pr1558-milestone-v0-20-0-cluster-b-worktree-lif.md) | PR #1558 — Milestone v0.20.0 Cluster B — Worktree Lifecycle & Rebase Concurrency | [#1558](https://github.com/nikhilsoman/synlynk/pull/1558) | 2026-09-11 |
+| [201](./201-pr1559-milestone-v0-20-0-cluster-c-fleet-diagno.md) | PR #1559 — Milestone v0.20.0 Cluster C — Fleet Diagnostic Truth & Concurrency Resilience | [#1559](https://github.com/nikhilsoman/synlynk/pull/1559) | 2026-09-11 |
+| [202](./202-pr1560-milestone-v0-20-0-cluster-d-next-gen-har.md) | PR #1560 — Milestone v0.20.0 Cluster D — Next-Gen Harness Onboarding (Meta Muse Integration) | [#1560](https://github.com/nikhilsoman/synlynk/pull/1560) | 2026-09-11 |
 
 ## Per-PR Post Template
 

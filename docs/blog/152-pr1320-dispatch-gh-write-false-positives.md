@@ -1,3 +1,14 @@
+---
+title: "PR #1320 — Tighten _task_requires_gh_write() Auto-Detection Heuristic"
+author: "synlynk team"
+date: 2026-09-01
+post: 152
+pr: "#1320"
+type: pr
+series: "Building the OS for Multi-Agent Development"
+tags: posts
+version: "0.18.0"
+---
 # Post 152: Tighten `_task_requires_gh_write()` Auto-Detection Heuristic (PR #1320, Issue #1246)
 
 - **PR:** [#1320](https://github.com/nikhilsoman/synlynk/pull/1320)

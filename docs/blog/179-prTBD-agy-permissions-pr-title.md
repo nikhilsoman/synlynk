@@ -4,8 +4,11 @@ date: 2026-09-06
 series: "Building the OS for Multi-Agent Development"
 post: 179
 pr: "TBD"
+author: "synlynk team"
+version: "0.19.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 The #1435 open-PR sweep closed a pile of `fix: ## Permissions (job-…)` siblings whose *code* had already merged. The remaining goalpost was the product bug that produced those titles: #1427 (and the same fingerprint on #1421).

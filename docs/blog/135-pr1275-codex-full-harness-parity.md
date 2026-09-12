@@ -1,3 +1,14 @@
+---
+title: "PR #1275 — Granting Codex Full Harness Parity Across Review and GitHub-Write Tasks"
+author: "synlynk team"
+date: 2026-08-30
+post: 135
+pr: "#1275"
+type: pr
+series: "Building the OS for Multi-Agent Development"
+tags: posts
+version: "0.18.0"
+---
 # PR #1275 — Granting Codex Full Harness Parity Across Review and GitHub-Write Tasks
 
 ## Where we left off

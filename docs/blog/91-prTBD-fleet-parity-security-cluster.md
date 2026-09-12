@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 91
 pr: "TBD"
 merged: status open
+author: "synlynk team"
+version: "0.13.1"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 PR #587 (post #90) closed out the harness-capability-drift-regression-classification chain, and with it the last dependency blocking the fleet-parity audit — eight issues (#332, #338, #340, #342, #347, #348, #419, #461) queued since mid-project as "known gaps between what synlynk assumes about dispatched agents and what those agents' CLIs can actually enforce." Three of the eight (#332/#419/#461) turned out to already be fixed by PR #604 and were closed by inspection. The remaining five split cleanly along one axis: does the gap let a dispatched agent **do more than it was granted** (security severity), or does it **fail or drift without exceeding scope** (reliability severity)? This PR is the security half — #348 and #338. The reliability half (#340/#342/#347) stays queued as a follow-up spec.

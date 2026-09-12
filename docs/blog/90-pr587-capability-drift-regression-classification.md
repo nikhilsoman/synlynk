@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 90
 pr: "#587"
 merged: status open
+author: "synlynk team"
+version: "0.13.1"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 PR #614 (post #89) landed dispatch-time capability enforcement — block or degrade a dispatch before it spawns, based on probe results and declared requirements. But that gate can only be as good as the data feeding it, and two gaps sat underneath it: capability data (`AGENT_CAPABILITY_BASELINES`, the probe results) only ever refreshed reactively at dispatch time, and when a harness-facing failure did occur, nothing distinguished "synlynk broke this" from "the harness changed underneath us." That second gap was concrete, not theoretical: issue #616/#617, where a host-side PR-auto-create fallback silently ignored `job['base_branch']` and shipped undetected because nothing exercised that code path.

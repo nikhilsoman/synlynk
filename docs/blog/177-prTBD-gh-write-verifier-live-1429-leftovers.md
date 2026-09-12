@@ -4,8 +4,11 @@ date: 2026-09-06
 series: "Building the OS for Multi-Agent Development"
 post: 177
 pr: "TBD"
+author: "synlynk team"
+version: "0.19.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 PR #1441 stopped `_reconcile_daemon_jobs` from overwriting a corroborated `done` with `permission_denied`. LIVE-1429 closed. The goalpost was: job status should match GitHub ground truth for gh-write jobs.

@@ -1,3 +1,14 @@
+---
+title: "v0.12.0 — Measurement & Reliability (Named Release)"
+author: "synlynk team"
+date: 2026-07-15
+post: 64
+pr: "v0.12.0"
+type: release
+series: "Building the OS for Multi-Agent Development"
+tags: posts
+version: "0.12.0"
+---
 # v0.12.0 — Measurement & Reliability
 
 **Date:** 2026-07-15

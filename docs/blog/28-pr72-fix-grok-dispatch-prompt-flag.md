@@ -1,3 +1,14 @@
+---
+title: "28-pr72-fix-grok-dispatch-prompt-flag"
+author: "synlynk team"
+date: 2026-06-27
+post: 28
+pr: "—"
+type: pr
+series: "Building the OS for Multi-Agent Development"
+tags: posts
+version: "0.10.0"
+---
 # Blog Post 28 — PR #72: Fix Grok Dispatch Prompt Flag
 
 **Series:** Building synlynk — the OS for multi-agent development  

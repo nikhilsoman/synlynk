@@ -4,8 +4,11 @@ date: 2026-09-06
 series: "Building the OS for Multi-Agent Development"
 post: 187
 pr: "TBD"
+author: "synlynk team"
+version: "0.19.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 PR #1453 implemented `synlynk gh --role <role> -- <gh-args>` to route interactive GitHub operations through role-scoped GitHub Apps, and PR #1454 ensured parent auto-PR creation fails closed rather than falling back to host `nikhilsoman` credentials. However, interactive agent sessions had not yet been formally instructed across harness files to make `synlynk gh --role` their mandatory default.

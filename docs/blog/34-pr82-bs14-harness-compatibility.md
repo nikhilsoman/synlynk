@@ -1,9 +1,14 @@
 ---
+title: "PR #82 — BS-14 Harness Compatibility System"
+author: "synlynk team"
+date: 2026-07-01
 post: 34
 pr: "#82"
-merged: 2026-07-01
+type: pr
+series: "Building the OS for Multi-Agent Development"
+tags: posts
+version: "0.10.0"
 ---
-
 # PR #82 — BS-14 Harness Compatibility System
 
 ## The Broader Goal at the End of the Previous PR

@@ -5,12 +5,61 @@ title: Blog
 
 <section class="section-blog section-dark">
   <div class="blog-inner">
-    <div class="hook-label">Build Diary</div>
+    <div class="hook-label">COMMUNICATIONS &amp; DISPATCH</div>
     <h1 class="blog-headline"><span class="grad1">synlynk</span> Blog</h1>
-    <p class="blog-sub">Documenting the design choices, pivots, and architectural details of the OS for multi-agent development.</p>
+    <p class="blog-sub">Strategic architectural releases, evolutionary trends, and continuous engineering build diary.</p>
+
+    <!-- TIER 1: FEATURED STRATEGIC RELEASES -->
+    <div class="blog-tier-header">
+      <div class="tier-badge tier-badge-release">TIER 1 · STRATEGIC MILESTONES</div>
+      <h2 class="tier-title">Featured Named Releases</h2>
+      <p class="tier-sub">Major architectural leaps, operational paradigm shifts, and strategic direction.</p>
+    </div>
+
+    <div class="blog-releases-grid">
+      {% for post in collections.releasePosts %}
+        <article class="blog-release-card">
+          <a href="{{ post.url }}" class="blog-release-banner-link">
+            <div class="blog-release-banner">
+              <span class="release-tag">MILESTONE v{{ (post.data.version or post.data.post) | replace("v", "") }}</span>
+              <span class="release-visual-badge">📊 Architecture &amp; Simulation</span>
+            </div>
+          </a>
+          <div class="blog-release-content">
+            <div class="blog-release-meta">
+              <span class="blog-card-date">{{ post.date | dateFilter(post) }}</span>
+              {% if post.data.version %}
+                <span class="blog-release-pill">v{{ post.data.version | replace("v", "") }}</span>
+              {% endif %}
+              {% if post.data.author %}
+                <span class="blog-card-author">by {{ post.data.author }}</span>
+              {% endif %}
+            </div>
+            <h2 class="blog-release-title">
+              <a href="{{ post.url }}">{{ post.data.title }}</a>
+            </h2>
+            <p class="blog-release-excerpt">
+              {{ post.templateContent | striptags | truncate(220) }}
+            </p>
+            <div class="blog-release-footer">
+              <a href="{{ post.url }}" class="btn-primary-small">Explore Release Analysis →</a>
+            </div>
+          </div>
+        </article>
+      {% endfor %}
+    </div>
+
+    <div class="blog-tier-divider"></div>
+
+    <!-- TIER 2: PER-PR BUILD DIARY -->
+    <div class="blog-tier-header">
+      <div class="tier-badge tier-badge-pr">TIER 2 · CONTINUOUS LOG</div>
+      <h2 class="tier-title">Engineering Build Diary</h2>
+      <p class="tier-sub">Atomic, incremental dispatch logs for every merged pull request.</p>
+    </div>
 
     <div class="blog-grid">
-      {% for post in collections.posts %}
+      {% for post in collections.prPosts %}
         <article class="blog-card">
           <a href="{{ post.url }}" class="blog-card-img-link">
             <div class="blog-card-hero-fallback fallback-grad-{{ (post.data.post or 0) % 4 }}">
@@ -19,7 +68,7 @@ title: Blog
           </a>
           <div class="blog-card-content">
             <div class="blog-card-meta">
-              <span class="blog-card-date">{{ post.date | dateFilter }}</span>
+              <span class="blog-card-date">{{ post.date | dateFilter(post) }}</span>
               {% if post.data.pr %}
                 <span class="blog-card-pr">{{ post.data.pr }}</span>
               {% endif %}
@@ -34,7 +83,7 @@ title: Blog
           </div>
         </article>
       {% else %}
-        <p class="no-posts">No blog posts found.</p>
+        <p class="no-posts">No build diary posts found.</p>
       {% endfor %}
     </div>
   </div>

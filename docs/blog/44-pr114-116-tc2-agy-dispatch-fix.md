@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 44
 pr: "#114–#116"
 merged: 2026-07-05
+author: "synlynk team"
+version: "0.11.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 With the integration of ecosystem status in Vizor (PR #113), synlynk had a functional dashboard displaying fleet health and capabilities. However, as soon as this instrument panel was turned on, it revealed a critical failure: all dispatches to the `agy` agent were failing immediately at the preflight stage. 

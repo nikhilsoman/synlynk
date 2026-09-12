@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 83
 pr: "TBD"
 merged: status open
+author: "synlynk team"
+version: "0.13.1"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 PR #587 left synlynk with a corrected understanding of Codex's harness surface: the canonical matrix now says Codex uses `--ask-for-approval` with `untrusted|on-request|never`, not the older legacy approval-flag wording that had leaked into prior dispatch notes and examples. The broader goal was still the same: every dispatched harness should either succeed at a granted capability headless, or fail loudly with a remediation path that operators can actually act on.

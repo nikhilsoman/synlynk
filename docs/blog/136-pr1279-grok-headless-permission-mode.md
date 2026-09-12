@@ -1,3 +1,14 @@
+---
+title: "PR #1279 — Eliminating Grok Headless Execution Cancellation via --always-approve"
+author: "synlynk team"
+date: 2026-08-30
+post: 136
+pr: "#1279"
+type: pr
+series: "Building the OS for Multi-Agent Development"
+tags: posts
+version: "0.18.0"
+---
 # PR #1279 — Eliminating Grok Headless Execution Cancellation via --always-approve
 
 ## Where we left off

@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 41
 pr: 106
 status: draft
+author: "synlynk team"
+version: "0.11.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 synlynk had live job tracking, dispatch, and daemon health, but no terminal-native workspace HUD. The only built-in views were split across command-line job tables and the browser Vizor surface. The missing piece was a compact, always-available terminal monitor for the 6-cycle SDLC model.

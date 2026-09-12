@@ -1,3 +1,14 @@
+---
+title: "PR #1110 — gh-write Identity Hardening: Phase 1 Closeout"
+author: "synlynk team"
+date: 2026-08-23
+post: 125
+pr: "#1110"
+type: pr
+series: "Building the OS for Multi-Agent Development"
+tags: posts
+version: "0.14.0"
+---
 # PR #1110 — gh-write Identity Hardening: Phase 1 Closeout (#423)
 
 **PR:** [#1110](https://github.com/nikhilsoman/synlynk/pull/1110)

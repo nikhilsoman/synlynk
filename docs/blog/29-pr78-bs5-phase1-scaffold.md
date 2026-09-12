@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 29
 pr: "#78"
 merged: 2026-06-28
+author: "synlynk team"
+version: "0.10.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 At the end of v0.9.8 (health pulse + lifecycle commands), the CLI was hardened for clean onboarding, exit, repair, and observability. The understood next step was shifting focus toward public launch preparation — making the project discoverable and understandable to new users beyond the GitHub repo and internal docs.
 

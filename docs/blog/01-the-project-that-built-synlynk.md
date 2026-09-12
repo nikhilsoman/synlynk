@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 1
 tags: posts
 excerpt: "synlynk did not start with a product thesis. It started with a recurring pain: one human, three AI tools, no shared state, and a live medical product that could not afford coordination failures."
+author: "synlynk team"
+version: "0.4.0"
+pr: "TBD"
+type: pr
 ---
-
 # The Project That Built synlynk
 
 synlynk was not designed from first principles. It was extracted from a real workgroup running a real product, after three separate AI agents independently analyzed that workgroup and converged on the same four failure modes.

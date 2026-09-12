@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 60
 pr: "#256"
 merged: pending
+author: "synlynk team"
+version: "0.12.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 PR #252 shipped the second of four planned per-agent structured-output adapters — Claude — and re-validated the pattern PR #244 (Codex) established: `extract_tokens()` tries a per-agent `_extract_<agent>_structured()` function first, falls through to the existing regex chain on any failure, and requires zero changes to `_resolve_cost_tier()` or any of Phase 1's provenance machinery. That PR's closing note named the next goalpost explicitly: Gemini and Grok remain, each independently shippable, each requiring its own live-verified investigation of that CLI's actual structured-output shape rather than a copy-paste of Codex's or Claude's.

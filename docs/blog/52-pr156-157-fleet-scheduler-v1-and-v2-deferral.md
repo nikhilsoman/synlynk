@@ -1,3 +1,14 @@
+---
+title: "52-pr156-157-fleet-scheduler-v1-and-v2-deferral"
+author: "synlynk team"
+date: 2026-07-11
+post: 52
+pr: "—"
+type: pr
+series: "Building the OS for Multi-Agent Development"
+tags: posts
+version: "0.12.0"
+---
 # PR #156/#157 — Fleet Dispatch Scheduler v1 Ships, v2 Deferred to a Tracked Goal
 
 **Date:** 2026-07-11

@@ -8,8 +8,8 @@ pr: "#1347"
 version: "0.19.0"
 tags: ["growth", "marketing", "automation", "media", "living-docs"]
 merged: "status: open"
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 Following the model registry baseline (PR #1339), multi-agent fleet parity (PR #1308–#1310), and Sentinel guards against token bloat (PR #1334), synlynk operated with strong internal orchestration. However, external communication, promotion, documentation synchronization, and marketing remained manual or disconnected from the continuous delivery lifecycle.

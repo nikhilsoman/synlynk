@@ -1,3 +1,14 @@
+---
+title: "PR #1322 — Fix YAML Frontmatter in Blog Post 103"
+author: "synlynk team"
+date: 2026-09-02
+post: 154
+pr: "#1322"
+type: pr
+series: "Building the OS for Multi-Agent Development"
+tags: posts
+version: "0.18.0"
+---
 # Post 154: Fix YAML Frontmatter in Blog Post 103 (PR #1322, Issue #941)
 
 - **PR:** [#1322](https://github.com/nikhilsoman/synlynk/pull/1322)

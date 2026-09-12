@@ -6,8 +6,11 @@ post: 40
 prs: "#89–#102"
 version: "v0.10.0"
 tag: named-release
+author: "synlynk team"
+tags: [posts]
+pr: "TBD"
+type: release
 ---
-
 # v0.10.0 — Developer Preview: The First Daily-Driver Release
 
 ## The Broader Goal at the End of the Previous Milestone

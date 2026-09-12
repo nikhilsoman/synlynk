@@ -1,3 +1,14 @@
+---
+title: "PR #1319 — Decouple README Sync Validator Unit Tests from Live Repo Root"
+author: "synlynk team"
+date: 2026-09-01
+post: 151
+pr: "#1319"
+type: pr
+series: "Building the OS for Multi-Agent Development"
+tags: posts
+version: "0.18.0"
+---
 # Post 151: Decouple README Sync Validator Unit Tests from Live Repo Root (PR #1319, Issue #1270)
 
 - **PR:** [#1319](https://github.com/nikhilsoman/synlynk/pull/1319)

@@ -4,8 +4,11 @@ date: 2026-09-06
 series: "Building the OS for Multi-Agent Development"
 post: 181
 pr: "TBD"
+author: "synlynk team"
+version: "0.19.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 #1449 let review sandboxes run `synlynk pr check` without writing shared `todo.md`. The remaining hole was that the same command still failed closed on every dispatched reviewer: the job worktree is on `dispatch/<harness>/job-<id>`, not the PR branch, so `gh pr view` and `gh pr checks <branch>` cannot see CI.

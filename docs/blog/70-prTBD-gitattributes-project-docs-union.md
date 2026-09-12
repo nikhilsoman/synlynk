@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 70
 pr: "#383"
 merged: —
+author: "synlynk team"
+version: "0.13.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 After v0.12.0 (Measurement & Reliability) and the live-command-selftest arc (PR #328), concurrent multi-agent / multi-worktree work is the default operating mode. Shared markdown under `project-docs/` remains a write-through, git-tracked human surface even as `state.db` is the machine-readable substrate. That surface is also a merge-conflict magnet: todo checkboxes, cost ledger rows, and per-user devlogs get appended from many sessions at once.

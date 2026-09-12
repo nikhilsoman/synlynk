@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 89
 pr: "#614"
 merged: status open
+author: "synlynk team"
+version: "0.13.1"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 Phase 5 (`#606`) shipped `_scan_repo_requirements()` as a presence-only discovery primitive — Docker, MCP, and GitHub Actions signals from the repo tree, with no policy attached. Phase 3 (`#607`) and Phase 4 (`#612`) landed the remediation audit log and `doctor --fix agy` path. The remaining integration gap was dispatch-time enforcement: nothing in `dispatch_agent()` yet combined probe age/status, declared job needs, and repo signals into a single block-or-degrade decision before the subprocess spawned.

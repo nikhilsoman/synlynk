@@ -1,3 +1,14 @@
+---
+title: "PR #1303 — Grant Administration:Write Permission to Merge Roles in GitHub App Manifests"
+author: "synlynk team"
+date: 2026-09-01
+post: 150
+pr: "#1303"
+type: pr
+series: "Building the OS for Multi-Agent Development"
+tags: posts
+version: "0.18.0"
+---
 # Post 150: Grant Administration:Write Permission to Merge Roles in GitHub App Manifests (PR #1303, Issue #1295)
 
 - **PR:** [#1303](https://github.com/nikhilsoman/synlynk/pull/1303)

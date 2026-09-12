@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 157
 pr: "#1328"
 merged: status open
+author: "synlynk team"
+version: "0.18.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Problem
 
 A code review needs to read the checkout and may need to post findings on

@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 99
 pr: "#731"
 merged: 2026-08-05
+author: "synlynk team"
+version: "0.13.1"
+tags: [posts]
+type: pr
 ---
-
 # 99: Synlynk UX 1.0 — TUI + Vizor on Shared uxcore
 
 ## Where we left off

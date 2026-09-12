@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 61
 pr: "#257"
 merged: pending
+author: "synlynk team"
+version: "0.12.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 PR #256 shipped the third of four planned per-agent structured-output adapters — Agy (Gemini) — and validated something beyond the extraction logic itself: that the plan-execution stage, not just the design stage, could be distributed across the real agent fleet via `synlynk dispatch`, with Agy and Grok each wiring parts of their own adapter under Claude's PM/reviewer verification. That PR's closing note named the remaining goalpost precisely: Grok is the fourth and final adapter in epic #210's structured-output layer, and — unlike the other three — `dispatch.py` already had a `--output-format json` flag wired for it (an incidental byproduct of Agy's Task 3), meaning the live-investigation phase would start from a flag nobody had actually parsed the output of yet.

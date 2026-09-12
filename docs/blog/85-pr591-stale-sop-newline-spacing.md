@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 85
 pr: "#591"
 merged: 2026-07-30
+author: "synlynk team"
+version: "0.13.1"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 With #339 (PR #584) and #583 (PR #588) both merged and the accidental Codex dispatch regression fixed (PR #589), the path was finally clear to run `synlynk sync --repair-sops --confirm` for real and regenerate CLAUDE.md/GEMINI.md/GROK.md.

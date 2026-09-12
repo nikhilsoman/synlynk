@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 161
 pr: "#1337"
 merged: "status: open"
+author: "synlynk team"
+version: "0.19.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 The cost ledger needed to distinguish the commercial value of tokens from the

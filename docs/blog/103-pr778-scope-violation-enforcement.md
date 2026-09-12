@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 103
 pr: "#778"
 merged: 2026-08-08
+author: "synlynk team"
+version: "0.13.1"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 PR #770/#771 closed the first of three sub-projects under issue #769 (itself born from issue #720's

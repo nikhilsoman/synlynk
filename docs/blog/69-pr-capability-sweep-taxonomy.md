@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 69
 pr: "TBD"
 merged: status open
+author: "synlynk team"
+version: "0.13.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 After #292's model-identity fix, `capability_ratings` rows finally key on a real `model_at_dispatch` instead of collapsing three of four agents into `unknown`. But the ratings themselves were still scored against ad-hoc, free-text `discipline` / `org_domain` / `industry` labels with no standard vocabulary and no calibration mechanism beyond whatever a single job happened to touch. There was no way to bootstrap a new agent's capability profile before it had done any real work, and no way to reward an agent for shipping a PR that sailed through review clean versus one that took four rounds of changes.

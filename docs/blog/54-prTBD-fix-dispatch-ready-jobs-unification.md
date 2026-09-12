@@ -6,8 +6,11 @@ post: 54
 pr: "#TBD"
 issue: "#190"
 merged: —
+author: "synlynk team"
+version: "0.12.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 Fable's external review (blog-adjacent strategy doc, PR #188) laid out a multi-year arc for synlynk as the OS for multi-agent development. One concrete finding was independent of the local-agent MLX work: the daemon/scheduler queue path and the interactive `dispatch` path had silently forked. Fleet scheduler v1 (`synlynk schedule --execute`) is designed to call `_dispatch_ready_jobs` as its execution primitive — so any isolation or flag gap there becomes a fleet-wide failure class, not a niche daemon bug.

@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 155
 pr: "#1325"
 merged: status open
+author: "synlynk team"
+version: "0.18.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 The CLI should make the state of a multi-agent workspace legible and actionable,

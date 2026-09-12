@@ -1,3 +1,14 @@
+---
+title: "132-pr1202-harness-agent-terminology-sweep"
+author: "synlynk team"
+date: 2026-08-29
+post: 132
+pr: "—"
+type: pr
+series: "Building the OS for Multi-Agent Development"
+tags: posts
+version: "0.18.0"
+---
 # PR #1202 — Saying What We Mean: Harness vs. Agent
 
 ## Where we left off

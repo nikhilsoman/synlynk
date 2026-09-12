@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 171
 pr: "#1375"
 merged: 2026-09-04
+author: "synlynk team"
+version: "0.19.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 PR #1271 and PR #1275 (posts [134](./134-pr1271-codex-direct-gh-write-network-access.md) and [135](./135-pr1275-codex-full-harness-parity.md)) had closed the book on Codex's GitHub-write network access: a live sandbox probe proved the block was a configurable Codex CLI option, not a structural sandbox limitation, and `-c sandbox_workspace_write.network_access=true` gave Codex full harness parity with Claude, Grok, and Agy on review and gh-write tasks. That finding shipped as a high-confidence, tested fix. The goalpost at the end of #1275 was: Codex can now do everything the other three harnesses can do for GitHub writes — case closed.

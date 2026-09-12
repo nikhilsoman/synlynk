@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 137
 pr: "#1286"
 merged: 2026-08-30
+author: "synlynk team"
+version: "0.18.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 After establishing full headless parity for OpenAI Codex (PR #1275) and xAI Grok (PR #1279), the objective shifted to evaluating harness parity for the remaining core fleet members: Google Agy (Antigravity CLI) and Anthropic Claude.

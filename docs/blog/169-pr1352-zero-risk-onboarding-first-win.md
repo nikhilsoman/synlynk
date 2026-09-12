@@ -1,3 +1,14 @@
+---
+title: "PR #1352 - Zero-Risk Onboarding & Instant First-Win Experience"
+author: "synlynk team"
+date: 2026-09-03
+post: 169
+pr: "#1352"
+type: pr
+series: "Building the OS for Multi-Agent Development"
+tags: posts
+version: "0.19.0"
+---
 # PR #1352 - Zero-Risk Onboarding & Instant First-Win Experience
 
 Early adopters evaluating multi-agent development tools face an understandable trust barrier: handing control of an existing repository to autonomous tooling carries the risk of overwritten uncommitted work, unwanted config churn, or silent state pollution. PR #1352 eliminates this friction with a non-destructive safety guard and delivers an immediate "First Win" demonstration within two minutes of onboarding.

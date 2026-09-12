@@ -6,8 +6,11 @@ post: 145
 pr: "#1312"
 issue: "#1201"
 status: open
+author: "synlynk team"
+version: "0.18.0"
+tags: [posts]
+type: pr
 ---
-
 # PR #1312 — Wire Charter Content into Dispatch and Execution Context
 
 ## The Broader Goal

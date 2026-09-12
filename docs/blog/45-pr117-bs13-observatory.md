@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 45
 pr: "#117"
 merged: 2026-07-05
+author: "synlynk team"
+version: "0.11.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 While the workspace HUD (PR #106) provided a terminal-native dashboard for monitoring the 6-cycle SDLC model, it only tracked local repo executions. The long-arc goal of synlynk is **autonomous multi-agent dispatch** across multiple repositories and agents. To make this legibility possible, we needed a unified operator panel: a read-only, near real-time live board displaying running jobs across all repos in a single workspace.

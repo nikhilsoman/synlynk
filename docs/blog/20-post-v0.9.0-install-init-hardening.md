@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 20
 pr: "hotfix — 3 commits to main"
 merged: 2026-06-22
+author: "synlynk team"
+version: "0.9.0"
+tags: [posts]
+type: release
 ---
-
 ## The Broader Goal at the End of PR #53
 
 PR #53 shipped v0.9.0 — the kernel hardening release. The package split moved ~4700 lines from `bin/synlynk.py` into a proper `synlynk/` package. Scoped dispatch context, per-agent prompt framing, Ed25519 signing, anti-gaming quality caps, and the package structure were all locked in. The stated next goal was v0.9.1: `synlynk relay join` onboarding and the community-first relay model.

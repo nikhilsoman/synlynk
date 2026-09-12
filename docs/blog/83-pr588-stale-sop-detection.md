@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 83
 pr: "#588"
 merged: 2026-07-29
+author: "synlynk team"
+version: "0.13.1"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 With #339 merged (PR #584), doctor/probe output was trustworthy again, and the PM's next queued task was finally regenerating CLAUDE.md/GEMINI.md/GROK.md with the up-to-date GitHub-write-routing text (#426/#569) — an ask that had been outstanding across multiple prior sessions.

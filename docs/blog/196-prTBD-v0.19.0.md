@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 196
 pr: "#TBD"
 status: open
+author: "synlynk team"
+version: "0.19.0"
+tags: [posts]
+type: release
 ---
-
 ## The Broader Goal at the End of the Previous PR
 At the conclusion of `v0.18.0`, synlynk established harness capability scoring, dispatch reliability, and QA merge-gate authority. However, execution velocity remained gated by conversational turn-taking: agents frequently paused for human reassurance at every micro-step, PRs merged directly into production `main`, and daemon crashes on macOS could leave role tokens unrefreshed.
 

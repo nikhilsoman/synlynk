@@ -6,8 +6,11 @@ post: 142
 pr: "#1309"
 issue: "#347"
 status: merged
+author: "synlynk team"
+version: "0.18.0"
+tags: [posts]
+type: pr
 ---
-
 # PR #1309 — Fleet Parity: Instruction File Preflight Check and Closed-Loop Receipt Verification
 
 ## The Broader Goal at the End of the Previous PR
