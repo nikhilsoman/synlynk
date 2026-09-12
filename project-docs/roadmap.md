@@ -54,6 +54,6 @@
 ### Cluster F: Safe Fleet Parity Migration Engine & In-Browser Role Provisioning (v0.20.1)
 - [x] **Point 3 Policy Authority Bugfix:** Resolves false-positive readiness failure for standard 2-tier overrides in `readiness.py` and expands `test_readiness_matrix.py`.
 - [x] **Architectural Design Spec Approved:** `docs/superpowers/specs/2026-09-12-safe-fleet-parity-migration-engine-design.md` detailing Worktree-Isolated Shadow Engine (`synlynk heal --parity`) and `synlynk viz` in-browser 6-role GitHub App manifest provisioning.
-- [ ] **Core Parity Engine Implementation (`synlynk/parity.py`):** Stack detection, AST/fence parser, worktree-isolated migration runner, and `synlynk doctor --parity` check.
-- [ ] **`synlynk viz` Role Provisioning Web Flow:** `/onboarding/roles` UI with GitHub App manifest redirect, loopback auth callback, credentials writer, and live SSE self-test attestation.
-- [ ] **Fleet Parity Upgrades:** Execute safe migration playbooks across `cc-videoreframing`, `playblazer-ng`, and `hitchcock`.
+- [x] **Core Parity Engine Implementation (`synlynk/parity.py`):** Stack detection, AST/fence parser, worktree-isolated migration runner, and `synlynk doctor` fleet parity check (`_hc_fleet_parity`).
+- [x] **`synlynk viz` Role Provisioning Web Flow:** `/onboarding/roles` UI with GitHub App manifest redirect, loopback auth callback, credentials writer, and live 4-point readiness self-test attestation (`/api/readiness/live`).
+- [x] **Fleet Parity Upgrades:** Executed safe worktree-isolated migration playbooks across `cc-videoreframing`, `playblazer-ng`, and `hitchcock` without modifying main branches.
