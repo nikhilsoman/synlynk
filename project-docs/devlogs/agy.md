@@ -372,3 +372,22 @@
   - Clean Eleventy build (449 files written in 0.55s) with zero date homogenization or invalid `#00` badges.
 [@agy]
 
+## 2026-09-12 — Safe Fleet Parity Migration Engine & In-Browser Provisioning Wizard
+
+### Shipped
+- **Point 3 Policy Authority Bugfix (`synlynk/readiness.py`):** Resolved false-positive `WARN` in `check_point_3_policy_authority()` where 2-tier policy files wrapping authority definitions inside an `"overrides"` key failed inspection. Updated logic to inspect both top-level and `"overrides"`-nested keys (`dev_authority`, `task_allocation`, `merge_authority`) and verified schema versioning. Added unit test `test_point_3_policy_authority_valid_overrides` in `tests/test_readiness_matrix.py`; all 12 tests pass.
+- **Architectural Design Spec Authored (`docs/superpowers/specs/2026-09-12-safe-fleet-parity-migration-engine-design.md`):** Formulated Approach A (Worktree-Isolated Shadow Parity Engine with `_hc_fleet_parity` doctor check) and In-Browser Role Provisioning Wizard (`synlynk viz` localhost:27472 GitHub App manifest flow for `pm`, `tpm`, `qa`, `dev`, `architect`, `marketing`), integrating Claude's RxCC retrospective feedback and 8-repo fleet audit findings.
+- **Decision Panel Consensus Recorded (`project-docs/decisions/2026-09-12-safe-declarative-parity-migration-engine.md`):** Codex and Agy agreed on dry-run by default, non-destructive directive preservation, stack-aware CI protection, recursive `**/.synlynk/*` gitignore rules, and in-worktree validation.
+- **Core Parity Engine Implemented (`synlynk/parity.py`):**
+  - `detect_project_stack()`: Multi-stack detection (Node/pnpm/yarn/npm, Go, Python, Rust) without injecting incompatible CI or branch protection constraints.
+  - `parse_directive_fences()` & `inject_sop_fences()`: 100% preservation of user-authored domain knowledge while injecting canonical `<!-- synlynk:start -->` and `<!-- synlynk:harness -->` SOP blocks.
+  - `ensure_recursive_gitignore()`: Enforces recursive `**/.synlynk/*` un-ignoring for config, policy, and roles while protecting credentials and runtime logs.
+  - `run_parity_remediation()`: Worktree-isolated migration engine at `.worktrees/synlynk-parity-check` generating verified pull requests. Supports `--dry-run` and `--branch`.
+- **Fleet Parity Diagnostic (`synlynk/doctor.py`):** Added `_hc_fleet_parity` check verifying fenced directives, complete workgroup rosters, and policy authority.
+- **In-Browser Role Provisioning Wizard (`synlynk/viz.py`):** Added `/onboarding/roles` with 1-click GitHub App Manifest generation for all 6 canonical roles (`pm`, `tpm`, `qa`, `dev`, `architect`, `marketing`), loopback `/auth/callback` code exchange, and live 4-point readiness self-test streaming via `/api/readiness/live`.
+- **Target Fleet Parity Upgrades Executed:**
+  - `cc-videoreframing` (`/Users/nikhilsoman/dev/cc-videoreframing`): Remediated missing `agy` workgroup slot and `policy.json` in isolated worktree; verified `check_fleet_parity` reports `PASS`.
+  - `playblazer-ng` (`/Users/nikhilsoman/dev/playblazer-ng`): Injected modern SOP fences across all 4 harness directives, seeded `policy.json` and `roles.yaml`; verified `check_fleet_parity` reports `PASS`.
+  - `hitchcock` (`/Users/nikhilsoman/dev/hitchcock`): Seeded `policy.json` and `roles.yaml` in isolated worktree; verified `check_fleet_parity` reports `PASS`.
+- **PR #1563 Opened:** Submitted PR for `feat/agy/safe-fleet-parity-engine` on `synlynk`.
+[@agy]

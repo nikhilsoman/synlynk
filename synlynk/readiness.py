@@ -156,8 +156,19 @@ def check_point_3_policy_authority(repo_path: Optional[str] = None) -> Dict[str,
             "remediation": "Repair JSON syntax in .synlynk/policy.json",
         }
 
-    task_alloc = data.get("task_allocation") or {}
-    has_rules = bool(task_alloc or [k for k in data if k.endswith("_authority")])
+    overrides = data.get("overrides", {})
+    task_alloc = (
+        data.get("task_allocation")
+        or (data.get("dev_authority") or {}).get("task_allocation")
+        or overrides.get("task_allocation")
+        or (overrides.get("dev_authority") or {}).get("task_allocation")
+        or {}
+    )
+    has_rules = bool(
+        task_alloc
+        or [k for k in data if k.endswith("_authority")]
+        or [k for k in overrides if k.endswith("_authority")]
+    )
 
     if not has_rules:
         return {
@@ -169,12 +180,22 @@ def check_point_3_policy_authority(repo_path: Optional[str] = None) -> Dict[str,
             "remediation": "Add role allocation rules in .synlynk/policy.json",
         }
 
+    rules_count = (
+        len([k for k in data if k.endswith("_authority")])
+        + len([k for k in overrides if k.endswith("_authority")])
+    )
+    if task_alloc:
+        rules_count += len(task_alloc)
+
     return {
         "key": "policy_authority",
         "name": "Point 3: Policy Authority",
         "status": "PASS",
         "message": "Policy rules valid and authority definitions active",
-        "details": {"version": data.get("version", 1), "rules_count": len(data)},
+        "details": {
+            "version": data.get("version") or data.get("schema_version", 1),
+            "rules_count": rules_count or len(data),
+        },
         "remediation": "",
     }
 

@@ -1,5 +1,14 @@
 # Cost Log
 
+## 2026-09-12 — Safe Fleet Parity Migration Engine & In-Browser Role Provisioning
+- Interactive Conductor: Agy (Gemini 2.5 Pro / Flash).
+- Local TDD implementation: resolved Point 3 policy authority bug in `synlynk/readiness.py`, added unit test in `tests/test_readiness_matrix.py`.
+- Authored architectural design spec `docs/superpowers/specs/2026-09-12-safe-fleet-parity-migration-engine-design.md`, recorded decision in `project-docs/decisions/2026-09-12-safe-declarative-parity-migration-engine.md`.
+- Implemented `synlynk/parity.py`, `_hc_fleet_parity` check in `synlynk/doctor.py`, and `/onboarding/roles` wizard in `synlynk/viz.py`.
+- 16 new unit and integration tests passing (`tests/test_parity.py` and `tests/test_viz_onboarding.py`).
+- Executed shadow worktree parity upgrades on `cc-videoreframing`, `playblazer-ng`, and `hitchcock` with 100% test and diagnostic passes.
+- PR #1563 opened; zero external fee-bearing dispatch spend.
+
 ## 2026-09-12 — LIVE-12 Marketing Surface Decoupling & Dual-Treatment Engine
 - Interactive Conductor: Agy (Gemini 2.5 Pro / Flash).
 - Local TDD implementation, frontmatter backfill across 61 posts, Nunjucks features matrix refactoring, Two-Tier blog architecture, `synlynk marketing sync-pr` CLI & workflow, and headless Chrome PDF & Pandoc EPUB compilation engine. Zero external fee-bearing dispatch spend.

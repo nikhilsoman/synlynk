@@ -745,6 +745,20 @@ def _hc_dual_ledger_sync() -> HealthCheck:
     return HealthCheck("dual_ledger_sync", "ok", sync_res["detail"])
 
 
+def _hc_fleet_parity() -> HealthCheck:
+    """Check adoption parity across directives, config roster, and policy authority."""
+    from synlynk.parity import check_fleet_parity
+    res = check_fleet_parity(".")
+    if res.get("status") == "PASS":
+        return HealthCheck("fleet_parity", "ok", res.get("message", "Full parity active"))
+    return HealthCheck(
+        "fleet_parity",
+        "warn",
+        res.get("message", "Drift detected"),
+        fix=res.get("remediation", "Run `synlynk heal --parity`"),
+    )
+
+
 HEALTH_CHECKS = [
     _hc_python_version,
     _hc_project_init,
@@ -760,6 +774,7 @@ HEALTH_CHECKS = [
     _hc_pr_review_cycles,
     _hc_version_current,
     _hc_dual_ledger_sync,
+    _hc_fleet_parity,
 ]
 
 

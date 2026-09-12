@@ -4969,6 +4969,299 @@ def _write_cache(data: dict, port: int) -> None:
         json.dump(manifest, f)
 
 
+def get_role_manifest_payload(role: str, repo_name: str = "workspace", port: int = 27472) -> dict:
+    """Generate GitHub App Manifest payload for a specific workspace role."""
+    role = role.lower()
+    permissions = {
+        "metadata": "read",
+        "contents": "write",
+        "pull_requests": "write",
+        "issues": "write",
+    }
+    if role in ("qa", "dev"):
+        permissions["checks"] = "write"
+        permissions["statuses"] = "write"
+
+    return {
+        "name": f"synlynk-{role}-{repo_name}",
+        "url": "https://synlynk.com",
+        "hook_attributes": {"url": f"http://localhost:{port}/webhook"},
+        "redirect_url": f"http://localhost:{port}/auth/callback?role={role}",
+        "public": False,
+        "default_permissions": permissions,
+        "default_events": ["pull_request", "pull_request_review", "issues"],
+    }
+
+
+def handle_github_app_conversion(code: str, role: str, repo_root: str = ".") -> dict:
+    """Exchange GitHub App manifest conversion code and write credentials."""
+    import urllib.request
+    from pathlib import Path
+
+    url = f"https://api.github.com/app-manifests/{code}/conversions"
+    req = urllib.request.Request(url, method="POST", headers={"Accept": "application/vnd.github+json"})
+
+    with urllib.request.urlopen(req) as resp:
+        data = json.loads(resp.read().decode("utf-8"))
+
+    app_id = data.get("id")
+    pem = data.get("pem")
+
+    root = Path(repo_root).resolve()
+    role_dir = root / ".synlynk" / "github_apps" / role
+    role_dir.mkdir(parents=True, exist_ok=True)
+
+    app_json_path = role_dir / f"{role}.app.json"
+    pem_path = role_dir / f"{role}.private-key.pem"
+
+    app_json_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    if pem:
+        pem_path.write_text(pem, encoding="utf-8")
+    os.chmod(str(app_json_path), 0o600)
+    if pem_path.exists():
+        os.chmod(str(pem_path), 0o600)
+
+    try:
+        from synlynk.github_app_auth import refresh_installation_token
+        refresh_installation_token(role, apps_dir=str(root / ".synlynk" / "github_apps"))
+    except Exception:
+        pass
+
+    return {"ok": True, "role": role, "app_id": app_id, "slug": data.get("slug")}
+
+
+def generate_roles_onboarding_html(repo_root: str = ".", port: int = 27472) -> str:
+    """Generate in-browser role provisioning wizard HTML."""
+    from pathlib import Path
+    import html as _html
+
+    root = Path(repo_root).resolve()
+    repo_name = root.name
+    roles_dir = root / ".synlynk" / "github_apps"
+
+    roles_info = [
+        ("pm", "Program Manager", "claude", "Roadmap, goal tracking, issue triage, and named release narratives."),
+        ("tpm", "Technical Program Manager", "claude", "Milestone execution loop, cross-harness sweeps, and dependency tracking."),
+        ("qa", "QA Engineer", "claude", "Autonomous PR review, test validation, and merge-gate authority."),
+        ("dev", "Software Developer", "codex", "Core implementation, tests, bugfixes, refactoring, and PR creation."),
+        ("architect", "Lead Architect", "claude", "System architecture, specifications, technical decisions, and charter governance."),
+        ("marketing", "Marketing Engineer", "agy", "Release communications, documentation compilation, and build diary blogs."),
+    ]
+
+    cards_html = []
+    for slug, title, default_harness, desc in roles_info:
+        role_app = roles_dir / slug / f"{slug}.app.json"
+        is_configured = role_app.exists()
+
+        if is_configured:
+            badge = '<span class="badge configured">✓ Configured</span>'
+            btn_html = '<button class="btn configured-btn" disabled>Active Role</button>'
+        else:
+            badge = '<span class="badge unconfigured">Not Configured</span>'
+            manifest = get_role_manifest_payload(slug, repo_name=repo_name, port=port)
+            manifest_json = json.dumps(manifest)
+            escaped = _html.escape(manifest_json, quote=True)
+            btn_html = f'''<form action="https://github.com/settings/apps/new" method="POST" target="_blank">
+                <input type="hidden" name="manifest" value="{escaped}">
+                <button type="submit" class="btn primary-btn">Provision with GitHub</button>
+            </form>'''
+
+        cards_html.append(f'''
+        <div class="role-card">
+            <div class="card-header">
+                <h3>{title} (<code>{slug}</code>)</h3>
+                {badge}
+            </div>
+            <p class="role-desc">{desc}</p>
+            <div class="role-meta">Default Harness: <strong>{default_harness}</strong></div>
+            <div class="card-actions">
+                {btn_html}
+            </div>
+        </div>
+        ''')
+
+    cards_joined = "".join(cards_html)
+
+    return f'''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>synlynk Vizor — Workspace Role Provisioning Wizard</title>
+    <style>
+        :root {{
+            --bg-base: #0f1117;
+            --bg-card: #181c27;
+            --border: #283044;
+            --text-main: #f0f3f8;
+            --text-muted: #8b9bb4;
+            --accent: #6366f1;
+            --accent-hover: #4f46e5;
+            --green: #10b981;
+            --yellow: #f59e0b;
+        }}
+        body {{
+            background: var(--bg-base);
+            color: var(--text-main);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            margin: 0;
+            padding: 32px;
+        }}
+        header {{
+            max-width: 1100px;
+            margin: 0 auto 32px auto;
+        }}
+        h1 {{
+            font-size: 28px;
+            margin: 0 0 8px 0;
+            color: #fff;
+        }}
+        p.subtitle {{
+            color: var(--text-muted);
+            margin: 0;
+            font-size: 15px;
+        }}
+        .grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 20px;
+            max-width: 1100px;
+            margin: 0 auto 32px auto;
+        }}
+        .role-card {{
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }}
+        .card-header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }}
+        .card-header h3 {{
+            margin: 0;
+            font-size: 18px;
+        }}
+        .badge {{
+            font-size: 12px;
+            font-weight: 600;
+            padding: 4px 8px;
+            border-radius: 4px;
+        }}
+        .badge.configured {{
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--green);
+            border: 1px solid var(--green);
+        }}
+        .badge.unconfigured {{
+            background: rgba(245, 158, 11, 0.15);
+            color: var(--yellow);
+            border: 1px solid var(--yellow);
+        }}
+        .role-desc {{
+            color: var(--text-muted);
+            font-size: 14px;
+            line-height: 1.5;
+            margin: 0 0 16px 0;
+        }}
+        .role-meta {{
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-bottom: 16px;
+        }}
+        .btn {{
+            width: 100%;
+            padding: 10px;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            font-size: 14px;
+            transition: all 0.2s ease;
+        }}
+        .primary-btn {{
+            background: var(--accent);
+            color: #fff;
+        }}
+        .primary-btn:hover {{
+            background: var(--accent-hover);
+        }}
+        .configured-btn {{
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-muted);
+            cursor: default;
+        }}
+        .readiness-card {{
+            max-width: 1100px;
+            margin: 0 auto;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 24px;
+        }}
+        .readiness-card h2 {{
+            margin-top: 0;
+            font-size: 20px;
+        }}
+        .point-row {{
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border);
+            font-size: 14px;
+        }}
+        .point-row:last-child {{
+            border-bottom: none;
+        }}
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Workspace Role Provisioning Wizard</h1>
+        <p class="subtitle">1-Click GitHub App provisioning for autonomous fleet agents in <strong>{repo_name}</strong>.</p>
+    </header>
+
+    <div class="grid">
+        {cards_joined}
+    </div>
+
+    <div class="readiness-card">
+        <h2>Live 4-Point Fleet Readiness Matrix</h2>
+        <div id="readiness-container">Loading live readiness points...</div>
+    </div>
+
+    <script>
+        async function fetchReadiness() {{
+            try {{
+                const res = await fetch('/api/readiness/live');
+                const data = await res.json();
+                const container = document.getElementById('readiness-container');
+                if (!data.points) return;
+                let html = '';
+                for (const p of data.points) {{
+                    const color = p.status === 'PASS' ? '#10b981' : (p.status === 'WARN' ? '#f59e0b' : '#ef4444');
+                    html += `<div class="point-row">
+                        <span><strong>${{p.name}}</strong>: ${{p.message}}</span>
+                        <span style="color: ${{color}}; font-weight: 600;">${{p.status}}</span>
+                    </div>`;
+                }}
+                container.innerHTML = html;
+            }} catch (err) {{
+                console.error('Readiness poll error:', err);
+            }}
+        }}
+        fetchReadiness();
+        setInterval(fetchReadiness, 3000);
+    </script>
+</body>
+</html>'''
+
+
 class VizorHandler(http.server.SimpleHTTPRequestHandler):
     """Serves viz-cache/ and handles Vizor POST routes."""
 
@@ -5003,6 +5296,46 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
         self.send_header("Content-Type", "application/json")
         self.end_headers()
         self.wfile.write(json.dumps(payload).encode("utf-8"))
+
+    def do_GET(self):
+        from urllib.parse import urlparse, parse_qs
+
+        parsed = urlparse(self.path)
+        path = parsed.path
+
+        if path in ("/onboarding/roles", "/onboarding/roles/"):
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.end_headers()
+            port = getattr(self.server, "server_port", 27472)
+            html = generate_roles_onboarding_html(port=port)
+            self.wfile.write(html.encode("utf-8"))
+            return
+
+        if path == "/auth/callback":
+            params = parse_qs(parsed.query)
+            code = params.get("code", [""])[0]
+            role = params.get("role", [""])[0] or "qa"
+            if code:
+                try:
+                    handle_github_app_conversion(code=code, role=role)
+                    self.send_response(302)
+                    self.send_header("Location", f"/onboarding/roles?success={role}")
+                    self.end_headers()
+                    return
+                except Exception as e:
+                    self.send_error(500, f"GitHub App conversion error: {e}")
+                    return
+            self.send_error(400, "Missing code query param")
+            return
+
+        if path == "/api/readiness/live":
+            from synlynk.readiness import evaluate_readiness_matrix
+            matrix = evaluate_readiness_matrix()
+            self._send_json_ok(matrix)
+            return
+
+        super().do_GET()
 
     def do_OPTIONS(self):
         if self.path not in ("/note", "/dispatch", "/approve", "/kill", "/architect-map/view-pref", "/roles/create", "/worktrees/clean"):
