@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 63
 pr: "#259"
 merged: pending
+author: "synlynk team"
+version: "0.12.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 PR #264 closed epic #210 in full — every dollar figure the Vizor Effort & Cost tab renders is now either structurally sourced or visibly flagged as an estimate. That PR's closing note named the one thing still standing between the current state and marking the v0.12.0 Measurement Ledger Hardening theme shipped: issue #259, `synlynk status` surfacing `rates_updated_at`. Fable's 2026-07-12 strategic review had asked for the `_MODEL_RATE_TABLE` move out of code and into an updatable data file "with a `rates_updated_at` shown in `status`." The data-file move itself shipped back in Measurement Ledger Phase 1 (`.synlynk/model_rates.json`, PR #236) — `synlynk/costs.py`'s `_load_model_rates()` has returned a `rates_updated_at` key ever since. Nothing downstream ever read it. `synlynk status` — the command most people actually run — had no way to tell a caller whether the rate table behind every cost number on screen was current or a hardcoded fallback from before any rate file existed.

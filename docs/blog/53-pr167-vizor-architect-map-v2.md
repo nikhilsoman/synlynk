@@ -1,3 +1,14 @@
+---
+title: "53-pr167-vizor-architect-map-v2"
+author: "synlynk team"
+date: 2026-07-12
+post: 53
+pr: "—"
+type: pr
+series: "Building the OS for Multi-Agent Development"
+tags: posts
+version: "0.12.0"
+---
 # Architect Map v2 — From Static Tube Map to Live Workspace Graph
 
 **Date:** 2026-07-12

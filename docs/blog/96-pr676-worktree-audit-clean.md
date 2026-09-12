@@ -4,8 +4,11 @@ date: 2026-08-03
 series: "Building the OS for Multi-Agent Development"
 post: 96
 pr: "#676"
+author: "synlynk team"
+version: "0.13.1"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 The Worktree Hygiene Protocol (CLAUDE.md, added via PR #575) formalized when a dispatch-job worktree/branch should be removed: on merge, confirmed via `git status --short` + `git merge-base --is-ancestor` (or PR state for squash merges), with a periodic full audit "at least every ~20 dispatched jobs." That periodic audit was pure manual archaeology — a July 2026 sweep found 30 stale worktrees/branches that had accumulated because cleanup only ever happened reactively, in large batches, long after the owning PRs had merged. The protocol existed; nothing enforced it.

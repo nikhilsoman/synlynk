@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 74
 pr: "#475"
 merged: 2026-07-24
+author: "synlynk team"
+version: "0.13.1"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 PR #463 had just landed dispatch stacking and the ground-truth suite gate — jobs now branch off the actual feature branch tip instead of stale `origin/main`, and a job can no longer report `completed` while leaving the test suite red. That work assumed the dispatch pipeline's surrounding plumbing (PR creation, headless permission handling) was already solid; this PR exists because a job dispatched from a *different* repo (rxcc) surfaced that it wasn't.

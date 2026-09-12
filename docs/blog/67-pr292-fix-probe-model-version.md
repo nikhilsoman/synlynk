@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 67
 pr: "#292"
 merged: status open
+author: "synlynk team"
+version: "0.13.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 After v0.12.0 (Measurement & Reliability), model identity is a first-class ledger field: `model_at_dispatch` is probed before every job, capability ratings key on it, and cost rates resolve through `_model_rate_for_version()`. That only works if the Tier-2 probe actually returns a real model id.

@@ -1,3 +1,14 @@
+---
+title: "PR #1022 — Agent-Roles-Charters Phase 1 Follow-Ups: Closing the Footguns"
+author: "synlynk team"
+date: 2026-08-17
+post: 120
+pr: "#1022"
+type: pr
+series: "Building the OS for Multi-Agent Development"
+tags: posts
+version: "0.14.0"
+---
 # PR #1022 — Agent-Roles-Charters Phase 1 Follow-Ups: Closing the Footguns
 
 ## The Goal at the End of the Previous PR

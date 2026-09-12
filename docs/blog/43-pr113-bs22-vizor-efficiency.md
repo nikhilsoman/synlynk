@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 43
 pr: "#113"
 merged: 2026-07-04
+author: "synlynk team"
+version: "0.11.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 With PR #110 (BS-16), the harness gained a comprehensive instrument panel inside the SQLite data layer and the terminal output of `synlynk status`. However, this capacity data was trapped inside the terminal and JSON serializers. 

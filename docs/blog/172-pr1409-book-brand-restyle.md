@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 172
 pr: "#1409"
 merged: 2026-09-04
+author: "synlynk team"
+version: "0.19.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 Draft v0.5 of "The Supervised Machine" had just absorbed the Strategic Review integration — new chapters, deep-dive expansions, the pre-Part-0 cold open — landing it at its most structurally complete state yet. The goalpost at the end of that work was editorial: the book's content was right. Its presentation was an afterthought — Georgia serif, ad hoc grays and golds, nothing tying it visually to synlynk itself.

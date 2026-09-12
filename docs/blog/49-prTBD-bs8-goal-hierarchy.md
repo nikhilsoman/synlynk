@@ -1,3 +1,14 @@
+---
+title: "BS-8: The Business Goal Layer"
+author: "synlynk team"
+date: 2026-07-11
+post: 49
+pr: "TBD"
+type: pr
+series: "Building the OS for Multi-Agent Development"
+tags: posts
+version: "0.12.0"
+---
 # BS-8: The Business Goal Layer
 
 **Date:** 2026-07-11

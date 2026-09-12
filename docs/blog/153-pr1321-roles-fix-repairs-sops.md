@@ -1,3 +1,14 @@
+---
+title: "PR #1321 — Repair Stale & Missing SOP Sections during synlynk roles --fix"
+author: "synlynk team"
+date: 2026-09-01
+post: 153
+pr: "#1321"
+type: pr
+series: "Building the OS for Multi-Agent Development"
+tags: posts
+version: "0.18.0"
+---
 # Post 153: Repair Stale & Missing SOP Sections during `synlynk roles --fix` (PR #1321, Issue #1231)
 
 - **PR:** [#1321](https://github.com/nikhilsoman/synlynk/pull/1321)

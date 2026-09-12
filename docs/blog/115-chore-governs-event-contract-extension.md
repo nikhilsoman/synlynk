@@ -4,8 +4,11 @@ date: 2026-08-13
 series: "Building the OS for Multi-Agent Development"
 post: 115
 pr: "TBD"
+author: "synlynk team"
+version: "0.13.1"
+tags: [posts]
+type: pr
 ---
-
 # 115: Two New Event Types for the Autonomous Ops Release Gates
 
 ## Broader goal (previous)

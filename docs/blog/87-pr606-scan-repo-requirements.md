@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 87
 pr: "#606"
 merged: status open
+author: "synlynk team"
+version: "0.13.1"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 PR #587 closed the loop on harness-capability reality checking: synlynk had a canonical way to describe what each harness can actually do, where the headless failure modes are, and which assumptions had to be corrected. The next gap was narrower and more operational: the dispatch layer still had no cheap way to tell whether a repo itself carries static requirements like Docker, MCP, or GitHub Actions. This PR starts that separation by adding a pure repository-signal scanner instead of folding policy into dispatch.

@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 79
 pr: "#536"
 merged: 2026-07-25
+author: "synlynk team"
+version: "0.13.1"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 PR #517 added two new entries to `HEALTH_CHECKS` — checks for un-provisioned identity roles and for identity-file permission/gitignore drift — as part of shipping per-role GitHub App identity. Its Security Review noted, without fixing, that these checks were unreachable in practice: `synlynk doctor` run from the actual CLI (`cli.py:1071`'s bare `cmd_doctor()` call, with no `checks` argument) never touched `HEALTH_CHECKS` at all. It only ran the interactive TC1-5 agent-testing wizard. Filed as #525.

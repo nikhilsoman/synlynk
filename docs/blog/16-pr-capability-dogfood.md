@@ -1,3 +1,14 @@
+---
+title: "Capability Dogfood"
+author: "synlynk team"
+date: 2026-06-20
+post: 16
+pr: "TBD"
+type: pr
+series: "Building the OS for Multi-Agent Development"
+tags: posts
+version: "0.9.0"
+---
 # Blog Post 16 — Capability Dogfood: Seeding the Routing Brain
 
 ## Broader Goal (End of Previous PR)

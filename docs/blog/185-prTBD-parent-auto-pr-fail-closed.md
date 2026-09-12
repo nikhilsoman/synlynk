@@ -4,8 +4,11 @@ date: 2026-09-06
 series: "Building the OS for Multi-Agent Development"
 post: 185
 pr: "TBD"
+author: "synlynk team"
+version: "0.19.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 #1453 shipped `synlynk gh --role`. Parent auto-PR already injected a role token when one existed (#1452) but still fell through to host `gh` when it did not.

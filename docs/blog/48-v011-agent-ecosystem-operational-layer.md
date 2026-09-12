@@ -1,3 +1,14 @@
+---
+title: "v0.11.0 — The Agent Ecosystem Operational Layer (Named Release)"
+author: "synlynk team"
+date: 2026-07-05
+post: 48
+pr: "v0.11.0"
+type: release
+series: "Building the OS for Multi-Agent Development"
+tags: posts
+version: "0.11.0"
+---
 # v0.11.0 — The Agent Ecosystem Operational Layer
 
 **Date:** 2026-07-05

@@ -3611,8 +3611,18 @@ def cmd_pr_check(pr_number=None) -> None:
         )
         print("  Fix with: synlynk audit-docs --fix\n")
     try:
-        from synlynk.marketing import update_blog_index
+        from synlynk.marketing import update_blog_index, validate_all_blog_posts
         update_blog_index()
+        blog_findings = validate_all_blog_posts()
+        if blog_findings:
+            print(f"\n  🚫 [PR CHECK BLOCKED] Blog post frontmatter validation failed ({len(blog_findings)} invalid post(s)):")
+            for f in blog_findings[:5]:
+                print(f"    {f['file']}: {', '.join(f['errors'])}")
+            if len(blog_findings) > 5:
+                print(f"    ... and {len(blog_findings) - 5} more")
+            raise SystemExit(1)
+    except SystemExit:
+        raise
     except Exception:
         pass
     print(f"  {_GREEN}✓{_RESET} PR check passed — all model versions attested.")

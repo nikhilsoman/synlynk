@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 156
 pr: "#1327"
 merged: 2026-09-02
+author: "synlynk team"
+version: "0.18.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 In previous fleet parity milestones (PRs #1308, #1309, #1310), synlynk established runtime and diagnostic equity across the Core 4 harnesses (`claude`, `agy`, `codex`, `grok`). These advancements enforced strict working directory boundaries, closed-loop instruction receipt verifications, and headless execution flag adaptations.

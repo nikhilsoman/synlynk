@@ -1,3 +1,14 @@
+---
+title: "PR #1271 — Direct Codex GitHub-Write Network Access via Config Override"
+author: "synlynk team"
+date: 2026-08-29
+post: 134
+pr: "#1271"
+type: pr
+series: "Building the OS for Multi-Agent Development"
+tags: posts
+version: "0.18.0"
+---
 # PR #1271 — Direct Codex GitHub-Write Network Access via Config Override
 
 ## Where we left off

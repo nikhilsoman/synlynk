@@ -1,3 +1,14 @@
+---
+title: "51-prTBD-141-agent-quotas-routing-gate"
+author: "synlynk team"
+date: 2026-07-11
+post: 51
+pr: "—"
+type: pr
+series: "Building the OS for Multi-Agent Development"
+tags: posts
+version: "0.12.0"
+---
 # #141 — agent_quotas Base Table + Stage-2 Quota Gate
 
 **Date:** 2026-07-11  

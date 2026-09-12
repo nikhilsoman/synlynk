@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 82
 pr: "#584"
 merged: 2026-07-29
+author: "synlynk team"
+version: "0.13.1"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 Coming out of the LIVE-3 recovery (PR #549) and the state-engine work, the standing priority was a pre-launch headless-capability audit across the agent fleet — confirming `synlynk doctor` could actually be trusted to say which agents support which dispatch flags, headless contracts, and network dependencies before that audit started trusting its output.

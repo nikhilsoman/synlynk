@@ -11,6 +11,8 @@ from synlynk.marketing import (
     update_blog_index,
     validate_all_blog_posts,
     validate_blog_post_frontmatter,
+    sync_pr_blog_post,
+    cmd_marketing_sync_pr,
 )
 
 
@@ -179,3 +181,78 @@ Body
     updated_content = update_blog_index(blog_dir=blog_dir, readme_path=readme)
     assert "164-pr1347-growth.md" in updated_content
     assert "PR #1347 — Autonomous Growth Engine" in updated_content
+
+
+def test_validate_all_blog_posts(tmp_path):
+    blog_dir = tmp_path / "docs" / "blog"
+    blog_dir.mkdir(parents=True, exist_ok=True)
+    (blog_dir / "01-valid.md").write_text("""---
+title: "Valid Post"
+author: "Agy"
+date: "2026-09-11"
+pr: "#1558"
+version: "0.20.0"
+tags: [posts]
+type: pr
+---
+Body
+""", encoding="utf-8")
+    (blog_dir / "02-invalid.md").write_text("""---
+title: "Invalid Post"
+---
+Missing required keys
+""", encoding="utf-8")
+
+    findings = validate_all_blog_posts(blog_dir=blog_dir)
+    assert len(findings) == 1
+    assert "02-invalid.md" in findings[0]["file"]
+
+
+def test_sync_pr_blog_post_creates_post(tmp_path):
+    root = str(tmp_path)
+    (tmp_path / "VERSION").write_text("0.20.0\n")
+    blog_dir = tmp_path / "docs" / "blog"
+    blog_dir.mkdir(parents=True, exist_ok=True)
+    (blog_dir / "README.md").write_text("# Blog Index\n\n## Series Index\n\n| Post | Title | PR | Date |\n|---|---|---|---|\n\n## Per-PR Post Template\n")
+
+    res = sync_pr_blog_post(
+        pr_number=1558,
+        root=root,
+        dry_run=False,
+        title="Milestone v0.20.0 Cluster B — Worktree Lifecycle",
+        author="Agy (Gemini)",
+        date_str="2026-09-11",
+        version="0.20.0",
+        body="## Summary\nImplemented sparse worktrees.\n\n### Highlights\n- Added sparse cone checkout.\n- Added sibling branch pruning.\n\n### Tests\n56 passed.",
+    )
+
+    assert res["post"] == 1
+    assert res["pr"] == "#1558"
+    assert res["date"] == "2026-09-11"
+    post_file = Path(res["file"])
+    assert post_file.is_file()
+
+    content = post_file.read_text(encoding="utf-8")
+    assert "type: pr" in content
+    assert "PR #1558 — Milestone v0.20.0 Cluster B — Worktree Lifecycle" in content
+    assert "Added sparse cone checkout" in content
+    assert "56 passed" in content
+
+    # Verify frontmatter validity
+    meta = validate_blog_post_frontmatter(post_file)
+    assert meta["pr"] == "#1558"
+    assert meta["type"] == "pr"
+
+
+def test_cmd_marketing_sync_pr_cli(tmp_path, monkeypatch):
+    root = str(tmp_path)
+    (tmp_path / "VERSION").write_text("0.20.0\n")
+    blog_dir = tmp_path / "docs" / "blog"
+    blog_dir.mkdir(parents=True, exist_ok=True)
+    (blog_dir / "README.md").write_text("# Blog Index\n\n## Series Index\n\n| Post | Title | PR | Date |\n|---|---|---|---|\n\n## Per-PR Post Template\n")
+    monkeypatch.chdir(tmp_path)
+
+    cmd_marketing_sync_pr(pr_number=1558, dry_run=False)
+    created_posts = list(blog_dir.glob("*pr1558*.md"))
+    assert len(created_posts) == 1
+

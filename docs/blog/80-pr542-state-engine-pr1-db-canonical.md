@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 80
 pr: "#542"
 merged: 2026-07-26
+author: "synlynk team"
+version: "0.13.1"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 `todo.md` had already been DB-canonical for a while — stories live in a `stories` table, `todo.md` is regenerated from it, and that pattern was stable. `roadmap.md`, `memory.md`, and `costs.md` were still flat markdown, hand-edited or append-only, and drifting: repeated `costs.md` corruption incidents (#481, #482, #485) traced back to exactly the class of problem `todo.md` had already solved — multiple writers touching a plain-text file with no single source of truth. The `2026-07-20-state-engine-tiered-design.md` spec had already been approved, laying out a three-PR sequence (PR1/PR2/PR3) to extend the `todo.md` pattern to the rest of `project-docs/`.

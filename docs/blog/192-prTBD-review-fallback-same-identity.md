@@ -4,8 +4,11 @@ date: 2026-09-06
 series: "Building the OS for Multi-Agent Development"
 post: 192
 pr: "TBD"
+author: "synlynk team"
+version: "0.19.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 The #1436 identity-routing arc separated autonomous GitHub operations across distinct role GitHub Apps (`qa`, `dev`, `pm`, etc.), ensuring autonomous writes no longer leak into the human operator's personal GitHub identity. Live verification proved that `synlynk-synlynk-qa[bot]` successfully submits approving reviews (`gh pr review --approve`) and squash-merges PRs authored by both human and sibling role bots (#1455).

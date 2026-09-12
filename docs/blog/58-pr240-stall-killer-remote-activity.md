@@ -6,8 +6,11 @@ post: 58
 pr: "#240"
 issue: "#202"
 merged: 2026-07-14
+author: "synlynk team"
+version: "0.12.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 PR #238 (previous post) closed a small dispatch-hygiene gap. #202 — filed 2026-07-12 and deliberately parked at the time ("until fixed, don't trust `synlynk jobs` status display alone; cross-check `jobs.json`, `git log`/`git status`, and `gh pr list` directly") — was the next item pulled off the backlog, per explicit user sequencing. The symptom: `synlynk jobs` would show `FAILED (exit -1)` for jobs that had, in fact, completed real work — committed, pushed, PR opened — with the discrepancy only visible by manually cross-checking `jobs.json` against git history.

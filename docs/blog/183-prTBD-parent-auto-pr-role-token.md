@@ -4,8 +4,11 @@ date: 2026-09-06
 series: "Building the OS for Multi-Agent Development"
 post: 183
 pr: "TBD"
+author: "synlynk team"
+version: "0.19.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 #1436's spec recorded that dispatched `--requires-gh-write` children already use role Apps, while the parent process that runs `gh pr create` after the job still used host `nikhilsoman`. That is how merge/review jobs opened noise PRs as the human.

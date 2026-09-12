@@ -1,3 +1,14 @@
+---
+title: "191-prTBD-exec-gh-shim"
+author: "synlynk team"
+date: 2026-09-06
+post: 191
+pr: "—"
+type: pr
+series: "Building the OS for Multi-Agent Development"
+tags: posts
+version: "0.19.0"
+---
 # The `synlynk exec` GitHub CLI guard
 
 `synlynk exec` now places a short-lived `gh` shim at the front of the child

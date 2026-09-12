@@ -4,8 +4,11 @@ date: 2026-08-10
 series: "Building the OS for Multi-Agent Development"
 post: 113
 pr: "#880"
+author: "synlynk team"
+version: "0.13.1"
+tags: [posts]
+type: pr
 ---
-
 # Agent vs Harness — Phase 0 Terminology
 
 ## Broader goal (previous)

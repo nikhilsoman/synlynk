@@ -6,8 +6,11 @@ post: 143
 pr: "#1310"
 issue: "#573"
 status: merged
+author: "synlynk team"
+version: "0.18.0"
+tags: [posts]
+type: pr
 ---
-
 # PR #1310 — Fleet Parity: Agy Stitch MCP Integration, Diagnostics, and Prompt Guidance
 
 ## The Broader Goal at the End of the Previous PR

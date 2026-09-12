@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 65
 pr: "—"
 merged: "—"
+author: "synlynk team"
+version: "0.13.0"
+tags: [posts]
+type: release
 ---
-
 *This post is different from the others in this series. Most entries here are engineering diary — the "why" and "how" behind a specific PR, written for people already using synlynk. This one is for you if you're deciding whether to try it, or if you installed it a few months ago and haven't kept up.*
 
 ## The one-sentence version

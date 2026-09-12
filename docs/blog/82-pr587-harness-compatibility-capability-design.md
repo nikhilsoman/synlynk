@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 82
 pr: "#587"
 merged: status open (spec approved 2026-07-30; implementation plan committed)
+author: "synlynk team"
+version: "0.13.1"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 Coming out of PR #549 (LIVE-3 recovery) and the run of state-engine and identity work before it, synlynk's dispatch mechanism was reliable at the level of "does the job run and does a PR come out the other end." What it didn't have was any model of *why* a dispatched job goes quiet without producing anything. The trigger for this PR was a real incident: an Agy dispatch job ran ~72 minutes, took one 3-second turn, hit a shell `command` permission wall that headless mode couldn't prompt for, was silently auto-denied, and produced nothing. Nothing in synlynk's telemetry distinguished that from a job that was still legitimately thinking.

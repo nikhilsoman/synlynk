@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 55
 pr: "#204/#205/#207"
 merged: 2026-07-13
+author: "synlynk team"
+version: "0.12.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 BS-8 had already shipped the Business Goal hierarchy, and GOVERNS was in the middle of

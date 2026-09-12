@@ -8,8 +8,8 @@ pr: "#1353"
 version: "0.19.0"
 tags: ["autonomy", "heal", "advisory", "daemon", "observability"]
 merged: "status: open"
+type: pr
 ---
-
 ## Closing the loop
 
 synlynk now has a single remediation path from repository diagnosis to verified

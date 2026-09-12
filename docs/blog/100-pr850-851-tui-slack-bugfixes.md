@@ -1,3 +1,14 @@
+---
+title: "100-pr850-851-tui-slack-bugfixes"
+author: "synlynk team"
+date: 2026-08-09
+post: 100
+pr: "—"
+type: pr
+series: "Building the OS for Multi-Agent Development"
+tags: posts
+version: "0.13.1"
+---
 # 100. PRs #850/#851 — Closing the two bugs the onboarding guide surfaced
 
 ## Goal at the end of the previous PR

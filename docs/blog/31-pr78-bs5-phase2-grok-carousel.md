@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 31
 pr: "#78"
 merged: TBD
+author: "synlynk team"
+version: "0.10.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 At the end of Phase 1 (scaffold + tokens) and Agy's parallel Phase 2 work on Sections 1/3/4/5 + the CSS design system, the homepage had a complete visual language and most of the marketing surface in place. The remaining critical interactive piece was Section 2 — the live terminal carousel demonstrating the four primary commands (init, join, dispatch, status) — plus the install-bar copy affordance that makes "getting started" feel instant.
 

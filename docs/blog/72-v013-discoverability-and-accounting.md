@@ -1,3 +1,14 @@
+---
+title: "v0.13.0 — Discoverability & Accounting"
+author: "synlynk team"
+date: 2026-07-22
+post: 72
+pr: "#274–#440"
+type: release
+series: "Building the OS for Multi-Agent Development"
+tags: posts
+version: "0.13.0"
+---
 # v0.13.0 — Discoverability & Accounting
 
 **Date:** 2026-07-22

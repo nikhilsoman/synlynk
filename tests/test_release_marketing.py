@@ -8,6 +8,11 @@ from synlynk.release_marketing import (
     mirror_docs_pdfs_to_website,
     update_website_metadata,
     execute_release_ceremony,
+    compile_docs_pdfs,
+    compile_book_epub,
+    compile_html_to_pdf,
+    find_chrome_binary,
+    find_pandoc_binary,
 )
 
 
@@ -146,3 +151,30 @@ def test_cmd_release_invokes_marketing_ceremony(tmp_path, monkeypatch):
     cmd_release(dry_run=True, version="0.19.0", role="dev", waive=waives)
     # Release check docs
     cmd_release(check_docs=True, version="0.19.0", role="dev", waive=waives)
+
+
+def test_compile_docs_pdfs_dry_run(tmp_path):
+    root = _setup_fixture_repo(tmp_path)
+    compiled = compile_docs_pdfs(root, dry_run=True)
+    assert len(compiled) == 3
+    assert "synlynk-quickstart-guide.pdf" in compiled
+    assert "synlynk-official-reference.pdf" in compiled
+    assert "synlynk-command-reference.pdf" in compiled
+
+
+def test_compile_book_epub_dry_run(tmp_path):
+    root = _setup_fixture_repo(tmp_path)
+    book_dir = tmp_path / "docs" / "book"
+    book_dir.mkdir(parents=True)
+    (book_dir / "the-supervised-machine-v0.5-DRAFT.html").write_text("<html><body>Book</body></html>")
+    epub = compile_book_epub(root, dry_run=True)
+    assert epub == "the-supervised-machine-v0.5-DRAFT.epub"
+
+
+def test_find_binaries():
+    # In this Mac environment, Chrome or Pandoc may be detected
+    chrome = find_chrome_binary()
+    assert chrome is None or os.path.exists(chrome)
+    pandoc = find_pandoc_binary()
+    assert pandoc is None or os.path.exists(pandoc)
+

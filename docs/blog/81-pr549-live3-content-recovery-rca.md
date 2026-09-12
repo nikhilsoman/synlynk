@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 81
 pr: "#549"
 merged: 2026-07-26
+author: "synlynk team"
+version: "0.13.1"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 PR #542 had just merged, DB-canonicalizing `roadmap.md`/`memory.md`/`costs.md`/`todo.md` and running `synlynk migrate` against this repo. The expectation going in was that the migrate's deletions were scoped exactly to those four files, since those are the only ones with a database table backing them.

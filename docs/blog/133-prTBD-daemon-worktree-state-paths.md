@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 133
 pr: "TBD"
 merged: "status: open"
+author: "synlynk team"
+version: "0.18.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 The previous reliability work aimed to make GitHub-write dispatch dependable across the full daemon and worktree lifecycle. A daemon-owned GitHub App token cache was in place, but its filesystem location still depended on where the daemon process was started.

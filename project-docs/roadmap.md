@@ -44,3 +44,9 @@
 - [x] **Meta Muse CLI Adapter:** First-class dispatch adapter in `synlynk/dispatch.py` with closed-loop receipt check (#1508, PR #1560).
 - [x] **Muse Capability Scoring & Probe:** Registered in taxonomy, probe, and baseline matrix (PR #1560).
 - [ ] *(Deferred)* DeepSeek harness evaluation parked until local harness maturation.
+
+### Cluster E (LIVE-12): Autonomous Marketing Surface Remediation & Dual-Treatment Engine
+- [x] **Phase 1 (Surface Remediation):** Prepend canonical YAML frontmatter across all 61 un-frontmattered blog posts, refresh `website/src/features.njk` to v0.20.0 matrix, author strategic release post #197, and execute v0.20.0 release ceremony (`README.md` 2,804 tests + `release.json`).
+- [x] **Phase 2 (CI & Preflight Quality Gate):** Enforce `validate_all_blog_posts()` in `synlynk pr check` and `tests/test_marketing.py`; harden `website/.eleventy.js` with defensive date fallback preventing mtime leaks.
+- [x] **Phase 3 (Autonomous PR Trigger & Two-Tier Blog):** Add `synlynk marketing sync-pr <pr>` and post-merge GitHub Action workflow; deploy two-tier blog view on `synlynk.com/blog` (Featured Named Release strategic communication vs Per-PR build diary).
+- [x] **Phase 4 (Automated PDF & EPUB Compilation):** Automate headless Chrome PDF and Pandoc EPUB generation for Quick Start, Official Manual, Command Reference, and Book manuscript (`the-supervised-machine`) during release ceremonies and mirror to website assets.

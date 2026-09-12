@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 37
 pr: "#TBD"
 merged: —
+author: "synlynk team"
+version: "0.10.0"
+tags: [posts]
+type: release
 ---
-
 # PR #TBD — v0.10.0: README Overhaul & Documentation Alignment
 
 ## The Broader Goal at the End of the Previous PR

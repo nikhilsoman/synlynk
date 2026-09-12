@@ -6,8 +6,11 @@ post: 141
 pr: "#1308"
 issue: "#342"
 merged: 2026-08-30
+author: "synlynk team"
+version: "0.18.0"
+tags: [posts]
+type: pr
 ---
-
 # PR #1308 — Fleet Parity: Enforce --cwd for Grok and -C for Codex with Working-Directory Protection
 
 ## The Broader Goal at the End of the Previous PR

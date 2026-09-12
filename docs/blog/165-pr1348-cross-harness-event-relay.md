@@ -1,8 +1,14 @@
 ---
 title: "Cross-Harness Event Relay"
+author: "synlynk team"
 date: 2026-09-02
+post: 165
+pr: "#1348"
+type: pr
+series: "Building the OS for Multi-Agent Development"
+tags: posts
+version: "0.19.0"
 ---
-
 # Cross-Harness Event Relay
 
 Agents increasingly work across harnesses, but disk polling makes progress and

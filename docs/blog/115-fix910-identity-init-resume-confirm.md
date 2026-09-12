@@ -4,8 +4,12 @@ date: 2026-08-12
 series: "Building the OS for Multi-Agent Development"
 post: 115
 issue: "#910"
+author: "synlynk team"
+version: "0.13.1"
+tags: [posts]
+pr: "TBD"
+type: pr
 ---
-
 # Resume at Confirmation, Not from Scratch
 
 ## Broader goal (previous)

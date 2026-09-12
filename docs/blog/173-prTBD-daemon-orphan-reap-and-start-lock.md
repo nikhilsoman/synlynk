@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 173
 pr: "#1417"
 merged: —
+author: "synlynk team"
+version: "0.19.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 Recent work hardened onboarding, heal/TPM autonomy, and ephemeral swarm execution. The broader goal remained containerized and OS-level agent sandboxing: credential masking and containment across every dispatch. That arc assumes the daemon is a trustworthy supervisor — if it dies, the workspace must still know which billed agent processes are alive and must not accidentally run two supervisors at once.

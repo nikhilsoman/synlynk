@@ -1,3 +1,14 @@
+---
+title: "PR #1003 — Agent-Roles-Charters Phase 1: Giving Workspace Agents a CLI"
+author: "synlynk team"
+date: 2026-08-16
+post: 117
+pr: "#1003"
+type: pr
+series: "Building the OS for Multi-Agent Development"
+tags: posts
+version: "0.14.0"
+---
 # PR #1003 — Agent-Roles-Charters Phase 1: Giving Workspace Agents a CLI
 
 ## The Goal at the End of the Previous PR

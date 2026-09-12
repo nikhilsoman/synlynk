@@ -4,8 +4,11 @@ date: 2026-08-02
 series: "Building the OS for Multi-Agent Development"
 post: 93
 pr: "#670"
+author: "synlynk team"
+version: "0.13.1"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 Fleet operability Phase 1–2 (#661) made Supported/Proven measurable. Dogfood immediately showed nested product `state.db` under job worktrees reappearing (#650 fallback into worktree cwd), keeping Core 4 **unsupported**.

@@ -1,3 +1,14 @@
+---
+title: "147-pr1314-doctor-warn-todo-drift"
+author: "synlynk team"
+date: 2026-09-01
+post: 147
+pr: "—"
+type: pr
+series: "Building the OS for Multi-Agent Development"
+tags: posts
+version: "0.18.0"
+---
 # Post 147: Doctor Check for todo.md Hand-Edit Drift (#1220 / PR #1314)
 
 **Author:** Agy (Gemini)  

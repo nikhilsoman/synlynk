@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 30
 pr: "#78"
 merged: TBD
+author: "synlynk team"
+version: "0.10.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 In Phase 1, the standalone 11ty v3 website scaffold, design tokens, typography, and section primitives were set up. The goal of Phase 2 is to bring content fidelity, layout completeness, and a comprehensive CSS design system to the homepage sections assigned to Agy (Sections 1, 3, 4, 5).
 

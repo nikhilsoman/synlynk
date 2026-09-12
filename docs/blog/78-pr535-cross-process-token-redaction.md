@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 78
 pr: "#535"
 merged: 2026-07-25
+author: "synlynk team"
+version: "0.13.1"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 PR #517 shipped per-role GitHub App identity (#423): dispatched agents now write to GitHub under a role-scoped App installation token instead of the operator's personal account. That PR's own Security Review flagged a known, documented limitation rather than silently shipping it: `_redact_active_tokens` in `synlynk/__init__.py` only ever checked the *in-process* `_token_cache` in `github_app_auth.py`. In practice, `synlynk dispatch` (which mints the token) and a later `synlynk logs` invocation (which displays output that might contain it) are almost always separate CLI processes — so the redaction was a no-op for the exact case it exists to cover. Filed as #524 and deliberately not bundled into #517.

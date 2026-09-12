@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 21
 pr: "feat/v0.9.2 — 6 tasks, merged to main"
 merged: 2026-06-22
+author: "synlynk team"
+version: "0.9.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of Post #20
 
 Post #20 was about closing production gaps revealed by dogfooding — the install binary crash and the init overwrite problem that appeared the moment we ran synlynk in a non-synlynk repo. Both were fixed in a hotfix session before any new feature work began.

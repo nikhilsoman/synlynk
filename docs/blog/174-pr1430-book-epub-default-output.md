@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 174
 pr: "#1430"
 status: open
+author: "synlynk team"
+version: "0.19.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 By PR #1409, "The Supervised Machine" had a real visual identity layered onto the HTML source of

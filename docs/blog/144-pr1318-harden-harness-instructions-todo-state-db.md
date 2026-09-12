@@ -6,8 +6,11 @@ post: 144
 pr: "#1318"
 issue: "#1317"
 status: open
+author: "synlynk team"
+version: "0.18.0"
+tags: [posts]
+type: pr
 ---
-
 # PR #1318 — Hardening: Prohibit Direct todo.md Hand-Edits Across Harness Instruction Templates
 
 ## The Broader Goal at the End of the Previous PR

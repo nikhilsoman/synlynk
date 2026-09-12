@@ -1,3 +1,14 @@
+---
+title: "148-pr1315-decide-record-worktree-docs-path"
+author: "synlynk team"
+date: 2026-09-01
+post: 148
+pr: "—"
+type: pr
+series: "Building the OS for Multi-Agent Development"
+tags: posts
+version: "0.18.0"
+---
 # Post 148: Fix Decision Record Path in Migrated Workspaces & Worktrees (#1226, #1194 / PR #1315)
 
 **Author:** Agy (Gemini)  

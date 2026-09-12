@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 100
 pr: "TBD"
 status: open
+author: "synlynk team"
+version: "0.13.1"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 Issue #720 identified three deferred sub-projects growing out of the dispatch fail-closed

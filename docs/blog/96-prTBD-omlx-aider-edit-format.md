@@ -1,3 +1,14 @@
+---
+title: "96-prTBD-omlx-aider-edit-format"
+author: "synlynk team"
+date: 2026-08-05
+post: 96
+pr: "—"
+type: pr
+series: "Building the OS for Multi-Agent Development"
+tags: posts
+version: "0.13.1"
+---
 # 96: the request finally landed — and the model tried to delete a test file
 
 ## Where we left off

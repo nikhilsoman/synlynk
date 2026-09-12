@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 68
 pr: "#328"
 merged: 2026-07-18
+author: "synlynk team"
+version: "0.13.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 PR #292 closed out model-identity correctness — Tier-2 probes stopped collapsing three of four agents into `model_version='unknown'`. With v0.12.0 (Measurement & Reliability) shipped and its immediate follow-on fixed, the GTM checklist's item 2 (SDLC/GOVERNS stage placement) was already fully shipped via the command taxonomy PRs (#303, #316, #319). Item 1 remained open and unscoped: "Deep review of every synlynk command and its testing in a live repo scenario." Every command had unit tests under mocks. None had ever been proven to actually work end-to-end against a real, live host repo — the taxonomy work built the map (59 commands, GOVERNS stages, capability tiers) but never drove a car across the terrain it described.

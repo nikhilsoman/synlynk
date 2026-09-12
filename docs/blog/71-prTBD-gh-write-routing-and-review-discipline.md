@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 68
 pr: "#432"
 merged: status open
+author: "synlynk team"
+version: "0.13.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 synlynk's multi-agent workgroup rests on two process rules that were already written into every agent's harness fence: **capability-based task allocation** (route by skill) and **PR Review Discipline** (non-authoring agent reviews and merges). Those rules assumed that any dispatched agent could run the same `gh` surface, and that GitHub would treat different agents as different reviewers.

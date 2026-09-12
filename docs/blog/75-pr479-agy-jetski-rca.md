@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 75
 pr: "#479"
 merged: 2026-07-24
+author: "synlynk team"
+version: "0.13.1"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 PR #475 had just shipped a warning for the *generic* silent-no-op failure mode: `agy` dispatched with no write/run permissions produces a clean-looking success that actually did nothing. That fix assumed the underlying cause was always "permissions were never granted." A follow-up handoff note from the rxcc session — the same one that surfaced PR #475's bugs — reported a *more specific* failure: permissions correctly granted, but a headless-runtime "jetski" auto-deny for the command/shell tool specifically, four different mitigation attempts all failing identically.

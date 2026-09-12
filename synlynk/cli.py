@@ -1122,6 +1122,10 @@ def build_parser() -> argparse.ArgumentParser:
     ceremony_parser.add_argument("--dry-run", action="store_true", help="Report updates without modifying files")
     ceremony_parser.add_argument("--skip-build", action="store_true", help="Skip static website build verification")
 
+    sync_pr_parser = marketing_sub.add_parser("sync-pr", help="Synchronize blog post for merged pull request")
+    sync_pr_parser.add_argument("pr_number", help="Pull request number (e.g. 1558)")
+    sync_pr_parser.add_argument("--dry-run", action="store_true", help="Report updates without modifying files")
+
     parser._synlynk_help_parsers = {
         "harness": harness_parser,
         "agent": agent_parser,
@@ -1275,6 +1279,7 @@ def main(argv=None) -> None:
         cmd_relay_start,
         cmd_release,
         cmd_marketing_ceremony,
+        cmd_marketing_sync_pr,
         cmd_repair,
         cmd_roadmap_add,
         cmd_roles,
@@ -1996,6 +2001,11 @@ def main(argv=None) -> None:
                 version=getattr(args, "version", None),
                 dry_run=getattr(args, "dry_run", False),
                 skip_build=getattr(args, "skip_build", False),
+            )
+        elif getattr(args, "marketing_action", None) == "sync-pr":
+            cmd_marketing_sync_pr(
+                pr_number=getattr(args, "pr_number"),
+                dry_run=getattr(args, "dry_run", False),
             )
         else:
             help_parsers.get("marketing", parser).print_help()

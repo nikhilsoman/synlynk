@@ -12,7 +12,7 @@ import threading
 import tempfile
 import urllib.request
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Union
 import sqlite3 as _sqlite3
 import importlib as _importlib
 
@@ -3233,6 +3233,12 @@ def cmd_marketing_ceremony(
     print(f"  - Docs bundles updated: {len(res.docs_updated)} files ({', '.join(res.docs_updated) if res.docs_updated else 'none'})")
     print(f"  - Website metadata updated: {res.website_updated}")
     print(f"  - Website build ok: {res.website_build_ok}")
+
+
+def cmd_marketing_sync_pr(pr_number: Union[int, str], dry_run: bool = False) -> None:
+    """Executes the limited-treatment marketing sync for a merged pull request."""
+    from synlynk.marketing import cmd_marketing_sync_pr as _impl
+    return _impl(pr_number=pr_number, dry_run=dry_run)
 
 
 def cmd_status(json_output: bool = False, platform: bool = False) -> None:

@@ -7,8 +7,10 @@ pr: "#30"
 merged: open
 tags: posts
 excerpt: "17 black-box CLI tests, zero subprocess mocks. The E2E suite treats synlynk as a user would: real subprocess invocations, real tmp dirs, real exit codes. A safety net that grows with every feature."
+author: "synlynk team"
+version: "0.4.0"
+type: pr
 ---
-
 # PR #30 — The E2E Safety Net
 
 **PR:** test: add E2E test suite (17 scenarios, black-box CLI testing)  

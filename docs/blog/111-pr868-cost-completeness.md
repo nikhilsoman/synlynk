@@ -4,8 +4,12 @@ date: 2026-08-09
 series: "Building the OS for Multi-Agent Development"
 post: 111
 issue: 752
+author: "synlynk team"
+version: "0.13.1"
+tags: [posts]
+pr: "#868"
+type: pr
 ---
-
 # Cost Completeness — No More Silent $0 Windows
 
 ## Goal

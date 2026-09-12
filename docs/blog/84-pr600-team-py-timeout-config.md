@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 84
 pr: "600"
 merged: status open
+author: "synlynk team"
+version: "0.13.1"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 PR #587 left the project with a sharper understanding of harness behavior and a canonical capability matrix, but one practical gap remained in the team workflow: `synlynk decide` still treated every panel query as if 120 seconds were enough for every agent and every prompt. That assumption is fine for short prompts, but it is not fine for Codex on the longer self-review prompts this repo now uses.

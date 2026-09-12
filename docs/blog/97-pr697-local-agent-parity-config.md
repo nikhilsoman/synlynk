@@ -1,3 +1,14 @@
+---
+title: "PR #697 — Starter-tier Guardrails & Local Agent A/B Test Harness"
+author: "synlynk team"
+date: 2026-08-03
+post: 97
+pr: "#697"
+type: pr
+series: "Building the OS for Multi-Agent Development"
+tags: posts
+version: "0.13.1"
+---
 # 97: two-tier parity, shipped one tier at a time
 
 ## Where we left off

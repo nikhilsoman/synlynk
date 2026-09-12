@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 175
 pr: "#1434"
 status: merged
+author: "synlynk team"
+version: "0.19.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 By PR #1430, "The Supervised Machine" had settled its default output set: HTML source of truth,

@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 93
 pr: "TBD"
 merged: status open
+author: "synlynk team"
+version: "0.13.1"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 PR #657 (post #92) closed the last known gap in the Local agent's onboarding surface: `synlynk local doctor` now checks for Aider on `PATH`, not just oMLX reachability and the model roster. That left "finish the rollout" complete on the code side, with only two operational steps remaining before the 5th agent was actually usable on this machine: install Aider, and bring up `omlx serve`.

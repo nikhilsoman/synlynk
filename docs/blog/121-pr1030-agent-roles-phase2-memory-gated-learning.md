@@ -1,3 +1,14 @@
+---
+title: "PR #1030 — Agent-Roles-Charters Phase 2: Making Capability Grants Mean Something"
+author: "synlynk team"
+date: 2026-08-18
+post: 121
+pr: "#1030"
+type: pr
+series: "Building the OS for Multi-Agent Development"
+tags: posts
+version: "0.14.0"
+---
 # PR #1030 — Agent-Roles-Charters Phase 2: Making Capability Grants Mean Something
 
 ## The Goal at the End of the Previous PR

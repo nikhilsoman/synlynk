@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 167
 pr: "#1350"
 status: open
+author: "synlynk team"
+version: "0.19.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 Dispatch had reliable harness metadata and cost telemetry, but its role guidance

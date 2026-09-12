@@ -1,3 +1,14 @@
+---
+title: "94-prTBD-omlx-api-key"
+author: "synlynk team"
+date: 2026-08-02
+post: 94
+pr: "—"
+type: pr
+series: "Building the OS for Multi-Agent Development"
+tags: posts
+version: "0.13.1"
+---
 # 94: oMLX needs an API key, and the roster ID was wrong too
 
 ## Where we left off

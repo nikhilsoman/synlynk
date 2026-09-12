@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 173
 pr: "TBD"
 merged: "status: open"
+author: "synlynk team"
+version: "0.19.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 The Job Lifecycle Ground-Truth Verification epic (PRs [#126](https://github.com/nikhilsoman/synlynk/pull/126), [#127](https://github.com/nikhilsoman/synlynk/pull/127), and [#129](https://github.com/nikhilsoman/synlynk/pull/129)) established that a dispatched job's status must be checked against the work it actually left behind. The remaining goal was to make every execution engine obey that contract, including the daemon queue.

@@ -6,8 +6,11 @@ post: 56
 pr: "#236"
 issue: "#210 (Phase 1 of 2)"
 merged: —
+author: "synlynk team"
+version: "0.12.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 Fable's external review (`docs/strategy/2026-07-12-fable-deep-review-and-strategic-roadmap.md`) drew a hard line for synlynk's pre-GA arc: **"every number synlynk displays is either structurally sourced or visibly labeled as an estimate. No GA, no users, no revenue talk before this."** The review, done alongside the local-agent MLX driver design, turned up two compounding problems in the cost ledger: extraction fragility (a regex-scraping pipeline that silently degrades to an 80/20 heuristic guess on format drift, with nothing distinguishing a measured number from a guessed one) and coverage gaps (several real execution surfaces — the `jobs.py` daemon reconcile path, `synlynk launch`, native PM sessions, the `support_engineer.py` autonomous agent — writing incomplete cost rows or none at all). A related, narrower fix (#189: per-model rate table bypasses in three specific call sites) had already landed independently. This PR picks up the larger structural problem #189 was a symptom of.

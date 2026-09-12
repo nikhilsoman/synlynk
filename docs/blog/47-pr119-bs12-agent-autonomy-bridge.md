@@ -1,3 +1,14 @@
+---
+title: "PR #119 — BS-12: The Agent Autonomy Bridge"
+author: "synlynk team"
+date: 2026-07-05
+post: 47
+pr: "#119"
+type: pr
+series: "Building the OS for Multi-Agent Development"
+tags: posts
+version: "0.11.0"
+---
 # PR #119 — BS-12: The Agent Autonomy Bridge
 
 **Date:** 2026-07-05

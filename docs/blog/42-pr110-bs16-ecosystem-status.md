@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 42
 pr: "#110"
 merged: 2026-07-04
+author: "synlynk team"
+version: "0.11.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 At the close of PR #106 (Workspace HUD), synlynk had a functional terminal observer via `synlynk watch` and the beginning of a cycle-aware dispatch model (recording a `cycle` field on each job). However, the harness was still largely blind to the operational boundaries and capacity limits of its agent fleet. We had binary compliance scores, but lacked a formal way to measure whether an agent was capable of executing a specific phase of the 6-cycle SDLC (Dream, Plan, Work, Ship, Maintain, Engage) or if a proposed dispatch would overrun its context window or token limits. 

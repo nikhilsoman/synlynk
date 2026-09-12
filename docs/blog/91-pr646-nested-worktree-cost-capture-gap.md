@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 91
 pr: "#646"
 merged: status open
+author: "synlynk team"
+version: "0.13.1"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 PR #587 (post #90) closed the loop on harness capability drift and regression classification. However, telemetry collection and cost tracking depend on reliably recording every subagent job's token usage in the central `state.db` at `~/.synlynk/projects/<hash-of-main-repo-root>/state.db`. Prior to PR #646, when an agent dispatched a job from within an existing job's git worktree, cost logging suffered from an isolated DB resolution bug.

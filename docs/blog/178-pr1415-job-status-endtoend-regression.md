@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 178
 pr: "#1415"
 merged: 2026-09-04
+author: "synlynk team"
+version: "0.19.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 The #1377 RCA had just closed: five independent false-negative fingerprints in job-status reporting (#1379–#1383), each root-caused and fixed in its own PR (#1384–#1388). The goalpost at that point was verification, not code — confirm every fix actually landed on `origin/main` and the fixes hold under the real test suite, rather than trusting the tickets' own "closed" labels. That validation passed. But the RCA itself flagged an acknowledged gap: none of the five fixes had an end-to-end regression test proving the *whole* status pipeline — dispatch → child process → GitHub ground truth → `daemon_jobs` row → `synlynk jobs` output — agrees with reality across all four ways a dispatched job can actually end.

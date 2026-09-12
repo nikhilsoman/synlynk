@@ -4,8 +4,12 @@ date: 2026-08-09
 series: "Building the OS for Multi-Agent Development"
 post: 109
 issue: 569
+author: "synlynk team"
+version: "0.13.1"
+tags: [posts]
+pr: "#857"
+type: pr
 ---
-
 # GH-Write Fail-Closed — No More Silent Personal Keyring
 
 ## Broader goal

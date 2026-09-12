@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 39
 pr: "#TBD"
 merged: —
+author: "synlynk team"
+version: "0.10.0"
+tags: [posts]
+type: pr
 ---
-
 # PR #TBD — BS-21 Vizor: Local Browser Workspace Dashboard
 
 ## The Broader Goal at the End of the Previous PR

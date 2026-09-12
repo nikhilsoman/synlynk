@@ -1,3 +1,14 @@
+---
+title: "PR #993 — Freeing `agent` from `harness`"
+author: "synlynk team"
+date: 2026-08-16
+post: 118
+pr: "#993"
+type: pr
+series: "Building the OS for Multi-Agent Development"
+tags: posts
+version: "0.14.0"
+---
 # 118: PR #993 — freeing `agent` from `harness`
 
 ## Where we left off

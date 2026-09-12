@@ -4,8 +4,12 @@ date: 2026-08-07
 series: "Building the OS for Multi-Agent Development"
 post: 102
 issue: 753
+author: "synlynk team"
+version: "0.13.1"
+tags: [posts]
+pr: "#772"
+type: pr
 ---
-
 # `jobs reap` — Kill Zombie `running` Rows for Real
 
 ## Broader goal (end of previous PR)

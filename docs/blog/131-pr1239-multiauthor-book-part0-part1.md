@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 131
 pr: "#1239"
 merged: "2026-08-29"
+author: "synlynk team"
+version: "0.18.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 "The Supervised Machine" (`docs/book/`) existed at v0.2-DRAFT as a single-voice engineering

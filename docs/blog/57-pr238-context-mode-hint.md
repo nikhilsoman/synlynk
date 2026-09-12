@@ -6,8 +6,11 @@ post: 57
 pr: "#238"
 issue: "#237"
 merged: 2026-07-14
+author: "synlynk team"
+version: "0.12.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 PR #236 (Measurement Ledger Hardening Phase 1, still open at the time) closed the loop on *what a cost row says about itself* — every write now carries explicit provenance. Reviewing the roadmap for what would strengthen that same "trust the numbers" theme turned up a smaller, adjacent waste: `synlynk dispatch` callers (including this project's own PM workflow) kept passing `--context-mode full` out of habit, even when a task prompt was already fully self-contained — exact code, exact file paths, exact commit message. Full-context dispatches inject the whole roadmap/memory/todo snapshot into the implementer's prompt, burning tokens the task didn't need.

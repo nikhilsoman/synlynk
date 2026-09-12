@@ -4,8 +4,11 @@ date: 2026-08-09
 series: "Building the OS for Multi-Agent Development"
 post: 112
 pr: "#874"
+author: "synlynk team"
+version: "0.13.1"
+tags: [posts]
+type: pr
 ---
-
 # cold-start Phase 2 — The Canon Baseline
 
 ## Broader goal (previous)

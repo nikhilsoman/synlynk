@@ -4,8 +4,11 @@ date: 2026-08-12
 series: "Building the OS for Multi-Agent Development"
 post: 114
 pr: "TBD"
+author: "synlynk team"
+version: "0.13.1"
+tags: [posts]
+type: pr
 ---
-
 # 114: Untangling Repo Name from Product Name
 
 ## Broader goal (previous)

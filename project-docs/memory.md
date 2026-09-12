@@ -1,5 +1,18 @@
 # synlynk Memory
 
+## LIVE-12 & Cluster E Shipped: Marketing Surface Decoupling & Dual-Treatment Engine (decided/shipped 2026-09-12)
+- **Root Cause & RCA Documented (`docs/rca/2026-09-12-LIVE-12-marketing-surface-decoupling-and-blog-date-drift.md`):**
+  1. Blog post date homogenization ("Sep 11, 2026") and `#00` badges caused by missing YAML frontmatter across 61 historical blog posts, which triggered Eleventy's `stat.mtime` fallback.
+  2. Features matrix stagnation at `v0.13.1` caused by hardcoded static HTML table without a data-driven model or release automation.
+  3. Stale PDF/EPUB distribution caused by copy-only ceremony that lacked automated compilation.
+- **Marketing Agent Charter Revision 1:** Updated `SEED_CHARTERS["marketing"]` in `synlynk/agent_cli.py` and active workspace store to codify the **Dual-Treatment Protocol**:
+  - *Named Releases (Full Treatment):* Consolidated strategic blog post (direction, evolutionary trend, future outlook) with rich visuals (terminal simulations, vizor architecture maps, metric charts) tagged `type: release`; dynamic Features Matrix (`website/src/features.njk` / `_data/features.json`); automated compilation of documentation bundles (Quick Start, Official Manual, Command Reference HTML/PDF) and Book manuscript (`the-supervised-machine` PDF + EPUB); updated GitHub `README.md` (version badge, collected tests, hero summary).
+  - *Routine Feature PRs (Limited Treatment):* Atomic per-PR blog post (`docs/blog/NN-prN-<slug>.md`) with validated YAML frontmatter (`type: pr`, `author`, `date`, `pr`, `version`, `tags`) detailing what shipped, why, and test verification; updated `docs/blog/README.md` series index; exported social snippets in `.synlynk/social_drafts.json`.
+- **Two-Tier Blog Architecture:** Implemented in `website/src/blog/index.njk` and `website/src/assets/css/main.css` separating Tier 1 (Featured Strategic Named Releases) from Tier 2 (Continuous Engineering Build Diary). Hardened `website/.eleventy.js` with defensive date parsing preventing file mtime fallback leaks.
+- **Autonomous PR Marketing Trigger:** Added `synlynk marketing sync-pr <pr>` CLI command (`synlynk/marketing.py`, `synlynk/cli.py`, `synlynk/taxonomy.py`) and `.github/workflows/marketing-pr-sync.yml` running on PR merge.
+- **Automated PDF & EPUB Compilation Engine:** Wired headless Chrome PDF and Pandoc EPUB compilation into `synlynk/release_marketing.py:execute_release_ceremony()`. Verified live generation across all 4 guides and book manuscript.
+- **Preflight Quality Gate:** Added `validate_all_blog_posts()` into `synlynk pr check` (`synlynk/db.py`) to block merge if any blog post lacks schema-compliant frontmatter. [@agy]
+
 ## Milestone v0.20.0 Cluster D Shipped: Next-Gen Harness Onboarding (Meta Muse Integration) (decided/shipped 2026-09-11)
 - **Implementation Shipped (PR #1560):** Completed Milestone v0.20.0 Cluster D (`story-996159c6`) per approved design spec (`docs/superpowers/specs/2026-09-11-v0.20.0-visual-workspace-autonomous-onboarding-design.md` §6) and implementation plan (`docs/superpowers/plans/2026-09-11-cluster-d-muse-harness-onboarding.md`).
 - **Architectural Deliverables:**
@@ -691,9 +704,14 @@ work because local git activity is not sufficient corroboration.
   - *Onboarding Lifecycle:* Repo scan -> archetype detection (code topology vs blank template) -> goal elicitation -> SFIA 9-grounded role synthesis -> in-browser 1-click GitHub App creation wizard.
   - *Continuous Evolution:* Reactive PM story-intake skill gap detection (staging role proposals) + Retrospective TPM milestone audit (pruning/adapting stagnant charters via `synlynk charters adapt`).
 - **Release v0.19.0 Stamped on main:** Stamped with `synlynk release --version 0.19.0 --role pm`, updating `VERSION`, `synlynk/_constants.py`, `CHANGELOG.md`, `README.md` (2,734 collected tests), and blog post 196.
-- **Marketing Workspace Agent Charter & Release Ceremony Mandate:**
-  - Expanded `marketing` charter (revision 5) to mandate continuous and release-time `README.md` synchronization (badges, collected test counts, hero highlights, and command reference).
-  - Mandated synlynk.com (`website/`) maintenance and automated compilation/export of the three canonical Synlynk Docs bundles in `docs/` (`synlynk-quickstart-guide.html/.pdf`, `synlynk-official-reference.html/.pdf`, `synlynk-command-reference.html/.pdf`).
-  - Integrated `sync_readme_for_release()` into `synlynk release`, establishing the Marketing Release Ceremony dispatched by PM/TPM as a prerequisite gate before public release tagging.
-[@agy]
+## LIVE-12: Marketing Surface Decoupling, Dual-Treatment Protocol & Autonomous Charter Mandate (2026-09-12)
+- **RCA Findings Recorded:** 61 blog posts lacking YAML frontmatter caused Eleventy's GitHub Actions build on 2026-09-11 to default timestamps to runner mtime (`Sep 11, 2026`) and badges to `#00`, inverting blog chronology. `website/src/features.njk` was hardcoded at `v0.13.1` with zero data-driven release pipeline. The marketing agent had no post-merge trigger loop or CI preflight gate, and PDF/EPUB compilations were unautomated during releases.
+- **Dual-Treatment Marketing Protocol Codified:**
+  1. *Named Release (Full Treatment):* Consolidated strategic blog post (strategic review of direction, evolutionary trend, future outlook) + embedded visuals (terminal simulations, vizor architecture maps, metric charts) marked `type: release` and featured on `synlynk.com/blog`; updated Features Matrix (`website/src/features.njk` / `_data/features.json`); recompiled HTML/PDF documentation bundles (Quick Start, Official Manual, Command Reference) and Book manuscript (`the-supervised-machine` PDF + EPUB) mirrored to `website/src/assets/docs/`; updated GitHub `README.md` (version badge, collected tests, release hero).
+  2. *Routine Feature PRs (Limited Treatment):* Strictly incremental per-PR blog post in `docs/blog/NN-prN-<slug>.md` with validated frontmatter (`title`, `author`, `date` matching PR merge date, `pr`, `post`, `tags`, `type: pr`) detailing what shipped, why, and how it was verified; updated `docs/blog/README.md` index; exported social snippets in `.synlynk/social_drafts.json`.
+- **Two-Tier Blog Architecture:** `synlynk.com/blog` structured with two explicit tiers: featured strategic release communications at the top, followed by the chronological per-PR engineering build diary.
+- **Automated PDF & EPUB Compilation Engine (Phase 4):** Headless Chrome (`--headless --print-to-pdf`) and Pandoc (`--metadata-file --css`) automated compilation integrated into `synlynk/release_marketing.py` for all 3 doc guides and the book manuscript.
+- **Marketing Charter Revision:** Agent `f2039c38-37ef-4380-ae97-9954f0f7ed36` and `SEED_CHARTERS["marketing"]` updated to autonomously execute both protocols, gated by `synlynk pr check` blog validation and post-merge automated dispatch.
+[@nikhilsoman via Agy]
+
 

@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 122
 pr: "#1074, #1075"
 merged: 2026-08-19
+author: "synlynk team"
+version: "0.14.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Goal at the End of the Previous PR
 
 Issue #859 had already closed the identity half of dispatched GitHub writes: role-scoped GitHub

@@ -1,3 +1,14 @@
+---
+title: "PR #118 — BS-22: Vizor Gets Its Eyes"
+author: "synlynk team"
+date: 2026-07-05
+post: 46
+pr: "#118"
+type: pr
+series: "Building the OS for Multi-Agent Development"
+tags: posts
+version: "0.11.0"
+---
 # PR #118 — BS-22: Vizor Gets Its Eyes
 
 **Date:** 2026-07-05

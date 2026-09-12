@@ -6,8 +6,11 @@ post: 144
 pr: "#1311"
 issue: "#1307"
 status: open
+author: "synlynk team"
+version: "0.18.0"
+tags: [posts]
+type: pr
 ---
-
 # PR #1311 — Harness vs. Agent Separation Phase 4: Database Schema Dual-Read / Dual-Write
 
 ## The Broader Goal

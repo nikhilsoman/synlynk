@@ -1,3 +1,14 @@
+---
+title: "PRs #1100–#1101 — Completion Tracker + Merge-Restricted-Classes Gate Mode"
+author: "synlynk team"
+date: 2026-08-22
+post: 124
+pr: "#1100"
+type: pr
+series: "Building the OS for Multi-Agent Development"
+tags: posts
+version: "0.14.0"
+---
 ## Goal at the End of the Previous PR
 
 Post #123 landed the qa-merge-gate-authority stack: `synlynk pr check` computes a

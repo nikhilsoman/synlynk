@@ -1,3 +1,14 @@
+---
+title: "149-pr1316-doctor-tc9-live-gh-write-probe"
+author: "synlynk team"
+date: 2026-09-01
+post: 149
+pr: "—"
+type: pr
+series: "Building the OS for Multi-Agent Development"
+tags: posts
+version: "0.18.0"
+---
 # Post 149: Doctor TC-9 In-Sandbox GitHub Write Capability Probe (#1213 / PR #1316)
 
 **Author:** Agy (Gemini)  

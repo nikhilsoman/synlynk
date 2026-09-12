@@ -1,3 +1,14 @@
+---
+title: "PR #770 — Teaching the Classifier to Check Its Work First"
+author: "synlynk team"
+date: 2026-08-07
+post: 100
+pr: "#770"
+type: pr
+series: "Building the OS for Multi-Agent Development"
+tags: posts
+version: "0.13.1"
+---
 # PR #770 — Teaching the Classifier to Check Its Work First
 
 ## The goal at the end of the previous PR

@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 162
 pr: "#1339"
 merged: "status: open"
+author: "synlynk team"
+version: "0.19.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 Synlynk had reliable harness and workspace-agent boundaries, but model identity

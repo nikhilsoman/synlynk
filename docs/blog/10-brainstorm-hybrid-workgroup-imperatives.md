@@ -6,8 +6,10 @@ post: 10
 pr: "—"
 type: brainstorm
 merged: —
+author: "synlynk team"
+version: "0.4.0"
+tags: [posts]
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 After PR #30 (the E2E test suite), synlynk had a hardened v0.3.1 with 140 passing tests, a restored token extraction pipeline, and a fully spec'd roadmap through v1.0. The stated goalpost was to start implementation planning for v0.4.0 — the Trio Protocol (Architect → Build → Verify pipeline, `synlynk run`).

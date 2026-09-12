@@ -1,3 +1,14 @@
+---
+title: "Codex Headless Dispatch"
+author: "synlynk team"
+date: 2026-06-21
+post: 17
+pr: "TBD"
+type: pr
+series: "Building the OS for Multi-Agent Development"
+tags: posts
+version: "0.9.0"
+---
 # Blog Post 17 — Codex Headless Dispatch: `codex exec` Unlocks the Third Agent
 
 ## Broader Goal (End of Previous PR)

@@ -1,3 +1,14 @@
+---
+title: "95-prTBD-omlx-litellm-provider-prefix"
+author: "synlynk team"
+date: 2026-08-03
+post: 95
+pr: "—"
+type: pr
+series: "Building the OS for Multi-Agent Development"
+tags: posts
+version: "0.13.1"
+---
 # 95: exit 0 lied — a real dispatch never reached Ornith
 
 ## Where we left off

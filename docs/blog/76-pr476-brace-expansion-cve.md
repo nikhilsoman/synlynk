@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 76
 pr: "#476"
 merged: 2026-07-24
+author: "synlynk team"
+version: "0.13.1"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 PR #479 had just closed the agy jetski investigation with no code fix — a clean stopping point for that thread. Separately, and unrelated to the dispatch-reliability work of #475/#463/#479, Dependabot alert #7 had been sitting open against the website's `package-lock.json`: a high-severity exponential-time denial-of-service in `brace-expansion` (CVE-2026-13149, GHSA-3jxr-9vmj-r5cp), triggered by consecutive non-expanding `{}` groups.

@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 158
 pr: "#1329"
 merged: status open
+author: "synlynk team"
+version: "0.18.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 Role provisioning (`synlynk team join` / role bootstrap) walks an operator

@@ -4,8 +4,11 @@ date: 2026-09-06
 series: "Building the OS for Multi-Agent Development"
 post: 176
 pr: "TBD"
+author: "synlynk team"
+version: "0.19.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 PR #1440 made every home harness a conductor, not just Claude: dual-mode directives, constitutional precedence of runtime context over static `*.md`, and `synlynk home`. The goalpost at the end of that PR was that Agy, Codex, and Grok could drive dispatch → PR → review from an interactive session. That only works if `synlynk jobs` tells the truth about those writes.

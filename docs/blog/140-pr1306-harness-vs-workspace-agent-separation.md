@@ -6,8 +6,11 @@ post: 140
 pr: "#1306"
 issue: "#1255"
 merged: 2026-08-30
+author: "synlynk team"
+version: "0.18.0"
+tags: [posts]
+type: pr
 ---
-
 # PR #1306 — Standardizing Harness vs. Workspace Agent Separation Across CLI Flags, Configs, and Docs
 
 ## The Core Distinction

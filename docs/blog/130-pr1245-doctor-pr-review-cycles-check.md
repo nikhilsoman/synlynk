@@ -1,3 +1,14 @@
+---
+title: "PR #1245 — Doctor Learns to Watch Its Own Reviewers"
+author: "synlynk team"
+date: 2026-08-29
+post: 130
+pr: "#1245"
+type: pr
+series: "Building the OS for Multi-Agent Development"
+tags: posts
+version: "0.18.0"
+---
 # PR #1245 — Doctor Learns to Watch Its Own Reviewers
 
 ## Where we left off

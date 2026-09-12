@@ -1,3 +1,14 @@
+---
+title: "P0 Fix: Dispatch Context Scoping"
+author: "synlynk team"
+date: 2026-06-24
+post: 23
+pr: "#59"
+type: pr
+series: "Building the OS for Multi-Agent Development"
+tags: posts
+version: "0.9.0"
+---
 # Post 23 — P0 Fix: Dispatch Context Scoping
 
 **Branch:** `fix/dispatch-context-scoping`  

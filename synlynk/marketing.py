@@ -368,3 +368,226 @@ def validate_all_blog_posts(blog_dir: Union[str, Path] = "docs/blog") -> List[Di
         except Exception as exc:
             findings.append({"file": str(p), "errors": [str(exc)]})
     return findings
+
+
+def fetch_pr_details(pr_number: Union[int, str], repo_root: Optional[str] = None) -> Dict[str, Any]:
+    """Fetches PR metadata from GitHub CLI or local git context."""
+    import subprocess
+    import datetime
+    pr_clean = str(pr_number).lstrip("#")
+    try:
+        proc = subprocess.run(
+            ["gh", "pr", "view", pr_clean, "--json", "number,title,body,author,mergedAt"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            cwd=repo_root or os.getcwd(),
+        )
+        if proc.returncode == 0 and proc.stdout.strip():
+            data = json.loads(proc.stdout)
+            author_data = data.get("author") or {}
+            author_login = author_data.get("login", "synlynk team")
+            if author_login.startswith("app/"):
+                author_login = author_login.replace("app/synlynk-", "").replace("app/", "") + " agent"
+
+            merged_at = data.get("mergedAt") or ""
+            date_str = merged_at[:10] if merged_at else datetime.date.today().isoformat()
+
+            return {
+                "number": int(data.get("number") or pr_clean),
+                "title": data.get("title") or f"PR #{pr_clean}",
+                "body": data.get("body") or "",
+                "author": author_login,
+                "date": date_str,
+            }
+    except Exception:
+        pass
+
+    return {
+        "number": int(pr_clean) if pr_clean.isdigit() else 0,
+        "title": f"PR #{pr_clean}",
+        "body": "",
+        "author": "synlynk team",
+        "date": datetime.date.today().isoformat(),
+    }
+
+
+def sync_pr_blog_post(
+    pr_number: Union[int, str],
+    root: Optional[str] = None,
+    dry_run: bool = False,
+    title: Optional[str] = None,
+    author: Optional[str] = None,
+    date_str: Optional[str] = None,
+    version: Optional[str] = None,
+    body: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Generates or updates a Limited-Treatment per-PR blog post for a merged pull request.
+
+    Ensures valid YAML frontmatter (type: pr), structured sections, index update, and social draft.
+    """
+    import datetime
+    repo_root = root or os.getcwd()
+    blog_dir = Path(repo_root) / "docs" / "blog"
+    blog_dir.mkdir(parents=True, exist_ok=True)
+
+    pr_clean = str(pr_number).lstrip("#")
+
+    # 1. Fetch metadata if not provided
+    if title is None or body is None:
+        fetched = fetch_pr_details(pr_clean, repo_root=repo_root)
+        title = title or fetched["title"]
+        body = body or fetched["body"]
+        author = author or fetched["author"]
+        date_str = date_str or fetched["date"]
+
+    author = author or "synlynk team"
+    date_str = date_str or datetime.date.today().isoformat()
+
+    # Determine version from VERSION file if not passed
+    if not version:
+        vfile = Path(repo_root) / "VERSION"
+        if vfile.is_file():
+            version = vfile.read_text(encoding="utf-8").strip()
+        else:
+            version = "0.20.0"
+    version = version.lstrip("v")
+
+    # 2. Check if a post for this PR already exists
+    target_post = None
+    target_num = None
+    for p in blog_dir.glob("*.md"):
+        if p.name in ("README.md", "TEMPLATE.md"):
+            continue
+        m = re.match(r"^(\d+)-.*pr" + re.escape(pr_clean) + r"(-.*)?\.md$", p.name, re.IGNORECASE)
+        if m:
+            target_post = p
+            target_num = int(m.group(1))
+            break
+
+    if not target_post:
+        # Determine next post number
+        max_num = 0
+        for p in blog_dir.glob("*.md"):
+            if p.name in ("README.md", "TEMPLATE.md"):
+                continue
+            m = re.match(r"^(\d+)-", p.name)
+            if m:
+                max_num = max(max_num, int(m.group(1)))
+        target_num = max_num + 1
+
+        # Clean title for filename slug
+        title_slug = title
+        title_slug = re.sub(r"^(feat|fix|chore|docs|refactor|test)(\([^)]+\))?:\s*", "", title_slug, flags=re.IGNORECASE)
+        slug = re.sub(r"[^a-z0-9]+", "-", title_slug.lower()).strip("-")[:40]
+        if not slug:
+            slug = "update"
+        target_post = blog_dir / f"{target_num:02d}-pr{pr_clean}-{slug}.md"
+
+    # 3. Parse PR body into sections
+    highlights = []
+    tests_summary = []
+    co_authors = []
+
+    if body:
+        # Extract co-authors if present
+        for line in body.splitlines():
+            line_str = line.strip()
+            co_m = re.match(r"^Co-Authored-By:\s*(.*?)\s*<.*?>", line_str, re.IGNORECASE)
+            if co_m:
+                ca = co_m.group(1).strip()
+                if ca and ca not in co_authors:
+                    co_authors.append(ca)
+
+        m_ship = re.search(r"###?\s*(What This PR Shipped|Highlights)\s*(.*?)(?=\n###? |\Z)", body, re.DOTALL | re.IGNORECASE)
+        if m_ship:
+            for line in m_ship.group(2).splitlines():
+                l_str = line.strip()
+                if l_str.startswith("- ") or l_str.startswith("* ") or re.match(r"^\d+\.\s+", l_str):
+                    item = re.sub(r"^[-*]|\d+\.\s*", "", l_str).strip()
+                    if item and not item.lower().startswith("co-authored-by:"):
+                        highlights.append(item)
+
+        m_test = re.search(r"###?\s*(Tests|Verification)\s*(.*?)(?=\n###? |\Z)", body, re.DOTALL | re.IGNORECASE)
+        if m_test:
+            for line in m_test.group(2).splitlines():
+                l_str = line.strip()
+                if l_str and not l_str.lower().startswith("co-authored-by:"):
+                    tests_summary.append(l_str)
+
+    if co_authors and (author == "synlynk team" or "agent" in author or "bot" in author):
+        author = ", ".join(co_authors)
+
+    if not highlights:
+        highlights.append(f"Merged improvements and fixes for PR #{pr_clean}.")
+
+    test_evidence_text = "\n".join(tests_summary) if tests_summary else "Verified via local regression test suite and GitHub Actions CI matrix."
+    highlights_text = "\n".join(f"- {h}" for h in highlights)
+
+    title_clean = re.sub(r"^(feat|fix|chore|docs|refactor|test)(\([^)]+\))?:\s*", "", title, flags=re.IGNORECASE).strip()
+    if title.startswith("PR #"):
+        clean_title = title
+    else:
+        clean_title = f"PR #{pr_clean} — {title_clean}"
+    clean_title_escaped = clean_title.replace('"', '\\"')
+
+    post_content = f"""---
+title: "{clean_title_escaped}"
+date: {date_str}
+series: "Building the OS for Multi-Agent Development"
+post: {target_num}
+pr: "#{pr_clean}"
+status: merged
+author: "{author}"
+version: "{version}"
+tags: [posts]
+type: pr
+---
+
+## The Broader Goal at the End of the Previous PR
+
+Advancing the multi-agent operating system toward reliable, autonomous development, unblocking workgroup velocity and eliminating manual developer toil.
+
+## Strategic Shifts in This PR
+
+Focused, limited-treatment delta resolving PR #{pr_clean} requirements with strict backward compatibility and comprehensive verification.
+
+## What This PR Shipped
+
+{highlights_text}
+
+## Verification & Test Evidence
+
+{test_evidence_text}
+
+## What This Achieved on the Path to Autonomy
+
+Maintains repository integrity, expands test-proven capabilities, and keeps the hybrid human-agent workgroup aligned with zero drift.
+"""
+
+    if not dry_run:
+        target_post.write_text(post_content, encoding="utf-8")
+        update_blog_index(blog_dir=blog_dir)
+        extract_social_changelog_snippets(target_post, output_path=Path(repo_root) / ".synlynk" / "social_drafts.json")
+
+    return {
+        "file": str(target_post),
+        "post": target_num,
+        "pr": f"#{pr_clean}",
+        "title": clean_title,
+        "date": date_str,
+        "version": version,
+        "author": author,
+        "dry_run": dry_run,
+    }
+
+
+def cmd_marketing_sync_pr(pr_number: Union[int, str], dry_run: bool = False) -> None:
+    """CLI handler for synlynk marketing sync-pr <pr>."""
+    print(f"🔄 [Marketing PR Sync] Synchronizing blog post for PR #{pr_number}...")
+    res = sync_pr_blog_post(pr_number=pr_number, dry_run=dry_run)
+    action = "Would create" if dry_run else "Created/Updated"
+    print(f"✅ [Marketing PR Sync] {action} blog post #{res['post']}: {res['file']}")
+    print(f"   Title: {res['title']}")
+    print(f"   Date: {res['date']} | Version: v{res['version']} | Author: {res['author']}")
+

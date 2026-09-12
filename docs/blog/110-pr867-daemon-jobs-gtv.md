@@ -4,8 +4,12 @@ date: 2026-08-09
 series: "Building the OS for Multi-Agent Development"
 post: 110
 issues: "331,579"
+author: "synlynk team"
+version: "0.13.1"
+tags: [posts]
+pr: "#867"
+type: pr
 ---
-
 # Daemon Jobs GTV — Stop Lying About Success
 
 ## Broader goal

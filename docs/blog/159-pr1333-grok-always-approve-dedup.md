@@ -5,8 +5,11 @@ series: "Building the OS for Multi-Agent Development"
 post: 159
 pr: "#1333"
 merged: status open
+author: "synlynk team"
+version: "0.18.0"
+tags: [posts]
+type: pr
 ---
-
 ## The Broader Goal at the End of the Previous PR
 
 The previous fleet-parity work made Grok a first-class dispatch target, but
