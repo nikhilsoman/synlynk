@@ -74,6 +74,28 @@ def test_point_3_policy_authority_valid(tmp_path):
     assert "Policy rules valid" in res["message"]
 
 
+def test_point_3_policy_authority_valid_overrides(tmp_path):
+    synlynk_dir = tmp_path / ".synlynk"
+    synlynk_dir.mkdir()
+    policy_file = synlynk_dir / "policy.json"
+    policy_file.write_text(json.dumps({
+        "schema_version": 1,
+        "repo_id": "myrepo",
+        "overrides": {
+            "dev_authority": {
+                "task_allocation": {"implement": {"harness": "codex"}}
+            },
+            "merge_authority": {"can_merge": ["qa"]}
+        }
+    }))
+
+    res = check_point_3_policy_authority(repo_path=str(tmp_path))
+    assert res["status"] == "PASS"
+    assert "Policy rules valid" in res["message"]
+    assert res["details"]["version"] == 1
+
+
+
 def test_point_4_git_shim_missing(tmp_path):
     shim_path = str(tmp_path / "gh")
     res = check_point_4_git_shim(shim_path=shim_path, env_path="")

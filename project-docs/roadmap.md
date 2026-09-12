@@ -50,3 +50,10 @@
 - [x] **Phase 2 (CI & Preflight Quality Gate):** Enforce `validate_all_blog_posts()` in `synlynk pr check` and `tests/test_marketing.py`; harden `website/.eleventy.js` with defensive date fallback preventing mtime leaks.
 - [x] **Phase 3 (Autonomous PR Trigger & Two-Tier Blog):** Add `synlynk marketing sync-pr <pr>` and post-merge GitHub Action workflow; deploy two-tier blog view on `synlynk.com/blog` (Featured Named Release strategic communication vs Per-PR build diary).
 - [x] **Phase 4 (Automated PDF & EPUB Compilation):** Automate headless Chrome PDF and Pandoc EPUB generation for Quick Start, Official Manual, Command Reference, and Book manuscript (`the-supervised-machine`) during release ceremonies and mirror to website assets.
+
+### Cluster F: Safe Fleet Parity Migration Engine & In-Browser Role Provisioning (v0.20.1)
+- [x] **Point 3 Policy Authority Bugfix:** Resolves false-positive readiness failure for standard 2-tier overrides in `readiness.py` and expands `test_readiness_matrix.py`.
+- [x] **Architectural Design Spec Approved:** `docs/superpowers/specs/2026-09-12-safe-fleet-parity-migration-engine-design.md` detailing Worktree-Isolated Shadow Engine (`synlynk heal --parity`) and `synlynk viz` in-browser 6-role GitHub App manifest provisioning.
+- [ ] **Core Parity Engine Implementation (`synlynk/parity.py`):** Stack detection, AST/fence parser, worktree-isolated migration runner, and `synlynk doctor --parity` check.
+- [ ] **`synlynk viz` Role Provisioning Web Flow:** `/onboarding/roles` UI with GitHub App manifest redirect, loopback auth callback, credentials writer, and live SSE self-test attestation.
+- [ ] **Fleet Parity Upgrades:** Execute safe migration playbooks across `cc-videoreframing`, `playblazer-ng`, and `hitchcock`.

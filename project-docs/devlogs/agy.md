@@ -372,3 +372,11 @@
   - Clean Eleventy build (449 files written in 0.55s) with zero date homogenization or invalid `#00` badges.
 [@agy]
 
+## 2026-09-12 — Safe Fleet Parity Migration Engine & Readiness Bugfix
+
+### Shipped
+- **Point 3 Policy Authority Bugfix (`synlynk/readiness.py`):** Resolved false-positive `WARN` in `check_point_3_policy_authority()` where 2-tier policy files wrapping authority definitions inside an `"overrides"` key failed inspection. Updated logic to inspect both top-level and `"overrides"`-nested keys (`dev_authority`, `task_allocation`, `merge_authority`) and verified schema versioning. Added unit test `test_point_3_policy_authority_valid_overrides` in `tests/test_readiness_matrix.py`; all 12 tests pass.
+- **Architectural Design Spec Authored (`docs/superpowers/specs/2026-09-12-safe-fleet-parity-migration-engine-design.md`):** Formulated Approach A (Worktree-Isolated Shadow Parity Engine with `_hc_fleet_parity` doctor check) and In-Browser Role Provisioning Wizard (`synlynk viz` localhost:27472 GitHub App manifest flow for `pm`, `tpm`, `qa`, `dev`, `architect`, `marketing`), integrating Claude's RxCC retrospective feedback and 8-repo fleet audit findings.
+- **Decision Panel Consensus Recorded (`project-docs/decisions/2026-09-12-safe-declarative-parity-migration-engine.md`):** Codex and Agy agreed on dry-run by default, non-destructive directive preservation, stack-aware CI protection, recursive `**/.synlynk/*` gitignore rules, and in-worktree validation.
+- **Target Fleet Identified:** Prepared remediation playbooks for `cc-videoreframing`, `playblazer-ng`, and `hitchcock`.
+[@agy]

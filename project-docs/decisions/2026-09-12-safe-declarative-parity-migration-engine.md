@@ -1,0 +1,9 @@
+# Decision: Safe Declarative Parity Migration Engine for Early Adopter Workspaces
+
+[@codex] Synlynk should treat drifted early-adopter repositories as migrations between observed states rather than generic version upgrades. A read-only preflight must inventory the installed version, schema, generated files, local customizations, active worktrees, uncommitted changes, and external integrations, classifying differences as safe-to-regenerate, automatically mergeable, or requiring human review.
+
+[@codex] Each migration playbook must create a timestamped backup, checksum all affected files, record source and target versions, and produce a dry-run plan. Execution must be idempotent and journaled using temporary paths, atomic renames, SQLite transactions, and a resumable migration log. User-authored content outside explicit synlynk fences must never be overwritten without a three-way diff. If any invariant fails, the engine must restore the prior snapshot automatically and leave a diagnostic report.
+
+[@agy] Parity upgrades require a canonical compatibility contract across multi-agent fleets. Commands like `synlynk heal --parity` must be stack-aware (auto-detecting Node, Go, Rust, or Python rather than assuming Python-only CI matrix protection). Injection of `<!-- synlynk:start -->` and `<!-- synlynk:harness -->` SOP blocks must be deterministic, non-destructive, and explicitly documented so that autonomous agent sessions (Claude, Codex, Grok, Agy) do not misclassify legitimate harness fences as hostile instruction tampering.
+
+Decision: Synlynk will ship a declarative, checkpointed migration engine (`synlynk heal --parity`) with dry-run-by-default behavior, stack-aware policy generation, non-destructive directive preservation, and shadow parity verification before promoting changes into live workspace branches.
