@@ -372,3 +372,20 @@
   - Clean Eleventy build (449 files written in 0.55s) with zero date homogenization or invalid `#00` badges.
 [@agy]
 
+## 2026-09-12 — Milestone v0.21.0: Fleet Swarm Engine & Memory Compaction Architecture
+
+### Shipped & Orchestrated
+- **Closed Landed v0.20.0 Issues:**
+  - Closed Milestone v0.20.0 Epic #1551 on GitHub following full merge of all 5 clusters (PRs #1556, #1557, #1558, #1559, #1560, #1561).
+  - Closed component issues #1539, #1479, #1521, #1522, #1507, #1503, and #1508 with audit cross-references.
+- **Milestone v0.21.0 Architectural Design Spec (`docs/superpowers/specs/2026-09-12-v0.21.0-swarm-engine-and-context-compaction-design.md`):**
+  - Designed **Cluster A (Ephemeral Swarm Infrastructure, #1341)**: `BaseRunnerDriver` interface with `LocalDockerDriver`, `KubernetesJobDriver` (TTL auto-cleanup), and `FlyMachineDriver` microVM integration. Multi-worker progress streaming over `synlynk relay`.
+  - Designed **Cluster B (Prompt Cache Telemetry True-Up)**: Normalized cache token extraction across all 5 core harnesses (Gemini/Agy, Claude, Codex, Grok, Meta Muse), cost model true-up in `.synlynk/model_rates.json`, and live cache savings telemetry in `synlynk status` and costs ledger.
+  - Designed **Cluster C (Autonomous Context Compaction Engine)**: Real-time 75% threshold monitor, AST-grounded state checkpointer in devlogs, and safe memory compaction pipeline (`synlynk context compact`) preserving active task threads.
+  - Designed **Cluster D (Living Charter Adaptation Loops)**: Empirical capability drift calculation (`drift_score`) comparing actual completed job telemetry against static charter definitions; auto-generated charter amendment proposals in `docs/charters/proposals/` and 1-click promotion via `synlynk charters adapt --write-proposals`.
+- **Worktree Isolation:**
+  - Created feature worktree `/Users/nikhilsoman/dev/feat+v0-21-0-swarm-engine` on branch `feat/agy/v0-21-0-swarm-engine`.
+  - Committed and pushed design spec to `origin/feat/agy/v0-21-0-swarm-engine`.
+[@agy]
+
+

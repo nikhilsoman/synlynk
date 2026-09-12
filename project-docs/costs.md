@@ -1,5 +1,10 @@
 # Cost Log
 
+## 2026-09-12 — Milestone v0.21.0 Architecture & Sprint Roadmap
+- Interactive Conductor: Agy (Gemini 2.5 Pro / Flash).
+- Closed 8 resolved v0.20.0 GitHub issues via `synlynk gh --role pm`.
+- Authored comprehensive Milestone v0.21.0 architectural specification (`docs/superpowers/specs/2026-09-12-v0.21.0-swarm-engine-and-context-compaction-design.md`) covering Swarm Runners (Docker/K8s/Fly), Prompt Cache True-Up, Context Compaction Engine, and Living Charters. Zero external fee-bearing dispatch spend.
+
 ## 2026-09-12 — LIVE-12 Marketing Surface Decoupling & Dual-Treatment Engine
 - Interactive Conductor: Agy (Gemini 2.5 Pro / Flash).
 - Local TDD implementation, frontmatter backfill across 61 posts, Nunjucks features matrix refactoring, Two-Tier blog architecture, `synlynk marketing sync-pr` CLI & workflow, and headless Chrome PDF & Pandoc EPUB compilation engine. Zero external fee-bearing dispatch spend.
