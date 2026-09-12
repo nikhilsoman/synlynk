@@ -6,6 +6,7 @@
   - **Cluster B (Prompt Cache Telemetry True-Up):** Full telemetry and pricing true-up across all 5 harnesses (Gemini/Agy, Claude, Codex, Grok, Meta Muse). Displays real-time cache hit efficiency and financial savings in `synlynk status` and costs ledger.
   - **Cluster C (Autonomous Context Compaction Engine):** Real-time token budget monitor with 75% threshold alerting, automated AST-grounded state checkpointer in `project-docs/devlogs/`, and `synlynk context compact` memory pipeline preserving active task threads.
   - **Cluster D (Living Charter Adaptation Loops):** Empirical capability drift calculation (`drift_score`) comparing actual completed job telemetry against static charter definitions. Generates structured charter amendments in `docs/charters/proposals/` with 1-click promotion via `synlynk charters adapt --write-proposals`.
+- **Diagram Width Constraint (<= 180 cols):** All terminal-rendered diagrams (Mermaid, ASCII art, tables) must strictly fit within 180 columns. In Mermaid, avoid wide horizontal layouts with multiple side-by-side subgraphs; stack clusters vertically (`flowchart TD`, S1 --> S2 --> S3) so rendering remains clean across all developer terminals without inline code block overflow degradation. [@agy]
 - **Target Release:** 25 September 2026 (v0.21.0), leading directly into v1.0.0 Public Launch on 01 October 2026. [@agy]
 
 ## LIVE-12 & Cluster E Shipped: Marketing Surface Decoupling & Dual-Treatment Engine (decided/shipped 2026-09-12)
