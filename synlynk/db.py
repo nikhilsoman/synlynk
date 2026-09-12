@@ -3609,6 +3609,7 @@ def cmd_pr_check(pr_number=None) -> None:
             f"\n  ⚠ [PR CHECK] devlog identity drift found: {fork_count} fork(s), "
             f"{unreg_count} unregistered (soft-warn, not blocking)"
         )
+        print("  Fix with: synlynk audit-docs --fix\n")
     try:
         from synlynk.marketing import update_blog_index, validate_all_blog_posts
         update_blog_index()

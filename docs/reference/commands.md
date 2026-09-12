@@ -74,6 +74,7 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `pm sweep` (primary) — execute
 - `release` (primary) — release
 - `marketing ceremony` (secondary) — release
+- `marketing sync-pr` (secondary) — release
 - `pr check` (primary) — release
 - `gh` (primary) — execute
 - `pr gate-status` (secondary) — release
