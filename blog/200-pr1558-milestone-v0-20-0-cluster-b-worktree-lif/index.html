@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #1558 — Milestone v0.20.0 Cluster B — Worktree Lifecycle &amp; Rebase Concurrency | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Sep 11, 2026</span>
+        
+          <span class="blog-post-pr">PR #1558</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #1558 — Milestone v0.20.0 Cluster B — Worktree Lifecycle &amp; Rebase Concurrency</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>Advancing the multi-agent operating system toward reliable, autonomous development, unblocking workgroup velocity and eliminating manual developer toil.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>Focused, limited-treatment delta resolving PR #1558 requirements with strict backward compatibility and comprehensive verification.</p>
+<h2>What This PR Shipped</h2>
+<ul>
+<li><strong>Adaptive Scope-Bounded Sparse Worktrees (#1389, #1390, #1391)</strong>:</li>
+<li>Cone-mode sparse checkout using <code>extensions.worktreeConfig true</code> and <code>git sparse-checkout init --cone</code>.</li>
+<li>Guaranteed context isolation and fast checkout (&lt;150ms) with mandatory inclusion of <code>.synlynk/</code>, <code>project-docs/</code>, <code>synlynk/</code>, and <code>tests/</code>.</li>
+<li>Dynamic cone expansion via <code>ensure_path_in_sparse_cone()</code>.</li>
+<li><strong>Sibling Branch Auto-Pruning Engine (#1348)</strong>:</li>
+<li>Patch-equivalence detection via <code>git cherry</code> to safely identify squash-merged branches.</li>
+<li>Worktree cleanup and local/remote branch deletion integrated with <code>synlynk worktree clean --prune-siblings</code>.</li>
+<li><strong>Multi-Task Lineage Tracking (#1347)</strong>:</li>
+<li>Added <code>superseded_by</code> and <code>lineage_root</code> columns to SQLite schema (<code>daemon_jobs</code> and <code>stories</code>).</li>
+<li>Added <code>record_job_superseded()</code>, <code>record_story_superseded()</code>, and <code>get_job_lineage()</code>.</li>
+<li>Excluded superseded jobs from zombie reap detection and marked with <code>superseded</code> status tag.</li>
+<li><strong>Deterministic Build Timestamp Freezing (#1349)</strong>:</li>
+<li>Extracted commit epoch via <code>get_worktree_epoch()</code> and injected <code>SOURCE_DATE_EPOCH</code> into subprocess environment for all dispatched workers.</li>
+</ul>
+<h2>Verification &amp; Test Evidence</h2>
+<p>56 regression and unit tests passing in <code>tests/test_worktree_sparse.py</code>, <code>tests/test_worktree_prune.py</code>, <code>tests/test_worktree_lineage.py</code>, <code>tests/test_worktree_timestamp.py</code>, and <code>tests/test_worktree.py</code>.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>Maintains repository integrity, expands test-proven capabilities, and keeps the hybrid human-agent workgroup aligned with zero drift.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

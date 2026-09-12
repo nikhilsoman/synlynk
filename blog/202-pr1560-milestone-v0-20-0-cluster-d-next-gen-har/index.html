@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #1560 — Milestone v0.20.0 Cluster D — Next-Gen Harness Onboarding (Meta Muse Integration) | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-2">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Sep 11, 2026</span>
+        
+          <span class="blog-post-pr">PR #1560</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #1560 — Milestone v0.20.0 Cluster D — Next-Gen Harness Onboarding (Meta Muse Integration)</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>Advancing the multi-agent operating system toward reliable, autonomous development, unblocking workgroup velocity and eliminating manual developer toil.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>Focused, limited-treatment delta resolving PR #1560 requirements with strict backward compatibility and comprehensive verification.</p>
+<h2>What This PR Shipped</h2>
+<ul>
+<li><strong>Meta Muse Capability Baseline (<code>synlynk/_constants.py</code>, #1508)</strong>:</li>
+<li>Added <code>muse</code> to <code>HARNESS_CAPABILITY_BASELINES</code> with full <code>can_gh_write: True</code>, non-interactive flags (<code>run --non-interactive</code>), prompt argument handling (<code>--prompt</code>), and <code>builder</code>, <code>verifier</code>, <code>architect</code> role charters.</li>
+<li>Defined <code>NEXT_GEN_FLEET = frozenset({&quot;muse&quot;})</code> and updated <code>EXTENDED_FLEET = frozenset({&quot;local&quot;, &quot;muse&quot;})</code>.</li>
+<li><strong>Dispatch CLI Adapter &amp; Prompt Formatting (<code>synlynk/dispatch.py</code>)</strong>:</li>
+<li>Injected <code>-C worktree_path</code> and <code>--output-format json</code> flags into Muse subprocess dispatches.</li>
+<li>Formatted prompts with closed-loop <code>SYNLYNK_TASK_RECEIVED</code> digest header and working directory constraint blocks.</li>
+<li><strong>Structured Token &amp; Cost Extraction (<code>synlynk/costs.py</code>)</strong>:</li>
+<li>Added <code>_extract_muse_structured()</code> to parse both single JSON and streaming JSON outputs with <code>input_tokens</code>, <code>output_tokens</code>, and <code>cached_tokens</code>.</li>
+<li><strong>Probe &amp; Documentation (<code>synlynk/probe.py</code>, <code>docs/harness-capability-baseline.md</code>)</strong>:</li>
+<li>Mapped <code>muse</code> in <code>harness_map</code> for <code>synlynk probe muse</code> verification.</li>
+<li>Documented Meta Muse architecture and capability profile.</li>
+</ul>
+<h2>Verification &amp; Test Evidence</h2>
+<p>5 unit tests in <code>tests/test_muse_harness.py</code> covering TC-0 schema compliance, flag generation, prompt formatting, token extraction, and probing. 147 dispatch tests and 26 probe tests verified green.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>Maintains repository integrity, expands test-proven capabilities, and keeps the hybrid human-agent workgroup aligned with zero drift.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

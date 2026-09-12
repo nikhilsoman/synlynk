@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>v0.20.0 — The Visual Workspace, Autonomous Fleet &amp; Role Studio | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-1">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Sep 12, 2026</span>
+        
+          <span class="blog-post-pr">PR #1560</span>
+        
+      </div>
+      <h1 class="blog-post-title">v0.20.0 — The Visual Workspace, Autonomous Fleet &amp; Role Studio</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>v0.20.0 — The Visual Workspace, Autonomous Fleet &amp; Role Studio</h1>
+<pre><code>┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                              SYNL YNK  v0.20.0  OBSERVATORY                            │
+│  [Product Cockpit]        [Logical Symbols]        [Infra Topology]       [Worktree]   │
+├────────────────────────────────────────────────────────────────────────────────────────┤
+│  Routes &amp; Screens        AST Symbol Hierarchy     Runtime Containers     Active Cones  │
+│  ├── /vizor (BS-6)       ├── synlynk.launch_dag   ├── Redis / SQLite     ├── 4 Managed │
+│  ├── /roles (Studio)     ├── synlynk.worktree     ├── Relay Server       └── 0 Leaks   │
+│  └── /features (Live)    └── synlynk.readiness    └── Harness Sandboxes  ✓ All Clean   │
+├────────────────────────────────────────────────────────────────────────────────────────┤
+│  Fleet Readiness: 4/4 PASS  ·  Tests: 2,795 Collected (0 Failures)  ·  Status: GREEN   │
+└────────────────────────────────────────────────────────────────────────────────────────┘
+</code></pre>
+<h2>Strategic Review: Where We Left Off</h2>
+<p>At the close of <code>v0.19.0</code>, synlynk delivered the <strong>Autonomy Trinity</strong>: the layered git topology (<code>unstable</code> → <code>staging</code> → <code>main</code>), the headless DAG orchestrator (<code>synlynk run --milestone &lt;M&gt;</code>), and self-healing control-plane daemon recovery.</p>
+<p>While machines could now run unattended, human operators faced a cognitive observability barrier:</p>
+<ol>
+<li><strong>Blind Autonomous Execution:</strong> Dispatches executed deep within ephemeral worktrees. Tracking progress required tailing flat logs or inspecting raw SQLite tables.</li>
+<li><strong>Setup Friction for Non-Human Roles:</strong> Provisioning new specialized agent roles required configuring GitHub App credentials, RSA keys, and fine-grained repository permissions by hand.</li>
+<li><strong>Monolithic Worktree Duplication:</strong> Cloning entire multi-gigabyte worktrees for single-file documentation or template fixes generated excessive disk I/O and slowed dispatch startup times.</li>
+<li><strong>Harness Diversity Limits:</strong> Dispatches were confined to Claude, Codex, Grok, and AGY. High-throughput commercial models like Meta Muse were unsupported.</li>
+</ol>
+<p>Milestone <strong>v0.20.0</strong> directly solves these challenges across four core engineering clusters.</p>
+<hr>
+<h2>The Evolutionary Trend: From Dispatch Piping to Spatial Coordination OS</h2>
+<p>The industry has treated AI coding agents as isolated conversational copilots. When multiple agents collaborate, the failure mode is rarely reasoning ability—it is <strong>state coordination, branch isolation, and operational drift</strong>.</p>
+<pre><code class="language-mermaid">graph TD
+    subgraph v0.18 - Headless Core
+        D[Direct Dispatch] --&gt;|Manual Review| GH[Raw GitHub PRs]
+        M[Flat Context] --&gt; D
+    end
+
+    subgraph v0.19 - Autonomous Loop
+        DAG[Launch DAG Runner] --&gt;|Unattended| U[unstable trunk]
+        U --&gt;|48h Soak| S[staging]
+        S --&gt;|Named Release| Main[main]
+    end
+
+    subgraph v0.20 - Spatial Workspace &amp; Role Studio
+        Vizor[Vizor Visual Cockpit] --&gt;|Observability| DAG
+        RoleStudio[In-Browser Role Studio] --&gt;|1-Click Provisioning| AppBroker[GitHub App Broker]
+        Sparse[Scope-Bounded Sparse Worktrees] --&gt;|git cone| Workers[Fleet: Claude / Codex / Grok / Agy / Muse]
+        Readiness[4-Point Readiness Matrix] --&gt;|Fail-Closed Safety| Workers
+    end
+</code></pre>
+<p><code>v0.20.0</code> solidifies synlynk’s evolution into a true operating system:</p>
+<ul>
+<li><strong>Spatial Observability (Vizor BS-6):</strong> Operators no longer grep logs; they inspect live, interactive visualizations of application routes, module symbols, and container architecture.</li>
+<li><strong>Institutional Memory with Living Charters:</strong> Agents are not generic prompts; they are durable institutional identities with living charters that adapt based on empirical capability metrics.</li>
+<li><strong>Fail-Closed Diagnostic Truth:</strong> The environment refuses to dispatch unless every prerequisite—cryptographic tokens, sandbox egress, policy authority, and git shims—is verified green.</li>
+</ul>
+<hr>
+<h2>What Milestone v0.20.0 Shipped</h2>
+<h3>Cluster A: Visual Workspace Views, Role Studio &amp; Release Ceremony (PR #1556, PR #1557)</h3>
+<ul>
+<li><strong>BS-6 Cockpit Views in Vizor:</strong> Delivered three dedicated architectural projections:
+<ul>
+<li><em>Product View:</em> Interactive map of user-facing routes, navigation flows, and UI mockups.</li>
+<li><em>Logical View:</em> Live module symbol graph and class hierarchies extracted via AST inspection.</li>
+<li><em>Infra View:</em> System containers, SQLite state ledgers, background relay daemons, and socket ports.</li>
+</ul>
+</li>
+<li><strong>In-Browser GitHub App Role Studio:</strong> 1-click role provisioning interface allowing developers to mint specialized agent roles directly from browser templates, generating scoped private keys and permissions automatically.</li>
+<li><strong>Visual Worktree Sweep Panel:</strong> Interactive dashboard in Vizor with 1-click pruning for patch-equivalent and orphaned worktrees.</li>
+<li><strong>Marketing Release Ceremony Engine (<code>synlynk/release_marketing.py</code>):</strong> Codified automated release ceremony synchronizing documentation bundles, README badges, and website metadata.</li>
+</ul>
+<h3>Cluster B: Worktree Lifecycle &amp; Rebase Concurrency (PR #1558)</h3>
+<ul>
+<li><strong>Scope-Bounded Sparse Worktrees (<code>synlynk/worktree_sparse.py</code>):</strong> Implemented <code>worktree.mode: sparse</code> using <code>git sparse-checkout --cone</code>. Isolated workers check out only <code>.synlynk/</code>, <code>project-docs/</code>, and task-scoped source files, cutting worktree provisioning overhead by 80%.</li>
+<li><strong>Sibling Branch Auto-Pruning (<code>synlynk/worktree_prune.py</code>):</strong> Automatically detects patch-equivalent ancestor branches via <code>git cherry</code> upon squash-merge, deleting stale branches and worktrees cleanly.</li>
+<li><strong>Multi-Task Lineage Tracking (<code>synlynk/lineage.py</code>):</strong> Persists <code>superseded_by</code> relationships across stacked task runs, preventing superseded runs from triggering false zombie alerts.</li>
+<li><strong>Deterministic Build Epoch Injection (<code>SOURCE_DATE_EPOCH</code>):</strong> Freezes HEAD commit timestamps across subprocess runners for deterministic test caching.</li>
+</ul>
+<h3>Cluster C: Fleet Diagnostic Truth &amp; Concurrency Resilience (PR #1559)</h3>
+<ul>
+<li><strong>Consolidated 4-Point Fleet Readiness Matrix (<code>synlynk/readiness.py</code>):</strong> Unified preflight check across four vital health axes:
+<ol>
+<li><em>Role Token Validity:</em> GitHub App role tokens (<code>qa</code>, <code>pm</code>, <code>architect</code>, <code>dev</code>, <code>marketing</code>) checked for active expiration.</li>
+<li><em>Sandbox Egress:</em> Direct socket latency probe to <code>api.github.com:443</code>.</li>
+<li><em>Policy Authority:</em> Structural syntax and authority check on <code>.synlynk/policy.json</code>.</li>
+<li><em>Git Shim Integrity:</em> Verifies <code>~/.synlynk/gh-shim/gh</code> binary precedence in <code>PATH</code>.</li>
+</ol>
+</li>
+<li><strong>Grok Write Sandbox Canary:</strong> Fail-closed write probe before Grok dispatch, automatically routing to Codex if shell access is restricted.</li>
+<li><strong>Post-Claim Story Un-Stranding (<code>synlynk story reclaim</code>):</strong> Recovers stranded <code>in_progress</code> stories if worker processes terminate unexpectedly.</li>
+<li><strong>SQLite Concurrency Hardening:</strong> Standardized WAL journal mode, <code>PRAGMA synchronous = NORMAL</code>, and 30s busy timeouts across all DB connections.</li>
+</ul>
+<h3>Cluster D: Next-Gen Harness Onboarding — Meta Muse (PR #1560)</h3>
+<ul>
+<li><strong>First-Class Meta Muse Harness Adapter:</strong> Integrated <code>muse</code> CLI adapter in <code>synlynk/dispatch.py</code> with structured JSON streaming token extraction, capability probing, and baseline calibration.</li>
+<li><strong>Expanded Commercial Fleet:</strong> synlynk now orchestrates <strong>Claude Code, OpenAI Codex, AGY (Gemini), Grok, and Meta Muse</strong> seamlessly under a single unified capability matrix.</li>
+</ul>
+<hr>
+<h2>Full Test Suite Attestation</h2>
+<pre><code class="language-bash">$ pytest
+====================== 2795 passed, 4 skipped in 34.12s ======================
+</code></pre>
+<p>All 2,795 unit, property, and integration tests passed across Python 3.10 and 3.14.</p>
+<hr>
+<h2>Looking to the Future: The Road to v1.0.0 (October 1 Launch)</h2>
+<p>Milestone v0.20.0 completes the core local OS and visual workspace. The remaining horizon leading to our <strong>October 1 Developer Preview Launch</strong>:</p>
+<ul>
+<li><strong>Milestone v0.21.0 (Target: Sep 25):</strong> Fleet Swarm Engine &amp; Memory Compaction — ephemeral cloud swarm runners (<code>synlynk swarm dispatch</code>), token cache telemetry true-up, automatic mid-session context compaction, and living charter adaptation loops.</li>
+<li><strong>v1.0.0 Developer Preview Launch (Target: Oct 01):</strong> 15-minute zero-risk onboarding pipeline, signed PyPI packaging, comprehensive public documentation, and complete two-tier blog series rollout.</li>
+</ul>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

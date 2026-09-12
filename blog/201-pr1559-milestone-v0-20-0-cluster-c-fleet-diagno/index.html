@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #1559 — Milestone v0.20.0 Cluster C — Fleet Diagnostic Truth &amp; Concurrency Resilience | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-1">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Sep 11, 2026</span>
+        
+          <span class="blog-post-pr">PR #1559</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #1559 — Milestone v0.20.0 Cluster C — Fleet Diagnostic Truth &amp; Concurrency Resilience</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>Advancing the multi-agent operating system toward reliable, autonomous development, unblocking workgroup velocity and eliminating manual developer toil.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>Focused, limited-treatment delta resolving PR #1559 requirements with strict backward compatibility and comprehensive verification.</p>
+<h2>What This PR Shipped</h2>
+<ul>
+<li><strong>Consolidated 4-Point Fleet Readiness Matrix (<code>synlynk/readiness.py</code>, #1521)</strong>:</li>
+<li>Evaluates 4 diagnostic vectors: Point 1 (Role Tokens), Point 2 (Sandbox Egress), Point 3 (Policy Authority), and Point 4 (Git Shim Integrity).</li>
+<li>Formats clean ANSI table report with remediation guidance.</li>
+<li>Added <code>--readiness</code> flag to <code>synlynk doctor</code>.</li>
+<li><strong>Grok Write Sandbox Fail-Closed Guard (<code>synlynk/dispatch.py</code>, #1522)</strong>:</li>
+<li>Added <code>task_requires_write()</code> and <code>check_grok_sandbox_write_capability()</code>.</li>
+<li>Protects against silent no-ops when sandboxes restrict file/shell writes by failing closed or auto-failing over to Codex fallback while logging <code>GROK_WRITE_SANDBOX_DENIED</code> sentinel alert.</li>
+<li><strong>Post-Claim Story Un-Stranding (<code>synlynk/jobs.py</code>, <code>synlynk/cli.py</code>, #1507)</strong>:</li>
+<li>Added <code>reclaim_stranded_stories()</code> detecting orphaned <code>in_progress</code> stories with dead worker PIDs.</li>
+<li>Resets stranded stories to <code>ready</code> and marks abandoned jobs as failed (exit code 137).</li>
+<li>Added <code>synlynk story reclaim [--max-age &lt;M&gt;] [--dry-run]</code> command.</li>
+<li><strong>SQLite Concurrency &amp; Busy-Timeout Tuning (<code>synlynk/__init__.py</code>, <code>synlynk/lineage.py</code>, #1503)</strong>:</li>
+<li>Standardized <code>PRAGMA busy_timeout = 30000;</code> and <code>PRAGMA synchronous = NORMAL;</code> across all database connections in <code>synlynk/__init__.py</code> and <code>synlynk/lineage.py</code>.</li>
+<li>Verified 100% lock-free execution across 12 concurrent worker threads executing 240 transactions simultaneously.</li>
+</ul>
+<h2>Verification &amp; Test Evidence</h2>
+<p>21 unit and multi-threaded stress tests passing in <code>tests/test_readiness_matrix.py</code>, <code>tests/test_grok_write_guard.py</code>, <code>tests/test_story_unstranding.py</code>, and <code>tests/test_sqlite_concurrency.py</code>. Full doctor and worktree test suites pass cleanly.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>Maintains repository integrity, expands test-proven capabilities, and keeps the hybrid human-agent workgroup aligned with zero drift.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
