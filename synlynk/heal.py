@@ -48,7 +48,16 @@ def _auto_merge(stories: list[dict], verdicts: list[dict]) -> list[str]:
 
 
 def cmd_heal(args=None, *, batch_size=None, auto_merge=None) -> dict:
-    """Run scan -> backlog triage -> swarm dispatch -> QA -> merge."""
+    """Run scan -> backlog triage -> swarm dispatch -> QA -> merge (or --parity remediation)."""
+    if getattr(args, "parity", False):
+        from synlynk.parity import run_parity_remediation
+        dry_run = getattr(args, "dry_run", False)
+        branch = getattr(args, "branch", None)
+        repo_path = getattr(args, "repo_path", ".")
+        result = run_parity_remediation(repo_path, dry_run=dry_run, branch=branch)
+        print(json.dumps(result, indent=2, default=str))
+        return result
+
     from synlynk.scan import run_workspace_scan
     from synlynk.backlog import stage_discovered_work, triage_backlog, auto_promote_backlog
     from synlynk.tpm_sweep import run_sweep_pass
