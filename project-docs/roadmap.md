@@ -50,3 +50,31 @@
 - [x] **Phase 2 (CI & Preflight Quality Gate):** Enforce `validate_all_blog_posts()` in `synlynk pr check` and `tests/test_marketing.py`; harden `website/.eleventy.js` with defensive date fallback preventing mtime leaks.
 - [x] **Phase 3 (Autonomous PR Trigger & Two-Tier Blog):** Add `synlynk marketing sync-pr <pr>` and post-merge GitHub Action workflow; deploy two-tier blog view on `synlynk.com/blog` (Featured Named Release strategic communication vs Per-PR build diary).
 - [x] **Phase 4 (Automated PDF & EPUB Compilation):** Automate headless Chrome PDF and Pandoc EPUB generation for Quick Start, Official Manual, Command Reference, and Book manuscript (`the-supervised-machine`) during release ceremonies and mirror to website assets.
+
+---
+
+## 3. Milestone v0.21.0 Breakdown (Current Milestone)
+
+- **Approved Design Spec:** `docs/superpowers/specs/2026-09-12-v0.21.0-swarm-engine-and-context-compaction-design.md`
+- **Target Horizon:** 25 September 2026
+
+### Cluster A: Ephemeral Swarm Execution Infrastructure (#1341)
+- [ ] **Pluggable Runner Driver Contract:** Standardized `BaseRunnerDriver` interface (`provision`, `get_status`, `stream_logs`, `collect_artifacts`, `destroy`) in `synlynk/runners/base.py`.
+- [ ] **Multi-Cloud Runner Adapters:** Implement `LocalDockerDriver` (`synlynk/runners/docker.py`), `KubernetesJobDriver` with TTL auto-reap (`synlynk/runners/k8s.py`), and `FlyMachineDriver` microVM client (`synlynk/runners/fly.py`).
+- [ ] **Swarm Orchestration CLI & Event Mesh:** Implement `synlynk swarm dispatch --driver <D> --batch-size <N> --task "<T>"`, progress streaming over `synlynk relay`, and fail-safe `synlynk swarm destroy [--all]`.
+
+### Cluster B: Prompt Cache Telemetry True-Up & Analytics
+- [ ] **Unified Cache Token Extractor:** Complete prompt cache token extraction across all 5 core harnesses (Gemini/Agy, Claude, Codex, Grok, Meta Muse).
+- [ ] **Pricing Ledger True-Up:** Update `.synlynk/model_rates.json` and cost model to accurately calculate cached input discounts and net dollar savings.
+- [ ] **Real-Time Cache Efficiency Display:** Surface cache hit ratios and monetary savings in `synlynk status`, `synlynk quota`, and `synlynk ops report`.
+
+### Cluster C: Autonomous Context Compaction Engine
+- [ ] **Token Budget Monitor & 75% Alerting:** Implement real-time session token tracking against harness-specific context limits with `CONTEXT_BUDGET_WARNING` sentinels.
+- [ ] **AST-Grounded State Checkpointer:** Automated pre-compaction state snapshot capturing open tasks, symbol deltas, and devlog resumption markers.
+- [ ] **Safe Memory Compaction Pipeline:** Implement `synlynk context compact [--threshold <float>] [--dry-run]` to prune dead conversational turns while preserving core context authority.
+
+### Cluster D: Living Charter Adaptation Loops (`synlynk charters adapt`)
+- [ ] **Empirical Capability Drift Scoring:** Calculate Euclidean drift score between historical dispatch telemetry and static charter definitions.
+- [ ] **Automated Charter Amendment Proposals:** Generate structured charter amendment candidates in `docs/charters/proposals/` when drift exceeds threshold.
+- [ ] **1-Click Promotion Flow:** Wire `synlynk charters adapt --write-proposals` and `--approve <role>` to automatically update `state.db:agent_charters`.
+
