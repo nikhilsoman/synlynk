@@ -12,7 +12,7 @@ import threading
 import tempfile
 import urllib.request
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Union
 import sqlite3 as _sqlite3
 import importlib as _importlib
 
