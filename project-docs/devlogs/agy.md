@@ -409,3 +409,32 @@
   4. `nikhilsoman/hitchcock`: PR #23 squash-merged to `main`; shadow worktree deleted.
 - **Diagnostic Verification:** `synlynk doctor` verifies `✓ fleet_parity: PASS` and identifies declared 7 canonical roles (`pm`, `architect`, `qa`, `dev`, `marketing`, `tpm`, `infra`) across all 4 repositories.
 [@agy]
+
+## 2026-09-13 — GitHub App Manifest Webhook Resolution (`PR #1566`)
+
+### Shipped
+- **Manifest Webhook URL Resolution (`synlynk/viz.py`):** Resolved GitHub App Manifest creation error (`Error: Hook url is not supported because it isn't reachable over the public Internet (localhost)`). In GitHub's manifest specification, `hook_attributes.url` is validated against public internet destinations. Replaced `localhost:{port}/webhook` with `https://synlynk.com/github-apps/{slug}/{role}/webhook`, explicitly set `"active": False` to disable webhook event delivery, and set `"default_events": []` since workspace roles operate via CLI polling and pull requests without inbound webhooks.
+- **Test Suite Updates (`tests/test_viz_onboarding.py`):** Added assertions for `hook_attributes.url` public HTTPS schema, `active: False`, and `default_events: []`. Verified all 2,820 tests pass.
+- **PR #1566 Merged:** Submitted and squash-merged PR #1566 to `main` with all 4 CI checks passing and green QA merge gate.
+- **RxCC Server Re-Launched:** Restarted background `synlynk viz --serve --port 27472` in `/Users/nikhilsoman/dev/rxcc` with the updated manifest payload. Verified live HTML generation generates valid public HTTPS webhook URLs and inactive webhook states.
+[@agy]
+
+## 2026-09-13 — `/auth/sync` Handler Bugfix & PM Role Provisioned (`PR #1568`)
+
+### Shipped
+- **`/auth/sync` NameError Resolution (`synlynk/viz.py`):** Resolved `ERR_EMPTY_RESPONSE` crash triggered by unimported `Path` symbol in request handler scope during installation sync. Wrapped `/auth/sync` in defensive try-except block, added `User-Agent: synlynk-viz` header for GitHub API compliance, and invoked `refresh_installation_token()` upon saving `installation_id`.
+- **Unit Test Added (`tests/test_viz_onboarding.py`):** Added `test_viz_auth_sync_handler` testing end-to-end sync, credential update, and redirect flow.
+- **PR #1568 Merged:** Merged `701dca8b` to `main` with all 4 CI checks green.
+- **RxCC `pm` Role Active:** Verified `synlynk-dialify-rxcc-pm` created, installed on Dialify org (installation ID 161274653), and token minted with 0o600 permissions. `synlynk doctor` confirms `pm` role is active.
+[@agy]
+
+## 2026-09-13 — Readiness Point 1 Flat Role Token Support (`PR #1569`)
+
+### Shipped
+- **Readiness Matrix Point 1 Extension (`synlynk/readiness.py`):** Fixed discrepancy where Point 1 (Role Tokens) only checked directory-nested tokens (`apps_dir/<role>/<role>.token.json`), reporting `WARN: No role tokens found` despite valid tokens emitted by `refresh_installation_token()` to flat paths (`apps_dir/<role>.token.json`). Extended discovery to detect both layouts seamlessly.
+- **Unit Tests Added (`tests/test_readiness_matrix.py`):** Added `test_point_1_role_tokens_valid_flat`. All 13 readiness tests passed.
+- **PR #1569 Merged:** Merged `d7a5b1ad` to `main` with all 4 CI checks green.
+- **Live Readiness Verified:** Tested `GET /api/readiness/live` in `rxcc` at port 27472: Point 1 now discovers `pm` token and reports `Valid: pm (expires_in_s: 2817)`.
+[@agy]
+
+

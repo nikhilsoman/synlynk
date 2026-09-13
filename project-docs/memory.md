@@ -13,7 +13,11 @@
   - `Dialify/playblazer-ng`: PR #5 merged to `main`.
   - `nikhilsoman/hitchcock`: PR #23 merged to `main`.
   - `nikhilsoman/synlynk`: PR #1564 merged to `main`.
+- **GitHub App Manifest Webhook Resolution (`synlynk/viz.py`, PR #1566):** Resolved GitHub App Manifest creation error (`Error: Hook url is not supported because it isn't reachable over the public Internet (localhost)`). Replaced `localhost:{port}/webhook` with `https://synlynk.com/github-apps/{slug}/{role}/webhook`, explicitly set `"active": False` to disable webhook event delivery, and set `"default_events": []` since workspace roles operate via CLI polling and PR creation without inbound webhooks.
+- **In-Browser `/auth/sync` Handler & Token Minting (`synlynk/viz.py`, PR #1568):** Resolved `NameError: name 'Path' is not defined` during sync redirect. Added `User-Agent: synlynk-viz` header for GitHub API request compliance, dual-persisted `installation_id` to both flat and nested JSON files, and called `refresh_installation_token()` to mint role token immediately upon synchronization.
+- **Point 1 Role Token Discovery Dual-Layout (`synlynk/readiness.py`, PR #1569):** Extended `check_point_1_role_tokens` to discover both directory-nested (`apps_dir/<role>/<role>.token.json`) and flat (`apps_dir/<role>.token.json`) token files, ensuring live readiness checks report PASS regardless of storage layout.
 [@agy, @nikhilsoman]
+
 
 ## Safe Fleet Parity Migration Engine & Readiness Bugfix (decided/shipped 2026-09-12)
 - **Point 3 Policy Authority Bug Resolved (`synlynk/readiness.py`, `tests/test_readiness_matrix.py`):** Fixed a false-positive `WARN` in `check_point_3_policy_authority()` where 2-tier policy files wrapping authority definitions inside an `"overrides"` key failed inspection. Updated logic to inspect both top-level and `"overrides"`-nested keys (`dev_authority`, `task_allocation`, `merge_authority`) and verified schema versioning. Added unit test `test_point_3_policy_authority_valid_overrides`; all 12 readiness tests pass.
