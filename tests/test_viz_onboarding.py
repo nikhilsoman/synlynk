@@ -17,6 +17,9 @@ def test_get_role_manifest_payload():
     assert "pull_requests" in payload["default_permissions"]
     assert payload["default_permissions"]["pull_requests"] == "write"
     assert "http://localhost:27472/auth/callback" in payload["redirect_url"]
+    assert payload["hook_attributes"]["url"] == "https://synlynk.com/github-apps/test-repo/qa/webhook"
+    assert payload["hook_attributes"]["active"] is False
+    assert payload["default_events"] == []
 
 
 def test_generate_roles_onboarding_html(tmp_path):
