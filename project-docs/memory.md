@@ -57,6 +57,22 @@
   4. **SQLite Concurrency & Busy-Timeout Tuning (`synlynk/__init__.py`, `synlynk/lineage.py`, #1503):** Configured `PRAGMA busy_timeout = 30000;` and `PRAGMA synchronous = NORMAL;` across all database connections in `synlynk/__init__.py` and `synlynk/lineage.py`. Verified zero lock contention under high-concurrency 12-thread simultaneous read/write stress testing.
 - **Verification & Review:** 21 unit and multi-threaded stress tests passing. [@agy]
 
+## Synlynk v0.21.0 FTUE & Onboarding Journey Architecture Formulated (decided 2026-09-13)
+- **Comprehensive Brainstorm Agenda Authored (`docs/superpowers/specs/2026-09-13-ftue-onboarding-journey-brainstorm-agenda.md`):** Formulated the definitive first-time user experience (FTUE) and onboarding journey specification for Milestone v0.21.0. Synthesized prior specifications (BS-17, BS-6, Zero-Risk Onboarding, Cold-Start Intent Transmission, RxCC Live Retrospective), existing implementation components (`scan.py`, `coldstart.py`, `viz.py`, `viz_views.py`, `readiness.py`), and external developer product benchmarks (`clig.dev`, Vercel, Fly.io, Supabase, Astro, Stripe, PostHog).
+- **Core Architecture (The 6 Pillars):**
+  1. *Quick Install:* One-line standalone bootstrap (<30s) across `curl | sh`, `pipx`, and `brew` with instant preflight checks.
+  2. *3D Workspace Discovery Engine (`synlynk scan --deep`):* Tri-directional semantic and static extraction covering (a) Industry/Application Domain Space, (b) Physical Structure (directory hierarchy, configs, CI/CD, deployment targets), and (c) Logical Structure (entities, schemas, information flow, service boundaries, message queues, datastores).
+  3. *Interactive Context Validation ("Confirm & Tweak"):* Compact visual chip UI in local Vizor (`http://localhost:27472/onboarding`) with zero-typing default progression and inline editing.
+  4. *Unified 3-View Visual Canvas in Vizor:* Integrated drillable physical file tree, logical architect tubemap/sequence flow, and application screens/cloud infrastructure topology.
+  5. *Gap & Opportunity Discovery -> GOVERNS Goals:* Automated detection of untested routes, security holes, and doc drift, formulating candidate GOVERNS goals (`--outcome ... --criterion ...`) written to `state.db` upon 1-click user approval.
+  6. *First-Win Task Selection & Autonomous SOP Dispatch:* 3 bite-sized candidate tasks, executing via isolated worktree with real GitHub PR created in <3 minutes.
+- **Multi-Harness Panel Consensus Approved (`dec-fcff261a`, 2026-09-13):** Convened panel (`claude`, `codex`, `agy`, `grok`) via `synlynk decide --record`. Unanimously resolved:
+  - *Debate 1:* Hybrid CLI-first (responsive terminal chips, `Enter` continues, `Space` opens `localhost:27472/onboarding`, `--no-input` stays 100% non-browser JSON).
+  - *Debate 2:* Tiered, offline-first scan (<10s deterministic AST/manifest scan is critical path; LLM semantic labeling is non-blocking Tier 2 overlay).
+  - *Debate 3:* Zero footprint outside `.synlynk/` with rollback snapshot; dirty trees fail closed or force isolated worktree.
+  - *Debate 4:* Single North-Star First-Win Goal (one high-confidence additive test/CI goal, verified PR created in <5m; merging is out of 5m promise).
+  - *Scope Calibration:* 3D discovery and deeper rendered screen/cloud modeling deferred to follow-on release; distribution formalized as 4th explicit workstream. [@agy]
+
 ## Milestone v0.20.0 Cluster B Shipped: Worktree Lifecycle & Rebase Concurrency (decided/shipped 2026-09-11)
 - **Implementation Shipped (PR #1558):** Completed Milestone v0.20.0 Cluster B (`story-dfb61aea`) per approved design spec (`docs/superpowers/specs/2026-09-11-cluster-b-worktree-lifecycle-concurrency-design.md`) and implementation plan (`docs/superpowers/plans/2026-09-11-cluster-b-worktree-lifecycle-concurrency.md`).
 - **Architectural Deliverables:**

@@ -1,5 +1,10 @@
 # Cost Log
 
+## 2026-09-13 — FTUE & Onboarding Journey Brainstorm Agenda Synthesis
+- Interactive Conductor: Agy (Gemini 2.5 Pro / Flash).
+- Architectural synthesis: historical spec analysis (BS-17, Zero-Risk, Cold-Start, BS-6), existing codebase audit, public developer product onboarding teardowns, and authoring the canonical 6-pillar specification `docs/superpowers/specs/2026-09-13-ftue-onboarding-journey-brainstorm-agenda.md`.
+- Zero external fee-bearing dispatch spend.
+
 ## 2026-09-13 — Track 1 Fleet Parity, Manifest Webhook Resolution, & GitHub App Naming Standardization
 - Interactive Conductor: Agy (Gemini 2.5 Pro / Flash).
 - Local TDD implementation: manifest public webhook and inactive state (PR #1566), `/auth/sync` handler & automatic token minting (PR #1568), Point 1 flat role token discovery (PR #1569), and universal `syn-{owner}-{slug}-{role}` App naming standardization with <=34 char budget enforcement (PR #1570).

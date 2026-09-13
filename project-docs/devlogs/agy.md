@@ -449,5 +449,17 @@
 - **PR #1570 Merged:** Merged commit `087ee600` to `main` with all 4 CI matrix checks passing. Reinstalled `synlynk` 0.20.0 and verified clean live generation on `hitchcock` at port 27472.
 [@agy]
 
+## 2026-09-13 — FTUE & Onboarding Journey Brainstorm Agenda Formulated (`docs/superpowers/specs/2026-09-13-ftue-onboarding-journey-brainstorm-agenda.md`)
 
-
+### Shipped
+- **Comprehensive Review & Retrospective:** Audited past specifications (BS-17 FTUE TUI Wizard, Zero-Risk Onboarding & First Win, Cold-Start & Intent Transmission, BS-6 Visualization Architecture, RxCC Adoption Retrospectives) and active implementation components (`synlynk/scan.py`, `synlynk/coldstart.py`, `synlynk/viz.py`, `synlynk/viz_views.py`, `synlynk/readiness.py`).
+- **External Best Practice Deconstruction:** Researched CLI & developer product onboarding standards (`clig.dev`, 12-factor CLI, Vercel CLI, Fly.io, Supabase, Astro, Stripe, PostHog, Sentry), synthesizing key principles (sub-100ms feedback, TTY detection, `--no-input` scriptability, crash-only idempotence, and time-to-first-win).
+- **The 6 Pillars Defined:**
+  1. *Quick Install:* < 30s bootstrap across `curl | sh`, `pipx`, and `brew` with instant preflight checks.
+  2. *3D Discovery Engine:* Automated tri-directional extraction covering (a) Industry/Application Domain Space, (b) Physical Structure (directory hierarchy, configs, CI/CD, deployment targets), and (c) Logical Structure (entities, schemas, information flow, service boundaries, message queues, datastores).
+  3. *Interactive Context Validation:* "Confirm & Tweak" chip UI in Vizor (`http://localhost:27472/onboarding`) with zero-typing default progression.
+  4. *Unified 3-View Visual Canvas in Vizor:* Drillable physical file tree, logical architect tubemap/sequence flow, and application screens/cloud infrastructure topology.
+  5. *Gap & Opportunity Discovery:* Automated detection of untested routes, security holes, and doc drift, formulating candidate GOVERNS goals written to `state.db` upon 1-click approval.
+  6. *First-Win Task Selection & Autonomous SOP Dispatch:* 3 bite-sized candidate tasks, executing via isolated worktree with real GitHub PR created in < 3 minutes.
+- **Multi-Harness Consensus Recorded (`dec-fcff261a`):** Dispatched topic to panel (`claude`, `codex`, `agy`, `grok`) via `synlynk decide --record`. Approved unanimously: Hybrid CLI-first flow, tiered offline-first AST discovery, zero footprint outside `.synlynk/` with rollback snapshot, and single North-Star First-Win Goal (<5m PR). Deferred 3D spatial scan to follow-on release; formalized distribution as 4th explicit workstream. Recorded in `project-docs/decisions/2026-09-13-synlynk-v0-21-0-ftue-onboarding-journey.md`.
+[@agy]
