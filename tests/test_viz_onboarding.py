@@ -83,3 +83,49 @@ def test_handle_github_app_conversion_mock(tmp_path):
         assert (apps_dir / "qa.private-key.pem").exists()
         app_json = json.loads((apps_dir / "qa.app.json").read_text())
         assert app_json["id"] == 123456
+
+
+def test_viz_auth_sync_handler(tmp_path, monkeypatch):
+    from synlynk.viz import VizorHandler
+    import io
+    monkeypatch.chdir(tmp_path)
+
+    apps_dir = tmp_path / ".synlynk" / "github_apps"
+    apps_dir.mkdir(parents=True)
+    (apps_dir / "pm.json").write_text(json.dumps({
+        "role": "pm",
+        "app_id": 12345,
+        "private_key_path": str(apps_dir / "pm.pem"),
+    }))
+    (apps_dir / "pm.pem").write_text("FAKE_PEM")
+
+    class DummyServer:
+        server_port = 27472
+
+    handler = VizorHandler.__new__(VizorHandler)
+    handler.server = DummyServer()
+    handler.requestline = "GET /auth/sync?role=pm HTTP/1.1"
+    handler.request_version = "HTTP/1.1"
+    handler.path = "/auth/sync?role=pm"
+    handler.rfile = io.BytesIO()
+    handler.wfile = io.BytesIO()
+    handler.headers = {}
+    handler._headers_buffer = []
+
+    def fake_sign_jwt(app_id, pem_path):
+        return "fake.jwt.token"
+
+    monkeypatch.setattr("synlynk.github_app_auth._sign_jwt", fake_sign_jwt)
+    monkeypatch.setattr("synlynk.github_app_auth.refresh_installation_token", lambda *a, **kw: None)
+
+    with patch("urllib.request.urlopen") as mock_urlopen:
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = json.dumps([{"id": 998877, "account": {"login": "Dialify"}}]).encode("utf-8")
+        mock_urlopen.return_value.__enter__.return_value = mock_resp
+
+        handler.do_GET()
+
+    # Verify installation_id was recorded in pm.json
+    conf = json.loads((apps_dir / "pm.json").read_text())
+    assert conf.get("installation_id") == 998877
+
