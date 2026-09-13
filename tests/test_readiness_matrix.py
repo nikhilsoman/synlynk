@@ -37,6 +37,18 @@ def test_point_1_role_tokens_valid(tmp_path):
     assert "qa" in res["details"]
 
 
+def test_point_1_role_tokens_valid_flat(tmp_path):
+    apps_dir = tmp_path / "apps"
+    apps_dir.mkdir(parents=True)
+    token_file = apps_dir / "pm.token.json"
+    import time
+    token_file.write_text(json.dumps({"token": "ghs_test123", "expires_at": time.time() + 3600}))
+
+    res = check_point_1_role_tokens(apps_dir=str(apps_dir))
+    assert res["status"] == "PASS"
+    assert "pm" in res["details"]
+
+
 def test_point_2_sandbox_egress_success():
     with patch("socket.create_connection") as mock_conn:
         mock_sock = MagicMock()
