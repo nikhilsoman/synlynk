@@ -391,3 +391,21 @@
   - `hitchcock` (`/Users/nikhilsoman/dev/hitchcock`): Seeded `policy.json` and `roles.yaml` in isolated worktree; verified `check_fleet_parity` reports `PASS`.
 - **PR #1563 Merged:** Submitted and squash-merged PR #1563 (`feat/agy/safe-fleet-parity-engine`) to `main` with green QA approval gate and all 4 CI checks passing.
 [@agy]
+
+## 2026-09-13 — Track 1 Fleet Parity Rollout (RxCC, CC-Videoreframing, Playblazer-NG, Hitchcock) & 7-Role Architecture
+
+### Shipped & Landed Across All 4 Target Repositories
+- **Safe Fleet Parity Migration Playbook Codified (`docs/playbooks/safe-fleet-parity-migration-playbook.md`):** Formalized the 4 non-negotiable invariants (Worktree-First, 100% Non-Destructive Directive Preservation, Multi-Stack CI Isolation, and Recursive `.gitignore` Safety) and standardized 8-gate migration lifecycle.
+- **Organization-Scoped GitHub App Provisioning (`synlynk/viz.py`):** Resolved owner classification (`owner_type == "org"` via `gh api users/<owner>`) and routed manifest submissions to `https://github.com/organizations/<org>/settings/apps/new` with `identity_slug` prefixing (`synlynk-dialify-rxcc-*`, `synlynk-dialify-vdowrx-*`), preventing personal account collision.
+- **Dedicated 7th Canonical Role (`infra`):** Added DevOps & Cloud Infrastructure role (`infra: { harness: grok }`) for Pulumi IaC and AWS cloud operations isolation, enabling scoped AWS IAM OIDC trust boundaries and CODEOWNERS protections.
+- **YAML Dictionary Roles Parser (`synlynk/identity_roles.py`):** Enhanced `load_declared_roles()` to parse structured dictionary mappings (`roles:\n  pm:\n    harness: claude`) as well as flat lists, ensuring `synlynk doctor` and CLI tools correctly discover all 7 declared roles.
+- **In-Browser Role Installation & Sync Loop (`synlynk/viz.py`):** Added `/auth/sync?role=<role>` endpoint to capture and verify `installation_id` from GitHub API using the App's JWT, and dual-persisted credentials to both `github_apps/<role>/<role>.app.json` and flat `github_apps/<role>.json`.
+- **CI Resilience in `synlynk/sentinel.py`:** Gracefully handled client repositories where GitHub Actions CI is unconfigured or disabled (e.g. `playblazer-ng`, `hitchcock`), avoiding false-positive fail-closed QA blocks.
+- **PR #1564 Merged (`nikhilsoman/synlynk`):** Submitted and squash-merged PR #1564 with all 4 GitHub Actions checks green.
+- **Sequential 8-Gate Fleet Rollout Executed & Merged Across All 4 Target Repositories:**
+  1. `Dialify/rxcc`: PR #1150 squash-merged to `master`; unit tests passing; shadow worktree deleted.
+  2. `Dialify/cc-videoreframing`: PR #213 squash-merged to `main`; unit tests and matrix checks passing; shadow worktree deleted.
+  3. `Dialify/playblazer-ng`: PR #5 squash-merged to `main` after rebasing past onboarding legacy commit; shadow worktree deleted.
+  4. `nikhilsoman/hitchcock`: PR #23 squash-merged to `main`; shadow worktree deleted.
+- **Diagnostic Verification:** `synlynk doctor` verifies `✓ fleet_parity: PASS` and identifies declared 7 canonical roles (`pm`, `architect`, `qa`, `dev`, `marketing`, `tpm`, `infra`) across all 4 repositories.
+[@agy]

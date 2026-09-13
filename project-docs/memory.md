@@ -1,5 +1,20 @@
 # synlynk Memory
 
+## Track 1 Fleet Parity Rollout & 7-Role Architecture (decided/shipped 2026-09-13)
+- **Safe Fleet Parity Migration Playbook Adopted (`docs/playbooks/safe-fleet-parity-migration-playbook.md`):** Codified 4 non-negotiable invariants (Worktree-First, 100% Non-Destructive Directive Preservation, Multi-Stack CI Isolation, and Recursive `.gitignore` Safety) and the standard 8-gate lifecycle.
+- **Organization-Scoped GitHub App Provisioning (`synlynk/viz.py`):** Resolved owner classification (`owner_type == "org"` via `gh api users/<owner>`) and routed manifest form submissions to `https://github.com/organizations/<org>/settings/apps/new` with `identity_slug` prefixing (`synlynk-dialify-rxcc-*`, `synlynk-dialify-vdowrx-*`), preventing personal namespace collisions.
+- **Dedicated 7th Canonical Role (`infra`):** Standardized DevOps & Cloud Infrastructure role (`infra: { harness: grok }`) for Pulumi IaC and AWS cloud resource management across all workspaces, establishing explicit IAM trust boundaries and CODEOWNERS gating.
+- **YAML Dictionary Roles Parser (`synlynk/identity_roles.py`):** Enhanced `load_declared_roles()` to parse structured dictionary mappings (`roles:\n  pm:\n    harness: claude`) in addition to flat lists.
+- **In-Browser Role Installation & Sync Loop (`synlynk/viz.py`):** Added `/auth/sync?role=<role>` endpoint to automatically capture and verify `installation_id` from GitHub API using the App's JWT, and dual-persisted credentials to both namespaced `github_apps/<role>/<role>.app.json` and flat `github_apps/<role>.json`.
+- **CI Resilience in `synlynk/sentinel.py`:** Gracefully handled repositories where GitHub Actions CI is unconfigured or disabled (`playblazer-ng`, `hitchcock`), avoiding false-positive fail-closed QA blocks.
+- **Landed Across All 4 Target Repositories:**
+  - `Dialify/rxcc`: PR #1150 merged to `master`.
+  - `Dialify/cc-videoreframing`: PR #213 merged to `main`.
+  - `Dialify/playblazer-ng`: PR #5 merged to `main`.
+  - `nikhilsoman/hitchcock`: PR #23 merged to `main`.
+  - `nikhilsoman/synlynk`: PR #1564 merged to `main`.
+[@agy, @nikhilsoman]
+
 ## Safe Fleet Parity Migration Engine & Readiness Bugfix (decided/shipped 2026-09-12)
 - **Point 3 Policy Authority Bug Resolved (`synlynk/readiness.py`, `tests/test_readiness_matrix.py`):** Fixed a false-positive `WARN` in `check_point_3_policy_authority()` where 2-tier policy files wrapping authority definitions inside an `"overrides"` key failed inspection. Updated logic to inspect both top-level and `"overrides"`-nested keys (`dev_authority`, `task_allocation`, `merge_authority`) and verified schema versioning. Added unit test `test_point_3_policy_authority_valid_overrides`; all 12 readiness tests pass.
 - **Architectural Design Spec Approved (`docs/superpowers/specs/2026-09-12-safe-fleet-parity-migration-engine-design.md`):** Formulated Approach A (Worktree-Isolated Shadow Parity Engine with `_hc_fleet_parity` doctor check) and In-Browser Role Provisioning Wizard (`synlynk viz` localhost:27472 GitHub App manifest flow for `pm`, `tpm`, `qa`, `dev`, `architect`, `marketing`), integrating Claude's RxCC retrospective feedback and 8-repo fleet audit findings.
