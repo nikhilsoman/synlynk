@@ -437,4 +437,17 @@
 - **Live Readiness Verified:** Tested `GET /api/readiness/live` in `rxcc` at port 27472: Point 1 now discovers `pm` token and reports `Valid: pm (expires_in_s: 2817)`.
 [@agy]
 
+## 2026-09-13 — GitHub App Naming Standardization & Length Budget Enforcement (`PR #1570`)
+
+### Shipped
+- **Universal Naming Syntax (`synlynk/viz.py`):** Standardized GitHub App naming to `syn-{owner}-{slug}-{role}` across both personal and organization repositories. Fixed inversion bug that generated `synlynk-{role}-{slug}` on personal accounts, ensuring the role is always the terminal suffix.
+- **Prefix & Role Shortening:** Shortened brand prefix from `synlynk-` to `syn-` (saving 4 chars) and canonical roles `architect` -> `arch` (saving 5 chars) and `marketing` -> `mktg` (saving 5 chars). Max role suffix length is now strictly 5 chars (`infra`).
+- **Defensive Truncation Budget:** Implemented deterministic budget allocator capping `owner` and `slug` so every generated app name mathematically satisfies GitHub's <= 34 character limit.
+- **Wizard Card Transparency:** Displayed generated App name (`syn-...`) directly in role provisioning wizard cards before submission.
+- **Event & Marketing Bot Resolution:** Updated `_ROLE_LOGIN_RE` and `_reviewer_role_from_login` in `synlynk/events.py` and author login parsing in `synlynk/marketing.py` to support `syn-*` prefixes and expand `arch`/`mktg` to canonical roles.
+- **Unit Tests:** Added 7 unit tests in `tests/test_viz_onboarding.py` covering personal/org manifest payloads, role expansions, and truncation.
+- **PR #1570 Merged:** Merged commit `087ee600` to `main` with all 4 CI matrix checks passing. Reinstalled `synlynk` 0.20.0 and verified clean live generation on `hitchcock` at port 27472.
+[@agy]
+
+
 
