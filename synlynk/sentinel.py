@@ -530,6 +530,24 @@ def _extract_verified_by_ci(worktree_path=None, worktree_branch=None, pr_number=
         result = None
 
     if result is not None:
+        if not (result.stdout or "").strip():
+            # No checks reported on the PR. Check if repository uses GitHub Actions at all.
+            try:
+                repo_runs = subprocess.run(
+                    ["gh", "run", "list", "--limit", "1", "--json", "id"],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                    cwd=root,
+                )
+                if repo_runs.returncode != 0:
+                    return True
+                repo_data = json.loads(repo_runs.stdout.strip() or "[]")
+                if not repo_data:
+                    return True
+            except Exception:
+                pass
+
         # Only the test-matrix jobs (e.g. "test (3.8)") count. Ignore the
         # in-progress qa-gate row — gh reports it as pending while this job
         # is the one asking, and that used to make the whole blob fail-closed.
