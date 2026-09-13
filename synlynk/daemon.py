@@ -148,6 +148,24 @@ def _release_daemon_lock(lock_fh) -> None:
         pass
 
 
+def _find_pid_listening_on_port(port: int) -> Optional[int]:
+    """Return the PID listening on 127.0.0.1:*port*, or None if not found."""
+    try:
+        res = subprocess.run(
+            ["lsof", "-ti", f":{port}"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if res.returncode == 0 and res.stdout.strip():
+            pids = [int(line) for line in res.stdout.strip().split() if line.isdigit()]
+            if pids:
+                return pids[0]
+    except Exception:
+        pass
+    return None
+
+
 def _daemonize_via_reexec(entry_point: str, logfile: str, cwd: Optional[str] = None) -> None:
     """Spawn a detached child process running a module-level entry point."""
     cwd = os.path.abspath(cwd or os.getcwd())
@@ -216,7 +234,10 @@ class WatchDaemon:
             # time out) so a concurrent start() cannot also pass the
             # not-running check and double-spawn (#349).
             self._await_child_pidfile()
-            print(self._started_message)
+            if self._is_running():
+                print(self._started_message)
+            else:
+                print(f"  ⚠ Failed to start daemon (check {os.path.basename(self.logfile)} for errors).", file=sys.stderr)
         finally:
             _release_daemon_lock(lock_fh)
 
@@ -271,6 +292,8 @@ class WatchDaemon:
         """Returns 'running', 'stopped', or 'zombie' (pidfile exists but process dead)."""
         lock_path = _daemon_lock_path(self.pidfile)
         owner_pid = _daemon_lock_owner_pid(lock_path)
+        if owner_pid == os.getpid():
+            owner_pid = None
         if not os.path.exists(self.pidfile):
             if _pid_is_alive(owner_pid):
                 return "running"
@@ -961,7 +984,13 @@ class SynlynkDaemon(WatchDaemon):
             except (OSError, ValueError):
                 pass
 
+        if owner_pid == os.getpid():
+            owner_pid = None
         target_pid = pid if (pid and _pid_is_alive(pid)) else (owner_pid if _pid_is_alive(owner_pid) else None)
+        if not target_pid:
+            port_pid = _find_pid_listening_on_port(self.HTTP_PORT)
+            if port_pid and _pid_is_alive(port_pid) and port_pid != os.getpid():
+                target_pid = port_pid
         start_file = self.pidfile.replace(".pid", ".start")
 
         if not target_pid:
@@ -1066,9 +1095,34 @@ class SynlynkDaemon(WatchDaemon):
 
         local_http_auth.ensure_local_token()
         handler_class = _make_daemon_handler(self)
-        http_server = _ReuseAddrHTTPServer(("127.0.0.1", self.HTTP_PORT), handler_class)
-        t = _threading.Thread(target=http_server.serve_forever, daemon=True)
-        t.start()
+        try:
+            http_server = _ReuseAddrHTTPServer(("127.0.0.1", self.HTTP_PORT), handler_class)
+            t = _threading.Thread(target=http_server.serve_forever, daemon=True)
+            t.start()
+        except OSError as exc:
+            print(
+                f"  ⚠ Failed to bind HTTP server on port {self.HTTP_PORT}: {exc}",
+                file=sys.stderr,
+            )
+            if os.path.exists(self.pidfile):
+                try:
+                    os.remove(self.pidfile)
+                except OSError:
+                    pass
+            if self._lock_fh is not None:
+                _release_daemon_lock(self._lock_fh)
+                self._lock_fh = None
+            try:
+                _write_sentinel_alert(
+                    "ERROR",
+                    "DAEMON_PORT_CONFLICT",
+                    f"Daemon HTTP server failed to bind 127.0.0.1:{self.HTTP_PORT}: {exc}. "
+                    "Another process may be using this port. Run 'synlynk daemon stop' to reclaim.",
+                    self.sentinel_path,
+                )
+            except Exception:
+                pass
+            return
 
         config = _pkg("load_config")()
         max_parallel = config.get("max_parallel", 4)

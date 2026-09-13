@@ -449,5 +449,24 @@
 - **PR #1570 Merged:** Merged commit `087ee600` to `main` with all 4 CI matrix checks passing. Reinstalled `synlynk` 0.20.0 and verified clean live generation on `hitchcock` at port 27472.
 [@agy]
 
+## 2026-09-13 — Fix Daemon False 'Already Running' Deadlock & Port Collision Zombie (#1572, PR #1573)
 
+### Incident & Symptoms
+- Reported from `rxcc`: `synlynk daemon status` returned "✦ synlynk daemon not running", but `synlynk daemon start` immediately returned "synlynk daemon is already running." without spawning a process.
+- `synlynk daemon restart` produced self-contradictory messages in a single invocation ("✦ daemon not running (cleaned stale lock/pidfile)." followed by "synlynk daemon is already running.").
+- A 2+ day-old zombie daemon process was holding port 27471, triggering unhandled `OSError: [Errno 48] Address already in use` crashes.
 
+### Root Causes
+1. **Starter Self-Recognition Deadlock:** In `WatchDaemon.start()`, `_try_acquire_daemon_lock()` records the caller's PID (`os.getpid()`) into `daemon.pid.lock`. Immediately inside `try:`, `start()` checks `self._is_running()`. In `_health()`, because `pidfile` does not exist yet, it checked `_pid_is_alive(owner_pid)`. Since `owner_pid` was `os.getpid()` (the starter CLI itself), `_health()` returned `"running"`, causing `start()` to falsely report already running and exit without spawning the child.
+2. **Unhandled HTTP Port Bind Conflict:** In `SynlynkDaemon._run_loop()`, `_ReuseAddrHTTPServer` initialization was unhandled. If port 27471 was held by an orphaned process, it raised `[Errno 48] Address already in use`, terminating the child process after `pidfile` was published and leaving an instant zombie.
+3. **Orphan Port Blindspot on Stop:** `SynlynkDaemon.stop()` only checked `self.pidfile` and `lock_path`. If both were deleted or contained dead PIDs while an orphan held port 27471, `stop()` reported "daemon not running" without killing the process on port 27471.
+
+### Shipped
+- **Exclude Caller PID in Health Check (`synlynk/daemon.py`):** In `_health()`, set `owner_pid = None` if `owner_pid == os.getpid()`.
+- **Accurate Startup Verification (`synlynk/daemon.py`):** In `WatchDaemon.start()`, confirm `self._is_running()` after awaiting child pidfile before printing started message; emit stderr error if child failed to start.
+- **Port Conflict Graceful Recovery (`synlynk/daemon.py`):** Wrapped HTTP server startup in `try ... except OSError` in `_run_loop()`, cleanly removing `pidfile`, releasing `lock_fh`, logging error to stderr, and publishing a `DAEMON_PORT_CONFLICT` sentinel alert.
+- **Orphan Reclaim by Port on Stop (`synlynk/daemon.py`):** Added `_find_pid_listening_on_port(self.HTTP_PORT)` fallback in `stop()` to terminate orphaned processes listening on port 27471.
+- **Unit Tests:** Added 6 reproduction and regression test cases in `tests/test_daemon_liveness_1572.py`.
+- **Verification:** All 6 reproduction tests passed. Existing daemon tests (20/20) passed. Full repository test suite passed (2,830 tests passed, 3 skipped).
+- **PR:** Opened PR #1573 on branch `fix/agy/daemon-liveness-false-positive-1572`.
+[@agy]
