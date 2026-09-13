@@ -119,5 +119,5 @@
 - PR #1566: Fixed GitHub App manifest webhook rejection by setting public HTTPS endpoint, active=False, and empty default_events. Full 2,820 test suite passed; zero external fee-bearing dispatch spend.
 - PR #1568: Fixed `/auth/sync` NameError by importing `Path`, adding User-Agent header, and minting role token. Full 2,820 test suite passed; zero external fee-bearing dispatch spend.
 - PR #1569: Extended Point 1 role token readiness check to support flat token files alongside nested paths. All 13 readiness tests passed; zero external fee-bearing dispatch spend.
-
-
+- PR #1570: Universal GitHub App naming standardization (`syn-{owner}-{slug}-{role}`), length budget allocator (<= 34 chars), and manifest card transparency. All 7 unit tests passed; zero external fee-bearing dispatch spend.
+- PR #1573: Fixed daemon false "already running" self-recognition deadlock, unhandled port 27471 collision crash, and orphaned port cleanup (#1572). 6 reproduction tests and full 2,830 test suite passed; zero external fee-bearing dispatch spend.

@@ -740,4 +740,12 @@ work because local git activity is not sufficient corroboration.
 - **Marketing Charter Revision:** Agent `f2039c38-37ef-4380-ae97-9954f0f7ed36` and `SEED_CHARTERS["marketing"]` updated to autonomously execute both protocols, gated by `synlynk pr check` blog validation and post-merge automated dispatch.
 [@nikhilsoman via Agy]
 
+## Daemon Liveness Verification & Port Conflict Recovery (#1572, 2026-09-13)
+
+- **Caller PID Exclusion in Health Check:** In `synlynk/daemon.py::WatchDaemon._health()`, `owner_pid` from `daemon.pid.lock` is ignored if `owner_pid == os.getpid()`. When a starter process acquires the exclusive start lock, its PID is stamped in `lock_path`. Checking `_health()` before spawning previously detected the starter itself as an active background daemon, deadlocking all startup calls into a false "already running" exit.
+- **Accurate Child Confirmation:** `WatchDaemon.start()` now validates `self._is_running()` after awaiting the child's pidfile rather than blindly printing a success message.
+- **Port Collision Containment:** Wrapped HTTP server socket binding in `SynlynkDaemon._run_loop()` in `try ... except OSError`. If port 27471 is held by an orphaned process, the daemon cleans up its pidfile, releases the lifetime lock, and publishes a `DAEMON_PORT_CONFLICT` sentinel alert, preventing unhandled termination crashes.
+- **Orphan Port Reclaim on Stop:** In `SynlynkDaemon.stop()`, if pidfile and lockfile are missing or stale, `stop()` falls back to `_find_pid_listening_on_port(self.HTTP_PORT)` to identify and terminate orphaned processes listening on port 27471.
+[@agy]
+
 
