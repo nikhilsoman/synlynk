@@ -96,15 +96,23 @@ class EventEnvelope:
         return cls.from_dict(json.loads(value))
 
 
-_ROLE_LOGIN_RE = re.compile(r"^synlynk-[a-z0-9]+-([a-z]+)\[bot\]$")
+_ROLE_LOGIN_RE = re.compile(r"^(?:synlynk|syn)-.+-([a-z]+)\[bot\]$")
+
+_ROLE_EXPANSIONS = {
+    "arch": "architect",
+    "mktg": "marketing",
+}
 
 
 def _reviewer_role_from_login(login):
-    """Derives the role slug from a synlynk-<repo-slug>-<role>[bot] GitHub App login."""
+    """Derives the canonical role slug from a synlynk-* or syn-* GitHub App login."""
     if not login:
         return None
     match = _ROLE_LOGIN_RE.match(login)
-    return match.group(1) if match else None
+    if not match:
+        return None
+    role = match.group(1)
+    return _ROLE_EXPANSIONS.get(role, role)
 
 
 def _existing_review_submitted_keys(pr_number):

@@ -13,13 +13,39 @@ from synlynk.viz import (
 
 def test_get_role_manifest_payload():
     payload = get_role_manifest_payload("qa", repo_name="test-repo", port=27472)
-    assert payload["name"] == "synlynk-qa-test-repo"
+    assert payload["name"] == "syn-test-repo-qa"
+    assert len(payload["name"]) <= 34
     assert "pull_requests" in payload["default_permissions"]
     assert payload["default_permissions"]["pull_requests"] == "write"
     assert "http://localhost:27472/auth/callback" in payload["redirect_url"]
     assert payload["hook_attributes"]["url"] == "https://synlynk.com/github-apps/test-repo/qa/webhook"
     assert payload["hook_attributes"]["active"] is False
     assert payload["default_events"] == []
+
+    # Personal repo with owner and role abbreviation
+    payload_arch = get_role_manifest_payload("architect", repo_name="hitchcock", owner="nikhilsoman")
+    assert payload_arch["name"] == "syn-nikhilsoman-hitchcock-arch"
+    assert len(payload_arch["name"]) <= 34
+
+    # Org repo with marketing role abbreviation
+    payload_mktg = get_role_manifest_payload("marketing", repo_name="playblazer-ng", org="Dialify")
+    assert payload_mktg["name"] == "syn-dialify-playblazer-ng-mktg"
+    assert len(payload_mktg["name"]) <= 34
+
+    # Defensive truncation guaranteeing <= 34 chars on long names
+    payload_long = get_role_manifest_payload("infra", repo_name="very-long-project-name-12345", owner="superlongorganizationname")
+    assert len(payload_long["name"]) <= 34
+    assert payload_long["name"].startswith("syn-")
+    assert payload_long["name"].endswith("-infra")
+
+
+def test_reviewer_role_from_login():
+    from synlynk.events import _reviewer_role_from_login
+    assert _reviewer_role_from_login("synlynk-synlynk-qa[bot]") == "qa"
+    assert _reviewer_role_from_login("syn-dialify-rxcc-pm[bot]") == "pm"
+    assert _reviewer_role_from_login("syn-dialify-playblazer-ng-arch[bot]") == "architect"
+    assert _reviewer_role_from_login("syn-nikhilsoman-hitchcock-mktg[bot]") == "marketing"
+    assert _reviewer_role_from_login("syn-nikhilsoman-hitchcock-infra[bot]") == "infra"
 
 
 def test_generate_roles_onboarding_html(tmp_path):
@@ -47,10 +73,26 @@ def test_generate_roles_onboarding_html_org_and_identity_slug(tmp_path, monkeypa
 
     html = generate_roles_onboarding_html(repo_root=str(tmp_path), port=27472)
     assert "https://github.com/organizations/Dialify/settings/apps/new" in html
-    assert "synlynk-dialify-vdowrx-pm" in html
-    assert "synlynk-dialify-vdowrx-qa" in html
-    assert "synlynk-dialify-vdowrx-dev" in html
-    assert "synlynk-dialify-vdowrx-infra" in html
+    assert "syn-dialify-vdowrx-pm" in html
+    assert "syn-dialify-vdowrx-qa" in html
+    assert "syn-dialify-vdowrx-dev" in html
+    assert "syn-dialify-vdowrx-infra" in html
+    assert "syn-dialify-vdowrx-arch" in html
+    assert "syn-dialify-vdowrx-mktg" in html
+
+
+def test_generate_roles_onboarding_html_personal_repo(tmp_path, monkeypatch):
+    from synlynk import team
+    monkeypatch.setattr(team, "_resolve_repo_owner", lambda cwd: ("user", "nikhilsoman"))
+
+    repo_dir = tmp_path / "hitchcock"
+    repo_dir.mkdir()
+
+    html = generate_roles_onboarding_html(repo_root=str(repo_dir), port=27472)
+    assert "https://github.com/settings/apps/new" in html
+    assert "syn-nikhilsoman-hitchcock-pm" in html
+    assert "syn-nikhilsoman-hitchcock-arch" in html
+    assert "syn-nikhilsoman-hitchcock-infra" in html
 
 
 def test_handle_github_app_conversion_mock(tmp_path):
