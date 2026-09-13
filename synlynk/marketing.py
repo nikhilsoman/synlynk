@@ -388,7 +388,7 @@ def fetch_pr_details(pr_number: Union[int, str], repo_root: Optional[str] = None
             author_data = data.get("author") or {}
             author_login = author_data.get("login", "synlynk team")
             if author_login.startswith("app/"):
-                author_login = author_login.replace("app/synlynk-", "").replace("app/", "") + " agent"
+                author_login = author_login.replace("app/synlynk-", "").replace("app/syn-", "").replace("app/", "") + " agent"
 
             merged_at = data.get("mergedAt") or ""
             date_str = merged_at[:10] if merged_at else datetime.date.today().isoformat()

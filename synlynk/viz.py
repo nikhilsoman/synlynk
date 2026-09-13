@@ -4976,6 +4976,7 @@ def get_role_manifest_payload(
     port: int = 27472,
     org: str = "",
     project_slug: str = "",
+    owner: str = "",
 ) -> dict:
     """Generate GitHub App Manifest payload for a specific workspace role."""
     role = role.lower()
@@ -4990,10 +4991,34 @@ def get_role_manifest_payload(
         permissions["statuses"] = "write"
 
     slug = project_slug or repo_name
-    if org:
-        app_name = f"synlynk-{org.lower()}-{slug}-{role}"
+    owner_str = (owner or org or "").lower().strip()
+
+    role_abbr = {
+        "architect": "arch",
+        "marketing": "mktg",
+    }.get(role, role)
+
+    prefix = "syn"
+
+    if owner_str:
+        # Format: syn-{owner}-{slug}-{role}
+        # Fixed: prefix (3) + 3 hyphens + role_abbr = 6 + len(role_abbr)
+        avail = 34 - len(prefix) - len(role_abbr) - 3
+        if len(owner_str) + len(slug) > avail:
+            capped_owner = owner_str[:10].rstrip("-")
+            avail_slug = max(1, avail - len(capped_owner))
+            clean_slug = slug[:avail_slug].rstrip("-")
+            app_name = f"{prefix}-{capped_owner}-{clean_slug}-{role_abbr}"
+        else:
+            app_name = f"{prefix}-{owner_str}-{slug}-{role_abbr}"
     else:
-        app_name = f"synlynk-{role}-{slug}"
+        # Format: syn-{slug}-{role}
+        avail_slug = 34 - len(prefix) - len(role_abbr) - 2
+        clean_slug = slug[:avail_slug].rstrip("-")
+        app_name = f"{prefix}-{clean_slug}-{role_abbr}"
+
+    if len(app_name) > 34:
+        app_name = app_name[:34].rstrip("-")
 
     return {
         "name": app_name,
@@ -5089,6 +5114,7 @@ def generate_roles_onboarding_html(repo_root: str = ".", port: int = 27472) -> s
     except Exception:
         pass
 
+    owner_slug = ""
     try:
         cfg_path = root / ".synlynk" / "config.json"
         if cfg_path.exists():
@@ -5097,9 +5123,12 @@ def generate_roles_onboarding_html(repo_root: str = ".", port: int = 27472) -> s
                 project_slug = cfg_data["identity_slug"]
             elif cfg_data.get("repo"):
                 project_slug = cfg_data["repo"]
+            if cfg_data.get("owner_slug"):
+                owner_slug = cfg_data["owner_slug"]
     except Exception:
         pass
 
+    effective_owner = owner_slug or owner_login
     org_name = owner_login if owner_type == "org" else ""
     form_action = (
         f"https://github.com/organizations/{owner_login}/settings/apps/new"
@@ -5141,12 +5170,14 @@ def generate_roles_onboarding_html(repo_root: str = ".", port: int = 27472) -> s
         if is_configured and installation_id:
             badge = '<span class="badge configured">✓ Installed & Active</span>'
             btn_html = '<button class="btn configured-btn" disabled>Active Role</button>'
+            app_name_display = app_slug
         elif is_configured:
             badge = '<span class="badge configured" style="background:#f59e0b;color:#000;">Pending Installation</span>'
             btn_html = f'''<div style="display:flex;gap:8px;flex-direction:column;">
                 <a href="https://github.com/apps/{app_slug}/installations/new" target="_blank" class="btn primary-btn" style="text-align:center;text-decoration:none;padding:8px 12px;">Install on GitHub ↗</a>
                 <a href="/auth/sync?role={slug}" class="btn" style="text-align:center;text-decoration:none;padding:8px 12px;background:#283044;color:#f0f3f8;">Sync Installation ID</a>
             </div>'''
+            app_name_display = app_slug
         else:
             badge = '<span class="badge unconfigured">Not Configured</span>'
             manifest = get_role_manifest_payload(
@@ -5155,7 +5186,9 @@ def generate_roles_onboarding_html(repo_root: str = ".", port: int = 27472) -> s
                 port=port,
                 org=org_name,
                 project_slug=project_slug,
+                owner=effective_owner,
             )
+            app_name_display = manifest.get("name", "")
             manifest_json = json.dumps(manifest)
             escaped = _html.escape(manifest_json, quote=True)
             btn_html = f'''<form action="{form_action}" method="POST" target="_blank">
@@ -5170,7 +5203,7 @@ def generate_roles_onboarding_html(repo_root: str = ".", port: int = 27472) -> s
                 {badge}
             </div>
             <p class="role-desc">{desc}</p>
-            <div class="role-meta">Default Harness: <strong>{default_harness}</strong></div>
+            <div class="role-meta">Default Harness: <strong>{default_harness}</strong> &bull; App: <code>{app_name_display}</code></div>
             <div class="card-actions">
                 {btn_html}
             </div>
