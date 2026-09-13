@@ -4997,11 +4997,14 @@ def get_role_manifest_payload(
     return {
         "name": app_name,
         "url": "https://synlynk.com",
-        "hook_attributes": {"url": f"http://localhost:{port}/webhook"},
+        "hook_attributes": {
+            "url": f"https://synlynk.com/github-apps/{slug}/{role}/webhook",
+            "active": False,
+        },
         "redirect_url": f"http://localhost:{port}/auth/callback?role={role}",
         "public": False,
         "default_permissions": permissions,
-        "default_events": ["pull_request", "pull_request_review", "issues"],
+        "default_events": [],
     }
 
 
