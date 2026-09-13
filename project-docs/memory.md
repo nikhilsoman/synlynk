@@ -13,6 +13,7 @@
   - `Dialify/playblazer-ng`: PR #5 merged to `main`.
   - `nikhilsoman/hitchcock`: PR #23 merged to `main`.
   - `nikhilsoman/synlynk`: PR #1564 merged to `main`.
+- **GitHub App Manifest Webhook Resolution (`synlynk/viz.py`, PR #1566):** Resolved GitHub App Manifest creation error (`Error: Hook url is not supported because it isn't reachable over the public Internet (localhost)`). Replaced `localhost:{port}/webhook` with `https://synlynk.com/github-apps/{slug}/{role}/webhook`, explicitly set `"active": False` to disable webhook event delivery, and set `"default_events": []` since workspace roles operate via CLI polling and PR creation without inbound webhooks.
 [@agy, @nikhilsoman]
 
 ## Safe Fleet Parity Migration Engine & Readiness Bugfix (decided/shipped 2026-09-12)

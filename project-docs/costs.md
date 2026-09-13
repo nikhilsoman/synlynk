@@ -110,4 +110,6 @@
 - Organization-scoped GitHub App provisioning, YAML dict roles parsing, in-browser `/auth/sync` installation loop, and CI resilience implemented and merged (PR #1564).
 - 4 target pull requests approved and squash-merged to primary branches (`rxcc` PR #1150, `cc-videoreframing` PR #213, `playblazer-ng` PR #5, `hitchcock` PR #23).
 - 68 unit and integration tests passing; zero external fee-bearing dispatch spend.
+- PR #1566: Fixed GitHub App manifest webhook rejection by setting public HTTPS endpoint, active=False, and empty default_events. Full 2,820 test suite passed; zero external fee-bearing dispatch spend.
+
 

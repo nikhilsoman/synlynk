@@ -409,3 +409,13 @@
   4. `nikhilsoman/hitchcock`: PR #23 squash-merged to `main`; shadow worktree deleted.
 - **Diagnostic Verification:** `synlynk doctor` verifies `✓ fleet_parity: PASS` and identifies declared 7 canonical roles (`pm`, `architect`, `qa`, `dev`, `marketing`, `tpm`, `infra`) across all 4 repositories.
 [@agy]
+
+## 2026-09-13 — GitHub App Manifest Webhook Resolution (`PR #1566`)
+
+### Shipped
+- **Manifest Webhook URL Resolution (`synlynk/viz.py`):** Resolved GitHub App Manifest creation error (`Error: Hook url is not supported because it isn't reachable over the public Internet (localhost)`). In GitHub's manifest specification, `hook_attributes.url` is validated against public internet destinations. Replaced `localhost:{port}/webhook` with `https://synlynk.com/github-apps/{slug}/{role}/webhook`, explicitly set `"active": False` to disable webhook event delivery, and set `"default_events": []` since workspace roles operate via CLI polling and pull requests without inbound webhooks.
+- **Test Suite Updates (`tests/test_viz_onboarding.py`):** Added assertions for `hook_attributes.url` public HTTPS schema, `active: False`, and `default_events: []`. Verified all 2,820 tests pass.
+- **PR #1566 Merged:** Submitted and squash-merged PR #1566 to `main` with all 4 CI checks passing and green QA merge gate.
+- **RxCC Server Re-Launched:** Restarted background `synlynk viz --serve --port 27472` in `/Users/nikhilsoman/dev/rxcc` with the updated manifest payload. Verified live HTML generation generates valid public HTTPS webhook URLs and inactive webhook states.
+[@agy]
+
