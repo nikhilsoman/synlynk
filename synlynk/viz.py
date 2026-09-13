@@ -3,6 +3,7 @@ import html
 import http.server
 import json
 import os
+from pathlib import Path
 import re
 import subprocess
 import sys
@@ -5429,15 +5430,16 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
             params = parse_qs(parsed.query)
             role = params.get("role", [""])[0]
             if role:
-                from synlynk.github_app_auth import _sign_jwt
-                from urllib.request import Request, urlopen
-                root = Path(".").resolve()
-                apps_dir = root / ".synlynk" / "github_apps"
-                json_path = apps_dir / f"{role}.json"
-                app_json_path = apps_dir / role / f"{role}.app.json"
-                target_path = json_path if json_path.exists() else app_json_path
-                if target_path.exists():
-                    try:
+                try:
+                    from pathlib import Path
+                    from synlynk.github_app_auth import _sign_jwt, refresh_installation_token
+                    from urllib.request import Request, urlopen
+                    root = Path(".").resolve()
+                    apps_dir = root / ".synlynk" / "github_apps"
+                    json_path = apps_dir / f"{role}.json"
+                    app_json_path = apps_dir / role / f"{role}.app.json"
+                    target_path = json_path if json_path.exists() else app_json_path
+                    if target_path.exists():
                         conf = json.loads(target_path.read_text(encoding="utf-8"))
                         app_id = conf.get("app_id") or conf.get("id")
                         pem_path = conf.get("private_key_path")
@@ -5453,6 +5455,7 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
                                     "Accept": "application/vnd.github+json",
                                     "Authorization": f"Bearer {jwt}",
                                     "X-GitHub-Api-Version": "2022-11-28",
+                                    "User-Agent": "synlynk-viz",
                                 }
                             )
                             with urlopen(req) as resp:
@@ -5470,8 +5473,12 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
                                     aconf = json.loads(app_json_path.read_text(encoding="utf-8"))
                                     aconf["installation_id"] = inst_id
                                     app_json_path.write_text(json.dumps(aconf, indent=2) + "\n", encoding="utf-8")
-                    except Exception:
-                        pass
+                                try:
+                                    refresh_installation_token(role, conf, apps_dir=str(apps_dir))
+                                except Exception:
+                                    pass
+                except Exception:
+                    pass
             self.send_response(302)
             self.send_header("Location", f"/onboarding/roles?synced={role}")
             self.end_headers()
