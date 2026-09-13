@@ -39,27 +39,37 @@ def check_point_1_role_tokens(apps_dir: Optional[str] = None) -> Dict[str, Any]:
     valid_roles = []
 
     for entry in os.listdir(apps_dir):
+        token_path = None
+        role_name = None
         role_path = os.path.join(apps_dir, entry)
-        if not os.path.isdir(role_path):
+        if os.path.isdir(role_path):
+            cand = os.path.join(role_path, f"{entry}.token.json")
+            if os.path.exists(cand):
+                token_path = cand
+                role_name = entry
+        elif entry.endswith(".token.json"):
+            token_path = role_path
+            role_name = entry[:-len(".token.json")]
+
+        if not token_path or not role_name or role_name in roles_found:
             continue
-        token_path = os.path.join(role_path, f"{entry}.token.json")
-        if os.path.exists(token_path):
-            try:
-                with open(token_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                expires_at = data.get("expires_at", 0)
-                is_valid = isinstance(expires_at, (int, float)) and expires_at - 60 > now
-                roles_found[entry] = {
-                    "valid": is_valid,
-                    "expires_in_s": max(0, int(expires_at - now)),
-                }
-                if is_valid:
-                    valid_roles.append(entry)
-                else:
-                    expired_roles.append(entry)
-            except Exception as e:
-                roles_found[entry] = {"valid": False, "error": str(e)}
-                expired_roles.append(entry)
+
+        try:
+            with open(token_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            expires_at = data.get("expires_at", 0)
+            is_valid = isinstance(expires_at, (int, float)) and expires_at - 60 > now
+            roles_found[role_name] = {
+                "valid": is_valid,
+                "expires_in_s": max(0, int(expires_at - now)),
+            }
+            if is_valid:
+                valid_roles.append(role_name)
+            else:
+                expired_roles.append(role_name)
+        except Exception as e:
+            roles_found[role_name] = {"valid": False, "error": str(e)}
+            expired_roles.append(role_name)
 
     if not roles_found:
         return {
