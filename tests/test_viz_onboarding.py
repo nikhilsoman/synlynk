@@ -32,6 +32,22 @@ def test_generate_roles_onboarding_html(tmp_path):
     assert "/api/readiness/live" in html
 
 
+def test_generate_roles_onboarding_html_org_and_identity_slug(tmp_path, monkeypatch):
+    from synlynk import team
+    monkeypatch.setattr(team, "_resolve_repo_owner", lambda cwd: ("org", "Dialify"))
+    
+    # Configure identity_slug: "vdowrx"
+    synlynk_dir = tmp_path / ".synlynk"
+    synlynk_dir.mkdir()
+    (synlynk_dir / "config.json").write_text(json.dumps({"identity_slug": "vdowrx"}))
+
+    html = generate_roles_onboarding_html(repo_root=str(tmp_path), port=27472)
+    assert "https://github.com/organizations/Dialify/settings/apps/new" in html
+    assert "synlynk-dialify-vdowrx-pm" in html
+    assert "synlynk-dialify-vdowrx-qa" in html
+    assert "synlynk-dialify-vdowrx-dev" in html
+
+
 def test_handle_github_app_conversion_mock(tmp_path):
     mock_response = {
         "id": 123456,

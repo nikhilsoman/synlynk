@@ -4969,7 +4969,13 @@ def _write_cache(data: dict, port: int) -> None:
         json.dump(manifest, f)
 
 
-def get_role_manifest_payload(role: str, repo_name: str = "workspace", port: int = 27472) -> dict:
+def get_role_manifest_payload(
+    role: str,
+    repo_name: str = "workspace",
+    port: int = 27472,
+    org: str = "",
+    project_slug: str = "",
+) -> dict:
     """Generate GitHub App Manifest payload for a specific workspace role."""
     role = role.lower()
     permissions = {
@@ -4982,8 +4988,14 @@ def get_role_manifest_payload(role: str, repo_name: str = "workspace", port: int
         permissions["checks"] = "write"
         permissions["statuses"] = "write"
 
+    slug = project_slug or repo_name
+    if org:
+        app_name = f"synlynk-{org.lower()}-{slug}-{role}"
+    else:
+        app_name = f"synlynk-{role}-{slug}"
+
     return {
-        "name": f"synlynk-{role}-{repo_name}",
+        "name": app_name,
         "url": "https://synlynk.com",
         "hook_attributes": {"url": f"http://localhost:{port}/webhook"},
         "redirect_url": f"http://localhost:{port}/auth/callback?role={role}",
@@ -5039,6 +5051,33 @@ def generate_roles_onboarding_html(repo_root: str = ".", port: int = 27472) -> s
     repo_name = root.name
     roles_dir = root / ".synlynk" / "github_apps"
 
+    owner_type = "user"
+    owner_login = ""
+    project_slug = repo_name
+    try:
+        from synlynk.team import _resolve_repo_owner
+        owner_type, owner_login = _resolve_repo_owner(cwd=str(root))
+    except Exception:
+        pass
+
+    try:
+        cfg_path = root / ".synlynk" / "config.json"
+        if cfg_path.exists():
+            cfg_data = json.loads(cfg_path.read_text(encoding="utf-8"))
+            if cfg_data.get("identity_slug"):
+                project_slug = cfg_data["identity_slug"]
+            elif cfg_data.get("repo"):
+                project_slug = cfg_data["repo"]
+    except Exception:
+        pass
+
+    org_name = owner_login if owner_type == "org" else ""
+    form_action = (
+        f"https://github.com/organizations/{owner_login}/settings/apps/new"
+        if owner_type == "org" and owner_login
+        else "https://github.com/settings/apps/new"
+    )
+
     roles_info = [
         ("pm", "Program Manager", "claude", "Roadmap, goal tracking, issue triage, and named release narratives."),
         ("tpm", "Technical Program Manager", "claude", "Milestone execution loop, cross-harness sweeps, and dependency tracking."),
@@ -5058,10 +5097,16 @@ def generate_roles_onboarding_html(repo_root: str = ".", port: int = 27472) -> s
             btn_html = '<button class="btn configured-btn" disabled>Active Role</button>'
         else:
             badge = '<span class="badge unconfigured">Not Configured</span>'
-            manifest = get_role_manifest_payload(slug, repo_name=repo_name, port=port)
+            manifest = get_role_manifest_payload(
+                slug,
+                repo_name=repo_name,
+                port=port,
+                org=org_name,
+                project_slug=project_slug,
+            )
             manifest_json = json.dumps(manifest)
             escaped = _html.escape(manifest_json, quote=True)
-            btn_html = f'''<form action="https://github.com/settings/apps/new" method="POST" target="_blank">
+            btn_html = f'''<form action="{form_action}" method="POST" target="_blank">
                 <input type="hidden" name="manifest" value="{escaped}">
                 <button type="submit" class="btn primary-btn">Provision with GitHub</button>
             </form>'''
