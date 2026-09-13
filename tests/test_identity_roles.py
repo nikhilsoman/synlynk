@@ -26,3 +26,20 @@ def test_load_declared_roles_ignores_malformed_file(tmp_path, monkeypatch):
     (tmp_path / ".synlynk").mkdir()
     (tmp_path / ".synlynk" / "roles.yaml").write_text("not: valid: yaml: [[[")
     assert load_declared_roles() == list(DEFAULT_ROLES)
+
+
+def test_load_declared_roles_reads_yaml_dict(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / ".synlynk" / "roles.yaml").write_text(
+        "schema_version: 1\n"
+        "roles:\n"
+        "  pm:\n"
+        "    harness: claude\n"
+        "  architect:\n"
+        "    harness: claude\n"
+        "  infra:\n"
+        "    harness: grok\n"
+    )
+    assert load_declared_roles() == ["pm", "architect", "infra"]
+

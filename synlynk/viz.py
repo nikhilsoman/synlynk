@@ -5033,6 +5033,31 @@ def handle_github_app_conversion(code: str, role: str, repo_root: str = ".") -> 
     if pem_path.exists():
         os.chmod(str(pem_path), 0o600)
 
+    # Also persist standard flat files expected by synlynk doctor and team.py
+    apps_dir = root / ".synlynk" / "github_apps"
+    legacy_json_path = apps_dir / f"{role}.json"
+    legacy_pem_path = apps_dir / f"{role}.pem"
+    if pem:
+        legacy_pem_path.write_text(pem, encoding="utf-8")
+        try:
+            os.chmod(str(legacy_pem_path), 0o600)
+        except OSError:
+            pass
+
+    flat_config = {
+        "role": role,
+        "app_id": app_id,
+        "client_id": data.get("client_id"),
+        "app_slug": data.get("slug") or data.get("name") or role,
+        "installation_id": data.get("installation_id"),
+        "private_key_path": str(legacy_pem_path if legacy_pem_path.exists() else pem_path),
+    }
+    legacy_json_path.write_text(json.dumps(flat_config, indent=2) + "\n", encoding="utf-8")
+    try:
+        os.chmod(str(legacy_json_path), 0o600)
+    except OSError:
+        pass
+
     try:
         from synlynk.github_app_auth import refresh_installation_token
         refresh_installation_token(role, apps_dir=str(root / ".synlynk" / "github_apps"))
@@ -5091,11 +5116,33 @@ def generate_roles_onboarding_html(repo_root: str = ".", port: int = 27472) -> s
     cards_html = []
     for slug, title, default_harness, desc in roles_info:
         role_app = roles_dir / slug / f"{slug}.app.json"
-        is_configured = role_app.exists()
+        legacy_role_app = roles_dir / f"{slug}.json"
+        is_configured = role_app.exists() or legacy_role_app.exists()
 
-        if is_configured:
-            badge = '<span class="badge configured">✓ Configured</span>'
+        conf = {}
+        if legacy_role_app.exists():
+            try:
+                conf = json.loads(legacy_role_app.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+        elif role_app.exists():
+            try:
+                conf = json.loads(role_app.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+
+        installation_id = conf.get("installation_id")
+        app_slug = conf.get("app_slug") or conf.get("slug") or slug
+
+        if is_configured and installation_id:
+            badge = '<span class="badge configured">✓ Installed & Active</span>'
             btn_html = '<button class="btn configured-btn" disabled>Active Role</button>'
+        elif is_configured:
+            badge = '<span class="badge configured" style="background:#f59e0b;color:#000;">Pending Installation</span>'
+            btn_html = f'''<div style="display:flex;gap:8px;flex-direction:column;">
+                <a href="https://github.com/apps/{app_slug}/installations/new" target="_blank" class="btn primary-btn" style="text-align:center;text-decoration:none;padding:8px 12px;">Install on GitHub ↗</a>
+                <a href="/auth/sync?role={slug}" class="btn" style="text-align:center;text-decoration:none;padding:8px 12px;background:#283044;color:#f0f3f8;">Sync Installation ID</a>
+            </div>'''
         else:
             badge = '<span class="badge unconfigured">Not Configured</span>'
             manifest = get_role_manifest_payload(
@@ -5373,6 +5420,58 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
                     self.send_error(500, f"GitHub App conversion error: {e}")
                     return
             self.send_error(400, "Missing code query param")
+            return
+
+        if path == "/auth/sync":
+            params = parse_qs(parsed.query)
+            role = params.get("role", [""])[0]
+            if role:
+                from synlynk.github_app_auth import _sign_jwt
+                from urllib.request import Request, urlopen
+                root = Path(".").resolve()
+                apps_dir = root / ".synlynk" / "github_apps"
+                json_path = apps_dir / f"{role}.json"
+                app_json_path = apps_dir / role / f"{role}.app.json"
+                target_path = json_path if json_path.exists() else app_json_path
+                if target_path.exists():
+                    try:
+                        conf = json.loads(target_path.read_text(encoding="utf-8"))
+                        app_id = conf.get("app_id") or conf.get("id")
+                        pem_path = conf.get("private_key_path")
+                        if not pem_path or not os.path.exists(pem_path):
+                            cand_pem = apps_dir / f"{role}.pem"
+                            cand_pem2 = apps_dir / role / f"{role}.private-key.pem"
+                            pem_path = str(cand_pem if cand_pem.exists() else cand_pem2)
+                        if app_id and pem_path and os.path.exists(pem_path):
+                            jwt = _sign_jwt(app_id, pem_path)
+                            req = Request(
+                                "https://api.github.com/app/installations",
+                                headers={
+                                    "Accept": "application/vnd.github+json",
+                                    "Authorization": f"Bearer {jwt}",
+                                    "X-GitHub-Api-Version": "2022-11-28",
+                                }
+                            )
+                            with urlopen(req) as resp:
+                                inst_payload = json.loads(resp.read().decode("utf-8"))
+                            inst_list = inst_payload if isinstance(inst_payload, list) else inst_payload.get("installations", [])
+                            if inst_list and isinstance(inst_list[0], dict) and "id" in inst_list[0]:
+                                inst_id = inst_list[0]["id"]
+                                conf["installation_id"] = inst_id
+                                target_path.write_text(json.dumps(conf, indent=2) + "\n", encoding="utf-8")
+                                if json_path.exists() and target_path != json_path:
+                                    jconf = json.loads(json_path.read_text(encoding="utf-8"))
+                                    jconf["installation_id"] = inst_id
+                                    json_path.write_text(json.dumps(jconf, indent=2) + "\n", encoding="utf-8")
+                                if app_json_path.exists() and target_path != app_json_path:
+                                    aconf = json.loads(app_json_path.read_text(encoding="utf-8"))
+                                    aconf["installation_id"] = inst_id
+                                    app_json_path.write_text(json.dumps(aconf, indent=2) + "\n", encoding="utf-8")
+                    except Exception:
+                        pass
+            self.send_response(302)
+            self.send_header("Location", f"/onboarding/roles?synced={role}")
+            self.end_headers()
             return
 
         if path == "/api/readiness/live":

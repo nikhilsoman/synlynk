@@ -13,7 +13,7 @@ ROLES_YAML_PATH = os.path.join(".synlynk", "roles.yaml")
 
 
 def load_declared_roles() -> list:
-    """Read .synlynk/roles.yaml's flat `roles:` list; fall back to DEFAULT_ROLES."""
+    """Read .synlynk/roles.yaml's flat `roles:` list or mapping; fall back to DEFAULT_ROLES."""
     if not os.path.exists(ROLES_YAML_PATH):
         return list(DEFAULT_ROLES)
     try:
@@ -31,8 +31,16 @@ def load_declared_roles() -> list:
         if in_roles_block:
             if stripped.startswith("- "):
                 roles.append(stripped[2:].strip())
+            elif stripped.endswith(":") and not stripped.startswith("#"):
+                indent = len(line) - len(line.lstrip())
+                if indent == 2:
+                    roles.append(stripped[:-1].strip())
+                elif indent == 0:
+                    break
             elif stripped and not stripped.startswith("#"):
-                break
+                indent = len(line) - len(line.lstrip())
+                if indent == 0:
+                    break
     return roles if roles else list(DEFAULT_ROLES)
 
 
