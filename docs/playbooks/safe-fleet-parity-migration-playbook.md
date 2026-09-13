@@ -55,7 +55,7 @@ Every target repository must advance sequentially through these 8 gates:
 ### Gate 4: Stack-Aware Config & Policy Provisioning
 - [ ] Verify `.synlynk/config.json` declares all 4 core harnesses (`claude`, `codex`, `agy`, `grok`) in `workgroup_agents`.
 - [ ] Generate `.synlynk/policy.json` with native test commands (e.g., `npm test` / `pnpm test` for Node, `go test ./...` for Go, `pytest` for Python).
-- [ ] Seed canonical `.synlynk/roles.yaml` defining 6 standard roles (`pm`, `tpm`, `qa`, `dev`, `architect`, `marketing`).
+- [ ] Seed canonical `.synlynk/roles.yaml` defining 7 standard roles (`pm`, `tpm`, `qa`, `dev`, `architect`, `marketing`, `infra`).
 - [ ] Seed `.agents/` profiles (`claude.json`, `agy.json`, `codex.json`, `grok.json`).
 
 ### Gate 5: Recursive `.gitignore` Hardening
@@ -120,10 +120,11 @@ Once baseline parity is merged, autonomous execution requires role-scoped identi
    ```
    http://localhost:27472/onboarding/roles
    ```
-3. For each unconfigured role (`pm`, `tpm`, `qa`, `dev`, `architect`, `marketing`), click **"Provision with GitHub"**.
+3. For each unconfigured role (`pm`, `tpm`, `qa`, `dev`, `architect`, `marketing`, `infra`), click **"Provision with GitHub"**.
 4. GitHub opens with a pre-configured GitHub App Manifest:
-   - App Name: `synlynk-<role>-<repo_name>`
-   - Permissions: Scoped read/write for issues, PRs, and contents; checks & statuses write for `qa`/`dev`.
+   - Form Target: Organization settings (`https://github.com/organizations/<org>/settings/apps/new`) for org-owned repositories, or personal settings for user repos.
+   - App Name: `synlynk-<org>-<slug>-<role>` (e.g. `synlynk-dialify-rxcc-infra`, `synlynk-dialify-vdowrx-infra`).
+   - Permissions: Scoped read/write for issues, PRs, and contents; checks & statuses write for `qa`, `dev`, and `infra`.
    - Callback: `http://localhost:27472/auth/callback?role=<role>`
 5. Click **"Create GitHub App"**; GitHub redirects back to Vizor with an authorization code.
 6. Vizor exchanges the code for credentials, writes `<role>.app.json` and `<role>.private-key.pem` with `0o600` permissions into `.synlynk/github_apps/<role>/`, and mints an initial role token.

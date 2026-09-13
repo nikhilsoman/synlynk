@@ -4984,7 +4984,7 @@ def get_role_manifest_payload(
         "pull_requests": "write",
         "issues": "write",
     }
-    if role in ("qa", "dev"):
+    if role in ("qa", "dev", "infra"):
         permissions["checks"] = "write"
         permissions["statuses"] = "write"
 
@@ -5085,6 +5085,7 @@ def generate_roles_onboarding_html(repo_root: str = ".", port: int = 27472) -> s
         ("dev", "Software Developer", "codex", "Core implementation, tests, bugfixes, refactoring, and PR creation."),
         ("architect", "Lead Architect", "claude", "System architecture, specifications, technical decisions, and charter governance."),
         ("marketing", "Marketing Engineer", "agy", "Release communications, documentation compilation, and build diary blogs."),
+        ("infra", "DevOps & Infrastructure", "grok", "Pulumi IaC, AWS cloud resource management, and CI/CD pipelines."),
     ]
 
     cards_html = []

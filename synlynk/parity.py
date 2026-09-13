@@ -412,6 +412,9 @@ def run_parity_remediation(
             "  tpm:\n"
             "    harness: claude\n"
             "    description: \"Technical program management, milestone execution.\"\n"
+            "  infra:\n"
+            "    harness: grok\n"
+            "    description: \"Cloud infrastructure, Pulumi IaC, container pipelines, and AWS operations.\"\n"
         )
         roles_path.write_text(roles_content, encoding="utf-8")
 

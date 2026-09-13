@@ -28,6 +28,7 @@ def test_generate_roles_onboarding_html(tmp_path):
     assert "dev" in html
     assert "architect" in html
     assert "marketing" in html
+    assert "infra" in html
     assert "https://github.com/settings/apps/new" in html
     assert "/api/readiness/live" in html
 
@@ -46,6 +47,7 @@ def test_generate_roles_onboarding_html_org_and_identity_slug(tmp_path, monkeypa
     assert "synlynk-dialify-vdowrx-pm" in html
     assert "synlynk-dialify-vdowrx-qa" in html
     assert "synlynk-dialify-vdowrx-dev" in html
+    assert "synlynk-dialify-vdowrx-infra" in html
 
 
 def test_handle_github_app_conversion_mock(tmp_path):
