@@ -1,5 +1,22 @@
 # synlynk Memory
 
+## Universal Surface Expansion & Standalone Synlynk Cockpit Herdr Spec (decided 2026-09-14)
+- **Universal Surface Expansion for FTUE Onboarding (`v0.21.0`):**
+  - Expanded Stage 1 surface binding beyond Cursor, Windsurf, and VS Code to natively support:
+    1. *Warp Terminal:* Auto-generation of `.warp/workflows/synlynk.yaml` command workflows, registration of `synlynk mcp` in Warp AI Assistant (`~/.warp/mcp.json`), and OSC 133 semantic terminal block formatting.
+    2. *Antigravity IDE (`Agy`):* Auto-installation of `skills/synlynk/` skill pack, MCP eager tool definition generation in `~/.gemini/antigravity-cli/mcp/synlynk/`, `GEMINI.md` instruction fencing, and 1M–2M context window priming.
+    3. *Replit:* Container configuration in `replit.nix` & `.replit` auto-launching daemon on port 27471, `.replitrules` generation, and docked webview extension for Vizor onboarding (`/onboarding`).
+    4. *Emergent:* External MCP gateway binding (`.emergent/synlynk.json`), `synlynk dispatch emergent` cloud microVM worker adapter, and webhook status synchronization.
+  - Updated 4-Tier Cross-Environment Testing Matrix to include 8 pre-configured golden fixture testbeds.
+  - Updated implementation plan Task 2 (`synlynk/surface.py`) and tests (`tests/test_surface.py`).
+- **Standalone Synlynk Cockpit Story & Specification (`story-0127066f`):**
+  - Created standalone story `story-0127066f` (`Synlynk Cockpit: Active Herdr 4-pane terminal orchestration (synlynk herdr init)`) linked to `goal-c7113f58` under phase `Cockpit`, stage `open`.
+  - Authored architectural specification: `docs/superpowers/specs/2026-09-14-synlynk-cockpit-herdr-orchestration.md`.
+  - Defined 4-pane asymmetric layout: Top-Left (Home Conductor), Top-Right (HUD `synlynk watch`), Bottom-Left (Away Worker logs streamer `synlynk logs -f`), Bottom-Right (Operator clean shell).
+  - Defined `synlynk dispatch --pane` live away worker viewport.
+  - Strictly decoupled from FTUE Onboarding milestone v0.21.0.
+[@agy, @nikhilsoman]
+
 ## Over-the-Horizon Strategic Expansion Goal Created (decided 2026-09-14)
 - **Goal Created (`goal-c7113f58`):** *"Over-the-Horizon Strategic Expansion: DeepSeek Harness (DSH/Cordis) Plugin Architecture, ACP Headless Transport & Herdr Multi-Pane Cockpit"*. Parked for post-v1.0 execution with zero distraction from active v0.21.0 FTUE Onboarding commitments.
 - **Architectural Research Saved (`docs/strategy/deepseek-harness-and-over-the-horizon-expansion.md`):**

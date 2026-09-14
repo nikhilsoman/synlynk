@@ -13,11 +13,11 @@
 | **v0.18.0** | 2026-08-30 | Dispatch reliability, QA merge-gate authority, Codex parity, Grok headless approval. | **SHIPPED** (2,346 tests) |
 | **v0.19.0** | 2026-09-11 | Layered release protocol (`unstable`/`staging`/`main`), autonomous unattended DAG loop (`synlynk run --milestone <M>`), daemon lifecycle recovery, absolute App key paths, dual-ledger state sync. | **SHIPPED** (2,734 tests) |
 | **v0.20.0** | 2026-09-18 | Visual Workspace, Autonomous Onboarding & Fleet Resilience: BS-6 Vizor views (Product, Logical, Infra), In-browser GitHub App role creation wizard, scope-bounded sparse worktrees (`git sparse-checkout --cone`), 4-point readiness matrix in `synlynk doctor --readiness`, Meta Muse CLI harness adapter. | **SHIPPED** (2,792 tests) |
-| **v0.21.0** | 2026-09-25 | **Visual, Cross-Environment & Autonomous Onboarding (FTUE):** Zero-terminal onboarding, Cursor/Windsurf/VS Code native rule binding, Greenfield starter sandbox ("syn-ping") & Behind-the-Curtain tour, Brownfield 3D discovery & confirm chips, 1-click GitHub App role provisioning, and First Real Win PR in < 5 minutes. | **ACTIVE DESIGN** |
+| **v0.21.0** | 2026-09-25 | **Visual, Cross-Environment & Autonomous Onboarding (FTUE):** Zero-terminal onboarding, Cursor/Windsurf/VS Code/Warp/Antigravity/Replit/Emergent native surface binding, Greenfield starter sandbox ("syn-ping") & Behind-the-Curtain tour, Brownfield 3D discovery & confirm chips, 1-click GitHub App role provisioning, and First Real Win PR in < 5 minutes. | **ACTIVE DESIGN** |
 | **v1.0.0** | **2026-10-01** | **Developer Preview Public Launch (Time-to-Wow):** 15-minute zero-risk onboarding pipeline, signed GA release on PyPI/pipx, full documentation release, commercial marketing launch. | Target GA Release |
 | **v1.1.0** | Q4 2026 | Cross-workgroup team collaboration, community relay server, multi-tenant quota arbitration. | Post-GA |
 | **v1.2.0** | Q1 2027 | Enterprise workspace: microVM kernel sandboxing (Bubblewrap/eBPF), SCIP semantic code graph, EdenFS monorepo scaling. | Post-GA |
-| **v1.3.0+** | 2027 | **Over-the-Horizon Expansion (`goal-c7113f58`):** DeepSeek Harness (`dsh`) Cordis plugin architecture, ACP headless transport, active Herdr multi-pane cockpit (`synlynk herdr init`), and heterogeneous agent federation (Warp, Replit, Emergent). | Parked Strategic Epic |
+| **v1.3.0+** | 2027 | **Over-the-Horizon Expansion (`goal-c7113f58`):** DeepSeek Harness (`dsh`) Cordis plugin architecture, ACP headless transport, and Synlynk Cockpit: Active Herdr 4-pane terminal orchestration (`story-0127066f` / `synlynk herdr init`). | Parked Strategic Epic |
 
 ---
 

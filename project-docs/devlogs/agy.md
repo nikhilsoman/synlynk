@@ -488,3 +488,25 @@
   - Updated implementation plan: `docs/superpowers/plans/2026-09-13-v0-21-0-ftue-onboarding-journey.md` (10 sequential TDD tasks)
   - Committed on branch `feat/agy/v0-21-0-ftue-onboarding` at commit `0c0daf4`.
 [@agy]
+
+## 2026-09-14 — Universal Surface Expansion (Warp, Antigravity, Replit, Emergent) & Standalone Herdr Cockpit Spec
+
+### Shipped & Codified
+- **Universal Surface Expansion in FTUE Onboarding (`v0.21.0`):**
+  - Added native surface auto-discovery and rule binding for **Warp**, **Antigravity IDE**, **Replit**, and **Emergent** across `docs/superpowers/specs/2026-09-13-ftue-onboarding-journey-brainstorm-agenda.md` and `docs/superpowers/plans/2026-09-13-v0-21-0-ftue-onboarding-journey.md`:
+    - *Warp Terminal:* Generates `.warp/workflows/synlynk.yaml` command palette workflows, registers `synlynk mcp` over `stdio` in `~/.warp/mcp.json`, and emits OSC 133 semantic block markers.
+    - *Antigravity IDE (`Agy`):* Installs `skills/synlynk/` skill pack, registers eager MCP tools in `~/.gemini/antigravity-cli/mcp/synlynk/`, fences instructions in `GEMINI.md`, and primes 1M–2M context window directly.
+    - *Replit:* Auto-injects background daemon into `replit.nix` & `.replit` (port 27471), writes `.replitrules`, and docks Vizor onboarding (`/onboarding`) as an editor tab.
+    - *Emergent:* Configures `.emergent/synlynk.json` MCP gateway, implements `synlynk dispatch emergent` cloud microVM adapter, and binds webhook callbacks.
+  - Expanded 4-Tier Cross-Environment Testing Matrix with 8 golden fixture testbeds (`fixture-cursor`, `fixture-windsurf`, `fixture-vscode`, `fixture-warp`, `fixture-antigravity`, `fixture-replit`, `fixture-emergent`, `fixture-cli`).
+  - Updated Task 2 in the implementation plan to detect and generate templates for all 7 surfaces with TDD unit tests.
+- **Standalone Synlynk Cockpit Herdr Story & Specification:**
+  - Created standalone story in `state.db`: `story-0127066f` (`Synlynk Cockpit: Active Herdr 4-pane terminal orchestration (synlynk herdr init)`), linked to `goal-c7113f58` under phase `Cockpit`, stage `open`.
+  - Authored comprehensive architectural specification: `docs/superpowers/specs/2026-09-14-synlynk-cockpit-herdr-orchestration.md`.
+  - Defined 4-pane layout: Top-Left (Home Conductor), Top-Right (HUD `synlynk watch`), Bottom-Left (Away Worker logs streamer `synlynk logs -f`), Bottom-Right (Operator clean shell).
+  - Defined `synlynk dispatch --pane` live away worker viewport.
+  - Decoupled completely from the FTUE Onboarding milestone.
+- **Updated Project Governance:**
+  - Updated `project-docs/roadmap.md` (`v0.21.0` and `v1.3.0+` rows).
+  - Updated `project-docs/memory.md` with architectural attribution.
+[@agy]

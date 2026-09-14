@@ -1,5 +1,11 @@
 # Cost Log
 
+## 2026-09-14 — Universal Surface Expansion (Warp, Antigravity, Replit, Emergent) & Herdr Cockpit Spec
+- Interactive Conductor: Agy (Gemini 2.5 Pro / Flash).
+- Architectural design and spec/plan updates for FTUE Onboarding v0.21.0 adding Warp, Antigravity, Replit, and Emergent.
+- Created standalone story `story-0127066f` under `goal-c7113f58` and authored architectural specification `docs/superpowers/specs/2026-09-14-synlynk-cockpit-herdr-orchestration.md`.
+- Zero external fee-bearing dispatch spend.
+
 ## 2026-09-13 — FTUE & Onboarding Journey v0.21.0 Architecture Finalization
 - Interactive Conductor: Agy (Gemini 2.5 Pro / Flash).
 - Architectural design, multi-surface cross-environment integration (Cursor, Windsurf, VS Code, Claude Desktop, Antigravity, Vizor), greenfield sandbox specification, and 4-tier testing matrix definition.
