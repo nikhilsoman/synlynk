@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Implement the end-to-end First-Time User Experience (FTUE) and onboarding journey for Synlynk v0.21.0, enabling any developer—regardless of whether they use Cursor, Windsurf, VS Code, Claude Desktop, Antigravity IDE, or a terminal CLI—to experience the foundational mental model (Stage 0), bind their surface and provision GitHub Apps (Stage 1), run a 3-minute greenfield sandbox with an artifact tour (Stage 2), adopt their real brownfield repo with 3D discovery and achieve their First Real Win PR in under 5 minutes (Stage 3), and manage upgrade/uninstall lifecycles cleanly (Stages 4 & 5).
+**Goal:** Implement the end-to-end First-Time User Experience (FTUE) and onboarding journey for Synlynk v0.21.0, enabling any developer—regardless of whether they use Cursor, Windsurf, VS Code, Warp, Antigravity IDE, Replit, Emergent, Claude Desktop, or a terminal CLI—to experience the foundational mental model (Stage 0), bind their surface and provision GitHub Apps (Stage 1), run a 3-minute greenfield sandbox with an artifact tour (Stage 2), adopt their real brownfield repo with 3D discovery and achieve their First Real Win PR in under 5 minutes (Stage 3), and manage upgrade/uninstall lifecycles cleanly (Stages 4 & 5).
 
 **Architecture:** 
 - A surface-agnostic, offline-first pipeline rooted in deterministic AST/manifest scanning (<10s).
-- Native rule injection (`.cursor/rules/synlynk.mdc`, `.windsurfrules`, `.github/copilot-instructions.md`) making the AI inside Cursor/Windsurf the Home Conductor without requiring terminal harness binaries.
+- Native rule & workflow injection (`.cursor/rules/synlynk.mdc`, `.windsurfrules`, `.github/copilot-instructions.md`, `.warp/workflows/synlynk.yaml`, `.replitrules`, `.emergent/synlynk.json`, `GEMINI.md`) making the AI inside Cursor/Windsurf/Replit/Emergent/Agy the Home Conductor without requiring terminal harness binaries.
 - Vizor Web GUI (`localhost:27472/onboarding`) with 1-click GitHub App role provisioning and 3-view canvas (file tree, tubemap, application screens).
 - Greenfield starter sandbox ("syn-ping") with "Behind the Curtain" artifact tour (`state.db`, `context.md`, `project-docs/`, worktrees).
 - Brownfield 3D discovery, interactive "Confirm & Tweak" chips, gap scanner producing GOVERNS goals, and 1-click isolated worktree first-win dispatch.
@@ -33,7 +33,7 @@
 ### New Files to Create:
 1. `install.sh` — POSIX-compliant standalone installer script with checksum verification and pipx/brew/curl fallbacks.
 2. `synlynk/install.py` — Distribution preflight verification (`check_install_prerequisites`), environment checks, and version verification.
-3. `synlynk/surface.py` — Cross-environment surface detector and native IDE rule generator (Cursor, Windsurf, VS Code, Claude Desktop, Antigravity).
+3. `synlynk/surface.py` — Cross-environment surface detector and native rule/workflow generator (Cursor, Windsurf, VS Code, Warp, Antigravity, Replit, Emergent, Claude Desktop).
 4. `synlynk/sandbox.py` — Greenfield starter micro-app ("syn-ping") generator and 3-minute milestone loop simulator.
 5. `synlynk/discovery.py` — Tiered static AST & package manifest 3D discovery scanner (<10s offline critical path).
 6. `synlynk/discovery_semantic.py` — Non-blocking Tier 2 semantic/domain labeling overlay with provenance tracking.
@@ -207,6 +207,7 @@ Co-Authored-By: AGY <noreply@antigravity.dev>"
 import sys
 import os
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from synlynk.surface import detect_developer_surfaces, bind_surface_rules
@@ -220,6 +221,16 @@ def test_detect_developer_surfaces_cursor_and_vscode(tmp_path):
     assert "vscode" in surfaces
 
 
+def test_detect_developer_surfaces_warp_replit_emergent(tmp_path):
+    (tmp_path / ".replit").write_text("run = 'python main.py'")
+    (tmp_path / ".emergent").mkdir()
+    with patch.dict(os.environ, {"TERM_PROGRAM": "WarpTerminal"}):
+        surfaces = detect_developer_surfaces(str(tmp_path))
+        assert "warp" in surfaces
+        assert "replit" in surfaces
+        assert "emergent" in surfaces
+
+
 def test_bind_surface_rules_generates_cursor_mdc(tmp_path):
     bind_surface_rules(str(tmp_path), ["cursor"])
     mdc_file = tmp_path / ".cursor" / "rules" / "synlynk.mdc"
@@ -228,6 +239,30 @@ def test_bind_surface_rules_generates_cursor_mdc(tmp_path):
     assert "description: synlynk project protocol" in content
     assert "alwaysApply: true" in content
     assert "Home Conductor" in content
+
+
+def test_bind_surface_rules_generates_warp_replit_emergent_antigravity(tmp_path):
+    bind_surface_rules(str(tmp_path), ["warp", "replit", "emergent", "antigravity"])
+    
+    # Warp
+    warp_yaml = tmp_path / ".warp" / "workflows" / "synlynk.yaml"
+    assert warp_yaml.exists()
+    assert "synlynk start" in warp_yaml.read_text()
+    
+    # Replit
+    replit_rules = tmp_path / ".replitrules"
+    assert replit_rules.exists()
+    assert "Home Conductor" in replit_rules.read_text()
+    
+    # Emergent
+    emergent_json = tmp_path / ".emergent" / "synlynk.json"
+    assert emergent_json.exists()
+    assert "mcp_gateway" in emergent_json.read_text()
+    
+    # Antigravity
+    gemini_md = tmp_path / "GEMINI.md"
+    assert gemini_md.exists()
+    assert "AntiGravity Instructions" in gemini_md.read_text()
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -240,12 +275,13 @@ Expected: FAIL with `ModuleNotFoundError: No module named 'synlynk.surface'`
 ```python
 # synlynk/surface.py
 import os
+import json
 from pathlib import Path
 from typing import List, Dict, Any
 
 
 def detect_developer_surfaces(repo_root: str) -> List[str]:
-    """Detect presence of AI IDEs and developer surfaces in repo or host."""
+    """Detect presence of AI IDEs, cloud workspaces, and developer surfaces in repo or host."""
     p = Path(repo_root)
     surfaces = []
     if (p / ".cursor").is_dir() or os.path.exists("/Applications/Cursor.app"):
@@ -254,8 +290,14 @@ def detect_developer_surfaces(repo_root: str) -> List[str]:
         surfaces.append("windsurf")
     if (p / ".vscode").is_dir():
         surfaces.append("vscode")
-    if (Path.home() / ".gemini" / "antigravity-cli").is_dir():
+    if (p / ".warp").is_dir() or (Path.home() / ".warp").is_dir() or os.environ.get("TERM_PROGRAM") == "WarpTerminal":
+        surfaces.append("warp")
+    if (Path.home() / ".gemini" / "antigravity-cli").is_dir() or os.environ.get("ANTIGRAVITY_ENV"):
         surfaces.append("antigravity")
+    if (p / ".replit").is_file() or os.environ.get("REPL_ID") or os.environ.get("REPLIT_ENVIRONMENT"):
+        surfaces.append("replit")
+    if (p / ".emergent").is_dir() or os.environ.get("EMERGENT_ENV"):
+        surfaces.append("emergent")
     if (Path.home() / "Library" / "Application Support" / "Claude").is_dir():
         surfaces.append("claude_desktop")
     if not surfaces:
@@ -264,9 +306,10 @@ def detect_developer_surfaces(repo_root: str) -> List[str]:
 
 
 def bind_surface_rules(repo_root: str, surfaces: List[str]) -> Dict[str, Any]:
-    """Inject non-destructive rules and MCP configs for detected surfaces."""
+    """Inject non-destructive rules, workflows, and MCP configs for detected surfaces."""
     p = Path(repo_root)
     results = {}
+    
     if "cursor" in surfaces:
         rules_dir = p / ".cursor" / "rules"
         rules_dir.mkdir(parents=True, exist_ok=True)
@@ -287,13 +330,69 @@ You are operating inside a synlynk-managed repository. You are the Home Conducto
 - Provisioned Workspace Agents (`@syn-pm[bot]`, `@syn-qa[bot]`) handle review and approval gates.
 """)
         results["cursor"] = str(mdc_path)
+
+    if "warp" in surfaces:
+        warp_wf_dir = p / ".warp" / "workflows"
+        warp_wf_dir.mkdir(parents=True, exist_ok=True)
+        wf_path = warp_wf_dir / "synlynk.yaml"
+        wf_path.write_text("""name: synlynk start
+description: Launch synlynk autonomous developer onboarding or workspace session
+command: synlynk start
+tags:
+  - synlynk
+  - ai-agent
+---
+name: synlynk dispatch
+description: Dispatch an away worker harness into an isolated worktree
+command: synlynk dispatch {{harness}} --task "{{task}}"
+tags:
+  - synlynk
+  - dispatch
+""")
+        results["warp"] = str(wf_path)
+
+    if "replit" in surfaces:
+        replit_rules = p / ".replitrules"
+        replit_rules.write_text("""<!-- synlynk:start version="0.21.0" tool="replit" -->
+# synlynk Replit Agent Instructions
+You are operating as a Synlynk Home Conductor inside Replit.
+- Synlynk daemon is running at http://localhost:27471.
+- Read `.synlynk/context.md` for workspace state.
+- Always implement features in dedicated branches/worktrees before merging.
+<!-- synlynk:end -->
+""")
+        results["replit"] = str(replit_rules)
+
+    if "emergent" in surfaces:
+        emergent_dir = p / ".emergent"
+        emergent_dir.mkdir(parents=True, exist_ok=True)
+        cfg_path = emergent_dir / "synlynk.json"
+        cfg_path.write_text(json.dumps({
+            "mcp_gateway": "http://localhost:27471/mcp",
+            "autonomous_mode": True,
+            "worktree_isolation": True
+        }, indent=2))
+        results["emergent"] = str(cfg_path)
+
+    if "antigravity" in surfaces:
+        gemini_md = p / "GEMINI.md"
+        gemini_md.write_text("""<!-- synlynk:start version="0.21.0" tool="agy" -->
+# synlynk AntiGravity Instructions
+You are the primary Home Harness and Project Conductor.
+- Context window: 1M-2M tokens (ingest `.synlynk/context.md` in full).
+- Drive Unattended Milestone Loop: Spec -> Plan -> Worktree -> TDD -> PR.
+- Record decisions in `project-docs/memory.md`.
+<!-- synlynk:end -->
+""")
+        results["antigravity"] = str(gemini_md)
+
     return results
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_surface.py -v`  
-Expected: PASS (2 passed)
+Expected: PASS (4 passed)
 
 - [ ] **Step 5: Commit**
 
