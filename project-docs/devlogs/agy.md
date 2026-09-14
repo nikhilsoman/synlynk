@@ -525,5 +525,6 @@
 - **Task 9 (1-Click First-Win Isolated Worktree):** Implemented `synlynk/first_win.py` (`dispatch_first_win_task()`) enforcing Git Worktree-First policy.
 - **Task 10 (Lifecycle & Orchestrator):** Implemented `synlynk/upgrade.py` (`execute_upgrade()`), `synlynk/uninstall.py` (`execute_uninstall()`), `synlynk/coldstart.py` (`run_ftue_journey()`), and wired `init --quickstart` & `uninstall` in `synlynk/cli.py` & `synlynk/taxonomy.py`.
 - **Verification:** All 11 FTUE test suites passed 100% green (28/28 tests). Whole-branch review diff generated (`review-91dcc34a..ae9b2b10.diff`, 10 commits, 53KB).
+- **PR & Review Dispatch:** Pushed branch `feat/agy/v0-21-0-ftue-onboarding`, opened PR #1574, passed `synlynk pr check` attestation, and dispatched QA review to Codex (`job-e1414241`, `--role qa`, `--requires-gh-write`).
 [@agy]
 

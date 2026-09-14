@@ -149,4 +149,7 @@
   - `synlynk/first_win.py` (1-click isolated worktree SOP task dispatch)
   - `synlynk/upgrade.py` & `synlynk/uninstall.py` & `synlynk/coldstart.py` (Lifecycle handlers and cross-environment orchestrator)
 - 28 new unit and integration tests across 11 test suites passing 100% green; full test suite passing; zero external fee-bearing dispatch spend.
+- Submitted PR #1574 (`feat/agy/v0-21-0-ftue-onboarding`).
+- Dispatched QA Review & Attestation Gate: Codex (`job-e1414241`), ~$0.14 estimated (`--requires-gh-write`, `--role qa`).
+
 
