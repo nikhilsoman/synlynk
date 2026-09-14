@@ -510,3 +510,20 @@
   - Updated `project-docs/roadmap.md` (`v0.21.0` and `v1.3.0+` rows).
   - Updated `project-docs/memory.md` with architectural attribution.
 [@agy]
+
+## 2026-09-14 — FTUE Onboarding Journey v0.21.0 Full 10-Task Implementation Complete
+
+### Shipped & Verified (All 10 Tasks)
+- **Task 1 (Installer Preflight):** Implemented `synlynk/install.py` (`check_install_prerequisites()`, `run_install_preflight()`) and verified with `tests/test_install.py`.
+- **Task 2 (Universal Surfaces):** Implemented `synlynk/surface.py` (`detect_developer_surfaces()`, `bind_surface_rules()`) covering Cursor, Windsurf, VS Code, Warp, Antigravity, Replit, and Emergent.
+- **Task 3 (Greenfield Sandbox):** Implemented `synlynk/sandbox.py` (`scaffold_greenfield_sandbox()`, `build_artifact_tour()`).
+- **Task 4 (Deterministic 3D Static Discovery):** Implemented `synlynk/discovery.py` (`scan_workspace_static()`) analyzing Domain, Physical, and Logical architecture in <10s offline.
+- **Task 5 (Semantic Overlay):** Implemented `synlynk/discovery_semantic.py` (`enrich_with_semantic_overlay()`) with non-blocking graceful timeout and provenance tags.
+- **Task 6 (Context Validator):** Implemented `synlynk/context_validator.py` (`render_chips_summary()`, `validate_context_interactive()`, `validate_context()`) with TTY visual chips.
+- **Task 7 (Vizor 3-View Canvas & Behind-the-Curtain Tour):** Implemented `generate_onboarding_html()` in `synlynk/viz.py` and routed `/onboarding`.
+- **Task 8 (Gap Scanner & GOVERNS Goal Generator):** Implemented `synlynk/gap_scanner.py` (`scan_workspace_gaps()`, `generate_governs_goal()`).
+- **Task 9 (1-Click First-Win Isolated Worktree):** Implemented `synlynk/first_win.py` (`dispatch_first_win_task()`) enforcing Git Worktree-First policy.
+- **Task 10 (Lifecycle & Orchestrator):** Implemented `synlynk/upgrade.py` (`execute_upgrade()`), `synlynk/uninstall.py` (`execute_uninstall()`), `synlynk/coldstart.py` (`run_ftue_journey()`), and wired `init --quickstart` & `uninstall` in `synlynk/cli.py` & `synlynk/taxonomy.py`.
+- **Verification:** All 11 FTUE test suites passed 100% green (28/28 tests). Whole-branch review diff generated (`review-91dcc34a..ae9b2b10.diff`, 10 commits, 53KB).
+[@agy]
+

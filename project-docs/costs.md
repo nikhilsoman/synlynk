@@ -133,3 +133,20 @@
 - PR #1569: Extended Point 1 role token readiness check to support flat token files alongside nested paths. All 13 readiness tests passed; zero external fee-bearing dispatch spend.
 - PR #1570: Universal GitHub App naming standardization (`syn-{owner}-{slug}-{role}`), length budget allocator (<= 34 chars), and manifest card transparency. All 7 unit tests passed; zero external fee-bearing dispatch spend.
 - PR #1573: Fixed daemon false "already running" self-recognition deadlock, unhandled port 27471 collision crash, and orphaned port cleanup (#1572). 6 reproduction tests and full 2,830 test suite passed; zero external fee-bearing dispatch spend.
+
+## 2026-09-14 — FTUE Onboarding Journey v0.21.0 Full Implementation
+
+- Conductor: Agy (Gemini 2.5 Pro / Flash).
+- Implemented complete 10-task SDD implementation plan in feature worktree `/Users/nikhilsoman/dev/feat+v0-21-0-ftue-onboarding` on branch `feat/agy/v0-21-0-ftue-onboarding`:
+  - `synlynk/install.py` (Preflight & dependency validation)
+  - `synlynk/surface.py` (Universal surface detection & rule binding: Cursor, Windsurf, VS Code, Warp, Antigravity, Replit, Emergent)
+  - `synlynk/sandbox.py` (Greenfield 3-min starter micro-app & artifact tour)
+  - `synlynk/discovery.py` (Deterministic 3D static AST discovery)
+  - `synlynk/discovery_semantic.py` (Tier 2 semantic overlay with graceful fallback)
+  - `synlynk/context_validator.py` (CLI interactive confirm chips validator)
+  - `synlynk/viz.py` (Vizor 3-view canvas & behind-the-curtain tour)
+  - `synlynk/gap_scanner.py` (Automated workspace gap scanner & GOVERNS goal generator)
+  - `synlynk/first_win.py` (1-click isolated worktree SOP task dispatch)
+  - `synlynk/upgrade.py` & `synlynk/uninstall.py` & `synlynk/coldstart.py` (Lifecycle handlers and cross-environment orchestrator)
+- 28 new unit and integration tests across 11 test suites passing 100% green; full test suite passing; zero external fee-bearing dispatch spend.
+
