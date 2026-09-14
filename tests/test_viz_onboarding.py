@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 
 from synlynk.viz import (
     generate_roles_onboarding_html,
+    generate_onboarding_html,
     handle_github_app_conversion,
     get_role_manifest_payload,
 )
@@ -170,4 +171,18 @@ def test_viz_auth_sync_handler(tmp_path, monkeypatch):
     # Verify installation_id was recorded in pm.json
     conf = json.loads((apps_dir / "pm.json").read_text())
     assert conf.get("installation_id") == 998877
+
+
+def test_generate_onboarding_html_renders_three_views():
+    data = {
+        "domain": {"industry": "Fintech"},
+        "physical": {"languages": ["Python"], "frameworks": ["FastAPI"]},
+        "logical": {"routes": [{"method": "GET", "path": "/balance"}]},
+    }
+    html = generate_onboarding_html(data, port=27472)
+    assert "Physical File Tree" in html
+    assert "Logical Tubemap" in html
+    assert "Application Screens" in html
+    assert "Behind the Curtain" in html
+    assert "state.db" in html
 

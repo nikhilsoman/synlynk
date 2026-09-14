@@ -470,3 +470,75 @@
 - **Verification:** All 6 reproduction tests passed. Existing daemon tests (20/20) passed. Full repository test suite passed (2,830 tests passed, 3 skipped).
 - **PR:** Opened PR #1573 on branch `fix/agy/daemon-liveness-false-positive-1572`.
 [@agy]
+
+## 2026-09-13 — FTUE & Onboarding Journey v0.21.0 Architecture & Cross-Environment Test Matrix Finalized
+
+### Shipped & Finalized
+- **Multi-Surface Architecture Formulated:** Codified the principle that terminal CLI harness binaries (`claude`, `agy`, `codex`, `grok`) must NEVER be a mandatory prerequisite for developer onboarding. Synlynk binds directly to modern AI IDEs (Cursor via `.cursor/rules/synlynk.mdc`, Windsurf via `.windsurfrules`, VS Code via `.github/copilot-instructions.md`, Claude Desktop via local MCP, and Antigravity IDE via `GEMINI.md`). The AI inside Cursor/Windsurf operates natively as the Home Conductor without the user touching a terminal.
+- **6-Stage Lifecycle Codified:**
+  - *Stage 0 (The Mental Model):* Explains what Synlynk IS (control plane / substrate) vs ISN'T (not a model/chatbot), the Home Conductor vs Away Workers separation of concerns, why Agy (1M-2M context champion) and Claude Sonnet are recommended Home Conductors, and why dedicated GitHub App identities (`@syn-pm[bot]`, `@syn-qa[bot]`) prevent self-review collisions (`#423`) and enable authentic CI merge gates.
+  - *Stage 1 (Surface & Fleet Binding):* Environment auto-detection, non-destructive fenced rule generation, and 1-click GitHub App role provisioning via Vizor (`/onboarding/roles` and `/auth/sync`).
+  - *Stage 2 (Greenfield Sandbox & Artifact Tour):* 3-minute starter micro-app (`syn-ping`) demonstrating the complete milestone loop (Spec -> Plan -> Worktree -> TDD -> PR -> QA Review) followed by a visual "Behind the Curtain" tour of `state.db`, `context.md`, `project-docs/`, worktrees, and Vizor's 3-view canvas (file tree, tubemap, application screens).
+  - *Stage 3 (Brownfield Adoption):* "How do YOU want to use it?" with safety gates (git dirty check, snapshot), 3D discovery (Domain, Physical, Logical), interactive "Confirm & Tweak" chips, gap scanner producing GOVERNS goals, and the First Real Win PR in < 5 minutes.
+  - *Stage 4 (Upgrade Journey):* `synlynk upgrade` (safe schema migrations, instruction refresh, re-probe, zero-downtime daemon restart).
+  - *Stage 5 (Uninstall Journey):* `synlynk uninstall` (clean service teardown, shim removal, zero zombies).
+- **4-Tier Cross-Environment Testing Matrix:** Enforces Tier 1 (syntax/schema attestation for `.mdc`, `.windsurfrules`, Copilot, MCP), Tier 2 (prompt/persona emulation asserting Home Conductor behavior in headless LLMs), Tier 3 (Playwright browser automation for Vizor UI), and Tier 4 (golden dogfood fixture repositories).
+- **Committed in Feature Worktree (`feat/agy/v0-21-0-ftue-onboarding`):**
+  - Updated specification: `docs/superpowers/specs/2026-09-13-ftue-onboarding-journey-brainstorm-agenda.md`
+  - Updated implementation plan: `docs/superpowers/plans/2026-09-13-v0-21-0-ftue-onboarding-journey.md` (10 sequential TDD tasks)
+  - Committed on branch `feat/agy/v0-21-0-ftue-onboarding` at commit `0c0daf4`.
+[@agy]
+
+## 2026-09-14 — Universal Surface Expansion (Warp, Antigravity, Replit, Emergent) & Standalone Herdr Cockpit Spec
+
+### Shipped & Codified
+- **Universal Surface Expansion in FTUE Onboarding (`v0.21.0`):**
+  - Added native surface auto-discovery and rule binding for **Warp**, **Antigravity IDE**, **Replit**, and **Emergent** across `docs/superpowers/specs/2026-09-13-ftue-onboarding-journey-brainstorm-agenda.md` and `docs/superpowers/plans/2026-09-13-v0-21-0-ftue-onboarding-journey.md`:
+    - *Warp Terminal:* Generates `.warp/workflows/synlynk.yaml` command palette workflows, registers `synlynk mcp` over `stdio` in `~/.warp/mcp.json`, and emits OSC 133 semantic block markers.
+    - *Antigravity IDE (`Agy`):* Installs `skills/synlynk/` skill pack, registers eager MCP tools in `~/.gemini/antigravity-cli/mcp/synlynk/`, fences instructions in `GEMINI.md`, and primes 1M–2M context window directly.
+    - *Replit:* Auto-injects background daemon into `replit.nix` & `.replit` (port 27471), writes `.replitrules`, and docks Vizor onboarding (`/onboarding`) as an editor tab.
+    - *Emergent:* Configures `.emergent/synlynk.json` MCP gateway, implements `synlynk dispatch emergent` cloud microVM adapter, and binds webhook callbacks.
+  - Expanded 4-Tier Cross-Environment Testing Matrix with 8 golden fixture testbeds (`fixture-cursor`, `fixture-windsurf`, `fixture-vscode`, `fixture-warp`, `fixture-antigravity`, `fixture-replit`, `fixture-emergent`, `fixture-cli`).
+  - Updated Task 2 in the implementation plan to detect and generate templates for all 7 surfaces with TDD unit tests.
+- **Standalone Synlynk Cockpit Herdr Story & Specification:**
+  - Created standalone story in `state.db`: `story-0127066f` (`Synlynk Cockpit: Active Herdr 4-pane terminal orchestration (synlynk herdr init)`), linked to `goal-c7113f58` under phase `Cockpit`, stage `open`.
+  - Authored comprehensive architectural specification: `docs/superpowers/specs/2026-09-14-synlynk-cockpit-herdr-orchestration.md`.
+  - Defined 4-pane layout: Top-Left (Home Conductor), Top-Right (HUD `synlynk watch`), Bottom-Left (Away Worker logs streamer `synlynk logs -f`), Bottom-Right (Operator clean shell).
+  - Defined `synlynk dispatch --pane` live away worker viewport.
+  - Decoupled completely from the FTUE Onboarding milestone.
+- **Updated Project Governance:**
+  - Updated `project-docs/roadmap.md` (`v0.21.0` and `v1.3.0+` rows).
+  - Updated `project-docs/memory.md` with architectural attribution.
+[@agy]
+
+## 2026-09-14 — FTUE Onboarding Journey v0.21.0 Full 10-Task Implementation Complete
+
+### Shipped & Verified (All 10 Tasks)
+- **Task 1 (Installer Preflight):** Implemented `synlynk/install.py` (`check_install_prerequisites()`, `run_install_preflight()`) and verified with `tests/test_install.py`.
+- **Task 2 (Universal Surfaces):** Implemented `synlynk/surface.py` (`detect_developer_surfaces()`, `bind_surface_rules()`) covering Cursor, Windsurf, VS Code, Warp, Antigravity, Replit, and Emergent.
+- **Task 3 (Greenfield Sandbox):** Implemented `synlynk/sandbox.py` (`scaffold_greenfield_sandbox()`, `build_artifact_tour()`).
+- **Task 4 (Deterministic 3D Static Discovery):** Implemented `synlynk/discovery.py` (`scan_workspace_static()`) analyzing Domain, Physical, and Logical architecture in <10s offline.
+- **Task 5 (Semantic Overlay):** Implemented `synlynk/discovery_semantic.py` (`enrich_with_semantic_overlay()`) with non-blocking graceful timeout and provenance tags.
+- **Task 6 (Context Validator):** Implemented `synlynk/context_validator.py` (`render_chips_summary()`, `validate_context_interactive()`, `validate_context()`) with TTY visual chips.
+- **Task 7 (Vizor 3-View Canvas & Behind-the-Curtain Tour):** Implemented `generate_onboarding_html()` in `synlynk/viz.py` and routed `/onboarding`.
+- **Task 8 (Gap Scanner & GOVERNS Goal Generator):** Implemented `synlynk/gap_scanner.py` (`scan_workspace_gaps()`, `generate_governs_goal()`).
+- **Task 9 (1-Click First-Win Isolated Worktree):** Implemented `synlynk/first_win.py` (`dispatch_first_win_task()`) enforcing Git Worktree-First policy.
+- **Task 10 (Lifecycle & Orchestrator):** Implemented `synlynk/upgrade.py` (`execute_upgrade()`), `synlynk/uninstall.py` (`execute_uninstall()`), `synlynk/coldstart.py` (`run_ftue_journey()`), and wired `init --quickstart` & `uninstall` in `synlynk/cli.py` & `synlynk/taxonomy.py`.
+- **Verification:** All 11 FTUE test suites passed 100% green (28/28 tests). Whole-branch review diff generated (`review-91dcc34a..ae9b2b10.diff`, 10 commits, 53KB).
+- **PR & Review Dispatch:** Pushed branch `feat/agy/v0-21-0-ftue-onboarding`, opened PR #1574, passed `synlynk pr check` attestation, and dispatched QA review to Codex (`job-e1414241`, `--role qa`, `--requires-gh-write`).
+[@agy]
+
+### Root Causes
+1. **Starter Self-Recognition Deadlock:** In `WatchDaemon.start()`, `_try_acquire_daemon_lock()` records the caller's PID (`os.getpid()`) into `daemon.pid.lock`. Immediately inside `try:`, `start()` checks `self._is_running()`. In `_health()`, because `pidfile` does not exist yet, it checked `_pid_is_alive(owner_pid)`. Since `owner_pid` was `os.getpid()` (the starter CLI itself), `_health()` returned `"running"`, causing `start()` to falsely report already running and exit without spawning the child.
+2. **Unhandled HTTP Port Bind Conflict:** In `SynlynkDaemon._run_loop()`, `_ReuseAddrHTTPServer` initialization was unhandled. If port 27471 was held by an orphaned process, it raised `[Errno 48] Address already in use`, terminating the child process after `pidfile` was published and leaving an instant zombie.
+3. **Orphan Port Blindspot on Stop:** `SynlynkDaemon.stop()` only checked `self.pidfile` and `lock_path`. If both were deleted or contained dead PIDs while an orphan held port 27471, `stop()` reported "daemon not running" without killing the process on port 27471.
+
+### Shipped
+- **Exclude Caller PID in Health Check (`synlynk/daemon.py`):** In `_health()`, set `owner_pid = None` if `owner_pid == os.getpid()`.
+- **Accurate Startup Verification (`synlynk/daemon.py`):** In `WatchDaemon.start()`, confirm `self._is_running()` after awaiting child pidfile before printing started message; emit stderr error if child failed to start.
+- **Port Conflict Graceful Recovery (`synlynk/daemon.py`):** Wrapped HTTP server startup in `try ... except OSError` in `_run_loop()`, cleanly removing `pidfile`, releasing `lock_fh`, logging error to stderr, and publishing a `DAEMON_PORT_CONFLICT` sentinel alert.
+- **Orphan Reclaim by Port on Stop (`synlynk/daemon.py`):** Added `_find_pid_listening_on_port(self.HTTP_PORT)` fallback in `stop()` to terminate orphaned processes listening on port 27471.
+- **Unit Tests:** Added 6 reproduction and regression test cases in `tests/test_daemon_liveness_1572.py`.
+- **Verification:** All 6 reproduction tests passed. Existing daemon tests (20/20) passed. Full repository test suite passed (2,830 tests passed, 3 skipped).
+- **PR:** Opened PR #1573 on branch `fix/agy/daemon-liveness-false-positive-1572`.
+[@agy]

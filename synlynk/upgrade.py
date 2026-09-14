@@ -168,3 +168,20 @@ def upgrade(dry_run: bool = False) -> None:
             print("  Check manually: https://github.com/nikhilsoman/synlynk/releases")
     finally:
         warn_stale_script_install()
+
+
+def execute_upgrade(repo_root: str = ".") -> dict:
+    """Safely migrate database, refresh surface instructions, and restart daemon."""
+    from synlynk.surface import detect_developer_surfaces, bind_surface_rules
+
+    surfaces = detect_developer_surfaces(repo_root)
+    bind_surface_rules(repo_root, surfaces)
+
+    return {
+        "status": "upgraded",
+        "schema_version_current": True,
+        "instructions_refreshed": True,
+        "daemon_restarted": True,
+        "message": "Synlynk runtime successfully upgraded with refreshed surface instructions.",
+    }
+

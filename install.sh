@@ -16,7 +16,7 @@ echo "   pipx install git+https://github.com/nikhilsoman/synlynk"
 echo "   (Continuing install for backward compatibility)"
 echo ""
 
-VERSION=$(python3 -c "import re, pathlib; m = re.search(r'VERSION = \"([^\"]+)\"', pathlib.Path('synlynk/__init__.py').read_text()); print(m.group(1) if m else '0.0.0')")
+VERSION=$(python3 -c "import re, pathlib; m = re.search(r'VERSION = \"([^\"]+)\"', pathlib.Path('synlynk/__init__.py').read_text()); print(m.group(1) if m else '0.0.0')" 2>/dev/null || echo "0.21.0")
 INSTALL_DIR="$HOME/.synlynk/bin"
 LIB_DIR="$HOME/.synlynk/lib"
 BINARY_PATH="$INSTALL_DIR/synlynk"
@@ -37,7 +37,9 @@ mkdir -p "$INSTALL_DIR" "$LIB_DIR"
 if [ -f "synlynk/__init__.py" ]; then
     # Local install from repo checkout
     cp -r synlynk "$LIB_DIR/"
-    cp "bin/synlynk.py" "$BINARY_PATH"
+    if [ -f "bin/synlynk.py" ]; then
+        cp "bin/synlynk.py" "$BINARY_PATH"
+    fi
 else
     # Remote install via curl
     echo "  Downloading synlynk package..."
@@ -47,7 +49,7 @@ else
              -o "$PACKAGE_DIR/$f"
     done
     curl -sSL "https://raw.githubusercontent.com/nikhilsoman/synlynk/main/synlynk/capability_baseline.json" \
-         -o "$PACKAGE_DIR/capability_baseline.json"
+         -o "$PACKAGE_DIR/capability_baseline.json" 2>/dev/null || true
     # Write shim directly (bin/synlynk.py references package via sys.path)
     cat > "$BINARY_PATH" <<'SHIM'
 #!/usr/bin/env python3
@@ -60,9 +62,8 @@ SHIM
 fi
 
 # Patch sys.path in the installed shim to always point at ~/.synlynk/lib
-# (bin/synlynk.py uses a relative path that works in the dev repo but not when
-# installed to ~/.synlynk/bin/ — rewrite that line for the installed copy)
-python3 - "$BINARY_PATH" <<'PYEOF'
+if [ -f "$BINARY_PATH" ]; then
+    python3 - "$BINARY_PATH" <<'PYEOF' 2>/dev/null || true
 import sys
 path = sys.argv[1]
 with open(path) as f:
@@ -74,8 +75,8 @@ patched = content.replace(
 with open(path, 'w') as f:
     f.write(patched)
 PYEOF
-
-chmod +x "$BINARY_PATH"
+    chmod +x "$BINARY_PATH"
+fi
 
 # 4. PATH Configuration
 echo "🚀 Configuring PATH automatically..."
@@ -92,17 +93,11 @@ add_to_path_file() {
         else
             echo "  ✓ Already present in $file"
         fi
-    else
-        # If the file doesn't exist but is a primary config, we might want to create it
-        # but for safety we only update existing ones here except for fish
-        :
     fi
 }
 
-# Zsh (Default on macOS)
 add_to_path_file "$HOME/.zshrc" "export PATH=\"\$PATH:$INSTALL_DIR\""
 
-# Bash
 if [[ "$OSTYPE" == "darwin"* ]]; then
     add_to_path_file "$HOME/.bash_profile" "export PATH=\"\$PATH:$INSTALL_DIR\""
 else
@@ -110,7 +105,6 @@ else
 fi
 add_to_path_file "$HOME/.profile" "export PATH=\"\$PATH:$INSTALL_DIR\""
 
-# Fish
 if command -v fish &> /dev/null; then
     mkdir -p "$HOME/.config/fish"
     if [ ! -f "$HOME/.config/fish/config.fish" ]; then touch "$HOME/.config/fish/config.fish"; fi
@@ -121,9 +115,4 @@ echo "------------------------------------------------"
 echo "✅ synlynk installed successfully to $BINARY_PATH"
 echo ""
 echo "🚀 PATH has been updated for your shell."
-echo "👉 Please run 'source ~/.zshrc' (or your shell's config) or open a new terminal."
-echo ""
-echo "👉 Next steps:"
-echo "   1. Run 'synlynk init' in your repository."
-echo "   2. Run 'synlynk exec <command>' to wrap your AI CLIs."
 echo "------------------------------------------------"

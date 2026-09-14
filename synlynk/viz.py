@@ -5096,6 +5096,47 @@ def handle_github_app_conversion(code: str, role: str, repo_root: str = ".") -> 
     return {"ok": True, "role": role, "app_id": app_id, "slug": data.get("slug")}
 
 
+def generate_onboarding_html(data: dict = None, port: int = 27472) -> str:
+    """Generate self-contained HTML for onboarding 3-view canvas and artifact tour."""
+    data = data or {}
+    industry = data.get("domain", {}).get("industry", "Application Service")
+    return f"""<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Synlynk Onboarding Canvas</title>
+  <style>
+    body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; background: #0f1419; color: #f0f3f6; }}
+    .header {{ padding: 20px; border-bottom: 1px solid #21262d; }}
+    .grid {{ display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; padding: 20px; }}
+    .card {{ background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px; }}
+    .badge {{ background: #1f6feb; color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 12px; }}
+    .tour {{ margin: 20px; padding: 16px; background: #0d1117; border: 1px solid #238636; border-radius: 8px; }}
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Synlynk Onboarding — {industry}</h1>
+    <span class="badge">Local Offline Canvas</span>
+  </div>
+  <div class="grid">
+    <div class="card"><h3>View 1: Physical File Tree</h3><p>Directories, frameworks, and component boundaries.</p></div>
+    <div class="card"><h3>View 2: Logical Tubemap</h3><p>Data streams and entity lifecycles.</p></div>
+    <div class="card"><h3>View 3: Application Screens</h3><p>Discovered routes and cloud topology.</p></div>
+  </div>
+  <div class="tour">
+    <h2>Behind the Curtain: The Coordination Substrate</h2>
+    <ul>
+      <li><strong>state.db:</strong> SQLite persistent ledger tracking goals, stories, and jobs.</li>
+      <li><strong>.synlynk/context.md:</strong> Real-time situational awareness snapshot.</li>
+      <li><strong>project-docs/:</strong> Living 4-doc governance (roadmap.md, todo.md, memory.md, devlogs/).</li>
+      <li><strong>.worktrees/:</strong> Clean, isolated task execution sandboxes.</li>
+    </ul>
+  </div>
+</body>
+</html>"""
+
+
 def generate_roles_onboarding_html(repo_root: str = ".", port: int = 27472) -> str:
     """Generate in-browser role provisioning wizard HTML."""
     from pathlib import Path
@@ -5432,6 +5473,15 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
 
         parsed = urlparse(self.path)
         path = parsed.path
+
+        if path in ("/onboarding", "/onboarding/"):
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.end_headers()
+            port = getattr(self.server, "server_port", 27472)
+            html = generate_onboarding_html(port=port)
+            self.wfile.write(html.encode("utf-8"))
+            return
 
         if path in ("/onboarding/roles", "/onboarding/roles/"):
             self.send_response(200)

@@ -1,5 +1,35 @@
 # synlynk Memory
 
+## Universal Surface Expansion & Standalone Synlynk Cockpit Herdr Spec (decided 2026-09-14)
+- **Universal Surface Expansion for FTUE Onboarding (`v0.21.0`):**
+  - Expanded Stage 1 surface binding beyond Cursor, Windsurf, and VS Code to natively support:
+    1. *Warp Terminal:* Auto-generation of `.warp/workflows/synlynk.yaml` command workflows, registration of `synlynk mcp` in Warp AI Assistant (`~/.warp/mcp.json`), and OSC 133 semantic terminal block formatting.
+    2. *Antigravity IDE (`Agy`):* Auto-installation of `skills/synlynk/` skill pack, MCP eager tool definition generation in `~/.gemini/antigravity-cli/mcp/synlynk/`, `GEMINI.md` instruction fencing, and 1M–2M context window priming.
+    3. *Replit:* Container configuration in `replit.nix` & `.replit` auto-launching daemon on port 27471, `.replitrules` generation, and docked webview extension for Vizor onboarding (`/onboarding`).
+    4. *Emergent:* External MCP gateway binding (`.emergent/synlynk.json`), `synlynk dispatch emergent` cloud microVM worker adapter, and webhook status synchronization.
+  - Updated 4-Tier Cross-Environment Testing Matrix to include 8 pre-configured golden fixture testbeds.
+  - Updated implementation plan Task 2 (`synlynk/surface.py`) and tests (`tests/test_surface.py`).
+- **Standalone Synlynk Cockpit Story & Specification (`story-0127066f`):**
+  - Created standalone story `story-0127066f` (`Synlynk Cockpit: Active Herdr 4-pane terminal orchestration (synlynk herdr init)`) linked to `goal-c7113f58` under phase `Cockpit`, stage `open`.
+  - Authored architectural specification: `docs/superpowers/specs/2026-09-14-synlynk-cockpit-herdr-orchestration.md`.
+  - Defined 4-pane asymmetric layout: Top-Left (Home Conductor), Top-Right (HUD `synlynk watch`), Bottom-Left (Away Worker logs streamer `synlynk logs -f`), Bottom-Right (Operator clean shell).
+  - Defined `synlynk dispatch --pane` live away worker viewport.
+  - Strictly decoupled from FTUE Onboarding milestone v0.21.0.
+[@agy, @nikhilsoman]
+
+## Over-the-Horizon Strategic Expansion Goal Created (decided 2026-09-14)
+- **Goal Created (`goal-c7113f58`):** *"Over-the-Horizon Strategic Expansion: DeepSeek Harness (DSH/Cordis) Plugin Architecture, ACP Headless Transport & Herdr Multi-Pane Cockpit"*. Parked for post-v1.0 execution with zero distraction from active v0.21.0 FTUE Onboarding commitments.
+- **Architectural Research Saved (`docs/strategy/deepseek-harness-and-over-the-horizon-expansion.md`):**
+  1. *DeepSeek Harness (`dsh`, deepseek-ai/deepseek-harness):* Cordis IoC microkernel ("Everything is a Plugin"), capability seams, and subagent drivers for Claude Code and Codex. Formulated 4 strategic integration vectors: (1) `dsh` as a first-class compute harness (`synlynk dispatch dsh`), (2) `@synlynk/dsh-plugin` Cordis ecosystem bridge bringing Synlynk governance to 11,000+ DSH users, (3) Agent Control Protocol (ACP) JSON-RPC headless transport eliminating OS zombie processes, and (4) in-process multi-harness subagent federation.
+  2. *Active Herdr Multi-Pane Cockpit (`synlynk herdr init`):* Evolves Herdr from a passive documentation SOP to an active 4-pane terminal cockpit (Conductor, Observatory HUD, Logs Streamer, Operator Shell) with interactive dispatch spawning. Guarded by `HERDR_ENV=1` opt-in invariant.
+  3. *Heterogeneous Agent Federation:* Bridges for Warp (Workflows & MCP), Antigravity IDE (Skill Packs), Replit (Nix daemon & embedded Vizor), and Emergent (cloud microVM sandboxes).
+- **Linked Stories in `state.db`:**
+  - `story-b75cb3e7`: `[Research & Spec] DSH Cordis Plugin Architecture & @synlynk/dsh-plugin Integration`
+  - `story-541995f4`: `[Architecture] DSH Agent Control Protocol (ACP) JSON-RPC Headless Transport`
+  - `story-2348ac34`: `[Architecture] Active Herdr Terminal Multi-Pane Cockpit Orchestration`
+- **Roadmap Updated:** Added `v1.3.0+` Over-the-Horizon expansion row to `project-docs/roadmap.md`.
+[@agy, @nikhilsoman]
+
 ## Track 1 Fleet Parity Rollout & 7-Role Architecture (decided/shipped 2026-09-13)
 - **Safe Fleet Parity Migration Playbook Adopted (`docs/playbooks/safe-fleet-parity-migration-playbook.md`):** Codified 4 non-negotiable invariants (Worktree-First, 100% Non-Destructive Directive Preservation, Multi-Stack CI Isolation, and Recursive `.gitignore` Safety) and the standard 8-gate lifecycle.
 - **Organization-Scoped GitHub App Provisioning (`synlynk/viz.py`):** Resolved owner classification (`owner_type == "org"` via `gh api users/<owner>`) and routed manifest form submissions to `https://github.com/organizations/<org>/settings/apps/new` with `identity_slug` prefixing (`synlynk-dialify-rxcc-*`, `synlynk-dialify-vdowrx-*`), preventing personal namespace collisions.

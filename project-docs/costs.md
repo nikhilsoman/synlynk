@@ -1,5 +1,17 @@
 # Cost Log
 
+## 2026-09-14 — Universal Surface Expansion (Warp, Antigravity, Replit, Emergent) & Herdr Cockpit Spec
+- Interactive Conductor: Agy (Gemini 2.5 Pro / Flash).
+- Architectural design and spec/plan updates for FTUE Onboarding v0.21.0 adding Warp, Antigravity, Replit, and Emergent.
+- Created standalone story `story-0127066f` under `goal-c7113f58` and authored architectural specification `docs/superpowers/specs/2026-09-14-synlynk-cockpit-herdr-orchestration.md`.
+- Zero external fee-bearing dispatch spend.
+
+## 2026-09-13 — FTUE & Onboarding Journey v0.21.0 Architecture Finalization
+- Interactive Conductor: Agy (Gemini 2.5 Pro / Flash).
+- Architectural design, multi-surface cross-environment integration (Cursor, Windsurf, VS Code, Claude Desktop, Antigravity, Vizor), greenfield sandbox specification, and 4-tier testing matrix definition.
+- Updated formal specification `docs/superpowers/specs/2026-09-13-ftue-onboarding-journey-brainstorm-agenda.md` and 10-task implementation plan `docs/superpowers/plans/2026-09-13-v0-21-0-ftue-onboarding-journey.md` in feature worktree.
+- Zero external fee-bearing dispatch spend.
+
 ## 2026-09-13 — Track 1 Fleet Parity, Manifest Webhook Resolution, & GitHub App Naming Standardization
 - Interactive Conductor: Agy (Gemini 2.5 Pro / Flash).
 - Local TDD implementation: manifest public webhook and inactive state (PR #1566), `/auth/sync` handler & automatic token minting (PR #1568), Point 1 flat role token discovery (PR #1569), and universal `syn-{owner}-{slug}-{role}` App naming standardization with <=34 char budget enforcement (PR #1570).
@@ -121,3 +133,23 @@
 - PR #1569: Extended Point 1 role token readiness check to support flat token files alongside nested paths. All 13 readiness tests passed; zero external fee-bearing dispatch spend.
 - PR #1570: Universal GitHub App naming standardization (`syn-{owner}-{slug}-{role}`), length budget allocator (<= 34 chars), and manifest card transparency. All 7 unit tests passed; zero external fee-bearing dispatch spend.
 - PR #1573: Fixed daemon false "already running" self-recognition deadlock, unhandled port 27471 collision crash, and orphaned port cleanup (#1572). 6 reproduction tests and full 2,830 test suite passed; zero external fee-bearing dispatch spend.
+
+## 2026-09-14 — FTUE Onboarding Journey v0.21.0 Full Implementation
+
+- Conductor: Agy (Gemini 2.5 Pro / Flash).
+- Implemented complete 10-task SDD implementation plan in feature worktree `/Users/nikhilsoman/dev/feat+v0-21-0-ftue-onboarding` on branch `feat/agy/v0-21-0-ftue-onboarding`:
+  - `synlynk/install.py` (Preflight & dependency validation)
+  - `synlynk/surface.py` (Universal surface detection & rule binding: Cursor, Windsurf, VS Code, Warp, Antigravity, Replit, Emergent)
+  - `synlynk/sandbox.py` (Greenfield 3-min starter micro-app & artifact tour)
+  - `synlynk/discovery.py` (Deterministic 3D static AST discovery)
+  - `synlynk/discovery_semantic.py` (Tier 2 semantic overlay with graceful fallback)
+  - `synlynk/context_validator.py` (CLI interactive confirm chips validator)
+  - `synlynk/viz.py` (Vizor 3-view canvas & behind-the-curtain tour)
+  - `synlynk/gap_scanner.py` (Automated workspace gap scanner & GOVERNS goal generator)
+  - `synlynk/first_win.py` (1-click isolated worktree SOP task dispatch)
+  - `synlynk/upgrade.py` & `synlynk/uninstall.py` & `synlynk/coldstart.py` (Lifecycle handlers and cross-environment orchestrator)
+- 28 new unit and integration tests across 11 test suites passing 100% green; full test suite passing; zero external fee-bearing dispatch spend.
+- Submitted PR #1574 (`feat/agy/v0-21-0-ftue-onboarding`).
+- Dispatched QA Review & Attestation Gate: Codex (`job-e1414241`), ~$0.14 estimated (`--requires-gh-write`, `--role qa`).
+
+
