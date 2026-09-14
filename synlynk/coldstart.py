@@ -206,3 +206,57 @@ def cmd_start() -> None:
         _run_new_project_flow(answers)
     else:
         _run_existing_project_flow(".")
+
+
+def run_ftue_journey(repo_root: str = ".", interactive: bool = True, dry_run: bool = False) -> dict:
+    """Run end-to-end 5-stage FTUE onboarding journey:
+    1. Surface detection & rule binding
+    2. 3D static discovery & semantic overlay
+    3. Context confirmation (chips validator)
+    4. Gap scanning & GOVERNS goal generation
+    5. First-win isolated worktree SOP task dispatch
+    """
+    from synlynk.surface import detect_developer_surfaces, bind_surface_rules
+    from synlynk.discovery import scan_workspace_static
+    from synlynk.discovery_semantic import enrich_with_semantic_overlay
+    from synlynk.context_validator import validate_context
+    from synlynk.gap_scanner import scan_workspace_gaps, generate_governs_goal
+    from synlynk.first_win import dispatch_first_win_task
+
+    # Stage 1: Surfaces
+    surfaces = detect_developer_surfaces(repo_root)
+    rule_bindings = bind_surface_rules(repo_root, surfaces)
+
+    # Stage 2: Discovery
+    discovery = scan_workspace_static(repo_root)
+    discovery = enrich_with_semantic_overlay(discovery, repo_root)
+
+    # Stage 3: Validate context
+    confirmed_context = validate_context(discovery, interactive=interactive)
+
+    # Stage 4: Gap Scanner & Goal Generation
+    gaps = scan_workspace_gaps(confirmed_context, repo_root)
+    governs_goal = generate_governs_goal(gaps[0]) if gaps else None
+
+    # Stage 5: First-Win Task Dispatch
+    first_win = None
+    if governs_goal and not dry_run:
+        first_win = dispatch_first_win_task(governs_goal, repo_root)
+    elif governs_goal:
+        first_win = {
+            "status": "planned",
+            "branch": "feat/first-win-verification",
+            "goal": governs_goal,
+            "worktree_isolated": True,
+        }
+
+    return {
+        "success": True,
+        "surfaces": surfaces,
+        "rule_bindings": rule_bindings,
+        "discovery": confirmed_context,
+        "gaps": gaps,
+        "governs_goal": governs_goal,
+        "first_win_task": first_win,
+    }
+

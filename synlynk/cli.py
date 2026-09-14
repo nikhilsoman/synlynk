@@ -209,12 +209,17 @@ def build_parser() -> argparse.ArgumentParser:
                                   "Use '.' for repos that keep docs at the repo root.")
     init_parser.add_argument("--wizard", action="store_true",
                              help="Run the FTUE guided setup wizard")
+    init_parser.add_argument("--quickstart", action="store_true",
+                             help="Run the 5-stage automated FTUE onboarding journey")
     init_parser.add_argument("--dry-run", action="store_true", dest="dry_run",
                              help="Preview what init would write without writing anything")
 
     upgrade_parser = subparsers.add_parser("upgrade", help="Check for and apply updates")
     upgrade_parser.add_argument("--dry-run", action="store_true", dest="dry_run",
                                 help="Preview what would be upgraded without installing")
+
+    uninstall_parser = subparsers.add_parser("uninstall", help="Clean teardown, daemon shutdown, and shim removal")
+    uninstall_parser.add_argument("--force", action="store_true", help="Force complete uninstall")
 
     subparsers.add_parser("join", help="Onboard as a new member to an existing project")
     subparsers.add_parser(
@@ -1332,7 +1337,13 @@ def main(argv=None) -> None:
     _warn_stale_repo_version(VERSION)
 
     if args.command == "init":
-        if getattr(args, "wizard", False):
+        if getattr(args, "quickstart", False):
+            from synlynk.coldstart import run_ftue_journey
+            res = run_ftue_journey(dry_run=getattr(args, "dry_run", False))
+            if res.get("first_win_task"):
+                print(f"\n✦ FTUE Onboarding complete. First win prepared on {res['first_win_task'].get('branch')}.")
+            return
+        elif getattr(args, "wizard", False):
             wizard_init()
         else:
             agents = [a.strip() for a in args.agents.split(",") if a.strip()]
@@ -1358,6 +1369,10 @@ def main(argv=None) -> None:
         sys.exit(cmd_gh(args.role, getattr(args, "gh_args", []) or []))
     elif args.command == "upgrade":
         upgrade(dry_run=getattr(args, "dry_run", False))
+    elif args.command == "uninstall":
+        from synlynk.uninstall import execute_uninstall
+        res = execute_uninstall()
+        print(f"  ✓ {res['message']}")
     elif args.command == "watch":
         action = getattr(args, "action", None)
         if action:

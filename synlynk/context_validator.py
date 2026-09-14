@@ -22,3 +22,9 @@ def validate_context_interactive(data: Dict[str, Any], no_input: bool = False) -
     print("  " + render_chips_summary(data))
     print("\nPress Enter to accept [or Space to open Vizor]: ", end="", flush=True)
     return data
+
+
+def validate_context(data: Dict[str, Any], interactive: bool = True) -> Dict[str, Any]:
+    """Validate discovered context with interactive or headless mode."""
+    return validate_context_interactive(data, no_input=not interactive)
+
