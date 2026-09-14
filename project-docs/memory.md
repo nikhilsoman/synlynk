@@ -1,5 +1,18 @@
 # synlynk Memory
 
+## FTUE & Onboarding Journey v0.21.0 Architecture Finalized (decided 2026-09-13)
+- **Multi-Surface & Zero-Terminal Invariant:** Decided that terminal CLI harness binaries (`claude`, `agy`, `codex`, `grok`) must NEVER be a mandatory prerequisite for onboarding. Synlynk natively binds to modern AI IDEs (Cursor via `.cursor/rules/synlynk.mdc`, Windsurf via `.windsurfrules`, VS Code via `.github/copilot-instructions.md`, Claude Desktop via local MCP, and Antigravity IDE via `GEMINI.md`). The AI inside Cursor/Windsurf operates natively as the Home Conductor without the user touching a terminal.
+- **6-Stage Lifecycle Codified:**
+  - *Stage 0 (The Mental Model):* Explains what Synlynk IS (control plane / substrate) vs ISN'T (not a model/chatbot), the Home Conductor vs Away Workers separation of concerns, why Agy (1M-2M context champion) and Claude Sonnet are recommended Home Conductors, and why dedicated GitHub App identities (`@syn-pm[bot]`, `@syn-qa[bot]`) prevent self-review collisions (`#423`) and enable authentic CI merge gates.
+  - *Stage 1 (Surface & Fleet Binding):* Environment auto-detection, non-destructive fenced rule generation, and 1-click GitHub App role provisioning via Vizor (`/onboarding/roles` and `/auth/sync`).
+  - *Stage 2 (Greenfield Sandbox & Artifact Tour):* 3-minute starter micro-app (`syn-ping`) demonstrating the complete milestone loop (Spec -> Plan -> Worktree -> TDD -> PR -> QA Review) followed by a visual "Behind the Curtain" tour of `state.db`, `context.md`, `project-docs/`, worktrees, and Vizor's 3-view canvas (file tree, tubemap, application screens).
+  - *Stage 3 (Brownfield Adoption):* "How do YOU want to use it?" with safety gates (git dirty check, snapshot), 3D discovery (Domain, Physical, Logical), interactive "Confirm & Tweak" chips, gap scanner producing GOVERNS goals, and the First Real Win PR in < 5 minutes.
+  - *Stage 4 (Upgrade Journey):* `synlynk upgrade` (safe schema migrations, instruction refresh, re-probe, zero-downtime daemon restart).
+  - *Stage 5 (Uninstall Journey):* `synlynk uninstall` (clean service teardown, shim removal, zero zombies).
+- **4-Tier Cross-Environment Testing Matrix:** Enforces Tier 1 (syntax/schema attestation for `.mdc`, `.windsurfrules`, Copilot, MCP), Tier 2 (prompt/persona emulation asserting Home Conductor behavior in headless LLMs), Tier 3 (Playwright browser automation for Vizor UI), and Tier 4 (golden dogfood fixture repositories).
+- **Spec & Plan Approved:** Committed in worktree `feat+v0-21-0-ftue-onboarding` at `docs/superpowers/specs/2026-09-13-ftue-onboarding-journey-brainstorm-agenda.md` and `docs/superpowers/plans/2026-09-13-v0-21-0-ftue-onboarding-journey.md`.
+[@agy, @nikhilsoman]
+
 ## Track 1 Fleet Parity Rollout & 7-Role Architecture (decided/shipped 2026-09-13)
 - **Safe Fleet Parity Migration Playbook Adopted (`docs/playbooks/safe-fleet-parity-migration-playbook.md`):** Codified 4 non-negotiable invariants (Worktree-First, 100% Non-Destructive Directive Preservation, Multi-Stack CI Isolation, and Recursive `.gitignore` Safety) and the standard 8-gate lifecycle.
 - **Organization-Scoped GitHub App Provisioning (`synlynk/viz.py`):** Resolved owner classification (`owner_type == "org"` via `gh api users/<owner>`) and routed manifest form submissions to `https://github.com/organizations/<org>/settings/apps/new` with `identity_slug` prefixing (`synlynk-dialify-rxcc-*`, `synlynk-dialify-vdowrx-*`), preventing personal namespace collisions.
@@ -56,22 +69,6 @@
   3. **Post-Claim Story Un-Stranding (`synlynk/jobs.py`, `synlynk/cli.py`, #1507):** Implemented `reclaim_stranded_stories()`. Automatically scans stories stuck in `in_progress` without an active worker PID and reverts them to `ready` status with an audit trail, preventing stranded backlog tasks when worker processes crash or reboot. Added `synlynk story reclaim [--max-age <M>] [--dry-run]` command.
   4. **SQLite Concurrency & Busy-Timeout Tuning (`synlynk/__init__.py`, `synlynk/lineage.py`, #1503):** Configured `PRAGMA busy_timeout = 30000;` and `PRAGMA synchronous = NORMAL;` across all database connections in `synlynk/__init__.py` and `synlynk/lineage.py`. Verified zero lock contention under high-concurrency 12-thread simultaneous read/write stress testing.
 - **Verification & Review:** 21 unit and multi-threaded stress tests passing. [@agy]
-
-## Synlynk v0.21.0 FTUE & Onboarding Journey Architecture Formulated (decided 2026-09-13)
-- **Comprehensive Brainstorm Agenda Authored (`docs/superpowers/specs/2026-09-13-ftue-onboarding-journey-brainstorm-agenda.md`):** Formulated the definitive first-time user experience (FTUE) and onboarding journey specification for Milestone v0.21.0. Synthesized prior specifications (BS-17, BS-6, Zero-Risk Onboarding, Cold-Start Intent Transmission, RxCC Live Retrospective), existing implementation components (`scan.py`, `coldstart.py`, `viz.py`, `viz_views.py`, `readiness.py`), and external developer product benchmarks (`clig.dev`, Vercel, Fly.io, Supabase, Astro, Stripe, PostHog).
-- **Core Architecture (The 6 Pillars):**
-  1. *Quick Install:* One-line standalone bootstrap (<30s) across `curl | sh`, `pipx`, and `brew` with instant preflight checks.
-  2. *3D Workspace Discovery Engine (`synlynk scan --deep`):* Tri-directional semantic and static extraction covering (a) Industry/Application Domain Space, (b) Physical Structure (directory hierarchy, configs, CI/CD, deployment targets), and (c) Logical Structure (entities, schemas, information flow, service boundaries, message queues, datastores).
-  3. *Interactive Context Validation ("Confirm & Tweak"):* Compact visual chip UI in local Vizor (`http://localhost:27472/onboarding`) with zero-typing default progression and inline editing.
-  4. *Unified 3-View Visual Canvas in Vizor:* Integrated drillable physical file tree, logical architect tubemap/sequence flow, and application screens/cloud infrastructure topology.
-  5. *Gap & Opportunity Discovery -> GOVERNS Goals:* Automated detection of untested routes, security holes, and doc drift, formulating candidate GOVERNS goals (`--outcome ... --criterion ...`) written to `state.db` upon 1-click user approval.
-  6. *First-Win Task Selection & Autonomous SOP Dispatch:* 3 bite-sized candidate tasks, executing via isolated worktree with real GitHub PR created in <3 minutes.
-- **Multi-Harness Panel Consensus Approved (`dec-fcff261a`, 2026-09-13):** Convened panel (`claude`, `codex`, `agy`, `grok`) via `synlynk decide --record`. Unanimously resolved:
-  - *Debate 1:* Hybrid CLI-first (responsive terminal chips, `Enter` continues, `Space` opens `localhost:27472/onboarding`, `--no-input` stays 100% non-browser JSON).
-  - *Debate 2:* Tiered, offline-first scan (<10s deterministic AST/manifest scan is critical path; LLM semantic labeling is non-blocking Tier 2 overlay).
-  - *Debate 3:* Zero footprint outside `.synlynk/` with rollback snapshot; dirty trees fail closed or force isolated worktree.
-  - *Debate 4:* Single North-Star First-Win Goal (one high-confidence additive test/CI goal, verified PR created in <5m; merging is out of 5m promise).
-  - *Scope Calibration:* 3D discovery and deeper rendered screen/cloud modeling deferred to follow-on release; distribution formalized as 4th explicit workstream. [@agy]
 
 ## Milestone v0.20.0 Cluster B Shipped: Worktree Lifecycle & Rebase Concurrency (decided/shipped 2026-09-11)
 - **Implementation Shipped (PR #1558):** Completed Milestone v0.20.0 Cluster B (`story-dfb61aea`) per approved design spec (`docs/superpowers/specs/2026-09-11-cluster-b-worktree-lifecycle-concurrency-design.md`) and implementation plan (`docs/superpowers/plans/2026-09-11-cluster-b-worktree-lifecycle-concurrency.md`).
@@ -755,5 +752,13 @@ work because local git activity is not sufficient corroboration.
 - **Automated PDF & EPUB Compilation Engine (Phase 4):** Headless Chrome (`--headless --print-to-pdf`) and Pandoc (`--metadata-file --css`) automated compilation integrated into `synlynk/release_marketing.py` for all 3 doc guides and the book manuscript.
 - **Marketing Charter Revision:** Agent `f2039c38-37ef-4380-ae97-9954f0f7ed36` and `SEED_CHARTERS["marketing"]` updated to autonomously execute both protocols, gated by `synlynk pr check` blog validation and post-merge automated dispatch.
 [@nikhilsoman via Agy]
+
+## Daemon Liveness Verification & Port Conflict Recovery (#1572, 2026-09-13)
+
+- **Caller PID Exclusion in Health Check:** In `synlynk/daemon.py::WatchDaemon._health()`, `owner_pid` from `daemon.pid.lock` is ignored if `owner_pid == os.getpid()`. When a starter process acquires the exclusive start lock, its PID is stamped in `lock_path`. Checking `_health()` before spawning previously detected the starter itself as an active background daemon, deadlocking all startup calls into a false "already running" exit.
+- **Accurate Child Confirmation:** `WatchDaemon.start()` now validates `self._is_running()` after awaiting the child's pidfile rather than blindly printing a success message.
+- **Port Collision Containment:** Wrapped HTTP server socket binding in `SynlynkDaemon._run_loop()` in `try ... except OSError`. If port 27471 is held by an orphaned process, the daemon cleans up its pidfile, releases the lifetime lock, and publishes a `DAEMON_PORT_CONFLICT` sentinel alert, preventing unhandled termination crashes.
+- **Orphan Port Reclaim on Stop:** In `SynlynkDaemon.stop()`, if pidfile and lockfile are missing or stale, `stop()` falls back to `_find_pid_listening_on_port(self.HTTP_PORT)` to identify and terminate orphaned processes listening on port 27471.
+[@agy]
 
 

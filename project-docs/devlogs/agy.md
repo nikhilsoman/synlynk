@@ -449,17 +449,42 @@
 - **PR #1570 Merged:** Merged commit `087ee600` to `main` with all 4 CI matrix checks passing. Reinstalled `synlynk` 0.20.0 and verified clean live generation on `hitchcock` at port 27472.
 [@agy]
 
-## 2026-09-13 — FTUE & Onboarding Journey Brainstorm Agenda Formulated (`docs/superpowers/specs/2026-09-13-ftue-onboarding-journey-brainstorm-agenda.md`)
+## 2026-09-13 — Fix Daemon False 'Already Running' Deadlock & Port Collision Zombie (#1572, PR #1573)
+
+### Incident & Symptoms
+- Reported from `rxcc`: `synlynk daemon status` returned "✦ synlynk daemon not running", but `synlynk daemon start` immediately returned "synlynk daemon is already running." without spawning a process.
+- `synlynk daemon restart` produced self-contradictory messages in a single invocation ("✦ daemon not running (cleaned stale lock/pidfile)." followed by "synlynk daemon is already running.").
+- A 2+ day-old zombie daemon process was holding port 27471, triggering unhandled `OSError: [Errno 48] Address already in use` crashes.
+
+### Root Causes
+1. **Starter Self-Recognition Deadlock:** In `WatchDaemon.start()`, `_try_acquire_daemon_lock()` records the caller's PID (`os.getpid()`) into `daemon.pid.lock`. Immediately inside `try:`, `start()` checks `self._is_running()`. In `_health()`, because `pidfile` does not exist yet, it checked `_pid_is_alive(owner_pid)`. Since `owner_pid` was `os.getpid()` (the starter CLI itself), `_health()` returned `"running"`, causing `start()` to falsely report already running and exit without spawning the child.
+2. **Unhandled HTTP Port Bind Conflict:** In `SynlynkDaemon._run_loop()`, `_ReuseAddrHTTPServer` initialization was unhandled. If port 27471 was held by an orphaned process, it raised `[Errno 48] Address already in use`, terminating the child process after `pidfile` was published and leaving an instant zombie.
+3. **Orphan Port Blindspot on Stop:** `SynlynkDaemon.stop()` only checked `self.pidfile` and `lock_path`. If both were deleted or contained dead PIDs while an orphan held port 27471, `stop()` reported "daemon not running" without killing the process on port 27471.
 
 ### Shipped
-- **Comprehensive Review & Retrospective:** Audited past specifications (BS-17 FTUE TUI Wizard, Zero-Risk Onboarding & First Win, Cold-Start & Intent Transmission, BS-6 Visualization Architecture, RxCC Adoption Retrospectives) and active implementation components (`synlynk/scan.py`, `synlynk/coldstart.py`, `synlynk/viz.py`, `synlynk/viz_views.py`, `synlynk/readiness.py`).
-- **External Best Practice Deconstruction:** Researched CLI & developer product onboarding standards (`clig.dev`, 12-factor CLI, Vercel CLI, Fly.io, Supabase, Astro, Stripe, PostHog, Sentry), synthesizing key principles (sub-100ms feedback, TTY detection, `--no-input` scriptability, crash-only idempotence, and time-to-first-win).
-- **The 6 Pillars Defined:**
-  1. *Quick Install:* < 30s bootstrap across `curl | sh`, `pipx`, and `brew` with instant preflight checks.
-  2. *3D Discovery Engine:* Automated tri-directional extraction covering (a) Industry/Application Domain Space, (b) Physical Structure (directory hierarchy, configs, CI/CD, deployment targets), and (c) Logical Structure (entities, schemas, information flow, service boundaries, message queues, datastores).
-  3. *Interactive Context Validation:* "Confirm & Tweak" chip UI in Vizor (`http://localhost:27472/onboarding`) with zero-typing default progression.
-  4. *Unified 3-View Visual Canvas in Vizor:* Drillable physical file tree, logical architect tubemap/sequence flow, and application screens/cloud infrastructure topology.
-  5. *Gap & Opportunity Discovery:* Automated detection of untested routes, security holes, and doc drift, formulating candidate GOVERNS goals written to `state.db` upon 1-click approval.
-  6. *First-Win Task Selection & Autonomous SOP Dispatch:* 3 bite-sized candidate tasks, executing via isolated worktree with real GitHub PR created in < 3 minutes.
-- **Multi-Harness Consensus Recorded (`dec-fcff261a`):** Dispatched topic to panel (`claude`, `codex`, `agy`, `grok`) via `synlynk decide --record`. Approved unanimously: Hybrid CLI-first flow, tiered offline-first AST discovery, zero footprint outside `.synlynk/` with rollback snapshot, and single North-Star First-Win Goal (<5m PR). Deferred 3D spatial scan to follow-on release; formalized distribution as 4th explicit workstream. Recorded in `project-docs/decisions/2026-09-13-synlynk-v0-21-0-ftue-onboarding-journey.md`.
+- **Exclude Caller PID in Health Check (`synlynk/daemon.py`):** In `_health()`, set `owner_pid = None` if `owner_pid == os.getpid()`.
+- **Accurate Startup Verification (`synlynk/daemon.py`):** In `WatchDaemon.start()`, confirm `self._is_running()` after awaiting child pidfile before printing started message; emit stderr error if child failed to start.
+- **Port Conflict Graceful Recovery (`synlynk/daemon.py`):** Wrapped HTTP server startup in `try ... except OSError` in `_run_loop()`, cleanly removing `pidfile`, releasing `lock_fh`, logging error to stderr, and publishing a `DAEMON_PORT_CONFLICT` sentinel alert.
+- **Orphan Reclaim by Port on Stop (`synlynk/daemon.py`):** Added `_find_pid_listening_on_port(self.HTTP_PORT)` fallback in `stop()` to terminate orphaned processes listening on port 27471.
+- **Unit Tests:** Added 6 reproduction and regression test cases in `tests/test_daemon_liveness_1572.py`.
+- **Verification:** All 6 reproduction tests passed. Existing daemon tests (20/20) passed. Full repository test suite passed (2,830 tests passed, 3 skipped).
+- **PR:** Opened PR #1573 on branch `fix/agy/daemon-liveness-false-positive-1572`.
+[@agy]
+
+## 2026-09-13 — FTUE & Onboarding Journey v0.21.0 Architecture & Cross-Environment Test Matrix Finalized
+
+### Shipped & Finalized
+- **Multi-Surface Architecture Formulated:** Codified the principle that terminal CLI harness binaries (`claude`, `agy`, `codex`, `grok`) must NEVER be a mandatory prerequisite for developer onboarding. Synlynk binds directly to modern AI IDEs (Cursor via `.cursor/rules/synlynk.mdc`, Windsurf via `.windsurfrules`, VS Code via `.github/copilot-instructions.md`, Claude Desktop via local MCP, and Antigravity IDE via `GEMINI.md`). The AI inside Cursor/Windsurf operates natively as the Home Conductor without the user touching a terminal.
+- **6-Stage Lifecycle Codified:**
+  - *Stage 0 (The Mental Model):* Explains what Synlynk IS (control plane / substrate) vs ISN'T (not a model/chatbot), the Home Conductor vs Away Workers separation of concerns, why Agy (1M-2M context champion) and Claude Sonnet are recommended Home Conductors, and why dedicated GitHub App identities (`@syn-pm[bot]`, `@syn-qa[bot]`) prevent self-review collisions (`#423`) and enable authentic CI merge gates.
+  - *Stage 1 (Surface & Fleet Binding):* Environment auto-detection, non-destructive fenced rule generation, and 1-click GitHub App role provisioning via Vizor (`/onboarding/roles` and `/auth/sync`).
+  - *Stage 2 (Greenfield Sandbox & Artifact Tour):* 3-minute starter micro-app (`syn-ping`) demonstrating the complete milestone loop (Spec -> Plan -> Worktree -> TDD -> PR -> QA Review) followed by a visual "Behind the Curtain" tour of `state.db`, `context.md`, `project-docs/`, worktrees, and Vizor's 3-view canvas (file tree, tubemap, application screens).
+  - *Stage 3 (Brownfield Adoption):* "How do YOU want to use it?" with safety gates (git dirty check, snapshot), 3D discovery (Domain, Physical, Logical), interactive "Confirm & Tweak" chips, gap scanner producing GOVERNS goals, and the First Real Win PR in < 5 minutes.
+  - *Stage 4 (Upgrade Journey):* `synlynk upgrade` (safe schema migrations, instruction refresh, re-probe, zero-downtime daemon restart).
+  - *Stage 5 (Uninstall Journey):* `synlynk uninstall` (clean service teardown, shim removal, zero zombies).
+- **4-Tier Cross-Environment Testing Matrix:** Enforces Tier 1 (syntax/schema attestation for `.mdc`, `.windsurfrules`, Copilot, MCP), Tier 2 (prompt/persona emulation asserting Home Conductor behavior in headless LLMs), Tier 3 (Playwright browser automation for Vizor UI), and Tier 4 (golden dogfood fixture repositories).
+- **Committed in Feature Worktree (`feat/agy/v0-21-0-ftue-onboarding`):**
+  - Updated specification: `docs/superpowers/specs/2026-09-13-ftue-onboarding-journey-brainstorm-agenda.md`
+  - Updated implementation plan: `docs/superpowers/plans/2026-09-13-v0-21-0-ftue-onboarding-journey.md` (10 sequential TDD tasks)
+  - Committed on branch `feat/agy/v0-21-0-ftue-onboarding` at commit `0c0daf4`.
 [@agy]
