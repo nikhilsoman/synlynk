@@ -1,16 +1,16 @@
 # synlynk Memory
 
-## FTUE & Onboarding Journey v0.21.0 Architecture Finalized (decided 2026-09-13)
-- **Multi-Surface & Zero-Terminal Invariant:** Decided that terminal CLI harness binaries (`claude`, `agy`, `codex`, `grok`) must NEVER be a mandatory prerequisite for onboarding. Synlynk natively binds to modern AI IDEs (Cursor via `.cursor/rules/synlynk.mdc`, Windsurf via `.windsurfrules`, VS Code via `.github/copilot-instructions.md`, Claude Desktop via local MCP, and Antigravity IDE via `GEMINI.md`). The AI inside Cursor/Windsurf operates natively as the Home Conductor without the user touching a terminal.
-- **6-Stage Lifecycle Codified:**
-  - *Stage 0 (The Mental Model):* Explains what Synlynk IS (control plane / substrate) vs ISN'T (not a model/chatbot), the Home Conductor vs Away Workers separation of concerns, why Agy (1M-2M context champion) and Claude Sonnet are recommended Home Conductors, and why dedicated GitHub App identities (`@syn-pm[bot]`, `@syn-qa[bot]`) prevent self-review collisions (`#423`) and enable authentic CI merge gates.
-  - *Stage 1 (Surface & Fleet Binding):* Environment auto-detection, non-destructive fenced rule generation, and 1-click GitHub App role provisioning via Vizor (`/onboarding/roles` and `/auth/sync`).
-  - *Stage 2 (Greenfield Sandbox & Artifact Tour):* 3-minute starter micro-app (`syn-ping`) demonstrating the complete milestone loop (Spec -> Plan -> Worktree -> TDD -> PR -> QA Review) followed by a visual "Behind the Curtain" tour of `state.db`, `context.md`, `project-docs/`, worktrees, and Vizor's 3-view canvas (file tree, tubemap, application screens).
-  - *Stage 3 (Brownfield Adoption):* "How do YOU want to use it?" with safety gates (git dirty check, snapshot), 3D discovery (Domain, Physical, Logical), interactive "Confirm & Tweak" chips, gap scanner producing GOVERNS goals, and the First Real Win PR in < 5 minutes.
-  - *Stage 4 (Upgrade Journey):* `synlynk upgrade` (safe schema migrations, instruction refresh, re-probe, zero-downtime daemon restart).
-  - *Stage 5 (Uninstall Journey):* `synlynk uninstall` (clean service teardown, shim removal, zero zombies).
-- **4-Tier Cross-Environment Testing Matrix:** Enforces Tier 1 (syntax/schema attestation for `.mdc`, `.windsurfrules`, Copilot, MCP), Tier 2 (prompt/persona emulation asserting Home Conductor behavior in headless LLMs), Tier 3 (Playwright browser automation for Vizor UI), and Tier 4 (golden dogfood fixture repositories).
-- **Spec & Plan Approved:** Committed in worktree `feat+v0-21-0-ftue-onboarding` at `docs/superpowers/specs/2026-09-13-ftue-onboarding-journey-brainstorm-agenda.md` and `docs/superpowers/plans/2026-09-13-v0-21-0-ftue-onboarding-journey.md`.
+## Over-the-Horizon Strategic Expansion Goal Created (decided 2026-09-14)
+- **Goal Created (`goal-c7113f58`):** *"Over-the-Horizon Strategic Expansion: DeepSeek Harness (DSH/Cordis) Plugin Architecture, ACP Headless Transport & Herdr Multi-Pane Cockpit"*. Parked for post-v1.0 execution with zero distraction from active v0.21.0 FTUE Onboarding commitments.
+- **Architectural Research Saved (`docs/strategy/deepseek-harness-and-over-the-horizon-expansion.md`):**
+  1. *DeepSeek Harness (`dsh`, deepseek-ai/deepseek-harness):* Cordis IoC microkernel ("Everything is a Plugin"), capability seams, and subagent drivers for Claude Code and Codex. Formulated 4 strategic integration vectors: (1) `dsh` as a first-class compute harness (`synlynk dispatch dsh`), (2) `@synlynk/dsh-plugin` Cordis ecosystem bridge bringing Synlynk governance to 11,000+ DSH users, (3) Agent Control Protocol (ACP) JSON-RPC headless transport eliminating OS zombie processes, and (4) in-process multi-harness subagent federation.
+  2. *Active Herdr Multi-Pane Cockpit (`synlynk herdr init`):* Evolves Herdr from a passive documentation SOP to an active 4-pane terminal cockpit (Conductor, Observatory HUD, Logs Streamer, Operator Shell) with interactive dispatch spawning. Guarded by `HERDR_ENV=1` opt-in invariant.
+  3. *Heterogeneous Agent Federation:* Bridges for Warp (Workflows & MCP), Antigravity IDE (Skill Packs), Replit (Nix daemon & embedded Vizor), and Emergent (cloud microVM sandboxes).
+- **Linked Stories in `state.db`:**
+  - `story-b75cb3e7`: `[Research & Spec] DSH Cordis Plugin Architecture & @synlynk/dsh-plugin Integration`
+  - `story-541995f4`: `[Architecture] DSH Agent Control Protocol (ACP) JSON-RPC Headless Transport`
+  - `story-2348ac34`: `[Architecture] Active Herdr Terminal Multi-Pane Cockpit Orchestration`
+- **Roadmap Updated:** Added `v1.3.0+` Over-the-Horizon expansion row to `project-docs/roadmap.md`.
 [@agy, @nikhilsoman]
 
 ## Track 1 Fleet Parity Rollout & 7-Role Architecture (decided/shipped 2026-09-13)

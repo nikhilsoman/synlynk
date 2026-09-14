@@ -1,8 +1,8 @@
 # Feature Release Priorities & Milestone Roadmap
 
-- **Governing Goals:** `goal-85656c82` (Developer Experience 1.0), `goal-8f64eff5` (Platform Health), `goal-bde24050` (State & Job Truth), `goal-90e73dfd` (GOVERNS Lifecycle), `goal-250b6fb2` (Fleet Parity)
+- **Governing Goals:** `goal-85656c82` (Developer Experience 1.0), `goal-8f64eff5` (Platform Health), `goal-bde24050` (State & Job Truth), `goal-90e73dfd` (GOVERNS Lifecycle), `goal-250b6fb2` (Fleet Parity), `goal-c7113f58` (Over-the-Horizon Strategic Expansion)
 - **Target Launch:** **01 October 2026 (v1.0.0 Developer Preview Launch)**
-- **Last Updated:** 2026-09-11
+- **Last Updated:** 2026-09-14
 
 ---
 
@@ -17,6 +17,7 @@
 | **v1.0.0** | **2026-10-01** | **Developer Preview Public Launch (Time-to-Wow):** 15-minute zero-risk onboarding pipeline, signed GA release on PyPI/pipx, full documentation release, commercial marketing launch. | Target GA Release |
 | **v1.1.0** | Q4 2026 | Cross-workgroup team collaboration, community relay server, multi-tenant quota arbitration. | Post-GA |
 | **v1.2.0** | Q1 2027 | Enterprise workspace: microVM kernel sandboxing (Bubblewrap/eBPF), SCIP semantic code graph, EdenFS monorepo scaling. | Post-GA |
+| **v1.3.0+** | 2027 | **Over-the-Horizon Expansion (`goal-c7113f58`):** DeepSeek Harness (`dsh`) Cordis plugin architecture, ACP headless transport, active Herdr multi-pane cockpit (`synlynk herdr init`), and heterogeneous agent federation (Warp, Replit, Emergent). | Parked Strategic Epic |
 
 ---
 
