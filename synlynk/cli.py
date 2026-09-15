@@ -246,6 +246,12 @@ def build_parser() -> argparse.ArgumentParser:
     impact_parser.add_argument("--depth", type=int, default=10, help="Max traversal depth (default: 10)")
     impact_parser.add_argument("--json", action="store_true", help="Output impact report as JSON")
 
+    mesh_parser = subparsers.add_parser(
+        "mesh", help="Aggregate multi-repo knowledge graphs into a federated mesh"
+    )
+    mesh_parser.add_argument("--repos", help="Comma-separated repo paths (default: auto-discover)")
+    mesh_parser.add_argument("--output", help="Path to write global graph JSON (default: ~/.synlynk/global-graph.json)")
+
     team_parser = subparsers.add_parser("team", help="Team status and management")
     team_sub = team_parser.add_subparsers(dest="team_action")
     team_sub.add_parser("status", help="Show team digest: members, stories, budget")
@@ -1183,6 +1189,7 @@ def build_parser() -> argparse.ArgumentParser:
         "tool": tool_parser,
         "pack": pack_parser,
         "impact": impact_parser,
+        "mesh": mesh_parser,
     }
 
     roles_parser = subparsers.add_parser(
@@ -2012,6 +2019,9 @@ def main(argv=None) -> None:
     elif args.command == "impact":
         from synlynk.impact import cmd_impact
         sys.exit(cmd_impact(args))
+    elif args.command == "mesh":
+        from synlynk.multirepo_graph import cmd_multirepo_mesh
+        sys.exit(cmd_multirepo_mesh(args))
     elif args.command == "scan":
         cmd_scan(
             deep=getattr(args, "deep", False),
