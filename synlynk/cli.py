@@ -252,6 +252,15 @@ def build_parser() -> argparse.ArgumentParser:
     mesh_parser.add_argument("--repos", help="Comma-separated repo paths (default: auto-discover)")
     mesh_parser.add_argument("--output", help="Path to write global graph JSON (default: ~/.synlynk/global-graph.json)")
 
+    spike_parser = subparsers.add_parser(
+        "spike", help="Evaluate architectural candidates and generate empirical receipts"
+    )
+    spike_sub = spike_parser.add_subparsers(dest="spike_action")
+    spike_eval_parser = spike_sub.add_parser("eval", help="Run spike evaluation benchmark")
+    spike_eval_parser.add_argument("--candidate", default="graphify", help="Candidate tool or technology name")
+    spike_eval_parser.add_argument("--scenario", default="codebase-exploration", help="Evaluation benchmark scenario")
+    spike_eval_parser.add_argument("--baseline", default="grep-native", help="Baseline comparison tool or technique")
+
     team_parser = subparsers.add_parser("team", help="Team status and management")
     team_sub = team_parser.add_subparsers(dest="team_action")
     team_sub.add_parser("status", help="Show team digest: members, stories, budget")
@@ -1190,6 +1199,7 @@ def build_parser() -> argparse.ArgumentParser:
         "pack": pack_parser,
         "impact": impact_parser,
         "mesh": mesh_parser,
+        "spike": spike_parser,
     }
 
     roles_parser = subparsers.add_parser(
@@ -2022,6 +2032,9 @@ def main(argv=None) -> None:
     elif args.command == "mesh":
         from synlynk.multirepo_graph import cmd_multirepo_mesh
         sys.exit(cmd_multirepo_mesh(args))
+    elif args.command == "spike":
+        from synlynk.spike import cmd_spike
+        sys.exit(cmd_spike(args))
     elif args.command == "scan":
         cmd_scan(
             deep=getattr(args, "deep", False),
