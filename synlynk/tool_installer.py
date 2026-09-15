@@ -2,7 +2,8 @@
 
 import shutil
 import subprocess
-from typing import Dict, Any, Optional
+import sys
+from typing import Dict, Any
 
 RECOMMENDED_TOOLS: Dict[str, Dict[str, Any]] = {
     "graphify": {
@@ -36,19 +37,38 @@ def install_tool(tool_name: str) -> bool:
 
     config = RECOMMENDED_TOOLS[tool_name]
     package = config["package"]
+    methods = config.get("install_methods", [])
 
-    # Prefer uv, then pipx, then pip
-    if shutil.which("uv"):
+    cmd = None
+    if "uv" in methods and shutil.which("uv"):
         cmd = ["uv", "tool", "install", package]
-    elif shutil.which("pipx"):
+    elif "pipx" in methods and shutil.which("pipx"):
         cmd = ["pipx", "install", package]
-    elif shutil.which("pip"):
+    elif "pip" in methods and shutil.which("pip"):
         cmd = ["pip", "install", package]
+    elif "brew" in methods and shutil.which("brew"):
+        cmd = ["brew", "install", package]
+    elif "apt" in methods and shutil.which("apt-get"):
+        cmd = ["sudo", "apt-get", "install", "-y", package]
     else:
+        supported = ", ".join(methods) if methods else "none specified"
+        print(
+            f"Error: No supported package manager found to install '{tool_name}'. "
+            f"Supported methods: {supported}.",
+            file=sys.stderr,
+        )
         return False
 
     try:
         res = subprocess.run(cmd, capture_output=True, text=True, check=True)
         return res.returncode == 0
-    except (subprocess.SubprocessError, OSError):
+    except subprocess.CalledProcessError as exc:
+        err_msg = (exc.stderr or exc.stdout or "").strip()
+        print(
+            f"Error: Installer command '{' '.join(cmd)}' failed with code {exc.returncode}:\n{err_msg}",
+            file=sys.stderr,
+        )
+        return False
+    except (subprocess.SubprocessError, OSError) as exc:
+        print(f"Error: Failed to execute installer '{' '.join(cmd)}': {exc}", file=sys.stderr)
         return False

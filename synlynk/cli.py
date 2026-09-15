@@ -1969,10 +1969,11 @@ def main(argv=None) -> None:
             try:
                 success = install_tool(tool_name)
                 if not success:
-                    print(f"Failed to install {tool_name}.")
+                    print(f"Installation of {tool_name} failed. See error output above.", file=sys.stderr)
                     sys.exit(1)
+                print(f"Successfully installed {tool_name}.")
             except ValueError as exc:
-                print(f"Error: {exc}")
+                print(f"Error: {exc}", file=sys.stderr)
                 sys.exit(1)
         else:
             help_parsers.get("tool", parser).print_help()
