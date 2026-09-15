@@ -228,6 +228,39 @@ def build_parser() -> argparse.ArgumentParser:
     home_parser = subparsers.add_parser("home", help="Display or switch the active home harness")
     home_parser.add_argument("harness", nargs="?", choices=["claude", "agy", "codex", "grok", "local"], help="Harness to set as home")
 
+    tool_parser = subparsers.add_parser("tool", help="Manage recommended ecosystem tools")
+    tool_sub = tool_parser.add_subparsers(dest="tool_action")
+    tool_install_parser = tool_sub.add_parser("install", help="Install a recommended tool")
+    tool_install_parser.add_argument("tool_name", help="Name of tool to install (e.g. graphify)")
+
+    pack_parser = subparsers.add_parser(
+        "pack", help="Synthesize a concise AST context pack from the knowledge graph"
+    )
+    pack_parser.add_argument("target", help="Task description or story ID (e.g. story-1234)")
+    pack_parser.add_argument("--budget", type=int, default=1500, help="Token budget ceiling (default: 1500)")
+
+    impact_parser = subparsers.add_parser(
+        "impact", help="Calculate blast-radius and upstream/downstream impact for a symbol or file"
+    )
+    impact_parser.add_argument("target", help="Symbol name or file path (e.g. get_user, synlynk/db.py)")
+    impact_parser.add_argument("--depth", type=int, default=10, help="Max traversal depth (default: 10)")
+    impact_parser.add_argument("--json", action="store_true", help="Output impact report as JSON")
+
+    mesh_parser = subparsers.add_parser(
+        "mesh", help="Aggregate multi-repo knowledge graphs into a federated mesh"
+    )
+    mesh_parser.add_argument("--repos", help="Comma-separated repo paths (default: auto-discover)")
+    mesh_parser.add_argument("--output", help="Path to write global graph JSON (default: ~/.synlynk/global-graph.json)")
+
+    spike_parser = subparsers.add_parser(
+        "spike", help="Evaluate architectural candidates and generate empirical receipts"
+    )
+    spike_sub = spike_parser.add_subparsers(dest="spike_action")
+    spike_eval_parser = spike_sub.add_parser("eval", help="Run spike evaluation benchmark")
+    spike_eval_parser.add_argument("--candidate", default="graphify", help="Candidate tool or technology name")
+    spike_eval_parser.add_argument("--scenario", default="codebase-exploration", help="Evaluation benchmark scenario")
+    spike_eval_parser.add_argument("--baseline", default="grep-native", help="Baseline comparison tool or technique")
+
     team_parser = subparsers.add_parser("team", help="Team status and management")
     team_sub = team_parser.add_subparsers(dest="team_action")
     team_sub.add_parser("status", help="Show team digest: members, stories, budget")
@@ -252,6 +285,7 @@ def build_parser() -> argparse.ArgumentParser:
     heal_parser.add_argument("--parity", action="store_true", help="Run worktree-isolated fleet parity remediation")
     heal_parser.add_argument("--dry-run", action="store_true", help="Print parity gaps and files to touch without modifying files")
     heal_parser.add_argument("--branch", type=str, default=None, help="Target feature branch for parity remediation PR")
+    heal_parser.add_argument("--cycles", action="store_true", help="Detect circular imports and generate refactoring stories")
 
     audit_docs_parser = subparsers.add_parser(
         "audit-docs", help="Detect (and optionally fix) devlog author-identity drift"
@@ -1074,6 +1108,13 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="PR number (dispatch job branches cannot auto-detect via gh pr view)",
     )
+    pr_check_parser.add_argument(
+        "--impact-attested",
+        action="store_true",
+        dest="impact_attested",
+        default=False,
+        help="Verify all modified symbols in PR have associated test coverage via knowledge graph",
+    )
     pr_sub.add_parser("gate-status", help="qa block-only merge gate (CI matrix + sentinel health)")
 
     capability_parser = subparsers.add_parser("capability", help="Capability ledger commands")
@@ -1154,6 +1195,11 @@ def build_parser() -> argparse.ArgumentParser:
         "worktree": worktree_parser,
         "swarm": swarm_parser,
         "marketing": marketing_parser,
+        "tool": tool_parser,
+        "pack": pack_parser,
+        "impact": impact_parser,
+        "mesh": mesh_parser,
+        "spike": spike_parser,
     }
 
     roles_parser = subparsers.add_parser(
@@ -1838,7 +1884,10 @@ def main(argv=None) -> None:
         cmd_schedule(execute=args.execute, max_stories=args.max_stories)
     elif args.command == "pr":
         if args.pr_action == "check":
-            cmd_pr_check(pr_number=getattr(args, "pr_number", None))
+            cmd_pr_check(
+                pr_number=getattr(args, "pr_number", None),
+                impact_attested=getattr(args, "impact_attested", False),
+            )
         elif args.pr_action == "gate-status":
             from synlynk.qa_gate import cmd_pr_gate_status
             cmd_pr_gate_status()
@@ -1902,6 +1951,9 @@ def main(argv=None) -> None:
         panel_members = [p.strip() for p in args.panel.split(",") if p.strip()]
         cmd_decide(args.topic, panel=panel_members, record=args.record, audit=args.audit)
     elif args.command == "heal":
+        if getattr(args, "cycles", False):
+            from synlynk.heal_cycles import cmd_heal_cycles
+            sys.exit(cmd_heal_cycles(args))
         cmd_heal(args)
     elif args.command == "audit-docs":
         findings = cmd_audit_docs(json_output=args.json, fix=args.fix)
@@ -1952,6 +2004,37 @@ def main(argv=None) -> None:
             )
         else:
             help_parsers.get("media", parser).print_help()
+    elif args.command == "tool":
+        from synlynk.tool_installer import install_tool
+        action = getattr(args, "tool_action", None)
+        if action == "install":
+            tool_name = getattr(args, "tool_name", None)
+            if not tool_name:
+                help_parsers.get("tool", parser).print_help()
+                sys.exit(1)
+            try:
+                success = install_tool(tool_name)
+                if not success:
+                    print(f"Installation of {tool_name} failed. See error output above.", file=sys.stderr)
+                    sys.exit(1)
+                print(f"Successfully installed {tool_name}.")
+            except ValueError as exc:
+                print(f"Error: {exc}", file=sys.stderr)
+                sys.exit(1)
+        else:
+            help_parsers.get("tool", parser).print_help()
+    elif args.command == "pack":
+        from synlynk.pack import cmd_pack
+        sys.exit(cmd_pack(args))
+    elif args.command == "impact":
+        from synlynk.impact import cmd_impact
+        sys.exit(cmd_impact(args))
+    elif args.command == "mesh":
+        from synlynk.multirepo_graph import cmd_multirepo_mesh
+        sys.exit(cmd_multirepo_mesh(args))
+    elif args.command == "spike":
+        from synlynk.spike import cmd_spike
+        sys.exit(cmd_spike(args))
     elif args.command == "scan":
         cmd_scan(
             deep=getattr(args, "deep", False),

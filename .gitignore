@@ -5,6 +5,7 @@
 .synlynk/viz-meta.json
 !.synlynk/roles.yaml
 !.synlynk/capability-roles.json
+!.synlynk/skills/
 __pycache__/
 *.pyc
 .DS_Store

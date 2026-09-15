@@ -8,6 +8,7 @@ import uuid
 
 from synlynk import agent_store
 from synlynk import charter_schema
+from synlynk.charters import adapt_charters_for_installed_tools
 
 SEED_CHARTERS = {
     "dev": (
@@ -334,6 +335,24 @@ def cmd_agent_sync_routing(id_or_alias: str) -> None:
         print(f"No task_allocation entry for role '{role}' in policy.json — nothing to sync.")
     else:
         print(f"Synced dispatch_routing for {agent_id} (role: {role}, revision {new_revision})")
+
+
+def cmd_agent_sync_skills(id_or_alias: str | None = None) -> dict:
+    """Sync installed ecosystem tool skills into living agent charter(s)."""
+    adapted = adapt_charters_for_installed_tools(dry_run=False)
+    if id_or_alias:
+        agent_id = _resolve_or_exit(id_or_alias)
+        entry = next(a for a in agent_store.list_agents() if a["agent_id"] == agent_id)
+        role = next(
+            (a["value"] for a in entry["aliases"] if a["kind"] == "role_slug"), ""
+        )
+        skills = adapted.get(role, {}).get("skills", [])
+        print(f"Synced skills for {agent_id} (role: {role}): {skills}")
+    else:
+        for role, data in adapted.items():
+            if data.get("skills"):
+                print(f"Synced skills for {role}: {data['skills']}")
+    return adapted
 
 
 def cmd_agent_disable(id_or_alias: str) -> None:

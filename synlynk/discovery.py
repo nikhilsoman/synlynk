@@ -2,9 +2,40 @@ import ast
 import json
 import os
 import re
+import shutil
+import subprocess
 import time
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
+
+
+def _is_graphify_installed() -> bool:
+    try:
+        from synlynk.tool_installer import is_tool_available
+        return is_tool_available("graphify")
+    except Exception:
+        return shutil.which("graphify") is not None
+
+
+def _get_head_commit(repo_root: str) -> str:
+    try:
+        res = subprocess.run(
+            ["git", "-C", repo_root, "rev-parse", "HEAD"],
+            capture_output=True, text=True, check=True, timeout=2,
+        )
+        return res.stdout.strip()
+    except Exception:
+        return ""
+
+
+def _read_graphify_manifest(repo_root: str) -> Optional[Dict[str, Any]]:
+    manifest_path = Path(repo_root) / ".synlynk" / "graphify-out" / "manifest.json"
+    if manifest_path.is_file():
+        try:
+            return json.loads(manifest_path.read_text(errors="ignore"))
+        except Exception:
+            return None
+    return None
 
 
 def scan_workspace_static(repo_root: str) -> Dict[str, Any]:
@@ -56,6 +87,22 @@ def scan_workspace_static(repo_root: str) -> Dict[str, Any]:
         except Exception:
             pass
 
+    kg_section: Dict[str, Any] = {"available": False}
+    if _is_graphify_installed():
+        manifest = _read_graphify_manifest(str(root))
+        if manifest:
+            head_commit = _get_head_commit(str(root))
+            built_at = manifest.get("built_at_commit", "")
+            stale = (head_commit != built_at) if head_commit else False
+            kg_section = {
+                "available": True,
+                "stale": stale,
+                "built_at_commit": built_at,
+                "nodes_count": manifest.get("nodes_count", 0),
+                "edges_count": manifest.get("edges_count", 0),
+                "communities_count": manifest.get("communities_count", 0),
+            }
+
     scan_ms = int((time.time() - t0) * 1000)
     return {
         "scan_time_ms": scan_ms,
@@ -68,4 +115,6 @@ def scan_workspace_static(repo_root: str) -> Dict[str, Any]:
             "routes": routes,
             "entities": entities,
         },
+        "knowledge_graph": kg_section,
     }
+

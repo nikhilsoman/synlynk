@@ -3532,12 +3532,21 @@ def cmd_audit_docs(json_output: bool = False, fix: bool = False) -> list:
 
     return findings
 
-def cmd_pr_check(pr_number=None) -> None:
-    """Hard-blocks merge if any capability_ratings row has model_version='unknown'.
+def cmd_pr_check(pr_number=None, impact_attested: bool = False) -> None:
+    """Hard-blocks merge if any capability_ratings row has model_version='unknown'
+    or if --impact-attested fails.
 
     Exit code 1 if blocked. Exit code 0 if clean.
     """
     from synlynk import _GREEN, _RESET, _get_db
+
+    if impact_attested:
+        from synlynk.pr_check import check_pr_impact_attestation
+        res = check_pr_impact_attestation()
+        if not res.get("passed"):
+            print(f"\n  🚫 [PR CHECK BLOCKED] Impact attestation failed: {res.get('error')}\n")
+            raise SystemExit(1)
+        print(f"  {_GREEN}✓{_RESET} Impact attestation passed — {res.get('message')}")
 
     detect_hand_edit = globals().get("_detect_hand_edit")
     if callable(detect_hand_edit):

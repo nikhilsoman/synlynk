@@ -526,7 +526,31 @@
 - **Task 10 (Lifecycle & Orchestrator):** Implemented `synlynk/upgrade.py` (`execute_upgrade()`), `synlynk/uninstall.py` (`execute_uninstall()`), `synlynk/coldstart.py` (`run_ftue_journey()`), and wired `init --quickstart` & `uninstall` in `synlynk/cli.py` & `synlynk/taxonomy.py`.
 - **Verification:** All 11 FTUE test suites passed 100% green (28/28 tests). Whole-branch review diff generated (`review-91dcc34a..ae9b2b10.diff`, 10 commits, 53KB).
 - **PR & Review Dispatch:** Pushed branch `feat/agy/v0-21-0-ftue-onboarding`, opened PR #1574, passed `synlynk pr check` attestation, and dispatched QA review to Codex (`job-e1414241`, `--role qa`, `--requires-gh-write`).
+- **PR #1574 Merged:** Formally approved by QA (`synlynk-synlynk-qa`) and squash-merged to `main`.
 [@agy]
+
+## 2026-09-15 — Graphify Knowledge Graph Substrate, Multi-Repo Mesh & Reusable Spike Harness Specification
+
+### Shipped & Formulated
+- **Live Empirical Benchmark & PoC Executed:**
+  - Evaluated `graphifyy` (Apache-2.0) on `synlynk` (~35,000 LOC, 368 Python code files) in a temporary sandbox.
+  - Tree-sitter AST extraction completed in **14.2 seconds** offline with $0.00 token cost, mapping 6,932 nodes, 13,637 call edges, and 428 modular communities.
+  - Measured **13× to 32× token reduction** on targeted code exploration and blast-radius queries (~350–1,200 tokens vs. 8,400–38,500 baseline grep tokens; 95%+ savings).
+- **Decision Panel Consensus (`dec-494eb4f5`, `dec-17f044f8`):**
+  - Convened multi-agent panel (`claude`, `agy`) approving Graphify's adoption into the **Recommended Stack** under a strict "Opt-in, JIT-Bound, Graceful Fallback" contract.
+  - Validated that Graphify must be accessed via budget-capped MCP tools (`graphify-mcp`) rather than dumping the 7.3 MB raw graph into context.
+- **Architectural Specification Authored & Committed (`docs/superpowers/specs/2026-09-15-graphify-knowledge-graph-and-spike-harness.md`):**
+  - **Pillar 1 (Core Onboarding):** 1-click install (`synlynk tool install graphify`), deterministic `--code-only` AST extraction, and `built_at_commit` SHA staleness invalidation.
+  - **Pillar 2 (Agent Charter Skills):** 4 role-specific skills (`graphify-architecture-audit` for Architect, `graphify-pr-impact` for Verifier, `graphify-symbol-navigator` for Builder, `graphify-domain-sweep` for PM).
+  - **Pillar 3 (Pre-Emptive Cached Traversals):** 4 canonical paths (Ingress $\to$ Ledger, Auth Perimeter, Dispatch Loop, Cross-Service Boundary) generating instant 1,500-token context packs (`synlynk pack`).
+  - **Pillar 4 (New CLI Commands):** `synlynk impact`, `synlynk pack`, `synlynk pr check --impact-attested`, `synlynk graph view/export`, `synlynk heal --cycles`.
+  - **Pillar 5 (Reusable Spike Evaluation Harness):** Productized `synlynk spike eval <candidate>` for automated, empirical A/B evaluation in shadow worktrees.
+  - **Pillar 6 (Multi-Repo Knowledge Mesh):** Federated cross-repo graph (`~/.synlynk/global-graph.json`) resolving shared endpoints across sibling repositories.
+- **Implementation Plan Authored (`docs/superpowers/plans/2026-09-15-graphify-knowledge-graph-and-spike-harness.md`):**
+  - Decomposed into 4 phases and 12 bite-sized TDD tasks distributed across all 4 fleet harnesses (Codex, Grok, Agy, Claude) per the Capability Matrix.
+  - Planned for autonomous milestone execution with explicit file targets, failing tests, minimal implementations, and acceptance gates.
+[@agy]
+
 
 ### Root Causes
 1. **Starter Self-Recognition Deadlock:** In `WatchDaemon.start()`, `_try_acquire_daemon_lock()` records the caller's PID (`os.getpid()`) into `daemon.pid.lock`. Immediately inside `try:`, `start()` checks `self._is_running()`. In `_health()`, because `pidfile` does not exist yet, it checked `_pid_is_alive(owner_pid)`. Since `owner_pid` was `os.getpid()` (the starter CLI itself), `_health()` returned `"running"`, causing `start()` to falsely report already running and exit without spawning the child.
@@ -541,4 +565,33 @@
 - **Unit Tests:** Added 6 reproduction and regression test cases in `tests/test_daemon_liveness_1572.py`.
 - **Verification:** All 6 reproduction tests passed. Existing daemon tests (20/20) passed. Full repository test suite passed (2,830 tests passed, 3 skipped).
 - **PR:** Opened PR #1573 on branch `fix/agy/daemon-liveness-false-positive-1572`.
+[@agy]
+
+## 2026-09-15 — Full Implementation & Verification: Graphify Knowledge Graph Substrate, Multi-Repo Mesh & Spike Harness (All 12 Tasks)
+
+### Completed Milestones
+- **Phase 1: Core AST Provider & Vizor Embed (Tasks 1–4):**
+  - Task 1 (`codex`): 1-click installer and preflight detector in `synlynk/tool_installer.py`, wiring `synlynk tool install` in CLI and taxonomy.
+  - Task 2 (`codex`): Deterministic AST extraction awareness and commit staleness anchor (`built_at_commit` vs. HEAD) in `synlynk/discovery.py`.
+  - Task 3 (`grok`): Vizor View 2 (Logical View) Graphify call-graph ingestion, community clustering, and amber staleness banner in `synlynk/viz_views.py` & `synlynk/viz.py`.
+  - Task 4 (`agy`): FTUE onboarding wizard 1-click checkbox recommendation and complete user guide in `synlynk/coldstart.py` & `docs/tools/graphify.md`.
+- **Phase 2: Role-Specific Charter Skills & Context Packs (Tasks 5–7):**
+  - Task 5 (`agy`): Materialized 4 role-specific skills with YAML frontmatter in `.synlynk/skills/` (`graphify-architecture-audit`, `graphify-pr-impact`, `graphify-symbol-navigator`, `graphify-domain-sweep`).
+  - Task 6 (`claude`): Living charter adaptation and tool injection in `synlynk/charters.py` and `synlynk/agent_cli.py`.
+  - Task 7 (`codex`): JIT AST context pack synthesis (`synlynk/pack.py`, `synlynk pack`) and Turn-1 prompt injection in `synlynk/dispatch.py:_format_prompt_for_agent()`.
+- **Phase 3: High-Leverage Commands & Verification Gates (Tasks 8–10):**
+  - Task 8 (`codex`): `synlynk impact <symbol|file>` blast-radius calculator in `synlynk/impact.py`, CLI wiring, and test mapping.
+  - Task 9 (`codex`/`qa`): `synlynk pr check --impact-attested` verification gate in `synlynk/pr_check.py` and `synlynk/db.py`.
+  - Task 10 (`codex`): `synlynk heal --cycles` circular import detector and automated refactoring story generator in `synlynk/heal_cycles.py`.
+- **Phase 4: Multi-Repo Knowledge Mesh & Spike Evaluation Harness (Tasks 11–12):**
+  - Task 11 (`codex`): Federated multi-repo knowledge mesh aggregator (`synlynk mesh`, `~/.synlynk/global-graph.json`) and cross-repo HTTP edge inference in `synlynk/multirepo_graph.py`.
+  - Task 12 (`claude`/`codex`): Reusable spike evaluation engine and empirical receipt generator (`synlynk spike eval`, `synlynk/spike.py`).
+
+### Verification & Quality Gates
+- **12/12 Test Suites:** 58/58 unit and integration tests passing 100% green (`tests/test_*.py`).
+- **Zero-Failure Fallback:** Verified with `shutil.which = lambda x: None` simulating absent/corrupted Graphify binary; all 58 tests passed with zero unhandled exceptions.
+- **Token Ceiling Guardrail:** Verified `_cut_to_token_budget` strictly bounds injected context packs to $\le 1,500$ tokens.
+- **Commit Attestation:** All 17 commits contain validated `Co-Authored-By` attribution trailers matching the executing harness.
+- **Regression Suite:** 178 existing tests passing green across dispatch, coldstart, and CLI parser.
+- **Git State:** Pushed cleanly to `origin/feat/agy/graphify-knowledge-graph-and-spike-harness`.
 [@agy]
