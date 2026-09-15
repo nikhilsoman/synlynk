@@ -116,30 +116,22 @@ def test_run_upgrade_pipx_local_path_reinstalls_release(monkeypatch, tmp_path, c
     assert "switched to release channel" in out
 
 
-def test_run_upgrade_script_prints_migrate_hint(monkeypatch, capsys):
+def test_run_upgrade_script_prints_pipx_migration_hint(monkeypatch, capsys):
     import synlynk
 
     monkeypatch.setattr(synlynk, "_detect_install_type", lambda: "script")
 
-    class Result:
-        returncode = 0
-
-    class Response:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb):
-            return False
-
-        def read(self):
-            return b"echo installer"
-
-    monkeypatch.setattr(synlynk.subprocess, "run", lambda *args, **kwargs: Result())
-    monkeypatch.setattr(synlynk.urllib.request, "urlopen", lambda *args, **kwargs: Response())
+    monkeypatch.setattr(
+        synlynk.urllib.request,
+        "urlopen",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("must not fetch installer")),
+    )
     synlynk._run_upgrade("0.10.1")
     out = capsys.readouterr().out
-    assert "✓ Upgraded to v0.10.1" in out
-    assert "Run 'synlynk migrate' if prompted" in out
+    assert "script install is retired" in out
+    assert "pipx install git+https://github.com/nikhilsoman/synlynk" in out
+    assert "rm -rf ~/.synlynk/bin ~/.synlynk/lib" in out
+    assert "✓ Upgraded" not in out
 
 
 def test_run_upgrade_pipx_records_leg2_manifest(tmp_path, monkeypatch):
@@ -239,11 +231,12 @@ def test_warn_stale_script_install_with_shim_and_pipx(monkeypatch, tmp_path, cap
     assert "rm -rf" in out
 
 
-def test_install_script_downloads_all_package_modules():
+def test_install_script_dispatches_to_pipx():
     install_script = Path(__file__).resolve().parents[1] / "install.sh"
     content = install_script.read_text()
-    assert 'for f in __init__.py __main__.py cli.py db.py hud.py viz.py; do' in content
-    assert 'curl -sSL "https://raw.githubusercontent.com/nikhilsoman/synlynk/main/synlynk/$f"' in content
+    assert "pipx install git+https://github.com/nikhilsoman/synlynk" in content
+    assert "for f in" not in content
+    assert "raw.githubusercontent.com/nikhilsoman/synlynk/main/synlynk/$f" not in content
 
 
 def test_upgrade_dry_run_makes_no_subprocess_calls(tmp_path, monkeypatch, capsys):

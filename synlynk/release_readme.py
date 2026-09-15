@@ -350,17 +350,12 @@ def validate_readme_for_release(
                 ReadmeFinding("hero", "README hero/release summary is empty or too short")
             )
 
-    install_ok = (
-        "pipx install" in text
-        or "install.sh" in text
-        or "python3 bin/synlynk.py" in text
-    )
+    install_ok = "pipx install" in text
     if not install_ok:
         findings.append(
             ReadmeFinding(
                 "install",
-                "README is missing current install instructions "
-                "(pipx, install.sh, or python3 bin/synlynk.py)",
+                "README is missing current pipx install instructions",
             )
         )
 
@@ -520,4 +515,3 @@ def sync_readme_for_release(
     with open(readme_path, "w", encoding="utf-8") as f:
         f.write(content)
     return True
-

@@ -6,6 +6,7 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from synlynk import cmd_release
 from scripts.generate_command_docs import render_readme_section
+from synlynk.release_readme import validate_readme_for_release
 
 
 def _write_synced_readme(root, version):
@@ -31,6 +32,29 @@ python3 bin/synlynk.py --help
 {render_readme_section()}
 """
     )
+
+
+def test_release_install_check_requires_pipx(tmp_path):
+    (tmp_path / "README.md").write_text(
+        """<p align="center">
+  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/version-0.14.0-blue" alt="Version"></a>
+</p>
+
+**v0.14.0:** A sufficiently long named release summary for the gate.
+
+## Install
+
+```bash
+python3 bin/synlynk.py --help
+```
+"""
+    )
+
+    findings = validate_readme_for_release(str(tmp_path), "0.14.0", collected_test_count=0)
+
+    install_findings = [item for item in findings if item.check == "install"]
+    assert install_findings
+    assert "pipx" in install_findings[0].message
 
 
 def test_cmd_release_refuses_when_role_not_authorized(tmp_path, monkeypatch):

@@ -1994,54 +1994,35 @@ def test_upgrade_reports_up_to_date(monkeypatch, capsys):
     assert "latest version" in captured.out
 
 def test_upgrade_auto_installs_new_version(tmp_path, monkeypatch, capsys):
-    import json as _json
     import types
     call_log = []
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(synlynk, "_detect_install_type", lambda: "script")
 
-    class Response:
-        def __init__(self, payload: bytes):
-            self._payload = payload
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb):
-            return False
-
-        def read(self):
-            return self._payload
-
-    api_response = Response(_json.dumps({"tag_name": "v99.0.0"}).encode())
-    script_response = Response(b'echo "install ok"')
-
-    url_calls = [api_response, script_response]
-
-    def fake_urlopen(req, **kw):
-        return url_calls.pop(0)
-
     fake_gh_result = types.SimpleNamespace(returncode=0, stdout="v99.0.0\n")
-    fake_bash_result = types.SimpleNamespace(returncode=0)
 
     def fake_run(cmd, **kwargs):
         call_log.append(cmd)
         if cmd[0] == "gh":
             return fake_gh_result
-        if cmd[0] == "bash":
-            return fake_bash_result
         raise AssertionError(f"unexpected subprocess call: {cmd}")
 
     monkeypatch.setattr(synlynk.subprocess, "run", fake_run)
-    monkeypatch.setattr(synlynk.urllib.request, 'urlopen', fake_urlopen)
+    monkeypatch.setattr(
+        synlynk.urllib.request,
+        "urlopen",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("must not fetch installer")
+        ),
+    )
     synlynk.upgrade()
     captured = capsys.readouterr()
     assert "99.0.0" in captured.out
     assert "upgrading" in captured.out
-    assert "Upgraded" in captured.out
+    assert "script install is retired" in captured.out
     assert call_log[0][0] == "gh"
-    assert call_log[-1][0] == "bash"
+    assert call_log == [["gh", "api", "repos/nikhilsoman/synlynk/releases/latest", "--jq", ".tag_name"]]
 
 def test_upgrade_handles_network_error(monkeypatch, capsys):
     monkeypatch.setattr(synlynk.subprocess, 'run', lambda *a, **kw: (_ for _ in ()).throw(Exception("no gh")))
