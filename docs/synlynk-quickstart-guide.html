@@ -578,9 +578,9 @@
   <div class="cover-version">v0.20.0 · Measurement &amp; Reliability</div>
 
   <div class="cover-command">
-    <div><span style="color:#636366;">$</span> <span style="color:#64d2ff;">curl -fsSL synlynk.com/install.sh | sh</span></div>
+    <div><span style="color:#636366;">$</span> <span style="color:#64d2ff;">pipx install git+https://github.com/nikhilsoman/synlynk</span></div>
     <div style="color:#3a3a3c; margin: 3px 0;">───────────────────────────────</div>
-    <div><span style="color:#30d158;">✓</span> <span style="color:#636366;">synlynk 0.12.0 installed to ~/.synlynk/bin</span></div>
+    <div><span style="color:#30d158;">✓</span> <span style="color:#636366;">synlynk 0.12.0 installed to isolated venv</span></div>
     <div><span style="color:#30d158;">✓</span> <span style="color:#636366;">PATH updated · zero pip dependencies</span></div>
     <div style="color:#3a3a3c; margin: 3px 0;">───────────────────────────────</div>
     <div><span style="color:#ffd60a;">→</span> <span style="color:#8e8e93;">cd your-repo && synlynk init</span></div>
@@ -617,7 +617,7 @@
       <div class="step-n">1</div>
       <div class="step-b">
         <div class="step-t">Install globally</div>
-        <div class="step-d">Drops <code>synlynk</code> into <code>~/.synlynk/bin</code> and updates your shell PATH. No sudo, no pip, no build.</div>
+        <div class="step-d">Installs <code>synlynk</code> into an isolated pipx venv and puts the binary on your PATH. No sudo, no build.</div>
       </div>
     </div>
   </div>
@@ -625,9 +625,9 @@
   <div class="term">
     <div class="term-bar"><div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div><div class="t-lbl">install</div></div>
     <div class="tb">
-      <div><span class="t-p">$ </span><span class="t-c">curl -fsSL</span> <span class="t-a">synlynk.com/install.sh</span> <span class="t-p">|</span> <span class="t-c">sh</span></div>
-      <div><span class="t-s">✓</span> <span class="t-o">Installed synlynk/ package to ~/.synlynk/lib/</span></div>
-      <div><span class="t-s">✓</span> <span class="t-o">Binary at ~/.synlynk/bin/synlynk · PATH updated in ~/.zshrc</span></div>
+      <div><span class="t-p">$ </span><span class="t-c">pipx install</span> <span class="t-a">git+https://github.com/nikhilsoman/synlynk</span></div>
+      <div><span class="t-s">✓</span> <span class="t-o">Installed synlynk into isolated pipx venv</span></div>
+      <div><span class="t-s">✓</span> <span class="t-o">Binary at ~/.local/bin/synlynk · PATH updated</span></div>
       <div><span class="t-s">✓</span> <span class="t-o">synlynk 0.12.0 ready</span></div>
     </div>
   </div>
