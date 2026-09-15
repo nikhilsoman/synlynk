@@ -2007,6 +2007,7 @@ body { margin:0; font-family:'SF Mono',monospace; background:#f6f8fa; color:#1f2
 .am-tree { font-size:12px; }
 .am-tree-dir > summary { cursor:pointer; padding:2px 0; }
 .am-tree-file { padding:2px 0 2px 18px; color:#475569; }
+.am-stale-banner { background:#fffbeb; border:1px solid #f59e0b; color:#b45309; padding:8px 16px; margin:8px 20px; border-radius:6px; font-size:12px; font-weight:500; display:flex; align-items:center; gap:8px; }
 """
 
 
@@ -2168,8 +2169,18 @@ function bs6RenderGraph() {
     if (!p) return;
     const label = String(n.label || n.id || '');
     const w = Math.max(90, label.length * 7 + 20);
-    markup += '<g class="am-node" transform="translate(' + (p.x - w / 2) + ',' + (p.y - 18) + ')" onclick="bs6OpenDrawer(\\'' + n.id + '\\')">' +
-      '<rect width="' + w + '" height="36" rx="8"></rect>' +
+    let strokeColor = '#334155';
+    let community = n.community;
+    if (community === undefined && n.attrs_json) {
+      try { community = JSON.parse(n.attrs_json).community; } catch (e) {}
+    }
+    const communityColors = ['#0d9e87', '#3b82f6', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#10b981'];
+    if (community !== undefined && community !== null) {
+      const idx = Math.abs(Number(community)) % communityColors.length;
+      strokeColor = communityColors[idx];
+    }
+    markup += '<g class="am-node" transform="translate(' + (p.x - w / 2) + ',' + (p.y - 18) + ')" onclick="bs6OpenDrawer(\'' + n.id + '\')">' +
+      '<rect width="' + w + '" height="36" rx="8" stroke="' + strokeColor + '" stroke-width="1.8"></rect>' +
       '<text x="' + (w / 2) + '" y="22" text-anchor="middle">' + label + '</text>' +
       '</g>';
   });
@@ -2223,6 +2234,28 @@ def _generate_bs6_view_html(data: dict, port: int, view_key: str, view_title: st
         for kind, count in sorted(kind_counts.items())
     )
 
+    is_stale = bool(view_data.get("stale"))
+    if not is_stale and view_key == "logical":
+        is_stale = bool(data.get("discovery", {}).get("knowledge_graph", {}).get("stale"))
+        if not is_stale:
+            for n in nodes:
+                try:
+                    attrs = json.loads(n.get("attrs_json") or "{}")
+                    if attrs.get("stale"):
+                        is_stale = True
+                        break
+                except Exception:
+                    pass
+
+    staleness_banner_html = ""
+    if is_stale:
+        staleness_banner_html = (
+            '<div class="am-stale-banner" id="graph-stale-banner">'
+            '<span>⚠️ Graph Stale (differs from HEAD commit) — '
+            '<a href="javascript:location.reload()" style="color:#b45309;text-decoration:underline;">[Refresh]</a></span>'
+            '</div>'
+        )
+
     template = """<!DOCTYPE html>
 <html lang="en" data-theme="light">
 <head>
@@ -2236,6 +2269,7 @@ __STYLE_CONTENT__
 <div class="am-header">
   <h1>__VIEW_TITLE__ — __WORKSPACE_NAME__</h1>
 </div>
+__STALENESS_BANNER__
 <div class="am-legend">__LEGEND_HTML__</div>
 <div id="bs6-graph-view" class="am-view active">
   <svg id="bs6-svg" width="100%" height="640"></svg>
@@ -2262,6 +2296,7 @@ __LIVE_JS_HTML__
         .replace("__STYLE_CONTENT__", _ARCHITECT_MAP_STYLE)
         .replace("__VIEW_TITLE__", html.escape(view_title))
         .replace("__WORKSPACE_NAME__", html.escape(workspace_name))
+        .replace("__STALENESS_BANNER__", staleness_banner_html)
         .replace("__LEGEND_HTML__", legend_html)
         .replace("__NODES_JSON__", nodes_json)
         .replace("__EDGES_JSON__", edges_json)
