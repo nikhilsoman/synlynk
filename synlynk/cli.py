@@ -228,6 +228,11 @@ def build_parser() -> argparse.ArgumentParser:
     home_parser = subparsers.add_parser("home", help="Display or switch the active home harness")
     home_parser.add_argument("harness", nargs="?", choices=["claude", "agy", "codex", "grok", "local"], help="Harness to set as home")
 
+    tool_parser = subparsers.add_parser("tool", help="Manage recommended ecosystem tools")
+    tool_sub = tool_parser.add_subparsers(dest="tool_action")
+    tool_install_parser = tool_sub.add_parser("install", help="Install a recommended tool")
+    tool_install_parser.add_argument("tool_name", help="Name of tool to install (e.g. graphify)")
+
     team_parser = subparsers.add_parser("team", help="Team status and management")
     team_sub = team_parser.add_subparsers(dest="team_action")
     team_sub.add_parser("status", help="Show team digest: members, stories, budget")
@@ -1154,6 +1159,7 @@ def build_parser() -> argparse.ArgumentParser:
         "worktree": worktree_parser,
         "swarm": swarm_parser,
         "marketing": marketing_parser,
+        "tool": tool_parser,
     }
 
     roles_parser = subparsers.add_parser(
@@ -1952,6 +1958,24 @@ def main(argv=None) -> None:
             )
         else:
             help_parsers.get("media", parser).print_help()
+    elif args.command == "tool":
+        from synlynk.tool_installer import install_tool
+        action = getattr(args, "tool_action", None)
+        if action == "install":
+            tool_name = getattr(args, "tool_name", None)
+            if not tool_name:
+                help_parsers.get("tool", parser).print_help()
+                sys.exit(1)
+            try:
+                success = install_tool(tool_name)
+                if not success:
+                    print(f"Failed to install {tool_name}.")
+                    sys.exit(1)
+            except ValueError as exc:
+                print(f"Error: {exc}")
+                sys.exit(1)
+        else:
+            help_parsers.get("tool", parser).print_help()
     elif args.command == "scan":
         cmd_scan(
             deep=getattr(args, "deep", False),
