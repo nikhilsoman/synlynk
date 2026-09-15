@@ -71,6 +71,7 @@ _SENTINEL_ISSUES_NONE = json.dumps([])
 _SENTINEL_ISSUES_UNRELATED = json.dumps([
     {"title": "[support] telemetry_anomaly: high failure rate", "number": 503},
 ])
+_SENTINEL_ISSUES_NONE_ANSI = "\x1b[1;37m[\x1b[0m\x1b[1;37m]\x1b[0m\n"
 
 
 def _mock_gh_issue_list(stdout, returncode=0):
@@ -91,6 +92,17 @@ def test_qa_gate_sentinel_health_green_on_medium_only():
 def test_qa_gate_sentinel_health_green_on_no_open_issues():
     with patch("subprocess.run", return_value=_mock_gh_issue_list(_SENTINEL_ISSUES_NONE)):
         assert _qa_gate_sentinel_health("owner", "repo") is True
+
+
+def test_qa_gate_sentinel_health_green_on_ansi_wrapped_empty_json():
+    with patch("subprocess.run", return_value=_mock_gh_issue_list(_SENTINEL_ISSUES_NONE_ANSI)):
+        assert _qa_gate_sentinel_health("owner", "repo") is True
+
+
+def test_qa_gate_sentinel_health_uses_supported_issue_list_flags():
+    with patch("subprocess.run", return_value=_mock_gh_issue_list(_SENTINEL_ISSUES_NONE)) as mock_run:
+        assert _qa_gate_sentinel_health("owner", "repo") is True
+    assert mock_run.call_args.args[0][:3] == ["gh", "issue", "list"]
 
 
 def test_qa_gate_sentinel_health_ignores_unrelated_support_issues():
