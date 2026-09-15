@@ -2,7 +2,22 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
+
+
+def _merged_pr_branch(pr: str) -> str | None:
+    """Return the head branch for a PR, or None when GitHub cannot provide it."""
+    result = subprocess.run(
+        ["gh", "pr", "view", str(pr), "--json", "headRefName"],
+        capture_output=True, text=True, check=False,
+    )
+    if result.returncode != 0:
+        return None
+    try:
+        return json.loads(result.stdout).get("headRefName") or None
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return None
 
 
 def _diagnostics(scan: dict) -> list[dict]:
@@ -40,10 +55,16 @@ def _auto_merge(stories: list[dict], verdicts: list[dict]) -> list[str]:
         pr = story.get("pr_number") or story.get("pull_request")
         if not pr:
             continue
+        branch = _merged_pr_branch(str(pr))
         result = subprocess.run(["gh", "pr", "merge", str(pr), "--squash", "--delete-branch"],
                                 capture_output=True, text=True, check=False)
         if result.returncode == 0:
             merged.append(str(pr))
+            try:
+                from synlynk.worktree_prune import reap_merged_worktree
+                reap_merged_worktree(os.getcwd(), branch=branch)
+            except (OSError, subprocess.SubprocessError):
+                pass
     return merged
 
 
