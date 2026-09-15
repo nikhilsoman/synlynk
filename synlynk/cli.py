@@ -1092,6 +1092,13 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="PR number (dispatch job branches cannot auto-detect via gh pr view)",
     )
+    pr_check_parser.add_argument(
+        "--impact-attested",
+        action="store_true",
+        dest="impact_attested",
+        default=False,
+        help="Verify all modified symbols in PR have associated test coverage via knowledge graph",
+    )
     pr_sub.add_parser("gate-status", help="qa block-only merge gate (CI matrix + sentinel health)")
 
     capability_parser = subparsers.add_parser("capability", help="Capability ledger commands")
@@ -1859,7 +1866,10 @@ def main(argv=None) -> None:
         cmd_schedule(execute=args.execute, max_stories=args.max_stories)
     elif args.command == "pr":
         if args.pr_action == "check":
-            cmd_pr_check(pr_number=getattr(args, "pr_number", None))
+            cmd_pr_check(
+                pr_number=getattr(args, "pr_number", None),
+                impact_attested=getattr(args, "impact_attested", False),
+            )
         elif args.pr_action == "gate-status":
             from synlynk.qa_gate import cmd_pr_gate_status
             cmd_pr_gate_status()
