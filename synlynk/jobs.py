@@ -713,6 +713,33 @@ def _resolve_finalize_worktree_branch(job: dict, worktree_path: str) -> Optional
     return recorded
 
 
+def _record_gh_write_pr_effect(job: dict, pr_number: int) -> None:
+    """Persist the PR opened by a job as its GitHub write effect.
+
+    ``gh_write_target`` starts as the dispatch seed (often an issue number),
+    but automatic PR creation is the actual effect that must be verified.
+    Keep both the flat-file job and daemon row aligned before reconciliation.
+    """
+    if not job.get("requires_gh_write") or pr_number is None:
+        return
+
+    target = f"pr:{pr_number}"
+    job["gh_write_target"] = target
+    job["gh_write_expect"] = "pr_open"
+    get_db = _pkg("_get_db")
+    if not get_db:
+        return
+    conn = get_db()
+    try:
+        conn.execute(
+            "UPDATE daemon_jobs SET gh_write_target=?, gh_write_expect=? WHERE job_id=?",
+            (target, "pr_open", job.get("id", "")),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def _finalize_completed_worktree_job(job: dict, git_state: Optional[dict]) -> None:
     """Best-effort git finalization for a completed job with genuine work."""
     # Always purge nested product state.db under the job worktree (fleet nested_state).
@@ -836,6 +863,7 @@ def _finalize_completed_worktree_job(job: dict, git_state: Optional[dict]) -> No
         else:
             pr_number = _maybe_open_worktree_pr(job, worktree_path, worktree_branch)
             if pr_number is not None:
+                _record_gh_write_pr_effect(job, pr_number)
                 conn = _pkg("_get_db")()
                 conn.execute(
                     "UPDATE capability_ratings SET pr_number=? WHERE story_id=?",
