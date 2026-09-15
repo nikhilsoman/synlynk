@@ -15,6 +15,7 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `home` (primary) — open
 - `init` (primary) — open
 - `start` (primary) — open
+- `tool install` (secondary) — open
 - `scan` (primary) — open
 - `join` (primary) — open
 - `migrate` (secondary) — sustain
@@ -27,6 +28,10 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 
 ## Tier 1 — Goal
 
+- `pack` (primary) — execute
+- `impact` (primary) — execute
+- `mesh` (primary) — open
+- `spike eval` (secondary) — sustain
 - `decide` (primary) — goal
 - `goal create` (primary) — goal
 - `goal list` (primary) — goal
@@ -103,6 +108,7 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `local doctor` (secondary) — sustain
 - `upgrade` (secondary) — sustain
 - `rollback` (secondary) — sustain
+- `uninstall` (secondary) — sustain
 - `relay status` (secondary) — visualize
 - `relay send` (secondary) — execute
 - `relay tail` (secondary) — visualize
