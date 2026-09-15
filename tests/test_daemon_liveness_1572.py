@@ -48,6 +48,39 @@ def test_daemon_health_ignores_own_pid_in_lockfile(tmp_path):
         _release_daemon_lock(lock_fh)
 
 
+def test_watch_status_cleans_dead_pid_and_start_succeeds(tmp_path, monkeypatch, capsys):
+    """A dead pidfile is reported as stopped and does not block the next start."""
+    pidfile = str(tmp_path / "watch.pid")
+    logfile = str(tmp_path / "watch.log")
+    daemon = WatchDaemon()
+    daemon.pidfile = pidfile
+    daemon.logfile = logfile
+
+    with open(pidfile, "w") as f:
+        f.write("99999999\n")
+
+    daemon.status()
+    status_output = capsys.readouterr().out
+    assert "watch stopped" in status_output
+    assert "watch running" not in status_output
+    assert not os.path.exists(pidfile)
+
+    spawned = []
+
+    def fake_daemonize(entry_point, log_path, cwd=None):
+        spawned.append(entry_point)
+        with open(pidfile, "w") as f:
+            f.write(f"{os.getpid()}\n")
+
+    monkeypatch.setattr("synlynk.daemon._daemonize_via_reexec", fake_daemonize)
+    daemon.start()
+
+    start_output = capsys.readouterr().out
+    assert "already running" not in start_output
+    assert "started" in start_output
+    assert len(spawned) == 1
+
+
 def test_daemon_start_does_not_self_deadlock(tmp_path, monkeypatch, capsys):
     """daemon.start() without mock on _is_running must not self-abort as 'already running'."""
     pidfile = str(tmp_path / "daemon.pid")
