@@ -594,4 +594,18 @@
 - **Commit Attestation:** All 17 commits contain validated `Co-Authored-By` attribution trailers matching the executing harness.
 - **Regression Suite:** 178 existing tests passing green across dispatch, coldstart, and CLI parser.
 - **Git State:** Pushed cleanly to `origin/feat/agy/graphify-knowledge-graph-and-spike-harness`.
+- **Merge & Verification:** PR #1579 approved by QA non-author bot `synlynk-synlynk-qa` and squash-merged into `main` (commit `34477e4a`). All 2,978 tests passing on CI.
 [@agy]
+
+## 2026-09-16 — Post-Merge Remediation & Milestone v0.22.0 Shipped Sync
+
+### Context & Root Cause
+- Following the merge of PR #1579, the post-merge `marketing-pr-sync` GitHub Action failed because `.synlynk/social_drafts.json` was matched by `.synlynk/*` in `.gitignore`, causing `git add` to fail without `-f`.
+- Transitioned Milestone v0.22.0 in `project-docs/roadmap.md` to `SHIPPED (PR #1579, 2,978 tests)` with full Cluster G breakdown.
+
+### Shipped
+- **Workflow Resilience (`.github/workflows/marketing-pr-sync.yml`):** Replaced direct `git add docs/blog/ .synlynk/social_drafts.json` with `git add docs/blog/` and `git add -f .synlynk/social_drafts.json 2>/dev/null || true`.
+- **Gitignore Whitelist (`.gitignore`):** Whitelisted `!.synlynk/social_drafts.json` alongside `.synlynk/skills/` and `.synlynk/roles.yaml`.
+- **Roadmap Sync (`project-docs/roadmap.md`):** Updated milestone table to `SHIPPED` and documented all 4 phases in Cluster G.
+[@agy]
+
