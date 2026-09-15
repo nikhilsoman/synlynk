@@ -1495,3 +1495,9 @@ implementation plan.
 
 - Implemented `synlynk.viz_views` with workspace view tables, product journey/route extraction, logical package/module extraction, infra service extraction, and snapshot orchestration.
 - Added five focused tests; `python3 -m pytest tests/test_viz_views.py -v` passes 5/5.
+
+## 2026-09-16 — Issue #1588 daemon liveness verification
+
+- Verified PR #1573 already fixes the false `already running` path by excluding the starter PID from health checks and validating child liveness after spawn.
+- Added `test_watch_status_cleans_dead_pid_and_start_succeeds` to cover dead pidfile cleanup, stopped status, and successful restart.
+- Targeted verification: `python -m pytest tests/test_daemon_liveness_1572.py tests/test_daemon_token_refresh.py` — 24 passed.

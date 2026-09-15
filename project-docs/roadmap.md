@@ -66,3 +66,6 @@
 - [x] **Phase 3 (High-Leverage Commands & Verification Gates):** Blast-radius impact calculator (`synlynk impact`), graph-attested PR verification gate (`synlynk pr check --impact-attested`), and circular import healer (`synlynk heal --cycles`) (PR #1579).
 - [x] **Phase 4 (Multi-Repo Mesh & Spike Evaluation Harness):** Federated multi-repo knowledge mesh aggregator (`synlynk mesh`) and reusable empirical spike evaluation harness (`synlynk spike eval`) (PR #1579).
 
+### Daemon liveness Wave 1 (#1588)
+
+- [x] Verified #1573's false-`already running` fix and added the dead-PID status/start regression test; targeted daemon tests pass.
