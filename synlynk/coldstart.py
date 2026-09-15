@@ -258,5 +258,37 @@ def run_ftue_journey(repo_root: str = ".", interactive: bool = True, dry_run: bo
         "gaps": gaps,
         "governs_goal": governs_goal,
         "first_win_task": first_win,
+        "recommendations": get_onboarding_recommendations(),
     }
+
+
+def get_onboarding_recommendations() -> list[dict]:
+    """Return onboarding tool recommendations with preflight availability status.
+
+    Checks availability of registered ecosystem tools (e.g. Graphify AST Knowledge Graph)
+    and marks uninstalled tools as recommended for 1-click installation during FTUE onboarding.
+    """
+    from synlynk.tool_installer import RECOMMENDED_TOOLS, is_tool_available
+
+    recommendations = []
+    for tool_name, meta in RECOMMENDED_TOOLS.items():
+        installed = is_tool_available(tool_name)
+        if tool_name == "graphify":
+            label = "Graphify AST Knowledge Graph (Recommended: ~20x token savings)"
+        else:
+            binary = meta.get("binary", tool_name)
+            desc = meta.get("description", "")
+            label = f"{binary} CLI ({desc})" if desc else f"{binary} CLI"
+
+        recommendations.append({
+            "name": tool_name,
+            "label": label,
+            "description": meta.get("description", ""),
+            "installed": installed,
+            "recommended": not installed,
+            "package": meta.get("package", tool_name),
+            "binary": meta.get("binary", tool_name),
+            "license": meta.get("license", ""),
+        })
+    return recommendations
 
