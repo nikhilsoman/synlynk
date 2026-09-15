@@ -39,7 +39,8 @@ jobs:
         run: |
           git config --global user.name "synlynk-marketing[bot]"
           git config --global user.email "marketing@synlynk.com"
-          git add docs/blog/ .synlynk/social_drafts.json
+          git add docs/blog/
+          git add -f .synlynk/social_drafts.json 2>/dev/null || true
           if git diff --staged --quiet; then
             echo "No marketing changes to commit."
           else

@@ -6,6 +6,7 @@
 !.synlynk/roles.yaml
 !.synlynk/capability-roles.json
 !.synlynk/skills/
+!.synlynk/social_drafts.json
 __pycache__/
 *.pyc
 .DS_Store
