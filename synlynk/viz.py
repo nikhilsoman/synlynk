@@ -5143,8 +5143,10 @@ def handle_github_app_conversion(code: str, role: str, repo_root: str = ".") -> 
 
 def generate_onboarding_html(data: dict = None, port: int = 27472) -> str:
     """Generate self-contained HTML for onboarding 3-view canvas and artifact tour."""
+    import html as _html
+
     data = data or {}
-    industry = data.get("domain", {}).get("industry", "Application Service")
+    industry = _html.escape(data.get("domain", {}).get("industry", "Application Service"))
 
     try:
         from synlynk.coldstart import get_onboarding_recommendations
@@ -5154,9 +5156,9 @@ def generate_onboarding_html(data: dict = None, port: int = 27472) -> str:
 
     recs_cards = []
     for rec in recs:
-        name = rec.get("name", "")
-        label = rec.get("label", name)
-        desc = rec.get("description", "")
+        name = _html.escape(str(rec.get("name", "")))
+        label = _html.escape(str(rec.get("label", name)))
+        desc = _html.escape(str(rec.get("description", "")))
         installed = rec.get("installed", False)
         if installed:
             recs_cards.append(f"""
