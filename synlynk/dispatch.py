@@ -1606,6 +1606,15 @@ def _format_prompt_for_agent(agent: str, context_text: str, story_id: str,
     receipt_instruction = _render_task_receipt_instruction(task_sha256)
     instruction_receipt = _render_instruction_receipt_instruction(instruction_file)
     headers = f"{receipt_instruction}{instruction_receipt}"
+
+    repo_root = cwd_hint or os.getcwd()
+    try:
+        from synlynk.pack import synthesize_context_pack
+        pack_text = synthesize_context_pack(repo_root, task_text=task, story_id=story_id)
+        if pack_text:
+            context_text = f"{context_text}\n\n{pack_text}" if context_text else pack_text
+    except Exception:
+        pass
     story_ref = f"\n\n## Story / Task Reference\nStory ID: {story_id}" if story_id else ""
     gh_write_instruction = ""
     if requires_gh_write:

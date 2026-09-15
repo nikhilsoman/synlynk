@@ -233,6 +233,12 @@ def build_parser() -> argparse.ArgumentParser:
     tool_install_parser = tool_sub.add_parser("install", help="Install a recommended tool")
     tool_install_parser.add_argument("tool_name", help="Name of tool to install (e.g. graphify)")
 
+    pack_parser = subparsers.add_parser(
+        "pack", help="Synthesize a concise AST context pack from the knowledge graph"
+    )
+    pack_parser.add_argument("target", help="Task description or story ID (e.g. story-1234)")
+    pack_parser.add_argument("--budget", type=int, default=1500, help="Token budget ceiling (default: 1500)")
+
     team_parser = subparsers.add_parser("team", help="Team status and management")
     team_sub = team_parser.add_subparsers(dest="team_action")
     team_sub.add_parser("status", help="Show team digest: members, stories, budget")
@@ -1160,6 +1166,7 @@ def build_parser() -> argparse.ArgumentParser:
         "swarm": swarm_parser,
         "marketing": marketing_parser,
         "tool": tool_parser,
+        "pack": pack_parser,
     }
 
     roles_parser = subparsers.add_parser(
@@ -1977,6 +1984,9 @@ def main(argv=None) -> None:
                 sys.exit(1)
         else:
             help_parsers.get("tool", parser).print_help()
+    elif args.command == "pack":
+        from synlynk.pack import cmd_pack
+        sys.exit(cmd_pack(args))
     elif args.command == "scan":
         cmd_scan(
             deep=getattr(args, "deep", False),
