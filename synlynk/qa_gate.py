@@ -7,6 +7,7 @@ See docs/superpowers/specs/2026-08-20-qa-merge-gate-authority-design.md.
 
 import json
 import os
+import re
 import subprocess
 from typing import Optional
 
@@ -48,6 +49,7 @@ def _qa_gate_ci_status(worktree_path=None, worktree_branch=None, pr_number=None)
 
 
 _HIGH_SEVERITY_MARKERS = ("FLATLINE", "QUOTA_EXHAUSTED", "CRITICAL")
+_ANSI_ESCAPE = re.compile(r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1b\\))")
 
 
 def _qa_gate_sentinel_health(owner: str, repo: str) -> Optional[bool]:
@@ -79,7 +81,8 @@ def _qa_gate_sentinel_health(owner: str, repo: str) -> Optional[bool]:
         return None
 
     try:
-        issues = json.loads((result.stdout or "").strip() or "[]")
+        clean_stdout = _ANSI_ESCAPE.sub("", result.stdout or "")
+        issues = json.loads(clean_stdout.strip() or "[]")
     except json.JSONDecodeError:
         return None
     if not isinstance(issues, list):
