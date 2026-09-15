@@ -18,7 +18,7 @@ fi
 
 PIPX_HOME_DIR=${PIPX_HOME:-"$HOME/.local/pipx"}
 if [ -d "$PIPX_HOME_DIR/venvs/synlynk" ]; then
-    pipx install git+https://github.com/nikhilsoman/synlynk --force
+    exec pipx install git+https://github.com/nikhilsoman/synlynk --force
 else
-    pipx install git+https://github.com/nikhilsoman/synlynk
+    exec pipx install git+https://github.com/nikhilsoman/synlynk
 fi

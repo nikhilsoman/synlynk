@@ -235,6 +235,7 @@ def test_install_script_dispatches_to_pipx():
     install_script = Path(__file__).resolve().parents[1] / "install.sh"
     content = install_script.read_text()
     assert "pipx install git+https://github.com/nikhilsoman/synlynk" in content
+    assert "exec pipx install git+https://github.com/nikhilsoman/synlynk" in content
     assert "for f in" not in content
     assert "raw.githubusercontent.com/nikhilsoman/synlynk/main/synlynk/$f" not in content
 
