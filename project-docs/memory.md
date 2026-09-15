@@ -779,3 +779,25 @@ work because local git activity is not sufficient corroboration.
 [@agy]
 
 
+
+## Graphify Knowledge Graph Substrate, Multi-Repo Mesh & Spike Harness (decided/shipped 2026-09-15)
+- **Shipped:** All 12 tasks across Phases 1–4 of `docs/superpowers/plans/2026-09-15-graphify-knowledge-graph-and-spike-harness.md` on branch `feat/agy/graphify-knowledge-graph-and-spike-harness`. [@agy]
+- **Adoption Contract:** Graphify (Apache-2.0) integrated under strict "Opt-in, JIT-Bound, Graceful Fallback" terms:
+  - Process isolation across CLI/JSON interfaces (`.synlynk/graphify-out/graph.json`) — zero code vendoring.
+  - Hard token ceiling: Injected context packs strictly capped at $\le 1,500$ tokens (`_cut_to_token_budget`).
+  - Zero-cost default: Local Tree-sitter AST extraction (`--code-only`) only; no deep LLM multi-modal mode in default CLI loops.
+  - Fallback invariant: If Graphify is missing or corrupted, all Synlynk commands fall back to native stdlib AST discovery with zero unhandled exceptions.
+- **Core Capabilities Added:**
+  - **Tool Installer (`synlynk tool install <tool>`):** 1-click installer and preflight detector in `synlynk/tool_installer.py`.
+  - **Commit Staleness Anchor:** `synlynk/discovery.py` flags cached AST graphs as stale whenever HEAD SHA differs from `built_at_commit`.
+  - **Vizor Logical View Embed:** D3 canvas rendering AST call-graph clusters and an amber staleness banner when graph is behind git HEAD.
+  - **FTUE Onboarding Checkbox:** Integrated 1-click Graphify option in `synlynk init` / `/onboarding` and authored `docs/tools/graphify.md`.
+  - **Role-Specific Charter Skills:** Materialized 4 skills in `.synlynk/skills/` (`graphify-architecture-audit`, `graphify-pr-impact`, `graphify-symbol-navigator`, `graphify-domain-sweep`), automatically bound via `synlynk charters adapt`.
+  - **JIT Context Packs (`synlynk pack`):** Synthesizes compact 1-hop AST subgraphs, automatically injected into `_format_prompt_for_agent()` Turn-1 prompt across all harnesses.
+  - **Blast Radius Calculator (`synlynk impact <symbol|file>`):** Instant upstream caller, downstream callee, and associated test mapping.
+  - **Attested PR Gate (`synlynk pr check --impact-attested`):** Enforces test coverage attestation for all modified symbols before PR merge.
+  - **Cycle Detector (`synlynk heal --cycles`):** Detects dependency cycles and auto-creates prioritized refactoring stories in `state.db`.
+  - **Multi-Repo Mesh (`synlynk mesh`):** Merges multi-repo graphs into `~/.synlynk/global-graph.json` and infers cross-repo HTTP API edges.
+  - **Reusable Spike Harness (`synlynk spike eval`):** Automated A/B benchmarking engine and standardized markdown evaluation receipts.
+- **Verification:** 58/58 tests passing across 12 test suites, zero-failure fallback verified, and 178 regression tests passing green.
+[@agy]
