@@ -109,3 +109,35 @@ def test_generate_logical_html_renders_amber_staleness_banner():
     html_clean = generate_logical_html(data, 8721)
     assert 'id="graph-stale-banner"' not in html_clean
     assert "Graph Stale" not in html_clean
+
+
+def test_extract_logical_nodes_malformed_graph_json_falls_back(tmp_path):
+    conn = sqlite3.connect(":memory:")
+    init_workspace_view_tables(conn)
+
+    out_dir = tmp_path / ".synlynk" / "graphify-out"
+    out_dir.mkdir(parents=True)
+    # Malformed graph.json with unexpected schema
+    (out_dir / "graph.json").write_text(json.dumps({"nodes": 123, "edges": "bad"}))
+
+    # Add a python file in the repository root
+    (tmp_path / "app.py").write_text("print('hello')\n")
+
+    nodes, edges = extract_logical_nodes(conn, str(tmp_path))
+    assert any(n["label"] == "app.py" for n in nodes)
+    assert all(n["provenance"] == "extracted" for n in nodes)
+
+
+def test_generate_logical_html_string_community():
+    data = {
+        "workspace": {"name": "test-repo"},
+        "workspace_views": {
+            "logical": {
+                "nodes": [{"id": "n1", "label": "core_module", "kind": "module", "attrs_json": json.dumps({"community": "core"})}],
+                "edges": [],
+            }
+        }
+    }
+    html = generate_logical_html(data, 8721)
+    assert "core_module" in html
+    assert "bs6RenderGraph" in html

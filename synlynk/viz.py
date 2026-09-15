@@ -2176,8 +2176,18 @@ function bs6RenderGraph() {
     }
     const communityColors = ['#0d9e87', '#3b82f6', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#10b981'];
     if (community !== undefined && community !== null) {
-      const idx = Math.abs(Number(community)) % communityColors.length;
-      strokeColor = communityColors[idx];
+      let idx = Number(community);
+      if (!Number.isFinite(idx)) {
+        let hash = 0;
+        const str = String(community);
+        for (let i = 0; i < str.length; i++) {
+          hash = (hash * 31 + str.charCodeAt(i)) | 0;
+        }
+        idx = Math.abs(hash);
+      } else {
+        idx = Math.abs(Math.floor(idx));
+      }
+      strokeColor = communityColors[idx % communityColors.length];
     }
     markup += '<g class="am-node" transform="translate(' + (p.x - w / 2) + ',' + (p.y - 18) + ')" onclick="bs6OpenDrawer(\'' + n.id + '\')">' +
       '<rect width="' + w + '" height="36" rx="8" stroke="' + strokeColor + '" stroke-width="1.8"></rect>' +

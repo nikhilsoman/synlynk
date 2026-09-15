@@ -169,122 +169,126 @@ def extract_logical_nodes(conn: sqlite3.Connection, repo_path: str) -> Tuple[Lis
         try:
             with open(graph_path, "r", encoding="utf-8") as f:
                 loaded = json.load(f)
-                if isinstance(loaded, dict) and "nodes" in loaded:
+                if isinstance(loaded, dict) and isinstance(loaded.get("nodes"), list):
                     graph_data = loaded
         except Exception:
             graph_data = None
 
     if graph_data is not None:
-        # Read manifest for commit staleness anchor
-        built_at_commit = ""
-        if os.path.isfile(manifest_path):
-            try:
-                with open(manifest_path, "r", encoding="utf-8") as f:
-                    manifest_data = json.load(f)
-                    if isinstance(manifest_data, dict):
-                        built_at_commit = str(manifest_data.get("built_at_commit") or "")
-            except Exception:
-                built_at_commit = ""
-        if not built_at_commit:
-            built_at_commit = str(graph_data.get("built_at_commit") or "")
+        try:
+            # Read manifest for commit staleness anchor
+            built_at_commit = ""
+            if os.path.isfile(manifest_path):
+                try:
+                    with open(manifest_path, "r", encoding="utf-8") as f:
+                        manifest_data = json.load(f)
+                        if isinstance(manifest_data, dict):
+                            built_at_commit = str(manifest_data.get("built_at_commit") or "")
+                except Exception:
+                    built_at_commit = ""
+            if not built_at_commit:
+                built_at_commit = str(graph_data.get("built_at_commit") or "")
 
-        is_stale = bool(sha and built_at_commit and sha != built_at_commit)
-        stale_val = 1 if is_stale else 0
+            is_stale = bool(sha and built_at_commit and sha != built_at_commit)
+            stale_val = 1 if is_stale else 0
 
-        raw_nodes = graph_data.get("nodes") or []
-        raw_edges = graph_data.get("edges") or graph_data.get("links") or []
+            raw_nodes = [n for n in (graph_data.get("nodes") or []) if isinstance(n, dict)]
+            raw_edges = [e for e in (graph_data.get("edges") or graph_data.get("links") or []) if isinstance(e, dict)]
 
-        degrees: Dict[str, int] = {}
-        for e in raw_edges:
-            src = str(e.get("source") or e.get("from") or e.get("from_id") or "")
-            tgt = str(e.get("target") or e.get("to") or e.get("to_id") or "")
-            if src:
-                degrees[src] = degrees.get(src, 0) + 1
-            if tgt:
-                degrees[tgt] = degrees.get(tgt, 0) + 1
+            degrees: Dict[str, int] = {}
+            for e in raw_edges:
+                src = str(e.get("source") or e.get("from") or e.get("from_id") or "")
+                tgt = str(e.get("target") or e.get("to") or e.get("to_id") or "")
+                if src:
+                    degrees[src] = degrees.get(src, 0) + 1
+                if tgt:
+                    degrees[tgt] = degrees.get(tgt, 0) + 1
 
-        total_nodes = len(raw_nodes)
-        id_map: Dict[str, str] = {}
-        seen_node_ids = set()
+            total_nodes = len(raw_nodes)
+            id_map: Dict[str, str] = {}
+            seen_node_ids = set()
 
-        for rn in raw_nodes:
-            raw_id = str(rn.get("id") or "")
-            label = str(rn.get("label") or raw_id or "")
-            kind = str(rn.get("kind") or "module")
-            source_path = str(rn.get("source_path") or rn.get("file") or rn.get("path") or "")
-            if not source_path and ":" in raw_id:
-                source_path = raw_id.split(":", 1)[0]
+            for rn in raw_nodes:
+                raw_id = str(rn.get("id") or "")
+                label = str(rn.get("label") or raw_id or "")
+                kind = str(rn.get("kind") or "module")
+                source_path = str(rn.get("source_path") or rn.get("file") or rn.get("path") or "")
+                if not source_path and ":" in raw_id:
+                    source_path = raw_id.split(":", 1)[0]
 
-            node_id = _id("logical", repo, kind, raw_id or source_path or label)
-            id_map[raw_id] = node_id
-            id_map[label] = node_id
+                node_id = _id("logical", repo, kind, raw_id or source_path or label)
+                id_map[raw_id] = node_id
+                id_map[label] = node_id
 
-            if node_id in seen_node_ids:
-                continue
-            seen_node_ids.add(node_id)
+                if node_id in seen_node_ids:
+                    continue
+                seen_node_ids.add(node_id)
 
-            community = rn.get("community", 0)
-            centrality = rn.get("centrality") or rn.get("rank")
-            if centrality is None:
-                deg = degrees.get(raw_id, 0)
-                centrality = round(deg / max(1, total_nodes - 1), 4) if total_nodes > 1 else 1.0
+                community = rn.get("community", 0)
+                centrality = rn.get("centrality") or rn.get("rank")
+                if centrality is None:
+                    deg = degrees.get(raw_id, 0)
+                    centrality = round(deg / max(1, total_nodes - 1), 4) if total_nodes > 1 else 1.0
 
-            attrs = {k: v for k, v in rn.items() if k not in ("id", "label", "kind", "source_path", "file", "path")}
-            attrs["community"] = community
-            attrs["centrality"] = centrality
-            if built_at_commit:
-                attrs["built_at_commit"] = built_at_commit
-            if is_stale:
-                attrs["stale"] = True
+                attrs = {k: v for k, v in rn.items() if k not in ("id", "label", "kind", "source_path", "file", "path")}
+                attrs["community"] = community
+                attrs["centrality"] = centrality
+                if built_at_commit:
+                    attrs["built_at_commit"] = built_at_commit
+                if is_stale:
+                    attrs["stale"] = True
 
-            node = {
-                "id": node_id,
-                "view": "logical",
-                "repo": repo,
-                "kind": kind,
-                "label": label,
-                "attrs_json": json.dumps(attrs, sort_keys=True),
-                "provenance": "graphify",
-                "source_path": source_path,
-                "scanned_at": now,
-                "head_sha": sha,
-                "community": community,
-                "centrality": centrality,
-                "stale": is_stale,
-            }
-            nodes.append(node)
+                node = {
+                    "id": node_id,
+                    "view": "logical",
+                    "repo": repo,
+                    "kind": kind,
+                    "label": label,
+                    "attrs_json": json.dumps(attrs, sort_keys=True),
+                    "provenance": "graphify",
+                    "source_path": source_path,
+                    "scanned_at": now,
+                    "head_sha": sha,
+                    "community": community,
+                    "centrality": centrality,
+                    "stale": is_stale,
+                }
+                nodes.append(node)
 
-        seen_edge_ids = set()
-        for re_edge in raw_edges:
-            src_raw = str(re_edge.get("source") or re_edge.get("from") or re_edge.get("from_id") or "")
-            tgt_raw = str(re_edge.get("target") or re_edge.get("to") or re_edge.get("to_id") or "")
-            from_id = id_map.get(src_raw) or _id("logical", repo, "node", src_raw)
-            to_id = id_map.get(tgt_raw) or _id("logical", repo, "node", tgt_raw)
+            seen_edge_ids = set()
+            for re_edge in raw_edges:
+                src_raw = str(re_edge.get("source") or re_edge.get("from") or re_edge.get("from_id") or "")
+                tgt_raw = str(re_edge.get("target") or re_edge.get("to") or re_edge.get("to_id") or "")
+                from_id = id_map.get(src_raw) or _id("logical", repo, "node", src_raw)
+                to_id = id_map.get(tgt_raw) or _id("logical", repo, "node", tgt_raw)
 
-            if from_id not in seen_node_ids or to_id not in seen_node_ids:
-                continue
+                if from_id not in seen_node_ids or to_id not in seen_node_ids:
+                    continue
 
-            edge_kind = str(re_edge.get("kind") or re_edge.get("type") or "calls")
-            edge_id = _id("edge", from_id, to_id, edge_kind)
-            if edge_id in seen_edge_ids:
-                continue
-            seen_edge_ids.add(edge_id)
+                edge_kind = str(re_edge.get("kind") or re_edge.get("type") or "calls")
+                edge_id = _id("edge", from_id, to_id, edge_kind)
+                if edge_id in seen_edge_ids:
+                    continue
+                seen_edge_ids.add(edge_id)
 
-            edge_attrs = {k: v for k, v in re_edge.items() if k not in ("source", "target", "from", "to", "from_id", "to_id", "kind", "type")}
-            edge = {
-                "id": edge_id,
-                "view": "logical",
-                "from_id": from_id,
-                "to_id": to_id,
-                "kind": edge_kind,
-                "provenance": "graphify",
-                "attrs_json": json.dumps(edge_attrs, sort_keys=True),
-                "scanned_at": now,
-            }
-            edges.append(edge)
+                edge_attrs = {k: v for k, v in re_edge.items() if k not in ("source", "target", "from", "to", "from_id", "to_id", "kind", "type")}
+                edge = {
+                    "id": edge_id,
+                    "view": "logical",
+                    "from_id": from_id,
+                    "to_id": to_id,
+                    "kind": edge_kind,
+                    "provenance": "graphify",
+                    "attrs_json": json.dumps(edge_attrs, sort_keys=True),
+                    "scanned_at": now,
+                }
+                edges.append(edge)
 
-        _save_projection(conn, "logical", repo, nodes, edges, started, sha, stale=stale_val)
-        return nodes, edges
+            _save_projection(conn, "logical", repo, nodes, edges, started, sha, stale=stale_val)
+            return nodes, edges
+        except Exception:
+            # Fall back cleanly to standard directory-based extraction on any schema error
+            nodes, edges = [], []
 
     package_nodes: Dict[str, dict] = {}
     skip = {".git", ".synlynk", "__pycache__", "node_modules", ".venv", "venv"}
