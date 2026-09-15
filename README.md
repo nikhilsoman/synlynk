@@ -31,12 +31,7 @@ synlynk is a Python CLI that turns your terminal into a hybrid workgroup — one
 pipx install git+https://github.com/nikhilsoman/synlynk
 ```
 
-**Alternative Method (via shell script):**
-```bash
-curl -sSL https://raw.githubusercontent.com/nikhilsoman/synlynk/main/install.sh | bash
-```
-
-**Run directly without installing:**
+**Run directly without installing (contributor / checkout mode):**
 ```bash
 python3 bin/synlynk.py <command>
 ```
