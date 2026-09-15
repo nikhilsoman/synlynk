@@ -94,16 +94,17 @@ def test_run_upgrade_pipx_failure(monkeypatch, capsys):
     assert "run manually" in out
 
 
-def test_run_upgrade_script_falls_back_to_install_sh(monkeypatch, capsys):
+def test_run_upgrade_script_prints_pipx_migration(monkeypatch, capsys):
     import urllib.request
 
     monkeypatch.setattr(synlynk, "_detect_install_type", lambda: "script")
     monkeypatch.setattr(
         urllib.request,
         "urlopen",
-        lambda *a, **kw: (_ for _ in ()).throw(Exception("network")),
+        lambda *a, **kw: (_ for _ in ()).throw(AssertionError("must not fetch installer")),
     )
-    monkeypatch.setattr(urllib.request, "Request", lambda *a, **kw: None)
     synlynk._run_upgrade("9.9.9")
     out = capsys.readouterr().out
-    assert "Auto-install failed" in out or "run manually" in out
+    assert "script install is retired" in out
+    assert "pipx install git+https://github.com/nikhilsoman/synlynk" in out
+    assert "✓ Upgraded" not in out

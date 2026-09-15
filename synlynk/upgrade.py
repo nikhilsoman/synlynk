@@ -6,7 +6,7 @@ import subprocess
 import sys
 import urllib.request
 
-from synlynk._constants import VERSION, _INSTALL_SCRIPT_URL
+from synlynk._constants import VERSION
 
 
 def _detect_install_type() -> str:
@@ -66,23 +66,10 @@ def _run_upgrade(latest: str) -> None:
                 else:
                     print("  ⚠ pipx upgrade failed — run manually: pipx upgrade synlynk")
             return
-        try:
-            req = urllib.request.Request(
-                _INSTALL_SCRIPT_URL, headers={"User-Agent": f"synlynk/{VERSION}"}
-            )
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                script = resp.read().decode()
-            result = subprocess.run(["bash", "-c", script], text=True)
-            if result.returncode == 0:
-                print(f"  ✓ Upgraded to v{latest}")
-                print("  Restart your shell or run: source ~/.zshrc")
-                print("  → Run 'synlynk migrate' if prompted, to apply any schema changes")
-            else:
-                print(f"  ⚠ Install script exited {result.returncode} — run manually:")
-                print(f"  curl -sSL {_INSTALL_SCRIPT_URL} | bash")
-        except Exception as e:
-            print(f"  ⚠ Auto-install failed ({e}) — run manually:")
-            print(f"  curl -sSL {_INSTALL_SCRIPT_URL} | bash")
+        print("  ⚠ script install is retired; no upgrade was performed.")
+        print("  Run: pipx install git+https://github.com/nikhilsoman/synlynk")
+        print("  If a legacy shim exists, remove it with:")
+        print("    rm -rf ~/.synlynk/bin ~/.synlynk/lib")
 
 
 def _get_pipx_source() -> str:
@@ -184,4 +171,3 @@ def execute_upgrade(repo_root: str = ".") -> dict:
         "daemon_restarted": True,
         "message": "Synlynk runtime successfully upgraded with refreshed surface instructions.",
     }
-
