@@ -239,6 +239,13 @@ def build_parser() -> argparse.ArgumentParser:
     pack_parser.add_argument("target", help="Task description or story ID (e.g. story-1234)")
     pack_parser.add_argument("--budget", type=int, default=1500, help="Token budget ceiling (default: 1500)")
 
+    impact_parser = subparsers.add_parser(
+        "impact", help="Calculate blast-radius and upstream/downstream impact for a symbol or file"
+    )
+    impact_parser.add_argument("target", help="Symbol name or file path (e.g. get_user, synlynk/db.py)")
+    impact_parser.add_argument("--depth", type=int, default=10, help="Max traversal depth (default: 10)")
+    impact_parser.add_argument("--json", action="store_true", help="Output impact report as JSON")
+
     team_parser = subparsers.add_parser("team", help="Team status and management")
     team_sub = team_parser.add_subparsers(dest="team_action")
     team_sub.add_parser("status", help="Show team digest: members, stories, budget")
@@ -1167,6 +1174,7 @@ def build_parser() -> argparse.ArgumentParser:
         "marketing": marketing_parser,
         "tool": tool_parser,
         "pack": pack_parser,
+        "impact": impact_parser,
     }
 
     roles_parser = subparsers.add_parser(
@@ -1987,6 +1995,9 @@ def main(argv=None) -> None:
     elif args.command == "pack":
         from synlynk.pack import cmd_pack
         sys.exit(cmd_pack(args))
+    elif args.command == "impact":
+        from synlynk.impact import cmd_impact
+        sys.exit(cmd_impact(args))
     elif args.command == "scan":
         cmd_scan(
             deep=getattr(args, "deep", False),
