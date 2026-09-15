@@ -270,6 +270,7 @@ def build_parser() -> argparse.ArgumentParser:
     heal_parser.add_argument("--parity", action="store_true", help="Run worktree-isolated fleet parity remediation")
     heal_parser.add_argument("--dry-run", action="store_true", help="Print parity gaps and files to touch without modifying files")
     heal_parser.add_argument("--branch", type=str, default=None, help="Target feature branch for parity remediation PR")
+    heal_parser.add_argument("--cycles", action="store_true", help="Detect circular imports and generate refactoring stories")
 
     audit_docs_parser = subparsers.add_parser(
         "audit-docs", help="Detect (and optionally fix) devlog author-identity drift"
@@ -1933,6 +1934,9 @@ def main(argv=None) -> None:
         panel_members = [p.strip() for p in args.panel.split(",") if p.strip()]
         cmd_decide(args.topic, panel=panel_members, record=args.record, audit=args.audit)
     elif args.command == "heal":
+        if getattr(args, "cycles", False):
+            from synlynk.heal_cycles import cmd_heal_cycles
+            sys.exit(cmd_heal_cycles(args))
         cmd_heal(args)
     elif args.command == "audit-docs":
         findings = cmd_audit_docs(json_output=args.json, fix=args.fix)
