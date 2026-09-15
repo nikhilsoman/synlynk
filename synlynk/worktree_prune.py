@@ -171,3 +171,89 @@ def prune_sibling_branches(
         subprocess.run(["git", "-C", repo_root, "worktree", "prune"], capture_output=True, check=False)
 
     return pruned
+
+
+def reap_merged_worktree(
+    repo_root: str,
+    *,
+    branch: Optional[str] = None,
+    worktree_path: Optional[str] = None,
+    target_branch: str = "origin/main",
+) -> List[str]:
+    """Remove a clean, already-merged worktree and its branch.
+
+    Only the merged branch and nested ``worktrees/job-*`` entries are
+    considered. Dirty or not-yet-merged entries are left in place.
+    """
+    repo_root = os.path.abspath(repo_root)
+    target_check = subprocess.run(
+        ["git", "-C", repo_root, "rev-parse", "--verify", target_branch],
+        capture_output=True, text=True, check=False,
+    )
+    target = target_branch if target_check.returncode == 0 else "main"
+    entries = _get_worktree_map(repo_root)
+    selected = []
+    for entry_branch, path in entries.items():
+        if branch and entry_branch == branch:
+            selected.append((entry_branch, path))
+        elif worktree_path and os.path.realpath(path) == os.path.realpath(worktree_path):
+            selected.append((entry_branch, path))
+    if not selected:
+        return []
+
+    selected_roots = {os.path.realpath(path) for _, path in selected}
+    for entry_branch, path in entries.items():
+        real_path = os.path.realpath(path)
+        if any(
+            real_path.startswith(root + os.sep)
+            and os.path.basename(real_path).startswith("job-")
+            for root in selected_roots
+        ):
+            selected.append((entry_branch, path))
+
+    selected.sort(key=lambda item: len(os.path.realpath(item[1])), reverse=True)
+    selected_paths = {os.path.realpath(path) for _, path in selected}
+    reaped = []
+    reaped_paths = set()
+    for entry_branch, path in selected:
+        real_path = os.path.realpath(path)
+        status = subprocess.run(
+            ["git", "-C", path, "status", "--porcelain"],
+            capture_output=True, text=True, check=False,
+        )
+        if not os.path.isdir(path) or status.returncode != 0 or status.stdout.strip():
+            continue
+        if not is_patch_equivalent(repo_root, entry_branch, target):
+            continue
+        if any(
+            child != real_path and child.startswith(real_path + os.sep)
+            and child in selected_paths and child not in reaped_paths
+            for child in selected_paths
+        ):
+            continue
+        removed = subprocess.run(
+            ["git", "-C", repo_root, "worktree", "remove", "--force", path],
+            capture_output=True, text=True, check=False,
+        )
+        if removed.returncode != 0:
+            continue
+        deleted = subprocess.run(
+            ["git", "-C", repo_root, "branch", "-D", entry_branch],
+            capture_output=True, text=True, check=False,
+        )
+        if deleted.returncode != 0:
+            continue
+        reaped.append(entry_branch)
+        reaped_paths.add(real_path)
+        remote = subprocess.run(
+            ["git", "-C", repo_root, "ls-remote", "--exit-code", "--heads", "origin",
+             f"refs/heads/{entry_branch}"],
+            capture_output=True, text=True, check=False,
+        )
+        if remote.returncode == 0:
+            subprocess.run(
+                ["git", "-C", repo_root, "push", "origin", "--delete", entry_branch],
+                capture_output=True, text=True, check=False,
+            )
+    subprocess.run(["git", "-C", repo_root, "worktree", "prune"], capture_output=True, check=False)
+    return reaped
