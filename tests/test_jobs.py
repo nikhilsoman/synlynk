@@ -2289,6 +2289,7 @@ def test_ensure_daemon_job_cost_entry_skips_when_present(project_dir):
     )
     conn.commit()
     conn.close()
+
     _insert_cost_row(
         session_date="2026-08-09", agent="claude", model="t",
         input_tokens=5, output_tokens=1, cache_read_tokens=0,
@@ -2297,6 +2298,39 @@ def test_ensure_daemon_job_cost_entry_skips_when_present(project_dir):
     conn = sl._get_db()
     assert jobs_mod._ensure_daemon_job_cost_entry(job_id, "claude", None, "", conn=conn) is False
     conn.close()
+
+
+def test_terminal_job_marks_missing_cost_when_update_costs_is_a_noop(project_dir, monkeypatch):
+    """A terminal job must explain an absent row instead of silently looking free."""
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    job_id = "job-cost-missing-marker"
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, depends_on, enqueued_at) "
+        "VALUES (?,?,?,?,?,?,?)",
+        (job_id, "codex", "t", "done", 5, "[]", "2026-08-09T12:00:00"),
+    )
+    conn.commit()
+
+    monkeypatch.setattr(jobs_mod, "_pkg", lambda name, default=None: {
+        "_get_db": sl._get_db,
+        "update_costs": lambda *a, **k: None,
+        "extract_tokens": lambda *a, **k: (0, 0),
+        "extract_model_version": lambda *a, **k: "m",
+    }.get(name, getattr(sl, name, default)))
+
+    assert jobs_mod._ensure_daemon_job_cost_entry(job_id, "codex", None, "", conn=conn) is False
+    row = conn.execute(
+        "SELECT cost_missing_reason FROM daemon_jobs WHERE job_id=?", (job_id,)
+    ).fetchone()
+    cost_count = conn.execute(
+        "SELECT COUNT(*) FROM cost_entries WHERE job_id=?", (job_id,)
+    ).fetchone()[0]
+    conn.close()
+    assert cost_count == 0
+    assert row[0] == "update_costs returned without a cost_entries row"
 
 
 def test_reconcile_daemon_jobs_emits_job_terminal_cost_recorded_true(project_dir, monkeypatch):
