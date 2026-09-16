@@ -5,6 +5,8 @@ from unittest.mock import patch
 import pytest
 
 from synlynk.capability_watch import (
+    capability_sweep_status,
+    is_capability_sweep_overdue,
     is_probe_stale,
     is_smoke_test_stale,
     mark_probe_run,
@@ -24,7 +26,10 @@ def conn(tmp_path):
 
 def test_capability_watch_table_exists(conn):
     cols = {row[1] for row in conn.execute("PRAGMA table_info(capability_watch)")}
-    assert cols == {"id", "last_probe_at", "last_green_probe_at", "last_smoke_test_at", "last_green_smoke_at"}
+    assert cols == {
+        "id", "last_probe_at", "last_green_probe_at", "last_smoke_test_at",
+        "last_green_smoke_at", "last_sweep_at", "sweep_job_count",
+    }
 
 
 def test_capability_watch_singleton_row_seeded(conn):
@@ -64,6 +69,35 @@ def test_is_probe_stale_true_when_old(conn):
 
 def test_is_smoke_test_stale_true_when_never_run(conn):
     assert is_smoke_test_stale(conn, threshold_days=7) is True
+
+
+def test_capability_sweep_overdue_when_never_run(conn):
+    assert is_capability_sweep_overdue(conn) is True
+
+
+def test_capability_sweep_overdue_after_job_threshold(conn):
+    conn.execute("UPDATE capability_watch SET last_sweep_at = datetime('now'), sweep_job_count = 0 WHERE id = 1")
+    conn.executemany(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, enqueued_at) VALUES (?, ?, ?, 'done', datetime('now'))",
+        [(f"job-{i}", "codex", "test") for i in range(25)],
+    )
+    conn.commit()
+    status = capability_sweep_status(conn)
+    assert status["jobs_since_sweep"] == 25
+    assert status["overdue"] is True
+
+
+def test_capability_sweep_not_overdue_before_job_or_time_threshold(conn):
+    conn.execute(
+        "UPDATE capability_watch SET last_sweep_at = ?, sweep_job_count = 0 WHERE id = 1",
+        (time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),),
+    )
+    conn.executemany(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, enqueued_at) VALUES (?, ?, ?, 'done', datetime('now'))",
+        [(f"job-{i}", "codex", "test") for i in range(24)],
+    )
+    conn.commit()
+    assert is_capability_sweep_overdue(conn) is False
 
 
 def test_mark_smoke_test_run_updates_timestamp(conn):

@@ -17,6 +17,9 @@ import time
 import sqlite3
 from typing import Optional
 
+CAPABILITY_SWEEP_JOB_THRESHOLD = 25
+CAPABILITY_SWEEP_MAX_AGE_DAYS = 30
+
 
 def _now_iso() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
@@ -45,6 +48,53 @@ def is_smoke_test_stale(conn, threshold_days: int = 7) -> bool:
     if last is None:
         return True
     return (time.time() - last) > threshold_days * 86400
+
+
+def _dispatched_job_count(conn) -> int:
+    """Return the durable dispatch count used by the reassessment cadence."""
+    try:
+        return int(conn.execute("SELECT COUNT(*) FROM daemon_jobs").fetchone()[0])
+    except Exception:
+        return 0
+
+
+def capability_sweep_status(
+    conn,
+    job_threshold: int = CAPABILITY_SWEEP_JOB_THRESHOLD,
+    max_age_days: int = CAPABILITY_SWEEP_MAX_AGE_DAYS,
+) -> dict:
+    row = conn.execute(
+        "SELECT last_sweep_at, sweep_job_count FROM capability_watch WHERE id = 1"
+    ).fetchone()
+    last_sweep_at = row[0] if row else None
+    last_job_count = int(row[1] or 0) if row else 0
+    current_job_count = _dispatched_job_count(conn)
+    last = _parse_iso(last_sweep_at)
+    age_overdue = last is None or (time.time() - last) > max_age_days * 86400
+    jobs_overdue = current_job_count - last_job_count >= job_threshold
+    return {
+        "overdue": age_overdue or jobs_overdue,
+        "last_sweep_at": last_sweep_at,
+        "jobs_since_sweep": max(0, current_job_count - last_job_count),
+        "job_threshold": job_threshold,
+        "max_age_days": max_age_days,
+    }
+
+
+def is_capability_sweep_overdue(
+    conn,
+    job_threshold: int = CAPABILITY_SWEEP_JOB_THRESHOLD,
+    max_age_days: int = CAPABILITY_SWEEP_MAX_AGE_DAYS,
+) -> bool:
+    return capability_sweep_status(conn, job_threshold, max_age_days)["overdue"]
+
+
+def mark_capability_sweep_run(conn) -> None:
+    conn.execute(
+        "UPDATE capability_watch SET last_sweep_at = ?, sweep_job_count = ? WHERE id = 1",
+        (_now_iso(), _dispatched_job_count(conn)),
+    )
+    conn.commit()
 
 
 def mark_probe_run(conn, green: bool) -> None:

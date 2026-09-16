@@ -1,5 +1,7 @@
 # synlynk Blog Series: Building the OS for Multi-Agent Development
 
+| [186](./186-pr1179-capability-reassessment-cadence.md) | PR #1179 - Durable harness capability reassessment cadence | TBD | 2026-09-16 |
+
 A post-mortem / build diary documenting the design choices, strategic pivots, and technical decisions behind synlynk — from first commit to the OS for multi-agent development.
 
 ## Series Index

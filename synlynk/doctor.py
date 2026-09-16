@@ -759,6 +759,29 @@ def _hc_fleet_parity() -> HealthCheck:
     )
 
 
+def _hc_capability_reassessment() -> HealthCheck:
+    """Warn when the living harness baseline needs its scheduled review."""
+    try:
+        from synlynk.capability_watch import capability_sweep_status
+
+        status = capability_sweep_status(_pkg("_get_db")())
+        if not status["overdue"]:
+            return HealthCheck(
+                "capability_reassessment",
+                "ok",
+                f"last sweep {status['last_sweep_at']} ({status['jobs_since_sweep']} jobs since)",
+            )
+        return HealthCheck(
+            "capability_reassessment",
+            "warn",
+            f"capability sweep overdue ({status['jobs_since_sweep']} jobs since last sweep; "
+            f"threshold {status['job_threshold']} or {status['max_age_days']} days)",
+            fix="Run: synlynk capability sweep",
+        )
+    except Exception as exc:
+        return HealthCheck("capability_reassessment", "warn", f"cadence check unavailable: {exc}")
+
+
 HEALTH_CHECKS = [
     _hc_python_version,
     _hc_project_init,
@@ -775,6 +798,7 @@ HEALTH_CHECKS = [
     _hc_version_current,
     _hc_dual_ledger_sync,
     _hc_fleet_parity,
+    _hc_capability_reassessment,
 ]
 
 

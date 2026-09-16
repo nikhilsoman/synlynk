@@ -943,7 +943,9 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
                 last_probe_at TEXT,
                 last_green_probe_at TEXT,
                 last_smoke_test_at TEXT,
-                last_green_smoke_at TEXT
+                last_green_smoke_at TEXT,
+                last_sweep_at TEXT,
+                sweep_job_count INTEGER NOT NULL DEFAULT 0
             );
 
             CREATE TABLE IF NOT EXISTS gh_write_capability (
@@ -966,8 +968,14 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
         """)
         conn.execute(
             "INSERT OR IGNORE INTO capability_watch (id, last_probe_at, last_green_probe_at, "
-            "last_smoke_test_at, last_green_smoke_at) VALUES (1, NULL, NULL, NULL, NULL)"
+            "last_smoke_test_at, last_green_smoke_at, last_sweep_at, sweep_job_count) "
+            "VALUES (1, NULL, NULL, NULL, NULL, NULL, 0)"
         )
+        capability_watch_cols = {row[1] for row in conn.execute("PRAGMA table_info(capability_watch)")}
+        if "last_sweep_at" not in capability_watch_cols:
+            conn.execute("ALTER TABLE capability_watch ADD COLUMN last_sweep_at TEXT")
+        if "sweep_job_count" not in capability_watch_cols:
+            conn.execute("ALTER TABLE capability_watch ADD COLUMN sweep_job_count INTEGER NOT NULL DEFAULT 0")
         harness_verb_cols = {row[1] for row in conn.execute("PRAGMA table_info(harness_verb_map)")}
         if "verb" not in harness_verb_cols:
             try:
