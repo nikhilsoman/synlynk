@@ -64,6 +64,7 @@ class WriteResult:
 
 
 from synlynk import _get_db
+from synlynk.pr_rebase import rebase_pr_if_behind
 
 
 @dataclasses.dataclass(frozen=True)
@@ -586,12 +587,15 @@ def approve_pr(pr_number: int, actor: Optional[Actor] = None, role: str = "qa") 
             )
             if comment.returncode != 0:
                 return {"ok": False, "message": comment.stdout or comment.stderr}
+        rebase = rebase_pr_if_behind(int(pr), env=env)
+        if rebase.get("attempted") and not rebase.get("rebased"):
+            return {"ok": False, "message": f"cannot merge behind PR: {rebase['reason']}"}
         from synlynk.merge_oracle import require_merge_oracle
         oracle = require_merge_oracle(pr_number=int(pr), role=op_role)
         if not oracle["merge_allowed"]:
             return {"ok": False, "message": oracle["reason"]}
         merge = subprocess.run(
-            ["gh", "pr", "merge", pr, "--squash", "--admin"], capture_output=True, text=True, env=env
+            ["gh", "pr", "merge", pr, "--squash"], capture_output=True, text=True, env=env
         )
         return {"ok": merge.returncode == 0, "message": merge.stdout or merge.stderr}
 

@@ -81,13 +81,29 @@ def test_dispatch_denied_for_viewer(tmp_path, monkeypatch):
 def test_approve_pr_runs_gh_commands(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     with patch("synlynk.merge_oracle.require_merge_oracle", return_value={"merge_allowed": True}), \
+         patch("synlynk.uxcore.rebase_pr_if_behind", return_value={"attempted": False}) as rebase, \
          patch("subprocess.run") as mock_run:
         mock_run.return_value.returncode = 0
         mock_run.return_value.stdout = ""
         result = uxcore.approve_pr(pr_number=715)
     assert result.ok is True
+    rebase.assert_called_once()
     called_cmds = [call.args[0] for call in mock_run.call_args_list]
     assert any("merge" in cmd for cmd in called_cmds)
+
+
+def test_approve_pr_does_not_merge_when_behind_rebase_fails(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    with patch("synlynk.uxcore.rebase_pr_if_behind", return_value={
+        "attempted": True, "rebased": False, "reason": "rebase conflicted"
+    }) as rebase, patch("subprocess.run") as mock_run:
+        mock_run.return_value.returncode = 0
+        result = uxcore.approve_pr(pr_number=716)
+
+    assert result.ok is False
+    assert "rebase conflicted" in result.message
+    rebase.assert_called_once()
+    assert not any("merge" in call.args[0] for call in mock_run.call_args_list)
 
 
 def test_approve_pr_propagates_non_self_approval_failure(tmp_path, monkeypatch):
@@ -117,6 +133,7 @@ def test_approve_pr_uses_comment_fallback_only_for_self_approval_failure(tmp_pat
     comment = type("Completed", (), {"returncode": 0, "stdout": "", "stderr": ""})()
     merge = type("Completed", (), {"returncode": 0, "stdout": "merged", "stderr": ""})()
     with patch("synlynk.merge_oracle.require_merge_oracle", return_value={"merge_allowed": True}), \
+         patch("synlynk.uxcore.rebase_pr_if_behind", return_value={"attempted": False}), \
          patch("subprocess.run", side_effect=[review, comment, merge]) as mock_run:
         result = uxcore.approve_pr(pr_number=1465)
 

@@ -3212,6 +3212,7 @@ def test_allow_distinct_qa_app_identities_to_submit_approving_pr_reviews(tmp_pat
     success_merge = subprocess.CompletedProcess(args=["gh", "pr", "merge"], returncode=0, stdout="Merged", stderr="")
 
     with patch("synlynk.merge_oracle.require_merge_oracle", return_value={"merge_allowed": True}), \
+         patch("synlynk.uxcore.rebase_pr_if_behind", return_value={"attempted": False}), \
          patch("subprocess.run", side_effect=[success_review, success_merge]) as mock_run:
         result = uxcore.approve_pr(pr_number=1475)
         assert result.ok is True
@@ -3219,7 +3220,7 @@ def test_allow_distinct_qa_app_identities_to_submit_approving_pr_reviews(tmp_pat
         review_call, merge_call = mock_run.call_args_list
         assert review_call.args[0] == ["gh", "pr", "review", "1475", "--approve"]
         assert review_call.kwargs.get("env", {}).get("GH_TOKEN") == "fake-qa-token"
-        assert merge_call.args[0] == ["gh", "pr", "merge", "1475", "--squash", "--admin"]
+        assert merge_call.args[0] == ["gh", "pr", "merge", "1475", "--squash"]
         assert merge_call.kwargs.get("env", {}).get("GH_TOKEN") == "fake-qa-token"
 
     # 3. Same-identity collision: review fails with self-approval error -> falls back to comment checklist
@@ -3231,6 +3232,7 @@ def test_allow_distinct_qa_app_identities_to_submit_approving_pr_reviews(tmp_pat
     )
     success_comment = subprocess.CompletedProcess(args=["gh", "pr", "comment"], returncode=0, stdout="", stderr="")
     with patch("synlynk.merge_oracle.require_merge_oracle", return_value={"merge_allowed": True}), \
+         patch("synlynk.uxcore.rebase_pr_if_behind", return_value={"attempted": False}), \
          patch("subprocess.run", side_effect=[self_approve_fail, success_comment, success_merge]) as mock_run:
         result = uxcore.approve_pr(pr_number=1475)
         assert result.ok is True
@@ -3239,7 +3241,7 @@ def test_allow_distinct_qa_app_identities_to_submit_approving_pr_reviews(tmp_pat
         assert review_call.args[0] == ["gh", "pr", "review", "1475", "--approve"]
         assert comment_call.args[0][:4] == ["gh", "pr", "comment", "1475"]
         assert "same-login collision review fallback" in comment_call.args[0][5]
-        assert merge_call.args[0] == ["gh", "pr", "merge", "1475", "--squash", "--admin"]
+        assert merge_call.args[0] == ["gh", "pr", "merge", "1475", "--squash"]
 
     # 4. Credential / permission failure: falls back to actionable comment
     integration_fail = subprocess.CompletedProcess(
@@ -3249,6 +3251,7 @@ def test_allow_distinct_qa_app_identities_to_submit_approving_pr_reviews(tmp_pat
         stderr="HTTP 403: Resource not accessible by integration",
     )
     with patch("synlynk.merge_oracle.require_merge_oracle", return_value={"merge_allowed": True}), \
+         patch("synlynk.uxcore.rebase_pr_if_behind", return_value={"attempted": False}), \
          patch("subprocess.run", side_effect=[integration_fail, success_comment, success_merge]) as mock_run:
         result = uxcore.approve_pr(pr_number=1475)
         assert result.ok is True
@@ -3257,7 +3260,7 @@ def test_allow_distinct_qa_app_identities_to_submit_approving_pr_reviews(tmp_pat
         assert review_call.args[0] == ["gh", "pr", "review", "1475", "--approve"]
         assert comment_call.args[0][:4] == ["gh", "pr", "comment", "1475"]
         assert "credential/permission review fallback" in comment_call.args[0][5]
-        assert merge_call.args[0] == ["gh", "pr", "merge", "1475", "--squash", "--admin"]
+        assert merge_call.args[0] == ["gh", "pr", "merge", "1475", "--squash"]
 
     # 5. Unrelated failure (e.g. network failure): fails closed, no comment posted
     network_fail = subprocess.CompletedProcess(
