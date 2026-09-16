@@ -47,7 +47,7 @@ def _verify_story(story: dict) -> dict:
         return {"story_id": story.get("story_id"), "passed": False, "command": command, "output": str(exc)}
 
 
-def _auto_merge(stories: list[dict], verdicts: list[dict]) -> list[str]:
+def _auto_merge(stories: list[dict], verdicts: list[dict], *, role: str = "qa") -> list[str]:
     if not stories or not verdicts or not all(v.get("passed") for v in verdicts):
         return []
     merged = []
@@ -57,7 +57,7 @@ def _auto_merge(stories: list[dict], verdicts: list[dict]) -> list[str]:
             continue
         branch = _merged_pr_branch(str(pr))
         from synlynk.merge_oracle import require_merge_oracle
-        oracle = require_merge_oracle(pr_number=int(pr), role="qa")
+        oracle = require_merge_oracle(pr_number=int(pr), role=role)
         if not oracle["merge_allowed"]:
             continue
         result = subprocess.run(["gh", "pr", "merge", str(pr), "--squash", "--delete-branch"],
@@ -108,7 +108,7 @@ def cmd_heal(args=None, *, batch_size=None, auto_merge=None) -> dict:
     dispatch = run_sweep_pass()
     stories = promoted or triaged
     verdicts = [_verify_story(story) for story in stories]
-    merged = _auto_merge(stories, verdicts) if auto_merge else []
+    merged = _auto_merge(stories, verdicts, role=getattr(args, "role", "qa")) if auto_merge else []
     result = {"scanned": len(findings), "staged": staged, "triaged": triaged,
               "promoted": promoted, "dispatch": dispatch, "qa": verdicts, "merged": merged}
     print(json.dumps(result, indent=2, default=str))
