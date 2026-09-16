@@ -482,6 +482,11 @@ def ingest_backlog(
                     ),
                 )
                 conn.commit()
+                link_result = link_backlog_item_to_goal(
+                    item_id,
+                    goal_id=story_meta.get("goal_id"),
+                    db_conn=conn,
+                )
                 ingested.append({
                     "item_id": item_id,
                     "title": story_meta["title"],
@@ -489,7 +494,7 @@ def ingest_backlog(
                     "role": story_meta["role"],
                     "stage": story_meta["stage"],
                     "complexity_tier": story_meta["complexity_tier"],
-                    "goal_id": story_meta["goal_id"],
+                    "goal_id": link_result.get("goal_id") or story_meta["goal_id"],
                     "fingerprint": story_meta["fingerprint"],
                 })
             except Exception:
@@ -576,6 +581,11 @@ def triage_backlog(
                 ),
             )
             conn.commit()
+            link_result = link_backlog_item_to_goal(
+                item_id,
+                goal_id=synthesized.get("goal_id"),
+                db_conn=conn,
+            )
             triaged_items.append({
                 "id": row_id,
                 "item_id": item_id,
@@ -585,7 +595,7 @@ def triage_backlog(
                 "stage": synthesized["stage"],
                 "governs_stage": synthesized["governs_stage"],
                 "complexity_tier": synthesized["complexity_tier"],
-                "goal_id": synthesized["goal_id"],
+                "goal_id": link_result.get("goal_id") or synthesized["goal_id"],
                 "acceptance_criteria": synthesized["acceptance_criteria"],
                 "fingerprint": synthesized["fingerprint"],
                 "status": "triaged",
@@ -676,6 +686,12 @@ def auto_promote_backlog(
         except Exception:
             pass
 
+        link_result = link_backlog_item_to_goal(
+            item_id,
+            goal_id=goal_id,
+            db_conn=conn,
+        )
+
         promoted_stories.append({
             "story_id": story_id,
             "title": title,
@@ -683,7 +699,7 @@ def auto_promote_backlog(
             "stage": stage or "open",
             "governs_stage": g_stage or "open",
             "complexity_tier": tier,
-            "goal_id": goal_id,
+            "goal_id": link_result.get("goal_id") or goal_id,
             "gh_issue": num,
             "fingerprint": fp,
         })
