@@ -30,6 +30,7 @@ def test_auto_merge_reaps_worktree_after_successful_merge():
 def test_auto_merge_marks_linked_story_done(project_dir):
     story_id = cmd_story_create("merged story")
     with patch("synlynk.heal._merged_pr_branch", return_value="feat/merged"), \
+         patch("synlynk.merge_oracle.require_merge_oracle", return_value={"merge_allowed": True}), \
          patch("synlynk.heal.subprocess.run") as run, \
          patch("synlynk.worktree_prune.reap_merged_worktree"):
         run.return_value.returncode = 0
