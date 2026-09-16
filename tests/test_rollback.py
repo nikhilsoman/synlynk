@@ -233,6 +233,25 @@ def test_rollback_checkpoint_stash_excludes_gitignored_untracked_path(tmp_path, 
     assert tracked.read_text() == "uncommitted local edit\n"
 
 
+def test_stash_paths_excludes_sqlite_sidecars(monkeypatch):
+    status = """ M project-docs/memory.md
+?? .synlynk/projects/abcd/state.db-shm
+?? .synlynk/projects/abcd/state.db-wal
+?? .synlynk/projects/abcd/state.db
+"""
+
+    def fake_run(args, **kwargs):
+        assert args == ["git", "status", "--porcelain"]
+        return subprocess.CompletedProcess(args, 0, stdout=status, stderr="")
+
+    monkeypatch.setattr(rollback.subprocess, "run", fake_run)
+
+    assert rollback._stash_paths([]) == [
+        "project-docs/memory.md",
+        ".synlynk/projects/abcd/state.db",
+    ]
+
+
 def test_rollback_checkpoint_leaves_manifest_on_success(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     _init_git_repo(tmp_path)
