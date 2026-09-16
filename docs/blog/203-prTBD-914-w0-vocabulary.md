@@ -10,4 +10,6 @@
 
 **Toward autonomy:** Unattended merge already needs an honest GitHub actor. W0 says that actor is a **product-scoped type**, not a human and not a swarm of Apps. W1 is install/secrets.
 
-**New goalpost:** Approve W1 (where PEMs live, how a type is installed on the right repos) before any identity-init code for multi-repo.
+**Also in this PR:** W1 install/secrets — PEMs live in `~/.synlynk/workspaces/<product>/github_apps/` now (approach A). PEM-less members (approach C) wait for Teams/W4.
+
+**New goalpost:** Review W0+W1 on PR; next brainstorm is W5 (declaring a specialist type) or W6 (swarm write/blast radius), still no identity-init code until a plan.

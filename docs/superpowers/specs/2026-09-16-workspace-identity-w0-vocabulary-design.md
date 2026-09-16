@@ -14,7 +14,7 @@
 
 W0 locks **vocabulary and authority** so W1 (install/secrets) and later specs do not invent a second identity system.
 
-**Not this spec:** App provisioning code, PEM layout, swarm runner drivers, Projects v2 boards, `synlynk join`. Those are W1+.
+**Not this spec:** App provisioning code, PEM layout (see W1), swarm runner drivers, Projects v2 boards, `synlynk join`. Those are W1+.
 
 **#914 stays OPEN** until the workspace-App program (at least W1) is specified and the scoped work is done. The doctor slice in PR #1630 is not this program.
 
@@ -148,7 +148,7 @@ GitHub auto-merge stays **off**.
 
 | ID | Spec | Depends on |
 |:---|:---|:---|
-| **W1** | Product-scoped GitHub Apps: create once per type, install on the right repos, PEM/token home, worktree-aware minting | W0 |
+| **W1** | Product-scoped GitHub Apps: create once per type, install on the right repos, PEM/token home, worktree-aware minting — **specified** in `2026-09-16-workspace-identity-w1-install-secrets-design.md` (A now, C at Teams) | W0 |
 | **W2** | Work graph inside a product (issues stay in-repo; GOVERNS/epic spans repos; costs tagged `repo_id` + type) | W0, W1 |
 | **W3** | Shared Projects v2 / Vizor board per product | W0, W2 |
 | **W4** | Members and member-dispatch (`synlynk join`; humans dispatch types) | W0, W1, W6 |
