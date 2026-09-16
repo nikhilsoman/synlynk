@@ -890,15 +890,29 @@ def build_parser() -> argparse.ArgumentParser:
         help="Story ID for context labelling")
 
     launch_parser = subparsers.add_parser(
-        "launch", help="Pick your first task and dispatch it (FTUE task picker)")
+        "launch",
+        help=(
+            "Pick your first task and dispatch it (FTUE task picker); "
+            "approved plans run unattended via `synlynk run --milestone`"
+        ),
+    )
     launch_parser.add_argument("--dry-run", action="store_true", dest="dry_run",
         help="Print selected tasks without TUI or dispatching")
     launch_parser.add_argument("--list", action="store_true", dest="list_mode",
         help="Print full template pool with trigger conditions")
 
     run_parser = subparsers.add_parser(
-        "run", help="Convenience wrappers for common dispatch patterns")
-    run_parser.add_argument("--milestone", default=None, help="Target milestone for unattended execution loop")
+        "run",
+        help=(
+            "Run approved plans unattended via `synlynk run --milestone`; "
+            "ad-hoc dispatch is the exception"
+        ),
+    )
+    run_parser.add_argument(
+        "--milestone",
+        default=None,
+        help="Target milestone (approved-plan execution is unattended by default)",
+    )
     run_parser.add_argument("--unattended", "--autonomous", action="store_true", dest="unattended",
                             help="Execute milestone DAG unattended without turn-taking approvals")
     run_parser.add_argument("--dag", action="store_true", dest="dag_view",
@@ -1697,11 +1711,18 @@ def main(argv=None) -> None:
         action = getattr(args, "run_action", None)
         if action == "--trio":
             cmd_run_trio(args.task, story_id=getattr(args, "story_id", None))
-        elif getattr(args, "unattended", False) or getattr(args, "dag_view", False) or getattr(args, "milestone", None):
+        elif (
+            getattr(args, "unattended", False)
+            or getattr(args, "dag_view", False)
+            or getattr(args, "milestone", None)
+        ):
             from synlynk.launch_dag import cmd_run_dag
             cmd_run_dag(
                 milestone=getattr(args, "milestone", None),
-                unattended=getattr(args, "unattended", False),
+                unattended=(
+                    getattr(args, "unattended", False)
+                    or getattr(args, "milestone", None) is not None
+                ),
                 dag_view=getattr(args, "dag_view", False),
                 dry_run=getattr(args, "dry_run", False),
                 max_parallel=getattr(args, "max_parallel", 4),
