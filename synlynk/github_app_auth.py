@@ -21,8 +21,19 @@ def _redaction_cache_path() -> str:
     return os.path.join(".synlynk", "token_redaction_cache.json")
 
 
+def _default_apps_dir() -> str:
+    """Return the shared GitHub App directory for the current repository."""
+    try:
+        from synlynk.daemon import _daemon_state_path
+        return _daemon_state_path("github_apps")
+    except Exception:
+        # Preserve the historical behavior outside a repository or when the
+        # daemon module cannot resolve the repository context.
+        return os.path.join(".synlynk", "github_apps")
+
+
 def _role_token_cache_path(role: str, apps_dir: Optional[str] = None) -> str:
-    base = apps_dir if apps_dir is not None else os.path.join(".synlynk", "github_apps")
+    base = apps_dir if apps_dir is not None else _default_apps_dir()
     return os.path.join(base, f"{role}.token.json")
 
 
@@ -239,6 +250,7 @@ def refresh_installation_token(role: str, app_config: dict, apps_dir: Optional[s
     it only reads the cache via read_cached_installation_token().
     ``apps_dir``, when given, overrides the default cwd-relative lookup.
     """
+    apps_dir = apps_dir if apps_dir is not None else _default_apps_dir()
     pem_path = _resolve_private_key_path(app_config.get("private_key_path", ""), apps_dir=apps_dir)
     token, expires_at = _mint_installation_token(
         app_config["app_id"], app_config["installation_id"], pem_path,
