@@ -126,12 +126,39 @@ def check_durable_role_app_material(
     }
 
 
+def _with_durable_role_app_material(
+    result: Dict[str, Any],
+    apps_dir: Optional[str],
+    repo_root: Optional[str],
+) -> Dict[str, Any]:
+    """Apply the durable-material failure without renaming Point 1."""
+    material = check_durable_role_app_material(apps_dir, repo_root=repo_root)
+    if material["status"] != "FAIL":
+        return result
+
+    details = dict(result.get("details") or {})
+    details["durable_role_app_material"] = material["details"]
+    return {
+        **result,
+        "status": "FAIL",
+        "message": f"{result['message']}; {material['message']}",
+        "details": details,
+        "remediation": material["remediation"],
+    }
+
+
 def check_point_1_role_tokens(
     apps_dir: Optional[str] = None, *, repo_root: Optional[str] = None
 ) -> Dict[str, Any]:
     """Point 1: Verify GitHub App role tokens and expiration."""
+    using_default_apps_dir = apps_dir is None
     if apps_dir is None:
         apps_dir = os.path.join(".synlynk", "github_apps")
+
+    # Custom app directories are used by callers/tests as isolated token
+    # fixtures. Only apply the repo-scoped durable-material guard when the
+    # default directory is used or a repo root was explicitly supplied.
+    check_material = repo_root is not None or using_default_apps_dir
 
     if not os.path.exists(apps_dir):
         result = {
@@ -142,8 +169,7 @@ def check_point_1_role_tokens(
             "details": {},
             "remediation": "Configure roles with `synlynk join` or in Vizor Role Studio",
         }
-        material = check_durable_role_app_material(apps_dir, repo_root=repo_root)
-        return material if material["status"] == "FAIL" else result
+        return _with_durable_role_app_material(result, apps_dir, repo_root) if check_material else result
 
     now = time.time()
     roles_found = {}
@@ -192,8 +218,7 @@ def check_point_1_role_tokens(
             "details": roles_found,
             "remediation": "Mint role tokens via `synlynk join` or Vizor Role Studio",
         }
-        material = check_durable_role_app_material(apps_dir, repo_root=repo_root)
-        return material if material["status"] == "FAIL" else result
+        return _with_durable_role_app_material(result, apps_dir, repo_root) if check_material else result
 
     if expired_roles and not valid_roles:
         result = {
@@ -204,8 +229,7 @@ def check_point_1_role_tokens(
             "details": roles_found,
             "remediation": "Run `synlynk daemon` or refresh tokens with `synlynk join`",
         }
-        material = check_durable_role_app_material(apps_dir, repo_root=repo_root)
-        return material if material["status"] == "FAIL" else result
+        return _with_durable_role_app_material(result, apps_dir, repo_root) if check_material else result
 
     if expired_roles:
         result = {
@@ -216,8 +240,7 @@ def check_point_1_role_tokens(
             "details": roles_found,
             "remediation": "Refresh expired tokens via daemon or `synlynk join`",
         }
-        material = check_durable_role_app_material(apps_dir, repo_root=repo_root)
-        return material if material["status"] == "FAIL" else result
+        return _with_durable_role_app_material(result, apps_dir, repo_root) if check_material else result
 
     result = {
         "key": "role_tokens",
@@ -227,8 +250,7 @@ def check_point_1_role_tokens(
         "details": roles_found,
         "remediation": "",
     }
-    material = check_durable_role_app_material(apps_dir, repo_root=repo_root)
-    return material if material["status"] == "FAIL" else result
+    return _with_durable_role_app_material(result, apps_dir, repo_root) if check_material else result
 
 
 def check_point_2_sandbox_egress(host: str = "api.github.com", port: int = 443, timeout: float = 3.0) -> Dict[str, Any]:

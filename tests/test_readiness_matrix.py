@@ -82,6 +82,30 @@ def test_durable_role_app_material_passes_with_nested_app_file(tmp_path, monkeyp
     assert result["status"] == "PASS"
 
 
+def test_point_1_preserves_role_tokens_key_when_durable_material_is_missing(tmp_path, monkeypatch):
+    from synlynk import agent_store
+    import time
+
+    monkeypatch.setattr(
+        agent_store,
+        "list_agents",
+        lambda: [{"agent_id": "dev-primary", "aliases": [{"kind": "role_slug", "value": "dev"}]}],
+    )
+    monkeypatch.setattr(agent_store, "read_charter", lambda _agent_id: ("---\ndurability: durable\n---\n", 1))
+    monkeypatch.setattr("synlynk.readiness._policy_requires_gh_write", lambda _repo_root: True)
+    apps_dir = tmp_path / "apps"
+    apps_dir.mkdir()
+    (apps_dir / "dev.token.json").write_text(json.dumps({"expires_at": time.time() + 3600}))
+
+    result = check_point_1_role_tokens(
+        apps_dir=str(apps_dir), repo_root=str(tmp_path)
+    )
+
+    assert result["key"] == "role_tokens"
+    assert result["status"] == "FAIL"
+    assert "durable_role_app_material" in result["details"]
+
+
 def test_point_2_sandbox_egress_success():
     with patch("socket.create_connection") as mock_conn:
         mock_sock = MagicMock()

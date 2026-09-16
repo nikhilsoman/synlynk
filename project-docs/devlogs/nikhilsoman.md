@@ -1507,3 +1507,8 @@ implementation plan.
 - Added a local doctor/readiness hard-fail for durable workspace roles lacking nested GitHub App material when policy declares `gh_write` routing.
 - Added regression tests for missing and present role-scoped material; `pytest -q tests/test_doctor_identity_roles.py tests/test_readiness_matrix.py` — 19 passed.
 - Cross-repo App scope remains parked; no Apps or GitHub settings were provisioned or changed.
+
+## 2026-09-16 — Issue #914 CI readiness compatibility follow-up
+
+- Preserved the readiness matrix's Point 1 key as `role_tokens` while retaining durable App-material failure details and remediation.
+- Scoped durable-material evaluation away from isolated custom token fixtures; `pytest -q tests/test_readiness_matrix.py tests/test_doctor_identity_roles.py` — 20 passed.
