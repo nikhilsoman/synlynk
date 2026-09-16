@@ -107,13 +107,31 @@ def _git_dirty() -> bool:
     return bool(result.stdout.strip())
 
 
-def _is_git_ignored(path: str) -> bool:
+def _stash_paths(untracked_paths: list) -> list:
+    """Return dirty paths except files owned by the operation.
+
+    Supplying explicit dirty paths avoids making git expand ``.`` while
+    SQLite is creating ignored WAL/SHM files under the central runtime tree.
+    """
     result = subprocess.run(
-        ["git", "check-ignore", "-q", path],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        ["git", "status", "--porcelain"], capture_output=True, text=True
     )
-    return result.returncode == 0
+    if result is None or result.returncode != 0:
+        return []
+    outputs = [os.path.normpath(str(path)) for path in untracked_paths]
+    paths = []
+    for line in result.stdout.splitlines():
+        if len(line) < 4:
+            continue
+        path = line[3:]
+        if " -> " in path:
+            path = path.rsplit(" -> ", 1)[-1]
+        path = os.path.normpath(path)
+        if any(path == output or path.startswith(output + os.sep) for output in outputs):
+            continue
+        if path not in paths:
+            paths.append(path)
+    return paths
 
 
 def _pop_stash(stash_ref: str) -> None:
@@ -171,14 +189,13 @@ def rollback_checkpoint(op_type: str, untracked_paths: Optional[list] = None):
         # pathspec — git treats an exclude pathspec pointing at an ignored
         # path as an attempt to add an ignored file and aborts with exit 1,
         # even though the stash itself already succeeded.
-        exclude_pathspecs = [
-            f":!{p}" for p in untracked_paths if not _is_git_ignored(p)
-        ]
+        stash_paths = _stash_paths(untracked_paths)
         try:
-            subprocess.run(
-                ["git", "stash", "push", "-u", "-m", stash_ref, "--", ".", *exclude_pathspecs],
-                check=True,
-            )
+            if stash_paths:
+                subprocess.run(
+                    ["git", "stash", "push", "-u", "-m", stash_ref, "--", *stash_paths],
+                    check=True,
+                )
         except subprocess.CalledProcessError:
             shutil.rmtree(backup_dir, ignore_errors=True)
             raise

@@ -181,6 +181,29 @@ def test_rollback_checkpoint_stash_excludes_out_of_repo_untracked_path(tmp_path,
     assert tracked.read_text() == "uncommitted local edit\n"
 
 
+def test_rollback_checkpoint_ignores_central_db_runtime_tree(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    _init_git_repo(tmp_path)
+    (tmp_path / ".gitignore").write_text(".synlynk/\n")
+    tracked = tmp_path / "tracked.txt"
+    tracked.write_text("uncommitted local edit\n")
+    subprocess.run(["git", "add", ".gitignore", "tracked.txt"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "commit", "-m", "initial", "-q"], cwd=tmp_path, check=True)
+    tracked.write_text("uncommitted local edit\n")
+
+    runtime_db = tmp_path / ".synlynk" / "projects" / "project" / "state.db"
+    runtime_db.parent.mkdir(parents=True)
+    connection = sqlite3.connect(runtime_db)
+    connection.execute("PRAGMA journal_mode=WAL")
+    connection.execute("CREATE TABLE marker (value TEXT)")
+    connection.commit()
+
+    with rollback.rollback_checkpoint("init", untracked_paths=["generated.txt"]):
+        assert (tmp_path / ".synlynk" / "projects").exists()
+
+    connection.close()
+
+
 def test_rollback_checkpoint_stash_excludes_gitignored_untracked_path(tmp_path, monkeypatch):
     """Regression test: an untracked_paths entry that lives inside a
     gitignored directory (e.g. .synlynk/project-docs, .synlynk/.synlynk_migrated)
