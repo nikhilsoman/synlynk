@@ -285,7 +285,7 @@ def cmd_run_dag(
     dry_run: bool = False,
     max_parallel: int = 4,
 ) -> None:
-    """CLI orchestrator for synlynk run --unattended / --dag."""
+    """CLI orchestrator; approved milestone plans run unattended by default."""
     from synlynk.db import _get_db
 
     conn = _get_db()

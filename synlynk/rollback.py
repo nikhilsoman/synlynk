@@ -129,6 +129,11 @@ def _stash_paths(untracked_paths: list) -> list:
         path = os.path.normpath(path)
         if any(path == output or path.startswith(output + os.sep) for output in outputs):
             continue
+        # SQLite creates these transient sidecars while a database is open.
+        # They can disappear between `git status` and `git stash`, which makes
+        # an explicit pathspec fail with "does not match index".
+        if path.endswith(("-shm", "-wal")):
+            continue
         if path not in paths:
             paths.append(path)
     return paths
