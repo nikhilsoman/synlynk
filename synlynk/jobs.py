@@ -227,6 +227,27 @@ def _check_instruction_receipt(log_text: str, expected_version: Optional[str]) -
     return "absent"
 
 
+def _instruction_receipt_is_trusted(
+    receipt_status: Optional[str],
+    expected_version: Optional[str],
+    *,
+    waived: bool = False,
+) -> bool:
+    """Return whether instruction loading is trusted for unattended merge.
+
+    A receipt is only evidence of the expected instruction file when it
+    matches the expected version.  In particular, an ``absent`` receipt is
+    not equivalent to a successful check when a version was expected; it can
+    be accepted only through an explicit waiver.  Jobs without an expected
+    version retain the legacy behavior because there is no claim to verify.
+    """
+    if not expected_version:
+        return True
+    if receipt_status == "ok":
+        return True
+    return receipt_status == "absent" and waived
+
+
 def _classify_task_delivery(receipt_status: Optional[str], has_corroborating_activity: bool) -> dict:
     """Combines a receipt-check result with git-activity evidence.
 
