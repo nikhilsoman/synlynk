@@ -3295,7 +3295,9 @@ def test_reconcile_auto_finalizes_dirty_worktree_excluding_generated_files(proje
     assert "gh pr create" in out or any(cmd[:3] == ["gh", "pr", "create"] for cmd in calls)
 
 
-def test_reconcile_marks_scope_violation_when_change_outside_declared_scope(project_dir, monkeypatch, capsys):
+def test_reconcile_marks_scope_violation_without_gh_write_for_change_outside_declared_scope(
+    project_dir, monkeypatch, capsys
+):
     import synlynk as sl
     import synlynk.jobs as jobs_mod
 
