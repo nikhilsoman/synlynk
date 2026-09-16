@@ -65,6 +65,28 @@ def test_preflight_blocks_missing_stitch_mcp_when_required(tmp_path, monkeypatch
     assert result_forced.get("sentinel") != "MCP_SERVER_MISSING"
 
 
+def test_preflight_blocks_unavailable_local_capability(monkeypatch):
+    from synlynk import local_agent
+    from synlynk.dispatch import _preflight_dispatch
+
+    monkeypatch.setattr(
+        local_agent,
+        "_load_local_config",
+        lambda: {"endpoint": "http://127.0.0.1:8000", "models": []},
+    )
+    monkeypatch.setattr(
+        local_agent,
+        "_health_check",
+        lambda endpoint, api_key=None: {"reachable": False, "error": "connection refused"},
+    )
+
+    result = _preflight_dispatch("local", [])
+
+    assert result["passed"] is False
+    assert result["sentinel"] == "LOCAL_CAPABILITY_UNAVAILABLE"
+    assert "synlynk local doctor" in result["reason"]
+
+
 def test_fleet_parity_agy_stitch_mcp_integration_preflight_blocks(tmp_path, monkeypatch):
     test_preflight_blocks_missing_stitch_mcp_when_required(tmp_path, monkeypatch)
 
@@ -111,6 +133,14 @@ def test_format_job_summary_does_not_double_flag_failed_job():
 
     assert "status:   FAILED (exit 1)" in summary
     assert "GH WRITE CANCELLED" not in summary
+
+
+def test_grok_shell_denial_is_detected_even_when_wrapper_exits_zero():
+    from synlynk.costs import _log_has_permission_denied_signature
+
+    assert _log_has_permission_denied_signature(
+        "Error: execution denied in headless sandbox"
+    ) is True
 
 
 def test_cli_dispatch_dry_run_prints_preview_and_creates_no_job(project_dir, monkeypatch, capsys):
@@ -2476,4 +2506,3 @@ def test_dispatch_logs_isolated_and_preserved_on_reap(tmp_path, monkeypatch):
     preserved_log = os.path.join(_daemon_state_path("logs"), os.path.basename(log_path))
     assert os.path.exists(preserved_log)
     assert open(preserved_log).read() == "dispatched worker output"
-

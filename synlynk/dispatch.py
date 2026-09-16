@@ -2472,6 +2472,55 @@ def _preflight_dispatch(
     from synlynk.fleet import repo_has_any_core_instruction_file
 
     check_root = root or os.getcwd()
+
+    if harness_name == "local":
+        # Aider can exit zero after doing no work when its configured oMLX
+        # backend is unavailable.  Verify the actual local capability before
+        # spawning it so the job cannot be recorded as a successful no-op.
+        from synlynk.local_agent import _health_check, _load_local_config
+
+        try:
+            local_config = _load_local_config()
+        except (FileNotFoundError, OSError, KeyError, TypeError, ValueError) as exc:
+            return {
+                "passed": False,
+                "sentinel": "LOCAL_CAPABILITY_UNAVAILABLE",
+                "reason": (
+                    f"Local harness configuration is unavailable: {exc}. "
+                    "Run `synlynk local doctor` and start oMLX before dispatching."
+                ),
+            }
+        endpoint = local_config.get("endpoint")
+        if not endpoint:
+            return {
+                "passed": False,
+                "sentinel": "LOCAL_CAPABILITY_UNAVAILABLE",
+                "reason": (
+                    "Local harness configuration has no oMLX endpoint. "
+                    "Run `synlynk local doctor` and fix .agents/local.json."
+                ),
+            }
+        health = _health_check(endpoint, api_key=os.environ.get("OPENAI_API_KEY"))
+        if not health.get("reachable"):
+            return {
+                "passed": False,
+                "sentinel": "LOCAL_CAPABILITY_UNAVAILABLE",
+                "reason": (
+                    f"Local oMLX endpoint {endpoint!r} is unavailable: "
+                    f"{health.get('error', 'health check failed')}. "
+                    "Run `synlynk local doctor` and start oMLX before retrying."
+                ),
+            }
+        if shutil.which("aider") is None:
+            return {
+                "passed": False,
+                "sentinel": "LOCAL_CAPABILITY_UNAVAILABLE",
+                "reason": (
+                    "Local harness requires `aider`, but it is not installed on PATH. "
+                    "Run `synlynk local doctor` or install aider-chat before retrying."
+                ),
+            }
+
     if harness_name in _CORE_FLEET and repo_has_any_core_instruction_file(check_root):
         expected_file = _CORE_INSTRUCTION_FILES.get(harness_name)
         if expected_file and not os.path.exists(os.path.join(check_root, expected_file)):

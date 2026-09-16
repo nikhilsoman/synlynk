@@ -887,12 +887,18 @@ def cmd_doctor(args=None, checks: _List = None) -> int:
                 if agent == "agy"
                 else {"passed": True, "skipped": "not Agy"}
             )
+            live_probe = getattr(args, "live_probe", False) if args is not None else False
+            tc9 = _run_tc9(agent, live=live_probe, db_conn=db_conn)
 
             # TC-5 is warn-only for exit code; still surfaces as ⚠ below.
             hard_tcs_passed = (
                 tc0["passed"] and tc1["passed"] and tc2["passed"]
                 and tc3["passed"] and tc4["passed"]
                 and tc6["passed"] and tc7["passed"]
+                # Grok's TC-9 result is the authoritative shell/gh-write
+                # capability signal.  A denied shell must not look healthy
+                # merely because the wrapper exited zero.
+                and (agent != "grok" or tc9["passed"])
             )
             agent_missing = [agent] if agent in missing_core_instructions else []
             # Nested DBs already counted once above; avoid re-flagging per agent.
@@ -975,8 +981,6 @@ def cmd_doctor(args=None, checks: _List = None) -> int:
                 print(f"    TC-8 agy-stitch-mcp-preflight: {tc8_status}")
                 if not tc8["passed"]:
                     print(f"      {tc8['error']}")
-            live_probe = getattr(args, "live_probe", False) if args is not None else False
-            tc9 = _run_tc9(agent, live=live_probe, db_conn=db_conn)
             if tc9:
                 if tc9["passed"]:
                     tc9_note = f" ({tc9.get('mechanism', 'supported')})" if tc9.get("mechanism") else ""

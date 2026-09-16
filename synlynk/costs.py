@@ -203,6 +203,10 @@ def _log_has_permission_denied_signature(output_text: str) -> bool:
         "no output produced",
         "permission that headless mode cannot prompt for",
         "auto-denied",
+        # Grok's shell-denied path can still return exit 0 from the wrapper.
+        "execution denied in headless sandbox",
+        "shell execution denied",
+        "sandbox denies shell execution",
     )
     signature_window = lines[-80:]
     lowered_window = "\n".join(
