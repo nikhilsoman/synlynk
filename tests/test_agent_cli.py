@@ -3211,7 +3211,8 @@ def test_allow_distinct_qa_app_identities_to_submit_approving_pr_reviews(tmp_pat
     success_review = subprocess.CompletedProcess(args=["gh", "pr", "review"], returncode=0, stdout="", stderr="")
     success_merge = subprocess.CompletedProcess(args=["gh", "pr", "merge"], returncode=0, stdout="Merged", stderr="")
 
-    with patch("subprocess.run", side_effect=[success_review, success_merge]) as mock_run:
+    with patch("synlynk.merge_oracle.require_merge_oracle", return_value={"merge_allowed": True}), \
+         patch("subprocess.run", side_effect=[success_review, success_merge]) as mock_run:
         result = uxcore.approve_pr(pr_number=1475)
         assert result.ok is True
         assert len(mock_run.call_args_list) == 2
@@ -3229,7 +3230,8 @@ def test_allow_distinct_qa_app_identities_to_submit_approving_pr_reviews(tmp_pat
         stderr="GraphQL: Can not approve your own pull request (approvePullRequest)",
     )
     success_comment = subprocess.CompletedProcess(args=["gh", "pr", "comment"], returncode=0, stdout="", stderr="")
-    with patch("subprocess.run", side_effect=[self_approve_fail, success_comment, success_merge]) as mock_run:
+    with patch("synlynk.merge_oracle.require_merge_oracle", return_value={"merge_allowed": True}), \
+         patch("subprocess.run", side_effect=[self_approve_fail, success_comment, success_merge]) as mock_run:
         result = uxcore.approve_pr(pr_number=1475)
         assert result.ok is True
         assert len(mock_run.call_args_list) == 3
@@ -3246,7 +3248,8 @@ def test_allow_distinct_qa_app_identities_to_submit_approving_pr_reviews(tmp_pat
         stdout="",
         stderr="HTTP 403: Resource not accessible by integration",
     )
-    with patch("subprocess.run", side_effect=[integration_fail, success_comment, success_merge]) as mock_run:
+    with patch("synlynk.merge_oracle.require_merge_oracle", return_value={"merge_allowed": True}), \
+         patch("subprocess.run", side_effect=[integration_fail, success_comment, success_merge]) as mock_run:
         result = uxcore.approve_pr(pr_number=1475)
         assert result.ok is True
         assert len(mock_run.call_args_list) == 3
