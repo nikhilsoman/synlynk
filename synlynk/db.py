@@ -808,6 +808,11 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
                 conn.execute("ALTER TABLE daemon_jobs ADD COLUMN lineage_root TEXT DEFAULT NULL")
             except sqlite3.OperationalError:
                 pass
+        if "cost_missing_reason" not in daemon_job_cols:
+            try:
+                conn.execute("ALTER TABLE daemon_jobs ADD COLUMN cost_missing_reason TEXT")
+            except sqlite3.OperationalError:
+                pass
         try:
             conn.execute("UPDATE daemon_jobs SET harness = agent WHERE (harness IS NULL OR harness = '') AND agent IS NOT NULL")
         except sqlite3.OperationalError:

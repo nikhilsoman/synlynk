@@ -2748,8 +2748,9 @@ def _ensure_daemon_job_cost_entry(
 ) -> bool:
     """Write a cost_entries row for *job_id* if none exists yet (Epic A2 / #752).
 
-    Returns True when a new row was written. Uses update_costs (t-shirt estimate
-    if tokens extract as zero) so terminal jobs never leave the ledger blank.
+    Returns True when a new row was written. If the row cannot be written, the
+    daemon job receives a durable ``cost_missing_reason`` marker so a terminal
+    job is never mistaken for an unaccounted-for zero-cost job.
     """
     owns_conn = conn is None
     get_db = _pkg("_get_db")
@@ -2771,6 +2772,7 @@ def _ensure_daemon_job_cost_entry(
             return False
         update_fn = _pkg("update_costs")
         if not update_fn:
+            _mark_daemon_job_cost_missing(conn, job_id, "update_costs unavailable")
             return False
         extract = _pkg("extract_tokens")
         in_tokens, out_tokens = 0, 0
@@ -2802,9 +2804,21 @@ def _ensure_daemon_job_cost_entry(
                 job_id=job_id,
                 harness=agent or "",
             )
-            return True
+            try:
+                recorded = conn.execute(
+                    "SELECT 1 FROM cost_entries WHERE job_id=?", (job_id,)
+                ).fetchone()
+            except Exception:
+                recorded = None
+            if recorded:
+                return True
+            _mark_daemon_job_cost_missing(
+                conn, job_id, "update_costs returned without a cost_entries row"
+            )
+            return False
         except Exception as exc:
             print(f"  ⚠ cost capture failed for {job_id}: {exc}")
+            _mark_daemon_job_cost_missing(conn, job_id, f"{type(exc).__name__}: {exc}")
             return False
     finally:
         if owns_conn and conn is not None:
@@ -2812,6 +2826,19 @@ def _ensure_daemon_job_cost_entry(
                 conn.close()
             except Exception:
                 pass
+
+
+def _mark_daemon_job_cost_missing(conn, job_id: str, reason: str) -> None:
+    """Record why a terminal daemon job has no cost ledger row."""
+    try:
+        conn.execute(
+            "UPDATE daemon_jobs SET cost_missing_reason=? "
+            "WHERE job_id=? AND (cost_missing_reason IS NULL OR cost_missing_reason='')",
+            (reason[:1000], job_id),
+        )
+        conn.commit()
+    except Exception as exc:
+        print(f"  ⚠ cost-missing marker failed for {job_id}: {exc}")
 
 
 def _gtv_status_for_daemon_exit(
@@ -3102,6 +3129,11 @@ def _reconcile_daemon_jobs() -> None:
                     cost_recorded = _ensure_daemon_job_cost_entry(
                         job_id, agent, story_id, log_text_pref, conn=conn
                     )
+                    if not cost_recorded:
+                        cost_recorded = bool(conn.execute(
+                            "SELECT cost_missing_reason FROM daemon_jobs WHERE job_id=?",
+                            (job_id,),
+                        ).fetchone()[0])
                     emit_event(
                         "job_terminal",
                         {
@@ -3190,6 +3222,10 @@ def _reconcile_daemon_jobs() -> None:
                         )
                         if settled and zombie_status == "killed_zombie":
                             _reap_zombie_worktree(job_id, log_path, conn=conn)
+                        if settled:
+                            _ensure_daemon_job_cost_entry(
+                                job_id, agent, story_id, _read_job_log(log_path), conn=conn
+                            )
                     except Exception:
                         conn.rollback()
                         _release_daemon_job_terminal_claim_and_commit(conn, job_id, terminal_claim_token)
@@ -3285,6 +3321,11 @@ def _reconcile_daemon_jobs() -> None:
                 cost_recorded = _ensure_daemon_job_cost_entry(
                     job_id, agent, story_id, log_text, conn=conn
                 )
+                if not cost_recorded:
+                    cost_recorded = bool(conn.execute(
+                        "SELECT cost_missing_reason FROM daemon_jobs WHERE job_id=?",
+                        (job_id,),
+                    ).fetchone()[0])
                 emit_event(
                     "job_terminal",
                     {
