@@ -3208,16 +3208,20 @@ def test_allow_distinct_qa_app_identities_to_submit_approving_pr_reviews(tmp_pat
     assert bot_login == "synlynk-synlynk-qa[bot]"
 
     # 2. Distinct identity approval: passes role-scoped token and runs gh pr review --approve
+    distinct_author = subprocess.CompletedProcess(
+        args=["gh", "pr", "view"], returncode=0,
+        stdout='{"author":{"login":"synlynk-synlynk-dev[bot]"}}', stderr="",
+    )
     success_review = subprocess.CompletedProcess(args=["gh", "pr", "review"], returncode=0, stdout="", stderr="")
     success_merge = subprocess.CompletedProcess(args=["gh", "pr", "merge"], returncode=0, stdout="Merged", stderr="")
 
     with patch("synlynk.merge_oracle.require_merge_oracle", return_value={"merge_allowed": True}), \
          patch("synlynk.uxcore.rebase_pr_if_behind", return_value={"attempted": False}), \
-         patch("subprocess.run", side_effect=[success_review, success_merge]) as mock_run:
+         patch("subprocess.run", side_effect=[distinct_author, success_review, success_merge]) as mock_run:
         result = uxcore.approve_pr(pr_number=1475)
         assert result.ok is True
-        assert len(mock_run.call_args_list) == 2
-        review_call, merge_call = mock_run.call_args_list
+        assert len(mock_run.call_args_list) == 3
+        _, review_call, merge_call = mock_run.call_args_list
         assert review_call.args[0] == ["gh", "pr", "review", "1475", "--approve"]
         assert review_call.kwargs.get("env", {}).get("GH_TOKEN") == "fake-qa-token"
         assert merge_call.args[0] == ["gh", "pr", "merge", "1475", "--squash"]
@@ -3231,14 +3235,18 @@ def test_allow_distinct_qa_app_identities_to_submit_approving_pr_reviews(tmp_pat
         stderr="GraphQL: Can not approve your own pull request (approvePullRequest)",
     )
     success_comment = subprocess.CompletedProcess(args=["gh", "pr", "comment"], returncode=0, stdout="", stderr="")
+    same_author = subprocess.CompletedProcess(
+        args=["gh", "pr", "view"], returncode=0,
+        stdout='{"author":{"login":"synlynk-synlynk-qa[bot]"}}', stderr="",
+    )
     with patch("synlynk.merge_oracle.require_merge_oracle", return_value={"merge_allowed": True}), \
          patch("synlynk.uxcore.rebase_pr_if_behind", return_value={"attempted": False}), \
-         patch("subprocess.run", side_effect=[self_approve_fail, success_comment, success_merge]) as mock_run:
+         patch("subprocess.run", side_effect=[same_author, success_comment, success_merge]) as mock_run:
         result = uxcore.approve_pr(pr_number=1475)
         assert result.ok is True
         assert len(mock_run.call_args_list) == 3
-        review_call, comment_call, merge_call = mock_run.call_args_list
-        assert review_call.args[0] == ["gh", "pr", "review", "1475", "--approve"]
+        view_call, comment_call, merge_call = mock_run.call_args_list
+        assert view_call.args[0] == ["gh", "pr", "view", "1475", "--json", "author"]
         assert comment_call.args[0][:4] == ["gh", "pr", "comment", "1475"]
         assert "same-login collision review fallback" in comment_call.args[0][5]
         assert merge_call.args[0] == ["gh", "pr", "merge", "1475", "--squash"]
@@ -3252,11 +3260,11 @@ def test_allow_distinct_qa_app_identities_to_submit_approving_pr_reviews(tmp_pat
     )
     with patch("synlynk.merge_oracle.require_merge_oracle", return_value={"merge_allowed": True}), \
          patch("synlynk.uxcore.rebase_pr_if_behind", return_value={"attempted": False}), \
-         patch("subprocess.run", side_effect=[integration_fail, success_comment, success_merge]) as mock_run:
+         patch("subprocess.run", side_effect=[distinct_author, integration_fail, success_comment, success_merge]) as mock_run:
         result = uxcore.approve_pr(pr_number=1475)
         assert result.ok is True
-        assert len(mock_run.call_args_list) == 3
-        review_call, comment_call, merge_call = mock_run.call_args_list
+        assert len(mock_run.call_args_list) == 4
+        _, review_call, comment_call, merge_call = mock_run.call_args_list
         assert review_call.args[0] == ["gh", "pr", "review", "1475", "--approve"]
         assert comment_call.args[0][:4] == ["gh", "pr", "comment", "1475"]
         assert "credential/permission review fallback" in comment_call.args[0][5]
@@ -3269,11 +3277,11 @@ def test_allow_distinct_qa_app_identities_to_submit_approving_pr_reviews(tmp_pat
         stdout="",
         stderr="fatal: unable to access 'https://github.com/': Could not resolve host",
     )
-    with patch("subprocess.run", return_value=network_fail) as mock_run:
+    with patch("subprocess.run", side_effect=[distinct_author, network_fail]) as mock_run:
         result = uxcore.approve_pr(pr_number=1475)
         assert result.ok is False
         assert "Could not resolve host" in result.message
-        assert len(mock_run.call_args_list) == 1
+        assert len(mock_run.call_args_list) == 2
 
     # 6. Probe stale SOP repair: legacy #423 text without qa APPROVE default is detected as stale
     from synlynk.probe import _repair_sops_only
