@@ -1,5 +1,30 @@
 # synlynk Memory
 
+## Graphify AST Knowledge Graph Substrate, Multi-Repo Mesh & Spike Harness (decided/shipped 2026-09-15)
+- **Architectural Specification & Plan Approved:**
+  - `docs/superpowers/specs/2026-09-15-graphify-knowledge-graph-and-spike-harness.md`
+  - `docs/superpowers/plans/2026-09-15-graphify-knowledge-graph-and-spike-harness.md`
+- **Core Design Decisions:**
+  1. *Opt-in, JIT-Bound, Graceful Fallback Contract:* When `graphify` is absent from `PATH` or corrupted, all commands gracefully fallback to native Python AST discovery without crashing.
+  2. *License Isolation Invariant:* Apache-2.0 (`graphify`) and MIT (`synlynk`) process isolation maintained across CLI/JSON interfaces; zero direct code vendoring.
+  3. *Token Ceiling Guardrail:* Injected context packs strictly bounded to <= 1,500 tokens via `_cut_to_token_budget`.
+  4. *Offline & Zero-Cost Default:* AST extraction defaults to local Tree-sitter AST extraction (`--code-only`) without fee-bearing LLM multimodal extractions.
+  5. *Commit Staleness Anchor:* Compared `built_at_commit` against HEAD SHA to reliably detect graph staleness and surface amber warnings in Vizor Logical View.
+- **Shipped Components (PR #1579 & PR #1580, 68/68 tests passing):**
+  - Tool installer (`synlynk tool install graphify`, `synlynk/tool_installer.py`).
+  - AST extraction & cache integration (`synlynk/discovery.py`).
+  - Vizor Logical View (View 2) Graphify call-graph embed with D3 clustering (`synlynk/viz_views.py`, `synlynk/viz.py`).
+  - FTUE Onboarding recommendation and user guide (`synlynk/coldstart.py`, `docs/tools/graphify.md`).
+  - 4 materialized role skills (`.synlynk/skills/graphify-*`).
+  - Living charter adaptation and tool injection (`synlynk/charters.py`, `synlynk/agent_cli.py`).
+  - JIT AST context pack generator (`synlynk pack`, `synlynk/pack.py`) with Turn-1 prompt injection (`synlynk/dispatch.py`).
+  - Blast-radius impact calculator (`synlynk impact <symbol|file>`, `synlynk/impact.py`).
+  - Attested PR verification gate (`synlynk pr check --impact-attested`, `synlynk/pr_check.py`).
+  - Circular import detector & healer (`synlynk heal --cycles`, `synlynk/heal_cycles.py`).
+  - Federated multi-repo knowledge mesh (`synlynk mesh`, `synlynk/multirepo_graph.py`).
+  - Reusable empirical spike evaluation harness (`synlynk spike eval`, `synlynk/spike.py`).
+[@agy, @nikhilsoman]
+
 ## Universal Surface Expansion & Standalone Synlynk Cockpit Herdr Spec (decided 2026-09-14)
 - **Universal Surface Expansion for FTUE Onboarding (`v0.21.0`):**
   - Expanded Stage 1 surface binding beyond Cursor, Windsurf, and VS Code to natively support:
