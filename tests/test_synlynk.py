@@ -688,6 +688,21 @@ def test_build_subprocess_env_raises_without_resolvable_role():
         _build_subprocess_env("claude", {}, requires_gh_write=True, story_id=None, agent_role=None)
 
 
+def test_build_subprocess_env_fails_closed_without_role_from_nested_worktree(
+    monkeypatch, tmp_path
+):
+    from synlynk.dispatch import _build_subprocess_env
+
+    nested_worktree = tmp_path / "repo" / "worktrees" / "job-1584"
+    nested_worktree.mkdir(parents=True)
+    monkeypatch.chdir(nested_worktree)
+
+    with pytest.raises(RuntimeError, match="--requires-gh-write"):
+        _build_subprocess_env(
+            "claude", {}, requires_gh_write=True, story_id=None, agent_role=None
+        )
+
+
 def test_build_subprocess_env_dev_default_unchanged_when_gh_write_not_required(monkeypatch, tmp_path):
     from synlynk.dispatch import _build_subprocess_env
 

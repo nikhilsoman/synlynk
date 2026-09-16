@@ -57,6 +57,52 @@ def test_read_cached_installation_token_returns_fresh_token(monkeypatch, tmp_pat
     assert gh_auth.read_cached_installation_token("dev") == "fresh-token"
 
 
+def test_token_cache_defaults_to_repo_common_apps_dir_from_worktree(monkeypatch, tmp_path):
+    from synlynk import github_app_auth as gh_auth
+
+    common_apps_dir = tmp_path / "main-repo" / ".synlynk" / "github_apps"
+    worktree_dir = tmp_path / "worktrees" / "job-1584"
+    common_apps_dir.mkdir(parents=True)
+    worktree_dir.mkdir(parents=True)
+    monkeypatch.setattr(gh_auth, "_default_apps_dir", lambda: str(common_apps_dir))
+    monkeypatch.chdir(worktree_dir)
+
+    cache_path = common_apps_dir / "qa.token.json"
+    cache_path.write_text(json.dumps({
+        "token": "shared-worktree-token", "expires_at": time.time() + 300,
+    }))
+
+    assert gh_auth._role_token_cache_path("qa") == str(cache_path)
+    assert gh_auth.read_cached_installation_token("qa") == "shared-worktree-token"
+    assert not (worktree_dir / ".synlynk" / "github_apps" / "qa.token.json").exists()
+
+
+def test_refresh_installation_token_defaults_to_repo_common_apps_dir_from_worktree(
+    monkeypatch, tmp_path
+):
+    from synlynk import github_app_auth as gh_auth
+
+    common_apps_dir = tmp_path / "main-repo" / ".synlynk" / "github_apps"
+    worktree_dir = tmp_path / "worktrees" / "job-1584"
+    common_apps_dir.mkdir(parents=True)
+    worktree_dir.mkdir(parents=True)
+    monkeypatch.setattr(gh_auth, "_default_apps_dir", lambda: str(common_apps_dir))
+    monkeypatch.chdir(worktree_dir)
+    expires = time.time() + 3600
+    monkeypatch.setattr(
+        gh_auth, "_mint_installation_token",
+        lambda app_id, installation_id, private_key_path: ("shared-token", expires),
+    )
+
+    gh_auth.refresh_installation_token(
+        "qa", {"app_id": "1", "installation_id": "2", "private_key_path": "unused.pem"}
+    )
+
+    cache_path = common_apps_dir / "qa.token.json"
+    assert json.loads(cache_path.read_text())["token"] == "shared-token"
+    assert not (worktree_dir / ".synlynk" / "github_apps" / "qa.token.json").exists()
+
+
 def test_read_cached_installation_token_returns_none_when_stale(monkeypatch, tmp_path):
     from synlynk import github_app_auth as gh_auth
 
@@ -239,4 +285,3 @@ def test_refresh_installation_token_resolves_relative_pem_path_to_absolute(tmp_p
     assert len(minted_pem_paths) == 1
     assert os.path.isabs(minted_pem_paths[0])
     assert os.path.samefile(minted_pem_paths[0], pem_file)
-
