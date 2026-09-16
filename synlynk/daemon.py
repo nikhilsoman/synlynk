@@ -952,6 +952,29 @@ class SynlynkDaemon(WatchDaemon):
         except Exception as exc:
             log_telemetry_event({"event": "sre_heartbeat", "status": "degraded", "component": "autonomous_loop", "error": str(exc)})
 
+    def _run_capability_watch_tick(self, config: dict) -> None:
+        """Run due capability checks from the daemon cadence.
+
+        CLI startup also triggers this check, but a continuously running
+        daemon must provide the cadence when no interactive commands run.
+        """
+        conn = None
+        try:
+            from synlynk.capability_watch import maybe_trigger_staleness_checks
+
+            conn = _pkg("_get_db")()
+            maybe_trigger_staleness_checks(conn, config)
+        except Exception as exc:
+            _write_sentinel_alert(
+                "ERROR",
+                "CAPABILITY_WATCH_FAILED",
+                f"Daemon capability watch tick failed: {exc}. Check daemon.log and state.db.",
+                self.sentinel_path,
+            )
+        finally:
+            if conn is not None:
+                conn.close()
+
     def _prepare_start(self) -> None:
         watch_pid = _daemon_state_path("watch.pid")
         if os.path.exists(watch_pid):
@@ -1149,6 +1172,7 @@ class SynlynkDaemon(WatchDaemon):
             if self.autonomous and time.time() - self._last_autonomous_run >= max(interval, 60):
                 self._autonomous_tick()
                 self._last_autonomous_run = time.time()
+            self._run_capability_watch_tick(config)
             try:
                 _reconcile_daemon_jobs()
                 _dispatch_ready_jobs(max_parallel=max_parallel)

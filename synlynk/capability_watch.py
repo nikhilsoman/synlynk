@@ -17,6 +17,8 @@ import time
 import sqlite3
 from typing import Optional
 
+from synlynk.sentinel import _write_sentinel_alert
+
 
 def _now_iso() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
@@ -71,6 +73,29 @@ def mark_smoke_test_run(conn, green: bool) -> None:
     conn.commit()
 
 
+def _sentinel_path_for_db(conn) -> str:
+    """Return the workspace sentinel path for a capability-watch database."""
+    db_path = _db_path_for_conn(conn)
+    if db_path:
+        return os.path.join(os.path.dirname(os.path.dirname(db_path)), "sentinel.md")
+    return os.path.join(os.getcwd(), ".synlynk", "sentinel.md")
+
+
+def _record_check_failure(conn, code: str, detail: str) -> None:
+    """Make an automatic check failure visible even without a prior green run."""
+    try:
+        _write_sentinel_alert(
+            "ERROR",
+            code,
+            detail[:500],
+            sentinel_path=_sentinel_path_for_db(conn),
+        )
+    except Exception:
+        # The check's timestamp/result remains authoritative; sentinel writing
+        # must not prevent the watch from recording that the attempt happened.
+        pass
+
+
 def _run_free_probe(conn) -> None:
     """Runs the structural TC1-5 probe for every discovered agent."""
     from synlynk import discover_agents
@@ -86,6 +111,12 @@ def _run_free_probe(conn) -> None:
             check=False,
         )
         if result.returncode != 0:
+            _record_check_failure(
+                conn,
+                "AUTO_PROBE_FAILED",
+                f"Automatic capability probe failed (exit {result.returncode}): "
+                f"{(result.stderr or result.stdout or 'no output').strip()}",
+            )
             ok = False
             row = conn.execute(
                 "SELECT last_green_probe_at FROM capability_watch WHERE id = 1"
@@ -128,6 +159,12 @@ def _run_paid_smoke_test(conn) -> None:
         check=False,
     )
     if result.returncode != 0:
+        _record_check_failure(
+            conn,
+            "AUTO_SMOKE_TEST_FAILED",
+            f"Automatic live smoke test failed (exit {result.returncode}): "
+            f"{(result.stderr or result.stdout or 'no output').strip()}",
+        )
         row = conn.execute(
             "SELECT last_green_smoke_at FROM capability_watch WHERE id = 1"
         ).fetchone()

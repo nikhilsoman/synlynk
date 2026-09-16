@@ -145,6 +145,41 @@ def test_run_paid_smoke_test_classifies_failures(conn, tmp_path):
     assert call_kwargs["failing_path"] == "synlynk/selftest.py"
 
 
+def test_run_paid_smoke_test_writes_actionable_sentinel_on_failure(conn, tmp_path):
+    from synlynk.capability_watch import _run_paid_smoke_test
+
+    fake_result = type("R", (), {"returncode": 1, "stdout": "FAIL", "stderr": "boom"})()
+    with patch("synlynk.capability_watch.subprocess.run", return_value=fake_result), patch(
+        "synlynk.capability_watch._write_sentinel_alert"
+    ) as mock_alert:
+        _run_paid_smoke_test(conn)
+
+    mock_alert.assert_called_once()
+    args, kwargs = mock_alert.call_args
+    assert args[:2] == ("ERROR", "AUTO_SMOKE_TEST_FAILED")
+    assert "boom" in args[2]
+    assert kwargs["sentinel_path"].endswith("sentinel.md")
+
+
+def test_daemon_capability_watch_tick_runs_due_checks(tmp_path):
+    import synlynk.daemon as daemon_mod
+    from synlynk.daemon import SynlynkDaemon
+
+    db_path = tmp_path / "state.db"
+    conn = sqlite3.connect(str(db_path))
+    _migrate_db(conn)
+    daemon = SynlynkDaemon()
+    with patch.object(daemon_mod, "_pkg", side_effect=lambda name, default=None: {
+        "_get_db": lambda: conn,
+    }.get(name, default)), patch(
+        "synlynk.capability_watch.maybe_trigger_staleness_checks"
+    ) as mock_check:
+        daemon._run_capability_watch_tick({"auto_smoke_test": True})
+
+    mock_check.assert_called_once_with(conn, {"auto_smoke_test": True})
+    conn.close()
+
+
 def test_cli_main_does_not_crash_when_staleness_check_raises(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     with patch(
