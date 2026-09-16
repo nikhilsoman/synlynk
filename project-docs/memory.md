@@ -1,5 +1,7 @@
 # synlynk Memory
 
+- [@codex] QA merges must repair a mergeable `BEHIND` PR by rebasing onto fresh `origin/main` and using `git push --force-with-lease`; a conflicted or failed rebase blocks the merge, and `--admin` is prohibited for this path (#1604).
+
 ## Graphify AST Knowledge Graph Substrate, Multi-Repo Mesh & Spike Harness (decided/shipped 2026-09-15)
 - **Architectural Specification & Plan Approved:**
   - `docs/superpowers/specs/2026-09-15-graphify-knowledge-graph-and-spike-harness.md`
