@@ -198,3 +198,4 @@
 ## 2026-09-16 — Issue #914
 
 - Local implementation and targeted pytest verification; no external dispatch spend. Estimated task budget: $2.00.
+- CI compatibility follow-up and targeted regression verification; no external dispatch spend. Estimated incremental cost: $0.00.

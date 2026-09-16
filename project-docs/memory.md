@@ -630,6 +630,10 @@ flat-file reconciliation is serialized. [@codex]
 - Full design spec: `docs/superpowers/specs/2026-08-30-harness-agent-separation-design.md`.
 [@agy]
 
+## Issue #914 readiness checkpoint compatibility (2026-09-16)
+
+- [@nikhilsoman] Durable role App-material failures are folded into Point 1's existing `role_tokens` result; the readiness matrix keeps its four stable checkpoint IDs while doctor retains the dedicated durable-material guard.
+
 ## BS-6 Projection Engine (2026-09-11)
 - [@nikhilsoman] Task 1 adds refreshable SQLite projections for product, logical, and infra workspace views. Extractors return JSON-ready records and persist nodes, edges, and per-view metadata; filesystem extraction remains safe when scanner state is absent.
 
