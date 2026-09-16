@@ -202,6 +202,17 @@ def _hc_identity_roles() -> HealthCheck:
     """Diffs .synlynk/roles.yaml's declared roles against provisioned GitHub Apps."""
     from synlynk.identity_roles import load_declared_roles
 
+    from synlynk.readiness import check_durable_role_app_material
+
+    material = check_durable_role_app_material()
+    if material["status"] == "FAIL":
+        return HealthCheck(
+            "identity_roles",
+            "fail",
+            material["message"],
+            fix=material["remediation"],
+        )
+
     roles = load_declared_roles()
     missing = []
     for role in roles:
