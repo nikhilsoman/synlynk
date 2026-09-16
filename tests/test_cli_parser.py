@@ -85,6 +85,45 @@ def test_probe_harness_flag_new():
     assert args.harness == "codex"
 
 
+def test_milestone_runs_unattended_by_default(monkeypatch):
+    calls = []
+
+    import synlynk.launch_dag as launch_dag
+
+    monkeypatch.setattr(
+        launch_dag,
+        "cmd_run_dag",
+        lambda **kwargs: calls.append(kwargs),
+    )
+
+    cli_mod.main(["run", "--milestone", "v0.20.0"])
+
+    assert calls == [
+        {
+            "milestone": "v0.20.0",
+            "unattended": True,
+            "dag_view": False,
+            "dry_run": False,
+            "max_parallel": 4,
+        }
+    ]
+
+
+def test_run_and_launch_help_describe_unattended_default():
+    parser = cli_mod.build_parser()
+    run_help = parser.parse_args(["run"])  # parser construction remains valid
+    assert run_help.command == "run"
+    subparser_action = parser._subparsers._group_actions[0]
+    run_help_text = " ".join(subparser_action.choices["run"].format_help().split())
+    command_help = {
+        action.dest: action.help for action in subparser_action._choices_actions
+    }
+    assert "approved plans unattended via `synlynk run --milestone`" in command_help["run"]
+    assert "approved-plan execution is unattended" in run_help_text
+    assert "by default" in run_help_text
+    assert "approved plans run unattended via `synlynk run --milestone`" in command_help["launch"]
+
+
 def test_fast_cli_import_defers_command_graph():
     result = subprocess.run(
         [
