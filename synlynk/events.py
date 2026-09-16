@@ -332,6 +332,18 @@ def emit_awaiting_approval(story_id: str, action: str, reason: str,
     )
 
 
+def record_goal_suggestion(stage: str, outcome: str, criterion: str,
+                           *, story_id: str = None, spec_path: str = None,
+                           plan_path: str = None,
+                           emitted_by: str = "lifecycle_checkpoint") -> int:
+    """Record an advisory GOVERNS goal suggestion in the event ledger."""
+    payload = {"stage": stage, "outcome": outcome, "criterion": criterion}
+    for key, value in (("story_id", story_id), ("spec_path", spec_path), ("plan_path", plan_path)):
+        if value is not None:
+            payload[key] = value
+    return emit_event("goal_suggestion_shown", payload, emitted_by=emitted_by)
+
+
 def pending_events(harness_name: str, event_type: str) -> list:
     """Returns events of event_type with id greater than harness_name's checkpoint, oldest first."""
     from synlynk import _get_db

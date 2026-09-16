@@ -58,6 +58,28 @@ def test_pr_check_soft_warn_does_not_change_exit_code(project_dir):
         cmd_pr_check()
 
 
+def test_pr_check_warns_for_unlinked_pr_and_job(project_dir, capsys):
+    story_id = cmd_story_create(title="Tracked work")
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO capability_ratings "
+        "(story_id, agent, model_version, pr_number, quality, signal_source) "
+        "VALUES (?, 'codex', 'gpt-5', 1605, 8.0, 'human')", (story_id,),
+    )
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, story_id, status, enqueued_at) "
+        "VALUES ('job-1605', 'codex', 'implement', ?, 'done', '2026-09-16T00:00:00')", (story_id,),
+    )
+    conn.commit()
+    conn.close()
+    with patch("synlynk.pr_multiplier._is_github_remote", return_value=False):
+        cmd_pr_check()
+    captured = capsys.readouterr().out
+    assert "PR #1605" in captured
+    assert "job-1605" in captured
+    assert "soft-warn, not blocking" in captured
+
+
 def test_pr_check_blocks_on_red_qa_gate(project_dir):
     from synlynk.db import cmd_pr_check
 
