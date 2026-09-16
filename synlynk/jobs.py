@@ -227,6 +227,27 @@ def _check_instruction_receipt(log_text: str, expected_version: Optional[str]) -
     return "absent"
 
 
+def _instruction_receipt_is_trusted(
+    receipt_status: Optional[str],
+    expected_version: Optional[str],
+    *,
+    waived: bool = False,
+) -> bool:
+    """Return whether instruction loading is trusted for unattended merge.
+
+    A receipt is only evidence of the expected instruction file when it
+    matches the expected version.  In particular, an ``absent`` receipt is
+    not equivalent to a successful check when a version was expected; it can
+    be accepted only through an explicit waiver.  Jobs without an expected
+    version retain the legacy behavior because there is no claim to verify.
+    """
+    if not expected_version:
+        return True
+    if receipt_status == "ok":
+        return True
+    return receipt_status == "absent" and waived
+
+
 def _classify_task_delivery(receipt_status: Optional[str], has_corroborating_activity: bool) -> dict:
     """Combines a receipt-check result with git-activity evidence.
 
@@ -876,9 +897,25 @@ def _finalize_completed_worktree_job(job: dict, git_state: Optional[dict]) -> No
 def _apply_dispatch_gate(job: dict) -> None:
     """Runs the configured gate suite in job's worktree; downgrades status on failure.
 
+    Instruction receipts are checked before unattended completion so an untrusted
+    job cannot be finalized for an automatic merge.  A non-empty
+    ``instruction_receipt_waiver`` is the explicit operator waiver path.
     Also flags STALE_BASE when the job's stacked base branch has advanced since dispatch.
     """
     if job.get("status") != "completed":
+        return
+
+    expected_version = job.get("expected_instruction_version")
+    receipt_status = job.get("instruction_receipt")
+    waived = bool(job.get("instruction_receipt_waived") or job.get("instruction_receipt_waiver"))
+    if not _instruction_receipt_is_trusted(receipt_status, expected_version, waived=waived):
+        job["status"] = "instruction_receipt_untrusted"
+        job["instruction_receipt_gate"] = "waived" if waived else "blocked"
+        print(
+            f"  ⚠ job {job.get('id', '')} instruction receipt is untrusted "
+            f"(status={receipt_status!r}, expected={expected_version!r}) "
+            "— unattended completion/merge blocked"
+        )
         return
     load_config_fn = _pkg("load_config")
     config = load_config_fn() if load_config_fn else {}
@@ -1799,8 +1836,9 @@ def _reconcile_jobs_unlocked() -> None:
                         f"worktree left intact for inspection"
                     )
                 else:
-                    _finalize_completed_worktree_job(job, git_state)
                     _apply_dispatch_gate(job)
+                    if job.get("status") == "completed":
+                        _finalize_completed_worktree_job(job, git_state)
             task_sha256, task_preview = _task_sha256_and_preview(job.get("task"))
             summary = _pkg("_write_job_summary")(
                 job.get("id", ""),
@@ -2038,8 +2076,9 @@ def _reconcile_jobs_unlocked() -> None:
                         f"worktree left intact for inspection"
                     )
                 else:
-                    _finalize_completed_worktree_job(job, git_state)
                     _apply_dispatch_gate(job)
+                    if job.get("status") == "completed":
+                        _finalize_completed_worktree_job(job, git_state)
             check_token_bloat = _pkg("check_token_bloat")
             if check_token_bloat:
                 files_count = len(summary_files_touched) if isinstance(summary_files_touched, (list, tuple, set)) else int(summary_files_touched or 0)
