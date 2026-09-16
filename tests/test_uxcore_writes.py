@@ -144,6 +144,7 @@ def test_approve_pr_uses_comment_fallback_only_for_self_approval_failure(tmp_pat
     comment = type("Completed", (), {"returncode": 0, "stdout": "", "stderr": ""})()
     merge = type("Completed", (), {"returncode": 0, "stdout": "merged", "stderr": ""})()
     with patch("synlynk.merge_oracle.require_merge_oracle", return_value={"merge_allowed": True}), \
+         patch("synlynk.uxcore.rebase_pr_if_behind", return_value={"attempted": False}), \
          patch("subprocess.run", side_effect=[review, comment, merge]) as mock_run:
         result = uxcore.approve_pr(pr_number=1465)
 
