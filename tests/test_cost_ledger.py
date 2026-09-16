@@ -401,6 +401,12 @@ def test_log_has_permission_denied_signature_detects_genuine_denial():
     assert _log_has_permission_denied_signature(fixture) is True
 
 
+def test_log_has_permission_denied_signature_detects_grok_shell_denial():
+    assert _log_has_permission_denied_signature(
+        "Error: execution denied in headless sandbox"
+    ) is True
+
+
 def test_log_has_permission_denied_signature_ignores_denial_when_earlier_response_nonempty():
     fixture = (
         '{"conversation_id":"job-1","status":"SUCCESS","response":"did the work",'
@@ -1949,4 +1955,3 @@ def test_insert_cost_row_with_harness_and_agent_role(project_dir, monkeypatch):
     by_role = get_costs_by_agent_role()
     assert by_role.get("dev") == 0.035
     assert by_role.get("pm") == 0.075
-

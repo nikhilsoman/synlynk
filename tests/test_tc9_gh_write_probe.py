@@ -134,6 +134,42 @@ def test_doctor_prints_tc9_output(monkeypatch, capsys):
         assert "TC-9 gh-write: ✓ (direct_cli)" in captured
 
 
+def test_doctor_fails_when_grok_tc9_denies_shell(monkeypatch):
+    import synlynk
+    import synlynk.doctor as doctor
+
+    db = sqlite3.connect(":memory:")
+    _migrate_db(db)
+    passed = {"passed": True}
+    monkeypatch.setattr(synlynk, "_get_db", lambda: db)
+    monkeypatch.setattr(doctor, "_print_health_check_report", lambda checks: False)
+    monkeypatch.setattr(doctor, "find_nested_product_state_dbs", lambda path: [])
+    monkeypatch.setattr(doctor, "repo_has_any_core_instruction_file", lambda path: False)
+    monkeypatch.setattr(synlynk, "_run_tc0", lambda *args: {"passed": True, "schema_issues": []})
+    monkeypatch.setattr(synlynk, "_run_tc1", lambda *args: {"passed": True})
+    monkeypatch.setattr(synlynk, "_run_tc2", lambda *args: {"passed": True, "failed_flags": []})
+    monkeypatch.setattr(synlynk, "_run_tc3", lambda *args: {"passed": True, "unreachable": []})
+    monkeypatch.setattr(synlynk, "_run_tc4", lambda *args: {"passed": True, "failed_verbs": []})
+    monkeypatch.setattr(synlynk, "_run_tc5", lambda *args: {"passed": True, "missing": {}})
+    monkeypatch.setattr(synlynk, "_run_tc6", lambda *args: passed)
+    monkeypatch.setattr(
+        doctor,
+        "_run_tc9",
+        lambda *args, **kwargs: {
+            "passed": False,
+            "can_gh_write": False,
+            "mechanism": "sandbox_denied",
+            "error": "Grok headless dispatch sandbox denies shell execution",
+        },
+    )
+
+    args = MagicMock(fix=None, agent="grok", live_probe=False)
+    try:
+        assert doctor.cmd_doctor(args=args) == 1
+    finally:
+        db.close()
+
+
 def test_get_harness_gh_write_capability():
     from synlynk.probe import _get_harness_gh_write_capability
 
