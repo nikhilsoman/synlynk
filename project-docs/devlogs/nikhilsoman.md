@@ -1501,3 +1501,14 @@ implementation plan.
 - Verified PR #1573 already fixes the false `already running` path by excluding the starter PID from health checks and validating child liveness after spawn.
 - Added `test_watch_status_cleans_dead_pid_and_start_succeeds` to cover dead pidfile cleanup, stopped status, and successful restart.
 - Targeted verification: `python -m pytest tests/test_daemon_liveness_1572.py tests/test_daemon_token_refresh.py` — 24 passed.
+
+## 2026-09-16 — Issue #914 durable role App-material guard
+
+- Added a local doctor/readiness hard-fail for durable workspace roles lacking nested GitHub App material when policy declares `gh_write` routing.
+- Added regression tests for missing and present role-scoped material; `pytest -q tests/test_doctor_identity_roles.py tests/test_readiness_matrix.py` — 19 passed.
+- Cross-repo App scope remains parked; no Apps or GitHub settings were provisioned or changed.
+
+## 2026-09-16 — Issue #914 CI readiness compatibility follow-up
+
+- Preserved the readiness matrix's Point 1 key as `role_tokens` while retaining durable App-material failure details and remediation.
+- Scoped durable-material evaluation away from isolated custom token fixtures; `pytest -q tests/test_readiness_matrix.py tests/test_doctor_identity_roles.py` — 20 passed.

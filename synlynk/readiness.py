@@ -18,13 +18,150 @@ _DIM = "\033[2m"
 _RESET = "\033[0m"
 
 
-def check_point_1_role_tokens(apps_dir: Optional[str] = None) -> Dict[str, Any]:
+def _policy_requires_gh_write(repo_root: Optional[str]) -> bool:
+    """Return whether the repo policy declares a GitHub-write route."""
+    if not repo_root:
+        repo_root = os.getcwd()
+    policy_path = os.path.join(repo_root, ".synlynk", "policy.json")
+    try:
+        with open(policy_path, "r", encoding="utf-8") as f:
+            policy = json.load(f)
+    except (OSError, ValueError):
+        return False
+
+    def contains_gh_write(value: Any) -> bool:
+        if isinstance(value, dict):
+            return any(key == "gh_write" or contains_gh_write(item) for key, item in value.items())
+        if isinstance(value, list):
+            return any(contains_gh_write(item) for item in value)
+        return False
+
+    return contains_gh_write(policy)
+
+
+def _declared_durable_roles() -> List[str]:
+    """Return active role slugs whose canonical charter is durable."""
+    try:
+        from synlynk import agent_store, charter_schema
+
+        durable = []
+        for entry in agent_store.list_agents():
+            if entry.get("disabled"):
+                continue
+            role = next(
+                (alias.get("value") for alias in entry.get("aliases", [])
+                 if alias.get("kind") == "role_slug"),
+                None,
+            )
+            if not role:
+                continue
+            charter, _revision = agent_store.read_charter(entry.get("agent_id", ""))
+            frontmatter, _body = charter_schema.split_frontmatter(charter)
+            metadata = charter_schema.parse_frontmatter(frontmatter or "")
+            if metadata.get("durability") == "durable" and role not in durable:
+                durable.append(role)
+        return durable
+    except Exception:
+        # A missing/unreadable durable-agent registry should not turn this
+        # targeted material check into a false positive.
+        return []
+
+
+def check_durable_role_app_material(
+    apps_dir: Optional[str] = None,
+    *,
+    repo_root: Optional[str] = None,
+    gh_write_required: Optional[bool] = None,
+) -> Dict[str, Any]:
+    """Check App material for durable roles when GitHub writes are configured.
+
+    App material is intentionally checked in the role-scoped directory created
+    by the provisioning flow (``github_apps/<role>``). Token-only files do not
+    satisfy this check because they cannot authenticate a GitHub App.
+    """
+    if repo_root is None:
+        repo_root = os.getcwd()
+    if apps_dir is None:
+        apps_dir = os.path.join(repo_root, ".synlynk", "github_apps")
+    if gh_write_required is None:
+        gh_write_required = _policy_requires_gh_write(repo_root)
+
+    durable_roles = _declared_durable_roles()
+    if not gh_write_required or not durable_roles:
+        return {
+            "key": "durable_role_app_material",
+            "name": "Durable Role App Material",
+            "status": "PASS",
+            "message": "No durable-role GitHub App material is required",
+            "details": {"gh_write_required": bool(gh_write_required), "roles": durable_roles},
+            "remediation": "",
+        }
+
+    missing = []
+    for role in durable_roles:
+        role_dir = os.path.join(apps_dir, role)
+        has_material = os.path.isdir(role_dir) and any(
+            os.path.isfile(os.path.join(role_dir, filename))
+            and (filename.endswith(".app.json") or filename.endswith(".private-key.pem") or filename.endswith(".pem"))
+            for filename in os.listdir(role_dir)
+        ) if os.path.isdir(role_dir) else False
+        if not has_material:
+            missing.append(role)
+
+    if not missing:
+        status = "PASS"
+        message = f"GitHub App material present for durable role(s): {', '.join(durable_roles)}"
+        remediation = ""
+    else:
+        status = "FAIL"
+        message = f"Missing GitHub App material for durable role(s): {', '.join(missing)}"
+        remediation = "Provision role Apps with `synlynk identity init --role <role>`"
+    return {
+        "key": "durable_role_app_material",
+        "name": "Durable Role App Material",
+        "status": status,
+        "message": message,
+        "details": {"gh_write_required": True, "roles": durable_roles, "missing": missing},
+        "remediation": remediation,
+    }
+
+
+def _with_durable_role_app_material(
+    result: Dict[str, Any],
+    apps_dir: Optional[str],
+    repo_root: Optional[str],
+) -> Dict[str, Any]:
+    """Apply the durable-material failure without renaming Point 1."""
+    material = check_durable_role_app_material(apps_dir, repo_root=repo_root)
+    if material["status"] != "FAIL":
+        return result
+
+    details = dict(result.get("details") or {})
+    details["durable_role_app_material"] = material["details"]
+    return {
+        **result,
+        "status": "FAIL",
+        "message": f"{result['message']}; {material['message']}",
+        "details": details,
+        "remediation": material["remediation"],
+    }
+
+
+def check_point_1_role_tokens(
+    apps_dir: Optional[str] = None, *, repo_root: Optional[str] = None
+) -> Dict[str, Any]:
     """Point 1: Verify GitHub App role tokens and expiration."""
+    using_default_apps_dir = apps_dir is None
     if apps_dir is None:
         apps_dir = os.path.join(".synlynk", "github_apps")
 
+    # Custom app directories are used by callers/tests as isolated token
+    # fixtures. Only apply the repo-scoped durable-material guard when the
+    # default directory is used or a repo root was explicitly supplied.
+    check_material = repo_root is not None or using_default_apps_dir
+
     if not os.path.exists(apps_dir):
-        return {
+        result = {
             "key": "role_tokens",
             "name": "Point 1: Role Token Validity",
             "status": "WARN",
@@ -32,6 +169,7 @@ def check_point_1_role_tokens(apps_dir: Optional[str] = None) -> Dict[str, Any]:
             "details": {},
             "remediation": "Configure roles with `synlynk join` or in Vizor Role Studio",
         }
+        return _with_durable_role_app_material(result, apps_dir, repo_root) if check_material else result
 
     now = time.time()
     roles_found = {}
@@ -72,7 +210,7 @@ def check_point_1_role_tokens(apps_dir: Optional[str] = None) -> Dict[str, Any]:
             expired_roles.append(role_name)
 
     if not roles_found:
-        return {
+        result = {
             "key": "role_tokens",
             "name": "Point 1: Role Token Validity",
             "status": "WARN",
@@ -80,9 +218,10 @@ def check_point_1_role_tokens(apps_dir: Optional[str] = None) -> Dict[str, Any]:
             "details": roles_found,
             "remediation": "Mint role tokens via `synlynk join` or Vizor Role Studio",
         }
+        return _with_durable_role_app_material(result, apps_dir, repo_root) if check_material else result
 
     if expired_roles and not valid_roles:
-        return {
+        result = {
             "key": "role_tokens",
             "name": "Point 1: Role Token Validity",
             "status": "FAIL",
@@ -90,9 +229,10 @@ def check_point_1_role_tokens(apps_dir: Optional[str] = None) -> Dict[str, Any]:
             "details": roles_found,
             "remediation": "Run `synlynk daemon` or refresh tokens with `synlynk join`",
         }
+        return _with_durable_role_app_material(result, apps_dir, repo_root) if check_material else result
 
     if expired_roles:
-        return {
+        result = {
             "key": "role_tokens",
             "name": "Point 1: Role Token Validity",
             "status": "WARN",
@@ -100,8 +240,9 @@ def check_point_1_role_tokens(apps_dir: Optional[str] = None) -> Dict[str, Any]:
             "details": roles_found,
             "remediation": "Refresh expired tokens via daemon or `synlynk join`",
         }
+        return _with_durable_role_app_material(result, apps_dir, repo_root) if check_material else result
 
-    return {
+    result = {
         "key": "role_tokens",
         "name": "Point 1: Role Token Validity",
         "status": "PASS",
@@ -109,6 +250,7 @@ def check_point_1_role_tokens(apps_dir: Optional[str] = None) -> Dict[str, Any]:
         "details": roles_found,
         "remediation": "",
     }
+    return _with_durable_role_app_material(result, apps_dir, repo_root) if check_material else result
 
 
 def check_point_2_sandbox_egress(host: str = "api.github.com", port: int = 443, timeout: float = 3.0) -> Dict[str, Any]:
@@ -264,7 +406,8 @@ def check_point_4_git_shim(shim_path: Optional[str] = None, env_path: Optional[s
 def evaluate_readiness_matrix(repo_root: Optional[str] = None) -> Dict[str, Any]:
     """Evaluate all 4 readiness checkpoints."""
     p1 = check_point_1_role_tokens(
-        apps_dir=os.path.join(repo_root, ".synlynk", "github_apps") if repo_root else None
+        apps_dir=os.path.join(repo_root, ".synlynk", "github_apps") if repo_root else None,
+        repo_root=repo_root,
     )
     p2 = check_point_2_sandbox_egress()
     p3 = check_point_3_policy_authority(repo_path=repo_root)

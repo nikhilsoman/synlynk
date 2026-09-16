@@ -77,6 +77,10 @@
 
 ## Safe Fleet Parity Migration Engine & Readiness Bugfix (decided/shipped 2026-09-12)
 - **Point 3 Policy Authority Bug Resolved (`synlynk/readiness.py`, `tests/test_readiness_matrix.py`):** Fixed a false-positive `WARN` in `check_point_3_policy_authority()` where 2-tier policy files wrapping authority definitions inside an `"overrides"` key failed inspection. Updated logic to inspect both top-level and `"overrides"`-nested keys (`dev_authority`, `task_allocation`, `merge_authority`) and verified schema versioning. Added unit test `test_point_3_policy_authority_valid_overrides`; all 12 readiness tests pass.
+
+## Workspace identity guard (#914, 2026-09-16)
+
+- [@nikhilsoman] Kept cross-repo App scope parked and added a local doctor/readiness hard-fail when a policy requiring `gh_write` has an active durable role without App material in `.synlynk/github_apps/<role>/`. No provisioning or GitHub org changes are part of this slice.
 - **Architectural Design Spec Approved (`docs/superpowers/specs/2026-09-12-safe-fleet-parity-migration-engine-design.md`):** Formulated Approach A (Worktree-Isolated Shadow Parity Engine with `_hc_fleet_parity` doctor check) and In-Browser Role Provisioning Wizard (`synlynk viz` localhost:27472 GitHub App manifest flow for `pm`, `tpm`, `qa`, `dev`, `architect`, `marketing`), integrating Claude's RxCC retrospective feedback and 8-repo fleet audit findings.
 - **Decision Recorded (`project-docs/decisions/2026-09-12-safe-declarative-parity-migration-engine.md`):** Consensus between Codex and Agy to enforce non-destructive directive preservation, stack-aware CI protection, recursive `**/.synlynk/*` gitignore rules, and in-worktree validation before PR generation. [@agy, @codex]
 - **Shipped Parity Engine & Upgrades (`synlynk/parity.py`, PR #1563):** Implemented stack detection (Node/Go/Python/Rust), directive AST fence injection preserving 100% of user content, `synlynk heal --parity`, `_hc_fleet_parity` doctor check, and `/onboarding/roles` in-browser wizard. Successfully upgraded `cc-videoreframing`, `playblazer-ng`, and `hitchcock` in shadow worktrees without touching main. [@agy]
@@ -625,6 +629,10 @@ flat-file reconciliation is serialized. [@codex]
 - Database lock safety: `synlynk/db.py` guards `_normalize_org_domain_drift` updates with row-existence checks, eliminating same-thread SQLite deadlocks during nested dispatches.
 - Full design spec: `docs/superpowers/specs/2026-08-30-harness-agent-separation-design.md`.
 [@agy]
+
+## Issue #914 readiness checkpoint compatibility (2026-09-16)
+
+- [@nikhilsoman] Durable role App-material failures are folded into Point 1's existing `role_tokens` result; the readiness matrix keeps its four stable checkpoint IDs while doctor retains the dedicated durable-material guard.
 
 ## BS-6 Projection Engine (2026-09-11)
 - [@nikhilsoman] Task 1 adds refreshable SQLite projections for product, logical, and infra workspace views. Extractors return JSON-ready records and persist nodes, edges, and per-view metadata; filesystem extraction remains safe when scanner state is absent.

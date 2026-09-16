@@ -11,6 +11,7 @@ from synlynk.readiness import (
     format_readiness_table,
     cmd_doctor_readiness,
     check_point_1_role_tokens,
+    check_durable_role_app_material,
     check_point_2_sandbox_egress,
     check_point_3_policy_authority,
     check_point_4_git_shim,
@@ -47,6 +48,62 @@ def test_point_1_role_tokens_valid_flat(tmp_path):
     res = check_point_1_role_tokens(apps_dir=str(apps_dir))
     assert res["status"] == "PASS"
     assert "pm" in res["details"]
+
+
+def test_durable_role_app_material_fails_when_gh_write_required(tmp_path, monkeypatch):
+    from synlynk import agent_store
+
+    monkeypatch.setattr(
+        agent_store,
+        "list_agents",
+        lambda: [{"agent_id": "dev-primary", "aliases": [{"kind": "role_slug", "value": "dev"}]}],
+    )
+    monkeypatch.setattr(agent_store, "read_charter", lambda _agent_id: ("---\ndurability: durable\n---\n", 1))
+    result = check_durable_role_app_material(
+        str(tmp_path / "apps"), gh_write_required=True
+    )
+    assert result["status"] == "FAIL"
+    assert result["details"]["missing"] == ["dev"]
+
+
+def test_durable_role_app_material_passes_with_nested_app_file(tmp_path, monkeypatch):
+    from synlynk import agent_store
+
+    monkeypatch.setattr(
+        agent_store,
+        "list_agents",
+        lambda: [{"agent_id": "dev-primary", "aliases": [{"kind": "role_slug", "value": "dev"}]}],
+    )
+    monkeypatch.setattr(agent_store, "read_charter", lambda _agent_id: ("---\ndurability: durable\n---\n", 1))
+    app_dir = tmp_path / "apps" / "dev"
+    app_dir.mkdir(parents=True)
+    (app_dir / "dev.app.json").write_text("{}")
+    result = check_durable_role_app_material(str(tmp_path / "apps"), gh_write_required=True)
+    assert result["status"] == "PASS"
+
+
+def test_point_1_preserves_role_tokens_key_when_durable_material_is_missing(tmp_path, monkeypatch):
+    from synlynk import agent_store
+    import time
+
+    monkeypatch.setattr(
+        agent_store,
+        "list_agents",
+        lambda: [{"agent_id": "dev-primary", "aliases": [{"kind": "role_slug", "value": "dev"}]}],
+    )
+    monkeypatch.setattr(agent_store, "read_charter", lambda _agent_id: ("---\ndurability: durable\n---\n", 1))
+    monkeypatch.setattr("synlynk.readiness._policy_requires_gh_write", lambda _repo_root: True)
+    apps_dir = tmp_path / "apps"
+    apps_dir.mkdir()
+    (apps_dir / "dev.token.json").write_text(json.dumps({"expires_at": time.time() + 3600}))
+
+    result = check_point_1_role_tokens(
+        apps_dir=str(apps_dir), repo_root=str(tmp_path)
+    )
+
+    assert result["key"] == "role_tokens"
+    assert result["status"] == "FAIL"
+    assert "durable_role_app_material" in result["details"]
 
 
 def test_point_2_sandbox_egress_success():

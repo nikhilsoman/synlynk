@@ -69,3 +69,8 @@
 ### Daemon liveness Wave 1 (#1588)
 
 - [x] Verified #1573's false-`already running` fix and added the dead-PID status/start regression test; targeted daemon tests pass.
+
+### Workspace identity slice (#914)
+
+- [ ] Cross-repo App scope remains parked; the local durable-role App-material doctor/readiness guard is tracked by the child PR for #914.
+- [x] Readiness CI compatibility: Point 1 retains the `role_tokens` checkpoint ID while reporting durable App-material failures.
