@@ -102,6 +102,8 @@ def cmd_capability_sweep(cost_cap_override: float = None) -> None:
         raise SystemExit(1)
 
     _run_sweep(discovered, _CALIBRATION_SKILLS)
+    from synlynk.capability_watch import mark_capability_sweep_run
+    mark_capability_sweep_run(_get_db())
 
 
 def _pick_verifier_harness(executor_harness: str, available_harnesses: list) -> str:
