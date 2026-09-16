@@ -2953,6 +2953,28 @@ def cmd_story_done(story_id: str) -> None:
     print(f"  {_GREEN}✓{_RESET} Story {story_id} marked done")
 
 
+def mark_story_done_after_merge(story_id: str, pr_number=None) -> bool:
+    """Mark the story linked to a successfully merged PR as done.
+
+    Merge callers invoke this only after GitHub confirms the merge.  Keeping
+    the state transition here reuses the canonical ``cmd_story_done`` path,
+    including its lifecycle event and goal linkage behavior.
+    """
+    if not story_id:
+        return False
+    from synlynk import _get_db
+
+    conn = _get_db()
+    exists = conn.execute(
+        "SELECT 1 FROM stories WHERE story_id=?", (story_id,)
+    ).fetchone()
+    conn.close()
+    if not exists:
+        return False
+    cmd_story_done(story_id)
+    return True
+
+
 def _find_ticket(story_id: str, action: str, status: str) -> dict | None:
     """Returns the approval_tickets row matching (story_id, action, status), or None."""
     from synlynk import _get_db
