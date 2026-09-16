@@ -1,5 +1,12 @@
 # Codex Devlog
 
+## 2026-09-16 - Unattended stacked-PR rebase (#1604)
+
+- Added a mocked `BEHIND`/`MERGEABLE` PR repair helper that fetches `origin/main`, rebases cleanly, and force-pushes with lease; conflicts abort without pushing.
+- Wired the helper into the QA merge path and removed the `--admin` merge flag.
+- Verification: 143 tests passed, 1 skipped across the modified test files.
+[@codex]
+
 ## 2026-09-09 - PR #1518 QA follow-up
 
 - Serialized local capability-envelope seeding and the final local dispatch

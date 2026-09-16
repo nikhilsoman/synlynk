@@ -1,5 +1,9 @@
 # Cost Log
 
+## 2026-09-16 - C7 unattended stacked-PR rebase (#1604)
+
+- Codex implementation and focused verification; estimated operation cost: $2.00.
+
 ## 2026-09-15 / 2026-09-16 — Graphify AST Knowledge Graph Substrate, Multi-Repo Mesh & Marketing Sync (PR #1579, #1580)
 - Interactive Conductor: Agy (Gemini 2.5 Flash / Pro).
 - Dispatched and orchestrated 12 bite-sized implementation tasks across Codex, Grok, Agy, and Claude harnesses using Subagent-Driven Development (SDD).
