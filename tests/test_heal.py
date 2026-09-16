@@ -23,3 +23,13 @@ def test_auto_merge_reaps_worktree_after_successful_merge():
         run.return_value.stdout = ""
         assert _auto_merge([{"pr_number": 12}], [{"passed": True}]) == ["12"]
     reap.assert_called_once_with(os.getcwd(), branch="feat/merged")
+
+
+def test_auto_merge_does_not_reach_gh_merge_when_role_is_unauthorized():
+    with patch("synlynk.heal._merged_pr_branch", return_value="feat/blocked"), \
+         patch("synlynk.policy_cli.cmd_policy_check_merge", return_value=1) as check_merge, \
+         patch("synlynk.heal.subprocess.run") as run:
+        assert _auto_merge([{"pr_number": 12}], [{"passed": True}], role="dev") == []
+
+    check_merge.assert_called_once_with(role="dev")
+    assert not any("merge" in call.args[0] for call in run.call_args_list)

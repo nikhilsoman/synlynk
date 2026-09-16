@@ -103,6 +103,17 @@ def test_approve_pr_does_not_merge_when_behind_rebase_fails(tmp_path, monkeypatc
     assert result.ok is False
     assert "rebase conflicted" in result.message
     rebase.assert_called_once()
+
+
+def test_approve_pr_does_not_reach_gh_merge_when_role_is_unauthorized(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    review = type("Completed", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+    with patch("synlynk.policy_cli.cmd_policy_check_merge", return_value=1) as check_merge, \
+         patch("subprocess.run", return_value=review) as mock_run:
+        result = uxcore.approve_pr(pr_number=715, role="dev")
+
+    assert result.ok is False
+    check_merge.assert_called_once_with(role="dev")
     assert not any("merge" in call.args[0] for call in mock_run.call_args_list)
 
 
