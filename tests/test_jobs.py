@@ -1221,6 +1221,69 @@ def test_maybe_open_worktree_pr_does_not_skip_for_changed_requires_gh_write_work
     assert pr_number == 99
 
 
+def test_finalize_completed_worktree_job_records_created_pr_as_gh_write_effect(
+    tmp_path, monkeypatch
+):
+    import subprocess
+    import synlynk.jobs as jobs_mod
+
+    worktree_path = tmp_path / "repo"
+    worktree_path.mkdir()
+    executed = []
+
+    class FakeConn:
+        def execute(self, sql, params=()):
+            executed.append((sql, params))
+
+        def commit(self):
+            pass
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(jobs_mod, "_worktree_path_is_available", lambda *a: True)
+    monkeypatch.setattr(jobs_mod, "_job_has_real_work_landed", lambda state: True)
+    monkeypatch.setattr(
+        jobs_mod,
+        "_resolve_finalize_worktree_branch",
+        lambda job, path: "feat/effect-truth",
+    )
+    monkeypatch.setattr(
+        jobs_mod.subprocess,
+        "run",
+        lambda cmd, **kwargs: subprocess.CompletedProcess(cmd, 0, stdout="", stderr=""),
+    )
+    monkeypatch.setattr(jobs_mod, "_push_worktree_branch_if_needed", lambda *a, **k: None)
+    monkeypatch.setattr(jobs_mod, "_maybe_open_worktree_pr", lambda *a: 1576)
+
+    real_pkg = jobs_mod._pkg
+    monkeypatch.setattr(
+        jobs_mod,
+        "_pkg",
+        lambda name, default=None: (lambda: FakeConn()) if name == "_get_db" else real_pkg(name, default),
+    )
+
+    job = {
+        "id": "job-effect-truth",
+        "story_id": "story-effect-truth",
+        "requires_gh_write": True,
+        "gh_write_target": "issue:1587",
+        "gh_write_expect": "pr_open",
+        "worktree_path": str(worktree_path),
+        "worktree_branch": "dispatch/codex/job-effect-truth",
+    }
+
+    jobs_mod._finalize_completed_worktree_job(job, {"dirty": False, "commits_ahead": 1})
+
+    assert job["gh_write_target"] == "pr:1576"
+    assert job["gh_write_expect"] == "pr_open"
+    assert any(
+        "UPDATE daemon_jobs SET gh_write_target=?, gh_write_expect=?" in sql
+        and params == ("pr:1576", "pr_open", "job-effect-truth")
+        for sql, params in executed
+    )
+
+
 def test_maybe_open_worktree_pr_injects_role_app_token(tmp_path, monkeypatch):
     """#1436 Hole A: parent gh pr create must use the job role App token, not host gh."""
     import subprocess
