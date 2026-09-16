@@ -92,7 +92,8 @@ def test_approve_pr_runs_gh_commands(tmp_path, monkeypatch):
 
 def test_approve_pr_marks_story_done_after_merge(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    with patch("subprocess.run") as mock_run, \
+    with patch("synlynk.merge_oracle.require_merge_oracle", return_value={"merge_allowed": True}), \
+         patch("subprocess.run") as mock_run, \
          patch("synlynk.db.mark_story_done_after_merge") as mark_done:
         mock_run.return_value.returncode = 0
         mock_run.return_value.stdout = ""
