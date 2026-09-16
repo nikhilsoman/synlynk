@@ -944,6 +944,44 @@ def test_apply_dispatch_gate_leaves_status_completed_when_no_gate_configured(pro
     assert job.get("suite_result") is None
 
 
+def test_apply_dispatch_gate_blocks_untrusted_instruction_receipt(project_dir, monkeypatch, capsys):
+    import synlynk.jobs as jobs_mod
+    import synlynk as sl
+
+    monkeypatch.setattr(jobs_mod, "_pkg", lambda name, default=None: {"load_config": sl.load_config}.get(name, default))
+    job = {
+        "id": "job-instruction-gate",
+        "status": "completed",
+        "expected_instruction_version": "0.18.0",
+        "instruction_receipt": "absent",
+    }
+
+    jobs_mod._apply_dispatch_gate(job)
+
+    assert job["status"] == "instruction_receipt_untrusted"
+    assert job["instruction_receipt_gate"] == "blocked"
+    assert "unattended completion/merge blocked" in capsys.readouterr().out
+
+
+def test_apply_dispatch_gate_accepts_explicit_instruction_receipt_waiver(project_dir, monkeypatch):
+    import synlynk.jobs as jobs_mod
+    import synlynk as sl
+
+    monkeypatch.setattr(jobs_mod, "_pkg", lambda name, default=None: {"load_config": sl.load_config}.get(name, default))
+    job = {
+        "id": "job-instruction-waived",
+        "status": "completed",
+        "expected_instruction_version": "0.18.0",
+        "instruction_receipt": "absent",
+        "instruction_receipt_waiver": "operator verified legacy harness",
+    }
+
+    jobs_mod._apply_dispatch_gate(job)
+
+    assert job["status"] == "completed"
+    assert "instruction_receipt_gate" not in job
+
+
 def test_apply_dispatch_gate_flags_stale_base(project_dir, monkeypatch):
     import synlynk
     import synlynk.jobs as jobs_mod
