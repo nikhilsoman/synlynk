@@ -98,7 +98,7 @@ Specialist `frontend-qa.json` has `"canonical": false`, `"kind": "qa"`, and `rep
 
 ## 5. Provisioning and adding a repo
 
-**Create type (once per product):** existing manifest flow (`synlynk identity init`), but App name is `synlynk-<product>-<type>` and files land in the **product** store, not the repo. Human still completes GitHub’s install click (cannot be fully scripted).
+**Create type (once per product):** W5 splits this. `synlynk type create` writes the type registry + charter (**no** App). `synlynk identity init --type <id>` then mints the App into the **product** store (`synlynk-<product>-<type>`). Human still completes GitHub’s install click (cannot be fully scripted). Do not run `identity init` for an id that is missing from `types.yaml`.
 
 **Add repo to an existing type:** do **not** run `identity init` again. Open or API-update the installation’s repository list, then update `repos[]` in the product json. PM-scoped when agent creation is PM-owned (W0); until then, the operator who holds the PEM.
 

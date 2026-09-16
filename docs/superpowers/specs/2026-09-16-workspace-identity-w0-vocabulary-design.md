@@ -152,7 +152,7 @@ GitHub auto-merge stays **off**.
 | **W2** | Work graph inside a product (issues stay in-repo; GOVERNS/epic spans repos; costs tagged `repo_id` + type) | W0, W1 |
 | **W3** | Shared Projects v2 / Vizor board per product | W0, W2 |
 | **W4** | Members and member-dispatch (`synlynk join`; humans dispatch types) | W0, W1, W6 |
-| **W5** | Specialization mechanics (declaring a type, charter files, skills/tools attach) | W0 |
+| **W5** | Specialization mechanics (declaring a type, charter files, skills/tools attach) — **specified** in `2026-09-17-workspace-identity-w5-specialization-design.md` | W0 |
 | **W6** | Policy / blast radius / receipts; swarm **write** policy (review vs merge) | W0, W1 |
 | **W7** | Runtime + surfaces (swarm identity, doctor/wizard “add repo to this product”) | W1, W6 |
 

@@ -2,9 +2,9 @@
 
 **Goal going in (previous work):** Control-plane trust on a *single* repo: jobs record real PRs, qa-gate+CI merge, non-author qa App, stories close, worktrees reap. Epic #1581 landed 22/23 children; #914 (workspace-level identities) stayed OPEN on purpose.
 
-**Shift in this PR:** #914 is foundational for Teams, multi-repo products, and member-dispatch, but it is not one ticket. This PR does **not** implement multi-repo Apps. It records **W0** — locked vocabulary and authority — so later specs do not invent a second identity system.
+**Shift in this PR:** #914 is foundational for Teams, multi-repo products, and member-dispatch, but it is not one ticket. This PR does **not** implement multi-repo Apps or `synlynk type`. It records **W0** vocabulary, **W1** PEM home, and **W5** how a specialist type is declared — so later specs do not invent a second identity system.
 
-**What shipped:** `docs/superpowers/specs/2026-09-16-workspace-identity-w0-vocabulary-design.md`. Product ≠ repo topology; agent **type** vs ephemeral **worker**; charter (constant) vs context pack (tpm-sharded, ephemeral); install surface vs work surface; canonical `qa` as sole train merger; specialists as `kind: qa` with their own App and charter; swarm = N workers × 1 type × N packs, not N Apps. No code.
+**What shipped:** W0 `2026-09-16-workspace-identity-w0-vocabulary-design.md`; W1 `2026-09-16-workspace-identity-w1-install-secrets-design.md`; W5 `2026-09-17-workspace-identity-w5-specialization-design.md`. Product ≠ repo topology; type vs worker; charter vs pack; product-store Apps (A now) and types (`types.yaml` + `types/<id>/{charter,memory}.md`); two-step `type create` then `identity init --type`; kind-inherit skill deltas; canonical `qa` sole train merger. No code.
 
 **Brainstorm:** chat 2026-09-16 on #914; no companion HTML this slice (vocabulary, not topology diagrams).
 
@@ -12,4 +12,4 @@
 
 **Also in this PR:** W1 install/secrets — PEMs live in `~/.synlynk/workspaces/<product>/github_apps/` now (approach A). PEM-less members (approach C) wait for Teams/W4.
 
-**New goalpost:** Review W0+W1 on PR; next brainstorm is W5 (declaring a specialist type) or W6 (swarm write/blast radius), still no identity-init code until a plan.
+**New goalpost:** Review W0+W1+W5 on PR #1647; next brainstorm is **W6** (policy, blast radius, swarm review vs merge). Still no identity-init / `type create` code until a plan. #914 stays OPEN.
