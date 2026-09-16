@@ -112,6 +112,22 @@ def test_check_instruction_receipt_empty():
     assert jobs_mod._check_instruction_receipt("some log", None) is None
 
 
+def test_instruction_receipt_absent_is_not_trusted_for_unattended_merge():
+    import synlynk.jobs as jobs_mod
+
+    assert jobs_mod._instruction_receipt_is_trusted("absent", "0.13.0") is False
+    assert jobs_mod._instruction_receipt_is_trusted("absent", "0.13.0", waived=True) is True
+
+
+def test_instruction_receipt_trust_requires_expected_version_match():
+    import synlynk.jobs as jobs_mod
+
+    assert jobs_mod._instruction_receipt_is_trusted("ok", "0.13.0") is True
+    assert jobs_mod._instruction_receipt_is_trusted("mismatch", "0.13.0", waived=True) is False
+    assert jobs_mod._instruction_receipt_is_trusted("none", "0.13.0", waived=True) is False
+    assert jobs_mod._instruction_receipt_is_trusted(None, None) is True
+
+
 def test_classify_task_delivery_hard_fail_when_no_marker_and_no_activity():
     import synlynk.jobs as jobs_mod
 
@@ -926,6 +942,44 @@ def test_apply_dispatch_gate_leaves_status_completed_when_no_gate_configured(pro
 
     assert job["status"] == "completed"
     assert job.get("suite_result") is None
+
+
+def test_apply_dispatch_gate_blocks_untrusted_instruction_receipt(project_dir, monkeypatch, capsys):
+    import synlynk.jobs as jobs_mod
+    import synlynk as sl
+
+    monkeypatch.setattr(jobs_mod, "_pkg", lambda name, default=None: {"load_config": sl.load_config}.get(name, default))
+    job = {
+        "id": "job-instruction-gate",
+        "status": "completed",
+        "expected_instruction_version": "0.18.0",
+        "instruction_receipt": "absent",
+    }
+
+    jobs_mod._apply_dispatch_gate(job)
+
+    assert job["status"] == "instruction_receipt_untrusted"
+    assert job["instruction_receipt_gate"] == "blocked"
+    assert "unattended completion/merge blocked" in capsys.readouterr().out
+
+
+def test_apply_dispatch_gate_accepts_explicit_instruction_receipt_waiver(project_dir, monkeypatch):
+    import synlynk.jobs as jobs_mod
+    import synlynk as sl
+
+    monkeypatch.setattr(jobs_mod, "_pkg", lambda name, default=None: {"load_config": sl.load_config}.get(name, default))
+    job = {
+        "id": "job-instruction-waived",
+        "status": "completed",
+        "expected_instruction_version": "0.18.0",
+        "instruction_receipt": "absent",
+        "instruction_receipt_waiver": "operator verified legacy harness",
+    }
+
+    jobs_mod._apply_dispatch_gate(job)
+
+    assert job["status"] == "completed"
+    assert "instruction_receipt_gate" not in job
 
 
 def test_apply_dispatch_gate_flags_stale_base(project_dir, monkeypatch):
