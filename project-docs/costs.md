@@ -194,3 +194,7 @@
 ## 2026-09-16 — Issue #1588
 
 - Local verification and regression-test addition; no external dispatch spend. Estimated task budget: $2.00.
+
+## 2026-09-16 — Issue #914
+
+- Local implementation and targeted pytest verification; no external dispatch spend. Estimated task budget: $2.00.
