@@ -1838,6 +1838,8 @@ def main(argv=None) -> None:
                 limit=getattr(args, "limit", 100),
             )
             print(f"✓ Ingested {res['ingested']} backlog items ({res['fetched']} fetched, {res['duplicates']} duplicates skipped).")
+            for item in res.get("items", []):
+                print(f"  - {item['item_id']}: goal {item.get('goal_id') or 'ungoverned'}")
         elif args.backlog_action == "triage":
             from synlynk.backlog import triage_backlog
             triaged = triage_backlog(auto_promote=getattr(args, "auto_promote", False))
