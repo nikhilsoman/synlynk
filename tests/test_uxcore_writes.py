@@ -80,7 +80,8 @@ def test_dispatch_denied_for_viewer(tmp_path, monkeypatch):
 
 def test_approve_pr_runs_gh_commands(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    with patch("subprocess.run") as mock_run:
+    with patch("synlynk.merge_oracle.require_merge_oracle", return_value={"merge_allowed": True}), \
+         patch("subprocess.run") as mock_run:
         mock_run.return_value.returncode = 0
         mock_run.return_value.stdout = ""
         result = uxcore.approve_pr(pr_number=715)
@@ -115,7 +116,8 @@ def test_approve_pr_uses_comment_fallback_only_for_self_approval_failure(tmp_pat
     })()
     comment = type("Completed", (), {"returncode": 0, "stdout": "", "stderr": ""})()
     merge = type("Completed", (), {"returncode": 0, "stdout": "merged", "stderr": ""})()
-    with patch("subprocess.run", side_effect=[review, comment, merge]) as mock_run:
+    with patch("synlynk.merge_oracle.require_merge_oracle", return_value={"merge_allowed": True}), \
+         patch("subprocess.run", side_effect=[review, comment, merge]) as mock_run:
         result = uxcore.approve_pr(pr_number=1465)
 
     assert result.ok is True

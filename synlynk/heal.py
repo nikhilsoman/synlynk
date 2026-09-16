@@ -56,6 +56,10 @@ def _auto_merge(stories: list[dict], verdicts: list[dict]) -> list[str]:
         if not pr:
             continue
         branch = _merged_pr_branch(str(pr))
+        from synlynk.merge_oracle import require_merge_oracle
+        oracle = require_merge_oracle(pr_number=int(pr), role="qa")
+        if not oracle["merge_allowed"]:
+            continue
         result = subprocess.run(["gh", "pr", "merge", str(pr), "--squash", "--delete-branch"],
                                 capture_output=True, text=True, check=False)
         if result.returncode == 0:
