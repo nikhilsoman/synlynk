@@ -306,6 +306,7 @@ def _format_status_terminal(
     json_output: bool = False,
     rates_updated_at: Optional[str] = None,
     worktree_hint: Optional[dict] = None,
+    capability_reassessment: Optional[dict] = None,
 ) -> str:
     """Format status output for terminal or JSON consumers."""
     agents = [r["harness_name"] for r in harness_rows] or sorted(HARNESS_CAPABILITY_BASELINES)
@@ -325,6 +326,7 @@ def _format_status_terminal(
             "sentinels_active": sentinels_active,
             "rates_updated_at": rates_updated_at,
             "worktrees": worktree_hint or {"local": 0, "stale_hint": 0},
+            "capability_reassessment": capability_reassessment or {},
         }
         return json.dumps(payload, indent=2)
 
@@ -383,7 +385,7 @@ def _format_status_terminal(
 def cmd_status(db_conn=None, json_output: bool = False) -> str:
     """Print ecosystem status for the current workspace."""
     from synlynk import _get_db, _read_sentinel_alerts, load_config
-    from synlynk.capability_watch import is_smoke_test_stale
+    from synlynk.capability_watch import capability_sweep_status, is_smoke_test_stale
     from synlynk.costs import _load_model_rates
     from synlynk.worktree import _worktree_status_hint
 
@@ -407,6 +409,7 @@ def cmd_status(db_conn=None, json_output: bool = False) -> str:
     sentinels_active = len(_read_sentinel_alerts())
     rates_updated_at = _load_model_rates().get("rates_updated_at")
     worktree_hint = _worktree_status_hint()
+    reassessment = capability_sweep_status(db_conn)
     output = _format_status_terminal(
         harness_rows,
         cycle_map,
@@ -416,9 +419,15 @@ def cmd_status(db_conn=None, json_output: bool = False) -> str:
         json_output=json_output,
         rates_updated_at=rates_updated_at,
         worktree_hint=worktree_hint,
+        capability_reassessment=reassessment,
     )
     if not json_output:
         extra_lines = []
+        if reassessment["overdue"]:
+            extra_lines.append(
+                "⚠ capability sweep overdue - run `synlynk capability sweep` "
+                f"({reassessment['jobs_since_sweep']} jobs since last sweep)"
+            )
         if is_smoke_test_stale(db_conn, threshold_days=7):
             extra_lines.append(
                 "⚠ smoke test overdue - run `synlynk selftest --live` or enable `auto_smoke_test` in config"
