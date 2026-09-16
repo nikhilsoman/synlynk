@@ -5,6 +5,7 @@ import pytest
 from synlynk.worktree_prune import (
     find_patch_equivalent_sibling_branches,
     prune_sibling_branches,
+    reap_merged_worktree,
 )
 
 
@@ -97,3 +98,44 @@ def test_prune_removes_worktree_and_branch(tmp_path):
 
     branches = subprocess.run(["git", "branch"], cwd=repo_dir, capture_output=True, text=True, check=True).stdout
     assert "feat/wt-branch" not in branches
+
+
+def test_reap_merged_worktree_sweeps_nested_job_worktrees(tmp_path):
+    repo_dir = _setup_prune_repo(tmp_path)
+    parent_dir = str(tmp_path / "parent")
+    subprocess.run(["git", "worktree", "add", parent_dir, "-b", "feat/parent", "main"],
+                   cwd=repo_dir, check=True, capture_output=True)
+    (tmp_path / "parent" / "parent.txt").write_text("parent")
+    subprocess.run(["git", "add", "parent.txt"], cwd=parent_dir, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "parent"], cwd=parent_dir, check=True, capture_output=True)
+    subprocess.run(["git", "merge", "--squash", "feat/parent"], cwd=repo_dir, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "merge parent"], cwd=repo_dir, check=True, capture_output=True)
+
+    nested_dir = str(tmp_path / "parent" / "worktrees" / "job-nested")
+    subprocess.run(["git", "worktree", "add", nested_dir, "-b", "dispatch/codex/job-nested", "main"],
+                   cwd=repo_dir, check=True, capture_output=True)
+    (tmp_path / "parent" / "worktrees" / "job-nested" / "nested.txt").write_text("nested")
+    subprocess.run(["git", "add", "nested.txt"], cwd=nested_dir, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "nested"], cwd=nested_dir, check=True, capture_output=True)
+    subprocess.run(["git", "merge", "--squash", "dispatch/codex/job-nested"], cwd=repo_dir, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "merge nested"], cwd=repo_dir, check=True, capture_output=True)
+
+    reaped = reap_merged_worktree(repo_dir, branch="feat/parent", target_branch="main")
+    assert reaped == ["dispatch/codex/job-nested", "feat/parent"]
+    assert not (tmp_path / "parent").exists()
+
+
+def test_reap_merged_worktree_preserves_dirty_tree(tmp_path):
+    repo_dir = _setup_prune_repo(tmp_path)
+    wt_dir = str(tmp_path / "dirty")
+    subprocess.run(["git", "worktree", "add", wt_dir, "-b", "feat/dirty", "main"],
+                   cwd=repo_dir, check=True, capture_output=True)
+    (tmp_path / "dirty" / "change.txt").write_text("change")
+    subprocess.run(["git", "add", "change.txt"], cwd=wt_dir, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "change"], cwd=wt_dir, check=True, capture_output=True)
+    subprocess.run(["git", "merge", "--squash", "feat/dirty"], cwd=repo_dir, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "merge dirty"], cwd=repo_dir, check=True, capture_output=True)
+    (tmp_path / "dirty" / "uncommitted.txt").write_text("keep")
+
+    assert reap_merged_worktree(repo_dir, branch="feat/dirty", target_branch="main") == []
+    assert (tmp_path / "dirty").exists()
