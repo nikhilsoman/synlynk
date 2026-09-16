@@ -64,6 +64,8 @@ def _auto_merge(stories: list[dict], verdicts: list[dict]) -> list[str]:
                                 capture_output=True, text=True, check=False)
         if result.returncode == 0:
             merged.append(str(pr))
+            from synlynk.db import mark_story_done_after_merge
+            mark_story_done_after_merge(story.get("story_id"), pr_number=pr)
             try:
                 from synlynk.worktree_prune import reap_merged_worktree
                 reap_merged_worktree(os.getcwd(), branch=branch)
