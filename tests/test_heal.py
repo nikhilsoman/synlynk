@@ -1,6 +1,8 @@
 import os
 from unittest.mock import patch
 
+import synlynk
+from synlynk.db import cmd_story_create
 from synlynk.heal import _diagnostics, _auto_merge
 
 
@@ -23,3 +25,22 @@ def test_auto_merge_reaps_worktree_after_successful_merge():
         run.return_value.stdout = ""
         assert _auto_merge([{"pr_number": 12}], [{"passed": True}]) == ["12"]
     reap.assert_called_once_with(os.getcwd(), branch="feat/merged")
+
+
+def test_auto_merge_marks_linked_story_done(project_dir):
+    story_id = cmd_story_create("merged story")
+    with patch("synlynk.heal._merged_pr_branch", return_value="feat/merged"), \
+         patch("synlynk.heal.subprocess.run") as run, \
+         patch("synlynk.worktree_prune.reap_merged_worktree"):
+        run.return_value.returncode = 0
+        run.return_value.stdout = ""
+        assert _auto_merge(
+            [{"story_id": story_id, "pr_number": 12}], [{"passed": True}]
+        ) == ["12"]
+
+    conn = synlynk._get_db()
+    status = conn.execute(
+        "SELECT status FROM stories WHERE story_id=?", (story_id,)
+    ).fetchone()[0]
+    conn.close()
+    assert status == "done"
