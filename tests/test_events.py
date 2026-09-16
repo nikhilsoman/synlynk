@@ -1,7 +1,7 @@
 import json
 import sqlite3
 import pytest
-from synlynk.events import emit_event, pending_events, advance_checkpoint, scan_local_events
+from synlynk.events import emit_event, pending_events, advance_checkpoint, scan_local_events, record_goal_suggestion
 
 
 def test_approval_tickets_table_exists(project_dir):
@@ -53,6 +53,23 @@ def test_emit_awaiting_approval_event_recorded(project_dir):
     assert '"story-1"' in row[1]
     assert '"release_cut"' in row[1]
     assert '"named_release"' in row[1]
+
+
+def test_record_goal_suggestion_writes_telemetry_event(project_dir):
+    event_id = record_goal_suggestion(
+        "spec_approved", "Ship the feature", "All acceptance checks pass",
+        story_id="story-123", spec_path="docs/superpowers/specs/feature.md",
+    )
+    import synlynk
+    conn = synlynk._get_db()
+    row = conn.execute(
+        "SELECT event_type, payload_json, emitted_by FROM events WHERE id=?", (event_id,)
+    ).fetchone()
+    conn.close()
+    assert row[0] == "goal_suggestion_shown"
+    assert json.loads(row[1])["stage"] == "spec_approved"
+    assert json.loads(row[1])["story_id"] == "story-123"
+    assert row[2] == "lifecycle_checkpoint"
 
 
 def test_pending_events_returns_only_events_after_checkpoint(project_dir):

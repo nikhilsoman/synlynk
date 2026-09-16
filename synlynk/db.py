@@ -3614,11 +3614,37 @@ def cmd_pr_check(pr_number=None, impact_attested: bool = False) -> None:
         "  SELECT story_id FROM goal_contributions WHERE link_status='linked'"
         ")"
     ).fetchall()
+    unlinked_prs = conn2.execute(
+        "SELECT DISTINCT cr.pr_number, cr.story_id FROM capability_ratings cr "
+        "LEFT JOIN stories s ON s.story_id = cr.story_id "
+        "WHERE cr.pr_number IS NOT NULL AND s.goal_id IS NULL "
+        "AND cr.story_id NOT IN ("
+        "  SELECT story_id FROM goal_contributions WHERE link_status='linked'"
+        ") ORDER BY cr.pr_number"
+    ).fetchall()
+    unlinked_jobs = conn2.execute(
+        "SELECT DISTINCT dj.job_id, dj.story_id FROM daemon_jobs dj "
+        "LEFT JOIN stories s ON s.story_id = dj.story_id "
+        "WHERE dj.story_id IS NOT NULL AND s.goal_id IS NULL "
+        "AND dj.story_id NOT IN ("
+        "  SELECT story_id FROM goal_contributions WHERE link_status='linked'"
+        ") ORDER BY dj.job_id"
+    ).fetchall()
     conn2.close()
+    if unlinked_story_ids or unlinked_prs or unlinked_jobs:
+        print("\n  ⚠ [PR CHECK] Work with no linked GOVERNS goal (soft-warn, not blocking):")
+    if unlinked_prs:
+        print("    PRs:")
+        for pr_number_value, story_id in unlinked_prs:
+            print(f"      PR #{pr_number_value} ({story_id})")
+    if unlinked_jobs:
+        print("    Jobs:")
+        for job_id, story_id in unlinked_jobs:
+            print(f"      {job_id} ({story_id})")
     if unlinked_story_ids:
-        print("\n  ⚠ [PR CHECK] Stories with no linked GOVERNS goal (soft-warn, not blocking):")
+        print("    Stories:")
         for (story_id,) in unlinked_story_ids:
-            print(f"    {story_id}")
+            print(f"      {story_id}")
         print("  Link with: synlynk goal link <story-id> --goal <goal-id>\n")
     devlog_findings = cmd_audit_docs(json_output=False)
     if devlog_findings:
