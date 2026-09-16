@@ -1,5 +1,13 @@
 # Cost Log
 
+## 2026-09-15 / 2026-09-16 — Graphify AST Knowledge Graph Substrate, Multi-Repo Mesh & Marketing Sync (PR #1579, #1580)
+- Interactive Conductor: Agy (Gemini 2.5 Flash / Pro).
+- Dispatched and orchestrated 12 bite-sized implementation tasks across Codex, Grok, Agy, and Claude harnesses using Subagent-Driven Development (SDD).
+- Verified AST extraction with graceful fallback, JIT token budget clipping (<= 1,500 tokens), blast-radius impact analysis, circular dependency healing, multi-repo mesh aggregation, and spike evaluation harness.
+- PR #1579 reviewed and squash-merged by `synlynk-synlynk-qa`.
+- Post-merge CI workflow unblock and Milestone v0.22.0 roadmap sync via PR #1580 squash-merged by `synlynk-synlynk-qa`.
+- Dispatched verification jobs via Codex (`job-9fb41832`, `job-5898c0fe`). Total dispatch spend ~$0.10.
+
 ## 2026-09-14 — Universal Surface Expansion (Warp, Antigravity, Replit, Emergent) & Herdr Cockpit Spec
 - Interactive Conductor: Agy (Gemini 2.5 Pro / Flash).
 - Architectural design and spec/plan updates for FTUE Onboarding v0.21.0 adding Warp, Antigravity, Replit, and Emergent.
