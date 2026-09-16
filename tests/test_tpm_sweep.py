@@ -24,6 +24,29 @@ def test_run_sweep_pass_advances_authorized_story(isolated_db, project_dir):
     assert summary["parked"] == 0
 
 
+def test_run_sweep_pass_selects_ready_story_and_dispatches_it(isolated_db, project_dir):
+    cmd_story_create(title="not ready", story_id="story-draft")
+    ready_story_id = cmd_story_create(title="ready story", story_id="story-ready")
+    cmd_story_ready(ready_story_id)
+
+    with patch("synlynk.tpm_sweep.check_authority") as mock_auth, \
+            patch("synlynk.tpm_sweep.dispatch_agent") as mock_dispatch:
+        mock_auth.return_value = MagicMock(allowed=True, requires_approval=False)
+        mock_dispatch.return_value = {"id": "job-ready", "agent": "codex"}
+
+        summary = run_sweep_pass()
+
+    assert summary == {"advanced": 1, "parked": 0, "failed": 0}
+    mock_dispatch.assert_called_once_with(
+        "codex",
+        "ready story",
+        story_id="story-ready",
+        task_type="implement",
+        context_mode="full",
+        role="dev",
+    )
+
+
 def test_run_sweep_pass_routes_marketing_role_to_agy(isolated_db, project_dir):
     story_id = cmd_story_create(title="write blog post", story_id="story-5", role="marketing")
     cmd_story_ready(story_id)
