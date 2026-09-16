@@ -1598,6 +1598,7 @@ def _format_prompt_for_agent(agent: str, context_text: str, story_id: str,
                               cwd_hint: Optional[str] = None,
                               task_sha256: Optional[str] = None,
                               instruction_file: Optional[str] = None,
+                              role: Optional[str] = None,
                               *, requires_gh_write: bool = False) -> str:
     """Returns a prompt formatted for the agent's preferred input style."""
     requires_gh_write = bool(
@@ -1615,6 +1616,19 @@ def _format_prompt_for_agent(agent: str, context_text: str, story_id: str,
             context_text = f"{context_text}\n\n{pack_text}" if context_text else pack_text
     except Exception:
         pass
+    if role:
+        try:
+            from synlynk.charter_injection import render_charter_section
+
+            charter_section = render_charter_section(repo_path=repo_root, role=role)
+            charter_header = f"## Role Charter ({role},"
+            if charter_section and charter_header not in context_text:
+                context_text = (
+                    f"{charter_section}{context_text}" if context_text else charter_section
+                )
+        except Exception:
+            # Keep legacy workspaces dispatchable before agent-store adoption.
+            pass
     story_ref = f"\n\n## Story / Task Reference\nStory ID: {story_id}" if story_id else ""
     gh_write_instruction = ""
     if requires_gh_write:
@@ -3261,6 +3275,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             cwd_hint=worktree_path,
             task_sha256=task_sha256_for_receipt,
             instruction_file=instruction_file,
+            role=resolved_agent_role,
             requires_gh_write=requires_gh_write,
         )
     except TypeError:

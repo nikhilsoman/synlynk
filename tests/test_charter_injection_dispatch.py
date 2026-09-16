@@ -98,6 +98,20 @@ def test_task_context_includes_charter(project_dir, monkeypatch, isolated_db):
     assert "This agent owns dev tasks and execution." in context_str
 
 
+def test_format_prompt_for_agent_includes_live_charter_for_role(project_dir, monkeypatch):
+    """The final dispatch prompt contains the role's agent-store charter body."""
+    _init_workspace_agents(project_dir, monkeypatch)
+    from synlynk.dispatch import _format_prompt_for_agent
+
+    for role in ("pm", "dev", "qa"):
+        prompt = _format_prompt_for_agent(
+            "codex", "", "story-101", "run the task", "", "",
+            cwd_hint=str(project_dir), role=role,
+        )
+        assert f"## Role Charter ({role}, revision 1)" in prompt
+        assert f"This agent owns {role} tasks and execution." in prompt
+
+
 def test_dispatch_agent_populates_charter_metadata_and_context(project_dir, monkeypatch, isolated_db):
     """dispatch_agent includes charter in context and populates job dict metadata."""
     _init_workspace_agents(project_dir, monkeypatch)
