@@ -182,3 +182,7 @@
   - `synlynk/spike.py`: Reusable spike evaluation engine & empirical receipt generator (`synlynk spike eval`)
 - 58 unit and integration tests across 12 test suites passing 100% green; zero external fee-bearing dispatch spend.
 - Branch pushed cleanly to `origin/feat/agy/graphify-knowledge-graph-and-spike-harness`.
+
+## 2026-09-16 — Issue #1588
+
+- Local verification and regression-test addition; no external dispatch spend. Estimated task budget: $2.00.

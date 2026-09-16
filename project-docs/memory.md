@@ -801,3 +801,8 @@ work because local git activity is not sufficient corroboration.
   - **Reusable Spike Harness (`synlynk spike eval`):** Automated A/B benchmarking engine and standardized markdown evaluation receipts.
 - **Verification:** 58/58 tests passing across 12 test suites, zero-failure fallback verified, and 178 regression tests passing green.
 [@agy]
+
+## Daemon liveness follow-up (#1588, 2026-09-16)
+
+- [@nikhilsoman] Treat #1573 as the fix baseline; #1588 requires an explicit user-visible regression proof rather than another daemon implementation change.
+- [@nikhilsoman] The proof is a dead `watch.pid` reporting stopped, stale pidfile cleanup, and a subsequent start spawning successfully without `already running`.
