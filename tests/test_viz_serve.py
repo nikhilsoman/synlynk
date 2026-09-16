@@ -277,6 +277,17 @@ def test_handle_approve_routes_through_uxcore():
     assert result["ok"] is True
 
 
+def test_handle_approve_passes_story_id_to_merge_path():
+    from synlynk.viz import VizorHandler
+
+    handler = VizorHandler.__new__(VizorHandler)
+    with patch("synlynk.uxcore.approve_pr") as mock_approve:
+        mock_approve.return_value = MagicMock(ok=True, message="merged", job_id=None)
+        result = handler._handle_approve({"pr_number": 715, "story_id": "story-715"})
+    mock_approve.assert_called_once_with(pr_number=715, story_id="story-715")
+    assert result["ok"] is True
+
+
 def test_handle_kill_routes_through_uxcore():
     from synlynk.viz import VizorHandler
 

@@ -530,7 +530,8 @@ def dispatch(agent: str, task: str, actor: Optional[Actor] = None, **flags) -> W
     return _execute_write("dispatch", actor, _op, agent=agent, task=task, flags=flags)
 
 
-def approve_pr(pr_number: int, actor: Optional[Actor] = None, role: str = "qa") -> WriteResult:
+def approve_pr(pr_number: int, actor: Optional[Actor] = None, role: str = "qa",
+               story_id: Optional[str] = None) -> WriteResult:
     """Approve and squash-merge a PR via gh. qa APPROVE (`gh pr review --approve`)
     is the default when reviewer and author identities differ; comment-checklist only
     on same-login collision or credential/permission fallback (see #423)."""
@@ -597,6 +598,9 @@ def approve_pr(pr_number: int, actor: Optional[Actor] = None, role: str = "qa") 
         merge = subprocess.run(
             ["gh", "pr", "merge", pr, "--squash"], capture_output=True, text=True, env=env
         )
+        if merge.returncode == 0 and story_id:
+            from synlynk.db import mark_story_done_after_merge
+            mark_story_done_after_merge(story_id, pr_number=pr)
         return {"ok": merge.returncode == 0, "message": merge.stdout or merge.stderr}
 
     return _execute_write("approve_pr", actor, _op, pr_number=pr_number, role=role)

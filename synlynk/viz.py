@@ -5880,7 +5880,10 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
     def _handle_approve(self, payload: dict) -> dict:
         from synlynk import uxcore
 
-        result = uxcore.approve_pr(pr_number=payload["pr_number"])
+        approve_kwargs = {"pr_number": payload["pr_number"]}
+        if payload.get("story_id"):
+            approve_kwargs["story_id"] = payload["story_id"]
+        result = uxcore.approve_pr(**approve_kwargs)
         return {"ok": result.ok, "message": result.message, "job_id": result.job_id}
 
     def _handle_approve_request(self):
