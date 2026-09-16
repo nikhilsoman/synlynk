@@ -12,6 +12,7 @@ from synlynk.platform_ops import (
     format_platform_report,
     _is_sentinel_critical_line,
     _parse_sentinel_line_ts,
+    aggregate_dispatch_context,
 )
 
 
@@ -114,6 +115,33 @@ def test_format_platform_report_includes_context_mode_rollup():
     assert "by_context_mode=" in text
     assert "pct=" in text
     assert "context_bytes=" in text
+
+
+def test_aggregate_dispatch_context_splits_success_and_cost():
+    jobs = [
+        {"job_id": "home-ok", "dispatch_context": "home", "status": "done"},
+        {"job_id": "home-fail", "dispatch_context": "home", "status": "failed"},
+        {"job_id": "headless-ok", "dispatch_context": "headless", "status": "completed"},
+        {"job_id": "legacy", "dispatch_context": None, "status": "done"},
+    ]
+    costs = [
+        {"job_id": "home-ok", "dispatch_context": "unknown", "cost": 1.25},
+        {"job_id": "home-fail", "dispatch_context": "home", "cost": 0.25},
+        {"job_id": "headless-ok", "dispatch_context": "headless", "cost": 2.0},
+        {"job_id": "unlinked", "dispatch_context": None, "cost": 0.5},
+    ]
+
+    result = aggregate_dispatch_context(jobs, costs)
+
+    assert result["home"] == {
+        "jobs": 2, "success": 1, "failed": 1, "success_rate": 0.5, "cost_usd": 1.5,
+    }
+    assert result["headless"] == {
+        "jobs": 1, "success": 1, "failed": 0, "success_rate": 1.0, "cost_usd": 2.0,
+    }
+    assert result["unknown"] == {
+        "jobs": 1, "success": 1, "failed": 0, "success_rate": 1.0, "cost_usd": 0.5,
+    }
 
 
 # --- #751 windowed sentinel_crit -------------------------------------------------
