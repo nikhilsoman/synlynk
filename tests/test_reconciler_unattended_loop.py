@@ -299,3 +299,51 @@ def test_launch_dag_unattended_escalation_on_reserved_gate(isolated_db, monkeypa
 
     ready_ids = {n.node_id for n in dag.get_ready_nodes()}
     assert "impl:s-indep" in ready_ids
+
+
+def test_launch_dag_reserved_gate_skips_only_blocked_branch(isolated_db, monkeypatch):
+    """Each reserved gate parks its branch while independent siblings continue."""
+    from synlynk.launch_dag import LaunchDAG
+
+    gate_contexts = [
+        "Spec approval required",
+        "Irreversible release requires approval",
+        "Unresolvable test failure",
+        "Breaking architecture requires approval",
+    ]
+    escalations = []
+
+    def fake_escalate(story_id, context, decision_required, options, assignee):
+        escalations.append((story_id, context, assignee))
+        return f"https://github.com/nikhilsoman/synlynk/issues/{len(escalations)}"
+
+    monkeypatch.setattr("synlynk.launch_dag.raise_escalation_ticket", fake_escalate)
+
+    stories = []
+    for index, context in enumerate(gate_contexts):
+        stories.extend([
+            {"story_id": f"gate-{index}", "title": context, "depends_on": []},
+            {"story_id": f"gate-child-{index}", "title": "Dependent work", "depends_on": [f"gate-{index}"]},
+            {"story_id": f"sibling-{index}", "title": "Independent work", "depends_on": []},
+        ])
+
+    dag = LaunchDAG()
+    dag.build_from_stories(stories)
+
+    for index, context in enumerate(gate_contexts):
+        dag.escalate_node(
+            f"impl:gate-{index}",
+            context=context,
+            decision_required="Human decision required",
+            options=["Approve", "Reject"],
+            assignee="nikhilsoman",
+        )
+
+    ready_ids = {node.node_id for node in dag.get_ready_nodes()}
+    for index in range(len(gate_contexts)):
+        assert f"impl:gate-{index}" not in ready_ids
+        assert f"impl:gate-child-{index}" not in ready_ids
+        assert f"impl:sibling-{index}" in ready_ids
+    assert [(story_id, assignee) for story_id, _, assignee in escalations] == [
+        (f"gate-{index}", "nikhilsoman") for index in range(len(gate_contexts))
+    ]
