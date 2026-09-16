@@ -3576,6 +3576,16 @@ def cmd_pr_check(pr_number=None, impact_attested: bool = False) -> None:
             if pr_number is not None and _qa_gate_mode() == "merge-restricted-classes":
                 changed_files = _gh_pr_changed_files(pr_number)
                 if is_docs_only_change(changed_files):
+                    from synlynk.merge_oracle import require_merge_oracle
+                    oracle = require_merge_oracle(
+                        pr_number=pr_number,
+                        role="qa",
+                        pr_check=lambda _: (True, "synlynk pr check passed"),
+                        qa_gate=lambda _: gate,
+                    )
+                    if not oracle["merge_allowed"]:
+                        conn.close()
+                        raise SystemExit(1)
                     print(
                         f"  {_GREEN}✓{_RESET} docs-only PR, qa gate green — qa merging directly "
                         "(merge-restricted-classes)"

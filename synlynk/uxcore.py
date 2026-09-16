@@ -586,6 +586,10 @@ def approve_pr(pr_number: int, actor: Optional[Actor] = None, role: str = "qa") 
             )
             if comment.returncode != 0:
                 return {"ok": False, "message": comment.stdout or comment.stderr}
+        from synlynk.merge_oracle import require_merge_oracle
+        oracle = require_merge_oracle(pr_number=int(pr), role=op_role)
+        if not oracle["merge_allowed"]:
+            return {"ok": False, "message": oracle["reason"]}
         merge = subprocess.run(
             ["gh", "pr", "merge", pr, "--squash", "--admin"], capture_output=True, text=True, env=env
         )
