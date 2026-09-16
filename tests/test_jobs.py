@@ -112,6 +112,22 @@ def test_check_instruction_receipt_empty():
     assert jobs_mod._check_instruction_receipt("some log", None) is None
 
 
+def test_instruction_receipt_absent_is_not_trusted_for_unattended_merge():
+    import synlynk.jobs as jobs_mod
+
+    assert jobs_mod._instruction_receipt_is_trusted("absent", "0.13.0") is False
+    assert jobs_mod._instruction_receipt_is_trusted("absent", "0.13.0", waived=True) is True
+
+
+def test_instruction_receipt_trust_requires_expected_version_match():
+    import synlynk.jobs as jobs_mod
+
+    assert jobs_mod._instruction_receipt_is_trusted("ok", "0.13.0") is True
+    assert jobs_mod._instruction_receipt_is_trusted("mismatch", "0.13.0", waived=True) is False
+    assert jobs_mod._instruction_receipt_is_trusted("none", "0.13.0", waived=True) is False
+    assert jobs_mod._instruction_receipt_is_trusted(None, None) is True
+
+
 def test_classify_task_delivery_hard_fail_when_no_marker_and_no_activity():
     import synlynk.jobs as jobs_mod
 
