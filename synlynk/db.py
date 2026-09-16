@@ -3603,6 +3603,10 @@ def cmd_pr_check(pr_number=None, impact_attested: bool = False) -> None:
                         f"  {_GREEN}✓{_RESET} docs-only PR, qa gate green — qa merging directly "
                         "(merge-restricted-classes)"
                     )
+                    from synlynk.policy_cli import cmd_policy_check_merge
+                    if cmd_policy_check_merge(role="qa") != 0:
+                        conn.close()
+                        raise SystemExit(1)
                     subprocess.run(
                         ["gh", "pr", "merge", str(pr_number), "--squash"],
                         check=False,

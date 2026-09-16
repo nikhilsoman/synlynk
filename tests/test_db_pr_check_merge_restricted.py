@@ -1,4 +1,5 @@
 from unittest.mock import patch, MagicMock
+import pytest
 import json
 
 
@@ -17,6 +18,7 @@ def test_cmd_pr_check_merges_docs_only_pr_when_mode_is_merge_restricted_classes(
          patch("synlynk.db.qa_gate_verdict", return_value={"verdict": "green", "reason": "CI green, no unresolved sentinel alert"}), \
          patch("synlynk.db._gh_pr_changed_files", return_value=["docs/blog/01-post.md"]), \
          patch("synlynk.merge_oracle.require_merge_oracle", return_value={"merge_allowed": True}), \
+         patch("synlynk.policy_cli.cmd_policy_check_merge", return_value=0), \
          patch("subprocess.run") as mock_run, \
          patch("synlynk.db._detect_hand_edit", None), \
          patch("synlynk.db.cmd_audit_docs", return_value=[]):
@@ -26,6 +28,33 @@ def test_cmd_pr_check_merges_docs_only_pr_when_mode_is_merge_restricted_classes(
     merge_calls = [c for c in mock_run.call_args_list if c.args[0][:2] == ["gh", "pr"] and "merge" in c.args[0]]
     assert len(merge_calls) == 1
     assert merge_calls[0].args[0] == ["gh", "pr", "merge", "501", "--squash"]
+
+
+def test_cmd_pr_check_does_not_reach_gh_merge_when_policy_blocks(project_dir, tmp_path, monkeypatch):
+    from synlynk.db import cmd_pr_check
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir(exist_ok=True)
+    (tmp_path / ".synlynk" / "config.json").write_text(json.dumps({"qa_gate_mode": "merge-restricted-classes"}))
+
+    with patch("synlynk.db._is_github_remote", return_value=True), \
+         patch("synlynk.db._current_pr_number", return_value=505), \
+         patch("synlynk.db._extract_pr_review_cycles", return_value=0), \
+         patch("synlynk.db._apply_review_cycle_multiplier"), \
+         patch("synlynk.db.detect_remote_owner_repo", return_value=("nikhilsoman", "synlynk")), \
+         patch("synlynk.db.qa_gate_verdict", return_value={"verdict": "green", "reason": "ok"}), \
+         patch("synlynk.db._gh_pr_changed_files", return_value=["docs/blog/01-post.md"]), \
+         patch("synlynk.merge_oracle.require_merge_oracle", return_value={"merge_allowed": True}), \
+         patch("synlynk.policy_cli.cmd_policy_check_merge", return_value=1) as check_merge, \
+         patch("subprocess.run") as mock_run, \
+         patch("synlynk.db._detect_hand_edit", None):
+        mock_run.return_value = MagicMock(returncode=0, stdout="")
+        with pytest.raises(SystemExit):
+            cmd_pr_check()
+
+    check_merge.assert_called_once_with(role="qa")
+    merge_calls = [c for c in mock_run.call_args_list if c.args[0][:2] == ["gh", "pr"] and "merge" in c.args[0]]
+    assert merge_calls == []
 
 
 def test_cmd_pr_check_does_not_merge_when_mode_is_block_only(project_dir, tmp_path, monkeypatch):
