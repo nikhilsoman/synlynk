@@ -6,6 +6,12 @@ from unittest.mock import patch
 from synlynk import uxcore
 
 
+def test_review_mode_uses_comment_checklist_only_for_same_identity():
+    assert uxcore._review_mode_for_logins("synlynk-qa[bot]", "SYNLYNK-QA[BOT]") == "comment_checklist"
+    assert uxcore._review_mode_for_logins("synlynk-dev[bot]", "synlynk-qa[bot]") == "approve"
+    assert uxcore._review_mode_for_logins(None, "synlynk-qa[bot]") == "approve"
+
+
 def test_feature_flags_missing_key_is_disabled(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     os.makedirs(".synlynk")
