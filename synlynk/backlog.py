@@ -42,6 +42,8 @@ DEFAULT_ACTIVE_GOALS = [
     },
 ]
 
+DEFAULT_BACKLOG_GOAL_ID = "goal-d3333441"
+
 
 def compute_fingerprint(title: str, source_ref: str = "") -> str:
     """Compute a deterministic SHA-256 fingerprint for a discovered item."""
@@ -687,6 +689,62 @@ def auto_promote_backlog(
         })
 
     return promoted_stories
+
+
+def link_backlog_item_to_goal(
+    item_id: str,
+    goal_id: Optional[str] = None,
+    db_conn=None,
+) -> dict:
+    """Associate one captured backlog item (or discovered story) with a goal.
+
+    This is intentionally a one-shot mutation for callers that already know
+    the goal.  Triage remains responsible for heuristic matching; this helper
+    provides deterministic explicit attribution and keeps a promoted story's
+    contribution record in sync.
+    """
+    if not item_id or not str(item_id).strip():
+        return {"linked": False, "reason": "empty_item_id"}
+
+    selected_goal_id = (goal_id or DEFAULT_BACKLOG_GOAL_ID).strip()
+    if not selected_goal_id:
+        selected_goal_id = DEFAULT_BACKLOG_GOAL_ID
+
+    conn = _get_connection(db_conn)
+    if conn is None:
+        return {"linked": False, "reason": "database_unavailable", "goal_id": selected_goal_id}
+
+    backlog = conn.execute(
+        "SELECT story_id FROM backlog_items WHERE item_id = ?",
+        (str(item_id).strip(),),
+    ).fetchone()
+    if backlog is not None:
+        story_id = backlog[0]
+        conn.execute(
+            "UPDATE backlog_items SET goal_id = ?, updated_at = CURRENT_TIMESTAMP WHERE item_id = ?",
+            (selected_goal_id, str(item_id).strip()),
+        )
+        if story_id:
+            conn.execute("UPDATE stories SET goal_id = ? WHERE story_id = ?", (selected_goal_id, story_id))
+            conn.execute(
+                "INSERT OR IGNORE INTO goal_contributions (goal_id, story_id) VALUES (?, ?)",
+                (selected_goal_id, story_id),
+            )
+        conn.commit()
+        return {"linked": True, "item_id": str(item_id).strip(), "story_id": story_id, "goal_id": selected_goal_id}
+
+    story = conn.execute("SELECT story_id FROM stories WHERE story_id = ?", (str(item_id).strip(),)).fetchone()
+    if story is None:
+        return {"linked": False, "reason": "item_not_found", "item_id": str(item_id).strip(), "goal_id": selected_goal_id}
+
+    story_id = story[0]
+    conn.execute("UPDATE stories SET goal_id = ? WHERE story_id = ?", (selected_goal_id, story_id))
+    conn.execute(
+        "INSERT OR IGNORE INTO goal_contributions (goal_id, story_id) VALUES (?, ?)",
+        (selected_goal_id, story_id),
+    )
+    conn.commit()
+    return {"linked": True, "item_id": str(item_id).strip(), "story_id": story_id, "goal_id": selected_goal_id}
 
 
 def _create_github_issue(

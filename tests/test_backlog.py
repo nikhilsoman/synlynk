@@ -15,6 +15,7 @@ from synlynk.backlog import (
     auto_promote_backlog,
     stage_discovered_work,
     list_staged_backlog,
+    link_backlog_item_to_goal,
 )
 from synlynk.db import _migrate_db
 from synlynk.taxonomy import COMMAND_TAXONOMY
@@ -260,6 +261,57 @@ def test_triage_and_auto_promote_backlog(test_db):
     ).fetchone()
     assert gc_row is not None
     assert gc_row[0] == "goal-adb60ccc"
+
+
+def test_link_captured_backlog_item_to_explicit_or_default_goal(test_db):
+    test_db.execute(
+        "INSERT INTO backlog_items (item_id, title, status) VALUES (?, ?, 'staged')",
+        ("backlog-captured-1590", "Backlog goal association proof"),
+    )
+    test_db.commit()
+
+    linked = link_backlog_item_to_goal(
+        "backlog-captured-1590", goal_id="goal-explicit", db_conn=test_db
+    )
+    assert linked["linked"] is True
+    assert linked["goal_id"] == "goal-explicit"
+    assert test_db.execute(
+        "SELECT goal_id FROM backlog_items WHERE item_id = ?",
+        ("backlog-captured-1590",),
+    ).fetchone()[0] == "goal-explicit"
+
+    default_item = "backlog-captured-default"
+    test_db.execute(
+        "INSERT INTO backlog_items (item_id, title, status) VALUES (?, ?, 'staged')",
+        (default_item, "Backlog default goal proof"),
+    )
+    test_db.commit()
+    linked = link_backlog_item_to_goal(default_item, db_conn=test_db)
+    assert linked["goal_id"] == "goal-d3333441"
+    assert test_db.execute(
+        "SELECT goal_id FROM backlog_items WHERE item_id = ?", (default_item,)
+    ).fetchone()[0] == "goal-d3333441"
+
+
+def test_link_captured_backlog_item_keeps_promoted_story_contribution_in_sync(test_db):
+    test_db.execute(
+        "INSERT INTO backlog_items (item_id, title, status, story_id) VALUES (?, ?, 'promoted', ?)",
+        ("backlog-promoted-1590", "Promoted goal association proof", "story-promoted-1590"),
+    )
+    test_db.execute(
+        "INSERT INTO stories (story_id, title, status) VALUES (?, ?, 'open')",
+        ("story-promoted-1590", "Promoted goal association proof"),
+    )
+    test_db.commit()
+
+    linked = link_backlog_item_to_goal("backlog-promoted-1590", "goal-explicit", test_db)
+    assert linked["story_id"] == "story-promoted-1590"
+    assert test_db.execute(
+        "SELECT goal_id FROM stories WHERE story_id = 'story-promoted-1590'"
+    ).fetchone()[0] == "goal-explicit"
+    assert test_db.execute(
+        "SELECT goal_id FROM goal_contributions WHERE story_id = 'story-promoted-1590'"
+    ).fetchone()[0] == "goal-explicit"
 
 
 def test_cli_backlog_subcommands_integration(capsys, monkeypatch, test_db):
