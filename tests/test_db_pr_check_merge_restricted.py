@@ -16,6 +16,7 @@ def test_cmd_pr_check_merges_docs_only_pr_when_mode_is_merge_restricted_classes(
          patch("synlynk.db.detect_remote_owner_repo", return_value=("nikhilsoman", "synlynk")), \
          patch("synlynk.db.qa_gate_verdict", return_value={"verdict": "green", "reason": "CI green, no unresolved sentinel alert"}), \
          patch("synlynk.db._gh_pr_changed_files", return_value=["docs/blog/01-post.md"]), \
+         patch("synlynk.merge_oracle.require_merge_oracle", return_value={"merge_allowed": True}), \
          patch("subprocess.run") as mock_run, \
          patch("synlynk.db._detect_hand_edit", None), \
          patch("synlynk.db.cmd_audit_docs", return_value=[]):
