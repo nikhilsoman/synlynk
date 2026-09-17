@@ -71,8 +71,29 @@ def resolve_github_apps_dir(repo_path: PathLike = ".") -> Path:
     product_apps = github_apps_dir(slug)
     if any(product_apps.glob("*.json")) or any(product_apps.glob("*.pem")):
         return product_apps
-    repo_apps = Path(repo_path).resolve() / ".synlynk" / "github_apps"
-    return repo_apps if repo_apps.is_dir() else product_apps
+    repo = Path(repo_path).resolve()
+    repo_candidates = [repo / ".synlynk" / "github_apps"]
+    try:
+        if (repo / ".git").exists():
+            result = subprocess.run(
+                ["git", "rev-parse", "--git-common-dir"], cwd=repo,
+                capture_output=True, text=True, check=False,
+            )
+            if result.returncode == 0:
+                common = Path(result.stdout.strip()).resolve()
+                main_repo = common.parent if common.name == ".git" else common.parent
+                main_apps = main_repo / ".synlynk" / "github_apps"
+                if main_apps not in repo_candidates:
+                    repo_candidates.append(main_apps)
+    except (OSError, ValueError):
+        pass
+    for repo_apps in repo_candidates:
+        if repo_apps.is_dir() and any(repo_apps.iterdir()):
+            return repo_apps
+    for repo_apps in repo_candidates:
+        if repo_apps.is_dir():
+            return repo_apps
+    return product_apps
 
 
 def write_apps_dir_for_init(repo_path: PathLike = ".") -> Path:

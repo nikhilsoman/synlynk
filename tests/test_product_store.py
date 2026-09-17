@@ -6,7 +6,7 @@ from synlynk.product_store import (
     github_apps_dir, identity_slug_from_config, migrate_repo_apps_if_needed,
     product_root, resolve_github_apps_dir, types_yaml_path, write_apps_dir_for_init,
 )
-from synlynk.team import IdentityAlreadyProvisioned, cmd_identity_init_role
+from synlynk.team import cmd_identity_init_role
 
 
 def _repo(tmp_path, slug="vdowrx"):
@@ -49,7 +49,7 @@ def test_write_and_migrate_are_product_scoped(tmp_path, monkeypatch):
     assert write_apps_dir_for_init(tmp_path).is_dir()
 
 
-def test_second_init_fails_closed_before_manifest(tmp_path, monkeypatch):
+def test_second_init_is_noop_before_manifest(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     monkeypatch.chdir(tmp_path)
     _repo(tmp_path)
@@ -58,5 +58,4 @@ def test_second_init_fails_closed_before_manifest(tmp_path, monkeypatch):
     (apps / "qa.json").write_text(json.dumps({"installation_id": 2, "private_key_path": str(apps / "qa.pem")}))
     (apps / "qa.pem").write_text("dummy")
     monkeypatch.setattr("synlynk.team._build_app_manifest_url", lambda *a, **k: pytest.fail("manifest opened"))
-    with pytest.raises(IdentityAlreadyProvisioned):
-        cmd_identity_init_role("qa")
+    cmd_identity_init_role("qa")

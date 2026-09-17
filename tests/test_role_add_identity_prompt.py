@@ -7,6 +7,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 def test_identity_init_role_registers_new_role_in_roles_yaml(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".synlynk").mkdir()
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    (tmp_path / ".synlynk" / "config.json").write_text('{"identity_slug": "test-product"}')
 
     import synlynk.team as team_mod
 
