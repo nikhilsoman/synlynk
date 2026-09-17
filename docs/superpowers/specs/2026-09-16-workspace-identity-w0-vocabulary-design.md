@@ -156,7 +156,7 @@ GitHub auto-merge stays **off**.
 | **W5** | Specialization mechanics (declaring a type, charter files, skills/tools attach) — **specified** in `2026-09-17-workspace-identity-w5-specialization-design.md` | W0 |
 | **W8** | Industry packs, Vizor organigram onboard, expansion, `connector` kind — **specified** in `2026-09-17-workspace-identity-w8-packs-onboarding-organigram-design.md` | W0, W1, W5 |
 | **W6** | Policy / blast radius / receipts; swarm **write** policy (review vs merge); connector firewall engine — **specified** in `2026-09-17-workspace-identity-w6-policy-blast-radius-design.md` | W0, W1, W8 |
-| **W7** | Runtime + surfaces (swarm identity, doctor/wizard “add repo to this product”) | W1, W6 |
+| **W7** | Runtime + surfaces (swarm identity, doctor/wizard “add repo to this product”) — **specified** in `2026-09-17-workspace-identity-w7-runtime-surfaces-design.md` | W1, W4, W6, W8 |
 
 **Order:** W0 (this file) → W1 and W5 in parallel enough to freeze App **mechanics** → W8 (freeze pack catalog + onboard) → W6 → W2/W3 → W4 → W7 / W9.
 
