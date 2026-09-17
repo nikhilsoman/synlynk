@@ -151,7 +151,7 @@ GitHub auto-merge stays **off**.
 | **W1** | Product-scoped GitHub Apps: create once per type, install on the right repos, PEM/token home, worktree-aware minting — **specified** in `2026-09-16-workspace-identity-w1-install-secrets-design.md` (A now, C at Teams) | W0 |
 | **W2** | Work graph inside a product (issues stay in-repo; GOVERNS/epic spans repos; costs tagged `repo_id` + type) — **specified** in `2026-09-17-workspace-identity-w2-work-graph-design.md` | W0, W1 |
 | **W3** | Product Vizor board; tracker import/export protocol — **specified** in `2026-09-17-workspace-identity-w3-product-board-design.md` | W0, W2 |
-| **W4** | Members and member-dispatch (`synlynk join`; humans dispatch types) | W0, W1, W6 |
+| **W4** | Members and member-dispatch (`synlynk join`; humans dispatch types) — **specified** in `2026-09-17-workspace-identity-w4-members-dispatch-design.md` | W0, W1, W6 |
 | **W9** | Hosted Vizor (entire surface) at `synlynk.com/<slug>` — **specified** in `2026-09-17-workspace-identity-w9-hosted-vizor-design.md` | W3, W4 |
 | **W5** | Specialization mechanics (declaring a type, charter files, skills/tools attach) — **specified** in `2026-09-17-workspace-identity-w5-specialization-design.md` | W0 |
 | **W8** | Industry packs, Vizor organigram onboard, expansion, `connector` kind — **specified** in `2026-09-17-workspace-identity-w8-packs-onboarding-organigram-design.md` | W0, W1, W5 |
