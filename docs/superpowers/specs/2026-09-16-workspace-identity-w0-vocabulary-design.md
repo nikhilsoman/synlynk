@@ -149,7 +149,7 @@ GitHub auto-merge stays **off**.
 | ID | Spec | Depends on |
 |:---|:---|:---|
 | **W1** | Product-scoped GitHub Apps: create once per type, install on the right repos, PEM/token home, worktree-aware minting — **specified** in `2026-09-16-workspace-identity-w1-install-secrets-design.md` (A now, C at Teams) | W0 |
-| **W2** | Work graph inside a product (issues stay in-repo; GOVERNS/epic spans repos; costs tagged `repo_id` + type) | W0, W1 |
+| **W2** | Work graph inside a product (issues stay in-repo; GOVERNS/epic spans repos; costs tagged `repo_id` + type) — **specified** in `2026-09-17-workspace-identity-w2-work-graph-design.md` | W0, W1 |
 | **W3** | Shared Projects v2 / Vizor board per product | W0, W2 |
 | **W4** | Members and member-dispatch (`synlynk join`; humans dispatch types) | W0, W1, W6 |
 | **W5** | Specialization mechanics (declaring a type, charter files, skills/tools attach) — **specified** in `2026-09-17-workspace-identity-w5-specialization-design.md` | W0 |

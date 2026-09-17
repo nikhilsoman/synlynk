@@ -74,7 +74,7 @@ Solo monorepo (`nikhilsoman/synlynk`): one type, one install, one repo. Degenera
 - **No PEM** under `<repo>/.synlynk/github_apps/` after migration.
 - Dispatch / daemon resolve `identity_slug` → `~/.synlynk/workspaces/<slug>/github_apps/<type>.*`.
 - Worktrees **must not** look for PEMs relative to the worktree cwd. Token minting uses the product store (absolute paths). This is a W1 requirement, not a nice-to-have — it is a known live failure mode.
-- Moving `state.db` to the workspace directory is **not** required in W1. The June 2026 workspace `state.db` spec remains the target for W2; W1 only relocates **App material**.
+- Moving `state.db` to the workspace directory is **not** required in W1. That move is **W2** (`2026-09-17-workspace-identity-w2-work-graph-design.md`). W1 only relocates **App material**.
 
 `qa.json` (illustrative, not a schema freeze):
 
