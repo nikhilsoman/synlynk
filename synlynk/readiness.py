@@ -82,7 +82,8 @@ def check_durable_role_app_material(
     if repo_root is None:
         repo_root = os.getcwd()
     if apps_dir is None:
-        apps_dir = os.path.join(repo_root, ".synlynk", "github_apps")
+        from synlynk.product_store import resolve_github_apps_dir
+        apps_dir = str(resolve_github_apps_dir(repo_root))
     if gh_write_required is None:
         gh_write_required = _policy_requires_gh_write(repo_root)
 
@@ -99,12 +100,16 @@ def check_durable_role_app_material(
 
     missing = []
     for role in durable_roles:
+        flat_json = os.path.join(apps_dir, f"{role}.json")
+        flat_pem = os.path.join(apps_dir, f"{role}.pem")
         role_dir = os.path.join(apps_dir, role)
-        has_material = os.path.isdir(role_dir) and any(
-            os.path.isfile(os.path.join(role_dir, filename))
-            and (filename.endswith(".app.json") or filename.endswith(".private-key.pem") or filename.endswith(".pem"))
-            for filename in os.listdir(role_dir)
-        ) if os.path.isdir(role_dir) else False
+        has_material = (os.path.isfile(flat_json) and os.path.isfile(flat_pem)) or (
+            os.path.isdir(role_dir) and any(
+                os.path.isfile(os.path.join(role_dir, filename))
+                and (filename.endswith(".app.json") or filename.endswith(".private-key.pem") or filename.endswith(".pem"))
+                for filename in os.listdir(role_dir)
+            )
+        )
         if not has_material:
             missing.append(role)
 

@@ -398,32 +398,9 @@ def _load_harness_overrides(agent: str) -> dict:
 
 def _resolve_github_apps_dir() -> str:
     """Resolve the provisioned GitHub App directory across git worktrees."""
-    cwd_apps_dir = os.path.join(".synlynk", "github_apps")
-    if os.path.isdir(cwd_apps_dir):
-        return cwd_apps_dir
+    from synlynk.product_store import resolve_github_apps_dir
+    return str(resolve_github_apps_dir("."))
 
-    if not os.path.exists(".git"):
-        return cwd_apps_dir
-
-    try:
-        result = subprocess.run(
-            ["git", "rev-parse", "--git-common-dir"],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        git_common_dir = result.stdout.strip()
-        if git_common_dir:
-            git_common_dir = os.path.abspath(git_common_dir)
-            main_repo_apps_dir = os.path.join(
-                os.path.dirname(git_common_dir), ".synlynk", "github_apps"
-            )
-            if os.path.isdir(main_repo_apps_dir):
-                return main_repo_apps_dir
-    except Exception:
-        pass
-
-    return cwd_apps_dir
 
 
 def _resolve_dispatch_gh_token(role: str) -> Optional[str]:

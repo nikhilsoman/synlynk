@@ -203,6 +203,9 @@ def _hc_identity_roles() -> HealthCheck:
     from synlynk.identity_roles import load_declared_roles
 
     from synlynk.readiness import check_durable_role_app_material
+    from synlynk.product_store import migrate_repo_apps_if_needed, resolve_github_apps_dir
+    migrate_repo_apps_if_needed(".")
+    apps_dir = resolve_github_apps_dir(".")
 
     material = check_durable_role_app_material()
     if material["status"] == "FAIL":
@@ -216,7 +219,7 @@ def _hc_identity_roles() -> HealthCheck:
     roles = load_declared_roles()
     missing = []
     for role in roles:
-        json_path = os.path.join(".synlynk", "github_apps", f"{role}.json")
+        json_path = apps_dir / f"{role}.json"
         if not os.path.exists(json_path):
             missing.append(role)
             continue
@@ -243,7 +246,9 @@ def _hc_identity_roles() -> HealthCheck:
 def _hc_identity_file_perms() -> HealthCheck:
     """Verifies .synlynk/github_apps/*.{json,pem} are still 0o600 — private key
     material and installation IDs at rest must not be group/world-readable."""
-    apps_dir = os.path.join(".synlynk", "github_apps")
+    from synlynk.product_store import migrate_repo_apps_if_needed, resolve_github_apps_dir
+    migrate_repo_apps_if_needed(".")
+    apps_dir = str(resolve_github_apps_dir("."))
     if not os.path.isdir(apps_dir):
         return HealthCheck("identity_file_perms", "ok", "No .synlynk/github_apps/ directory yet")
     loose = []
