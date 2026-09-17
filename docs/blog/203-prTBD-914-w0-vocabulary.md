@@ -4,7 +4,7 @@
 
 **Shift in this PR:** #914 is foundational for Teams, multi-repo products, and member-dispatch, but it is not one ticket. This PR does **not** implement Apps, `synlynk type`, Vizor, or the `state.db` move. It records **W0–W2, W5, W6, W8**.
 
-**What shipped:** W0 vocabulary; W1 PEM store; W2 one product `state.db` (issues in-repo, claim/link pointers, docs slice + home rollup); W5 types; W8 packs/organigram/`connector`; W6 product policy. No code.
+**What shipped:** W0 vocabulary; W1 PEM store; W2 one product `state.db` (claim/link pointers, GitHub forge + pluggable tracker with Linear named, docs slice + home rollup); W5 types; W8 packs/organigram/`connector`; W6 product policy. No code.
 
 **Brainstorm:** chat 2026-09-16 on #914; no companion HTML this slice (vocabulary, not topology diagrams).
 
