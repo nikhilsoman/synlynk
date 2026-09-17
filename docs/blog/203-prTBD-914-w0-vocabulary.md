@@ -12,4 +12,4 @@
 
 **Also in this PR:** W1 install/secrets — PEMs live in `~/.synlynk/workspaces/<product>/github_apps/` now (approach A). PEM-less members (approach C) wait for Teams/W4.
 
-**New goalpost:** Review W0–W9 on PR #1647. Next is **writing-plans** (or qa merge of this docs PR) on explicit go — no identity-init code until a plan. #914 stays OPEN until scoped implementation lands.
+**New goalpost:** W0–W9 specs + program/wave-1 plans on PR #1647. Execute **Wave 1** (`docs/superpowers/plans/2026-09-17-workspace-identity-wave1-product-store.md`) on a Codex branch after this docs PR merges (or stacked). #914 stays OPEN.
