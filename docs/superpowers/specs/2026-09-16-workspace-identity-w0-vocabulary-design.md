@@ -153,10 +153,11 @@ GitHub auto-merge stays **off**.
 | **W3** | Shared Projects v2 / Vizor board per product | W0, W2 |
 | **W4** | Members and member-dispatch (`synlynk join`; humans dispatch types) | W0, W1, W6 |
 | **W5** | Specialization mechanics (declaring a type, charter files, skills/tools attach) — **specified** in `2026-09-17-workspace-identity-w5-specialization-design.md` | W0 |
-| **W6** | Policy / blast radius / receipts; swarm **write** policy (review vs merge) | W0, W1 |
+| **W8** | Industry packs, Vizor organigram onboard, expansion, `connector` kind — **specified** in `2026-09-17-workspace-identity-w8-packs-onboarding-organigram-design.md` | W0, W1, W5 |
+| **W6** | Policy / blast radius / receipts; swarm **write** policy (review vs merge); connector firewall engine | W0, W1, W8 |
 | **W7** | Runtime + surfaces (swarm identity, doctor/wizard “add repo to this product”) | W1, W6 |
 
-**Order:** W0 (this file) → W1 and W5 in parallel enough to freeze App count → W6 → W2/W3 → W4 → W7.
+**Order:** W0 (this file) → W1 and W5 in parallel enough to freeze App **mechanics** → W8 (freeze pack catalog + onboard) → W6 → W2/W3 → W4 → W7.
 
 Do not start W4 (Teams) until W1 and W6 exist as approved specs.
 

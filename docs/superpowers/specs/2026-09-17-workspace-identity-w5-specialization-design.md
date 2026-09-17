@@ -79,7 +79,7 @@ Writes a `types.yaml` row and `types/<id>/charter.md` (seeded from the kind’s 
 
 Mints the GitHub App + PEM into `github_apps/` per W1.
 
-- Fail-closed if the type does not exist in `types.yaml`, **except** empty-store + canonical id (seed first — §4.4).
+- Fail-closed if the type does not exist in `types.yaml`, **except** empty-store + **pack-canonical** id (seed first — §4.4 / W8).
 - Fail-closed if this `(product, type)` already has App material (W1: never a second App).
 - App slug remains `synlynk-<product>-<type>` (W1).
 
@@ -93,13 +93,13 @@ Until agent creation is PM-owned in product, the operator who can write the prod
 - Local / harness work **may** run with charter + context pack only (no App). That worker must not call `synlynk gh`.
 - Context packs stay ephemeral and tpm-authored (W0). They are not type files.
 
-### 4.4 Canonical eight
+### 4.4 Canonical types (per product pack)
 
-Pre-seeded (`canonical: true`) on first product-store init. They are **not** created via `type create`.
+Canonical types are **per product**, from the industry **pack** (W8). They are **not** created via `type create`. Software dogfood still looks like today’s eight because the pack is `software-product`.
 
-**Empty store vs `identity init`:** `identity init --type qa` (or any canonical id) on a product with no `types.yaml` **seeds the canonical eight, then** mints that App. `identity init --type frontend-qa` on an empty store **fails** — specialists are never implied; `type create` must have run.
+**Empty store vs `identity init`:** `identity init --type <canonical-id>` on a product with no `types.yaml` **seeds that product’s pack, then** mints the App. Pack comes from `--pack`, Vizor onboard, or default `software-product` when the scan looks like a software repo. `identity init --type frontend-qa` (or `figma`) on an empty store **fails** — specialists and connectors are never implied; `type create` (or organigram add) must have run.
 
-Solo × monorepo dogfood: only these types. No fake `frontend-qa` / `backend-qa` split required on `synlynk` or `rxcc`.
+Solo × monorepo software dogfood: `software-product` only. No fake `frontend-qa` / `edit` split required on `synlynk` or `rxcc`. Hitchcock uses pack `studio` (W8).
 
 ---
 
@@ -206,7 +206,7 @@ Do not auto-merge two App identities (W1 §7). Do not treat `workspace_id` UUID 
 - `synlynk identity init --type frontend-qa` then writes `github_apps/frontend-qa.{json,pem}` and fails if the type row is missing.
 - `dispatch --role frontend-qa` resolves that type; reviews (once App exists) show as `synlynk-vdowrx-frontend-qa[bot]`.
 - Skill edits on kind `qa` apply to `frontend-qa`; `frontend-qa` cannot appear in `merge_authority.can_merge` via `types.yaml`.
-- Solo synlynk dogfood keeps only canonical types.
+- Solo synlynk dogfood keeps only `software-product` canonical types (W8).
 - `rxcc` and `vdowrx` type stores remain separate directories.
 
 ---
