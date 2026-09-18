@@ -40,6 +40,8 @@ jobs:
         env:
           MARKETING_BRANCH: automation/marketing-sync
         run: |
+          git config --global user.name "synlynk-marketing[bot]"
+          git config --global user.email "marketing@synlynk.com"
           git fetch origin main
           if git ls-remote --exit-code --heads origin "$MARKETING_BRANCH" >/dev/null 2>&1; then
             git fetch origin "$MARKETING_BRANCH"
@@ -60,8 +62,6 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           MARKETING_BRANCH: automation/marketing-sync
         run: |
-          git config --global user.name "synlynk-marketing[bot]"
-          git config --global user.email "marketing@synlynk.com"
           git add docs/blog/
           git add -f .synlynk/social_drafts.json 2>/dev/null || true
           if git diff --staged --quiet; then
