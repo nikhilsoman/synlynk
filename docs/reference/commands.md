@@ -68,6 +68,8 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `roles` (secondary) — open
 - `type create` (secondary) — execute
 - `type seed` (secondary) — execute
+- `type relabel` (secondary) — execute
+- `connector add` (secondary) — execute
 
 ## Tier 2 — Execute
 
