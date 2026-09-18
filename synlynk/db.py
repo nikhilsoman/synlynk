@@ -674,6 +674,11 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
                 conn.execute("ALTER TABLE stories ADD COLUMN repo_id TEXT")
             except sqlite3.OperationalError:
                 pass
+        if "type_id" not in story_cols:
+            try:
+                conn.execute("ALTER TABLE stories ADD COLUMN type_id TEXT")
+            except sqlite3.OperationalError:
+                pass
         try:
             conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_stories_fingerprint ON stories(fingerprint) WHERE fingerprint IS NOT NULL")
         except sqlite3.OperationalError:
