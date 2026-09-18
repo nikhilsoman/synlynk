@@ -662,6 +662,17 @@ def build_parser() -> argparse.ArgumentParser:
     status_parser.add_argument("--platform", action="store_true", dest="platform",
                                help="Show legacy project dashboard instead of ecosystem status")
 
+    backup_parser = subparsers.add_parser(
+        "backup", help="Create or verify SQLite-consistent state.db DR snapshots"
+    )
+    backup_sub = backup_parser.add_subparsers(dest="backup_action")
+    backup_create = backup_sub.add_parser("create", help="Create an integrity-checked local snapshot")
+    backup_create.add_argument("--source", default=None, help="Source state.db path")
+    backup_create.add_argument("--output-dir", default=None, dest="output_dir")
+    backup_create.add_argument("--label", default="state")
+    backup_verify = backup_sub.add_parser("verify", help="Verify a snapshot")
+    backup_verify.add_argument("snapshot")
+
     ops_parser = subparsers.add_parser(
         "ops",
         help="Cross-repo platform operations report (jobs, costs, LIVE, hygiene)",
@@ -1514,6 +1525,16 @@ def main(argv=None) -> None:
             cmd_ecosystem_status(
                 db_conn=_get_db(read_only=True), json_output=args.json_output
             )
+    elif args.command == "backup":
+        from synlynk.backup import cmd_backup_create, cmd_backup_verify
+        if args.backup_action == "create":
+            cmd_backup_create(
+                source=args.source, output_dir=args.output_dir, label=args.label
+            )
+        elif args.backup_action == "verify":
+            cmd_backup_verify(args.snapshot)
+        else:
+            help_parsers.get("backup", parser).print_help()
     elif args.command == "home":
         cmd_home(args)
     elif args.command == "selftest":
