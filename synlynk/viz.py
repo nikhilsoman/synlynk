@@ -6091,6 +6091,11 @@ def _ftue_prompts(config: dict) -> dict:
 def cmd_viz(args) -> None:
     """Entry point for `synlynk viz` subcommand."""
     import synlynk  # local import to avoid circular at module load
+    if getattr(args, "hosted", False):
+        from synlynk.product_store import identity_slug_from_config
+        from synlynk.wave6 import hosted_vizor_placeholder
+        print(json.dumps(hosted_vizor_placeholder(identity_slug_from_config(".")), indent=2))
+        return
     config_path = ".synlynk/config.json"
     config = {}
     if os.path.exists(config_path):
