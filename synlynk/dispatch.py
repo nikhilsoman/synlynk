@@ -2826,6 +2826,16 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 (a["value"] for a in entry["aliases"] if a["kind"] == "role_slug"), None
             )
     resolved_agent_role = role or resolved_agent_role
+    # W5: when a product registry exists, role/type dispatch must resolve the
+    # product-owned type rather than silently treating an arbitrary string as
+    # an identity. Legacy repos without a registry retain role-only dispatch.
+    if resolved_agent_role:
+        from synlynk.product_store import configured_identity_slug, types_yaml_path
+        from synlynk.types_registry import resolve_type
+
+        product_slug = configured_identity_slug(".")
+        if product_slug and types_yaml_path(product_slug).exists():
+            resolve_type(product_slug, resolved_agent_role)
     from synlynk.wave6 import connector_dispatch_allowed
     if not connector_dispatch_allowed(resolved_agent_role, grants=grants):
         raise RuntimeError(
