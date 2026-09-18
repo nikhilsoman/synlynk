@@ -1,5 +1,7 @@
 import pytest
 import os
+import json
+import sqlite3
 import subprocess
 import sys
 
@@ -167,3 +169,25 @@ def test_fast_cli_preserves_help_and_invalid_command_paths():
     assert "sentinel" in help_result.stdout
     assert invalid_result.returncode == 2
     assert "invalid choice" in invalid_result.stderr
+
+
+def test_state_restore_cli_prints_json_result(tmp_path, monkeypatch, capsys):
+    source = tmp_path / "snapshot.db"
+    sqlite3.connect(source).close()
+    destination = tmp_path / "workspace" / "state.db"
+    monkeypatch.setenv("SYNLYNK_REGISTRY_PATH", str(tmp_path / "registry.json"))
+
+    cli_mod.main([
+        "state",
+        "restore",
+        str(source),
+        str(destination),
+        "--slug",
+        "demo",
+        "--product-id",
+        "product-demo",
+    ])
+
+    output = json.loads(capsys.readouterr().out)
+    assert output["disposition"] == "planned"
+    assert output["destination"] == str(destination)

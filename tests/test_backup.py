@@ -144,3 +144,27 @@ def test_verify_encrypted_snapshot_can_use_keychain_passphrase(
     )
     assert evidence["integrity_check"] == "ok"
     assert calls == ["com.example.dr"]
+
+
+def test_verify_encrypted_snapshot_allows_gpg_agent_pinentry(
+    tmp_path, gpg_recipient, monkeypatch
+):
+    source = tmp_path / "state.db"
+    sqlite3.connect(source).close()
+    snapshot = create_snapshot(source=source, output_dir=tmp_path / "snapshots")
+    encrypted = encrypt_snapshot(
+        snapshot["snapshot"], gpg_recipient, output_dir=tmp_path / "export"
+    )
+
+    original_run = backup_module.subprocess.run
+    commands = []
+
+    def run(command, *args, **kwargs):
+        if command[0] == shutil.which("gpg") and "--decrypt" in command:
+            commands.append(command)
+            assert "--batch" not in command
+        return original_run(command, *args, **kwargs)
+
+    monkeypatch.setattr(backup_module.subprocess, "run", run)
+    assert verify_encrypted_snapshot(encrypted["encrypted_snapshot"])["integrity_check"] == "ok"
+    assert len(commands) == 1
