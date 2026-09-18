@@ -9,10 +9,13 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
+from pathlib import Path
 from typing import Any, Optional
 from urllib.parse import quote
 
+from synlynk import _get_db
 from synlynk.product_store import identity_slug_from_config, repos_path, state_db_path
+from synlynk.state_registry import canonical_path
 
 BOARD_STATUSES = ("open", "ready", "in_progress", "blocked", "done")
 _NWO_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
@@ -73,12 +76,14 @@ def _pointer(story: dict, repo_names: dict[str, str]) -> Optional[dict]:
     return {"tracker": tracker, "container": container, "id": object_id, "url": url}
 
 
-def _open_product_db(repo_path: str = ".") -> tuple[sqlite3.Connection, str]:
+def _open_product_db(
+    repo_path: str = ".", *, read_only: bool = False, migrate: bool = True
+) -> tuple[sqlite3.Connection, str]:
     slug = identity_slug_from_config(repo_path)
-    path = state_db_path(slug)
+    path = canonical_path(slug, state_db_path(slug))
     if not path.is_file():
         raise FileNotFoundError(f"product state.db not found for identity_slug={slug!r}")
-    conn = sqlite3.connect(path)
+    conn = _get_db(db_path=str(Path(path)), read_only=read_only, migrate=migrate and not read_only)
     conn.row_factory = sqlite3.Row
     return conn, slug
 
@@ -91,7 +96,7 @@ def board_data(
     goal_id: Optional[str] = None,
 ) -> dict:
     """Return product-scoped board cards and deterministic filter options."""
-    conn, slug = _open_product_db(repo_path)
+    conn, slug = _open_product_db(repo_path, read_only=True)
     try:
         story_cols = _columns(conn, "stories")
         if not {"story_id", "title", "status"}.issubset(story_cols):
@@ -141,7 +146,7 @@ def update_status(story_id: str, status: str, repo_path: str = ".") -> dict:
         raise ValueError("story_id is required")
     if status not in BOARD_STATUSES:
         raise ValueError(f"unknown board status: {status}")
-    conn, _slug = _open_product_db(repo_path)
+    conn, _slug = _open_product_db(repo_path, migrate=False)
     try:
         story_cols = _columns(conn, "stories")
         if not story_cols:

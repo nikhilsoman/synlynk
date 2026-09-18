@@ -734,7 +734,7 @@ def cleanup_selftest_workspaces(temp_root: str = None) -> int:
 
 
 def _check_dual_ledger_sync() -> dict:
-    """Check synchronization between authoritative state.db and fallback state.db (#1535)."""
+    """Report legacy repo state without opening it as a second ledger."""
     try:
         from synlynk import get_state_db_path, _project_root
         active_path = get_state_db_path()
@@ -744,22 +744,10 @@ def _check_dual_ledger_sync() -> dict:
         fallback_path = os.path.abspath(os.path.join(root, ".synlynk", "state.db"))
         if not os.path.exists(fallback_path) or os.path.abspath(fallback_path) == os.path.abspath(active_path):
             return {"passed": True, "detail": "single ledger active"}
-        import sqlite3 as _sqlite3
-        conn_primary = _sqlite3.connect(active_path, timeout=5.0)
-        conn_fallback = _sqlite3.connect(fallback_path, timeout=5.0)
-        try:
-            primary_records = dict(conn_primary.execute("SELECT harness_name, installed_version FROM harness_records").fetchall())
-            fallback_records = dict(conn_fallback.execute("SELECT harness_name, installed_version FROM harness_records").fetchall())
-        finally:
-            conn_primary.close()
-            conn_fallback.close()
-        drift = []
-        for harness, ver in primary_records.items():
-            if harness in fallback_records and fallback_records[harness] != ver:
-                drift.append(f"{harness} (primary={ver}, fallback={fallback_records[harness]})")
-        if drift:
-            return {"passed": False, "detail": ", ".join(drift)}
-        return {"passed": True, "detail": "synchronized"}
+        return {
+            "passed": False,
+            "detail": f"legacy non-canonical ledger present: {fallback_path}; not opened or synchronized",
+        }
     except Exception as exc:
         return {"passed": True, "detail": f"skipped ({exc})"}
 
@@ -771,7 +759,7 @@ def _hc_dual_ledger_sync() -> HealthCheck:
             "dual_ledger_sync",
             "warn",
             f"state.db drift detected: {sync_res['detail']}",
-            fix="run `synlynk probe` to re-synchronize harness records across ledgers",
+            fix="inventory or explicitly quarantine the legacy ledger; do not synchronize it",
         )
     return HealthCheck("dual_ledger_sync", "ok", sync_res["detail"])
 
@@ -780,7 +768,9 @@ def _hc_product_state_db_leftover() -> HealthCheck:
     """Warn about the legacy repo graph after product migration."""
     try:
         from synlynk.product_store import identity_slug_from_config, state_db_path
-        product_db = state_db_path(identity_slug_from_config("."))
+        from synlynk.state_registry import canonical_path
+        slug = identity_slug_from_config(".")
+        product_db = canonical_path(slug, state_db_path(slug))
         repo_db = os.path.abspath(os.path.join(os.getcwd(), ".synlynk", "state.db"))
         if product_db.exists() and os.path.isfile(repo_db) and os.path.abspath(repo_db) != os.path.abspath(product_db):
             return HealthCheck(

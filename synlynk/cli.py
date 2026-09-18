@@ -681,6 +681,15 @@ def build_parser() -> argparse.ArgumentParser:
     backup_encrypt.add_argument("snapshot")
     backup_encrypt.add_argument("--recipient", required=True, help="GPG public-key recipient")
     backup_encrypt.add_argument("--output-dir", default=None, dest="output_dir")
+    backup_package = backup_sub.add_parser(
+        "package", help="Create an encrypted provider-neutral DR package"
+    )
+    backup_package.add_argument("--source", default=None, help="Source state.db path")
+    backup_package.add_argument("--output-dir", default=None, dest="output_dir")
+    backup_package.add_argument("--label", default="state")
+    backup_package.add_argument(
+        "--recipient", required=True, help="GPG public-key recipient"
+    )
     backup_verify_encrypted = backup_sub.add_parser(
         "verify-encrypted", help="Decrypt and verify an encrypted snapshot"
     )
@@ -690,6 +699,36 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="macOS Keychain service containing the GPG passphrase",
     )
+
+    state_parser = subparsers.add_parser(
+        "state", help="Inspect canonical and legacy state DB artifacts"
+    )
+    state_sub = state_parser.add_subparsers(dest="state_action")
+    state_inventory = state_sub.add_parser(
+        "inventory", help="Read-only inventory with hashes and integrity checks"
+    )
+    state_inventory.add_argument("--json", action="store_true", dest="json_output")
+    state_inventory.add_argument(
+        "--all", action="store_true", dest="all_artifacts",
+        help="Include the full ~/.synlynk legacy/quarantine/backup tree",
+    )
+    state_promote = state_sub.add_parser("promote", help="Promote a verified DB without overwriting canonical state")
+    state_promote.add_argument("source")
+    state_promote.add_argument("destination")
+    state_promote.add_argument("--slug", required=True)
+    state_promote.add_argument("--product-id", default=None, dest="product_id")
+    state_quarantine = state_sub.add_parser("quarantine", help="Plan or apply read-only quarantine for a legacy DB")
+    state_quarantine.add_argument("path")
+    state_quarantine.add_argument("--slug", required=True)
+    state_quarantine.add_argument("--root", default=None)
+    state_quarantine.add_argument("--apply", action="store_true")
+    state_restore = state_sub.add_parser("restore", help="Validate or explicitly restore a canonical DB snapshot")
+    state_restore.add_argument("snapshot")
+    state_restore.add_argument("destination")
+    state_restore.add_argument("--slug", required=True)
+    state_restore.add_argument("--product-id", default=None, dest="product_id")
+    state_restore.add_argument("--archive-root", default=None, dest="archive_root")
+    state_restore.add_argument("--apply", action="store_true")
 
     ops_parser = subparsers.add_parser(
         "ops",
@@ -1266,6 +1305,7 @@ def build_parser() -> argparse.ArgumentParser:
         "impact": impact_parser,
         "mesh": mesh_parser,
         "spike": spike_parser,
+        "state": state_parser,
     }
 
     roles_parser = subparsers.add_parser(
@@ -1547,6 +1587,7 @@ def main(argv=None) -> None:
         from synlynk.backup import (
             cmd_backup_create,
             cmd_backup_encrypt,
+            cmd_backup_package,
             cmd_backup_verify,
             cmd_backup_verify_encrypted,
         )
@@ -1558,10 +1599,50 @@ def main(argv=None) -> None:
             cmd_backup_verify(args.snapshot)
         elif args.backup_action == "encrypt":
             cmd_backup_encrypt(args.snapshot, args.recipient, args.output_dir)
+        elif args.backup_action == "package":
+            cmd_backup_package(
+                source=args.source,
+                output_dir=args.output_dir,
+                label=args.label,
+                recipient=args.recipient,
+            )
         elif args.backup_action == "verify-encrypted":
             cmd_backup_verify_encrypted(args.snapshot, args.keychain_service)
         else:
             help_parsers.get("backup", parser).print_help()
+    elif args.command == "state":
+        if args.state_action == "inventory":
+            from synlynk.state_inventory import cmd_state_inventory
+
+            sys.exit(cmd_state_inventory(
+                json_output=args.json_output,
+                all_artifacts=getattr(args, "all_artifacts", False),
+            ))
+        elif args.state_action == "promote":
+            from synlynk.state_repair import promote_state_db
+
+            print(json.dumps(promote_state_db(
+                args.source, args.destination, slug=args.slug, product_id=args.product_id
+            ), sort_keys=True))
+        elif args.state_action == "quarantine":
+            from synlynk.state_repair import quarantine_state_db
+
+            print(json.dumps(quarantine_state_db(
+                args.path, slug=args.slug, quarantine_root=args.root, apply=args.apply
+            ), sort_keys=True))
+        elif args.state_action == "restore":
+            from synlynk.state_repair import restore_state_db
+
+            print(json.dumps(restore_state_db(
+                args.snapshot,
+                args.destination,
+                slug=args.slug,
+                product_id=args.product_id,
+                archive_root=args.archive_root,
+                apply=args.apply,
+            ), sort_keys=True))
+        else:
+            help_parsers.get("state", parser).print_help()
     elif args.command == "home":
         cmd_home(args)
     elif args.command == "selftest":

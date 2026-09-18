@@ -91,3 +91,14 @@
   regression coverage for fallback, persistence failure, concurrency, and
   continued operation.
 [@codex]
+
+## DR readiness and second-machine restore preparation (2026-09-18)
+
+- Added `synlynk backup package`, which stages an online SQLite snapshot in a
+  temporary directory, encrypts it to a workspace DR recipient, and removes
+  plaintext staging before returning.
+- Added the provider-neutral state DB disaster-recovery runbook covering
+  encrypted retention, key custody, second-machine restore, and acceptance
+  evidence.
+- Focused backup verification: 5 passed, 2 skipped.
+[@codex]

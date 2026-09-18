@@ -593,10 +593,11 @@ def _get_project_root() -> str:
 def _resolve_db_path() -> str:
     """Resolve the product graph, migrating the legacy path once if needed."""
     from synlynk.product_store import identity_slug_from_config, migrate_state_db_if_needed, state_db_path
+    from synlynk.state_registry import canonical_path
 
     root = _project_root()
     slug = identity_slug_from_config(root)
-    path = state_db_path(slug)
+    path = canonical_path(slug, state_db_path(slug))
     if not _IS_TESTING:
         migrate_state_db_if_needed(root)
     return str(path)
@@ -997,7 +998,12 @@ WHERE split_model = 0
 GROUP BY agent, model_version, discipline, engg_domain, org_domain, role, stage, industry, phase;
 """
 
-def _get_db(db_path: str = None, read_only: bool = False) -> _sqlite3.Connection:
+def _get_db(
+    db_path: str = None,
+    read_only: bool = False,
+    *,
+    migrate: bool = True,
+) -> _sqlite3.Connection:
     """Return a SQLite connection to state.db.
 
     ``read_only=True`` opens the selected ledger through SQLite's read-only
@@ -1014,16 +1020,21 @@ def _get_db(db_path: str = None, read_only: bool = False) -> _sqlite3.Connection
     override that fails should surface loudly, not be silently re-routed.
     See #681.
 
-    Falls back to ./.synlynk/state.db when the centralised path under
-    ~/.synlynk/projects/<key>/ is unwritable. Dispatched-agent sandboxes
-    commonly mount $HOME read-only; that surfaces as OSError(EROFS) from
-    os.makedirs (not PermissionError) or as sqlite3.OperationalError from
-    connect when the directory already exists. See #648.
+    Fallback to ./.synlynk/state.db is disabled by default. A local ledger is
+    a different source of truth and must never be selected silently when the
+    product ledger is unavailable. Sandboxed callers that explicitly accept
+    an isolated, non-canonical ledger may set
+    SYNLYNK_ALLOW_STATE_DB_FALLBACK=1. Dispatched-agent sandboxes commonly
+    mount $HOME read-only; that surfaces as OSError(EROFS) from os.makedirs
+    (not PermissionError) or as sqlite3.OperationalError from connect when
+    the directory already exists. See #648 and the Sev1 state-integrity
+    incident #1655.
 
     Primary product ledger must not live under job/feature worktrees when the
-    home path is the intended path (#330 / fleet S2a). Sandbox fallback after
-    OSError/OperationalError uses a path that never lands under worktrees
-    (tmpdir when cwd is a job/feature worktree) so nested_state matrix stays clean.
+    home path is the intended path (#330 / fleet S2a). If an operator
+    explicitly enables the sandbox fallback, it uses a path that never lands
+    under worktrees (tmpdir when cwd is a job/feature worktree) so the
+    nested_state matrix stays clean.
 
     During pytest execution from a linked worktree, the canonical shared path is
     redirected to a process-local temporary DB to protect the live ledger. Set
@@ -1048,7 +1059,7 @@ def _get_db(db_path: str = None, read_only: bool = False) -> _sqlite3.Connection
         os.close(fd)
         os.unlink(probe)
 
-    def _connect(path: str, *, read_only: bool = False) -> _sqlite3.Connection:
+    def _connect(path: str, *, read_only: bool = False, migrate: bool = True) -> _sqlite3.Connection:
         global ACTIVE_DB_PATH
         if read_only:
             wal_path = f"{path}-wal"
@@ -1099,7 +1110,16 @@ def _get_db(db_path: str = None, read_only: bool = False) -> _sqlite3.Connection
             conn.execute("PRAGMA busy_timeout=30000")
             conn.execute("PRAGMA synchronous=NORMAL")
             conn.execute("PRAGMA foreign_keys=ON")
-            _migrate_db(conn)
+            if migrate:
+                _migrate_db(conn)
+            if migrate and not _IS_TESTING and os.path.abspath(path) == os.path.abspath(DB_PATH):
+                from synlynk.product_store import identity_slug_from_config
+                from synlynk.state_registry import ensure_registered_product, identity_metadata, product_identity
+
+                slug = identity_slug_from_config(_project_root())
+                entry = ensure_registered_product(slug, Path(path), product_identity(slug, _project_root()))
+                identity_metadata(conn, product_id=entry["product_id"], mode="canonical", path=Path(path))
+                conn.commit()
         except Exception:
             conn.close()
             raise
@@ -1107,18 +1127,18 @@ def _get_db(db_path: str = None, read_only: bool = False) -> _sqlite3.Connection
         return conn
 
     if db_path is not None:
-        return _connect(db_path, read_only=read_only)
+        return _connect(db_path, read_only=read_only, migrate=migrate)
 
     override = os.environ.get("SYNLYNK_STATE_DB_PATH")
     if override:
         # Explicit overrides remain authoritative: failures propagate and do
         # not silently select another ledger.
-        return _connect(override, read_only=read_only)
+        return _connect(override, read_only=read_only, migrate=migrate)
 
     if read_only:
         # Read-only inspection must fail on an unavailable/corrupt canonical
         # ledger rather than falling back to a stale repo or sandbox copy.
-        return _connect(DB_PATH, read_only=True)
+        return _connect(DB_PATH, read_only=True, migrate=migrate)
 
     from synlynk.fleet import assert_not_nested_product_ledger, sandbox_fallback_db_path
 
@@ -1131,29 +1151,29 @@ def _get_db(db_path: str = None, read_only: bool = False) -> _sqlite3.Connection
             "for an intentional shared-DB test.",
             file=sys.stderr,
         )
-    fallback_path = sandbox_fallback_db_path()
-    tried_fallback = False
-    while True:
-        try:
-            # Refuse nested worktree product ledger on the primary attempt only.
-            if not tried_fallback:
-                assert_not_nested_product_ledger(db_path, home_writable=True)
-            return _connect(db_path)
-        # OSError covers PermissionError, EROFS (read-only mounts), ENOSPC, etc.
-        # OperationalError covers "unable to open database file" when the dir
-        # exists but the file/FS is still unwritable (sandbox case in #648).
-        # RuntimeError from nested-ledger refusal must not trigger fallback.
-        except (OSError, _sqlite3.OperationalError) as exc:
-            if tried_fallback:
-                raise
-            print(
-                f"warning: cannot open project state DB at {db_path} ({exc}); "
-                f"no project state found on this machine — falling back to "
-                f"local {fallback_path}",
-                file=sys.stderr,
-            )
-            db_path = fallback_path
-            tried_fallback = True
+    try:
+        assert_not_nested_product_ledger(db_path, home_writable=True)
+        return _connect(db_path, migrate=migrate)
+    # RuntimeError from nested-ledger refusal must not trigger fallback.
+    except (OSError, _sqlite3.OperationalError) as exc:
+        if os.environ.get("SYNLYNK_ALLOW_STATE_DB_FALLBACK") != "1":
+            raise RuntimeError(
+                "canonical state DB unavailable or unusable at "
+                f"{os.path.abspath(db_path)}: {exc}; refusing to select a "
+                "non-canonical fallback. Set SYNLYNK_STATE_DB_PATH to an "
+                "explicit verified ledger, or set "
+                "SYNLYNK_ALLOW_STATE_DB_FALLBACK=1 only for an intentional "
+                "isolated sandbox."
+            ) from exc
+        fallback_path = sandbox_fallback_db_path()
+        print(
+            f"warning: cannot open canonical project state DB at {db_path} "
+            f"({exc}); explicitly falling back with "
+            "SYNLYNK_ALLOW_STATE_DB_FALLBACK=1 — using isolated "
+            f"ledger {fallback_path}",
+            file=sys.stderr,
+        )
+        return _connect(fallback_path, migrate=migrate)
 
 
 def get_state_db_path() -> str:
@@ -1161,6 +1181,47 @@ def get_state_db_path() -> str:
     return os.path.abspath(
         os.environ.get("SYNLYNK_STATE_DB_PATH") or ACTIVE_DB_PATH or DB_PATH
     )
+
+
+def open_state_db(
+    *,
+    product_id: str | None = None,
+    mode: str = "canonical",
+    read_only: bool = False,
+    explicit_path: str | None = None,
+) -> _sqlite3.Connection:
+    """Open a state ledger through an explicit, typed access mode.
+
+    ``canonical`` is the only mode used by normal product commands.  The
+    other modes are intentionally explicit so tests, backup verification, and
+    restore tooling cannot accidentally become an alternate product ledger.
+    Degraded ledgers are read-only unless an operator explicitly opts into a
+    write with ``SYNLYNK_ALLOW_DEGRADED_WRITES=1``.
+    """
+    allowed = {"canonical", "test", "backup", "restore", "degraded"}
+    if mode not in allowed:
+        raise ValueError(f"unsupported state DB mode: {mode!r}")
+    if mode == "canonical":
+        if explicit_path is not None:
+            from synlynk.product_store import identity_slug_from_config, state_db_path
+            from synlynk.state_registry import canonical_path
+
+            slug = identity_slug_from_config(_project_root())
+            expected = canonical_path(slug, state_db_path(slug)).resolve()
+            requested = Path(explicit_path).expanduser().resolve()
+            if requested != expected:
+                raise RuntimeError(
+                    f"canonical state DB path mismatch: expected {expected}, requested {requested}"
+                )
+        return _get_db(db_path=explicit_path, read_only=read_only) if explicit_path else _get_db(read_only=read_only)
+    if explicit_path is None:
+        raise ValueError(f"mode={mode!r} requires explicit_path")
+    if mode == "degraded" and not read_only and os.environ.get("SYNLYNK_ALLOW_DEGRADED_WRITES") != "1":
+        raise RuntimeError(
+            "degraded state DB access is read-only by default; set "
+            "SYNLYNK_ALLOW_DEGRADED_WRITES=1 for an intentional write"
+        )
+    return _get_db(db_path=explicit_path, read_only=read_only or mode in {"backup"})
 
 
 

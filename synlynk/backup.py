@@ -196,6 +196,39 @@ def encrypt_snapshot(
             temporary.unlink()
 
 
+def create_dr_package(
+    source: str | Path | None = None,
+    output_dir: str | Path | None = None,
+    label: str = "state",
+    recipient: str | None = None,
+) -> dict:
+    """Create an encrypted, provider-neutral DR package.
+
+    Plaintext is staged in a temporary directory and removed after export.
+    The destination receives only the encrypted database and its manifest.
+    """
+    if not recipient or not recipient.strip():
+        raise ValueError("a GPG recipient is required for encrypted DR export")
+    source_path = Path(source).expanduser().resolve() if source else _default_source()
+    destination_dir = (
+        Path(output_dir).expanduser().resolve()
+        if output_dir
+        else _default_output_dir(source_path)
+    )
+    with tempfile.TemporaryDirectory(prefix="synlynk-dr-package-") as staging_dir:
+        snapshot = create_snapshot(source=source_path, output_dir=staging_dir, label=label)
+        manifest = encrypt_snapshot(
+            snapshot["snapshot"], recipient, output_dir=destination_dir
+        )
+    manifest["source_snapshot"] = "temporary plaintext removed after export"
+    manifest["plaintext_retained"] = False
+    manifest_path = Path(manifest["encrypted_snapshot"]).with_suffix(".json")
+    manifest_path.write_text(
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    return manifest
+
+
 def verify_encrypted_snapshot(
     encrypted: str | Path,
     keychain_service: str | None = None,
@@ -257,6 +290,16 @@ def cmd_backup_encrypt(snapshot: str, recipient: str, output_dir=None) -> None:
     print(f"  ✓ Encrypted snapshot: {manifest['encrypted_snapshot']}")
     print(f"  ✓ Manifest: {manifest['encrypted_snapshot'][:-4]}.json")
     print(f"  ✓ SHA-256: {manifest['encrypted_sha256']}")
+
+
+def cmd_backup_package(source=None, output_dir=None, label="state", recipient=None) -> None:
+    manifest = create_dr_package(
+        source=source, output_dir=output_dir, label=label, recipient=recipient
+    )
+    print(f"  ✓ Encrypted DR package: {manifest['encrypted_snapshot']}")
+    print(f"  ✓ Manifest: {manifest['encrypted_snapshot'][:-4]}.json")
+    print(f"  ✓ SHA-256: {manifest['encrypted_sha256']}")
+    print("  ✓ Plaintext staging: removed")
 
 
 def cmd_backup_verify_encrypted(snapshot: str, keychain_service=None) -> None:

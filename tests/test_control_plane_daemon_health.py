@@ -152,11 +152,13 @@ def test_dual_ledger_sync_detection_and_write_through(tmp_path, monkeypatch):
     with patch("synlynk.get_state_db_path", return_value=primary_db), \
          patch("synlynk._project_root", return_value=str(repo)):
         res = _check_dual_ledger_sync()
-        assert res["passed"] is True
-        assert res["detail"] == "synchronized"
+        # The repo-local ledger is now a legacy artifact, never a second
+        # writable source of truth. Equal rows do not make it canonical.
+        assert res["passed"] is False
+        assert "legacy non-canonical ledger" in res["detail"]
 
         hc = _hc_dual_ledger_sync()
-        assert hc.status == "ok"
+        assert hc.status == "warn"
 
         # Now induce drift on primary
         conn_p = sqlite3.connect(primary_db)
@@ -166,17 +168,19 @@ def test_dual_ledger_sync_detection_and_write_through(tmp_path, monkeypatch):
 
         res_drift = _check_dual_ledger_sync()
         assert res_drift["passed"] is False
-        assert "codex" in res_drift["detail"]
+        assert "not opened or synchronized" in res_drift["detail"]
 
         hc_drift = _hc_dual_ledger_sync()
         assert hc_drift.status == "warn"
 
-        # Write-through to fallback DB
+        # The compatibility hook is intentionally a no-op; the legacy DB is
+        # not repaired by writing a second source of truth.
         _write_through_fallback_db("codex", "0.2.0", "ok", "{}", "{}", "hash", "2026-09-10T00:00:00Z")
 
-        # Now both should be synchronized again
+        # The legacy artifact remains non-canonical and requires inventory or
+        # quarantine rather than synchronization.
         res_synced = _check_dual_ledger_sync()
-        assert res_synced["passed"] is True
+        assert res_synced["passed"] is False
 
 
 def test_cli_probe_no_fence_flag(tmp_path, monkeypatch):

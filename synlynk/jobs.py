@@ -2428,7 +2428,9 @@ def scan_zombie_running_jobs(db_path: str) -> list:
     project = os.path.basename(os.path.dirname(db_path))
     out = []
     try:
-        conn = sqlite3.connect(db_path)
+        conn = sqlite3.connect(
+            f"file:{os.path.abspath(db_path)}?mode=ro", uri=True, timeout=30.0
+        )
     except Exception:
         return out
     try:
@@ -2484,9 +2486,26 @@ def apply_reap_zombies(
 
     reaped = []
     now = time.strftime("%Y-%m-%dT%H:%M:%S")
-    for db_path, items in by_db.items():
+    canonical = None
+    get_db = _pkg("_get_db")
+    get_state_db_path = _pkg("get_state_db_path")
+    if get_state_db_path is not None:
         try:
-            conn = sqlite3.connect(db_path)
+            canonical = os.path.realpath(get_state_db_path())
+        except Exception:
+            canonical = None
+    for db_path, items in by_db.items():
+        # Zombie reaping is a write.  Never mutate a legacy/copy discovered by
+        # the all-projects inventory; only the centrally selected ledger may be
+        # changed.  Inspection of other ledgers remains read-only above.
+        if get_db is None:
+            continue
+        if not _pkg("_IS_TESTING", False) and (
+            canonical is None or os.path.realpath(db_path) != canonical
+        ):
+            continue
+        try:
+            conn = get_db(db_path=db_path)
         except Exception:
             continue
         try:
