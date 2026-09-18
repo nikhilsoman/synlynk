@@ -19,13 +19,9 @@ _LINEAGE_LOCK = threading.RLock()
 def _resolve_db_path(db_path: Optional[str] = None) -> str:
     if db_path:
         return db_path
-    cand1 = os.path.join(os.getcwd(), ".synlynk", "state.db")
-    if os.path.exists(cand1):
-        return cand1
-    cand2 = os.path.join(os.getcwd(), "state.db")
-    if os.path.exists(cand2):
-        return cand2
-    return cand1
+    from synlynk import get_state_db_path
+
+    return get_state_db_path()
 
 
 def ensure_lineage_schema(conn: sqlite3.Connection) -> None:
@@ -62,7 +58,9 @@ def ensure_lineage_schema(conn: sqlite3.Connection) -> None:
 
 
 def _connect_lineage_db(db_file: str) -> sqlite3.Connection:
-    conn = sqlite3.connect(db_file, timeout=30.0)
+    from synlynk import _get_db
+
+    conn = _get_db(db_path=db_file, migrate=False)
     try:
         conn.execute("PRAGMA busy_timeout = 30000")
     except Exception:

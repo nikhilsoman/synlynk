@@ -263,7 +263,9 @@ def _db_path_for_conn(conn) -> Optional[str]:
 def _maybe_trigger_staleness_checks_in_thread(db_path: Optional[str], config: dict) -> None:
     if not db_path:
         return
-    conn = sqlite3.connect(db_path)
+    from synlynk import _get_db
+
+    conn = _get_db(db_path=db_path)
     try:
         maybe_trigger_staleness_checks(conn, config)
     finally:

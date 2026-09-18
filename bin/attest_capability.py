@@ -151,7 +151,7 @@ def main() -> None:
         print("  Mode: DRY RUN")
     print()
 
-    conn = sqlite3.connect(DB_PATH)
+    conn = synlynk._get_db(db_path=DB_PATH)
     conn.execute("PRAGMA foreign_keys=ON")
 
     updated = 0

@@ -53,7 +53,8 @@ def _compute_api_equivalent_usd(agent, model, input_tokens, output_tokens, cache
 
 
 def backfill_api_equivalent_usd(db_path: str, dry_run: bool = False) -> int:
-    conn = sqlite3.connect(db_path)
+    mode = "test" if getattr(synlynk, "_IS_TESTING", False) else "canonical"
+    conn = synlynk.open_state_db(mode=mode, explicit_path=db_path)
     conn.row_factory = sqlite3.Row
     try:
         columns = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}

@@ -14,6 +14,8 @@ import webbrowser
 from typing import Dict, Optional, Tuple
 
 from synlynk import _get_db, _query_repo_file_tree
+
+_open_state_db = _get_db
 from synlynk.observatory import (
     build_job_observatory_snapshot,
     write_observatory_snapshot,
@@ -574,8 +576,10 @@ def generate_viz_data() -> dict:
 
     original_uxcore_get_db = uxcore._get_db
     if db_path:
-        import sqlite3
-        uxcore._get_db = lambda: sqlite3.connect(db_path)
+        # db_path came from the already-selected connection above. Re-open it
+        # through the central resolver in read-only mode so Vizor never
+        # discovers or mutates a second ledger.
+        uxcore._get_db = lambda: _open_state_db(db_path=db_path, read_only=True)
     else:
         uxcore._get_db = _get_db
     try:
