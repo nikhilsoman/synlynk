@@ -16,6 +16,7 @@ from synlynk.state_registry import (
     product_identity,
     registered_canonical_path,
     registry_lock,
+    update_registered_product,
 )
 
 
@@ -166,4 +167,63 @@ def quarantine_state_db(
             os.replace(moved_path, source.parent / Path(moved_path).name)
         shutil.rmtree(target, ignore_errors=True)
         raise
+    return result
+
+
+def restore_state_db(
+    snapshot: str | Path,
+    destination: str | Path,
+    *,
+    slug: str,
+    product_id: str | None = None,
+    archive_root: str | Path | None = None,
+    apply: bool = False,
+) -> dict:
+    """Validate a snapshot and plan/apply an explicit canonical restore."""
+    source = Path(snapshot).expanduser().resolve()
+    destination_path = Path(destination).expanduser().resolve()
+    if not source.is_file():
+        raise FileNotFoundError(source)
+    with sqlite3.connect(f"file:{source}?mode=ro", uri=True) as conn:
+        if conn.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
+            raise sqlite3.DatabaseError(f"restore snapshot failed integrity check: {source}")
+    archive_dir = Path(archive_root or Path.home() / ".synlynk" / "backups").expanduser().resolve()
+    stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+    archive_path = archive_dir / f"restore-{slug}-{stamp}" / destination_path.name
+    result = {
+        "disposition": "planned",
+        "snapshot": str(source),
+        "destination": str(destination_path),
+        "archive": str(archive_path),
+    }
+    if not apply:
+        return result
+    destination_path.parent.mkdir(parents=True, exist_ok=True)
+    archive_path.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = destination_path.with_name(f".{destination_path.name}.restore.lock")
+    with registry_lock(lock_path):
+        temporary = _normalized_copy(source, destination_path.parent)
+        try:
+            if destination_path.exists():
+                os.replace(destination_path, archive_path)
+                for suffix in ("-wal", "-shm", "-journal"):
+                    sidecar = Path(f"{destination_path}{suffix}")
+                    if sidecar.exists():
+                        os.replace(sidecar, archive_path.parent / sidecar.name)
+            os.replace(temporary, destination_path)
+            _fsync_dir(destination_path.parent)
+            entry = ensure_registered_product(
+                slug, destination_path, product_id or product_identity(slug)
+            )
+            generation = int(entry.get("lineage_generation", 1)) + 1
+            update_registered_product(
+                slug,
+                lineage_generation=generation,
+                state="active",
+                last_restore_snapshot=str(source),
+            )
+            result.update({"disposition": "restored", "lineage_generation": generation})
+        finally:
+            if temporary.exists():
+                temporary.unlink()
     return result
