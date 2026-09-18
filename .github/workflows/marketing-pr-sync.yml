@@ -4,13 +4,19 @@ on:
   pull_request_target:
     types: [closed]
 
+concurrency:
+  group: marketing-pr-sync
+  cancel-in-progress: false
+
 permissions:
   contents: write
-  pull-requests: read
+  pull-requests: write
 
 jobs:
   marketing-sync:
-    if: github.event.pull_request.merged == true
+    if: >-
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.head.ref != 'automation/marketing-sync'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -29,13 +35,29 @@ jobs:
           pip install --upgrade pip
           pip install -e .
 
+      - name: Prepare idempotent marketing branch
+        env:
+          MARKETING_BRANCH: automation/marketing-sync
+        run: |
+          git fetch origin main
+          if git ls-remote --exit-code --heads origin "$MARKETING_BRANCH" >/dev/null 2>&1; then
+            git fetch origin "$MARKETING_BRANCH"
+            git checkout -B "$MARKETING_BRANCH" "origin/$MARKETING_BRANCH"
+            git merge --no-edit origin/main
+          else
+            git checkout -B "$MARKETING_BRANCH" origin/main
+          fi
+
       - name: Synchronize PR Blog Post & Collateral
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python3 -m synlynk marketing sync-pr ${{ github.event.pull_request.number }}
 
-      - name: Commit and push marketing updates
+      - name: Commit and publish marketing PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MARKETING_BRANCH: automation/marketing-sync
         run: |
           git config --global user.name "synlynk-marketing[bot]"
           git config --global user.email "marketing@synlynk.com"
@@ -44,7 +66,28 @@ jobs:
           if git diff --staged --quiet; then
             echo "No marketing changes to commit."
           else
-            git commit -m "docs(blog): synchronize limited-treatment post for PR #${{ github.event.pull_request.number }} [skip ci]" \
+            git commit -m "docs(blog): synchronize limited-treatment post for PR #${{ github.event.pull_request.number }}" \
                        -m "Co-Authored-By: Agy (Gemini) <noreply@antigravity.dev>"
-            git push origin main
+            git push origin "$MARKETING_BRANCH"
+          fi
+
+          existing_pr=$(gh pr list \
+            --repo "$GITHUB_REPOSITORY" \
+            --head "$GITHUB_REPOSITORY_OWNER:$MARKETING_BRANCH" \
+            --base main \
+            --state open \
+            --json number \
+            --jq '.[0].number // empty')
+
+          if [ -n "$existing_pr" ]; then
+            echo "Reused existing marketing PR #$existing_pr."
+          elif ! git diff origin/main...HEAD --quiet; then
+            gh pr create \
+              --repo "$GITHUB_REPOSITORY" \
+              --base main \
+              --head "$MARKETING_BRANCH" \
+              --title "docs(blog): synchronize marketing collateral" \
+              --body "Automated post-merge marketing updates for PR #${{ github.event.pull_request.number }}.\n\nFixes #1666"
+          else
+            echo "No marketing changes to publish."
           fi
