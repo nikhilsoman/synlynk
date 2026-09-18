@@ -682,6 +682,7 @@ CREATE TABLE IF NOT EXISTS stories (
     archived_at   TIMESTAMP,
     superseded_by TEXT DEFAULT NULL,
     repo_id       TEXT,
+    type_id       TEXT,
     created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

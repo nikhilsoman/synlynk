@@ -744,6 +744,7 @@ def generate_index_html(data: dict, port: int) -> str:
         """.rstrip()
 
     nav_items = [
+        ("board", "▦", "Board", "board.html", False),
         ("gantt", "📅", "Gantt", "gantt.html", True),
         ("product", "🗺", "Product View", "product.html", False),
         ("logical", "🧩", "Logical View", "logical.html", False),
@@ -4984,11 +4985,37 @@ document.querySelector('#role-form').addEventListener('submit',async e=>{{e.prev
 </script></body></html>"""
 
 
+def generate_board_html(port: int) -> str:
+    """Render the local product board shell; cards come from product state.db."""
+    live = _live_js(port)
+    return """<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>synlynk Vizor — Board</title>
+<style>
+:root{--bg:#f6f8fa;--panel:#fff;--ink:#1f2328;--muted:#667085;--line:#d8dee4;--accent:#0d9e87;--accent-bg:#e6f7f4}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+main{max-width:1280px;margin:0 auto;padding:34px 28px 70px}.eyebrow{color:var(--accent);font-weight:700;letter-spacing:.08em;text-transform:uppercase;font-size:11px}h1{font-size:34px;margin:8px 0}.subtitle{color:var(--muted);margin:0 0 24px}
+.filters{display:flex;gap:10px;flex-wrap:wrap;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:20px}select{border:1px solid var(--line);border-radius:7px;padding:8px;background:#fff;color:var(--ink)}
+.board{display:grid;grid-template-columns:repeat(5,minmax(180px,1fr));gap:12px;align-items:start}.column{background:#eef2f5;border-radius:12px;padding:10px;min-height:180px}.column h2{font-size:13px;margin:3px 4px 10px;text-transform:capitalize}.card{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:12px;margin-bottom:9px;box-shadow:0 2px 8px #1f23280d}.card h3{font-size:13px;margin:0 0 9px}.meta{color:var(--muted);font-size:11px;margin:4px 0}.links{display:flex;gap:8px;font-size:11px}.links a{color:var(--accent)}button{border:1px solid var(--line);background:#fff;border-radius:6px;padding:4px 7px;cursor:pointer}.empty{color:var(--muted);padding:20px 5px;font-size:12px}@media(max-width:900px){.board{grid-template-columns:repeat(2,minmax(180px,1fr))}}@media(max-width:520px){.board{grid-template-columns:1fr}}
+</style></head><body><main><div class="eyebrow">Vizor / Product graph</div><h1>Board</h1><p class="subtitle">Claimed work across every repository in this product. Changes write to the product <code>state.db</code>.</p>
+<div class="filters"><select id="repo"><option value="">All repositories</option></select><select id="type"><option value="">All types</option></select><select id="goal"><option value="">All goals</option></select><span id="identity" class="meta"></span></div><div id="board" class="board"></div></main>""" + live + """<script>
+const statuses=['open','ready','in_progress','blocked','done']; let boardData={};
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function options(id, values){const el=document.getElementById(id); values.forEach(v=>{const o=document.createElement('option');o.value=v;o.textContent=v;el.appendChild(o);});}
+function link(pointer){return pointer&&pointer.url?`<a href="${esc(pointer.url)}" target="_blank" rel="noopener">${esc(pointer.tracker)} #${esc(pointer.id)}</a>`:'';}
+function draw(){const repo=document.getElementById('repo').value,type=document.getElementById('type').value,goal=document.getElementById('goal').value;const cards=(boardData.cards||[]).filter(c=>(!repo||c.repo_id===repo)&&(!type||c.type_id===type)&&(!goal||c.goal_id===goal));document.getElementById('board').innerHTML=statuses.map(s=>`<section class="column"><h2>${esc(s.replace('_',' '))}</h2>${cards.filter(c=>c.status===s).map(c=>`<article class="card"><h3>${esc(c.title)}</h3><div class="meta">${esc(c.repo_name||c.repo_id||'unassigned')} · ${esc(c.type_id||'untyped')}</div><div class="meta">${esc(c.goal_id||'no goal')}</div><div class="links">${link(c.tracker)}${c.pr_url?`<a href="${esc(c.pr_url)}" target="_blank" rel="noopener">PR</a>`:''}</div><div style="margin-top:9px">${statuses.filter(x=>x!==c.status).map(x=>`<button data-id="${esc(c.story_id)}" data-status="${x}">${esc(x.replace('_',' '))}</button>`).join(' ')}</div></article>`).join('')||'<div class="empty">No cards</div>'}</section>`).join('');document.querySelectorAll('button[data-id]').forEach(b=>b.onclick=()=>updateStatus(b.dataset.id,b.dataset.status));}
+async function load(){const q=new URLSearchParams();['repo','type','goal'].forEach(k=>{const v=document.getElementById(k).value;if(v)q.set(k+'_id',v)});const r=await fetch('/api/board?'+q.toString());if(!r.ok){document.getElementById('board').textContent='Board unavailable';return}boardData=await r.json();document.getElementById('identity').textContent='Product: '+(boardData.identity_slug||'unknown');draw();}
+async function updateStatus(id,status){const r=await fetch('/api/board/status',{method:'POST',headers:window.vizorAuthHeaders({'Content-Type':'application/json'}),body:JSON.stringify({story_id:id,status})});if(!r.ok){alert('Status update failed');return}await load();}
+['repo','type','goal'].forEach(id=>document.getElementById(id).onchange=load);fetch('/api/board').then(r=>r.json()).then(d=>{boardData=d;options('repo',d.filters.repos||[]);options('type',d.filters.types||[]);options('goal',d.filters.goals||[]);document.getElementById('identity').textContent='Product: '+(d.identity_slug||'unknown');draw()});
+</script></body></html>"""
+
+
 def _write_cache(data: dict, port: int) -> None:
     """Generate all views and write to viz-cache/."""
     os.makedirs(VIZ_CACHE_DIR, exist_ok=True)
     views = {
         "index.html": generate_index_html(data, port),
+        "board.html": generate_board_html(port),
         "gantt.html": generate_gantt_html(data, port),
         "tube.html": generate_architect_map_html(data, port),
         "product.html": generate_product_html(data, port),
@@ -5670,10 +5697,24 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
             self._send_json_ok(matrix)
             return
 
+        if path == "/api/board":
+            from synlynk.board import board_data
+            filters = parse_qs(parsed.query)
+            try:
+                payload = board_data(
+                    repo_id=(filters.get("repo_id") or [None])[0],
+                    type_id=(filters.get("type_id") or [None])[0],
+                    goal_id=(filters.get("goal_id") or [None])[0],
+                )
+            except FileNotFoundError:
+                payload = {"identity_slug": "", "cards": [], "filters": {"repos": [], "types": [], "goals": []}}
+            self._send_json_ok(payload)
+            return
+
         super().do_GET()
 
     def do_OPTIONS(self):
-        if self.path not in ("/note", "/dispatch", "/approve", "/kill", "/architect-map/view-pref", "/roles/create", "/worktrees/clean", "/tools/install", "/api/tools/install"):
+        if self.path not in ("/note", "/dispatch", "/approve", "/kill", "/architect-map/view-pref", "/roles/create", "/worktrees/clean", "/tools/install", "/api/tools/install", "/api/board/status"):
             self.send_error(404)
             return
         self.send_response(204)
@@ -5698,8 +5739,29 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
             self._handle_worktree_clean_request()
         elif self.path in ("/tools/install", "/api/tools/install"):
             self._handle_tool_install_request()
+        elif self.path == "/api/board/status":
+            self._handle_board_status_request()
         else:
             self.send_error(404)
+
+    def _handle_board_status_request(self):
+        try:
+            payload = self._read_json_body()
+            from synlynk.board import update_status
+            result = update_status(payload.get("story_id"), payload.get("status"))
+        except (json.JSONDecodeError, TypeError, ValueError) as exc:
+            self.send_error(400, str(exc) or "Invalid JSON")
+            return
+        except KeyError as exc:
+            self.send_error(404, str(exc))
+            return
+        except FileNotFoundError as exc:
+            self.send_error(404, str(exc))
+            return
+        except Exception as exc:
+            self.send_error(500, str(exc))
+            return
+        self._send_json_ok(result)
 
     def _handle_tool_install_request(self):
         from urllib.parse import parse_qs
