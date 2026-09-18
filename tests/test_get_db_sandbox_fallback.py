@@ -24,6 +24,7 @@ def test_get_db_falls_back_on_erofs_oserror(tmp_path, monkeypatch, capsys):
     primary = tmp_path / "readonly_home" / "projects" / "deadbeef" / "state.db"
     monkeypatch.setattr(synlynk, "DB_PATH", str(primary))
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SYNLYNK_ALLOW_STATE_DB_FALLBACK", "1")
 
     real_makedirs = os.makedirs
     calls = {"n": 0}
@@ -59,6 +60,7 @@ def test_get_db_falls_back_on_permissionerror(tmp_path, monkeypatch, capsys):
     primary = tmp_path / "no_access" / "state.db"
     monkeypatch.setattr(synlynk, "DB_PATH", str(primary))
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SYNLYNK_ALLOW_STATE_DB_FALLBACK", "1")
 
     real_makedirs = os.makedirs
     calls = {"n": 0}
@@ -91,6 +93,7 @@ def test_get_db_falls_back_on_sqlite_operational_error(tmp_path, monkeypatch, ca
     primary.parent.mkdir(parents=True)
     monkeypatch.setattr(synlynk, "DB_PATH", str(primary))
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SYNLYNK_ALLOW_STATE_DB_FALLBACK", "1")
 
     real_connect = synlynk._sqlite3.connect
     calls = {"n": 0}
@@ -121,6 +124,7 @@ def test_get_db_reraise_when_fallback_also_fails(tmp_path, monkeypatch):
 
     monkeypatch.setattr(synlynk, "DB_PATH", str(tmp_path / "p" / "state.db"))
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SYNLYNK_ALLOW_STATE_DB_FALLBACK", "1")
 
     def always_fail(path, exist_ok=False):
         raise OSError(errno.EROFS, "Read-only file system", path)
@@ -128,6 +132,49 @@ def test_get_db_reraise_when_fallback_also_fails(tmp_path, monkeypatch):
     monkeypatch.setattr(os, "makedirs", always_fail)
 
     with pytest.raises(OSError, match="Read-only file system"):
+        synlynk._get_db()
+
+
+def test_get_db_fails_closed_without_implicit_fallback(tmp_path, monkeypatch):
+    """Canonical access failure must never select a checkout-local ledger."""
+    import synlynk
+
+    primary = tmp_path / "readonly_home" / "projects" / "deadbeef" / "state.db"
+    monkeypatch.setattr(synlynk, "DB_PATH", str(primary))
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("SYNLYNK_ALLOW_STATE_DB_FALLBACK", raising=False)
+
+    def always_fail(path, exist_ok=False):
+        raise OSError(errno.EROFS, "Read-only file system", path)
+
+    monkeypatch.setattr(os, "makedirs", always_fail)
+
+    with pytest.raises(RuntimeError, match="refusing to select a non-canonical fallback"):
+        synlynk._get_db()
+    assert not (tmp_path / ".synlynk" / "state.db").exists()
+
+
+def test_get_db_never_reuses_malformed_fallback_when_explicitly_enabled(tmp_path, monkeypatch):
+    """Explicit fallback may create an isolated DB, never reuse malformed state."""
+    import synlynk
+
+    primary = tmp_path / "readonly_home" / "projects" / "deadbeef" / "state.db"
+    fallback = tmp_path / ".synlynk" / "state.db"
+    fallback.parent.mkdir()
+    fallback.write_bytes(b"not a sqlite database")
+    monkeypatch.setattr(synlynk, "DB_PATH", str(primary))
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SYNLYNK_ALLOW_STATE_DB_FALLBACK", "1")
+    real_makedirs = os.makedirs
+
+    def always_fail(path, exist_ok=False):
+        if os.path.abspath(path) == os.path.abspath(primary.parent):
+            raise OSError(errno.EROFS, "Read-only file system", path)
+        return real_makedirs(path, exist_ok=exist_ok)
+
+    monkeypatch.setattr(os, "makedirs", always_fail)
+
+    with pytest.raises(sqlite3.DatabaseError):
         synlynk._get_db()
 
 
@@ -232,6 +279,7 @@ def test_get_db_rejects_readonly_primary_before_returning_connection(tmp_path, m
     primary.chmod(0o444)
     monkeypatch.setattr(synlynk, "DB_PATH", str(primary))
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SYNLYNK_ALLOW_STATE_DB_FALLBACK", "1")
 
     selected = synlynk._get_db()
     try:
@@ -269,6 +317,7 @@ def test_get_db_failed_primary_probe_preserves_db_and_sidecars(tmp_path, monkeyp
     }
     monkeypatch.setattr(synlynk, "DB_PATH", str(primary))
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SYNLYNK_ALLOW_STATE_DB_FALLBACK", "1")
 
     real_connect = synlynk._sqlite3.connect
 

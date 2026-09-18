@@ -1014,16 +1014,21 @@ def _get_db(db_path: str = None, read_only: bool = False) -> _sqlite3.Connection
     override that fails should surface loudly, not be silently re-routed.
     See #681.
 
-    Falls back to ./.synlynk/state.db when the centralised path under
-    ~/.synlynk/projects/<key>/ is unwritable. Dispatched-agent sandboxes
-    commonly mount $HOME read-only; that surfaces as OSError(EROFS) from
-    os.makedirs (not PermissionError) or as sqlite3.OperationalError from
-    connect when the directory already exists. See #648.
+    Fallback to ./.synlynk/state.db is disabled by default. A local ledger is
+    a different source of truth and must never be selected silently when the
+    product ledger is unavailable. Sandboxed callers that explicitly accept
+    an isolated, non-canonical ledger may set
+    SYNLYNK_ALLOW_STATE_DB_FALLBACK=1. Dispatched-agent sandboxes commonly
+    mount $HOME read-only; that surfaces as OSError(EROFS) from os.makedirs
+    (not PermissionError) or as sqlite3.OperationalError from connect when
+    the directory already exists. See #648 and the Sev1 state-integrity
+    incident #1655.
 
     Primary product ledger must not live under job/feature worktrees when the
-    home path is the intended path (#330 / fleet S2a). Sandbox fallback after
-    OSError/OperationalError uses a path that never lands under worktrees
-    (tmpdir when cwd is a job/feature worktree) so nested_state matrix stays clean.
+    home path is the intended path (#330 / fleet S2a). If an operator
+    explicitly enables the sandbox fallback, it uses a path that never lands
+    under worktrees (tmpdir when cwd is a job/feature worktree) so the
+    nested_state matrix stays clean.
 
     During pytest execution from a linked worktree, the canonical shared path is
     redirected to a process-local temporary DB to protect the live ledger. Set
@@ -1131,29 +1136,29 @@ def _get_db(db_path: str = None, read_only: bool = False) -> _sqlite3.Connection
             "for an intentional shared-DB test.",
             file=sys.stderr,
         )
-    fallback_path = sandbox_fallback_db_path()
-    tried_fallback = False
-    while True:
-        try:
-            # Refuse nested worktree product ledger on the primary attempt only.
-            if not tried_fallback:
-                assert_not_nested_product_ledger(db_path, home_writable=True)
-            return _connect(db_path)
-        # OSError covers PermissionError, EROFS (read-only mounts), ENOSPC, etc.
-        # OperationalError covers "unable to open database file" when the dir
-        # exists but the file/FS is still unwritable (sandbox case in #648).
-        # RuntimeError from nested-ledger refusal must not trigger fallback.
-        except (OSError, _sqlite3.OperationalError) as exc:
-            if tried_fallback:
-                raise
-            print(
-                f"warning: cannot open project state DB at {db_path} ({exc}); "
-                f"no project state found on this machine — falling back to "
-                f"local {fallback_path}",
-                file=sys.stderr,
-            )
-            db_path = fallback_path
-            tried_fallback = True
+    try:
+        assert_not_nested_product_ledger(db_path, home_writable=True)
+        return _connect(db_path)
+    # RuntimeError from nested-ledger refusal must not trigger fallback.
+    except (OSError, _sqlite3.OperationalError) as exc:
+        if os.environ.get("SYNLYNK_ALLOW_STATE_DB_FALLBACK") != "1":
+            raise RuntimeError(
+                "canonical state DB unavailable or unusable at "
+                f"{os.path.abspath(db_path)}: {exc}; refusing to select a "
+                "non-canonical fallback. Set SYNLYNK_STATE_DB_PATH to an "
+                "explicit verified ledger, or set "
+                "SYNLYNK_ALLOW_STATE_DB_FALLBACK=1 only for an intentional "
+                "isolated sandbox."
+            ) from exc
+        fallback_path = sandbox_fallback_db_path()
+        print(
+            f"warning: cannot open canonical project state DB at {db_path} "
+            f"({exc}); explicitly falling back with "
+            "SYNLYNK_ALLOW_STATE_DB_FALLBACK=1 — using isolated "
+            f"ledger {fallback_path}",
+            file=sys.stderr,
+        )
+        return _connect(fallback_path)
 
 
 def get_state_db_path() -> str:
