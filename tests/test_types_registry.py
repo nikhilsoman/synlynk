@@ -1,7 +1,14 @@
 import json
 import pytest
 
-from synlynk.types_registry import TypeExists, UnknownKind, load_types, seed_canonical_types, type_create
+from synlynk.types_registry import (
+    TypeExists,
+    UnknownKind,
+    effective_skills,
+    load_types,
+    seed_canonical_types,
+    type_create,
+)
 
 
 def setup_product(tmp_path, monkeypatch, slug="vdowrx"):
@@ -27,6 +34,27 @@ def test_type_create_and_validation(tmp_path, monkeypatch):
         type_create("vdowrx", "qa", "qa")
     with pytest.raises(UnknownKind):
         type_create("vdowrx", "colorist", "not-a-kind")
+
+
+def test_specialist_inherits_kind_skills_and_applies_delta(tmp_path, monkeypatch):
+    setup_product(tmp_path, monkeypatch)
+    seed_canonical_types("vdowrx")
+    type_create("vdowrx", "frontend-qa", "qa")
+    types = load_types("vdowrx")
+    types["frontend-qa"]["skills_add"] = ["playwright", "qa-gate"]
+    types["frontend-qa"]["skills_remove"] = ["instruction-receipts"]
+    from synlynk.types_registry import _save
+    _save("vdowrx", types)
+
+    assert effective_skills("vdowrx", "frontend-qa") == [
+        "non-author-review", "qa-gate", "playwright"
+    ]
+
+
+def test_type_create_rejects_canonical_id_before_pack_seed(tmp_path, monkeypatch):
+    setup_product(tmp_path, monkeypatch)
+    with pytest.raises(TypeExists):
+        type_create("vdowrx", "qa", "qa")
 
 
 def test_studio_seed_and_pack_kind_creation(tmp_path, monkeypatch):
