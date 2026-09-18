@@ -1073,8 +1073,10 @@ def test_phase_7_of_docssuperpowersplans20260730h_panel_timeout_override_respect
 
     assert codex_output == "panel output"
     assert claude_output == "panel output"
-    assert calls[0][1]["timeout"] == 300
-    assert calls[1][1]["timeout"] == 120
+    codex_execution = next(call for call in calls if call[0][:2] == ["codex", "exec"])
+    claude_execution = next(call for call in calls if call[0][0] == "claude" and call[1]["timeout"] == 120)
+    assert codex_execution[1]["timeout"] == 300
+    assert claude_execution[1]["timeout"] == 120
 
 
 def test_best_agent_refreshes_quotas_before_gate(project_dir, monkeypatch):

@@ -65,6 +65,16 @@ HARNESS_CAPABILITY_BASELINES = {
             "required_endpoints": [],
             "optional_endpoints": [],
         },
+        "panel_auth_check": {
+            "probe": ["claude", "auth", "status"],
+            "unauthenticated_markers": [
+                '"loggedin": false',
+                '"authmethod": "none"',
+                "not logged in",
+                "login required",
+                "sign in",
+            ],
+        },
         "roles": ["architect", "pm"],
         "env_passthrough": [],
         "strengths": ["long context", "reasoning", "code review", "planning"],
@@ -107,6 +117,14 @@ HARNESS_CAPABILITY_BASELINES = {
         "network_deps": {
             "required_endpoints": [],
             "optional_endpoints": [],
+        },
+        "panel_auth_check": {
+            "probe": ["codex", "login", "status"],
+            "unauthenticated_markers": [
+                "not logged in",
+                "login required",
+                "sign in",
+            ],
         },
         "roles": ["builder", "verifier"],
         "env_passthrough": [],

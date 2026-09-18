@@ -279,6 +279,9 @@ def build_parser() -> argparse.ArgumentParser:
         "--record", action="store_true",
         help="Write the Decision record to project-docs/decisions/"
     )
+    decide_parser.add_argument(
+        "--model", help="Explicit model identifier passed to every panel harness"
+    )
     decide_parser.add_argument("--audit", action="store_true", help="Write an executive architecture audit brief")
 
     heal_parser = subparsers.add_parser("heal", help="Scan, remediate, verify, and optionally merge fixes")
@@ -2044,7 +2047,13 @@ def main(argv=None) -> None:
             help_parsers.get("team", parser).print_help()
     elif args.command == "decide":
         panel_members = [p.strip() for p in args.panel.split(",") if p.strip()]
-        cmd_decide(args.topic, panel=panel_members, record=args.record, audit=args.audit)
+        cmd_decide(
+            args.topic,
+            panel=panel_members,
+            record=args.record,
+            audit=args.audit,
+            model=args.model,
+        )
     elif args.command == "heal":
         if getattr(args, "cycles", False):
             from synlynk.heal_cycles import cmd_heal_cycles

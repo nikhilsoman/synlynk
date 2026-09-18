@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import queue
+import shutil
 import subprocess
 import re
 import sys
@@ -40,6 +41,151 @@ _YELLOW = "\033[33m"
 _CYAN = "\033[36m"
 _DIM = "\033[2m"
 _RESET = "\033[0m"
+
+_LAST_PANEL_RUNS: dict[str, dict] = {}
+_PANEL_IDENTITY_ENV_KEYS = (
+    "HOME",
+    "CLAUDE_CONFIG_DIR",
+    "CODEX_HOME",
+    "GH_CONFIG_DIR",
+    "XDG_CONFIG_HOME",
+)
+
+
+def _panel_execution_identity(agent: str, cli: str) -> dict:
+    """Return non-secret identity details for a panel subprocess."""
+    env = {}
+    for key in _PANEL_IDENTITY_ENV_KEYS:
+        value = os.environ.get(key)
+        if value:
+            env[key] = os.path.abspath(os.path.expanduser(value)) if key != "HOME" else os.path.abspath(os.path.expanduser(value))
+    return {
+        "agent": agent,
+        "cli": cli,
+        "executable": shutil.which(cli) or cli,
+        "cwd": os.path.abspath(os.getcwd()),
+        "env": env,
+    }
+
+
+def _panel_text(value: str, limit: int = 1200) -> str:
+    value = (value or "").strip()
+    return value if len(value) <= limit else value[:limit] + "..."
+
+
+def _panel_failure(agent: str, identity: dict, reason: str, **details) -> dict:
+    result = {
+        "ok": False,
+        "agent": agent,
+        "reason": reason,
+        "identity": identity,
+    }
+    result.update(details)
+    _LAST_PANEL_RUNS[agent] = result
+    return result
+
+
+def _resolve_panel_model(agent: str, requested: str | None) -> str:
+    if requested:
+        return requested
+    if agent == "claude":
+        config_dir = os.environ.get("CLAUDE_CONFIG_DIR", "~/.claude")
+        settings_path = Path(os.path.expanduser(config_dir)) / "settings.json"
+        try:
+            settings = json.loads(settings_path.read_text(encoding="utf-8"))
+            if settings.get("model"):
+                return str(settings["model"])
+        except (OSError, ValueError, TypeError):
+            pass
+    return "default"
+
+
+def _panel_preflight(agent: str, cfg: dict, identity: dict) -> dict:
+    """Run auth and version probes using the panel subprocess identity."""
+    auth_check = cfg.get("panel_auth_check") or cfg.get("auth_check") or {}
+    probe = auth_check.get("probe")
+    if not probe:
+        return _panel_failure(
+            agent, identity, "no authoritative auth probe configured for harness"
+        )
+    try:
+        auth_result = subprocess.run(
+            probe,
+            capture_output=True,
+            text=True,
+            timeout=3,
+            check=False,
+        )
+    except FileNotFoundError:
+        return _panel_failure(
+            agent, identity, "auth probe executable is unavailable",
+            command=probe, returncode=None, stdout="", stderr="",
+        )
+    except subprocess.TimeoutExpired as exc:
+        return _panel_failure(
+            agent, identity, "auth probe timed out",
+            command=probe, returncode=None, stdout=_panel_text(exc.stdout or ""),
+            stderr=_panel_text(exc.stderr or ""), timed_out=True,
+        )
+    auth_stdout = getattr(auth_result, "stdout", "") or ""
+    auth_stderr = getattr(auth_result, "stderr", "") or ""
+    auth_returncode = getattr(auth_result, "returncode", 0)
+    auth_text = "\n".join(part for part in [auth_stdout, auth_stderr] if part)
+    lower_auth_text = auth_text.lower()
+    markers = [str(marker).lower() for marker in auth_check.get("unauthenticated_markers", [])]
+    matched = next((marker for marker in markers if marker in lower_auth_text), None)
+    if auth_returncode != 0 or matched:
+        return _panel_failure(
+            agent, identity,
+            "auth probe reported an unavailable or unauthenticated harness",
+            command=probe,
+            returncode=auth_returncode,
+            stdout=_panel_text(auth_stdout),
+            stderr=_panel_text(auth_stderr),
+            matched_marker=matched,
+        )
+
+    try:
+        version_result = subprocess.run(
+            [cfg["cli"], "--version"],
+            capture_output=True,
+            text=True,
+            timeout=3,
+            check=False,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+        return _panel_failure(
+            agent, identity, "version probe failed",
+            command=[cfg["cli"], "--version"], returncode=None,
+            stdout=_panel_text(getattr(exc, "stdout", "")),
+            stderr=_panel_text(getattr(exc, "stderr", "")),
+            timed_out=isinstance(exc, subprocess.TimeoutExpired),
+        )
+    version_returncode = getattr(version_result, "returncode", 0)
+    version_stdout = getattr(version_result, "stdout", "") or ""
+    version_stderr = getattr(version_result, "stderr", "") or ""
+    if version_returncode != 0:
+        return _panel_failure(
+            agent, identity, "version probe returned a non-zero exit",
+            command=[cfg["cli"], "--version"],
+            returncode=version_returncode,
+            stdout=_panel_text(version_stdout),
+            stderr=_panel_text(version_stderr),
+        )
+    return {
+        "ok": True,
+        "agent": agent,
+        "identity": identity,
+        "version": _panel_text(
+            ((version_stdout or version_stderr).splitlines() or ["<empty>"])[0],
+            240,
+        ),
+        "model": "default",
+        "auth": {
+            "command": probe,
+            "returncode": auth_returncode,
+        },
+    }
 
 
 def get_username() -> str:
@@ -467,8 +613,17 @@ def _panel_query_timeout(agent: str, timeout: int | None = None) -> int:
     return AGENT_PANEL_QUERY_TIMEOUT_SECONDS.get(agent, 120)
 
 
-def _run_agent_sync(agent: str, prompt: str, timeout: int | None = None) -> str:
-    """Run an agent synchronously and return its stdout. Returns '' on any failure."""
+def _run_agent_sync(
+    agent: str,
+    prompt: str,
+    timeout: int | None = None,
+    model: str | None = None,
+) -> str:
+    """Run an agent synchronously after auth/version preflight.
+
+    The public return contract remains stdout-or-empty for existing callers;
+    structured diagnostics are retained in ``_LAST_PANEL_RUNS`` for decide.
+    """
     import tempfile as _tmp
 
     baselines = HARNESS_CAPABILITY_BASELINES
@@ -478,10 +633,27 @@ def _run_agent_sync(agent: str, prompt: str, timeout: int | None = None) -> str:
 
     agent_cfg = baselines[agent]
     cli = agent_cfg["cli"]
-    flags = agent_cfg["non_interactive_flags"]
+    flags = list(agent_cfg["non_interactive_flags"])
     prompt_via_arg = agent_cfg.get("prompt_via_arg", False)
     prompt_flag = agent_cfg.get("prompt_flag")
     effective_timeout = _panel_query_timeout(agent, timeout)
+    identity = _panel_execution_identity(agent, cli)
+
+    preflight = _panel_preflight(agent, agent_cfg, identity)
+    if not preflight["ok"]:
+        print(
+            f"  ⚠ Agent '{agent}' preflight failed: {preflight['reason']} "
+            f"(returncode={preflight.get('returncode')!r}, "
+            f"stderr={preflight.get('stderr') or '<empty>'})"
+        )
+        return ""
+
+    resolved_model = _resolve_panel_model(agent, model)
+    if model and "--model" in agent_cfg.get("dispatch_flags", {}).get("valid_flags", []):
+        flags.extend(["--model", model])
+    preflight["model"] = resolved_model
+    preflight["requested_model"] = model
+    _LAST_PANEL_RUNS[agent] = preflight
 
     prompt_file = None
     try:
@@ -505,8 +677,44 @@ def _run_agent_sync(agent: str, prompt: str, timeout: int | None = None) -> str:
                     stdin=stdin_file, capture_output=True,
                     text=True, timeout=effective_timeout
                 )
-        return result.stdout.strip()
-    except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as e:
+        stdout = (getattr(result, "stdout", "") or "").strip()
+        stderr = (getattr(result, "stderr", "") or "").strip()
+        returncode = getattr(result, "returncode", 0)
+        preflight.update({
+            "returncode": returncode,
+            "stdout": _panel_text(stdout),
+            "stderr": _panel_text(stderr),
+        })
+        if returncode != 0 or not stdout:
+            preflight["ok"] = False
+            preflight["reason"] = (
+                "headless command returned a non-zero exit"
+                if returncode != 0 else "headless command returned empty stdout"
+            )
+            print(
+                f"  ⚠ Agent '{agent}' failed: {preflight['reason']} "
+                f"(returncode={returncode!r}, stderr={stderr or '<empty>'})"
+            )
+            return ""
+        return stdout
+    except subprocess.TimeoutExpired as e:
+        preflight.update({
+            "ok": False,
+            "reason": "headless command timed out",
+            "returncode": None,
+            "stdout": _panel_text(e.stdout or ""),
+            "stderr": _panel_text(e.stderr or ""),
+            "timed_out": True,
+        })
+        print(f"  ⚠ Agent '{agent}' failed: headless command timed out")
+        return ""
+    except (FileNotFoundError, OSError) as e:
+        preflight.update({
+            "ok": False,
+            "reason": "headless command could not be started",
+            "returncode": None,
+            "stderr": str(e),
+        })
         print(f"  ⚠ Agent '{agent}' failed: {e}")
         return ""
     finally:
@@ -530,11 +738,22 @@ def _audit_metrics() -> dict:
     }
 
 
-def _cmd_decide_audit(panel: list) -> str:
+def _cmd_decide_audit(panel: list, model: str | None = None) -> str:
     metrics = _audit_metrics()
     metrics["Cost Efficiency"]["panel_size"] = len(panel)
-    inputs = {member: _pkg("_run_agent_sync")(member, "Audit modularity, AI-readiness, technical debt, and cost efficiency. Return evidence and recommendations.") for member in panel}
-    inputs = {k: v for k, v in inputs.items() if v}
+    inputs = {}
+    for member in panel:
+        prompt = (
+            "Audit modularity, AI-readiness, technical debt, and cost efficiency. "
+            "Return evidence and recommendations."
+        )
+        if model:
+            inputs[member] = _pkg("_run_agent_sync")(member, prompt, model=model)
+        else:
+            inputs[member] = _pkg("_run_agent_sync")(member, prompt)
+    if any(not value for value in inputs.values()):
+        print("Error: one or more audit panel members failed preflight or execution")
+        sys.exit(1)
     today = time.strftime("%Y-%m-%d")
     docs_dir = _pkg("_synlynk_project_docs_dir")() if _pkg("_is_migrated")() else _pkg("_docs_dir")()
     output_dir = Path(docs_dir) / "decisions"
@@ -551,10 +770,16 @@ def _cmd_decide_audit(panel: list) -> str:
     return str(path)
 
 
-def cmd_decide(topic: str, panel: list, record: bool = False, audit: bool = False) -> None:
+def cmd_decide(
+    topic: str,
+    panel: list,
+    record: bool = False,
+    audit: bool = False,
+    model: str | None = None,
+) -> None:
     """Convene a multi-agent panel on topic and optionally record the Decision."""
     if audit:
-        _cmd_decide_audit(panel)
+        _cmd_decide_audit(panel, model=model)
         return
     print(f"\n  {_CYAN}▶{_RESET} Convening panel on: {topic}")
     print(f"  Panel: {', '.join(panel)}\n")
@@ -566,17 +791,42 @@ def cmd_decide(topic: str, panel: list, record: bool = False, audit: bool = Fals
     )
 
     inputs = {}
+    failures = []
     for member in panel:
         print(f"  {_CYAN}▶{_RESET} Querying {member}...")
-        output = _pkg("_run_agent_sync")(member, panel_prompt)
+        _LAST_PANEL_RUNS.pop(member, None)
+        if model:
+            output = _pkg("_run_agent_sync")(member, panel_prompt, model=model)
+        else:
+            output = _pkg("_run_agent_sync")(member, panel_prompt)
         if output:
+            run = _LAST_PANEL_RUNS.get(member, {})
+            metadata = []
+            if run.get("model"):
+                metadata.append(f"model={run['model']}")
+            if run.get("version"):
+                metadata.append(f"version={run['version']}")
+            if metadata:
+                output = f"[{'; '.join(metadata)}]\n\n{output}"
             inputs[member] = output
             print(f"  {_GREEN}✓{_RESET} {member} responded ({len(output.split())} words)")
         else:
-            print(f"  ⚠ {member} returned no output — skipping")
+            failure = _LAST_PANEL_RUNS.get(member) or {
+                "reason": "returned no output without diagnostics"
+            }
+            failures.append((member, failure))
+            print(f"  ⚠ {member} unavailable: {failure.get('reason', 'unknown failure')}")
 
-    if not inputs:
-        print("Error: all panel members failed — cannot produce a decision")
+    if failures:
+        print("Error: required panel member unavailable — refusing to synthesize")
+        for member, failure in failures:
+            print(
+                f"  - {member}: returncode={failure.get('returncode')!r}; "
+                f"stdout={failure.get('stdout') or '<empty>'}; "
+                f"stderr={failure.get('stderr') or '<empty>'}; "
+                f"timed_out={failure.get('timed_out', False)!r}; "
+                f"identity={json.dumps(failure.get('identity', {}), sort_keys=True)}"
+            )
         sys.exit(1)
 
     synthesis_parts = [
@@ -591,9 +841,13 @@ def cmd_decide(topic: str, panel: list, record: bool = False, audit: bool = Fals
     synthesis_prompt = "\n".join(synthesis_parts)
 
     print(f"\n  {_CYAN}▶{_RESET} Synthesizing...")
-    synthesis = _pkg("_run_agent_sync")(panel[0], synthesis_prompt)
+    if model:
+        synthesis = _pkg("_run_agent_sync")(panel[0], synthesis_prompt, model=model)
+    else:
+        synthesis = _pkg("_run_agent_sync")(panel[0], synthesis_prompt)
     if not synthesis:
-        synthesis = "Synthesis unavailable — see individual panel inputs above."
+        print("Error: panel synthesis failed — no decision was recorded")
+        sys.exit(1)
 
     decision_text = ""
     for line in synthesis.split("\n"):
