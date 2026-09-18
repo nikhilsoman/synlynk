@@ -729,10 +729,9 @@ def cmd_join(invite: str = None) -> None:
         print("Error: git config user.name not set — run: git config user.name 'Your Name'")
         sys.exit(1)
 
-    from synlynk.wave6 import accept_membership
-    if not invite:
-        raise RuntimeError("membership invite is required; join does not run init or provision PEM material")
-    accept_membership(invite)
+    if invite:
+        from synlynk.wave6 import accept_membership
+        accept_membership(invite)
 
     print(f"  {_GREEN}▶{_RESET} Joining project as @{username} (membership receipt pending verification)...")
 
