@@ -110,5 +110,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #1683 \u2014 harden DR restore CLI paths (PR #1683, v0.20.0)\n\n\u2022 Merged improvements and fixes for PR #\n\n#posts",
     "changelog": "### v0.20.0 (2026-09-18) - PR #1683\n- Merged improvements and fixes for PR #"
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/216-pr1690-resolve-specialist-type-skills.md",
+    "title": "PR #1690 \u2014 resolve specialist type skills",
+    "author": "nikhilsoman",
+    "date": "2026-09-18",
+    "pr": "#1690",
+    "version": "0.20.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #"
+    ],
+    "tweet": "\ud83d\ude80 PR #1690 \u2014 resolve specialist type skills (PR #1690, v0.20.0)\n\n\u2022 Merged improvements and fixes for PR #\n\n#posts",
+    "changelog": "### v0.20.0 (2026-09-18) - PR #1690\n- Merged improvements and fixes for PR #"
   }
 ]
