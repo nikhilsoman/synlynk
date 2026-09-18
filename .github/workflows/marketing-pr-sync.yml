@@ -74,7 +74,7 @@ jobs:
 
           existing_pr=$(gh pr list \
             --repo "$GITHUB_REPOSITORY" \
-            --head "$GITHUB_REPOSITORY_OWNER:$MARKETING_BRANCH" \
+            --head "$MARKETING_BRANCH" \
             --base main \
             --state open \
             --json number \
