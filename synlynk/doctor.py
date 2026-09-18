@@ -106,7 +106,7 @@ def _hc_identity_slug() -> HealthCheck:
     except (OSError, json.JSONDecodeError):
         return HealthCheck("identity_slug", "fail", "Cannot read .synlynk/config.json")
     if not isinstance(data.get("identity_slug"), str) or not data["identity_slug"].strip():
-        return HealthCheck("identity_slug", "fail", "identity_slug is required for dispatch and workspace add-repo",
+        return HealthCheck("identity_slug", "warn", "identity_slug is required for workspace add-repo; dispatch will use the repository fallback",
                            fix="Set identity_slug in .synlynk/config.json")
     return HealthCheck("identity_slug", "ok", f"product identity configured: {data['identity_slug']}")
 

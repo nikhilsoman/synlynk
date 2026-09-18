@@ -50,7 +50,7 @@ def test_write_and_migrate_are_product_scoped(tmp_path, monkeypatch):
     assert write_apps_dir_for_init(tmp_path).is_dir()
 
 
-def test_second_init_fails_closed_before_manifest(tmp_path, monkeypatch):
+def test_second_init_is_a_noop_before_manifest(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     monkeypatch.chdir(tmp_path)
     _repo(tmp_path)
@@ -59,9 +59,8 @@ def test_second_init_fails_closed_before_manifest(tmp_path, monkeypatch):
     (apps / "qa.json").write_text(json.dumps({"installation_id": 2, "private_key_path": str(apps / "qa.pem")}))
     (apps / "qa.pem").write_text("dummy")
     monkeypatch.setattr("synlynk.team._build_app_manifest_url", lambda *a, **k: pytest.fail("manifest opened"))
-    from synlynk.team import IdentityAlreadyProvisioned
-    with pytest.raises(IdentityAlreadyProvisioned, match="already exists"):
-        cmd_identity_init_role("qa")
+    cmd_identity_init_role("qa")
+    assert "already provisioned" in capsys.readouterr().out
 
 
 def test_state_db_migration_copies_legacy_repo_db_without_overwrite(tmp_path, monkeypatch):
