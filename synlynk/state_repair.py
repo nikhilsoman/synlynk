@@ -13,6 +13,7 @@ from pathlib import Path
 from synlynk.state_registry import (
     StateRegistryError,
     ensure_registered_product,
+    identity_metadata,
     product_identity,
     registered_canonical_path,
     registry_lock,
@@ -67,6 +68,21 @@ def _normalized_copy(source: Path, destination_dir: Path) -> Path:
             sidecar.unlink()
     _fsync_file(temporary)
     return temporary
+
+
+def register_existing_state(path: str | Path, *, slug: str, product_id: str | None = None) -> dict:
+    """Register an existing canonical DB after a read-only integrity check."""
+    source = Path(path).expanduser().resolve()
+    if not source.is_file():
+        raise FileNotFoundError(source)
+    with sqlite3.connect(f"file:{source}?mode=ro", uri=True) as conn:
+        if conn.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
+            raise sqlite3.DatabaseError(f"state DB failed integrity check: {source}")
+    entry = ensure_registered_product(slug, source, product_id or product_identity(slug))
+    with sqlite3.connect(str(source), timeout=30.0) as conn:
+        identity_metadata(conn, product_id=entry["product_id"], mode="canonical", path=source)
+        conn.commit()
+    return {"disposition": "registered", "path": str(source), "product_id": entry["product_id"]}
 
 
 def promote_state_db(

@@ -126,7 +126,12 @@ def product_identity(slug: str, repo_path: str = ".") -> str:
     return _legacy_product_id(slug)
 
 
-def canonical_path(slug: str, fallback: Path) -> Path:
+def canonical_path(
+    slug: str,
+    fallback: Path,
+    *,
+    allow_unregistered_existing: bool = False,
+) -> Path:
     """Resolve the registry path, rejecting an unexpected canonical move."""
     path = registry_path()
     try:
@@ -147,6 +152,8 @@ def canonical_path(slug: str, fallback: Path) -> Path:
         # product has no DB to copy or masquerade as, so it may bootstrap at
         # its deterministic product path.  Existing unregistered files remain
         # fail-closed and must be explicitly inventoried/reconciled.
+        if allow_unregistered_existing and fallback.expanduser().resolve().exists():
+            return fallback.expanduser().resolve()
         if not fallback.expanduser().resolve().exists():
             return fallback
         raise StateRegistryError(f"no canonical registry entry for product {slug!r}")
