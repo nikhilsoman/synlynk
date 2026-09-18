@@ -6,6 +6,7 @@ import os
 import re
 import shutil
 import subprocess
+import hashlib
 from pathlib import Path
 from typing import Union
 
@@ -56,6 +57,41 @@ def types_yaml_path(slug: str) -> Path:
 
 def types_dir(slug: str) -> Path:
     return product_root(slug) / "types"
+
+
+def state_db_path(slug: str) -> Path:
+    """Return the single product-scoped graph database path."""
+    return product_root(slug) / "state.db"
+
+
+def migrate_state_db_if_needed(repo_path: PathLike = ".") -> Path:
+    """Copy a legacy graph into the product store without overwriting it."""
+    repo = Path(repo_path).resolve()
+    slug = identity_slug_from_config(repo)
+    destination = state_db_path(slug)
+    if destination.exists():
+        return destination
+
+    try:
+        common = subprocess.run(
+            ["git", "rev-parse", "--git-common-dir"], cwd=repo,
+            capture_output=True, text=True, check=False,
+        )
+        root = Path(common.stdout.strip()).resolve().parent if common.returncode == 0 else repo
+    except (OSError, ValueError):
+        root = repo
+    old_key = hashlib.md5(str(root).encode()).hexdigest()[:8]
+    candidates = [
+        Path(os.path.expanduser("~")) / ".synlynk" / "projects" / old_key / "state.db",
+        repo / ".synlynk" / "state.db",
+    ]
+    source = next((path for path in candidates if path.is_file()), None)
+    if source is None:
+        return destination
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if not destination.exists():
+        shutil.copy2(source, destination)
+    return destination
 
 
 def ensure_product_dirs(slug: str) -> Path:

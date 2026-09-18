@@ -591,16 +591,15 @@ def _get_project_root() -> str:
 
 
 def _resolve_db_path() -> str:
-    """Centralise DB at ~/.synlynk/projects/<key>/state.db so all worktrees share one DB.
-
-    Key is an 8-char MD5 of the shared repo root, falling back to CWD outside git.
-    This avoids the .synlynk/state flat-file collision and the per-worktree isolation bug.
-    """
-    import hashlib as _h
+    """Resolve the product graph, migrating the legacy path once if needed."""
+    from synlynk.product_store import identity_slug_from_config, migrate_state_db_if_needed, state_db_path
 
     root = _project_root()
-    key = _h.md5(root.encode()).hexdigest()[:8]
-    return os.path.expanduser(f"~/.synlynk/projects/{key}/state.db")
+    slug = identity_slug_from_config(root)
+    path = state_db_path(slug)
+    if not _IS_TESTING:
+        migrate_state_db_if_needed(root)
+    return str(path)
 
 
 def _is_git_worktree() -> bool:
@@ -682,6 +681,7 @@ CREATE TABLE IF NOT EXISTS stories (
     gh_issue      TEXT,
     archived_at   TIMESTAMP,
     superseded_by TEXT DEFAULT NULL,
+    repo_id       TEXT,
     created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -812,6 +812,7 @@ CREATE TABLE IF NOT EXISTS daemon_jobs (
     role         TEXT,
     task         TEXT NOT NULL,
     story_id     TEXT,
+    type_id      TEXT,
     status       TEXT NOT NULL DEFAULT 'queued',
     priority     INTEGER NOT NULL DEFAULT 5,
     depends_on   TEXT NOT NULL DEFAULT '[]',

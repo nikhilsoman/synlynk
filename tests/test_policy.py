@@ -103,7 +103,7 @@ def test_load_policy_reads_workspace_defaults(tmp_path, monkeypatch):
     assert policy["org"]["org_id"] == "acme"
 
 
-def test_load_policy_repo_override_replaces_whole_object(tmp_path, monkeypatch):
+def test_load_policy_repo_cannot_replace_product_merge_authority(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     ws_policy_path = tmp_path / ".synlynk" / "workspaces" / "acme" / "policy.json"
     _write_json(ws_policy_path, {
@@ -124,7 +124,7 @@ def test_load_policy_repo_override_replaces_whole_object(tmp_path, monkeypatch):
         },
     })
     policy = load_policy(repo_path=str(repo), workspace_name="acme")
-    assert policy["merge_authority"]["can_merge"] == ["qa", "architect"]
+    assert policy["merge_authority"]["can_merge"] == ["qa"]
     # release_authority untouched by the override — inherited from workspace defaults
     assert policy["release_authority"]["can_cut_release"] == ["pm"]
 
