@@ -193,6 +193,13 @@ def test_daemon_stop_kills_orphaned_process_on_http_port(tmp_path, monkeypatch):
     daemon = SynlynkDaemon()
     daemon.pidfile = pidfile
 
+    # xdist workers run this test concurrently.  Give each worker an isolated
+    # port so one worker cannot reclaim another worker's orphan process.
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.bind(("127.0.0.1", 0))
+        test_port = probe.getsockname()[1]
+    monkeypatch.setattr(daemon, "HTTP_PORT", test_port)
+
     # Spawn an orphan process that binds HTTP_PORT
     orphan_code = (
         f"import socket, time; "

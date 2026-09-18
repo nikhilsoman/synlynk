@@ -1,3 +1,12 @@
+---
+title: "Workspace identity W0: vocabulary before Apps"
+author: "Nikhil Soman"
+date: 2026-09-18
+pr: "#1647"
+version: "0.21.0"
+tags: [workspace, identity]
+---
+
 # 203 — Workspace identity W0: vocabulary before Apps
 
 **Goal going in (previous work):** Control-plane trust on a *single* repo: jobs record real PRs, qa-gate+CI merge, non-author qa App, stories close, worktrees reap. Epic #1581 landed 22/23 children; #914 (workspace-level identities) stayed OPEN on purpose.

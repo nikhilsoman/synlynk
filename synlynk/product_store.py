@@ -8,7 +8,7 @@ import shutil
 import subprocess
 import hashlib
 from pathlib import Path
-from typing import Union
+from typing import Optional, Union
 
 PathLike = Union[str, Path]
 
@@ -43,12 +43,27 @@ def identity_slug_from_config(repo_path: PathLike = ".") -> str:
     return _slugify(repo.name)
 
 
+def configured_identity_slug(repo_path: PathLike = ".") -> Optional[str]:
+    """Return the explicitly configured product identity, or ``None``."""
+    repo = Path(repo_path).resolve()
+    try:
+        data = json.loads((repo / ".synlynk" / "config.json").read_text())
+    except (OSError, json.JSONDecodeError):
+        return None
+    raw = data.get("identity_slug")
+    return _slugify(raw.strip()) if isinstance(raw, str) and raw.strip() else None
+
+
 def product_root(slug: str) -> Path:
     return Path(os.path.expanduser("~")) / ".synlynk" / "workspaces" / _slugify(slug)
 
 
 def github_apps_dir(slug: str) -> Path:
     return product_root(slug) / "github_apps"
+
+
+def repos_path(slug: str) -> Path:
+    return product_root(slug) / "repos.json"
 
 
 def types_yaml_path(slug: str) -> Path:

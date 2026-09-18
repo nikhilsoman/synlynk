@@ -353,6 +353,13 @@ def build_parser() -> argparse.ArgumentParser:
     scan_parser.add_argument("--no-tui", action="store_true",
                              help="Print a text summary instead of the interactive TUI")
 
+    workspace_parser = subparsers.add_parser("workspace", help="Manage product workspace repositories")
+    workspace_sub = workspace_parser.add_subparsers(dest="workspace_action")
+    workspace_add_repo = workspace_sub.add_parser(
+        "add-repo", help="Register this clone; human still adds the repo in the GitHub install UI"
+    )
+    workspace_add_repo.add_argument("nwo", nargs="?", help="GitHub name-with-owner, for example org/api")
+
     migrate_parser = subparsers.add_parser(
         "migrate", help="Migrate project-docs markdown into state.db and .synlynk/project-docs"
     )
@@ -2083,6 +2090,12 @@ def main(argv=None) -> None:
             workspace_name=getattr(args, "workspace_name", None),
             no_tui=getattr(args, "no_tui", False),
         )
+    elif args.command == "workspace":
+        if getattr(args, "workspace_action", None) == "add-repo":
+            from synlynk.workspace import cmd_workspace_add_repo
+            sys.exit(cmd_workspace_add_repo(args))
+        else:
+            help_parsers.get("workspace", parser).print_help()
     elif args.command == "migrate":
         cmd_migrate(
             dry_run=getattr(args, "dry_run", False),

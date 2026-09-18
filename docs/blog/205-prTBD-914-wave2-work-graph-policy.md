@@ -1,3 +1,12 @@
+---
+title: "Wave 2 — One product graph and policy authority"
+author: "Nikhil Soman"
+date: 2026-09-18
+pr: "#1649"
+version: "0.21.0"
+tags: [workspace, identity, policy]
+---
+
 # Wave 2 — One product graph and policy authority
 
 Wave 2 of #914 moves synlynk's graph to the product store at
