@@ -77,6 +77,11 @@ def types_dir(slug: str) -> Path:
     return product_root(slug) / "types"
 
 
+def connectors_dir(slug: str) -> Path:
+    """Return the product-scoped connector credential directory."""
+    return product_root(slug) / "connectors"
+
+
 def state_db_path(slug: str) -> Path:
     """Return the single product-scoped graph database path."""
     return product_root(slug) / "state.db"
@@ -177,6 +182,7 @@ def ensure_product_dirs(slug: str) -> Path:
     root = product_root(slug)
     github_apps_dir(slug).mkdir(parents=True, exist_ok=True)
     types_dir(slug).mkdir(parents=True, exist_ok=True)
+    connectors_dir(slug).mkdir(parents=True, exist_ok=True)
     return root
 
 

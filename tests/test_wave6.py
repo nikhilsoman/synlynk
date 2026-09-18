@@ -29,9 +29,11 @@ def test_connector_dispatch_requires_explicit_grant(tmp_path, monkeypatch):
     config = tmp_path / ".synlynk" / "config.json"
     config.parent.mkdir()
     config.write_text(json.dumps({"identity_slug": "demo"}))
-    from synlynk.product_store import types_yaml_path
-    types_yaml_path("demo").parent.mkdir(parents=True, exist_ok=True)
-    types_yaml_path("demo").write_text(json.dumps({"types": {"github": {"kind": "connector"}}}))
+    from synlynk.connectors import add_connector
+    add_connector(
+        "demo", type_id="github", home_repo="synlynk", reach="home_repo",
+        allowlist=["api.github.com"], protocol="oauth",
+    )
 
     assert not connector_dispatch_allowed("github")
     assert connector_dispatch_allowed("github", ["connector"])
