@@ -97,7 +97,11 @@ _PROJECT_DOC_KEEP_N = 50
 # Bump when a new schema migration is added.  This is deliberately kept in
 # SQLite's small built-in metadata slot so checking it does not touch the DB
 # file or create a backup on already-migrated connections.
-_DB_MIGRATION_VERSION = 9
+# Version 10 re-runs the idempotent schema reconciliation for databases that
+# were stamped at version 9 before several columns were added to that same
+# migration block.  Those ledgers are structurally valid but not compatible
+# with current readers (for example capability_watch and daemon_jobs).
+_DB_MIGRATION_VERSION = 10
 
 _GENERATORS_BY_FILENAME = {
     "todo.md": "_generate_todo_md",
@@ -991,16 +995,16 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
                 detected_at TEXT NOT NULL
             );
         """)
-        conn.execute(
-            "INSERT OR IGNORE INTO capability_watch (id, last_probe_at, last_green_probe_at, "
-            "last_smoke_test_at, last_green_smoke_at, last_sweep_at, sweep_job_count) "
-            "VALUES (1, NULL, NULL, NULL, NULL, NULL, 0)"
-        )
         capability_watch_cols = {row[1] for row in conn.execute("PRAGMA table_info(capability_watch)")}
         if "last_sweep_at" not in capability_watch_cols:
             conn.execute("ALTER TABLE capability_watch ADD COLUMN last_sweep_at TEXT")
         if "sweep_job_count" not in capability_watch_cols:
             conn.execute("ALTER TABLE capability_watch ADD COLUMN sweep_job_count INTEGER NOT NULL DEFAULT 0")
+        conn.execute(
+            "INSERT OR IGNORE INTO capability_watch (id, last_probe_at, last_green_probe_at, "
+            "last_smoke_test_at, last_green_smoke_at, last_sweep_at, sweep_job_count) "
+            "VALUES (1, NULL, NULL, NULL, NULL, NULL, 0)"
+        )
         harness_verb_cols = {row[1] for row in conn.execute("PRAGMA table_info(harness_verb_map)")}
         if "verb" not in harness_verb_cols:
             try:

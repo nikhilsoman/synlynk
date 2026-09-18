@@ -7,6 +7,8 @@ import re
 import shutil
 import subprocess
 import hashlib
+import sqlite3
+import tempfile
 from pathlib import Path
 from typing import Optional, Union
 
@@ -80,7 +82,12 @@ def state_db_path(slug: str) -> Path:
 
 
 def migrate_state_db_if_needed(repo_path: PathLike = ".") -> Path:
-    """Copy a legacy graph into the product store without overwriting it."""
+    """Copy a legacy graph into the product store without overwriting it.
+
+    Use SQLite's online backup API instead of copying the main file directly.
+    A raw copy can produce a structurally invalid destination when the source
+    is in WAL mode and has committed pages in its sidecar files.
+    """
     repo = Path(repo_path).resolve()
     slug = identity_slug_from_config(repo)
     destination = state_db_path(slug)
@@ -105,7 +112,35 @@ def migrate_state_db_if_needed(repo_path: PathLike = ".") -> Path:
         return destination
     destination.parent.mkdir(parents=True, exist_ok=True)
     if not destination.exists():
-        shutil.copy2(source, destination)
+        temporary = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                prefix=f".{destination.name}.", suffix=".tmp", dir=destination.parent,
+            ) as temp_file:
+                temporary = Path(temp_file.name)
+            source_conn = sqlite3.connect(
+                f"file:{source.resolve()}?mode=ro", uri=True,
+            )
+            destination_conn = sqlite3.connect(str(temporary))
+            try:
+                source_conn.backup(destination_conn)
+                destination_conn.commit()
+                integrity = destination_conn.execute("PRAGMA integrity_check").fetchone()[0]
+                if integrity != "ok":
+                    raise sqlite3.DatabaseError(
+                        f"legacy state database failed integrity_check: {integrity}"
+                    )
+            finally:
+                destination_conn.close()
+                source_conn.close()
+            os.replace(temporary, destination)
+            temporary = None
+        finally:
+            if temporary is not None:
+                try:
+                    temporary.unlink()
+                except FileNotFoundError:
+                    pass
     return destination
 
 
