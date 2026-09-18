@@ -1051,9 +1051,27 @@ def _get_db(db_path: str = None, read_only: bool = False) -> _sqlite3.Connection
     def _connect(path: str, *, read_only: bool = False) -> _sqlite3.Connection:
         global ACTIVE_DB_PATH
         if read_only:
-            conn = _sqlite3.connect(
-                f"file:{os.path.abspath(path)}?mode=ro", uri=True, timeout=30.0
-            )
+            wal_path = f"{path}-wal"
+            has_wal = os.path.exists(wal_path) and os.path.getsize(wal_path) > 0
+            if has_wal:
+                # An immutable connection intentionally ignores WAL frames and
+                # would expose stale state.  Take a consistent online-backup
+                # snapshot into memory instead; callers still get a read-only
+                # inspection connection without mutating the source ledger.
+                source_conn = _sqlite3.connect(
+                    f"file:{os.path.abspath(path)}?mode=ro", uri=True, timeout=30.0
+                )
+                conn = _sqlite3.connect(":memory:")
+                try:
+                    source_conn.backup(conn)
+                finally:
+                    source_conn.close()
+            else:
+                conn = _sqlite3.connect(
+                    f"file:{os.path.abspath(path)}?mode=ro&immutable=1",
+                    uri=True,
+                    timeout=30.0,
+                )
             try:
                 conn.execute("PRAGMA busy_timeout=30000")
                 conn.execute("PRAGMA foreign_keys=ON")
