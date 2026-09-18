@@ -108,6 +108,24 @@ def _panel_preflight(agent: str, cfg: dict, identity: dict) -> dict:
         return _panel_failure(
             agent, identity, "no authoritative auth probe configured for harness"
         )
+    required_paths = [
+        os.path.abspath(os.path.expanduser(path))
+        for path in auth_check.get("required_paths", [])
+        if path
+    ]
+    missing_paths = [path for path in required_paths if not os.path.exists(path)]
+    if missing_paths:
+        return _panel_failure(
+            agent,
+            identity,
+            "required auth state is missing",
+            required_paths=required_paths,
+            missing_paths=missing_paths,
+            returncode=None,
+            stdout="",
+            stderr="",
+            coverage="probe-only",
+        )
     try:
         auth_result = subprocess.run(
             probe,
@@ -120,12 +138,14 @@ def _panel_preflight(agent: str, cfg: dict, identity: dict) -> dict:
         return _panel_failure(
             agent, identity, "auth probe executable is unavailable",
             command=probe, returncode=None, stdout="", stderr="",
+            coverage="probe-only",
         )
     except subprocess.TimeoutExpired as exc:
         return _panel_failure(
             agent, identity, "auth probe timed out",
             command=probe, returncode=None, stdout=_panel_text(exc.stdout or ""),
             stderr=_panel_text(exc.stderr or ""), timed_out=True,
+            coverage="probe-only",
         )
     auth_stdout = getattr(auth_result, "stdout", "") or ""
     auth_stderr = getattr(auth_result, "stderr", "") or ""
@@ -143,6 +163,7 @@ def _panel_preflight(agent: str, cfg: dict, identity: dict) -> dict:
             stdout=_panel_text(auth_stdout),
             stderr=_panel_text(auth_stderr),
             matched_marker=matched,
+            coverage="probe-only",
         )
 
     try:
@@ -160,6 +181,7 @@ def _panel_preflight(agent: str, cfg: dict, identity: dict) -> dict:
             stdout=_panel_text(getattr(exc, "stdout", "")),
             stderr=_panel_text(getattr(exc, "stderr", "")),
             timed_out=isinstance(exc, subprocess.TimeoutExpired),
+            coverage="probe-only",
         )
     version_returncode = getattr(version_result, "returncode", 0)
     version_stdout = getattr(version_result, "stdout", "") or ""
@@ -171,6 +193,7 @@ def _panel_preflight(agent: str, cfg: dict, identity: dict) -> dict:
             returncode=version_returncode,
             stdout=_panel_text(version_stdout),
             stderr=_panel_text(version_stderr),
+            coverage="probe-only",
         )
     return {
         "ok": True,
@@ -181,6 +204,7 @@ def _panel_preflight(agent: str, cfg: dict, identity: dict) -> dict:
             240,
         ),
         "model": "default",
+        "coverage": "probe-only",
         "auth": {
             "command": probe,
             "returncode": auth_returncode,
@@ -653,6 +677,7 @@ def _run_agent_sync(
         flags.extend(["--model", model])
     preflight["model"] = resolved_model
     preflight["requested_model"] = model
+    preflight["coverage"] = "invocation"
     _LAST_PANEL_RUNS[agent] = preflight
 
     prompt_file = None
