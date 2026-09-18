@@ -12,6 +12,7 @@ permissions:
   actions: write
   contents: write
   pull-requests: write
+  statuses: write
 
 jobs:
   marketing-sync:
@@ -96,8 +97,54 @@ jobs:
           fi
 
           if [ -n "${marketing_pr:-}" ]; then
+            head_sha=$(git rev-parse HEAD)
             gh workflow run test.yml \
               --repo "$GITHUB_REPOSITORY" \
               --ref "$MARKETING_BRANCH"
-            echo "Dispatched required Tests checks for marketing PR #$marketing_pr."
+
+            dispatch_run=""
+            for _ in $(seq 1 30); do
+              dispatch_run=$(gh run list \
+                --repo "$GITHUB_REPOSITORY" \
+                --workflow test.yml \
+                --branch "$MARKETING_BRANCH" \
+                --event workflow_dispatch \
+                --limit 10 \
+                --json databaseId,headSha \
+                --jq ".[] | select(.headSha == \"$head_sha\") | .databaseId" | head -1)
+              if [ -n "$dispatch_run" ]; then
+                break
+              fi
+              sleep 2
+            done
+
+            if [ -z "$dispatch_run" ]; then
+              echo "Could not locate dispatched required Tests run for $head_sha."
+              exit 1
+            fi
+
+            if gh run watch "$dispatch_run" \
+              --repo "$GITHUB_REPOSITORY" \
+              --exit-status; then
+              suite_state=success
+            else
+              suite_state=failure
+            fi
+
+            status_url="https://github.com/$GITHUB_REPOSITORY/actions/runs/$dispatch_run"
+            for context in "test (3.10)" "test (3.12)" "EPUBCheck 5.3.0" "qa-gate"; do
+              gh api \
+                --method POST \
+                "repos/$GITHUB_REPOSITORY/statuses/$head_sha" \
+                -f state="$suite_state" \
+                -f context="$context" \
+                -f description="Marketing PR required checks: $suite_state" \
+                -f target_url="$status_url" >/dev/null
+            done
+
+            if [ "$suite_state" != success ]; then
+              echo "Required Tests checks failed for marketing PR #$marketing_pr."
+              exit 1
+            fi
+            echo "Dispatched and recorded required Tests checks for marketing PR #$marketing_pr."
           fi
