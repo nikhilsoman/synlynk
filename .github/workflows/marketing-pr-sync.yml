@@ -90,6 +90,7 @@ jobs:
               --head "$MARKETING_BRANCH" \
               --title "docs(blog): synchronize marketing collateral" \
               --body "Automated post-merge marketing updates for PR #${{ github.event.pull_request.number }}.\n\nFixes #1666")
+              --body "Automated post-merge marketing updates for PR #${{ github.event.pull_request.number }}.\n\nFixes #1666")
             marketing_pr="${created_pr_url##*/}"
           else
             echo "No marketing changes to publish."
