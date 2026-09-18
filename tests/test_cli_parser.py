@@ -73,6 +73,19 @@ def test_type_seed_and_identity_pack_parse():
     assert (args.role, args.pack) == ("director", "studio")
 
 
+def test_w8_connector_and_relabel_parsers():
+    parser = cli_mod.build_parser()
+    args = parser.parse_args([
+        "connector", "add", "figma", "--home-repo", "synlynk",
+        "--reach", "home_repo", "--allow", "api.figma.com", "--protocol", "oauth",
+    ])
+    assert (args.command, args.connector_action, args.type_id) == ("connector", "add", "figma")
+    args = parser.parse_args(["type", "relabel", "director", "Showrunner"])
+    assert (args.command, args.type_action, args.type_id, args.label) == (
+        "type", "relabel", "director", "Showrunner"
+    )
+
+
 def test_audit_docs_parser_accepts_json_and_fix_flags():
     from synlynk.cli import build_parser
 

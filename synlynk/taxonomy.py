@@ -210,6 +210,12 @@ COMMAND_TAXONOMY = [
     {"command": "type seed", "governs_stage": "execute", "maturity_tier": 1, "prominence": "secondary",
      "orientation_gateway": False, "audience": "human",
      "trigger_phrases": ["seed canonical product types", "seed an industry pack"], "hook_event": None},
+    {"command": "type relabel", "governs_stage": "execute", "maturity_tier": 1, "prominence": "secondary",
+     "orientation_gateway": False, "audience": "human",
+     "trigger_phrases": ["rename an organigram label", "relabel a product type"], "hook_event": None},
+    {"command": "connector add", "governs_stage": "execute", "maturity_tier": 1, "prominence": "secondary",
+     "orientation_gateway": False, "audience": "human",
+     "trigger_phrases": ["add a connector", "catalog an outbound connector"], "hook_event": None},
 
     # --- Tier 2: Execute ---
     {"command": "dispatch", "governs_stage": "execute", "maturity_tier": 2, "prominence": "primary",
