@@ -669,6 +669,11 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
                 conn.execute("ALTER TABLE stories ADD COLUMN superseded_by TEXT DEFAULT NULL")
             except sqlite3.OperationalError:
                 pass
+        if "repo_id" not in story_cols:
+            try:
+                conn.execute("ALTER TABLE stories ADD COLUMN repo_id TEXT")
+            except sqlite3.OperationalError:
+                pass
         try:
             conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_stories_fingerprint ON stories(fingerprint) WHERE fingerprint IS NOT NULL")
         except sqlite3.OperationalError:
@@ -703,6 +708,11 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             except sqlite3.OperationalError:
                 pass
         daemon_job_cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)")}
+        if "type_id" not in daemon_job_cols:
+            try:
+                conn.execute("ALTER TABLE daemon_jobs ADD COLUMN type_id TEXT")
+            except sqlite3.OperationalError:
+                pass
         if "handoff_count" not in daemon_job_cols:
             try:
                 conn.execute("ALTER TABLE daemon_jobs ADD COLUMN handoff_count INTEGER NOT NULL DEFAULT 0")
@@ -818,6 +828,11 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
         except sqlite3.OperationalError:
             pass
         cost_cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}
+        if "type_id" not in cost_cols:
+            try:
+                conn.execute("ALTER TABLE cost_entries ADD COLUMN type_id TEXT")
+            except sqlite3.OperationalError:
+                pass
         if "session_id" not in cost_cols:
             try:
                 conn.execute("ALTER TABLE cost_entries ADD COLUMN session_id TEXT")
@@ -1083,6 +1098,7 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
                 output_tokens     INTEGER,
                 cache_read_tokens INTEGER,
                 story_id          TEXT REFERENCES stories(story_id),
+                type_id           TEXT,
                 epic_id           INTEGER REFERENCES roadmap_arcs(id),
                 phase_id          INTEGER REFERENCES roadmap_phases(id),
                 total_cost_usd    REAL,
@@ -1222,6 +1238,7 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
                     output_tokens     INTEGER,
                     cache_read_tokens INTEGER,
                     story_id          TEXT REFERENCES stories(story_id),
+                    type_id           TEXT,
                     epic_id           INTEGER REFERENCES roadmap_arcs(id),
                     phase_id          INTEGER REFERENCES roadmap_phases(id),
                     total_cost_usd    REAL,
@@ -1237,28 +1254,22 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
                 )
             """)
             old_cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries_pre_provenance)")}
-            select_cols = ", ".join(
-                c if c in old_cols else "NULL"
-                for c in (
-                    "session_date",
-                    "agent",
-                    "model",
-                    "input_tokens",
-                    "output_tokens",
-                    "cache_read_tokens",
-                    "story_id",
-                    "epic_id",
-                    "phase_id",
-                    "total_cost_usd",
-                    "notes",
-                )
-            )
+            def _old_col(name):
+                return name if name in old_cols else "NULL"
+
+            select_cols = ", ".join([
+                _old_col("session_date"), _old_col("agent"), _old_col("model"),
+                _old_col("input_tokens"), _old_col("output_tokens"), _old_col("cache_read_tokens"),
+                _old_col("story_id"), "NULL", _old_col("epic_id"), _old_col("phase_id"),
+                _old_col("total_cost_usd"), "NULL", "NULL", "NULL", _old_col("notes"),
+                "'legacy_unknown'", "NULL", "NULL", _old_col("recorded_at"),
+            ])
             conn.execute(f"""
                 INSERT INTO cost_entries
                     (session_date, agent, model, input_tokens, output_tokens, cache_read_tokens,
-                     story_id, epic_id, phase_id, total_cost_usd, api_equivalent_usd, actual_usd,
+                     story_id, type_id, epic_id, phase_id, total_cost_usd, api_equivalent_usd, actual_usd,
                      payment_mode, notes, cost_source, estimate_basis, job_id, recorded_at)
-                SELECT {select_cols}, NULL, NULL, NULL, 'legacy_unknown', NULL, NULL, recorded_at
+                SELECT {select_cols}
                 FROM cost_entries_pre_provenance
             """)
             conn.execute("DROP TABLE cost_entries_pre_provenance")

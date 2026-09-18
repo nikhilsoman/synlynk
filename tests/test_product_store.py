@@ -4,13 +4,14 @@ import pytest
 
 from synlynk.product_store import (
     github_apps_dir, identity_slug_from_config, migrate_repo_apps_if_needed,
-    product_root, resolve_github_apps_dir, types_yaml_path, write_apps_dir_for_init,
+    migrate_state_db_if_needed, product_root, resolve_github_apps_dir, state_db_path,
+    types_yaml_path, write_apps_dir_for_init,
 )
 from synlynk.team import cmd_identity_init_role
 
 
 def _repo(tmp_path, slug="vdowrx"):
-    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / ".synlynk").mkdir(parents=True)
     (tmp_path / ".synlynk" / "config.json").write_text(json.dumps({"identity_slug": slug}))
 
 
@@ -59,3 +60,16 @@ def test_second_init_is_noop_before_manifest(tmp_path, monkeypatch):
     (apps / "qa.pem").write_text("dummy")
     monkeypatch.setattr("synlynk.team._build_app_manifest_url", lambda *a, **k: pytest.fail("manifest opened"))
     cmd_identity_init_role("qa")
+
+
+def test_state_db_migration_copies_legacy_repo_db_without_overwrite(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    repo = tmp_path / "repo"
+    _repo(repo, "hitchcock")
+    legacy = repo / ".synlynk" / "state.db"
+    legacy.write_bytes(b"legacy")
+    destination = migrate_state_db_if_needed(repo)
+    assert destination == state_db_path("hitchcock")
+    assert destination.read_bytes() == b"legacy"
+    legacy.write_bytes(b"newer")
+    assert migrate_state_db_if_needed(repo).read_bytes() == b"legacy"

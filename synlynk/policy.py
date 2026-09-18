@@ -76,7 +76,7 @@ def _repo_policy_path(repo_path: str) -> Path:
     return Path(repo_path) / ".synlynk" / "policy.json"
 
 
-def load_policy(repo_path: str, workspace_name: str = "default") -> Dict[str, Any]:
+def load_policy(repo_path: str, workspace_name: str = None) -> Dict[str, Any]:
     """Merge workspace defaults with a repo's sparse overrides.
 
     Merge rule: for each top-level key under "defaults", if the repo's
@@ -84,21 +84,32 @@ def load_policy(repo_path: str, workspace_name: str = "default") -> Dict[str, An
     default's value entirely (whole-object replace, one level deep — not a
     recursive deep merge).
     """
+    if workspace_name is None:
+        from synlynk.product_store import identity_slug_from_config
+        workspace_name = identity_slug_from_config(repo_path)
     ws_raw = _read_json(_workspace_policy_path(workspace_name))
     workspace_doc = ws_raw if ws_raw is not None else DEFAULT_WORKSPACE_POLICY
 
-    merged = json.loads(json.dumps(workspace_doc.get("defaults", DEFAULT_WORKSPACE_POLICY["defaults"])))
+    if "defaults" in workspace_doc:
+        base = workspace_doc.get("defaults", {})
+    else:
+        base = {key: value for key, value in workspace_doc.items()
+                if key in DEFAULT_WORKSPACE_POLICY["defaults"]}
+    merged = json.loads(json.dumps(DEFAULT_WORKSPACE_POLICY["defaults"]))
+    merged.update(json.loads(json.dumps(base)))
     merged["org"] = workspace_doc.get("org", DEFAULT_WORKSPACE_POLICY["org"])
 
     repo_raw = _read_json(_repo_policy_path(repo_path))
     if repo_raw:
         for key, value in repo_raw.get("overrides", {}).items():
+            if key in {"merge_authority", "connector_authority"}:
+                continue
             merged[key] = value
 
     return merged
 
 
-def get_human_authority_role(repo_path: str, workspace_name: str = "default") -> str:
+def get_human_authority_role(repo_path: str, workspace_name: str = None) -> str:
     """Return the role currently holding the human-authority pointer."""
     policy = load_policy(repo_path=repo_path, workspace_name=workspace_name)
     pointer = policy.get("human_authority_role") or {}
@@ -131,7 +142,7 @@ def _matches_approval_rule(action: str, policy: Dict[str, Any]) -> Optional[str]
     return None
 
 
-def check_authority(action: str, role: str, repo_path: str, workspace_name: str = "default") -> AuthorityResult:
+def check_authority(action: str, role: str, repo_path: str, workspace_name: str = None) -> AuthorityResult:
     if not any(action == p or action.startswith(p) for p in _ACTION_PREFIXES):
         raise ValueError(f"check_authority: unknown action {action!r}")
 
@@ -142,7 +153,7 @@ def check_authority(action: str, role: str, repo_path: str, workspace_name: str 
     elif action == "goal_create":
         allowed = role in policy["roadmap_authority"]["can_create_goals"]
     elif action == "merge":
-        allowed = role in policy["merge_authority"]["can_merge"]
+        allowed = _merge_role_allowed(role, policy, repo_path)
     elif action == "release_cut":
         allowed = role in policy["release_authority"]["can_cut_release"]
     elif action.startswith("task_dispatch:"):
@@ -163,3 +174,19 @@ def check_authority(action: str, role: str, repo_path: str, workspace_name: str 
         return AuthorityResult(allowed=True, requires_approval=True, reason=matched_rule)
 
     return AuthorityResult(allowed=True, requires_approval=False, reason="")
+
+
+def _merge_role_allowed(role: str, policy: Dict[str, Any], repo_path: str) -> bool:
+    """Resolve product type ids for merge authority, with legacy fallback."""
+    can_merge = policy.get("merge_authority", {}).get("can_merge", [])
+    try:
+        from synlynk.product_store import identity_slug_from_config
+        from synlynk.types_registry import load_types
+        types = load_types(identity_slug_from_config(repo_path))
+        type_info = types.get(role)
+        if type_info is not None:
+            return bool(type_info.get("canonical") and type_info.get("kind") == "qa"
+                        and (role in can_merge or "qa" in can_merge))
+    except (OSError, ValueError, TypeError):
+        pass
+    return role in can_merge

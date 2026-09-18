@@ -761,6 +761,40 @@ def _hc_dual_ledger_sync() -> HealthCheck:
     return HealthCheck("dual_ledger_sync", "ok", sync_res["detail"])
 
 
+def _hc_product_state_db_leftover() -> HealthCheck:
+    """Warn about the legacy repo graph after product migration."""
+    try:
+        from synlynk.product_store import identity_slug_from_config, state_db_path
+        product_db = state_db_path(identity_slug_from_config("."))
+        repo_db = os.path.abspath(os.path.join(os.getcwd(), ".synlynk", "state.db"))
+        if product_db.exists() and os.path.isfile(repo_db) and os.path.abspath(repo_db) != os.path.abspath(product_db):
+            return HealthCheck(
+                "product_state_db_leftover", "warn",
+                f"legacy repo state.db remains after product migration: {repo_db}",
+                fix="Keep the product state.db authoritative; remove the repo copy after review",
+            )
+        return HealthCheck("product_state_db_leftover", "ok", "no legacy repo state.db remains")
+    except Exception as exc:
+        return HealthCheck("product_state_db_leftover", "warn", f"check unavailable: {exc}")
+
+
+def _hc_product_policy_merge_types() -> HealthCheck:
+    """Fail when product can_merge names a non-canonical QA type."""
+    try:
+        from synlynk.policy import load_policy
+        from synlynk.product_store import identity_slug_from_config
+        from synlynk.types_registry import load_types
+        policy = load_policy(os.getcwd())
+        types = load_types(identity_slug_from_config("."))
+        invalid = [role for role in policy.get("merge_authority", {}).get("can_merge", [])
+                   if role in types and not (types[role].get("canonical") and types[role].get("kind") == "qa")]
+        if invalid:
+            return HealthCheck("product_policy_merge_types", "fail", f"can_merge contains non-canonical QA type(s): {', '.join(invalid)}")
+        return HealthCheck("product_policy_merge_types", "ok", "can_merge contains only canonical QA types")
+    except Exception as exc:
+        return HealthCheck("product_policy_merge_types", "warn", f"check unavailable: {exc}")
+
+
 def _hc_fleet_parity() -> HealthCheck:
     """Check adoption parity across directives, config roster, and policy authority."""
     from synlynk.parity import check_fleet_parity
@@ -813,6 +847,8 @@ HEALTH_CHECKS = [
     _hc_pr_review_cycles,
     _hc_version_current,
     _hc_dual_ledger_sync,
+    _hc_product_state_db_leftover,
+    _hc_product_policy_merge_types,
     _hc_fleet_parity,
     _hc_capability_reassessment,
 ]
