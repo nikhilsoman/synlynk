@@ -1,3 +1,12 @@
+---
+title: "PR #1179 - Capability Reassessment Gets a Durable Cadence"
+author: "Nikhil Soman"
+date: 2026-09-18
+pr: "#1179"
+version: "0.21.0"
+tags: [capability, cadence]
+---
+
 # PR #1179 - Capability Reassessment Gets a Durable Cadence
 
 The harness baseline is useful only while it is kept current. This change makes

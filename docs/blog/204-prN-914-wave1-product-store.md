@@ -1,9 +1,12 @@
 ---
 title: "Wave 1 — Product-Scoped GitHub Apps and Types"
+author: "Nikhil Soman"
 date: 2026-09-17
 series: "Building the OS for Multi-Agent Development"
 post: 204
-pr: "#TBD"
+pr: "#1648"
+version: "0.21.0"
+tags: [workspace, identity, product-store]
 status: open
 ---
 

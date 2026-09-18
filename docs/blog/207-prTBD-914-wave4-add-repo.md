@@ -1,3 +1,12 @@
+---
+title: "Wave 4: add a repository without minting another identity"
+author: "Nikhil Soman"
+date: 2026-09-18
+pr: "#1651"
+version: "0.21.0"
+tags: [workspace, identity, repositories]
+---
+
 # Wave 4: add a repository without minting another identity
 
 Wave 4 adds `synlynk workspace add-repo [<nwo>]` for product-scoped workspaces.

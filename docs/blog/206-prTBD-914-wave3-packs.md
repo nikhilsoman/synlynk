@@ -5,6 +5,7 @@ date: 2026-09-18
 post: 206
 pr: TBD
 series: "Workspace identity"
+version: "0.21.0"
 tags: [identity, packs, cli]
 ---
 
