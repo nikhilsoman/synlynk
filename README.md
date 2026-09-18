@@ -130,6 +130,10 @@ Full command reference: [docs/reference/commands.md](docs/reference/commands.md)
 <!-- commands:end -->
 <!-- commands:end -->
 
+To register another clone in the same product identity, run
+`synlynk workspace add-repo [<nwo>]`; select the repository in the GitHub App
+install UI afterward.
+
 ### Dispatch flags
 
 - `--task-type <type>`: classify a dispatch task for task-specific handling (use `review` for PR review jobs; review jobs default to a 90-minute stall timeout and are scoped to read-only permissions (`read:*`) instead of the agent's default write-capable role bundle; explicit `--grant`/`--revoke` still apply on top).

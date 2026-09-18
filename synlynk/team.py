@@ -881,8 +881,9 @@ def cmd_identity_init_role(role: str, project=None, pack_id: str = "software-pro
         except (json.JSONDecodeError, OSError):
             existing = {}
         if existing.get("installation_id") and existing.get("private_key_path"):
-            print(f"  role '{role}' is already provisioned ({json_path}) — no-op")
-            return
+            raise IdentityAlreadyProvisioned(
+                f"type '{role}' already exists for this product; add this repo to the installation instead"
+            )
         if (
             existing.get("app_id")
             and existing.get("client_id")

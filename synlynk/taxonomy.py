@@ -31,6 +31,7 @@ def iter_leaf_commands(parser: argparse.ArgumentParser, prefix: tuple = ()):
 
 
 COMMAND_TAXONOMY = [
+    {"command": "workspace add-repo", "governs_stage": "open", "maturity_tier": 3, "prominence": "primary", "orientation_gateway": False, "audience": "human", "trigger_phrases": ["add a repo to the workspace", "register a product repository"], "hook_event": None},
     {"command": "swarm dispatch", "governs_stage": "execute", "maturity_tier": 2, "prominence": "primary", "orientation_gateway": False, "audience": "human", "trigger_phrases": ["fan out swarm work", "run ephemeral workers"], "hook_event": None},
     {"command": "swarm status", "governs_stage": "visualize", "maturity_tier": 2, "prominence": "secondary", "orientation_gateway": False, "audience": "human", "trigger_phrases": ["show swarm runners"], "hook_event": None},
     {"command": "swarm destroy", "governs_stage": "execute", "maturity_tier": 2, "prominence": "secondary", "orientation_gateway": False, "audience": "human", "trigger_phrases": ["tear down swarm runners"], "hook_event": None},

@@ -96,6 +96,21 @@ def _hc_project_init() -> HealthCheck:
     )
 
 
+def _hc_identity_slug() -> HealthCheck:
+    path = os.path.join(".synlynk", "config.json")
+    if not os.path.exists(path):
+        return HealthCheck("identity_slug", "warn", "No .synlynk/config.json; product identity checks skipped")
+    try:
+        with open(path) as config_file:
+            data = json.load(config_file)
+    except (OSError, json.JSONDecodeError):
+        return HealthCheck("identity_slug", "fail", "Cannot read .synlynk/config.json")
+    if not isinstance(data.get("identity_slug"), str) or not data["identity_slug"].strip():
+        return HealthCheck("identity_slug", "fail", "identity_slug is required for dispatch and workspace add-repo",
+                           fix="Set identity_slug in .synlynk/config.json")
+    return HealthCheck("identity_slug", "ok", f"product identity configured: {data['identity_slug']}")
+
+
 def _hc_model_registry() -> HealthCheck:
     """Ensure the canonical model catalog is available to doctor consumers."""
     try:
@@ -795,6 +810,23 @@ def _hc_product_policy_merge_types() -> HealthCheck:
         return HealthCheck("product_policy_merge_types", "warn", f"check unavailable: {exc}")
 
 
+def _hc_product_specialist_apps() -> HealthCheck:
+    try:
+        from synlynk.product_store import configured_identity_slug, github_apps_dir
+        from synlynk.types_registry import load_types
+        slug = configured_identity_slug(".")
+        if not slug:
+            return HealthCheck("product_specialist_apps", "warn", "specialist App check skipped without identity_slug")
+        missing = [type_id for type_id, info in load_types(slug).items()
+                   if not info.get("canonical") and not (github_apps_dir(slug) / f"{type_id}.json").exists()]
+        if missing:
+            return HealthCheck("product_specialist_apps", "warn",
+                               f"specialist/connector App JSON missing: {', '.join(sorted(missing))}")
+        return HealthCheck("product_specialist_apps", "ok", "specialist App JSON present")
+    except Exception as exc:
+        return HealthCheck("product_specialist_apps", "warn", f"check unavailable: {exc}")
+
+
 def _hc_fleet_parity() -> HealthCheck:
     """Check adoption parity across directives, config roster, and policy authority."""
     from synlynk.parity import check_fleet_parity
@@ -835,6 +867,7 @@ def _hc_capability_reassessment() -> HealthCheck:
 HEALTH_CHECKS = [
     _hc_python_version,
     _hc_project_init,
+    _hc_identity_slug,
     _hc_model_registry,
     _hc_docs_dir,
     _hc_todo_drift,
@@ -849,6 +882,7 @@ HEALTH_CHECKS = [
     _hc_dual_ledger_sync,
     _hc_product_state_db_leftover,
     _hc_product_policy_merge_types,
+    _hc_product_specialist_apps,
     _hc_fleet_parity,
     _hc_capability_reassessment,
 ]

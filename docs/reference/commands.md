@@ -117,6 +117,7 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 
 ## Tier 3 — Team / Enterprise
 
+- `workspace add-repo` (primary) — open
 - `team status` (primary) — notify
 - `sync` (primary) — sustain
 - `score add` (secondary) — sustain

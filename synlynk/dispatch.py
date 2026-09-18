@@ -2792,6 +2792,15 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         raise ValueError(
             "--task is empty or whitespace-only; refusing to dispatch (see #720)"
         )
+    config_path = os.path.join(os.getcwd(), ".synlynk", "config.json")
+    if os.path.isfile(config_path):
+        try:
+            with open(config_path) as config_file:
+                config_data = json.load(config_file)
+        except (OSError, json.JSONDecodeError) as exc:
+            raise RuntimeError(f"Dispatch refused: could not read {config_path}: {exc}") from exc
+        if not isinstance(config_data.get("identity_slug"), str) or not config_data["identity_slug"].strip():
+            raise RuntimeError("Dispatch refused: .synlynk/config.json is missing identity_slug")
     if task_type:
         try:
             authority = check_authority(
