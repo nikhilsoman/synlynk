@@ -682,6 +682,11 @@ def build_parser() -> argparse.ArgumentParser:
         "verify-encrypted", help="Decrypt and verify an encrypted snapshot"
     )
     backup_verify_encrypted.add_argument("snapshot")
+    backup_verify_encrypted.add_argument(
+        "--keychain-service",
+        default=None,
+        help="macOS Keychain service containing the GPG passphrase",
+    )
 
     ops_parser = subparsers.add_parser(
         "ops",
@@ -1551,7 +1556,7 @@ def main(argv=None) -> None:
         elif args.backup_action == "encrypt":
             cmd_backup_encrypt(args.snapshot, args.recipient, args.output_dir)
         elif args.backup_action == "verify-encrypted":
-            cmd_backup_verify_encrypted(args.snapshot)
+            cmd_backup_verify_encrypted(args.snapshot, args.keychain_service)
         else:
             help_parsers.get("backup", parser).print_help()
     elif args.command == "home":

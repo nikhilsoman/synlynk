@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from synlynk import backup as backup_module
 from synlynk.backup import (
     create_snapshot,
     encrypt_snapshot,
@@ -116,3 +117,30 @@ def test_encrypt_requires_recipient(tmp_path):
     sqlite3.connect(source).close()
     with pytest.raises(ValueError, match="recipient"):
         encrypt_snapshot(source, "")
+
+
+def test_verify_encrypted_snapshot_can_use_keychain_passphrase(
+    tmp_path, gpg_recipient, monkeypatch
+):
+    source = tmp_path / "state.db"
+    conn = sqlite3.connect(source)
+    conn.execute("CREATE TABLE marker (value TEXT)")
+    conn.execute("INSERT INTO marker VALUES ('keychain')")
+    conn.commit()
+    conn.close()
+    snapshot_dir = tmp_path / "snapshots"
+    snapshot = create_snapshot(source=source, output_dir=snapshot_dir)
+    snapshot_path = snapshot_dir / Path(snapshot["snapshot"]).name
+    encrypted = encrypt_snapshot(snapshot_path, gpg_recipient, output_dir=tmp_path / "export")
+
+    calls = []
+    monkeypatch.setattr(
+        backup_module,
+        "_keychain_passphrase",
+        lambda service: calls.append(service) or "",
+    )
+    evidence = verify_encrypted_snapshot(
+        encrypted["encrypted_snapshot"], keychain_service="com.example.dr"
+    )
+    assert evidence["integrity_check"] == "ok"
+    assert calls == ["com.example.dr"]
