@@ -1,4 +1,4 @@
-"""Small, dependency-free product type registry for W5's Wave 1 slice."""
+"""Dependency-free product type registry and canonical industry packs."""
 from __future__ import annotations
 
 import json
@@ -10,11 +10,31 @@ from synlynk.product_store import ensure_product_dirs, types_dir, types_yaml_pat
 class TypeExists(RuntimeError): pass
 class UnknownKind(ValueError): pass
 
-PACK_TYPES = {
-    "pm": ("pm", "PM"), "tpm": ("tpm", "TPM"), "architect": ("architect", "Architect"),
-    "qa": ("qa", "QA"), "dev": ("dev", "Dev"), "designer": ("designer", "Designer"),
-    "marketing": ("marketing", "Marketing"), "synlynk-bot": ("synlynk-bot", "synlynk-bot"),
-}
+PACK_DIR = Path(__file__).with_name("packs")
+PACK_IDS = ("software-product", "studio", "agency")
+
+
+def _load_pack(pack_id: str) -> dict:
+    if pack_id not in PACK_IDS:
+        raise ValueError(f"unknown pack: {pack_id}")
+    try:
+        data = json.loads((PACK_DIR / f"{pack_id}.yaml").read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"invalid pack: {pack_id}") from exc
+    if not isinstance(data, dict) or data.get("id") != pack_id:
+        raise ValueError(f"invalid pack: {pack_id}")
+    return data
+
+
+def _pack_types(pack_id: str) -> dict[str, tuple[str, str]]:
+    return {
+        type_id: (entry["kind"], entry["label"])
+        for type_id, entry in _load_pack(pack_id).get("types", {}).items()
+    }
+
+
+# Kept as a public compatibility constant for Wave 1 callers.
+PACK_TYPES = _pack_types("software-product")
 
 
 def _load(path: Path) -> dict:
@@ -45,11 +65,10 @@ def _charter(slug: str, type_id: str, kind: str) -> None:
 
 
 def seed_canonical_types(slug: str, pack_id: str = "software-product") -> dict:
-    if pack_id != "software-product":
-        raise ValueError(f"unknown pack: {pack_id}")
+    pack_types = _pack_types(pack_id)
     ensure_product_dirs(slug)
     types = load_types(slug)
-    for type_id, (kind, label) in PACK_TYPES.items():
+    for type_id, (kind, label) in pack_types.items():
         types.setdefault(type_id, {"kind": kind, "canonical": True, "label": label})
         _charter(slug, type_id, kind)
     _save(slug, types)
@@ -57,14 +76,13 @@ def seed_canonical_types(slug: str, pack_id: str = "software-product") -> dict:
 
 
 def type_create(slug: str, type_id: str, kind: str) -> dict:
-    if kind not in PACK_TYPES:
-        try:
-            from synlynk.charter_schema import KNOWN_ROLES
-            approved = set(KNOWN_ROLES) | {"infra"}
-        except ImportError:
-            approved = set(PACK_TYPES)
-        if kind not in approved:
-            raise UnknownKind(kind)
+    approved_kinds = {
+        pack_kind
+        for pack_id in PACK_IDS
+        for pack_kind, _label in _pack_types(pack_id).values()
+    }
+    if kind not in approved_kinds:
+        raise UnknownKind(kind)
     types = load_types(slug)
     if type_id in types:
         raise TypeExists(type_id)
