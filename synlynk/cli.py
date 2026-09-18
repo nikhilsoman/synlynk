@@ -1511,7 +1511,9 @@ def main(argv=None) -> None:
             cmd_project_status(json_output=args.json_output, platform=True)
         else:
             from synlynk import _get_db
-            cmd_ecosystem_status(db_conn=_get_db(), json_output=args.json_output)
+            cmd_ecosystem_status(
+                db_conn=_get_db(read_only=True), json_output=args.json_output
+            )
     elif args.command == "home":
         cmd_home(args)
     elif args.command == "selftest":

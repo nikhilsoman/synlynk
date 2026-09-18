@@ -997,8 +997,13 @@ WHERE split_model = 0
 GROUP BY agent, model_version, discipline, engg_domain, org_domain, role, stage, industry, phase;
 """
 
-def _get_db(db_path: str = None) -> _sqlite3.Connection:
-    """Returns a WAL-mode SQLite connection to state.db, running migrations.
+def _get_db(db_path: str = None, read_only: bool = False) -> _sqlite3.Connection:
+    """Return a SQLite connection to state.db.
+
+    ``read_only=True`` opens the selected ledger through SQLite's read-only
+    URI mode and deliberately skips directory creation, WAL setup, and
+    migrations.  Inspection callers use this mode so status cannot mutate or
+    silently substitute the product ledger.
 
     SYNLYNK_STATE_DB_PATH, if set, is used verbatim and takes precedence over
     everything below: no nested-worktree guard, no fallback chain. A caller
@@ -1043,8 +1048,25 @@ def _get_db(db_path: str = None) -> _sqlite3.Connection:
         os.close(fd)
         os.unlink(probe)
 
-    def _connect(path: str) -> _sqlite3.Connection:
+    def _connect(path: str, *, read_only: bool = False) -> _sqlite3.Connection:
         global ACTIVE_DB_PATH
+        if read_only:
+            conn = _sqlite3.connect(
+                f"file:{os.path.abspath(path)}?mode=ro", uri=True, timeout=30.0
+            )
+            try:
+                conn.execute("PRAGMA busy_timeout=30000")
+                conn.execute("PRAGMA foreign_keys=ON")
+                quick_check = conn.execute("PRAGMA quick_check").fetchone()[0]
+                if quick_check != "ok":
+                    raise _sqlite3.DatabaseError(
+                        f"state database failed quick_check: {quick_check}"
+                    )
+            except Exception:
+                conn.close()
+                raise
+            ACTIVE_DB_PATH = os.path.abspath(path)
+            return conn
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
         _check_write_capability(path)
         conn = _sqlite3.connect(path, timeout=30.0)
@@ -1067,13 +1089,18 @@ def _get_db(db_path: str = None) -> _sqlite3.Connection:
         return conn
 
     if db_path is not None:
-        return _connect(db_path)
+        return _connect(db_path, read_only=read_only)
 
     override = os.environ.get("SYNLYNK_STATE_DB_PATH")
     if override:
         # Explicit overrides remain authoritative: failures propagate and do
         # not silently select another ledger.
-        return _connect(override)
+        return _connect(override, read_only=read_only)
+
+    if read_only:
+        # Read-only inspection must fail on an unavailable/corrupt canonical
+        # ledger rather than falling back to a stale repo or sandbox copy.
+        return _connect(DB_PATH, read_only=True)
 
     from synlynk.fleet import assert_not_nested_product_ledger, sandbox_fallback_db_path
 
