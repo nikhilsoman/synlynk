@@ -27,3 +27,20 @@ def test_type_create_and_validation(tmp_path, monkeypatch):
         type_create("vdowrx", "qa", "qa")
     with pytest.raises(UnknownKind):
         type_create("vdowrx", "colorist", "not-a-kind")
+
+
+def test_studio_seed_and_pack_kind_creation(tmp_path, monkeypatch):
+    setup_product(tmp_path, monkeypatch, "hitchcock")
+    seed_canonical_types("hitchcock", "studio")
+    types = load_types("hitchcock")
+    assert types["director"] == {"kind": "pm", "canonical": True, "label": "Director"}
+    type_create("hitchcock", "colorist", "edit")
+    assert load_types("hitchcock")["colorist"]["kind"] == "edit"
+
+
+def test_agency_seed_and_unknown_pack(tmp_path, monkeypatch):
+    setup_product(tmp_path, monkeypatch, "agency")
+    seed_canonical_types("agency", "agency")
+    assert load_types("agency")["partner"]["label"] == "Partner"
+    with pytest.raises(ValueError, match="unknown pack"):
+        seed_canonical_types("agency", "unknown")

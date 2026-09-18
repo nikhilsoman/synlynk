@@ -9,6 +9,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [203](./203-prTBD-914-w0-vocabulary.md) | #914 workspace identity specs W0–W9 + wave-1 plan | [#1647](https://github.com/nikhilsoman/synlynk/pull/1647) | 2026-09-16 |
 | [204](./204-prN-914-wave1-product-store.md) | Wave 1 — Product-scoped GitHub Apps and types | #TBD | 2026-09-17 |
 | [205](./205-prTBD-914-wave2-work-graph-policy.md) | Wave 2 — Product work graph and policy authority | #TBD | 2026-09-18 |
+| [206](./206-prTBD-914-wave3-packs.md) | Wave 3 — Industry packs for workspace identity | #TBD | 2026-09-18 |
 | [185](./185-prTBD-parent-auto-pr-fail-closed.md) | #1436 - Parent auto-PR fail-closed without role token | TBD | 2026-09-06 |
 | [184](./184-prTBD-synlynk-gh-role.md) | #1436 Hole B - synlynk gh --role | TBD | 2026-09-06 |
 | [183](./183-prTBD-parent-auto-pr-role-token.md) | #1436 Hole A - Parent auto-PR uses role App token | TBD | 2026-09-06 |

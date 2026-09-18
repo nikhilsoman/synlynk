@@ -58,6 +58,7 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `launch` (primary) — open
 - `roles` (secondary) — open
 - `type create` (secondary) — execute
+- `type seed` (secondary) — execute
 
 ## Tier 2 — Execute
 

@@ -856,7 +856,7 @@ class UnknownType(RuntimeError):
     """The requested specialist has not been created in the product registry."""
 
 
-def ensure_type_for_identity_init(type_id: str) -> None:
+def ensure_type_for_identity_init(type_id: str, pack_id: str = "software-product") -> None:
     from synlynk.product_store import identity_slug_from_config, types_yaml_path
     from synlynk.types_registry import load_types, seed_canonical_types
     slug = identity_slug_from_config(".")
@@ -864,14 +864,14 @@ def ensure_type_for_identity_init(type_id: str) -> None:
         return
     types = load_types(slug)
     if not types and not types_yaml_path(slug).exists():
-        seed_canonical_types(slug)
+        seed_canonical_types(slug, pack_id)
         types = load_types(slug)
     if type_id not in types:
         raise UnknownType(f"unknown type {type_id!r}; run synlynk type create {type_id} --kind <kind>")
 
 
-def cmd_identity_init_role(role: str, project=None) -> None:
-    ensure_type_for_identity_init(role)
+def cmd_identity_init_role(role: str, project=None, pack_id: str = "software-product") -> None:
+    ensure_type_for_identity_init(role, pack_id)
     from synlynk.product_store import migrate_repo_apps_if_needed
     migrate_repo_apps_if_needed(".")
     app_dir, json_path, pem_path = _write_role_app_paths(role)

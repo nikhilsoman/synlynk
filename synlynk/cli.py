@@ -487,11 +487,19 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Provision a GitHub App for a specific role",
     )
+    identity_init_parser.add_argument(
+        "--pack", default="software-product",
+        choices=("software-product", "studio", "agency"),
+        help="Canonical type pack to seed",
+    )
     type_parser = subparsers.add_parser("type", help="Manage product identity types")
     type_sub = type_parser.add_subparsers(dest="type_action")
     type_create_parser = type_sub.add_parser("create", help="Create a specialist type")
     type_create_parser.add_argument("type_id")
     type_create_parser.add_argument("--kind", required=True)
+    type_seed_parser = type_sub.add_parser("seed", help="Seed canonical types from an industry pack")
+    type_seed_parser.add_argument("--pack", required=True,
+                                  choices=("software-product", "studio", "agency"))
     identity_sub.add_parser("list", help="List provisioned role identities")
 
     events_parser = subparsers.add_parser("events", help="Inspect the GOVERNS event bus")
@@ -2161,9 +2169,10 @@ def main(argv=None) -> None:
         action = getattr(args, "identity_action", None)
         if action == "init" or action is None:
             role = getattr(args, "role", None)
+            pack_id = getattr(args, "pack", "software-product")
             if role:
                 try:
-                    cmd_identity_init_role(role)
+                    cmd_identity_init_role(role, pack_id=pack_id)
                 except Exception as exc:
                     from synlynk.team import IdentityAlreadyProvisioned, UnknownType
                     if isinstance(exc, (IdentityAlreadyProvisioned, UnknownType)):
@@ -2171,6 +2180,9 @@ def main(argv=None) -> None:
                         raise SystemExit(1)
                     raise
             else:
+                from synlynk.product_store import identity_slug_from_config
+                from synlynk.types_registry import seed_canonical_types
+                seed_canonical_types(identity_slug_from_config("."), pack_id)
                 cmd_identity_init()
         elif action == "list":
             cmd_identity_list()
@@ -2186,6 +2198,11 @@ def main(argv=None) -> None:
             except (TypeExists, UnknownKind) as exc:
                 print(f"  type create refused: {exc}", file=sys.stderr)
                 raise SystemExit(1)
+        elif getattr(args, "type_action", None) == "seed":
+            from synlynk.product_store import identity_slug_from_config
+            from synlynk.types_registry import seed_canonical_types
+            seed_canonical_types(identity_slug_from_config("."), args.pack)
+            print(f"  seeded pack '{args.pack}'")
         else:
             type_parser.print_help()
     elif args.command == "events":

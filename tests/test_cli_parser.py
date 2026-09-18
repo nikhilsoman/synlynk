@@ -63,6 +63,14 @@ def test_start_command_parses():
     assert args.command == "start"
 
 
+def test_type_seed_and_identity_pack_parse():
+    parser = cli_mod.build_parser()
+    args = parser.parse_args(["type", "seed", "--pack", "studio"])
+    assert (args.command, args.type_action, args.pack) == ("type", "seed", "studio")
+    args = parser.parse_args(["identity", "init", "--type", "director", "--pack", "studio"])
+    assert (args.role, args.pack) == ("director", "studio")
+
+
 def test_audit_docs_parser_accepts_json_and_fix_flags():
     from synlynk.cli import build_parser
 
