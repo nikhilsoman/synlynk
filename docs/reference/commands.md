@@ -32,6 +32,8 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `impact` (primary) — execute
 - `mesh` (primary) — open
 - `spike eval` (secondary) — sustain
+- `backup create` (secondary) — sustain
+- `backup verify` (secondary) — sustain
 - `decide` (primary) — goal
 - `goal create` (primary) — goal
 - `goal list` (primary) — goal
