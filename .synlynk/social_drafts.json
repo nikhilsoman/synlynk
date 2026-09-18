@@ -14,5 +14,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #1674 \u2014 route post-merge marketing sync through PR (PR #1674, v0.20.0)\n\n\u2022 Merged improvements and fixes for PR #\n\n#posts",
     "changelog": "### v0.20.0 (2026-09-18) - PR #1674\n- Merged improvements and fixes for PR #"
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/210-pr1677-configure-marketing-bot-identity-before-.md",
+    "title": "PR #1677 \u2014 configure marketing bot identity before merge",
+    "author": "synlynk-dev agent",
+    "date": "2026-09-18",
+    "pr": "#1677",
+    "version": "0.20.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #"
+    ],
+    "tweet": "\ud83d\ude80 PR #1677 \u2014 configure marketing bot identity before merge (PR #1677, v0.20.0)\n\n\u2022 Merged improvements and fixes for PR #\n\n#posts",
+    "changelog": "### v0.20.0 (2026-09-18) - PR #1677\n- Merged improvements and fixes for PR #"
   }
 ]

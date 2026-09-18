@@ -244,6 +244,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [207](./207-prTBD-914-wave4-add-repo.md) | Wave 4: add a repository without minting another identity | [#1651](https://github.com/nikhilsoman/synlynk/pull/1651) | 2026-09-18 |
 | [208](./208-prTBD-914-wave5-product-board.md) | Wave 5 — Local Vizor Board over the product graph | TBD | 2026-09-18 |
 | [209](./209-pr1674-route-post-merge-marketing-sync-through-.md) | PR #1674 — route post-merge marketing sync through PR | [#1674](https://github.com/nikhilsoman/synlynk/pull/1674) | 2026-09-18 |
+| [210](./210-pr1677-configure-marketing-bot-identity-before-.md) | PR #1677 — configure marketing bot identity before merge | [#1677](https://github.com/nikhilsoman/synlynk/pull/1677) | 2026-09-18 |
 
 ## Per-PR Post Template
 
