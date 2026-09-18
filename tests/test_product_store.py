@@ -4,7 +4,8 @@ import pytest
 
 from synlynk.product_store import (
     github_apps_dir, identity_slug_from_config, migrate_repo_apps_if_needed,
-    migrate_state_db_if_needed, product_root, resolve_github_apps_dir, state_db_path,
+    migrate_state_db_if_needed, product_registry_path, product_root,
+    register_product, resolve_github_apps_dir, state_db_path,
     types_yaml_path, write_apps_dir_for_init,
 )
 from synlynk.team import cmd_identity_init_role
@@ -87,3 +88,40 @@ def test_state_db_migration_copies_legacy_repo_db_without_overwrite(tmp_path, mo
     destination_conn = sqlite3.connect(destination)
     assert destination_conn.execute("SELECT value FROM ledger").fetchone() == ("legacy",)
     destination_conn.close()
+
+
+def test_product_registry_registration_is_idempotent(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    first = register_product("synlynk")
+    second = register_product("synlynk")
+    assert first == second == state_db_path("synlynk")
+    assert register_product("synlynk") == first
+    payload = json.loads(product_registry_path().read_text())
+    assert payload["products"]["synlynk"]["mode"] == "canonical"
+
+
+def test_product_registry_rejects_path_mismatch(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    register_product("synlynk")
+    with pytest.raises(RuntimeError, match="path mismatch"):
+        register_product("synlynk", tmp_path / "other.db")
+
+
+def test_product_registry_rejects_corrupt_registry(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    path = product_registry_path()
+    path.parent.mkdir(parents=True)
+    path.write_text("not json")
+    with pytest.raises(RuntimeError, match="unreadable"):
+        register_product("synlynk")
+
+
+def test_existing_ledger_without_registry_fails_closed(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    legacy_path = state_db_path("synlynk")
+    legacy_path.parent.mkdir(parents=True)
+    legacy_path.touch()
+    with pytest.raises(RuntimeError, match="missing for existing ledger"):
+        from synlynk.product_store import ensure_product_registered
+
+        ensure_product_registered("synlynk")

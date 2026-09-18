@@ -656,6 +656,11 @@ ACTIVE_DB_PATH = None
 _DB_SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
 
+CREATE TABLE IF NOT EXISTS state_metadata (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS stories (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     story_id      TEXT NOT NULL UNIQUE,
@@ -997,7 +1002,53 @@ WHERE split_model = 0
 GROUP BY agent, model_version, discipline, engg_domain, org_domain, role, stage, industry, phase;
 """
 
-def _get_db(db_path: str = None, read_only: bool = False) -> _sqlite3.Connection:
+_STATE_DB_MODES = frozenset({"canonical", "ephemeral-test", "restore", "backup"})
+
+
+def _state_metadata_values(path: str, mode: str) -> dict[str, str]:
+    if mode not in _STATE_DB_MODES:
+        raise ValueError(f"unsupported state DB mode: {mode}")
+    if mode == "canonical":
+        from synlynk.product_store import identity_slug_from_config
+
+        product_id = identity_slug_from_config(_project_root())
+    else:
+        product_id = mode
+    return {"product_id": product_id, "mode": mode, "schema": "1"}
+
+
+def _validate_state_metadata(conn: _sqlite3.Connection, path: str, mode: str, *, write: bool) -> None:
+    expected = _state_metadata_values(path, mode)
+    table_exists = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'state_metadata'"
+    ).fetchone()
+    if not table_exists and not write:
+        # Read-only inspection cannot repair a legacy database. A subsequent
+        # writable canonical open annotates it before normal use.
+        return
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS state_metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL)"
+    )
+    actual = dict(conn.execute("SELECT key, value FROM state_metadata").fetchall())
+    for key in ("product_id", "mode"):
+        if key in actual and actual[key] != expected[key]:
+            raise RuntimeError(
+                f"state DB metadata mismatch for {path}: {key}={actual[key]!r}, "
+                f"expected {expected[key]!r}"
+            )
+    if write:
+        conn.executemany(
+            "INSERT INTO state_metadata(key, value) VALUES (?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            expected.items(),
+        )
+
+
+def _get_db(
+    db_path: str = None,
+    read_only: bool = False,
+    mode: str | None = None,
+) -> _sqlite3.Connection:
     """Return a SQLite connection to state.db.
 
     ``read_only=True`` opens the selected ledger through SQLite's read-only
@@ -1053,7 +1104,7 @@ def _get_db(db_path: str = None, read_only: bool = False) -> _sqlite3.Connection
         os.close(fd)
         os.unlink(probe)
 
-    def _connect(path: str, *, read_only: bool = False) -> _sqlite3.Connection:
+    def _connect(path: str, *, read_only: bool = False, selected_mode: str = "canonical") -> _sqlite3.Connection:
         global ACTIVE_DB_PATH
         if read_only:
             wal_path = f"{path}-wal"
@@ -1085,6 +1136,7 @@ def _get_db(db_path: str = None, read_only: bool = False) -> _sqlite3.Connection
                     raise _sqlite3.DatabaseError(
                         f"state database failed quick_check: {quick_check}"
                     )
+                _validate_state_metadata(conn, path, selected_mode, write=False)
             except Exception:
                 conn.close()
                 raise
@@ -1105,6 +1157,7 @@ def _get_db(db_path: str = None, read_only: bool = False) -> _sqlite3.Connection
             conn.execute("PRAGMA synchronous=NORMAL")
             conn.execute("PRAGMA foreign_keys=ON")
             _migrate_db(conn)
+            _validate_state_metadata(conn, path, selected_mode, write=True)
         except Exception:
             conn.close()
             raise
@@ -1112,18 +1165,22 @@ def _get_db(db_path: str = None, read_only: bool = False) -> _sqlite3.Connection
         return conn
 
     if db_path is not None:
-        return _connect(db_path, read_only=read_only)
+        return _connect(db_path, read_only=read_only, selected_mode=mode or "ephemeral-test")
 
     override = os.environ.get("SYNLYNK_STATE_DB_PATH")
     if override:
         # Explicit overrides remain authoritative: failures propagate and do
         # not silently select another ledger.
-        return _connect(override, read_only=read_only)
+        return _connect(override, read_only=read_only, selected_mode=mode or "ephemeral-test")
+
+    from synlynk.product_store import ensure_product_registered, identity_slug_from_config
+
+    ensure_product_registered(identity_slug_from_config(_project_root()))
 
     if read_only:
         # Read-only inspection must fail on an unavailable/corrupt canonical
         # ledger rather than falling back to a stale repo or sandbox copy.
-        return _connect(DB_PATH, read_only=True)
+        return _connect(DB_PATH, read_only=True, selected_mode=mode or "canonical")
 
     from synlynk.fleet import assert_not_nested_product_ledger, sandbox_fallback_db_path
 
@@ -1138,7 +1195,7 @@ def _get_db(db_path: str = None, read_only: bool = False) -> _sqlite3.Connection
         )
     try:
         assert_not_nested_product_ledger(db_path, home_writable=True)
-        return _connect(db_path)
+        return _connect(db_path, selected_mode=mode or "canonical")
     # RuntimeError from nested-ledger refusal must not trigger fallback.
     except (OSError, _sqlite3.OperationalError) as exc:
         if os.environ.get("SYNLYNK_ALLOW_STATE_DB_FALLBACK") != "1":
@@ -1166,6 +1223,18 @@ def get_state_db_path() -> str:
     return os.path.abspath(
         os.environ.get("SYNLYNK_STATE_DB_PATH") or ACTIVE_DB_PATH or DB_PATH
     )
+
+
+def open_state_db(
+    path: str | None = None,
+    *,
+    mode: str = "canonical",
+    read_only: bool = False,
+) -> _sqlite3.Connection:
+    """Open a typed state DB through the canonical resolver."""
+    if mode != "canonical" and path is None and not os.environ.get("SYNLYNK_STATE_DB_PATH"):
+        raise ValueError(f"mode {mode!r} requires an explicit database path")
+    return _get_db(path, read_only=read_only, mode=mode)
 
 
 
