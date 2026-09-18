@@ -62,5 +62,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #1679 \u2014 remove duplicate marketing PR body argument (PR #1679, v0.20.0)\n\n\u2022 Merged improvements and fixes for PR #\n\n#posts",
     "changelog": "### v0.20.0 (2026-09-18) - PR #1679\n- Merged improvements and fixes for PR #"
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/213-pr1680-reuse-existing-marketing-sync-pull-reque.md",
+    "title": "PR #1680 \u2014 reuse existing marketing sync pull request",
+    "author": "synlynk-dev agent",
+    "date": "2026-09-18",
+    "pr": "#1680",
+    "version": "0.20.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #"
+    ],
+    "tweet": "\ud83d\ude80 PR #1680 \u2014 reuse existing marketing sync pull request (PR #1680, v0.20.0)\n\n\u2022 Merged improvements and fixes for PR #\n\n#posts",
+    "changelog": "### v0.20.0 (2026-09-18) - PR #1680\n- Merged improvements and fixes for PR #"
   }
 ]
