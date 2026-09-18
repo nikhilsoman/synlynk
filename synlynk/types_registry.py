@@ -9,6 +9,7 @@ from synlynk.product_store import ensure_product_dirs, types_dir, types_yaml_pat
 
 class TypeExists(RuntimeError): pass
 class UnknownKind(ValueError): pass
+class UnknownType(ValueError): pass
 
 PACK_DIR = Path(__file__).with_name("packs")
 PACK_IDS = ("software-product", "studio", "agency")
@@ -133,4 +134,16 @@ def type_create(slug: str, type_id: str, kind: str) -> dict:
     types[type_id] = {"kind": kind, "canonical": False, "skills_add": [], "skills_remove": []}
     _save(slug, types)
     _charter(slug, type_id, kind)
+    return types[type_id]
+
+
+def relabel_type(slug: str, type_id: str, label: str) -> dict:
+    """Change the organigram label without changing the stable type identity."""
+    if not isinstance(label, str) or not label.strip():
+        raise ValueError("type label is required")
+    types = load_types(slug)
+    if type_id not in types:
+        raise UnknownType(type_id)
+    types[type_id]["label"] = label.strip()
+    _save(slug, types)
     return types[type_id]

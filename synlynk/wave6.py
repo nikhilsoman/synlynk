@@ -33,11 +33,18 @@ def connector_dispatch_allowed(role: str, grants: Optional[list[str]] = None) ->
     try:
         from synlynk.product_store import identity_slug_from_config
         from synlynk.types_registry import load_types
-        kind = (load_types(identity_slug_from_config(".")).get(role) or {}).get("kind")
+        slug = identity_slug_from_config(".")
+        kind = (load_types(slug).get(role) or {}).get("kind")
     except (OSError, ValueError, json.JSONDecodeError):
         kind = None
     if kind != "connector":
         return True
+    try:
+        from synlynk.connectors import connector_is_dispatchable
+        if not connector_is_dispatchable(slug, role):
+            return False
+    except (OSError, ValueError, json.JSONDecodeError):
+        return False
     return "connector" in set(grants or []) or "connector-dispatch" in set(grants or [])
 
 

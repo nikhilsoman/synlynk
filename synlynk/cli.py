@@ -242,6 +242,24 @@ def build_parser() -> argparse.ArgumentParser:
     pack_parser.add_argument("target", help="Task description or story ID (e.g. story-1234)")
     pack_parser.add_argument("--budget", type=int, default=1500, help="Token budget ceiling (default: 1500)")
 
+    connector_parser = subparsers.add_parser(
+        "connector", help="Catalog a product-scoped outbound connector"
+    )
+    connector_sub = connector_parser.add_subparsers(dest="connector_action")
+    connector_add_parser = connector_sub.add_parser("add", help="Add a connector type with an explicit egress policy")
+    connector_add_parser.add_argument("type_id")
+    connector_add_parser.add_argument("--home-repo", required=True)
+    connector_add_parser.add_argument("--reach", required=True,
+                                      help="home_repo, all_product_repos, or comma-separated repo names")
+    connector_add_parser.add_argument("--allow", action="append", required=True, dest="allowlist",
+                                      help="Allowed external host/API target; repeat for multiple entries")
+    connector_add_parser.add_argument("--protocol", required=True,
+                                      choices=("api_key", "bearer_token", "basic", "oauth", "gateway"))
+    connector_add_parser.add_argument("--provider", default=None,
+                                      help="Optional gateway provider label; no vendor default is selected")
+    connector_add_parser.add_argument("--secret-file", default=None,
+                                      help="Read the connector secret from a local file (never print it)")
+
     impact_parser = subparsers.add_parser(
         "impact", help="Calculate blast-radius and upstream/downstream impact for a symbol or file"
     )
@@ -513,6 +531,9 @@ def build_parser() -> argparse.ArgumentParser:
     type_seed_parser = type_sub.add_parser("seed", help="Seed canonical types from an industry pack")
     type_seed_parser.add_argument("--pack", required=True,
                                   choices=("software-product", "studio", "agency"))
+    type_relabel_parser = type_sub.add_parser("relabel", help="Change an organigram label without reminting")
+    type_relabel_parser.add_argument("type_id")
+    type_relabel_parser.add_argument("label")
     identity_sub.add_parser("list", help="List provisioned role identities")
 
     events_parser = subparsers.add_parser("events", help="Inspect the GOVERNS event bus")
@@ -2212,6 +2233,26 @@ def main(argv=None) -> None:
     elif args.command == "pack":
         from synlynk.pack import cmd_pack
         sys.exit(cmd_pack(args))
+    elif args.command == "connector":
+        if getattr(args, "connector_action", None) != "add":
+            connector_parser.print_help()
+        else:
+            from synlynk.connectors import ConnectorInvalid, add_connector
+            from synlynk.product_store import identity_slug_from_config
+            try:
+                secret = None
+                if args.secret_file:
+                    secret = Path(args.secret_file).read_text()
+                add_connector(
+                    identity_slug_from_config("."), type_id=args.type_id,
+                    home_repo=args.home_repo, reach=args.reach,
+                    allowlist=args.allowlist, protocol=args.protocol,
+                    provider=args.provider, secret=secret,
+                )
+                print(f"  added connector '{args.type_id}'")
+            except (ConnectorInvalid, OSError, ValueError) as exc:
+                print(f"  connector add refused: {exc}", file=sys.stderr)
+                raise SystemExit(1)
     elif args.command == "impact":
         from synlynk.impact import cmd_impact
         sys.exit(cmd_impact(args))
@@ -2358,6 +2399,15 @@ def main(argv=None) -> None:
             from synlynk.types_registry import seed_canonical_types
             seed_canonical_types(identity_slug_from_config("."), args.pack)
             print(f"  seeded pack '{args.pack}'")
+        elif getattr(args, "type_action", None) == "relabel":
+            from synlynk.product_store import identity_slug_from_config
+            from synlynk.types_registry import UnknownType, relabel_type
+            try:
+                relabel_type(identity_slug_from_config("."), args.type_id, args.label)
+                print(f"  relabeled type '{args.type_id}'")
+            except (UnknownType, ValueError) as exc:
+                print(f"  type relabel refused: {exc}", file=sys.stderr)
+                raise SystemExit(1)
         else:
             type_parser.print_help()
     elif args.command == "events":
