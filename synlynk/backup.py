@@ -7,6 +7,7 @@ import os
 import shutil
 import sqlite3
 import subprocess
+import sys
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -135,6 +136,22 @@ def _require_gpg() -> str:
     return executable
 
 
+def _keychain_passphrase(service: str) -> str:
+    if sys.platform != "darwin":
+        raise RuntimeError("--keychain-service is supported only on macOS")
+    security = shutil.which("security")
+    if not security:
+        raise RuntimeError("macOS security command is unavailable")
+    result = subprocess.run(
+        [security, "find-generic-password", "-s", service, "-w"],
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    return result.stdout.rstrip("\r\n")
+
+
 def encrypt_snapshot(
     snapshot: str | Path,
     recipient: str,
@@ -179,7 +196,10 @@ def encrypt_snapshot(
             temporary.unlink()
 
 
-def verify_encrypted_snapshot(encrypted: str | Path) -> dict:
+def verify_encrypted_snapshot(
+    encrypted: str | Path,
+    keychain_service: str | None = None,
+) -> dict:
     """Decrypt an encrypted artifact into a temporary file and verify SQLite."""
     path = Path(encrypted).expanduser().resolve()
     manifest_path = path.with_suffix(".json")
@@ -191,9 +211,19 @@ def verify_encrypted_snapshot(encrypted: str | Path) -> dict:
     gpg = _require_gpg()
     with tempfile.TemporaryDirectory(prefix="synlynk-dr-verify-") as temporary_dir:
         plaintext = Path(temporary_dir) / "snapshot.db"
+        command = [gpg, "--batch", "--yes", "--output", str(plaintext)]
+        passphrase = None
+        if keychain_service:
+            passphrase = _keychain_passphrase(keychain_service)
+            command.extend(["--pinentry-mode", "loopback", "--passphrase-fd", "0"])
+        command.extend(["--decrypt", str(path)])
         subprocess.run(
-            [gpg, "--batch", "--yes", "--output", str(plaintext), "--decrypt", str(path)],
-            check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            command,
+            check=True,
+            input=(passphrase + "\n") if passphrase is not None else None,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
         )
         evidence = verify_snapshot(plaintext)
     if evidence["sha256"] != manifest.get("source_sha256"):
@@ -229,8 +259,8 @@ def cmd_backup_encrypt(snapshot: str, recipient: str, output_dir=None) -> None:
     print(f"  ✓ SHA-256: {manifest['encrypted_sha256']}")
 
 
-def cmd_backup_verify_encrypted(snapshot: str) -> None:
-    evidence = verify_encrypted_snapshot(snapshot)
+def cmd_backup_verify_encrypted(snapshot: str, keychain_service=None) -> None:
+    evidence = verify_encrypted_snapshot(snapshot, keychain_service=keychain_service)
     print(f"  ✓ Encrypted snapshot verified: {evidence['encrypted_snapshot']}")
     print(f"  ✓ Decrypted SHA-256: {evidence['source_sha256']}")
     print(f"  ✓ Integrity: {evidence['integrity_check']}")
