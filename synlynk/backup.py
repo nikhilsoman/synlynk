@@ -244,20 +244,36 @@ def verify_encrypted_snapshot(
     gpg = _require_gpg()
     with tempfile.TemporaryDirectory(prefix="synlynk-dr-verify-") as temporary_dir:
         plaintext = Path(temporary_dir) / "snapshot.db"
-        command = [gpg, "--batch", "--yes", "--output", str(plaintext)]
+        # With a local GPG agent (the non-macOS path), allow pinentry to
+        # unlock a protected key when the agent has not cached its passphrase.
+        # Keychain-backed verification remains non-interactive by design.
+        command = [gpg, "--yes", "--output", str(plaintext)]
         passphrase = None
         if keychain_service:
             passphrase = _keychain_passphrase(keychain_service)
+            command[1:1] = ["--batch"]
             command.extend(["--pinentry-mode", "loopback", "--passphrase-fd", "0"])
         command.extend(["--decrypt", str(path)])
-        subprocess.run(
-            command,
-            check=True,
-            input=(passphrase + "\n") if passphrase is not None else None,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
+        try:
+            subprocess.run(
+                command,
+                check=True,
+                input=(passphrase + "\n") if passphrase is not None else None,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+        except subprocess.CalledProcessError as error:
+            detail = (error.stderr or "").strip()
+            guidance = (
+                "unlock the private key through the local GPG agent and retry"
+                if keychain_service is None
+                else "check the configured keychain service and retry"
+            )
+            suffix = f": {detail}" if detail else ""
+            raise RuntimeError(
+                f"GPG could not decrypt the DR artifact; {guidance}{suffix}"
+            ) from error
         evidence = verify_snapshot(plaintext)
     if evidence["sha256"] != manifest.get("source_sha256"):
         raise sqlite3.DatabaseError("decrypted DR snapshot checksum mismatch")

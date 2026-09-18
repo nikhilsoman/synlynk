@@ -13,6 +13,28 @@ class UnknownKind(ValueError): pass
 PACK_DIR = Path(__file__).with_name("packs")
 PACK_IDS = ("software-product", "studio", "agency")
 
+# Kind skills are product-wide review/working laws. A type stores only its
+# delta, so changing a baseline affects every type with that kind.
+KIND_BASELINE_SKILLS: dict[str, tuple[str, ...]] = {
+    "pm": ("roadmap-authority",),
+    "tpm": ("task-planning",),
+    "architect": ("architecture-review",),
+    "qa": ("non-author-review", "instruction-receipts", "qa-gate"),
+    "dev": ("implementation",),
+    "designer": ("design-review",),
+    "marketing": ("marketing-comms",),
+    "synlynk-bot": ("automation-receipts",),
+    "infra": ("infrastructure-safety",),
+    "edit": ("editing",),
+    "color": ("color-review",),
+    "script": ("script-review",),
+    "sound": ("sound-review",),
+    "account": ("account-management",),
+    "creative": ("creative-review",),
+    "media": ("media-planning",),
+    "research": ("research-synthesis",),
+}
+
 
 def _load_pack(pack_id: str) -> dict:
     if pack_id not in PACK_IDS:
@@ -46,6 +68,27 @@ def _load(path: Path) -> dict:
 
 def load_types(slug: str) -> dict:
     return _load(types_yaml_path(slug))
+
+
+def resolve_type(slug: str, type_id: str) -> dict:
+    """Resolve a product type or fail closed with a useful error."""
+    entry = load_types(slug).get(type_id)
+    if not isinstance(entry, dict) or not isinstance(entry.get("kind"), str):
+        raise ValueError(f"unknown product type {type_id!r} for {slug!r}")
+    return entry
+
+
+def effective_skills(slug: str, type_id: str) -> list[str]:
+    """Return kind baseline skills plus the type's add/remove delta."""
+    entry = resolve_type(slug, type_id)
+    baseline = list(KIND_BASELINE_SKILLS.get(entry["kind"], ()))
+    removed = {skill for skill in entry.get("skills_remove", []) if isinstance(skill, str)}
+    added = [skill for skill in entry.get("skills_add", []) if isinstance(skill, str)]
+    result = [skill for skill in baseline if skill not in removed]
+    for skill in added:
+        if skill not in result:
+            result.append(skill)
+    return result
 
 
 def _save(slug: str, types: dict) -> None:
@@ -85,7 +128,7 @@ def type_create(slug: str, type_id: str, kind: str) -> dict:
     if kind not in approved_kinds:
         raise UnknownKind(kind)
     types = load_types(slug)
-    if type_id in types:
+    if type_id in types or any(type_id in _pack_types(pack_id) for pack_id in PACK_IDS):
         raise TypeExists(type_id)
     types[type_id] = {"kind": kind, "canonical": False, "skills_add": [], "skills_remove": []}
     _save(slug, types)
