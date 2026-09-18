@@ -2,7 +2,7 @@ import sqlite3
 
 import pytest
 
-from synlynk.state_repair import promote_state_db, quarantine_state_db
+from synlynk.state_repair import promote_state_db, quarantine_state_db, restore_state_db
 from synlynk.state_registry import StateRegistryError
 
 
@@ -53,3 +53,33 @@ def test_quarantine_rejects_registered_canonical(tmp_path, monkeypatch):
     promote_state_db(canonical, canonical, slug="demo", product_id="product-demo")
     with pytest.raises(StateRegistryError, match="canonical DB"):
         quarantine_state_db(canonical, slug="demo", quarantine_root=tmp_path / "q", apply=True)
+
+
+def test_restore_is_dry_run_by_default_and_assigns_new_lineage(tmp_path, monkeypatch):
+    monkeypatch.setenv("SYNLYNK_REGISTRY_PATH", str(tmp_path / "registry.json"))
+    source = tmp_path / "source.db"
+    destination = tmp_path / "workspace" / "state.db"
+    _db(source, "restored")
+    destination.parent.mkdir()
+    _db(destination, "broken")
+
+    planned = restore_state_db(
+        source, destination, slug="demo", product_id="product-demo", archive_root=tmp_path / "archive"
+    )
+    assert planned["disposition"] == "planned"
+    assert destination.exists()
+
+    restored = restore_state_db(
+        source,
+        destination,
+        slug="demo",
+        product_id="product-demo",
+        archive_root=tmp_path / "archive",
+        apply=True,
+    )
+    assert restored["disposition"] == "restored"
+    assert restored["lineage_generation"] == 2
+    conn = sqlite3.connect(destination)
+    assert conn.execute("SELECT value FROM facts").fetchone()[0] == "restored"
+    conn.close()
+    assert list((tmp_path / "archive").rglob("state.db"))

@@ -199,6 +199,20 @@ def ensure_registered_product(slug: str, path: Path, product_id: Optional[str] =
         return entry
 
 
+def update_registered_product(slug: str, **updates: object) -> dict:
+    """Atomically update an existing product registry entry."""
+    registry = registry_path()
+    with registry_lock(registry):
+        payload = _read_unlocked(registry)
+        entry = payload["products"].get(slug)
+        if not isinstance(entry, dict):
+            raise StateRegistryError(f"no registered product for {slug!r}")
+        entry.update(updates)
+        payload["products"][slug] = entry
+        _write_unlocked(registry, payload)
+        return entry
+
+
 def identity_metadata(conn, *, product_id: str, mode: str, path: Path) -> None:
     """Bootstrap/read identity metadata on an already-open writable ledger."""
     conn.execute(

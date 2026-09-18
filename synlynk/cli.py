@@ -713,6 +713,13 @@ def build_parser() -> argparse.ArgumentParser:
     state_quarantine.add_argument("--slug", required=True)
     state_quarantine.add_argument("--root", default=None)
     state_quarantine.add_argument("--apply", action="store_true")
+    state_restore = state_sub.add_parser("restore", help="Validate or explicitly restore a canonical DB snapshot")
+    state_restore.add_argument("snapshot")
+    state_restore.add_argument("destination")
+    state_restore.add_argument("--slug", required=True)
+    state_restore.add_argument("--product-id", default=None, dest="product_id")
+    state_restore.add_argument("--archive-root", default=None, dest="archive_root")
+    state_restore.add_argument("--apply", action="store_true")
 
     ops_parser = subparsers.add_parser(
         "ops",
@@ -1605,6 +1612,17 @@ def main(argv=None) -> None:
 
             print(json.dumps(quarantine_state_db(
                 args.path, slug=args.slug, quarantine_root=args.root, apply=args.apply
+            ), sort_keys=True))
+        elif args.state_action == "restore":
+            from synlynk.state_repair import restore_state_db
+
+            print(json.dumps(restore_state_db(
+                args.snapshot,
+                args.destination,
+                slug=args.slug,
+                product_id=args.product_id,
+                archive_root=args.archive_root,
+                apply=args.apply,
             ), sort_keys=True))
         else:
             help_parsers.get("state", parser).print_help()
