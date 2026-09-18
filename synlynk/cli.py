@@ -221,7 +221,9 @@ def build_parser() -> argparse.ArgumentParser:
     uninstall_parser = subparsers.add_parser("uninstall", help="Clean teardown, daemon shutdown, and shim removal")
     uninstall_parser.add_argument("--force", action="store_true", help="Force complete uninstall")
 
-    subparsers.add_parser("join", help="Onboard as a new member to an existing project")
+    join_parser = subparsers.add_parser("join", help="Join an existing project without initializing identity")
+    join_parser.add_argument("--invite", required=True,
+                             help="Opaque membership invite verified by the project minter")
     subparsers.add_parser(
         "start", help="Cold-start entry point: detect new vs existing project and guide setup"
     )
@@ -1266,6 +1268,8 @@ def build_parser() -> argparse.ArgumentParser:
                             help="Stop background server")
     viz_parser.add_argument("--port", type=int, default=None,
                             help="Override port (default: 8721)")
+    viz_parser.add_argument("--hosted", action="store_true",
+                            help="Show the fail-closed hosted Vizor placeholder")
 
     return parser
 
@@ -1984,7 +1988,7 @@ def main(argv=None) -> None:
         from synlynk.coldstart import cmd_start
         cmd_start()
     elif args.command == "join":
-        cmd_join()
+        cmd_join(getattr(args, "invite", None))
     elif args.command == "team":
         action = getattr(args, "team_action", None)
         if action == "status" or action is None:

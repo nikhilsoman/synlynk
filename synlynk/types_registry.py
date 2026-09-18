@@ -76,11 +76,12 @@ def seed_canonical_types(slug: str, pack_id: str = "software-product") -> dict:
 
 
 def type_create(slug: str, type_id: str, kind: str) -> dict:
-    approved_kinds = {
+    approved_kinds = {"connector"}
+    approved_kinds.update(
         pack_kind
         for pack_id in PACK_IDS
         for pack_kind, _label in _pack_types(pack_id).values()
-    }
+    )
     if kind not in approved_kinds:
         raise UnknownKind(kind)
     types = load_types(slug)

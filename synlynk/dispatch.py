@@ -2826,6 +2826,11 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 (a["value"] for a in entry["aliases"] if a["kind"] == "role_slug"), None
             )
     resolved_agent_role = role or resolved_agent_role
+    from synlynk.wave6 import connector_dispatch_allowed
+    if not connector_dispatch_allowed(resolved_agent_role, grants=grants):
+        raise RuntimeError(
+            f"Dispatch refused for connector role {resolved_agent_role!r}: explicit connector grant required"
+        )
     if requires_gh_write and not resolved_agent_role:
         resolved_agent_role = _role_for_story(story_id)
     if requires_gh_write and not resolved_agent_role:
