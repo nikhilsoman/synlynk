@@ -98,7 +98,18 @@ def _role_slug(role: str) -> str:
 
 
 def _role_app_dir() -> Path:
-    return Path(".synlynk") / "github_apps"
+    from synlynk.product_store import resolve_github_apps_dir
+    return resolve_github_apps_dir(".")
+
+
+def _write_role_app_paths(role: str) -> tuple[Path, Path, Path]:
+    from synlynk.product_store import write_apps_dir_for_init
+    if (Path(".synlynk") / "config.json").is_file():
+        app_dir = write_apps_dir_for_init(".")
+    else:
+        app_dir = Path(".synlynk") / "github_apps"
+    slug = _role_slug(role)
+    return app_dir, app_dir / f"{slug}.json", app_dir / f"{slug}.pem"
 
 
 def _role_app_paths(role: str) -> tuple[Path, Path, Path]:
@@ -837,15 +848,40 @@ def cmd_identity_init() -> None:
         print("  (public key file not found)")
 
 
+class IdentityAlreadyProvisioned(RuntimeError):
+    """A product/type App already exists; never mint a second App."""
+
+
+class UnknownType(RuntimeError):
+    """The requested specialist has not been created in the product registry."""
+
+
+def ensure_type_for_identity_init(type_id: str) -> None:
+    from synlynk.product_store import identity_slug_from_config, types_yaml_path
+    from synlynk.types_registry import load_types, seed_canonical_types
+    slug = identity_slug_from_config(".")
+    if not (Path(".synlynk") / "config.json").is_file():
+        return
+    types = load_types(slug)
+    if not types and not types_yaml_path(slug).exists():
+        seed_canonical_types(slug)
+        types = load_types(slug)
+    if type_id not in types:
+        raise UnknownType(f"unknown type {type_id!r}; run synlynk type create {type_id} --kind <kind>")
+
+
 def cmd_identity_init_role(role: str, project=None) -> None:
-    app_dir, json_path, pem_path = _role_app_paths(role)
+    ensure_type_for_identity_init(role)
+    from synlynk.product_store import migrate_repo_apps_if_needed
+    migrate_repo_apps_if_needed(".")
+    app_dir, json_path, pem_path = _write_role_app_paths(role)
     if json_path.exists():
         try:
             existing = json.loads(json_path.read_text())
         except (json.JSONDecodeError, OSError):
             existing = {}
-        if existing.get("installation_id") and existing.get("private_key_path") and os.path.exists(existing["private_key_path"]):
-            print(f"  role '{role}' already provisioned at {json_path}")
+        if existing.get("installation_id") and existing.get("private_key_path"):
+            print(f"  role '{role}' is already provisioned ({json_path}) — no-op")
             return
         if (
             existing.get("app_id")
@@ -931,7 +967,7 @@ def cmd_identity_init_role(role: str, project=None) -> None:
     if conversion is None:
         raise RuntimeError("no manifest conversion received")
     conversion.setdefault("slug", conversion.get("name", _role_slug(role)))
-    conversion["private_key_path"] = str(pem_path)
+    conversion["private_key_path"] = str(pem_path.resolve())
     config = _write_role_app_config(role, conversion)
     _confirm_installation(config["app_slug"], json_path)
     with open(json_path) as fh:
@@ -955,7 +991,8 @@ def cmd_identity_list() -> None:
     print(f"\n  {'role':<14}  {'app_slug':<24}  status")
     print(f"  {'─' * 14}  {'─' * 24}  {'─' * 20}")
     for role in roles:
-        json_path = os.path.join(".synlynk", "github_apps", f"{role}.json")
+        from synlynk.product_store import resolve_github_apps_dir
+        json_path = resolve_github_apps_dir(".") / f"{role}.json"
         if not os.path.exists(json_path):
             print(f"  {role:<14}  {'—':<24}  not provisioned")
             continue

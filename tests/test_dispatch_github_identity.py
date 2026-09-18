@@ -98,6 +98,8 @@ def test_resolve_dispatch_gh_token_uses_main_repo_apps_from_worktree(tmp_path, m
     }))
 
     monkeypatch.chdir(worktree)
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    (repo / ".synlynk" / "config.json").write_text(json.dumps({"identity_slug": "test-product"}))
     import synlynk.dispatch as dispatch_mod
 
     assert dispatch_mod._resolve_dispatch_gh_token("qa") == "token-for-qa"
@@ -114,13 +116,14 @@ def test_resolve_github_apps_dir_prefers_cwd_directory(tmp_path, monkeypatch):
         raise AssertionError("git-common-dir lookup should not run")
 
     monkeypatch.setattr(dispatch_mod.subprocess, "run", fail_git_lookup)
-    assert dispatch_mod._resolve_github_apps_dir() == os.path.join(
-        ".synlynk", "github_apps"
-    )
+    assert dispatch_mod._resolve_github_apps_dir() == str(apps_dir.resolve())
 
 
 def test_resolve_github_apps_dir_falls_back_to_cwd_path_when_unavailable(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    apps_dir = tmp_path / ".synlynk" / "github_apps"
+    apps_dir.mkdir(parents=True)
 
     import synlynk.dispatch as dispatch_mod
 
@@ -128,9 +131,7 @@ def test_resolve_github_apps_dir_falls_back_to_cwd_path_when_unavailable(tmp_pat
         raise subprocess.CalledProcessError(128, args[0])
 
     monkeypatch.setattr(dispatch_mod.subprocess, "run", fail_git_lookup)
-    assert dispatch_mod._resolve_github_apps_dir() == os.path.join(
-        ".synlynk", "github_apps"
-    )
+    assert dispatch_mod._resolve_github_apps_dir() == str(apps_dir.resolve())
 
 
 def test_resolve_dispatch_gh_bot_login_uses_role_specific_app(tmp_path, monkeypatch):

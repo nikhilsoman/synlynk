@@ -34,6 +34,8 @@ def test_resolve_github_apps_dir_in_git_worktree(tmp_path, monkeypatch):
 
     apps_dir = repo / ".synlynk" / "github_apps"
     apps_dir.mkdir(parents=True)
+    (repo / ".synlynk" / "config.json").write_text(json.dumps({"identity_slug": "test-product"}))
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
 
     monkeypatch.chdir(worktree)
     resolved = _resolve_github_apps_dir()

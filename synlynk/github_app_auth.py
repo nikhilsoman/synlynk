@@ -24,8 +24,10 @@ def _redaction_cache_path() -> str:
 def _default_apps_dir() -> str:
     """Return the shared GitHub App directory for the current repository."""
     try:
-        from synlynk.daemon import _daemon_state_path
-        return _daemon_state_path("github_apps")
+        if not os.path.isfile(os.path.join(".synlynk", "config.json")):
+            return os.path.join(".synlynk", "github_apps")
+        from synlynk.product_store import resolve_github_apps_dir
+        return str(resolve_github_apps_dir("."))
     except Exception:
         # Preserve the historical behavior outside a repository or when the
         # daemon module cannot resolve the repository context.

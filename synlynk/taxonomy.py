@@ -173,6 +173,9 @@ COMMAND_TAXONOMY = [
     {"command": "roles", "governs_stage": "open", "maturity_tier": 1, "prominence": "secondary",
      "orientation_gateway": False, "audience": "human",
      "trigger_phrases": ["who has what role on this project"], "hook_event": None},
+    {"command": "type create", "governs_stage": "execute", "maturity_tier": 1, "prominence": "secondary",
+     "orientation_gateway": False, "audience": "human",
+     "trigger_phrases": ["create a product type"], "hook_event": None},
 
     # --- Tier 2: Execute ---
     {"command": "dispatch", "governs_stage": "execute", "maturity_tier": 2, "prominence": "primary",

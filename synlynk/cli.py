@@ -483,10 +483,15 @@ def build_parser() -> argparse.ArgumentParser:
     identity_sub = identity_parser.add_subparsers(dest="identity_action")
     identity_init_parser = identity_sub.add_parser("init", help="Create local Ed25519 identity key")
     identity_init_parser.add_argument(
-        "--role",
+        "--role", "--type", dest="role",
         default=None,
         help="Provision a GitHub App for a specific role",
     )
+    type_parser = subparsers.add_parser("type", help="Manage product identity types")
+    type_sub = type_parser.add_subparsers(dest="type_action")
+    type_create_parser = type_sub.add_parser("create", help="Create a specialist type")
+    type_create_parser.add_argument("type_id")
+    type_create_parser.add_argument("--kind", required=True)
     identity_sub.add_parser("list", help="List provisioned role identities")
 
     events_parser = subparsers.add_parser("events", help="Inspect the GOVERNS event bus")
@@ -2157,13 +2162,32 @@ def main(argv=None) -> None:
         if action == "init" or action is None:
             role = getattr(args, "role", None)
             if role:
-                cmd_identity_init_role(role)
+                try:
+                    cmd_identity_init_role(role)
+                except Exception as exc:
+                    from synlynk.team import IdentityAlreadyProvisioned, UnknownType
+                    if isinstance(exc, (IdentityAlreadyProvisioned, UnknownType)):
+                        print(f"  identity init refused: {exc}", file=sys.stderr)
+                        raise SystemExit(1)
+                    raise
             else:
                 cmd_identity_init()
         elif action == "list":
             cmd_identity_list()
         else:
             help_parsers.get("identity", parser).print_help()
+    elif args.command == "type":
+        if getattr(args, "type_action", None) == "create":
+            from synlynk.product_store import identity_slug_from_config
+            from synlynk.types_registry import type_create, TypeExists, UnknownKind
+            try:
+                type_create(identity_slug_from_config("."), args.type_id, args.kind)
+                print(f"  created type '{args.type_id}'")
+            except (TypeExists, UnknownKind) as exc:
+                print(f"  type create refused: {exc}", file=sys.stderr)
+                raise SystemExit(1)
+        else:
+            type_parser.print_help()
     elif args.command == "events":
         action = getattr(args, "events_action", None)
         if action == "tail":
