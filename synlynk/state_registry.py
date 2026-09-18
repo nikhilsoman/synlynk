@@ -143,6 +143,12 @@ def canonical_path(slug: str, fallback: Path) -> Path:
     payload = _read_unlocked(path)
     entry = payload["products"].get(slug)
     if not isinstance(entry, dict) or not entry.get("canonical_path"):
+        # A shared registry may already contain other products.  A brand-new
+        # product has no DB to copy or masquerade as, so it may bootstrap at
+        # its deterministic product path.  Existing unregistered files remain
+        # fail-closed and must be explicitly inventoried/reconciled.
+        if not fallback.expanduser().resolve().exists():
+            return fallback
         raise StateRegistryError(f"no canonical registry entry for product {slug!r}")
     registered = Path(str(entry["canonical_path"])).expanduser().resolve()
     return registered
