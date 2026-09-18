@@ -1,8 +1,14 @@
+import json
 import sqlite3
 
 import pytest
 
-from synlynk.state_repair import promote_state_db, quarantine_state_db, restore_state_db
+from synlynk.state_repair import (
+    promote_state_db,
+    quarantine_state_db,
+    register_existing_state,
+    restore_state_db,
+)
 from synlynk.state_registry import StateRegistryError
 
 
@@ -83,3 +89,16 @@ def test_restore_is_dry_run_by_default_and_assigns_new_lineage(tmp_path, monkeyp
     assert conn.execute("SELECT value FROM facts").fetchone()[0] == "restored"
     conn.close()
     assert list((tmp_path / "archive").rglob("state.db"))
+
+
+def test_register_existing_state_validates_and_registers(tmp_path, monkeypatch):
+    registry = tmp_path / "registry.json"
+    monkeypatch.setenv("SYNLYNK_REGISTRY_PATH", str(registry))
+    db = tmp_path / "state.db"
+    _db(db)
+
+    result = register_existing_state(db, slug="demo", product_id="product-demo")
+
+    assert result["disposition"] == "registered"
+    payload = json.loads(registry.read_text())
+    assert payload["products"]["demo"]["canonical_path"] == str(db.resolve())
