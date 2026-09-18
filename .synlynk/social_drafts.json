@@ -126,5 +126,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #1690 \u2014 resolve specialist type skills (PR #1690, v0.20.0)\n\n\u2022 Merged improvements and fixes for PR #\n\n#posts",
     "changelog": "### v0.20.0 (2026-09-18) - PR #1690\n- Merged improvements and fixes for PR #"
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/217-pr1691-block-duplicate-product-apps.md",
+    "title": "PR #1691 \u2014 block duplicate product Apps",
+    "author": "nikhilsoman",
+    "date": "2026-09-18",
+    "pr": "#1691",
+    "version": "0.20.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #"
+    ],
+    "tweet": "\ud83d\ude80 PR #1691 \u2014 block duplicate product Apps (PR #1691, v0.20.0)\n\n\u2022 Merged improvements and fixes for PR #\n\n#posts",
+    "changelog": "### v0.20.0 (2026-09-18) - PR #1691\n- Merged improvements and fixes for PR #"
   }
 ]

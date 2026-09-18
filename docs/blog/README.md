@@ -251,6 +251,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [214](./214-pr1681-attach-marketing-checks-to-automation-pu.md) | PR #1681 — attach marketing checks to automation pull requests | [#1681](https://github.com/nikhilsoman/synlynk/pull/1681) | 2026-09-18 |
 | [215](./215-pr1683-harden-dr-restore-cli-paths.md) | PR #1683 — harden DR restore CLI paths | [#1683](https://github.com/nikhilsoman/synlynk/pull/1683) | 2026-09-18 |
 | [216](./216-pr1690-resolve-specialist-type-skills.md) | PR #1690 — resolve specialist type skills | [#1690](https://github.com/nikhilsoman/synlynk/pull/1690) | 2026-09-18 |
+| [217](./217-pr1691-block-duplicate-product-apps.md) | PR #1691 — block duplicate product Apps | [#1691](https://github.com/nikhilsoman/synlynk/pull/1691) | 2026-09-18 |
 
 ## Per-PR Post Template
 
