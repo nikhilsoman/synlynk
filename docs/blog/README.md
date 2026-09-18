@@ -249,6 +249,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [212](./212-pr1679-remove-duplicate-marketing-pr-body-argum.md) | PR #1679 — remove duplicate marketing PR body argument | [#1679](https://github.com/nikhilsoman/synlynk/pull/1679) | 2026-09-18 |
 | [213](./213-pr1680-reuse-existing-marketing-sync-pull-reque.md) | PR #1680 — reuse existing marketing sync pull request | [#1680](https://github.com/nikhilsoman/synlynk/pull/1680) | 2026-09-18 |
 | [214](./214-pr1681-attach-marketing-checks-to-automation-pu.md) | PR #1681 — attach marketing checks to automation pull requests | [#1681](https://github.com/nikhilsoman/synlynk/pull/1681) | 2026-09-18 |
+| [215](./215-pr1683-harden-dr-restore-cli-paths.md) | PR #1683 — harden DR restore CLI paths | [#1683](https://github.com/nikhilsoman/synlynk/pull/1683) | 2026-09-18 |
 
 ## Per-PR Post Template
 

@@ -94,5 +94,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #1681 \u2014 attach marketing checks to automation pull requests (PR #1681, v0.20.0)\n\n\u2022 Merged improvements and fixes for PR #\n\n#posts",
     "changelog": "### v0.20.0 (2026-09-18) - PR #1681\n- Merged improvements and fixes for PR #"
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/215-pr1683-harden-dr-restore-cli-paths.md",
+    "title": "PR #1683 \u2014 harden DR restore CLI paths",
+    "author": "nikhilsoman",
+    "date": "2026-09-18",
+    "pr": "#1683",
+    "version": "0.20.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #"
+    ],
+    "tweet": "\ud83d\ude80 PR #1683 \u2014 harden DR restore CLI paths (PR #1683, v0.20.0)\n\n\u2022 Merged improvements and fixes for PR #\n\n#posts",
+    "changelog": "### v0.20.0 (2026-09-18) - PR #1683\n- Merged improvements and fixes for PR #"
   }
 ]
