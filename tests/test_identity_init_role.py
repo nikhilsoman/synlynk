@@ -8,6 +8,8 @@ from types import SimpleNamespace
 from urllib.error import HTTPError
 from urllib.parse import unquote, urlparse
 
+import pytest
+
 import synlynk as sl
 import synlynk.team as team_mod
 
@@ -175,7 +177,7 @@ def test_resolve_project_slug_falls_back_without_identity_slug(tmp_path, monkeyp
     assert team_mod._resolve_project_slug() == "cc-videoreframing"
 
 
-def test_cmd_identity_init_role_noops_if_already_provisioned(tmp_path, monkeypatch):
+def test_cmd_identity_init_role_fails_closed_if_already_provisioned(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     (tmp_path / ".synlynk").mkdir()
@@ -209,7 +211,8 @@ def test_cmd_identity_init_role_noops_if_already_provisioned(tmp_path, monkeypat
     monkeypatch.setattr(sl, "_confirm_installation", lambda app_slug, path: (_ for _ in ()).throw(AssertionError("should not confirm")))
     monkeypatch.setattr("builtins.input", lambda prompt="": (_ for _ in ()).throw(AssertionError("should not prompt")))
 
-    sl.cmd_identity_init_role("review")
+    with pytest.raises(team_mod.IdentityAlreadyProvisioned, match="second App"):
+        sl.cmd_identity_init_role("review")
 
     assert json.loads(json_path.read_text())["installation_id"] == 99
 
