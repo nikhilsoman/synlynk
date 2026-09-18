@@ -37,7 +37,6 @@ def test_required_checks_support_automation_branch_dispatch():
     assert "workflow_dispatch: {}" in workflow
     assert "github.event_name == 'workflow_dispatch'" in workflow
 
-
 def test_marketing_sync_stages_blog_and_social_draft_outputs():
     workflow = WORKFLOW.read_text(encoding="utf-8")
 
