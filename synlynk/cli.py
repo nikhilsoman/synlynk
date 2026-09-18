@@ -729,6 +729,12 @@ def build_parser() -> argparse.ArgumentParser:
     state_restore.add_argument("--slug", required=True)
     state_restore.add_argument("--product-id", default=None, dest="product_id")
     state_restore.add_argument("--archive-root", default=None, dest="archive_root")
+    state_register = state_sub.add_parser(
+        "register", help="Register an existing canonical DB after an integrity check"
+    )
+    state_register.add_argument("--slug", required=True)
+    state_register.add_argument("--path", required=True)
+    state_register.add_argument("--product-id", default=None, dest="product_id")
     state_restore.add_argument("--apply", action="store_true")
 
     ops_parser = subparsers.add_parser(
@@ -1641,6 +1647,12 @@ def main(argv=None) -> None:
                 product_id=args.product_id,
                 archive_root=args.archive_root,
                 apply=args.apply,
+            ), sort_keys=True))
+        elif args.state_action == "register":
+            from synlynk.state_repair import register_existing_state
+
+            print(json.dumps(register_existing_state(
+                args.path, slug=args.slug, product_id=args.product_id
             ), sort_keys=True))
         else:
             help_parsers.get("state", parser).print_help()

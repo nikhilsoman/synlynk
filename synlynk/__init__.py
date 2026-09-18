@@ -597,7 +597,19 @@ def _resolve_db_path() -> str:
 
     root = _project_root()
     slug = identity_slug_from_config(root)
-    path = canonical_path(slug, state_db_path(slug))
+    try:
+        path = canonical_path(
+            slug,
+            state_db_path(slug),
+            allow_unregistered_existing=os.environ.get("SYNLYNK_ALLOW_REGISTRY_RECOVERY") == "1",
+        )
+    except Exception as exc:
+        if "no canonical registry entry" in str(exc):
+            raise type(exc)(
+                f"{exc}; run SYNLYNK_ALLOW_REGISTRY_RECOVERY=1 synlynk state register "
+                f"--slug {slug} --path {state_db_path(slug)}"
+            ) from exc
+        raise
     if not _IS_TESTING:
         migrate_state_db_if_needed(root)
     return str(path)

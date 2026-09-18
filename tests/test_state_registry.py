@@ -36,6 +36,16 @@ def test_existing_corrupt_registry_fails_closed(tmp_path, monkeypatch):
         canonical_path("demo", tmp_path / "state.db")
 
 
+def test_missing_registry_entry_can_be_explicitly_recovered(tmp_path, monkeypatch):
+    registry = tmp_path / "registry.json"
+    existing = tmp_path / "state.db"
+    existing.write_text("state")
+    registry.write_text(json.dumps({"version": 1, "products": {}}))
+    monkeypatch.setenv("SYNLYNK_REGISTRY_PATH", str(registry))
+
+    assert canonical_path("demo", existing, allow_unregistered_existing=True) == existing.resolve()
+
+
 def test_identity_metadata_rejects_copied_or_relocated_canonical(tmp_path):
     first = tmp_path / "first.db"
     second = tmp_path / "second.db"

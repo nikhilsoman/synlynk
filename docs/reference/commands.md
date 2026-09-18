@@ -41,6 +41,7 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `state promote` (secondary) — sustain
 - `state quarantine` (secondary) — sustain
 - `state restore` (secondary) — sustain
+- `state register` (secondary) — sustain
 - `decide` (primary) — goal
 - `goal create` (primary) — goal
 - `goal list` (primary) — goal
