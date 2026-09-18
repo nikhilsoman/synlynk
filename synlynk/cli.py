@@ -672,6 +672,16 @@ def build_parser() -> argparse.ArgumentParser:
     backup_create.add_argument("--label", default="state")
     backup_verify = backup_sub.add_parser("verify", help="Verify a snapshot")
     backup_verify.add_argument("snapshot")
+    backup_encrypt = backup_sub.add_parser(
+        "encrypt", help="Encrypt a verified snapshot for off-machine retention"
+    )
+    backup_encrypt.add_argument("snapshot")
+    backup_encrypt.add_argument("--recipient", required=True, help="GPG public-key recipient")
+    backup_encrypt.add_argument("--output-dir", default=None, dest="output_dir")
+    backup_verify_encrypted = backup_sub.add_parser(
+        "verify-encrypted", help="Decrypt and verify an encrypted snapshot"
+    )
+    backup_verify_encrypted.add_argument("snapshot")
 
     ops_parser = subparsers.add_parser(
         "ops",
@@ -1526,13 +1536,22 @@ def main(argv=None) -> None:
                 db_conn=_get_db(read_only=True), json_output=args.json_output
             )
     elif args.command == "backup":
-        from synlynk.backup import cmd_backup_create, cmd_backup_verify
+        from synlynk.backup import (
+            cmd_backup_create,
+            cmd_backup_encrypt,
+            cmd_backup_verify,
+            cmd_backup_verify_encrypted,
+        )
         if args.backup_action == "create":
             cmd_backup_create(
                 source=args.source, output_dir=args.output_dir, label=args.label
             )
         elif args.backup_action == "verify":
             cmd_backup_verify(args.snapshot)
+        elif args.backup_action == "encrypt":
+            cmd_backup_encrypt(args.snapshot, args.recipient, args.output_dir)
+        elif args.backup_action == "verify-encrypted":
+            cmd_backup_verify_encrypted(args.snapshot)
         else:
             help_parsers.get("backup", parser).print_help()
     elif args.command == "home":

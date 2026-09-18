@@ -1,7 +1,58 @@
 import json
+import os
+import shutil
 import sqlite3
+import subprocess
+import tempfile
+from pathlib import Path
 
-from synlynk.backup import create_snapshot, verify_snapshot
+import pytest
+
+from synlynk.backup import (
+    create_snapshot,
+    encrypt_snapshot,
+    verify_encrypted_snapshot,
+    verify_snapshot,
+)
+
+
+@pytest.fixture
+def gpg_recipient(tmp_path, monkeypatch):
+    gpg = shutil.which("gpg")
+    if not gpg:
+        pytest.skip("gpg is unavailable")
+    home = Path(tempfile.mkdtemp(prefix="gpg-", dir="/tmp"))
+    os.chmod(home, 0o700)
+    monkeypatch.setenv("GNUPGHOME", str(home))
+    try:
+        subprocess.run(
+            [
+                gpg,
+                "--batch",
+                "--pinentry-mode",
+                "loopback",
+                "--passphrase",
+                "",
+                "--quick-gen-key",
+                "Synlynk DR Test <dr-test@synlynk.invalid>",
+                "rsa2048",
+                "encrypt",
+                "1d",
+            ],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+    except subprocess.CalledProcessError as error:
+        pytest.skip(f"gpg key generation unavailable: {error.stderr.strip()}")
+    keys = subprocess.run(
+        [gpg, "--batch", "--list-keys", "--with-colons"],
+        check=True,
+        stdout=subprocess.PIPE,
+        text=True,
+    ).stdout
+    return next(line.split(":")[9] for line in keys.splitlines() if line.startswith("fpr:"))
 
 
 def test_create_snapshot_uses_online_backup_and_writes_manifest(tmp_path):
@@ -37,3 +88,31 @@ def test_verify_snapshot_rejects_corruption(tmp_path):
         pass
     else:
         raise AssertionError("corrupt snapshot unexpectedly verified")
+
+
+def test_encrypt_and_verify_snapshot_without_leaving_plaintext(tmp_path, gpg_recipient):
+    source = tmp_path / "state.db"
+    conn = sqlite3.connect(source)
+    conn.execute("CREATE TABLE events (id INTEGER PRIMARY KEY, body TEXT)")
+    conn.execute("INSERT INTO events (body) VALUES ('secret')")
+    conn.commit()
+    conn.close()
+    snapshot_dir = tmp_path / "snapshots"
+    snapshot = create_snapshot(source=source, output_dir=snapshot_dir)
+    snapshot_path = snapshot_dir / Path(snapshot["snapshot"]).name
+    export_dir = tmp_path / "off-machine"
+
+    encrypted = encrypt_snapshot(snapshot_path, gpg_recipient, output_dir=export_dir)
+    encrypted_path = export_dir / Path(encrypted["encrypted_snapshot"]).name
+    assert encrypted_path.exists()
+    assert b"secret" not in encrypted_path.read_bytes()
+    assert verify_encrypted_snapshot(encrypted_path)["integrity_check"] == "ok"
+    assert not list(export_dir.glob("*.db"))
+    assert not list(tmp_path.glob("synlynk-dr-verify-*"))
+
+
+def test_encrypt_requires_recipient(tmp_path):
+    source = tmp_path / "state.db"
+    sqlite3.connect(source).close()
+    with pytest.raises(ValueError, match="recipient"):
+        encrypt_snapshot(source, "")
