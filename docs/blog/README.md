@@ -252,6 +252,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [215](./215-pr1683-harden-dr-restore-cli-paths.md) | PR #1683 — harden DR restore CLI paths | [#1683](https://github.com/nikhilsoman/synlynk/pull/1683) | 2026-09-18 |
 | [216](./216-pr1690-resolve-specialist-type-skills.md) | PR #1690 — resolve specialist type skills | [#1690](https://github.com/nikhilsoman/synlynk/pull/1690) | 2026-09-18 |
 | [217](./217-pr1691-block-duplicate-product-apps.md) | PR #1691 — block duplicate product Apps | [#1691](https://github.com/nikhilsoman/synlynk/pull/1691) | 2026-09-18 |
+| [218](./218-pr1685-add-explicit-canonical-registry-recovery.md) | PR #1685 — add explicit canonical registry recovery | [#1685](https://github.com/nikhilsoman/synlynk/pull/1685) | 2026-09-18 |
 
 ## Per-PR Post Template
 

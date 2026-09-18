@@ -142,5 +142,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #1691 \u2014 block duplicate product Apps (PR #1691, v0.20.0)\n\n\u2022 Merged improvements and fixes for PR #\n\n#posts",
     "changelog": "### v0.20.0 (2026-09-18) - PR #1691\n- Merged improvements and fixes for PR #"
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/218-pr1685-add-explicit-canonical-registry-recovery.md",
+    "title": "PR #1685 \u2014 add explicit canonical registry recovery",
+    "author": "nikhilsoman",
+    "date": "2026-09-18",
+    "pr": "#1685",
+    "version": "0.20.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #"
+    ],
+    "tweet": "\ud83d\ude80 PR #1685 \u2014 add explicit canonical registry recovery (PR #1685, v0.20.0)\n\n\u2022 Merged improvements and fixes for PR #\n\n#posts",
+    "changelog": "### v0.20.0 (2026-09-18) - PR #1685\n- Merged improvements and fixes for PR #"
   }
 ]
