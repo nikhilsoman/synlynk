@@ -35,6 +35,7 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `backup create` (secondary) — sustain
 - `backup verify` (secondary) — sustain
 - `backup encrypt` (secondary) — sustain
+- `backup package` (secondary) — sustain
 - `backup verify-encrypted` (secondary) — sustain
 - `state inventory` (secondary) — sustain
 - `state promote` (secondary) — sustain
