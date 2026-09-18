@@ -681,6 +681,15 @@ def build_parser() -> argparse.ArgumentParser:
     backup_encrypt.add_argument("snapshot")
     backup_encrypt.add_argument("--recipient", required=True, help="GPG public-key recipient")
     backup_encrypt.add_argument("--output-dir", default=None, dest="output_dir")
+    backup_package = backup_sub.add_parser(
+        "package", help="Create an encrypted provider-neutral DR package"
+    )
+    backup_package.add_argument("--source", default=None, help="Source state.db path")
+    backup_package.add_argument("--output-dir", default=None, dest="output_dir")
+    backup_package.add_argument("--label", default="state")
+    backup_package.add_argument(
+        "--recipient", required=True, help="GPG public-key recipient"
+    )
     backup_verify_encrypted = backup_sub.add_parser(
         "verify-encrypted", help="Decrypt and verify an encrypted snapshot"
     )
@@ -1578,6 +1587,7 @@ def main(argv=None) -> None:
         from synlynk.backup import (
             cmd_backup_create,
             cmd_backup_encrypt,
+            cmd_backup_package,
             cmd_backup_verify,
             cmd_backup_verify_encrypted,
         )
@@ -1589,6 +1599,13 @@ def main(argv=None) -> None:
             cmd_backup_verify(args.snapshot)
         elif args.backup_action == "encrypt":
             cmd_backup_encrypt(args.snapshot, args.recipient, args.output_dir)
+        elif args.backup_action == "package":
+            cmd_backup_package(
+                source=args.source,
+                output_dir=args.output_dir,
+                label=args.label,
+                recipient=args.recipient,
+            )
         elif args.backup_action == "verify-encrypted":
             cmd_backup_verify_encrypted(args.snapshot, args.keychain_service)
         else:

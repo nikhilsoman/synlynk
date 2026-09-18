@@ -74,3 +74,7 @@
 
 - [ ] Cross-repo App scope remains parked; the local durable-role App-material doctor/readiness guard is tracked by the child PR for #914.
 - [x] Readiness CI compatibility: Point 1 retains the `role_tokens` checkpoint ID while reporting durable App-material failures.
+
+DR hardening remains in sustainment: encrypted provider-neutral package export is
+implemented; the cross-machine restore drill is pending access to a second
+machine.

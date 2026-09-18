@@ -841,3 +841,12 @@ work because local git activity is not sufficient corroboration.
 
 - [@nikhilsoman] Treat #1573 as the fix baseline; #1588 requires an explicit user-visible regression proof rather than another daemon implementation change.
 - [@nikhilsoman] The proof is a dead `watch.pid` reporting stopped, stale pidfile cleanup, and a subsequent start spawning successfully without `already running`.
+
+## 2026-09-18 — Provider-neutral DR package
+
+- [@codex] Keep the DR export provider-neutral: Synlynk emits an encrypted
+  `.db.gpg` plus manifest, while GitHub, Google Drive, and iCloud are merely
+  redundant storage destinations. Plaintext is temporary and is not uploaded.
+- [@codex] Use one stable GPG keypair per product/workspace, record its public
+  fingerprint with each backup, and rotate only for compromise, loss, or an
+  intentional key rotation.
