@@ -18,7 +18,10 @@ def test_marketing_sync_uses_a_protected_branch_pr_flow():
     assert "--base main" in workflow
     assert "Fixes #1666" in workflow
     assert "actions: write" in workflow
+    assert "statuses: write" in workflow
     assert "gh workflow run test.yml" in workflow
+    assert 'gh run watch "$dispatch_run"' in workflow
+    assert 'repos/$GITHUB_REPOSITORY/statuses/$head_sha' in workflow
     assert "created_pr_url=$(gh pr create" in workflow
     assert 'marketing_pr="${created_pr_url##*/}"' in workflow
     assert workflow.count('--body "Automated post-merge marketing updates') == 1
