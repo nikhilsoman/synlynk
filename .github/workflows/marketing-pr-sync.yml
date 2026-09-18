@@ -9,6 +9,7 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
+  actions: write
   contents: write
   pull-requests: write
 
@@ -81,13 +82,23 @@ jobs:
 
           if [ -n "$existing_pr" ]; then
             echo "Reused existing marketing PR #$existing_pr."
+            marketing_pr="$existing_pr"
           elif ! git diff origin/main...HEAD --quiet; then
-            gh pr create \
+            marketing_pr=$(gh pr create \
               --repo "$GITHUB_REPOSITORY" \
               --base main \
               --head "$MARKETING_BRANCH" \
               --title "docs(blog): synchronize marketing collateral" \
-              --body "Automated post-merge marketing updates for PR #${{ github.event.pull_request.number }}.\n\nFixes #1666"
+              --body "Automated post-merge marketing updates for PR #${{ github.event.pull_request.number }}.\n\nFixes #1666" \
+              --json number \
+              --jq '.number')
           else
             echo "No marketing changes to publish."
+          fi
+
+          if [ -n "${marketing_pr:-}" ]; then
+            gh workflow run test.yml \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref "$MARKETING_BRANCH"
+            echo "Dispatched required Tests checks for marketing PR #$marketing_pr."
           fi
