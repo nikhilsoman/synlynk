@@ -19,6 +19,8 @@ def test_marketing_sync_uses_a_protected_branch_pr_flow():
     assert "Fixes #1666" in workflow
     assert "actions: write" in workflow
     assert "gh workflow run test.yml" in workflow
+    assert "created_pr_url=$(gh pr create" in workflow
+    assert 'marketing_pr="${created_pr_url##*/}"' in workflow
     assert "git push origin main" not in workflow
     assert "[skip ci]" not in workflow
 
