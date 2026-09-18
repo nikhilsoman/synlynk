@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import hashlib
 import sqlite3
+import os
 import tempfile
 from pathlib import Path
 from typing import Optional, Union
@@ -111,36 +112,64 @@ def migrate_state_db_if_needed(repo_path: PathLike = ".") -> Path:
     if source is None:
         return destination
     destination.parent.mkdir(parents=True, exist_ok=True)
-    if not destination.exists():
-        temporary = None
+    lock_path = destination.with_name(f".{destination.name}.migration.lock")
+    with lock_path.open("a+") as lock_handle:
         try:
-            with tempfile.NamedTemporaryFile(
-                prefix=f".{destination.name}.", suffix=".tmp", dir=destination.parent,
-            ) as temp_file:
-                temporary = Path(temp_file.name)
-            source_conn = sqlite3.connect(
-                f"file:{source.resolve()}?mode=ro", uri=True,
-            )
-            destination_conn = sqlite3.connect(str(temporary))
-            try:
-                source_conn.backup(destination_conn)
-                destination_conn.commit()
-                integrity = destination_conn.execute("PRAGMA integrity_check").fetchone()[0]
-                if integrity != "ok":
-                    raise sqlite3.DatabaseError(
-                        f"legacy state database failed integrity_check: {integrity}"
-                    )
-            finally:
-                destination_conn.close()
-                source_conn.close()
-            os.replace(temporary, destination)
+            import fcntl
+            fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
+        except (ImportError, OSError) as exc:
+            raise RuntimeError(f"cannot lock state migration {lock_path}: {exc}") from exc
+        try:
+            if destination.exists():
+                return destination
             temporary = None
-        finally:
-            if temporary is not None:
+            try:
+                with tempfile.NamedTemporaryFile(
+                    prefix=f".{destination.name}.", suffix=".tmp", dir=destination.parent,
+                ) as temp_file:
+                    temporary = Path(temp_file.name)
+                source_conn = sqlite3.connect(
+                    f"file:{source.resolve()}?mode=ro", uri=True,
+                )
+                destination_conn = sqlite3.connect(str(temporary))
                 try:
-                    temporary.unlink()
-                except FileNotFoundError:
+                    source_conn.backup(destination_conn)
+                    destination_conn.commit()
+                    integrity = destination_conn.execute("PRAGMA integrity_check").fetchone()[0]
+                    if integrity != "ok":
+                        raise sqlite3.DatabaseError(
+                            f"legacy state database failed integrity_check: {integrity}"
+                        )
+                    destination_conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                    destination_conn.execute("PRAGMA journal_mode=DELETE")
+                    destination_conn.commit()
+                finally:
+                    destination_conn.close()
+                    source_conn.close()
+                with temporary.open("rb") as handle:
+                    os.fsync(handle.fileno())
+                os.replace(temporary, destination)
+                temporary = None
+                try:
+                    dir_fd = os.open(str(destination.parent), os.O_RDONLY)
+                    try:
+                        os.fsync(dir_fd)
+                    finally:
+                        os.close(dir_fd)
+                except OSError:
                     pass
+            finally:
+                if temporary is not None:
+                    try:
+                        temporary.unlink()
+                    except FileNotFoundError:
+                        pass
+        finally:
+            try:
+                import fcntl
+                fcntl.flock(lock_handle.fileno(), fcntl.LOCK_UN)
+            except (ImportError, OSError):
+                pass
     return destination
 
 

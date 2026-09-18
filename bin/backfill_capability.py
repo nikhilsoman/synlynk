@@ -81,7 +81,7 @@ def get_db() -> sqlite3.Connection:
         print(f"  ERROR: state.db not found at {DB_PATH}")
         print("  Run: synlynk init  (in this repo) to create the database first.")
         sys.exit(1)
-    conn = sqlite3.connect(DB_PATH)
+    conn = synlynk._get_db(db_path=DB_PATH)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
     return conn

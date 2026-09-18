@@ -559,47 +559,8 @@ def _write_through_fallback_db(
     capability_hash: str,
     last_probe_at: str,
 ) -> None:
-    """Write through probe outcome to local fallback state.db if primary is distinct (#1535)."""
-    try:
-        from synlynk import get_state_db_path, _project_root
-        active_path = get_state_db_path()
-        root = _project_root()
-        if not root:
-            return
-        fallback_path = os.path.abspath(os.path.join(root, ".synlynk", "state.db"))
-        if not os.path.exists(fallback_path) or os.path.abspath(fallback_path) == os.path.abspath(active_path):
-            return
-        import sqlite3 as _sqlite3
-        conn = _sqlite3.connect(fallback_path, timeout=5.0)
-        try:
-            conn.execute(
-                """
-                INSERT INTO harness_records
-                    (harness_name, installed_version, compliance_status, active_contract, active_flags, capability_hash, last_probe_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(harness_name) DO UPDATE SET
-                    installed_version=excluded.installed_version,
-                    compliance_status=excluded.compliance_status,
-                    active_contract=excluded.active_contract,
-                    active_flags=excluded.active_flags,
-                    capability_hash=excluded.capability_hash,
-                    last_probe_at=excluded.last_probe_at
-                """,
-                (
-                    harness_name,
-                    installed_version,
-                    compliance_status,
-                    active_contract,
-                    active_flags,
-                    capability_hash,
-                    last_probe_at,
-                ),
-            )
-            conn.commit()
-        finally:
-            conn.close()
-    except Exception:
-        pass
+    """Deprecated compatibility hook; probe results belong only to canonical state."""
+    return
 
 
 def _probe_agent(harness_name: str, db_conn, fast_path_ok: bool = True, write_fence: bool = True) -> dict:

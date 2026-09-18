@@ -691,6 +691,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="macOS Keychain service containing the GPG passphrase",
     )
 
+    state_parser = subparsers.add_parser(
+        "state", help="Inspect canonical and legacy state DB artifacts"
+    )
+    state_sub = state_parser.add_subparsers(dest="state_action")
+    state_inventory = state_sub.add_parser(
+        "inventory", help="Read-only inventory with hashes and integrity checks"
+    )
+    state_inventory.add_argument("--json", action="store_true", dest="json_output")
+    state_inventory.add_argument(
+        "--all", action="store_true", dest="all_artifacts",
+        help="Include the full ~/.synlynk legacy/quarantine/backup tree",
+    )
+
     ops_parser = subparsers.add_parser(
         "ops",
         help="Cross-repo platform operations report (jobs, costs, LIVE, hygiene)",
@@ -1266,6 +1279,7 @@ def build_parser() -> argparse.ArgumentParser:
         "impact": impact_parser,
         "mesh": mesh_parser,
         "spike": spike_parser,
+        "state": state_parser,
     }
 
     roles_parser = subparsers.add_parser(
@@ -1562,6 +1576,16 @@ def main(argv=None) -> None:
             cmd_backup_verify_encrypted(args.snapshot, args.keychain_service)
         else:
             help_parsers.get("backup", parser).print_help()
+    elif args.command == "state":
+        if args.state_action == "inventory":
+            from synlynk.state_inventory import cmd_state_inventory
+
+            sys.exit(cmd_state_inventory(
+                json_output=args.json_output,
+                all_artifacts=getattr(args, "all_artifacts", False),
+            ))
+        else:
+            help_parsers.get("state", parser).print_help()
     elif args.command == "home":
         cmd_home(args)
     elif args.command == "selftest":
