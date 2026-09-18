@@ -89,6 +89,24 @@ def test_migrate_db_renames_pre_existing_agent_quotas_without_collision(tmp_path
     assert not _table_exists_test_helper(conn, "agent_quotas")
 
 
+def test_v10_reconciles_databases_stamped_at_v9(tmp_path):
+    """A v9 ledger may predate columns added inside the v9 migration block."""
+    import sqlite3
+    from synlynk import db
+
+    conn = sqlite3.connect(tmp_path / "state.db")
+    conn.execute("PRAGMA user_version = 9")
+    db._migrate_db(conn)
+
+    watch_cols = {row[1] for row in conn.execute("PRAGMA table_info(capability_watch)")}
+    daemon_cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)")}
+    assert {"last_sweep_at", "sweep_job_count"} <= watch_cols
+    assert "cost_missing_reason" in daemon_cols
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 10
+    assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+    conn.close()
+
+
 def _table_exists_test_helper(conn, name: str) -> bool:
     return conn.execute(
         "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)

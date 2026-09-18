@@ -64,13 +64,26 @@ def test_second_init_is_a_noop_before_manifest(tmp_path, monkeypatch, capsys):
 
 
 def test_state_db_migration_copies_legacy_repo_db_without_overwrite(tmp_path, monkeypatch):
+    import sqlite3
+
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     repo = tmp_path / "repo"
     _repo(repo, "hitchcock")
     legacy = repo / ".synlynk" / "state.db"
-    legacy.write_bytes(b"legacy")
+    legacy.parent.mkdir(parents=True, exist_ok=True)
+    source_conn = sqlite3.connect(legacy)
+    source_conn.execute("CREATE TABLE ledger (value TEXT)")
+    source_conn.execute("INSERT INTO ledger VALUES ('legacy')")
+    source_conn.commit()
+    source_conn.close()
     destination = migrate_state_db_if_needed(repo)
     assert destination == state_db_path("hitchcock")
-    assert destination.read_bytes() == b"legacy"
+    destination_conn = sqlite3.connect(destination)
+    assert destination_conn.execute("SELECT value FROM ledger").fetchone() == ("legacy",)
+    assert destination_conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+    destination_conn.close()
     legacy.write_bytes(b"newer")
-    assert migrate_state_db_if_needed(repo).read_bytes() == b"legacy"
+    assert migrate_state_db_if_needed(repo) == destination
+    destination_conn = sqlite3.connect(destination)
+    assert destination_conn.execute("SELECT value FROM ledger").fetchone() == ("legacy",)
+    destination_conn.close()
