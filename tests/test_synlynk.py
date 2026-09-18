@@ -713,6 +713,19 @@ def test_build_subprocess_env_dev_default_unchanged_when_gh_write_not_required(m
     assert "GH_TOKEN" not in env
 
 
+def test_build_subprocess_env_does_not_forward_private_key_material(monkeypatch):
+    from synlynk.dispatch import _build_subprocess_env
+
+    monkeypatch.setenv("SYNLYNK_PRIVATE_KEY_PATH", "/runner/identity.pem")
+    monkeypatch.setenv("GITHUB_APP_PRIVATE_KEY", "-----BEGIN PRIVATE KEY-----")
+
+    env = _build_subprocess_env("codex", {}, requires_gh_write=False, story_id="swarm-1")
+
+    assert "SYNLYNK_PRIVATE_KEY_PATH" not in env
+    assert "GITHUB_APP_PRIVATE_KEY" not in env
+    assert not any("pem" in key.lower() or "private_key" in key.lower() for key in env)
+
+
 def test_role_permission_defaults_cover_all_default_roles():
     from synlynk._constants import _ROLE_PERMISSION_DEFAULTS
 

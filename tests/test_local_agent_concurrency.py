@@ -1,6 +1,7 @@
 """Tests the local-agent concurrency guard in dispatch_agent(): max_concurrent
 running 'local' jobs from .agents/local.json is enforced before spawning a new one."""
 import sqlite3
+import os
 import tempfile
 import threading
 import unittest
@@ -92,6 +93,12 @@ class TestSchedulerLocalConcurrency(unittest.TestCase):
 
     def test_concurrent_direct_dispatch_claims_one_local_slot(self):
         db_file = tempfile.NamedTemporaryFile()
+        previous_db_path = os.environ.get("SYNLYNK_STATE_DB_PATH")
+        os.environ["SYNLYNK_STATE_DB_PATH"] = db_file.name
+        if previous_db_path is None:
+            self.addCleanup(os.environ.pop, "SYNLYNK_STATE_DB_PATH", None)
+        else:
+            self.addCleanup(os.environ.__setitem__, "SYNLYNK_STATE_DB_PATH", previous_db_path)
         setup = sqlite3.connect(db_file.name)
         setup.execute(
             "CREATE TABLE daemon_jobs ("
