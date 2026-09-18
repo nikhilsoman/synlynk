@@ -158,5 +158,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #1685 \u2014 add explicit canonical registry recovery (PR #1685, v0.20.0)\n\n\u2022 Merged improvements and fixes for PR #\n\n#posts",
     "changelog": "### v0.20.0 (2026-09-18) - PR #1685\n- Merged improvements and fixes for PR #"
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/219-pr1692-complete-w8-packs-and-connector-catalog.md",
+    "title": "PR #1692 \u2014 complete W8 packs and connector catalog",
+    "author": "nikhilsoman",
+    "date": "2026-09-18",
+    "pr": "#1692",
+    "version": "0.20.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #"
+    ],
+    "tweet": "\ud83d\ude80 PR #1692 \u2014 complete W8 packs and connector catalog (PR #1692, v0.20.0)\n\n\u2022 Merged improvements and fixes for PR #\n\n#posts",
+    "changelog": "### v0.20.0 (2026-09-18) - PR #1692\n- Merged improvements and fixes for PR #"
   }
 ]
