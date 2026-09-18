@@ -154,6 +154,21 @@ def canonical_path(slug: str, fallback: Path) -> Path:
     return registered
 
 
+def registered_canonical_path(slug: str) -> Optional[Path]:
+    """Return a registered path, or None when a product has not bootstrapped."""
+    path = registry_path()
+    try:
+        os.stat(path)
+    except FileNotFoundError:
+        return None
+    with registry_lock(path):
+        payload = _read_unlocked(path)
+        entry = payload["products"].get(slug)
+        if not isinstance(entry, dict) or not entry.get("canonical_path"):
+            return None
+        return Path(str(entry["canonical_path"])).expanduser().resolve()
+
+
 def ensure_registered_product(slug: str, path: Path, product_id: Optional[str] = None) -> dict:
     """Idempotently register a canonical product path and return its entry."""
     registry = registry_path()

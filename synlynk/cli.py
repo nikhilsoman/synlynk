@@ -703,6 +703,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--all", action="store_true", dest="all_artifacts",
         help="Include the full ~/.synlynk legacy/quarantine/backup tree",
     )
+    state_promote = state_sub.add_parser("promote", help="Promote a verified DB without overwriting canonical state")
+    state_promote.add_argument("source")
+    state_promote.add_argument("destination")
+    state_promote.add_argument("--slug", required=True)
+    state_promote.add_argument("--product-id", default=None, dest="product_id")
+    state_quarantine = state_sub.add_parser("quarantine", help="Plan or apply read-only quarantine for a legacy DB")
+    state_quarantine.add_argument("path")
+    state_quarantine.add_argument("--slug", required=True)
+    state_quarantine.add_argument("--root", default=None)
+    state_quarantine.add_argument("--apply", action="store_true")
 
     ops_parser = subparsers.add_parser(
         "ops",
@@ -1584,6 +1594,18 @@ def main(argv=None) -> None:
                 json_output=args.json_output,
                 all_artifacts=getattr(args, "all_artifacts", False),
             ))
+        elif args.state_action == "promote":
+            from synlynk.state_repair import promote_state_db
+
+            print(json.dumps(promote_state_db(
+                args.source, args.destination, slug=args.slug, product_id=args.product_id
+            ), sort_keys=True))
+        elif args.state_action == "quarantine":
+            from synlynk.state_repair import quarantine_state_db
+
+            print(json.dumps(quarantine_state_db(
+                args.path, slug=args.slug, quarantine_root=args.root, apply=args.apply
+            ), sort_keys=True))
         else:
             help_parsers.get("state", parser).print_help()
     elif args.command == "home":

@@ -37,6 +37,8 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `backup encrypt` (secondary) — sustain
 - `backup verify-encrypted` (secondary) — sustain
 - `state inventory` (secondary) — sustain
+- `state promote` (secondary) — sustain
+- `state quarantine` (secondary) — sustain
 - `decide` (primary) — goal
 - `goal create` (primary) — goal
 - `goal list` (primary) — goal
