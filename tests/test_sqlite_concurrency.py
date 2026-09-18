@@ -100,7 +100,9 @@ def test_lineage_concurrent_writes(tmp_path):
             job_a = f"job-{idx}-a"
             job_b = f"job-{idx}-b"
             conn = sqlite3.connect(db_file, timeout=30.0)
-            conn.execute("PRAGMA journal_mode = WAL")
+            # Journal mode is database configuration, not a per-writer setup
+            # step. Changing it concurrently races before lineage locking is
+            # reached and recreates the original `database is locked` failure.
             conn.execute("PRAGMA busy_timeout = 30000")
             conn.execute("INSERT INTO daemon_jobs (job_id, agent, task) VALUES (?, 'codex', 'test')", (job_a,))
             conn.execute("INSERT INTO daemon_jobs (job_id, agent, task) VALUES (?, 'codex', 'test')", (job_b,))
