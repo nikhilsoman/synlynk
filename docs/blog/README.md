@@ -241,6 +241,9 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [200](./200-pr1558-milestone-v0-20-0-cluster-b-worktree-lif.md) | PR #1558 — Milestone v0.20.0 Cluster B — Worktree Lifecycle & Rebase Concurrency | [#1558](https://github.com/nikhilsoman/synlynk/pull/1558) | 2026-09-11 |
 | [201](./201-pr1559-milestone-v0-20-0-cluster-c-fleet-diagno.md) | PR #1559 — Milestone v0.20.0 Cluster C — Fleet Diagnostic Truth & Concurrency Resilience | [#1559](https://github.com/nikhilsoman/synlynk/pull/1559) | 2026-09-11 |
 | [202](./202-pr1560-milestone-v0-20-0-cluster-d-next-gen-har.md) | PR #1560 — Milestone v0.20.0 Cluster D — Next-Gen Harness Onboarding (Meta Muse Integration) | [#1560](https://github.com/nikhilsoman/synlynk/pull/1560) | 2026-09-11 |
+| [207](./207-prTBD-914-wave4-add-repo.md) | Wave 4: add a repository without minting another identity | [#1651](https://github.com/nikhilsoman/synlynk/pull/1651) | 2026-09-18 |
+| [208](./208-prTBD-914-wave5-product-board.md) | Wave 5 — Local Vizor Board over the product graph | TBD | 2026-09-18 |
+| [209](./209-pr1674-route-post-merge-marketing-sync-through-.md) | PR #1674 — route post-merge marketing sync through PR | [#1674](https://github.com/nikhilsoman/synlynk/pull/1674) | 2026-09-18 |
 
 ## Per-PR Post Template
 
