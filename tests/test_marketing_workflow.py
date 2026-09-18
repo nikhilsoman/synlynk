@@ -10,6 +10,8 @@ def test_marketing_sync_uses_a_protected_branch_pr_flow():
     assert "pull_request_target:" in workflow
     assert "ref: main" in workflow
     assert "MARKETING_BRANCH: automation/marketing-sync" in workflow
+    assert 'git config --global user.name "synlynk-marketing[bot]"' in workflow
+    assert 'git config --global user.email "marketing@synlynk.com"' in workflow
     assert "head.ref != 'automation/marketing-sync'" in workflow
     assert "git push origin \"$MARKETING_BRANCH\"" in workflow
     assert "gh pr create" in workflow
