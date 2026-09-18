@@ -31,3 +31,40 @@ def test_read_only_db_connection_fails_closed_on_corruption(tmp_path, monkeypatc
 
     with pytest.raises(sqlite3.DatabaseError):
         _get_db(read_only=True)
+
+
+def test_read_only_db_connection_does_not_create_sqlite_sidecars(tmp_path, monkeypatch):
+    from synlynk import _get_db
+
+    path = tmp_path / "state.db"
+    conn = sqlite3.connect(path)
+    conn.execute("CREATE TABLE marker (value TEXT)")
+    conn.commit()
+    conn.close()
+
+    monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(path))
+    read_conn = _get_db(read_only=True)
+    read_conn.execute("SELECT * FROM marker").fetchall()
+    read_conn.close()
+
+    assert not (tmp_path / "state.db-wal").exists()
+    assert not (tmp_path / "state.db-shm").exists()
+
+
+def test_read_only_db_connection_snapshots_unapplied_wal(tmp_path, monkeypatch):
+    from synlynk import _get_db
+
+    path = tmp_path / "state.db"
+    conn = sqlite3.connect(path)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("CREATE TABLE marker (value TEXT)")
+    conn.execute("INSERT INTO marker VALUES ('pending')")
+    conn.commit()
+    wal_path = tmp_path / "state.db-wal"
+    assert wal_path.stat().st_size > 0
+
+    monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(path))
+    read_conn = _get_db(read_only=True)
+    assert read_conn.execute("SELECT value FROM marker").fetchone() == ("pending",)
+    read_conn.close()
+    conn.close()
