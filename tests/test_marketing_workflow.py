@@ -32,6 +32,8 @@ def test_marketing_sync_is_serialized_and_idempotent():
     assert "group: marketing-pr-sync" in workflow
     assert "cancel-in-progress: false" in workflow
     assert "gh pr list \\" in workflow
+    assert '--head "$MARKETING_BRANCH"' in workflow
+    assert '--head "$GITHUB_REPOSITORY_OWNER:$MARKETING_BRANCH"' not in workflow
     assert "--state open" in workflow
     assert "Reused existing marketing PR" in workflow
 
