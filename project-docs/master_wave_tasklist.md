@@ -33,7 +33,7 @@
 | Task ID | Task Title & Deliverables | Assigned Harness | Assigned Role | Est. Time | Actual Runtime | Dependencies | Live Status |
 | :--- | :--- | :---: | :---: | :---: | :---: | :--- | :---: |
 | **W1-T3.1** | **Autonomous Backlog Triage & Living Trigger Registry**<br>• `synlynk backlog triage` issue-to-story synthesizer<br>• Dynamic prompt injection in `synlynk/charters.py` | `codex` | `dev` | 30 min | **18 min** | W1-T2.2 | 🟢 **DONE** |
-| **W1-T3.2** | **Autonomous PM Opportunity Sweeps & Architect Boundary Watchdog**<br>• `synlynk pm sweep` plotting Ring 3 opportunities<br>• SPOF audit & memory RSS leak detector in `synlynk doctor` | `claude` + `codex` | `pm` / `architect` | 40 min | — | W1-T2.1 | ⚪ PENDING |
+| **W1-T3.2** | **Autonomous PM Opportunity Sweeps & Architect Boundary Watchdog**<br>• `synlynk pm sweep` plotting Ring 3 opportunities<br>• SPOF audit & memory RSS leak detector in `synlynk doctor` | `claude` + `codex` | `pm` / `architect` | 40 min | **16 min** | W1-T2.1 | 🟢 **DONE** |
 | **W1-T3.3** | **Autonomous Two-Tier Marketing Release Ceremony**<br>• Blog post generator (`synlynk marketing sync-pr`)<br>• Standalone doc bundles (HTML/PDF/EPUB) compilation | `agy` | `marketing` | 25 min | — | None | ⚪ PENDING |
 
 ---

@@ -1106,6 +1106,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--dry-run", action="store_true",
         help="Print the composed research prompt without invoking Claude"
     )
+    pm_sweep_parser.add_argument(
+        "--radar", action="store_true",
+        help="Plot Ring 3 opportunities to .synlynk/radar.json and docs/pm/opportunities-radar.md"
+    )
 
     tpm_parser = subparsers.add_parser("tpm", help="TPM sweep commands")
     tpm_subparsers = tpm_parser.add_subparsers(dest="tpm_command")
@@ -1989,7 +1993,7 @@ def main(argv=None) -> None:
     elif args.command == "pm" and args.pm_command == "sweep":
         from synlynk.pm_agent import cmd_pm_sweep
 
-        cmd_pm_sweep(dry_run=args.dry_run)
+        cmd_pm_sweep(dry_run=args.dry_run, radar=getattr(args, "radar", False))
     elif args.command == "tpm" and args.tpm_command == "sweep":
         from synlynk.tpm_sweep import run_sweep_pass
 
