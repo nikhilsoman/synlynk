@@ -190,5 +190,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #1693 \u2014 isolate scratch registry path (PR #1693, v0.20.0)\n\n\u2022 Merged improvements and fixes for PR #\n\n#posts",
     "changelog": "### v0.20.0 (2026-09-19) - PR #1693\n- Merged improvements and fixes for PR #"
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/221-pr1695-model-first-class-tripartite-dispatch-an.md",
+    "title": "PR #1695 \u2014 model first-class tripartite dispatch and AST cost tiering (Wave 1 Task 1.1)",
+    "author": "nikhilsoman",
+    "date": "2026-09-19",
+    "pr": "#1695",
+    "version": "0.21.0-dev",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #"
+    ],
+    "tweet": "\ud83d\ude80 PR #1695 \u2014 model first-class tripartite dispatch and AST cost tiering (Wave 1 Task 1.1) (PR #1695, v0.21.0-dev)\n\n\u2022 Merged improvements and fixes for PR #\n\n#posts",
+    "changelog": "### v0.21.0-dev (2026-09-19) - PR #1695\n- Merged improvements and fixes for PR #"
   }
 ]

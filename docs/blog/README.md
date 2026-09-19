@@ -255,6 +255,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [218](./218-pr1685-add-explicit-canonical-registry-recovery.md) | PR #1685 — add explicit canonical registry recovery | [#1685](https://github.com/nikhilsoman/synlynk/pull/1685) | 2026-09-18 |
 | [219](./219-pr1692-complete-w8-packs-and-connector-catalog.md) | PR #1692 — complete W8 packs and connector catalog | [#1692](https://github.com/nikhilsoman/synlynk/pull/1692) | 2026-09-18 |
 | [220](./220-pr1693-isolate-scratch-registry-path.md) | PR #1693 — isolate scratch registry path | [#1693](https://github.com/nikhilsoman/synlynk/pull/1693) | 2026-09-19 |
+| [221](./221-pr1695-model-first-class-tripartite-dispatch-an.md) | PR #1695 — model first-class tripartite dispatch and AST cost tiering (Wave 1 Task 1.1) | [#1695](https://github.com/nikhilsoman/synlynk/pull/1695) | 2026-09-19 |
 
 ## Per-PR Post Template
 
