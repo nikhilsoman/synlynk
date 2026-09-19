@@ -24,7 +24,7 @@
 | :--- | :--- | :---: | :---: | :---: | :---: | :--- | :---: |
 | **W1-T2.1** | **Vizor World View Inside-Out Extractor & Concentric Radar UI**<br>• `extract_world_nodes()` in `synlynk/viz_views.py`<br>• Concentric Radar SVG visualization with interactive drawer in `synlynk/viz.py`<br>• Dual projection toggle (Radar vs Sequence Flow) | `agy` + `grok` | `designer` / `dev` | 45 min | **25 min** | W1-T1.1 | 🟢 **DONE** |
 | **W1-T2.2** | **Deep Brownfield Ingestion Engine (`synlynk init --brownfield`)**<br>• Automated test/linter/runtime reverse-engineering<br>• Git churn analysis & 1-click confirmation chips<br>• Living 4-doc generation (`roadmap.md`, `memory.md`, `todo.md`) | `codex` | `dev` | 35 min | **20 min** | W1-T1.1 | 🟢 **DONE** |
-| **W1-T2.3** | **Magic PR Engine (Instant First Win in < 5 min)**<br>• `synlynk heal --magic` AST gap discovery<br>• Zero-touch test generation & attested PR opening | `codex` | `dev` | 30 min | (running) | W1-T2.2 | 🔵 **IN PROGRESS** |
+| **W1-T2.3** | **Magic PR Engine (Instant First Win in < 5 min)**<br>• `synlynk heal --magic` AST gap discovery<br>• Zero-touch test generation & attested PR opening | `codex` | `dev` | 30 min | **15 min** | W1-T2.2 | 🟢 **DONE** |
 
 ---
 
@@ -32,7 +32,7 @@
 
 | Task ID | Task Title & Deliverables | Assigned Harness | Assigned Role | Est. Time | Actual Runtime | Dependencies | Live Status |
 | :--- | :--- | :---: | :---: | :---: | :---: | :--- | :---: |
-| **W1-T3.1** | **Autonomous Backlog Triage & Living Trigger Registry**<br>• `synlynk backlog triage` issue-to-story synthesizer<br>• Dynamic prompt injection in `synlynk/charters.py` | `codex` | `dev` | 30 min | — | W1-T2.2 | ⚪ PENDING |
+| **W1-T3.1** | **Autonomous Backlog Triage & Living Trigger Registry**<br>• `synlynk backlog triage` issue-to-story synthesizer<br>• Dynamic prompt injection in `synlynk/charters.py` | `codex` | `dev` | 30 min | (running) | W1-T2.2 | 🔵 **IN PROGRESS** |
 | **W1-T3.2** | **Autonomous PM Opportunity Sweeps & Architect Boundary Watchdog**<br>• `synlynk pm sweep` plotting Ring 3 opportunities<br>• SPOF audit & memory RSS leak detector in `synlynk doctor` | `claude` + `codex` | `pm` / `architect` | 40 min | — | W1-T2.1 | ⚪ PENDING |
 | **W1-T3.3** | **Autonomous Two-Tier Marketing Release Ceremony**<br>• Blog post generator (`synlynk marketing sync-pr`)<br>• Standalone doc bundles (HTML/PDF/EPUB) compilation | `agy` | `marketing` | 25 min | — | None | ⚪ PENDING |
 

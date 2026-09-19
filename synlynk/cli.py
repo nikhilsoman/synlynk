@@ -312,7 +312,9 @@ def build_parser() -> argparse.ArgumentParser:
     heal_parser.add_argument("--role", default="qa", help="Role authorized to merge verified pull requests")
     heal_parser.add_argument("--batch-size", type=int, default=1, help="Maximum findings to remediate")
     heal_parser.add_argument("--parity", action="store_true", help="Run worktree-isolated fleet parity remediation")
-    heal_parser.add_argument("--dry-run", action="store_true", help="Print parity gaps and files to touch without modifying files")
+    heal_parser.add_argument("--magic", action="store_true", help="Run Magic PR Engine for instant zero-touch first win")
+    heal_parser.add_argument("--no-pr", action="store_true", help="Skip opening PR on GitHub (local branch commit only)")
+    heal_parser.add_argument("--dry-run", action="store_true", help="Print parity/magic gaps without writing files")
     heal_parser.add_argument("--branch", type=str, default=None, help="Target feature branch for parity remediation PR")
     heal_parser.add_argument("--cycles", action="store_true", help="Detect circular imports and generate refactoring stories")
 
