@@ -175,7 +175,11 @@ def _copy_probe_metadata_rows(workspace: Path, rows: list) -> int:
         return 0
 
     db_path = workspace / ".synlynk" / "state.db"
-    with patch.object(synlynk_pkg, "DB_PATH", str(db_path)):
+    # The registry derives the product identity from the current project root,
+    # so redirect cwd together with DB_PATH. Otherwise a scratch selftest
+    # attempts to register its temporary ledger under the caller's product
+    # slug and fails with a canonical-path mismatch.
+    with _chdir(workspace), patch.object(synlynk_pkg, "DB_PATH", str(db_path)):
         destination_conn = synlynk_pkg._get_db()
         try:
             destination_conn.executemany(
