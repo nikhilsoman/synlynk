@@ -219,3 +219,135 @@ def adapt_charters_for_installed_tools(*, dry_run: bool = False) -> dict[str, di
         }
 
     return updated
+
+
+TRIGGER_REGISTRY: list[tuple[str, str | None, str]] = [
+    ("fan out swarm work", "run ephemeral workers", "synlynk swarm dispatch"),
+    ("show swarm runners", None, "synlynk swarm status"),
+    ("tear down swarm runners", None, "synlynk swarm destroy"),
+    ("generate media assets", "render svg diagrams and og cards", "synlynk media generate"),
+    ("list registered models", None, "synlynk models list"),
+    ("show model details", None, "synlynk models show"),
+    ("discover installed models", None, "synlynk models discover"),
+    ("switch home harness", "set home harness", "synlynk home"),
+    ("set up synlynk here", "get started with synlynk", "synlynk init"),
+    ("start a new project", "is this a new or existing project", "synlynk start"),
+    ("scan this repo", "inventory this codebase", "synlynk scan"),
+    ("fix repository gaps automatically", "run autonomous remediation", "synlynk heal"),
+    ("run magic pr", "instant first win", "synlynk heal --magic"),
+    ("add me to this project", "onboard me", "synlynk join"),
+    ("migrate the old config", "upgrade project-docs layout", "synlynk migrate"),
+    ("configure the codex harness", "override dispatch flags for grok", "synlynk configure agent"),
+    ("add this agent binary", "retrofit an agent onto this project", "synlynk harness add"),
+    ("write this agent's context profile", None, "synlynk harness configure"),
+    ("what agents are configured", "list our agents", "synlynk harness list"),
+    ("set this config key", None, "synlynk config set"),
+    ("control workspace-agent nudges", None, "synlynk config nudges"),
+    ("let's decide on X", "record this decision", "synlynk decide"),
+    ("create a new goal", "start a business goal for X", "synlynk goal create"),
+    ("what goals are active", "list our goals", "synlynk goal list"),
+    ("open a work session", "start a work session", "synlynk session open"),
+    ("what session am I in", "show the active session", "synlynk session status"),
+    ("checkpoint this session", "save a session checkpoint", "synlynk session checkpoint"),
+    ("close out this session", "finish this work session", "synlynk session close"),
+    ("link this story to the goal", "attach this to goal X", "synlynk goal link"),
+    ("how close is this goal", "goal completion rollup", "synlynk goal status"),
+    ("create a story for X", "write up this piece of work", "synlynk story create"),
+    ("what stories do we have", "list open stories", "synlynk story list"),
+    ("mark this story ready", None, "synlynk story ready"),
+    ("revert this story to draft", None, "synlynk story draft"),
+    ("mark this story done", None, "synlynk story done"),
+    ("capture discovered work", "stage a task into backlog", "synlynk backlog capture"),
+    ("list staged backlog", "show discovered tasks", "synlynk backlog list"),
+    ("sync backlog to github", "create issues for discovered tasks", "synlynk backlog sync"),
+    ("ingest github issues", "fetch backlog issues", "synlynk backlog ingest"),
+    ("triage open backlog", "synthesize backlog stories", "synlynk backlog triage"),
+    ("auto-promote backlog items", "promote triaged stories to ready", "synlynk backlog auto-promote"),
+    ("add a roadmap arc", "add a roadmap phase", "synlynk roadmap add"),
+    ("open the workspace", "open this project", "synlynk open"),
+    ("what should I do next", "give me a task to launch", "synlynk launch"),
+    ("who has what role on this project", None, "synlynk roles"),
+    ("let's build X", "can you implement...", "synlynk dispatch"),
+    ("backfill capability ratings", "repair missing story ids", "synlynk backfill-capability-ratings"),
+    ("adapt living charters", "detect charter drift", "synlynk charters adapt"),
+    ("what's still running", "check on that job", "synlynk jobs"),
+    ("hand this stalled job to another agent", None, "synlynk jobs handoff"),
+    ("reap zombie jobs", "clear dead running jobs", "synlynk jobs reap"),
+    ("batch these up", "run this fleet-wide", "synlynk schedule"),
+    ("run the TPM sweep", "sweep ready stories", "synlynk tpm sweep"),
+    ("run the competitive sweep", "check for competitor gaps", "synlynk pm sweep"),
+    ("cut a release", "ship v0.x.0", "synlynk release"),
+    ("is this PR's model version attested", None, "synlynk pr check"),
+    ("qa merge gate status", "is the qa-gate green", "synlynk pr gate-status"),
+    ("am I authorized to merge this", "check merge authority", "synlynk policy check-merge"),
+    ("show current policy", "what is the current policy", "synlynk policy show"),
+    ("sync branch protection", "enforce policy on github", "synlynk policy sync-branch-protection"),
+    ("platform ops report", "nightly ops rollup", "synlynk ops report"),
+    ("run a health check", "is synlynk set up correctly", "synlynk doctor"),
+    ("probe this endpoint", None, "synlynk probe"),
+    ("audit stale worktrees", "classify worktree safety", "synlynk worktree audit"),
+    ("clean up stale worktrees", "remove safe worktrees", "synlynk worktree clean"),
+    ("audit docs", "audit devlog identity drift", "synlynk audit-docs"),
+    ("run claude directly with context", None, "synlynk exec"),
+    ("launch the terminal ui", "open the curses dashboard", "synlynk tui"),
+    ("tail that job's logs", None, "synlynk logs"),
+    ("drop me into that job's shell", None, "synlynk shell"),
+    ("what sentinel alerts are active", None, "synlynk sentinel list"),
+    ("clear that sentinel alert", None, "synlynk sentinel clear"),
+    ("log this manual session's cost", None, "synlynk cost log"),
+    ("reconcile subscription costs", "true up monthly spend", "synlynk cost true-up"),
+    ("grant a credit balance", "record a credit grant", "synlynk credit grant"),
+    ("show agent quota headroom", None, "synlynk quota"),
+    ("run a capability sweep", "seed capability baselines", "synlynk capability sweep"),
+    ("run the trio protocol", None, "synlynk run --trio"),
+    ("is the local oMLX agent reachable", None, "synlynk local doctor"),
+    ("upgrade synlynk", None, "synlynk upgrade"),
+    ("roll back the last change", None, "synlynk rollback"),
+    ("where are we", "what's the state of things", "synlynk status"),
+    ("show me the live HUD", "watch the workspace", "synlynk watch"),
+    ("open the dashboard", "show me the browser view", "synlynk viz"),
+    ("check relay health", None, "synlynk relay status"),
+    ("message another agent", None, "synlynk relay send"),
+    ("tail relay events", None, "synlynk relay tail"),
+]
+
+
+def render_trigger_registry_markdown() -> str:
+    """Render the standard trigger registry markdown block."""
+    lines = ["## Trigger registry", ""]
+    for row in TRIGGER_REGISTRY:
+        if row[1]:
+            lines.append(f'- "{row[0]}", "{row[1]}" -> `{row[2]}`')
+        else:
+            lines.append(f'- "{row[0]}" -> `{row[2]}`')
+    lines.append("")
+    return "\n".join(lines)
+
+
+def refresh_agent_instruction_triggers(repo_root: str = ".", dry_run: bool = False) -> dict[str, bool]:
+    """Scan and update trigger registry across all instruction files (CLAUDE.md, GEMINI.md, AGENTS.md, GROK.md)."""
+    root = Path(repo_root)
+    trigger_md = render_trigger_registry_markdown().strip()
+    target_files = ["CLAUDE.md", "GEMINI.md", "AGENTS.md", "GROK.md"]
+    updated = {}
+
+    for fname in target_files:
+        fpath = root / fname
+        if not fpath.exists():
+            continue
+        import re
+        content = fpath.read_text(encoding="utf-8")
+        if "## Trigger registry" in content:
+            pattern = r"## Trigger registry[\s\S]*?(?=\n## |\n<!-- synlynk:end -->|\Z)"
+            replacement = trigger_md + "\n\n"
+            new_content = re.sub(pattern, replacement, content, count=1)
+            if new_content != content:
+                if not dry_run:
+                    fpath.write_text(new_content, encoding="utf-8")
+                updated[fname] = True
+            else:
+                updated[fname] = False
+        else:
+            updated[fname] = False
+
+    return updated
