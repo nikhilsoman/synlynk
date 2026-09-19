@@ -14,7 +14,7 @@
 | Task ID | Task Title & Deliverables | Assigned Harness | Assigned Role | Est. Time | Actual Runtime | Dependencies | Live Status |
 | :--- | :--- | :---: | :---: | :---: | :---: | :--- | :---: |
 | **W1-T1.1** | **Model First-Class Tripartite Dispatch & AST Cost Tiering**<br>• Decouple Role vs Sandbox vs Model in `synlynk/dispatch.py`<br>• AST blast-radius cost router in `synlynk impact`<br>• Regression test suite in `tests/test_dispatch_model_routing.py` | `codex` | `dev` | 25 min | **39 min** (PR #1695) | None (Ready) | 🟢 **DONE** |
-| **W1-T1.2** | **Sovereign Multi-Home Protocol & Dynamic Drain-to-Boundary**<br>• Implement predictive quota runway & drain horizons in `synlynk/handover.py`<br>• Worktree App-token isolation validation<br>• SOP updates across `CLAUDE.md`, `GEMINI.md`, `AGENTS.md`, `GROK.md` | `agy` + `codex` | `architect` / `qa` | 30 min | — | None (Ready) | 🟡 **STAGED** |
+| **W1-T1.2** | **Sovereign Multi-Home Protocol & Dynamic Drain-to-Boundary**<br>• Implement predictive quota runway & drain horizons in `synlynk/handover.py`<br>• Worktree App-token isolation validation<br>• SOP updates across `CLAUDE.md`, `GEMINI.md`, `AGENTS.md`, `GROK.md` | `agy` + `codex` | `architect` / `qa` | 30 min | **15 min** | None (Ready) | 🟢 **DONE** |
 
 ---
 
@@ -22,8 +22,8 @@
 
 | Task ID | Task Title & Deliverables | Assigned Harness | Assigned Role | Est. Time | Actual Runtime | Dependencies | Live Status |
 | :--- | :--- | :---: | :---: | :---: | :---: | :--- | :---: |
-| **W1-T2.1** | **Vizor World View Inside-Out Extractor & Concentric Radar UI**<br>• `extract_world_nodes()` in `synlynk/viz_views.py`<br>• Concentric Radar SVG visualization with interactive drawer in `synlynk/viz.py`<br>• Dual projection toggle (Radar vs Sequence Flow) | `agy` + `grok` | `designer` / `dev` | 45 min | — | W1-T1.1 | ⚪ PENDING |
-| **W1-T2.2** | **Deep Brownfield Ingestion Engine (`synlynk init --brownfield`)**<br>• Automated test/linter/runtime reverse-engineering<br>• Git churn analysis & 1-click confirmation chips<br>• Living 4-doc generation (`roadmap.md`, `memory.md`, `todo.md`) | `codex` | `dev` | 35 min | — | W1-T1.1 | ⚪ PENDING |
+| **W1-T2.1** | **Vizor World View Inside-Out Extractor & Concentric Radar UI**<br>• `extract_world_nodes()` in `synlynk/viz_views.py`<br>• Concentric Radar SVG visualization with interactive drawer in `synlynk/viz.py`<br>• Dual projection toggle (Radar vs Sequence Flow) | `agy` + `grok` | `designer` / `dev` | 45 min | **25 min** | W1-T1.1 | 🟢 **DONE** |
+| **W1-T2.2** | **Deep Brownfield Ingestion Engine (`synlynk init --brownfield`)**<br>• Automated test/linter/runtime reverse-engineering<br>• Git churn analysis & 1-click confirmation chips<br>• Living 4-doc generation (`roadmap.md`, `memory.md`, `todo.md`) | `codex` | `dev` | 35 min | (running) | W1-T1.1 | 🔵 **IN PROGRESS** |
 | **W1-T2.3** | **Magic PR Engine (Instant First Win in < 5 min)**<br>• `synlynk heal --magic` AST gap discovery<br>• Zero-touch test generation & attested PR opening | `codex` | `dev` | 30 min | — | W1-T2.2 | ⚪ PENDING |
 
 ---

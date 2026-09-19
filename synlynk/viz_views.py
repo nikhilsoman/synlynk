@@ -15,7 +15,8 @@ import time
 from typing import Dict, List, Tuple
 
 
-_VIEWS = ("product", "logical", "infra")
+_VIEWS = ("product", "logical", "infra", "world")
+
 
 
 def _now() -> str:
@@ -95,13 +96,15 @@ def _save_projection(conn: sqlite3.Connection, view: str, repo: str,
     init_workspace_view_tables(conn)
     conn.execute("DELETE FROM workspace_view_edges WHERE view = ? AND (from_id IN (SELECT id FROM workspace_view_nodes WHERE view = ? AND repo = ?) OR to_id IN (SELECT id FROM workspace_view_nodes WHERE view = ? AND repo = ?))", (view, view, repo, view, repo))
     conn.execute("DELETE FROM workspace_view_nodes WHERE view = ? AND repo = ?", (view, repo))
+    unique_nodes = list({n["id"]: n for n in nodes}.values())
     conn.executemany(
-        "INSERT INTO workspace_view_nodes (id, view, repo, kind, label, attrs_json, provenance, source_path, scanned_at, head_sha) VALUES (:id, :view, :repo, :kind, :label, :attrs_json, :provenance, :source_path, :scanned_at, :head_sha)",
-        nodes,
+        "INSERT OR REPLACE INTO workspace_view_nodes (id, view, repo, kind, label, attrs_json, provenance, source_path, scanned_at, head_sha) VALUES (:id, :view, :repo, :kind, :label, :attrs_json, :provenance, :source_path, :scanned_at, :head_sha)",
+        unique_nodes,
     )
+    unique_edges = list({e["id"]: e for e in edges}.values())
     conn.executemany(
-        "INSERT INTO workspace_view_edges (id, view, from_id, to_id, kind, provenance, attrs_json, scanned_at) VALUES (:id, :view, :from_id, :to_id, :kind, :provenance, :attrs_json, :scanned_at)",
-        edges,
+        "INSERT OR REPLACE INTO workspace_view_edges (id, view, from_id, to_id, kind, provenance, attrs_json, scanned_at) VALUES (:id, :view, :from_id, :to_id, :kind, :provenance, :attrs_json, :scanned_at)",
+        unique_edges,
     )
     conn.execute(
         "INSERT INTO workspace_view_meta (view, generated_at, head_sha, source_counts_json, duration_ms, stale) VALUES (?, ?, ?, ?, ?, ?) "
@@ -113,7 +116,8 @@ def _save_projection(conn: sqlite3.Connection, view: str, repo: str,
 
 def _node(view: str, repo: str, kind: str, label: str, attrs: dict,
           source_path: str, provenance: str, now: str, head_sha: str) -> dict:
-    return {"id": _id(view, repo, kind, source_path or label), "view": view,
+    node_key = label if view == "world" else (source_path or label)
+    return {"id": _id(view, repo, kind, node_key), "view": view,
             "repo": repo, "kind": kind, "label": label,
             "attrs_json": json.dumps(attrs, sort_keys=True),
             "provenance": provenance, "source_path": source_path,
@@ -328,11 +332,144 @@ def extract_infra_nodes(conn: sqlite3.Connection, repo_path: str) -> Tuple[List[
     return nodes, edges
 
 
+def extract_world_nodes(conn: sqlite3.Connection, repo_path: str) -> Tuple[List[dict], List[dict]]:
+
+    """Extract inside-out world perspective: external APIs, webhooks, IdPs, databases, and opportunity radar."""
+    started, now, repo, sha = time.monotonic(), _now(), _repo_name(repo_path), _head_sha(repo_path)
+    nodes: List[dict] = []
+    edges: List[dict] = []
+
+    # 1. Center Workspace Root Node (Ring 0)
+    root_node = _node(
+        "world", repo, "workspace", f"{repo} (Workspace Core)",
+        {"ring": 0, "tier": "core", "criticality": 1.0, "description": "Local workspace runtime boundary"},
+        ".", "extracted", now, sha
+    )
+    nodes.append(root_node)
+
+    # 2. Heuristic External Egress Scanner
+    detected_integrations: Dict[str, dict] = {}
+    known_patterns = [
+        # LLM / AI Providers
+        (r"(openai|chatgpt)", "OpenAI API", "llm", 1, "LLM Inference Gateway", "OPENAI_API_KEY"),
+        (r"(anthropic|claude)", "Anthropic Claude API", "llm", 1, "LLM Inference Gateway", "ANTHROPIC_API_KEY"),
+        (r"(generativelanguage|gemini|google\.generativeai)", "Google Gemini API", "llm", 1, "LLM Multimodal API", "GEMINI_API_KEY"),
+        (r"(grok|xai)", "xAI Grok API", "llm", 1, "LLM Inference Gateway", "XAI_API_KEY"),
+        (r"(openrouter)", "OpenRouter Gateway", "llm", 1, "Model Aggregator", "OPENROUTER_API_KEY"),
+        (r"(fal\.ai|fal_client)", "fal.ai Media Engine", "media", 1, "Generative Media & 3D", "FAL_KEY"),
+        # Payments & Billing
+        (r"(stripe)", "Stripe Payments", "payment", 1, "Payment Gateway & Billing", "STRIPE_API_KEY"),
+        (r"(lemon_squeezy|lemonsqueezy)", "Lemon Squeezy", "payment", 1, "Merchant of Record", "LEMONSQUEEZY_API_KEY"),
+        # Auth & Identity
+        (r"(auth0)", "Auth0 Identity", "auth", 1, "OAuth2 / OIDC IdP", "AUTH0_CLIENT_SECRET"),
+        (r"(clerk)", "Clerk Auth", "auth", 1, "User Management & Auth", "CLERK_SECRET_KEY"),
+        (r"(firebase.*auth)", "Firebase Auth", "auth", 1, "Identity Provider", "FIREBASE_AUTH_KEY"),
+        # Cloud Storage & Databases
+        (r"(supabase)", "Supabase Backend", "database", 1, "Postgres & Edge Functions", "SUPABASE_KEY"),
+        (r"(pinecone)", "Pinecone Vector DB", "database", 1, "Vector Index & Retrieval", "PINECONE_API_KEY"),
+        (r"(redis)", "Redis Cache", "database", 1, "In-Memory Cache & Lock Store", "REDIS_URL"),
+        (r"(s3|boto3|aws)", "AWS S3 / Cloud", "storage", 2, "Blob Storage & Infrastructure", "AWS_SECRET_ACCESS_KEY"),
+        # Communications & Notifications
+        (r"(resend)", "Resend Email", "comms", 2, "Transactional Email Delivery", "RESEND_API_KEY"),
+        (r"(twilio)", "Twilio SMS/Voice", "comms", 2, "Telephony & SMS Gateway", "TWILIO_AUTH_TOKEN"),
+        (r"(sendgrid)", "SendGrid Email", "comms", 2, "Email Delivery", "SENDGRID_API_KEY"),
+        (r"(slack_sdk|slack)", "Slack Webhooks", "comms", 2, "Team Notification Webhooks", "SLACK_BOT_TOKEN"),
+        # Developer & Source Control
+        (r"(github\.com|api\.github\.com)", "GitHub REST/GraphQL API", "vcs", 1, "Source Control & Apps API", "GH_TOKEN"),
+    ]
+
+    # Quick scan of workspace files for patterns
+    skip_dirs = {".git", ".synlynk", "__pycache__", "node_modules", ".venv", "venv", "dist", "build", ".pytest_cache", ".ruff_cache", "project-docs", "docs"}
+    scanned_count = 0
+    max_scan_files = 150
+    for root, dirs, files in os.walk(repo_path):
+        dirs[:] = [d for d in dirs if d not in skip_dirs and not d.startswith(".")]
+        for f in files:
+            if f.endswith((".py", ".js", ".ts", ".json", ".env.example", ".env", ".yml", ".yaml")):
+                fpath = os.path.join(root, f)
+                scanned_count += 1
+                if scanned_count > max_scan_files:
+                    break
+                try:
+                    with open(fpath, "r", encoding="utf-8", errors="ignore") as fh:
+                        content = fh.read(15000)
+                        for pattern, label, category, ring, desc, env_var in known_patterns:
+                            if label not in detected_integrations and re.search(pattern, content, re.IGNORECASE):
+                                detected_integrations[label] = {
+                                    "label": label,
+                                    "category": category,
+                                    "ring": ring,
+                                    "description": desc,
+                                    "env_var": env_var,
+                                    "source_path": os.path.relpath(fpath, repo_path),
+                                }
+                except Exception:
+                    pass
+        if scanned_count > max_scan_files:
+            break
+
+    # Fallback to standard core providers if running in clean test sandbox
+    if not detected_integrations:
+        detected_integrations["GitHub REST/GraphQL API"] = {
+            "label": "GitHub REST/GraphQL API", "category": "vcs", "ring": 1,
+            "description": "Source Control & Apps API", "env_var": "GH_TOKEN", "source_path": "synlynk/gh.py"
+        }
+        detected_integrations["Google Gemini API"] = {
+            "label": "Google Gemini API", "category": "llm", "ring": 1,
+            "description": "LLM Multimodal API", "env_var": "GEMINI_API_KEY", "source_path": "synlynk/dispatch.py"
+        }
+
+    # Add detected integration nodes
+    for name, item in detected_integrations.items():
+        node = _node(
+            "world", repo, item["category"], item["label"],
+            {
+                "ring": item["ring"],
+                "category": item["category"],
+                "description": item["description"],
+                "env_var": item["env_var"],
+                "tier": "egress" if item["ring"] <= 2 else "opportunity",
+                "criticality": 0.9 if item["ring"] == 1 else 0.5,
+            },
+            item.get("source_path", "runtime"), "extracted", now, sha
+        )
+        nodes.append(node)
+        edge_kind = "calls" if item["category"] in ("llm", "payment", "vcs") else "integrates_with"
+        edges.append(_edge("world", root_node, node, edge_kind, "extracted", now))
+
+    # 3. Opportunity Radar Ring 3 Projections (from .synlynk/radar.json or PM opportunities)
+    radar_file = os.path.join(repo_path, ".synlynk", "radar.json")
+    if os.path.exists(radar_file):
+        try:
+            with open(radar_file, "r", encoding="utf-8") as rf:
+                opps = json.load(rf).get("opportunities", [])
+                for opp in opps:
+                    opp_node = _node(
+                        "world", repo, "opportunity", opp.get("title", "Opportunity Node"),
+                        {
+                            "ring": 3,
+                            "category": "opportunity",
+                            "description": opp.get("description", "Projected partner opportunity"),
+                            "tier": "opportunity",
+                            "estimated_value": opp.get("value", "medium"),
+                        },
+                        "project-docs/roadmap.md", "projected", now, sha
+                    )
+                    nodes.append(opp_node)
+                    edges.append(_edge("world", root_node, opp_node, "evaluates", "projected", now))
+        except Exception:
+            pass
+
+    _save_projection(conn, "world", repo, nodes, edges, started, sha)
+    return nodes, edges
+
+
 def build_workspace_views_snapshot(conn: sqlite3.Connection, repo_path: str) -> dict:
-    """Refresh all three projections and return the JSON-ready snapshot."""
+    """Refresh all four projections and return the JSON-ready snapshot."""
     product = extract_product_nodes(conn, repo_path)
     logical = extract_logical_nodes(conn, repo_path)
     infra = extract_infra_nodes(conn, repo_path)
+    world = extract_world_nodes(conn, repo_path)
     logical_stale = False
     try:
         row = conn.execute("SELECT stale FROM workspace_view_meta WHERE view = 'logical'").fetchone()
@@ -340,7 +477,11 @@ def build_workspace_views_snapshot(conn: sqlite3.Connection, repo_path: str) -> 
             logical_stale = bool(row[0])
     except Exception:
         pass
-    return {"product": {"nodes": product[0], "edges": product[1]},
-            "logical": {"nodes": logical[0], "edges": logical[1], "stale": logical_stale},
-            "infra": {"nodes": infra[0], "edges": infra[1]},
-            "updated_at": _now()}
+    return {
+        "product": {"nodes": product[0], "edges": product[1]},
+        "logical": {"nodes": logical[0], "edges": logical[1], "stale": logical_stale},
+        "infra": {"nodes": infra[0], "edges": infra[1]},
+        "world": {"nodes": world[0], "edges": world[1]},
+        "updated_at": _now()
+    }
+

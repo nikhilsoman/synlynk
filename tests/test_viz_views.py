@@ -5,6 +5,7 @@ from synlynk.viz_views import (
     extract_infra_nodes,
     extract_logical_nodes,
     extract_product_nodes,
+    extract_world_nodes,
     init_workspace_view_tables,
 )
 
@@ -47,8 +48,22 @@ def test_extract_infra_nodes_daemon(tmp_path):
     assert edges[0]["kind"] == "manages"
 
 
+def test_extract_world_nodes_egress(tmp_path):
+    conn = sqlite3.connect(":memory:")
+    # Create fake integration file
+    app_file = tmp_path / "app.py"
+    app_file.write_text("import stripe\nimport openai\nimport boto3\n")
+    nodes, edges = extract_world_nodes(conn, str(tmp_path))
+    assert any(n["kind"] == "workspace" for n in nodes)
+    assert any("stripe" in n["label"].lower() for n in nodes)
+    assert any("openai" in n["label"].lower() for n in nodes)
+    assert any("aws" in n["label"].lower() for n in nodes)
+    assert len(edges) >= 3
+
+
 def test_build_workspace_views_snapshot(tmp_path):
     conn = sqlite3.connect(":memory:")
     snapshot = build_workspace_views_snapshot(conn, str(tmp_path))
-    assert {"product", "logical", "infra"} <= snapshot.keys()
-    assert conn.execute("SELECT COUNT(*) FROM workspace_view_meta").fetchone()[0] == 3
+    assert {"product", "logical", "infra", "world"} <= snapshot.keys()
+    assert conn.execute("SELECT COUNT(*) FROM workspace_view_meta").fetchone()[0] == 4
+
