@@ -294,7 +294,7 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
   ordinary command usage, not on phrase matches, not mid-brainstorm).
 <!-- synlynk:end -->
 
-<!-- synlynk:harness v0.150.1 verified:2026-09-11T12:41:34Z -->
+<!-- synlynk:harness v0.154.0 verified:2026-09-19T04:44:21Z -->
 # Harness Instructions (synlynk-managed — do not edit)
 
 ## PR Review Discipline
@@ -356,11 +356,9 @@ This table is generated from `.synlynk/config.json` so it tracks the repo's own 
 - Execution mode: pipe
 - Non-interactive flag: --version
 - Stdout flush: native
-
 ## Active Dispatch Flags
 - Valid: -c --model --sandbox
 - Invalid (do not use): --dangerously-bypass-approvals-and-sandbox --dangerously-skip-permissions --print --approval-policy
-
 ## Network Dependencies
 - None required
 

@@ -1,8 +1,8 @@
 # Feature Release Priorities & Milestone Roadmap
 
-- **Governing Goals:** `goal-85656c82` (Developer Experience 1.0), `goal-8f64eff5` (Platform Health), `goal-bde24050` (State & Job Truth), `goal-90e73dfd` (GOVERNS Lifecycle), `goal-250b6fb2` (Fleet Parity), `goal-c7113f58` (Over-the-Horizon Strategic Expansion)
+- **Governing Goals:** `goal-85656c82` (Developer Experience 1.0), `goal-8f64eff5` (Platform Health), `goal-bde24050` (State & Job Truth), `goal-90e73dfd` (GOVERNS Lifecycle), `goal-250b6fb2` (Fleet Parity), `goal-c7113f58` (Over-the-Horizon Strategic Expansion), `goal-f0489be9` (Vizor World View & Ecosystem Radar)
 - **Target Launch:** **01 October 2026 (v1.0.0 Developer Preview Launch)**
-- **Last Updated:** 2026-09-14
+- **Last Updated:** 2026-09-19
 
 ---
 
@@ -15,10 +15,11 @@
 | **v0.20.0** | 2026-09-18 | Visual Workspace, Autonomous Onboarding & Fleet Resilience: BS-6 Vizor views (Product, Logical, Infra), In-browser GitHub App role creation wizard, scope-bounded sparse worktrees (`git sparse-checkout --cone`), 4-point readiness matrix in `synlynk doctor --readiness`, Meta Muse CLI harness adapter. | **SHIPPED** (2,792 tests) |
 | **v0.21.0** | 2026-09-25 | **Visual, Cross-Environment & Autonomous Onboarding (FTUE):** Zero-terminal onboarding, Cursor/Windsurf/VS Code/Warp/Antigravity/Replit/Emergent native surface binding, Greenfield starter sandbox ("syn-ping") & Behind-the-Curtain tour, Brownfield 3D discovery & confirm chips, 1-click GitHub App role provisioning, and First Real Win PR in < 5 minutes. | **SHIPPED** (PR #1574) |
 | **v0.22.0** | 2026-09-28 | **Graphify AST Knowledge Graph Substrate, Multi-Repo Mesh & Spike Harness:** 1-click tool installer (`synlynk tool install`), commit staleness anchor, Vizor Logical View embed, 4 role-specific skills, JIT context packs (`synlynk pack`), blast-radius calculator (`synlynk impact`), attested PR gate (`synlynk pr check --impact-attested`), circular import detector (`synlynk heal --cycles`), federated multi-repo mesh (`synlynk mesh`), and reusable spike evaluation engine (`synlynk spike eval`). | **SHIPPED** (PR #1579, 2,978 tests) |
-| **v1.0.0** | **2026-10-01** | **Developer Preview Public Launch (Time-to-Wow):** 15-minute zero-risk onboarding pipeline, signed GA release on PyPI/pipx, full documentation release, commercial marketing launch. | Target GA Release |
-| **v1.1.0** | Q4 2026 | Cross-workgroup team collaboration, community relay server, multi-tenant quota arbitration. | Post-GA |
-| **v1.2.0** | Q1 2027 | Enterprise workspace: microVM kernel sandboxing (Bubblewrap/eBPF), SCIP semantic code graph, EdenFS monorepo scaling. | Post-GA |
-| **v1.3.0+** | 2027 | **Over-the-Horizon Expansion (`goal-c7113f58`):** DeepSeek Harness (`dsh`) Cordis plugin architecture, ACP headless transport, and Synlynk Cockpit: Active Herdr 4-pane terminal orchestration (`story-0127066f` / `synlynk herdr init`). | Parked Strategic Epic |
+| **v1.0.0** | **2026-10-01** | **[Wave 1] Developer Preview Launch (Synlynk Personal):** Zero-dependency local stability, 9 pillars (Model First-Class, World View, Brownfield Ingestion, Magic PR, Multi-Home Conductor). | Active Sprint (`story-ffb0f3e6`) |
+| **v1.1.0** | **2026-10-08** | **[Wave 2] Synlynk Teams Relay (Peer-to-Peer Mesh):** Ephemeral P2P event bus, distributed task leases, sibling AST conflict preemption, 3-tier identity attribution. | Scheduled Wave (`story-f6782d57`) |
+| **v1.2.0** | **2026-10-15** | **[Wave 3] Synlynk Teams Server (Hosted Collaboration Hub):** Centralized multi-tenant workspace, hosted W9 Vizor with RBAC, encrypted state sync, fleet quotas. | Scheduled Wave (`story-f4dbf2ce`) |
+| **v1.3.0** | **2026-10-22** | **[Wave 4] Synlynk Model Hub & Provider Aggregator:** Meta Muse GA integration, Local oMLX inference harness, BYO API-key aggregators, empirical spike harness. | Scheduled Wave (`story-c7064c40`) |
+| **v1.4.0+** | 2027 | **Over-the-Horizon Expansion (`goal-c7113f58`):** DeepSeek Harness (`dsh`) Cordis plugin architecture, ACP headless transport, and Synlynk Cockpit: Active Herdr 4-pane terminal orchestration (`story-0127066f` / `synlynk herdr init`). | Parked Strategic Epic |
 
 ---
 
@@ -72,9 +73,68 @@
 
 ### Workspace identity slice (#914)
 
-- [ ] Cross-repo App scope remains parked; the local durable-role App-material doctor/readiness guard is tracked by the child PR for #914.
+- [x] W0-W3 and bounded W4/W6 slices are on main; W5 specialist type resolution/effective skills merged in PR #1690 (2026-09-19).
+- [x] W7 runtime/swarm identity acceptance merged in PR #1691 (2026-09-19); duplicate product/type App initialization now fails closed and worker env is PEM-free.
+- [x] W8 pack onboarding/organigram expansion merged in PR #1692 (2026-09-19); software-product, studio, and agency packs plus explicit connector isolation are on main.
+- [ ] Cross-repo App scope remains parked; hosted W9 Vizor remains a fail-closed placeholder with no OAuth/hosting per handoff.
 - [x] Readiness CI compatibility: Point 1 retains the `role_tokens` checkpoint ID while reporting durable App-material failures.
 
 DR hardening remains in sustainment: encrypted provider-neutral package export is
 implemented; the cross-machine restore drill is pending access to a second
 machine.
+
+Control-plane hygiene (2026-09-19): two definitively merged worktrees were
+removed and stale Git metadata pruned; 71 worktrees remain intentionally
+unremoved because they are dirty or their PR state is not currently verifiable.
+The malformed legacy repo-local `.synlynk/state.db` was quarantined with its
+WAL/SHM sidecars; the canonical product ledger passed integrity checks. Sentinel
+noise was reduced from 824 to 160 by clearing only historical receipt/version/
+tool-pressure classes. Cost/token and other diagnostic alerts remain retained.
+
+Follow-up (2026-09-19): GitHub-backed classification removed the next safe
+merged batch; remaining worktrees are intentionally preserved because they are
+open-PR, dirty, detached-with-commits, or no-PR branches with unique content.
+Capability sweep and the non-live fleet matrix are green. Live selftest
+registry isolation is fixed in PR #1693; merge is pending CI and QA-gate
+resolution. Grok/Muse probe health and local oMLX configuration remain
+operator-level environment work, not product-state recovery.
+
+---
+
+## 3. Milestone v1.0.0 (01 Oct 2026) — 11-Day Stabilization & 9-Pillar Plan
+
+### Pillar 1: First-Class Model Selection & Graphify Cost Routing (`goal-85656c82`)
+- Decouple Model Family from Harness runtime across all CLI dispatches.
+- Graphify AST blast-radius complexity scoring (`synlynk impact`) driving dynamic cost tiering (Flash/Haiku for leaf edits $\to$ Sonnet/GPT-4o for refactors $\to$ o1/Pro for specs).
+
+### Pillar 2: Rich Local Vizor & World View Control Plane (`goal-vizor-personal`, `goal-f0489be9`)
+- 4-Perspective Vizor Dashboard on `localhost:8585` (Product View, Logical AST View, Infra View, and **World View**).
+- **World View Tier 1 Code Truth Extraction (`synlynk/viz_views.py`):** Ingests outbound API clients, inbound webhook listeners, identity providers (IdPs), and compliance boundaries.
+- **Concentric Radar Layout (SVG):** Visualizes Product Core at center $\to$ Ring 1 (Live Code Truth) $\to$ Ring 2 (Standby Integrations) $\to$ Ring 3 (Ecosystem Opportunities).
+
+### Pillar 3: Deep Brownfield Project Onboarding (`synlynk init --brownfield`)
+- Zero-terminal reverse-engineering of legacy test suites, linters, package managers, and commit churn.
+- Autonomous synthesis of living `roadmap.md`, `memory.md`, and `todo.md` project documentation.
+
+### Pillar 4: Magic PR Engine (< 5 Minute Time-to-Wow)
+- Zero-risk initial scan generating verified, test-attested quick-win PRs (cycle healing, doc repair, test coverage).
+
+### Pillar 5: Fleet Parity, Dynamic Handover & Token Isolation (`goal-250b6fb2`)
+- **Dynamic Handover Drain-to-Boundary:** Outgoing Home Conductor marks `DRAINING`, finishing in-flight tasks cleanly before session stop; incoming Home claims next task without split-brain collisions.
+- **Worktree Product Identity & App-Token Isolation:** Fixed worktree slug derivation via `git-common-dir` root, locked explicit `"identity_slug": "synlynk"` in config, and strictly fail-closed on role App token absence.
+
+### Pillar 6: Autonomous Agent Work Discovery & Triage
+- Proactive ingestion of GitHub issues and local discovery backlog into ready stories (`synlynk backlog triage`).
+- Living charter triggers for automated QA PR claiming and Architect complexity audits.
+
+### Pillar 7: Autonomous PM Sweeps & Ecosystem Opportunity Radar (`goal-f0489be9`)
+- `synlynk pm sweep` scans competitor capabilities and adjacent market integrations.
+- Tier 2 PM Radar Playbook: Proactively plots opportunity nodes on Ring 3 of the World View with 1-click `synlynk story create`.
+
+### Pillar 8: Autonomous Architect Boundary Resilience & Modularity Watchdog (`goal-f0489be9`, `goal-8f64eff5`)
+- Watchdog auditing disk footprint, worktree cleanup, memory/RSS usage, and WAL concurrency.
+- Tier 2 Architect Boundary Playbook: Audits World View outbound dependencies for SPOF risks, missing circuit breakers, and egress security.
+
+### Pillar 9: Active Marketing Agent Charter & Doc Publishing
+- Autonomous two-tier blog sync (`synlynk marketing sync-pr <pr>`) and release note maintenance.
+- Automated compilation of Quick Start, Official Manual, and CLI Reference into standalone HTML/PDF/EPUB assets.

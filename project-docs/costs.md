@@ -208,3 +208,23 @@
 
 - Local Codex implementation and focused verification; no external dispatch
   spend. Estimated task budget: $2.00.
+
+## 2026-09-19 — #914 W5 continuation
+
+- Local Codex implementation, issue/PR operations, CI monitoring, and focused verification; no external dispatch spend. Estimated task budget: $2.00.
+
+## 2026-09-19 — #914 W7 runtime/swarm acceptance
+
+- Local Codex implementation, CI monitoring, QA/policy checks, GitHub issue/PR operations, and merge; no external dispatch spend. Estimated task budget: $2.00.
+
+## 2026-09-19 — #914 W8 packs/onboarding/connectors
+
+- Local Codex implementation, full verification, CI monitoring, QA/policy checks, GitHub issue/PR operations, and merge; no external dispatch spend. Estimated task budget: $2.00.
+
+## 2026-09-19 — Worktree/sentinel/state triage
+
+- Local Codex read-only audits, bounded worktree cleanup, sentinel class cleanup, state inventory, quarantine, and verification; no external dispatch spend. Estimated task budget: $1.00.
+
+## 2026-09-19 — Remaining hygiene and selftest repair
+
+- Local Codex capability sweep, fleet matrix, GitHub-backed worktree audit/cleanup, live selftest, focused regression tests, and PR #1693 preparation. Live selftest reported its configured $2 cap; no paid harness dispatch was required for the repair. Estimated task budget: $2.00.

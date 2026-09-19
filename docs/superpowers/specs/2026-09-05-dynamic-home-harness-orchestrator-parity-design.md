@@ -131,6 +131,37 @@ In `synlynk/probe.py` (`SOP_BLOCKS`), replace all hardcoded references to "Claud
    - Detects legacy directive files containing obsolete hand-edit directives or hardcoded Claude-subservient rules.
    - Idempotently upgrades them to the new Symmetric Dual-Mode format without destroying human-added custom sections.
 
+### Pillar 5: Dynamic Handover Protocol (Drain-to-Boundary Pipeline)
+When the operator triggers `synlynk home <new_harness>` or hot-swaps the interactive terminal pane:
+1. **No Abrupt Halts / In-Flight Preservation:**
+   - The outgoing Home Conductor is tagged as `DRAINING`.
+   - It retains its exclusive lock on its currently claimed in-progress story (`story_id`) and associated worktree.
+   - It completes its active loop: implementation $\to$ tests pass $\to$ PR created $\to$ QA review gate / milestone checkpoint.
+2. **Story Boundary Handoff:**
+   - Upon completing the task (`synlynk story done`), the draining harness detects that its session is no longer active home.
+   - It runs `synlynk checkpoint`, records its devlog entry, and halts execution cleanly.
+3. **Incoming Home Backlog Claim:**
+   - The newly designated Home Harness reads the refreshed `.synlynk/context.md` in its dedicated pane, claims the *next independent story* from `project-docs/todo.md`, and launches on a clean, isolated worktree.
+   - Eliminates AI context amnesia and human operator cognitive fragmentation.
+
+### Pillar 6: Worktree Product Identity & App-Token Isolation Hardening
+1. **Worktree Root Slug Resolution (`synlynk/product_store.py`):**
+   - When resolving `identity_slug_from_config(repo_path)` in a git worktree where `identity_slug` is not explicitly set, the resolver derives `_slugify(root.name)` from `git rev-parse --git-common-dir` (the main repository), never the worktree leaf directory name.
+   - Ensures all worktrees, subagents, and background workers unconditionally resolve App credentials from `~/.synlynk/workspaces/<product_slug>/github_apps/`.
+2. **Explicit Config Locking:**
+   - Sets `"identity_slug": "<slug>"` explicitly in `.synlynk/config.json` during project initialization and migration.
+3. **Airtight Fail-Closed GitHub-Write Enforcement:**
+   - Prevents accidental fallbacks to the host/personal keyring (`nikhilsoman`). Dispatches with `--requires-gh-write` fail closed with actionable path diagnostics if a role App token is missing or expired.
+4. **Readiness Self-Check:**
+   - `synlynk doctor --readiness` tests role App token resolution inside temporary synthetic worktrees to attest zero host-auth leakage.
+
+### Pillar 7: Team-Scale Sovereign Multi-Home Protocol (Wave 2 / Wave 3 Alignment)
+The Sovereign Multi-Home architecture scales seamlessly from 1 developer across 4 panes to N teammates across N machines:
+1. **Three-Tier Attribution:** Every action is tagged with $\langle \text{@user}, \text{role}, \text{harness} \rangle$ (e.g., `@alice` pairing with `Agy` under `synlynk-dev[bot]`), ensuring 100% auditability across distributed commits and PRs.
+2. **Distributed Task Leases & Heartbeat Reclamation:** Stories in `state.db` (and synchronized via the Teams Relay Mesh) record rolling 30-minute leases. Teammates cannot double-claim active in-progress work, and abandoned stories auto-reclaim after lease expiration.
+3. **Sibling AST Conflict Preemption:** Graphify AST impact analysis (`synlynk mesh`) tracks active worktrees across teammates, raising proactive merge-order warnings before merge conflicts happen.
+4. **Non-Authoring Peer & QA Review Gates:** Reviews are executed either by local role-scoped QA bots or peer teammates, enforcing zero self-approval before squash-merging.
+
 ---
 
 ## 4. Operational Alignment: Sovereign Conductor with Matrix Delegation
@@ -161,3 +192,9 @@ When Agy (or any non-Claude harness) is active Home Conductor:
   `synlynk instructions update --repair` replaces legacy subservient sections in existing repos.
 - [ ] **AC-6: Full Test Suite Green:**
   All existing and new unit tests pass cleanly in pytest.
+- [ ] **AC-7: Dynamic Handover Drain-to-Boundary Verification:**
+  Switching home harness marks outgoing session as draining, allowing in-flight story completion before clean session stop.
+- [ ] **AC-8: Worktree App-Token Isolation Green:**
+  Worktree dispatches resolve tokens strictly from `~/.synlynk/workspaces/<product>/github_apps/` with zero host personal token leakage.
+- [ ] **AC-9: Team-Scale Identity & Lease Attestation:**
+  Story claims and PR attribution support 3-tier identity $\langle \text{@user}, \text{role}, \text{harness} \rangle$ with distributed lease collision protection.

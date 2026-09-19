@@ -1,6 +1,41 @@
 # synlynk Memory
 
-- [@codex] QA merges must repair a mergeable `BEHIND` PR by rebasing onto fresh `origin/main` and using `git push --force-with-lease`; a conflicted or failed rebase blocks the merge, and `--admin` is prohibited for this path (#1604).
+## Decisioning Models Archetype & Model Taxonomy Expansion (decided 2026-09-19)
+- **Goal Linked (`goal-c7113f58`):** Over-the-Horizon Strategic Expansion.
+- **Exploration Story Created (`story-0f7043d7`):** *"Exploration: Decisioning Models (TypeSafe.ai/Jev) for Sub-20ms Fleet Routing & Policy Gating"*.
+- **Core Insights & Taxonomy:**
+  1. *Taxonomy Distinction:*
+     - **Reasoning Models (System 2):** Generative, deep CoT (o1, o3, Opus, R1). 5s–60s latency, high cost, text/code generation, nondeterministic formatting.
+     - **Decisioning Models (System 1):** Deterministic, sub-20ms, typed schema outputs with confidence scores (e.g., TypeSafe.ai/Jev). Pure classification/decisioning.
+  2. *Architect(bot) & Fleet Applications:*
+     - Fast Model Routing Arbiter (sub-15ms tier and harness resolution).
+     - Speculative Fan-out Classifier (parallel vs sequential worktree safety).
+     - Fast Merge-Gate Policy Evaluator (pre-screening git diffs before LLM reviews).
+     - World View Proximity & Boundary Classification.
+  3. *Execution Horizon:* Deep research and prototyping staged to follow the kickoff of the Master 4-Wave Roadmap.
+[@agy, @nikhilsoman]
+
+
+## Sovereign Multi-Home Workstream Conductor & Team-Scale Parity (decided 2026-09-19)
+- **Architecture Formalized (`goal-250b6fb2`, spec #1440):** [`docs/superpowers/specs/2026-09-05-dynamic-home-harness-orchestrator-parity-design.md`](file:///Users/nikhilsoman/dev/synlynk/docs/superpowers/specs/2026-09-05-dynamic-home-harness-orchestrator-parity-design.md).
+- **Core Principles & Decisions:**
+  1. *Elimination of Single-Home Bottleneck:* Replaced the legacy single global `home_harness` singleton with the **Workstream Co-Conductor Model**. Every interactive harness session (Claude, Agy, Codex, Grok) is a Sovereign Home Conductor for the workstream/plan it initiates.
+  2. *Drain-to-Boundary Pipeline Handover:* Mid-plan handoffs drain through the active task-list or safe quota horizon before session close, eliminating AI context amnesia and operator context thrashing.
+  3. *Team-Scale Fractal Parity (Wave 2 / Wave 3):* Scales from 1 operator across 4 panes to N teammates across N machines. Conductor is defined as $\langle \text{@user}, \text{role}, \text{harness} \rangle$.
+  4. *Distributed Task Leases & Collision Preemption:* Rolling 30-minute task leases in `state.db` / Teams Relay Mesh prevent double-claiming. Graphify AST mesh tracks sibling worktree blast radii for real-time merge collision warnings.
+  5. *Worktree Identity Isolation Hardened:* Fixed product slug derivation in `synlynk/product_store.py` (`git-common-dir` root fallback), locked `"identity_slug": "synlynk"` in `config.json`, strictly failing closed on host personal token fallback.
+[@agy, @nikhilsoman]
+
+## Vizor World View Inside-Out Projection & Opportunity Radar (decided 2026-09-19)
+- **Goal Created (`goal-f0489be9`):** *"Establish Vizor World View as an inside-out projection of external integrations and autonomous opportunity radar"*.
+- **Exploration Story Created (`story-2161a277`):** *"Exploration: Vizor World View Inside-Out Projection & Opportunity Radar Architecture"* assigned to `architect` and `pm`.
+- **Architectural Discovery Spec Committed:** [`docs/superpowers/specs/2026-09-19-vizor-world-view-and-opportunity-radar-discovery.md`](file:///Users/nikhilsoman/dev/synlynk/docs/superpowers/specs/2026-09-19-vizor-world-view-and-opportunity-radar-discovery.md).
+- **Core Principles & Decisions:**
+  1. *4th Vizor Perspective:* Extends Product (UX), Logical (Code/AST), and Infra (Runtime) views with the **World View** (inside-out ecosystem interface).
+  2. *2-Tier Graduated Discovery:* Tier 1 extracts deterministic code truth (outbound APIs, inbound webhooks, IdPs, data clearinghouses, compliance gates); Tier 2 empowers PM and Architect to project opportunities on concentric radar rings.
+  3. *Autonomous PM + Architect Deliberation:* Architect evaluates egress resilience, failover redundancy, and secret isolation; PM evaluates adjacent partner platforms and market monetization opportunities.
+  4. *Living Charter Amendments Proposed:* Injects ecosystem radar maintenance into `roles/pm.md` and boundary resilience governance into `roles/architect.md` as standard default playbooks.
+[@agy, @nikhilsoman]
 
 ## Graphify AST Knowledge Graph Substrate, Multi-Repo Mesh & Spike Harness (decided/shipped 2026-09-15)
 - **Architectural Specification & Plan Approved:**
@@ -850,3 +885,30 @@ work because local git activity is not sufficient corroboration.
 - [@codex] Use one stable GPG keypair per product/workspace, record its public
   fingerprint with each backup, and rotate only for compromise, loss, or an
   intentional key rotation.
+
+## 2026-09-19 — #914 W0-W9 audit and W5 closure
+
+- [@nikhilsoman] Treat #914 as still open: W0-W3 and bounded W4/W6 are shipped, W5 is now closed by PR #1690, W7/#1688 and W8/#1689 remain partial, and W9 stays a hosted placeholder with no production OAuth/hosting.
+- [@nikhilsoman] GitHub same-identity COMMENT reviews do not satisfy the repository's formal approving-review branch rule; after all CI and `synlynk policy check-merge --role qa` gates passed, the documented admin squash fallback was used for #1690.
+
+## 2026-09-19 — #914 W7 runtime identity closure
+
+- [@nikhilsoman] Product/type App material is singleton state: `identity init` must fail closed when it already exists and direct the operator to add the clone to the existing GitHub installation rather than minting a second App.
+- [@nikhilsoman] Swarm workers receive token-only runtime material; PEM/private-key environment forwarding is prohibited and covered by acceptance tests. PR #1691 merged as `cb8ba3db`; W8/#1689 is the next implementation slice.
+
+## 2026-09-19 — #914 W8 pack and connector closure
+
+- [@nikhilsoman] Pack onboarding is local and extensible: software-product, studio, and agency define canonical type IDs while kinds remain policy laws; labels can change without reminting the GitHub App.
+- [@nikhilsoman] Connectors are catalog-only until explicit add, require a home/reach/allowlist/protocol contract, store metadata and secrets under the product store, and fail closed for unknown protocols or empty allowlists. PR #1692 merged as `76d547d4`; W9 stays a named hosted-Vizor placeholder with no hosting or OAuth.
+
+## 2026-09-19 — Control-plane cleanup and state-db RCA
+
+- [@nikhilsoman] The authoritative Synlynk product ledger is `~/.synlynk/workspaces/synlynk/state.db`; the malformed `.synlynk/state.db` under the repository was a legacy duplicate, not the source of truth.
+- [@nikhilsoman] Legacy malformed ledgers must be quarantined with sidecars preserved, never deleted or synchronized. The 2026-09-19 duplicate was quarantined under `~/.synlynk/quarantine/state-1789803642-6953985554dd/`; canonical integrity and doctor checks passed afterward.
+- [@nikhilsoman] Sentinel cleanup is class-based: historical receipt/version/tool-pressure noise may be cleared after no-active-job verification, while cost/token anomalies and unresolved operational diagnostics remain for RCA.
+
+## 2026-09-19 — Selftest isolation and worktree closure
+
+- [@nikhilsoman] Scratch selftests must redirect both `DB_PATH` and cwd before opening the scratch ledger; redirecting only the path violates the canonical product registry invariant. PR #1693 carries the fix.
+- [@nikhilsoman] Do not remove worktrees with no PR merely because they are old: branches with unique commits, dirty files, detached commits, or open PRs remain preserved until an owner decision exists.
+- [@nikhilsoman] Live selftest environment failures are not state corruption: Grok and Muse require healthy probes, while local requires `.agents/local.json` and a running oMLX setup.

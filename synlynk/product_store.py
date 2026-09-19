@@ -24,15 +24,16 @@ def _slugify(value: str) -> str:
 def identity_slug_from_config(repo_path: PathLike = ".") -> str:
     repo = Path(repo_path).resolve()
     candidates = [repo / ".synlynk" / "config.json"]
+    root_repo = repo
     try:
-        if not (repo / ".git").exists():
-            raise OSError("not a git worktree")
-        result = subprocess.run(["git", "rev-parse", "--git-common-dir"], cwd=repo,
-                                capture_output=True, text=True, check=False)
-        if result.returncode == 0:
-            common = Path(result.stdout.strip()).resolve()
-            root = common.parent if common.name == ".git" else common.parent
-            candidates.append(root / ".synlynk" / "config.json")
+        if (repo / ".git").exists():
+            result = subprocess.run(["git", "rev-parse", "--git-common-dir"], cwd=repo,
+                                    capture_output=True, text=True, check=False)
+            if result.returncode == 0:
+                common = Path(result.stdout.strip()).resolve()
+                root = common.parent if common.name == ".git" else common.parent
+                root_repo = root
+                candidates.append(root / ".synlynk" / "config.json")
     except (OSError, ValueError):
         pass
     for cfg_path in candidates:
@@ -43,7 +44,7 @@ def identity_slug_from_config(repo_path: PathLike = ".") -> str:
         raw = data.get("identity_slug")
         if isinstance(raw, str) and raw.strip():
             return _slugify(raw.strip())
-    return _slugify(repo.name)
+    return _slugify(root_repo.name)
 
 
 def configured_identity_slug(repo_path: PathLike = ".") -> Optional[str]:

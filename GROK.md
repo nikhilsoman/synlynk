@@ -294,7 +294,7 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
   ordinary command usage, not on phrase matches, not mid-brainstorm).
 <!-- synlynk:end -->
 
-<!-- synlynk:harness v1.0.13 verified:2026-09-11T12:41:35Z -->
+<!-- synlynk:harness v1.0.30 verified:2026-09-19T04:44:22Z -->
 # Harness Instructions (synlynk-managed — do not edit)
 
 ## Your Role
@@ -372,11 +372,9 @@ This table is generated from `.synlynk/config.json` so it tracks the repo's own 
 - Execution mode: pipe
 - Non-interactive flag: --single
 - Stdout flush: native
-
 ## Active Dispatch Flags
 - Valid: --always-approve --permission-mode --output-format --model --single
 - Invalid (do not use): --yes --dangerously-skip-permissions --print --non-interactive
-
 ## Network Dependencies
 - Required: cli-chat-proxy.grok.com:443
 

@@ -1,3 +1,23 @@
+## 2026-09-19 — Milestone v1.0.0 Dev Preview Sprint: Decisioning Models Taxonomy & Master Roadmap Staging
+
+### Shipped & Formalized
+- **Decisioning Models vs Reasoning Models Taxonomy (`goal-c7113f58`, `story-0f7043d7`):**
+  - Conducted architectural analysis of Decisioning Models (TypeSafe.ai/Jev archetype: sub-20ms deterministic structured classification) vs Reasoning Models (System 2 CoT generative LLMs).
+  - Identified 4 high-leverage applications for Synlynk: Fast Model Tier Router (<15ms), Speculative Fan-out Arbiter, Fast Merge-Gate Policy Evaluator, and World View Proximity Scoring.
+  - Created and linked exploration ticket `story-0f7043d7` to `goal-c7113f58`, staged for deep research after Master Roadmap launch.
+- **World View Inside-Out Projection & Opportunity Radar (`goal-f0489be9`, `story-2161a277`):**
+  - Created and committed formal discovery spec `docs/superpowers/specs/2026-09-19-vizor-world-view-and-opportunity-radar-discovery.md`.
+  - Folded across 3 operational domains: Pillar 2 (Vizor View 4 + Code Truth AST Extractor + Concentric Radar SVG), Pillar 7 (Autonomous PM Opportunity Sweeps & 1-click story promotion), and Pillar 8 (Architect boundary resilience, SPOF audit, and egress security).
+- **Pillar 5 Dynamic Handover & Worktree Token Isolation Hardening (`goal-250b6fb2`):**
+  - Updated design spec `docs/superpowers/specs/2026-09-05-dynamic-home-harness-orchestrator-parity-design.md` with Section 3.5 (Drain-to-Boundary Pipeline Handover) and Section 3.6 (Worktree Identity & App-Token Isolation).
+  - Fixed worktree product identity slug resolver in `synlynk/product_store.py`: fallback slug is derived from root repository via `git rev-parse --git-common-dir` instead of the leaf worktree folder name.
+  - Locked explicit `"identity_slug": "synlynk"` in `.synlynk/config.json`, eliminating personal GitHub token fallback leaks.
+- **Master 4-Wave Roadmap & Implementation Plan Committed:**
+  - Plan committed at `docs/superpowers/plans/2026-09-19-master-4-wave-roadmap-and-autonomous-execution.md` with Wave 1 (Dev Preview v1.0.0, 9 Pillars), Wave 2 (Teams Relay Mesh), Wave 3 (Teams Server Hub), Wave 4 (Model Hub GA).
+- **Verification:** Ran targeted regression suite (`tests/test_product_store.py`, `tests/test_dispatch_github_identity.py`, `tests/test_viz_views.py`, `tests/test_roles.py`) — 47/47 passed cleanly.
+[@agy, @nikhilsoman]
+
+
 ## 2026-09-11 — Milestone v0.20.0 Sprint 1: BS-6 Workspace Views, Role Studio, & Worktree Lifecycle (PR #1556)
 
 ### Shipped
@@ -1512,3 +1532,36 @@ implementation plan.
 
 - Preserved the readiness matrix's Point 1 key as `role_tokens` while retaining durable App-material failure details and remediation.
 - Scoped durable-material evaluation away from isolated custom token fixtures; `pytest -q tests/test_readiness_matrix.py tests/test_doctor_identity_roles.py` — 20 passed.
+
+## 2026-09-19 — Issue #914 W5 continuation
+
+- Audited approved W0-W9 specs against main. W5 was partial; W7 and W8 remain open child work (#1688, #1689). W4 API fail-closed and W9 hosted placeholder remain intentional scope boundaries.
+- Implemented W5 product type resolution, effective kind-baseline plus add/remove skills, canonical-id protection, and fail-closed dispatch validation in PR #1690.
+- Verification: focused 33 passed; CI Python 3.10, 3.12, EPUBCheck, and qa-gate green. PR #1690 merged as `cd7a4a70` using the documented same-identity admin fallback; dedicated worktree removed.
+
+## 2026-09-19 — Issue #914 W7 runtime/swarm acceptance
+
+- Audited the approved W7 contract and confirmed add-repo was already product-scoped; the missing invariant was duplicate identity initialization silently no-oping instead of refusing a second App.
+- Implemented fail-closed duplicate `(product, type)` App initialization with guidance to add the clone to the existing GitHub installation, plus acceptance coverage that worker subprocess environments do not forward PEM/private-key material.
+- Updated stale expectations and made the threaded local-concurrency test explicitly bind its temporary ledger through `SYNLYNK_STATE_DB_PATH` under the canonical DB guard.
+- Verification: W7 suite 72 passed; concurrency test 7 passed; CI Python 3.10, 3.12, EPUBCheck, and qa-gate green. PR #1691 merged as `cb8ba3db` via the documented same-identity admin fallback; W7 worktree cleaned. W8/#1689 is next; W9 remains deferred.
+
+## 2026-09-19 — Issue #914 W8 packs/onboarding/connectors
+
+- Implemented the approved local W8 contract: shipped software-product, studio, and agency pack metadata; preserved stable kind/type-id separation; added non-reminting organigram relabeling; and added explicit connector cataloging with home/reach/allowlist/protocol validation.
+- Connector credentials are product-scoped, secrets are written with restrictive permissions and never returned in metadata, and connector dispatch fails closed without valid catalog metadata or explicit grants. No hosted OAuth, vendor SDK, or production hosting was added.
+- Verification: focused W8 suites 70 passed; taxonomy/pack/connector/parser 36 passed; packaging/identity/doctor integration 48 passed; CI Python 3.10, 3.12, EPUBCheck, and qa-gate green. PR #1692 merged as `76d547d4` via the documented same-identity admin fallback; W8 worktree cleaned. W0-W8 are complete; W9 remains deferred.
+
+## 2026-09-19 — Worktree and sentinel control-plane triage
+
+- Audited 77 worktrees with no active jobs. Removed two definitively merged worktrees (`job-07c14b9a`, `job-6d650b6a`) and pruned their stale Git administrative entries; left 71 worktrees requiring review, including all dirty or PR-unverified worktrees.
+- Reduced the 824-alert backlog to 160 by clearing only historical `TASK_RECEIPT_WARN`, `HARNESS_VERSION_DRIFT`, and `TOOL_PRESSURE` records. Cost, token, preflight, stall, handoff, and other diagnostic alerts were retained.
+- State inventory proved the canonical product DB `~/.synlynk/workspaces/synlynk/state.db` is integrity-OK. The malformed file was the legacy repo-local `.synlynk/state.db`; quarantined it recoverably at `/Users/nikhilsoman/.synlynk/quarantine/state-1789803642-6953985554dd/` with WAL/SHM sidecars preserved.
+- `synlynk doctor` now reports one active ledger and no legacy repo state DB; `synlynk status` is healthy. Cleared the resolved `RECONCILIATION_PERSISTENCE_DEGRADED` sentinel. Remaining alert backlog is historical cost/token and harness-event evidence for separate review.
+
+## 2026-09-19 — Remaining control-plane closure and selftest repair
+
+- GitHub-backed audit classified the remaining worktrees: open PRs and dirty/unique-content worktrees remain preserved; no further safe removals were identified. Active PR worktrees include #1669, #1562, #1529, #1530, #1481, and #1693.
+- Capability sweep completed for 5 harnesses, 7 models, and 3 SFIA skills; the non-live fleet matrix completed 12/12 applicable cells green.
+- Live selftest exposed a scratch-ledger bug: probe metadata provisioning changed `DB_PATH` without changing cwd, causing a canonical-path mismatch. Fixed in PR #1693 (`bd5e9133`) by redirecting both cwd and DB path; focused verification is 155 passed, 1 skipped.
+- Live selftest reaches the full scenario suite. Remaining failures are environment gaps: Grok probe degraded, local harness configuration absent, and Muse probe degraded. A completed Agy child job with a dead PID was reconciled via `synlynk jobs reap --apply`.

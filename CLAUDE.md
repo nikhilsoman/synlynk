@@ -176,7 +176,7 @@ Checklist:
 
 Waive a waivable check only with `--waive check=reason` (non-empty reason). `version` cannot be waived.
 
-<!-- synlynk:harness v2.1.267 verified:2026-09-11T12:41:33Z -->
+<!-- synlynk:harness v2.1.274 verified:2026-09-19T04:44:19Z -->
 # Harness Instructions (synlynk-managed — do not edit)
 
 ## Your Role
