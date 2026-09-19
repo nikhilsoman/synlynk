@@ -212,6 +212,8 @@ def build_parser() -> argparse.ArgumentParser:
                              help="Run the FTUE guided setup wizard")
     init_parser.add_argument("--quickstart", action="store_true",
                              help="Run the 5-stage automated FTUE onboarding journey")
+    init_parser.add_argument("--brownfield", action="store_true",
+                             help="Run Deep Brownfield Ingestion Engine to reverse-engineer tests, linters, churn, and bootstrap 4-doc structure")
     init_parser.add_argument("--dry-run", action="store_true", dest="dry_run",
                              help="Preview what init would write without writing anything")
 
@@ -1540,7 +1542,18 @@ def main(argv=None) -> None:
     _warn_stale_repo_version(VERSION)
 
     if args.command == "init":
-        if getattr(args, "quickstart", False):
+        if getattr(args, "brownfield", False):
+            from synlynk.coldstart import run_brownfield_init
+            res = run_brownfield_init(
+                repo_root=".",
+                interactive=not getattr(args, "force", False),
+                dry_run=getattr(args, "dry_run", False),
+                force=getattr(args, "force", False)
+            )
+            if res.get("success"):
+                print(f"\n✦ Brownfield Ingestion complete. Stack: {res.get('stack')}, Tests: {res.get('test_command')}, Hotspots: {len(res.get('hotspots', []))} files.")
+            return
+        elif getattr(args, "quickstart", False):
             from synlynk.coldstart import run_ftue_journey
             res = run_ftue_journey(dry_run=getattr(args, "dry_run", False))
             if res.get("first_win_task"):
