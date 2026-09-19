@@ -94,5 +94,85 @@
     ],
     "tweet": "\ud83d\ude80 PR #1681 \u2014 attach marketing checks to automation pull requests (PR #1681, v0.20.0)\n\n\u2022 Merged improvements and fixes for PR #\n\n#posts",
     "changelog": "### v0.20.0 (2026-09-18) - PR #1681\n- Merged improvements and fixes for PR #"
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/215-pr1683-harden-dr-restore-cli-paths.md",
+    "title": "PR #1683 \u2014 harden DR restore CLI paths",
+    "author": "nikhilsoman",
+    "date": "2026-09-18",
+    "pr": "#1683",
+    "version": "0.20.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #"
+    ],
+    "tweet": "\ud83d\ude80 PR #1683 \u2014 harden DR restore CLI paths (PR #1683, v0.20.0)\n\n\u2022 Merged improvements and fixes for PR #\n\n#posts",
+    "changelog": "### v0.20.0 (2026-09-18) - PR #1683\n- Merged improvements and fixes for PR #"
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/216-pr1690-resolve-specialist-type-skills.md",
+    "title": "PR #1690 \u2014 resolve specialist type skills",
+    "author": "nikhilsoman",
+    "date": "2026-09-18",
+    "pr": "#1690",
+    "version": "0.20.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #"
+    ],
+    "tweet": "\ud83d\ude80 PR #1690 \u2014 resolve specialist type skills (PR #1690, v0.20.0)\n\n\u2022 Merged improvements and fixes for PR #\n\n#posts",
+    "changelog": "### v0.20.0 (2026-09-18) - PR #1690\n- Merged improvements and fixes for PR #"
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/217-pr1691-block-duplicate-product-apps.md",
+    "title": "PR #1691 \u2014 block duplicate product Apps",
+    "author": "nikhilsoman",
+    "date": "2026-09-18",
+    "pr": "#1691",
+    "version": "0.20.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #"
+    ],
+    "tweet": "\ud83d\ude80 PR #1691 \u2014 block duplicate product Apps (PR #1691, v0.20.0)\n\n\u2022 Merged improvements and fixes for PR #\n\n#posts",
+    "changelog": "### v0.20.0 (2026-09-18) - PR #1691\n- Merged improvements and fixes for PR #"
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/218-pr1685-add-explicit-canonical-registry-recovery.md",
+    "title": "PR #1685 \u2014 add explicit canonical registry recovery",
+    "author": "nikhilsoman",
+    "date": "2026-09-18",
+    "pr": "#1685",
+    "version": "0.20.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #"
+    ],
+    "tweet": "\ud83d\ude80 PR #1685 \u2014 add explicit canonical registry recovery (PR #1685, v0.20.0)\n\n\u2022 Merged improvements and fixes for PR #\n\n#posts",
+    "changelog": "### v0.20.0 (2026-09-18) - PR #1685\n- Merged improvements and fixes for PR #"
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/219-pr1692-complete-w8-packs-and-connector-catalog.md",
+    "title": "PR #1692 \u2014 complete W8 packs and connector catalog",
+    "author": "nikhilsoman",
+    "date": "2026-09-18",
+    "pr": "#1692",
+    "version": "0.20.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #"
+    ],
+    "tweet": "\ud83d\ude80 PR #1692 \u2014 complete W8 packs and connector catalog (PR #1692, v0.20.0)\n\n\u2022 Merged improvements and fixes for PR #\n\n#posts",
+    "changelog": "### v0.20.0 (2026-09-18) - PR #1692\n- Merged improvements and fixes for PR #"
   }
 ]
