@@ -5,8 +5,8 @@
 
 ---
 
-## 🌊 Wave 1: 01 Oct 2026 — Synlynk Personal (Dev Preview v1.0.0)
-**Governing Goal:** [`goal-85656c82`](file:///Users/nikhilsoman/dev/synlynk/project-docs/roadmap.md)  ·  **Tracking Story:** [`story-ffb0f3e6`](file:///Users/nikhilsoman/dev/synlynk/project-docs/todo.md)  
+### 🌊 Wave 1: 01 Oct 2026 — Synlynk Personal (Dev Preview v1.0.0)
+**GitHub Epic:** [#1697](https://github.com/nikhilsoman/synlynk/issues/1697)  ·  **Governing Goal:** [`goal-85656c82`](file:///Users/nikhilsoman/dev/synlynk/project-docs/roadmap.md)  ·  **Tracking Story:** [`story-ffb0f3e6`](file:///Users/nikhilsoman/dev/synlynk/project-docs/todo.md)  
 **Core Focus:** Zero-dependency local stability, 9-pillar consolidation, flawless developer experience.
 
 ### Phase 1: Engine Foundation & Model Routing (Sep 19 – Sep 22)
@@ -49,38 +49,38 @@
 ---
 
 ## 🌊 Wave 2: 08 Oct 2026 — Synlynk Teams Relay (Peer-to-Peer Mesh)
-**Governing Goal:** [`goal-ef42902a`](file:///Users/nikhilsoman/dev/synlynk/project-docs/roadmap.md)  ·  **Tracking Story:** [`story-f6782d57`](file:///Users/nikhilsoman/dev/synlynk/project-docs/todo.md)  
+**GitHub Epic:** [#1698](https://github.com/nikhilsoman/synlynk/issues/1698)  ·  **Governing Goal:** [`goal-ef42902a`](file:///Users/nikhilsoman/dev/synlynk/project-docs/roadmap.md)  ·  **Tracking Story:** [`story-f6782d57`](file:///Users/nikhilsoman/dev/synlynk/project-docs/todo.md)  
 **Core Focus:** Decentralized multi-human, multi-agent mesh coordination without central servers.
 
-| Task ID | Task Title & Deliverables | Assigned Harness | Assigned Role | Est. Time | Actual Runtime | Live Status |
-| :--- | :--- | :---: | :---: | :---: | :---: | :--- | :--- |
-| **W2-T1.1** | **P2P Relay Event Bus (`synlynk relay send/tail`)**<br>• Ephemeral WebSocket/NATS mesh transport | `grok` + `codex` | `infra` | 45 min | **14 min** | 🟢 **DONE** |
-| **W2-T1.2** | **Distributed Task Leases & Automatic Heartbeat Un-stranding**<br>• 30-min rolling leases in `state.db` | `codex` | `core` | 35 min | **12 min** | 🟢 **DONE** |
-| **W2-T1.3** | **AST Mesh Sibling Worktree Overlap & Conflict Preemption**<br>• `synlynk mesh` blast-radius collision detector | `codex` | `architecture` | 40 min | **15 min** | 🟢 **DONE** |
-| **W2-T1.4** | **3-Tier Identity Attribution Protocol**<br>• Multi-user `<@user, role, harness>` attestation | `agy` | `architecture` | 25 min | **14 min** | 🟢 **DONE** |
+| Task ID | Task Title & Deliverables | GitHub Issue | Assigned Harness | Assigned Role | Est. Time | Actual Runtime | Live Status |
+| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :--- |
+| **W2-T1.1** | **P2P Relay Event Bus (`synlynk relay send/tail`)**<br>• Ephemeral WebSocket/NATS mesh transport | [#1699](https://github.com/nikhilsoman/synlynk/issues/1699) | `grok` + `codex` | `infra` | 45 min | **14 min** | 🟢 **DONE** (`d4554ef3`) |
+| **W2-T1.2** | **Distributed Task Leases & Automatic Heartbeat Un-stranding**<br>• 30-min rolling leases in `state.db` | [#1700](https://github.com/nikhilsoman/synlynk/issues/1700) | `codex` | `core` | 35 min | **12 min** | 🟢 **DONE** (`d1547a04`) |
+| **W2-T1.3** | **AST Mesh Sibling Worktree Overlap & Conflict Preemption**<br>• `synlynk mesh` blast-radius collision detector | [#1701](https://github.com/nikhilsoman/synlynk/issues/1701) | `codex` | `architecture` | 40 min | **15 min** | 🟢 **DONE** (`1ca851ff`) |
+| **W2-T1.4** | **3-Tier Identity Attribution Protocol**<br>• Multi-user `<@user, role, harness>` attestation | [#1702](https://github.com/nikhilsoman/synlynk/issues/1702) | `agy` | `architecture` | 25 min | **14 min** | 🟢 **DONE** (`0efc4527`) |
 
 ---
 
 ## 🌊 Wave 3: 15 Oct 2026 — Synlynk Teams Server (Hosted Hub & W9 Vizor)
-**Governing Goal:** [`goal-d8cb407d`](file:///Users/nikhilsoman/dev/synlynk/project-docs/roadmap.md)  ·  **Tracking Story:** [`story-f4dbf2ce`](file:///Users/nikhilsoman/dev/synlynk/project-docs/todo.md)  
+**GitHub Epic:** [#1703](https://github.com/nikhilsoman/synlynk/issues/1703)  ·  **Governing Goal:** [`goal-d8cb407d`](file:///Users/nikhilsoman/dev/synlynk/project-docs/roadmap.md)  ·  **Tracking Story:** [`story-f4dbf2ce`](file:///Users/nikhilsoman/dev/synlynk/project-docs/todo.md)  
 **Core Focus:** Centralized enterprise control plane, OAuth2 RBAC, and hosted team Vizor.
 
-| Task ID | Task Title & Deliverables | Assigned Harness | Assigned Role | Est. Time | Actual Runtime | Live Status |
-| :--- | :--- | :---: | :---: | :---: | :---: | :--- |
-| **W3-T1.1** | **Hosted Multi-Tenant Vizor Control Plane (W9)**<br>• OAuth2 SSO, Role-Based Access Control | `grok` + `agy` | `infra` / `designer` | 50 min | — | ⚪ PENDING |
-| **W3-T1.2** | **Central Encrypted State Synchronization**<br>• Remote daemon sync & distributed locking | `codex` | `infra` | 45 min | — | ⚪ PENDING |
-| **W3-T1.3** | **Fleet Quotas & Shared API Key Pooling**<br>• Organization-level rate limits & cost caps | `codex` | `pm` / `infra` | 35 min | — | ⚪ PENDING |
-| **W3-T1.4** | **Tamper-Evident Audit & Compliance Logging**<br>• Attestation cryptographic verification | `codex` | `qa` | 30 min | — | ⚪ PENDING |
+| Task ID | Task Title & Deliverables | GitHub Issue | Assigned Harness | Assigned Role | Est. Time | Actual Runtime | Live Status |
+| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :--- |
+| **W3-T1.1** | **Hosted Multi-Tenant Vizor Control Plane (W9)**<br>• OAuth2 SSO, Role-Based Access Control | [#1704](https://github.com/nikhilsoman/synlynk/issues/1704) | `grok` + `agy` | `infra` / `designer` | 50 min | — | ⚪ PENDING |
+| **W3-T1.2** | **Central Encrypted State Synchronization**<br>• Remote daemon sync & distributed locking | [#1705](https://github.com/nikhilsoman/synlynk/issues/1705) | `codex` | `infra` | 45 min | — | ⚪ PENDING |
+| **W3-T1.3** | **Fleet Quotas & Shared API Key Pooling**<br>• Organization-level rate limits & cost caps | [#1706](https://github.com/nikhilsoman/synlynk/issues/1706) | `codex` | `pm` / `infra` | 35 min | — | ⚪ PENDING |
+| **W3-T1.4** | **Tamper-Evident Audit & Compliance Logging**<br>• Attestation cryptographic verification | [#1707](https://github.com/nikhilsoman/synlynk/issues/1707) | `codex` | `qa` | 30 min | — | ⚪ PENDING |
 
 ---
 
 ## 🌊 Wave 4: 22 Oct 2026 — Synlynk Model Hub & Provider Aggregator
-**Governing Goal:** [`goal-56d4beee`](file:///Users/nikhilsoman/dev/synlynk/project-docs/roadmap.md)  ·  **Tracking Story:** [`story-c7064c40`](file:///Users/nikhilsoman/dev/synlynk/project-docs/todo.md)  
+**GitHub Epic:** [#1708](https://github.com/nikhilsoman/synlynk/issues/1708)  ·  **Governing Goal:** [`goal-56d4beee`](file:///Users/nikhilsoman/dev/synlynk/project-docs/roadmap.md)  ·  **Tracking Story:** [`story-c7064c40`](file:///Users/nikhilsoman/dev/synlynk/project-docs/todo.md)  
 **Core Focus:** Meta Muse GA, local oMLX execution, and universal BYOK model aggregators.
 
-| Task ID | Task Title & Deliverables | Assigned Harness | Assigned Role | Est. Time | Actual Runtime | Live Status |
-| :--- | :--- | :---: | :---: | :---: | :---: | :--- |
-| **W4-T1.1** | **Meta Muse CLI Adapter GA & Subagent Orchestration**<br>• E2E bidirectional tool & prompt protocol | `codex` | `core` | 40 min | — | ⚪ PENDING |
-| **W4-T1.2** | **Local oMLX Harness (Llama-3, Qwen-2.5, DeepSeek-Coder)**<br>• Zero-cloud Apple Silicon local execution | `grok` | `infra` | 50 min | — | ⚪ PENDING |
-| **W4-T1.3** | **Universal Provider Aggregators (OpenRouter, LiteLLM, Fal.ai)**<br>• BYOK API keys, tool gateways (Zapier/Composio) | `codex` | `core` | 45 min | — | ⚪ PENDING |
-| **W4-T1.4** | **Decisioning Models Integration (TypeSafe.ai / Jev Prototype)**<br>• Sub-20ms typed routing & policy gate evaluation | `codex` + `agy` | `architect` | 35 min | — | ⚪ PENDING |
+| Task ID | Task Title & Deliverables | GitHub Issue | Assigned Harness | Assigned Role | Est. Time | Actual Runtime | Live Status |
+| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :--- |
+| **W4-T1.1** | **Meta Muse CLI Adapter GA & Subagent Orchestration**<br>• E2E bidirectional tool & prompt protocol | [#1709](https://github.com/nikhilsoman/synlynk/issues/1709) | `codex` | `core` | 40 min | — | ⚪ PENDING |
+| **W4-T1.2** | **Local oMLX Harness (Llama-3, Qwen-2.5, DeepSeek-Coder)**<br>• Zero-cloud Apple Silicon local execution | [#1710](https://github.com/nikhilsoman/synlynk/issues/1710) | `grok` | `infra` | 50 min | — | ⚪ PENDING |
+| **W4-T1.3** | **Universal Provider Aggregators (OpenRouter, LiteLLM, Fal.ai)**<br>• BYOK API keys, tool gateways (Zapier/Composio) | [#1711](https://github.com/nikhilsoman/synlynk/issues/1711) | `codex` | `core` | 45 min | — | ⚪ PENDING |
+| **W4-T1.4** | **Decisioning Models Integration (TypeSafe.ai / Jev Prototype)**<br>• Sub-20ms typed routing & policy gate evaluation | [#1712](https://github.com/nikhilsoman/synlynk/issues/1712) | `codex` + `agy` | `architect` | 35 min | — | ⚪ PENDING |

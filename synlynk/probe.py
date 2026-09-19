@@ -101,8 +101,17 @@ _HERDR_WORKSPACE_SOP = """\
 6. Any new harness interactive session also gets its own new tab within the same workspace.
 7. Begin every Claude session with `/rc`.
 - **Precondition for all Herdr commands:** check `test "${HERDR_ENV:-}" = 1` before issuing any `herdr` command; if unset, this agent is not running inside Herdr and must not attempt to control a Herdr session from outside it.
-- Herdr is Apache-2.0 licensed (no NOTICE file) — free to reference/use without royalty or attribution beyond standard license retention.
 - Full CLI reference: https://github.com/herdrdev/herdr/blob/v0.8.2/skills/herdr/SKILL.md
+"""
+
+_TPM_GITHUB_SYNC_SOP = """\
+## TPM(bot) GitHub State Synchronization SOP
+1. **Pre-Execution Minting:** Every goal, epic, and story planned or recorded in `state.db` / `project-docs/roadmap.md` must be proactively minted as a GitHub Epic or Issue prior to starting implementation work.
+2. **Real-Time Visibility:** GitHub Issues and GitHub Projects v2 are the canonical real-time progress surfaces for the autonomous engineering fleet prior to hosted Vizor GA.
+3. **State Mirroring:**
+   - On Story Creation: TPM(bot) creates the GitHub issue with title, description, role/harness assignment, and labels.
+   - On State Transitions: When a story moves to `ready`, `in_progress`, or `done`, TPM(bot) updates the GitHub issue status and posts resolution comments with commit SHAs/PR links.
+   - On Milestone Sweeps: `synlynk tpm sweep` and `synlynk backlog sync` ensure zero untracked state drift between local `state.db` and GitHub.
 """
 
 SOP_BLOCKS = [
@@ -113,6 +122,7 @@ SOP_BLOCKS = [
     _COST_VISIBILITY_SOP,
     _REPO_HYGIENE_SOP,
     _HERDR_WORKSPACE_SOP,
+    _TPM_GITHUB_SYNC_SOP,
 ]
 
 _VERSION_TOKEN_PATTERN = re.compile(r"\b\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?\b")
