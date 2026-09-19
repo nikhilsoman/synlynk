@@ -272,10 +272,15 @@ def build_parser() -> argparse.ArgumentParser:
     impact_parser.add_argument("--json", action="store_true", help="Output impact report as JSON")
 
     mesh_parser = subparsers.add_parser(
-        "mesh", help="Aggregate multi-repo knowledge graphs into a federated mesh"
+        "mesh", help="Aggregate multi-repo knowledge graphs or check sibling worktree AST conflicts"
     )
     mesh_parser.add_argument("--repos", help="Comma-separated repo paths (default: auto-discover)")
     mesh_parser.add_argument("--output", help="Path to write global graph JSON (default: ~/.synlynk/global-graph.json)")
+    mesh_parser.add_argument("--conflicts", "--overlap", action="store_true", help="Detect AST collisions across sibling worktrees")
+    mesh_parser.add_argument("--worktrees", help="Comma-separated list of worktree paths or branches to analyze")
+    mesh_parser.add_argument("--base", default="main", help="Base ref for diff analysis (default: main)")
+    mesh_parser.add_argument("--fail-on-conflict", action="store_true", help="Exit with non-zero status if AST conflicts exist")
+    mesh_parser.add_argument("--json", action="store_true", help="Output report as JSON")
 
     spike_parser = subparsers.add_parser(
         "spike", help="Evaluate architectural candidates and generate empirical receipts"
@@ -2329,7 +2334,7 @@ def main(argv=None) -> None:
         from synlynk.impact import cmd_impact
         sys.exit(cmd_impact(args))
     elif args.command == "mesh":
-        from synlynk.multirepo_graph import cmd_multirepo_mesh
+        from synlynk.mesh import cmd_multirepo_mesh
         sys.exit(cmd_multirepo_mesh(args))
     elif args.command == "spike":
         from synlynk.spike import cmd_spike
