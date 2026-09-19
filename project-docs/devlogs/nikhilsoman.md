@@ -1,4 +1,16 @@
-## 2026-09-19 — Milestone v1.0.0 Dev Preview Sprint: Decisioning Models Taxonomy & Master Roadmap Staging
+## 2026-09-19 — Wave 1 Phase 1 Sprint: Task W1-T1.1 Model First-Class Dispatch Shipped (PR #1695)
+
+### Shipped & Verified
+- **Wave 1 Task 1.1 Shipped (PR #1695, `story-ffb0f3e6`, `goal-85656c82`):**
+  - Dispatched to Codex (`job-e655562a`), implementing tripartite model routing in `synlynk/dispatch.py`.
+  - Decoupled Workspace Agent Role (`--role`), Harness Sandbox Backend (`codex`/`agy`/`claude`/`grok`), and Model Tiering (`--model-tier fast|pro|reasoning`).
+  - Wired Graphify AST impact analysis (`synlynk impact`) to complexity-aware model tiering.
+  - Extended `daemon_jobs` schema with `model_tier`, `impact_score`, `requested_model`, `resolved_model`.
+  - Added unit test suite `tests/test_dispatch_model_routing.py` (6/6 passing). PR #1695 squash-merged to `main`, `unstable`, and `staging`.
+  - Actual runtime: 39 minutes.
+[@codex, @agy, @nikhilsoman]
+
+
 
 ### Shipped & Formalized
 - **Decisioning Models vs Reasoning Models Taxonomy (`goal-c7113f58`, `story-0f7043d7`):**

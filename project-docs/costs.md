@@ -1,5 +1,12 @@
 # Cost Log
 
+## 2026-09-19 — Wave 1 Task 1.1: Model First-Class Dispatch & AST Cost Tiering (PR #1695)
+- Dispatched Task W1-T1.1 to Codex (`job-e655562a`).
+- Tokens: 4,463,800 in / 13,974 out.
+- Spend: $13.60 recorded.
+- Shipped `synlynk/dispatch.py` tripartite model routing and `tests/test_dispatch_model_routing.py` (6/6 green).
+
+
 ## 2026-09-16 - C7 unattended stacked-PR rebase (#1604)
 
 - Codex implementation and focused verification; estimated operation cost: $2.00.

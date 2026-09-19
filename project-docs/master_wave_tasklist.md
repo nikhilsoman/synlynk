@@ -13,7 +13,7 @@
 
 | Task ID | Task Title & Deliverables | Assigned Harness | Assigned Role | Est. Time | Actual Runtime | Dependencies | Live Status |
 | :--- | :--- | :---: | :---: | :---: | :---: | :--- | :---: |
-| **W1-T1.1** | **Model First-Class Tripartite Dispatch & AST Cost Tiering**<br>• Decouple Role vs Sandbox vs Model in `synlynk/dispatch.py`<br>• AST blast-radius cost router in `synlynk impact`<br>• Regression test suite in `tests/test_dispatch_model_routing.py` | `codex` | `dev` | 25 min | — | None (Ready) | 🟡 **STAGED** |
+| **W1-T1.1** | **Model First-Class Tripartite Dispatch & AST Cost Tiering**<br>• Decouple Role vs Sandbox vs Model in `synlynk/dispatch.py`<br>• AST blast-radius cost router in `synlynk impact`<br>• Regression test suite in `tests/test_dispatch_model_routing.py` | `codex` | `dev` | 25 min | **39 min** (PR #1695) | None (Ready) | 🟢 **DONE** |
 | **W1-T1.2** | **Sovereign Multi-Home Protocol & Dynamic Drain-to-Boundary**<br>• Implement predictive quota runway & drain horizons in `synlynk/handover.py`<br>• Worktree App-token isolation validation<br>• SOP updates across `CLAUDE.md`, `GEMINI.md`, `AGENTS.md`, `GROK.md` | `agy` + `codex` | `architect` / `qa` | 30 min | — | None (Ready) | 🟡 **STAGED** |
 
 ---
