@@ -546,6 +546,21 @@ def build_parser() -> argparse.ArgumentParser:
     type_relabel_parser.add_argument("type_id")
     type_relabel_parser.add_argument("label")
     identity_sub.add_parser("list", help="List provisioned role identities")
+    identity_whoami_p = identity_sub.add_parser("whoami", help="Show active 3-tier identity attribution")
+    identity_whoami_p.add_argument("--user", help="Explicit user attribution")
+    identity_whoami_p.add_argument("--role", help="Explicit role charter")
+    identity_whoami_p.add_argument("--harness", help="Explicit harness backend")
+    identity_whoami_p.add_argument("--json", action="store_true", help="Output identity attribution as JSON")
+    identity_sub.add_parser("triplet", help="Show active 3-tier identity attribution")
+    identity_sub.add_parser("show", help="Show active 3-tier identity attribution")
+
+    whoami_parser = subparsers.add_parser(
+        "whoami", help="Show active 3-tier identity attribution (<@user, role, harness>)"
+    )
+    whoami_parser.add_argument("--user", help="Explicit user attribution")
+    whoami_parser.add_argument("--role", help="Explicit role charter")
+    whoami_parser.add_argument("--harness", help="Explicit harness backend")
+    whoami_parser.add_argument("--json", action="store_true", help="Output identity attribution as JSON")
 
     events_parser = subparsers.add_parser("events", help="Inspect the GOVERNS event bus")
     events_sub = events_parser.add_subparsers(dest="events_action")
@@ -1366,6 +1381,7 @@ def build_parser() -> argparse.ArgumentParser:
         "mesh": mesh_parser,
         "spike": spike_parser,
         "state": state_parser,
+        "whoami": whoami_parser,
     }
 
     roles_parser = subparsers.add_parser(
@@ -2459,8 +2475,14 @@ def main(argv=None) -> None:
                 cmd_identity_init()
         elif action == "list":
             cmd_identity_list()
+        elif action in ("whoami", "triplet", "show"):
+            from synlynk.attribution import cmd_whoami
+            sys.exit(cmd_whoami(args))
         else:
             help_parsers.get("identity", parser).print_help()
+    elif args.command == "whoami":
+        from synlynk.attribution import cmd_whoami
+        sys.exit(cmd_whoami(args))
     elif args.command == "type":
         if getattr(args, "type_action", None) == "create":
             from synlynk.product_store import identity_slug_from_config

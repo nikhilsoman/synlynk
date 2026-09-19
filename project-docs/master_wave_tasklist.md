@@ -57,7 +57,7 @@
 | **W2-T1.1** | **P2P Relay Event Bus (`synlynk relay send/tail`)**<br>• Ephemeral WebSocket/NATS mesh transport | `grok` + `codex` | `infra` | 45 min | **14 min** | 🟢 **DONE** |
 | **W2-T1.2** | **Distributed Task Leases & Automatic Heartbeat Un-stranding**<br>• 30-min rolling leases in `state.db` | `codex` | `core` | 35 min | **12 min** | 🟢 **DONE** |
 | **W2-T1.3** | **AST Mesh Sibling Worktree Overlap & Conflict Preemption**<br>• `synlynk mesh` blast-radius collision detector | `codex` | `architecture` | 40 min | **15 min** | 🟢 **DONE** |
-| **W2-T1.4** | **3-Tier Identity Attribution Protocol**<br>• Multi-user `<@user, role, harness>` attestation | `agy` | `architecture` | 25 min | — | 🟡 **IN PROGRESS** |
+| **W2-T1.4** | **3-Tier Identity Attribution Protocol**<br>• Multi-user `<@user, role, harness>` attestation | `agy` | `architecture` | 25 min | **14 min** | 🟢 **DONE** |
 
 ---
 
