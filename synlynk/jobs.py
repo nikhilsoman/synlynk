@@ -2641,6 +2641,10 @@ def reclaim_stranded_stories(
                         "UPDATE stories SET status='ready', readiness='ready' WHERE story_id=?",
                         (story_id,),
                     )
+                    conn.execute(
+                        "UPDATE task_leases SET status='expired' WHERE story_id=? AND status='active'",
+                        (story_id,),
+                    )
                     for job_id, agent, j_status, pid, started_at in job_rows:
                         if j_status == "running":
                             conn.execute(
@@ -2660,6 +2664,158 @@ def reclaim_stranded_stories(
             conn.close()
 
     return reclaimed
+
+
+def acquire_task_lease(
+    story_id: str,
+    leased_by: str,
+    duration_seconds: int = 1800,
+    conn=None,
+) -> dict:
+    """Acquire or extend a rolling lease on a story in state.db."""
+    owns_conn = False
+    if conn is None:
+        from synlynk import _get_db
+        conn = _get_db()
+        owns_conn = True
+
+    now = time.time()
+    expires_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now + duration_seconds))
+    now_str = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now))
+    lease_id = f"lease-{hashlib.md5(f'{story_id}:{leased_by}:{now}'.encode()).hexdigest()[:8]}"
+
+    try:
+        row = conn.execute(
+            "SELECT lease_id, leased_by, expires_at FROM task_leases "
+            "WHERE story_id=? AND status='active' ORDER BY rowid DESC LIMIT 1",
+            (story_id,),
+        ).fetchone()
+
+        if row:
+            curr_id, curr_holder, curr_exp = row
+            if curr_exp < now_str or curr_holder == leased_by:
+                conn.execute(
+                    "UPDATE task_leases SET status='expired' WHERE lease_id=?",
+                    (curr_id,),
+                )
+            else:
+                return {
+                    "acquired": False,
+                    "reason": "already_leased",
+                    "leased_by": curr_holder,
+                    "expires_at": curr_exp,
+                }
+
+        conn.execute(
+            """INSERT INTO task_leases (lease_id, story_id, leased_by, acquired_at, heartbeat_at, expires_at, status)
+               VALUES (?, ?, ?, ?, ?, ?, 'active')""",
+            (lease_id, story_id, leased_by, now_str, now_str, expires_at),
+        )
+        conn.execute(
+            "UPDATE stories SET status='in_progress', readiness='in_progress' WHERE story_id=?",
+            (story_id,),
+        )
+        conn.commit()
+        return {
+            "acquired": True,
+            "lease_id": lease_id,
+            "story_id": story_id,
+            "leased_by": leased_by,
+            "expires_at": expires_at,
+        }
+    finally:
+        if owns_conn:
+            conn.close()
+
+
+def renew_task_lease(
+    story_id: str,
+    leased_by: str,
+    extend_seconds: int = 1800,
+    conn=None,
+) -> bool:
+    """Send a heartbeat to renew the active task lease on a story."""
+    owns_conn = False
+    if conn is None:
+        from synlynk import _get_db
+        conn = _get_db()
+        owns_conn = True
+
+    now = time.time()
+    expires_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now + extend_seconds))
+    now_str = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now))
+
+    try:
+        res = conn.execute(
+            "UPDATE task_leases SET heartbeat_at=?, expires_at=? "
+            "WHERE story_id=? AND leased_by=? AND status='active'",
+            (now_str, expires_at, story_id, leased_by),
+        )
+        conn.commit()
+        return res.rowcount > 0
+    finally:
+        if owns_conn:
+            conn.close()
+
+
+def release_task_lease(
+    story_id: str,
+    leased_by: str,
+    new_status: str = "done",
+    conn=None,
+) -> bool:
+    """Release a task lease and update story status."""
+    owns_conn = False
+    if conn is None:
+        from synlynk import _get_db
+        conn = _get_db()
+        owns_conn = True
+
+    try:
+        conn.execute(
+            "UPDATE task_leases SET status='released' WHERE story_id=? AND leased_by=? AND status='active'",
+            (story_id, leased_by),
+        )
+        if new_status:
+            conn.execute(
+                "UPDATE stories SET status=?, readiness=? WHERE story_id=?",
+                (new_status, new_status, story_id),
+            )
+        conn.commit()
+        return True
+    finally:
+        if owns_conn:
+            conn.close()
+
+
+def get_active_lease(story_id: str, conn=None) -> Optional[dict]:
+    """Retrieve the currently active lease for a story."""
+    owns_conn = False
+    if conn is None:
+        from synlynk import _get_db
+        conn = _get_db()
+        owns_conn = True
+
+    try:
+        row = conn.execute(
+            "SELECT lease_id, story_id, leased_by, acquired_at, heartbeat_at, expires_at, status "
+            "FROM task_leases WHERE story_id=? AND status='active' ORDER BY rowid DESC LIMIT 1",
+            (story_id,),
+        ).fetchone()
+        if not row:
+            return None
+        return {
+            "lease_id": row[0],
+            "story_id": row[1],
+            "leased_by": row[2],
+            "acquired_at": row[3],
+            "heartbeat_at": row[4],
+            "expires_at": row[5],
+            "status": row[6],
+        }
+    finally:
+        if owns_conn:
+            conn.close()
 
 
 def cmd_story_reclaim(max_age_minutes: int = 30, dry_run: bool = False) -> int:

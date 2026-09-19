@@ -992,6 +992,17 @@ CREATE TABLE IF NOT EXISTS fleet_matrix_runs (
 );
 CREATE INDEX IF NOT EXISTS idx_fleet_matrix_runs_lookup
     ON fleet_matrix_runs(home, cell, tier, ts);
+
+CREATE TABLE IF NOT EXISTS task_leases (
+    lease_id           TEXT PRIMARY KEY,
+    story_id           TEXT NOT NULL,
+    leased_by          TEXT NOT NULL,
+    acquired_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    heartbeat_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    expires_at         TIMESTAMP NOT NULL,
+    status             TEXT NOT NULL DEFAULT 'active'
+);
+CREATE INDEX IF NOT EXISTS idx_task_leases_story ON task_leases(story_id, status);
 """
 
 _DB_SCORES_VIEW = """
