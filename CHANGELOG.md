@@ -9,7 +9,19 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Wave 1: 01 Oct 2026 — Synlynk Personal (Dev Preview v1.0.0)
+- In progress: First-class model tripartite dispatch & sovereign multi-home drain-to-boundary handover.
+
+## [v0.20.0] - 2026-09-19
+
+### Highlights
+- **Visual Workspace Observatory (BS-6 Vizor):** Interactive browser dashboard with Product, Logical, and Infra graph views (`synlynk viz`).
+- **Workspace Agent Roles & Role Studio:** Browser-driven GitHub App role onboarding and SFIA-grounded living charters.
+- **Adaptive Worktree Lifecycle:** Automatic stale worktree detection, blast-radius impact analysis, and safe pruning (`synlynk worktree audit/clean`).
+- **Fleet Resilience & State DB Hardening:** Fail-closed product identity resolution and crash-recoverable state promotion.
+
 ### Breaking Changes
+
 
 - **[Draft] The default output format for status commands is now structured JSON instead of human-readable text.**
   Scripts that parse the previous line-oriented output may fail or consume

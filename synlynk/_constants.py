@@ -1,6 +1,7 @@
 """Shared constants used across synlynk modules."""
 
-VERSION = "0.20.0"
+VERSION = "0.21.0-dev"
+
 
 _INSTALL_SCRIPT_URL = (
     "https://raw.githubusercontent.com/nikhilsoman/synlynk/main/install.sh"
