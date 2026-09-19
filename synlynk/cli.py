@@ -845,6 +845,15 @@ def build_parser() -> argparse.ArgumentParser:
              "Also hints routing to a GH-capable agent unless --force-agent (#426).")
     dispatch_parser.add_argument("--task-type", default=None, dest="task_type",
                                  help="Classify the dispatch task (for example, review) for task-specific handling")
+    dispatch_parser.add_argument(
+        "--model-tier", choices=["fast", "pro", "reasoning"], default=None,
+        dest="model_tier",
+        help="Model cost/capability tier; omitted selects from task intent and AST blast radius",
+    )
+    dispatch_parser.add_argument(
+        "--model", default=None,
+        help="Explicit model identifier; overrides automatic model selection",
+    )
     dispatch_parser.add_argument("--task-domain", default=None, dest="task_domain",
                                  help="Capability domain used by adaptive EV routing")
     dispatch_parser.add_argument("--criticality", type=float, default=1.0,
@@ -1790,6 +1799,8 @@ def main(argv=None) -> None:
                                  static_baseline=getattr(args, "static_baseline", False),
                                  requires_gh_write=_effective_requires_gh_write,
                                  task_type=_effective_task_type,
+                                 model_tier=getattr(args, "model_tier", None),
+                                 model=getattr(args, "model", None),
                                  task_domain=getattr(args, "task_domain", None),
                                  criticality=getattr(args, "criticality", 1.0),
                                  gh_write_target_kind=_resolved_gh_write_target_kind,

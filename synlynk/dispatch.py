@@ -34,6 +34,130 @@ _GH_WRITE_HARNESS_PRIORITY = ("claude", "agy")
 _STARTUP_FAILOVER_ORDER = ("codex", "agy", "claude")
 _CODEX_REVIEW_WRITABLE_ROOTS = "sandbox_workspace_write.writable_roots=[]"
 
+# Model selection is deliberately independent from workspace role and harness.
+# These are adapter-facing defaults; an explicit ``model`` always wins.
+MODEL_TIER_FAST = "fast"
+MODEL_TIER_PRO = "pro"
+MODEL_TIER_REASONING = "reasoning"
+MODEL_TIERS = (MODEL_TIER_FAST, MODEL_TIER_PRO, MODEL_TIER_REASONING)
+
+_DEFAULT_MODELS_BY_TIER = {
+    MODEL_TIER_FAST: {
+        "claude": "claude-3-5-haiku-latest",
+        "agy": "gemini-1.5-flash",
+        "codex": "gpt-4o-mini",
+        "grok": "grok-3-mini",
+        "local": "gemma-2-9b-it",
+    },
+    MODEL_TIER_PRO: {
+        "claude": "claude-3-5-sonnet-latest",
+        "agy": "gemini-1.5-pro",
+        "codex": "gpt-4o",
+        "grok": "grok-3",
+        "local": "qwen2.5-coder",
+    },
+    MODEL_TIER_REASONING: {
+        "claude": "claude-3-5-sonnet-latest",
+        "agy": "gemini-1.5-pro",
+        "codex": "o3-mini",
+        "grok": "grok-3",
+        "local": "deepseek-r1",
+    },
+}
+
+
+def ast_blast_radius_score(report: Optional[dict]) -> int:
+    """Return a stable, conservative score from a Graphify impact report."""
+    if not report:
+        return 0
+    return sum(
+        len(report.get(key) or [])
+        for key in ("target_nodes", "upstream_callers", "downstream_callees", "associated_tests")
+    )
+
+
+def _impact_targets(task: str, scope_paths: Optional[Sequence[str]] = None) -> list:
+    """Extract likely Graphify targets without requiring a Graphify installation."""
+    targets = list(scope_paths or [])
+    targets.extend(re.findall(r"(?:[\w.-]+/)+[\w.-]+\.(?:py|js|ts|tsx|go|rs)", task or ""))
+    # Symbols are useful when a task names one explicitly, but avoid treating
+    # ordinary prose words as graph targets.
+    targets.extend(re.findall(r"(?:[A-Za-z_]\w*\.)?[A-Za-z_]\w*\([^)]*\)", task or ""))
+    return list(dict.fromkeys(targets))
+
+
+def calculate_dispatch_impact(
+    task: str,
+    repo_root: Optional[str] = None,
+    scope_paths: Optional[Sequence[str]] = None,
+) -> dict:
+    """Calculate the aggregate Graphify blast radius for a dispatch task.
+
+    Missing Graphify data is intentionally a zero-score result so dispatch
+    remains usable in zero-dependency/local-only environments.
+    """
+    from synlynk.impact import calculate_impact
+
+    root = repo_root or os.getcwd()
+    reports = []
+    for target in _impact_targets(task, scope_paths):
+        try:
+            reports.append(calculate_impact(root, target))
+        except Exception:
+            continue
+    return {"score": sum(ast_blast_radius_score(report) for report in reports), "reports": reports}
+
+
+def resolve_model_tier(
+    task: str,
+    impact_score: int = 0,
+    role: Optional[str] = None,
+    task_type: Optional[str] = None,
+) -> str:
+    """Resolve fast/pro/reasoning from intent and AST blast radius.
+
+    Tier 1 is the inexpensive leaf path, Tier 2 covers multi-file work, and
+    Tier 3 reserves frontier reasoning for architecture/spec/root-cause work.
+    """
+    text = (task or "").lower()
+    reasoning_terms = ("architecture", "architectural", "spec", "reasoning", "root cause", "forensic")
+    if role in {"architect", "pm", "tpm"} or task_type in {"spec", "architecture", "forensics", "reasoning"}:
+        return MODEL_TIER_REASONING
+    if any(term in text for term in reasoning_terms):
+        return MODEL_TIER_REASONING
+    if impact_score > 12 or len(_impact_targets(task)) > 1 or any(
+        term in text for term in ("multi-file", "repo-wide", "refactor")
+    ):
+        return MODEL_TIER_PRO
+    return MODEL_TIER_FAST
+
+
+def resolve_dispatch_model(
+    harness: str,
+    task: str,
+    role: Optional[str] = None,
+    task_type: Optional[str] = None,
+    model: Optional[str] = None,
+    model_tier: Optional[str] = None,
+    repo_root: Optional[str] = None,
+    scope_paths: Optional[Sequence[str]] = None,
+) -> dict:
+    """Resolve model metadata while keeping role and harness untouched."""
+    if model_tier is not None and model_tier not in MODEL_TIERS:
+        raise ValueError(f"Unknown model tier: {model_tier!r}; expected one of {MODEL_TIERS}")
+    impact = calculate_dispatch_impact(task, repo_root=repo_root, scope_paths=scope_paths)
+    tier = model_tier or resolve_model_tier(task, impact["score"], role=role, task_type=task_type)
+    resolved_model = model or _DEFAULT_MODELS_BY_TIER.get(tier, {}).get(harness, "unknown")
+    return {
+        "harness": harness,
+        "role": role or "",
+        "model_tier": tier,
+        "impact_score": impact["score"],
+        "impact_reports": impact["reports"],
+        "requested_model": model or resolved_model,
+        "resolved_model": resolved_model,
+    }
+
 
 def _codex_network_flags(read_only: bool = False) -> list:
     """Enable Codex network access while keeping review worktrees unwritable."""
@@ -341,6 +465,10 @@ def _ensure_daemon_job_harness_columns(conn) -> None:
     definitions = {
         "harness": "TEXT",
         "role": "TEXT",
+        "model_tier": "TEXT",
+        "impact_score": "INTEGER DEFAULT 0",
+        "requested_model": "TEXT",
+        "resolved_model": "TEXT",
     }
     for name, definition in definitions.items():
         if name not in cols:
@@ -2782,6 +2910,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                    gh_write_target_kind: str = "issue",
                    gh_write_expect: str = None,
                    model: str = None,
+                   model_tier: str = None,
                    role: str = None,
                    task_domain: str = None,
                    criticality: float = 1.0,
@@ -2826,6 +2955,20 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 (a["value"] for a in entry["aliases"] if a["kind"] == "role_slug"), None
             )
     resolved_agent_role = role or resolved_agent_role
+    requested_model_input = model
+    model_routing = resolve_dispatch_model(
+        agent,
+        task,
+        role=resolved_agent_role,
+        task_type=task_type,
+        model=model,
+        model_tier=model_tier,
+        repo_root=os.getcwd(),
+        scope_paths=scope_paths,
+    )
+    # Preserve the old model parameter/flag while making the resolved
+    # model explicit in the job contract.
+    model = model_routing["resolved_model"]
     # W5: when a product registry exists, role/type dispatch must resolve the
     # product-owned type rather than silently treating an arbitrary string as
     # an identity. Legacy repos without a registry retain role-only dispatch.
@@ -2920,6 +3063,21 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
 
     if agent not in baselines_map:
         raise ValueError(f"Unknown agent: '{agent}'. Known: {list(baselines_map)}")
+
+    # A capability gate may reroute the harness (for example, Grok write
+    # denial or GitHub-write routing). Re-resolve against the final harness so
+    # automatic model defaults never leak across sandbox boundaries.
+    model_routing = resolve_dispatch_model(
+        agent,
+        task,
+        role=resolved_agent_role,
+        task_type=task_type,
+        model=requested_model_input,
+        model_tier=model_tier,
+        repo_root=os.getcwd(),
+        scope_paths=scope_paths,
+    )
+    model = model_routing["resolved_model"]
 
     import hashlib as _hashlib_early
     if not job_id:
@@ -3528,6 +3686,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 grants=grants, revokes=revokes, job_id=job_id, issue=issue, base=base,
                 scope_paths=scope_paths, session_id=session_id,
                 gh_write_target_kind=gh_write_target_kind, model=model, role=role,
+                model_tier=model_tier,
                 db_conn=db_conn, _startup_failover=False,
             )
 
@@ -3561,6 +3720,10 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         "micro_rework": 0,
         "retry_count": 0,
         "model_at_dispatch": model_at_dispatch,
+        "model_tier": model_routing["model_tier"],
+        "impact_score": model_routing["impact_score"],
+        "requested_model": model_routing["requested_model"],
+        "resolved_model": model_routing["resolved_model"],
         "fence": fence_data,
         "scope_paths": scope_paths or [],
         "requires_gh_write": requires_gh_write,
@@ -3609,6 +3772,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 dconn.execute(
                     "UPDATE daemon_jobs SET status='running', pid=?, started_at=?, "
                     "log_path=?, worktree_path=?, worktree_branch=?, agent=?, harness=?, role=?, task=?, story_id=?, "
+                    "model_tier=?, impact_score=?, requested_model=?, resolved_model=?, "
                     "dispatch_context=COALESCE(dispatch_context, ?), "
                     "context_mode=?, context_bytes=?, "
                     "session_id=COALESCE(session_id, ?), "
@@ -3626,6 +3790,10 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                         resolved_agent_role or None,
                         task,
                         story_id,
+                        model_routing["model_tier"],
+                        model_routing["impact_score"],
+                        model_routing["requested_model"],
+                        model_routing["resolved_model"],
                         dispatch_context,
                         context_mode,
                         context_bytes,
@@ -3642,8 +3810,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                     "INSERT OR REPLACE INTO daemon_jobs "
                     "(job_id, agent, harness, role, task, story_id, status, priority, depends_on, pid, "
                     "enqueued_at, started_at, log_path, worktree_path, worktree_branch, dispatch_context, context_mode, context_bytes, session_id, "
-                    "agent_id, requires_gh_write, gh_write_target, gh_write_author, gh_write_expect) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "agent_id, requires_gh_write, gh_write_target, gh_write_author, gh_write_expect, "
+                    "model_tier, impact_score, requested_model, resolved_model) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         job_id,
                         agent,
@@ -3669,6 +3838,10 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                         gh_write_target_value,
                         gh_write_author_value,
                         gh_write_expect_for_job,
+                        model_routing["model_tier"],
+                        model_routing["impact_score"],
+                        model_routing["requested_model"],
+                        model_routing["resolved_model"],
                     ),
                 )
             dconn.commit()
