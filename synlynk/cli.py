@@ -994,6 +994,14 @@ def build_parser() -> argparse.ArgumentParser:
     relay_broadcast_p.add_argument("--relay-url", default=None, dest="relay_url",
         help="Relay URL (default: http://localhost:27472)")
 
+    relay_peer_p = relay_sub.add_parser("peer", help="Manage P2P mesh relay peers")
+    relay_peer_sub = relay_peer_p.add_subparsers(dest="relay_peer_action")
+    relay_peer_add_p = relay_peer_sub.add_parser("add", help="Add a peer relay node")
+    relay_peer_add_p.add_argument("peer_url", help="Peer relay URL (e.g. http://127.0.0.1:7433)")
+    relay_peer_add_p.add_argument("--relay-url", default=None, dest="relay_url")
+    relay_peer_list_p = relay_peer_sub.add_parser("list", help="List connected peer relay nodes")
+    relay_peer_list_p.add_argument("--relay-url", default=None, dest="relay_url")
+
     logs_parser = subparsers.add_parser("logs", help="Tail the output log of a job")
     logs_parser.add_argument("--job", required=True, dest="job_id",
         help="Job ID (from `synlynk jobs`)")
@@ -1926,6 +1934,16 @@ def main(argv=None) -> None:
                 body=args.body,
                 relay_url=getattr(args, "relay_url", None),
             )
+        elif action == "peer":
+            peer_action = getattr(args, "relay_peer_action", None)
+            if peer_action == "add":
+                from synlynk.relay import cmd_relay_peer_add
+                cmd_relay_peer_add(args)
+            elif peer_action == "list":
+                from synlynk.relay import cmd_relay_peer_list
+                cmd_relay_peer_list(args)
+            else:
+                relay_peer_p.print_help()
         else:
             relay_parser.print_help()
     elif args.command == "logs":
