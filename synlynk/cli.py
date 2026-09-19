@@ -229,7 +229,9 @@ def build_parser() -> argparse.ArgumentParser:
         "start", help="Cold-start entry point: detect new vs existing project and guide setup"
     )
     home_parser = subparsers.add_parser("home", help="Display or switch the active home harness")
-    home_parser.add_argument("harness", nargs="?", choices=["claude", "agy", "codex", "grok", "local"], help="Harness to set as home")
+    home_parser.add_argument("harness", nargs="?", choices=["claude", "agy", "codex", "grok", "local", "muse"], help="Harness to set as home")
+    home_parser.add_argument("--force", action="store_true", help="Force immediate switch without draining in-progress story")
+
 
     tool_parser = subparsers.add_parser("tool", help="Manage recommended ecosystem tools")
     tool_sub = tool_parser.add_subparsers(dest="tool_action")
@@ -1381,25 +1383,35 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def cmd_home(args) -> None:
-    """Display or switch the active home harness."""
-    from synlynk import _update_config, load_config
-    from synlynk.context import detect_active_home_harness, generate_context
+    """Display or switch the active home harness with Sovereign Drain-to-Boundary protocol."""
+    from synlynk import load_config
+    from synlynk.context import detect_active_home_harness
+    from synlynk.handover import execute_home_handover, load_handover_state
 
     cfg = load_config() if callable(load_config) else {}
     target = getattr(args, "harness", None)
+    force = getattr(args, "force", False)
 
     if target:
-        _update_config({"home_harness": target})
-        generate_context()
-        print(f"  ✓ Home harness switched to: {target}")
-        print(f"  ✓ .synlynk/context.md refreshed with {target} as Active Home Conductor")
+        result = execute_home_handover(target, force=force)
+        if result.get("status") == "noop":
+            print(f"  ℹ {result.get('message')}")
+        else:
+            print(f"  ✓ Home harness switched to: {result['incoming_harness']}")
+            if result.get("draining"):
+                print(f"  ⏳ Outgoing harness '{result['outgoing_harness']}' marked as DRAINING (finishing story {result['active_story_id']}, est: {result['drain_horizon_minutes']}m)")
+            print(f"  ✓ .synlynk/context.md refreshed with {result['incoming_harness']} as Active Home Conductor")
     else:
         current_cfg = cfg.get("home_harness", "not configured")
         detected = detect_active_home_harness(cfg)
+        handover = load_handover_state()
         print("Home Harness Status:")
         print(f"  Configured in .synlynk/config.json : {current_cfg}")
         print(f"  Detected in current session       : {detected}")
+        if handover and handover.get("status") == "draining":
+            print(f"  ⏳ Drain in progress              : '{handover.get('outgoing_harness')}' finishing story {handover.get('active_story_id')}")
         print("  To switch: synlynk home <claude|agy|codex|grok>")
+
 
 
 def _warn_deprecated_harness_flag(argv) -> None:
