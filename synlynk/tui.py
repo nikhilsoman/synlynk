@@ -92,7 +92,10 @@ def _message(stdscr, text: str) -> None:
 
 
 def _main(stdscr) -> None:
-    curses.curs_set(0)
+    try:
+        curses.curs_set(0)
+    except (curses.error, Exception):
+        pass
     actor = uxcore.DEFAULT_ACTOR
     current = "1"
     selected_index = 0

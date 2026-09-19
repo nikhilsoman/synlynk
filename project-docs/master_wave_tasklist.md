@@ -42,9 +42,9 @@
 
 | Task ID | Task Title & Deliverables | Assigned Harness | Assigned Role | Est. Time | Actual Runtime | Dependencies | Live Status |
 | :--- | :--- | :---: | :---: | :---: | :---: | :--- | :---: |
-| **W1-T4.1** | **Full Fleet Regression Suite & 3,000+ Test Verification**<br>• Multi-Python matrix (3.10, 3.12, 3.14)<br>• Lock recovery, fail-closed identity, and memory leak checks | `qa` (`codex`) | `qa` | 20 min | — | All Phase 1–3 | ⚪ PENDING |
-| **W1-T4.2** | **4-Point Readiness Attestation (`synlynk doctor --readiness`)**<br>• Verified state.db health, zero Sev1 alerts, doc links green | `agy` | `qa` | 15 min | — | W1-T4.1 | ⚪ PENDING |
-| **W1-T4.3** | **Formal v1.0.0 Release Ceremony & GA Tagging**<br>• Signed Git Tag `v1.0.0`, PyPI package build, announcement blog | `nikhilsoman` + `agy` | `pm` / Lead | 20 min | — | W1-T4.2 | ⚪ PENDING |
+| **W1-T4.1** | **Full Fleet Regression Suite & 3,000+ Test Verification**<br>• Multi-Python matrix (3.10, 3.12, 3.14)<br>• Lock recovery, fail-closed identity, and memory leak checks | `qa` (`codex`) | `qa` | 20 min | **22 min** | All Phase 1–3 | 🟢 **DONE** |
+| **W1-T4.2** | **4-Point Readiness Attestation (`synlynk doctor --readiness`)**<br>• Verified state.db health, zero Sev1 alerts, doc links green | `agy` | `qa` | 15 min | **10 min** | W1-T4.1 | 🟢 **DONE** |
+| **W1-T4.3** | **Formal v1.0.0 Release Ceremony & GA Tagging**<br>• Signed Git Tag `v1.0.0`, PyPI package build, announcement blog | `nikhilsoman` + `agy` | `pm` / Lead | 20 min | **15 min** | W1-T4.2 | 🟢 **DONE** |
 
 ---
 

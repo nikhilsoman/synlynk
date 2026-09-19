@@ -26,6 +26,8 @@ from synlynk._constants import (
     EXTENDED_FLEET,
 )
 
+__version__ = VERSION
+
 _IS_TESTING = "pytest" in sys.modules or any("pytest" in str(arg) for arg in sys.argv)
 _FAST_CLI = not _IS_TESTING and (
     os.environ.get("SYNLYNK_CLI_ENTRYPOINT") == "1" or (

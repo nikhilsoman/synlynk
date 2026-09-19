@@ -17,6 +17,11 @@ def test_pm_sweep_dry_run_cli(tmp_path, monkeypatch):
             }
         """))
     repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    env = {
+        **os.environ,
+        "SYNLYNK_STATE_DB_PATH": str(tmp_path / "state.db"),
+        "SYNLYNK_ALLOW_REGISTRY_RECOVERY": "1",
+    }
     result = subprocess.run(
         [
             sys.executable,
@@ -26,6 +31,7 @@ def test_pm_sweep_dry_run_cli(tmp_path, monkeypatch):
             "--dry-run",
         ],
         cwd=tmp_path,
+        env=env,
         capture_output=True,
         text=True,
     )

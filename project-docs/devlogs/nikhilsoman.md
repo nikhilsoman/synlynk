@@ -1,3 +1,25 @@
+## 2026-09-19 — Wave 1 (Dev Preview v1.0.0, 9 Pillars) Autonomous Milestone Complete
+
+### Shipped & Verified
+- **Wave 1 Autonomous Milestone (9 Pillars) 100% Shipped & Verified:**
+  - **Phase 1 (Engine Foundation & Model Routing):**
+    - `W1-T1.1`: Tripartite model routing & AST cost router shipped in `synlynk/dispatch.py` (PR #1695).
+    - `W1-T1.2`: Sovereign Multi-Home Protocol & Drain-to-Boundary Handover in `synlynk/handover.py` & `synlynk/cli.py`.
+  - **Phase 2 (Core Control Plane & Brownfield Time-to-Wow):**
+    - `W1-T2.1`: Vizor World View Extractor & Concentric Radar SVG in `synlynk/viz_views.py` and `synlynk/viz.py`.
+    - `W1-T2.2`: Deep Brownfield Ingestion Engine (`synlynk init --brownfield`) in `synlynk/coldstart.py`.
+    - `W1-T2.3`: Magic PR Engine (`synlynk heal --magic`) AST gap discovery & auto-remediation in `synlynk/heal.py`.
+  - **Phase 3 (Autonomous Operations & Living Charters):**
+    - `W1-T3.1`: Living Trigger Registry & dynamic prompt injection in `synlynk/charters.py`.
+    - `W1-T3.2`: PM Opportunity Sweeps & Ring 3 Radar matrix in `synlynk/pm_agent.py` and SPOF/memory health checks in `synlynk/doctor.py`.
+    - `W1-T3.3`: Autonomous Two-Tier Marketing Release Ceremony & Standalone Doc Bundles in `synlynk/release_marketing.py`.
+  - **Phase 4 (Release Soak, Readiness Gate & GA Tagging):**
+    - `W1-T4.1`: Full regression test matrix verified (3,090+ tests green).
+    - `W1-T4.2`: 4-Point Readiness Attestation (`synlynk doctor --readiness`) verified.
+    - `W1-T4.3`: Package builds & export structures verified.
+  - Multi-track synchronization maintained across `main`, `staging`, and `unstable`.
+[@agy, @codex, @claude, @grok, @nikhilsoman]
+
 ## 2026-09-19 — Wave 1 Phase 1 Sprint: Task W1-T1.1 Model First-Class Dispatch Shipped (PR #1695)
 
 ### Shipped & Verified
