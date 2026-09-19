@@ -174,5 +174,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #1692 \u2014 complete W8 packs and connector catalog (PR #1692, v0.20.0)\n\n\u2022 Merged improvements and fixes for PR #\n\n#posts",
     "changelog": "### v0.20.0 (2026-09-18) - PR #1692\n- Merged improvements and fixes for PR #"
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/220-pr1693-isolate-scratch-registry-path.md",
+    "title": "PR #1693 \u2014 isolate scratch registry path",
+    "author": "synlynk-dev agent",
+    "date": "2026-09-19",
+    "pr": "#1693",
+    "version": "0.20.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #"
+    ],
+    "tweet": "\ud83d\ude80 PR #1693 \u2014 isolate scratch registry path (PR #1693, v0.20.0)\n\n\u2022 Merged improvements and fixes for PR #\n\n#posts",
+    "changelog": "### v0.20.0 (2026-09-19) - PR #1693\n- Merged improvements and fixes for PR #"
   }
 ]
