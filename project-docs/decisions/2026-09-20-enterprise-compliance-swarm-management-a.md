@@ -1,0 +1,85 @@
+<!-- generated - source of truth is state.db -->
+---
+decision_id: dec-b5b8989b
+topic: "Enterprise Compliance, Swarm Management, and Frontier Testbed Architecture: Monorepo Extension vs Dedicated Sister Swarm Project"
+date: 2026-09-20
+panel: [claude, agy, codex]
+status: approved
+---
+
+## Topic
+Enterprise Compliance, Swarm Management, and Frontier Testbed Architecture: Monorepo Extension vs Dedicated Sister Swarm Project
+
+## Panel Inputs
+
+### claude
+[model=default; version=2.1.274 (Claude Code)]
+
+**Analysis**
+
+The three concerns don't have the same coupling to the CLI, so they shouldn't all go to the same place.
+
+**Compliance** (identity attribution, audit trails, policy enforcement, merge authority) is a property of `state.db`, `policy.json` and the `whoami` and identity work that just landed in W2-T1.4. If this lives in a sister project, the audit log and the thing it audits will drift apart. That is a compliance failure by construction. It belongs in the monorepo.
+
+**The frontier testbed** (OrbStack VMs, Docker, soak runs) has to test the CLI at an exact commit. Version-locking to the CLI is the main requirement, and a sister repo makes that harder. It needs isolation from the default CI path, though. We've already seen a single missing `conn.commit()` turn a 90s CI run into a 32-minute lock cascade. Soak tests running in the default path would make that kind of problem worse. Keep it in the monorepo under its own directory, with its own opt-in entry point and a nightly or manual trigger.
+
+**Swarm management** is the one real candidate for separation. A control plane for ephemeral runners, NATS gating and hosted Team/Enterprise use will want dependencies beyond stdlib. That collides with the "single file, no deps" identity, and it overlaps with Vizor's and synlynk.com's territory. `synlynk swarm dispatch` already exists as a thin client. The heavy orchestration side is what could extract.
+
+**Cost of a sister repo now:** more cross-repo contract surface (Workspace Map edges, a second blog and PR cycle, a second release train). The dispatch fleet is also already stretched by stacked-PR proliferation, worktree cleanup and flaky infra. A second repo before the `state.db` schema and the `status --json` contract stabilise would mean paying for versioning discipline we don't yet have.
+
+**Recommendation:** Extend the monorepo now. Put compliance in core and the testbed in an isolated, opt-in directory. Keep the swarm control plane as a clearly bounded module behind a versioned interface. Extract it into a sister project only when it either needs a non-stdlib dependency or has to ship on a different cadence from the CLI. Write those two triggers into the spec as explicit extraction criteria, so the split is a decision we make later and not something that happens by accident.
+
+### agy
+[model=default; version=1.1.27]
+
+**Last completed task:** Perform structured technical code review of PR #51 (Codex Headless Dispatch)  
+**Next task:** Refine decision flow templates for agents  
+
+---
+
+### Architectural Analysis: Monorepo Extension vs. Dedicated Sister Swarm
+
+Enterprise compliance and frontier swarm experimentation operate under contradictory architectural forces: enterprise compliance demands immutable audit trails, deterministic blast-radius containment, and rigorous change control (e.g., SOC 2, ISO 27001), whereas frontier testbeds require uninhibited velocity, volatile tool definitions, and non-deterministic agent iteration.
+
+A **Monorepo Extension** provides shared schema governance, atomic cross-package commits, and zero-drift contract alignment. However, co-locating frontier agent research with core enterprise infrastructure introduces severe compliance contagion. Frontier swarms frequently require speculative API privileges, dynamic tool execution, and sandbox access that fundamentally breach enterprise change-management controls. Imposing enterprise compliance gates on the testbed suffocates experimentation speed, while loosening controls within the monorepo creates unacceptable regulatory vulnerabilities and expanded audit scopes.
+
+In contrast, a **Dedicated Sister Swarm Project** enforces a strict physical, administrative, and regulatory boundary. It permits decoupled CI/CD cadences, sandboxed IAM role boundaries, ephemeral synthetic test fixtures, and unconstrained failure modes without generating audit noise in regulated production logs. The chief drawback—schema and interface drift—is readily addressed by consuming core swarm communication protocols and shared domain models as versioned, immutable packages published from the enterprise monorepo.
+
+**Position and Recommendation:**  
+I strongly recommend implementing a **Dedicated Sister Swarm Project** coupled to the enterprise monorepo via versioned schema contracts. Frontier swarms require an unencumbered proving ground where autonomous orchestration graphs and emerging model capabilities can be aggressively evaluated without jeopardizing enterprise compliance postures. Isolating the testbed into a sister repository preserves rigorous regulatory boundaries and security controls, while validated agent topologies and battle-tested components can graduate into the enterprise production baseline through formal, contract-verified promotion gates.
+
+### codex
+[model=default; version=codex-cli 0.154.0]
+
+The decision turns on whether the frontier testbed is primarily an extension of synlynk’s control plane or a separate product with materially different trust boundaries. A monorepo offers strong advantages: shared schemas, orchestration primitives, telemetry, policy checks, cost accounting, worktree lifecycle, and CI can evolve together. It also reduces duplication and makes swarm experiments immediately reusable by enterprise workflows.
+
+However, enterprise compliance and frontier experimentation have opposing operational incentives. Enterprise paths require stability, auditability, predictable dependency graphs, controlled credentials, and conservative release gates. A frontier testbed needs rapid iteration, unsafe-to-production experiments, experimental harnesses, synthetic workloads, and potentially different retention and access policies. Putting both directly into one deployable project risks accidental coupling: experimental code can expand the compliance boundary, increase audit scope, complicate threat modeling, and make releases harder to reason about. The current repository already functions as a substantial control-plane system—with state synchronization, sentinels, agent routing, cost visibility, and merge governance—so its compliance surface is not trivial.
+
+A dedicated sister swarm project would provide isolation while preserving strategic alignment. The two projects should share versioned contracts and a small set of reusable libraries or packages: identity and capability schemas, event formats, policy interfaces, and test fixtures. The sister project can consume synlynk APIs or emit compatible events without inheriting its entire release cadence. Governance should require explicit promotion paths from testbed experiments into the enterprise monorepo, including security review, reproducibility evidence, provenance, and rollback plans.
+
+I recommend a dedicated sister swarm project, with synlynk remaining the governed enterprise control plane and the sister repository serving as the frontier experimentation environment. Share contracts and selectively extracted libraries—not runtime ownership or unrestricted source coupling. This yields the best balance of innovation speed, compliance isolation, and long-term architectural clarity.
+
+## Synthesis
+## Synthesis
+
+**Where the panel agrees.** All three want a hard boundary between compliance-scoped code and experimental code. All three want shared contracts and an explicit path for graduating or extracting things. The disagreement is only about timing and location: claude says extend the monorepo behind boundaries, while agy and codex say start a sister repo now.
+
+**Why I'm not going with the 2-to-1 majority.**
+
+- **The testbed isn't frontier agent research.** agy's and codex's arguments assume it is: speculative API privileges, "unsafe-to-production experiments", volatile tool definitions. The committed spec (`2026-09-20-automated-acceptance-testbed-design.md`) describes OrbStack VMs and Docker running acceptance and multi-node soak tests against the CLI. A test rig has to be pinned to the exact commit under test, and a sister repo makes that harder, not easier.
+- **Their mechanism doesn't exist yet.** Both proposals lean on "versioned, immutable packages" and "contract-verified promotion gates". synlynk is a single stdlib-only file with no package boundary. The `state.db` schema and the `synlynk status --json` contract are still moving. A sister repo now means a second release train, more Workspace Map edges and a second blog and PR cycle. It would sit on contracts we can't yet version, and the fleet is already strained by stacked-PR proliferation and worktree cleanup.
+- **The compliance argument cuts the other way for identity and audit.** Attribution, `policy.json`, merge authority and the `state.db` audit trail (W2-T1.4 just landed) must live next to the thing they audit. Splitting them out creates the drift that makes an audit fail.
+- **The one valid worry is compliance scope creep.** The `conn.commit()` incident, where CI went from 90s to 32 minutes, shows why soak workloads must not share the default path. That calls for isolation inside the repo, not a separate repo.
+
+**What we take from agy and codex.** The testbed and any swarm experiments get their own directory, an opt-in entry point and a nightly or manual trigger. They are excluded from the default CI path and from the `install.sh` and release artifact. They use separate credentials, and their code does not enter the compliance-audited surface. Anything promoted from the testbed into core goes through the normal PR and review gates.
+
+**Swarm control plane.** It stays a bounded module behind a versioned interface. `synlynk swarm dispatch` remains the thin client. The heavy orchestration side is the only real candidate for extraction.
+
+Decision: Extend the synlynk monorepo instead of creating a dedicated sister swarm project now. Compliance (identity, audit, policy, merge authority) stays in core alongside `state.db` and `policy.json`. The acceptance and soak testbed goes in an isolated, opt-in directory that is version-locked to the CLI commit under test. That directory is kept out of default CI and out of shipped artifacts, and uses separate credentials. The swarm control plane is built as a bounded module behind a versioned interface. Extraction into a sister project is deferred and governed by two explicit criteria, which the testbed spec must record: the swarm module needs a non-stdlib dependency, or it must ship on a different release cadence from the CLI. Meeting either trigger reopens this decision, and no extraction happens before the `state.db` schema and `status --json` contract are versioned.
+
+If you want this recorded, I can run `synlynk decide` and add the extraction criteria to the testbed spec. That spec currently has uncommitted changes on `main`, so that work would go on a branch.
+
+## Decision
+Decision: Extend the synlynk monorepo instead of creating a dedicated sister swarm project now. Compliance (identity, audit, policy, merge authority) stays in core alongside `state.db` and `policy.json`. The acceptance and soak testbed goes in an isolated, opt-in directory that is version-locked to the CLI commit under test. That directory is kept out of default CI and out of shipped artifacts, and uses separate credentials. The swarm control plane is built as a bounded module behind a versioned interface. Extraction into a sister project is deferred and governed by two explicit criteria, which the testbed spec must record: the swarm module needs a non-stdlib dependency, or it must ship on a different release cadence from the CLI. Meeting either trigger reopens this decision, and no extraction happens before the `state.db` schema and `status --json` contract are versioned.
+
+> Signatures: see 2026-09-20-enterprise-compliance-swarm-management-a.json
