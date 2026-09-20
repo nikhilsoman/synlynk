@@ -1,0 +1,137 @@
+{
+  "schema_version": 1,
+  "as_of": "2026-09-20",
+  "tiers": {
+    "fast": {
+      "claude": "claude-haiku-4.5",
+      "agy": "gemini-3.7-flash",
+      "codex": "gpt-5-mini",
+      "grok": "grok-3-mini",
+      "local": "qwen2.5-coder-7b"
+    },
+    "pro": {
+      "claude": "claude-sonnet-5",
+      "agy": "gemini-3.0-pro",
+      "codex": "gpt-5",
+      "grok": "grok-3",
+      "local": "qwen2.5-coder-32b"
+    },
+    "reasoning": {
+      "claude": "claude-opus-5",
+      "agy": "gemini-3.5-pro",
+      "codex": "o3",
+      "grok": "grok-3.5",
+      "local": "deepseek-r1"
+    }
+  },
+  "models": [
+    {
+      "model_id": "claude-sonnet-5",
+      "family": "claude-5",
+      "harness": "claude",
+      "context_window": 200000,
+      "max_output": 16384,
+      "rates": {"input_per_1k": 0.003, "output_per_1k": 0.015, "cache_read_per_1k": 0.0003},
+      "entitlement_tier": "included_in_base"
+    },
+    {
+      "model_id": "claude-haiku-4.5",
+      "family": "claude-4",
+      "harness": "claude",
+      "context_window": 200000,
+      "max_output": 8192,
+      "rates": {"input_per_1k": 0.0008, "output_per_1k": 0.004, "cache_read_per_1k": 0.00008},
+      "entitlement_tier": "included_in_base"
+    },
+    {
+      "model_id": "claude-opus-5",
+      "family": "claude-5",
+      "harness": "claude",
+      "context_window": 200000,
+      "max_output": 16384,
+      "rates": {"input_per_1k": 0.015, "output_per_1k": 0.075, "cache_read_per_1k": 0.0015},
+      "entitlement_tier": "subscription_capped"
+    },
+    {
+      "model_id": "gemini-3.7-flash",
+      "family": "gemini-3",
+      "harness": "agy",
+      "context_window": 1000000,
+      "max_output": 8192,
+      "rates": {"input_per_1k": 0.0001, "output_per_1k": 0.0004},
+      "entitlement_tier": "included_in_base"
+    },
+    {
+      "model_id": "gemini-3.0-pro",
+      "family": "gemini-3",
+      "harness": "agy",
+      "context_window": 2000000,
+      "max_output": 16384,
+      "rates": {"input_per_1k": 0.00125, "output_per_1k": 0.005},
+      "entitlement_tier": "metered_extra_usage_only"
+    },
+    {
+      "model_id": "gemini-3.5-pro",
+      "family": "gemini-3",
+      "harness": "agy",
+      "context_window": 2000000,
+      "max_output": 32768,
+      "rates": {"input_per_1k": 0.002, "output_per_1k": 0.008},
+      "entitlement_tier": "subscription_capped"
+    },
+    {
+      "model_id": "gpt-5-mini",
+      "family": "gpt-5",
+      "harness": "codex",
+      "context_window": 128000,
+      "max_output": 16384,
+      "rates": {"input_per_1k": 0.00015, "output_per_1k": 0.0006},
+      "entitlement_tier": "included_in_base"
+    },
+    {
+      "model_id": "gpt-5",
+      "family": "gpt-5",
+      "harness": "codex",
+      "context_window": 200000,
+      "max_output": 16384,
+      "rates": {"input_per_1k": 0.0025, "output_per_1k": 0.01},
+      "entitlement_tier": "included_in_base"
+    },
+    {
+      "model_id": "o3",
+      "family": "o-series",
+      "harness": "codex",
+      "context_window": 200000,
+      "max_output": 100000,
+      "rates": {"input_per_1k": 0.005, "output_per_1k": 0.02},
+      "entitlement_tier": "subscription_capped"
+    },
+    {
+      "model_id": "grok-3-mini",
+      "family": "grok-3",
+      "harness": "grok",
+      "context_window": 131072,
+      "max_output": 8192,
+      "rates": {"input_per_1k": 0.0002, "output_per_1k": 0.0008},
+      "entitlement_tier": "included_in_base"
+    },
+    {
+      "model_id": "grok-3",
+      "family": "grok-3",
+      "harness": "grok",
+      "context_window": 131072,
+      "max_output": 16384,
+      "rates": {"input_per_1k": 0.003, "output_per_1k": 0.012},
+      "entitlement_tier": "metered_extra_usage_only"
+    },
+    {
+      "model_id": "deepseek-r1",
+      "family": "deepseek-r1",
+      "harness": "local",
+      "context_window": 128000,
+      "max_output": 8192,
+      "rates": {"input_per_1k": 0.0, "output_per_1k": 0.0},
+      "entitlement_tier": "zero_cost_local"
+    }
+  ]
+}
