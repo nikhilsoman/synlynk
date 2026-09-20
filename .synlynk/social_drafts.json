@@ -222,5 +222,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #1719 \u2014 Frontier QA Testbed engine and multi-node soak testing framework (PR #1719, v0.21.0-dev)\n\n\u2022 Merged improvements and fixes for PR #\n\n#posts",
     "changelog": "### v0.21.0-dev (2026-09-20) - PR #1719\n- Merged improvements and fixes for PR #"
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/223-pr1727-first-class-model-catalog-multi-track-qu.md",
+    "title": "PR #1727 \u2014 first-class model catalog, multi-track quotas, and rolling calibration engine",
+    "author": "nikhilsoman",
+    "date": "2026-09-20",
+    "pr": "#1727",
+    "version": "0.21.0-dev",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #"
+    ],
+    "tweet": "\ud83d\ude80 PR #1727 \u2014 first-class model catalog, multi-track quotas, and rolling calibration engine (PR #1727, v0.21.0-dev)\n\n\u2022 Merged improvements and fixes for PR #\n\n#posts",
+    "changelog": "### v0.21.0-dev (2026-09-20) - PR #1727\n- Merged improvements and fixes for PR #"
   }
 ]
