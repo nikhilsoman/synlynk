@@ -27,16 +27,22 @@ def test_standard_identities_matrix():
     assert alice.username == "alice"
     assert alice.role == "dev"
     assert alice.harness == "codex"
+    assert alice.model_tier == "fast"
+    assert alice.model == "gpt-4o-mini"
 
     bob = STANDARD_IDENTITIES["node-2"]
     assert bob.username == "bob"
     assert bob.role == "architect"
     assert bob.harness == "agy"
+    assert bob.model_tier == "pro"
+    assert bob.model == "gemini-1.5-pro"
 
     charlie = STANDARD_IDENTITIES["node-3"]
     assert charlie.username == "charlie"
     assert charlie.role == "qa"
     assert charlie.harness == "grok"
+    assert charlie.model_tier == "pro"
+    assert charlie.model == "grok-3"
 
 
 def test_provision_node_identity():
