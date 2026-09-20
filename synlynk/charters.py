@@ -104,6 +104,11 @@ TOOL_ROLE_SKILLS: dict[str, dict[str, str]] = {
         "builder": "graphify-symbol-navigator",
         "pm": "graphify-domain-sweep",
     },
+    "testbed": {
+        "qa": "testbed-acceptance-runner",
+        "verifier": "testbed-acceptance-runner",
+        "architect": "testbed-topology-audit",
+    },
 }
 
 ALL_ADAPT_ROLES = (

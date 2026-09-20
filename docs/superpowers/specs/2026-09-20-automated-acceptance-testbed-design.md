@@ -30,27 +30,27 @@ This specification establishes **`synlynk testbed`**: an automated, zero-host-po
 ## 2. Architecture & System Topology
 
 ```
-                                  ┌──────────────────────────────────────────────┐
-                                  │           synlynk testbed CLI Runner         │
-                                  │      (macOS Host / Linux CI Orchestrator)    │
-                                  └──────────────────────┬───────────────────────┘
-                                                         │
-                                ┌────────────────────────┴────────────────────────┐
-                                ▼                                                 ▼
-                    ┌────────────────────────┐                        ┌────────────────────────┐
-                    │     OrbStack Driver    │                        │      Docker Driver     │
-                    │   (Local macOS / VMs)  │                        │   (GitHub Actions CI)  │
-                    └───────────┬────────────┘                        └───────────┬────────────┘
-                                │                                                 │
-        ┌───────────────────────┴───────────────────────┐                         │
-        ▼                                               ▼                         ▼
-┌───────────────────────────────┐               ┌───────────────────────────────┐
-│ Node 1: "@alice" (Dev)        │  P2P Mesh WS  │ Node 2: "@bob" (Architect)    │
-│ IP: 192.168.139.213           │◄─────────────►│ IP: 192.168.139.214           │
-│ Harness: Codex CLI (BYOK API) │               │ Harness: AGY (BYOK API)       │
-│ Synlynk Target: v1.1.0-dev    │               │ Synlynk Target: v1.1.0-dev    │
-│ state.db (Node-Local)         │               │ state.db (Node-Local)         │
-└───────────────────────────────┘               └───────────────────────────────┘
+┌────────────────────────────────────────┐
+│       synlynk testbed CLI Runner       │
+│  (macOS Host / Linux CI Orchestrator)  │
+└───────────────────┬────────────────────┘
+                    │
+        ┌───────────┴───────────┐
+        ▼                       ▼
+┌───────────────┐       ┌───────────────┐
+│ OrbDriver VM  │       │ DockerDriver  │
+│ (macOS Host)  │       │ (CI Pipeline) │
+└───────┬───────┘       └───────┬───────┘
+        │                       │
+ ┌──────┴───────────────┐       │
+ ▼                      ▼       ▼
+┌─────────────────┐   ┌─────────────────┐
+│ Node 1: @alice  │   │ Node 2: @bob    │
+│ Role: dev       │◄─►│ Role: architect │
+│ Harness: codex  │WS │ Harness: agy    │
+│ Target: v1.1.0  │   │ Target: v1.1.0  │
+│ state.db (local)│   │ state.db (local)│
+└─────────────────┘   └─────────────────┘
 ```
 
 ---
@@ -124,7 +124,7 @@ Unlike brittle assertions that read stdout labels or regex match terminal text, 
 
 ---
 
-## 4. Test Tiers & Execution Scenarios
+## 4. Test Tiers & Frontier Scenarios
 
 ### Tier 1: Acceptance & Smoke Suite (Duration: ~3–5 min)
 Executed before release tags and as a local pre-push gate:
@@ -139,9 +139,66 @@ Executed on scheduled nightly runs and pre-release soak ceremonies:
 2. **Clock Skew Simulation:** Adjusts system time by +45 minutes on Node 2; verifies lease expiration logic respects UTC timestamps.
 3. **High-Churn Event Storm:** 1,000 relay messages/second across 5 mesh nodes; verifies zero memory leaks and sub-5ms routing latency.
 
+### Tier 3: Frontier Agent Test Suite (Autonomous Agent E2E)
+Executed by the **QA Agent (`qa`)** during release certification:
+1. **Autonomous Multi-Agent Collaboration Journey:** QA agent dispatches a cross-node task to Node 1 (`@alice`, dev), monitors P2P relay broadcasts on Node 2 (`@bob`, architect), verifies state transitions in `state.db`, and validates PR creation and CI passing.
+2. **Crash & Auto-Triage Loop:** QA agent injects unhandled exceptions into worker nodes, observes fault recovery, and verifies that failure diagnostics are converted into structured issue tickets.
+
 ---
 
-## 5. CLI User Experience
+## 5. QA Agent Charter Integration & Release Gate Protocol
+
+### A. Living Charter Ownership (`synlynk/charters.py`)
+`synlynk testbed` is formally registered as an exclusive capability of the **QA Agent (`qa`)** in `TOOL_ROLE_SKILLS`:
+
+```python
+TOOL_ROLE_SKILLS["testbed"] = {
+    "qa": "testbed-acceptance-runner",
+    "verifier": "testbed-acceptance-runner",
+    "architect": "testbed-topology-audit",
+}
+```
+
+### B. QA Verification & Attestation Flow
+
+```
+┌──────────────────────────────────────┐
+│  Developer Agent (dev / codex / agy) │
+│  Ships Feature Branch & Unit Tests   │
+└──────────────────┬───────────────────┘
+                   │ PR Created
+                   ▼
+┌──────────────────────────────────────┐
+│       QA Agent (qa / claude)         │
+│  Runs: synlynk testbed matrix        │
+└──────────────────┬───────────────────┘
+                   │
+         ┌─────────┴─────────┐
+      Passes?             Fails?
+         │                   │
+         ▼                   ▼
+┌──────────────────┐ ┌──────────────────┐
+│ Sign Attestation │ │ Auto-Triage &    │
+│ Receipt (Ed25519)│ │ Dispatch Bugfix  │
+│ testbed-*.json   │ │ Ticket to dev    │
+└────────┬─────────┘ └──────────────────┘
+         │
+         ▼
+┌──────────────────────────────────────┐
+│ synlynk release / policy check-merge │
+│ Gate verifies passing QA receipt     │
+└──────────────────────────────────────┘
+```
+
+### C. Release Policy Gate Integration (`synlynk/policy.py`)
+Before any version is tagged or release ceremony is executed (`synlynk release`), `synlynk/policy.py` requires:
+1. A valid cryptographic receipt `project-docs/receipts/testbed-receipt-<commit-sha>.json`.
+2. Overall verdict == `PASSED` with zero invariant violations.
+3. Signature verified against QA Agent's public attestation key.
+
+---
+
+## 6. CLI User Experience
 
 ```bash
 # Run acceptance testbed locally with OrbStack VMs
@@ -162,7 +219,7 @@ synlynk testbed clean --force
 
 ---
 
-## 6. Attestation & Receipt Output
+## 7. Attestation & Receipt Output
 
 Upon completion, `synlynk testbed` outputs an attested JSON receipt:
 
@@ -179,21 +236,24 @@ Upon completion, `synlynk testbed` outputs an attested JSON receipt:
   "scenarios_executed": [
     {"name": "brownfield_init", "duration_seconds": 18.4, "status": "PASSED"},
     {"name": "p2p_relay_mesh", "duration_seconds": 24.1, "status": "PASSED"},
-    {"name": "task_lease_recovery", "duration_seconds": 31.0, "status": "PASSED"}
+    {"name": "task_lease_recovery", "duration_seconds": 31.0, "status": "PASSED"},
+    {"name": "frontier_agent_collab", "duration_seconds": 42.8, "status": "PASSED"}
   ],
   "invariants_verified": {
     "lease_mutual_exclusion": true,
     "zero_orphan_running_rows": true,
-    "relay_deduplication": true
+    "relay_deduplication": true,
+    "3_tier_attribution_preserved": true
   },
   "overall_verdict": "PASSED",
+  "attested_by": "<@charlie, qa, claude>",
   "signature": "ed25519:3f9a..."
 }
 ```
 
 ---
 
-## 7. Implementation Plan
+## 8. Implementation Plan
 
 | Phase | Deliverable | Assigned Harness / Role | Est. Time |
 | :--- | :--- | :---: | :---: |
@@ -201,12 +261,65 @@ Upon completion, `synlynk testbed` outputs an attested JSON receipt:
 | **Phase 2** | **Version Installer & Wheel Packaging** (`synlynk/testbed/installer.py`) | `codex` / `core` | 30 min |
 | **Phase 3** | **Synthetic Identity & Credential Vault** (`synlynk/testbed/identities.py`) | `agy` / `architecture` | 25 min |
 | **Phase 4** | **Scenario Runner & Invariant Asserter** (`synlynk/testbed/scenarios.py`) | `codex` / `qa` | 45 min |
-| **Phase 5** | **CLI Integration & Receipt Generator** (`synlynk/testbed/cli.py`) | `agy` / `dev` | 25 min |
+| **Phase 5** | **CLI, QA Attestation & Release Gate Hook** (`synlynk/testbed/cli.py`, `synlynk/charters.py`, `synlynk/policy.py`) | `agy` / `dev` | 30 min |
 
 ---
 
-## 8. Verification & Acceptance Criteria
+---
+
+## 9. Verification & Acceptance Criteria
 
 1. `synlynk testbed run --scenario p2p-mesh` spins up 2 fresh OrbStack VMs, installs Synlynk at `--target unstable`, links them over WebSockets, executes task lease handover after a `SIGKILL` fault, and cleans up VMs in < 4 minutes total.
 2. Verified 100% zero host environment pollution (no leftover files, processes, or ports on macOS host).
-3. Produces green attested receipt `testbed-receipt-*.json`.
+3. Produces green attested receipt `testbed-receipt-*.json` signed by the QA agent.
+4. `synlynk release` verifies the receipt and blocks releases if the testbed receipt is missing or failed.
+
+---
+
+## 10. Enterprise Compliance Boundaries & Sister Swarm Project Extraction Governance
+
+**Decision Reference:** [`project-docs/decisions/2026-09-20-enterprise-compliance-swarm-management-a.md`](file:///Users/nikhilsoman/dev/synlynk/project-docs/decisions/2026-09-20-enterprise-compliance-swarm-management-a.md) (`dec-b5b8989b`)
+
+```
+┌────────────────────────────────────────┐
+│           SYNLYNK CORE REPO            │
+│  ┌──────────────────────────────────┐  │
+│  │ Compliance Core (SOC2 / RBAC)    │  │
+│  │ • state.db Audit Trail           │  │
+│  │ • policy.json & Merge Authority  │  │
+│  │ • 3-Tier Identity Attribution    │  │
+│  └──────────────────────────────────┘  │
+│  ┌──────────────────────────────────┐  │
+│  │ Frontier Testbed (Isolated Dir)  │  │
+│  │ • OrbStack & Docker Drivers      │  │
+│  │ • Excluded from Default CI/Build │  │
+│  │ • Opt-In / Nightly QA Trigger    │  │
+│  └──────────────────────────────────┘  │
+│  ┌──────────────────────────────────┐  │
+│  │ Swarm Thin Client (synlynk swarm)│  │
+│  │ • Stdlib-only JSON IPC Interface │  │
+│  └──────────────────┬───────────────┘  │
+└─────────────────────┼──────────────────┘
+                      │ Future Extraction
+                      ▼ (Governed by Triggers)
+┌────────────────────────────────────────┐
+│      SISTER SWARM ORCHESTRATOR         │
+│  • Heavy Cloud / K8s / Cloud SDKs      │
+│  • Multi-Region Fleet Load Balancing   │
+│  • DLP Gateways & Audit Proxy Bridges  │
+└────────────────────────────────────────┘
+```
+
+### A. Compliance Scoping & Monorepo Colocation
+1. **Audit Integrity:** Regulatory compliance (SOC 2 Type II, DLP metadata, immutable state audit logs, merge authority policies) MUST reside in `synlynk` core alongside `state.db` and `policy.json`. Splitting audit mechanisms from the operational database they observe causes schema drift and audit failure.
+2. **Blast Radius Isolation:** The `synlynk/testbed/` package is strictly quarantined:
+   - Excluded from standard fast unit-test CI runs.
+   - Excluded from single-file `install.sh` and production pip distributions.
+   - Operates with dedicated headless BYOK credentials to prevent production token pollution.
+
+### B. Formal Extraction Triggers for Sister Swarm Project
+The heavy swarm execution and enterprise proxy orchestrator will remain a bounded module within Synlynk until one of the following hard architectural gates is reached:
+1. **Non-Stdlib Dependency Trigger:** The swarm control plane requires heavy external dependencies (e.g., Kubernetes client libraries, cloud provider SDKs, distributed gRPC engines) that violate the zero-dependency client philosophy.
+2. **Decoupled Release Cadence Trigger:** The swarm orchestrator requires a continuous, independent cloud deployment lifecycle distinct from the CLI release train.
+3. **Mandatory Precondition:** No sister project extraction may occur until the `state.db` relational schema and `synlynk status --json` output contracts are declared immutable and versioned.
+
