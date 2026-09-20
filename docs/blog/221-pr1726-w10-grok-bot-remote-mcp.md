@@ -1,6 +1,6 @@
 # W10 — A Phone Can Talk to a synlynk Workspace, Once Hosted Vizor Exists
 
-**PR:** TBD
+**PR:** [#1726](https://github.com/nikhilsoman/synlynk/pull/1726)
 **Date:** 2026-09-20
 
 ## Where things stood
