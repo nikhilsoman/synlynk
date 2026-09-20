@@ -107,6 +107,86 @@ MODEL_FAMILIES = BUILTIN_FAMILIES
 BUILTIN_MODELS = BUILTIN_MODEL_CATALOG
 
 
+def load_model_catalog(repo_path: Optional[str] = None) -> dict[str, Any]:
+    """Load .synlynk/models.json declarative catalog with builtin fallback."""
+    base = Path(repo_path) if repo_path else Path.cwd()
+    catalog_path = base / ".synlynk" / "models.json"
+    if catalog_path.is_file():
+        try:
+            with open(catalog_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+
+    # Builtin fallback catalog
+    return {
+        "schema_version": 1,
+        "as_of": "2026-09-20",
+        "tiers": {
+            "fast": {
+                "claude": "claude-haiku-4.5",
+                "agy": "gemini-3.7-flash",
+                "codex": "gpt-5-mini",
+                "grok": "grok-3-mini",
+                "local": "qwen2.5-coder-7b",
+            },
+            "pro": {
+                "claude": "claude-sonnet-5",
+                "agy": "gemini-3.0-pro",
+                "codex": "gpt-5",
+                "grok": "grok-3",
+                "local": "qwen2.5-coder-32b",
+            },
+            "reasoning": {
+                "claude": "claude-opus-5",
+                "agy": "gemini-3.5-pro",
+                "codex": "o3",
+                "grok": "grok-3.5",
+                "local": "deepseek-r1",
+            },
+        },
+        "models": [model_to_dict(m) for m in BUILTIN_MODEL_CATALOG],
+    }
+
+
+def resolve_tier_model(tier: str, harness: str, repo_path: Optional[str] = None) -> str:
+    """Resolve the model ID for a given tier and harness from the catalog."""
+    catalog = load_model_catalog(repo_path)
+    tiers = catalog.get("tiers", {})
+    tier_map = tiers.get(tier, {})
+    if harness in tier_map:
+        return tier_map[harness]
+    # Fallback to pro or fast if tier unknown
+    for t in ("pro", "fast", "reasoning"):
+        if harness in tiers.get(t, {}):
+            return tiers[t][harness]
+    return f"{harness}-default"
+
+
+def get_models_from_catalog(repo_path: Optional[str] = None) -> list[ModelSpec]:
+    """Parse ModelSpec objects from the loaded catalog."""
+    catalog = load_model_catalog(repo_path)
+    specs: list[ModelSpec] = []
+    for m in catalog.get("models", []):
+        rates = m.get("rates", {})
+        if not isinstance(rates, RateCard):
+            rates = RateCard(**rates) if isinstance(rates, dict) else RateCard()
+        specs.append(
+            ModelSpec(
+                model_id=m["model_id"],
+                family_id=m.get("family", m.get("family_id", "generic")),
+                harness_binding=m.get("harness", m.get("harness_binding", "claude")),
+                rates=rates,
+                entitlement_tier=m.get("entitlement_tier", EntitlementTier.METERED_EXTRA_USAGE_ONLY),
+                context_geometry=ContextGeometry(
+                    max_input_tokens=m.get("context_window", 200000),
+                    max_output_tokens=m.get("max_output", 8192),
+                ),
+            )
+        )
+    return specs if specs else list(BUILTIN_MODEL_CATALOG)
+
+
 def _jsonable(value: Any) -> Any:
     if isinstance(value, Enum):
         return value.value
