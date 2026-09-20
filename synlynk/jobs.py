@@ -2641,10 +2641,13 @@ def reclaim_stranded_stories(
                         "UPDATE stories SET status='ready', readiness='ready' WHERE story_id=?",
                         (story_id,),
                     )
-                    conn.execute(
-                        "UPDATE task_leases SET status='expired' WHERE story_id=? AND status='active'",
-                        (story_id,),
-                    )
+                    try:
+                        conn.execute(
+                            "UPDATE task_leases SET status='expired' WHERE story_id=? AND status='active'",
+                            (story_id,),
+                        )
+                    except Exception:
+                        pass
                     for job_id, agent, j_status, pid, started_at in job_rows:
                         if j_status == "running":
                             conn.execute(

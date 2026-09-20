@@ -744,7 +744,11 @@ def _quota_status_for_agent(
       status="unknown" and degraded=True. The routing engine keeps the harness
       eligible (does not hard-block) but ranks known-headroom harnesses first.
     """
-    rows = _read_agent_quota_rows(conn, agent, track=track)
+    read_fn = _pkg("_read_agent_quota_rows") or _read_agent_quota_rows
+    try:
+        rows = read_fn(conn, agent, track=track)
+    except TypeError:
+        rows = read_fn(conn, agent)
     if rows is None:
         return {
             "status": "unknown",
