@@ -622,3 +622,15 @@
 - **Roadmap Sync (`project-docs/roadmap.md`):** Updated milestone table to `SHIPPED` and documented all 4 phases in Cluster G.
 [@agy]
 
+## 2026-09-20 — Shipped: First-Class Model Catalog, Multi-Track Quotas & Rolling Calibration Engine (Epic #1720, PR #1727)
+
+### Completed Tasks & Capabilities
+- **MC-1 (#1721) Declarative SOTA Model Catalog:** Implemented `.synlynk/models.json` with 2026 SOTA models (`claude-sonnet-5`, `gemini-3.7-flash`, `gpt-5`/`o3`, `grok-3`, `qwen2.5-coder`), tier fallbacks (`daily_driver`, `deep_reasoning`, `high_throughput`, `coding_specialist`), and dynamic catalog loader `load_model_catalog()` in `synlynk/models.py` & `synlynk/dispatch.py`.
+- **MC-2 (#1722) Multi-Track Quota & Dual-Read Cost Engine:** Added `track` column to `harness_quotas` table in SQLite schema with backward-compatible migration, supporting isolated quota pools (`gemini`, `claude_proxy`, `gpt_oss`) for Antigravity / Google AI Pro subscriptions in `synlynk/quota.py` and `synlynk/costs.py`.
+- **MC-3 (#1723) Rolling `/usage` Calibration Engine:** Implemented CLI usage output parser (`parse_cli_usage_output`), delta token vs delta percentage linear regression (`calibrate_quota_window`), and burn runway calculator (`calculate_burn_runway`) with dynamic ceiling adjustment.
+- **MC-4 (#1724) Empirical Time-of-Day Dynamic Allocation Advisory:** Implemented 24-hour dynamic quota block modeling in `synlynk/advisory.py` projecting regional off-peak expansions (~1.6x) and peak restrictions (~0.65x), formatted strictly $\le 56$ cols wide.
+- **MC-5 (#1725) CLI Integration & Verification Suite:** Wired `synlynk quota advisory` and `synlynk quota calibrate` with `--json` output, updated command taxonomy, and passed all 3,160 tests with 100% CI green.
+- **Merge & Verification:** PR #1727 approved and squashed-merged to `main`.
+[@agy]
+
+
