@@ -147,7 +147,8 @@ def resolve_dispatch_model(
         raise ValueError(f"Unknown model tier: {model_tier!r}; expected one of {MODEL_TIERS}")
     impact = calculate_dispatch_impact(task, repo_root=repo_root, scope_paths=scope_paths)
     tier = model_tier or resolve_model_tier(task, impact["score"], role=role, task_type=task_type)
-    resolved_model = model or _DEFAULT_MODELS_BY_TIER.get(tier, {}).get(harness, "unknown")
+    from synlynk.models import resolve_tier_model
+    resolved_model = model or resolve_tier_model(tier, harness, repo_path=repo_root)
     return {
         "harness": harness,
         "role": role or "",

@@ -25,6 +25,7 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `harness list` (secondary) — open
 - `config set` (secondary) — open
 - `config nudges` (secondary) — open
+- `whoami` (secondary) — open
 
 ## Tier 1 — Goal
 
@@ -116,6 +117,9 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `cost true-up` (secondary) — sustain
 - `credit grant` (secondary) — sustain
 - `quota` (secondary) — sustain
+- `quota advisory` (secondary) — sustain
+- `quota calibrate` (secondary) — sustain
+- `testbed` (secondary) — execute
 - `capability sweep` (secondary) — sustain
 - `run` (primary) — execute
 - `run --trio` (secondary) — execute
@@ -144,6 +148,11 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `daemon` — sustain
 - `identity init` — sustain
 - `identity list` — sustain
+- `identity show` — open
+- `identity whoami` — open
+- `identity triplet` — open
+- `relay peer list` — sustain
+- `relay peer add` — sustain
 - `events tail` — sustain
 - `repair` — sustain
 - `exit` — sustain

@@ -58,7 +58,7 @@ def test_tripartite_resolution_keeps_role_and_harness_separate(tmp_path):
     assert routed["harness"] == "codex"
     assert routed["role"] == "qa"
     assert routed["model_tier"] == MODEL_TIER_FAST
-    assert routed["resolved_model"] == "gpt-4o-mini"
+    assert routed["resolved_model"] == "gpt-5-mini"
     assert routed["requested_model"] == routed["resolved_model"]
 
 

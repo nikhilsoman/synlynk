@@ -12,6 +12,8 @@
 - **Vizor World View Extractor:** Implemented Concentric Radar SVG visualization and dual projection toggles (Radar vs Sequence Flow) for workspace proximity mapping. [@grok, @agy]
 - **Deep Brownfield & Magic PR Engine:** Automated brownfield test/linter/runtime discovery (`synlynk init --brownfield`) and zero-touch AST remediation (`synlynk heal --magic`). [@codex]
 - **PM Radar & Architect Watchdog:** Added Ring 3 (Ecosystem & Competitor Frontier) opportunity extraction (`synlynk pm sweep --radar`) and SPOF/memory health checks in `synlynk doctor`. [@claude, @codex, @agy]
+- **Frontier QA Testbed & Enterprise Compliance Boundaries:** Co-located compliance and isolated testbed inside monorepo; established explicit extraction criteria for future sister swarm orchestrator. Bound testbed execution and Ed25519 cryptographic attestation receipts to QA Agent charter. [@agy, @claude, @codex]
+
 
 ## Architecture
 - `state.db` remains the single point of mutation and source of truth across all 4 project documentation projections.

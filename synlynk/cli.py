@@ -1271,6 +1271,65 @@ def build_parser() -> argparse.ArgumentParser:
         dest="tpm_view",
         help="Show open reservations across all harnesses (read-only TPM hook view)",
     )
+    quota_sub = quota_parser.add_subparsers(dest="quota_action")
+    advisory_parser = quota_sub.add_parser(
+        "advisory", help="Show 24H fleet utilization and dynamic surge/off-peak advisory"
+    )
+    advisory_parser.add_argument(
+        "--json",
+        action="store_true",
+        dest="json_output",
+        help="Emit machine-readable JSON",
+    )
+    calibrate_parser = quota_sub.add_parser(
+        "calibrate", help="Calibrate quota ceilings from delta /usage CLI percentages"
+    )
+    calibrate_parser.add_argument(
+        "--harness",
+        required=True,
+        dest="harness",
+        help="Harness name (claude, agy, codex, grok)",
+    )
+    calibrate_parser.add_argument(
+        "--window",
+        default="5h",
+        dest="window",
+        choices=["5h", "hourly", "daily", "weekly", "monthly"],
+        help="Quota window (default: 5h)",
+    )
+    calibrate_parser.add_argument(
+        "--p1",
+        type=float,
+        required=True,
+        dest="p1",
+        help="Initial reported percentage (e.g. 10.0)",
+    )
+    calibrate_parser.add_argument(
+        "--p2",
+        type=float,
+        required=True,
+        dest="p2",
+        help="Final reported percentage (e.g. 30.0)",
+    )
+    calibrate_parser.add_argument(
+        "--tokens",
+        type=int,
+        required=True,
+        dest="tokens",
+        help="Executed tokens delta between p1 and p2",
+    )
+    calibrate_parser.add_argument(
+        "--track",
+        default="default",
+        dest="track",
+        help="Quota track (default, gemini, claude_proxy, gpt_oss)",
+    )
+    calibrate_parser.add_argument(
+        "--json",
+        action="store_true",
+        dest="json_output",
+        help="Emit machine-readable JSON",
+    )
 
     schedule_parser = subparsers.add_parser(
         "schedule", help="Batch-assign ready stories to agents (dry-run by default)"
@@ -2168,7 +2227,40 @@ def main(argv=None) -> None:
                 note=args.note,
             )
     elif args.command == "quota":
-        if getattr(args, "tpm_view", False):
+        action = getattr(args, "quota_action", None)
+        if action == "advisory":
+            from synlynk.advisory import (
+                get_utilization_advisory,
+                format_advisory_text,
+                export_advisory_json,
+            )
+            adv = get_utilization_advisory()
+            if getattr(args, "json_output", False):
+                print(export_advisory_json(adv))
+            else:
+                print(format_advisory_text(adv))
+        elif action == "calibrate":
+            from synlynk.quota import calibrate_and_update_quota
+            cal = calibrate_and_update_quota(
+                harness=args.harness,
+                window=args.window,
+                p1_pct=args.p1,
+                p2_pct=args.p2,
+                delta_tokens=args.tokens,
+                track=getattr(args, "track", "default") or "default",
+            )
+            if getattr(args, "json_output", False):
+                print(json.dumps(cal, indent=2))
+            else:
+                if cal.get("valid"):
+                    print(
+                        f"✓ Calibrated {args.harness} ({args.window}, track={getattr(args, 'track', 'default')}): "
+                        f"ceiling = {cal['calculated_ceiling']:,} tokens "
+                        f"(delta: {cal['delta_tokens']:,} tokens across {cal['delta_pct']}%)"
+                    )
+                else:
+                    print(f"✗ Calibration failed: {cal.get('reason', 'invalid delta')}")
+        elif getattr(args, "tpm_view", False):
             cmd_quota_tpm_view()
         else:
             _warn_deprecated_harness_flag(cli_tokens)

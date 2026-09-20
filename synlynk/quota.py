@@ -2,10 +2,11 @@
 
 import json
 import os
+import re
 import sys
 import time
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Optional
 
 try:
     from datetime import UTC  # Python 3.11+
@@ -435,12 +436,32 @@ def cmd_quota_tpm_view() -> None:
         )
 
 
+def resolve_harness_track(harness: str, model: Optional[str] = None) -> str:
+    """Resolve the quota track for a given harness and model.
+    
+    Antigravity (Google AI Pro) provides multi-track quotas:
+    - 'claude_proxy': Claude models proxied via Antigravity
+    - 'gpt_oss': GPT and Open Source models (e.g. DeepSeek, Qwen)
+    - 'gemini': Native Gemini models
+    Other harnesses default to 'default'.
+    """
+    if harness == "agy":
+        mod_lower = (model or "").lower()
+        if "claude" in mod_lower:
+            return "claude_proxy"
+        if any(k in mod_lower for k in ("gpt", "oss", "deepseek", "qwen", "llama", "mistral")):
+            return "gpt_oss"
+        return "gemini"
+    return "default"
+
+
 def _upsert_agent_quota(
     agent: str,
     quota_type: str,
     limit_tokens: int,
     used_tokens: int = 0,
     *,
+    track: str = "default",
     model: str = "unknown",
     unit: str = "tokens",
     reset_at: Optional[str] = None,
@@ -459,28 +480,56 @@ def _upsert_agent_quota(
     if own_conn:
         conn = _pkg("_get_db")()
     try:
-        conn.execute(
-            """
-            INSERT INTO harness_quotas
-                (harness, model, quota_type, unit, limit_tokens, used_tokens,
-                 reset_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-            ON CONFLICT(harness, model, quota_type, unit) DO UPDATE SET
-                limit_tokens = excluded.limit_tokens,
-                used_tokens  = excluded.used_tokens,
-                reset_at     = excluded.reset_at,
-                updated_at   = CURRENT_TIMESTAMP
-            """,
-            (
-                agent,
-                model or "unknown",
-                quota_type,
-                unit,
-                int(limit_tokens),
-                int(used_tokens or 0),
-                reset_at,
-            ),
-        )
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(harness_quotas)")}
+        has_track = "track" in cols
+
+        if has_track:
+            conn.execute(
+                """
+                INSERT INTO harness_quotas
+                    (harness, track, model, quota_type, unit, limit_tokens, used_tokens,
+                     reset_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(harness, track, model, quota_type, unit) DO UPDATE SET
+                    limit_tokens = excluded.limit_tokens,
+                    used_tokens  = excluded.used_tokens,
+                    reset_at     = excluded.reset_at,
+                    updated_at   = CURRENT_TIMESTAMP
+                """,
+                (
+                    agent,
+                    track or "default",
+                    model or "unknown",
+                    quota_type,
+                    unit,
+                    int(limit_tokens),
+                    int(used_tokens or 0),
+                    reset_at,
+                ),
+            )
+        else:
+            conn.execute(
+                """
+                INSERT INTO harness_quotas
+                    (harness, model, quota_type, unit, limit_tokens, used_tokens,
+                     reset_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(harness, model, quota_type, unit) DO UPDATE SET
+                    limit_tokens = excluded.limit_tokens,
+                    used_tokens  = excluded.used_tokens,
+                    reset_at     = excluded.reset_at,
+                    updated_at   = CURRENT_TIMESTAMP
+                """,
+                (
+                    agent,
+                    model or "unknown",
+                    quota_type,
+                    unit,
+                    int(limit_tokens),
+                    int(used_tokens or 0),
+                    reset_at,
+                ),
+            )
         conn.commit()
     finally:
         if own_conn:
@@ -608,7 +657,7 @@ def _project_request_quota_from_config() -> Optional[dict]:
     }
 
 
-def _read_agent_quota_rows(conn, agent: str) -> Optional[list]:
+def _read_agent_quota_rows(conn, agent: str, track: Optional[str] = None) -> Optional[list]:
     """Read harness_quotas rows for a harness.
 
     Returns:
@@ -620,23 +669,48 @@ def _read_agent_quota_rows(conn, agent: str) -> Optional[list]:
     known headroom) but keep the agent eligible.
     """
     try:
-        rows = conn.execute(
-            """
-            SELECT harness, model, quota_type, unit, limit_tokens, used_tokens,
-                   reset_at, updated_at
-            FROM harness_quotas
-            WHERE harness = ?
-            """,
-            (agent,),
-        ).fetchall()
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(harness_quotas)")}
+        has_track = "track" in cols
+        if has_track and track is not None:
+            rows = conn.execute(
+                """
+                SELECT harness, model, quota_type, unit, limit_tokens, used_tokens,
+                       reset_at, updated_at, track
+                FROM harness_quotas
+                WHERE harness = ? AND track = ?
+                """,
+                (agent, track),
+            ).fetchall()
+        elif has_track:
+            rows = conn.execute(
+                """
+                SELECT harness, model, quota_type, unit, limit_tokens, used_tokens,
+                       reset_at, updated_at, track
+                FROM harness_quotas
+                WHERE harness = ?
+                """,
+                (agent,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT harness, model, quota_type, unit, limit_tokens, used_tokens,
+                       reset_at, updated_at
+                FROM harness_quotas
+                WHERE harness = ?
+                """,
+                (agent,),
+            ).fetchall()
     except Exception:
         return None
     result = []
     for r in rows:
         limit_v = r[4]
         used_v = r[5]
+        row_track = r[8] if len(r) > 8 else "default"
         result.append({
             "agent": r[0],
+            "track": row_track,
             "model": r[1],
             "quota_type": r[2],
             "unit": r[3] or "tokens",
@@ -655,6 +729,7 @@ def _quota_status_for_agent(
     agent: str,
     estimated_tokens: Optional[int] = None,
     estimated_requests: int = 1,
+    track: Optional[str] = None,
 ) -> dict:
     """Stage-2 quota gate for one harness.
 
@@ -669,7 +744,11 @@ def _quota_status_for_agent(
       status="unknown" and degraded=True. The routing engine keeps the harness
       eligible (does not hard-block) but ranks known-headroom harnesses first.
     """
-    rows = _pkg("_read_agent_quota_rows")(conn, agent)
+    read_fn = _pkg("_read_agent_quota_rows") or _read_agent_quota_rows
+    try:
+        rows = read_fn(conn, agent, track=track)
+    except TypeError:
+        rows = read_fn(conn, agent)
     if rows is None:
         return {
             "status": "unknown",
@@ -793,3 +872,134 @@ def _estimate_story_cost_usd(
     in_tok = int(tokens * 0.7)
     out_tok = tokens - in_tok
     return (in_tok / 1000 * rates["input"]) + (out_tok / 1000 * rates["output"])
+
+
+def parse_cli_usage_output(harness: str, text: str) -> dict[str, Any]:
+    """Parse output from harness-specific /usage CLI commands into normalized quota structures."""
+    windows: dict[str, Any] = {}
+    tracks: dict[str, Any] = {}
+    lines = [line.strip() for line in (text or "").splitlines() if line.strip()]
+
+    for line in lines:
+        line_lower = line.lower()
+        track_detected = None
+        if "gemini" in line_lower:
+            track_detected = "gemini"
+        elif "claude" in line_lower and harness == "agy":
+            track_detected = "claude_proxy"
+        elif any(k in line_lower for k in ("gpt", "oss", "deepseek", "qwen")) and harness == "agy":
+            track_detected = "gpt_oss"
+
+        pct_match = re.search(r"(\d+(?:\.\d+)?)\s*%", line)
+        if not pct_match:
+            continue
+        pct_val = float(pct_match.group(1))
+
+        reset_match = re.search(r"resets?\s+(?:in|on)\s+([^)]+)", line, re.IGNORECASE)
+        reset_str = reset_match.group(1).strip() if reset_match else None
+
+        win_type = None
+        if any(w in line_lower for w in ("5-hour", "5 hour", "5h", "5-hr")):
+            win_type = "5h"
+        elif any(w in line_lower for w in ("weekly", "week", "1w", "7-day")):
+            win_type = "weekly"
+        elif any(w in line_lower for w in ("daily", "day", "24h")):
+            win_type = "daily"
+        elif any(w in line_lower for w in ("monthly", "month", "30-day")):
+            win_type = "monthly"
+
+        if win_type:
+            entry = {"pct_used": pct_val, "resets_in": reset_str, "track": track_detected or "default"}
+            if track_detected:
+                if track_detected not in tracks:
+                    tracks[track_detected] = {}
+                tracks[track_detected][win_type] = entry
+            else:
+                windows[win_type] = entry
+
+    return {
+        "harness": harness,
+        "raw_text": text,
+        "windows": windows,
+        "tracks": tracks,
+    }
+
+
+def calibrate_quota_window(delta_tokens: int, p1_pct: float, p2_pct: float) -> dict[str, Any]:
+    """Correlate delta executed tokens against delta reported % to compute calculated ceiling."""
+    delta_pct = p2_pct - p1_pct
+    if delta_pct <= 0 or delta_tokens <= 0:
+        return {
+            "valid": False,
+            "delta_tokens": delta_tokens,
+            "delta_pct": delta_pct,
+            "calculated_ceiling": None,
+            "reason": "non_positive_delta",
+        }
+    ceiling = int(round((delta_tokens * 100.0) / delta_pct))
+    return {
+        "valid": True,
+        "delta_tokens": delta_tokens,
+        "delta_pct": round(delta_pct, 4),
+        "calculated_ceiling": ceiling,
+    }
+
+
+def calculate_burn_runway(remaining_tokens: int, burn_rate_tokens_per_hr: float) -> dict[str, Any]:
+    """Calculate projected burn runway in hours based on remaining headroom and burn rate."""
+    if burn_rate_tokens_per_hr <= 0:
+        return {
+            "remaining_tokens": remaining_tokens,
+            "burn_rate_per_hr": burn_rate_tokens_per_hr,
+            "runway_hours": None,
+            "status": "idle",
+        }
+    hours = max(0.0, float(remaining_tokens) / float(burn_rate_tokens_per_hr))
+    status = "healthy"
+    if hours < 1.0:
+        status = "critical"
+    elif hours < 3.0:
+        status = "warning"
+
+    return {
+        "remaining_tokens": remaining_tokens,
+        "burn_rate_per_hr": burn_rate_tokens_per_hr,
+        "runway_hours": round(hours, 2),
+        "status": status,
+    }
+
+
+def calibrate_and_update_quota(
+    harness: str,
+    window: str,
+    p1_pct: float,
+    p2_pct: float,
+    delta_tokens: int,
+    track: str = "default",
+    conn=None,
+) -> dict[str, Any]:
+    """Calibrate quota limit from delta telemetry and update harness_quotas table."""
+    cal = calibrate_quota_window(delta_tokens, p1_pct, p2_pct)
+    if not cal["valid"] or cal["calculated_ceiling"] is None:
+        return cal
+    ceiling = cal["calculated_ceiling"]
+    used = int(round(ceiling * (p2_pct / 100.0)))
+    own_conn = conn is None
+    if own_conn:
+        conn = _pkg("_get_db")()
+    try:
+        _upsert_agent_quota(
+            harness,
+            window,
+            limit_tokens=ceiling,
+            used_tokens=used,
+            track=track,
+            unit="tokens",
+            conn=conn,
+        )
+        if own_conn:
+            conn.commit()
+    finally:
+        if own_conn and conn is not None:
+            conn.close()
+    return cal
