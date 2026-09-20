@@ -212,6 +212,8 @@ def build_parser() -> argparse.ArgumentParser:
                              help="Run the FTUE guided setup wizard")
     init_parser.add_argument("--quickstart", action="store_true",
                              help="Run the 5-stage automated FTUE onboarding journey")
+    init_parser.add_argument("--brownfield", action="store_true",
+                             help="Run Deep Brownfield Ingestion Engine to reverse-engineer tests, linters, churn, and bootstrap 4-doc structure")
     init_parser.add_argument("--dry-run", action="store_true", dest="dry_run",
                              help="Preview what init would write without writing anything")
 
@@ -229,7 +231,11 @@ def build_parser() -> argparse.ArgumentParser:
         "start", help="Cold-start entry point: detect new vs existing project and guide setup"
     )
     home_parser = subparsers.add_parser("home", help="Display or switch the active home harness")
-    home_parser.add_argument("harness", nargs="?", choices=["claude", "agy", "codex", "grok", "local"], help="Harness to set as home")
+    home_parser.add_argument("harness", nargs="?", choices=["claude", "agy", "codex", "grok", "local", "muse"], help="Harness to set as home")
+    home_parser.add_argument("--force", action="store_true", help="Force immediate switch without draining in-progress story")
+
+    testbed_parser = subparsers.add_parser("testbed", help="Frontier QA Acceptance and Multi-Node Soak Testbed")
+    testbed_parser.add_argument("testbed_args", nargs=argparse.REMAINDER, help="Arguments passed to testbed runner")
 
     tool_parser = subparsers.add_parser("tool", help="Manage recommended ecosystem tools")
     tool_sub = tool_parser.add_subparsers(dest="tool_action")
@@ -268,10 +274,15 @@ def build_parser() -> argparse.ArgumentParser:
     impact_parser.add_argument("--json", action="store_true", help="Output impact report as JSON")
 
     mesh_parser = subparsers.add_parser(
-        "mesh", help="Aggregate multi-repo knowledge graphs into a federated mesh"
+        "mesh", help="Aggregate multi-repo knowledge graphs or check sibling worktree AST conflicts"
     )
     mesh_parser.add_argument("--repos", help="Comma-separated repo paths (default: auto-discover)")
     mesh_parser.add_argument("--output", help="Path to write global graph JSON (default: ~/.synlynk/global-graph.json)")
+    mesh_parser.add_argument("--conflicts", "--overlap", action="store_true", help="Detect AST collisions across sibling worktrees")
+    mesh_parser.add_argument("--worktrees", help="Comma-separated list of worktree paths or branches to analyze")
+    mesh_parser.add_argument("--base", default="main", help="Base ref for diff analysis (default: main)")
+    mesh_parser.add_argument("--fail-on-conflict", action="store_true", help="Exit with non-zero status if AST conflicts exist")
+    mesh_parser.add_argument("--json", action="store_true", help="Output report as JSON")
 
     spike_parser = subparsers.add_parser(
         "spike", help="Evaluate architectural candidates and generate empirical receipts"
@@ -308,7 +319,9 @@ def build_parser() -> argparse.ArgumentParser:
     heal_parser.add_argument("--role", default="qa", help="Role authorized to merge verified pull requests")
     heal_parser.add_argument("--batch-size", type=int, default=1, help="Maximum findings to remediate")
     heal_parser.add_argument("--parity", action="store_true", help="Run worktree-isolated fleet parity remediation")
-    heal_parser.add_argument("--dry-run", action="store_true", help="Print parity gaps and files to touch without modifying files")
+    heal_parser.add_argument("--magic", action="store_true", help="Run Magic PR Engine for instant zero-touch first win")
+    heal_parser.add_argument("--no-pr", action="store_true", help="Skip opening PR on GitHub (local branch commit only)")
+    heal_parser.add_argument("--dry-run", action="store_true", help="Print parity/magic gaps without writing files")
     heal_parser.add_argument("--branch", type=str, default=None, help="Target feature branch for parity remediation PR")
     heal_parser.add_argument("--cycles", action="store_true", help="Detect circular imports and generate refactoring stories")
 
@@ -535,6 +548,21 @@ def build_parser() -> argparse.ArgumentParser:
     type_relabel_parser.add_argument("type_id")
     type_relabel_parser.add_argument("label")
     identity_sub.add_parser("list", help="List provisioned role identities")
+    identity_whoami_p = identity_sub.add_parser("whoami", help="Show active 3-tier identity attribution")
+    identity_whoami_p.add_argument("--user", help="Explicit user attribution")
+    identity_whoami_p.add_argument("--role", help="Explicit role charter")
+    identity_whoami_p.add_argument("--harness", help="Explicit harness backend")
+    identity_whoami_p.add_argument("--json", action="store_true", help="Output identity attribution as JSON")
+    identity_sub.add_parser("triplet", help="Show active 3-tier identity attribution")
+    identity_sub.add_parser("show", help="Show active 3-tier identity attribution")
+
+    whoami_parser = subparsers.add_parser(
+        "whoami", help="Show active 3-tier identity attribution (<@user, role, harness>)"
+    )
+    whoami_parser.add_argument("--user", help="Explicit user attribution")
+    whoami_parser.add_argument("--role", help="Explicit role charter")
+    whoami_parser.add_argument("--harness", help="Explicit harness backend")
+    whoami_parser.add_argument("--json", action="store_true", help="Output identity attribution as JSON")
 
     events_parser = subparsers.add_parser("events", help="Inspect the GOVERNS event bus")
     events_sub = events_parser.add_subparsers(dest="events_action")
@@ -988,6 +1016,14 @@ def build_parser() -> argparse.ArgumentParser:
     relay_broadcast_p.add_argument("--relay-url", default=None, dest="relay_url",
         help="Relay URL (default: http://localhost:27472)")
 
+    relay_peer_p = relay_sub.add_parser("peer", help="Manage P2P mesh relay peers")
+    relay_peer_sub = relay_peer_p.add_subparsers(dest="relay_peer_action")
+    relay_peer_add_p = relay_peer_sub.add_parser("add", help="Add a peer relay node")
+    relay_peer_add_p.add_argument("peer_url", help="Peer relay URL (e.g. http://127.0.0.1:7433)")
+    relay_peer_add_p.add_argument("--relay-url", default=None, dest="relay_url")
+    relay_peer_list_p = relay_peer_sub.add_parser("list", help="List connected peer relay nodes")
+    relay_peer_list_p.add_argument("--relay-url", default=None, dest="relay_url")
+
     logs_parser = subparsers.add_parser("logs", help="Tail the output log of a job")
     logs_parser.add_argument("--job", required=True, dest="job_id",
         help="Job ID (from `synlynk jobs`)")
@@ -1099,6 +1135,10 @@ def build_parser() -> argparse.ArgumentParser:
     pm_sweep_parser.add_argument(
         "--dry-run", action="store_true",
         help="Print the composed research prompt without invoking Claude"
+    )
+    pm_sweep_parser.add_argument(
+        "--radar", action="store_true",
+        help="Plot Ring 3 opportunities to .synlynk/radar.json and docs/pm/opportunities-radar.md"
     )
 
     tpm_parser = subparsers.add_parser("tpm", help="TPM sweep commands")
@@ -1343,6 +1383,7 @@ def build_parser() -> argparse.ArgumentParser:
         "mesh": mesh_parser,
         "spike": spike_parser,
         "state": state_parser,
+        "whoami": whoami_parser,
     }
 
     roles_parser = subparsers.add_parser(
@@ -1381,25 +1422,35 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def cmd_home(args) -> None:
-    """Display or switch the active home harness."""
-    from synlynk import _update_config, load_config
-    from synlynk.context import detect_active_home_harness, generate_context
+    """Display or switch the active home harness with Sovereign Drain-to-Boundary protocol."""
+    from synlynk import load_config
+    from synlynk.context import detect_active_home_harness
+    from synlynk.handover import execute_home_handover, load_handover_state
 
     cfg = load_config() if callable(load_config) else {}
     target = getattr(args, "harness", None)
+    force = getattr(args, "force", False)
 
     if target:
-        _update_config({"home_harness": target})
-        generate_context()
-        print(f"  ✓ Home harness switched to: {target}")
-        print(f"  ✓ .synlynk/context.md refreshed with {target} as Active Home Conductor")
+        result = execute_home_handover(target, force=force)
+        if result.get("status") == "noop":
+            print(f"  ℹ {result.get('message')}")
+        else:
+            print(f"  ✓ Home harness switched to: {result['incoming_harness']}")
+            if result.get("draining"):
+                print(f"  ⏳ Outgoing harness '{result['outgoing_harness']}' marked as DRAINING (finishing story {result['active_story_id']}, est: {result['drain_horizon_minutes']}m)")
+            print(f"  ✓ .synlynk/context.md refreshed with {result['incoming_harness']} as Active Home Conductor")
     else:
         current_cfg = cfg.get("home_harness", "not configured")
         detected = detect_active_home_harness(cfg)
+        handover = load_handover_state()
         print("Home Harness Status:")
         print(f"  Configured in .synlynk/config.json : {current_cfg}")
         print(f"  Detected in current session       : {detected}")
+        if handover and handover.get("status") == "draining":
+            print(f"  ⏳ Drain in progress              : '{handover.get('outgoing_harness')}' finishing story {handover.get('active_story_id')}")
         print("  To switch: synlynk home <claude|agy|codex|grok>")
+
 
 
 def _warn_deprecated_harness_flag(argv) -> None:
@@ -1528,7 +1579,18 @@ def main(argv=None) -> None:
     _warn_stale_repo_version(VERSION)
 
     if args.command == "init":
-        if getattr(args, "quickstart", False):
+        if getattr(args, "brownfield", False):
+            from synlynk.coldstart import run_brownfield_init
+            res = run_brownfield_init(
+                repo_root=".",
+                interactive=not getattr(args, "force", False),
+                dry_run=getattr(args, "dry_run", False),
+                force=getattr(args, "force", False)
+            )
+            if res.get("success"):
+                print(f"\n✦ Brownfield Ingestion complete. Stack: {res.get('stack')}, Tests: {res.get('test_command')}, Hotspots: {len(res.get('hotspots', []))} files.")
+            return
+        elif getattr(args, "quickstart", False):
             from synlynk.coldstart import run_ftue_journey
             res = run_ftue_journey(dry_run=getattr(args, "dry_run", False))
             if res.get("first_win_task"):
@@ -1895,6 +1957,16 @@ def main(argv=None) -> None:
                 body=args.body,
                 relay_url=getattr(args, "relay_url", None),
             )
+        elif action == "peer":
+            peer_action = getattr(args, "relay_peer_action", None)
+            if peer_action == "add":
+                from synlynk.relay import cmd_relay_peer_add
+                cmd_relay_peer_add(args)
+            elif peer_action == "list":
+                from synlynk.relay import cmd_relay_peer_list
+                cmd_relay_peer_list(args)
+            else:
+                relay_peer_p.print_help()
         else:
             relay_parser.print_help()
     elif args.command == "logs":
@@ -1962,7 +2034,7 @@ def main(argv=None) -> None:
     elif args.command == "pm" and args.pm_command == "sweep":
         from synlynk.pm_agent import cmd_pm_sweep
 
-        cmd_pm_sweep(dry_run=args.dry_run)
+        cmd_pm_sweep(dry_run=args.dry_run, radar=getattr(args, "radar", False))
     elif args.command == "tpm" and args.tpm_command == "sweep":
         from synlynk.tpm_sweep import run_sweep_pass
 
@@ -2184,7 +2256,9 @@ def main(argv=None) -> None:
         if getattr(args, "cycles", False):
             from synlynk.heal_cycles import cmd_heal_cycles
             sys.exit(cmd_heal_cycles(args))
-        cmd_heal(args)
+    elif args.command == "testbed":
+        from synlynk.testbed.cli import run_testbed_cli
+        sys.exit(run_testbed_cli(args.testbed_args or []))
     elif args.command == "audit-docs":
         findings = cmd_audit_docs(json_output=args.json, fix=args.fix)
         if findings and not args.fix:
@@ -2280,7 +2354,7 @@ def main(argv=None) -> None:
         from synlynk.impact import cmd_impact
         sys.exit(cmd_impact(args))
     elif args.command == "mesh":
-        from synlynk.multirepo_graph import cmd_multirepo_mesh
+        from synlynk.mesh import cmd_multirepo_mesh
         sys.exit(cmd_multirepo_mesh(args))
     elif args.command == "spike":
         from synlynk.spike import cmd_spike
@@ -2405,8 +2479,14 @@ def main(argv=None) -> None:
                 cmd_identity_init()
         elif action == "list":
             cmd_identity_list()
+        elif action in ("whoami", "triplet", "show"):
+            from synlynk.attribution import cmd_whoami
+            sys.exit(cmd_whoami(args))
         else:
             help_parsers.get("identity", parser).print_help()
+    elif args.command == "whoami":
+        from synlynk.attribution import cmd_whoami
+        sys.exit(cmd_whoami(args))
     elif args.command == "type":
         if getattr(args, "type_action", None) == "create":
             from synlynk.product_store import identity_slug_from_config

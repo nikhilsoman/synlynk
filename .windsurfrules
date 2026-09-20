@@ -1,0 +1,9 @@
+# synlynk:start version="0.21.0-dev"
+Read .synlynk/context.md at session start.
+Do NOT hand-edit todo.md — update task status in state.db via `synlynk story done <id>` and `synlynk checkpoint`.
+Run `synlynk checkpoint` at task boundaries.
+Never commit directly to main or master — use a worktree.
+Append decisions to project-docs/memory.md with [@username].
+Check .synlynk/sentinel.md for active alerts before starting work.
+
+# synlynk:end

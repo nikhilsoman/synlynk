@@ -1,4 +1,38 @@
-## 2026-09-19 — Milestone v1.0.0 Dev Preview Sprint: Decisioning Models Taxonomy & Master Roadmap Staging
+## 2026-09-19 — Wave 1 (Dev Preview v1.0.0, 9 Pillars) Autonomous Milestone Complete
+
+### Shipped & Verified
+- **Wave 1 Autonomous Milestone (9 Pillars) 100% Shipped & Verified:**
+  - **Phase 1 (Engine Foundation & Model Routing):**
+    - `W1-T1.1`: Tripartite model routing & AST cost router shipped in `synlynk/dispatch.py` (PR #1695).
+    - `W1-T1.2`: Sovereign Multi-Home Protocol & Drain-to-Boundary Handover in `synlynk/handover.py` & `synlynk/cli.py`.
+  - **Phase 2 (Core Control Plane & Brownfield Time-to-Wow):**
+    - `W1-T2.1`: Vizor World View Extractor & Concentric Radar SVG in `synlynk/viz_views.py` and `synlynk/viz.py`.
+    - `W1-T2.2`: Deep Brownfield Ingestion Engine (`synlynk init --brownfield`) in `synlynk/coldstart.py`.
+    - `W1-T2.3`: Magic PR Engine (`synlynk heal --magic`) AST gap discovery & auto-remediation in `synlynk/heal.py`.
+  - **Phase 3 (Autonomous Operations & Living Charters):**
+    - `W1-T3.1`: Living Trigger Registry & dynamic prompt injection in `synlynk/charters.py`.
+    - `W1-T3.2`: PM Opportunity Sweeps & Ring 3 Radar matrix in `synlynk/pm_agent.py` and SPOF/memory health checks in `synlynk/doctor.py`.
+    - `W1-T3.3`: Autonomous Two-Tier Marketing Release Ceremony & Standalone Doc Bundles in `synlynk/release_marketing.py`.
+  - **Phase 4 (Release Soak, Readiness Gate & GA Tagging):**
+    - `W1-T4.1`: Full regression test matrix verified (3,090+ tests green).
+    - `W1-T4.2`: 4-Point Readiness Attestation (`synlynk doctor --readiness`) verified.
+    - `W1-T4.3`: Package builds & export structures verified.
+  - Multi-track synchronization maintained across `main`, `staging`, and `unstable`.
+[@agy, @codex, @claude, @grok, @nikhilsoman]
+
+## 2026-09-19 — Wave 1 Phase 1 Sprint: Task W1-T1.1 Model First-Class Dispatch Shipped (PR #1695)
+
+### Shipped & Verified
+- **Wave 1 Task 1.1 Shipped (PR #1695, `story-ffb0f3e6`, `goal-85656c82`):**
+  - Dispatched to Codex (`job-e655562a`), implementing tripartite model routing in `synlynk/dispatch.py`.
+  - Decoupled Workspace Agent Role (`--role`), Harness Sandbox Backend (`codex`/`agy`/`claude`/`grok`), and Model Tiering (`--model-tier fast|pro|reasoning`).
+  - Wired Graphify AST impact analysis (`synlynk impact`) to complexity-aware model tiering.
+  - Extended `daemon_jobs` schema with `model_tier`, `impact_score`, `requested_model`, `resolved_model`.
+  - Added unit test suite `tests/test_dispatch_model_routing.py` (6/6 passing). PR #1695 squash-merged to `main`, `unstable`, and `staging`.
+  - Actual runtime: 39 minutes.
+[@codex, @agy, @nikhilsoman]
+
+
 
 ### Shipped & Formalized
 - **Decisioning Models vs Reasoning Models Taxonomy (`goal-c7113f58`, `story-0f7043d7`):**

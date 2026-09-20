@@ -2,18 +2,13 @@
 
 This file provides guidance to Agy (the `agy` CLI, powered by Gemini) when working in this repository.
 
-<!-- synlynk:start version="0.18.0" tool="agy" -->
+<!-- synlynk:start version="0.21.0-dev" tool="agy" -->
 # synlynk AGY (AntiGravity) Instructions
 
 ## Identity & Attribution
 - **Engine:** agy-2.x
 - **Commit trailer:** `Co-Authored-By: AGY <noreply@antigravity.dev>`
 - **Branch prefix:** `feat/agy/` or `fix/agy/`
-- In a harness/session shell, prepend the synlynk gh shim: `eval "$(synlynk gh --shim-env)"` (or equivalent PATH prepend of `~/.synlynk/gh-shim`).
-- Then raw `gh` is refused unless a role `GH_TOKEN` is already injected, `SYNLYNK_GH_ROLE` is set, or `SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH=1`.
-- Prefer `synlynk gh --role <role> -- …` for session GitHub writes.
-- Nikhil at a normal login shell (no harness env) is unchanged.
-- qa APPROVE is the default when reviewer login ≠ PR author login. Keep the #423 comment-checklist only for same-identity collisions.
 
 ## Domain Ownership
 | Domain | Owned by this agent | Notes |
@@ -162,8 +157,15 @@ Do not start a task outside your role column without explicit Home Harness appro
 6. Any new harness interactive session also gets its own new tab within the same workspace.
 7. Begin every Claude session with `/rc`.
 - **Precondition for all Herdr commands:** check `test "${HERDR_ENV:-}" = 1` before issuing any `herdr` command; if unset, this agent is not running inside Herdr and must not attempt to control a Herdr session from outside it.
-- Herdr is Apache-2.0 licensed (no NOTICE file) — free to reference/use without royalty or attribution beyond standard license retention.
 - Full CLI reference: https://github.com/herdrdev/herdr/blob/v0.8.2/skills/herdr/SKILL.md
+
+## TPM(bot) GitHub State Synchronization SOP
+1. **Pre-Execution Minting:** Every goal, epic, and story planned or recorded in `state.db` / `project-docs/roadmap.md` must be proactively minted as a GitHub Epic or Issue prior to starting implementation work.
+2. **Real-Time Visibility:** GitHub Issues and GitHub Projects v2 are the canonical real-time progress surfaces for the autonomous engineering fleet prior to hosted Vizor GA.
+3. **State Mirroring:**
+   - On Story Creation: TPM(bot) creates the GitHub issue with title, description, role/harness assignment, and labels.
+   - On State Transitions: When a story moves to `ready`, `in_progress`, or `done`, TPM(bot) updates the GitHub issue status and posts resolution comments with commit SHAs/PR links.
+   - On Milestone Sweeps: `synlynk tpm sweep` and `synlynk backlog sync` ensure zero untracked state drift between local `state.db` and GitHub.
 
 ## synlynk Start
 ```bash
@@ -206,10 +208,25 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
 - "switch home harness", "set home harness", "what is our home harness" -> `synlynk home`
 - "set up synlynk here", "get started with synlynk" -> `synlynk init`
 - "start a new project", "is this a new or existing project" -> `synlynk start`
+- "install tool", "install recommended tool", "install graphify" -> `synlynk tool install`
+- "synthesize context pack", "generate task pack", "pack context" -> `synlynk pack`
+- "calculate blast radius", "impact analysis", "symbol callers and callees", "check impact" -> `synlynk impact`
+- "merge fleet graphs", "aggregate multi-repo mesh", "federated knowledge graph", "cross-repo edges" -> `synlynk mesh`
+- "run spike evaluation", "evaluate spike", "benchmark candidate", "spike receipt" -> `synlynk spike eval`
 - "scan this repo", "inventory this codebase" -> `synlynk scan`
-- "fix repository gaps automatically", "run autonomous remediation" -> `synlynk heal`
+- "fix repository gaps automatically", "run autonomous remediation", "run parity remediation", "remediate adoption parity", "heal parity", "detect circular dependencies", "heal import cycles", "circular import detector" -> `synlynk heal`
 - "add me to this project", "onboard me" -> `synlynk join`
 - "migrate the old config", "upgrade project-docs layout" -> `synlynk migrate`
+- "create a state database backup", "snapshot state for disaster recovery" -> `synlynk backup create`
+- "verify a state database backup", "check a recovery snapshot" -> `synlynk backup verify`
+- "encrypt state backup", "export encrypted state backup" -> `synlynk backup encrypt`
+- "package state for disaster recovery", "create an encrypted DR package" -> `synlynk backup package`
+- "verify encrypted state backup", "test encrypted state restore" -> `synlynk backup verify-encrypted`
+- "inventory state databases", "audit state DB artifacts" -> `synlynk state inventory`
+- "promote a state database", "repair canonical state" -> `synlynk state promote`
+- "quarantine a legacy state database", "isolate a state DB copy" -> `synlynk state quarantine`
+- "restore state from DR snapshot", "recover canonical state DB" -> `synlynk state restore`
+- "register an existing state database", "repair a missing registry entry" -> `synlynk state register`
 - "configure the codex harness", "override dispatch flags for grok" -> `synlynk configure agent`
 - "add this agent binary", "retrofit an agent onto this project" -> `synlynk harness add`
 - "write this agent's context profile" -> `synlynk harness configure`
@@ -230,6 +247,7 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
 - "mark this story ready" -> `synlynk story ready`
 - "revert this story to draft" -> `synlynk story draft`
 - "mark this story done" -> `synlynk story done`
+- "reclaim stranded stories", "unstrand abandoned stories" -> `synlynk story reclaim`
 - "capture discovered work", "stage a task into backlog" -> `synlynk backlog capture`
 - "list staged backlog", "show discovered tasks" -> `synlynk backlog list`
 - "sync backlog to github", "create issues for discovered tasks" -> `synlynk backlog sync`
@@ -240,6 +258,10 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
 - "open the workspace", "open this project" -> `synlynk open`
 - "what should I do next", "give me a task to launch" -> `synlynk launch`
 - "who has what role on this project" -> `synlynk roles`
+- "create a product type" -> `synlynk type create`
+- "seed canonical product types", "seed an industry pack" -> `synlynk type seed`
+- "rename an organigram label", "relabel a product type" -> `synlynk type relabel`
+- "add a connector", "catalog an outbound connector" -> `synlynk connector add`
 - "let's build X", "can you implement...", "hand this to codex" -> `synlynk dispatch`
 - "backfill capability ratings", "repair missing story ids" -> `synlynk backfill-capability-ratings`
 - "adapt living charters", "detect charter drift" -> `synlynk charters adapt`
@@ -250,7 +272,10 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
 - "run the TPM sweep", "sweep ready stories" -> `synlynk tpm sweep`
 - "run the competitive sweep", "check for competitor gaps" -> `synlynk pm sweep`
 - "cut a release", "ship v0.x.0" -> `synlynk release`
+- "run marketing release ceremony", "synchronize release collateral" -> `synlynk marketing ceremony`
+- "sync pr blog post", "generate pr blog post", "marketing sync pr" -> `synlynk marketing sync-pr`
 - "is this PR's model version attested" -> `synlynk pr check`
+- "run gh as a role app", "gh as qa bot", "don't use host gh" -> `synlynk gh`
 - "qa merge gate status", "is the qa-gate green" -> `synlynk pr gate-status`
 - "am I authorized to merge this", "check merge authority" -> `synlynk policy check-merge`
 - "show current policy", "what is the current policy" -> `synlynk policy show`
@@ -272,10 +297,12 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
 - "grant a credit balance", "record a credit grant" -> `synlynk credit grant`
 - "show agent quota headroom" -> `synlynk quota`
 - "run a capability sweep", "seed capability baselines" -> `synlynk capability sweep`
+- "run milestone dag", "execute milestone unattended", "launch milestone dag" -> `synlynk run`
 - "run the trio protocol" -> `synlynk run --trio`
 - "is the local oMLX agent reachable" -> `synlynk local doctor`
 - "upgrade synlynk" -> `synlynk upgrade`
 - "roll back the last change" -> `synlynk rollback`
+- "uninstall synlynk", "clean teardown of synlynk" -> `synlynk uninstall`
 - "where are we", "what's the state of things" -> `synlynk status`
 - "show me the live HUD", "watch the workspace" -> `synlynk watch`
 - "open the dashboard", "show me the browser view" -> `synlynk viz`

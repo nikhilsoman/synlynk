@@ -854,6 +854,60 @@ def _hc_capability_reassessment() -> HealthCheck:
         return HealthCheck("capability_reassessment", "warn", f"cadence check unavailable: {exc}")
 
 
+def _hc_spof_audit() -> HealthCheck:
+    """Audit workspace for single points of failure across harness redundancy and roles."""
+    try:
+        config_path = os.path.join(".synlynk", "config.json")
+        if not os.path.exists(config_path):
+            return HealthCheck("spof_audit", "warn", "No .synlynk/config.json; SPOF audit skipped")
+
+        with open(config_path) as f:
+            data = json.load(f)
+
+        agents = data.get("agents", {})
+        if not agents or len(agents) < 2:
+            return HealthCheck(
+                "spof_audit",
+                "warn",
+                "Single harness configured; fleet lacks multi-agent redundancy",
+                fix="Run: synlynk harness add <harness> to add fallback execution harnesses",
+            )
+
+        return HealthCheck(
+            "spof_audit",
+            "ok",
+            f"Multi-agent redundancy verified ({len(agents)} active harnesses configured)",
+        )
+    except Exception as exc:
+        return HealthCheck("spof_audit", "warn", f"SPOF audit unavailable: {exc}")
+
+
+def _hc_memory_leak() -> HealthCheck:
+    """Monitor process RSS memory footprint and heap headroom to guard against memory leaks."""
+    try:
+        import platform
+        import resource
+
+        usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        # macOS returns bytes, Linux returns kilobytes
+        rss_mb = (usage / (1024 * 1024)) if platform.system() == "Darwin" else (usage / 1024)
+
+        if rss_mb > 1024:
+            return HealthCheck(
+                "memory_leak",
+                "warn",
+                f"Elevated process RSS memory usage: {rss_mb:.1f} MB (threshold 1024 MB)",
+                fix="Restart long-running daemon workers",
+            )
+        return HealthCheck(
+            "memory_leak",
+            "ok",
+            f"Process RSS memory baseline normal ({rss_mb:.1f} MB)",
+        )
+    except Exception as exc:
+        return HealthCheck("memory_leak", "warn", f"Memory leak check unavailable: {exc}")
+
+
 HEALTH_CHECKS = [
     _hc_python_version,
     _hc_project_init,
@@ -875,6 +929,8 @@ HEALTH_CHECKS = [
     _hc_product_specialist_apps,
     _hc_fleet_parity,
     _hc_capability_reassessment,
+    _hc_spof_audit,
+    _hc_memory_leak,
 ]
 
 

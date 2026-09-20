@@ -16,6 +16,75 @@ from urllib.parse import urlparse
 from synlynk.events import ActorIdentifier, EventEnvelope
 
 
+def encode_websocket_frame(payload: str) -> bytes:
+    """Encode text into a standard RFC 6455 unmasked WebSocket frame."""
+    data = payload.encode("utf-8")
+    length = len(data)
+    header = bytearray([0x81])  # FIN + opcode 1 (text)
+    if length <= 125:
+        header.append(length)
+    elif length <= 65535:
+        header.append(126)
+        header.extend(length.to_bytes(2, byteorder="big"))
+    else:
+        header.append(127)
+        header.extend(length.to_bytes(8, byteorder="big"))
+    return bytes(header) + data
+
+
+def decode_websocket_frame(data: bytes) -> tuple[str, int]:
+    """Decode an RFC 6455 unmasked or masked WebSocket text frame."""
+    if len(data) < 2:
+        return "", 0
+    masked = bool(data[1] & 0x80)
+    length = data[1] & 0x7F
+    offset = 2
+    if length == 126:
+        if len(data) < 4:
+            return "", 0
+        length = int.from_bytes(data[2:4], byteorder="big")
+        offset = 4
+    elif length == 127:
+        if len(data) < 10:
+            return "", 0
+        length = int.from_bytes(data[2:10], byteorder="big")
+        offset = 10
+
+    if masked:
+        if len(data) < offset + 4 + length:
+            return "", 0
+        mask_key = data[offset : offset + 4]
+        offset += 4
+        payload_bytes = bytearray(data[offset : offset + length])
+        for i in range(len(payload_bytes)):
+            payload_bytes[i] ^= mask_key[i % 4]
+        return payload_bytes.decode("utf-8", errors="replace"), offset + length
+    else:
+        if len(data) < offset + length:
+            return "", 0
+        payload_bytes = data[offset : offset + length]
+        return payload_bytes.decode("utf-8", errors="replace"), offset + length
+
+
+def format_nats_pub(subject: str, payload: str) -> bytes:
+    """Format a NATS protocol PUB command with payload."""
+    data = payload.encode("utf-8")
+    header = f"PUB {subject} {len(data)}\r\n".encode("utf-8")
+    return header + data + b"\r\n"
+
+
+def parse_nats_frame(data: bytes) -> tuple[str, str]:
+    """Parse a NATS PUB message frame into (subject, payload)."""
+    text = data.decode("utf-8", errors="replace")
+    lines = text.split("\r\n")
+    if len(lines) >= 2 and lines[0].startswith("PUB "):
+        parts = lines[0].split()
+        subject = parts[1] if len(parts) > 1 else "synlynk.events"
+        payload = lines[1]
+        return subject, payload
+    return "", ""
+
+
 def _db():
     from synlynk import _get_db
     return _get_db()
@@ -30,11 +99,33 @@ def _recipient_key(actor: ActorIdentifier | dict | str) -> str:
 
 
 class RelayBroker:
-    """Thread-safe publisher and JSON-RPC method dispatcher."""
+    """Thread-safe publisher, JSON-RPC method dispatcher, and P2P mesh forwarder."""
 
     def __init__(self):
         self._subscribers: set[queue.Queue] = set()
+        self._peers: set[str] = set()
+        self._seen_events: set[str] = set()
         self._lock = threading.RLock()
+
+    def add_peer(self, peer_url: str) -> bool:
+        norm = peer_url.rstrip("/")
+        with self._lock:
+            if norm not in self._peers:
+                self._peers.add(norm)
+                return True
+            return False
+
+    def remove_peer(self, peer_url: str) -> bool:
+        norm = peer_url.rstrip("/")
+        with self._lock:
+            if norm in self._peers:
+                self._peers.remove(norm)
+                return True
+            return False
+
+    def list_peers(self) -> list[str]:
+        with self._lock:
+            return sorted(self._peers)
 
     def subscribe(self) -> queue.Queue:
         subscriber = queue.Queue(maxsize=256)
@@ -96,6 +187,18 @@ class RelayBroker:
             event_type, payload = "steering_injected", {"job_id": params.get("job_id"), "prompt_delta": params.get("prompt_delta", "")}
         elif method in ("relay.request_review", "request_review"):
             event_type, payload = "review_requested", {"pr_url": params.get("pr_url"), "diff_summary": params.get("diff_summary", "")}
+        elif method in ("relay.peer_add", "peer_add"):
+            peer_url = params.get("peer_url") or params.get("url")
+            if not peer_url:
+                raise ValueError("peer_url parameter required")
+            added = self.add_peer(peer_url)
+            return {"peer_url": peer_url, "added": added, "peers": self.list_peers()}
+        elif method in ("relay.peer_list", "peer_list"):
+            return {"peers": self.list_peers(), "count": len(self.list_peers())}
+        elif method in ("relay.peer_remove", "peer_remove"):
+            peer_url = params.get("peer_url") or params.get("url")
+            removed = self.remove_peer(peer_url)
+            return {"peer_url": peer_url, "removed": removed, "peers": self.list_peers()}
         elif method in ("relay.broadcast", "broadcast"):
             event_type, payload, recipient = "task_progress", params.get("payload") or {"topic": params.get("topic"), "message": params.get("message", "")}, None
         elif method in ("relay.runner_progress", "runner_progress"):
@@ -103,7 +206,42 @@ class RelayBroker:
         else:
             raise ValueError(f"method not found: {method}")
         envelope = EventEnvelope.create(sender, event_type, payload, recipient)
-        return {"event_id": envelope.event_id, "subscribers": self.publish(envelope), "event": envelope.to_dict()}
+        subscribers = self.publish(envelope)
+        forwarded = self.forward_to_peers(envelope)
+        return {"event_id": envelope.event_id, "subscribers": subscribers, "forwarded": forwarded, "event": envelope.to_dict()}
+
+    def forward_to_peers(self, envelope: EventEnvelope) -> int:
+        """Forward an event to connected mesh peers without looping."""
+        with self._lock:
+            if envelope.event_id in self._seen_events:
+                return 0
+            self._seen_events.add(envelope.event_id)
+            peers = list(self._peers)
+
+        forwarded = 0
+        payload = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "relay.broadcast",
+            "params": {
+                "actor": envelope.sender.to_dict(),
+                "topic": envelope.event_type,
+                "payload": envelope.payload,
+            },
+        }
+        for peer in peers:
+            try:
+                req = urllib.request.Request(
+                    f"{peer}/rpc",
+                    data=json.dumps(payload).encode("utf-8"),
+                    headers={"Content-Type": "application/json"},
+                )
+                with urllib.request.urlopen(req, timeout=3) as resp:
+                    if resp.status == 200:
+                        forwarded += 1
+            except Exception:
+                pass
+        return forwarded
 
 
 class RelayHandler(BaseHTTPRequestHandler):
@@ -227,3 +365,36 @@ def cmd_relay_tail(args):
             line = raw_line.decode(errors="replace").rstrip()
             if line.startswith("data: "):
                 print(line[6:], flush=True)
+
+
+def cmd_relay_peer_add(args):
+    peer_url_str = getattr(args, "peer_url", None) or getattr(args, "url", "")
+    params = {"peer_url": peer_url_str}
+    request = urllib.request.Request(
+        relay_url(args) + "/rpc",
+        data=json.dumps({"jsonrpc": "2.0", "id": 1, "method": "relay.peer_add", "params": params}).encode(),
+        headers={"Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(request, timeout=5) as response:
+        result = json.loads(response.read())
+    if "error" in result:
+        raise RuntimeError(result["error"].get("message", "relay peer add failed"))
+    print(f"Added peer: {peer_url_str}")
+
+
+def cmd_relay_peer_list(args):
+    request = urllib.request.Request(
+        relay_url(args) + "/rpc",
+        data=json.dumps({"jsonrpc": "2.0", "id": 1, "method": "relay.peer_list", "params": {}}).encode(),
+        headers={"Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(request, timeout=5) as response:
+        result = json.loads(response.read())
+    if "error" in result:
+        raise RuntimeError(result["error"].get("message", "relay peer list failed"))
+    peers = result.get("result", {}).get("peers", [])
+    if not peers:
+        print("No peers configured.")
+    else:
+        for p in peers:
+            print(f"- {p}")

@@ -1,51 +1,10 @@
-# Task Execution Order and Dependencies
+# synlynk — Todo
 
-## Recently Landed (since last sync)
-- [x] #1475 — Allow distinct QA App identities to submit approving PR reviews
-- [x] #1440 (PR #1440) — Dynamic Home Harness Orchestrator Parity & Dual-Mode Directives (Governs goal-250b6fb2; spec & plan committed, constitutional precedence, dual-mode instructions across 4 harnesses, runtime home detection banner, synlynk home CLI verb, probe legacy repair, docs sync)
-- [x] v0.15.0 — Workspace Policy Layer
-- [x] v0.16.0 — Autonomous Loop
-- [x] v0.17.0 — Ticket-Driven Approval Auto-Resume
-- [x] v0.18.0 — Dispatch Reliability & QA Merge-Gate Authority
-- [x] Charter authority design + injection mechanism spec (PR #1193) — content/structure follow-up spec also drafted, plan not yet dispatched
-- [x] Harness capability baseline + recurring reassessment protocol (`docs/harness-capability-baseline.md`, PR #1178, 2026-08-25) — tracked ongoing via #1179
-- [x] LIVE-9 (`jobs --all` datetime crash) + LIVE-10 (branch-protection `enforce_admins` regression) — RCAs written, fixes merged
-- [x] #1209 — Codex dispatch `--ask-for-approval` flag mismatch (PR #1210, merged 2026-08-28, issue closed 2026-08-29)
-- [x] #1211 — macOS launchd daemon `KeepAlive` missing `SuccessfulExit: false` (PR #1212, merged 2026-08-28, issue closed 2026-08-29)
-- [x] #332/#338/#340/#348/#419/#461/#786/#936/#860 — all confirmed CLOSED on GitHub; stale in this file for weeks, removed from Next Task below
-- [x] [LIVE-6] #1140 reopened, root-caused (pre-fork token refresh moved into `daemon start`, not eliminated by prior fix), cross-linked to #1228, fixed via PR #1249 (merged `a37f4ff`, 2026-08-29)
-- [x] #1250 — dispatch job summaries silently report "files: 0 touched"; root-caused (`_job_worktree_details()` CWD-relative path), fixed via PR #1251 (merged `77a9be1`, 2026-08-29)
-- [x] PR #1195, #1214, #1215 — all confirmed MERGED on GitHub; Review Queue entry below was stale, removed
-- [x] #1228 — root-caused via systematic-debugging (unprotected exception boundary in daemon `_run_loop()`, 3 independent trigger bugs), fixed via PR #1258 (merged, 2026-08-29)
-- [x] PR #1232 — second, independently-dispatched, genuinely complementary fix for #1228 (CWD-relative daemon state paths — pidfile/logfile/watch-state via `_repo_common_dir()`/`_daemon_state_path()`); rebased onto post-#1258 main, found+fixed a real regression it introduced (bare `except Exception` needed around the new `subprocess.run` call — a global `Popen` mock in unrelated tests was tripping it), merged 2026-08-29. Confirmed via code read that it does NOT touch the separate qa-role GH-App-token-cache gap below — filed as #1264.
-- [x] 7-PR review backlog (#1259/#1260/#1254/#1253/#1252/#1248/#1247) collapsed to 3 real PRs via `git merge-base --is-ancestor` (dispatch-stacking produced supersets, not independent work); 5 closed as superseded/duplicate (#1259→#1260, #1248→#1254, #1252→#1254, #1253≡#1254 exact dup, #1243→#1247). Merged 2026-08-29: **#1260** (charter corpus references, `docs/charters/corpus-references.md`), **#1254** (harness/agent terminology prose sweep, 11 files), **#1247** (README named-release-sync validator, `synlynk/release_readme.py` + `synlynk release --check-docs`/`--waive`, CLAUDE.md protocol section — needed a manual rebase-merge past a `tests/test_agent_cli.py` conflict with #1250's landed test). All via Claude self-review fallback (#1264 blocked Agy/Codex `--requires-gh-write` dispatch again, live-reconfirmed).
-- [x] #1268 (PR #1271, merged `4eddd09`, 2026-08-29) — Direct Codex GitHub-write network access via config override; empirical sandbox probe proved `codex exec -s workspace-write -c sandbox_workspace_write.network_access=true` cleanly enables outbound HTTPS to `api.github.com`, disproving unalterable egress block; mapped `requires_gh_write` to auto-grant `_CODEX_NETWORK_PERMISSION` (`run:install`) for Codex in `synlynk/dispatch.py`. Replaces brokered file relay.
-- [x] #1274 (PR #1275, merged `582b0f1`, 2026-08-30) — Grant Codex full harness parity across review and gh-write tasks; permanently removed legacy 4-layer lockout that auto-rerouted Codex GitHub writes to Claude. Updated `_constants.py` (`can_gh_write: True`, `roles: ["builder", "verifier"]`), `.synlynk/policy.json`, `synlynk/policy.py`, `synlynk/probe.py`, `docs/harness-capability-baseline.md` (Reliable), and test suite. Implemented by Codex (`job-6144fa68`), reviewed/merged by Agy.
-- [x] #1277 (PR #1279, merged `68a7bd4`, 2026-08-30) — Eliminate Grok headless cancellation failure by adopting `--always-approve`; root-caused `stopReason: cancelled` to Grok's internal shell AST parser auto-cancelling compound commands in `--permission-mode dontAsk`. Updated `_grok_permission_flags()` to emit `--always-approve` when `run:shell` or `run:tests` is granted, made `--always-approve` required in `_constants.py`. Implemented by Grok (`job-4ba2fb42`), reviewed/merged by Agy.
-- [x] #1283 (PR #1286, merged `f740ba1`, 2026-08-30) — Eliminate Agy headless 5m timeout, enable read-only plan mode, and capture prompt-cache tokens. Injected `--print-timeout 30m0s` on all headless Agy dispatches, mapped `read:*` permissions to `--mode plan`, and extracted `cache_read_tokens` from structured output (verified with 7.14M cached tokens). Implemented by Agy, reviewed/merged on main.
-- [x] #1284 (PR #1288, merged `b7e99e9`, 2026-08-30) — Align Claude baseline roles with PM/deploy governance SOP; updated `_constants.py` roles from `["architect", "builder"]` to `["architect", "pm"]`, updated `docs/harness-capability-baseline.md`. Implemented by Claude (`job-56f6ecec`), reviewed/merged on main.
-- [x] #1255 (PR #1306, 2026-08-30) — Standardize Harness vs. Workspace Agent separation across CLI flags, configs, and docs. Added canonical `--force-harness` and `--to-harness` flags (with backward-compatible deprecation aliases), enabled `.harnesses/` directory resolution, exported canonical `cmd_harness_*` functions, resolved SQLite lock contention during model discovery, and cleaned living strategy docs.
-- [x] #342 (PR #1308, 2026-08-30) — Fleet Parity: Enforce --cwd for Grok and -C for Codex with working-directory prompt header. Passed explicit worktree path flags to Grok and Codex in `dispatch_agent()`, added Grok Working Directory prompt header in `_format_prompt_for_agent()`, and verified all 499 tests pass.
-- [x] #347 (PR #1309, 2026-08-30) — Fleet Parity: Instruction file preflight presence check and closed-loop receipt verification. Added instruction version extraction (`extract_instruction_version`), preflight check in `_preflight_dispatch()`, closed-loop `SYNLYNK_INSTRUCTION_VERSION` receipt protocol in `_format_prompt_for_agent()`, and receipt validation in `_check_instruction_receipt()`. All 499 tests pass.
-- [x] #573 (PR #1310, 2026-08-31) — Fleet Parity: Agy Stitch MCP Integration, Diagnostics, and Prompt Guidance. Discovered Gemini CLI extension vs. Antigravity MCP config mismatch, implemented TC-8 Stitch MCP doctor check with `synlynk doctor --fix agy` auto-remediation, added `--requires stitch` preflight gate, and injected `call_mcp_tool` prompt guidance. All 504 tests pass.
+<!-- Status: [ ] active  [x] done  [-] deferred  [~] superseded  [>] absorbed -->
 
-## Next Task
-- [ ] #914 — Workspace-level (multi-repo) agent identities — still untriaged into a phase
-- [ ] #937 — Review-dispatch job wrote to docs/ outside its read-only scope (job-0c924723, PR #933)
-- [ ] #1179 — Harness capability reassessment recurring cycle (parent/tracking; first cycle due ~25 jobs from creation or 2026-09-25)
-- [ ] #1213 — Automated live in-sandbox gh-write probe (re-scoped 2026-08-29 as concrete implementation under #1179, not a duplicate mechanism — see issue comment)
-- [ ] #1198 — [Tracking] Autonomous Operations Activation (5 children: #1199, #1200, #1201, #1202 [done], #1203)
-  - [ ] #1199 — Document corpus references used to derive charter content — **do before #1201**: this audit is what would catch/fix the still-unreconciled pm charter regression (competitive-intelligence-sweep/capability-gap-doc content overwritten with generic prose during an `agent edit pm` earlier, now stuck at revision 2, never restored) before it gets wired into live execution
-  - [ ] #1200 — `synlynk doctor` check for agent underperformance (elevated PR review cycles)
-  - [ ] #1201 — Wire charter content into dispatch/execution context (implements PR #1193's surfacing mechanism; charter content/structure design spec drafted, plan not yet written) — **blocked behind #1199**, see above
-  - [x] #1202 / #1255 — Standardize harness vs. agent terminology across codebase, CLI flags, configs, and docs (PR #1254, PR #1306); follow-up DB migration filed as #1307 / story-043eb9ee
-  - [ ] #1203 — Design GOVERNS backlog automation (auto-associate discovered/open/planned work with issues) — needs brainstorm first
-- [ ] #1188 — pipx-installed synlynk drifts silently from repo VERSION until schema-mismatch crash
-- [ ] #1194 — `synlynk decide --record` writes decision docs to gitignored path once repo is 'migrated'
-- [x] #865 / #1268 / #1213 comment (2026-08-29) — Live probe verified `codex exec -s workspace-write` blocks DNS egress by default, but `-c sandbox_workspace_write.network_access=true` enables outbound HTTPS; PR #1258 attribution false-positive resolved, PR #1271 merged providing direct config override for Codex gh-writes.
-- [ ] #1264 — qa-role GH App token cache writer (`github_app_auth.py:refresh_installation_token()`) doesn't share the daemon's worktree-aware path resolution that `_daemon_state_path()` now uses post-#1232; blocked Agy/Codex `--requires-gh-write` dispatch 3-4 times this session (PR #1258 review, PR #1232 fix attempts), forced Claude self-review/self-fix fallback each time. Root cause identified at code level; live reproduction with diagnostic instrumentation still needed before a fix is designed.
-- [ ] #1213 comment (2026-08-29) — Codex `api.github.com` sandbox-egress-block explanation for gh-write failures was never live-tested; #720 receipt-check failure observed instead this session, doesn't corroborate the theory — this session's #1228 fix dispatch (job-78d04989) had Codex successfully create PR #1258 with `--requires-gh-write`, further undermining the sandbox-egress theory — worth isolating failure mode when TC-suite live-test work happens
-- [x] #1263 / #1264 — synlynk daemon crashed immediately on macOS (raw `os.fork()` double-fork tripped `objc_initializeAfterForkError`, matched live `.ips` crash reports), which meant the daemon never survived long enough to run a single token-refresh cycle — the true explanation for #1264's "qa-role GH App token cache writer uses CWD-relative path, not `_daemon_state_path()`'s worktree-aware resolution" symptom. Fixed together in PR #1282 (merged 2026-08-30): `_daemonize_via_reexec()` replaces the double-fork with a detached `subprocess.Popen` re-exec spawn; `refresh_installation_token()` now threads `apps_dir` through explicitly. Merge required `gh pr merge --admin` — both qa-role dispatch attempts (Codex: unrelated CLI config bug; Grok: silent gh-write no-op) failed, CI was green, and required-approval count structurally can't clear with all harnesses sharing one GitHub identity.
+## Active Tasks
+- [ ] Review and refine the generated roadmap.md <!-- id: 1 -->
+- [ ] Review and update memory.md with actual decisions <!-- id: 2 -->
+- [ ] Define first milestone in roadmap <!-- id: 3 -->
 
-## Review Queue
-- PR #1440 (`feat/agy/dynamic-home-directives`): Dynamic home harness orchestrator parity — Dispatched to Claude (architect) via `job-927d474f`
+## Completed

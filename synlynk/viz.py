@@ -752,8 +752,10 @@ def generate_index_html(data: dict, port: int) -> str:
         ("gantt", "📅", "Gantt", "gantt.html", True),
         ("product", "🗺", "Product View", "product.html", False),
         ("logical", "🧩", "Logical View", "logical.html", False),
+        ("world", "🌐", "World View", "world.html", False),
         ("tube", "🚇", "Architect Map", "tube.html", False),
         ("infra", "⚙️", "Infra View", "infra.html", False),
+
         ("roles", "🤖", "Agent Roles", "roles.html", False),
         ("effort", "💰", "Effort & Cost", "effort.html", False),
         ("observatory", "◉", "Observatory", "observatory.html", False),
@@ -2331,6 +2333,11 @@ def generate_logical_html(data: dict, port: int) -> str:
 
 def generate_infra_html(data: dict, port: int) -> str:
     return _generate_bs6_view_html(data, port, "infra", "Infra View")
+
+
+def generate_world_html(data: dict, port: int) -> str:
+    return _generate_bs6_view_html(data, port, "world", "World View (Ecosystem Radar)")
+
 
 
 def generate_journeys_html(data: dict, port: int) -> str:
@@ -5024,7 +5031,9 @@ def _write_cache(data: dict, port: int) -> None:
         "tube.html": generate_architect_map_html(data, port),
         "product.html": generate_product_html(data, port),
         "logical.html": generate_logical_html(data, port),
+        "world.html": generate_world_html(data, port),
         "infra.html": generate_infra_html(data, port),
+
         "roles.html": generate_roles_html(data, port),
         "journeys.html": (
             '<!DOCTYPE html><html><head><meta charset="UTF-8">'

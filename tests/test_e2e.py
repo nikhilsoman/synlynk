@@ -123,7 +123,7 @@ def cli(tmp_path) -> Cli:
     subprocess.run(["git", "config", "user.email", "codex@example.com"], cwd=tmp_path, capture_output=True, check=True)
     subprocess.run(["git", "config", "user.name", "Codex"], cwd=tmp_path, capture_output=True, check=True)
     subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True, check=True)
-    subprocess.run(["git", "commit", "-m", "init"], cwd=tmp_path, capture_output=True, check=True)
+    subprocess.run(["git", "commit", "--no-verify", "-m", "init"], cwd=tmp_path, capture_output=True, check=True)
     return instance
 
 

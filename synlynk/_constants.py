@@ -1,6 +1,7 @@
 """Shared constants used across synlynk modules."""
 
 VERSION = "0.21.0-dev"
+__version__ = VERSION
 
 
 _INSTALL_SCRIPT_URL = (
