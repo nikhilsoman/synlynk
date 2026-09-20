@@ -1,5 +1,18 @@
 # Agy Devlog
 
+## 2026-09-20 — Frontier QA Testbed & Multi-Node Soak Testing Engine (Goal goal-9011307c / Epic #1713 / PR #1719)
+
+### Shipped
+- Implemented `synlynk/testbed/driver.py`: dual-backend driver abstraction supporting `OrbDriver` (wrapping `orbctl` for lightweight Linux VMs on macOS with native bridge IPs `192.168.139.x` and kernel fault injection) and `DockerDriver` (for CI containers).
+- Implemented `synlynk/testbed/installer.py`: version resolver supporting `--target staging`, `--target unstable`, `--target commit:<sha>`, and `--target local` (building local workspace `.whl` packages).
+- Implemented `synlynk/testbed/identities.py`: synthetic credential vault and 3-tier identity attribution provisioner (`<@alice, dev, codex>`, `<@bob, architect, agy>`, `<@charlie, qa, grok>`).
+- Implemented `synlynk/testbed/invariants.py` & `synlynk/testbed/scenarios.py`: multi-node acceptance scenarios (brownfield coldstart, P2P mesh handshake, task lease un-stranding after `SIGKILL`) with direct relational SQLite `state.db` invariant asserters.
+- Implemented `synlynk/testbed/cli.py`: full CLI wiring for `synlynk testbed run/matrix/soak/status/clean` and cryptographic Ed25519 receipt generation.
+- Bound `TOOL_ROLE_SKILLS["testbed"]` to `qa`, `verifier`, and `architect` in `synlynk/charters.py`.
+- Added `verify_testbed_receipt()` release gate check in `synlynk/policy.py`.
+- Verified 21 unit tests passing across all testbed modules. Shipped in PR #1719, closed Epic #1713 and issues #1714–#1718.
+
+
 ## 2026-06-28 — Homepage Sections 1, 3, 4, 5 & CSS Design System (Phase 2)
 
 ### Shipped
