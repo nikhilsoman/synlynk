@@ -190,3 +190,33 @@ def _merge_role_allowed(role: str, policy: Dict[str, Any], repo_path: str) -> bo
     except (OSError, ValueError, TypeError):
         pass
     return role in can_merge
+
+
+def verify_testbed_receipt(
+    commit_sha: str,
+    receipts_dir: Optional[Path] = None,
+    repo_path: Optional[str] = None,
+) -> bool:
+    """Verifies that an attested testbed receipt exists for the commit and passed."""
+    if receipts_dir is None:
+        base = Path(repo_path) if repo_path else Path.cwd()
+        receipts_dir = base / "project-docs" / "receipts"
+
+    if not receipts_dir.exists():
+        return False
+
+    receipt_path = receipts_dir / f"testbed-receipt-{commit_sha}.json"
+    if not receipt_path.exists():
+        # Check matching wildcards
+        matches = list(receipts_dir.glob(f"*{commit_sha}*.json"))
+        if not matches:
+            return False
+        receipt_path = matches[0]
+
+    try:
+        with open(receipt_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data.get("overall_verdict") == "PASSED" and bool(data.get("signature"))
+    except Exception:
+        return False
+

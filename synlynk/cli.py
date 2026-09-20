@@ -234,6 +234,8 @@ def build_parser() -> argparse.ArgumentParser:
     home_parser.add_argument("harness", nargs="?", choices=["claude", "agy", "codex", "grok", "local", "muse"], help="Harness to set as home")
     home_parser.add_argument("--force", action="store_true", help="Force immediate switch without draining in-progress story")
 
+    testbed_parser = subparsers.add_parser("testbed", help="Frontier QA Acceptance and Multi-Node Soak Testbed")
+    testbed_parser.add_argument("testbed_args", nargs=argparse.REMAINDER, help="Arguments passed to testbed runner")
 
     tool_parser = subparsers.add_parser("tool", help="Manage recommended ecosystem tools")
     tool_sub = tool_parser.add_subparsers(dest="tool_action")
@@ -2254,7 +2256,9 @@ def main(argv=None) -> None:
         if getattr(args, "cycles", False):
             from synlynk.heal_cycles import cmd_heal_cycles
             sys.exit(cmd_heal_cycles(args))
-        cmd_heal(args)
+    elif args.command == "testbed":
+        from synlynk.testbed.cli import run_testbed_cli
+        sys.exit(run_testbed_cli(args.testbed_args or []))
     elif args.command == "audit-docs":
         findings = cmd_audit_docs(json_output=args.json, fix=args.fix)
         if findings and not args.fix:
