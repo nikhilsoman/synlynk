@@ -1394,6 +1394,7 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             CREATE TABLE IF NOT EXISTS harness_quotas (
                 id           INTEGER PRIMARY KEY AUTOINCREMENT,
                 harness      TEXT NOT NULL,
+                track        TEXT NOT NULL DEFAULT 'default',
                 model        TEXT NOT NULL DEFAULT 'unknown',
                 quota_type   TEXT NOT NULL,
                 unit         TEXT NOT NULL DEFAULT 'tokens',
@@ -1401,7 +1402,7 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
                 used_tokens  INTEGER NOT NULL DEFAULT 0,
                 reset_at     TIMESTAMP,
                 updated_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(harness, model, quota_type, unit)
+                UNIQUE(harness, track, model, quota_type, unit)
             )
         """)
         conn.execute("""
@@ -1444,6 +1445,13 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             try:
                 conn.execute(
                     "ALTER TABLE harness_quotas ADD COLUMN model TEXT NOT NULL DEFAULT 'unknown'"
+                )
+            except sqlite3.OperationalError:
+                pass
+        if quota_cols and "track" not in quota_cols:
+            try:
+                conn.execute(
+                    "ALTER TABLE harness_quotas ADD COLUMN track TEXT NOT NULL DEFAULT 'default'"
                 )
             except sqlite3.OperationalError:
                 pass
