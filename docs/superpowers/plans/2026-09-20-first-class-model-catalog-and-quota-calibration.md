@@ -31,11 +31,11 @@
 **Interfaces:**
 - Produces: `load_model_catalog(repo_path: Optional[str]) -> dict`, `resolve_catalog_tier(tier: str, harness: str) -> str`
 
-- [ ] **Step 1: Write unit tests for JSON model catalog loading and fallback resolution**
-- [ ] **Step 2: Create declarative default `.synlynk/models.json` with 2026 SOTA models and rate cards**
-- [ ] **Step 3: Update `synlynk/models.py` to load from `.synlynk/models.json` with builtin fallback**
-- [ ] **Step 4: Update `synlynk/dispatch.py` to query model catalog dynamically for tier resolution**
-- [ ] **Step 5: Run tests and verify 100% pass**
+- [x] **Step 1: Write unit tests for JSON model catalog loading and fallback resolution**
+- [x] **Step 2: Create declarative default `.synlynk/models.json` with 2026 SOTA models and rate cards**
+- [x] **Step 3: Update `synlynk/models.py` to load from `.synlynk/models.json` with builtin fallback**
+- [x] **Step 4: Update `synlynk/dispatch.py` to query model catalog dynamically for tier resolution**
+- [x] **Step 5: Run tests and verify 100% pass**
 
 ---
 
@@ -50,10 +50,10 @@
 **Interfaces:**
 - Produces: Multi-track `harness_quotas` table with `track` column (`gemini`, `claude_proxy`, `gpt_oss`, `default`)
 
-- [ ] **Step 1: Write unit tests for multi-track quota reads/writes and dual-read cost updates**
-- [ ] **Step 2: Add migration for `track` column in `harness_quotas` table in `synlynk/db.py`**
-- [ ] **Step 3: Update `synlynk/costs.py` to attribute multi-track subscription costs**
-- [ ] **Step 4: Run tests and verify backward compatibility**
+- [x] **Step 1: Write unit tests for multi-track quota reads/writes and dual-read cost updates**
+- [x] **Step 2: Add migration for `track` column in `harness_quotas` table in `synlynk/db.py`**
+- [x] **Step 3: Update `synlynk/costs.py` to attribute multi-track subscription costs**
+- [x] **Step 4: Run tests and verify backward compatibility**
 
 ---
 
@@ -66,10 +66,10 @@
 **Interfaces:**
 - Produces: `parse_cli_usage_output(harness: str, text: str) -> dict`, `calibrate_quota_window(...)`
 
-- [ ] **Step 1: Write unit tests for `/usage` parsing across Claude, Antigravity, and Codex CLI outputs**
-- [ ] **Step 2: Implement delta mathematical calibration formula correlating tokens to percentage deltas**
-- [ ] **Step 3: Implement dynamic runway calculation (hours/days remaining) based on rolling burn rates**
-- [ ] **Step 4: Run tests and verify calibration accuracy**
+- [x] **Step 1: Write unit tests for `/usage` parsing across Claude, Antigravity, and Codex CLI outputs**
+- [x] **Step 2: Implement delta mathematical calibration formula correlating tokens to percentage deltas**
+- [x] **Step 3: Implement dynamic runway calculation (hours/days remaining) based on rolling burn rates**
+- [x] **Step 4: Run tests and verify calibration accuracy**
 
 ---
 
@@ -83,10 +83,10 @@
 **Interfaces:**
 - Produces: `get_utilization_advisory() -> dict`, `detect_offpeak_expanded_windows() -> list`
 
-- [ ] **Step 1: Write unit tests for surge throttle and off-peak expanded capacity detection**
-- [ ] **Step 2: Implement `synlynk/advisory.py` computing regional time-block capacity factors**
-- [ ] **Step 3: Implement advisory formatter for CLI and public JSON export**
-- [ ] **Step 4: Run tests and verify advisory outputs**
+- [x] **Step 1: Write unit tests for surge throttle and off-peak expanded capacity detection**
+- [x] **Step 2: Implement `synlynk/advisory.py` computing regional time-block capacity factors**
+- [x] **Step 3: Implement advisory formatter for CLI and public JSON export**
+- [x] **Step 4: Run tests and verify advisory outputs**
 
 ---
 
@@ -100,6 +100,6 @@
 **Interfaces:**
 - Produces: `synlynk quota advisory`, `synlynk quota calibrate`, `synlynk quota --json`
 
-- [ ] **Step 1: Write CLI integration tests for `synlynk quota advisory` and `synlynk quota calibrate`**
-- [ ] **Step 2: Wire CLI subcommands in `synlynk/cli.py`**
-- [ ] **Step 3: Run entire test suite across all subsystems and verify 100% pass**
+- [x] **Step 1: Write CLI integration tests for `synlynk quota advisory` and `synlynk quota calibrate`**
+- [x] **Step 2: Wire CLI subcommands in `synlynk/cli.py`**
+- [x] **Step 3: Run entire test suite across all subsystems and verify 100% pass**
