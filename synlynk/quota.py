@@ -2,10 +2,11 @@
 
 import json
 import os
+import re
 import sys
 import time
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Optional
 
 try:
     from datetime import UTC  # Python 3.11+
@@ -867,3 +868,134 @@ def _estimate_story_cost_usd(
     in_tok = int(tokens * 0.7)
     out_tok = tokens - in_tok
     return (in_tok / 1000 * rates["input"]) + (out_tok / 1000 * rates["output"])
+
+
+def parse_cli_usage_output(harness: str, text: str) -> dict[str, Any]:
+    """Parse output from harness-specific /usage CLI commands into normalized quota structures."""
+    windows: dict[str, Any] = {}
+    tracks: dict[str, Any] = {}
+    lines = [line.strip() for line in (text or "").splitlines() if line.strip()]
+
+    for line in lines:
+        line_lower = line.lower()
+        track_detected = None
+        if "gemini" in line_lower:
+            track_detected = "gemini"
+        elif "claude" in line_lower and harness == "agy":
+            track_detected = "claude_proxy"
+        elif any(k in line_lower for k in ("gpt", "oss", "deepseek", "qwen")) and harness == "agy":
+            track_detected = "gpt_oss"
+
+        pct_match = re.search(r"(\d+(?:\.\d+)?)\s*%", line)
+        if not pct_match:
+            continue
+        pct_val = float(pct_match.group(1))
+
+        reset_match = re.search(r"resets?\s+(?:in|on)\s+([^)]+)", line, re.IGNORECASE)
+        reset_str = reset_match.group(1).strip() if reset_match else None
+
+        win_type = None
+        if any(w in line_lower for w in ("5-hour", "5 hour", "5h", "5-hr")):
+            win_type = "5h"
+        elif any(w in line_lower for w in ("weekly", "week", "1w", "7-day")):
+            win_type = "weekly"
+        elif any(w in line_lower for w in ("daily", "day", "24h")):
+            win_type = "daily"
+        elif any(w in line_lower for w in ("monthly", "month", "30-day")):
+            win_type = "monthly"
+
+        if win_type:
+            entry = {"pct_used": pct_val, "resets_in": reset_str, "track": track_detected or "default"}
+            if track_detected:
+                if track_detected not in tracks:
+                    tracks[track_detected] = {}
+                tracks[track_detected][win_type] = entry
+            else:
+                windows[win_type] = entry
+
+    return {
+        "harness": harness,
+        "raw_text": text,
+        "windows": windows,
+        "tracks": tracks,
+    }
+
+
+def calibrate_quota_window(delta_tokens: int, p1_pct: float, p2_pct: float) -> dict[str, Any]:
+    """Correlate delta executed tokens against delta reported % to compute calculated ceiling."""
+    delta_pct = p2_pct - p1_pct
+    if delta_pct <= 0 or delta_tokens <= 0:
+        return {
+            "valid": False,
+            "delta_tokens": delta_tokens,
+            "delta_pct": delta_pct,
+            "calculated_ceiling": None,
+            "reason": "non_positive_delta",
+        }
+    ceiling = int(round((delta_tokens * 100.0) / delta_pct))
+    return {
+        "valid": True,
+        "delta_tokens": delta_tokens,
+        "delta_pct": round(delta_pct, 4),
+        "calculated_ceiling": ceiling,
+    }
+
+
+def calculate_burn_runway(remaining_tokens: int, burn_rate_tokens_per_hr: float) -> dict[str, Any]:
+    """Calculate projected burn runway in hours based on remaining headroom and burn rate."""
+    if burn_rate_tokens_per_hr <= 0:
+        return {
+            "remaining_tokens": remaining_tokens,
+            "burn_rate_per_hr": burn_rate_tokens_per_hr,
+            "runway_hours": None,
+            "status": "idle",
+        }
+    hours = max(0.0, float(remaining_tokens) / float(burn_rate_tokens_per_hr))
+    status = "healthy"
+    if hours < 1.0:
+        status = "critical"
+    elif hours < 3.0:
+        status = "warning"
+
+    return {
+        "remaining_tokens": remaining_tokens,
+        "burn_rate_per_hr": burn_rate_tokens_per_hr,
+        "runway_hours": round(hours, 2),
+        "status": status,
+    }
+
+
+def calibrate_and_update_quota(
+    harness: str,
+    window: str,
+    p1_pct: float,
+    p2_pct: float,
+    delta_tokens: int,
+    track: str = "default",
+    conn=None,
+) -> dict[str, Any]:
+    """Calibrate quota limit from delta telemetry and update harness_quotas table."""
+    cal = calibrate_quota_window(delta_tokens, p1_pct, p2_pct)
+    if not cal["valid"] or cal["calculated_ceiling"] is None:
+        return cal
+    ceiling = cal["calculated_ceiling"]
+    used = int(round(ceiling * (p2_pct / 100.0)))
+    own_conn = conn is None
+    if own_conn:
+        conn = _pkg("_get_db")()
+    try:
+        _upsert_agent_quota(
+            harness,
+            window,
+            limit_tokens=ceiling,
+            used_tokens=used,
+            track=track,
+            unit="tokens",
+            conn=conn,
+        )
+        if own_conn:
+            conn.commit()
+    finally:
+        if own_conn and conn is not None:
+            conn.close()
+    return cal
