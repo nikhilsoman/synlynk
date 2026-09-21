@@ -1,6 +1,6 @@
 # W12 — A Channel Is a Pane
 
-**PR:** TBD
+**PR:** [#1731](https://github.com/nikhilsoman/synlynk/pull/1731)
 **Date:** 2026-09-22
 
 ## Where things stood

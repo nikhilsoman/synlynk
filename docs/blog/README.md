@@ -255,7 +255,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [218](./218-pr1685-add-explicit-canonical-registry-recovery.md) | PR #1685 — add explicit canonical registry recovery | [#1685](https://github.com/nikhilsoman/synlynk/pull/1685) | 2026-09-18 |
 | [219](./219-pr1692-complete-w8-packs-and-connector-catalog.md) | PR #1692 — complete W8 packs and connector catalog | [#1692](https://github.com/nikhilsoman/synlynk/pull/1692) | 2026-09-18 |
 | [220](./220-pr1693-isolate-scratch-registry-path.md) | PR #1693 — isolate scratch registry path | [#1693](https://github.com/nikhilsoman/synlynk/pull/1693) | 2026-09-19 |
-| [223](./223-prTBD-w12-discord-herdr-bridge.md) | W12 - Discord/Herdr full-duplex remote-access bridge | TBD | 2026-09-22 |
+| [223](./223-pr1731-w12-discord-herdr-bridge.md) | W12 - Discord/Herdr full-duplex remote-access bridge | [#1731](https://github.com/nikhilsoman/synlynk/pull/1731) | 2026-09-22 |
 
 ## Per-PR Post Template
 
