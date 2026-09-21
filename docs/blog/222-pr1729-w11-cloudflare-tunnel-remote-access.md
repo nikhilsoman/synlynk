@@ -1,6 +1,6 @@
 # W11 — What a Tunnel Is For, and What It Isn't
 
-**PR:** TBD
+**PR:** [#1729](https://github.com/nikhilsoman/synlynk/pull/1729)
 **Date:** 2026-09-21
 
 ## Where things stood
