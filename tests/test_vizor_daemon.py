@@ -200,3 +200,23 @@ def test_workspace_index_empty(monkeypatch):
     monkeypatch.setattr(vizor_daemon, "_known_slugs", lambda: set())
     html = vizor_daemon._workspace_index_html()
     assert "No workspaces registered" in html
+
+
+def test_write_and_read_pidfile(tmp_path, monkeypatch):
+    from synlynk import vizor_daemon
+
+    monkeypatch.setattr(vizor_daemon, "DAEMON_HOME", tmp_path)
+    monkeypatch.setattr(vizor_daemon, "PIDFILE", tmp_path / "pidfile")
+    monkeypatch.setattr(vizor_daemon, "PORTFILE", tmp_path / "port")
+
+    vizor_daemon._write_state(pid=1234, port=8721)
+
+    assert vizor_daemon._read_pid() == 1234
+    assert vizor_daemon._read_port() == 8721
+
+
+def test_read_pid_missing_returns_none(tmp_path, monkeypatch):
+    from synlynk import vizor_daemon
+
+    monkeypatch.setattr(vizor_daemon, "PIDFILE", tmp_path / "nope")
+    assert vizor_daemon._read_pid() is None

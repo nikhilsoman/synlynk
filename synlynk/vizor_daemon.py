@@ -173,3 +173,71 @@ def build_workspace_routing_handler():
             super().do_GET()
 
     return WorkspaceRoutingHandler
+
+
+def _write_state(pid: int, port: int) -> None:
+    DAEMON_HOME.mkdir(parents=True, exist_ok=True)
+    PIDFILE.write_text(str(pid))
+    PORTFILE.write_text(str(port))
+
+
+def _read_pid() -> Optional[int]:
+    try:
+        return int(PIDFILE.read_text().strip())
+    except (FileNotFoundError, ValueError):
+        return None
+
+
+def _read_port() -> Optional[int]:
+    try:
+        return int(PORTFILE.read_text().strip())
+    except (FileNotFoundError, ValueError):
+        return None
+
+
+def is_running() -> bool:
+    pid = _read_pid()
+    if pid is None:
+        return False
+    try:
+        os.kill(pid, 0)
+        return True
+    except (ProcessLookupError, PermissionError):
+        return False
+    except OSError:
+        return False
+
+
+def run_forever(port: Optional[int] = None) -> None:
+    """Daemon entrypoint: serve forever, refreshing every registered workspace on a timer."""
+    import http.server
+    import threading
+
+    from synlynk.viz import DEFAULT_PORT
+
+    resolved_port = port or DEFAULT_PORT
+    CACHE_ROOT.mkdir(parents=True, exist_ok=True)
+    handler_cls = build_workspace_routing_handler()
+    server = http.server.HTTPServer(("127.0.0.1", resolved_port), handler_cls)
+    _write_state(pid=os.getpid(), port=resolved_port)
+    _log(f"daemon starting on port {resolved_port}")
+
+    stop_event = threading.Event()
+
+    def _poll_loop():
+        while not stop_event.is_set():
+            poll_once(resolved_port)
+            stop_event.wait(poll_interval())
+
+    poll_thread = threading.Thread(target=_poll_loop, daemon=True)
+    poll_thread.start()
+
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        stop_event.set()
+        server.shutdown()
+        server.server_close()
+        _log("daemon stopped")
