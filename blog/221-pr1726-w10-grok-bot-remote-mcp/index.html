@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #1726 — W10 Grok Bot remote MCP surface spec | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-1">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Sep 20, 2026</span>
+        
+          <span class="blog-post-pr">PR #1726</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #1726 — W10 Grok Bot remote MCP surface spec</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>W10 — A Phone Can Talk to a synlynk Workspace, Once Hosted Vizor Exists</h1>
+<p><strong>PR:</strong> <a href="https://github.com/nikhilsoman/synlynk/pull/1726">#1726</a>
+<strong>Date:</strong> 2026-09-20</p>
+<h2>Where things stood</h2>
+<p>The #914 workspace-identity arc (W0–W9) had just locked its last piece: W9, hosted Vizor. The plan there is <code>synlynk.com/&lt;product_slug&gt;</code> — a relay serving the same organigram, board, and job state that local <code>synlynk viz</code> shows, gated by GitHub OAuth and W4 member-token minting. The stated goal at the end of W9 was narrow and firm: give a teammate or an agency Partner a browser window onto a workspace without SSH to Nikhil's laptop. Nothing about phones, nothing about chat.</p>
+<h2>What moved the goalpost</h2>
+<p>Grok Bot — xAI's persistent cloud agent, reachable from a macOS/iOS/Android app — turned out to have exactly one integration path into a third-party system: a <strong>remote MCP connector</strong>. Not local, not loopback — it only speaks to an MCP server reachable over the public internet. That's a hard constraint, and it happens to line up with something synlynk was already going to build: a hosted relay with real auth. The question this PR answers is whether &quot;remote access to a Workspace&quot; should mean two things being built (a web HUD and a phone bot, separately) or one relay with two consumers.</p>
+<h2>What this PR ships</h2>
+<p>Nothing executable — this is a spec, <code>docs/superpowers/specs/2026-09-20-grok-bot-remote-mcp-design.md</code>, tracked as <strong>W10</strong>. It locks:</p>
+<ul>
+<li><strong>Transport</strong>: a remote MCP endpoint (<code>synlynk.com/&lt;product_slug&gt;/mcp</code>) on the <em>same</em> W9 relay — no second backend.</li>
+<li><strong>Auth</strong>: the same GitHub OAuth + W4 member-token minting hosted Vizor already needs. Grok Bot's connector auth maps to a W4 member exactly like a browser session does.</li>
+<li><strong>Authority</strong>: the MCP layer is a thin transport. <code>dispatch</code> and <code>decide</code> still pass through <code>policy.json</code>/<code>merge_authority</code> server-side — Grok Bot's own prompt-based permission model (natural-language rules + a review agent, not code-enforced) is never treated as the real gate.</li>
+<li><strong>Tool surface (v1)</strong>: <code>status</code>, <code>jobs_list</code>, <code>job_get</code>, <code>pr_check</code> (read), <code>dispatch</code>, <code>decide</code> (write) — each mapped 1:1 to something hosted Vizor already does, so nothing new gets exposed.</li>
+<li><strong>Scope discipline</strong>: the Marketplace &quot;Bot&quot; template (packaging this MCP surface as a shareable, pre-wired bot) is explicitly deferred — a follow-on spec, not built here.</li>
+</ul>
+<p>One thing deliberately left open: whether writes ship enabled on day one or the surface launches read-only with a feature flag for <code>dispatch</code>/<code>decide</code>, flipped on after real-world confidence. That's a rollout call, not an architecture call, so it's flagged rather than decided.</p>
+<p>No brainstorm visuals were used for this one — the questions were architectural (transport, auth, authority), not visual, so the session stayed text-only per the brainstorming skill's own guidance on when a visual companion earns its keep.</p>
+<h2>Where this leaves the long arc</h2>
+<p>The long arc is a harness-agnostic Home Conductor — Claude, Codex, Agy, Grok all get equal home/away airtime, and now potentially a <em>device</em> dimension too: the same conductor role reachable from a laptop or a phone, against one source of truth. W10 doesn't add a new source of truth; it makes sure a second client of the existing one doesn't turn into a second implementation of it.</p>
+<h2>New goalpost</h2>
+<p>W10 is locked and blocked on W9 landing on <code>main</code> with its own plan. The moment that dependency clears, W10 moves straight to <code>writing-plans</code> — the only decision waiting is the read/write rollout flag in §4, not a re-litigation of the design.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
