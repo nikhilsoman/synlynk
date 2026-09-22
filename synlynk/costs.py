@@ -497,23 +497,40 @@ def _subscription_actual_usd(
     tokens_in: int,
     tokens_out: int,
     pm_config: dict,
+    model: Optional[str] = None,
+    track: Optional[str] = None,
 ) -> tuple:
     """Return (actual_usd, quota_pct_used) for subscription mode."""
-    from synlynk.quota import _upsert_agent_quota
+    from synlynk.quota import _upsert_agent_quota, resolve_harness_track
 
+    track = track or resolve_harness_track(agent, model)
     get_db = _pkg("_get_db")
     conn = get_db()
     try:
-        row_in = conn.execute(
-            "SELECT used_tokens FROM harness_quotas WHERE harness=? "
-            "AND quota_type='monthly' AND unit='tokens' AND model='unknown'",
-            (agent,),
-        ).fetchone()
-        row_out = conn.execute(
-            "SELECT used_tokens FROM harness_quotas WHERE harness=? "
-            "AND quota_type='monthly' AND unit='tokens' AND model='out'",
-            (agent,),
-        ).fetchone()
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(harness_quotas)")}
+        has_track = "track" in cols
+        if has_track:
+            row_in = conn.execute(
+                "SELECT used_tokens FROM harness_quotas WHERE harness=? AND track=? "
+                "AND quota_type='monthly' AND unit='tokens' AND model='unknown'",
+                (agent, track),
+            ).fetchone()
+            row_out = conn.execute(
+                "SELECT used_tokens FROM harness_quotas WHERE harness=? AND track=? "
+                "AND quota_type='monthly' AND unit='tokens' AND model='out'",
+                (agent, track),
+            ).fetchone()
+        else:
+            row_in = conn.execute(
+                "SELECT used_tokens FROM harness_quotas WHERE harness=? "
+                "AND quota_type='monthly' AND unit='tokens' AND model='unknown'",
+                (agent,),
+            ).fetchone()
+            row_out = conn.execute(
+                "SELECT used_tokens FROM harness_quotas WHERE harness=? "
+                "AND quota_type='monthly' AND unit='tokens' AND model='out'",
+                (agent,),
+            ).fetchone()
     finally:
         conn.close()
 
@@ -579,6 +596,7 @@ def _subscription_actual_usd(
             "monthly",
             limit_tokens=tier_quota_in,
             used_tokens=cumulative_in,
+            track=track,
             model="unknown",
             unit="tokens",
             conn=conn,
@@ -588,6 +606,7 @@ def _subscription_actual_usd(
             "monthly",
             limit_tokens=tier_quota_out,
             used_tokens=cumulative_out,
+            track=track,
             model="out",
             unit="tokens",
             conn=conn,
@@ -638,17 +657,24 @@ def _credit_grant_actual_usd(agent: str, api_equivalent_usd: float) -> tuple:
         conn.close()
 
 
-def resolve_payment_value(agent: str, tokens_in: int, tokens_out: int) -> PaymentValue:
+def resolve_payment_value(
+    agent: str,
+    tokens_in: int,
+    tokens_out: int,
+    model: Optional[str] = None,
+) -> PaymentValue:
     """Resolve API-equivalent and actual payment values for a harness call."""
     pm_config = _payment_model_config_for_agent(agent)
     mode = pm_config.get("mode", "pay_as_you_go")
 
-    model_version = extract_model_version("", agent=agent)
+    model_version = model or extract_model_version("", agent=agent)
     rates = _model_rate_for_version(model_version, agent=agent)
     api_equivalent_usd = (tokens_in / 1000 * rates["input"]) + (tokens_out / 1000 * rates["output"])
 
     if mode == "subscription":
-        actual_usd, quota_pct_used = _subscription_actual_usd(agent, tokens_in, tokens_out, pm_config)
+        actual_usd, quota_pct_used = _subscription_actual_usd(
+            agent, tokens_in, tokens_out, pm_config, model=model
+        )
         return PaymentValue(
             api_equivalent_usd=api_equivalent_usd,
             actual_usd=actual_usd,

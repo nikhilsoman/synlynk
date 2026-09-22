@@ -928,6 +928,7 @@ CREATE TABLE IF NOT EXISTS subscriptions (
 CREATE TABLE IF NOT EXISTS harness_quotas (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     harness      TEXT NOT NULL,
+    track        TEXT NOT NULL DEFAULT 'default',
     model        TEXT NOT NULL DEFAULT 'unknown',
     quota_type   TEXT NOT NULL,
     unit         TEXT NOT NULL DEFAULT 'tokens',
@@ -935,7 +936,7 @@ CREATE TABLE IF NOT EXISTS harness_quotas (
     used_tokens  INTEGER NOT NULL DEFAULT 0,
     reset_at     TIMESTAMP,
     updated_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(harness, model, quota_type, unit)
+    UNIQUE(harness, track, model, quota_type, unit)
 );
 CREATE INDEX IF NOT EXISTS idx_harness_quotas_harness ON harness_quotas(harness);
 

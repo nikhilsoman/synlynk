@@ -103,37 +103,48 @@ def record_job_superseded(
     if not os.path.exists(db_file):
         return False
 
-    conn = None
-    try:
-        with _lineage_write_lock(db_file):
-            conn = _connect_lineage_db(db_file)
-            with conn:
-                ensure_lineage_schema(conn)
+    import time
+    for attempt in range(5):
+        conn = None
+        try:
+            with _lineage_write_lock(db_file):
+                conn = _connect_lineage_db(db_file)
+                with conn:
+                    ensure_lineage_schema(conn)
 
-                # Check if old job has an existing lineage_root
-                root_row = conn.execute(
-                    "SELECT lineage_root FROM daemon_jobs WHERE job_id = ?",
-                    (old_job_id,),
-                ).fetchone()
-                root_id = (root_row[0] if root_row and root_row[0] else None) or old_job_id
+                    # Check if old job has an existing lineage_root
+                    root_row = conn.execute(
+                        "SELECT lineage_root FROM daemon_jobs WHERE job_id = ?",
+                        (old_job_id,),
+                    ).fetchone()
+                    root_id = (root_row[0] if root_row and root_row[0] else None) or old_job_id
 
-                # Update old job
-                conn.execute(
-                    "UPDATE daemon_jobs SET superseded_by = ?, status = 'superseded' WHERE job_id = ?",
-                    (new_job_id, old_job_id),
-                )
+                    # Update old job
+                    conn.execute(
+                        "UPDATE daemon_jobs SET superseded_by = ?, status = 'superseded' WHERE job_id = ?",
+                        (new_job_id, old_job_id),
+                    )
 
-                # Set lineage_root on new job
-                conn.execute(
-                    "UPDATE daemon_jobs SET lineage_root = ? WHERE job_id = ?",
-                    (root_id, new_job_id),
-                )
-        return True
-    except Exception:
-        return False
-    finally:
-        if conn is not None:
-            conn.close()
+                    # Set lineage_root on new job
+                    conn.execute(
+                        "UPDATE daemon_jobs SET lineage_root = ? WHERE job_id = ?",
+                        (root_id, new_job_id),
+                    )
+            return True
+        except sqlite3.OperationalError:
+            if attempt < 4:
+                time.sleep(0.05 * (2 ** attempt))
+                continue
+            return False
+        except Exception:
+            return False
+        finally:
+            if conn is not None:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+    return False
 
 
 def record_story_superseded(
@@ -146,22 +157,33 @@ def record_story_superseded(
     if not os.path.exists(db_file):
         return False
 
-    conn = None
-    try:
-        with _lineage_write_lock(db_file):
-            conn = _connect_lineage_db(db_file)
-            with conn:
-                ensure_lineage_schema(conn)
-                conn.execute(
-                    "UPDATE stories SET superseded_by = ? WHERE story_id = ?",
-                    (new_story_id, old_story_id),
-                )
-        return True
-    except Exception:
-        return False
-    finally:
-        if conn is not None:
-            conn.close()
+    import time
+    for attempt in range(5):
+        conn = None
+        try:
+            with _lineage_write_lock(db_file):
+                conn = _connect_lineage_db(db_file)
+                with conn:
+                    ensure_lineage_schema(conn)
+                    conn.execute(
+                        "UPDATE stories SET superseded_by = ? WHERE story_id = ?",
+                        (new_story_id, old_story_id),
+                    )
+            return True
+        except sqlite3.OperationalError:
+            if attempt < 4:
+                time.sleep(0.05 * (2 ** attempt))
+                continue
+            return False
+        except Exception:
+            return False
+        finally:
+            if conn is not None:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+    return False
 
 
 def get_job_lineage(job_id: str, db_path: Optional[str] = None) -> List[Dict[str, Optional[str]]]:
