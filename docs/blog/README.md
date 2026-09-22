@@ -1,6 +1,7 @@
 # synlynk Blog Series: Building the OS for Multi-Agent Development
 
 | [221](./221-pr1726-w10-grok-bot-remote-mcp.md) | W10 - Grok Bot remote MCP surface, blocked on W9 | [#1726](https://github.com/nikhilsoman/synlynk/pull/1726) | 2026-09-20 |
+| [222](./222-pr1729-w11-cloudflare-tunnel-remote-access.md) | W11 - Cloudflare Tunnel full-duplex remote access, unblocked from W9 | [#1729](https://github.com/nikhilsoman/synlynk/pull/1729) | 2026-09-21 |
 | [186](./186-pr1179-capability-reassessment-cadence.md) | PR #1179 - Durable harness capability reassessment cadence | TBD | 2026-09-16 |
 
 A post-mortem / build diary documenting the design choices, strategic pivots, and technical decisions behind synlynk — from first commit to the OS for multi-agent development.
