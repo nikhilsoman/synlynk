@@ -1,3 +1,16 @@
+---
+title: "PR #1729 — W11: Cloudflare Tunnel remote access"
+date: 2026-09-21
+series: "Building the OS for Multi-Agent Development"
+post: 222
+pr: "#1729"
+status: open
+author: "synlynk team"
+version: "0.20.0"
+tags: [posts]
+type: pr
+---
+
 # W11 — What a Tunnel Is For, and What It Isn't
 
 **PR:** [#1729](https://github.com/nikhilsoman/synlynk/pull/1729)
