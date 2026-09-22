@@ -1,3 +1,16 @@
+---
+title: "PR #1726 — W10 Grok Bot remote MCP surface spec"
+date: 2026-09-20
+series: "Building the OS for Multi-Agent Development"
+post: 221
+pr: "#1726"
+status: merged
+author: "nikhilsoman"
+version: "0.21.0"
+tags: [posts]
+type: pr
+---
+
 # W10 — A Phone Can Talk to a synlynk Workspace, Once Hosted Vizor Exists
 
 **PR:** [#1726](https://github.com/nikhilsoman/synlynk/pull/1726)
