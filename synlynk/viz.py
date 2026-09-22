@@ -5112,7 +5112,10 @@ def get_role_manifest_payload(
             "url": f"https://synlynk.com/github-apps/{slug}/{role}/webhook",
             "active": False,
         },
-        "redirect_url": f"http://localhost:{port}/auth/callback?role={role}",
+        "redirect_url": (
+            f"http://localhost:{port}/auth/callback?role={role}&state={slug}"
+            if project_slug else f"http://localhost:{port}/auth/callback?role={role}"
+        ),
         "public": False,
         "default_permissions": permissions,
         "default_events": [],
@@ -5633,11 +5636,16 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
             params = parse_qs(parsed.query)
             code = params.get("code", [""])[0]
             role = params.get("role", [""])[0] or "qa"
+            state_slug = params.get("state", [""])[0]
+            redirect_target = (
+                f"/w/{state_slug}/onboarding/roles?success={role}"
+                if state_slug else f"/onboarding/roles?success={role}"
+            )
             if code:
                 try:
                     handle_github_app_conversion(code=code, role=role)
                     self.send_response(302)
-                    self.send_header("Location", f"/onboarding/roles?success={role}")
+                    self.send_header("Location", redirect_target)
                     self.end_headers()
                     return
                 except Exception as e:

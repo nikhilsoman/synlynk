@@ -871,3 +871,17 @@ def test_vizor_handler_handle_view_pref_creates_config_if_missing(tmp_path, monk
     with open(".synlynk/config.json") as f:
         saved = json.load(f)
     assert saved["vizor"]["architect_map_view"] == "graph"
+
+
+def test_get_role_manifest_payload_embeds_state_when_slug_given():
+    from synlynk.viz import get_role_manifest_payload
+
+    payload = get_role_manifest_payload("qa", port=8721, project_slug="acme")
+    assert "state=acme" in payload["redirect_url"]
+
+
+def test_get_role_manifest_payload_omits_state_without_slug():
+    from synlynk.viz import get_role_manifest_payload
+
+    payload = get_role_manifest_payload("qa", port=8721)
+    assert "state=" not in payload["redirect_url"]
