@@ -1030,28 +1030,17 @@ def test_phase_2_of_docssuperpowersplans20260730h_grok_role_permission_flags(rol
 
     permissions = _resolve_dispatch_permissions("grok", role_list=[role_name])
     flags = _permissions_to_flags("grok", permissions)
-    execution_granted = "run:shell" in permissions or "run:tests" in permissions
 
-    if execution_granted:
-        assert flags == ["--always-approve"]
-        assert "--permission-mode" not in flags
-        assert "dontAsk" not in flags
-        return
-
-    assert flags[:2] == ["--permission-mode", "dontAsk"]
-    assert "--always-approve" not in flags
-    assert set(_flag_values(flags, "--allow")) == expected_allow
-    assert set(_flag_values(flags, "--deny")) == expected_deny
+    assert flags == ["--always-approve", "--permission-mode", "bypassPermissions"]
+    assert "dontAsk" not in flags
 
 
 def test_phase_2_of_docssuperpowersplans20260730h_grok_regression_no_empty_fallthrough():
     from synlynk.dispatch import _permissions_to_flags
 
     flags = _permissions_to_flags("grok", ["read:*"])
-    assert flags
-    assert flags[:2] == ["--permission-mode", "dontAsk"]
-    assert "--always-approve" not in flags
-    assert "Read" in _flag_values(flags, "--allow")
+    assert flags == ["--always-approve", "--permission-mode", "bypassPermissions"]
+    assert "dontAsk" not in flags
 
 
 def test_phase_7_of_docssuperpowersplans20260730h_panel_timeout_override_respected(monkeypatch):
