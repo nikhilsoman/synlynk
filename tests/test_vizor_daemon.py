@@ -220,3 +220,47 @@ def test_read_pid_missing_returns_none(tmp_path, monkeypatch):
 
     monkeypatch.setattr(vizor_daemon, "PIDFILE", tmp_path / "nope")
     assert vizor_daemon._read_pid() is None
+
+
+def test_launchd_plist_path(monkeypatch, tmp_path):
+    from synlynk import vizor_daemon
+
+    monkeypatch.setattr(vizor_daemon.os.path, "expanduser", lambda p: str(tmp_path) + p[1:] if p.startswith("~") else p)
+    path = vizor_daemon._launchd_plist_path()
+    assert str(path).endswith("Library/LaunchAgents/com.synlynk.vizor-daemon.plist")
+
+
+def test_systemd_unit_path(monkeypatch, tmp_path):
+    from synlynk import vizor_daemon
+
+    monkeypatch.setattr(vizor_daemon.os.path, "expanduser", lambda p: str(tmp_path) + p[1:] if p.startswith("~") else p)
+    path = vizor_daemon._systemd_unit_path()
+    assert str(path).endswith(".config/systemd/user/synlynk-vizor-daemon.service")
+
+
+def test_install_writes_unit_and_starts(tmp_path, monkeypatch):
+    from synlynk import vizor_daemon
+
+    monkeypatch.setattr(vizor_daemon, "platform_name", lambda: "Darwin")
+    monkeypatch.setattr(vizor_daemon, "_launchd_plist_path", lambda: tmp_path / "com.synlynk.vizor-daemon.plist")
+    calls = []
+    monkeypatch.setattr(vizor_daemon.subprocess, "run", lambda *a, **k: calls.append(a) or type("R", (), {"returncode": 0})())
+
+    result = vizor_daemon.install()
+
+    assert result["installed"] is True
+    assert (tmp_path / "com.synlynk.vizor-daemon.plist").exists()
+    assert calls, "expected launchctl load to be invoked"
+
+
+def test_status_reports_not_installed(tmp_path, monkeypatch):
+    from synlynk import vizor_daemon
+
+    monkeypatch.setattr(vizor_daemon, "_launchd_plist_path", lambda: tmp_path / "missing.plist")
+    monkeypatch.setattr(vizor_daemon, "_systemd_unit_path", lambda: tmp_path / "missing.service")
+    monkeypatch.setattr(vizor_daemon, "is_running", lambda: False)
+
+    status = vizor_daemon.status()
+
+    assert status["service_registered"] is False
+    assert status["running"] is False

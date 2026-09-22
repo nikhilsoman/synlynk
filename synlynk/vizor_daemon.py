@@ -241,3 +241,124 @@ def run_forever(port: Optional[int] = None) -> None:
         server.shutdown()
         server.server_close()
         _log("daemon stopped")
+
+
+import platform as _platform_module
+import subprocess
+import sys
+
+
+def platform_name() -> str:
+    return _platform_module.system()
+
+
+def _launchd_plist_path() -> Path:
+    return Path(os.path.expanduser("~/Library/LaunchAgents/com.synlynk.vizor-daemon.plist"))
+
+
+def _systemd_unit_path() -> Path:
+    return Path(os.path.expanduser("~/.config/systemd/user/synlynk-vizor-daemon.service"))
+
+
+_LAUNCHD_LABEL = "com.synlynk.vizor-daemon"
+_SYSTEMD_UNIT_NAME = "synlynk-vizor-daemon.service"
+
+
+def _launchd_plist_contents(python_exe: str) -> str:
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>{_LAUNCHD_LABEL}</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>{python_exe}</string>
+        <string>-m</string>
+        <string>synlynk.vizor_daemon</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>{LOGFILE}</string>
+    <key>StandardErrorPath</key>
+    <string>{LOGFILE}</string>
+</dict>
+</plist>
+"""
+
+
+def _systemd_unit_contents(python_exe: str) -> str:
+    return f"""[Unit]
+Description=synlynk Vizor cross-workspace daemon
+
+[Service]
+ExecStart={python_exe} -m synlynk.vizor_daemon
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
+"""
+
+
+def install() -> dict:
+    """Write and load/enable the OS service unit, starting the daemon immediately."""
+    python_exe = sys.executable
+    system = platform_name()
+    if system == "Darwin":
+        plist_path = _launchd_plist_path()
+        plist_path.parent.mkdir(parents=True, exist_ok=True)
+        plist_path.write_text(_launchd_plist_contents(python_exe))
+        subprocess.run(["launchctl", "load", str(plist_path)], capture_output=True, text=True)
+        return {"installed": True, "manager": "launchd", "unit_path": str(plist_path)}
+    elif system == "Linux":
+        unit_path = _systemd_unit_path()
+        unit_path.parent.mkdir(parents=True, exist_ok=True)
+        unit_path.write_text(_systemd_unit_contents(python_exe))
+        subprocess.run(["systemctl", "--user", "enable", "--now", _SYSTEMD_UNIT_NAME],
+                        capture_output=True, text=True)
+        return {"installed": True, "manager": "systemd", "unit_path": str(unit_path)}
+    return {"installed": False, "reason": f"unsupported platform: {system}"}
+
+
+def uninstall() -> dict:
+    """Unload/disable the service unit and remove it."""
+    system = platform_name()
+    if system == "Darwin":
+        plist_path = _launchd_plist_path()
+        if plist_path.exists():
+            subprocess.run(["launchctl", "unload", str(plist_path)], capture_output=True, text=True)
+            plist_path.unlink()
+        return {"uninstalled": True, "manager": "launchd"}
+    elif system == "Linux":
+        unit_path = _systemd_unit_path()
+        subprocess.run(["systemctl", "--user", "disable", "--now", _SYSTEMD_UNIT_NAME],
+                        capture_output=True, text=True)
+        if unit_path.exists():
+            unit_path.unlink()
+        return {"uninstalled": True, "manager": "systemd"}
+    return {"uninstalled": False, "reason": f"unsupported platform: {system}"}
+
+
+def status() -> dict:
+    """Report whether the service is registered/running, its port, and pidfile state."""
+    system = platform_name()
+    registered = (
+        _launchd_plist_path().exists() if system == "Darwin"
+        else _systemd_unit_path().exists() if system == "Linux"
+        else False
+    )
+    return {
+        "platform": system,
+        "service_registered": registered,
+        "running": is_running(),
+        "pid": _read_pid(),
+        "port": _read_port(),
+    }
+
+
+if __name__ == "__main__":
+    run_forever()
