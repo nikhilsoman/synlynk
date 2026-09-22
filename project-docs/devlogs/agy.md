@@ -633,4 +633,17 @@
 - **Merge & Verification:** PR #1727 approved and squashed-merged to `main`.
 [@agy]
 
+## 2026-09-22 — LIVE-13 Remediation: Grok Headless Permission Bypass & Shell Execution (#1734, PR #1735)
+
+### Context & Root Cause
+- Investigated headless dispatch failures where Grok subshell and file-write commands were auto-cancelled with `stopReason: cancelled` due to default `--permission-mode dontAsk`.
+- Declared incident [LIVE-13] (#1732) and authored RCA [`docs/rca/2026-09-22-LIVE-13-grok-headless-dispatch-permission-bypass.md`](docs/rca/2026-09-22-LIVE-13-grok-headless-dispatch-permission-bypass.md).
+
+### Shipped
+- **Permission Bypass Integration (`synlynk/dispatch.py`):** Updated `_grok_permission_flags()` to always supply `--always-approve` and `--permission-mode bypassPermissions` whenever permissions are present, completely removing `--permission-mode dontAsk` from headless Grok dispatch paths. Guarded against duplicate flags in dispatch assembly.
+- **Test Suite Updates (`tests/test_dispatch.py`, `tests/test_agent_quota_tracking.py`):** Updated unit tests and role permission assertions across all 12 standard role bundles.
+- **Merge & Verification:** PR #1735 approved and squashed-merged to `main`. All 3,160+ unit and integration tests passing green on CI.
+[@agy]
+
+
 

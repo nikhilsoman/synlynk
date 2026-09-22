@@ -1785,13 +1785,15 @@ def test_grok_permission_flags_emits_always_approve_when_shell_or_tests_granted(
 
     shell_flags = _grok_permission_flags(["read:*", "run:shell"])
     test_flags = _grok_permission_flags(["read:*", "run:tests"])
+    write_flags = _grok_permission_flags(["read:*", "write:src/"])
 
-    assert shell_flags == ["--always-approve"]
-    assert test_flags == ["--always-approve"]
-    assert "--permission-mode" not in shell_flags
+    assert shell_flags == ["--always-approve", "--permission-mode", "bypassPermissions"]
+    assert test_flags == ["--always-approve", "--permission-mode", "bypassPermissions"]
+    assert write_flags == ["--always-approve", "--permission-mode", "bypassPermissions"]
     assert "dontAsk" not in shell_flags
-    assert "--permission-mode" not in test_flags
     assert "dontAsk" not in test_flags
+    assert "dontAsk" not in write_flags
+    assert _grok_permission_flags([]) == []
 
 
 def test_grok_dispatch_deduplicates_boolean_permission_and_baseline_flags(project_dir, monkeypatch):
