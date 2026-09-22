@@ -1,3 +1,16 @@
+---
+title: "PR #1731 — W12: Discord/Herdr full-duplex remote-access bridge"
+date: 2026-09-22
+series: "Building the OS for Multi-Agent Development"
+post: 223
+pr: "#1731"
+status: open
+author: "synlynk team"
+version: "0.20.0"
+tags: [posts]
+type: pr
+---
+
 # W12 — A Channel Is a Pane
 
 **PR:** [#1731](https://github.com/nikhilsoman/synlynk/pull/1731)
