@@ -1,5 +1,10 @@
 # Cost Log
 
+## 2026-09-23 — Dedicated OrbStack Contributor VM & Upstream LiteLLM Contribution (PR #42579)
+- Interactive Conductor: Agy.
+- Provisioned `litellm-dev-box` on OrbStack, validated `synlynk init --brownfield` on LiteLLM, fixed [Issue #42247](https://github.com/BerriAI/litellm/issues/42247), 1,240 tests passed, submitted upstream [PR #42579](https://github.com/BerriAI/litellm/pull/42579).
+- Zero external fee-bearing dispatch spend.
+
 ## 2026-09-19 — Wave 1 Task 1.1: Model First-Class Dispatch & AST Cost Tiering (PR #1695)
 - Dispatched Task W1-T1.1 to Codex (`job-e655562a`).
 - Tokens: 4,463,800 in / 13,974 out.
