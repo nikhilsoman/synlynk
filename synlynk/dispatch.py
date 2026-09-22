@@ -691,52 +691,16 @@ _GROK_PERMISSION_RULES = {
 
 
 def _grok_permission_flags(permissions: list) -> list:
-    """Translate resolved permission strings into Grok CLI permission flags."""
+    """Translate resolved permission strings into Grok CLI permission flags.
+
+    For headless execution (#1732, #1734), passes `--always-approve` and
+    `--permission-mode bypassPermissions` to prevent tool cancellations.
+    """
     permission_set = {perm for perm in (permissions or []) if perm}
     if not permission_set:
         return []
 
-    # Headless Grok auto-cancels compound shell in dontAsk (stopReason: cancelled).
-    if "run:shell" in permission_set or "run:tests" in permission_set:
-        return ["--always-approve"]
-
-    if set(_GROK_PERMISSION_RULES).issubset(permission_set):
-        return ["--always-approve"]
-
-    flags = ["--permission-mode", "dontAsk"]
-    allow_rules = []
-    has_write = "write:src/" in permission_set or "write:docs/" in permission_set
-    has_tests = "run:tests" in permission_set
-    has_shell = "run:shell" in permission_set
-
-    for perm in permissions or []:
-        rules = _GROK_PERMISSION_RULES.get(perm)
-        if not rules:
-            continue
-        allow_rules.extend(rules)
-
-    if not allow_rules:
-        return []
-
-    deny_rules = []
-    if not has_write:
-        deny_rules.extend(["Edit", "Write", "MultiEdit"])
-    if not (has_tests or has_shell):
-        deny_rules.append("Bash")
-
-    seen = set()
-    for rule in allow_rules:
-        if rule not in seen:
-            flags.extend(["--allow", rule])
-            seen.add(rule)
-
-    seen = set()
-    for rule in deny_rules:
-        if rule not in seen:
-            flags.extend(["--deny", rule])
-            seen.add(rule)
-
-    return flags
+    return ["--always-approve", "--permission-mode", "bypassPermissions"]
 
 
 class PermissionEnforcementError(RuntimeError):
@@ -3336,7 +3300,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     dispatch_mode = (cfg or {}).get("dispatch_mode", "daily-grind") if load_config else "daily-grind"
     if agent == "grok" and profile.get("always_approve_unsupported"):
         flags = [flag for flag in flags if flag != "--always-approve"]
-        flags = flags + ["--permission-mode", "bypassPermissions"]
+        if "--permission-mode" not in flags:
+            flags = flags + ["--permission-mode", "bypassPermissions"]
     if agent == "grok":
         flags = flags + ["--output-format", "json"]
     if agent == "claude":
