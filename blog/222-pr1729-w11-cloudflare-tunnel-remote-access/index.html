@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #1729 — W11: Cloudflare Tunnel remote access | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-2">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Sep 21, 2026</span>
+        
+          <span class="blog-post-pr">PR #1729</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #1729 — W11: Cloudflare Tunnel remote access</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>W11 — What a Tunnel Is For, and What It Isn't</h1>
+<p><strong>PR:</strong> <a href="https://github.com/nikhilsoman/synlynk/pull/1729">#1729</a>
+<strong>Date:</strong> 2026-09-21</p>
+<h2>Where things stood</h2>
+<p>W10 had just landed as a spec: Grok Bot as a phone-native conversational client on top of W9's hosted-Vizor relay. Both W9 and W10 share one property — they're designed to work whether or not any machine is actually turned on, because they're backed by synced state, not a live connection to a laptop.</p>
+<h2>What moved the goalpost</h2>
+<p>That same property is also a gap: neither W9 nor W10 can show you a dispatch job's output <em>as it streams</em>, or give you a real-time control channel to a daemon that's running right now. That's a genuinely different problem — full-duplex, machine-local, only meaningful while the origin is up — and it's the one Cloudflare Tunnel was explored against. Rather than brainstorm straight into a design, this one went through <code>synlynk decide</code> first: a two-member panel (Claude, Codex — Agy hit a headless permission denial, Grok's usage balance was exhausted) converged independently on the same shape, which made the follow-on brainstorm fast.</p>
+<h2>What this PR ships</h2>
+<p><code>docs/superpowers/specs/2026-09-21-cloudflare-tunnel-remote-access-design.md</code> (W11), plus the <code>synlynk decide</code> record it was built from. It locks:</p>
+<ul>
+<li><strong>Cloudflare Tunnel is not the transport under W9/W10.</strong> A tunnel only exists while the origin is online, and its token is a bearer secret that would create a second identity system next to the GitHub App/W4 tokens synlynk already has. It's a separate, opt-in <code>synlynk tunnel</code> lane instead.</li>
+<li><strong>Workspace members, not solo-only</strong> — Cloudflare Access + GitHub OAuth is coarse admission; the daemon independently maps the authenticated login to the W4 member roster before serving anything.</li>
+<li><strong>Named tunnels only.</strong> Quick Tunnels are explicitly ruled out for the daemon — an ephemeral URL with no Access layer in front would be the only secret.</li>
+<li><strong>Phase 1 (this spec's build target): read-only</strong> — <code>synlynk viz</code> and job-log streaming over the tunnel, enforced structurally (a read-only router on the tunnel-facing listener, not a convention). Doubles as an interim remote-access story before W9 ships.</li>
+<li><strong>Phase 2 (designed now, built later): dispatch and shell access</strong>, explicitly scoped as remote code execution — grant-gated (not just roster-gated), short-lived per-session routes minted the same way W4 mints installation tokens, worktree-scoped shell sessions, fully attributed in the audit trail. Implementation waits on W4's write-scope grants; the authorization contract doesn't.</li>
+</ul>
+<p>No visuals were used — the questions (transport boundary, audience, phasing) were architectural, not visual.</p>
+<h2>Where this leaves the long arc</h2>
+<p>The remote-access strategy now has three distinct, non-overlapping surfaces instead of one generic &quot;remote access&quot; bucket: W9 (always-on hosted view), W10 (phone-native conversational client on that same relay), and W11 (live full-duplex access to a running machine). Each has a reason to exist that the others don't cover, and none of them quietly duplicates another's auth or sync work.</p>
+<h2>New goalpost</h2>
+<p>W11 is unblocked — Phase 1 can move to <code>writing-plans</code> independently of W9's timeline. Phase 2 stays architecture-only until W4 defines write-scope grants, at which point this spec is the contract, not a re-brainstorm.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
