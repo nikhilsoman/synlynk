@@ -1663,6 +1663,14 @@ def _render_instruction_receipt_instruction(instruction_file: Optional[str]) -> 
     )
 
 
+_PR_REVIEW_RETRY_GUARD = (
+    "## PR Review Retry Guard (MANDATORY)\n"
+    "For a `BEHIND` or `DIRTY` PR, allow at most 2 `gh pr update-branch` "
+    "→ CI-wait cycles. If the PR is still `BEHIND` or `DIRTY` after the "
+    "second cycle, stop retrying and report back for escalation.\n\n"
+)
+
+
 def _format_prompt_for_agent(agent: str, context_text: str, story_id: str,
                               task: str, file_section: str, verify_section: str,
                               cwd_hint: Optional[str] = None,
@@ -1713,6 +1721,13 @@ def _format_prompt_for_agent(agent: str, context_text: str, story_id: str,
             "in dispatched sessions and have caused confirmed silent cancellations. "
             "After running `gh`, verify its exit status and report the result.\n\n"
         )
+        task_lower = (task or "").lower()
+        is_pr_review_or_merge = (
+            ("review" in task_lower or "merge" in task_lower)
+            and ("pr" in task_lower or "pull request" in task_lower)
+        )
+        if is_pr_review_or_merge:
+            gh_write_instruction += _PR_REVIEW_RETRY_GUARD
     if agent == "codex":
         sentences = [s.strip() for s in re.split(r"[.!?]", task) if s.strip()]
         criteria = "\n".join(f"- {s}" for s in sentences) if sentences else f"- {task}"

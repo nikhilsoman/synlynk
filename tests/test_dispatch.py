@@ -399,6 +399,19 @@ def test_gh_write_instruction_present_for_codex_when_required():
     assert "GitHub Write Instructions" in prompt
 
 
+def test_gh_write_review_prompt_caps_behind_update_branch_cycles():
+    from synlynk.dispatch import _format_prompt_for_agent
+
+    prompt = _format_prompt_for_agent(
+        "codex", "context", "story-1", "review and merge PR #1038", "", "",
+        requires_gh_write=True,
+    )
+
+    assert "at most 2" in prompt
+    assert "gh pr update-branch" in prompt
+    assert "stop retrying" in prompt
+
+
 def test_gh_write_instruction_absent_when_not_required():
     from synlynk.dispatch import _format_prompt_for_agent
 

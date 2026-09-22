@@ -116,6 +116,40 @@ def _job_retry_count(job: dict) -> int:
         return 0
 
 
+def _cost_inflation_is_critical(job: dict, log_text: str, sentinel_path: str) -> bool:
+    """Return whether a job's cost signal blocks another harness retry."""
+    check_token_bloat = _pkg("check_token_bloat")
+    if not check_token_bloat:
+        return False
+    in_tokens, out_tokens = _pkg("extract_tokens")(
+        log_text, agent=job.get("agent", "")
+    )
+    cost_usd = _job_cost_usd(
+        job.get("agent", ""),
+        in_tokens,
+        out_tokens,
+        job.get("model_version") or job.get("model_at_dispatch"),
+    )
+    alerts = check_token_bloat(
+        in_tokens=in_tokens,
+        out_tokens=out_tokens,
+        cost_usd=cost_usd,
+        files_touched=0,
+        job_id=job.get("id", ""),
+        agent=job.get("agent", ""),
+        sentinel_path=sentinel_path,
+    )
+    blocked = any(
+        alert.get("code") == "COST_INFLATION"
+        and alert.get("severity") == "CRITICAL"
+        and alert.get("actionable")
+        for alert in alerts
+    )
+    if blocked:
+        job["cost_inflation_critical"] = True
+    return blocked
+
+
 def _exit_code_from_wait_status(wait_status: int) -> Optional[int]:
     """Converts os.waitpid() status words into a shell-like exit code."""
     if os.WIFEXITED(wait_status):
@@ -1764,12 +1798,14 @@ def _reconcile_jobs_unlocked() -> None:
                 log_text_lower = log_text.lower()
                 for phrase in _pkg("HARNESS_TIMEOUT_PATTERNS"):
                     if phrase in log_text_lower:
-                        if not _retry_internal_timeout_job(job, jobs, git_state):
+                        cost_blocked = _cost_inflation_is_critical(job, log_text, sentinel_path)
+                        if cost_blocked or not _retry_internal_timeout_job(job, jobs, git_state):
                             _write_sentinel_alert(
                                 "CRITICAL",
                                 "HARNESS_INTERNAL_TIMEOUT",
                                 f"Job {job.get('id')} on agent '{job.get('agent')}' died from an internal "
-                                f"harness timeout (matched \"{phrase}\"), not a task failure. Consider retrying.",
+                                f"harness timeout (matched \"{phrase}\"), "
+                                f"{'and critical cost inflation blocked another retry' if cost_blocked else 'not a task failure. Consider retrying.'}",
                                 sentinel_path,
                             )
                         break
@@ -1966,12 +2002,14 @@ def _reconcile_jobs_unlocked() -> None:
                     log_text_lower = log_text.lower()
                     for phrase in _pkg("HARNESS_TIMEOUT_PATTERNS"):
                         if phrase in log_text_lower:
-                            if not _retry_internal_timeout_job(job, jobs, git_state):
+                            cost_blocked = _cost_inflation_is_critical(job, log_text, sentinel_path)
+                            if cost_blocked or not _retry_internal_timeout_job(job, jobs, git_state):
                                 _write_sentinel_alert(
                                     "CRITICAL",
                                     "HARNESS_INTERNAL_TIMEOUT",
                                     f"Job {job.get('id')} on agent '{job.get('agent')}' died from an internal "
-                                    f"harness timeout (matched \"{phrase}\"), not a task failure. Consider retrying.",
+                                    f"harness timeout (matched \"{phrase}\"), "
+                                    f"{'and critical cost inflation blocked another retry' if cost_blocked else 'not a task failure. Consider retrying.'}",
                                     sentinel_path,
                                 )
                             break
