@@ -21,6 +21,7 @@ from synlynk.observatory import (
     write_observatory_snapshot,
 )
 from synlynk.viz_views import build_workspace_views_snapshot
+from synlynk import vizor_daemon
 
 VIZ_CACHE_DIR = ".synlynk/viz-cache"
 VIZ_NOTES_PATH = ".synlynk/viz-notes.json"
@@ -6109,66 +6110,51 @@ def _ftue_prompts(config: dict) -> dict:
     return config
 
 
+def _current_workspace_slug() -> str:
+    from synlynk.product_store import identity_slug_from_config
+
+    return identity_slug_from_config(".")
+
+
 def cmd_viz(args) -> None:
     """Entry point for `synlynk viz` subcommand."""
-    import synlynk  # local import to avoid circular at module load
+    from synlynk import vizor_daemon
+
     if getattr(args, "hosted", False):
         from synlynk.product_store import identity_slug_from_config
         from synlynk.wave6 import hosted_vizor_placeholder
         print(json.dumps(hosted_vizor_placeholder(identity_slug_from_config(".")), indent=2))
         return
-    config_path = ".synlynk/config.json"
-    config = {}
-    if os.path.exists(config_path):
-        with open(config_path) as f:
-            config = json.load(f)
 
-    port = getattr(args, "port", None) or config.get("vizor", {}).get("port", DEFAULT_PORT)
-
-    if args.stop:
-        _stop_server()
+    if getattr(args, "install", False):
+        result = vizor_daemon.install()
+        if result.get("installed"):
+            print(f"  ✓ Vizor daemon installed via {result['manager']} ({result['unit_path']})")
+        else:
+            print(f"  ✗ Install failed: {result.get('reason', 'unknown error')}")
         return
 
-    if args.open:
-        webbrowser.open(f"http://localhost:{port}/index.html")
+    if getattr(args, "uninstall", False):
+        result = vizor_daemon.uninstall()
+        if result.get("uninstalled"):
+            print(f"  ✓ Vizor daemon uninstalled ({result['manager']})")
+        else:
+            print(f"  ✗ Uninstall failed: {result.get('reason', 'unknown error')}")
         return
 
-    if not args.generate:
-        config = _ftue_prompts(config)
-        port = getattr(args, "port", None) or config.get("vizor", {}).get("port", DEFAULT_PORT)
-
-    print("  Generating Vizor views…")
-    try:
-        data = generate_viz_data()
-    except NotImplementedError:
-        data = {
-            "workspace": {
-                "name": os.path.basename(os.getcwd()) or "workspace",
-                "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                "repos": [],
-            },
-            "notes": {},
-            "workspace_map": {"edges": [], "edge_types": {}},
-            "observatory": build_job_observatory_snapshot(),
-        }
-    except Exception as e:
-        print(f"  ✗ Data extraction failed: {e}")
+    if getattr(args, "daemon_status", False):
+        status = vizor_daemon.status()
+        print(json.dumps(status, indent=2))
         return
 
-    _write_cache(data, port)
-    print(f"  ✓ Views written to {VIZ_CACHE_DIR}/")
-
-    if args.generate:
-        print("  (--generate only: server not started)")
+    slug = _current_workspace_slug()
+    if not vizor_daemon.is_running():
+        print("  ✗ Vizor daemon is not running.")
+        print("  Run: synlynk viz --install")
+        print("  Or check: synlynk viz --daemon-status")
         return
 
-    if not _server_is_running() or args.serve:
-        server = _start_server(port)
-        print(f"  ✓ Serving at http://localhost:{port}/")
-
-    if args.serve:
-        _serve_until_stopped(server)
-        return
-
-    if not args.serve:
-        webbrowser.open(f"http://localhost:{port}/index.html")
+    port = vizor_daemon._read_port() or DEFAULT_PORT
+    url = f"http://localhost:{port}/w/{slug}/overview.html"
+    webbrowser.open(url)
+    print(f"  ✓ Opened {url}")
