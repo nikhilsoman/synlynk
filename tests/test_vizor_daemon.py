@@ -264,3 +264,21 @@ def test_status_reports_not_installed(tmp_path, monkeypatch):
 
     assert status["service_registered"] is False
     assert status["running"] is False
+
+
+def test_install_uninstall_use_home_relative_paths(tmp_path, monkeypatch):
+    from synlynk import vizor_daemon
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(vizor_daemon, "platform_name", lambda: "Darwin")
+    monkeypatch.setattr(vizor_daemon.subprocess, "run", lambda *a, **k: type("R", (), {"returncode": 0})())
+
+    result = vizor_daemon.install()
+    plist_path = Path(os.path.expanduser("~/Library/LaunchAgents/com.synlynk.vizor-daemon.plist"))
+
+    assert result["installed"] is True
+    assert plist_path.exists()
+
+    uninstall_result = vizor_daemon.uninstall()
+    assert uninstall_result["uninstalled"] is True
+    assert not plist_path.exists()
