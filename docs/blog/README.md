@@ -258,6 +258,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [221](./221-pr1695-model-first-class-tripartite-dispatch-an.md) | PR #1695 — model first-class tripartite dispatch and AST cost tiering (Wave 1 Task 1.1) | [#1695](https://github.com/nikhilsoman/synlynk/pull/1695) | 2026-09-19 |
 | [222](./222-pr1719-frontier-qa-testbed-engine-and-multi-nod.md) | PR #1719 — Frontier QA Testbed engine and multi-node soak testing framework | [#1719](https://github.com/nikhilsoman/synlynk/pull/1719) | 2026-09-20 |
 | [223](./223-pr1727-first-class-model-catalog-multi-track-qu.md) | PR #1727 — first-class model catalog, multi-track quotas, and rolling calibration engine | [#1727](https://github.com/nikhilsoman/synlynk/pull/1727) | 2026-09-20 |
+| [224](./224-pr1735-enable-explicit-permission-bypass-and-al.md) | PR #1735 — enable explicit permission bypass and always-approve for headless grok jobs | [#1735](https://github.com/nikhilsoman/synlynk/pull/1735) | 2026-09-22 |
 
 ## Per-PR Post Template
 
