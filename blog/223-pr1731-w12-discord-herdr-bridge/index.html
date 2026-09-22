@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #1731 — W12: Discord/Herdr full-duplex remote-access bridge | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-3">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Sep 22, 2026</span>
+        
+          <span class="blog-post-pr">PR #1731</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #1731 — W12: Discord/Herdr full-duplex remote-access bridge</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>W12 — A Channel Is a Pane</h1>
+<p><strong>PR:</strong> <a href="https://github.com/nikhilsoman/synlynk/pull/1731">#1731</a>
+<strong>Date:</strong> 2026-09-22</p>
+<h2>Where things stood</h2>
+<p>W9, W10, and W11 had just staked out three non-overlapping remote-access surfaces: an always-on hosted relay, a phone-native conversational client on top of it, and an opt-in tunnel for live, machine-local, full-duplex access to a running daemon. Between them they covered &quot;always available&quot; and &quot;live control of a machine&quot; — but nothing yet covered &quot;sit inside one specific running agent session, from a phone, in a chat app people already have open all day.&quot;</p>
+<h2>What moved the goalpost</h2>
+<p>That gap is what Discord was explored against. Unlike W11's dispatch/shell phase, injecting a prompt into an already-running, already-authorized Herdr session isn't a privilege escalation — the session's own permissions already gate what it can do. That let this spec skip W11's read-only-first phasing and design full duplex as the v1 target directly: a Discord channel that mirrors one live Herdr pane, both directions, from day one.</p>
+<h2>What this PR ships</h2>
+<p><code>docs/superpowers/specs/2026-09-22-discord-herdr-bridge-design.md</code> (W12). It locks:</p>
+<ul>
+<li><strong>One synlynk-managed Discord server, one channel per live Herdr session</strong> — not per-workspace-forever. A channel is created when a member first bridges a pane and archived when that pane closes; the channel's lifecycle mirrors the pane's own lifecycle rather than an independent policy.</li>
+<li><strong>Full duplex from day one.</strong> Typing in the channel injects a new prompt/turn into the running pane, exactly as if a human were steering that session directly — not raw stdin, not slash-commands-only.</li>
+<li><strong>Herdr's pane API for v1, behind a small abstracted interface</strong> (<code>inject(session_id, text)</code> / <code>stream(session_id) -&gt; events</code>). This is Approach C from three considered: build directly against Herdr now, but leave a documented seam so a non-Herdr backend is a future swap rather than a rewrite — cheaper than building a decoupled synlynk-native primitive today, without permanently welding the design to Herdr.</li>
+<li><strong>Workspace-member-scoped access.</strong> A Discord account must be linked to a W4 member via a <code>/link</code> flow before it can see or use any session's channel — Discord's own guild membership is coarse admission, never the real gate, the same trust-boundary discipline as W10's policy.json and W11's daemon-side JWT check. The linking pattern itself isn't new: W4 §2 already allows non-GitHub IdPs to &quot;alias the same member,&quot; so Discord slots into an existing seam rather than requiring a new grant type.</li>
+<li><strong>Throttling designed against real constraints</strong>, not assumed ones: research surfaced that Discord's gateway rate limit (120 commands/60s) governs commands like heartbeats, not message posting — the actual binding constraint for streaming Herdr output is the REST API's 5-messages-per-5-seconds-per-channel limit and the 4096-byte message cap, so the spec calls for coalescing/batching pane output rather than naive line-by-line posting.</li>
+</ul>
+<p>No visuals were used — every open question (duplex semantics, bridge mechanism, access model, phasing) was a text/architectural choice, not a visual one.</p>
+<h2>Where this leaves the long arc</h2>
+<p>The remote-access strategy now has four distinct surfaces, each answering a question the others structurally can't: W9 (always-on hosted view), W10 (phone-native conversational client on that relay), W11 (live full-duplex access to a running machine), and W12 (live full-duplex access to one specific running agent session, from a chat app). None of them quietly duplicates another's auth or sync work — the same discipline that shaped W9→W10 and W9/W10→W11 held here too.</p>
+<h2>New goalpost</h2>
+<p>W12 is unblocked — it depends only on W4 (already specced) and Herdr's existing pane API (already in production use), so it can move to <code>writing-plans</code> independently of W9/W10/W11's timelines. The four-surface remote-access map is now complete at the design level; the next arc is deciding build order across W10/W11/W12's implementation plans.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
