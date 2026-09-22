@@ -32,6 +32,26 @@ def test_gh_write_verified_true_when_pr_merged(monkeypatch):
     assert gh_write_verified("pr:964", expect="merged") is True
 
 
+def test_gh_write_verified_merged_retries_delayed_state(monkeypatch):
+    responses = iter([
+        '{"state":"OPEN"}',
+        '{"state":"MERGED"}',
+    ])
+    calls = []
+    sleeps = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, stdout=next(responses), stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr("synlynk.gh_verify.time.sleep", sleeps.append)
+
+    assert gh_write_verified("pr:964", expect="merged") is True
+    assert len(calls) == 2
+    assert sleeps == [0.1]
+
+
 @pytest.mark.parametrize("expect", ["pr_open", "created"])
 def test_gh_write_verified_true_when_pr_open_or_created(monkeypatch, expect):
     def fake_run(cmd, **kwargs):
