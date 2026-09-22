@@ -1,5 +1,6 @@
 # synlynk Blog Series: Building the OS for Multi-Agent Development
 
+| [221](./221-pr1726-w10-grok-bot-remote-mcp.md) | W10 - Grok Bot remote MCP surface, blocked on W9 | [#1726](https://github.com/nikhilsoman/synlynk/pull/1726) | 2026-09-20 |
 | [222](./222-pr1729-w11-cloudflare-tunnel-remote-access.md) | W11 - Cloudflare Tunnel full-duplex remote access, unblocked from W9 | [#1729](https://github.com/nikhilsoman/synlynk/pull/1729) | 2026-09-21 |
 | [186](./186-pr1179-capability-reassessment-cadence.md) | PR #1179 - Durable harness capability reassessment cadence | TBD | 2026-09-16 |
 
@@ -256,6 +257,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [218](./218-pr1685-add-explicit-canonical-registry-recovery.md) | PR #1685 — add explicit canonical registry recovery | [#1685](https://github.com/nikhilsoman/synlynk/pull/1685) | 2026-09-18 |
 | [219](./219-pr1692-complete-w8-packs-and-connector-catalog.md) | PR #1692 — complete W8 packs and connector catalog | [#1692](https://github.com/nikhilsoman/synlynk/pull/1692) | 2026-09-18 |
 | [220](./220-pr1693-isolate-scratch-registry-path.md) | PR #1693 — isolate scratch registry path | [#1693](https://github.com/nikhilsoman/synlynk/pull/1693) | 2026-09-19 |
+| [223](./223-pr1731-w12-discord-herdr-bridge.md) | W12 - Discord/Herdr full-duplex remote-access bridge | [#1731](https://github.com/nikhilsoman/synlynk/pull/1731) | 2026-09-22 |
 
 ## Per-PR Post Template
 
