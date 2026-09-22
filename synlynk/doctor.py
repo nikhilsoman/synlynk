@@ -4,6 +4,7 @@ import json
 import difflib
 import os
 import shutil
+import subprocess
 import tempfile
 import sqlite3 as _sqlite3
 import sys
@@ -11,6 +12,7 @@ import time
 import urllib.error
 import urllib.request
 import stat
+from pathlib import Path
 
 from dataclasses import dataclass as _dataclass
 from typing import List as _List
@@ -124,6 +126,80 @@ def _hc_model_registry() -> HealthCheck:
         return HealthCheck("model_registry", "ok", f"{count} model(s) registered")
     except Exception as exc:
         return HealthCheck("model_registry", "warn", f"registry unavailable: {exc}", fix="Run: synlynk models discover")
+
+
+def _hc_codex_model_catalog() -> HealthCheck:
+    """Detect drift between the Codex catalog and the authenticated CLI config."""
+    try:
+        from synlynk.models import load_model_catalog
+
+        catalog = load_model_catalog(os.getcwd())
+        catalog_ids = {
+            model.get("model_id")
+            for model in catalog.get("models", [])
+            if isinstance(model, dict) and model.get("harness") == "codex" and model.get("model_id")
+        }
+        catalog_ids.update(
+            tier.get("codex")
+            for tier in catalog.get("tiers", {}).values()
+            if isinstance(tier, dict) and tier.get("codex")
+        )
+        catalog_ids.discard(None)
+        if not catalog_ids:
+            return HealthCheck("codex_model_catalog", "warn", "No Codex model IDs found in the model catalog")
+
+        codex_home = Path(os.environ.get("CODEX_HOME", os.path.expanduser("~/.codex")))
+        config_path = codex_home / "config.toml"
+        configured_model = None
+        try:
+            from synlynk.probe import _read_toml_string_value
+            configured_model = _read_toml_string_value(str(config_path), "model")
+        except Exception:
+            configured_model = None
+
+        executable = shutil.which("codex")
+        if not executable:
+            return HealthCheck("codex_model_catalog", "warn", "Codex CLI is not installed; model authorization cannot be checked")
+        try:
+            login = subprocess.run(
+                [executable, "login", "status"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            return HealthCheck("codex_model_catalog", "warn", f"Codex login status unavailable: {exc}")
+
+        login_output = (login.stdout + "\n" + login.stderr).lower()
+        if login.returncode != 0 or "logged in" not in login_output:
+            return HealthCheck(
+                "codex_model_catalog",
+                "warn",
+                "Codex CLI is not authenticated; catalog authorization check skipped",
+                fix="Run: codex login",
+            )
+        if not configured_model:
+            return HealthCheck(
+                "codex_model_catalog",
+                "warn",
+                f"Authenticated Codex has no model configured in {config_path}",
+                fix=f"Set model = <authorized model ID> in {config_path}",
+            )
+        if configured_model not in catalog_ids:
+            return HealthCheck(
+                "codex_model_catalog",
+                "warn",
+                f"Codex config model {configured_model!r} is absent from catalog IDs: {', '.join(sorted(catalog_ids))}",
+                fix="Update .synlynk/models.json and the builtin fallback catalog to the authorized Codex model",
+            )
+        return HealthCheck(
+            "codex_model_catalog",
+            "ok",
+            f"Authenticated Codex model {configured_model} matches the catalog",
+        )
+    except Exception as exc:
+        return HealthCheck("codex_model_catalog", "warn", f"Codex catalog check unavailable: {exc}")
 
 
 def _hc_docs_dir() -> HealthCheck:
@@ -913,6 +989,7 @@ HEALTH_CHECKS = [
     _hc_project_init,
     _hc_identity_slug,
     _hc_model_registry,
+    _hc_codex_model_catalog,
     _hc_docs_dir,
     _hc_todo_drift,
     _hc_identity_key,
