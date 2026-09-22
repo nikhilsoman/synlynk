@@ -61,7 +61,43 @@ Herdr adapter (v1 implementation of the interface)    │
 - **Throttling**: Herdr pane output is coalesced into ≤4096-byte messages and rate-limited to the channel's 5-messages-per-5-seconds budget. Bursty output (e.g. a long build log) is batched rather than streamed line-by-line; output that would exceed a reasonable per-minute volume is truncated with a pointer to `synlynk logs` for the full record, rather than silently dropped or spamming the channel into the rate limit.
 - **cloudflared/W11 parallel, not integration**: the bot process runs wherever the Herdr session runs (the operator's machine), the same "additive sidecar, not folded into the daemon binary" posture W11 established for `cloudflared`.
 
-## 4. Non-goals
+## 4. Cross-device usability contract
+
+Discord supplies the client layout, but the bridge still needs an explicit
+contract so mobile convenience does not turn into a second product surface and
+desktop density does not become a requirement for basic operation.
+
+- **One information architecture:** the session channel, message ordering,
+  prompt semantics, link state, and authorization result are identical on
+  mobile and desktop. A user can open a channel on one device and continue on
+  the other without a mode switch or a different command vocabulary.
+- **Mobile is the baseline flow:** a linked member must be able to select one
+  live session, read the latest output, type a prompt, and see the result using
+  a single channel view and the normal Discord composer. No action may depend
+  on hover, right-click, drag-and-drop, a wide table, or simultaneous panes.
+  Session names and the first line of status messages must remain recognizable
+  when Discord truncates or wraps them on a narrow screen.
+- **Desktop is progressive enhancement:** desktop users may keep the channel
+  list visible, use Discord's split-pane behavior, or monitor multiple session
+  channels, but those are navigation conveniences rather than additional
+  bridge capabilities. Every action available in a desktop arrangement must
+  remain available from the single-channel mobile flow.
+- **Output is readable in both arrangements:** bridge messages use short,
+  labelled chunks with stable session attribution; long output is summarized
+  and linked to `synlynk logs` rather than relying on horizontal scrolling or
+  an always-visible desktop-only transcript panel. Code/log formatting must
+  degrade to ordinary wrapped text on mobile.
+- **Responsive acceptance checks:** at narrow width, the primary path is
+  `session -> latest output -> prompt -> acknowledgement`; at wide width, a
+  user may add parallel channel monitoring without changing that path. A
+  channel deep link, a reconnect, and a permission failure must produce the
+  same visible state and next step on both device classes.
+
+This resolves the mobile/desktop conflict by making mobile task completion the
+compatibility floor and desktop parallelism an optional client enhancement. It
+does not require synlynk to ship a custom responsive Discord UI.
+
+## 5. Non-goals
 
 - Building the bot process, the `/link` flow, the Herdr adapter, or the bridge interface's concrete code — that is the plan, not this spec.
 - A Discord-hosted equivalent of `synlynk viz`'s board/organigram view. Channels are session-scoped chat, not a dashboard; anyone wanting the board view still uses `synlynk viz` or (once shipped) W9's hosted Vizor.
@@ -70,6 +106,6 @@ Herdr adapter (v1 implementation of the interface)    │
 - Replacing or depending on W9, W10, or W11 in either direction.
 - Defining a new grant type in W4's schema — linking a Discord account to an existing W4 member is an identity alias, not a new permission; no new grant is introduced by this spec.
 
-## 5. Sequencing
+## 6. Sequencing
 
 Not blocked on W9, W10, or W11 — it depends only on W4 (member roster, already specced) and Herdr's existing pane API (already documented and in use per CLAUDE.md's Herdr Workspace Protocol). Can move to `writing-plans` independently of the other three specs' timelines.

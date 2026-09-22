@@ -14,6 +14,8 @@ Each arc below can be tagged `<!-- goal:goal-xxxxxxxx -->` to link it to a goal.
 | v0.2.0 | [Next milestone] | 🔜 Next | — |
 
 ## Recent work (from git history — 1219 commits, Python)
+- W12 Discord/Herdr bridge UX contract now treats mobile as the compatibility
+  floor and desktop multi-session monitoring as progressive enhancement.
 - feat(marketing): verify marketing release ceremony and standalone doc bundles (W1-T3.3)
 - feat(pm,doctor): implement Ring 3 opportunity radar and architect watchdog health checks (W1-T3.2)
 - feat(charters): implement living trigger registry and autonomous backlog triage triggers (W1-T3.1)

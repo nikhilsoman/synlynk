@@ -1,5 +1,10 @@
 # Cost Log
 
+## 2026-09-22 — W12 cross-device usability contract
+
+- Local Codex documentation review and scoped spec edit; no external dispatch
+  spend. Estimated task budget: $1.00.
+
 ## 2026-09-19 — Wave 1 Task 1.1: Model First-Class Dispatch & AST Cost Tiering (PR #1695)
 - Dispatched Task W1-T1.1 to Codex (`job-e655562a`).
 - Tokens: 4,463,800 in / 13,974 out.

@@ -1,5 +1,17 @@
 # Codex Devlog
 
+## 2026-09-22 — W12 Discord/Herdr cross-device usability contract
+
+- Added an explicit mobile/desktop interaction contract to the approved W12
+  design: mobile single-channel task completion is the compatibility floor;
+  desktop parallel monitoring is optional progressive enhancement.
+- Kept the contract client-native and implementation-agnostic, with shared
+  channel semantics, authorization, output chunking, and reconnect/error
+  behavior across device classes.
+- Verification: documentation-only change; no test files were added or
+  modified.
+[@codex]
+
 ## 2026-09-16 - Unattended stacked-PR rebase (#1604)
 
 - Added a mocked `BEHIND`/`MERGEABLE` PR repair helper that fetches `origin/main`, rebases cleanly, and force-pushes with lease; conflicts abort without pushing.
