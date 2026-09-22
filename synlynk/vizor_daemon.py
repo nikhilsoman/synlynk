@@ -128,6 +128,19 @@ def parse_workspace_path(path: str):
     return slug, "/" + remainder
 
 
+def _rewrite_workspace_app_route(path: str) -> Optional[str]:
+    """Return the unscoped path for a known workspace app route."""
+    if not path.startswith("/w/"):
+        return None
+    remainder = path[len("/w/"):]
+    slug, separator, route = remainder.partition("/")
+    if not separator or slug not in _known_slugs():
+        return None
+    if route in ("onboarding/roles", "onboarding/roles/"):
+        return "/onboarding/roles" if route == "onboarding/roles" else "/onboarding/roles/"
+    return None
+
+
 def _workspace_index_html() -> str:
     slugs = sorted(_known_slugs())
     if not slugs:
@@ -163,6 +176,11 @@ def build_workspace_routing_handler():
                 self.wfile.write(_workspace_index_html().encode("utf-8"))
                 return
             if path.startswith("/w/"):
+                app_route = _rewrite_workspace_app_route(path)
+                if app_route is not None:
+                    self.path = app_route + (("?" + urlparse(self.path).query) if urlparse(self.path).query else "")
+                    super().do_GET()
+                    return
                 slug, rewritten = parse_workspace_path(path)
                 if slug is None:
                     self.send_error(404, "Unknown workspace")

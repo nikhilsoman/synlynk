@@ -186,6 +186,19 @@ def test_resolve_slug_from_path_non_workspace_path(monkeypatch):
     assert rest is None
 
 
+def test_rewrite_workspace_app_route_for_known_slug(monkeypatch):
+    monkeypatch.setattr(vizor_daemon, "_known_slugs", lambda: {"acme"})
+
+    assert vizor_daemon._rewrite_workspace_app_route("/w/acme/onboarding/roles") == "/onboarding/roles"
+    assert vizor_daemon._rewrite_workspace_app_route("/w/acme/onboarding/roles/") == "/onboarding/roles/"
+
+
+def test_rewrite_workspace_app_route_rejects_unknown_slug(monkeypatch):
+    monkeypatch.setattr(vizor_daemon, "_known_slugs", lambda: {"acme"})
+
+    assert vizor_daemon._rewrite_workspace_app_route("/w/ghost/onboarding/roles") is None
+
+
 def test_workspace_index_lists_registered_slugs(monkeypatch):
     from synlynk import vizor_daemon
 
