@@ -106,3 +106,70 @@ def _log(message: str) -> None:
     DAEMON_HOME.mkdir(parents=True, exist_ok=True)
     with open(LOGFILE, "a") as f:
         f.write(f"{time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())} {message}\n")
+
+
+def _known_slugs() -> set:
+    return set(_registered_workspaces().keys())
+
+
+def parse_workspace_path(path: str):
+    """Split '/w/<slug>/rest' into (slug, '/<slug>/rest'), or (None, None).
+
+    The rewritten path keeps the slug segment so it maps 1:1 onto
+    CACHE_ROOT/<slug>/... when SimpleHTTPRequestHandler joins it against
+    directory=str(CACHE_ROOT).
+    """
+    if not path.startswith("/w/"):
+        return None, None
+    remainder = path[len("/w/"):]
+    slug = remainder.split("/", 1)[0]
+    if not slug or slug not in _known_slugs():
+        return None, None
+    return slug, "/" + remainder
+
+
+def _workspace_index_html() -> str:
+    slugs = sorted(_known_slugs())
+    if not slugs:
+        return "<html><body><p>No workspaces registered yet.</p></body></html>"
+    items = "".join(f'<li><a href="/w/{s}/overview.html">{s}</a></li>' for s in slugs)
+    return f"<html><body><ul>{items}</ul></body></html>"
+
+
+def build_workspace_routing_handler():
+    """Return a WorkspaceRoutingHandler class bound to the current VizorHandler.
+
+    Deferred import: synlynk.viz is heavy and importing it at vizor_daemon
+    module load time would pull HTTP-serving machinery into every caller
+    (including tests that only need poll_once/registry helpers).
+    """
+    from synlynk.viz import VizorHandler
+
+    class WorkspaceRoutingHandler(VizorHandler):
+        def __init__(self, *args, **kwargs):
+            http_server_module = __import__("http.server", fromlist=["SimpleHTTPRequestHandler"])
+            http_server_module.SimpleHTTPRequestHandler.__init__(
+                self, *args, directory=str(CACHE_ROOT), **kwargs
+            )
+
+        def do_GET(self):
+            from urllib.parse import urlparse
+
+            path = urlparse(self.path).path
+            if path == "/" or path == "":
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(_workspace_index_html().encode("utf-8"))
+                return
+            if path.startswith("/w/"):
+                slug, rewritten = parse_workspace_path(path)
+                if slug is None:
+                    self.send_error(404, "Unknown workspace")
+                    return
+                self.path = rewritten + (("?" + urlparse(self.path).query) if urlparse(self.path).query else "")
+                super().do_GET()
+                return
+            super().do_GET()
+
+    return WorkspaceRoutingHandler

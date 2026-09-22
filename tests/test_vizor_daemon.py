@@ -157,3 +157,46 @@ def test_poll_once_isolates_failures(tmp_path, monkeypatch):
     assert results["a"].startswith("error:")
     assert results["b"] == "ok"
     assert (cache_root / "b" / "manifest.json").exists()
+
+
+def test_resolve_slug_from_path_valid(tmp_path, monkeypatch):
+    from synlynk import vizor_daemon
+
+    monkeypatch.setattr(vizor_daemon, "_known_slugs", lambda: {"acme"})
+    slug, rest = vizor_daemon.parse_workspace_path("/w/acme/overview.html")
+    assert slug == "acme"
+    assert rest == "/acme/overview.html"
+
+
+def test_resolve_slug_from_path_unknown_slug(monkeypatch):
+    from synlynk import vizor_daemon
+
+    monkeypatch.setattr(vizor_daemon, "_known_slugs", lambda: {"acme"})
+    slug, rest = vizor_daemon.parse_workspace_path("/w/ghost/overview.html")
+    assert slug is None
+    assert rest is None
+
+
+def test_resolve_slug_from_path_non_workspace_path(monkeypatch):
+    from synlynk import vizor_daemon
+
+    monkeypatch.setattr(vizor_daemon, "_known_slugs", lambda: {"acme"})
+    slug, rest = vizor_daemon.parse_workspace_path("/onboarding")
+    assert slug is None
+    assert rest is None
+
+
+def test_workspace_index_lists_registered_slugs(monkeypatch):
+    from synlynk import vizor_daemon
+
+    monkeypatch.setattr(vizor_daemon, "_known_slugs", lambda: {"acme", "beta"})
+    html = vizor_daemon._workspace_index_html()
+    assert "acme" in html and "beta" in html
+
+
+def test_workspace_index_empty(monkeypatch):
+    from synlynk import vizor_daemon
+
+    monkeypatch.setattr(vizor_daemon, "_known_slugs", lambda: set())
+    html = vizor_daemon._workspace_index_html()
+    assert "No workspaces registered" in html
