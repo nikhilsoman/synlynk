@@ -560,6 +560,18 @@ def _resolve_dispatch_gh_token(role: str) -> Optional[str]:
     return None
 
 
+def _require_dispatch_gh_token(role: str) -> str:
+    """Fail before launch when a GitHub-write dispatch lacks a fresh token."""
+    token = _resolve_dispatch_gh_token(role)
+    if token:
+        return token
+    raise RuntimeError(
+        "Dispatch refused before launch: no valid, non-stale GitHub App token "
+        f"is available for role {role!r}. Run `synlynk identity init --role {role}` "
+        "to provision the role-scoped GitHub App, then retry dispatch."
+    )
+
+
 def _resolve_dispatch_gh_bot_login(role: str) -> Optional[str]:
     """Resolve a provisioned GitHub App bot login for dispatch.
 
@@ -3018,6 +3030,11 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 "or dispatch to a different agent (Codex/Grok)."
             )
             raise SystemExit(1)
+    if requires_gh_write:
+        # Resolve credentials before opening a DB connection, creating a job
+        # worktree, or spawning a child process. The child-env check below is
+        # intentionally retained as defense in depth for races/stale caches.
+        _require_dispatch_gh_token(resolved_agent_role)
     if agent == "grok" and task_requires_write(
         task, task_type=task_type, permissions=grants, requires_gh_write=requires_gh_write
     ):
