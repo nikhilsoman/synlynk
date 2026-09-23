@@ -21,6 +21,15 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `synlynk upgrade`, and fixes the OAuth-completion redirect so workspace-scoped
   `/w/<slug>/onboarding/roles` callbacks route to the roles handler instead of 404ing.
 
+### Fixed
+- **\[LIVE-14\] GitHub App token cache path drift (#1746):** `WatchDaemon._refresh_github_tokens`
+  and two `viz.py` OAuth/App-conversion refresh call sites now resolve the token cache directory
+  via `product_store.resolve_github_apps_dir()`, the same resolver `dispatch.py`/`synlynk gh` use
+  to read tokens. Previously they hardcoded a repo-local path, so a role's token in the global
+  workspace directory (the one dispatch/`synlynk gh` actually reads) never got refreshed once it
+  existed — every provisioned role's global token went silently stale while the daemon reported
+  itself healthy.
+
 ## [v0.20.0] - 2026-09-19
 
 ### Highlights
