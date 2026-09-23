@@ -133,3 +133,31 @@ def test_migrate_state_db_in_unwritable_sandbox_returns_source_or_destination(tm
     res = migrate_state_db_if_needed(repo)
     assert res == legacy
 
+
+def test_resolve_db_path_unregistered_non_project_directory(tmp_path, monkeypatch):
+    import synlynk
+    from synlynk.product_store import state_db_path
+    from synlynk.state_registry import ensure_registered_product
+
+    home = tmp_path / "home"
+    monkeypatch.setenv("HOME", str(home))
+    non_repo = tmp_path / "outside"
+    non_repo.mkdir()
+    monkeypatch.chdir(non_repo)
+
+    # Initialize a dummy registered other product so registry.json exists
+    other_db = home / ".synlynk" / "workspaces" / "other" / "state.db"
+    other_db.parent.mkdir(parents=True, exist_ok=True)
+    other_db.touch()
+    ensure_registered_product("other", other_db)
+
+    # Create un-registered product state.db file
+    prod_db = state_db_path("outside")
+    prod_db.parent.mkdir(parents=True, exist_ok=True)
+    prod_db.touch()
+
+    # DB_PATH resolution should gracefully return prod_db path rather than failing closed
+    resolved = synlynk._resolve_db_path()
+    assert resolved == str(prod_db)
+
+
