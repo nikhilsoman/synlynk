@@ -286,5 +286,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #1756 \u2014 backfill registry repo_path and inspect daemon install returncode (#1743, #1749) (PR #1756, v0.22.0-dev)\n\n\u2022 Merged improvements and fixes for PR #\n\n#posts",
     "changelog": "### v0.22.0-dev (2026-09-23) - PR #1756\n- Merged improvements and fixes for PR #"
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/230-pr1754-deduplicate-harness-sop-sections.md",
+    "title": "PR #1754 \u2014 deduplicate harness SOP sections",
+    "author": "nikhilsoman",
+    "date": "2026-09-23",
+    "pr": "#1754",
+    "version": "0.22.0-dev",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #"
+    ],
+    "tweet": "\ud83d\ude80 PR #1754 \u2014 deduplicate harness SOP sections (PR #1754, v0.22.0-dev)\n\n\u2022 Merged improvements and fixes for PR #\n\n#posts",
+    "changelog": "### v0.22.0-dev (2026-09-23) - PR #1754\n- Merged improvements and fixes for PR #"
   }
 ]
