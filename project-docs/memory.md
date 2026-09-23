@@ -6,7 +6,9 @@
 - **Languages:** Python
 - **Directories:** agents, bin, docs, examples, project-docs, scripts, synlynk, synlynk.egg-info, test_archive, test_context_output, tests, website, worktrees
 
-## Decisions
+- **Vizor Daemon Concurrency Mutex Lock (#1750):** `workspace_render_context()` in `synlynk/vizor_daemon.py` is protected by `_RENDER_LOCK = threading.Lock()` around the `os.chdir` and global `VIZ_CACHE_DIR`/`_get_db` monkeypatching window, preventing data races across concurrent polling threads. [@agy, @nikhilsoman]
+- **Sandboxed Worktree State Migration Resilience (#1733):** `migrate_state_db_if_needed`, `ensure_product_dirs`, and `synlynk/__init__._resolve_db_path` catch `PermissionError` and `OSError` defensively, ensuring CLI commands (such as `synlynk watch status`) can safely run in restricted or read-only sandboxes without crashing during module import. [@agy, @nikhilsoman]
+- **Concurrent SQLite Schema Migration Safety:** Wrapped `ALTER TABLE stories ADD COLUMN` in `synlynk/db.py` in `try...except sqlite3.OperationalError: pass` to eliminate race conditions when multi-threaded processes concurrently initialize schema on fresh databases. [@agy, @nikhilsoman]
 - **Codex Dispatch Model Auto-Probing (#1748):** When dispatching to Codex without an explicit `--model` override, `synlynk/dispatch.py` and `synlynk/models.py` auto-probe `~/.codex/config.toml` for the local configured model (`gpt-5.6-luna`), ensuring ChatGPT-account setups work seamlessly. [@agy, @nikhilsoman]
 - **Git Worktree Product Identity Slug Resolution (#1742):** `identity_slug_from_config()` in `synlynk/product_store.py` invokes `git rev-parse --path-format=absolute --git-common-dir` and evaluates relative paths defensively against `repo`, preventing git worktrees from creating isolated stray product entries in `registry.json`. [@agy, @nikhilsoman]
 - **Registry Self-Healing Repo Path (#1743):** `ensure_registered_product()` in `synlynk/state_registry.py` self-heals and persists `repo_path` on existing entries so the cross-workspace Vizor background daemon has valid repo paths for all registered workspaces. [@agy, @nikhilsoman]

@@ -1,5 +1,16 @@
 # Agy Devlog
 
+## 2026-09-24 — Sprint 3 Sandbox State Migration & Vizor Concurrency Lock (PR #1757)
+
+### Shipped & Verified
+- **Sprint 3 (PR #1757, Closes #1733, #1750):**
+  - Defensively caught `PermissionError` and `OSError` in `migrate_state_db_if_needed`, `ensure_product_dirs`, and `synlynk/__init__._resolve_db_path`, preventing CLI import crashes when inspecting status from restricted or sandboxed worktrees.
+  - Added `_RENDER_LOCK = threading.Lock()` mutex in `synlynk/vizor_daemon.py` wrapping `workspace_render_context`, guaranteeing thread safety and eliminating race conditions on process CWD and `VIZ_CACHE_DIR` during concurrent workspace refreshes.
+  - Wrapped `ALTER TABLE stories ADD COLUMN` statements in `synlynk/db.py` in `try...except sqlite3.OperationalError: pass` for multi-threaded schema migration safety, and enabled WAL mode in concurrent dispatch test fixtures.
+  - Added unit test regressions in `tests/test_product_store.py` (`test_migrate_state_db_in_unwritable_sandbox_returns_source_or_destination`) and `tests/test_vizor_daemon.py` (`test_workspace_render_context_uses_mutex_lock`, `test_workspace_render_context_thread_safety`).
+- Verified 61 unit tests passing locally and 4/4 matrix CI checks green (EPUBCheck, Python 3.10, Python 3.12, qa-gate). Merged to `main` (`fe18b991`) via QA review.
+[@agy, @nikhilsoman]
+
 ## 2026-09-23 — Sprint 1 & Sprint 2 Control-Plane & Daemon Fixes (PR #1755, #1756)
 
 ### Shipped & Verified

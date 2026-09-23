@@ -1,5 +1,13 @@
 # Cost Log
 
+## 2026-09-24 — Sprint 3 Sandbox State Migration & Vizor Concurrency Lock (PR #1757)
+- Interactive Conductor: Agy.
+- Resolved Issue #1733 (Defensive sandbox/unwritable worktree error handling during state migration and CLI import) in PR #1757.
+- Resolved Issue #1750 (`_RENDER_LOCK` mutex locking around `workspace_render_context` to protect global process CWD and viz cache directories) in PR #1757.
+- Resolved SQLite concurrent schema migration safety in `synlynk/db.py` and enabled WAL in concurrency fixtures.
+- 61 unit tests passing locally; 4/4 matrix CI checks 100% green.
+- Zero external fee-bearing dispatch spend.
+
 ## 2026-09-23 — Sprint 1 & Sprint 2 Control-Plane & Daemon Fixes (PR #1755, #1756)
 - Interactive Conductor: Agy.
 - Resolved Issue #1748 (Codex model tiering / `~/.codex/config.toml` auto-probing) and Issue #1742 (git worktree `--path-format=absolute` identity slug resolution) in PR #1755.
