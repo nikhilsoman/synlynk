@@ -222,5 +222,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #1744 \u2014 Vizor cross-workspace daemon (PR #1744, v0.21.0-dev)\n\n\u2022 Merged improvements and fixes for PR #\n\n#posts",
     "changelog": "### v0.21.0-dev (2026-09-23) - PR #1744\n- Merged improvements and fixes for PR #"
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/226-pr1747-align-github-app-token-refresh-cache-pat.md",
+    "title": "PR #1747 \u2014 align GitHub App token refresh cache paths [LIVE-14] (#1746)",
+    "author": "nikhilsoman",
+    "date": "2026-09-23",
+    "pr": "#1747",
+    "version": "0.21.0-dev",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #"
+    ],
+    "tweet": "\ud83d\ude80 PR #1747 \u2014 align GitHub App token refresh cache paths [LIVE-14] (#1746) (PR #1747, v0.21.0-dev)\n\n\u2022 Merged improvements and fixes for PR #\n\n#posts",
+    "changelog": "### v0.21.0-dev (2026-09-23) - PR #1747\n- Merged improvements and fixes for PR #"
   }
 ]
