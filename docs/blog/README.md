@@ -266,6 +266,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [228](./228-pr1755-resolve-codex-config-model-and-git-workt.md) | PR #1755 — resolve codex config model and git worktree identity slug (#1748, #1742) | [#1755](https://github.com/nikhilsoman/synlynk/pull/1755) | 2026-09-23 |
 | [229](./229-pr1756-backfill-registry-repo-path-and-inspect-.md) | PR #1756 — backfill registry repo_path and inspect daemon install returncode (#1743, #1749) | [#1756](https://github.com/nikhilsoman/synlynk/pull/1756) | 2026-09-23 |
 | [230](./230-pr1754-deduplicate-harness-sop-sections.md) | PR #1754 — deduplicate harness SOP sections | [#1754](https://github.com/nikhilsoman/synlynk/pull/1754) | 2026-09-23 |
+| [231](./231-pr1757-guard-sandbox-state-migration-and-mutex-.md) | PR #1757 — guard sandbox state migration and mutex-lock vizor render context (#1733, #1750) | [#1757](https://github.com/nikhilsoman/synlynk/pull/1757) | 2026-09-23 |
 
 ## Per-PR Post Template
 
