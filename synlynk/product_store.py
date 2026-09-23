@@ -26,14 +26,25 @@ def identity_slug_from_config(repo_path: PathLike = ".") -> str:
     candidates = [repo / ".synlynk" / "config.json"]
     root_repo = repo
     try:
-        if (repo / ".git").exists():
-            result = subprocess.run(["git", "rev-parse", "--git-common-dir"], cwd=repo,
-                                    capture_output=True, text=True, check=False)
+        if (repo / ".git").exists() or (repo.parent / ".git").exists():
+            result = subprocess.run(
+                ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+                cwd=repo,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
             if result.returncode == 0:
-                common = Path(result.stdout.strip()).resolve()
-                root = common.parent if common.name == ".git" else common.parent
-                root_repo = root
-                candidates.append(root / ".synlynk" / "config.json")
+                raw_common = result.stdout.strip()
+                if raw_common:
+                    common = Path(raw_common)
+                    if not common.is_absolute():
+                        common = (repo / common).resolve()
+                    else:
+                        common = common.resolve()
+                    root = common.parent if common.name == ".git" else common.parent
+                    root_repo = root
+                    candidates.append(root / ".synlynk" / "config.json")
     except (OSError, ValueError):
         pass
     for cfg_path in candidates:
@@ -102,11 +113,16 @@ def migrate_state_db_if_needed(repo_path: PathLike = ".") -> Path:
         return destination
 
     try:
-        common = subprocess.run(
-            ["git", "rev-parse", "--git-common-dir"], cwd=repo,
+        common_run = subprocess.run(
+            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"], cwd=repo,
             capture_output=True, text=True, check=False,
         )
-        root = Path(common.stdout.strip()).resolve().parent if common.returncode == 0 else repo
+        if common_run.returncode == 0 and common_run.stdout.strip():
+            raw_c = Path(common_run.stdout.strip())
+            c = (repo / raw_c).resolve() if not raw_c.is_absolute() else raw_c.resolve()
+            root = c.parent if c.name == ".git" else c.parent
+        else:
+            root = repo
     except (OSError, ValueError):
         root = repo
     old_key = hashlib.md5(str(root).encode()).hexdigest()[:8]
@@ -196,13 +212,14 @@ def resolve_github_apps_dir(repo_path: PathLike = ".") -> Path:
     repo = Path(repo_path).resolve()
     repo_candidates = [repo / ".synlynk" / "github_apps"]
     try:
-        if (repo / ".git").exists():
+        if (repo / ".git").exists() or (repo.parent / ".git").exists():
             result = subprocess.run(
-                ["git", "rev-parse", "--git-common-dir"], cwd=repo,
+                ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"], cwd=repo,
                 capture_output=True, text=True, check=False,
             )
-            if result.returncode == 0:
-                common = Path(result.stdout.strip()).resolve()
+            if result.returncode == 0 and result.stdout.strip():
+                raw_common = Path(result.stdout.strip())
+                common = (repo / raw_common).resolve() if not raw_common.is_absolute() else raw_common.resolve()
                 main_repo = common.parent if common.name == ".git" else common.parent
                 main_apps = main_repo / ".synlynk" / "github_apps"
                 if main_apps not in repo_candidates:

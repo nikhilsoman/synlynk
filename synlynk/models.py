@@ -161,6 +161,17 @@ def resolve_tier_model(tier: str, harness: str, repo_path: Optional[str] = None)
     for t in ("pro", "fast", "reasoning"):
         if harness in tiers.get(t, {}):
             return tiers[t][harness]
+    if harness == "codex":
+        try:
+            from synlynk.probe import _read_toml_string_value
+
+            codex_home = Path(os.environ.get("CODEX_HOME", os.path.expanduser("~/.codex")))
+            configured = _read_toml_string_value(str(codex_home / "config.toml"), "model")
+            if configured:
+                return configured
+        except Exception:
+            pass
+        return "gpt-5.6-luna"
     return f"{harness}-default"
 
 
