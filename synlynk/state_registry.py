@@ -176,7 +176,13 @@ def registered_canonical_path(slug: str) -> Optional[Path]:
         return Path(str(entry["canonical_path"])).expanduser().resolve()
 
 
-def ensure_registered_product(slug: str, path: Path, product_id: Optional[str] = None) -> dict:
+def ensure_registered_product(
+    slug: str,
+    path: Path,
+    product_id: Optional[str] = None,
+    *,
+    repo_path: Optional[Path] = None,
+) -> dict:
     """Idempotently register a canonical product path and return its entry."""
     registry = registry_path()
     path = path.expanduser().resolve()
@@ -201,6 +207,8 @@ def ensure_registered_product(slug: str, path: Path, product_id: Optional[str] =
             "lineage_generation": 1,
             "state": "active",
         }
+        if repo_path is not None:
+            entry["repo_path"] = str(Path(repo_path).expanduser().resolve())
         products[slug] = entry
         _write_unlocked(registry, payload)
         return entry

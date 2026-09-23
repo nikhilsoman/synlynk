@@ -235,7 +235,8 @@ def test_install_script_dispatches_to_pipx():
     install_script = Path(__file__).resolve().parents[1] / "install.sh"
     content = install_script.read_text()
     assert "pipx install git+https://github.com/nikhilsoman/synlynk" in content
-    assert "exec pipx install git+https://github.com/nikhilsoman/synlynk" in content
+    assert "exec pipx install" not in content
+    assert content.count("synlynk viz --install || true") == 2
     assert "for f in" not in content
     assert "raw.githubusercontent.com/nikhilsoman/synlynk/main/synlynk/$f" not in content
 
@@ -259,3 +260,35 @@ def test_upgrade_dry_run_makes_no_subprocess_calls(tmp_path, monkeypatch, capsys
     captured = capsys.readouterr()
     assert "DRY RUN" in captured.out
     assert "pipx" in captured.out
+
+
+def test_upgrade_installs_vizor_daemon_on_success(monkeypatch, capsys):
+    import importlib
+    import synlynk
+
+    upgrade_module = importlib.import_module("synlynk.upgrade")
+
+    monkeypatch.setattr(upgrade_module.subprocess, "run", lambda *a, **k: type(
+        "R", (), {"returncode": 0, "stdout": "v99.0.0"}
+    )())
+    calls = []
+    monkeypatch.setattr(synlynk, "_ensure_vizor_daemon_installed", lambda: calls.append(1), raising=False)
+    monkeypatch.setattr(synlynk, "_run_upgrade", lambda latest: None)
+    monkeypatch.setattr(synlynk, "_warn_stale_script_install", lambda: None)
+
+    upgrade_module.upgrade(dry_run=False)
+
+    assert calls == [1]
+
+
+def test_upgrade_dry_run_skips_daemon_install(monkeypatch):
+    import importlib
+
+    upgrade_module = importlib.import_module("synlynk.upgrade")
+
+    calls = []
+    monkeypatch.setattr(upgrade_module, "_ensure_vizor_daemon_installed", lambda: calls.append(1))
+
+    upgrade_module.upgrade(dry_run=True)
+
+    assert calls == []
