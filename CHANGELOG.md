@@ -8,18 +8,65 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ---
 
 ## [Unreleased]
+- Ongoing Wave 3: Hosted Teams Server Hub, Cloudflare Tunnel full-duplex daemon, and Dynamic Quota Advisory service.
 
-### Wave 1: 01 Oct 2026 — Synlynk Personal (Dev Preview v1.0.0)
-- In progress: First-class model tripartite dispatch & sovereign multi-home drain-to-boundary handover.
+## [v0.21.0] - 2026-09-23
+### Added
+- feat: Vizor cross-workspace daemon (#1744)
+- feat(models): first-class model catalog, multi-track quotas, and rolling calibration engine (#1727)
+- feat(testbed): wire model selection and model tiering into synthetic identities
+- feat(testbed): Frontier QA Testbed engine and multi-node soak testing framework (#1719)
+- feat(identity): implement 3-tier identity attribution protocol and whoami CLI (W2-T1.4)
+- feat(mesh): implement AST mesh sibling worktree collision detector and preemption (W2-T1.3)
+- feat(jobs): implement distributed task leases and heartbeat un-stranding in state.db (W2-T1.2)
+- feat(relay): implement P2P relay event bus, WS/NATS framing, and peer forwarding (W2-T1.1)
+- feat(release): verify full regression matrix, readiness gates, and formalize Wave 1 completion
+- feat(marketing): verify marketing release ceremony and standalone doc bundles (W1-T3.3)
+- feat(pm,doctor): implement Ring 3 opportunity radar and architect watchdog health checks (W1-T3.2)
+- feat(charters): implement living trigger registry and autonomous backlog triage triggers (W1-T3.1)
+- feat(heal): ship Magic PR Engine via synlynk heal --magic (W1-T2.3)
+- feat(coldstart): ship Deep Brownfield Ingestion Engine via synlynk init --brownfield (W1-T2.2)
+- feat(vizor): ship Inside-Out World View Extractor & Concentric Radar UI (W1-T2.1)
+- feat(handover): sovereign multi-home dynamic handover and drain-to-boundary protocol (Wave 1 Task 1.2)
+- feat(dispatch): model first-class tripartite dispatch and AST cost tiering (Wave 1 Task 1.1) (#1695)
+### Fixed
+- fix(dispatch): cap BEHIND/DIRTY PR-review retry churn and block retries on critical cost inflation (#1741)
+- fix: retry scalar GitHub write verification (#1740)
+- fix(models): sync codex model catalog with authenticated CLI config (#1739)
+- fix(dispatch): enable explicit permission bypass and always-approve for headless grok jobs (#1735)
+### Changed
+- docs: checkpoint dedicated OrbStack contributor testbed and upstream LiteLLM PR #42579
+- docs: W11 Cloudflare Tunnel full-duplex remote access spec (#1729)
+- docs: W12 Discord/Herdr full-duplex remote-access bridge spec (#1731)
+- docs: W10 Grok Bot remote MCP surface spec
+- docs: record LIVE-13 Grok permission bypass decision and devlog
+- docs(rca): record LIVE-13 Grok headless dispatch permission bypass RCA
+- docs: record model catalog and rolling quota calibration completion
+- docs(devlog): record Frontier QA Testbed implementation and decision
+- docs(spec): design automated acceptance and multi-node soak testbed via OrbStack VMs and Docker
+- docs(sop): add TPM(bot) GitHub state synchronization SOP and link all Wave Epics/Issues
+- docs: update tasklist, devlog, and cost log for Wave 1 Task 1.1 (PR #1695)
+- chore(release): bump development version to 0.21.0-dev and stamp v0.20.0 in CHANGELOG.md
+
+---
+
+## [v0.21.0] - 2026-09-23
+
+### Highlights
+- **Tripartite Model Routing & Sovereign Multi-Home Handover:** Dynamic intelligence tiering (`fast`, `pro`, `reasoning`) with AST blast-radius cost routing and proactive drain-to-boundary pipeline handover.
+- **Deep Brownfield & Magic PR Healing Engines:** Zero-touch repository reverse-engineering (`synlynk init --brownfield`) and automated AST parity gap discovery and repair (`synlynk heal --magic`).
+- **Teams Relay Mesh Substrate:** Ephemeral peer-to-peer WebSocket RFC 6455 / NATS event routing (`synlynk relay`), 30-min distributed SQLite story leases (`synlynk jobs`), AST sibling worktree collision preemption (`synlynk mesh --conflicts`), and 3-tier identity attribution (`synlynk whoami`).
+- **Vizor Cross-Workspace Daemon:** Persistent background daemon (`synlynk/vizor_daemon.py`) serving multi-workspace dashboards on `/w/<slug>/...` with systemd/launchd lifecycle (`synlynk viz install/status`).
+- **Declarative Model Catalog & Rolling Quota Calibrator:** Full 2026 SOTA model catalog (`.synlynk/models.json`), multi-track Google AI Pro / Claude / Codex / Grok quota isolation, and empirical `/usage` delta rolling calibration (`synlynk quota calibrate`).
+- **Frontier QA Testbed Engine:** Multi-node automated acceptance and soak testbed engine (`synlynk/testbed/`) running on isolated OrbStack VMs and Docker with Ed25519 attestation receipts.
 
 ### Added
 - **Vizor cross-workspace daemon:** a persistent, workspace-registry-driven background daemon
   (`synlynk/vizor_daemon.py`) that polls every registered product, isolates per-workspace refresh
-  failures, and serves the Vizor dashboard for any workspace via `/w/<slug>/...` routing — replacing
-  the old single-workspace `synlynk viz` process model. Adds launchd/systemd lifecycle commands
-  (`synlynk viz install/uninstall/status`), auto-installs on fresh `install.sh` runs and on
-  `synlynk upgrade`, and fixes the OAuth-completion redirect so workspace-scoped
-  `/w/<slug>/onboarding/roles` callbacks route to the roles handler instead of 404ing.
+  failures, and serves the Vizor dashboard for any workspace via `/w/<slug>/...` routing. Adds
+  launchd/systemd lifecycle commands (`synlynk viz install/uninstall/status`).
+- **Living Trigger Registry & Autonomous Backlog Triage:** Living trigger registry (`synlynk/charters.py`) for automated TPM sweeps and self-healing charter updates.
+- **LIVE-13 Grok Permission Bypass:** Explicit permission mode resolution (`--always-approve`, `--permission-mode bypassPermissions`) for trusted headless Grok jobs.
 
 ### Fixed
 - **\[LIVE-14\] GitHub App token cache path drift (#1746):** `WatchDaemon._refresh_github_tokens`

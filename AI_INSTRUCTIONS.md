@@ -177,6 +177,10 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
 - "reconcile subscription costs", "true up monthly subscription spend" -> `synlynk cost true-up`
 - "grant a credit balance", "record a credit grant" -> `synlynk credit grant`
 - "show agent quota headroom" -> `synlynk quota`
+- "fleet utilization advisory", "show quota advisory", "dynamic capacity advisory" -> `synlynk quota advisory`
+- "calibrate quota", "calibrate harness usage" -> `synlynk quota calibrate`
+- "run acceptance testbed", "testbed soak", "testbed receipt" -> `synlynk testbed`
+- "who am I", "show active caller identity" -> `synlynk whoami`
 - "run a capability sweep", "seed capability baselines" -> `synlynk capability sweep`
 - "run milestone dag", "execute milestone unattended", "launch milestone dag" -> `synlynk run`
 - "run the trio protocol" -> `synlynk run --trio`

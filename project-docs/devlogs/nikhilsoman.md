@@ -1600,11 +1600,11 @@ implementation plan.
 - Live selftest exposed a scratch-ledger bug: probe metadata provisioning changed `DB_PATH` without changing cwd, causing a canonical-path mismatch. Fixed in PR #1693 (`bd5e9133`) by redirecting both cwd and DB path; focused verification is 155 passed, 1 skipped.
 - Live selftest reaches the full scenario suite. Remaining failures are environment gaps: Grok probe degraded, local harness configuration absent, and Muse probe degraded. A completed Agy child job with a dead PID was reconciled via `synlynk jobs reap --apply`.
 
-## 2026-09-23 — Dedicated OrbStack Contributor VM & Upstream LiteLLM Contribution (PR #42579)
+## 2026-09-23 — Named Release v0.21.0 Ceremony & Daily Release Cadence
 
-- Provisioned persistent, dedicated Ubuntu 24.04 `arm64` VM `litellm-dev-box` on OrbStack for long-term open-source contributions.
-- Configured isolated Python 3.12 virtual environment (`uv`), cloned `BerriAI/litellm`, and injected Synlynk staging CLI (`v0.21.0-dev`).
-- Validated Synlynk brownfield ingestion (`synlynk init --brownfield`) on LiteLLM; maintained 100% clean upstream tree via `.git/info/exclude`.
-- Resolved upstream bug [BerriAI/litellm #42247](https://github.com/BerriAI/litellm/issues/42247): normalized unicode quotation marks (`’`/`‘`) in `ExceptionCheckers.is_azure_content_policy_violation_error` and added structured code matching for `content_filter` and `ContentFiltered` in `_map_azure_exception`.
-- Verification: 1,240 / 1,240 tests passing (100% Green). Forked `BerriAI/litellm` under `@nikhilsoman` and submitted upstream [PR #42579](https://github.com/BerriAI/litellm/pull/42579). Zero fee-bearing dispatch spend.
+- Executed full named release ceremony for `v0.21.0` (The Autonomous Multi-Home & Teams Relay Release) after verifying 3,195 passing tests (100% Green).
+- Synchronized collateral: README.md badges (3,198 collected), 4 HTML/PDF doc bundles, website release bundle, CHANGELOG.md, and published GitHub Release `v0.21.0`.
+- Established daily release cadence leading into `v1.0.0-rc1` (Oct 01): point releases will incrementally advance robust onboarding, autonomous execution loop, Vizor strengthening, and remote tunnels.
+- Bumped active trunk to `0.22.0-dev`.
+
 
