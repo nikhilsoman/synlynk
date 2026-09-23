@@ -295,3 +295,54 @@ def test_install_uninstall_use_home_relative_paths(tmp_path, monkeypatch):
     uninstall_result = vizor_daemon.uninstall()
     assert uninstall_result["uninstalled"] is True
     assert not plist_path.exists()
+
+
+def test_install_nonzero_returncode_reports_failure(tmp_path, monkeypatch):
+    from synlynk import vizor_daemon
+
+    monkeypatch.setattr(vizor_daemon, "platform_name", lambda: "Darwin")
+    monkeypatch.setattr(vizor_daemon, "_launchd_plist_path", lambda: tmp_path / "com.synlynk.vizor-daemon.plist")
+    monkeypatch.setattr(
+        vizor_daemon.subprocess,
+        "run",
+        lambda *a, **k: type("R", (), {"returncode": 1, "stderr": "service already loaded"})(),
+    )
+
+    result = vizor_daemon.install()
+    assert result["installed"] is False
+    assert "service already loaded" in result["reason"]
+
+
+def test_uninstall_nonzero_returncode_reports_failure(tmp_path, monkeypatch):
+    from synlynk import vizor_daemon
+
+    monkeypatch.setattr(vizor_daemon, "platform_name", lambda: "Darwin")
+    plist_path = tmp_path / "com.synlynk.vizor-daemon.plist"
+    plist_path.write_text("dummy")
+    monkeypatch.setattr(vizor_daemon, "_launchd_plist_path", lambda: plist_path)
+    monkeypatch.setattr(
+        vizor_daemon.subprocess,
+        "run",
+        lambda *a, **k: type("R", (), {"returncode": 1, "stderr": "permission denied"})(),
+    )
+
+    result = vizor_daemon.uninstall()
+    assert result["uninstalled"] is False
+    assert "permission denied" in result["reason"]
+    assert plist_path.exists(), "plist should not be unlinked when unload fails"
+
+
+def test_install_systemd_nonzero_returncode_reports_failure(tmp_path, monkeypatch):
+    from synlynk import vizor_daemon
+
+    monkeypatch.setattr(vizor_daemon, "platform_name", lambda: "Linux")
+    monkeypatch.setattr(vizor_daemon, "_systemd_unit_path", lambda: tmp_path / "synlynk-vizor-daemon.service")
+    monkeypatch.setattr(
+        vizor_daemon.subprocess,
+        "run",
+        lambda *a, **k: type("R", (), {"returncode": 1, "stderr": "Failed to connect to bus"})(),
+    )
+
+    result = vizor_daemon.install()
+    assert result["installed"] is False
+    assert "Failed to connect to bus" in result["reason"]
