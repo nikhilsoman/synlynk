@@ -346,3 +346,63 @@ def test_install_systemd_nonzero_returncode_reports_failure(tmp_path, monkeypatc
     result = vizor_daemon.install()
     assert result["installed"] is False
     assert "Failed to connect to bus" in result["reason"]
+
+
+def test_workspace_render_context_uses_mutex_lock(tmp_path):
+    from synlynk import vizor_daemon
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    db_path = tmp_path / "state.db"
+    db_path.write_bytes(b"")
+
+    assert not vizor_daemon._RENDER_LOCK.locked()
+    with vizor_daemon.workspace_render_context(repo, db_path, tmp_path / "cache"):
+        assert vizor_daemon._RENDER_LOCK.locked()
+    assert not vizor_daemon._RENDER_LOCK.locked()
+
+
+def test_workspace_render_context_thread_safety(tmp_path):
+    import time
+    import threading
+    from synlynk import vizor_daemon
+    import synlynk.viz as viz_module
+
+    repo_a = tmp_path / "repo_a"
+    repo_a.mkdir()
+    db_a = tmp_path / "a.db"
+    db_a.write_bytes(b"")
+
+    repo_b = tmp_path / "repo_b"
+    repo_b.mkdir()
+    db_b = tmp_path / "b.db"
+    db_b.write_bytes(b"")
+
+    results = []
+
+    def run_a():
+        with vizor_daemon.workspace_render_context(repo_a, db_a, tmp_path / "cache_a"):
+            time.sleep(0.05)
+            results.append(("a", os.getcwd(), viz_module.VIZ_CACHE_DIR))
+
+    def run_b():
+        time.sleep(0.01)
+        with vizor_daemon.workspace_render_context(repo_b, db_b, tmp_path / "cache_b"):
+            results.append(("b", os.getcwd(), viz_module.VIZ_CACHE_DIR))
+
+    t1 = threading.Thread(target=run_a)
+    t2 = threading.Thread(target=run_b)
+    t1.start()
+    t2.start()
+    t1.join()
+    t2.join()
+
+    assert len(results) == 2
+    # Ensure sequential serialized execution with consistent CWD and cache dir
+    assert results[0][0] == "a"
+    assert results[0][1] == str(repo_a.resolve())
+    assert results[0][2] == str(tmp_path / "cache_a")
+    assert results[1][0] == "b"
+    assert results[1][1] == str(repo_b.resolve())
+    assert results[1][2] == str(tmp_path / "cache_b")
+

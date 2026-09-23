@@ -631,13 +631,25 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             except sqlite3.OperationalError:
                 pass
         if "estimated_tokens" not in story_cols:
-            conn.execute("ALTER TABLE stories ADD COLUMN estimated_tokens INTEGER")
+            try:
+                conn.execute("ALTER TABLE stories ADD COLUMN estimated_tokens INTEGER")
+            except sqlite3.OperationalError:
+                pass
         if "actual_tokens" not in story_cols:
-            conn.execute("ALTER TABLE stories ADD COLUMN actual_tokens INTEGER")
+            try:
+                conn.execute("ALTER TABLE stories ADD COLUMN actual_tokens INTEGER")
+            except sqlite3.OperationalError:
+                pass
         if "stack_tags" not in story_cols:
-            conn.execute("ALTER TABLE stories ADD COLUMN stack_tags TEXT DEFAULT '[]'")
+            try:
+                conn.execute("ALTER TABLE stories ADD COLUMN stack_tags TEXT DEFAULT '[]'")
+            except sqlite3.OperationalError:
+                pass
         if "status" not in story_cols:
-            conn.execute("ALTER TABLE stories ADD COLUMN status TEXT NOT NULL DEFAULT 'open'")
+            try:
+                conn.execute("ALTER TABLE stories ADD COLUMN status TEXT NOT NULL DEFAULT 'open'")
+            except sqlite3.OperationalError:
+                pass
         if "archived_at" not in story_cols:
             try:
                 conn.execute("ALTER TABLE stories ADD COLUMN archived_at TIMESTAMP")
