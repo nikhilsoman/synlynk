@@ -353,7 +353,7 @@ def test_dispatch_agent_fail_closed_when_requires_gh_write_token_missing(
     monkeypatch.setenv("GITHUB_TOKEN", "fake-personal-token-should-not-leak-2")
     monkeypatch.delenv("SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH", raising=False)
 
-    with pytest.raises(RuntimeError, match="requires a role-scoped GitHub App"):
+    with pytest.raises(RuntimeError, match="no valid, non-stale GitHub App token"):
         _dispatch_with_fake_popen(
             tmp_path,
             monkeypatch,
@@ -367,25 +367,19 @@ def test_dispatch_agent_fail_closed_when_requires_gh_write_token_missing(
 def test_dispatch_agent_host_auth_escape_hatch_when_token_missing(
     tmp_path, monkeypatch, capsys
 ):
-    """SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH=1 opts into host gh (warned)."""
+    """Fail-at-launch token validation precedes the host-auth escape hatch."""
     monkeypatch.setenv("SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH", "1")
     monkeypatch.setenv("GH_TOKEN", "fake-personal-token-should-not-leak")
 
-    dispatch_mod, job, captured_env = _dispatch_with_fake_popen(
-        tmp_path,
-        monkeypatch,
-        agent="grok",
-        requires_gh_write=True,
-        token_resolver=lambda role: None,
-        role_for_story="qa",
-    )
-
-    stderr = capsys.readouterr().err
-    assert job["agent"] == "grok"
-    # Ambient tokens still not injected into allowlisted env (host keyring via HOME).
-    assert captured_env.get("GH_TOKEN") != "fake-personal-token-should-not-leak"
-    assert "GH_TOKEN" not in captured_env or captured_env.get("GH_TOKEN") is None
-    assert "SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH" in stderr or "host" in stderr.lower()
+    with pytest.raises(RuntimeError, match="no valid, non-stale GitHub App token"):
+        _dispatch_with_fake_popen(
+            tmp_path,
+            monkeypatch,
+            agent="grok",
+            requires_gh_write=True,
+            token_resolver=lambda role: None,
+            role_for_story="qa",
+        )
 
 
 def test_build_subprocess_env_fail_closed_unit(tmp_path, monkeypatch):

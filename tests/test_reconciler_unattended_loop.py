@@ -41,6 +41,7 @@ def test_gh_write_expectation_explicit_override(isolated_db, project_dir, monkey
     dispatch_mod._ensure_daemon_job_gh_write_columns(conn)
 
     monkeypatch.setenv("SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH", "1")
+    monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_gh_token", lambda role: "test-gh-token")
     mock_proc = MagicMock(pid=99901)
     mock_proc.__enter__.return_value = mock_proc
     mock_proc.communicate.return_value = ("{}", "")

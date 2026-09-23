@@ -1098,6 +1098,7 @@ def test_review_codex_gh_write_keeps_repository_read_only(project_dir, monkeypat
         "_build_subprocess_env",
         lambda *a, **kw: {},
     )
+    monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_gh_token", lambda role: "test-gh-token")
 
     dispatch_mod.dispatch_agent(
         "codex",
@@ -1498,6 +1499,68 @@ def test_dispatch_agent_requires_gh_write_true_capable_agent_unchanged(project_d
     assert job["agent"] == "grok"
 
 
+def test_dispatch_agent_gh_write_valid_token_proceeds(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+
+    class FakeProc:
+        pid = 1
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(
+        sl,
+        "_preflight_dispatch",
+        lambda *a, **kw: {"passed": True, "sentinel": None, "reason": None},
+    )
+    monkeypatch.setattr(sl, "resolve_or_create_story_id", lambda *a, **kw: "story-gh-write")
+    monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_gh_token", lambda role: "fresh-token")
+
+    job = sl.dispatch_agent(
+        "codex",
+        "review PR #500",
+        force_agent=True,
+        requires_gh_write=True,
+        role="qa",
+        context_mode="none",
+    )
+
+    assert job["agent"] == "codex"
+
+
+def test_dispatch_agent_gh_write_missing_token_fails_before_worktree_or_job(
+    project_dir, monkeypatch
+):
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+
+    worktree_calls = []
+    monkeypatch.setattr(
+        dispatch_mod,
+        "_create_job_worktree",
+        lambda *a, **kw: worktree_calls.append((a, kw)) or pytest.fail("worktree was created"),
+    )
+    monkeypatch.setattr(
+        dispatch_mod, "_resolve_dispatch_gh_token", lambda role: None
+    )
+
+    with pytest.raises(RuntimeError, match=r"role 'qa'.*synlynk identity init --role qa"):
+        sl.dispatch_agent(
+            "codex",
+            "review PR #500",
+            force_agent=True,
+            requires_gh_write=True,
+            role="qa",
+            context_mode="none",
+        )
+
+    assert worktree_calls == []
+    conn = sl._get_db()
+    try:
+        assert conn.execute("SELECT COUNT(*) FROM daemon_jobs").fetchone()[0] == 0
+    finally:
+        conn.close()
+
+
 def test_daemon_jobs_migration_adds_requires_gh_write_and_gh_write_target(project_dir):
     from synlynk import _get_db
     conn = _get_db()
@@ -1742,6 +1805,7 @@ def test_dispatch_agent_requires_gh_write_blocks_agy_when_tc7_fails(project_dir,
         "_run_tc7",
         lambda: {"passed": False, "missing": ["command(gh pr merge)"], "error": ""},
     )
+    monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_gh_token", lambda role: "test-gh-token")
     with pytest.raises(SystemExit):
         dispatch_mod.dispatch_agent("agy", "review PR 964", force_agent=True, requires_gh_write=True, role="qa")
     out = capsys.readouterr().out
@@ -2402,7 +2466,7 @@ def test_dispatch_agent_id_takes_precedence_over_story_id_for_gh_token_role(proj
         context_mode="none", requires_gh_write=True, force_agent=True,
     )
 
-    assert captured_roles == ["dev"]
+    assert captured_roles == ["dev", "dev"]
 
 
 def test_dispatch_agent_story_id_wins_over_agent_id_role_for_harness_selection(project_dir, monkeypatch):
