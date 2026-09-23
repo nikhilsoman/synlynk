@@ -268,6 +268,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [230](./230-pr1754-deduplicate-harness-sop-sections.md) | PR #1754 — deduplicate harness SOP sections | [#1754](https://github.com/nikhilsoman/synlynk/pull/1754) | 2026-09-23 |
 | [231](./231-pr1757-guard-sandbox-state-migration-and-mutex-.md) | PR #1757 — guard sandbox state migration and mutex-lock vizor render context (#1733, #1750) | [#1757](https://github.com/nikhilsoman/synlynk/pull/1757) | 2026-09-23 |
 | [232](./232-pr1753-fail-dispatch-early-without-role-github-.md) | PR #1753 — fail dispatch early without role GitHub token | [#1753](https://github.com/nikhilsoman/synlynk/pull/1753) | 2026-09-23 |
+| [233](./233-pr1758-modern-multi-workspace-hub-ui-and-index-.md) | PR #1758 — modern multi-workspace hub UI and /index.html routing fallback | [#1758](https://github.com/nikhilsoman/synlynk/pull/1758) | 2026-09-23 |
 
 ## Per-PR Post Template
 
