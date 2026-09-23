@@ -258,6 +258,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [219](./219-pr1692-complete-w8-packs-and-connector-catalog.md) | PR #1692 — complete W8 packs and connector catalog | [#1692](https://github.com/nikhilsoman/synlynk/pull/1692) | 2026-09-18 |
 | [220](./220-pr1693-isolate-scratch-registry-path.md) | PR #1693 — isolate scratch registry path | [#1693](https://github.com/nikhilsoman/synlynk/pull/1693) | 2026-09-19 |
 | [223](./223-pr1731-w12-discord-herdr-bridge.md) | W12 - Discord/Herdr full-duplex remote-access bridge | [#1731](https://github.com/nikhilsoman/synlynk/pull/1731) | 2026-09-22 |
+| [224](./224-pr1741-cap-behind-dirty-pr-review-retry-churn-a.md) | PR #1741 — cap BEHIND/DIRTY PR-review retry churn and block retries on critical cost inflation | [#1741](https://github.com/nikhilsoman/synlynk/pull/1741) | 2026-09-23 |
 
 ## Per-PR Post Template
 
