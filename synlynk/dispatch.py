@@ -45,21 +45,21 @@ _DEFAULT_MODELS_BY_TIER = {
     MODEL_TIER_FAST: {
         "claude": "claude-3-5-haiku-latest",
         "agy": "gemini-1.5-flash",
-        "codex": "gpt-4o-mini",
+        "codex": "gpt-5.6-luna",
         "grok": "grok-3-mini",
         "local": "gemma-2-9b-it",
     },
     MODEL_TIER_PRO: {
         "claude": "claude-3-5-sonnet-latest",
         "agy": "gemini-1.5-pro",
-        "codex": "gpt-4o",
+        "codex": "gpt-5.6-luna",
         "grok": "grok-3",
         "local": "qwen2.5-coder",
     },
     MODEL_TIER_REASONING: {
         "claude": "claude-3-5-sonnet-latest",
         "agy": "gemini-1.5-pro",
-        "codex": "o3-mini",
+        "codex": "gpt-5.6-luna",
         "grok": "grok-3",
         "local": "deepseek-r1",
     },
@@ -148,7 +148,22 @@ def resolve_dispatch_model(
     impact = calculate_dispatch_impact(task, repo_root=repo_root, scope_paths=scope_paths)
     tier = model_tier or resolve_model_tier(task, impact["score"], role=role, task_type=task_type)
     from synlynk.models import resolve_tier_model
-    resolved_model = model or resolve_tier_model(tier, harness, repo_path=repo_root)
+
+    resolved_model = model
+    if not resolved_model:
+        if harness == "codex" and model_tier is None:
+            try:
+                from synlynk.probe import _read_toml_string_value
+
+                codex_home = Path(os.environ.get("CODEX_HOME", os.path.expanduser("~/.codex")))
+                configured = _read_toml_string_value(str(codex_home / "config.toml"), "model")
+                if configured:
+                    resolved_model = configured
+            except Exception:
+                pass
+        if not resolved_model:
+            resolved_model = resolve_tier_model(tier, harness, repo_path=repo_root)
+
     return {
         "harness": harness,
         "role": role or "",

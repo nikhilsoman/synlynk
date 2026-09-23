@@ -87,3 +87,23 @@ def test_state_db_migration_copies_legacy_repo_db_without_overwrite(tmp_path, mo
     destination_conn = sqlite3.connect(destination)
     assert destination_conn.execute("SELECT value FROM ledger").fetchone() == ("legacy",)
     destination_conn.close()
+
+
+def test_identity_slug_from_config_resolves_in_git_worktree(tmp_path, monkeypatch):
+    main_repo = tmp_path / "main_repo"
+    _repo(main_repo, "canonical-product")
+    (main_repo / ".git").mkdir()
+    worktree_dir = tmp_path / "worktrees" / "chore-some-task"
+    worktree_dir.mkdir(parents=True)
+    # in a git worktree, .git is a file
+    (worktree_dir / ".git").write_text(f"gitdir: {main_repo / '.git' / 'worktrees' / 'chore-some-task'}")
+
+    monkeypatch.chdir(tmp_path)
+    # mock subprocess.run for git rev-parse inside worktree
+    def fake_run(cmd, cwd=None, **kwargs):
+        if cmd[:3] == ["git", "rev-parse", "--path-format=absolute"] and cmd[3] == "--git-common-dir":
+            return type("R", (), {"returncode": 0, "stdout": str(main_repo / ".git")})()
+        return type("R", (), {"returncode": 1, "stdout": ""})()
+
+    monkeypatch.setattr("synlynk.product_store.subprocess.run", fake_run)
+    assert identity_slug_from_config(worktree_dir) == "canonical-product"
