@@ -259,7 +259,7 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
   ordinary command usage, not on phrase matches, not mid-brainstorm).
 <!-- synlynk:end -->
 
-<!-- synlynk:harness vsop-repair verified:2026-09-23T18:32:00Z -->
+<!-- synlynk:harness v2.1.275 verified:2026-09-23T18:58:15Z -->
 # Harness Instructions (synlynk-managed — do not edit)
 
 ## PR Review Discipline
@@ -270,6 +270,8 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
 5. If the reviewer is unavailable, escalate to Claude.
 
 **GitHub identity note (#423):** qa APPROVE (`gh pr review --approve`) is the default whenever the reviewer identity differs from the PR author login (e.g. role App reviewing a human or sibling App PR). Dispatches under role App identities satisfy GitHub's non-author review requirement for real approvals. Route day-to-day reviews through `qa` and any feature/architecture-impacting review through `architect`. **Fallback (same-identity collision only):** post a formal COMMENT review with an explicit approve checklist (as on PR #417) only when the reviewer GitHub login equals the PR author login, where GitHub rejects self-approval. Do not tell sessions to skip `--approve` by default.
+
+**Merge authority is enforced from `.synlynk/policy.json` (`merge_authority`)** — a reviewer must run `synlynk policy check-merge --role <role>` before `gh pr merge`; a non-zero exit means do not merge.
 
 ## Brainstorm-First Policy
 1. Do not write code before an approved spec exists in `docs/superpowers/specs/`.
@@ -315,6 +317,7 @@ This table is generated from `.synlynk/config.json` so it tracks the repo's own 
 6. Any new harness interactive session also gets its own new tab within the same workspace.
 7. Begin every Claude session with `/rc`.
 - **Precondition for all Herdr commands:** check `test "${HERDR_ENV:-}" = 1` before issuing any `herdr` command; if unset, this agent is not running inside Herdr and must not attempt to control a Herdr session from outside it.
+- Herdr is Apache-2.0 licensed (no NOTICE file) — free to reference/use without royalty or attribution beyond standard license retention.
 - Full CLI reference: https://github.com/herdrdev/herdr/blob/v0.8.2/skills/herdr/SKILL.md
 
 ## Headless Execution Contract

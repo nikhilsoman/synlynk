@@ -77,6 +77,31 @@ def test_capability_allocation_table_uses_harness_not_agent_header():
     assert "docs/glossary-agent-vs-harness.md" in generated
 
 
+def test_repair_templates_preserve_merge_authority_and_herdr_license():
+    from synlynk.probe import (
+        REPAIR_HARNESS_VERSION,
+        _HERDR_WORKSPACE_SOP,
+        _repair_pr_review_sop,
+    )
+
+    merge_authority = (
+        "Merge authority is enforced from `.synlynk/policy.json` (`merge_authority`) "
+        "— a reviewer must run `synlynk policy check-merge --role <role>` before "
+        "`gh pr merge`; a non-zero exit means do not merge."
+    )
+    herdr_license = (
+        "Herdr is Apache-2.0 licensed (no NOTICE file) — free to reference/use "
+        "without royalty or attribution beyond standard license retention."
+    )
+
+    generated = _repair_pr_review_sop({})
+    assert "Merge authority is enforced from `.synlynk/policy.json` (`merge_authority`)" in generated
+    assert "synlynk policy check-merge --role <role>" in generated
+    assert "a non-zero exit means do not merge" in generated
+    assert herdr_license in _HERDR_WORKSPACE_SOP
+    assert REPAIR_HARNESS_VERSION == "2.1.275"
+
+
 def test_repair_sops_removes_unfenced_duplicate_sections(tmp_path, monkeypatch):
     from synlynk.probe import SOP_SECTION_HEADERS, _build_fence_content, _repair_sops_only
 
@@ -502,9 +527,9 @@ def test_sync_repair_sops_preserves_existing_fence_body(tmp_path, isolated_db, m
     synlynk.cmd_sync(dry_run=False, repair_sops=True)
 
     content = (tmp_path / "CLAUDE.md").read_text()
-    assert "probe-written content" in content
+    assert "Merge authority is enforced from `.synlynk/policy.json` (`merge_authority`)" in content
     assert "## Brainstorm-First Policy" in content
-    assert content.count("probe-written content") == 1
+    assert "probe-written content" not in content
 
 
 def test_sync_repair_sops_is_idempotent(tmp_path, isolated_db, monkeypatch):

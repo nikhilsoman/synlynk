@@ -24,6 +24,8 @@ SOP_SECTION_HEADERS = [
     "## Herdr Workspace Protocol",
 ]
 
+REPAIR_HARNESS_VERSION = "2.1.275"
+
 _PR_REVIEW_SOP = """\
 ## PR Review Discipline
 1. Assign a non-authoring agent to review the PR.
@@ -33,6 +35,8 @@ _PR_REVIEW_SOP = """\
 5. If the reviewer is unavailable, escalate to the Home Harness.
 
 **GitHub identity note (#423):** qa APPROVE (`gh pr review --approve`) is the default whenever the reviewer identity differs from the PR author login (e.g. role App reviewing a human or sibling App PR). Dispatches under role App identities satisfy GitHub's non-author review requirement for real approvals. Route day-to-day reviews through `qa` and any feature/architecture-impacting review through `architect`. **Fallback (same-identity collision only):** post a formal COMMENT review with an explicit approve checklist (as on PR #417) only when the reviewer GitHub login equals the PR author login, where GitHub rejects self-approval. Do not tell sessions to skip `--approve` by default.
+
+**Merge authority is enforced from `.synlynk/policy.json` (`merge_authority`)** — a reviewer must run `synlynk policy check-merge --role <role>` before `gh pr merge`; a non-zero exit means do not merge.
 """
 
 _BRAINSTORM_SOP = """\
@@ -102,6 +106,7 @@ _HERDR_WORKSPACE_SOP = """\
 6. Any new harness interactive session also gets its own new tab within the same workspace.
 7. Begin every Claude session with `/rc`.
 - **Precondition for all Herdr commands:** check `test "${HERDR_ENV:-}" = 1` before issuing any `herdr` command; if unset, this agent is not running inside Herdr and must not attempt to control a Herdr session from outside it.
+- Herdr is Apache-2.0 licensed (no NOTICE file) — free to reference/use without royalty or attribution beyond standard license retention.
 - Full CLI reference: https://github.com/herdrdev/herdr/blob/v0.8.2/skills/herdr/SKILL.md
 """
 
@@ -1380,6 +1385,9 @@ def _repair_pr_review_sop(cfg: dict) -> str:
         "collision only):** post a formal COMMENT review with an explicit approve checklist "
         "(as on PR #417) only when the reviewer GitHub login equals the PR author login, where "
         "GitHub rejects self-approval. Do not tell sessions to skip `--approve` by default.\n"
+        "\n**Merge authority is enforced from `.synlynk/policy.json` (`merge_authority`)** — a reviewer "
+        "must run `synlynk policy check-merge --role <role>` before `gh pr merge`; a non-zero exit "
+        "means do not merge.\n"
     )
 
 
@@ -1555,6 +1563,7 @@ def _repair_sops_only(
                         or "escalate to Claude" in current
                         or "All dispatched agents share one GitHub identity" in current
                         or "Can not approve your own pull request" in current
+                        or "Merge authority is enforced from `.synlynk/policy.json` (`merge_authority`)" not in current
                         or (
                             "If the reviewer is unavailable, escalate to the Home Harness." in current
                             and "BEHIND" not in current
@@ -1597,7 +1606,7 @@ def _repair_sops_only(
             else:
                 body = _repair_sop_body_parts(body, block)
 
-        _upsert_harness_fence(fpath, harness_version="sop-repair", body=body)
+        _upsert_harness_fence(fpath, harness_version=REPAIR_HARNESS_VERSION, body=body)
         for missing_header in fill_headers:
             print(f"    ✓ fill missing SOP '{missing_header}' in {fpath}")
         for stale_header in stale_headers:
