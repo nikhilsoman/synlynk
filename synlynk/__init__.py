@@ -1147,7 +1147,17 @@ def _get_db(
                 from synlynk.state_registry import ensure_registered_product, identity_metadata, product_identity
 
                 slug = identity_slug_from_config(_project_root())
-                entry = ensure_registered_product(slug, Path(path), product_identity(slug, _project_root()))
+                repo_root = Path(_project_root())
+                entry = ensure_registered_product(
+                    slug,
+                    Path(path),
+                    product_identity(slug, _project_root()),
+                    repo_path=repo_root,
+                )
+                if entry.get("repo_path") != str(repo_root.resolve()):
+                    from synlynk.state_registry import update_registered_product
+
+                    update_registered_product(slug, repo_path=str(repo_root.resolve()))
                 identity_metadata(conn, product_id=entry["product_id"], mode="canonical", path=Path(path))
                 conn.commit()
         except Exception:

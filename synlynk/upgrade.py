@@ -102,6 +102,18 @@ def _warn_stale_script_install() -> None:
     print("    Your pipx install at ~/.local/bin/synlynk is the active version")
 
 
+def _ensure_vizor_daemon_installed() -> None:
+    """Idempotently register the Vizor daemon service for existing installs."""
+    try:
+        from synlynk import vizor_daemon
+
+        if vizor_daemon.status().get("service_registered"):
+            return
+        vizor_daemon.install()
+    except Exception:
+        pass
+
+
 def upgrade(dry_run: bool = False) -> None:
     """Checks GitHub releases for a newer version and auto-installs if one is found."""
     print(f"Checking for updates... (current: v{VERSION})")
@@ -155,6 +167,11 @@ def upgrade(dry_run: bool = False) -> None:
             print("  Check manually: https://github.com/nikhilsoman/synlynk/releases")
     finally:
         warn_stale_script_install()
+        package = sys.modules.get("synlynk")
+        ensure_vizor_daemon_installed = getattr(
+            package, "_ensure_vizor_daemon_installed", _ensure_vizor_daemon_installed
+        )
+        ensure_vizor_daemon_installed()
 
 
 def execute_upgrade(repo_root: str = ".") -> dict:

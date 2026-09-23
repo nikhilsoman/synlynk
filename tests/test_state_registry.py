@@ -68,6 +68,32 @@ def test_registry_file_is_atomic_json(tmp_path, monkeypatch):
     assert payload["products"]["demo"]["mode"] == "canonical"
 
 
+def test_ensure_registered_product_persists_repo_path(tmp_path, monkeypatch):
+    registry = tmp_path / "registry.json"
+    monkeypatch.setenv("SYNLYNK_REGISTRY_PATH", str(registry))
+    db_path = tmp_path / "workspaces" / "acme" / "state.db"
+    repo_path = tmp_path / "repos" / "acme"
+    repo_path.mkdir(parents=True)
+
+    entry = ensure_registered_product(
+        "acme", db_path, product_id="pid-1", repo_path=repo_path
+    )
+
+    assert entry["repo_path"] == str(repo_path.resolve())
+    payload = json.loads(registry.read_text())
+    assert payload["products"]["acme"]["repo_path"] == str(repo_path.resolve())
+
+
+def test_ensure_registered_product_repo_path_optional(tmp_path, monkeypatch):
+    registry = tmp_path / "registry.json"
+    monkeypatch.setenv("SYNLYNK_REGISTRY_PATH", str(registry))
+    db_path = tmp_path / "workspaces" / "acme" / "state.db"
+
+    entry = ensure_registered_product("acme", db_path, product_id="pid-1")
+
+    assert "repo_path" not in entry
+
+
 def test_typed_open_requires_explicit_noncanonical_modes(tmp_path):
     from synlynk import open_state_db
 

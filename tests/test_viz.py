@@ -1,5 +1,34 @@
+import argparse
 import json, os, sqlite3, sys, tempfile, pytest
 from unittest.mock import patch, MagicMock
+
+
+def test_cmd_viz_opens_browser_to_workspace_url(monkeypatch):
+    from synlynk import viz
+
+    opened = {}
+    monkeypatch.setattr(viz.webbrowser, "open", lambda url: opened.setdefault("url", url))
+    monkeypatch.setattr(viz, "_current_workspace_slug", lambda: "acme")
+    monkeypatch.setattr(viz.vizor_daemon, "is_running", lambda: True)
+    monkeypatch.setattr(viz.vizor_daemon, "_read_port", lambda: 8721)
+
+    args = argparse.Namespace(hosted=False, install=False, uninstall=False, daemon_status=False)
+    viz.cmd_viz(args)
+
+    assert opened["url"] == "http://localhost:8721/w/acme/overview.html"
+
+
+def test_cmd_viz_prints_hint_when_daemon_not_running(monkeypatch, capsys):
+    from synlynk import viz
+
+    monkeypatch.setattr(viz, "_current_workspace_slug", lambda: "acme")
+    monkeypatch.setattr(viz.vizor_daemon, "is_running", lambda: False)
+
+    args = argparse.Namespace(hosted=False, install=False, uninstall=False, daemon_status=False)
+    viz.cmd_viz(args)
+
+    out = capsys.readouterr().out
+    assert "synlynk viz --install" in out
 
 
 def test_ftue_prompts_non_tty_uses_defaults_without_input(tmp_path, monkeypatch):
@@ -871,3 +900,17 @@ def test_vizor_handler_handle_view_pref_creates_config_if_missing(tmp_path, monk
     with open(".synlynk/config.json") as f:
         saved = json.load(f)
     assert saved["vizor"]["architect_map_view"] == "graph"
+
+
+def test_get_role_manifest_payload_embeds_state_when_slug_given():
+    from synlynk.viz import get_role_manifest_payload
+
+    payload = get_role_manifest_payload("qa", port=8721, project_slug="acme")
+    assert "state=acme" in payload["redirect_url"]
+
+
+def test_get_role_manifest_payload_omits_state_without_slug():
+    from synlynk.viz import get_role_manifest_payload
+
+    payload = get_role_manifest_payload("qa", port=8721)
+    assert "state=" not in payload["redirect_url"]

@@ -1463,17 +1463,13 @@ def build_parser() -> argparse.ArgumentParser:
         '--waive', action='append', default=[],
         help='Skip a waivable README check: check=reason (repeatable)')
 
-    viz_parser = subparsers.add_parser("viz", help="Open local browser workspace dashboard")
-    viz_parser.add_argument("--serve", action="store_true",
-                            help="Start background server (stable port)")
-    viz_parser.add_argument("--generate", action="store_true",
-                            help="Generate views without opening browser")
-    viz_parser.add_argument("--open", action="store_true",
-                            help="Open existing cache in browser")
-    viz_parser.add_argument("--stop", action="store_true",
-                            help="Stop background server")
-    viz_parser.add_argument("--port", type=int, default=None,
-                            help="Override port (default: 8721)")
+    viz_parser = subparsers.add_parser("viz", help="Open Vizor dashboard for this workspace")
+    viz_parser.add_argument("--install", action="store_true",
+                            help="Install the Vizor daemon as an OS-supervised background service")
+    viz_parser.add_argument("--uninstall", action="store_true",
+                            help="Uninstall the Vizor daemon service")
+    viz_parser.add_argument("--daemon-status", action="store_true",
+                            help="Report Vizor daemon install/running state")
     viz_parser.add_argument("--hosted", action="store_true",
                             help="Show the fail-closed hosted Vizor placeholder")
 
