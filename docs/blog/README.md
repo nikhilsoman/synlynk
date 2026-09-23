@@ -264,6 +264,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [224](./224-prTBD-v0.21.0.md) | PR #TBD — v0.21.0 Release | [#TBD](https://github.com/nikhilsoman/synlynk/pull/TBD) | 2026-09-23 |
 | [227](./227-pr1751-devlog-checkpoint-for-live-14-session.md) | PR #1751 — devlog checkpoint for LIVE-14 session | [#1751](https://github.com/nikhilsoman/synlynk/pull/1751) | 2026-09-23 |
 | [228](./228-pr1755-resolve-codex-config-model-and-git-workt.md) | PR #1755 — resolve codex config model and git worktree identity slug (#1748, #1742) | [#1755](https://github.com/nikhilsoman/synlynk/pull/1755) | 2026-09-23 |
+| [229](./229-pr1756-backfill-registry-repo-path-and-inspect-.md) | PR #1756 — backfill registry repo_path and inspect daemon install returncode (#1743, #1749) | [#1756](https://github.com/nikhilsoman/synlynk/pull/1756) | 2026-09-23 |
 
 ## Per-PR Post Template
 
