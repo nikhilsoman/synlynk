@@ -133,23 +133,35 @@ def migrate_state_db_if_needed(repo_path: PathLike = ".") -> Path:
     source = next((path for path in candidates if path.is_file()), None)
     if source is None:
         return destination
-    destination.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+    except (PermissionError, OSError):
+        return source
+
     lock_path = destination.with_name(f".{destination.name}.migration.lock")
-    with lock_path.open("a+") as lock_handle:
+    try:
+        lock_handle = lock_path.open("a+")
+    except (PermissionError, OSError):
+        return source
+
+    with lock_handle:
         try:
             import fcntl
             fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
-        except (ImportError, OSError) as exc:
-            raise RuntimeError(f"cannot lock state migration {lock_path}: {exc}") from exc
+        except (ImportError, OSError):
+            return source
         try:
             if destination.exists():
                 return destination
             temporary = None
             try:
-                with tempfile.NamedTemporaryFile(
-                    prefix=f".{destination.name}.", suffix=".tmp", dir=destination.parent,
-                ) as temp_file:
-                    temporary = Path(temp_file.name)
+                try:
+                    with tempfile.NamedTemporaryFile(
+                        prefix=f".{destination.name}.", suffix=".tmp", dir=destination.parent,
+                    ) as temp_file:
+                        temporary = Path(temp_file.name)
+                except (PermissionError, OSError):
+                    return source
                 source_conn = sqlite3.connect(
                     f"file:{source.resolve()}?mode=ro", uri=True,
                 )
@@ -197,9 +209,12 @@ def migrate_state_db_if_needed(repo_path: PathLike = ".") -> Path:
 
 def ensure_product_dirs(slug: str) -> Path:
     root = product_root(slug)
-    github_apps_dir(slug).mkdir(parents=True, exist_ok=True)
-    types_dir(slug).mkdir(parents=True, exist_ok=True)
-    connectors_dir(slug).mkdir(parents=True, exist_ok=True)
+    try:
+        github_apps_dir(slug).mkdir(parents=True, exist_ok=True)
+        types_dir(slug).mkdir(parents=True, exist_ok=True)
+        connectors_dir(slug).mkdir(parents=True, exist_ok=True)
+    except (PermissionError, OSError):
+        pass
     return root
 
 
