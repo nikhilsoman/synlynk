@@ -1,5 +1,20 @@
 # Agy Devlog
 
+## 2026-09-23 — Sprint 1 & Sprint 2 Control-Plane & Daemon Fixes (PR #1755, #1756)
+
+### Shipped & Verified
+- **Sprint 1 (PR #1755, Closes #1748, #1742):**
+  - Probed `~/.codex/config.toml` at dispatch time so ChatGPT-account setups defaulting to `gpt-5.6-luna` dispatch seamlessly without manual overrides.
+  - Aligned `_DEFAULT_MODELS_BY_TIER["codex"]` to `gpt-5.6-luna`.
+  - Fixed worktree product identity derivation in `synlynk/product_store.py` by adding `--path-format=absolute` to `git rev-parse --git-common-dir` and resolving paths defensively.
+  - Added unit tests in `tests/test_dispatch_model_routing.py` and `tests/test_product_store.py`.
+- **Sprint 2 (PR #1756, Closes #1743, #1749):**
+  - Added self-healing `repo_path` backfill to `ensure_registered_product()` in `synlynk/state_registry.py` and threaded `repo_path` through `synlynk/state_repair.py`.
+  - Updated `install()` and `uninstall()` in `synlynk/vizor_daemon.py` to inspect `subprocess.run().returncode` and `stderr`, returning structured failure diagnostics on launchd/systemctl errors.
+  - Added regression unit tests in `tests/test_state_registry.py` and `tests/test_vizor_daemon.py`.
+- Verified 55 unit tests passing locally and 4/4 matrix CI checks green per PR. Merged to `main` via QA review.
+[@agy, @nikhilsoman]
+
 ## 2026-09-20 — Frontier QA Testbed & Multi-Node Soak Testing Engine (Goal goal-9011307c / Epic #1713 / PR #1719)
 
 ### Shipped
