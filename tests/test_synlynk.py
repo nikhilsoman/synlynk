@@ -632,6 +632,7 @@ def test_dispatch_agent_gh_write_resolves_explicit_role_flag(tmp_path, isolated_
         return {}
 
     monkeypatch.setattr(dispatch_mod, "_build_subprocess_env", fake_build_env)
+    monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_gh_token", lambda role: "test-gh-token")
     monkeypatch.setattr(dispatch_mod, "_permissions_to_flags", lambda agent, permissions: [])
     monkeypatch.setattr(
         dispatch_mod,
@@ -812,6 +813,7 @@ def test_dispatch_agent_gh_write_auto_implies_run_shell(tmp_path, isolated_db, m
 
     monkeypatch.setattr(dispatch_mod, "_permissions_to_flags", fake_permissions_to_flags)
     monkeypatch.setattr(dispatch_mod, "_build_subprocess_env", lambda *a, **kw: {})
+    monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_gh_token", lambda role: "test-gh-token")
     monkeypatch.setattr(synlynk, "resolve_or_create_story_id", lambda *a, **kw: "story-adhoc")
     monkeypatch.setattr(
         dispatch_mod,
