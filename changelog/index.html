@@ -49,6 +49,14 @@ Versioning follows <a href="https://semver.org/spec/v2.0.0.html">Semantic Versio
 <ul>
 <li>In progress: First-class model tripartite dispatch &amp; sovereign multi-home drain-to-boundary handover.</li>
 </ul>
+<h3 class="tag-added">Added</h3>
+- **Vizor cross-workspace daemon:** a persistent, workspace-registry-driven background daemon
+  (`synlynk/vizor_daemon.py`) that polls every registered product, isolates per-workspace refresh
+  failures, and serves the Vizor dashboard for any workspace via `/w/<slug>/...` routing — replacing
+  the old single-workspace `synlynk viz` process model. Adds launchd/systemd lifecycle commands
+  (`synlynk viz install/uninstall/status`), auto-installs on fresh `install.sh` runs and on
+  `synlynk upgrade`, and fixes the OAuth-completion redirect so workspace-scoped
+  `/w/<slug>/onboarding/roles` callbacks route to the roles handler instead of 404ing.
 <div class="changelog-version-header"><span class="changelog-version">vv0.20.0</span><span class="changelog-date">2026-09-19</span></div>
 <h3>Highlights</h3>
 <ul>
