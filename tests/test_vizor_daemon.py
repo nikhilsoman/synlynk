@@ -165,7 +165,12 @@ def test_resolve_slug_from_path_valid(tmp_path, monkeypatch):
     monkeypatch.setattr(vizor_daemon, "_known_slugs", lambda: {"acme"})
     slug, rest = vizor_daemon.parse_workspace_path("/w/acme/overview.html")
     assert slug == "acme"
-    assert rest == "/acme/overview.html"
+    # /overview.html aliases to /index.html
+    assert rest == "/acme/index.html"
+
+    slug, rest = vizor_daemon.parse_workspace_path("/w/acme/manifest.json")
+    assert slug == "acme"
+    assert rest == "/acme/manifest.json"
 
 
 def test_resolve_slug_from_path_unknown_slug(monkeypatch):
@@ -212,7 +217,7 @@ def test_workspace_index_empty(monkeypatch):
 
     monkeypatch.setattr(vizor_daemon, "_known_slugs", lambda: set())
     html = vizor_daemon._workspace_index_html()
-    assert "No workspaces registered" in html
+    assert "No registered workspaces" in html
 
 
 def test_write_and_read_pidfile(tmp_path, monkeypatch):

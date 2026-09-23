@@ -129,7 +129,10 @@ def parse_workspace_path(path: str):
     slug = remainder.split("/", 1)[0]
     if not slug or slug not in _known_slugs():
         return None, None
-    return slug, "/" + remainder
+    rest = remainder[len(slug):]
+    if not rest or rest == "/" or rest == "/overview.html":
+        rest = "/index.html"
+    return slug, "/" + slug + rest
 
 
 def _rewrite_workspace_app_route(path: str) -> Optional[str]:
@@ -146,11 +149,319 @@ def _rewrite_workspace_app_route(path: str) -> Optional[str]:
 
 
 def _workspace_index_html() -> str:
+    workspaces = _registered_workspaces()
     slugs = sorted(_known_slugs())
     if not slugs:
-        return "<html><body><p>No workspaces registered yet.</p></body></html>"
-    items = "".join(f'<li><a href="/w/{s}/overview.html">{s}</a></li>' for s in slugs)
-    return f"<html><body><ul>{items}</ul></body></html>"
+        cards_html = """
+        <div style="grid-column: 1/-1; text-align: center; padding: 60px 20px; color: var(--text-muted);">
+          <p style="font-size: 16px; margin-bottom: 8px;">No registered workspaces found.</p>
+          <p style="font-size: 13px;">Run <code>synlynk init</code> or <code>synlynk workspace register</code> in a repository to connect it to Vizor.</p>
+        </div>
+        """
+    else:
+        cards = []
+        for s in slugs:
+            entry = workspaces.get(s, {})
+            repo_path = entry.get("repo_path") or ""
+            cache_dir = CACHE_ROOT / s
+            is_rendered = (cache_dir / "index.html").is_file()
+            status_badge = '<span class="badge" style="background:rgba(13,158,135,0.15);color:#14b8a6;">● Rendered</span>' if is_rendered else '<span class="badge" style="background:rgba(234,179,8,0.15);color:#eab308;">○ Registering</span>'
+
+            if is_rendered:
+                views_html = f"""
+                <div class="view-links">
+                  <a href="/w/{s}/index.html" class="view-chip primary">Overview</a>
+                  <a href="/w/{s}/effort.html" class="view-chip">Effort & Cost</a>
+                  <a href="/w/{s}/roles.html" class="view-chip">Roles</a>
+                  <a href="/w/{s}/tube.html" class="view-chip">Architect</a>
+                  <a href="/w/{s}/efficiency.html" class="view-chip">Efficiency</a>
+                  <a href="/w/{s}/observatory.html" class="view-chip">Observatory</a>
+                </div>
+                """
+            else:
+                views_html = f"""
+                <div class="view-links">
+                  <a href="/w/{s}/index.html" class="view-chip primary">Open Dashboard</a>
+                </div>
+                """
+
+            cards.append(f"""
+            <div class="workspace-card" data-slug="{s}">
+              <div>
+                <div class="card-header">
+                  <a href="/w/{s}/index.html" class="workspace-name">{s}</a>
+                  {status_badge}
+                </div>
+                <div class="repo-path">{repo_path or 'Standalone Product'}</div>
+              </div>
+              {views_html}
+            </div>
+            """)
+        cards_html = "\n".join(cards)
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Synlynk Vizor — Workspace Hub</title>
+  <style>
+    :root {{
+      --bg: #0b0f19;
+      --card-bg: #111827;
+      --card-border: #1f2937;
+      --card-hover: #1e293b;
+      --text: #f3f4f6;
+      --text-muted: #9ca3af;
+      --accent: #0d9e87;
+      --accent-glow: rgba(13, 158, 135, 0.2);
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      --font-mono: "SF Mono", Monaco, Inconsolata, monospace;
+    }}
+    @media (prefers-color-scheme: light) {{
+      :root {{
+        --bg: #f8fafc;
+        --card-bg: #ffffff;
+        --card-border: #e2e8f0;
+        --card-hover: #f1f5f9;
+        --text: #0f172a;
+        --text-muted: #64748b;
+        --accent: #0d9e87;
+        --accent-glow: rgba(13, 158, 135, 0.1);
+      }}
+    }}
+    * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    body {{
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-sans);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }}
+    header {{
+      background: var(--card-bg);
+      border-bottom: 1px solid var(--card-border);
+      padding: 16px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }}
+    .brand {{
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      color: inherit;
+    }}
+    .logo-badge {{
+      background: var(--accent);
+      color: #fff;
+      font-weight: 700;
+      font-size: 13px;
+      padding: 4px 8px;
+      border-radius: 6px;
+      letter-spacing: 0.5px;
+    }}
+    .brand-title {{
+      font-size: 17px;
+      font-weight: 600;
+      letter-spacing: -0.3px;
+    }}
+    .header-meta {{
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      font-size: 13px;
+      color: var(--text-muted);
+    }}
+    .status-dot {{
+      color: var(--accent);
+      font-weight: 600;
+    }}
+    .nav-btn {{
+      background: var(--card-hover);
+      color: var(--text);
+      text-decoration: none;
+      padding: 6px 14px;
+      border-radius: 6px;
+      border: 1px solid var(--card-border);
+      font-size: 13px;
+      font-weight: 500;
+      transition: all 0.15s ease;
+    }}
+    .nav-btn:hover {{
+      border-color: var(--accent);
+      color: var(--accent);
+    }}
+    main {{
+      flex: 1;
+      max-width: 1280px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 40px 32px;
+    }}
+    .hero-banner {{
+      margin-bottom: 32px;
+    }}
+    .hero-banner h1 {{
+      font-size: 26px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      letter-spacing: -0.5px;
+    }}
+    .hero-banner p {{
+      color: var(--text-muted);
+      font-size: 14px;
+    }}
+    .search-bar {{
+      margin-bottom: 24px;
+    }}
+    .search-input {{
+      width: 100%;
+      max-width: 420px;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      color: var(--text);
+      font-size: 14px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      outline: none;
+      transition: border-color 0.15s ease;
+    }}
+    .search-input:focus {{
+      border-color: var(--accent);
+    }}
+    .workspaces-grid {{
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: 20px;
+    }}
+    .workspace-card {{
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 22px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+    }}
+    .workspace-card:hover {{
+      border-color: var(--accent);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px var(--accent-glow);
+    }}
+    .card-header {{
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      gap: 8px;
+    }}
+    .workspace-name {{
+      font-size: 17px;
+      font-weight: 600;
+      color: var(--text);
+      text-decoration: none;
+      word-break: break-all;
+    }}
+    .workspace-name:hover {{
+      color: var(--accent);
+    }}
+    .badge {{
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 4px;
+      letter-spacing: 0.3px;
+      white-space: nowrap;
+    }}
+    .repo-path {{
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-bottom: 16px;
+      word-break: break-all;
+    }}
+    .view-links {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 14px;
+      padding-top: 14px;
+      border-top: 1px solid var(--card-border);
+    }}
+    .view-chip {{
+      background: var(--bg);
+      color: var(--text);
+      text-decoration: none;
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 6px;
+      border: 1px solid var(--card-border);
+      transition: all 0.15s ease;
+    }}
+    .view-chip:hover {{
+      background: var(--card-hover);
+      border-color: var(--accent);
+      color: var(--accent);
+    }}
+    .view-chip.primary {{
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+      font-weight: 600;
+    }}
+    footer {{
+      border-top: 1px solid var(--card-border);
+      padding: 16px 32px;
+      text-align: center;
+      font-size: 12px;
+      color: var(--text-muted);
+    }}
+  </style>
+</head>
+<body>
+  <header>
+    <a href="/" class="brand">
+      <span class="logo-badge">VIZOR</span>
+      <span class="brand-title">Synlynk Workspace Hub</span>
+    </a>
+    <div class="header-meta">
+      <span class="status-dot">● Daemon Live</span>
+      <a href="/onboarding/roles" class="nav-btn">Agent Roles</a>
+    </div>
+  </header>
+  <main>
+    <div class="hero-banner">
+      <h1>Active Workspaces</h1>
+      <p>OS-supervised persistent Vizor dashboard daemon polling registered workspaces.</p>
+    </div>
+    <div class="search-bar">
+      <input type="text" id="search-input" class="search-input" placeholder="Filter workspaces..." oninput="filterWorkspaces(this.value)">
+    </div>
+    <div class="workspaces-grid" id="workspaces-grid">
+      {cards_html}
+    </div>
+  </main>
+  <footer>
+    synlynk vizor daemon · persistent multi-workspace renderer & server
+  </footer>
+  <script>
+    function filterWorkspaces(query) {{
+      const q = query.toLowerCase().trim();
+      const cards = document.querySelectorAll('.workspace-card');
+      cards.forEach(card => {{
+        const slug = card.dataset.slug.toLowerCase();
+        const text = card.innerText.toLowerCase();
+        card.style.display = (slug.includes(q) || text.includes(q)) ? 'flex' : 'none';
+      }});
+    }}
+  </script>
+</body>
+</html>
+"""
 
 
 def build_workspace_routing_handler():
