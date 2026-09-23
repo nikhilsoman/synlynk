@@ -198,6 +198,12 @@ def ensure_registered_product(
                 raise StateRegistryError(
                     f"canonical path mismatch for {slug!r}: registry={registered_path} requested={path}"
                 )
+            if repo_path is not None:
+                new_repo_path = str(Path(repo_path).expanduser().resolve())
+                if entry.get("repo_path") != new_repo_path:
+                    entry["repo_path"] = new_repo_path
+                    products[slug] = entry
+                    _write_unlocked(registry, payload)
             return entry
         entry = {
             "product_id": product_id or _legacy_product_id(slug),
