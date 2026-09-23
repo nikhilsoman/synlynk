@@ -70,7 +70,13 @@ def _normalized_copy(source: Path, destination_dir: Path) -> Path:
     return temporary
 
 
-def register_existing_state(path: str | Path, *, slug: str, product_id: str | None = None) -> dict:
+def register_existing_state(
+    path: str | Path,
+    *,
+    slug: str,
+    product_id: str | None = None,
+    repo_path: str | Path | None = None,
+) -> dict:
     """Register an existing canonical DB after a read-only integrity check."""
     source = Path(path).expanduser().resolve()
     if not source.is_file():
@@ -78,7 +84,12 @@ def register_existing_state(path: str | Path, *, slug: str, product_id: str | No
     with sqlite3.connect(f"file:{source}?mode=ro", uri=True) as conn:
         if conn.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
             raise sqlite3.DatabaseError(f"state DB failed integrity check: {source}")
-    entry = ensure_registered_product(slug, source, product_id or product_identity(slug))
+    entry = ensure_registered_product(
+        slug,
+        source,
+        product_id or product_identity(slug),
+        repo_path=Path(repo_path) if repo_path else None,
+    )
     with sqlite3.connect(str(source), timeout=30.0) as conn:
         identity_metadata(conn, product_id=entry["product_id"], mode="canonical", path=source)
         conn.commit()
@@ -91,6 +102,7 @@ def promote_state_db(
     *,
     slug: str,
     product_id: str | None = None,
+    repo_path: str | Path | None = None,
 ) -> dict:
     """Promote a verified source without overwriting a different destination."""
     source_path = Path(source).expanduser().resolve()
@@ -105,7 +117,10 @@ def promote_state_db(
                 if conn.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
                     raise sqlite3.DatabaseError(f"source state DB failed integrity check: {source_path}")
             entry = ensure_registered_product(
-                slug, destination_path, product_id or product_identity(slug)
+                slug,
+                destination_path,
+                product_id or product_identity(slug),
+                repo_path=Path(repo_path) if repo_path else None,
             )
             return {
                 "disposition": "already-complete",
@@ -132,6 +147,7 @@ def promote_state_db(
                 slug,
                 destination_path,
                 product_id or product_identity(slug),
+                repo_path=Path(repo_path) if repo_path else None,
             )
             return {
                 "disposition": disposition,
@@ -192,6 +208,7 @@ def restore_state_db(
     *,
     slug: str,
     product_id: str | None = None,
+    repo_path: str | Path | None = None,
     archive_root: str | Path | None = None,
     apply: bool = False,
 ) -> dict:
@@ -207,10 +224,11 @@ def restore_state_db(
     stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
     archive_path = archive_dir / f"restore-{slug}-{stamp}" / destination_path.name
     result = {
-        "disposition": "planned",
+        "disposition": "plan-only",
         "snapshot": str(source),
         "destination": str(destination_path),
         "archive": str(archive_path),
+        "sha256": _sha256(source),
     }
     if not apply:
         return result
@@ -229,7 +247,10 @@ def restore_state_db(
             os.replace(temporary, destination_path)
             _fsync_dir(destination_path.parent)
             entry = ensure_registered_product(
-                slug, destination_path, product_id or product_identity(slug)
+                slug,
+                destination_path,
+                product_id or product_identity(slug),
+                repo_path=Path(repo_path) if repo_path else None,
             )
             generation = int(entry.get("lineage_generation", 1)) + 1
             update_registered_product(

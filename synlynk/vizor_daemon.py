@@ -330,14 +330,28 @@ def install() -> dict:
         plist_path = _launchd_plist_path()
         plist_path.parent.mkdir(parents=True, exist_ok=True)
         plist_path.write_text(_launchd_plist_contents(python_exe))
-        subprocess.run(["launchctl", "load", str(plist_path)], capture_output=True, text=True)
+        res = subprocess.run(["launchctl", "load", str(plist_path)], capture_output=True, text=True)
+        if res.returncode != 0:
+            return {
+                "installed": False,
+                "manager": "launchd",
+                "unit_path": str(plist_path),
+                "reason": res.stderr.strip() or f"launchctl load exited with code {res.returncode}",
+            }
         return {"installed": True, "manager": "launchd", "unit_path": str(plist_path)}
     elif system == "Linux":
         unit_path = _systemd_unit_path()
         unit_path.parent.mkdir(parents=True, exist_ok=True)
         unit_path.write_text(_systemd_unit_contents(python_exe))
-        subprocess.run(["systemctl", "--user", "enable", "--now", _SYSTEMD_UNIT_NAME],
+        res = subprocess.run(["systemctl", "--user", "enable", "--now", _SYSTEMD_UNIT_NAME],
                         capture_output=True, text=True)
+        if res.returncode != 0:
+            return {
+                "installed": False,
+                "manager": "systemd",
+                "unit_path": str(unit_path),
+                "reason": res.stderr.strip() or f"systemctl enable exited with code {res.returncode}",
+            }
         return {"installed": True, "manager": "systemd", "unit_path": str(unit_path)}
     return {"installed": False, "reason": f"unsupported platform: {system}"}
 
@@ -348,13 +362,25 @@ def uninstall() -> dict:
     if system == "Darwin":
         plist_path = _launchd_plist_path()
         if plist_path.exists():
-            subprocess.run(["launchctl", "unload", str(plist_path)], capture_output=True, text=True)
+            res = subprocess.run(["launchctl", "unload", str(plist_path)], capture_output=True, text=True)
+            if res.returncode != 0:
+                return {
+                    "uninstalled": False,
+                    "manager": "launchd",
+                    "reason": res.stderr.strip() or f"launchctl unload exited with code {res.returncode}",
+                }
             plist_path.unlink()
         return {"uninstalled": True, "manager": "launchd"}
     elif system == "Linux":
         unit_path = _systemd_unit_path()
-        subprocess.run(["systemctl", "--user", "disable", "--now", _SYSTEMD_UNIT_NAME],
+        res = subprocess.run(["systemctl", "--user", "disable", "--now", _SYSTEMD_UNIT_NAME],
                         capture_output=True, text=True)
+        if res.returncode != 0:
+            return {
+                "uninstalled": False,
+                "manager": "systemd",
+                "reason": res.stderr.strip() or f"systemctl disable exited with code {res.returncode}",
+            }
         if unit_path.exists():
             unit_path.unlink()
         return {"uninstalled": True, "manager": "systemd"}
