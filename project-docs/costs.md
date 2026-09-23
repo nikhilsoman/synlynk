@@ -1,5 +1,12 @@
 # Cost Log
 
+## 2026-09-23 — Sprint 1 & Sprint 2 Control-Plane & Daemon Fixes (PR #1755, #1756)
+- Interactive Conductor: Agy.
+- Resolved Issue #1748 (Codex model tiering / `~/.codex/config.toml` auto-probing) and Issue #1742 (git worktree `--path-format=absolute` identity slug resolution) in PR #1755.
+- Resolved Issue #1743 (state registry `repo_path` persistence & backfill) and Issue #1749 (`vizor_daemon` install/uninstall returncode check) in PR #1756.
+- 55 unit tests passing locally; all matrix CI checks 100% green.
+- Zero external fee-bearing dispatch spend.
+
 ## 2026-09-23 — Dedicated OrbStack Contributor VM & Upstream LiteLLM Contribution (PR #42579)
 - Interactive Conductor: Agy.
 - Provisioned `litellm-dev-box` on OrbStack, validated `synlynk init --brownfield` on LiteLLM, fixed [Issue #42247](https://github.com/BerriAI/litellm/issues/42247), 1,240 tests passed, submitted upstream [PR #42579](https://github.com/BerriAI/litellm/pull/42579).
