@@ -5178,7 +5178,8 @@ def handle_github_app_conversion(code: str, role: str, repo_root: str = ".") -> 
 
     try:
         from synlynk.github_app_auth import refresh_installation_token
-        refresh_installation_token(role, apps_dir=str(root / ".synlynk" / "github_apps"))
+        from synlynk.product_store import resolve_github_apps_dir
+        refresh_installation_token(role, apps_dir=str(resolve_github_apps_dir(str(root))))
     except Exception:
         pass
 
@@ -5662,9 +5663,10 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
                 try:
                     from pathlib import Path
                     from synlynk.github_app_auth import _sign_jwt, refresh_installation_token
+                    from synlynk.product_store import resolve_github_apps_dir
                     from urllib.request import Request, urlopen
                     root = Path(".").resolve()
-                    apps_dir = root / ".synlynk" / "github_apps"
+                    apps_dir = resolve_github_apps_dir(str(root))
                     json_path = apps_dir / f"{role}.json"
                     app_json_path = apps_dir / role / f"{role}.app.json"
                     target_path = json_path if json_path.exists() else app_json_path

@@ -19,6 +19,7 @@ from synlynk.sentinel import _write_sentinel_alert, log_telemetry_event
 from synlynk.team import get_username
 from synlynk import github_app_auth
 from synlynk import local_http_auth
+from synlynk.product_store import resolve_github_apps_dir
 
 
 def _pkg(name: str, default=None):
@@ -342,7 +343,8 @@ class WatchDaemon:
         Best-effort per role: one role's failure (revoked App, bad
         installation_id) must not stop the others or crash the daemon loop.
         """
-        apps_dir = _daemon_state_path("github_apps")
+        repo_dir = _repo_common_dir()
+        apps_dir = str(resolve_github_apps_dir(repo_dir))
         if not os.path.isdir(apps_dir):
             return
         for json_path in sorted(glob.glob(os.path.join(apps_dir, "*.json"))):
