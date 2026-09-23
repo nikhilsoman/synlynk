@@ -1464,6 +1464,26 @@ def _extract_sop_section(body: str, header: str) -> str:
     return match.group(0).rstrip("\n") if match else ""
 
 
+def _remove_unfenced_sop_sections(content: str) -> str:
+    """Remove hand-maintained SOP copies while preserving the managed fence."""
+    section_pattern = re.compile(
+        rf"(?ms)^({'|'.join(re.escape(header) for header in SOP_SECTION_HEADERS)})\n"
+        r".*?(?=^## |\Z)"
+    )
+
+    def clean_unfenced(part: str) -> str:
+        return section_pattern.sub("", part)
+
+    pieces = []
+    cursor = 0
+    for match in _FENCE_OPEN_PATTERN.finditer(content):
+        pieces.append(clean_unfenced(content[cursor:match.start()]))
+        pieces.append(match.group(0))
+        cursor = match.end()
+    pieces.append(clean_unfenced(content[cursor:]))
+    return "".join(pieces)
+
+
 def _repair_sop_body_parts(*parts: str) -> str:
     """Join SOP body fragments with exactly one blank line between sections."""
     cleaned = [part.strip("\n") for part in parts if part and part.strip("\n")]
@@ -1500,12 +1520,21 @@ def _repair_sops_only(
         fpath = directive_files.get(agent)
         if not fpath or not os.path.exists(fpath):
             continue
-        has_harness_fence = _fence_exists(fpath)
-        existing_body = _read_harness_fence_body(fpath)
         try:
             full_content = open(fpath, encoding="utf-8").read()
         except OSError:
             full_content = ""
+        cleaned_content = _remove_unfenced_sop_sections(full_content)
+        if cleaned_content != full_content:
+            if dry_run:
+                print(f"    → remove unfenced duplicate SOP sections from {fpath}")
+            else:
+                with open(fpath, "w", encoding="utf-8") as f:
+                    f.write(cleaned_content)
+                full_content = cleaned_content
+
+        has_harness_fence = _fence_exists(fpath)
+        existing_body = _read_harness_fence_body(fpath)
         # Check presence across the whole file, not just inside an existing fence —
         # pre-existing unfenced content (e.g. a raw "## PR Review Discipline" section
         # predating the fence mechanism) must not be duplicated (issue #718).
@@ -1513,11 +1542,7 @@ def _repair_sops_only(
         stale_headers = []
 
         if has_harness_fence and existing_body:
-            stale_candidates = [
-                "## PR Review Discipline",
-                "## Brainstorm-First Policy",
-                "## Capability-Based Task Allocation",
-            ]
+            stale_candidates = list(SOP_SECTION_HEADERS)
             for header in stale_candidates:
                 canonical = _build_repair_sop_block(header, cfg).rstrip("\n")
                 current = _extract_sop_section(existing_body, header)
@@ -1530,6 +1555,10 @@ def _repair_sops_only(
                         or "escalate to Claude" in current
                         or "All dispatched agents share one GitHub identity" in current
                         or "Can not approve your own pull request" in current
+                        or (
+                            "If the reviewer is unavailable, escalate to the Home Harness." in current
+                            and "BEHIND" not in current
+                        )
                     )
                 )
                 brainstorm_is_stale = (

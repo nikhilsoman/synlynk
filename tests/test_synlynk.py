@@ -77,6 +77,29 @@ def test_capability_allocation_table_uses_harness_not_agent_header():
     assert "docs/glossary-agent-vs-harness.md" in generated
 
 
+def test_repair_sops_removes_unfenced_duplicate_sections(tmp_path, monkeypatch):
+    from synlynk.probe import SOP_SECTION_HEADERS, _build_fence_content, _repair_sops_only
+
+    monkeypatch.chdir(tmp_path)
+    legacy = "\n\n".join(
+        f"{header}\nlegacy copy" for header in SOP_SECTION_HEADERS
+    )
+    fenced = _build_fence_content("old", "## Your Role\nimplement, test")
+    path = tmp_path / "AGENTS.md"
+    path.write_text(f"# Instructions\n\nKeep this text.\n\n{legacy}\n\n{fenced}\n")
+
+    _repair_sops_only(
+        cfg={"roles": {"codex": ["implement", "test"]}},
+        harness_name="codex",
+    )
+
+    content = path.read_text()
+    assert "Keep this text." in content
+    for header in SOP_SECTION_HEADERS:
+        assert content.count(header) == 1
+    assert "legacy copy" not in content
+
+
 def test_directive_templates_contain_sop_headers(tmp_path, isolated_db, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr("builtins.input", lambda *args, **kwargs: "n")
