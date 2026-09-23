@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+import threading
 from pathlib import Path
 from typing import Optional
 
@@ -18,6 +19,8 @@ PORTFILE = DAEMON_HOME / "port"
 LOGFILE = DAEMON_HOME / "daemon.log"
 CACHE_ROOT = Path(os.path.expanduser("~/.synlynk/vizor-cache"))
 DEFAULT_POLL_INTERVAL = 15
+
+_RENDER_LOCK = threading.Lock()
 
 
 def poll_interval() -> int:
@@ -43,20 +46,21 @@ def workspace_render_context(repo_path: Path, db_path: Path, cache_dir: Path):
     """
     import synlynk.viz as viz_module
 
-    old_cwd = os.getcwd()
-    original_get_db = viz_module._get_db
-    original_cache_dir = viz_module.VIZ_CACHE_DIR
-    try:
-        os.chdir(repo_path)
-        viz_module._get_db = lambda *a, **k: viz_module._open_state_db(
-            db_path=str(db_path), read_only=True
-        )
-        viz_module.VIZ_CACHE_DIR = str(cache_dir)
-        yield
-    finally:
-        viz_module._get_db = original_get_db
-        viz_module.VIZ_CACHE_DIR = original_cache_dir
-        os.chdir(old_cwd)
+    with _RENDER_LOCK:
+        old_cwd = os.getcwd()
+        original_get_db = viz_module._get_db
+        original_cache_dir = viz_module.VIZ_CACHE_DIR
+        try:
+            os.chdir(repo_path)
+            viz_module._get_db = lambda *a, **k: viz_module._open_state_db(
+                db_path=str(db_path), read_only=True
+            )
+            viz_module.VIZ_CACHE_DIR = str(cache_dir)
+            yield
+        finally:
+            viz_module._get_db = original_get_db
+            viz_module.VIZ_CACHE_DIR = original_cache_dir
+            os.chdir(old_cwd)
 
 
 def _registered_workspaces() -> dict:

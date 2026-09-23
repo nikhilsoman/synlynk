@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import pytest
 
@@ -107,3 +108,28 @@ def test_identity_slug_from_config_resolves_in_git_worktree(tmp_path, monkeypatc
 
     monkeypatch.setattr("synlynk.product_store.subprocess.run", fake_run)
     assert identity_slug_from_config(worktree_dir) == "canonical-product"
+
+
+def test_migrate_state_db_in_unwritable_sandbox_returns_source_or_destination(tmp_path, monkeypatch):
+    import sqlite3
+
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    repo = tmp_path / "repo"
+    _repo(repo, "sandboxed-product")
+    legacy = repo / ".synlynk" / "state.db"
+    legacy.parent.mkdir(parents=True, exist_ok=True)
+    source_conn = sqlite3.connect(legacy)
+    source_conn.execute("CREATE TABLE t (x INT)")
+    source_conn.close()
+
+    # Simulate an unwritable ~/.synlynk/workspaces/ directory
+    def failing_mkdir(self, *args, **kwargs):
+        if "workspaces" in str(self):
+            raise PermissionError("[Errno 1] Operation not permitted")
+        return None
+
+    monkeypatch.setattr(Path, "mkdir", failing_mkdir)
+    # Should safely return legacy source path without raising uncaught PermissionError
+    res = migrate_state_db_if_needed(repo)
+    assert res == legacy
+

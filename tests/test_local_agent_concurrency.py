@@ -100,6 +100,7 @@ class TestSchedulerLocalConcurrency(unittest.TestCase):
         else:
             self.addCleanup(os.environ.__setitem__, "SYNLYNK_STATE_DB_PATH", previous_db_path)
         setup = sqlite3.connect(db_file.name)
+        setup.execute("PRAGMA journal_mode=WAL")
         setup.execute(
             "CREATE TABLE daemon_jobs ("
             "job_id TEXT PRIMARY KEY, agent TEXT, task TEXT, story_id TEXT, "

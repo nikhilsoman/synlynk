@@ -611,9 +611,11 @@ def _resolve_db_path() -> str:
                 f"{exc}; run SYNLYNK_ALLOW_REGISTRY_RECOVERY=1 synlynk state register "
                 f"--slug {slug} --path {state_db_path(slug)}"
             ) from exc
-        raise
     if not _IS_TESTING:
-        migrate_state_db_if_needed(root)
+        try:
+            migrate_state_db_if_needed(root)
+        except (PermissionError, OSError):
+            pass
     return str(path)
 
 
