@@ -6,15 +6,15 @@
 <p align="center"><a href="https://synlynk.com">synlynk.com</a></p>
 
 <p align="center">
-  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/tests-2804%20collected-brightgreen" alt="Tests"></a>
-  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/version-0.20.0-blue" alt="Version"></a>
+  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/tests-3198%20collected-brightgreen" alt="Tests"></a>
+  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/version-0.21.0-blue" alt="Version"></a>
   <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/license-MIT-green" alt="License"></a>
   <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/python-3.9%2B-blue" alt="Python"></a>
 </p>
 
 synlynk is a Python CLI that turns your terminal into a hybrid workgroup — one human, multiple AI harnesses, shared project state. It injects scoped project context into every dispatch, routes tasks to the best available harness using a live capability ledger, and tracks costs and hallucination loops. A shared `project-docs/` directory keeps every tool in sync: Claude Code, Codex, and AGY all read the same context, decisions, and progress.
 
-**v0.20.0:** Visual workspace observatory (BS-6 Vizor Product, Logical, Infra views), browser GitHub App role onboarding, adaptive sparse worktrees, sibling branch pruning, 4-point fleet readiness matrix, and Meta Muse adapter, with 2804 tests collected.
+**v0.21.0:** Autonomous tripartite model dispatch, sovereign drain-to-boundary handover, P2P teams relay event bus, distributed task leases, AST worktree collision preemption, Vizor cross-workspace daemon, and first-class model catalog with quota calibration, with 3198 tests collected.
 
 ## Documentation
 
@@ -113,6 +113,7 @@ The AI tool is instructed (via `CLAUDE.md` / `GEMINI.md`) to read `.synlynk/cont
 Commands are grouped by where you'll reach for them in a typical project lifecycle.
 
 <!-- commands:start -->
+<!-- commands:start -->
 
 **Start here:**
 
@@ -129,152 +130,3 @@ Full command reference: [docs/reference/commands.md](docs/reference/commands.md)
 
 <!-- commands:end -->
 <!-- commands:end -->
-
-To register another clone in the same product identity, run
-`synlynk workspace add-repo [<nwo>]`; select the repository in the GitHub App
-install UI afterward.
-
-### Dispatch flags
-
-- `--task-type <type>`: classify a dispatch task for task-specific handling (use `review` for PR review jobs; review jobs default to a 90-minute stall timeout and are scoped to read-only permissions (`read:*`) instead of the agent's default write-capable role bundle; explicit `--grant`/`--revoke` still apply on top).
-- `--scope-paths <glob>` (repeatable): restrict this dispatch to only touching files matching
-  the given glob (e.g. `--scope-paths 'docs/superpowers/specs/**'`). At reconciliation, if the
-  job's actual changed files don't all match a declared glob, the job is marked
-  `SCOPE_VIOLATION` instead of being finalized, pushed, or turned into a PR — the worktree is
-  left untouched for inspection. Declaring `--scope-paths` also skips automatic PR creation for
-  a compliant job unless `--requires-gh-write` is also passed; `git push` of the job's own
-  branch is not affected either way. See #769.
-
-### `jobs --summary <id>` output
-
-The summary for a `SCOPE_VIOLATION` job includes a `scope_violation_files` field listing the
-out-of-scope paths that triggered the violation.
-
-> **Note:** `synlynk watch` uses `os.fork()` and requires macOS or Linux. `synlynk dispatch` works on all platforms.
-
-## Upgrading?
-
-If you installed synlynk before 2026-07, here's what's new:
-
-- `synlynk schedule` — fleet batch dispatch, dry-run by default
-- `synlynk cost log` — manual cost entries for native/PM-session work
-- `synlynk status` now shows a `RATES` line (rate-table staleness)
-- `synlynk viz` — local web HUD (Architect Map, Effort & Cost tab, Business Goals Panel)
-
-Run `synlynk upgrade` to get the latest, then `synlynk doctor` to verify.
-
-## Quota-aware dispatch
-
-`synlynk quota` headroom now accounts for open reservations, not just telemetry-recorded usage. Every dispatch path (ad-hoc, `--force-agent`, daemon-queued, and batch-scheduled via `synlynk schedule --execute`) reserves estimated tokens against a harness before it fires and releases the reservation once real usage lands.
-
-When headroom is insufficient, dispatch defers (stays `queued` with `blocked_reason=quota_exhausted`) rather than failing. It resumes automatically once the harness's quota window resets, picked up by the next `synlynk watch` daemon poll. Use `synlynk quota --tpm-view` to see all open reservations across harnesses.
-
-## synlynk init flags
-
-| Flag | Default | Description |
-|---|---|---|
-| `--force` | off | Overwrite existing template files |
-| `--wizard` | off | Run the TUI onboarding wizard (8 screens) |
-| `--agents claude,agy,codex` | all three | Comma-separated list of agents to generate instruction files for. `claude` → CLAUDE.md, `agy` → GEMINI.md, `codex` → AGENTS.md |
-| `--mode solo\|team` | `solo` | Written to `project-docs/.synlynk_config.json`. Controls whether teammate devlogs appear in context |
-| `--org <org>` | none | GitHub org name, stored in `.synlynk/config.json` |
-| `--repo <repo>` | none | GitHub repo name, stored in `.synlynk/config.json` |
-| `--project-id <id>` | none | GitHub Projects v2 node ID. When provided, fills the `TODO: PROJECT_ID` placeholder in all generated agent instruction files |
-
-Example with all flags:
-
-```bash
-synlynk init --org acmecorp --repo api-server \
-             --project-id PJ_kwDOA1234 \
-             --agents claude,agy,codex \
-             --mode team
-```
-
-## Project layout
-
-### Post-Migration Layout
-Once a project is migrated, all state is centralized in the `.synlynk/` directory:
-
-```
-.synlynk/
-  state.db          # SQLite database (Source of truth for all project state)
-  project-docs/     # Write-through backups (auto-updated on every DB write)
-    roadmap.md      # Feature priorities and status
-    todo.md         # Active tasks ([ ] / [x] checkboxes with <!-- id: N --> comments)
-    memory.md       # Persistent decisions and conventions
-    costs.md        # Per-session cost log (maintained by the AI agent)
-    devlogs/        # Per-user session notes
-  context.md        # Auto-generated snapshot (overwritten each exec/watch cycle)
-  config.json       # Budget limits, DR sync path, and settings
-  telemetry.json    # Rolling log of last 100 exec/checkpoint/watch events
-  sentinel.md       # Flatline alerts
-  state             # Current state: watching | active | stopped
-  watch.pid         # Watcher daemon PID (present only while running)
-  watch.log         # Watcher daemon stdout/stderr
-```
-
-> **Note:** Before migration, the `project-docs/` folder lives at the repository root (`/project-docs/`). Running `synlynk migrate` relocates it under `.synlynk/project-docs/` and registers the SQLite `state.db` as the primary source of truth.
-
-## Configuration
-
-`.synlynk/config.json` (created by `synlynk init`):
-
-```json
-{
-  "schema_version": 1,
-  "budget": { "limit_usd": 10.0, "limit_requests": 100 },
-  "watch_interval_seconds": 30,
-  "org": null,
-  "team": null,
-  "sync_endpoint": null
-}
-```
-
-`org`, `team`, and `sync_endpoint` are reserved for a future team sync feature and have no effect in the current version.
-
-## Session protocol
-
-`synlynk init` writes `CLAUDE.md`, `GEMINI.md`, and `AI_INSTRUCTIONS.md` to your repo root. At session start, the AI tool is instructed to:
-
-1. Run `synlynk watch status` — start the watcher if stopped
-2. Read `.synlynk/context.md` for full project state
-3. Check `.synlynk/sentinel.md` for any active alerts
-4. Report: last completed task, next active task, and (in team mode) recent teammate activity
-
-At session end: append a devlog entry and run `synlynk checkpoint`.
-
-## Budget tracking
-
-synlynk warns at 80% of configured cost and request limits. Spend is recorded automatically in the `cost_entries` table of `state.db` (written through from every exec event) and the manual `project-docs/costs.md` markdown ledger is maintained as a write-through backup, ensuring a Git-trackable record of cumulative spend and request counts.
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md).
-
-## License
-
-MIT — see [LICENSE](LICENSE).
-
----
-
-## Roadmap
-
-synlynk's goal is to become the OS for multi-agent development — the substrate that keeps every AI harness, every Agent role, and every developer in sync across the full project lifecycle.
-
-| Version | Theme | Status | Target |
-|---|---|---|---|
-| v0.3.x | Enriched agent templates, AGENTS.md, parametric init | ✅ Shipped | Jun 2026 |
-| v0.4.x | Hybrid Workgroup Bootstrap — agent discovery, `dispatch`, `jobs`, `run --trio`, init wizard, instruction reach, task status model | ✅ Shipped | Jun 2026 |
-| v0.5.0 | Capability Engine — data-driven agent routing, SQLite state | ✅ Shipped | Jun 2026 |
-| v0.6.x | Job Control + Constraints — constraint propagation, job state machine, `synlynk pr check`, model version probes | ✅ Shipped | Jun 2026 |
-| v0.7.0 | Static Scan Quality — `## Source Architecture` in every exec session, `synlynk scan`, 9-language symbol extraction | ✅ Shipped | Jun 2026 |
-| v0.8.0 | Support Engineer Agent — 5 signal collectors, GH issue filing, draft fix PRs, `.agents/` config | ✅ Shipped | Jun 2026 |
-| **v0.9.0** | Kernel Fixes + Package Split — scoped dispatch context, relevant files, verify contract, per-agent framing, Ed25519 signing, anti-gaming cap | ✅ Shipped | Jun 2026 |
-| v0.9.1 | Install Hardening + Docs Migration — installed binary fix, `--docs-dir` flag, smart init migration | ✅ Shipped | Jun 2026 |
-| **v0.9.2** | Team Onboarding + Consensus — `synlynk join`, `synlynk team status`, `synlynk decide`, pull-before-write arbitration, token budgets on stories | ✅ Shipped | Jun 2026 |
-| v0.9.3 | Async Daemon — `synlynk daemon`, launchd/systemd, job queue, HTTP context server localhost:27471 | ✅ Shipped | Jun 2026 |
-| **v0.9.4** | Context / Dispatch / Relay — SQLite task canon, agent profiles, `synlynk jobs` SQLite, HTTP SSE relay, VERIFY_SKIP sentinel | ✅ Shipped | Jun 2026 |
-| **v0.10.0** | FTUE Scan + Wizard + state.db Migration + Packaging + README | ✅ Shipped | Jul 2026 |
-| v1.0.0 | Community Layer — signed capability ledger, pipx/Homebrew, synlynk.com public launch | Planned | Sep 2026 |
-
-**We're looking for community input on what to build next.** See the [Discussions](../../discussions) tab to vote on feature direction and share use cases.

@@ -93,7 +93,8 @@ gh api graphql -f query='{ node(id: "TODO: PROJECT_ID") { ... on ProjectV2 { fie
 1. Assign a non-authoring agent to review the PR.
 2. From within the PR's own checked-out worktree/branch, the reviewer must run `synlynk pr check` so it can auto-detect the PR via git/gh context.
 3. The reviewer alone must merge the PR.
-4. If the reviewer is unavailable, escalate to the Home Harness.
+4. For a `BEHIND` or `DIRTY` PR, allow at most 2 `gh pr update-branch` → CI-wait cycles. If the PR is still `BEHIND` or `DIRTY` after the second cycle, stop retrying and report back for escalation.
+5. If the reviewer is unavailable, escalate to the Home Harness.
 
 **GitHub identity note (#423):** qa APPROVE (`gh pr review --approve`) is the default whenever the reviewer identity differs from the PR author login (e.g. role App reviewing a human or sibling App PR). Dispatches under role App identities satisfy GitHub's non-author review requirement for real approvals. Route day-to-day reviews through `qa` and any feature/architecture-impacting review through `architect`. **Fallback (same-identity collision only):** post a formal COMMENT review with an explicit approve checklist (as on PR #417) only when the reviewer GitHub login equals the PR author login, where GitHub rejects self-approval. Do not tell sessions to skip `--approve` by default.
 
@@ -292,6 +293,10 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
 - "reconcile subscription costs", "true up monthly subscription spend" -> `synlynk cost true-up`
 - "grant a credit balance", "record a credit grant" -> `synlynk credit grant`
 - "show agent quota headroom" -> `synlynk quota`
+- "fleet utilization advisory", "show quota advisory", "dynamic capacity advisory" -> `synlynk quota advisory`
+- "calibrate quota", "calibrate harness usage" -> `synlynk quota calibrate`
+- "run acceptance testbed", "testbed soak", "testbed receipt" -> `synlynk testbed`
+- "who am I", "show active caller identity" -> `synlynk whoami`
 - "run a capability sweep", "seed capability baselines" -> `synlynk capability sweep`
 - "run milestone dag", "execute milestone unattended", "launch milestone dag" -> `synlynk run`
 - "run the trio protocol" -> `synlynk run --trio`
