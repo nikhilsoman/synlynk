@@ -12,6 +12,15 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Wave 1: 01 Oct 2026 — Synlynk Personal (Dev Preview v1.0.0)
 - In progress: First-class model tripartite dispatch & sovereign multi-home drain-to-boundary handover.
 
+### Added
+- **Vizor cross-workspace daemon:** a persistent, workspace-registry-driven background daemon
+  (`synlynk/vizor_daemon.py`) that polls every registered product, isolates per-workspace refresh
+  failures, and serves the Vizor dashboard for any workspace via `/w/<slug>/...` routing — replacing
+  the old single-workspace `synlynk viz` process model. Adds launchd/systemd lifecycle commands
+  (`synlynk viz install/uninstall/status`), auto-installs on fresh `install.sh` runs and on
+  `synlynk upgrade`, and fixes the OAuth-completion redirect so workspace-scoped
+  `/w/<slug>/onboarding/roles` callbacks route to the roles handler instead of 404ing.
+
 ## [v0.20.0] - 2026-09-19
 
 ### Highlights
