@@ -26,7 +26,7 @@ def test_model_registry_persists_and_queries(project_dir):
     register_builtin_models(conn)
     conn.commit()
     rows = list_models(conn, harness="codex")
-    assert rows and rows[0]["model_id"] == "gpt-4o-2024-11-20"
+    assert rows and rows[0]["model_id"] == "gpt-5.6-luna"
     assert get_model(conn, rows[0]["model_id"])["entitlement_tier"] == "included_in_base"
     assert json.loads(conn.execute("SELECT rates FROM models LIMIT 1").fetchone()[0])["input_per_1k"] == 0.0
     conn.close()
@@ -51,4 +51,4 @@ def test_model_commands_seed_and_render_json(project_dir, capsys):
 
     cmd_models_list(json_output=True)
     payload = json.loads(capsys.readouterr().out)
-    assert any(item["model_id"] == "gpt-4o-2024-11-20" for item in payload)
+    assert any(item["model_id"] == "gpt-5.6-luna" for item in payload)

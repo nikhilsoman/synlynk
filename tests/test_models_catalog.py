@@ -74,6 +74,12 @@ def test_load_model_catalog_fallback_on_missing(tmp_path):
     assert resolve_tier_model("fast", "agy", repo_path=str(tmp_path)) is not None
 
 
+def test_builtin_codex_catalog_matches_current_account_model(tmp_path):
+    catalog = load_model_catalog(repo_path=str(tmp_path))
+    assert {catalog["tiers"][tier]["codex"] for tier in ("fast", "pro", "reasoning")} == {"gpt-5.6-luna"}
+    assert [model["model_id"] for model in catalog["models"] if model.get("harness_binding") == "codex"] == ["gpt-5.6-luna"]
+
+
 def test_get_models_from_catalog(tmp_path):
     catalog_path = tmp_path / ".synlynk" / "models.json"
     catalog_path.parent.mkdir(parents=True)
