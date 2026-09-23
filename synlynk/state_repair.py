@@ -224,7 +224,7 @@ def restore_state_db(
     stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
     archive_path = archive_dir / f"restore-{slug}-{stamp}" / destination_path.name
     result = {
-        "disposition": "plan-only",
+        "disposition": "planned",
         "snapshot": str(source),
         "destination": str(destination_path),
         "archive": str(archive_path),
