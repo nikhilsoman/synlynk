@@ -497,3 +497,37 @@ def test_refresh_github_tokens_passes_apps_dir_through_to_refresh_call(tmp_path,
                         lambda role, app_config, apps_dir=None: calls.append((role, apps_dir)))
     WatchDaemon()._refresh_github_tokens()
     assert calls == [("dev", str(apps_dir))]
+
+
+def test_refresh_github_tokens_uses_product_scoped_apps_dir(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".synlynk").mkdir()
+    (repo / ".synlynk" / "config.json").write_text(json.dumps({"identity_slug": "product-1746"}))
+    _git_run(["init"], repo)
+
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.chdir(repo)
+
+    from synlynk.product_store import resolve_github_apps_dir
+
+    product_apps_dir = resolve_github_apps_dir(repo)
+    product_apps_dir.mkdir(parents=True)
+    (product_apps_dir / "dev.json").write_text(json.dumps({
+        "role": "dev", "app_id": "1", "installation_id": "10",
+    }))
+    repo_apps_dir = repo / ".synlynk" / "github_apps"
+
+    import synlynk.daemon as daemon_mod
+
+    def fake_refresh(role, app_config, apps_dir=None):
+        token_path = os.path.join(apps_dir, f"{role}.token.json")
+        with open(token_path, "w") as fh:
+            json.dump({"token": "refreshed"}, fh)
+
+    monkeypatch.setattr(daemon_mod.github_app_auth, "refresh_installation_token", fake_refresh)
+
+    WatchDaemon()._refresh_github_tokens()
+
+    assert (product_apps_dir / "dev.token.json").exists()
+    assert not (repo_apps_dir / "dev.token.json").exists()
