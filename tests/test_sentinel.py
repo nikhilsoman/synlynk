@@ -115,6 +115,7 @@ def test_check_token_bloat_triggers_on_zero_files_with_high_tokens(tmp_path):
 
     assert "COST_INFLATION" in codes
     assert codes["COST_INFLATION"]["severity"] == "CRITICAL"
+    assert codes["COST_INFLATION"]["actionable"] is True
     assert "$5.26" in codes["COST_INFLATION"]["message"]
 
     content = sentinel_file.read_text()

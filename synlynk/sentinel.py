@@ -880,7 +880,12 @@ def check_token_bloat(
         )
         _write_sentinel_alert("CRITICAL", "COST_INFLATION", msg, sentinel_path=sentinel_path)
         print(f"\n  🚨 [COST_INFLATION] {msg}")
-        alerts_generated.append({"severity": "CRITICAL", "code": "COST_INFLATION", "message": msg})
+        alerts_generated.append({
+            "severity": "CRITICAL",
+            "code": "COST_INFLATION",
+            "message": msg,
+            "actionable": True,
+        })
     elif cost >= cost_warn_threshold:
         msg = (
             f"{job_label}{agent_label} accumulated ${cost:.2f} "

@@ -29,7 +29,8 @@ _PR_REVIEW_SOP = """\
 1. Assign a non-authoring agent to review the PR.
 2. From within the PR's own checked-out worktree/branch, the reviewer must run `synlynk pr check` so it can auto-detect the PR via git/gh context.
 3. The reviewer alone must merge the PR.
-4. If the reviewer is unavailable, escalate to the Home Harness.
+4. For a `BEHIND` or `DIRTY` PR, allow at most 2 `gh pr update-branch` → CI-wait cycles. If the PR is still `BEHIND` or `DIRTY` after the second cycle, stop retrying and report back for escalation.
+5. If the reviewer is unavailable, escalate to the Home Harness.
 
 **GitHub identity note (#423):** qa APPROVE (`gh pr review --approve`) is the default whenever the reviewer identity differs from the PR author login (e.g. role App reviewing a human or sibling App PR). Dispatches under role App identities satisfy GitHub's non-author review requirement for real approvals. Route day-to-day reviews through `qa` and any feature/architecture-impacting review through `architect`. **Fallback (same-identity collision only):** post a formal COMMENT review with an explicit approve checklist (as on PR #417) only when the reviewer GitHub login equals the PR author login, where GitHub rejects self-approval. Do not tell sessions to skip `--approve` by default.
 """
@@ -1369,7 +1370,8 @@ def _repair_pr_review_sop(cfg: dict) -> str:
         "1. Assign a non-authoring agent to review the PR.\n"
         "2. From within the PR's own checked-out worktree/branch, the reviewer must run `synlynk pr check` so it can auto-detect the PR via git/gh context.\n"
         "3. The reviewer alone must merge the PR.\n"
-        f"4. If the reviewer is unavailable, escalate to {escalation_target}.\n\n"
+        "4. For a `BEHIND` or `DIRTY` PR, allow at most 2 `gh pr update-branch` → CI-wait cycles. If the PR is still `BEHIND` or `DIRTY` after the second cycle, stop retrying and report back for escalation.\n"
+        f"5. If the reviewer is unavailable, escalate to {escalation_target}.\n\n"
         "**GitHub identity note (#423):** qa APPROVE (`gh pr review --approve`) is the default "
         "whenever the reviewer identity differs from the PR author login (e.g. role App reviewing "
         "a human or sibling App PR). Dispatches under role App identities satisfy GitHub's non-author "

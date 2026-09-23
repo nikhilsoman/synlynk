@@ -400,6 +400,15 @@ def test_sop_blocks_no_hardcoded_claude_authority():
     assert "escalate to the Home Harness" in combined_sops
 
 
+def test_pr_review_sop_caps_behind_update_branch_cycles():
+    from synlynk.probe import SOP_BLOCKS
+
+    review_sop = next(block for block in SOP_BLOCKS if block.startswith("## PR Review Discipline"))
+    assert "at most 2" in review_sop
+    assert "gh pr update-branch" in review_sop
+    assert "stop retrying" in review_sop
+
+
 def test_repair_sops_detects_legacy_claude_references(tmp_path, monkeypatch):
     from synlynk import probe
 
@@ -423,6 +432,5 @@ def test_repair_sops_detects_legacy_claude_references(tmp_path, monkeypatch):
     assert "Run the brainstorm using Claude" not in updated
     assert "without explicit Claude approval" not in updated
     assert "without explicit Home Harness approval" in updated
-
 
 

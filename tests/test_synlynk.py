@@ -3091,6 +3091,52 @@ def test_reconcile_requeues_clean_harness_internal_timeout(project_dir, monkeypa
     assert sentinel_calls == []
 
 
+def test_reconcile_blocks_timeout_retry_after_critical_cost_alert(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    worktree_path = project_dir / "worktrees" / "job-critical-cost"
+    worktree_path.mkdir(parents=True)
+    log_file = project_dir / ".synlynk" / "logs" / "job-critical-cost.log"
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+    log_file.write_text("timeout waiting for response\n")
+    job = {
+        "id": "job-critical-cost",
+        "agent": "codex",
+        "story_id": "story-184",
+        "task": "review and merge PR #1738",
+        "pid": 9999999,
+        "log_file": str(log_file),
+        "worktree_path": str(worktree_path),
+        "worktree_branch": "dispatch/codex/job-critical-cost",
+        "started_at": "2026-07-12T10:00:00",
+        "ended_at": None,
+        "status": "running",
+        "exit_code": None,
+        "dispatch_mode": "agent",
+        "model_at_dispatch": "unknown",
+    }
+    sl._save_jobs([job])
+    dispatched = []
+    sentinel_calls = []
+    monkeypatch.setattr(sl, "dispatch_agent", lambda *a, **kw: dispatched.append((a, kw)))
+    monkeypatch.setattr(sl, "_inspect_worktree_git_state", lambda *a, **kw: {"has_activity": False, "remote_has_activity": False})
+    monkeypatch.setattr(jobs_mod.os, "kill", lambda *a, **kw: (_ for _ in ()).throw(ProcessLookupError()))
+    monkeypatch.setattr(jobs_mod, "_write_sentinel_alert", lambda *a, **kw: sentinel_calls.append((a, kw)))
+    monkeypatch.setattr(
+        sl,
+        "check_token_bloat",
+        lambda **kwargs: [{"severity": "CRITICAL", "code": "COST_INFLATION", "actionable": True}],
+    )
+
+    sl._reconcile_jobs()
+
+    assert dispatched == []
+    reconciled = next(j for j in sl._load_jobs() if j["id"] == "job-critical-cost")
+    assert reconciled["cost_inflation_critical"] is True
+    assert any(call[0][1] == "HARNESS_INTERNAL_TIMEOUT" for call in sentinel_calls)
+
+
 def test_reconcile_does_not_requeue_timeout_with_real_work(project_dir, monkeypatch):
     import synlynk as sl
     import synlynk.jobs as jobs_mod
