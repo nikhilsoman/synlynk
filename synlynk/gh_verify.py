@@ -189,7 +189,8 @@ def gh_write_verified(
         return None
 
     is_list_expect = expect in _LIST_EXPECT_FIELD
-    attempts = _LIST_VERIFY_ATTEMPTS if is_list_expect else 1
+    is_scalar_expect = expect in _EXPECT_FIELD
+    attempts = _LIST_VERIFY_ATTEMPTS if (is_list_expect or is_scalar_expect) else 1
     if evidence is not None:
         evidence.update({"target": target, "expect": expect, "field": field, "attempts": []})
 
@@ -230,7 +231,21 @@ def gh_write_verified(
 
         if expect in _EXPECT_FIELD:
             actual = payload.get(field)
-            return None if actual is None else actual == expected_value
+            matched = None if actual is None else actual == expected_value
+            if evidence is not None:
+                evidence["attempts"][-1]["matched"] = matched
+            if matched is True:
+                if evidence is not None:
+                    evidence["matched"] = True
+                    evidence["attempt_count"] = attempt + 1
+                return True
+            if attempt + 1 < attempts:
+                time.sleep(_LIST_VERIFY_BACKOFF_SECONDS[min(attempt, len(_LIST_VERIFY_BACKOFF_SECONDS) - 1)])
+                continue
+            if evidence is not None:
+                evidence["matched"] = matched
+                evidence["attempt_count"] = attempt + 1
+            return matched
 
         entries = payload.get(field)
         if entries is None:
