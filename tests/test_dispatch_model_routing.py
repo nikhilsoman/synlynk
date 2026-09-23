@@ -79,3 +79,18 @@ def test_explicit_model_and_tier_override_automatic_routing(tmp_path):
 def test_unknown_model_tier_fails_closed(tmp_path):
     with pytest.raises(ValueError, match="Unknown model tier"):
         resolve_dispatch_model("codex", "small task", model_tier="ultra", repo_root=str(tmp_path))
+
+
+def test_codex_dispatch_probes_config_toml_when_unspecified(tmp_path, monkeypatch):
+    codex_home = tmp_path / "codex_home"
+    codex_home.mkdir()
+    (codex_home / "config.toml").write_text('model = "gpt-5.6-luna"\nmodel_reasoning_effort = "medium"\n')
+    monkeypatch.setenv("CODEX_HOME", str(codex_home))
+
+    routed = resolve_dispatch_model(
+        "codex",
+        "implement feature",
+        role="dev",
+        repo_root=str(tmp_path),
+    )
+    assert routed["resolved_model"] == "gpt-5.6-luna"
