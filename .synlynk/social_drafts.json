@@ -350,5 +350,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #1758 \u2014 modern multi-workspace hub UI and /index.html routing fallback (PR #1758, v0.22.0-dev)\n\n\u2022 Merged improvements and fixes for PR #\n\n#posts",
     "changelog": "### v0.22.0-dev (2026-09-23) - PR #1758\n- Merged improvements and fixes for PR #"
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/234-pr1759-guard-db-path-resolution-and-daemon-poll.md",
+    "title": "PR #1759 \u2014 guard DB_PATH resolution and daemon polling outside project roots",
+    "author": "nikhilsoman",
+    "date": "2026-09-23",
+    "pr": "#1759",
+    "version": "0.22.0-dev",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #"
+    ],
+    "tweet": "\ud83d\ude80 PR #1759 \u2014 guard DB_PATH resolution and daemon polling outside project roots (PR #1759, v0.22.0-dev)\n\n\u2022 Merged improvements and fixes for PR #\n\n#posts",
+    "changelog": "### v0.22.0-dev (2026-09-23) - PR #1759\n- Merged improvements and fixes for PR #"
   }
 ]
