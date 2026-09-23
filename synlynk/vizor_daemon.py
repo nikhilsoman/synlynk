@@ -82,6 +82,10 @@ def refresh_workspace(slug: str, entry: dict, port: int) -> None:
     db_path = entry.get("canonical_path")
     if not repo_path or not db_path:
         raise RuntimeError(f"workspace {slug!r} is missing repo_path or canonical_path")
+    if not Path(repo_path).is_dir():
+        raise RuntimeError(f"workspace {slug!r} repo_path {repo_path!r} does not exist")
+    if not Path(db_path).is_file():
+        raise RuntimeError(f"workspace {slug!r} db_path {db_path!r} does not exist")
 
     cache_dir = CACHE_ROOT / slug
     with workspace_render_context(Path(repo_path), Path(db_path), cache_dir):

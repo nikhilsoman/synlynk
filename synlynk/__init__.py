@@ -607,10 +607,13 @@ def _resolve_db_path() -> str:
         )
     except Exception as exc:
         if "no canonical registry entry" in str(exc):
+            if not os.path.exists(os.path.join(root, ".synlynk", "config.json")):
+                return str(state_db_path(slug))
             raise type(exc)(
                 f"{exc}; run SYNLYNK_ALLOW_REGISTRY_RECOVERY=1 synlynk state register "
                 f"--slug {slug} --path {state_db_path(slug)}"
             ) from exc
+        raise
     if not _IS_TESTING:
         try:
             migrate_state_db_if_needed(root)
