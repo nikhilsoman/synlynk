@@ -1,5 +1,19 @@
 # Agy Devlog
 
+## 2026-09-24 — Vizor View Generation, File Tree Rendering & Readonly DB Projections (PR #1772, #1773)
+
+### Shipped & Verified
+- **Scan & View Bloat Guard (PR #1772):**
+  - Excluded `worktrees`, `.worktrees`, `.claude`, `.pytest_cache`, `.ruff_cache`, `dist`, `build`, `test_archive`, `test_context_output` from `_SCAN_SKIP_DIRS` in `synlynk/scan.py` and `skip` set in `synlynk/viz_views.py`.
+  - Reduced deep scan runtime from choked 80,000+ files / 42MB source map down to 0.8s, 412 canonical files, and 3,272 symbols.
+- **Readonly DB Resilience & Fast Worktree Audit (PR #1773):**
+  - Wrapped `_save_projection` in `synlynk/viz_views.py` in `try...except (sqlite3.OperationalError, sqlite3.DatabaseError): pass`, preventing read-only state.db connections during daemon renders from throwing errors and returning empty node sets.
+  - Updated `_query_repo_file_tree` in `synlynk/scan.py` to accept optional `conn`, and threaded `views_conn` from `synlynk/viz.py:_base_data()`, guaranteeing `window.ARCHITECT_FILE_TREE` is populated.
+  - Added optional `gh_available: Optional[bool] = None` override in `synlynk/worktree.py:_collect_verdicts` and passed `gh_available=False` in `synlynk/viz.py:_collect_worktrees()`, eliminating >120 blocking sequential GitHub CLI network calls during HTML generation (dropping render time from 134s to <1s).
+  - Added regression unit tests in `tests/test_viz_views.py` (`test_build_workspace_views_snapshot_with_readonly_db`, `test_query_repo_file_tree_with_explicit_conn`).
+- Reinstalled synlynk, restarted Vizor launchd daemon, and confirmed `tube.html` (544 KB) and `logical.html` (302 KB) are live and rendering with 200 OK on `http://localhost:8721/w/synlynk/`.
+[@agy, @nikhilsoman]
+
 ## 2026-09-24 — Sprint 3 Sandbox State Migration & Vizor Concurrency Lock (PR #1757)
 
 ### Shipped & Verified
