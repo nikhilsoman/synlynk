@@ -1,26 +1,26 @@
 {
   "schema_version": 1,
-  "as_of": "2026-09-20",
+  "as_of": "2026-09-24",
   "tiers": {
     "fast": {
-      "claude": "claude-haiku-4.5",
-      "agy": "gemini-3.7-flash",
+      "claude": "claude-haiku-4-5-20251001",
+      "agy": "gemini-3-flash",
       "codex": "gpt-5.6-luna",
-      "grok": "grok-3-mini",
-      "local": "qwen2.5-coder-7b"
+      "grok": "grok-4.6",
+      "local": "qwen2.5"
     },
     "pro": {
       "claude": "claude-sonnet-5",
-      "agy": "gemini-3.0-pro",
+      "agy": "gemini-3-pro",
       "codex": "gpt-5.6-luna",
-      "grok": "grok-3",
-      "local": "qwen2.5-coder-32b"
+      "grok": "grok-4.7",
+      "local": "qwen2.5"
     },
     "reasoning": {
       "claude": "claude-opus-5",
-      "agy": "gemini-3.5-pro",
+      "agy": "gemini-3.5-flash-base",
       "codex": "gpt-5.6-luna",
-      "grok": "grok-3.5",
+      "grok": "grok-4.7",
       "local": "deepseek-r1"
     }
   },
@@ -35,8 +35,8 @@
       "entitlement_tier": "included_in_base"
     },
     {
-      "model_id": "claude-haiku-4.5",
-      "family": "claude-4",
+      "model_id": "claude-haiku-4-5-20251001",
+      "family": "claude-5",
       "harness": "claude",
       "context_window": 200000,
       "max_output": 8192,
@@ -53,7 +53,7 @@
       "entitlement_tier": "subscription_capped"
     },
     {
-      "model_id": "gemini-3.7-flash",
+      "model_id": "gemini-3-flash",
       "family": "gemini-3",
       "harness": "agy",
       "context_window": 1000000,
@@ -62,7 +62,7 @@
       "entitlement_tier": "included_in_base"
     },
     {
-      "model_id": "gemini-3.0-pro",
+      "model_id": "gemini-3-pro",
       "family": "gemini-3",
       "harness": "agy",
       "context_window": 2000000,
@@ -71,7 +71,7 @@
       "entitlement_tier": "metered_extra_usage_only"
     },
     {
-      "model_id": "gemini-3.5-pro",
+      "model_id": "gemini-3.5-flash-base",
       "family": "gemini-3",
       "harness": "agy",
       "context_window": 2000000,
@@ -89,8 +89,8 @@
       "entitlement_tier": "included_in_base"
     },
     {
-      "model_id": "grok-3-mini",
-      "family": "grok-3",
+      "model_id": "grok-4.6",
+      "family": "grok-4",
       "harness": "grok",
       "context_window": 131072,
       "max_output": 8192,
@@ -98,8 +98,8 @@
       "entitlement_tier": "included_in_base"
     },
     {
-      "model_id": "grok-3",
-      "family": "grok-3",
+      "model_id": "grok-4.7",
+      "family": "grok-4",
       "harness": "grok",
       "context_window": 131072,
       "max_output": 16384,
