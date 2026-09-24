@@ -1,3 +1,22 @@
+## 2026-09-24 — Sub-project 1 Shipped: Vizor Navigation & Information Architecture Restructure (PR #1765)
+
+### Shipped & Verified
+- **Vizor Navigation & IA Restructure Shipped (PR #1765, `goal-70317121`):**
+  - **Two-Tier Native Accordion:** Built with HTML5 native `<details name="...">` / `<summary>` tags without external JavaScript dependencies:
+    - Tier 1 Account Scope: `PERSONAL` (teal header), `TEAM` (blue header with coming-soon stub), `ENTERPRISE` (blue header with coming-soon stub).
+    - Tier 2 Workspace: Per-workspace accordion with live open-stories count badge (`<span class="count-badge">N</span>`).
+  - **Categorized View Groupings:** Replaced flat views list with 4 structured categories:
+    - `STATUS`: Board (`board.html`), Gantt (`gantt.html`)
+    - `TOPOLOGIES`: Architect Map (`tube.html`), Infra View (`infra.html`)
+    - `PROJECTIONS`: Product (`product.html`), Logical (`logical.html`), World (`world.html`)
+    - `TELEMETRY`: Effort & Cost (`effort.html`), Efficiency (`efficiency.html`), Observatory (`observatory.html`), Agent Roles (`roles.html`)
+  - **Location Breadcrumbs & Corner Actions:** Breadcrumb trail (`Personal › <workspace> › <category> › <view>`) with top-right corner action slots for Settings (sub-project 2), FTUE walkthrough (sub-project 4), and Hub launcher (`Hub ↗`).
+  - **Workspace Overview Canvas (`overview.html`):** Renders immediately upon selecting any workspace, featuring active sentinel alerts banner, 4 stat cards (Active Goals, Open Stories, Running Jobs, 7-Day Burn), goal progress rollup with percentage bars, recent jobs feed with status pills and PR links, and jump-to-view category shortcut cards.
+  - **Cross-Workspace Activity Stream (`activity.html`):** Real-time chronological event feed with per-workspace and per-type filter chips (`goal`, `story`, `epic`, `pr`, `job`) and load-more client pagination.
+  - **Daemon Route Bindings:** Updated `_write_cache()` and `WorkspaceRoutingHandler` in `synlynk/vizor_daemon.py` to route to `overview.html` by default inside the shell iframe while keeping direct route access.
+  - **Full Regression Test Matrix Passing (3,215 tests green).**
+[@agy, @nikhilsoman]
+
 ## 2026-09-24 — Named Release v0.22.0: Multi-Workspace Vizor Hub & Resilient State Isolation
 
 ### Shipped & Verified
