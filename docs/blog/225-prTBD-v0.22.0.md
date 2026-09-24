@@ -4,6 +4,9 @@ date: 2026-09-24
 series: "Building the OS for Multi-Agent Development"
 post: 225
 pr: "#TBD"
+author: "synlynk team"
+version: "0.22.0"
+tags: posts
 status: open
 ---
 
