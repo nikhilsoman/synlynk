@@ -366,5 +366,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #1759 \u2014 guard DB_PATH resolution and daemon polling outside project roots (PR #1759, v0.22.0-dev)\n\n\u2022 Merged improvements and fixes for PR #\n\n#posts",
     "changelog": "### v0.22.0-dev (2026-09-23) - PR #1759\n- Merged improvements and fixes for PR #"
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/235-pr1760-support-head-requests-in-workspaceroutin.md",
+    "title": "PR #1760 \u2014 support HEAD requests in WorkspaceRoutingHandler",
+    "author": "nikhilsoman",
+    "date": "2026-09-24",
+    "pr": "#1760",
+    "version": "0.22.0-dev",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #"
+    ],
+    "tweet": "\ud83d\ude80 PR #1760 \u2014 support HEAD requests in WorkspaceRoutingHandler (PR #1760, v0.22.0-dev)\n\n\u2022 Merged improvements and fixes for PR #\n\n#posts",
+    "changelog": "### v0.22.0-dev (2026-09-24) - PR #1760\n- Merged improvements and fixes for PR #"
   }
 ]
