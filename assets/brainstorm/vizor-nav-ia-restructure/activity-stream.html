@@ -1,0 +1,64 @@
+<h2>Tier 1 root canvas: Activity Stream</h2>
+<p class="subtitle">Shown when Personal (or later Team/Enterprise) is the active tier but no specific workspace is selected yet. Breadcrumb reads just "Personal".</p>
+
+<div class="mockup">
+  <div class="mockup-header">Personal — Activity Stream (illustrative)</div>
+  <div class="mockup-body">
+    <div style="font-size:12px;display:flex;flex-direction:column;gap:8px">
+
+      <div style="border:1px solid #444;border-radius:6px;padding:10px;background:#1c2420">
+        <div style="display:flex;justify-content:space-between">
+          <div><span style="color:#8fd;font-weight:600">synlynk-core</span> <span style="opacity:.6">· goal</span></div>
+          <div style="opacity:.5">12m ago</div>
+        </div>
+        <div style="margin-top:4px">Goal <b>vizor-ux-overhaul</b> updated — nav/IA sub-spec approved, moving to implementation plan.</div>
+        <div style="margin-top:6px;opacity:.7">🔗 Gantt &nbsp; 🔗 Goal status &nbsp; 💬</div>
+      </div>
+
+      <div style="border:1px solid #444;border-radius:6px;padding:10px;background:#1c2420">
+        <div style="display:flex;justify-content:space-between">
+          <div><span style="color:#8fd;font-weight:600">synlynk-core</span> <span style="opacity:.6">· PR</span></div>
+          <div style="opacity:.5">40m ago</div>
+        </div>
+        <div style="margin-top:4px">PR #1739 <b>fix: codex model-catalog drift</b> — all checks green, merge-authority pending.</div>
+        <div style="margin-top:6px;opacity:.7">🔗 GitHub &nbsp; 🔗 Job job-891306ab &nbsp; 💬</div>
+      </div>
+
+      <div style="border:1px solid #444;border-radius:6px;padding:10px;background:#1c2420">
+        <div style="display:flex;justify-content:space-between">
+          <div><span style="color:#8fd;font-weight:600">rxcc</span> <span style="opacity:.6">· epic</span></div>
+          <div style="opacity:.5">2h ago</div>
+        </div>
+        <div style="margin-top:4px">Epic <b>LIVE-5 verification gap</b> — 2 stories created from root cause (#98, #99), not yet dispatched.</div>
+        <div style="margin-top:6px;opacity:.7">🔗 Gantt &nbsp; 🔗 Issue &nbsp; 💬</div>
+      </div>
+
+      <div style="border:1px solid #444;border-radius:6px;padding:10px;background:#1c2420">
+        <div style="display:flex;justify-content:space-between">
+          <div><span style="color:#8fd;font-weight:600">playblazer-ng</span> <span style="opacity:.6">· story</span></div>
+          <div style="opacity:.5">5h ago</div>
+        </div>
+        <div style="margin-top:4px">Story <b>Ph2 Social+Economy</b> marked done by @nikhilsoman.</div>
+        <div style="margin-top:6px;opacity:.7">🔗 Gantt &nbsp; 🔗 GitHub &nbsp; 💬</div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div class="options" data-multiselect="true">
+  <div class="option" data-choice="filter-workspace" onclick="toggleSelect(this)">
+    <div class="letter">1</div>
+    <div class="content"><h3>Per-workspace filter chips</h3><p>Toggle which workspaces' activity shows in the stream (all-on by default).</p></div>
+  </div>
+  <div class="option" data-choice="filter-type" onclick="toggleSelect(this)">
+    <div class="letter">2</div>
+    <div class="content"><h3>Per-type filter chips</h3><p>Toggle goal/story/epic/PR/job event types independently.</p></div>
+  </div>
+  <div class="option" data-choice="infinite-scroll" onclick="toggleSelect(this)">
+    <div class="letter">3</div>
+    <div class="content"><h3>Paginated / load-more feed</h3><p>vs. a fixed "last N events" list with no pagination for v1.</p></div>
+  </div>
+</div>
+
+<p class="section" style="margin-top:14px;opacity:.8">Question: each card's action icons — I've mocked "Gantt link", a context link (GitHub/Job/Issue depending on event type), and a comment icon. Is the comment/reaction icon something you actually want (implies a new persistence layer for comments on activity events), or was "action icons" just meaning the link-out icons?</p>
