@@ -382,5 +382,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #1760 \u2014 support HEAD requests in WorkspaceRoutingHandler (PR #1760, v0.22.0-dev)\n\n\u2022 Merged improvements and fixes for PR #\n\n#posts",
     "changelog": "### v0.22.0-dev (2026-09-24) - PR #1760\n- Merged improvements and fixes for PR #"
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/236-pr1761-cut-named-release-v0-22-0.md",
+    "title": "PR #1761 \u2014 cut named release v0.22.0",
+    "author": "nikhilsoman",
+    "date": "2026-09-24",
+    "pr": "#1761",
+    "version": "0.22.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #"
+    ],
+    "tweet": "\ud83d\ude80 PR #1761 \u2014 cut named release v0.22.0 (PR #1761, v0.22.0)\n\n\u2022 Merged improvements and fixes for PR #\n\n#posts",
+    "changelog": "### v0.22.0 (2026-09-24) - PR #1761\n- Merged improvements and fixes for PR #"
   }
 ]

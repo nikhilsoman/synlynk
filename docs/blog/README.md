@@ -271,6 +271,8 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [233](./233-pr1758-modern-multi-workspace-hub-ui-and-index-.md) | PR #1758 — modern multi-workspace hub UI and /index.html routing fallback | [#1758](https://github.com/nikhilsoman/synlynk/pull/1758) | 2026-09-23 |
 | [234](./234-pr1759-guard-db-path-resolution-and-daemon-poll.md) | PR #1759 — guard DB_PATH resolution and daemon polling outside project roots | [#1759](https://github.com/nikhilsoman/synlynk/pull/1759) | 2026-09-23 |
 | [235](./235-pr1760-support-head-requests-in-workspaceroutin.md) | PR #1760 — support HEAD requests in WorkspaceRoutingHandler | [#1760](https://github.com/nikhilsoman/synlynk/pull/1760) | 2026-09-24 |
+| [225](./225-prTBD-v0.22.0.md) | PR #TBD — v0.22.0 Release | [#TBD](https://github.com/nikhilsoman/synlynk/pull/TBD) | 2026-09-24 |
+| [236](./236-pr1761-cut-named-release-v0-22-0.md) | PR #1761 — cut named release v0.22.0 | [#1761](https://github.com/nikhilsoman/synlynk/pull/1761) | 2026-09-24 |
 
 ## Per-PR Post Template
 
