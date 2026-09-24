@@ -258,6 +258,25 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [219](./219-pr1692-complete-w8-packs-and-connector-catalog.md) | PR #1692 — complete W8 packs and connector catalog | [#1692](https://github.com/nikhilsoman/synlynk/pull/1692) | 2026-09-18 |
 | [220](./220-pr1693-isolate-scratch-registry-path.md) | PR #1693 — isolate scratch registry path | [#1693](https://github.com/nikhilsoman/synlynk/pull/1693) | 2026-09-19 |
 | [223](./223-pr1731-w12-discord-herdr-bridge.md) | W12 - Discord/Herdr full-duplex remote-access bridge | [#1731](https://github.com/nikhilsoman/synlynk/pull/1731) | 2026-09-22 |
+| [224](./224-pr1741-cap-behind-dirty-pr-review-retry-churn-a.md) | PR #1741 — cap BEHIND/DIRTY PR-review retry churn and block retries on critical cost inflation | [#1741](https://github.com/nikhilsoman/synlynk/pull/1741) | 2026-09-23 |
+| [225](./225-pr1744-vizor-cross-workspace-daemon.md) | PR #1744 — Vizor cross-workspace daemon | [#1744](https://github.com/nikhilsoman/synlynk/pull/1744) | 2026-09-23 |
+| [226](./226-pr1747-align-github-app-token-refresh-cache-pat.md) | PR #1747 — align GitHub App token refresh cache paths [LIVE-14] (#1746) | [#1747](https://github.com/nikhilsoman/synlynk/pull/1747) | 2026-09-23 |
+| [224](./224-prTBD-v0.21.0.md) | PR #TBD — v0.21.0 Release | [#TBD](https://github.com/nikhilsoman/synlynk/pull/TBD) | 2026-09-23 |
+| [227](./227-pr1751-devlog-checkpoint-for-live-14-session.md) | PR #1751 — devlog checkpoint for LIVE-14 session | [#1751](https://github.com/nikhilsoman/synlynk/pull/1751) | 2026-09-23 |
+| [228](./228-pr1755-resolve-codex-config-model-and-git-workt.md) | PR #1755 — resolve codex config model and git worktree identity slug (#1748, #1742) | [#1755](https://github.com/nikhilsoman/synlynk/pull/1755) | 2026-09-23 |
+| [229](./229-pr1756-backfill-registry-repo-path-and-inspect-.md) | PR #1756 — backfill registry repo_path and inspect daemon install returncode (#1743, #1749) | [#1756](https://github.com/nikhilsoman/synlynk/pull/1756) | 2026-09-23 |
+| [230](./230-pr1754-deduplicate-harness-sop-sections.md) | PR #1754 — deduplicate harness SOP sections | [#1754](https://github.com/nikhilsoman/synlynk/pull/1754) | 2026-09-23 |
+| [231](./231-pr1757-guard-sandbox-state-migration-and-mutex-.md) | PR #1757 — guard sandbox state migration and mutex-lock vizor render context (#1733, #1750) | [#1757](https://github.com/nikhilsoman/synlynk/pull/1757) | 2026-09-23 |
+| [232](./232-pr1753-fail-dispatch-early-without-role-github-.md) | PR #1753 — fail dispatch early without role GitHub token | [#1753](https://github.com/nikhilsoman/synlynk/pull/1753) | 2026-09-23 |
+| [233](./233-pr1758-modern-multi-workspace-hub-ui-and-index-.md) | PR #1758 — modern multi-workspace hub UI and /index.html routing fallback | [#1758](https://github.com/nikhilsoman/synlynk/pull/1758) | 2026-09-23 |
+| [234](./234-pr1759-guard-db-path-resolution-and-daemon-poll.md) | PR #1759 — guard DB_PATH resolution and daemon polling outside project roots | [#1759](https://github.com/nikhilsoman/synlynk/pull/1759) | 2026-09-23 |
+| [235](./235-pr1760-support-head-requests-in-workspaceroutin.md) | PR #1760 — support HEAD requests in WorkspaceRoutingHandler | [#1760](https://github.com/nikhilsoman/synlynk/pull/1760) | 2026-09-24 |
+| [225](./225-prTBD-v0.22.0.md) | PR #TBD — v0.22.0 Release | [#TBD](https://github.com/nikhilsoman/synlynk/pull/TBD) | 2026-09-24 |
+| [236](./236-pr1761-cut-named-release-v0-22-0.md) | PR #1761 — cut named release v0.22.0 | [#1761](https://github.com/nikhilsoman/synlynk/pull/1761) | 2026-09-24 |
+| [237](./237-pr1762-bump-development-version-to-0-23-0-dev.md) | PR #1762 — bump development version to 0.23.0-dev | [#1762](https://github.com/nikhilsoman/synlynk/pull/1762) | 2026-09-24 |
+| [238](./238-pr1764-correct-stale-model-catalog-entries-in-m.md) | PR #1764 — correct stale model catalog entries in models.py and models.json | [#1764](https://github.com/nikhilsoman/synlynk/pull/1764) | 2026-09-24 |
+| [239](./239-pr1765-implement-two-tier-accordion-navigation-.md) | PR #1765 — implement two-tier accordion navigation, overview canvas, and activity stream | [#1765](https://github.com/nikhilsoman/synlynk/pull/1765) | 2026-09-24 |
+| [240](./240-pr1768-remove-legacy-embedded-sidebar-and-tab-b.md) | PR #1768 — remove legacy embedded sidebar and tab bar from gantt view | [#1768](https://github.com/nikhilsoman/synlynk/pull/1768) | 2026-09-24 |
 
 ## Per-PR Post Template
 
