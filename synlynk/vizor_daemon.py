@@ -484,7 +484,7 @@ def build_workspace_routing_handler():
                 self, *args, directory=str(CACHE_ROOT), **kwargs
             )
 
-        def do_GET(self):
+        def _route_path(self) -> bool:
             from urllib.parse import urlparse
 
             path = urlparse(self.path).path
@@ -492,22 +492,29 @@ def build_workspace_routing_handler():
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.end_headers()
-                self.wfile.write(_workspace_index_html().encode("utf-8"))
-                return
+                if self.command == "GET":
+                    self.wfile.write(_workspace_index_html().encode("utf-8"))
+                return False
             if path.startswith("/w/"):
                 app_route = _rewrite_workspace_app_route(path)
                 if app_route is not None:
                     self.path = app_route + (("?" + urlparse(self.path).query) if urlparse(self.path).query else "")
-                    super().do_GET()
-                    return
+                    return True
                 slug, rewritten = parse_workspace_path(path)
                 if slug is None:
                     self.send_error(404, "Unknown workspace")
-                    return
+                    return False
                 self.path = rewritten + (("?" + urlparse(self.path).query) if urlparse(self.path).query else "")
+                return True
+            return True
+
+        def do_GET(self):
+            if self._route_path():
                 super().do_GET()
-                return
-            super().do_GET()
+
+        def do_HEAD(self):
+            if self._route_path():
+                super().do_HEAD()
 
     return WorkspaceRoutingHandler
 
