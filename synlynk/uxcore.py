@@ -107,6 +107,9 @@ class Dream:
     cost_total_estimated: float
     cost_est: Optional[float]
     stages: list
+    target_date: Optional[str] = None
+    goal_id: Optional[str] = None
+    goal_outcome: Optional[str] = None
 
 
 _KNOWN_AGENTS = {"claude", "agy", "codex", "grok"}
@@ -197,20 +200,35 @@ def get_gantt_data() -> list:
         raise UxCoreError(f"could not open state db: {exc}") from exc
     try:
         arc_rows = conn.execute(
-            "SELECT version, title, status, target_date, notes FROM roadmap_arcs ORDER BY id"
+            "SELECT version, title, status, target_date, notes FROM roadmap_arcs ORDER BY id DESC"
         ).fetchall()
         phase_rows = conn.execute(
             "SELECT id, arc_version, phase_title, status, priority, story_id, notes "
             "FROM roadmap_phases ORDER BY arc_version, id"
         ).fetchall()
-        story_rows = conn.execute(
-            "SELECT story_id, title, status, phase, estimated_tokens FROM stories ORDER BY id"
-        ).fetchall()
+        story_cols = {row[1] for row in conn.execute("PRAGMA table_info(stories)").fetchall()} if conn else set()
+        has_goal = "goal_id" in story_cols
+        story_query = (
+            "SELECT story_id, title, status, phase, estimated_tokens, goal_id FROM stories ORDER BY id"
+            if has_goal
+            else "SELECT story_id, title, status, phase, estimated_tokens, NULL as goal_id FROM stories ORDER BY id"
+        )
+        story_rows = conn.execute(story_query).fetchall()
         cost_rows = _fetch_cost_rows(conn)
+
+        goal_map = {}
+        try:
+            for gid, outcome in conn.execute("SELECT goal_id, outcome FROM goals").fetchall():
+                if gid:
+                    goal_map[gid] = outcome
+        except Exception:
+            pass
 
         stories_by_id = {}
         stories_by_phase = {}
-        for story_id, title, status, phase, estimated_tokens in story_rows:
+        story_goals = {}
+        for row in story_rows:
+            story_id, title, status, phase, estimated_tokens, goal_id = row[0], row[1], row[2], row[3], row[4], row[5]
             task = Task(
                 id=story_id,
                 name=title or "",
@@ -222,6 +240,8 @@ def get_gantt_data() -> list:
             )
             stories_by_id[story_id] = task
             stories_by_phase.setdefault((phase or "").strip().lower(), []).append(task)
+            if goal_id:
+                story_goals[story_id] = goal_id
 
         for _date, agent, amount, notes, cost_source in cost_rows:
             amount = float(amount or 0.0)
@@ -236,10 +256,16 @@ def get_gantt_data() -> list:
         dreams = []
         import re
 
-        for dream_id, dream_name, dream_status, _target_date, _notes in arc_rows:
+        for dream_id, dream_name, dream_status, target_date, arc_notes in arc_rows:
             stage_rows = [row for row in phase_rows if row[1] == dream_id]
             stage_count = len(stage_rows)
             dream_stages = []
+            linked_goal_id = None
+            if arc_notes:
+                g_match = re.search(r"\bgoal-([a-zA-Z0-9_-]+)\b", arc_notes)
+                if g_match:
+                    linked_goal_id = g_match.group(0)
+
             for index, phase_row in enumerate(stage_rows):
                 _pid, _arc, phase_title, phase_status, _prio, story_id, notes = phase_row
                 agent_list = []
@@ -249,6 +275,8 @@ def get_gantt_data() -> list:
                 matched = []
                 if story_id and story_id in stories_by_id:
                     matched.append(stories_by_id[story_id])
+                    if not linked_goal_id and story_id in story_goals:
+                        linked_goal_id = story_goals[story_id]
                 matched.extend(stories_by_phase.get(phase_key.lower(), []))
                 deduped, seen = [], set()
                 for task in matched:
@@ -256,6 +284,8 @@ def get_gantt_data() -> list:
                         continue
                     seen.add(task.id)
                     deduped.append(task)
+                    if not linked_goal_id and task.id in story_goals:
+                        linked_goal_id = story_goals[task.id]
                 for task in deduped:
                     if task.agent and not _looks_like_stage_label(task.agent):
                         agent_list.append(task.agent)
@@ -277,6 +307,7 @@ def get_gantt_data() -> list:
             dream_tasks_cost_est = sum(
                 s.cost_est or 0.0 for s in dream_stages
             ) or None
+            goal_outcome = goal_map.get(linked_goal_id) if linked_goal_id else None
             dreams.append(
                 Dream(
                     id=dream_id,
@@ -286,6 +317,9 @@ def get_gantt_data() -> list:
                     cost_total_estimated=float(dream_cost_prov_estimated),
                     cost_est=dream_tasks_cost_est,
                     stages=dream_stages,
+                    target_date=target_date,
+                    goal_id=linked_goal_id,
+                    goal_outcome=goal_outcome,
                 )
             )
         return dreams

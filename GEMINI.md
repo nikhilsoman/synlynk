@@ -259,7 +259,7 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
   ordinary command usage, not on phrase matches, not mid-brainstorm).
 <!-- synlynk:end -->
 
-<!-- synlynk:harness v2.1.275 verified:2026-09-23T18:58:15Z -->
+<!-- synlynk:harness v2.0.0 verified:2026-09-24T12:45:03Z -->
 # Harness Instructions (synlynk-managed — do not edit)
 
 ## Headless Execution Contract
@@ -272,7 +272,6 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
 ## Network Dependencies
 - Required: generativelanguage.googleapis.com:443
 - Required: oauth2.googleapis.com:443
-
 ## PR Review Discipline
 1. Assign a non-authoring agent to review the PR.
 2. From within the PR's own checked-out worktree/branch, the reviewer must run `synlynk pr check` so it can auto-detect the PR via git/gh context.
@@ -343,5 +342,4 @@ This table is generated from `.synlynk/config.json` so it tracks the repo's own 
 - **Precondition for all Herdr commands:** check `test "${HERDR_ENV:-}" = 1` before issuing any `herdr` command; if unset, this agent is not running inside Herdr and must not attempt to control a Herdr session from outside it.
 - Herdr is Apache-2.0 licensed (no NOTICE file) — free to reference/use without royalty or attribution beyond standard license retention.
 - Full CLI reference: https://github.com/herdrdev/herdr/blob/v0.8.2/skills/herdr/SKILL.md
-
 <!-- /synlynk:harness -->

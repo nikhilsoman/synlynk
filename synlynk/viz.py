@@ -608,7 +608,7 @@ def generate_viz_data() -> dict:
         }
         for agent, bucket in fleet.items()
     }
-    data["dreams"] = [
+    data["releases"] = [
         {
             "id": dream.id,
             "name": dream.name,
@@ -616,6 +616,9 @@ def generate_viz_data() -> dict:
             "cost_total": dream.cost_total,
             "cost_total_estimated": dream.cost_total_estimated,
             "cost_est": dream.cost_est,
+            "target_date": getattr(dream, "target_date", None),
+            "goal_id": getattr(dream, "goal_id", None),
+            "goal_outcome": getattr(dream, "goal_outcome", None),
             "stages": [
                 {
                     "key": stage.key,
@@ -646,6 +649,7 @@ def generate_viz_data() -> dict:
         }
         for dream in dreams_typed
     ]
+    data["dreams"] = data["releases"]
 
     try:
         conn = _get_db()
@@ -2536,6 +2540,29 @@ body { font-family:'SF Mono','JetBrains Mono',monospace; background:var(--bg); c
   border-radius: 4px;
   font-family: inherit;
 }
+/* ══ SECTION DIVIDERS & COLLAPSIBLE CONTROLS ══════════════ */
+.section-divider { margin: 16px 0 10px; }
+.section-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px; background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 6px; cursor: pointer; user-select: none; transition: background .15s;
+}
+.section-header:hover { background: var(--border2); }
+.section-title { display: flex; align-items: center; gap: 10px; font-size: 12px; font-weight: 700; color: var(--text); }
+.section-chevron { font-size: 10px; color: var(--text3); transition: transform .2s; }
+.section-header.collapsed .section-chevron { transform: rotate(-90deg); }
+.section-badge { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px; text-transform: uppercase; }
+.active-badge { background: rgba(13,158,135,0.15); color: #0d9e87; border: 1px solid rgba(13,158,135,0.3); }
+.planned-badge { background: rgba(59,130,246,0.12); color: #3b82f6; border: 1px solid rgba(59,130,246,0.3); }
+.completed-badge { background: rgba(100,116,139,0.15); color: var(--text3); border: 1px solid var(--border); }
+.section-count { font-size: 11px; color: var(--text3); font-weight: normal; }
+.section-hint { font-size: 11px; color: var(--text3); }
+.section-content { transition: max-height .3s ease; }
+.section-content.collapsed { display: none; }
+.goal-pill { background: rgba(99,102,241,0.12); color: #6366f1; border: 1px solid rgba(99,102,241,0.3); font-size: 10px; padding: 1px 6px; border-radius: 4px; font-weight: 600; display: inline-flex; align-items: center; gap: 3px; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pivot-controls { display: flex; align-items: center; background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; padding: 2px; }
+.pivot-btn { padding: 4px 12px; border-radius: 4px; font-size: 11px; font-family: inherit; border: none; background: transparent; color: var(--text2); cursor: pointer; transition: all .15s; }
+.pivot-btn.active { background: var(--accent); color: #fff; font-weight: 700; }
 """
 
 
@@ -2572,7 +2599,8 @@ const STAGE_STYLE = {
   notify:'background:#ffe4e6;border-color:#fda4af;color:#be123c',
   sustain:'background:#f3f4f6;border-color:#d1d5db;color:#6b7280',
 };
-const dreams = Array.isArray(window.VIZOR_DATA && window.VIZOR_DATA.dreams) ? window.VIZOR_DATA.dreams : [];
+const releases = Array.isArray(window.VIZOR_DATA && (window.VIZOR_DATA.releases || window.VIZOR_DATA.dreams)) ? (window.VIZOR_DATA.releases || window.VIZOR_DATA.dreams) : [];
+const dreams = releases; // Backwards compatibility alias
 const goals = Array.isArray(window.VIZOR_DATA && window.VIZOR_DATA.goals) ? window.VIZOR_DATA.goals : [];
 const specVerifications = Array.isArray(window.VIZOR_DATA && window.VIZOR_DATA.spec_verifications) ? window.VIZOR_DATA.spec_verifications : [];
 const VERDICT_BADGE = {
@@ -2583,6 +2611,12 @@ const VERDICT_BADGE = {
 const notes = (window.VIZOR_DATA && window.VIZOR_DATA.notes && typeof window.VIZOR_DATA.notes === 'object') ? window.VIZOR_DATA.notes : {};
 let openDrills = {};
 let currentNoteTarget = null;
+let currentPivot = safeStorageGet('vizor-gantt-pivot', 'release');
+let sectionStates = {
+  active: safeStorageGet('vizor-gantt-sec-active', 'open') === 'open',
+  planned: safeStorageGet('vizor-gantt-sec-planned', 'open') === 'open',
+  completed: safeStorageGet('vizor-gantt-sec-completed', 'collapsed') === 'open',
+};
 
 function escapeHtml(value) {
   return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -2609,6 +2643,34 @@ function setTheme(t) {
   document.querySelectorAll('.theme-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('btn-' + t)?.classList.add('active');
   safeStorageSet('vizor-theme', t);
+}
+
+function toggleSection(secKey) {
+  sectionStates[secKey] = !sectionStates[secKey];
+  safeStorageSet('vizor-gantt-sec-' + secKey, sectionStates[secKey] ? 'open' : 'collapsed');
+  const header = document.getElementById('sec-hdr-' + secKey);
+  const content = document.getElementById('sec-cnt-' + secKey);
+  if (header && content) {
+    if (sectionStates[secKey]) {
+      header.classList.remove('collapsed');
+      content.classList.remove('collapsed');
+      const hint = header.querySelector('.section-hint');
+      if (hint) hint.textContent = 'Click to collapse';
+    } else {
+      header.classList.add('collapsed');
+      content.classList.add('collapsed');
+      const hint = header.querySelector('.section-hint');
+      if (hint) hint.textContent = 'Click to expand';
+    }
+  }
+}
+
+function setPivot(pivot) {
+  currentPivot = pivot;
+  safeStorageSet('vizor-gantt-pivot', pivot);
+  document.getElementById('pivot-release-btn')?.classList.toggle('active', pivot === 'release');
+  document.getElementById('pivot-goal-btn')?.classList.toggle('active', pivot === 'goal');
+  renderTimeline();
 }
 
 function classForStage(stageKey) {
@@ -2689,7 +2751,7 @@ async function saveNote() {
   closeNote();
 }
 
-function renderTask(task, dreamId, stageKey, index, total) {
+function renderTask(task, releaseId, stageKey, index, total) {
   const status = String(task.status || 'queued').trim().toLowerCase();
   const tbClass = status === 'done' ? 'tb-done' : status === 'active' ? 'tb-active' : status === 'blocked' ? 'tb-blocked' : 'tb-queued';
   const dotClass = status === 'done' ? 'done' : status === 'active' ? 'active' : status === 'blocked' ? 'blocked' : 'queued';
@@ -2720,10 +2782,10 @@ function renderTask(task, dreamId, stageKey, index, total) {
     </div>`;
 }
 
-function renderDrill(dreamId, stageKey) {
-  const dream = dreams.find(d => d.id === dreamId);
-  const stage = dream && Array.isArray(dream.stages) ? dream.stages.find(s => s.key === stageKey) : null;
-  const dr = document.getElementById('drill-' + dreamId);
+function renderDrill(releaseId, stageKey) {
+  const rel = releases.find(d => d.id === releaseId);
+  const stage = rel && Array.isArray(rel.stages) ? rel.stages.find(s => s.key === stageKey) : null;
+  const dr = document.getElementById('drill-' + releaseId);
   if (!dr) return;
   if (!stage) {
     dr.innerHTML = `<div style="padding:12px 14px;font-size:11px;color:var(--text3)">No tasks defined. <span style="color:var(--accent);cursor:pointer">📝 Add note</span></div>`;
@@ -2734,14 +2796,14 @@ function renderDrill(dreamId, stageKey) {
   const total = Math.max(tasks.length, 1);
   const gridCols = `260px repeat(${total}, 1fr)`;
   const headerCols = tasks.map((task, idx) => `<div class="zoom-col">${escapeHtml(task.name || ('Task ' + (idx + 1)))}</div>`).join('');
-  const taskRows = tasks.map((task, idx) => renderTask(task, dreamId, stageKey, idx, total)).join('');
+  const taskRows = tasks.map((task, idx) => renderTask(task, releaseId, stageKey, idx, total)).join('');
   const pillKey = classForStage(stageKey);
   const lastLabel = tasks.length > 1 ? tasks[tasks.length - 1].name : '';
   dr.innerHTML = `
     <div class="drill-header">
       <div class="stage-pill" style="${STAGE_STYLE[pillKey] || STAGE_STYLE.plan}">${escapeHtml(iconForStage(stageKey))} stage</div>
-      <div class="drill-ttl">${escapeHtml(dreamId.toUpperCase())} — ${tasks.length} task${tasks.length !== 1 ? 's' : ''} · zoomed to stage window</div>
-      <div class="drill-close" onclick="closeDrill('${escapeHtml(dreamId)}')">✕ collapse</div>
+      <div class="drill-ttl">${escapeHtml(releaseId.toUpperCase())} — ${tasks.length} task${tasks.length !== 1 ? 's' : ''} · zoomed to stage window</div>
+      <div class="drill-close" onclick="closeDrill('${escapeHtml(releaseId)}')">✕ collapse</div>
     </div>
     <div class="zoom-grid" style="grid-template-columns:${gridCols}">
       <div class="zoom-lbl">↳ zoomed: ${escapeHtml(stage.key || stageKey)}${lastLabel ? ' → ' + escapeHtml(lastLabel) : ''}</div>
@@ -2750,56 +2812,56 @@ function renderDrill(dreamId, stageKey) {
     ${taskRows}`;
 }
 
-function zoomStage(dreamId, stageKey, barEl) {
-  const dr = document.getElementById('drill-' + dreamId);
-  const drow = document.getElementById('drow-' + dreamId);
+function zoomStage(releaseId, stageKey, barEl) {
+  const dr = document.getElementById('drill-' + releaseId);
+  const drow = document.getElementById('drow-' + releaseId);
   if (!dr || !drow) return;
-  if (openDrills[dreamId] === stageKey) {
-    closeDrill(dreamId);
+  if (openDrills[releaseId] === stageKey) {
+    closeDrill(releaseId);
     return;
   }
-  if (openDrills[dreamId]) {
-    const prevBar = document.getElementById('sb-' + dreamId + '-' + openDrills[dreamId]);
+  if (openDrills[releaseId]) {
+    const prevBar = document.getElementById('sb-' + releaseId + '-' + openDrills[releaseId]);
     if (prevBar) prevBar.classList.remove('sel');
   }
-  renderDrill(dreamId, stageKey);
+  renderDrill(releaseId, stageKey);
   dr.classList.add('open');
   drow.classList.add('exp');
   if (barEl) barEl.classList.add('sel');
-  openDrills[dreamId] = stageKey;
+  openDrills[releaseId] = stageKey;
 }
 
-function closeDrill(dreamId) {
-  const dr = document.getElementById('drill-' + dreamId);
-  const drow = document.getElementById('drow-' + dreamId);
+function closeDrill(releaseId) {
+  const dr = document.getElementById('drill-' + releaseId);
+  const drow = document.getElementById('drow-' + releaseId);
   dr?.classList.remove('open');
   drow?.classList.remove('exp');
-  if (openDrills[dreamId]) {
-    const prevBar = document.getElementById('sb-' + dreamId + '-' + openDrills[dreamId]);
+  if (openDrills[releaseId]) {
+    const prevBar = document.getElementById('sb-' + releaseId + '-' + openDrills[releaseId]);
     if (prevBar) prevBar.classList.remove('sel');
   }
-  delete openDrills[dreamId];
+  delete openDrills[releaseId];
 }
 
-function toggleDrill(dreamId) {
-  if (openDrills[dreamId]) {
-    closeDrill(dreamId);
+function toggleDrill(releaseId) {
+  if (openDrills[releaseId]) {
+    closeDrill(releaseId);
     return;
   }
-  const dream = dreams.find(d => d.id === dreamId);
-  if (!dream || !Array.isArray(dream.stages) || !dream.stages.length) return;
-  const activeStage = dream.stages.find(s => String(s.status || '').toLowerCase() === 'active') || dream.stages[0];
-  const barEl = document.getElementById('sb-' + dreamId + '-' + activeStage.key);
-  zoomStage(dreamId, activeStage.key, barEl);
+  const rel = releases.find(d => d.id === releaseId);
+  if (!rel || !Array.isArray(rel.stages) || !rel.stages.length) return;
+  const activeStage = rel.stages.find(s => String(s.status || '').toLowerCase() === 'active') || rel.stages[0];
+  const barEl = document.getElementById('sb-' + releaseId + '-' + activeStage.key);
+  zoomStage(releaseId, activeStage.key, barEl);
 }
 
-function renderDream(dream) {
-  const stages = Array.isArray(dream.stages) ? dream.stages : [];
-  const note = dream.note || noteData(dream.id);
+function renderRelease(release) {
+  const stages = Array.isArray(release.stages) ? release.stages : [];
+  const note = release.note || noteData(release.id);
   const noteClass = noteStateClass(note && note.state);
   const taskCount = stages.reduce((sum, stage) => sum + (Array.isArray(stage.tasks) ? stage.tasks.length : 0), 0);
-  const status = String(dream.status || 'planned').trim().toLowerCase();
-  const statusClass = status === 'done' ? 'ok' : status === 'blocked' ? 'over' : 'na';
+  const status = String(release.status || 'planned').trim().toLowerCase();
+  const statusClass = (status === 'done' || status === 'shipped') ? 'ok' : (status === 'blocked' ? 'over' : 'na');
   const stageAgents = stages[0] && Array.isArray(stages[0].agents) ? stages[0].agents : [];
   const agentsHtml = stageAgents.slice(0, 4).map(agent => {
     const a = String(agent || '').trim().toLowerCase();
@@ -2818,24 +2880,32 @@ function renderDream(dream) {
       const agentLabel = a === 'codex' ? 'Co' : a === 'grok' ? 'G' : a === 'claude' ? 'C' : 'A';
       return `<div class="aa ${agentClass}">${agentLabel}</div>`;
     }).join('')}</div>` : '';
-    return `<div class="sb sb-${cls} ${live}" id="sb-${dream.id}-${stage.key}" style="left:${left}%;width:${width}%" onclick="zoomStage('${escapeHtml(dream.id)}','${escapeHtml(stage.key)}',this)">${escapeHtml(iconForStage(stage.key))}${agentHtml}</div>`;
+    return `<div class="sb sb-${cls} ${live}" id="sb-${release.id}-${stage.key}" style="left:${left}%;width:${width}%" onclick="zoomStage('${escapeHtml(release.id)}','${escapeHtml(stage.key)}',this)">${escapeHtml(iconForStage(stage.key))}${agentHtml}</div>`;
   }).join('');
+
+  const goalBadge = release.goal_id ? `<span class="goal-pill" title="Goal: ${escapeHtml(release.goal_outcome || release.goal_id)}">🎯 ${escapeHtml(release.goal_id)}</span>` : '';
+  const targetDateHtml = release.target_date ? `<span style="font-size:10px;color:var(--text3);margin-left:4px;">📅 ${escapeHtml(release.target_date)}</span>` : '';
+
   return `
-      <div class="drow" id="drow-${dream.id}">
-        <div class="dlbl editable" onclick="toggleDrill('${escapeHtml(dream.id)}')">
-          <div class="dtop"><span class="darr">▶</span><div class="dname">${escapeHtml(dream.id)} · ${escapeHtml(dream.name || dream.id)}</div>
-            <span class="note-chip nc-${noteClass.replace('note-', '') === 'none' ? 'info' : noteClass.replace('note-', '')}" style="display:${noteClass === 'note-none' ? 'none' : 'inline-flex'}" onclick="openNote('${escapeHtml(dream.id)}','${escapeHtml(dream.name || dream.id)}');event.stopPropagation()">✎ note</span>
+      <div class="drow" id="drow-${release.id}">
+        <div class="dlbl editable" onclick="toggleDrill('${escapeHtml(release.id)}')">
+          <div class="dtop"><span class="darr">▶</span><div class="dname">${escapeHtml(release.id)} · ${escapeHtml(release.name || release.id)}</div>
+            ${goalBadge}
+            <span class="note-chip nc-${noteClass.replace('note-', '') === 'none' ? 'info' : noteClass.replace('note-', '')}" style="display:${noteClass === 'note-none' ? 'none' : 'inline-flex'}" onclick="openNote('${escapeHtml(release.id)}','${escapeHtml(release.name || release.id)}');event.stopPropagation()">✎ note</span>
           </div>
-          <div class="dbot"><div class="aa-stack">${agentsHtml}</div><span class="dcost ${statusClass}">${escapeHtml(dream.status || 'planned')}${taskCount ? ' · ' + taskCount + ' tasks' : ''}</span></div>
-          <div class="pencil-wrap ${noteClass}" data-note-target="${escapeHtml(dream.id)}" data-note-label="${escapeHtml(dream.name || dream.id)}" onclick="openNoteFromEl(this);event.stopPropagation()"><svg class="pencil-icon"><use href="#pencil-svg"/></svg></div>
+          <div class="dbot"><div class="aa-stack">${agentsHtml}</div><span class="dcost ${statusClass}">${escapeHtml(release.status || 'planned')}${taskCount ? ' · ' + taskCount + ' tasks' : ''}</span>${targetDateHtml}</div>
+          <div class="pencil-wrap ${noteClass}" data-note-target="${escapeHtml(release.id)}" data-note-label="${escapeHtml(release.name || release.id)}" onclick="openNoteFromEl(this);event.stopPropagation()"><svg class="pencil-icon"><use href="#pencil-svg"/></svg></div>
         </div>
         <div class="dbars">
           <div class="today-ln" style="left:19%"></div>
           ${barHtml}
         </div>
       </div>
-      <div class="drill" id="drill-${dream.id}"></div>`;
+      <div class="drill" id="drill-${release.id}"></div>`;
 }
+
+// Backwards compatibility alias
+const renderDream = renderRelease;
 
 function renderGoal(goal) {
   const deadlineHtml = goal.deadline ? `<span class="goal-deadline">📅 ${escapeHtml(goal.deadline)}</span>` : '';
@@ -2915,45 +2985,176 @@ function renderVerified() {
     : '<div class="empty-state"><p class="empty-state-desc" style="padding: 12px 14px; font-size: 11px; color: var(--text3); margin: 0;">No verified PRs yet.</p></div>';
 }
 
-function renderDreams() {
+function renderByRelease() {
   const body = document.getElementById('gantt-body');
-  const wsSub = document.getElementById('ws-sub');
-  const dreamCount = document.getElementById('dream-count');
-  const dreamSub = document.getElementById('dream-sub');
-  const statusWorkspaces = document.getElementById('status-workspaces');
   if (!body) return;
+  if (!releases.length) {
+    body.innerHTML = "<p class='empty-state'>No Releases found in state db</p>";
+    return;
+  }
+  const activeList = [];
+  const plannedList = [];
+  const completedList = [];
 
-  if (!dreams.length) {
-    body.innerHTML = "<p class='empty-state'>No Dreams found in state db</p>";
-    if (wsSub) wsSub.textContent = '0 Dreams · no stage data';
-    if (dreamCount) dreamCount.textContent = '0';
-    if (dreamSub) dreamSub.textContent = '0 stages';
-    if (statusWorkspaces) statusWorkspaces.textContent = '0 dreams';
+  releases.forEach(r => {
+    const s = String(r.status || '').trim().toLowerCase();
+    if (s === 'shipped' || s === 'done' || s === 'completed' || s === 'resolved') {
+      completedList.push(r);
+    } else if (s === 'active' || s === 'in_progress') {
+      activeList.push(r);
+    } else {
+      plannedList.push(r);
+    }
+  });
+
+  const activeOpen = sectionStates.active;
+  const plannedOpen = sectionStates.planned;
+  const completedOpen = sectionStates.completed;
+
+  let html = '';
+
+  if (activeList.length > 0) {
+    html += `
+      <div class="section-divider">
+        <div class="section-header ${activeOpen ? '' : 'collapsed'}" id="sec-hdr-active" onclick="toggleSection('active')">
+          <div class="section-title">
+            <span class="section-chevron">▼</span>
+            <span class="section-badge active-badge">● Active</span>
+            <span>In-Progress Releases & Milestones</span>
+            <span class="section-count">(${activeList.length})</span>
+          </div>
+          <div class="section-hint">${activeOpen ? 'Click to collapse' : 'Click to expand'}</div>
+        </div>
+        <div class="section-content ${activeOpen ? '' : 'collapsed'}" id="sec-cnt-active">
+          ${activeList.map(renderRelease).join('')}
+        </div>
+      </div>`;
+  }
+
+  if (plannedList.length > 0) {
+    html += `
+      <div class="section-divider">
+        <div class="section-header ${plannedOpen ? '' : 'collapsed'}" id="sec-hdr-planned" onclick="toggleSection('planned')">
+          <div class="section-title">
+            <span class="section-chevron">▼</span>
+            <span class="section-badge planned-badge">○ Planned</span>
+            <span>Upcoming Releases & Arcs</span>
+            <span class="section-count">(${plannedList.length})</span>
+          </div>
+          <div class="section-hint">${plannedOpen ? 'Click to collapse' : 'Click to expand'}</div>
+        </div>
+        <div class="section-content ${plannedOpen ? '' : 'collapsed'}" id="sec-cnt-planned">
+          ${plannedList.map(renderRelease).join('')}
+        </div>
+      </div>`;
+  }
+
+  if (completedList.length > 0) {
+    html += `
+      <div class="section-divider">
+        <div class="section-header ${completedOpen ? '' : 'collapsed'}" id="sec-hdr-completed" onclick="toggleSection('completed')">
+          <div class="section-title">
+            <span class="section-chevron">▼</span>
+            <span class="section-badge completed-badge">✓ Shipped</span>
+            <span>Completed Historical Releases</span>
+            <span class="section-count">(${completedList.length})</span>
+          </div>
+          <div class="section-hint">${completedOpen ? 'Click to collapse' : 'Click to expand'}</div>
+        </div>
+        <div class="section-content ${completedOpen ? '' : 'collapsed'}" id="sec-cnt-completed">
+          ${completedList.map(renderRelease).join('')}
+        </div>
+      </div>`;
+  }
+
+  body.innerHTML = html || "<p class='empty-state'>No Releases found in state db</p>";
+}
+
+function renderByGoal() {
+  const body = document.getElementById('gantt-body');
+  if (!body) return;
+  if (!goals.length) {
+    body.innerHTML = "<p class='empty-state'>No active goals defined. Create one via <code>synlynk goal create</code></p>";
+    return;
+  }
+  let html = '';
+  goals.forEach(goal => {
+    const linkedReleases = releases.filter(r => r.goal_id === goal.id || (r.goal_outcome && r.goal_outcome === goal.outcome));
+    const deadlineHtml = goal.deadline ? `<span style="font-size:11px;color:var(--text3);margin-left:8px;">📅 ${escapeHtml(goal.deadline)}</span>` : '';
+    html += `
+      <div class="section-divider">
+        <div class="section-header">
+          <div class="section-title">
+            <span class="section-badge active-badge">🎯 Goal</span>
+            <span>${escapeHtml(goal.outcome)}</span>
+            <span class="section-count">(${linkedReleases.length} linked release${linkedReleases.length !== 1 ? 's' : ''})</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            ${deadlineHtml}
+            <span class="goal-badge active">${escapeHtml(goal.status || 'active')}</span>
+          </div>
+        </div>
+        <div class="section-content">
+          ${linkedReleases.length ? linkedReleases.map(renderRelease).join('') : `<div style="padding:10px 14px;font-size:11px;color:var(--text3);font-style:italic;">No releases linked to this goal yet.</div>`}
+        </div>
+      </div>`;
+  });
+  body.innerHTML = html;
+}
+
+function renderTimeline() {
+  const wsSub = document.getElementById('ws-sub');
+  const releaseCount = document.getElementById('dream-count');
+  const releaseSub = document.getElementById('dream-sub');
+  const statusWorkspaces = document.getElementById('status-workspaces');
+
+  if (!releases.length) {
+    const body = document.getElementById('gantt-body');
+    if (body) body.innerHTML = "<p class='empty-state'>No Releases found in state db</p>";
+    if (wsSub) wsSub.textContent = '0 Releases · no stage data';
+    if (releaseCount) releaseCount.textContent = '0';
+    if (releaseSub) releaseSub.textContent = '0 stages';
+    if (statusWorkspaces) statusWorkspaces.textContent = '0 releases';
     renderGoals();
     renderVerified();
     return;
   }
 
-  const dreamCountValue = dreams.length;
-  const stageCountValue = dreams.reduce((sum, dream) => sum + (Array.isArray(dream.stages) ? dream.stages.length : 0), 0);
-  const activeDreams = dreams.filter(dream => String(dream.status || '').toLowerCase() === 'active').length;
-  body.innerHTML = dreams.map(renderDream).join('');
-  if (wsSub) wsSub.textContent = dreamCountValue + ' Dreams · click any stage bar to zoom in';
-  if (dreamCount) dreamCount.textContent = String(dreamCountValue);
-  if (dreamSub) dreamSub.textContent = stageCountValue + ' stages · ' + activeDreams + ' active';
-  if (statusWorkspaces) statusWorkspaces.textContent = dreamCountValue + ' dreams';
+  const releaseCountValue = releases.length;
+  const stageCountValue = releases.reduce((sum, rel) => sum + (Array.isArray(rel.stages) ? rel.stages.length : 0), 0);
+  const activeReleases = releases.filter(rel => {
+    const s = String(rel.status || '').toLowerCase();
+    return s === 'active' || s === 'in_progress';
+  }).length;
+
+  if (currentPivot === 'goal') {
+    renderByGoal();
+  } else {
+    renderByRelease();
+  }
+
+  if (wsSub) wsSub.textContent = releaseCountValue + ' Releases · click any stage bar to zoom in';
+  if (releaseCount) releaseCount.textContent = String(releaseCountValue);
+  if (releaseSub) releaseSub.textContent = stageCountValue + ' stages · ' + activeReleases + ' active';
+  if (statusWorkspaces) statusWorkspaces.textContent = releaseCountValue + ' releases';
   renderGoals();
   renderVerified();
-  const firstDream = dreams[0];
-  const firstStage = firstDream && Array.isArray(firstDream.stages) ? (firstDream.stages.find(s => String(s.status || '').toLowerCase() === 'active') || firstDream.stages[0]) : null;
-  if (firstDream && firstStage) {
-    const barEl = document.getElementById('sb-' + firstDream.id + '-' + firstStage.key);
-    zoomStage(firstDream.id, firstStage.key, barEl);
+
+  const firstRel = releases[0];
+  const firstStage = firstRel && Array.isArray(firstRel.stages) ? (firstRel.stages.find(s => String(s.status || '').toLowerCase() === 'active') || firstRel.stages[0]) : null;
+  if (firstRel && firstStage) {
+    const barEl = document.getElementById('sb-' + firstRel.id + '-' + firstStage.key);
+    if (barEl) zoomStage(firstRel.id, firstStage.key, barEl);
   }
 }
 
+// Backwards compatibility
+function renderDreams() {
+  renderTimeline();
+}
+
 setTheme(safeStorageGet('vizor-theme', 'light'));
-renderDreams();
+renderTimeline();
 """.replace("__PORT__", str(port))
 
     return f"""<!DOCTYPE html>
@@ -2993,8 +3194,17 @@ renderDreams();
 
 <div class="content">
   <div class="ws-header">
-    <div><div class="ws-title">{html.escape(str(data.get("workspace", {}).get("name", "workspace")))}</div><div class="ws-sub" id="ws-sub">Loading dreams…</div></div>
-    <div class="ws-chip">● live</div>
+    <div>
+      <div class="ws-title">{html.escape(str(data.get("workspace", {}).get("name", "workspace")))}</div>
+      <div class="ws-sub" id="ws-sub">Loading timeline…</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;margin-left:auto;">
+      <div class="pivot-controls">
+        <button id="pivot-release-btn" class="pivot-btn active" onclick="setPivot('release')">By Release</button>
+        <button id="pivot-goal-btn" class="pivot-btn" onclick="setPivot('goal')">By Goal</button>
+      </div>
+      <div class="ws-chip">● live</div>
+    </div>
   </div>
   <div class="toolbar">
     <span class="lbl">Filter:</span>
@@ -3007,23 +3217,24 @@ renderDreams();
 
   <div class="gw"><div class="gantt" id="gantt">
     <div class="gh" id="gantt-header">
-      <div class="ghl">Dream / Epic</div>
-      <div class="gwk">Jul W1</div><div class="gwk">Jul W2</div>
-      <div class="gwk now">Jul W3 ▾</div><div class="gwk">Jul W4</div>
-      <div class="gwk">Aug W1</div><div class="gwk">Aug W2</div>
-      <div class="gwk">Aug W3</div><div class="gwk">Aug W4</div>
-      <div class="gwk">Sep W1</div><div class="gwk">Sep W2</div>
+      <div class="ghl">Release / Epic</div>
+      <div class="gwk">Goal</div><div class="gwk">Open</div>
+      <div class="gwk">Visualize</div><div class="gwk now">Execute ▾</div>
+      <div class="gwk">Release</div><div class="gwk">Notify</div>
+      <div class="gwk">Sustain</div><div class="gwk">QA Gate</div>
+      <div class="gwk">Target</div><div class="gwk">Review</div>
     </div>
     <div id="gantt-body"></div>
   </div></div>
 
   <div class="legend">
-    <div class="li"><div class="ld" style="background:var(--s-dream-bg);border-color:var(--s-dream-bd)"></div>✦ Dream</div>
-    <div class="li"><div class="ld" style="background:var(--s-plan-bg);border-color:var(--s-plan-bd)"></div>⊡ Plan</div>
-    <div class="li"><div class="ld" style="background:var(--s-work-bg);border-color:var(--s-work-bd)"></div>⚙ Work</div>
-    <div class="li"><div class="ld" style="background:var(--s-ship-bg);border-color:var(--s-ship-bd)"></div>▲ Ship</div>
-    <div class="li"><div class="ld" style="background:var(--s-maint-bg);border-color:var(--s-maint-bd)"></div>↺ Maintain</div>
-    <div class="li"><div class="ld" style="background:var(--s-engage-bg);border-color:var(--s-engage-bd)"></div>♡ Engage</div>
+    <div class="li"><div class="ld" style="background:#dbeafe;border-color:#93c5fd"></div>◆ Goal</div>
+    <div class="li"><div class="ld" style="background:#ede9fe;border-color:#c4b5fd"></div>○ Open</div>
+    <div class="li"><div class="ld" style="background:#e6f7f4;border-color:#c0ede6"></div>◌ Visualize</div>
+    <div class="li"><div class="ld" style="background:#dcfce7;border-color:#86efac"></div>⚙ Execute</div>
+    <div class="li"><div class="ld" style="background:#fef3c7;border-color:#fde68a"></div>▲ Release</div>
+    <div class="li"><div class="ld" style="background:#ffe4e6;border-color:#fda4af"></div>✉ Notify</div>
+    <div class="li"><div class="ld" style="background:#f3f4f6;border-color:#d1d5db"></div>↺ Sustain</div>
     <span class="lsep">|</span><div class="li" style="font-style:italic">~ animated = in progress</div>
   </div>
   <div class="ni-legend">
@@ -3043,7 +3254,7 @@ renderDreams();
   </div>
 
   <div class="srow">
-    <div class="sc teal editable"><div class="sl">Dreams in flight</div><div class="sv" id="dream-count">0</div><div class="ss" id="dream-sub">0 stages</div><div class="wow">⚡ live</div><div class="pencil-wrap note-none" onclick="openNote('summary','Summary');event.stopPropagation()"><svg class="pencil-icon"><use href="#pencil-svg"/></svg></div></div>
+    <div class="sc teal editable"><div class="sl">Releases tracked</div><div class="sv" id="dream-count">0</div><div class="ss" id="dream-sub">0 stages</div><div class="wow">⚡ live</div><div class="pencil-wrap note-none" onclick="openNote('summary','Summary');event.stopPropagation()"><svg class="pencil-icon"><use href="#pencil-svg"/></svg></div></div>
     <div class="sc blue editable"><div class="sl">Active agents</div><div class="sv">3</div><div class="aa-stack" style="margin-top:6px"><div class="aa aa-agy">A</div><div class="aa aa-codex">Co</div><div class="aa aa-grok">G</div></div><div class="pencil-wrap note-none" onclick="openNote('agents','Agents');event.stopPropagation()"><svg class="pencil-icon"><use href="#pencil-svg"/></svg></div></div>
     <div class="sc org editable"><div class="sl">Total spend</div><div class="sv">$28.50</div><div class="ss">of ~$71 · 40% in</div><div class="pencil-wrap note-none" onclick="openNote('cost','Total spend');event.stopPropagation()"><svg class="pencil-icon"><use href="#pencil-svg"/></svg></div></div>
     <div class="sc purp editable"><div class="sl">Next ship</div><div class="sv">Jul 24</div><div class="ss">Module Extraction → main</div><div class="pencil-wrap note-none" onclick="openNote('ship','Next ship');event.stopPropagation()"><svg class="pencil-icon"><use href="#pencil-svg"/></svg></div></div>
@@ -6238,23 +6449,135 @@ def generate_board_html(port: int) -> str:
     live = _live_js(port)
     return """<!DOCTYPE html>
 <html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>synlynk Vizor — Board</title>
+<title>synlynk Vizor — GOVERNS Board</title>
 <style>
-:root{--bg:#f6f8fa;--panel:#fff;--ink:#1f2328;--muted:#667085;--line:#d8dee4;--accent:#0d9e87;--accent-bg:#e6f7f4}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-main{max-width:1280px;margin:0 auto;padding:34px 28px 70px}.eyebrow{color:var(--accent);font-weight:700;letter-spacing:.08em;text-transform:uppercase;font-size:11px}h1{font-size:34px;margin:8px 0}.subtitle{color:var(--muted);margin:0 0 24px}
-.filters{display:flex;gap:10px;flex-wrap:wrap;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:20px}select{border:1px solid var(--line);border-radius:7px;padding:8px;background:#fff;color:var(--ink)}
-.board{display:grid;grid-template-columns:repeat(5,minmax(180px,1fr));gap:12px;align-items:start}.column{background:#eef2f5;border-radius:12px;padding:10px;min-height:180px}.column h2{font-size:13px;margin:3px 4px 10px;text-transform:capitalize}.card{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:12px;margin-bottom:9px;box-shadow:0 2px 8px #1f23280d}.card h3{font-size:13px;margin:0 0 9px}.meta{color:var(--muted);font-size:11px;margin:4px 0}.links{display:flex;gap:8px;font-size:11px}.links a{color:var(--accent)}button{border:1px solid var(--line);background:#fff;border-radius:6px;padding:4px 7px;cursor:pointer}.empty{color:var(--muted);padding:20px 5px;font-size:12px}@media(max-width:900px){.board{grid-template-columns:repeat(2,minmax(180px,1fr))}}@media(max-width:520px){.board{grid-template-columns:1fr}}
-</style></head><body><main><div class="eyebrow">Vizor / Product graph</div><h1>Board</h1><p class="subtitle">Claimed work across every repository in this product. Changes write to the product <code>state.db</code>.</p>
-<div class="filters"><select id="repo"><option value="">All repositories</option></select><select id="type"><option value="">All types</option></select><select id="goal"><option value="">All goals</option></select><span id="identity" class="meta"></span></div><div id="board" class="board"></div></main>""" + live + """<script>
-const statuses=['open','ready','in_progress','blocked','done']; let boardData={};
+:root{--bg:#f6f8fa;--panel:#fff;--panel-2:#f1f5f9;--ink:#1f2328;--muted:#667085;--line:#d8dee4;--accent:#0d9e87;--accent-bg:#e6f7f4;--shadow:0 2px 8px rgba(31,35,40,0.06)}
+@media (prefers-color-scheme: dark){
+  :root{--bg:#0d1117;--panel:#161b22;--panel-2:#21262d;--ink:#f0f6fc;--muted:#8b949e;--line:#30363d;--accent:#3de0c0;--accent-bg:#0d2137;--shadow:0 2px 12px rgba(0,0,0,0.4)}
+}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:13px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+main{max-width:1600px;margin:0 auto;padding:28px 24px 70px}
+.eyebrow{color:var(--accent);font-weight:700;letter-spacing:.08em;text-transform:uppercase;font-size:11px}
+h1{font-size:30px;margin:6px 0 4px;font-weight:700}
+.subtitle{color:var(--muted);margin:0 0 20px;font-size:13px}
+.filters{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 16px;margin-bottom:20px;box-shadow:var(--shadow)}
+select{border:1px solid var(--line);border-radius:6px;padding:6px 10px;background:var(--panel);color:var(--ink);font-size:12px;outline:none}
+select:focus{border-color:var(--accent)}
+.board{display:grid;grid-template-columns:repeat(7,minmax(200px,1fr));gap:12px;align-items:start;overflow-x:auto;padding-bottom:16px}
+.column{background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:10px;min-height:280px;display:flex;flex-direction:column}
+.column-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+.column h2{font-size:12px;margin:0;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink)}
+.column-count{font-size:10px;font-weight:700;padding:2px 6px;border-radius:999px;background:var(--panel);border:1px solid var(--line);color:var(--muted)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px;margin-bottom:10px;box-shadow:var(--shadow);transition:transform .15s,border-color .15s}
+.card:hover{border-color:var(--accent);transform:translateY(-1px)}
+.card-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:6px}
+.status-pill{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;border:1px solid;text-transform:uppercase;letter-spacing:.03em}
+.story-id{font-family:monospace;font-size:10px;color:var(--muted)}
+.card h3{font-size:12px;margin:0 0 8px;line-height:1.4;font-weight:600;color:var(--ink)}
+.meta{color:var(--muted);font-size:11px;margin:3px 0}
+.goal-meta{color:var(--accent);font-weight:500}
+.links{display:flex;gap:8px;font-size:11px;margin-top:6px}
+.links a{color:var(--accent);text-decoration:none;font-weight:500}
+.links a:hover{text-decoration:underline}
+.card-actions{margin-top:10px;padding-top:8px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:6px}
+.status-btns{display:flex;gap:4px;flex-wrap:wrap}
+.st-btn{border:1px solid var(--line);background:var(--panel);border-radius:4px;padding:3px 6px;font-size:10px;cursor:pointer;font-family:inherit;font-weight:600;transition:all .15s}
+.st-btn:hover{filter:brightness(.92);border-color:currentColor}
+.stage-select{width:100%;font-size:10px;padding:3px 6px;border-radius:4px;border:1px solid var(--line);background:var(--bg)}
+.pulse-dot{width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block;animation:pdot 1.5s infinite}
+@keyframes pdot{0%,100%{opacity:1}50%{opacity:.3}}
+.empty{color:var(--muted);padding:24px 8px;font-size:11px;text-align:center;font-style:italic}
+@media(max-width:1200px){.board{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}}
+</style></head><body><main>
+<div class="eyebrow">Vizor / Product graph</div>
+<h1>GOVERNS Board</h1>
+<p class="subtitle">Claimed work across every repository in this product mapped across the 7 GOVERNS lifecycle stages. Changes write to the product <code>state.db</code>.</p>
+<div class="filters">
+  <select id="repo"><option value="">All repositories</option></select>
+  <select id="type"><option value="">All types</option></select>
+  <select id="goal"><option value="">All goals</option></select>
+  <select id="status"><option value="">All statuses</option><option value="open">Open</option><option value="ready">Ready</option><option value="in_progress">In Progress</option><option value="blocked">Blocked</option><option value="done">Done</option></select>
+  <span id="identity" class="meta" style="margin-left:auto;font-weight:600;"></span>
+</div>
+<div id="board" class="board"></div>
+</main>""" + live + """<script>
+const stages=['goal','open','visualize','execute','release','notify','sustain'];
+const stageIcons={goal:'◆ Goal',open:'○ Open',visualize:'◌ Visualize',execute:'⚙ Execute',release:'▲ Release',notify:'✉ Notify',sustain:'↺ Sustain'};
+const statusColors={
+  open:{bg:'rgba(100,116,139,0.12)',border:'#cbd5e1',color:'#64748b',label:'Open'},
+  ready:{bg:'rgba(37,99,235,0.12)',border:'rgba(37,99,235,0.35)',color:'#2563eb',label:'Ready'},
+  in_progress:{bg:'rgba(13,158,135,0.15)',border:'rgba(13,158,135,0.4)',color:'#0d9e87',label:'In Progress'},
+  blocked:{bg:'rgba(220,38,38,0.12)',border:'rgba(220,38,38,0.35)',color:'#dc2626',label:'Blocked'},
+  done:{bg:'rgba(22,163,74,0.12)',border:'rgba(22,163,74,0.35)',color:'#16a34a',label:'Done'}
+};
+let boardData={};
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function options(id, values){const el=document.getElementById(id); values.forEach(v=>{const o=document.createElement('option');o.value=v;o.textContent=v;el.appendChild(o);});}
 function link(pointer){return pointer&&pointer.url?`<a href="${esc(pointer.url)}" target="_blank" rel="noopener">${esc(pointer.tracker)} #${esc(pointer.id)}</a>`:'';}
-function draw(){const repo=document.getElementById('repo').value,type=document.getElementById('type').value,goal=document.getElementById('goal').value;const cards=(boardData.cards||[]).filter(c=>(!repo||c.repo_id===repo)&&(!type||c.type_id===type)&&(!goal||c.goal_id===goal));document.getElementById('board').innerHTML=statuses.map(s=>`<section class="column"><h2>${esc(s.replace('_',' '))}</h2>${cards.filter(c=>c.status===s).map(c=>`<article class="card"><h3>${esc(c.title)}</h3><div class="meta">${esc(c.repo_name||c.repo_id||'unassigned')} · ${esc(c.type_id||'untyped')}</div><div class="meta">${esc(c.goal_id||'no goal')}</div><div class="links">${link(c.tracker)}${c.pr_url?`<a href="${esc(c.pr_url)}" target="_blank" rel="noopener">PR</a>`:''}</div><div style="margin-top:9px">${statuses.filter(x=>x!==c.status).map(x=>`<button data-id="${esc(c.story_id)}" data-status="${x}">${esc(x.replace('_',' '))}</button>`).join(' ')}</div></article>`).join('')||'<div class="empty">No cards</div>'}</section>`).join('');document.querySelectorAll('button[data-id]').forEach(b=>b.onclick=()=>updateStatus(b.dataset.id,b.dataset.status));}
-async function load(){const q=new URLSearchParams();['repo','type','goal'].forEach(k=>{const v=document.getElementById(k).value;if(v)q.set(k+'_id',v)});const r=await fetch('/api/board?'+q.toString());if(!r.ok){document.getElementById('board').textContent='Board unavailable';return}boardData=await r.json();document.getElementById('identity').textContent='Product: '+(boardData.identity_slug||'unknown');draw();}
-async function updateStatus(id,status){const r=await fetch('/api/board/status',{method:'POST',headers:window.vizorAuthHeaders({'Content-Type':'application/json'}),body:JSON.stringify({story_id:id,status})});if(!r.ok){alert('Status update failed');return}await load();}
-['repo','type','goal'].forEach(id=>document.getElementById(id).onchange=load);fetch('/api/board').then(r=>r.json()).then(d=>{boardData=d;options('repo',d.filters.repos||[]);options('type',d.filters.types||[]);options('goal',d.filters.goals||[]);document.getElementById('identity').textContent='Product: '+(d.identity_slug||'unknown');draw()});
+function draw(){
+  const repo=document.getElementById('repo').value,type=document.getElementById('type').value,goal=document.getElementById('goal').value,status=document.getElementById('status').value;
+  const cards=(boardData.cards||[]).filter(c=>(!repo||c.repo_id===repo)&&(!type||c.type_id===type)&&(!goal||c.goal_id===goal)&&(!status||c.status===status));
+  document.getElementById('board').innerHTML=stages.map(st=>{
+    const stageCards=cards.filter(c=>(c.governs_stage||c.stage||'open')===st);
+    return `<section class="column" data-stage="${st}">
+      <div class="column-header"><h2>${stageIcons[st]||st}</h2><span class="column-count">${stageCards.length}</span></div>
+      ${stageCards.map(c=>{
+        const sc=statusColors[c.status]||statusColors.open;
+        const pulseHtml=c.status==='in_progress'?'<span class="pulse-dot"></span> ':'';
+        return `<article class="card" id="card-${esc(c.story_id)}">
+          <div class="card-top">
+            <span class="status-pill" style="background:${sc.bg};border-color:${sc.border};color:${sc.color};">${pulseHtml}${esc(sc.label)}</span>
+            <span class="story-id">${esc(c.story_id)}</span>
+          </div>
+          <h3>${esc(c.title)}</h3>
+          <div class="meta">${esc(c.repo_name||c.repo_id||'unassigned')} · ${esc(c.type_id||'untyped')}</div>
+          ${c.goal_id?`<div class="meta goal-meta">🎯 ${esc(c.goal_id)}</div>`:''}
+          <div class="links">${link(c.tracker)}${c.pr_url?`<a href="${esc(c.pr_url)}" target="_blank" rel="noopener">PR</a>`:''}</div>
+          <div class="card-actions">
+            <div class="status-btns">
+              ${['ready','in_progress','done','blocked'].filter(s=>s!==c.status).map(s=>{
+                const btnSc=statusColors[s]||statusColors.open;
+                return `<button class="st-btn" data-id="${esc(c.story_id)}" data-status="${s}" style="color:${btnSc.color};">${esc(btnSc.label)}</button>`;
+              }).join(' ')}
+            </div>
+            <select class="stage-select" data-id="${esc(c.story_id)}" onchange="updateStage('${esc(c.story_id)}',this.value)">
+              ${stages.map(s=>`<option value="${s}" ${(c.governs_stage===s||(!c.governs_stage&&s==='open'))?'selected':''}>Move: ${stageIcons[s]}</option>`).join('')}
+            </select>
+          </div>
+        </article>`;
+      }).join('')||'<div class="empty">No cards</div>'}
+    </section>`;
+  }).join('');
+  document.querySelectorAll('button[data-status]').forEach(b=>b.onclick=()=>updateStatus(b.dataset.id,b.dataset.status));
+}
+async function load(){
+  const q=new URLSearchParams();
+  ['repo','type','goal'].forEach(k=>{const v=document.getElementById(k).value;if(v)q.set(k+'_id',v)});
+  const r=await fetch('/api/board?'+q.toString());
+  if(!r.ok){document.getElementById('board').textContent='Board unavailable';return}
+  boardData=await r.json();
+  document.getElementById('identity').textContent='Product: '+(boardData.identity_slug||'unknown');
+  draw();
+}
+async function updateStatus(id,status){
+  const r=await fetch('/api/board/status',{method:'POST',headers:window.vizorAuthHeaders({'Content-Type':'application/json'}),body:JSON.stringify({story_id:id,status})});
+  if(!r.ok){alert('Status update failed');return}
+  await load();
+}
+async function updateStage(id,stage){
+  const r=await fetch('/api/board/stage',{method:'POST',headers:window.vizorAuthHeaders({'Content-Type':'application/json'}),body:JSON.stringify({story_id:id,stage})});
+  if(!r.ok){alert('Stage update failed');return}
+  await load();
+}
+['repo','type','goal','status'].forEach(id=>document.getElementById(id).onchange=()=>id==='status'?draw():load());
+fetch('/api/board').then(r=>r.json()).then(d=>{
+  boardData=d;
+  options('repo',d.filters.repos||[]);
+  options('type',d.filters.types||[]);
+  options('goal',d.filters.goals||[]);
+  document.getElementById('identity').textContent='Product: '+(d.identity_slug||'unknown');
+  draw();
+});
 </script></body></html>"""
 
 
@@ -6976,7 +7299,7 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
         super().do_GET()
 
     def do_OPTIONS(self):
-        if self.path not in ("/note", "/dispatch", "/approve", "/kill", "/architect-map/view-pref", "/roles/create", "/worktrees/clean", "/tools/install", "/api/tools/install", "/api/board/status"):
+        if self.path not in ("/note", "/dispatch", "/approve", "/kill", "/architect-map/view-pref", "/roles/create", "/worktrees/clean", "/tools/install", "/api/tools/install", "/api/board/status", "/api/board/stage"):
             self.send_error(404)
             return
         self.send_response(204)
@@ -7003,6 +7326,8 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
             self._handle_tool_install_request()
         elif self.path == "/api/board/status":
             self._handle_board_status_request()
+        elif self.path == "/api/board/stage":
+            self._handle_board_stage_request()
         else:
             self.send_error(404)
 
@@ -7011,6 +7336,25 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
             payload = self._read_json_body()
             from synlynk.board import update_status
             result = update_status(payload.get("story_id"), payload.get("status"))
+        except (json.JSONDecodeError, TypeError, ValueError) as exc:
+            self.send_error(400, str(exc) or "Invalid JSON")
+            return
+        except KeyError as exc:
+            self.send_error(404, str(exc))
+            return
+        except FileNotFoundError as exc:
+            self.send_error(404, str(exc))
+            return
+        except Exception as exc:
+            self.send_error(500, str(exc))
+            return
+        self._send_json_ok(result)
+
+    def _handle_board_stage_request(self):
+        try:
+            payload = self._read_json_body()
+            from synlynk.board import update_stage
+            result = update_stage(payload.get("story_id"), payload.get("stage"))
         except (json.JSONDecodeError, TypeError, ValueError) as exc:
             self.send_error(400, str(exc) or "Invalid JSON")
             return
