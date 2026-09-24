@@ -1295,11 +1295,13 @@ def generate_activity_stream_html(data: dict, port: int) -> str:
         summary = e.get("summary") or ""
         ts = e.get("ts") or ""
         links = e.get("links") or []
-
-        links_html = "".join(
-            f'<a href="{html.escape(href)}" {"target=\"_blank\"" if href.startswith("http") else ""} class="event-link">🔗 {html.escape(label)}</a>'
-            for label, href in links
-        )
+        rendered_links = []
+        for label, href in links:
+            target_attr = ' target="_blank"' if href.startswith("http") else ""
+            rendered_links.append(
+                f'<a href="{html.escape(href)}"{target_attr} class="event-link">🔗 {html.escape(label)}</a>'
+            )
+        links_html = "".join(rendered_links)
 
         cards_html.append(f"""
         <div class="activity-card" data-workspace="{html.escape(ws)}" data-type="{html.escape(ev_type)}" style="{'display: flex;' if idx < 15 else 'display: none;'}">
