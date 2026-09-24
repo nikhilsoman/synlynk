@@ -134,7 +134,7 @@ def parse_workspace_path(path: str):
     if not slug or slug not in _known_slugs():
         return None, None
     rest = remainder[len(slug):]
-    if not rest or rest == "/" or rest == "/overview.html":
+    if not rest or rest == "/":
         rest = "/index.html"
     return slug, "/" + slug + rest
 

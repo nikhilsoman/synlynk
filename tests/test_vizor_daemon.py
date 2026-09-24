@@ -165,7 +165,10 @@ def test_resolve_slug_from_path_valid(tmp_path, monkeypatch):
     monkeypatch.setattr(vizor_daemon, "_known_slugs", lambda: {"acme"})
     slug, rest = vizor_daemon.parse_workspace_path("/w/acme/overview.html")
     assert slug == "acme"
-    # /overview.html aliases to /index.html
+    assert rest == "/acme/overview.html"
+
+    slug, rest = vizor_daemon.parse_workspace_path("/w/acme/")
+    assert slug == "acme"
     assert rest == "/acme/index.html"
 
     slug, rest = vizor_daemon.parse_workspace_path("/w/acme/manifest.json")
