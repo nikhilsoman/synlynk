@@ -712,65 +712,830 @@ def _compute_underused_feature_banner(data: dict) -> Optional[str]:
     return f"You've dispatched {len(jobs)} jobs but never used approve/kill -- try it"
 
 
-def generate_index_html(data: dict, port: int) -> str:
+def generate_overview_html(data: dict, port: int) -> str:
+    """Generate the per-workspace Overview canvas (overview.html)."""
     workspace = data.get("workspace") or {}
     workspace_name = str(workspace.get("name") or "workspace")
     updated_at = str(workspace.get("updated_at") or "")
-    repos = workspace.get("repos") or []
-    repo_items = []
-    for repo in repos:
-        if isinstance(repo, dict):
-            repo_name = str(repo.get("name") or repo.get("path") or repo.get("slug") or "")
-            repo_badge = str(repo.get("branch") or repo.get("status") or "")
-            active = bool(repo.get("active"))
-        else:
-            repo_name = str(repo)
-            repo_badge = ""
-            active = False
-        if not repo_name:
-            continue
-        badge_html = f'<span class="repo-badge">{html.escape(repo_badge)}</span>' if repo_badge else ""
-        repo_items.append(
-            f"""
-        <div class="repo-item{' active' if active else ''}">
-          <span class="repo-dot"></span>
-          <span class="repo-name">{html.escape(repo_name)}</span>
-          {badge_html}
-        </div>
-            """.rstrip()
-        )
-    repo_list_html = "\n".join(repo_items)
-    if repo_list_html:
-        repo_list_html = f"""
-      <div class="nav-group">
-        <div class="nav-group-label">Repos</div>
-        {repo_list_html}
-      </div>
-        """.rstrip()
 
-    nav_items = [
-        ("board", "▦", "Board", "board.html", False),
-        ("gantt", "📅", "Gantt", "gantt.html", True),
-        ("product", "🗺", "Product View", "product.html", False),
-        ("logical", "🧩", "Logical View", "logical.html", False),
-        ("world", "🌐", "World View", "world.html", False),
-        ("tube", "🚇", "Architect Map", "tube.html", False),
-        ("infra", "⚙️", "Infra View", "infra.html", False),
-
-        ("roles", "🤖", "Agent Roles", "roles.html", False),
-        ("effort", "💰", "Effort & Cost", "effort.html", False),
-        ("observatory", "◉", "Observatory", "observatory.html", False),
-        ("efficiency", "📊", "Efficiency", "efficiency.html", False),
+    # 1. Active sentinel alerts
+    sentinel_alerts = [
+        a for a in data.get("telemetry", {}).get("sentinel_alerts", [])
+        if not a.get("resolved")
     ]
-    nav_html = "\n".join(
-        f"""
-        <a class="nav-link{' active' if active else ''}" href="{view_html}" data-view="{view_id}" onclick="document.getElementById('view-frame').src = '{view_html}'; return setView('{view_id}');">
-          <span class="nav-icon">{icon}</span>
-          <span class="nav-label">{label}</span>
-        </a>
-        """.rstrip()
-        for view_id, icon, label, view_html, active in nav_items
-    )
+    alerts_html = ""
+    if sentinel_alerts:
+        alert_rows = []
+        for a in sentinel_alerts[:6]:
+            sev = str(a.get("severity") or "WARNING").upper()
+            sev_class = "sev-crit" if sev in ("CRITICAL", "CRIT") else "sev-warn"
+            pattern = a.get("pattern")
+            raw_msg = a.get("message") or "Sentinel alert active"
+            msg = f"{pattern}: {raw_msg}" if pattern and not raw_msg.startswith(str(pattern)) else raw_msg
+            ts = a.get("ts") or ""
+            alert_rows.append(
+                f'<div class="alert-item {sev_class}">'
+                f'<span class="alert-pill">{html.escape(sev)}</span>'
+                f'<span class="alert-msg">{html.escape(msg)}</span>'
+                f'<span class="alert-ts">{html.escape(ts)}</span>'
+                f'</div>'
+            )
+        alerts_html = f"""
+        <div class="alerts-banner">
+          <div class="alerts-header">
+            <span class="alerts-icon">⚠️</span>
+            <span class="alerts-title">Active Sentinel Alerts ({len(sentinel_alerts)})</span>
+          </div>
+          <div class="alerts-list">
+            {"".join(alert_rows)}
+          </div>
+        </div>
+        """
+
+    # 2. Stat Cards Data
+    goals = data.get("goals") or []
+    active_goals_count = len([g for g in goals if g.get("status") == "active" or not g.get("status")])
+
+    open_stories_count = 0
+    total_stories_count = 0
+    done_stories_count = 0
+    for dream in data.get("dreams") or []:
+        for stage in dream.get("stages") or []:
+            for task in stage.get("tasks") or []:
+                total_stories_count += 1
+                st = str(task.get("status") or "").lower()
+                if st in ("done", "completed", "resolved", "merged"):
+                    done_stories_count += 1
+                elif st in ("active", "ready", "open", "in_progress", "todo", "in progress"):
+                    open_stories_count += 1
+    if open_stories_count == 0 and total_stories_count == 0:
+        repos = workspace.get("repos") or []
+        if repos and isinstance(repos[0], dict):
+            open_stories_count = int(repos[0].get("active_dream_count") or 0)
+
+    jobs = data.get("jobs") or []
+    running_jobs_count = len([j for j in jobs if str(j.get("status") or "").lower() in ("running", "active", "dispatched")])
+
+    costs = data.get("costs") or {}
+    total_burn = float(costs.get("total_usd") or 0.0)
+
+    # 3. Goal Progress Rollup
+    goal_cards = []
+    if goals:
+        for g in goals[:6]:
+            gid = g.get("id") or "goal"
+            outcome = g.get("outcome") or g.get("name") or gid
+            criterion = g.get("criterion") or ""
+            pct = int((done_stories_count / total_stories_count) * 100) if total_stories_count > 0 else 0
+            crit_html = f'<div class="goal-criterion">{html.escape(criterion)}</div>' if criterion else ''
+            goal_cards.append(f"""
+            <div class="goal-item">
+              <div class="goal-top">
+                <span class="goal-badge">{html.escape(gid)}</span>
+                <span class="goal-outcome">{html.escape(outcome)}</span>
+                <span class="goal-pct">{pct}%</span>
+              </div>
+              {crit_html}
+              <div class="progress-bar-bg">
+                <div class="progress-bar-fill" style="width: {pct}%;"></div>
+              </div>
+            </div>
+            """)
+    else:
+        goal_cards.append("""
+        <div class="empty-hint">
+          No active goals in state.db. Run <code>synlynk goal create</code> to define an outcome.
+        </div>
+        """)
+    goals_html = "\n".join(goal_cards)
+
+    # 4. Recent / Active Jobs Feed
+    job_rows = []
+    if jobs:
+        for j in jobs[:6]:
+            jid = j.get("job_id") or j.get("id") or "job"
+            agent = j.get("agent") or j.get("harness") or "agent"
+            task_desc = j.get("task_description") or j.get("task") or j.get("branch") or jid
+            st = str(j.get("status") or "completed").lower()
+            pr_url = j.get("pr_url") or j.get("pr") or ""
+
+            if st in ("running", "active"):
+                st_badge = '<span class="status-chip running">● running</span>'
+            elif "pr" in st or pr_url:
+                st_badge = '<span class="status-chip pr-open">✓ PR open</span>'
+            elif st in ("failed", "error"):
+                st_badge = '<span class="status-chip failed">✕ failed</span>'
+            else:
+                st_badge = '<span class="status-chip done">✓ completed</span>'
+
+            pr_link_html = f'<a href="{html.escape(pr_url)}" target="_blank" class="job-link">PR ↗</a>' if pr_url else ""
+
+            job_rows.append(f"""
+            <div class="job-row">
+              <span class="job-id">{html.escape(jid)}</span>
+              <span class="agent-chip agent-{html.escape(agent.lower())}">{html.escape(agent)}</span>
+              <span class="job-desc" title="{html.escape(task_desc)}">{html.escape(task_desc)}</span>
+              {st_badge}
+              {pr_link_html}
+            </div>
+            """)
+    else:
+        job_rows.append("""
+        <div class="empty-hint">
+          No recent jobs dispatched. Dispatches from <code>synlynk dispatch</code> will appear here.
+        </div>
+        """)
+    jobs_html = "\n".join(job_rows)
+
+    style = """
+    :root {
+      --bg: #0d0f14; --bg2: #13171f; --bg3: #1a202c;
+      --border: #1e2430; --border2: #2d3748;
+      --text: #f3f4f6; --text2: #9ca3af; --text3: #6b7280;
+      --accent: #0d9e87; --accent-bg: rgba(13,158,135,0.15); --accent-dim: #14b8a6;
+      --shadow: 0 4px 16px rgba(0,0,0,0.25);
+      --font-mono: 'SF Mono', 'JetBrains Mono', monospace;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    [data-theme="light"] {
+      --bg: #f8fafc; --bg2: #ffffff; --bg3: #f1f5f9;
+      --border: #e2e8f0; --border2: #cbd5e1;
+      --text: #0f172a; --text2: #475569; --text3: #94a3b8;
+      --accent: #0d9e87; --accent-bg: #e6f7f4; --accent-dim: #0b7a60;
+      --shadow: 0 2px 10px rgba(0,0,0,0.06);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-sans);
+      padding: 24px 32px 48px;
+      line-height: 1.5;
+      font-size: 13px;
+    }
+    a { color: inherit; text-decoration: none; }
+    .overview-container { max-width: 1200px; margin: 0 auto; }
+    .overview-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .overview-title { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
+    .overview-sub { font-size: 13px; color: var(--text2); margin-top: 2px; }
+    .overview-meta { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--text3); }
+    .status-pill {
+      background: var(--accent-bg);
+      color: var(--accent-dim);
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+    }
+
+    /* Sentinel Banner */
+    .alerts-banner {
+      background: rgba(245, 158, 11, 0.1);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 24px;
+    }
+    .alerts-header { display: flex; align-items: center; gap: 8px; font-weight: 600; color: #f59e0b; margin-bottom: 8px; }
+    .alerts-list { display: flex; flex-direction: column; gap: 6px; }
+    .alert-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      background: var(--bg2);
+    }
+    .alert-item.sev-crit { border-left: 3px solid #ef4444; }
+    .alert-item.sev-warn { border-left: 3px solid #f59e0b; }
+    .alert-pill { font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 3px; background: rgba(0,0,0,0.2); }
+    .alert-msg { flex: 1; word-break: break-word; }
+    .alert-ts { color: var(--text3); font-size: 11px; font-family: var(--font-mono); }
+
+    /* Stat Cards Row */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .stat-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px 20px;
+      transition: transform 0.15s ease, border-color 0.15s ease;
+    }
+    .stat-card:hover { border-color: var(--accent); transform: translateY(-1px); }
+    .stat-label { font-size: 12px; color: var(--text2); font-weight: 500; }
+    .stat-value { font-size: 26px; font-weight: 700; margin: 4px 0 2px; color: var(--text); }
+    .text-accent { color: var(--accent-dim); }
+    .stat-foot { font-size: 11px; color: var(--text3); }
+
+    /* Section Cards */
+    .sections-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(480px, 1fr));
+      gap: 20px;
+      margin-bottom: 24px;
+    }
+    @media (max-width: 900px) {
+      .sections-grid { grid-template-columns: 1fr; }
+    }
+    .section-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px;
+    }
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    .section-title { font-size: 15px; font-weight: 600; }
+    .section-link { font-size: 12px; color: var(--accent); font-weight: 500; }
+    .section-link:hover { text-decoration: underline; }
+
+    /* Goals Rollup */
+    .goals-list { display: flex; flex-direction: column; gap: 12px; }
+    .goal-item {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px;
+    }
+    .goal-top { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+    .goal-badge {
+      font-size: 11px;
+      font-family: var(--font-mono);
+      background: var(--bg3);
+      color: var(--accent);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+    .goal-outcome { font-weight: 600; font-size: 13px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .goal-pct { font-size: 12px; font-weight: 700; color: var(--accent-dim); }
+    .goal-criterion { font-size: 12px; color: var(--text2); margin-bottom: 8px; line-height: 1.35; }
+    .progress-bar-bg { height: 6px; background: var(--bg3); border-radius: 3px; overflow: hidden; }
+    .progress-bar-fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width 0.3s ease; }
+
+    /* Jobs Feed */
+    .jobs-list { display: flex; flex-direction: column; gap: 8px; }
+    .job-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 12px;
+      padding: 8px 12px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+    }
+    .job-id { font-family: var(--font-mono); font-size: 11px; color: var(--text3); }
+    .agent-chip {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      background: var(--bg3);
+      color: var(--text2);
+    }
+    .agent-codex { background: rgba(16,163,127,0.15); color: #10a37f; }
+    .agent-agy { background: rgba(66,133,244,0.15); color: #4285f4; }
+    .agent-claude { background: rgba(13,158,135,0.15); color: #0d9e87; }
+    .agent-grok { background: rgba(255,255,255,0.1); color: var(--text); }
+    .job-desc { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+    .status-chip { font-size: 11px; font-weight: 600; padding: 2px 6px; border-radius: 4px; }
+    .status-chip.running { background: rgba(13,158,135,0.15); color: var(--accent-dim); }
+    .status-chip.pr-open { background: rgba(59,130,246,0.15); color: #60a5fa; }
+    .status-chip.done { background: rgba(34,197,94,0.15); color: #22c55e; }
+    .status-chip.failed { background: rgba(239,68,68,0.15); color: #ef4444; }
+    .job-link { font-size: 11px; color: var(--accent); font-weight: 600; }
+    .job-link:hover { text-decoration: underline; }
+
+    /* Category Shortcuts Grid */
+    .shortcuts-section { margin-top: 12px; }
+    .shortcuts-title { font-size: 15px; font-weight: 600; margin-bottom: 14px; }
+    .shortcuts-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+    }
+    .cat-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+    }
+    .cat-card-header {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--accent);
+      margin-bottom: 12px;
+    }
+    .cat-card-links { display: flex; flex-direction: column; gap: 8px; }
+    .cat-link {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border-radius: 6px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--text);
+      transition: all 0.15s ease;
+    }
+    .cat-link:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      transform: translateX(2px);
+    }
+    .link-icon { font-size: 13px; width: 16px; text-align: center; }
+
+    .empty-hint {
+      text-align: center;
+      padding: 24px 16px;
+      color: var(--text3);
+      font-size: 12px;
+      background: var(--bg);
+      border-radius: 6px;
+      border: 1px dashed var(--border);
+    }
+    """
+
+    return f"""<!DOCTYPE html>
+<html lang="en" data-theme="system">
+<head>
+  <meta charset="utf-8">
+  <title>{html.escape(workspace_name)} — Workspace Overview</title>
+  <style>{style}</style>
+</head>
+<body>
+  <div class="overview-container">
+    <div class="overview-header">
+      <div>
+        <h1 class="overview-title">{html.escape(workspace_name)}</h1>
+        <div class="overview-sub">Workspace Overview & Operational Health</div>
+      </div>
+      <div class="overview-meta">
+        <span class="status-pill">● Active</span>
+        <span class="meta-time">Updated {html.escape(updated_at)}</span>
+      </div>
+    </div>
+
+    {alerts_html}
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Active Goals</div>
+        <div class="stat-value">{active_goals_count}</div>
+        <div class="stat-foot">Sovereign GOVERNS goals</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Open Stories</div>
+        <div class="stat-value">{open_stories_count}</div>
+        <div class="stat-foot">Ready & in-flight tasks</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Jobs Running</div>
+        <div class="stat-value text-accent">{running_jobs_count}</div>
+        <div class="stat-foot">Autonomous dispatches</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Burn (7d)</div>
+        <div class="stat-value">${total_burn:.2f}</div>
+        <div class="stat-foot">Fleet AI spend</div>
+      </div>
+    </div>
+
+    <div class="sections-grid">
+      <div class="section-card">
+        <div class="section-header">
+          <div class="section-title">Goal Progress Rollup</div>
+          <a href="gantt.html" class="section-link">View in Gantt →</a>
+        </div>
+        <div class="goals-list">
+          {goals_html}
+        </div>
+      </div>
+
+      <div class="section-card">
+        <div class="section-header">
+          <div class="section-title">Recent / Active Dispatches</div>
+          <a href="observatory.html" class="section-link">Observatory →</a>
+        </div>
+        <div class="jobs-list">
+          {jobs_html}
+        </div>
+      </div>
+    </div>
+
+    <div class="shortcuts-section">
+      <div class="shortcuts-title">Jump to a View</div>
+      <div class="shortcuts-grid">
+        <div class="cat-card">
+          <div class="cat-card-header">STATUS</div>
+          <div class="cat-card-links">
+            <a href="board.html" class="cat-link"><span class="link-icon">▦</span> Board</a>
+            <a href="gantt.html" class="cat-link"><span class="link-icon">📅</span> Gantt</a>
+          </div>
+        </div>
+        <div class="cat-card">
+          <div class="cat-card-header">TOPOLOGIES</div>
+          <div class="cat-card-links">
+            <a href="tube.html" class="cat-link"><span class="link-icon">🚇</span> Architect Map</a>
+            <a href="infra.html" class="cat-link"><span class="link-icon">⚙️</span> Infra View</a>
+          </div>
+        </div>
+        <div class="cat-card">
+          <div class="cat-card-header">PROJECTIONS</div>
+          <div class="cat-card-links">
+            <a href="product.html" class="cat-link"><span class="link-icon">🗺</span> Product View</a>
+            <a href="logical.html" class="cat-link"><span class="link-icon">🧩</span> Logical View</a>
+            <a href="world.html" class="cat-link"><span class="link-icon">🌐</span> World View</a>
+          </div>
+        </div>
+        <div class="cat-card">
+          <div class="cat-card-header">TELEMETRY</div>
+          <div class="cat-card-links">
+            <a href="effort.html" class="cat-link"><span class="link-icon">💰</span> Effort & Cost</a>
+            <a href="efficiency.html" class="cat-link"><span class="link-icon">📊</span> Efficiency</a>
+            <a href="observatory.html" class="cat-link"><span class="link-icon">◉</span> Observatory</a>
+            <a href="roles.html" class="cat-link"><span class="link-icon">🤖</span> Agent Roles</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {_live_js(port)}
+</body>
+</html>"""
+
+
+def generate_activity_stream_html(data: dict, port: int) -> str:
+    """Generate the cross-workspace Activity Stream canvas (activity.html)."""
+    workspace = data.get("workspace") or {}
+    workspace_name = str(workspace.get("name") or "workspace")
+    updated_at = str(workspace.get("updated_at") or "")
+
+    # Collect and normalize events
+    events = []
+
+    # 1. From actions / events.jsonl
+    for act in data.get("actions") or []:
+        if not isinstance(act, dict):
+            continue
+        action_name = str(act.get("action") or act.get("event") or "event")
+        ts = str(act.get("ts") or act.get("timestamp") or "")
+        actor = str(act.get("user") or act.get("actor") or act.get("agent") or "system")
+        summary = str(act.get("summary") or act.get("message") or act.get("description") or f"Action {action_name} executed by {actor}")
+        ev_type = "story" if "story" in action_name else ("goal" if "goal" in action_name else ("pr" if "pr" in action_name else "job"))
+        events.append({
+            "workspace": workspace_name,
+            "type": ev_type,
+            "ts": ts,
+            "title": f"Action <b>{action_name}</b> by @{actor}",
+            "summary": summary,
+            "links": [("Board", "board.html"), ("Gantt", "gantt.html")],
+        })
+
+    # 2. From jobs
+    for j in data.get("jobs") or []:
+        if not isinstance(j, dict):
+            continue
+        jid = j.get("job_id") or j.get("id") or "job"
+        agent = j.get("agent") or j.get("harness") or "agent"
+        task_desc = j.get("task_description") or j.get("task") or j.get("branch") or jid
+        st = str(j.get("status") or "completed").lower()
+        pr_url = j.get("pr_url") or j.get("pr") or ""
+        ts = str(j.get("created_at") or j.get("updated_at") or "")
+        links = [("Observatory", "observatory.html")]
+        if pr_url:
+            links.append(("GitHub PR", pr_url))
+        events.append({
+            "workspace": workspace_name,
+            "type": "job",
+            "ts": ts,
+            "title": f"Dispatch <b>{jid}</b> on agent <b>{agent}</b> ({st})",
+            "summary": task_desc,
+            "links": links,
+        })
+
+    # 3. From goals
+    for g in data.get("goals") or []:
+        if not isinstance(g, dict):
+            continue
+        gid = g.get("id") or "goal"
+        outcome = g.get("outcome") or g.get("name") or gid
+        crit = g.get("criterion") or ""
+        events.append({
+            "workspace": workspace_name,
+            "type": "goal",
+            "ts": "",
+            "title": f"Goal <b>{gid}</b> updated",
+            "summary": f"{outcome} — {crit}" if crit else outcome,
+            "links": [("Gantt", "gantt.html")],
+        })
+
+    # 4. From dreams / stories
+    for dream in data.get("dreams") or []:
+        for stage in dream.get("stages") or []:
+            for task in stage.get("tasks") or []:
+                tid = task.get("id") or "task"
+                tname = task.get("name") or tid
+                tstatus = task.get("status") or "active"
+                agent = task.get("agent") or "agent"
+                events.append({
+                    "workspace": workspace_name,
+                    "type": "story",
+                    "ts": "",
+                    "title": f"Story <b>{tid}</b> ({tstatus})",
+                    "summary": f"{tname} — assigned to {agent}",
+                    "links": [("Board", "board.html"), ("Gantt", "gantt.html")],
+                })
+
+    # If events is empty, add placeholder
+    if not events:
+        events.append({
+            "workspace": workspace_name,
+            "type": "goal",
+            "ts": updated_at,
+            "title": f"Workspace <b>{workspace_name}</b> initialized",
+            "summary": "Vizor multi-workspace monitoring active. Autonomous events will stream here in real time.",
+            "links": [("Overview", "overview.html"), ("Board", "board.html")],
+        })
+
+    workspaces = sorted(list({e["workspace"] for e in events if e.get("workspace")}))
+    event_types = ["goal", "story", "epic", "pr", "job"]
+
+    cards_html = []
+    for idx, e in enumerate(events):
+        ws = e.get("workspace") or workspace_name
+        ev_type = e.get("type") or "story"
+        title = e.get("title") or ""
+        summary = e.get("summary") or ""
+        ts = e.get("ts") or ""
+        links = e.get("links") or []
+
+        links_html = "".join(
+            f'<a href="{html.escape(href)}" {"target=\"_blank\"" if href.startswith("http") else ""} class="event-link">🔗 {html.escape(label)}</a>'
+            for label, href in links
+        )
+
+        cards_html.append(f"""
+        <div class="activity-card" data-workspace="{html.escape(ws)}" data-type="{html.escape(ev_type)}" style="{'display: flex;' if idx < 15 else 'display: none;'}">
+          <div class="card-top">
+            <div class="card-tags">
+              <span class="tag-ws">{html.escape(ws)}</span>
+              <span class="tag-type tag-{html.escape(ev_type)}">· {html.escape(ev_type)}</span>
+            </div>
+            {f'<div class="card-time">{html.escape(ts)}</div>' if ts else ''}
+          </div>
+          <div class="card-title">{title}</div>
+          <div class="card-summary">{html.escape(summary)}</div>
+          <div class="card-links">{links_html}</div>
+        </div>
+        """)
+
+    stream_html = "\n".join(cards_html)
+
+    style = """
+    :root {
+      --bg: #0d0f14; --bg2: #13171f; --bg3: #1a202c;
+      --border: #1e2430; --border2: #2d3748;
+      --text: #f3f4f6; --text2: #9ca3af; --text3: #6b7280;
+      --accent: #0d9e87; --accent-bg: rgba(13,158,135,0.15); --accent-dim: #14b8a6;
+      --font-mono: 'SF Mono', 'JetBrains Mono', monospace;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    [data-theme="light"] {
+      --bg: #f8fafc; --bg2: #ffffff; --bg3: #f1f5f9;
+      --border: #e2e8f0; --border2: #cbd5e1;
+      --text: #0f172a; --text2: #475569; --text3: #94a3b8;
+      --accent: #0d9e87; --accent-bg: #e6f7f4; --accent-dim: #0b7a60;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-sans);
+      padding: 24px 32px 48px;
+      line-height: 1.5;
+      font-size: 13px;
+    }
+    a { color: inherit; text-decoration: none; }
+    .stream-container { max-width: 900px; margin: 0 auto; }
+    .stream-header {
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .stream-title { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
+    .stream-sub { font-size: 13px; color: var(--text2); margin-top: 2px; }
+
+    /* Filters Bar */
+    .filters-bar {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 18px;
+      margin-bottom: 24px;
+    }
+    .filter-group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .filter-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text3); width: 80px; }
+    .filter-chip {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text2);
+      font-size: 11px;
+      font-weight: 500;
+      padding: 4px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.15s ease;
+    }
+    .filter-chip:hover { border-color: var(--accent); color: var(--text); }
+    .filter-chip.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+
+    /* Activity Cards */
+    .stream-feed { display: flex; flex-direction: column; gap: 12px; }
+    .activity-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      transition: border-color 0.15s ease;
+    }
+    .activity-card:hover { border-color: var(--accent); }
+    .card-top { display: flex; justify-content: space-between; align-items: center; }
+    .card-tags { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+    .tag-ws { font-weight: 700; color: var(--accent); }
+    .tag-type { color: var(--text3); text-transform: lowercase; }
+    .card-time { font-size: 11px; color: var(--text3); font-family: var(--font-mono); }
+    .card-title { font-size: 13px; color: var(--text); }
+    .card-summary { font-size: 12px; color: var(--text2); line-height: 1.4; }
+    .card-links { display: flex; align-items: center; gap: 12px; margin-top: 4px; padding-top: 8px; border-top: 1px solid var(--border); }
+    .event-link { font-size: 11px; color: var(--accent); font-weight: 500; }
+    .event-link:hover { text-decoration: underline; }
+
+    .load-more-btn {
+      width: 100%;
+      padding: 12px;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text2);
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+      margin-top: 20px;
+      transition: all 0.15s ease;
+    }
+    .load-more-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--bg3); }
+    """
+
+    return f"""<!DOCTYPE html>
+<html lang="en" data-theme="system">
+<head>
+  <meta charset="utf-8">
+  <title>synlynk Vizor — Activity Stream</title>
+  <style>{style}</style>
+</head>
+<body>
+  <div class="stream-container">
+    <div class="stream-header">
+      <h1 class="stream-title">Activity Stream</h1>
+      <div class="stream-sub">Real-time cross-workspace events, dispatches, and governance updates</div>
+    </div>
+
+    <div class="filters-bar">
+      <div class="filter-group">
+        <span class="filter-label">Workspace:</span>
+        <button class="filter-chip active" data-filter-group="ws" data-filter="all" onclick="toggleFilter(this)">All</button>
+        {"".join(f'<button class="filter-chip" data-filter-group="ws" data-filter="{html.escape(w)}" onclick="toggleFilter(this)">{html.escape(w)}</button>' for w in workspaces)}
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">Type:</span>
+        <button class="filter-chip active" data-filter-group="type" data-filter="all" onclick="toggleFilter(this)">All Types</button>
+        {"".join(f'<button class="filter-chip" data-filter-group="type" data-filter="{html.escape(t)}" onclick="toggleFilter(this)">{html.escape(t.capitalize())}</button>' for t in event_types)}
+      </div>
+    </div>
+
+    <div class="stream-feed" id="stream-feed">
+      {stream_html}
+    </div>
+
+    <button type="button" class="load-more-btn" id="load-more" onclick="loadMore()">Load More Activity</button>
+  </div>
+
+  <script>
+    let visibleCount = 15;
+    let selectedWs = 'all';
+    let selectedType = 'all';
+
+    function toggleFilter(btn) {{
+      const group = btn.dataset.filterGroup;
+      const val = btn.dataset.filter;
+      document.querySelectorAll(`.filter-chip[data-filter-group="${{group}}"]`).forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      if (group === 'ws') selectedWs = val;
+      if (group === 'type') selectedType = val;
+      applyFilters();
+    }}
+
+    function applyFilters() {{
+      const cards = document.querySelectorAll('.activity-card');
+      let shown = 0;
+      cards.forEach(card => {{
+        const cardWs = card.dataset.workspace;
+        const cardType = card.dataset.type;
+        const wsMatch = selectedWs === 'all' || cardWs === selectedWs;
+        const typeMatch = selectedType === 'all' || cardType === selectedType;
+        if (wsMatch && typeMatch && shown < visibleCount) {{
+          card.style.display = 'flex';
+          shown++;
+        }} else {{
+          card.style.display = 'none';
+        }}
+      }});
+      const loadBtn = document.getElementById('load-more');
+      if (loadBtn) {{
+        loadBtn.style.display = (shown >= cards.length || shown === 0) ? 'none' : 'block';
+      }}
+    }}
+
+    function loadMore() {{
+      visibleCount += 15;
+      applyFilters();
+    }}
+  </script>
+  {_live_js(port)}
+</body>
+</html>"""
+
+
+def generate_index_html(data: dict, port: int) -> str:
+    """Generate the master Vizor shell with two-tier accordion and location breadcrumbs."""
+    workspace = data.get("workspace") or {}
+    workspace_name = str(workspace.get("name") or "workspace")
+    updated_at = str(workspace.get("updated_at") or "")
+
+    # Calculate open stories count for active workspace
+    open_stories = 0
+    for dream in data.get("dreams") or []:
+        for stage in dream.get("stages") or []:
+            for task in stage.get("tasks") or []:
+                st = str(task.get("status") or "").lower()
+                if st in ("active", "ready", "open", "in_progress", "todo", "in progress"):
+                    open_stories += 1
+    if open_stories == 0:
+        repos = workspace.get("repos") or []
+        if repos and isinstance(repos[0], dict):
+            open_stories = int(repos[0].get("active_dream_count") or 0)
+
+    # Registered workspaces for accordion
+    try:
+        from synlynk.state_registry import _read_unlocked, registry_path
+        rpath = registry_path()
+        reg_products = _read_unlocked(rpath).get("products", {}) if rpath.exists() else {}
+        other_slugs = [s for s in sorted(reg_products.keys()) if s != workspace_name]
+    except Exception:
+        other_slugs = []
+
+    other_ws_html = "".join(f"""
+        <details name="workspace" class="ws-accordion">
+          <summary class="ws-summary" onclick="window.location.href='/w/{html.escape(s)}/index.html';">
+            <span class="ws-chevron">▸</span>
+            <span class="ws-name">{html.escape(s)}</span>
+          </summary>
+        </details>
+    """ for s in other_slugs)
 
     style_content = """
     :root {
@@ -815,17 +1580,13 @@ def generate_index_html(data: dict, port: int) -> str:
     }
 
     * { box-sizing:border-box; margin:0; padding:0; }
-    @keyframes vizor-banner-slide-in {
-      from { opacity:0; transform:translate(-50%, -12px); }
-      to { opacity:1; transform:translate(-50%, 0); }
-    }
     html, body { height:100%; }
     body {
       display:flex;
       height:100vh;
       margin:0;
       overflow:hidden;
-      font-family:'SF Mono','JetBrains Mono',monospace;
+      font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, 'SF Mono', monospace;
       background:var(--bg);
       color:var(--text);
       font-size:13px;
@@ -841,8 +1602,8 @@ def generate_index_html(data: dict, port: int) -> str:
       overflow:hidden;
     }
     .sidenav {
-      width:220px;
-      min-width:220px;
+      width:260px;
+      min-width:260px;
       flex-shrink:0;
       background:var(--bg2);
       border-right:1px solid var(--border);
@@ -851,97 +1612,153 @@ def generate_index_html(data: dict, port: int) -> str:
       overflow:hidden;
     }
     .nav-header {
-      padding:14px 14px 12px;
+      padding:14px 16px;
       border-bottom:1px solid var(--border);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
     }
-    .nav-logo {
-      font-size:14px;
+    .nav-brand {
+      display:flex;
+      align-items:center;
+      gap:8px;
+    }
+    .logo-badge {
+      background:var(--accent);
+      color:#fff;
       font-weight:800;
-      color:var(--accent);
-      letter-spacing:-.5px;
-      line-height:1.2;
+      font-size:11px;
+      padding:3px 6px;
+      border-radius:4px;
+      letter-spacing:.5px;
     }
-    .workspace-name {
-      margin-top:5px;
-      font-size:12px;
-      color:var(--text2);
-      line-height:1.35;
-      word-break:break-word;
+    .brand-title {
+      font-size:14px;
+      font-weight:700;
+      color:var(--text);
+      letter-spacing:-.3px;
     }
     .nav-section {
       flex:1;
       overflow-y:auto;
-      padding:10px 0 8px;
+      padding:8px 0;
     }
-    .nav-group-label {
+
+    /* Accordion Styles */
+    .tier-accordion {
+      margin-bottom:2px;
+      border-bottom:1px solid var(--border2);
+    }
+    .tier-summary {
+      display:flex;
+      align-items:center;
+      gap:8px;
+      padding:10px 14px;
+      font-weight:700;
+      font-size:11px;
+      letter-spacing:.8px;
+      cursor:pointer;
+      user-select:none;
+    }
+    .tier-summary::-webkit-details-marker { display:none; }
+    .tier-personal > .tier-summary {
+      background:rgba(13,158,135,0.12);
+      color:var(--accent);
+    }
+    .tier-team > .tier-summary, .tier-enterprise > .tier-summary {
+      background:rgba(59,130,246,0.10);
+      color:#60a5fa;
+    }
+    .tier-chevron { font-size:10px; width:12px; }
+    .stub-badge {
+      margin-left:auto;
+      font-size:9px;
+      font-weight:500;
+      opacity:.75;
+      padding:1px 5px;
+      border-radius:4px;
+      background:rgba(255,255,255,0.08);
+    }
+    .stub-panel {
+      padding:16px 14px;
+      background:var(--bg3);
+      color:var(--text2);
+      text-align:center;
+      font-size:11px;
+      border-top:1px solid var(--border);
+    }
+    .stub-icon { font-size:18px; margin-bottom:4px; }
+    .stub-sub { font-size:10px; color:var(--text3); margin-top:4px; }
+
+    .tier-content {
+      background:var(--bg2);
+    }
+
+    /* Workspace Accordion */
+    .ws-accordion {
+      border-bottom:1px solid var(--border);
+    }
+    .ws-summary {
+      display:flex;
+      align-items:center;
+      gap:6px;
+      padding:8px 14px;
+      font-size:12px;
+      font-weight:600;
+      cursor:pointer;
+      background:var(--bg3);
+      color:var(--text);
+    }
+    .ws-summary::-webkit-details-marker { display:none; }
+    .ws-chevron { font-size:9px; width:10px; color:var(--text3); }
+    .ws-name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .count-badge {
       font-size:10px;
+      font-weight:700;
+      background:var(--accent-bg);
+      color:var(--accent);
+      padding:1px 6px;
+      border-radius:8px;
+    }
+    .ws-content {
+      padding:4px 0 8px;
+    }
+
+    .nav-category-header {
+      font-size:10px;
+      font-weight:700;
       text-transform:uppercase;
-      letter-spacing:1px;
+      letter-spacing:.8px;
       color:var(--text3);
-      padding:6px 14px 4px;
+      padding:8px 16px 4px;
     }
     .nav-link {
-      padding:7px 10px 7px 14px;
+      padding:6px 12px 6px 20px;
       display:flex;
       align-items:center;
       gap:8px;
       cursor:pointer;
       border-radius:5px;
-      margin:1px 6px;
+      margin:1px 8px;
       color:var(--text2);
       font-size:12px;
       line-height:1.2;
       user-select:none;
     }
     .nav-link:hover { background:var(--bg3); color:var(--text); }
-    .nav-link.active { background:var(--accent-bg); color:var(--accent); }
-    .nav-icon { width:16px; text-align:center; flex-shrink:0; }
+    .nav-link.active { background:var(--accent-bg); color:var(--accent); font-weight:600; }
+    .nav-icon { width:16px; text-align:center; flex-shrink:0; font-size:12px; }
     .nav-label { white-space:nowrap; }
-    .repo-item {
-      padding:4px 10px 4px 30px;
-      display:flex;
-      align-items:center;
-      gap:7px;
-      margin:0 6px;
-      color:var(--text3);
-      font-size:11px;
-      border-radius:4px;
-    }
-    .repo-item:hover { background:var(--bg3); color:var(--text2); }
-    .repo-item.active { background:var(--accent-bg); color:var(--accent); }
-    .repo-dot {
-      width:6px;
-      height:6px;
-      border-radius:50%;
-      background:var(--accent);
-      flex-shrink:0;
-    }
-    .repo-badge {
-      margin-left:auto;
-      font-size:10px;
-      background:var(--bg3);
-      color:var(--text3);
-      padding:1px 5px;
-      border-radius:8px;
-    }
+
     .nav-footer {
       border-top:1px solid var(--border);
-      padding:10px 12px;
+      padding:10px 14px;
+      background:var(--bg2);
     }
-    .theme-label {
-      font-size:10px;
-      color:var(--text3);
-      margin-bottom:6px;
-      text-transform:uppercase;
-      letter-spacing:.5px;
-    }
-    .theme-sw {
-      display:flex;
-      gap:4px;
-    }
+    .theme-sw { display:flex; gap:4px; margin-bottom:8px; }
     .theme-btn {
       flex:1;
-      padding:5px 0;
+      padding:4px 0;
       border-radius:5px;
       font-size:10px;
       text-align:center;
@@ -952,15 +1769,15 @@ def generate_index_html(data: dict, port: int) -> str:
     }
     .theme-btn:hover { border-color:var(--accent); color:var(--accent); }
     .theme-btn.active { background:var(--accent-bg); border-color:var(--accent); color:var(--accent); font-weight:700; }
+
     .avatar-row {
       display:flex;
       align-items:center;
       gap:8px;
-      margin-top:10px;
     }
     .avatar {
-      width:24px;
-      height:24px;
+      width:22px;
+      height:22px;
       border-radius:50%;
       background:linear-gradient(135deg,var(--accent),#0b7a60);
       display:flex;
@@ -981,6 +1798,7 @@ def generate_index_html(data: dict, port: int) -> str:
       white-space:nowrap;
     }
 
+    /* Main Area */
     .main {
       flex:1;
       display:flex;
@@ -988,6 +1806,57 @@ def generate_index_html(data: dict, port: int) -> str:
       overflow:hidden;
       min-width:0;
     }
+    .main-topbar {
+      background:var(--bg2);
+      border-bottom:1px solid var(--border);
+      padding:8px 20px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      min-height:42px;
+    }
+    .breadcrumbs {
+      display:flex;
+      align-items:center;
+      gap:6px;
+      font-size:12px;
+      color:var(--text2);
+    }
+    .crumb-link { color:var(--text2); font-weight:500; }
+    .crumb-link:hover { color:var(--accent); text-decoration:underline; }
+    .crumb-sep { color:var(--text3); font-size:11px; }
+    .crumb-cat { color:var(--text3); font-weight:600; text-transform:uppercase; font-size:11px; letter-spacing:.5px; }
+    .crumb-current { color:var(--text); font-weight:600; }
+
+    .corner-actions {
+      display:flex;
+      align-items:center;
+      gap:8px;
+    }
+    .corner-btn {
+      background:transparent;
+      border:1px solid var(--border);
+      border-radius:6px;
+      padding:4px 8px;
+      cursor:pointer;
+      color:var(--text2);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      transition:all 0.15s ease;
+    }
+    .corner-btn:hover { border-color:var(--accent); color:var(--accent); background:var(--bg3); }
+    .corner-link {
+      font-size:11px;
+      font-weight:600;
+      color:var(--accent);
+      padding:4px 8px;
+      border-radius:6px;
+      background:var(--accent-bg);
+      border:1px solid var(--accent);
+    }
+    .corner-link:hover { opacity:0.9; }
+
     iframe#view-frame {
       flex:1;
       border:none;
@@ -1007,21 +1876,13 @@ def generate_index_html(data: dict, port: int) -> str:
       min-height:28px;
     }
     .status-dot { color:var(--accent); }
-    .status-workspace { color:var(--text2); }
+    .status-workspace { color:var(--text2); font-weight:600; }
     .status-updated { margin-left:auto; }
     """
 
     meta_json = json.dumps({"port": port, "updated_at": updated_at})
     avatar_label = (workspace_name[:1] or "S").upper()
-    if workspace_name.lower().startswith("synlynk"):
-        avatar_label = "S"
-    banner_message = _compute_underused_feature_banner(data)
-    banner_html = ""
-    if banner_message:
-        banner_html = f'''<div id="vizor-first-visit-banner" style="position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:9998;display:flex;align-items:center;gap:16px;padding:12px 16px;border:1px solid var(--accent);border-radius:8px;background:var(--accent-bg);color:var(--text);box-shadow:var(--shadow);animation:vizor-banner-slide-in .3s ease-out;">
-  <span>{html.escape(banner_message)}</span>
-  <button type="button" onclick="this.parentElement.remove()" style="border:1px solid var(--accent);border-radius:4px;background:transparent;color:inherit;padding:4px 9px;cursor:pointer;">Close</button>
-</div>'''
+
     return f"""<!DOCTYPE html>
 <html lang="en" data-theme="light">
 <head>
@@ -1031,20 +1892,122 @@ def generate_index_html(data: dict, port: int) -> str:
 <style>{style_content}</style>
 </head>
 <body>
-{banner_html}
 <div class="shell">
   <aside class="sidenav">
     <div class="nav-header">
-      <div class="nav-logo">Synlynk viz</div>
-      <div class="workspace-name">{html.escape(workspace_name)}</div>
+      <div class="nav-brand">
+        <span class="logo-badge">VIZOR</span>
+        <span class="brand-title">synlynk</span>
+      </div>
     </div>
     <div class="nav-section">
-      <div class="nav-group-label">Views</div>
-      {nav_html}
-      {repo_list_html}
+      <!-- Tier 1: Personal -->
+      <details name="tier1" class="tier-accordion tier-personal" open>
+        <summary class="tier-summary">
+          <span class="tier-chevron">▾</span>
+          <span>PERSONAL</span>
+        </summary>
+        <div class="tier-content">
+          <!-- Active Workspace -->
+          <details name="workspace" class="ws-accordion" open>
+            <summary class="ws-summary">
+              <span class="ws-chevron">▾</span>
+              <span class="ws-name">{html.escape(workspace_name)}</span>
+              <span class="count-badge">{open_stories}</span>
+            </summary>
+            <div class="ws-content">
+              <a class="nav-link active" href="overview.html" data-view="overview" data-cat="Overview" data-label="Overview">
+                <span class="nav-icon">📊</span>
+                <span class="nav-label">Overview</span>
+              </a>
+
+              <div class="nav-category-header">STATUS</div>
+              <a class="nav-link" href="board.html" data-view="board" data-cat="STATUS" data-label="Board">
+                <span class="nav-icon">▦</span>
+                <span class="nav-label">Board</span>
+              </a>
+              <a class="nav-link" href="gantt.html" data-view="gantt" data-cat="STATUS" data-label="Gantt">
+                <span class="nav-icon">📅</span>
+                <span class="nav-label">Gantt</span>
+              </a>
+
+              <div class="nav-category-header">TOPOLOGIES</div>
+              <a class="nav-link" href="tube.html" data-view="tube" data-cat="TOPOLOGIES" data-label="Architect Map">
+                <span class="nav-icon">🚇</span>
+                <span class="nav-label">Architect Map</span>
+              </a>
+              <a class="nav-link" href="infra.html" data-view="infra" data-cat="TOPOLOGIES" data-label="Infra View">
+                <span class="nav-icon">⚙️</span>
+                <span class="nav-label">Infra View</span>
+              </a>
+
+              <div class="nav-category-header">PROJECTIONS</div>
+              <a class="nav-link" href="product.html" data-view="product" data-cat="PROJECTIONS" data-label="Product View">
+                <span class="nav-icon">🗺</span>
+                <span class="nav-label">Product View</span>
+              </a>
+              <a class="nav-link" href="logical.html" data-view="logical" data-cat="PROJECTIONS" data-label="Logical View">
+                <span class="nav-icon">🧩</span>
+                <span class="nav-label">Logical View</span>
+              </a>
+              <a class="nav-link" href="world.html" data-view="world" data-cat="PROJECTIONS" data-label="World View">
+                <span class="nav-icon">🌐</span>
+                <span class="nav-label">World View</span>
+              </a>
+
+              <div class="nav-category-header">TELEMETRY</div>
+              <a class="nav-link" href="effort.html" data-view="effort" data-cat="TELEMETRY" data-label="Effort & Cost">
+                <span class="nav-icon">💰</span>
+                <span class="nav-label">Effort & Cost</span>
+              </a>
+              <a class="nav-link" href="efficiency.html" data-view="efficiency" data-cat="TELEMETRY" data-label="Efficiency">
+                <span class="nav-icon">📊</span>
+                <span class="nav-label">Efficiency</span>
+              </a>
+              <a class="nav-link" href="observatory.html" data-view="observatory" data-cat="TELEMETRY" data-label="Observatory">
+                <span class="nav-icon">◉</span>
+                <span class="nav-label">Observatory</span>
+              </a>
+              <a class="nav-link" href="roles.html" data-view="roles" data-cat="TELEMETRY" data-label="Agent Roles">
+                <span class="nav-icon">🤖</span>
+                <span class="nav-label">Agent Roles</span>
+              </a>
+            </div>
+          </details>
+          {other_ws_html}
+        </div>
+      </details>
+
+      <!-- Tier 1: Team Stub -->
+      <details name="tier1" class="tier-accordion tier-team">
+        <summary class="tier-summary">
+          <span class="tier-chevron">▸</span>
+          <span>TEAM</span>
+          <span class="stub-badge">Coming soon</span>
+        </summary>
+        <div class="stub-panel">
+          <div class="stub-icon">🚧</div>
+          <div>Team workspaces aren't set up yet.</div>
+          <div class="stub-sub">Coming soon — invite teammates and share workspace views.</div>
+        </div>
+      </details>
+
+      <!-- Tier 1: Enterprise Stub -->
+      <details name="tier1" class="tier-accordion tier-enterprise">
+        <summary class="tier-summary">
+          <span class="tier-chevron">▸</span>
+          <span>ENTERPRISE</span>
+          <span class="stub-badge">Coming soon</span>
+        </summary>
+        <div class="stub-panel">
+          <div class="stub-icon">🏢</div>
+          <div>Enterprise workspaces coming soon.</div>
+          <div class="stub-sub">Coming soon — SSO, audit logs, and fleet-wide policies.</div>
+        </div>
+      </details>
     </div>
+
     <div class="nav-footer">
-      <div class="theme-label">Theme</div>
       <div class="theme-sw">
         <button class="theme-btn" type="button" data-theme-mode="light">☀ Light</button>
         <button class="theme-btn" type="button" data-theme-mode="dark">☾ Dark</button>
@@ -1058,7 +2021,28 @@ def generate_index_html(data: dict, port: int) -> str:
   </aside>
 
   <main class="main">
-    <iframe id="view-frame" src="gantt.html" title="Synlynk Vizor view"></iframe>
+    <header class="main-topbar">
+      <nav class="breadcrumbs" id="breadcrumbs">
+        <a class="crumb-link" href="activity.html" onclick="return setView('activity', 'activity.html', 'Personal', 'Activity Stream');">Personal</a>
+        <span class="crumb-sep" id="crumb-sep-ws">›</span>
+        <a class="crumb-link" href="overview.html" id="crumb-ws" onclick="return setView('overview', 'overview.html', '', 'Overview');">{html.escape(workspace_name)}</a>
+        <span class="crumb-sep" id="crumb-sep-cat" style="display:none;">›</span>
+        <span class="crumb-cat" id="crumb-cat" style="display:none;"></span>
+        <span class="crumb-sep" id="crumb-sep-view" style="display:none;">›</span>
+        <span class="crumb-current" id="crumb-view" style="display:none;"></span>
+      </nav>
+      <div class="corner-actions">
+        <button class="corner-btn" type="button" title="Settings — GitHub & Harness Connections (Sub-project 2)" onclick="alert('Settings section coming in Sub-project 2 (GitHub OAuth, Provider connections, Backup/Restore)');">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        </button>
+        <button class="corner-btn" type="button" title="Guided Walkthrough (Sub-project 4)" onclick="alert('FTUE Guided Walkthrough coming in Sub-project 4');">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+        </button>
+        <a href="/" class="corner-link" title="Workspace Hub">Hub ↗</a>
+      </div>
+    </header>
+
+    <iframe id="view-frame" src="overview.html" title="Synlynk Vizor view"></iframe>
     <div class="status-bar">
       <span class="status-dot">●</span>
       <span>local</span>
@@ -1098,13 +2082,43 @@ def generate_index_html(data: dict, port: int) -> str:
     syncThemeButtons(theme);
   }}
 
-  function setView(viewId, viewSrc) {{
+  function setView(viewId, viewSrc, category, label) {{
     if (viewSrc && viewFrame) {{
       viewFrame.src = viewSrc;
     }}
     navLinks.forEach((link) => {{
       link.classList.toggle('active', link.dataset.view === viewId);
     }});
+
+    const sepWs = document.getElementById('crumb-sep-ws');
+    const wsEl = document.getElementById('crumb-ws');
+    const sepCat = document.getElementById('crumb-sep-cat');
+    const catEl = document.getElementById('crumb-cat');
+    const sepView = document.getElementById('crumb-sep-view');
+    const viewEl = document.getElementById('crumb-view');
+
+    if (viewId === 'activity') {{
+      if (sepWs) sepWs.style.display = 'none';
+      if (wsEl) wsEl.style.display = 'none';
+      if (sepCat) sepCat.style.display = 'inline';
+      if (catEl) {{ catEl.style.display = 'inline'; catEl.textContent = 'ACTIVITY STREAM'; }}
+      if (sepView) sepView.style.display = 'none';
+      if (viewEl) viewEl.style.display = 'none';
+    }} else if (viewId === 'overview') {{
+      if (sepWs) sepWs.style.display = 'inline';
+      if (wsEl) wsEl.style.display = 'inline';
+      if (sepCat) sepCat.style.display = 'none';
+      if (catEl) catEl.style.display = 'none';
+      if (sepView) sepView.style.display = 'none';
+      if (viewEl) viewEl.style.display = 'none';
+    }} else {{
+      if (sepWs) sepWs.style.display = 'inline';
+      if (wsEl) wsEl.style.display = 'inline';
+      if (sepCat) sepCat.style.display = 'inline';
+      if (catEl) {{ catEl.style.display = 'inline'; catEl.textContent = category || ''; }}
+      if (sepView) sepView.style.display = 'inline';
+      if (viewEl) {{ viewEl.style.display = 'inline'; viewEl.textContent = label || ''; }}
+    }}
     return false;
   }}
 
@@ -1139,14 +2153,15 @@ def generate_index_html(data: dict, port: int) -> str:
   navLinks.forEach((link) => {{
     link.addEventListener('click', (event) => {{
       event.preventDefault();
-      const viewId = link.dataset.view || 'gantt';
-      const viewSrc = link.getAttribute('href') || 'gantt.html';
-      document.getElementById('view-frame').src = viewSrc;
-      setView(viewId);
+      const viewId = link.dataset.view || 'overview';
+      const viewSrc = link.getAttribute('href') || 'overview.html';
+      const category = link.dataset.cat || '';
+      const label = link.dataset.label || '';
+      setView(viewId, viewSrc, category, label);
     }});
   }});
 
-  setView('gantt', 'gantt.html');
+  setView('overview', 'overview.html', '', 'Overview');
 }})();
 </script>
 {_live_js(port)}
@@ -5027,6 +6042,8 @@ def _write_cache(data: dict, port: int) -> None:
     os.makedirs(VIZ_CACHE_DIR, exist_ok=True)
     views = {
         "index.html": generate_index_html(data, port),
+        "overview.html": generate_overview_html(data, port),
+        "activity.html": generate_activity_stream_html(data, port),
         "board.html": generate_board_html(port),
         "gantt.html": generate_gantt_html(data, port),
         "tube.html": generate_architect_map_html(data, port),

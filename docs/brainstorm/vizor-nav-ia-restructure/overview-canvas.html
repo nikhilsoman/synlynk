@@ -1,0 +1,56 @@
+<h2>What goes on the workspace overview canvas?</h2>
+<p class="subtitle">Shown the instant a workspace is selected, before any specific View is opened. Pick everything that should appear (multi-select) — this becomes the "root" breadcrumb page for that workspace.</p>
+
+<div class="mockup">
+  <div class="mockup-header">synlynk-core — overview (illustrative)</div>
+  <div class="mockup-body">
+    <div style="font-size:12px">
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <div style="flex:1;border:1px solid #444;border-radius:6px;padding:10px;background:#1c2420">
+          <div style="opacity:.6">Active Goals</div><div style="font-size:20px;font-weight:700">3</div>
+        </div>
+        <div style="flex:1;border:1px solid #444;border-radius:6px;padding:10px;background:#1c2420">
+          <div style="opacity:.6">Open Stories</div><div style="font-size:20px;font-weight:700">14</div>
+        </div>
+        <div style="flex:1;border:1px solid #444;border-radius:6px;padding:10px;background:#1c2420">
+          <div style="opacity:.6">Jobs Running</div><div style="font-size:20px;font-weight:700;color:#8fd">2</div>
+        </div>
+        <div style="flex:1;border:1px solid #444;border-radius:6px;padding:10px;background:#1c2420">
+          <div style="opacity:.6">Burn (7d)</div><div style="font-size:20px;font-weight:700">$18.40</div>
+        </div>
+      </div>
+      <div style="border:1px solid #444;border-radius:6px;padding:10px;margin-bottom:10px">
+        <div style="font-weight:600;margin-bottom:6px">Recent / Active Jobs</div>
+        <div style="opacity:.85">● job-891306ab &nbsp;codex&nbsp; dispatch/model-routing &nbsp;<span style="color:#8fd">running</span></div>
+        <div style="opacity:.85">✓ job-38a5aad8 &nbsp;codex&nbsp; job-status-labels &nbsp;<span style="color:#9d9">PR #1740 open</span></div>
+      </div>
+      <div style="border:1px solid #444;border-radius:6px;padding:10px">
+        <div style="font-weight:600;margin-bottom:6px">Jump to a View</div>
+        <div style="opacity:.85">Board · Gantt &nbsp;|&nbsp; Architect Map · Infra &nbsp;|&nbsp; Product · Logical · World &nbsp;|&nbsp; Effort · Cost · Efficiency · Observatory</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="options" data-multiselect="true">
+  <div class="option" data-choice="stat-cards" onclick="toggleSelect(this)">
+    <div class="letter">1</div>
+    <div class="content"><h3>Stat cards row</h3><p>Active Goals, Open Stories, Jobs Running, Burn — quick-glance numbers pulled from <code>synlynk status --json</code>.</p></div>
+  </div>
+  <div class="option" data-choice="job-feed" onclick="toggleSelect(this)">
+    <div class="letter">2</div>
+    <div class="content"><h3>Recent/active jobs feed</h3><p>Live-ish list of dispatched jobs for this workspace with status and PR links — the thing you currently check via <code>synlynk jobs</code>.</p></div>
+  </div>
+  <div class="option" data-choice="view-shortcuts" onclick="toggleSelect(this)">
+    <div class="letter">3</div>
+    <div class="content"><h3>Jump-to-view shortcuts</h3><p>One-click row/grid into each category's views, so the overview doubles as a launcher without needing the accordion still expanded.</p></div>
+  </div>
+  <div class="option" data-choice="goal-progress" onclick="toggleSelect(this)">
+    <div class="letter">4</div>
+    <div class="content"><h3>Goal progress rollup</h3><p>Mini progress bars per active GOVERNS goal (like <code>synlynk goal status</code>) — surfaces "what are we working toward" not just activity noise.</p></div>
+  </div>
+  <div class="option" data-choice="alerts" onclick="toggleSelect(this)">
+    <div class="letter">5</div>
+    <div class="content"><h3>Alerts / sentinel banner</h3><p>Surfaces active <code>.synlynk/sentinel.md</code> alerts (flatline, quota exhausted, etc.) right on the overview instead of only in CLI.</p></div>
+  </div>
+</div>
