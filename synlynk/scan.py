@@ -1450,7 +1450,9 @@ _AGENT_FILE_NAMES = {"CLAUDE.md", "GEMINI.md", "AGENTS.md", "AI_INSTRUCTIONS.md"
 _SCAN_SKIP_DIRS = {
     ".git", "node_modules", ".synlynk", "project-docs",
     "__pycache__", ".venv", "venv", "env", ".next", "dist", "build",
-    "vendor", ".worktrees", "coverage", ".nyc_output", "target", "out", "tmp",
+    "vendor", ".worktrees", "worktrees", ".claude", ".pytest_cache",
+    ".ruff_cache", "test_archive", "test_context_output",
+    "coverage", ".nyc_output", "target", "out", "tmp",
 }
 
 _SOURCE_EXTENSIONS = {
