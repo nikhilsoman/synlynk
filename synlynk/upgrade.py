@@ -7,6 +7,7 @@ import sys
 import urllib.request
 
 from synlynk._constants import VERSION
+from synlynk.scan import _run_graphify_extract
 
 
 def _detect_install_type() -> str:
@@ -172,6 +173,7 @@ def upgrade(dry_run: bool = False) -> None:
             package, "_ensure_vizor_daemon_installed", _ensure_vizor_daemon_installed
         )
         ensure_vizor_daemon_installed()
+        _run_graphify_extract(os.getcwd())
 
 
 def execute_upgrade(repo_root: str = ".") -> dict:
@@ -180,6 +182,7 @@ def execute_upgrade(repo_root: str = ".") -> dict:
 
     surfaces = detect_developer_surfaces(repo_root)
     bind_surface_rules(repo_root, surfaces)
+    _run_graphify_extract(repo_root)
 
     return {
         "status": "upgraded",
