@@ -186,7 +186,7 @@ def generate_viz_data() -> dict:
             from synlynk.worktree import _collect_verdicts, _get_repo_root
 
             main_repo_path = _get_repo_root()
-            verdicts = _collect_verdicts(main_repo_path, os.getcwd())
+            verdicts = _collect_verdicts(main_repo_path, os.getcwd(), gh_available=False)
         except Exception:
             return empty
 
@@ -222,20 +222,18 @@ def generate_viz_data() -> dict:
     def _base_data() -> dict:
         observatory = build_job_observatory_snapshot()
         observatory["worktrees"] = _collect_worktrees()
-        try:
-            file_tree = _query_repo_file_tree()
-        except Exception:
-            file_tree = {"name": ".", "dirs": {}, "files": []}
         repos = list(workspace_repos)
         for repo in repos:
             repo["active_dream_count"] = active_story_count if len(repos) == 1 else 0
         try:
             views_conn = _get_db()
             try:
+                file_tree = _query_repo_file_tree(conn=views_conn)
                 workspace_views = build_workspace_views_snapshot(views_conn, os.getcwd())
             finally:
                 views_conn.close()
         except Exception:
+            file_tree = {"name": ".", "dirs": {}, "files": []}
             workspace_views = {
                 "product": {"nodes": [], "edges": []},
                 "logical": {"nodes": [], "edges": []},

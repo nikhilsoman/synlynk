@@ -93,25 +93,29 @@ def init_workspace_view_tables(conn: sqlite3.Connection) -> None:
 def _save_projection(conn: sqlite3.Connection, view: str, repo: str,
                      nodes: List[dict], edges: List[dict], started: float,
                      head_sha: str, stale: int = 0) -> None:
-    init_workspace_view_tables(conn)
-    conn.execute("DELETE FROM workspace_view_edges WHERE view = ? AND (from_id IN (SELECT id FROM workspace_view_nodes WHERE view = ? AND repo = ?) OR to_id IN (SELECT id FROM workspace_view_nodes WHERE view = ? AND repo = ?))", (view, view, repo, view, repo))
-    conn.execute("DELETE FROM workspace_view_nodes WHERE view = ? AND repo = ?", (view, repo))
-    unique_nodes = list({n["id"]: n for n in nodes}.values())
-    conn.executemany(
-        "INSERT OR REPLACE INTO workspace_view_nodes (id, view, repo, kind, label, attrs_json, provenance, source_path, scanned_at, head_sha) VALUES (:id, :view, :repo, :kind, :label, :attrs_json, :provenance, :source_path, :scanned_at, :head_sha)",
-        unique_nodes,
-    )
-    unique_edges = list({e["id"]: e for e in edges}.values())
-    conn.executemany(
-        "INSERT OR REPLACE INTO workspace_view_edges (id, view, from_id, to_id, kind, provenance, attrs_json, scanned_at) VALUES (:id, :view, :from_id, :to_id, :kind, :provenance, :attrs_json, :scanned_at)",
-        unique_edges,
-    )
-    conn.execute(
-        "INSERT INTO workspace_view_meta (view, generated_at, head_sha, source_counts_json, duration_ms, stale) VALUES (?, ?, ?, ?, ?, ?) "
-        "ON CONFLICT(view) DO UPDATE SET generated_at=excluded.generated_at, head_sha=excluded.head_sha, source_counts_json=excluded.source_counts_json, duration_ms=excluded.duration_ms, stale=excluded.stale",
-        (view, _now(), head_sha, json.dumps({"nodes": len(nodes), "edges": len(edges)}), int((time.monotonic() - started) * 1000), stale),
-    )
-    conn.commit()
+    try:
+        init_workspace_view_tables(conn)
+        conn.execute("DELETE FROM workspace_view_edges WHERE view = ? AND (from_id IN (SELECT id FROM workspace_view_nodes WHERE view = ? AND repo = ?) OR to_id IN (SELECT id FROM workspace_view_nodes WHERE view = ? AND repo = ?))", (view, view, repo, view, repo))
+        conn.execute("DELETE FROM workspace_view_nodes WHERE view = ? AND repo = ?", (view, repo))
+        unique_nodes = list({n["id"]: n for n in nodes}.values())
+        conn.executemany(
+            "INSERT OR REPLACE INTO workspace_view_nodes (id, view, repo, kind, label, attrs_json, provenance, source_path, scanned_at, head_sha) VALUES (:id, :view, :repo, :kind, :label, :attrs_json, :provenance, :source_path, :scanned_at, :head_sha)",
+            unique_nodes,
+        )
+        unique_edges = list({e["id"]: e for e in edges}.values())
+        conn.executemany(
+            "INSERT OR REPLACE INTO workspace_view_edges (id, view, from_id, to_id, kind, provenance, attrs_json, scanned_at) VALUES (:id, :view, :from_id, :to_id, :kind, :provenance, :attrs_json, :scanned_at)",
+            unique_edges,
+        )
+        conn.execute(
+            "INSERT INTO workspace_view_meta (view, generated_at, head_sha, source_counts_json, duration_ms, stale) VALUES (?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT(view) DO UPDATE SET generated_at=excluded.generated_at, head_sha=excluded.head_sha, source_counts_json=excluded.source_counts_json, duration_ms=excluded.duration_ms, stale=excluded.stale",
+            (view, _now(), head_sha, json.dumps({"nodes": len(nodes), "edges": len(edges)}), int((time.monotonic() - started) * 1000), stale),
+        )
+        conn.commit()
+    except (sqlite3.OperationalError, sqlite3.DatabaseError):
+        # Database is read-only or locked; in-memory projection remains valid
+        pass
 
 
 def _node(view: str, repo: str, kind: str, label: str, attrs: dict,
@@ -319,7 +323,7 @@ def extract_logical_nodes(conn: sqlite3.Connection, repo_path: str) -> Tuple[Lis
             edges.append(_edge("logical", package, module, "includes", "extracted", now))
     try:
         from synlynk.scan import _query_repo_file_tree
-        _query_repo_file_tree()
+        _query_repo_file_tree(conn=conn)
     except Exception:
         pass
     _save_projection(conn, "logical", repo, nodes, edges, started, sha, stale=0)
