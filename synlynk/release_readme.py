@@ -87,15 +87,27 @@ def collect_pytest_test_count(root: str) -> Optional[int]:
     tests_dir = os.path.join(root, "tests")
     if not os.path.isdir(tests_dir):
         return 0
-    try:
-        result = subprocess.run(
-            [sys.executable, "-m", "pytest", tests_dir, "--collect-only", "-q", "--noconftest"],
-            cwd=root,
-            capture_output=True,
-            text=True,
-            timeout=180,
-        )
-    except (OSError, subprocess.TimeoutExpired):
+    candidate_cmds = [
+        [sys.executable, "-m", "pytest", tests_dir, "--collect-only", "-q", "--noconftest"],
+        ["pytest", tests_dir, "--collect-only", "-q", "--noconftest"],
+        ["python3", "-m", "pytest", tests_dir, "--collect-only", "-q", "--noconftest"],
+    ]
+    result = None
+    for cmd in candidate_cmds:
+        try:
+            res = subprocess.run(
+                cmd,
+                cwd=root,
+                capture_output=True,
+                text=True,
+                timeout=180,
+            )
+            if res.returncode == 0:
+                result = res
+                break
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+    if result is None:
         return None
     blob = (result.stdout or "") + "\n" + (result.stderr or "")
     if re.search(r"no tests collected", blob, re.IGNORECASE):
