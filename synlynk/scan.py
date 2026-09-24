@@ -1669,9 +1669,13 @@ def _scan_source_skeleton(root: str = ".") -> list:
         skeleton.append({"file": rel_path, "language": lang, "symbols": display_syms})
     return skeleton
 
-def _query_repo_file_tree() -> dict:
+def _query_repo_file_tree(conn: Optional[sqlite3.Connection] = None) -> dict:
     """Build a nested directory tree from source_symbols for the current HEAD."""
-    conn = _pkg("_get_db")()
+    if conn is None:
+        get_db = _pkg("_get_db")
+        if get_db is None:
+            from synlynk.db import _get_db as get_db
+        conn = get_db()
     cur = conn.cursor()
     try:
         cur.execute("SELECT MAX(scanned_at) FROM source_symbols")
@@ -1684,7 +1688,7 @@ def _query_repo_file_tree() -> dict:
             "GROUP BY file"
         )
         file_counts = cur.fetchall()
-    except sqlite3.OperationalError:
+    except (sqlite3.OperationalError, sqlite3.DatabaseError):
         return {"name": ".", "dirs": {}, "files": []}
 
     root = {"name": ".", "dirs": {}, "files": []}

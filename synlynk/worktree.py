@@ -374,9 +374,10 @@ def _worktree_status_hint():
     return {"local": len(entries), "stale_hint": stale}
 
 
-def _collect_verdicts(main_repo_path: str, cwd_worktree_path: str) -> list:
+def _collect_verdicts(main_repo_path: str, cwd_worktree_path: str, gh_available: Optional[bool] = None) -> list:
     entries = _list_worktrees(main_repo_path, cwd_worktree_path)
-    gh_available = _gh_auth_available()
+    if gh_available is None:
+        gh_available = _gh_auth_available()
     verdicts = []
     for entry in entries:
         signals = _gather_worktree_signals(entry, gh_available)
