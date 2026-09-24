@@ -6,15 +6,15 @@
 <p align="center"><a href="https://synlynk.com">synlynk.com</a></p>
 
 <p align="center">
-  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/tests-3198%20collected-brightgreen" alt="Tests"></a>
-  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/version-0.21.0-blue" alt="Version"></a>
+  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/tests-3213%20collected-brightgreen" alt="Tests"></a>
+  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/version-0.22.0-blue" alt="Version"></a>
   <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/license-MIT-green" alt="License"></a>
   <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/python-3.9%2B-blue" alt="Python"></a>
 </p>
 
 synlynk is a Python CLI that turns your terminal into a hybrid workgroup — one human, multiple AI harnesses, shared project state. It injects scoped project context into every dispatch, routes tasks to the best available harness using a live capability ledger, and tracks costs and hallucination loops. A shared `project-docs/` directory keeps every tool in sync: Claude Code, Codex, and AGY all read the same context, decisions, and progress.
 
-**v0.21.0:** Autonomous tripartite model dispatch, sovereign drain-to-boundary handover, P2P teams relay event bus, distributed task leases, AST worktree collision preemption, Vizor cross-workspace daemon, and first-class model catalog with quota calibration, with 3198 tests collected.
+**v0.22.0:** Frontier QA acceptance and multi-node soak testbed, cross-workspace Vizor background daemon, defensive worktree sandbox migration resilience, and concurrent schema state isolation, with 3213 tests collected.
 
 ## Documentation
 

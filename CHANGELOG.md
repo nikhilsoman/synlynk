@@ -10,6 +10,26 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 - Ongoing Wave 3: Hosted Teams Server Hub, Cloudflare Tunnel full-duplex daemon, and Dynamic Quota Advisory service.
 
+## [v0.22.0] - 2026-09-24
+### Added
+- feat(vizor): modern multi-workspace hub UI and /index.html routing fallback (#1758)
+### Fixed
+- fix(vizor): support HEAD requests in WorkspaceRoutingHandler (#1760)
+- fix(core): guard DB_PATH resolution and daemon polling outside project roots (#1759)
+- fix: fail dispatch early without role GitHub token (#1753)
+- fix(core): guard sandbox state migration and mutex-lock vizor render context (#1733, #1750) (#1757)
+- fix: backfill registry repo_path and inspect daemon install returncode (#1743, #1749) (#1756)
+- fix: resolve codex config model and git worktree identity slug (#1748, #1742) (#1755)
+### Changed
+- docs: update devlog, costs, and memory for Sprint 3 (#1733, #1750)
+- chore: deduplicate harness SOP sections (#1754)
+- docs: update devlog, costs, and memory for Sprints 1 and 2
+- docs: session checkpoint — LIVE-14 resolution, self-approval finding, PR #1744 audit, 3 tickets filed (#1751)
+- docs: finalize v0.21.0 release entry and set daily release cadence roadmap
+- chore(release): bump development version to 0.22.0-dev
+
+---
+
 ## [v0.21.0] - 2026-09-23
 ### Added
 - feat: Vizor cross-workspace daemon (#1744)

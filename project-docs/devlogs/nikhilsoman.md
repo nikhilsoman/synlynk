@@ -1,3 +1,14 @@
+## 2026-09-24 — Named Release v0.22.0: Multi-Workspace Vizor Hub & Resilient State Isolation
+
+### Shipped & Verified
+- **Release v0.22.0 Shipped:**
+  - **Vizor Multi-Workspace Hub & Entrypoint Routing (PR #1758):** Upgraded root index `http://localhost:8721/` to a modern responsive Synlynk design system dashboard with real-time search filtering, status badges, and view chips. Aliased `/w/<slug>/overview.html` and root routes cleanly to `/<slug>/index.html`.
+  - **Unconfigured Workspace DB_PATH Guard (PR #1759):** Guarded `_resolve_db_path()` to fall back to `state_db_path(slug)` when imported outside initialized repositories, preventing `StateRegistryError` during daemon launches.
+  - **HEAD Route Support (PR #1760):** Added unified `_route_path()` to handle `HEAD` and `GET` requests identically in `WorkspaceRoutingHandler`.
+  - **Marketing Ceremony:** Fully synchronized `README.md`, 4 standalone documentation bundles (Quickstart, Official Reference, Command Reference, Watching at Work in HTML & PDF), and `website/`.
+  - **All 3,212 Tests Collected and Passing Cleanly.**
+[@agy, @nikhilsoman]
+
 ## 2026-09-19 — Wave 1 (Dev Preview v1.0.0, 9 Pillars) Autonomous Milestone Complete
 
 ### Shipped & Verified
