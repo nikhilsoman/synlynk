@@ -32,7 +32,7 @@ def test_load_model_catalog_default(tmp_path):
             "reasoning": {
                 "claude": "claude-opus-5",
                 "agy": "gemini-3.5-pro",
-                "codex": "o3",
+                "codex": "gpt-5.6-luna",
             },
         },
         "models": [
@@ -63,7 +63,7 @@ def test_load_model_catalog_default(tmp_path):
     # Test tier resolution
     assert resolve_tier_model("fast", "agy", repo_path=str(tmp_path)) == "gemini-3.7-flash"
     assert resolve_tier_model("pro", "claude", repo_path=str(tmp_path)) == "claude-sonnet-5"
-    assert resolve_tier_model("reasoning", "codex", repo_path=str(tmp_path)) == "o3"
+    assert resolve_tier_model("reasoning", "codex", repo_path=str(tmp_path)) == "gpt-5.6-luna"
 
 
 def test_load_model_catalog_fallback_on_missing(tmp_path):
