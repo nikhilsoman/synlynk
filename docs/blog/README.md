@@ -274,6 +274,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [225](./225-prTBD-v0.22.0.md) | PR #TBD — v0.22.0 Release | [#TBD](https://github.com/nikhilsoman/synlynk/pull/TBD) | 2026-09-24 |
 | [236](./236-pr1761-cut-named-release-v0-22-0.md) | PR #1761 — cut named release v0.22.0 | [#1761](https://github.com/nikhilsoman/synlynk/pull/1761) | 2026-09-24 |
 | [237](./237-pr1762-bump-development-version-to-0-23-0-dev.md) | PR #1762 — bump development version to 0.23.0-dev | [#1762](https://github.com/nikhilsoman/synlynk/pull/1762) | 2026-09-24 |
+| [238](./238-pr1764-correct-stale-model-catalog-entries-in-m.md) | PR #1764 — correct stale model catalog entries in models.py and models.json | [#1764](https://github.com/nikhilsoman/synlynk/pull/1764) | 2026-09-24 |
 
 ## Per-PR Post Template
 

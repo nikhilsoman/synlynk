@@ -414,5 +414,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #1762 \u2014 bump development version to 0.23.0-dev (PR #1762, v0.23.0-dev)\n\n\u2022 Merged improvements and fixes for PR #\n\n#posts",
     "changelog": "### v0.23.0-dev (2026-09-24) - PR #1762\n- Merged improvements and fixes for PR #"
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/238-pr1764-correct-stale-model-catalog-entries-in-m.md",
+    "title": "PR #1764 \u2014 correct stale model catalog entries in models.py and models.json",
+    "author": "nikhilsoman",
+    "date": "2026-09-24",
+    "pr": "#1764",
+    "version": "0.23.0-dev",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #"
+    ],
+    "tweet": "\ud83d\ude80 PR #1764 \u2014 correct stale model catalog entries in models.py and models.json (PR #1764, v0.23.0-dev)\n\n\u2022 Merged improvements and fixes for PR #\n\n#posts",
+    "changelog": "### v0.23.0-dev (2026-09-24) - PR #1764\n- Merged improvements and fixes for PR #"
   }
 ]
