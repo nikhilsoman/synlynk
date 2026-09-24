@@ -63,6 +63,20 @@ def workspace_render_context(repo_path: Path, db_path: Path, cache_dir: Path):
             os.chdir(old_cwd)
 
 
+def _is_transient_test_path(path_str: str) -> bool:
+    test_markers = (
+        "/pytest-",
+        "test_run_",
+        "synlynk-selftest",
+        "test-instructions-",
+        "test_featonboarding",
+        "test_cmd_wizard",
+        "test-doctor-",
+        "test-synlynk-",
+    )
+    return any(marker in path_str for marker in test_markers)
+
+
 def _registered_workspaces() -> dict:
     """Return {slug: entry} for every registered product, or {} if no registry yet."""
     from synlynk.state_registry import _read_unlocked, registry_path
@@ -70,8 +84,31 @@ def _registered_workspaces() -> dict:
     path = registry_path()
     if not path.exists():
         return {}
-    payload = _read_unlocked(path)
-    return payload.get("products", {})
+    try:
+        payload = _read_unlocked(path)
+    except Exception:
+        return {}
+    products = payload.get("products", {})
+    if not isinstance(products, dict):
+        return {}
+
+    is_custom_registry = bool(os.environ.get("SYNLYNK_REGISTRY_PATH"))
+    valid_workspaces = {}
+    for slug, entry in products.items():
+        if not isinstance(entry, dict):
+            continue
+        repo_path = entry.get("repo_path")
+        db_path = entry.get("canonical_path")
+        if not repo_path or not db_path:
+            continue
+        repo_p = Path(repo_path)
+        db_p = Path(db_path)
+        if not repo_p.is_dir() or not db_p.is_file():
+            continue
+        if not is_custom_registry and (_is_transient_test_path(str(repo_path)) or _is_transient_test_path(str(slug))):
+            continue
+        valid_workspaces[slug] = entry
+    return valid_workspaces
 
 
 def refresh_workspace(slug: str, entry: dict, port: int) -> None:

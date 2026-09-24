@@ -681,3 +681,28 @@
 - **Service Reload & Verification:** Reinstalled in editable mode (`pip install -e .`), restarted launchd daemon (`synlynk viz --uninstall && synlynk viz --install`), verified clean HTTP output from `http://localhost:8721/w/synlynk/gantt.html` with zero duplicate columns.
 - **Merge:** PR #1768 approved and squash-merged to `main` with 4/4 CI checks passing.
 [@agy]
+
+## 2026-09-24 — Vizor GOVERNS Board, Gantt IA Dual-Pivot & Registry Isolation
+
+### Context & Requirements
+- **Transient Workspace Pollution:** Temporary pytest and selftest directories (e.g., `test_run_brownfield_init_e2e0`) appeared in the host Vizor hub due to unisolated registry writes during test runs.
+- **GOVERNS Board Alignment:** The Board view (`board.html`) needed to align with the 7 GOVERNS lifecycle stages (`Goal`, `Open`, `Visualize`, `Execute`, `Release`, `Notify`, `Sustain`) as primary columns, using execution status badges (`open`, `ready`, `in_progress`, `blocked`, `done`) with color coding.
+- **Gantt IA & Terminology:** Purge legacy "Dreams" terminology in favor of "Releases" / "Milestones" while maintaining backward compatibility; implement Option C (Dual-Pivot: Releases > Epics > Stories vs Goals > Objectives > Stories) with chronological ordering (most recent first) and collapsible section separators (Active & In-Progress, Planned & Upcoming, Completed & Shipped).
+
+### Shipped & Implemented
+- **Vizor Daemon Registry Defense (`synlynk/vizor_daemon.py`):** Added `_is_transient_test_path()` filtering out non-existent and transient test directories (`/pytest-`, `test_run_`, `synlynk-selftest-`, etc.) when running against the host registry. Pruned stale test artifacts from `~/.synlynk/registry.json`.
+- **GOVERNS Board Operations & UI (`synlynk/board.py`, `synlynk/viz.py`):**
+  - Added `GOVERNS_STAGES = ("goal", "open", "visualize", "execute", "release", "notify", "sustain")`.
+  - Added `update_stage()` in `synlynk/board.py` and wired route `/api/board/stage` in `VizorHandler`.
+  - Restructured `generate_board_html()` with 7 GOVERNS columns, distinct color-coded status badges, stage changer dropdowns, and quick status actions.
+- **Dual-Pivot Gantt Timeline & Collapsible Sections (`synlynk/uxcore.py`, `synlynk/viz.py`):**
+  - Updated `get_gantt_data()` to query releases in descending order (`ORDER BY id DESC`), attach linked `goal_id` / `goal_outcome`, and populate `target_date`.
+  - Added `data["releases"]` alongside legacy `data["dreams"]` in `generate_viz_data()`.
+  - Implemented collapsible section separators (`Active & In-Progress`, `Planned & Upcoming`, `Completed & Shipped`) with count badges and `localStorage` persistence.
+  - Added Dual-Pivot toggle buttons (`By Release` vs `By Goal`).
+- **Test Suite Updates (`tests/test_board.py`, `tests/test_viz.py`):**
+  - Added test cases for `update_stage()`, invalid stage fail-closed validation, and `/api/board/stage` endpoint assertions.
+  - Updated empty-state assertion in `tests/test_viz.py`.
+  - Verified full test suite passes: 3,217 passed, 3 skipped (100% green).
+[@agy]
+

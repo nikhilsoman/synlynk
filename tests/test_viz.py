@@ -713,7 +713,7 @@ def test_generate_gantt_html_empty_state():
 
     html = generate_gantt_html(data, port=8721)
 
-    assert "No Dreams found in state db" in html
+    assert "No Releases found in state db" in html
     assert "<p class='empty-state'>" in html
 
 

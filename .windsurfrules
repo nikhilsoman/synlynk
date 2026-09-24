@@ -1,4 +1,4 @@
-# synlynk:start version="0.21.0-dev"
+# synlynk:start version="0.23.0-dev"
 Read .synlynk/context.md at session start.
 Do NOT hand-edit todo.md — update task status in state.db via `synlynk story done <id>` and `synlynk checkpoint`.
 Run `synlynk checkpoint` at task boundaries.
