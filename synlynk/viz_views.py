@@ -295,7 +295,11 @@ def extract_logical_nodes(conn: sqlite3.Connection, repo_path: str) -> Tuple[Lis
             nodes, edges = [], []
 
     package_nodes: Dict[str, dict] = {}
-    skip = {".git", ".synlynk", "__pycache__", "node_modules", ".venv", "venv"}
+    skip = {
+        ".git", ".synlynk", "__pycache__", "node_modules", ".venv", "venv",
+        "worktrees", ".worktrees", ".claude", ".pytest_cache", ".ruff_cache",
+        "dist", "build", "test_archive", "test_context_output",
+    }
     for root, dirs, files in os.walk(repo_path):
         dirs[:] = sorted(d for d in dirs if d not in skip and not d.startswith("."))
         py_files = sorted(f for f in files if f.endswith(".py") and not f.startswith("."))
