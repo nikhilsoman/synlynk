@@ -12,8 +12,8 @@ Each arc below can be tagged `<!-- goal:goal-xxxxxxxx -->` to link it to a goal.
 | :--- | :--- | :--- | :--- |
 | v0.20.0 | Visual Workspace Observatory (BS-6 Vizor) | ✅ Shipped | 2026-09-19 |
 | v0.21.0 | Autonomous Multi-Home & Teams Relay Mesh | ✅ Shipped | 2026-09-23 |
-| v0.22.0 | Robust Onboarding, W11 Tunnel & W12 Discord Bridge | 🟡 In Progress | 2026-09-24 |
-| v0.23.0 | Autonomous Execution Loop & Vizor Strengthening | 🔜 Next | 2026-09-25 |
+| v0.22.0 | Multi-Workspace Vizor Hub & Resilient State Isolation | ✅ Shipped | 2026-09-24 |
+| v0.23.0 | Remote Access (W11 Tunnel, W12 Discord Bridge) & Autonomous Execution | 🔜 Next | 2026-09-25 |
 | v1.0.0-rc1 | Synlynk Personal & Teams Release Candidate | 🎯 Milestone | 2026-10-01 |
 
 ## Recent work (from git history — 1242 commits, Python)

@@ -1,6 +1,14 @@
 # Cost Log
-
-## 2026-09-24 — Sprint 3 Sandbox State Migration & Vizor Concurrency Lock (PR #1757)
+ 
++## 2026-09-24 — Release v0.22.0: Multi-Workspace Vizor Hub & Resilient State Isolation
++- Interactive Conductor: Agy.
++- Merged PR #1758: Modern multi-workspace Vizor Hub UI, status badges, and `/index.html` entrypoint routing fallback.
++- Merged PR #1759: Unconfigured workspace `DB_PATH` fallback and defensive daemon `repo_path` / `canonical_path` validation.
++- Merged PR #1760: Unified `HEAD` and `GET` routing in `WorkspaceRoutingHandler`.
++- Executed `synlynk release --version 0.22.0 --role pm` with 4 doc bundles (HTML & PDF) and website synchronizations.
++- Zero external fee-bearing dispatch spend.
++
+ ## 2026-09-24 — Sprint 3 Sandbox State Migration & Vizor Concurrency Lock (PR #1757)
 - Interactive Conductor: Agy.
 - Resolved Issue #1733 (Defensive sandbox/unwritable worktree error handling during state migration and CLI import) in PR #1757.
 - Resolved Issue #1750 (`_RENDER_LOCK` mutex locking around `workspace_render_context` to protect global process CWD and viz cache directories) in PR #1757.
