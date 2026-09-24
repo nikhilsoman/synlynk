@@ -273,6 +273,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [235](./235-pr1760-support-head-requests-in-workspaceroutin.md) | PR #1760 — support HEAD requests in WorkspaceRoutingHandler | [#1760](https://github.com/nikhilsoman/synlynk/pull/1760) | 2026-09-24 |
 | [225](./225-prTBD-v0.22.0.md) | PR #TBD — v0.22.0 Release | [#TBD](https://github.com/nikhilsoman/synlynk/pull/TBD) | 2026-09-24 |
 | [236](./236-pr1761-cut-named-release-v0-22-0.md) | PR #1761 — cut named release v0.22.0 | [#1761](https://github.com/nikhilsoman/synlynk/pull/1761) | 2026-09-24 |
+| [237](./237-pr1762-bump-development-version-to-0-23-0-dev.md) | PR #1762 — bump development version to 0.23.0-dev | [#1762](https://github.com/nikhilsoman/synlynk/pull/1762) | 2026-09-24 |
 
 ## Per-PR Post Template
 
