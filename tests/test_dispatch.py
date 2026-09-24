@@ -1948,6 +1948,32 @@ def test_agy_dispatch_flags_includes_print_timeout(project_dir, monkeypatch):
     assert "--print-timeout 30m0s" in shell_cmd
 
 
+def test_dispatch_emits_model_and_effort_flags(project_dir, monkeypatch):
+    import synlynk.dispatch as dispatch_mod
+
+    recorded_cmd = []
+
+    def fake_popen(cmd, *args, **kwargs):
+        if cmd and cmd[0] == "sh":
+            recorded_cmd.append(cmd)
+        return type("DummyProc", (), {"pid": 9999})()
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", fake_popen)
+
+    dispatch_mod.dispatch_agent(
+        agent="agy",
+        task="write docs",
+        model="gemini-3.1-pro-high",
+        effort="high",
+        skip_preflight=True,
+        context_mode="none",
+    )
+
+    shell_cmd = recorded_cmd[0][2]
+    assert "--model gemini-3.1-pro-high" in shell_cmd
+    assert "--effort high" in shell_cmd
+
+
 def test_agy_dispatch_flags_does_not_duplicate_print_timeout_if_already_present(project_dir, monkeypatch):
     import synlynk.dispatch as dispatch_mod
 

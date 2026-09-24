@@ -2917,6 +2917,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                    gh_write_target_kind: str = "issue",
                    gh_write_expect: str = None,
                    model: str = None,
+                   effort: str = None,
                    model_tier: str = None,
                    role: str = None,
                    task_domain: str = None,
@@ -3226,6 +3227,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         flags = flags + [f"--{key}"] if value in (None, "") else flags + [f"--{key}", str(value)]
     if model:
         flags += ["--model", model]
+    if effort:
+        flags += ["--effort", effort]
     load_config = _pkg("load_config")
     cfg = load_config() if load_config else {}
     role_list = (cfg.get("roles", {}) or {}).get(agent, [])

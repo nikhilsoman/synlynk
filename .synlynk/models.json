@@ -4,21 +4,21 @@
   "tiers": {
     "fast": {
       "claude": "claude-haiku-4-5-20251001",
-      "agy": "gemini-3-flash",
+      "agy": "gemini-3.7-flash-medium",
       "codex": "gpt-5.6-luna",
       "grok": "grok-4.6",
       "local": "qwen2.5"
     },
     "pro": {
       "claude": "claude-sonnet-5",
-      "agy": "gemini-3-pro",
+      "agy": "gemini-3.1-pro-low",
       "codex": "gpt-5.6-luna",
       "grok": "grok-4.7",
       "local": "qwen2.5"
     },
     "reasoning": {
       "claude": "claude-opus-5",
-      "agy": "gemini-3.5-flash-base",
+      "agy": "gemini-3.1-pro-high",
       "codex": "gpt-5.6-luna",
       "grok": "grok-4.7",
       "local": "deepseek-r1"
@@ -53,7 +53,7 @@
       "entitlement_tier": "subscription_capped"
     },
     {
-      "model_id": "gemini-3-flash",
+      "model_id": "gemini-3.7-flash-medium",
       "family": "gemini-3",
       "harness": "agy",
       "context_window": 1000000,
@@ -62,21 +62,21 @@
       "entitlement_tier": "included_in_base"
     },
     {
-      "model_id": "gemini-3-pro",
+      "model_id": "gemini-3.1-pro-low",
       "family": "gemini-3",
       "harness": "agy",
       "context_window": 2000000,
       "max_output": 16384,
       "rates": {"input_per_1k": 0.00125, "output_per_1k": 0.005},
-      "entitlement_tier": "metered_extra_usage_only"
+      "entitlement_tier": "subscription_capped"
     },
     {
-      "model_id": "gemini-3.5-flash-base",
+      "model_id": "gemini-3.1-pro-high",
       "family": "gemini-3",
       "harness": "agy",
       "context_window": 2000000,
-      "max_output": 32768,
-      "rates": {"input_per_1k": 0.002, "output_per_1k": 0.008},
+      "max_output": 16384,
+      "rates": {"input_per_1k": 0.00125, "output_per_1k": 0.005},
       "entitlement_tier": "subscription_capped"
     },
     {
