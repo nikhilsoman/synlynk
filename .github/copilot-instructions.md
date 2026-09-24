@@ -1,4 +1,4 @@
-<!-- synlynk:start version="0.21.0-dev" tool="copilot" -->
+<!-- synlynk:start version="0.23.0-dev" tool="copilot" -->
 ## synlynk Session Protocol
 
 ### Session Start

@@ -77,6 +77,34 @@ def test_board_status_fails_closed(tmp_path, monkeypatch):
         update_status("missing", "done", str(repo))
 
 
+def test_board_stage_updates_and_fails_closed(tmp_path, monkeypatch):
+    from synlynk.board import GOVERNS_STAGES, update_stage
+    repo, db_path = _product_repo(tmp_path, monkeypatch)
+
+    conn = sqlite3.connect(db_path)
+    conn.execute("ALTER TABLE stories ADD COLUMN governs_stage TEXT")
+    conn.commit()
+    conn.close()
+
+    res = update_stage("frontend-1", "execute", str(repo))
+    assert res == {"ok": True, "story_id": "frontend-1", "stage": "execute"}
+
+    conn = sqlite3.connect(db_path)
+    assert conn.execute("SELECT governs_stage FROM stories WHERE story_id='frontend-1'").fetchone()[0] == "execute"
+    conn.close()
+
+    payload = board_data(str(repo))
+    assert payload["governs_stages"] == list(GOVERNS_STAGES)
+    by_id = {card["story_id"]: card for card in payload["cards"]}
+    assert by_id["frontend-1"]["governs_stage"] == "execute"
+    assert by_id["api-1"]["governs_stage"] == "open"
+
+    with pytest.raises(ValueError, match="unknown GOVERNS stage"):
+        update_stage("frontend-1", "invalid_stage", str(repo))
+    with pytest.raises(KeyError, match="story not found"):
+        update_stage("nonexistent-card", "execute", str(repo))
+
+
 def test_board_view_is_local_and_uses_status_api():
     from synlynk.viz import generate_board_html
 
@@ -84,4 +112,7 @@ def test_board_view_is_local_and_uses_status_api():
     assert "Product graph" in html
     assert "/api/board" in html
     assert "/api/board/status" in html
+    assert "/api/board/stage" in html
+    assert "GOVERNS" in html
     assert "github.com" not in html
+

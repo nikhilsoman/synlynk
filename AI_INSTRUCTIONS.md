@@ -1,4 +1,4 @@
-<!-- synlynk:start version="0.21.0-dev" tool="universal" -->
+<!-- synlynk:start version="0.23.0-dev" tool="universal" -->
 # synlynk Universal AI Instructions
 
 Apply the following as your system prompt or custom instructions before starting any session in this repository.

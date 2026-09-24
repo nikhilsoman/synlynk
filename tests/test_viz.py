@@ -696,6 +696,10 @@ def test_generate_gantt_html_renders_dreams_and_notes():
     assert "note-urgent" in html
     assert "fetch('/note'" in html
     assert "vizorAuthHeaders" in html
+    assert '<div class="sidenav">' not in html
+    assert '<div class="view-tabs">' not in html
+    assert '<div class="shell">' not in html
+    assert '<div class="content">' in html
 
 
 def test_generate_gantt_html_empty_state():
@@ -709,7 +713,7 @@ def test_generate_gantt_html_empty_state():
 
     html = generate_gantt_html(data, port=8721)
 
-    assert "No Dreams found in state db" in html
+    assert "No Releases found in state db" in html
     assert "<p class='empty-state'>" in html
 
 
