@@ -430,5 +430,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #1764 \u2014 correct stale model catalog entries in models.py and models.json (PR #1764, v0.23.0-dev)\n\n\u2022 Merged improvements and fixes for PR #\n\n#posts",
     "changelog": "### v0.23.0-dev (2026-09-24) - PR #1764\n- Merged improvements and fixes for PR #"
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/239-pr1765-implement-two-tier-accordion-navigation-.md",
+    "title": "PR #1765 \u2014 implement two-tier accordion navigation, overview canvas, and activity stream",
+    "author": "nikhilsoman",
+    "date": "2026-09-24",
+    "pr": "#1765",
+    "version": "0.23.0-dev",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #"
+    ],
+    "tweet": "\ud83d\ude80 PR #1765 \u2014 implement two-tier accordion navigation, overview canvas, and activity stream (PR #1765, v0.23.0-dev)\n\n\u2022 Merged improvements and fixes for PR #\n\n#posts",
+    "changelog": "### v0.23.0-dev (2026-09-24) - PR #1765\n- Merged improvements and fixes for PR #"
   }
 ]
