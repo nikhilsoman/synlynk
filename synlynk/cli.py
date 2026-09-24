@@ -882,6 +882,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--model", default=None,
         help="Explicit model identifier; overrides automatic model selection",
     )
+    dispatch_parser.add_argument(
+        "--effort", choices=["low", "high"], default=None,
+        help="Reasoning effort for the selected model",
+    )
     dispatch_parser.add_argument("--task-domain", default=None, dest="task_domain",
                                  help="Capability domain used by adaptive EV routing")
     dispatch_parser.add_argument("--criticality", type=float, default=1.0,
@@ -1918,6 +1922,7 @@ def main(argv=None) -> None:
                                  task_type=_effective_task_type,
                                  model_tier=getattr(args, "model_tier", None),
                                  model=getattr(args, "model", None),
+                                 effort=getattr(args, "effort", None),
                                  task_domain=getattr(args, "task_domain", None),
                                  criticality=getattr(args, "criticality", 1.0),
                                  gh_write_target_kind=_resolved_gh_write_target_kind,

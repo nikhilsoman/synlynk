@@ -24,13 +24,15 @@ def test_builtin_catalog_uses_current_remote_models_and_preserves_local_models()
     assert {
         "claude-opus-5", "claude-opus-5-5", "claude-sonnet-5",
         "claude-fable-5-1", "claude-fable-5", "claude-haiku-4-5-20251001",
-        "gemini-3-pro", "gemini-3-flash", "gemini-3.1-pro", "gemini-3.5-flash-base",
+        "gemini-3.7-flash-medium", "gemini-3.1-pro-low", "gemini-3.1-pro-high",
         "gpt-5.6-luna", "grok-4.7", "grok-4.6",
     } <= model_ids
     assert {"deepseek-r1", "gemma-2-9b-it-q4", "qwen2.5"} <= model_ids
     assert not model_ids & {
         "claude-3-5-sonnet-20241022", "claude-3-5-opus-20240229",
         "gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash",
+        "gemini-3-pro", "gemini-3-flash", "gemini-3.1-pro", "gemini-3.5-flash-base",
+        "gemini-3-flash-preview", "gemini-3.1-pro-preview",
         "grok-2-latest", "gpt-4o-2024-11-20", "o3",
     }
 

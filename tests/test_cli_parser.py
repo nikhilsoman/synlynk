@@ -38,6 +38,17 @@ def test_dispatch_parser_issue_defaults_to_none():
     assert args.issue is None
 
 
+def test_dispatch_parser_effort_defaults_to_none_and_accepts_low_or_high():
+    parser = cli_mod.build_parser()
+
+    assert parser.parse_args(["dispatch", "agy", "--task", "fix it"]).effort is None
+    assert parser.parse_args(["dispatch", "agy", "--task", "fix it", "--effort", "low"]).effort == "low"
+    assert parser.parse_args(["dispatch", "agy", "--task", "fix it", "--effort", "high"]).effort == "high"
+
+    with pytest.raises(SystemExit):
+        parser.parse_args(["dispatch", "agy", "--task", "fix it", "--effort", "medium"])
+
+
 def test_backfill_capability_ratings_parser_registered():
     from synlynk.cli import build_parser
 
