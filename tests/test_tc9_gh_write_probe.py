@@ -116,7 +116,12 @@ def test_tc9_db_persistence(monkeypatch):
         assert row[2] == "direct_cli"
 
 
-def test_doctor_prints_tc9_output(monkeypatch, capsys):
+def test_doctor_prints_tc9_output(tmp_path, monkeypatch, capsys):
+    # Isolate from the host repo. Doctor health checks (_hc_todo_drift) call
+    # _detect_hand_edit → _generate_todo_md, which closes whatever _get_db()
+    # returns. Sharing the host migrated ledger would close this in-memory
+    # connection before TC-4.
+    monkeypatch.chdir(tmp_path)
     monkeypatch.setattr("shutil.which", lambda bin_name: "/usr/local/bin/claude")
     with patch("synlynk.probe._run_tc6", return_value={"passed": True, "error": "", "output": "ok"}):
         db = sqlite3.connect(":memory:")

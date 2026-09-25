@@ -58,6 +58,41 @@ def identity_slug_from_config(repo_path: PathLike = ".") -> str:
     return _slugify(root_repo.name)
 
 
+def resolve_product_display_name(repo_path: PathLike = ".") -> str:
+    """Product name for init/scan/brownfield: configured slug or git root name.
+
+    Never uses a linked worktree folder name. Does not slugify the last-resort
+    directory name so unconfigured scans keep the real folder spelling.
+    """
+    repo = Path(repo_path).resolve()
+    candidates = [repo / ".synlynk" / "config.json"]
+    root_repo = repo
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+            cwd=repo,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            raw_common = Path(result.stdout.strip())
+            common = (repo / raw_common).resolve() if not raw_common.is_absolute() else raw_common.resolve()
+            root_repo = common.parent if common.name == ".git" else common.parent
+            candidates.append(root_repo / ".synlynk" / "config.json")
+    except (OSError, ValueError):
+        pass
+    for cfg_path in candidates:
+        try:
+            data = json.loads(cfg_path.read_text())
+        except (OSError, json.JSONDecodeError):
+            continue
+        raw = data.get("identity_slug")
+        if isinstance(raw, str) and raw.strip():
+            return _slugify(raw.strip())
+    return root_repo.name
+
+
 def configured_identity_slug(repo_path: PathLike = ".") -> Optional[str]:
     """Return the explicitly configured product identity, or ``None``."""
     repo = Path(repo_path).resolve()
