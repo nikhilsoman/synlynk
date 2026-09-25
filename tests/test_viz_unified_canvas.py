@@ -58,14 +58,14 @@ def test_architect_map_theme_synchronization():
     assert "theme-change" in html or "data-theme" in html
 
 
-def test_logical_view_embeds_graphify_and_communities_sidebar():
+def test_logical_view_embeds_graphify_and_communities_dropdown():
     data = {
         "workspace": {"name": "synlynk"},
         "workspace_views": {
             "logical": {
                 "nodes": [
-                    {"id": "c1", "label": "auth_handler", "kind": "function", "attrs_json": '{"community": 1}'},
-                    {"id": "c2", "label": "db_pool", "kind": "class", "attrs_json": '{"community": 2}'}
+                    {"id": "c1", "label": "auth_handler", "kind": "function", "source_file": "synlynk/auth.py", "attrs_json": '{"community": 1}'},
+                    {"id": "c2", "label": "db_pool", "kind": "class", "source_file": "synlynk/db.py", "attrs_json": '{"community": 2}'}
                 ],
                 "edges": []
             }
@@ -73,5 +73,59 @@ def test_logical_view_embeds_graphify_and_communities_sidebar():
     }
     html = generate_logical_html(data, 8721)
     assert "graphify.html" in html or "vis-network" in html or "bs6-graph-view" in html
-    assert "Community" in html or "Communities" in html or "am-communities" in html
+    assert "Communities" in html or "am-dropdown" in html
+    assert "synlynk/auth.py" in html or "synlynk/db.py" in html
+    assert "am-kg-topbar" in html
+    assert "am-kg-canvas-full" in html
     assert "theme-change" in html or "data-theme" in html
+
+
+def test_architect_map_monorepo_tabs_and_topbar_dropdown():
+    data = {
+        "workspace": {
+            "name": "synlynk",
+            "repos": [{"name": "synlynk", "path": "/path/synlynk"}]
+        },
+        "workspace_views": {
+            "logical": {
+                "nodes": [
+                    {"id": "c1", "label": "auth_handler", "kind": "function", "source_file": "synlynk/auth.py", "attrs_json": '{"community": 1}'},
+                    {"id": "c2", "label": "AuthService", "kind": "class", "source_file": "synlynk/auth.py", "_callable_class": True, "attrs_json": '{"community": 1}'},
+                    {"id": "c3", "label": "DatabasePool", "kind": "class", "source_file": "synlynk/db.py", "attrs_json": '{"community": 2}'}
+                ],
+                "edges": []
+            }
+        }
+    }
+    html = generate_architect_map_html(data, 8721)
+    # Monorepo switcher should have Knowledge Graph and File Tree, but NOT Topology button
+    assert "Knowledge Graph" in html
+    assert "File Tree" in html
+    assert '<button class="am-tab" data-view="graph" onclick="setArchitectView(\'graph\')">Topology</button>' not in html
+    # Topbar dropdown and canonical labels
+    assert "am-kg-topbar" in html
+    assert "am-dropdown" in html
+    assert "am-kg-canvas-full" in html
+    assert "synlynk/auth.py · AuthService" in html
+    assert "synlynk/db.py · DatabasePool" in html
+
+
+def test_enrich_graphify_html_canonical_labels_and_batch_listeners():
+    from synlynk.viz import _enrich_graphify_html
+
+    sample_html = """<!DOCTYPE html><html><head></head><body><script>
+const RAW_NODES = [{"id": "1", "label": "Community 1", "title": "Community 1", "community": 1}];
+</script></body></html>"""
+
+    graph_data = {
+        "nodes": [
+            {"id": "n1", "label": "AuthService", "kind": "class", "source_file": "synlynk/auth.py", "community": 1}
+        ]
+    }
+
+    enriched = _enrich_graphify_html(sample_html, graph_data)
+    assert "synlynk/auth.py" in enriched
+    assert "Community 1" not in enriched or "synlynk/auth.py" in enriched
+    assert "filter-communities-batch" in enriched
+    assert "filter-community" in enriched
+

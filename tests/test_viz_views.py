@@ -109,3 +109,23 @@ def test_query_repo_file_tree_with_explicit_conn():
     conn.close()
 
 
+def test_derive_canonical_community_names():
+    from synlynk.viz_views import derive_canonical_community_names
+
+    raw_nodes = [
+        {"id": "n1", "label": "auth_login", "source_file": "synlynk/auth.py", "community": 1, "kind": "function"},
+        {"id": "n2", "label": "auth_logout", "source_file": "synlynk/auth.py", "community": 1, "kind": "function"},
+        {"id": "n3", "label": "AuthService", "source_file": "synlynk/auth.py", "community": 1, "kind": "class", "_callable_class": True},
+        {"id": "n4", "label": "db_query", "source_file": "synlynk/db.py", "community": 2, "kind": "function"},
+        {"id": "n5", "label": "DatabasePool", "source_file": "synlynk/db.py", "community": 2, "kind": "class"},
+        {"id": "n6", "label": "test_auth", "source_file": "tests/test_auth.py", "community": 3, "kind": "function"},
+        {"id": "n7", "label": "test_login", "source_file": "tests/test_auth.py", "community": 3, "kind": "function"},
+    ]
+
+    names = derive_canonical_community_names(raw_nodes)
+    assert names[1] == "synlynk/auth.py · AuthService"
+    assert names[2] == "synlynk/db.py · DatabasePool"
+    assert names[3] == "tests/test_auth.py"
+
+
+

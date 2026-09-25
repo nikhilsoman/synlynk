@@ -3508,6 +3508,67 @@ function filterKgSearch(query) {
   }
 }
 
+function toggleAmKgDropdown(e) {
+  if (e) e.stopPropagation();
+  const menu = document.getElementById('am-kg-dropdown-menu');
+  if (menu) menu.classList.toggle('open');
+}
+
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.am-dropdown')) {
+    const menus = document.querySelectorAll('.am-dropdown-menu');
+    menus.forEach(m => m.classList.remove('open'));
+  }
+});
+
+function filterAmKgCommunities(query) {
+  const q = (query || '').toLowerCase().trim();
+  const items = document.querySelectorAll('.am-community-item');
+  items.forEach(item => {
+    const text = item.textContent.toLowerCase();
+    item.style.display = !q || text.includes(q) ? 'flex' : 'none';
+  });
+}
+
+function selectAllAmCommunities(enable) {
+  const checkboxes = document.querySelectorAll('.am-community-checkbox');
+  checkboxes.forEach(cb => {
+    cb.checked = enable;
+  });
+  updateAmKgSelectedCount();
+  const frame = document.getElementById('am-graphify-frame');
+  if (frame && frame.contentWindow) {
+    try {
+      frame.contentWindow.postMessage({ type: 'filter-communities-batch', allEnabled: enable }, '*');
+    } catch (_) {}
+  }
+}
+
+function toggleAmCommunityFilter(cb) {
+  const comm = cb.dataset.comm;
+  const isChecked = cb.checked;
+  updateAmKgSelectedCount();
+  const frame = document.getElementById('am-graphify-frame');
+  if (frame && frame.contentWindow) {
+    try {
+      frame.contentWindow.postMessage({ type: 'filter-community', community: comm, enabled: isChecked }, '*');
+    } catch (_) {}
+  }
+}
+
+function updateAmKgSelectedCount() {
+  const checkboxes = document.querySelectorAll('.am-community-checkbox');
+  const checked = document.querySelectorAll('.am-community-checkbox:checked');
+  const countEl = document.getElementById('am-kg-selected-count');
+  if (countEl) {
+    if (checked.length === checkboxes.length) {
+      countEl.textContent = 'All (' + checkboxes.length + ')';
+    } else {
+      countEl.textContent = checked.length + ' / ' + checkboxes.length;
+    }
+  }
+}
+
 function applyTheme(theme) {
   if (!theme) return;
   const resolved = theme === 'system'
@@ -3631,8 +3692,24 @@ body { margin:0; font-family:'SF Mono',monospace; background:#f6f8fa; color:#1f2
 .am-cluster-detail { font-size:11px; fill:#475569; }
 .am-bridge-edge { stroke-dasharray:6,4; }
 .am-bridge-label { font-size:10px; font-weight:600; }
-.am-communities-sidebar { font-size:12px; }
+.am-kg-topbar { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; flex-wrap:wrap; }
+.am-kg-controls { display:flex; align-items:center; gap:10px; flex:1; }
+.am-dropdown { position:relative; display:inline-block; }
+.am-dropdown-btn { background:#fff; border:1px solid #d1d5db; border-radius:6px; padding:6px 12px; font-size:12px; font-family:inherit; cursor:pointer; display:flex; align-items:center; gap:6px; box-shadow:0 1px 2px rgba(0,0,0,0.05); }
+.am-dropdown-btn:hover { background:#f3f4f6; }
+.am-dropdown-menu { display:none; position:absolute; top:100%; left:0; margin-top:4px; width:340px; max-height:400px; background:#fff; border:1px solid #d1d5db; border-radius:8px; box-shadow:0 10px 25px rgba(0,0,0,0.15); z-index:100; flex-direction:column; box-sizing:border-box; }
+.am-dropdown-menu.open { display:flex; }
+.am-dropdown-header { padding:8px 10px; border-bottom:1px solid #e5e7eb; }
+.am-dropdown-header input { width:100%; box-sizing:border-box; padding:5px 8px; font-size:12px; border:1px solid #d1d5db; border-radius:4px; outline:none; font-family:inherit; }
+.am-dropdown-actions { display:flex; justify-content:space-between; padding:6px 10px; border-bottom:1px solid #e5e7eb; font-size:11px; }
+.am-dropdown-actions a { color:#0d9e87; text-decoration:none; cursor:pointer; font-weight:500; }
+.am-dropdown-actions a:hover { text-decoration:underline; }
+.am-dropdown-list { overflow-y:auto; padding:6px 10px; max-height:280px; }
 .am-community-item { user-select:none; }
+.am-search-input { background:#fff; border:1px solid #d1d5db; border-radius:6px; padding:6px 10px; font-size:12px; font-family:inherit; width:220px; outline:none; box-shadow:0 1px 2px rgba(0,0,0,0.05); }
+.am-search-input:focus { border-color:#0d9e87; }
+.am-kg-chip { font-size:11px; color:#64748b; background:#f1f5f9; padding:4px 8px; border-radius:6px; border:1px solid #e2e8f0; white-space:nowrap; }
+.am-kg-canvas-full { width:100%; height:720px; border:1px solid #d1d5db; border-radius:8px; overflow:hidden; position:relative; background:#fff; }
 
 [data-theme="dark"] body { background:#0d0f14; color:#c9d1d9; }
 [data-theme="dark"] .am-header { border-bottom-color:#1e2430; }
@@ -3649,14 +3726,22 @@ body { margin:0; font-family:'SF Mono',monospace; background:#f6f8fa; color:#1f2
 [data-theme="dark"] .am-cluster-header { fill:#1e2430; }
 [data-theme="dark"] .am-cluster-title { fill:#38bdf8; }
 [data-theme="dark"] .am-cluster-detail { fill:#8b949e; }
-[data-theme="dark"] .am-communities-sidebar { background:#0a0c10 !important; border-color:#1e2430 !important; color:#c9d1d9 !important; }
-[data-theme="dark"] .am-communities-sidebar input { background:#13171f; border-color:#1e2430; color:#c9d1d9; }
+[data-theme="dark"] .am-dropdown-btn { background:#13171f; border-color:#1e2430; color:#c9d1d9; }
+[data-theme="dark"] .am-dropdown-btn:hover { background:#1e2430; }
+[data-theme="dark"] .am-dropdown-menu { background:#0a0c10; border-color:#1e2430; color:#c9d1d9; box-shadow:0 10px 25px rgba(0,0,0,0.5); }
+[data-theme="dark"] .am-dropdown-header { border-bottom-color:#1e2430; }
+[data-theme="dark"] .am-dropdown-header input { background:#13171f; border-color:#1e2430; color:#c9d1d9; }
+[data-theme="dark"] .am-dropdown-actions { border-bottom-color:#1e2430; }
+[data-theme="dark"] .am-search-input { background:#13171f; border-color:#1e2430; color:#c9d1d9; }
+[data-theme="dark"] .am-kg-chip { background:#13171f; border-color:#1e2430; color:#8b949e; }
+[data-theme="dark"] .am-kg-canvas-full { border-color:#1e2430; background:#0d0f14; }
 """
 
 
 def generate_architect_map_html(data: dict, port: int) -> str:
     """Generate the Architect Map view shell."""
     import json
+    from synlynk.viz_views import derive_canonical_community_names
 
     workspace = data.get("workspace", {})
     workspace_name = str(workspace.get("name") or "workspace")
@@ -3710,7 +3795,9 @@ def generate_architect_map_html(data: dict, port: int) -> str:
 
     if is_monorepo:
         logical_nodes = (data.get("workspace_views") or {}).get("logical", {}).get("nodes") or []
-        communities: Dict[str, int] = {}
+        comm_names = derive_canonical_community_names(logical_nodes)
+
+        communities: Dict[Any, int] = {}
         for n in logical_nodes:
             comm = n.get("community")
             if comm is None:
@@ -3720,50 +3807,59 @@ def generate_architect_map_html(data: dict, port: int) -> str:
                 except Exception:
                     pass
             if comm is not None:
-                comm_name = f"Community {comm}" if isinstance(comm, int) else str(comm)
-                communities[comm_name] = communities.get(comm_name, 0) + 1
+                communities[comm] = communities.get(comm, 0) + 1
 
         community_colors = [
             "#3b82f6", "#10b981", "#8b5cf6", "#f59e0b", "#ec4899",
             "#06b6d4", "#6366f1", "#14b8a6", "#f97316", "#84cc16"
         ]
         if communities:
+            sorted_comms = sorted(communities.items(), key=lambda x: x[1], reverse=True)
             communities_html = "".join(
                 f'<label class="am-community-item" style="display:flex; align-items:center; gap:8px; padding:4px 0; font-size:12px; cursor:pointer;">'
-                f'<input type="checkbox" checked data-comm="{html.escape(cname)}">'
-                f'<span class="legend-dot" style="background:{community_colors[i % len(community_colors)]}; width:10px; height:10px; border-radius:50%; display:inline-block;"></span>'
-                f'<span>{html.escape(cname)} ({count})</span>'
+                f'<input type="checkbox" class="am-community-checkbox" checked data-comm="{html.escape(str(cid))}" onchange="toggleAmCommunityFilter(this)">'
+                f'<span class="legend-dot" style="background:{community_colors[i % len(community_colors)]}; width:10px; height:10px; border-radius:50%; display:inline-block; flex-shrink:0;"></span>'
+                f'<span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="{html.escape(comm_names.get(cid, f"Community {cid}"))}">{html.escape(comm_names.get(cid, f"Community {cid}"))} ({count})</span>'
                 f'</label>'
-                for i, (cname, count) in enumerate(sorted(communities.items()))
+                for i, (cid, count) in enumerate(sorted_comms)
             )
         else:
             communities_html = '<div style="font-size:11px; color:#64748b;">No Community clusters detected. Run <code>synlynk scan --deep</code>.</div>'
 
         switcher_html = """    <button class="am-tab active" data-view="knowledge" onclick="setArchitectView('knowledge')">Knowledge Graph</button>
-    <button class="am-tab" data-view="graph" onclick="setArchitectView('graph')">Topology</button>
     <button class="am-tab" data-view="tree" onclick="setArchitectView('tree')">File Tree</button>"""
 
+        total_symbols = len(logical_nodes)
+        num_clusters = len(communities)
         views_html = f"""{staleness_banner_html}
 <div id="am-knowledge-view" class="am-view active">
-  <div class="am-kg-container" style="display:flex; gap:16px; height:680px;">
-    <div class="am-communities-sidebar" style="width:260px; border:1px solid #d1d5db; border-radius:8px; padding:14px; background:#fff; overflow-y:auto; box-sizing:border-box;">
-      <div style="font-weight:bold; font-size:13px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
-        <span>Communities</span>
-        <span style="font-size:11px; color:#57606a;">AST Clusters</span>
+  <div class="am-kg-topbar">
+    <div class="am-kg-controls">
+      <div class="am-dropdown">
+        <button type="button" class="am-dropdown-btn" onclick="toggleAmKgDropdown(event)">
+          <span>🌐 Communities: <strong id="am-kg-selected-count">All ({num_clusters})</strong></span>
+          <span style="font-size:9px; color:#64748b;">▼</span>
+        </button>
+        <div class="am-dropdown-menu" id="am-kg-dropdown-menu">
+          <div class="am-dropdown-header">
+            <input type="text" placeholder="Filter communities..." oninput="filterAmKgCommunities(this.value)">
+          </div>
+          <div class="am-dropdown-actions">
+            <a onclick="selectAllAmCommunities(true)">Select All</a>
+            <a onclick="selectAllAmCommunities(false)">Deselect All</a>
+          </div>
+          <div class="am-dropdown-list" id="am-communities-list">
+            {communities_html}
+          </div>
+        </div>
       </div>
-      <input type="text" id="am-kg-search" placeholder="Search symbols..." style="width:100%; box-sizing:border-box; padding:6px 8px; font-size:12px; border:1px solid #d1d5db; border-radius:6px; margin-bottom:12px;" oninput="filterKgSearch(this.value)">
-      <div id="am-communities-list">
-        {communities_html}
-      </div>
-    </div>
-    <div class="am-kg-canvas" style="flex:1; border:1px solid #d1d5db; border-radius:8px; overflow:hidden; position:relative; background:#fff;">
-      <iframe id="am-graphify-frame" src="graphify.html" width="100%" height="100%" style="border:none;" title="Graphify Knowledge Graph"></iframe>
+      <input type="text" id="am-kg-search" class="am-search-input" placeholder="🔍 Search symbols..." oninput="filterKgSearch(this.value)">
+      <span class="am-kg-chip">{num_clusters} Clusters · {total_symbols} AST Symbols</span>
     </div>
   </div>
-</div>
-<div id="am-graph-view" class="am-view">
-  <div class="am-legend">{legend_html}</div>
-  <svg id="am-svg" width="100%" height="640"></svg>
+  <div class="am-kg-canvas-full">
+    <iframe id="am-graphify-frame" src="graphify.html" width="100%" height="100%" style="border:none;" title="Graphify Knowledge Graph"></iframe>
+  </div>
 </div>
 <div id="am-tree-view" class="am-view">
   <div id="am-tree-root" class="am-tree"></div>
@@ -3957,15 +4053,69 @@ function setLogicalView(view) {
   if (gv) gv.classList.toggle('active', view === 'svg');
 }
 
-function bs6ToggleCommFilter(cb) {
+function toggleAmKgDropdown(e) {
+  if (e) e.stopPropagation();
+  const menu = document.getElementById('bs6-kg-dropdown-menu');
+  if (menu) menu.classList.toggle('open');
+}
+
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.am-dropdown')) {
+    const menus = document.querySelectorAll('.am-dropdown-menu');
+    menus.forEach(m => m.classList.remove('open'));
+  }
+});
+
+function filterAmKgCommunities(query) {
+  const q = (query || '').toLowerCase().trim();
+  const items = document.querySelectorAll('.am-community-item');
+  items.forEach(item => {
+    const text = item.textContent.toLowerCase();
+    item.style.display = !q || text.includes(q) ? 'flex' : 'none';
+  });
+}
+
+function selectAllAmCommunities(enable) {
+  const checkboxes = document.querySelectorAll('.am-community-checkbox');
+  checkboxes.forEach(cb => {
+    cb.checked = enable;
+  });
+  updateAmKgSelectedCount();
+  const frame = document.getElementById('bs6-graphify-frame');
+  if (frame && frame.contentWindow) {
+    try {
+      frame.contentWindow.postMessage({ type: 'filter-communities-batch', allEnabled: enable }, '*');
+    } catch (_) {}
+  }
+}
+
+function toggleAmCommunityFilter(cb) {
   const comm = cb.dataset.comm;
   const isChecked = cb.checked;
+  updateAmKgSelectedCount();
   const frame = document.getElementById('bs6-graphify-frame');
   if (frame && frame.contentWindow) {
     try {
       frame.contentWindow.postMessage({ type: 'filter-community', community: comm, enabled: isChecked }, '*');
     } catch (_) {}
   }
+}
+
+function updateAmKgSelectedCount() {
+  const checkboxes = document.querySelectorAll('.am-community-checkbox');
+  const checked = document.querySelectorAll('.am-community-checkbox:checked');
+  const countEl = document.getElementById('bs6-kg-selected-count');
+  if (countEl) {
+    if (checked.length === checkboxes.length) {
+      countEl.textContent = 'All (' + checkboxes.length + ')';
+    } else {
+      countEl.textContent = checked.length + ' / ' + checkboxes.length;
+    }
+  }
+}
+
+function bs6ToggleCommFilter(cb) {
+  toggleAmCommunityFilter(cb);
 }
 
 function bs6FilterSearch(query) {
@@ -4040,6 +4190,8 @@ bs6RenderGraph();
 
 def _generate_bs6_view_html(data: dict, port: int, view_key: str, view_title: str) -> str:
     """Shared self-contained node/edge SVG view renderer for the BS-6 Product/Logical/Infra views."""
+    from synlynk.viz_views import derive_canonical_community_names
+
     workspace = data.get("workspace", {})
     workspace_name = str(workspace.get("name") or "workspace")
     workspace_views = data.get("workspace_views") or {}
@@ -4089,7 +4241,8 @@ def _generate_bs6_view_html(data: dict, port: int, view_key: str, view_title: st
     <button class="am-tab" data-view="svg" onclick="setLogicalView('svg')">AST Projection</button>
   </div>"""
 
-        communities: Dict[str, int] = {}
+        comm_names = derive_canonical_community_names(nodes)
+        communities: Dict[Any, int] = {}
         for n in nodes:
             comm = n.get("community")
             if comm is None:
@@ -4099,44 +4252,55 @@ def _generate_bs6_view_html(data: dict, port: int, view_key: str, view_title: st
                 except Exception:
                     pass
             if comm is not None:
-                comm_name = f"Community {comm}" if isinstance(comm, int) else str(comm)
-                communities[comm_name] = communities.get(comm_name, 0) + 1
+                communities[comm] = communities.get(comm, 0) + 1
 
         community_colors = [
             "#3b82f6", "#10b981", "#8b5cf6", "#f59e0b", "#ec4899",
             "#06b6d4", "#6366f1", "#14b8a6", "#f97316", "#84cc16"
         ]
         if communities:
+            sorted_comms = sorted(communities.items(), key=lambda x: x[1], reverse=True)
             comm_items = "".join(
                 f'<label class="am-community-item" style="display:flex; align-items:center; gap:8px; padding:4px 0; font-size:12px; cursor:pointer;">'
-                f'<input type="checkbox" checked data-comm="{html.escape(cname)}" onchange="bs6ToggleCommFilter(this)">'
-                f'<span class="legend-dot" style="background:{community_colors[i % len(community_colors)]}; width:10px; height:10px; border-radius:50%; display:inline-block;"></span>'
-                f'<span>{html.escape(cname)} ({count})</span>'
+                f'<input type="checkbox" class="am-community-checkbox" checked data-comm="{html.escape(str(cid))}" onchange="toggleAmCommunityFilter(this)">'
+                f'<span class="legend-dot" style="background:{community_colors[i % len(community_colors)]}; width:10px; height:10px; border-radius:50%; display:inline-block; flex-shrink:0;"></span>'
+                f'<span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="{html.escape(comm_names.get(cid, f"Community {cid}"))}">{html.escape(comm_names.get(cid, f"Community {cid}"))} ({count})</span>'
                 f'</label>'
-                for i, (cname, count) in enumerate(sorted(communities.items()))
+                for i, (cid, count) in enumerate(sorted_comms)
             )
         else:
             comm_items = '<div style="font-size:11px; color:#64748b;">No Community clusters detected. Run <code>synlynk scan --deep</code>.</div>'
 
-        communities_sidebar_html = f"""
-<div class="am-communities-sidebar" style="width:260px; border:1px solid #d1d5db; border-radius:8px; padding:14px; background:#fff; overflow-y:auto; box-sizing:border-box;">
-  <div style="font-weight:bold; font-size:13px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
-    <span>Communities</span>
-    <span style="font-size:11px; color:#57606a;">AST Clusters</span>
-  </div>
-  <input type="text" id="bs6-search" placeholder="Search symbols..." style="width:100%; box-sizing:border-box; padding:6px 8px; font-size:12px; border:1px solid #d1d5db; border-radius:6px; margin-bottom:12px;" oninput="bs6FilterSearch(this.value)">
-  <div id="bs6-communities-list">
-    {comm_items}
-  </div>
-</div>
-"""
+        num_clusters = len(communities)
+        total_symbols = len(nodes)
         main_views_html = f"""
 <div id="bs6-interactive-view" class="am-view active">
-  <div class="bs6-canvas-layout" style="display:flex; gap:16px; height:680px;">
-    {communities_sidebar_html}
-    <div style="flex:1; border:1px solid #d1d5db; border-radius:8px; overflow:hidden; position:relative; background:#fff;">
-      <iframe id="bs6-graphify-frame" src="graphify.html" width="100%" height="100%" style="border:none;" title="Graphify Knowledge Graph"></iframe>
+  <div class="am-kg-topbar">
+    <div class="am-kg-controls">
+      <div class="am-dropdown">
+        <button type="button" class="am-dropdown-btn" onclick="toggleAmKgDropdown(event)">
+          <span>🌐 Communities: <strong id="bs6-kg-selected-count">All ({num_clusters})</strong></span>
+          <span style="font-size:9px; color:#64748b;">▼</span>
+        </button>
+        <div class="am-dropdown-menu" id="bs6-kg-dropdown-menu">
+          <div class="am-dropdown-header">
+            <input type="text" placeholder="Filter communities..." oninput="filterAmKgCommunities(this.value)">
+          </div>
+          <div class="am-dropdown-actions">
+            <a onclick="selectAllAmCommunities(true)">Select All</a>
+            <a onclick="selectAllAmCommunities(false)">Deselect All</a>
+          </div>
+          <div class="am-dropdown-list" id="bs6-communities-list">
+            {comm_items}
+          </div>
+        </div>
+      </div>
+      <input type="text" id="bs6-search" class="am-search-input" placeholder="🔍 Search symbols..." oninput="bs6FilterSearch(this.value)">
+      <span class="am-kg-chip">{num_clusters} Clusters · {total_symbols} AST Symbols</span>
     </div>
+  </div>
+  <div class="am-kg-canvas-full">
+    <iframe id="bs6-graphify-frame" src="graphify.html" width="100%" height="100%" style="border:none;" title="Graphify Knowledge Graph"></iframe>
   </div>
 </div>
 <div id="bs6-graph-view" class="am-view">
@@ -7011,6 +7175,104 @@ fetch('/api/board').then(r=>r.json()).then(d=>{
 </script></body></html>"""
 
 
+def _enrich_graphify_html(html_str: str, graph_data: dict) -> str:
+    """Enrich Graphify HTML graph with human-readable canonical community labels and postMessage listeners."""
+    if not html_str:
+        return html_str
+
+    from synlynk.viz_views import derive_canonical_community_names
+    nodes = graph_data.get("nodes") or []
+    names = derive_canonical_community_names(nodes)
+
+    m = re.search(r'const RAW_NODES = (\[.*?\]);', html_str, re.DOTALL)
+    if m:
+        try:
+            raw_nodes = json.loads(m.group(1))
+            for rn in raw_nodes:
+                cid = rn.get("community")
+                if cid in names:
+                    cname = names[cid]
+                    rn["label"] = cname
+                    rn["title"] = cname
+                    rn["community_name"] = cname
+            new_nodes_json = json.dumps(raw_nodes)
+            html_str = html_str[:m.start(1)] + new_nodes_json + html_str[m.end(1):]
+        except Exception:
+            pass
+
+    if "filter-communities-batch" not in html_str:
+        listener_code = """
+window.addEventListener('message', function(e) {
+  if (!e.data) return;
+  if (e.data.type === 'filter-community') {
+    const comm = e.data.community;
+    const enabled = e.data.enabled;
+    const updates = [];
+    if (typeof RAW_NODES !== 'undefined') {
+      RAW_NODES.forEach(n => {
+        if (String(n.community) === String(comm) || String(n.community_name) === String(comm) || String(n.label) === String(comm)) {
+          updates.push({ id: n.id, hidden: !enabled });
+        }
+      });
+      if (updates.length && typeof nodesDS !== 'undefined') {
+        nodesDS.update(updates);
+      }
+    }
+  } else if (e.data.type === 'filter-communities-batch') {
+    const enabledMap = e.data.enabledMap || {};
+    const allEnabled = e.data.allEnabled;
+    const updates = [];
+    if (typeof RAW_NODES !== 'undefined') {
+      RAW_NODES.forEach(n => {
+        let isEnabled = true;
+        const cKey = String(n.community);
+        const cName = String(n.community_name || n.label);
+        if (allEnabled !== undefined) {
+          isEnabled = allEnabled;
+        } else if (enabledMap[cKey] !== undefined) {
+          isEnabled = enabledMap[cKey];
+        } else if (enabledMap[cName] !== undefined) {
+          isEnabled = enabledMap[cName];
+        }
+        updates.push({ id: n.id, hidden: !isEnabled });
+      });
+      if (updates.length && typeof nodesDS !== 'undefined') {
+        nodesDS.update(updates);
+      }
+    }
+  } else if (e.data.type === 'search') {
+    const q = (e.data.query || '').toLowerCase().trim();
+    if (typeof RAW_NODES !== 'undefined' && typeof nodesDS !== 'undefined') {
+      if (!q) {
+        const updates = RAW_NODES.map(n => ({ id: n.id, opacity: 1.0 }));
+        nodesDS.update(updates);
+      } else {
+        const updates = RAW_NODES.map(n => {
+          const match = (n.label || '').toLowerCase().includes(q) || (n.title || '').toLowerCase().includes(q) || (n.source_file || '').toLowerCase().includes(q);
+          return { id: n.id, opacity: match ? 1.0 : 0.15 };
+        });
+        nodesDS.update(updates);
+      }
+    }
+  } else if (e.data.type === 'theme-change') {
+    const theme = e.data.theme;
+    if (theme === 'dark') {
+      document.body.style.background = '#0d0f14';
+      document.body.style.color = '#c9d1d9';
+    } else {
+      document.body.style.background = '#ffffff';
+      document.body.style.color = '#1f2328';
+    }
+  }
+});
+"""
+        if "</script>" in html_str:
+            last_script = html_str.rfind("</script>")
+            html_str = html_str[:last_script] + listener_code + html_str[last_script:]
+
+    return html_str
+
+
 def _write_cache(data: dict, port: int) -> None:
     """Generate all views and write to viz-cache/."""
     os.makedirs(VIZ_CACHE_DIR, exist_ok=True)
@@ -7043,14 +7305,30 @@ def _write_cache(data: dict, port: int) -> None:
         with open(os.path.join(VIZ_CACHE_DIR, filename), "w") as f:
             f.write(html)
 
-    # Copy graphify.html to cache if present in workspace
+    # Copy graphify.html to cache if present in workspace and enrich with canonical labels
     graphify_src = os.path.join(os.getcwd(), ".synlynk", "graphify-out", "graph.html")
+    graphify_json_src = os.path.join(os.getcwd(), ".synlynk", "graphify-out", "graph.json")
     if os.path.isfile(graphify_src):
         try:
-            shutil.copyfile(graphify_src, os.path.join(VIZ_CACHE_DIR, "graphify.html"))
-            shutil.copyfile(graphify_src, os.path.join(VIZ_CACHE_DIR, "graph.html"))
+            with open(graphify_src, "r", encoding="utf-8") as gf:
+                html_str = gf.read()
+            graph_data = {}
+            if os.path.isfile(graphify_json_src):
+                with open(graphify_json_src, "r", encoding="utf-8") as jf:
+                    graph_data = json.load(jf)
+            elif (data.get("workspace_views") or {}).get("logical"):
+                graph_data = {"nodes": (data.get("workspace_views") or {}).get("logical", {}).get("nodes", [])}
+            enriched_html = _enrich_graphify_html(html_str, graph_data)
+            with open(os.path.join(VIZ_CACHE_DIR, "graphify.html"), "w", encoding="utf-8") as out_f:
+                out_f.write(enriched_html)
+            with open(os.path.join(VIZ_CACHE_DIR, "graph.html"), "w", encoding="utf-8") as out_f:
+                out_f.write(enriched_html)
         except Exception:
-            pass
+            try:
+                shutil.copyfile(graphify_src, os.path.join(VIZ_CACHE_DIR, "graphify.html"))
+                shutil.copyfile(graphify_src, os.path.join(VIZ_CACHE_DIR, "graph.html"))
+            except Exception:
+                pass
 
     manifest = {"updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "version": "0.1"}
     with open(os.path.join(VIZ_CACHE_DIR, "manifest.json"), "w") as f:

@@ -12,10 +12,71 @@ import re
 import sqlite3
 import subprocess
 import time
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 
 _VIEWS = ("product", "logical", "infra", "world")
+
+
+def derive_canonical_community_names(raw_nodes: List[Dict[str, Any]]) -> Dict[Any, str]:
+    """Derive human-readable canonical community names from AST nodes based on dominant files, classes, and paths."""
+    from collections import defaultdict, Counter
+    comm_nodes = defaultdict(list)
+    for n in raw_nodes:
+        comm = n.get("community")
+        if comm is None and n.get("attrs_json"):
+            try:
+                comm = json.loads(n["attrs_json"]).get("community")
+            except Exception:
+                pass
+        if comm is not None:
+            comm_nodes[comm].append(n)
+
+    names: Dict[Any, str] = {}
+    for comm, c_nodes in comm_nodes.items():
+        file_counts = Counter()
+        dir_counts = Counter()
+        classes = []
+        top_symbols = []
+
+        for n in c_nodes:
+            src = str(n.get("source_file") or n.get("source_path") or n.get("file") or n.get("path") or "")
+            src = src.lstrip("./")
+            if src:
+                file_counts[src] += 1
+                d = os.path.dirname(src)
+                if d:
+                    dir_counts[d] += 1
+            label = str(n.get("label") or n.get("id") or "")
+            if n.get("_callable_class") or n.get("kind") == "class":
+                classes.append(label)
+            top_symbols.append((label, n.get("centrality") or n.get("degree") or 0))
+
+        total = len(c_nodes)
+        if file_counts:
+            top_file, file_cnt = file_counts.most_common(1)[0]
+            if file_cnt / total >= 0.35 or len(file_counts) == 1:
+                if classes:
+                    top_class = Counter(classes).most_common(1)[0][0]
+                    if top_class and top_class.lower() not in top_file.lower():
+                        names[comm] = f"{top_file} · {top_class}"
+                    else:
+                        names[comm] = top_file
+                else:
+                    names[comm] = top_file
+            elif dir_counts and dir_counts.most_common(1)[0][1] / total >= 0.5:
+                top_dir = dir_counts.most_common(1)[0][0]
+                base_file = os.path.basename(top_file)
+                names[comm] = f"{top_dir}/* ({base_file})"
+            else:
+                names[comm] = top_file
+        else:
+            if top_symbols:
+                top_symbols.sort(key=lambda x: x[1], reverse=True)
+                names[comm] = f"Community {comm} ({top_symbols[0][0]})"
+            else:
+                names[comm] = f"Community {comm}"
+    return names
 
 
 
@@ -215,6 +276,7 @@ def extract_logical_nodes(conn: sqlite3.Connection, repo_path: str) -> Tuple[Lis
             total_nodes = len(raw_nodes)
             id_map: Dict[str, str] = {}
             seen_node_ids = set()
+            canonical_community_names = derive_canonical_community_names(raw_nodes)
 
             for rn in raw_nodes:
                 raw_id = str(rn.get("id") or "")
@@ -233,6 +295,7 @@ def extract_logical_nodes(conn: sqlite3.Connection, repo_path: str) -> Tuple[Lis
                 seen_node_ids.add(node_id)
 
                 community = rn.get("community", 0)
+                community_name = canonical_community_names.get(community, f"Community {community}")
                 centrality = rn.get("centrality") or rn.get("rank")
                 if centrality is None:
                     deg = degrees.get(raw_id, 0)
@@ -240,6 +303,7 @@ def extract_logical_nodes(conn: sqlite3.Connection, repo_path: str) -> Tuple[Lis
 
                 attrs = {k: v for k, v in rn.items() if k not in ("id", "label", "kind", "source_path", "file", "path")}
                 attrs["community"] = community
+                attrs["community_name"] = community_name
                 attrs["centrality"] = centrality
                 if built_at_commit:
                     attrs["built_at_commit"] = built_at_commit
@@ -258,6 +322,7 @@ def extract_logical_nodes(conn: sqlite3.Connection, repo_path: str) -> Tuple[Lis
                     "scanned_at": now,
                     "head_sha": sha,
                     "community": community,
+                    "community_name": community_name,
                     "centrality": centrality,
                     "stale": is_stale,
                 }
