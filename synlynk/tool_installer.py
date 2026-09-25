@@ -25,9 +25,22 @@ RECOMMENDED_TOOLS: Dict[str, Dict[str, Any]] = {
 
 def is_tool_available(tool_name: str) -> bool:
     """Check if the tool binary is available on PATH."""
+    import os
     config = RECOMMENDED_TOOLS.get(tool_name)
     binary = config["binary"] if config else tool_name
-    return shutil.which(binary) is not None
+    if shutil.which(binary) is not None:
+        return True
+    extra_paths = [
+        os.path.expanduser("~/.local/bin"),
+        os.path.expanduser("~/.pyenv/shims"),
+        "/opt/homebrew/bin",
+        "/usr/local/bin",
+    ]
+    for p in extra_paths:
+        full_p = os.path.join(p, binary)
+        if os.path.isfile(full_p) and os.access(full_p, os.X_OK):
+            return True
+    return False
 
 
 def install_tool(tool_name: str) -> bool:

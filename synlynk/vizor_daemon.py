@@ -601,6 +601,16 @@ def run_forever(port: Optional[int] = None) -> None:
 
     from synlynk.viz import DEFAULT_PORT
 
+    extra_paths = [
+        os.path.expanduser("~/.local/bin"),
+        os.path.expanduser("~/.pyenv/shims"),
+        "/opt/homebrew/bin",
+        "/usr/local/bin",
+    ]
+    for p in extra_paths:
+        if p not in os.environ.get("PATH", ""):
+            os.environ["PATH"] = p + ":" + os.environ.get("PATH", "")
+
     resolved_port = port or DEFAULT_PORT
     CACHE_ROOT.mkdir(parents=True, exist_ok=True)
     handler_cls = build_workspace_routing_handler()
@@ -651,6 +661,9 @@ _SYSTEMD_UNIT_NAME = "synlynk-vizor-daemon.service"
 
 
 def _launchd_plist_contents(python_exe: str) -> str:
+    local_bin = os.path.expanduser("~/.local/bin")
+    pyenv_shims = os.path.expanduser("~/.pyenv/shims")
+    default_path = f"/opt/homebrew/bin:/usr/local/bin:{local_bin}:{pyenv_shims}:/usr/bin:/bin:/usr/sbin:/sbin"
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
   "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -664,6 +677,11 @@ def _launchd_plist_contents(python_exe: str) -> str:
         <string>-m</string>
         <string>synlynk.vizor_daemon</string>
     </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>{default_path}</string>
+    </dict>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
