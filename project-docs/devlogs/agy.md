@@ -777,5 +777,30 @@
   - Ran full test suites: 25 targeted unit tests and all 163 regression tests across `tests/test_scan*.py`, `tests/test_viz*.py`, and `tests/test_mesh*.py` passed (100% green).
   - Executed `synlynk scan --deep`: confirmed successful AST extraction, 412 files, 3292 symbols scanned, updated `project-docs/source-map.md`.
   - Verified live daemon endpoints: HTTP 200 on `http://localhost:8721/w/synlynk/tube.html` and `logical.html`.
+## 2026-09-25 — Graph Staleness Evaluation Fix & Interactive Refresh API
+
+### Context & Root Cause Analysis
+- Investigated screenshot report where Architect Map and Logical views were showing "Graph Stale" and the `[Refresh]` link did nothing.
+- **Root Causes:**
+  1. *Stale Daemon Binary in Memory:* OS-supervised launchd service was running previous binary in memory prior to PR #1777 merge.
+  2. *False-Positive Staleness Check:* In `synlynk/discovery.py`, `stale = (head_commit != built_at) if head_commit else False` evaluated to `True` whenever `built_at_commit` was not yet populated in Graphify's default `manifest.json`.
+  3. *Client-Side Refresh Link:* The `[Refresh]` UI link only executed `javascript:location.reload()` without triggering backend extraction or cache invalidation.
+  4. *Missing HTTP API Endpoint:* `VizorHandler` lacked a `POST /api/graph/refresh` endpoint to trigger Graphify AST extraction on demand.
+
+### Shipped & Verified
+- **Staleness Evaluation (`synlynk/discovery.py`):**
+  - Updated staleness check to `bool(head_commit and built_at and head_commit != built_at)`.
+- **Manifest Head Commit Stamping (`synlynk/scan.py`):**
+  - Updated `_run_graphify_extract(repo_root)` to auto-stamp the current Git HEAD commit SHA into `.synlynk/graphify-out/manifest.json`.
+- **Interactive Graph Refresh Endpoint (`synlynk/viz.py`, `synlynk/vizor_daemon.py`):**
+  - Added `POST /api/graph/refresh` (and `/w/<slug>/api/graph/refresh`) to `VizorHandler` with authentication and workspace scoping.
+  - Triggers on-demand AST extraction, synchronizes SQLite DB view projection metadata, and regenerates the Vizor cache.
+  - Enhanced UI `triggerGraphRefresh(el)` in `tube.html` and `logical.html` with responsive loading states (`[Refreshing...]`, `[Refreshed ✓]`) and auto-reload.
+- **Daemon Binary PATH Resolution (`synlynk/tool_installer.py`, `synlynk/vizor_daemon.py`):**
+  - Augments search paths with standard user binary directories (`~/.local/bin`, `~/.pyenv/shims`, `/opt/homebrew/bin`, `/usr/local/bin`) so launchd background processes locate `graphify` and tools without PATH issues.
+- **Verification:**
+  - Added unit and integration tests in `tests/test_graph_refresh_api.py` (5/5 passed).
+  - Merged PR #1780 and PR #1781 with 100% green CI test suites.
+  - Tested live endpoint: `POST /w/synlynk/api/graph/refresh` returned 200 OK, refreshed the 17MB interactive knowledge graph in `tube.html` and `logical.html`, and cleared staleness warning.
 [@agy]
 
