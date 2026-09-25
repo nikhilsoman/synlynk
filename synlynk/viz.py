@@ -3286,6 +3286,37 @@ renderTimeline();
 
 
 _ARCHITECT_MAP_JS = """
+let amZoomScale = 1.0;
+let amPanX = 0, amPanY = 0;
+
+function amApplyTransform() {
+  const vp = document.getElementById('am-canvas-viewport');
+  if (vp) {
+    vp.setAttribute('transform', 'translate(' + amPanX + ',' + amPanY + ') scale(' + amZoomScale + ')');
+  }
+  const details = document.querySelectorAll('.am-cluster-detail');
+  details.forEach(d => {
+    d.style.display = amZoomScale < 0.65 ? 'none' : 'block';
+  });
+}
+
+function amZoomIn() {
+  amZoomScale = Math.min(amZoomScale * 1.25, 3.0);
+  amApplyTransform();
+}
+
+function amZoomOut() {
+  amZoomScale = Math.max(amZoomScale / 1.25, 0.4);
+  amApplyTransform();
+}
+
+function amZoomReset() {
+  amZoomScale = 1.0;
+  amPanX = 0;
+  amPanY = 0;
+  amApplyTransform();
+}
+
 function layoutGraph(nodes, edges) {
   const W = 900, H = 620, ITER = 200;
   const positions = {};
@@ -3329,38 +3360,75 @@ function renderGraph() {
   const nodes = window.ARCHITECT_NODES || [];
   const edges = window.ARCHITECT_EDGES || [];
   const edgeTypes = window.ARCHITECT_EDGE_TYPES || {};
+  const isMultiRepo = nodes.length > 1;
   const pos = layoutGraph(nodes, edges);
-  let markup = '';
+  let markup = '<g id="am-canvas-viewport" transform="translate(' + amPanX + ',' + amPanY + ') scale(' + amZoomScale + ')">';
+
   edges.forEach(e => {
     const a = pos[e.from], b = pos[e.to];
     if (!a || !b) return;
-    const color = (edgeTypes[e.type] || {}).color || '#94a3b8';
-    markup += '<line class="am-edge" x1="' + a.x + '" y1="' + a.y + '" x2="' + b.x + '" y2="' + b.y + '" stroke="' + color + '"></line>';
+    const color = (edgeTypes[e.type] || {}).color || '#0d9e87';
+    const edgeLabel = (edgeTypes[e.type] || {}).label || e.type || 'api-bridge';
+    if (isMultiRepo) {
+      const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+      markup += '<g class="am-bridge-group">' +
+        '<line class="am-edge am-bridge-edge" x1="' + a.x + '" y1="' + a.y + '" x2="' + b.x + '" y2="' + b.y + '" stroke="' + color + '" stroke-width="2.5" stroke-dasharray="6,4"></line>' +
+        '<rect x="' + (mx - 40) + '" y="' + (my - 10) + '" width="80" height="20" rx="4" fill="#ffffff" stroke="' + color + '" stroke-width="1"></rect>' +
+        '<text class="am-bridge-label" x="' + mx + '" y="' + (my + 4) + '" text-anchor="middle" font-size="10" fill="' + color + '" font-weight="600">' + edgeLabel + '</text>' +
+        '</g>';
+    } else {
+      markup += '<line class="am-edge" x1="' + a.x + '" y1="' + a.y + '" x2="' + b.x + '" y2="' + b.y + '" stroke="' + color + '"></line>';
+    }
   });
+
   nodes.forEach(n => {
     const p = pos[n.id];
     if (!p) return;
     const label = String(n.label || n.id || '');
-    const w = Math.max(90, label.length * 7 + 20);
-    markup += '<g class="am-node" transform="translate(' + (p.x - w / 2) + ',' + (p.y - 18) + ')" onclick="openDrawer(\\'' + n.id + '\\')">' +
-      '<rect width="' + w + '" height="36" rx="8"></rect>' +
-      '<text x="' + (w / 2) + '" y="22" text-anchor="middle">' + label + '</text>' +
-      '</g>';
+    if (isMultiRepo) {
+      const w = 220, h = 120;
+      const stack = (n.stack_labels || []).join(', ');
+      markup += '<g class="am-cluster am-cluster-repo am-repo-box" data-repo="' + n.id + '" transform="translate(' + (p.x - w / 2) + ',' + (p.y - h / 2) + ')" onclick="openDrawer(\\'' + n.id + '\\')">' +
+        '<rect class="am-cluster-bg" width="' + w + '" height="' + h + '" rx="10"></rect>' +
+        '<rect class="am-cluster-header" width="' + w + '" height="32" rx="10"></rect>' +
+        '<rect y="22" width="' + w + '" height="10" class="am-cluster-header"></rect>' +
+        '<text class="am-cluster-title" x="12" y="21">📦 ' + label + '</text>' +
+        '<text class="am-cluster-detail" x="12" y="55">Stack: ' + (stack || 'general') + '</text>' +
+        '<text class="am-cluster-detail" x="12" y="75">Active stories: ' + (n.active_dream_count || 0) + '</text>' +
+        '<g class="am-node" transform="translate(12, 86)">' +
+        '<rect width="' + (w - 24) + '" height="24" rx="4" fill="#ffffff" stroke="#94a3b8" stroke-width="1"></rect>' +
+        '<text x="' + ((w - 24) / 2) + '" y="16" text-anchor="middle" font-size="10" fill="#334155">Inspect Repo →</text>' +
+        '</g>' +
+        '</g>';
+    } else {
+      const w = Math.max(90, label.length * 7 + 20);
+      markup += '<g class="am-node" transform="translate(' + (p.x - w / 2) + ',' + (p.y - 18) + ')" onclick="openDrawer(\\'' + n.id + '\\')">' +
+        '<rect width="' + w + '" height="36" rx="8"></rect>' +
+        '<text x="' + (w / 2) + '" y="22" text-anchor="middle">' + label + '</text>' +
+        '</g>';
+    }
   });
+
+  markup += '</g>';
   svg.innerHTML = markup;
+  amApplyTransform();
 }
 
 function setArchitectView(view) {
   document.querySelectorAll('.am-tab').forEach(t => t.classList.toggle('active', t.dataset.view === view));
-  document.getElementById('am-graph-view').classList.toggle('active', view === 'graph');
-  document.getElementById('am-tree-view').classList.toggle('active', view === 'tree');
+  const kv = document.getElementById('am-knowledge-view');
+  if (kv) kv.classList.toggle('active', view === 'knowledge');
+  const gv = document.getElementById('am-graph-view');
+  if (gv) gv.classList.toggle('active', view === 'graph');
+  const tv = document.getElementById('am-tree-view');
+  if (tv) tv.classList.toggle('active', view === 'tree');
   if (view === 'tree' && !window._treeRendered) {
     renderTree();
     window._treeRendered = true;
   }
   fetch('/architect-map/view-pref', {
     method: 'POST',
-    headers: window.vizorAuthHeaders({ 'Content-Type': 'application/json' }),
+    headers: window.vizorAuthHeaders ? window.vizorAuthHeaders({ 'Content-Type': 'application/json' }) : { 'Content-Type': 'application/json' },
     body: JSON.stringify({ view: view }),
   }).catch(() => {});
 }
@@ -3400,7 +3468,7 @@ async function drawerDispatch() {
   if (!task) return;
   await fetch('/dispatch', {
     method: 'POST',
-    headers: window.vizorAuthHeaders({ 'Content-Type': 'application/json' }),
+    headers: window.vizorAuthHeaders ? window.vizorAuthHeaders({ 'Content-Type': 'application/json' }) : { 'Content-Type': 'application/json' },
     body: JSON.stringify({ repo_path: currentDrawerNode.path, task: task }),
   });
   closeDrawer();
@@ -3428,6 +3496,71 @@ function renderTree() {
   if (!root) return;
   const tree = window.ARCHITECT_FILE_TREE || { dirs: {}, files: [] };
   root.innerHTML = renderTreeNode(tree) || '<div class="am-tree-file">No scan data yet — run <code>synlynk scan --deep</code>.</div>';
+}
+
+function filterKgSearch(query) {
+  const q = (query || '').toLowerCase().trim();
+  const frame = document.getElementById('am-graphify-frame');
+  if (frame && frame.contentWindow) {
+    try {
+      frame.contentWindow.postMessage({ type: 'search', query: q }, '*');
+    } catch (_) {}
+  }
+}
+
+function applyTheme(theme) {
+  if (!theme) return;
+  const resolved = theme === 'system'
+    ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+    : theme;
+  document.documentElement.setAttribute('data-theme', resolved);
+  const frame = document.querySelector('iframe');
+  if (frame && frame.contentWindow) {
+    try {
+      frame.contentWindow.postMessage({ type: 'theme-change', theme: resolved }, '*');
+    } catch (_) {}
+  }
+}
+
+window.addEventListener('message', function(e) {
+  if (e.data && (e.data.type === 'theme-change' || e.data.theme)) {
+    applyTheme(e.data.theme || e.data);
+  }
+});
+
+try {
+  const savedTheme = localStorage.getItem('vizor-theme');
+  if (savedTheme) applyTheme(savedTheme);
+} catch (_) {}
+
+const svgEl = document.getElementById('am-svg');
+if (svgEl) {
+  let isDragging = false;
+  let startX = 0, startY = 0;
+  svgEl.addEventListener('wheel', function(e) {
+    e.preventDefault();
+    if (e.deltaY < 0) {
+      amZoomScale = Math.min(amZoomScale * 1.1, 3.0);
+    } else {
+      amZoomScale = Math.max(amZoomScale / 1.1, 0.4);
+    }
+    amApplyTransform();
+  }, { passive: false });
+  svgEl.addEventListener('mousedown', function(e) {
+    if (e.target.closest('.am-node') || e.target.closest('.am-cluster')) return;
+    isDragging = true;
+    startX = e.clientX - amPanX;
+    startY = e.clientY - amPanY;
+  });
+  window.addEventListener('mousemove', function(e) {
+    if (!isDragging) return;
+    amPanX = e.clientX - startX;
+    amPanY = e.clientY - startY;
+    amApplyTransform();
+  });
+  window.addEventListener('mouseup', function() {
+    isDragging = false;
+  });
 }
 
 renderGraph();
@@ -3462,6 +3595,36 @@ body { margin:0; font-family:'SF Mono',monospace; background:#f6f8fa; color:#1f2
 .am-tree-dir > summary { cursor:pointer; padding:2px 0; }
 .am-tree-file { padding:2px 0 2px 18px; color:#475569; }
 .am-stale-banner { background:#fffbeb; border:1px solid #f59e0b; color:#b45309; padding:8px 16px; margin:8px 20px; border-radius:6px; font-size:12px; font-weight:500; display:flex; align-items:center; gap:8px; }
+.am-zoom-controls { position:absolute; top:20px; right:30px; display:flex; gap:6px; z-index:10; }
+.am-zoom-btn { background:#fff; border:1px solid #d1d5db; border-radius:6px; padding:6px 10px; font-size:12px; cursor:pointer; font-family:inherit; box-shadow:0 1px 3px rgba(0,0,0,0.1); }
+.am-zoom-btn:hover { background:#f3f4f6; }
+.am-cluster-repo { cursor:pointer; }
+.am-cluster-bg { fill:#f8fafc; stroke:#64748b; stroke-width:1.5; }
+.am-cluster-header { fill:#e2e8f0; }
+.am-cluster-title { font-size:12px; font-weight:bold; fill:#0f172a; }
+.am-cluster-detail { font-size:11px; fill:#475569; }
+.am-bridge-edge { stroke-dasharray:6,4; }
+.am-bridge-label { font-size:10px; font-weight:600; }
+.am-communities-sidebar { font-size:12px; }
+.am-community-item { user-select:none; }
+
+[data-theme="dark"] body { background:#0d0f14; color:#c9d1d9; }
+[data-theme="dark"] .am-header { border-bottom-color:#1e2430; }
+[data-theme="dark"] .am-tab { background:#13171f; border-color:#1e2430; color:#c9d1d9; }
+[data-theme="dark"] .am-tab.active { background:#0d9e87; color:#fff; border-color:#0d9e87; }
+[data-theme="dark"] .am-drawer { background:#0a0c10; color:#c9d1d9; box-shadow:-2px 0 20px rgba(0,0,0,.5); }
+[data-theme="dark"] .am-node rect { fill:#13171f; stroke:#38bdf8; }
+[data-theme="dark"] .am-node text { fill:#c9d1d9; }
+[data-theme="dark"] .am-tree-file { color:#8b949e; }
+[data-theme="dark"] .am-stale-banner { background:#451a03; border-color:#78350f; color:#fbbf24; }
+[data-theme="dark"] .am-zoom-btn { background:#13171f; border-color:#1e2430; color:#c9d1d9; }
+[data-theme="dark"] .am-zoom-btn:hover { background:#1e2430; }
+[data-theme="dark"] .am-cluster-bg { fill:#13171f; stroke:#334155; }
+[data-theme="dark"] .am-cluster-header { fill:#1e2430; }
+[data-theme="dark"] .am-cluster-title { fill:#38bdf8; }
+[data-theme="dark"] .am-cluster-detail { fill:#8b949e; }
+[data-theme="dark"] .am-communities-sidebar { background:#0a0c10 !important; border-color:#1e2430 !important; color:#c9d1d9 !important; }
+[data-theme="dark"] .am-communities-sidebar input { background:#13171f; border-color:#1e2430; color:#c9d1d9; }
 """
 
 
@@ -3487,6 +3650,7 @@ def generate_architect_map_html(data: dict, port: int) -> str:
             "path": r.get("path", ""),
             "stack_labels": r.get("stack_labels", []),
             "github_url": r.get("github_url"),
+            "active_dream_count": r.get("active_dream_count", 0),
         }
         for r in repos
     ])
@@ -3503,6 +3667,99 @@ def generate_architect_map_html(data: dict, port: int) -> str:
     json_data = json.dumps(data)
     live_js_html = _live_js(port)
 
+    is_monorepo = len(repos) <= 1
+
+    is_stale = bool(data.get("discovery", {}).get("knowledge_graph", {}).get("stale"))
+    if not is_stale:
+        is_stale = bool((data.get("workspace_views") or {}).get("logical", {}).get("stale"))
+
+    staleness_banner_html = ""
+    if is_stale:
+        staleness_banner_html = (
+            '<div class="am-stale-banner" id="graph-stale-banner">'
+            '<span>⚠️ Graph Stale (differs from HEAD commit) — '
+            '<a href="javascript:location.reload()" style="color:#b45309;text-decoration:underline;">[Refresh Index]</a></span>'
+            '</div>'
+        )
+
+    if is_monorepo:
+        logical_nodes = (data.get("workspace_views") or {}).get("logical", {}).get("nodes") or []
+        communities: Dict[str, int] = {}
+        for n in logical_nodes:
+            comm = n.get("community")
+            if comm is None:
+                try:
+                    attrs = json.loads(n.get("attrs_json") or "{}")
+                    comm = attrs.get("community")
+                except Exception:
+                    pass
+            if comm is not None:
+                comm_name = f"Community {comm}" if isinstance(comm, int) else str(comm)
+                communities[comm_name] = communities.get(comm_name, 0) + 1
+
+        community_colors = [
+            "#3b82f6", "#10b981", "#8b5cf6", "#f59e0b", "#ec4899",
+            "#06b6d4", "#6366f1", "#14b8a6", "#f97316", "#84cc16"
+        ]
+        if communities:
+            communities_html = "".join(
+                f'<label class="am-community-item" style="display:flex; align-items:center; gap:8px; padding:4px 0; font-size:12px; cursor:pointer;">'
+                f'<input type="checkbox" checked data-comm="{html.escape(cname)}">'
+                f'<span class="legend-dot" style="background:{community_colors[i % len(community_colors)]}; width:10px; height:10px; border-radius:50%; display:inline-block;"></span>'
+                f'<span>{html.escape(cname)} ({count})</span>'
+                f'</label>'
+                for i, (cname, count) in enumerate(sorted(communities.items()))
+            )
+        else:
+            communities_html = '<div style="font-size:11px; color:#64748b;">No Community clusters detected. Run <code>synlynk scan --deep</code>.</div>'
+
+        switcher_html = """    <button class="am-tab active" data-view="knowledge" onclick="setArchitectView('knowledge')">Knowledge Graph</button>
+    <button class="am-tab" data-view="graph" onclick="setArchitectView('graph')">Topology</button>
+    <button class="am-tab" data-view="tree" onclick="setArchitectView('tree')">File Tree</button>"""
+
+        views_html = f"""{staleness_banner_html}
+<div id="am-knowledge-view" class="am-view active">
+  <div class="am-kg-container" style="display:flex; gap:16px; height:680px;">
+    <div class="am-communities-sidebar" style="width:260px; border:1px solid #d1d5db; border-radius:8px; padding:14px; background:#fff; overflow-y:auto; box-sizing:border-box;">
+      <div style="font-weight:bold; font-size:13px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
+        <span>Communities</span>
+        <span style="font-size:11px; color:#57606a;">AST Clusters</span>
+      </div>
+      <input type="text" id="am-kg-search" placeholder="Search symbols..." style="width:100%; box-sizing:border-box; padding:6px 8px; font-size:12px; border:1px solid #d1d5db; border-radius:6px; margin-bottom:12px;" oninput="filterKgSearch(this.value)">
+      <div id="am-communities-list">
+        {communities_html}
+      </div>
+    </div>
+    <div class="am-kg-canvas" style="flex:1; border:1px solid #d1d5db; border-radius:8px; overflow:hidden; position:relative; background:#fff;">
+      <iframe id="am-graphify-frame" src="graphify.html" width="100%" height="100%" style="border:none;" title="Graphify Knowledge Graph"></iframe>
+    </div>
+  </div>
+</div>
+<div id="am-graph-view" class="am-view">
+  <div class="am-legend">{legend_html}</div>
+  <svg id="am-svg" width="100%" height="640"></svg>
+</div>
+<div id="am-tree-view" class="am-view">
+  <div id="am-tree-root" class="am-tree"></div>
+</div>"""
+    else:
+        switcher_html = """    <button class="am-tab active" data-view="graph" onclick="setArchitectView('graph')">Clustered Canvas</button>
+    <button class="am-tab" data-view="tree" onclick="setArchitectView('tree')">File Tree</button>"""
+
+        views_html = f"""{staleness_banner_html}
+<div class="am-legend">{legend_html}</div>
+<div id="am-graph-view" class="am-view active" style="position:relative;">
+  <div class="am-zoom-controls">
+    <button type="button" class="am-zoom-btn" onclick="amZoomIn()" title="Zoom In">➕</button>
+    <button type="button" class="am-zoom-btn" onclick="amZoomOut()" title="Zoom Out">➖</button>
+    <button type="button" class="am-zoom-btn" onclick="amZoomReset()" title="Reset LOD Zoom">⊙ Reset</button>
+  </div>
+  <svg id="am-svg" width="100%" height="680" style="background:#fff; border-radius:8px; border:1px solid #d1d5db;"></svg>
+</div>
+<div id="am-tree-view" class="am-view">
+  <div id="am-tree-root" class="am-tree"></div>
+</div>"""
+
     template = """<!DOCTYPE html>
 <html lang="en" data-theme="light">
 <head>
@@ -3516,17 +3773,10 @@ __STYLE_CONTENT__
 <div class="am-header">
   <h1>Architect Map — __WORKSPACE_NAME__</h1>
   <div class="am-switcher">
-    <button class="am-tab active" data-view="graph" onclick="setArchitectView('graph')">Graph</button>
-    <button class="am-tab" data-view="tree" onclick="setArchitectView('tree')">File Tree</button>
+__SWITCHER_HTML__
   </div>
 </div>
-<div class="am-legend">__LEGEND_HTML__</div>
-<div id="am-graph-view" class="am-view active">
-  <svg id="am-svg" width="100%" height="640"></svg>
-</div>
-<div id="am-tree-view" class="am-view">
-  <div id="am-tree-root" class="am-tree"></div>
-</div>
+__VIEWS_HTML__
 <div class="ov" id="am-ov" onclick="closeDrawer()"></div>
 <div class="am-drawer" id="am-drawer">
   <div class="am-drawer-header">
@@ -3556,7 +3806,8 @@ __LIVE_JS_HTML__
         template
         .replace("__STYLE_CONTENT__", style_content)
         .replace("__WORKSPACE_NAME__", html.escape(workspace_name))
-        .replace("__LEGEND_HTML__", legend_html)
+        .replace("__SWITCHER_HTML__", switcher_html)
+        .replace("__VIEWS_HTML__", views_html)
         .replace("__JSON_DATA__", json_data)
         .replace("__NODES_JSON__", nodes_json)
         .replace("__EDGES_JSON__", edges_json)
@@ -3643,7 +3894,7 @@ function bs6RenderGraph() {
       }
       strokeColor = communityColors[idx % communityColors.length];
     }
-    markup += '<g class="am-node" transform="translate(' + (p.x - w / 2) + ',' + (p.y - 18) + ')" onclick="bs6OpenDrawer(\'' + n.id + '\')">' +
+    markup += '<g class="am-node" transform="translate(' + (p.x - w / 2) + ',' + (p.y - 18) + ')" onclick="bs6OpenDrawer(\\'' + n.id + '\\')">' +
       '<rect width="' + w + '" height="36" rx="8" stroke="' + strokeColor + '" stroke-width="1.8"></rect>' +
       '<text x="' + (w / 2) + '" y="22" text-anchor="middle">' + label + '</text>' +
       '</g>';
@@ -3671,6 +3922,65 @@ function bs6CloseDrawer() {
   document.getElementById('am-drawer').classList.remove('open');
   document.getElementById('am-ov').classList.remove('open');
 }
+
+function setLogicalView(view) {
+  document.querySelectorAll('.am-tab').forEach(t => t.classList.toggle('active', t.dataset.view === view));
+  const iv = document.getElementById('bs6-interactive-view');
+  if (iv) iv.classList.toggle('active', view === 'vis');
+  const gv = document.getElementById('bs6-graph-view');
+  if (gv) gv.classList.toggle('active', view === 'svg');
+}
+
+function bs6ToggleCommFilter(cb) {
+  const comm = cb.dataset.comm;
+  const isChecked = cb.checked;
+  const frame = document.getElementById('bs6-graphify-frame');
+  if (frame && frame.contentWindow) {
+    try {
+      frame.contentWindow.postMessage({ type: 'filter-community', community: comm, enabled: isChecked }, '*');
+    } catch (_) {}
+  }
+}
+
+function bs6FilterSearch(query) {
+  const q = (query || '').toLowerCase().trim();
+  const frame = document.getElementById('bs6-graphify-frame');
+  if (frame && frame.contentWindow) {
+    try {
+      frame.contentWindow.postMessage({ type: 'search', query: q }, '*');
+    } catch (_) {}
+  }
+  const nodes = document.querySelectorAll('#bs6-svg .am-node');
+  nodes.forEach(n => {
+    const text = (n.textContent || '').toLowerCase();
+    n.style.opacity = !q || text.includes(q) ? '1' : '0.2';
+  });
+}
+
+function applyTheme(theme) {
+  if (!theme) return;
+  const resolved = theme === 'system'
+    ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+    : theme;
+  document.documentElement.setAttribute('data-theme', resolved);
+  const frame = document.querySelector('iframe');
+  if (frame && frame.contentWindow) {
+    try {
+      frame.contentWindow.postMessage({ type: 'theme-change', theme: resolved }, '*');
+    } catch (_) {}
+  }
+}
+
+window.addEventListener('message', function(e) {
+  if (e.data && (e.data.type === 'theme-change' || e.data.theme)) {
+    applyTheme(e.data.theme || e.data);
+  }
+});
+
+try {
+  const savedTheme = localStorage.getItem('vizor-theme');
+  if (savedTheme) applyTheme(savedTheme);
+} catch (_) {}
 
 bs6RenderGraph();
 """
@@ -3720,6 +4030,76 @@ def _generate_bs6_view_html(data: dict, port: int, view_key: str, view_title: st
             '</div>'
         )
 
+    switcher_html = ""
+    if view_key == "logical":
+        switcher_html = """  <div class="am-switcher">
+    <button class="am-tab active" data-view="vis" onclick="setLogicalView('vis')">Interactive Canvas</button>
+    <button class="am-tab" data-view="svg" onclick="setLogicalView('svg')">AST Projection</button>
+  </div>"""
+
+        communities: Dict[str, int] = {}
+        for n in nodes:
+            comm = n.get("community")
+            if comm is None:
+                try:
+                    attrs = json.loads(n.get("attrs_json") or "{}")
+                    comm = attrs.get("community")
+                except Exception:
+                    pass
+            if comm is not None:
+                comm_name = f"Community {comm}" if isinstance(comm, int) else str(comm)
+                communities[comm_name] = communities.get(comm_name, 0) + 1
+
+        community_colors = [
+            "#3b82f6", "#10b981", "#8b5cf6", "#f59e0b", "#ec4899",
+            "#06b6d4", "#6366f1", "#14b8a6", "#f97316", "#84cc16"
+        ]
+        if communities:
+            comm_items = "".join(
+                f'<label class="am-community-item" style="display:flex; align-items:center; gap:8px; padding:4px 0; font-size:12px; cursor:pointer;">'
+                f'<input type="checkbox" checked data-comm="{html.escape(cname)}" onchange="bs6ToggleCommFilter(this)">'
+                f'<span class="legend-dot" style="background:{community_colors[i % len(community_colors)]}; width:10px; height:10px; border-radius:50%; display:inline-block;"></span>'
+                f'<span>{html.escape(cname)} ({count})</span>'
+                f'</label>'
+                for i, (cname, count) in enumerate(sorted(communities.items()))
+            )
+        else:
+            comm_items = '<div style="font-size:11px; color:#64748b;">No Community clusters detected. Run <code>synlynk scan --deep</code>.</div>'
+
+        communities_sidebar_html = f"""
+<div class="am-communities-sidebar" style="width:260px; border:1px solid #d1d5db; border-radius:8px; padding:14px; background:#fff; overflow-y:auto; box-sizing:border-box;">
+  <div style="font-weight:bold; font-size:13px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
+    <span>Communities</span>
+    <span style="font-size:11px; color:#57606a;">AST Clusters</span>
+  </div>
+  <input type="text" id="bs6-search" placeholder="Search symbols..." style="width:100%; box-sizing:border-box; padding:6px 8px; font-size:12px; border:1px solid #d1d5db; border-radius:6px; margin-bottom:12px;" oninput="bs6FilterSearch(this.value)">
+  <div id="bs6-communities-list">
+    {comm_items}
+  </div>
+</div>
+"""
+        main_views_html = f"""
+<div id="bs6-interactive-view" class="am-view active">
+  <div class="bs6-canvas-layout" style="display:flex; gap:16px; height:680px;">
+    {communities_sidebar_html}
+    <div style="flex:1; border:1px solid #d1d5db; border-radius:8px; overflow:hidden; position:relative; background:#fff;">
+      <iframe id="bs6-graphify-frame" src="graphify.html" width="100%" height="100%" style="border:none;" title="Graphify Knowledge Graph"></iframe>
+    </div>
+  </div>
+</div>
+<div id="bs6-graph-view" class="am-view">
+  <div class="am-legend">{legend_html}</div>
+  <svg id="bs6-svg" width="100%" height="640"></svg>
+</div>
+"""
+    else:
+        main_views_html = f"""
+<div class="am-legend">{legend_html}</div>
+<div id="bs6-graph-view" class="am-view active">
+  <svg id="bs6-svg" width="100%" height="640"></svg>
+</div>
+"""
+
     template = """<!DOCTYPE html>
 <html lang="en" data-theme="light">
 <head>
@@ -3732,12 +4112,10 @@ __STYLE_CONTENT__
 <body>
 <div class="am-header">
   <h1>__VIEW_TITLE__ — __WORKSPACE_NAME__</h1>
+__SWITCHER_HTML__
 </div>
 __STALENESS_BANNER__
-<div class="am-legend">__LEGEND_HTML__</div>
-<div id="bs6-graph-view" class="am-view active">
-  <svg id="bs6-svg" width="100%" height="640"></svg>
-</div>
+__MAIN_VIEWS__
 <div class="ov" id="am-ov" onclick="bs6CloseDrawer()"></div>
 <div class="am-drawer" id="am-drawer">
   <div class="am-drawer-header">
@@ -3760,8 +4138,9 @@ __LIVE_JS_HTML__
         .replace("__STYLE_CONTENT__", _ARCHITECT_MAP_STYLE)
         .replace("__VIEW_TITLE__", html.escape(view_title))
         .replace("__WORKSPACE_NAME__", html.escape(workspace_name))
+        .replace("__SWITCHER_HTML__", switcher_html)
         .replace("__STALENESS_BANNER__", staleness_banner_html)
-        .replace("__LEGEND_HTML__", legend_html)
+        .replace("__MAIN_VIEWS__", main_views_html)
         .replace("__NODES_JSON__", nodes_json)
         .replace("__EDGES_JSON__", edges_json)
         .replace("__PORT__", str(port))
