@@ -1274,6 +1274,44 @@ def _is_migrated() -> bool:
     return os.path.exists(os.path.join(_project_root(), ".synlynk", ".synlynk_migrated"))
 
 
+_GENERATED_DOC_FILES = ("roadmap.md", "todo.md", "memory.md", "costs.md")
+
+
+def _generated_docs_locked(replace_generated_docs: bool = False, root: str = None) -> bool:
+    """True when init/brownfield must not raw-write the generated 4-docs.
+
+    Checks the given root and its git-common-dir parent so a linked worktree
+    of a migrated product is locked even if the worktree has no local marker.
+    """
+    if replace_generated_docs:
+        return False
+    check_roots = []
+    if root:
+        check_roots.append(os.path.abspath(root))
+        try:
+            common = subprocess.check_output(
+                ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+                cwd=root,
+                stderr=subprocess.DEVNULL,
+            ).decode().strip()
+            if common:
+                check_roots.append(os.path.abspath(os.path.join(common, "..")))
+        except Exception:
+            pass
+    else:
+        check_roots.append(_project_root())
+        check_roots.append(os.getcwd())
+    seen = set()
+    for r in check_roots:
+        real = os.path.realpath(r)
+        if real in seen:
+            continue
+        seen.add(real)
+        if os.path.exists(os.path.join(real, ".synlynk", ".synlynk_migrated")):
+            return True
+    return False
+
+
 def _synlynk_project_docs_dir() -> str:
     return os.path.join(_project_root(), ".synlynk", "project-docs")
 
@@ -3635,7 +3673,8 @@ _ROBOT_ASCII = "[~]"  # ASCII robot stand-in for terminal (no emoji)
 
 def init(force: bool = False, agents: list = None,
          org: str = None, repo: str = None, project_id: str = None,
-         mode: str = "solo", dry_run: bool = False, quiet: bool = False) -> None:
+         mode: str = "solo", dry_run: bool = False, quiet: bool = False,
+         replace_generated_docs: bool = False) -> None:
     """Progressive wizard: semantic scan → harness discovery → doc bootstrap → nudge."""
 
     def _print_step(n: int, label: str) -> None:
@@ -3725,7 +3764,9 @@ def init(force: bool = False, agents: list = None,
             if not os.path.exists(d):
                 os.makedirs(d)
 
-        written = _write_informed_skeleton(scan, skip_existing=not force)
+        written = _write_informed_skeleton(
+            scan, skip_existing=not force, replace_generated_docs=replace_generated_docs
+        )
         if written:
             for p, label in written:
                 print(f"  {_GREEN}✓{_RESET} {p}  {_DIM}({label}){_RESET}")

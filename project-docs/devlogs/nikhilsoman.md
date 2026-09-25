@@ -6,6 +6,13 @@
 - Regenerated git-tracked `project-docs/roadmap.md` from `_generate_roadmap_md()` (no longer the brownfield skeleton).
 - Backup: `~/.synlynk/workspaces/backups/state-20260925T111303Z.db`.
 - `synlynk goal list` now shows 27 active goals (was 35).
+## 2026-09-25 — Generated 4-doc lock, worktree identity, generator write-through (`goal-6733bbf1`)
+
+### Shipped
+- A: `_generated_docs_locked()` — migrated product (including worktrees of it) will not raw-write roadmap/todo/memory/costs; `--force` is not enough; `--replace-generated-docs` is the explicit bypass.
+- D: `resolve_product_display_name()` — scan and brownfield use identity slug / git-common-dir root name, never `feat+…` worktree folder names.
+- B: `_write_generated_project_doc()` — generators dual-write `.synlynk/project-docs/` and git-tracked `project-docs/`.
+- Tests: `tests/test_generated_docs_lock.py` (5) plus updated migrate write-through assertion.
 [@grok, @nikhilsoman]
 
 ## 2026-09-24 — Sub-project 1 Shipped: Vizor Navigation & Information Architecture Restructure (PR #1765)

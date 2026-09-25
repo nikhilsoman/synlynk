@@ -310,8 +310,10 @@ def _static_scan(root: str = ".") -> dict:
     Returns dict with keys: project_name, description, commit_count,
     has_structured_commits, recent_topics, top_dirs, languages, readme_summary.
     """
+    from synlynk.product_store import resolve_product_display_name
+
     result = {
-        "project_name": os.path.basename(os.path.abspath(root)),
+        "project_name": resolve_product_display_name(root),
         "description": "",
         "commit_count": 0,
         "has_structured_commits": False,

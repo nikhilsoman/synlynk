@@ -2215,19 +2215,50 @@ def cmd_migrate(dry_run: bool = False, recover: bool = False, setup_dr: bool = F
     except MigrationImportError:
         raise SystemExit(1)
 
+def _write_generated_project_doc(filename: str, content: str) -> None:
+    """Write a generated 4-doc to the migrated cache and the git-tracked docs dir."""
+    from synlynk import _docs_dir, _dr_sync, _is_migrated, _synlynk_project_docs_dir
+
+    paths = []
+    if _is_migrated():
+        syn_dir = _synlynk_project_docs_dir()
+        os.makedirs(syn_dir, exist_ok=True)
+        paths.append(os.path.join(syn_dir, filename))
+    docs_dir = _docs_dir()
+    if docs_dir:
+        if _is_migrated() or os.path.exists(docs_dir):
+            os.makedirs(docs_dir, exist_ok=True)
+            paths.append(os.path.join(docs_dir, filename))
+        elif not _is_migrated():
+            return
+
+    seen = set()
+    for path in paths:
+        real = os.path.realpath(path)
+        if real in seen:
+            continue
+        seen.add(real)
+        parent = os.path.dirname(path)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+        try:
+            with open(path, "w") as fh:
+                fh.write(content)
+        except (OSError, PermissionError):
+            continue
+    if _is_migrated():
+        _dr_sync(filename)
+
+
 def _generate_todo_md() -> None:
     """Writes todo.md as a generated view of stories.
-    Post-migration: writes to .synlynk/project-docs/todo.md.
+    Post-migration: writes to .synlynk/project-docs/todo.md and project-docs/todo.md.
     Pre-migration: writes to project-docs/todo.md."""
-    from synlynk import _docs_dir, _dr_sync, _get_db, _is_migrated, _synlynk_project_docs_dir
-    if _is_migrated():
-        todo_path = os.path.join(_synlynk_project_docs_dir(), "todo.md")
-        os.makedirs(os.path.dirname(todo_path), exist_ok=True)
-    else:
+    from synlynk import _get_db, _is_migrated, _docs_dir
+    if not _is_migrated():
         docs_dir = _docs_dir()
         if not os.path.exists(docs_dir):
             return
-        todo_path = os.path.join(docs_dir, "todo.md")
 
     conn = _get_db()
     rows = conn.execute(
@@ -2250,14 +2281,7 @@ def _generate_todo_md() -> None:
         domain = f" [{engg_domain}]" if engg_domain and engg_domain != "unknown" else ""
         lines.append(f"- [{check}] {title or story_id}{domain} <!-- id:{story_id} -->\n")
 
-    try:
-        with open(todo_path, "w") as f:
-            f.writelines(lines)
-    except (OSError, PermissionError):
-        return
-
-    if _is_migrated():
-        _dr_sync("todo.md")
+    _write_generated_project_doc("todo.md", "".join(lines))
 
 
 def _rotate_project_doc(file_stem: str, all_rows: list, keep_n: int = None) -> list:
@@ -2383,17 +2407,13 @@ def _detect_hand_edit(filename: str) -> str | None:
 
 def _generate_roadmap_md() -> None:
     """Writes roadmap.md as a generated view of roadmap_arcs/roadmap_phases.
-    Post-migration: writes to .synlynk/project-docs/roadmap.md.
+    Post-migration: writes to .synlynk/project-docs/roadmap.md and project-docs/roadmap.md.
     Pre-migration: writes to project-docs/roadmap.md."""
-    from synlynk import _docs_dir, _dr_sync, _get_db, _is_migrated, _synlynk_project_docs_dir
-    if _is_migrated():
-        roadmap_path = os.path.join(_synlynk_project_docs_dir(), "roadmap.md")
-        os.makedirs(os.path.dirname(roadmap_path), exist_ok=True)
-    else:
+    from synlynk import _docs_dir, _get_db, _is_migrated
+    if not _is_migrated():
         docs_dir = _docs_dir()
         if not os.path.exists(docs_dir):
             return
-        roadmap_path = os.path.join(docs_dir, "roadmap.md")
 
     conn = _get_db()
     arcs = conn.execute(
@@ -2426,25 +2446,17 @@ def _generate_roadmap_md() -> None:
                 lines.append(f"  {p_notes}\n")
         lines.append("\n")
 
-    with open(roadmap_path, "w") as f:
-        f.writelines(lines)
-
-    if _is_migrated():
-        _dr_sync("roadmap.md")
+    _write_generated_project_doc("roadmap.md", "".join(lines))
 
 def _generate_costs_md() -> None:
     """Writes costs.md as a generated view of cost_entries.
     Post-migration: writes to .synlynk/project-docs/costs.md.
     Pre-migration: writes to project-docs/costs.md."""
-    from synlynk import _docs_dir, _dr_sync, _get_db, _is_migrated, _synlynk_project_docs_dir
-    if _is_migrated():
-        costs_path = os.path.join(_synlynk_project_docs_dir(), "costs.md")
-        os.makedirs(os.path.dirname(costs_path), exist_ok=True)
-    else:
+    from synlynk import _docs_dir, _get_db, _is_migrated
+    if not _is_migrated():
         docs_dir = _docs_dir()
         if not os.path.exists(docs_dir):
             return
-        costs_path = os.path.join(docs_dir, "costs.md")
 
     conn = _get_db()
     cursor = conn.execute(
@@ -2468,26 +2480,18 @@ def _generate_costs_md() -> None:
             f"{cost_str} | {cost_source} | {story_id or '-'} | {notes or ''} |\n"
         )
 
-    with open(costs_path, "w") as f:
-        f.writelines(lines)
-
-    if _is_migrated():
-        _dr_sync("costs.md")
+    _write_generated_project_doc("costs.md", "".join(lines))
 
 def _write_memory_md() -> None:
     """Regenerate memory.md from memory_entries table.
-    Post-migration: writes to .synlynk/project-docs/memory.md.
+    Post-migration: writes to .synlynk/project-docs/memory.md and project-docs/memory.md.
     Pre-migration: writes to project-docs/memory.md."""
-    from synlynk import _docs_dir, _get_db, _is_migrated, _synlynk_project_docs_dir
+    from synlynk import _docs_dir, _get_db, _is_migrated
 
-    if _is_migrated():
-        path = os.path.join(_synlynk_project_docs_dir(), "memory.md")
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-    else:
+    if not _is_migrated():
         docs_dir = _docs_dir()
         if not os.path.exists(docs_dir):
             return
-        path = os.path.join(docs_dir, "memory.md")
 
     conn = _get_db()
     rows = conn.execute("SELECT section, body FROM memory_entries ORDER BY id").fetchall()
@@ -2499,8 +2503,7 @@ def _write_memory_md() -> None:
     ]
     for section, body in rows:
         lines.append(f"## {section}\n\n{body}\n\n")
-    with open(path, "w") as f:
-        f.writelines(lines)
+    _write_generated_project_doc("memory.md", "".join(lines))
 
 def cmd_memory_add(section: str, body: str, author: str = None) -> None:
     """Add or update a memory entry. Always writes through to the flat file;

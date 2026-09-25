@@ -610,8 +610,9 @@ def test_write_through_todo_goes_to_synlynk_path(tmp_path, monkeypatch):
     backup = _setup_migrated(tmp_path, monkeypatch)
     synlynk._generate_todo_md()
     assert (backup / "todo.md").exists()
-    # old path must NOT be written
-    assert not (tmp_path / "project-docs" / "todo.md").exists()
+    tracked = tmp_path / "project-docs" / "todo.md"
+    assert tracked.exists()
+    assert "source of truth is state.db" in tracked.read_text()
 
 
 def test_write_through_noop_before_migration(tmp_path, monkeypatch):

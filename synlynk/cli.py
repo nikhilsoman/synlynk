@@ -214,6 +214,9 @@ def build_parser() -> argparse.ArgumentParser:
                              help="Run the 5-stage automated FTUE onboarding journey")
     init_parser.add_argument("--brownfield", action="store_true",
                              help="Run Deep Brownfield Ingestion Engine to reverse-engineer tests, linters, churn, and bootstrap 4-doc structure")
+    init_parser.add_argument("--replace-generated-docs", action="store_true",
+                             dest="replace_generated_docs",
+                             help="Allow init/brownfield to replace generated 4-docs on a migrated ledger (off by default)")
     init_parser.add_argument("--dry-run", action="store_true", dest="dry_run",
                              help="Preview what init would write without writing anything")
 
@@ -1644,7 +1647,8 @@ def main(argv=None) -> None:
                 repo_root=".",
                 interactive=not getattr(args, "force", False),
                 dry_run=getattr(args, "dry_run", False),
-                force=getattr(args, "force", False)
+                force=getattr(args, "force", False),
+                replace_generated_docs=getattr(args, "replace_generated_docs", False),
             )
             if res.get("success"):
                 print(f"\n✦ Brownfield Ingestion complete. Stack: {res.get('stack')}, Tests: {res.get('test_command')}, Hotspots: {len(res.get('hotspots', []))} files.")
@@ -1665,7 +1669,8 @@ def main(argv=None) -> None:
                 _update_config({"project_docs_dir": args.docs_dir})
             init(force=args.force, agents=agents, mode=args.mode,
                  org=args.org, repo=args.repo, project_id=args.project_id,
-                 dry_run=getattr(args, "dry_run", False))
+                 dry_run=getattr(args, "dry_run", False),
+                 replace_generated_docs=getattr(args, "replace_generated_docs", False))
     elif args.command == "exec":
         force = getattr(args, 'force', False)
         sys.exit(exec_command(args.cmd, force=force))
