@@ -57,6 +57,16 @@ def _detect_harnesses_on_path(names: tuple = None) -> list:
 
 def _run_graphify_extract(repo_root: str) -> bool:
     """Ensure Graphify is installed and execute deterministic AST extraction."""
+    extra_paths = [
+        os.path.expanduser("~/.local/bin"),
+        os.path.expanduser("~/.pyenv/shims"),
+        "/opt/homebrew/bin",
+        "/usr/local/bin",
+    ]
+    for p in extra_paths:
+        if p not in os.environ.get("PATH", ""):
+            os.environ["PATH"] = p + ":" + os.environ.get("PATH", "")
+
     if not is_tool_available("graphify"):
         try:
             installed = install_tool("graphify")

@@ -1,5 +1,5 @@
 # Source Map
-_Generated: 2026-09-25T08:31:23 · HEAD: 30024f1 · 412 files_
+_Generated: 2026-09-25T13:27:46 · HEAD: c922c4f · 416 files_
 
 ## [root]/  [python · 1, shell · 1]
 `conftest.py` · 3 symbols
@@ -7,7 +7,7 @@ _Generated: 2026-09-25T08:31:23 · HEAD: 30024f1 · 412 files_
 
 `install.sh` · 0 symbols
 
-## bin/  [python · 4]
+## bin/  [python · 5]
 `bin/attest_capability.py` · 2 symbols
   DB_PATH [constant:23], main() [function:146]
 
@@ -16,6 +16,9 @@ _Generated: 2026-09-25T08:31:23 · HEAD: 30024f1 · 412 files_
 
 `bin/backfill_capability.py` · 12 symbols
   DB_PATH [constant:29], _TITLE_PREFIX_DOMAIN [constant:35], _FILE_DOMAIN_RULES [constant:41], infer_engg_domain() [function:48], infer_phase() [function:63], count_review_cycles() [function:70], get_db() [function:79], story_exists() [function:89], insert_story() [function:94], insert_rating() [function:103], fetch_prs() [function:121], main() [function:133]
+
+`bin/statusline.py` · 2 symbols
+  get_git_remote() [function:7], main() [function:29]
 
 `bin/synlynk.py` · 0 symbols
 
@@ -107,7 +110,7 @@ _Generated: 2026-09-25T08:31:23 · HEAD: 30024f1 · 412 files_
   _SYNLYNK_DIR [constant:8], _synlynk_repo_root() [function:11], _warn_stale_repo_version() [function:30], cmd_watch() [function:54], build_parser() [function:184]
 
 `synlynk/coldstart.py` · 12 symbols
-  _MANIFEST_FILES [constant:13], _README_FILES [constant:17], _commit_count() [function:20], _detect_cold_start_mode() [function:33], _resolve_cold_start_mode() [function:89], _prompt_new_project_questions() [function:109], _run_new_project_flow() [function:127], _run_existing_project_flow() [function:153], cmd_start() [function:191], run_ftue_journey() [function:214], get_onboarding_recommendations() [function:268], _detect_brownfield_stack() [function:299]
+  _MANIFEST_FILES [constant:14], _README_FILES [constant:18], _working_directory() [function:22], _commit_count() [function:32], _detect_cold_start_mode() [function:45], _resolve_cold_start_mode() [function:101], _prompt_new_project_questions() [function:121], _run_new_project_flow() [function:139], _run_existing_project_flow() [function:166], cmd_start() [function:204], run_ftue_journey() [function:227], get_onboarding_recommendations() [function:281]
 
 `synlynk/completion_tracker.py` · 7 symbols
   _SPEC_PATH_RE [constant:12], _CLOSES_ISSUE_RE [constant:13], _GH_HASH_RE [constant:14], _VALID_VERDICTS [constant:16], parse_spec_reference() [function:19], _load_reference_content() [function:43], compute_completion_verdict() [function:70]
@@ -383,7 +386,7 @@ _Generated: 2026-09-25T08:31:23 · HEAD: 30024f1 · 412 files_
   execute_uninstall() [function:8]
 
 `synlynk/upgrade.py` · 8 symbols
-  _detect_install_type() [function:13], _ver_tuple() [function:35], _run_upgrade() [function:42], _get_pipx_source() [function:76], _warn_stale_script_install() [function:90], _ensure_vizor_daemon_installed() [function:106], upgrade() [function:118], execute_upgrade() [function:179]
+  _detect_install_type() [function:13], _ver_tuple() [function:35], _run_upgrade() [function:42], _get_pipx_source() [function:76], _warn_stale_script_install() [function:90], _ensure_vizor_daemon_installed() [function:106], upgrade() [function:118], execute_upgrade() [function:178]
 
 `synlynk/ux_nudges.py` · 2 symbols
   TUI_TIP_ID [constant:3], pending_ux_tip() [function:6]
@@ -509,8 +512,8 @@ _Generated: 2026-09-25T08:31:23 · HEAD: 30024f1 · 412 files_
 `tests/test_board.py` · 7 symbols
   _product_repo() [function:10], test_board_reads_product_graph_and_deep_links() [function:42], test_board_filters_are_composable() [function:55], test_board_status_writes_product_db_only() [function:62], test_board_status_fails_closed() [function:72], test_board_stage_updates_and_fails_closed() [function:80], test_board_view_is_local_and_uses_status_api() [function:108]
 
-`tests/test_brownfield_init.py` · 12 symbols
-  test_detect_brownfield_stack_python() [function:17], test_detect_brownfield_stack_typescript() [function:24], test_detect_brownfield_stack_rust() [function:32], test_detect_brownfield_stack_go() [function:38], test_detect_brownfield_tests_python() [function:44], test_detect_brownfield_tests_npm() [function:50], test_detect_brownfield_linters_python() [function:56], test_detect_brownfield_linters_eslint() [function:62], test_detect_brownfield_build() [function:68], test_bootstrap_4docs() [function:74], test_run_brownfield_init_dry_run() [function:107], test_run_brownfield_init_e2e() [function:117]
+`tests/test_brownfield_init.py` · 13 symbols
+  test_detect_brownfield_stack_python() [function:17], test_detect_brownfield_stack_typescript() [function:24], test_detect_brownfield_stack_rust() [function:32], test_detect_brownfield_stack_go() [function:38], test_detect_brownfield_tests_python() [function:44], test_detect_brownfield_tests_npm() [function:50], test_detect_brownfield_linters_python() [function:56], test_detect_brownfield_linters_eslint() [function:62], test_detect_brownfield_build() [function:68], test_bootstrap_4docs() [function:74], test_run_brownfield_init_dry_run() [function:107], test_run_brownfield_init_e2e() [function:117], test_run_brownfield_init_writes_only_to_repo_path() [function:145]
 
 `tests/test_bs6_workspace_views_spec.py` · 5 symbols
   SPEC_PATH [constant:5], REQUIRED_HEADINGS [constant:13], REQUIRED_PHRASES [constant:22], test_bs6_workspace_views_spec_exists() [function:32], test_bs6_workspace_views_spec_covers_required_sections() [function:36]
@@ -1011,7 +1014,7 @@ _Generated: 2026-09-25T08:31:23 · HEAD: 30024f1 · 412 files_
   test_scaffold_greenfield_sandbox_creates_ping_app() [function:9], test_build_artifact_tour_returns_core_pillars() [function:17]
 
 `tests/test_scan_graphify_auto.py` · 6 symbols
-  test_run_graphify_extract_when_installed() [function:7], test_run_graphify_extract_auto_installs_if_missing() [function:21], test_run_graphify_extract_install_fails() [function:31], test_run_graphify_extract_subprocess_error() [function:39], test_cmd_scan_deep_calls_run_graphify_extract() [function:46], test_upgrade_calls_run_graphify_extract() [function:61]
+  test_run_graphify_extract_when_installed() [function:7], test_run_graphify_extract_auto_installs_if_missing() [function:21], test_run_graphify_extract_install_fails() [function:31], test_run_graphify_extract_subprocess_error() [function:39], test_cmd_scan_deep_calls_run_graphify_extract() [function:46], test_execute_upgrade_calls_run_graphify_extract() [function:61]
 
 `tests/test_selftest.py` · 17 symbols
   EXPECTED_LIVE_SCENARIOS [constant:8], test_selftest_core_exports() [function:27], test_selftest_registry_covers_core_lifecycle_commands() [function:51], test_run_selftest_uses_generic_help_for_all_taxonomy_commands() [function:57], test_run_selftest_sorts_latent_tier_last() [function:82], test_live_selftest_bespoke_lifecycle_scenarios_pass() [function:95], test_live_selftest_init_preserves_existing_files() [function:106], test_live_selftest_migrate_imports_real_rows() [function:118], test_live_selftest_upgrade_respects_install_location() [function:130], test_scenario_join_creates_real_devlog_file() [function:142], test_scenario_decide_surfaces_each_agent_response() [function:154], test_gh_write_scenario_records_capability_per_harness_and_mode() [function:163], test_selftest_subcommand_is_registered() [function:200], test_dispatch_scenario_skips_when_budget_exhausted() [function:214], test_dispatch_scenario_uses_fence_estimate_as_cost() [function:230], test_dispatch_scenario_does_not_increment_context_spend() [function:259], test_exec_scenario_skips_when_budget_exhausted() [function:289]
@@ -1225,6 +1228,13 @@ _Generated: 2026-09-25T08:31:23 · HEAD: 30024f1 · 412 files_
 
 ## website/  [javascript · 1]
 `website/.eleventy.js` · 0 symbols
+
+## website/_site/assets/js/  [javascript · 3]
+`website/_site/assets/js/carousel.js` · 0 symbols
+
+`website/_site/assets/js/main.js` · 0 symbols
+
+`website/_site/assets/js/motherboard.js` · 0 symbols
 
 ## website/scripts/  [javascript · 1]
 `website/scripts/extract-heroes.js` · 0 symbols

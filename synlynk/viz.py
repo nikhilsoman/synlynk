@@ -7820,10 +7820,32 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
                     from synlynk.vizor_daemon import refresh_workspace, _registered_workspaces
                     workspaces = _registered_workspaces()
                     if slug in workspaces:
+                        db_path = workspaces[slug].get("canonical_path")
+                        if db_path and os.path.isfile(db_path):
+                            try:
+                                import sqlite3
+                                from synlynk.viz_views import build_workspace_views_snapshot
+                                conn = sqlite3.connect(db_path)
+                                build_workspace_views_snapshot(conn, repo_root)
+                                conn.commit()
+                                conn.close()
+                            except Exception:
+                                pass
                         refresh_workspace(slug, workspaces[slug], port)
                 except Exception:
                     pass
             else:
+                try:
+                    views_conn = _get_db()
+                    try:
+                        from synlynk.viz_views import build_workspace_views_snapshot
+                        build_workspace_views_snapshot(views_conn, repo_root)
+                        if hasattr(views_conn, "commit"):
+                            views_conn.commit()
+                    finally:
+                        views_conn.close()
+                except Exception:
+                    pass
                 try:
                     data = generate_viz_data()
                     _write_cache(data, port)
