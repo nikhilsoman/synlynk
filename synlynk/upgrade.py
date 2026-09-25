@@ -173,7 +173,6 @@ def upgrade(dry_run: bool = False) -> None:
             package, "_ensure_vizor_daemon_installed", _ensure_vizor_daemon_installed
         )
         ensure_vizor_daemon_installed()
-        _run_graphify_extract(os.getcwd())
 
 
 def execute_upgrade(repo_root: str = ".") -> dict:

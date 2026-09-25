@@ -58,19 +58,13 @@ def test_cmd_scan_deep_calls_run_graphify_extract(tmp_path):
         mock_extract.assert_called_once_with(str(tmp_path))
 
 
-def test_upgrade_calls_run_graphify_extract(tmp_path):
-    from synlynk.upgrade import upgrade, execute_upgrade
+def test_execute_upgrade_calls_run_graphify_extract(tmp_path):
+    import importlib
+    upgrade_mod = importlib.import_module("synlynk.upgrade")
 
-    with patch("synlynk.upgrade._run_graphify_extract") as mock_extract:
-        execute_upgrade(str(tmp_path))
+    with patch.object(upgrade_mod, "_run_graphify_extract") as mock_extract, \
+         patch("synlynk.surface.detect_developer_surfaces", return_value=[]), \
+         patch("synlynk.surface.bind_surface_rules"):
+        res = upgrade_mod.execute_upgrade(str(tmp_path))
+        assert res["status"] == "upgraded"
         mock_extract.assert_called_once_with(str(tmp_path))
-
-    with patch("synlynk.upgrade._run_graphify_extract") as mock_extract, \
-         patch("synlynk.upgrade._detect_install_type", return_value="pipx"), \
-         patch("synlynk.upgrade._ensure_vizor_daemon_installed"), \
-         patch("synlynk.upgrade._warn_stale_script_install"), \
-         patch("subprocess.run") as mock_run, \
-         patch("os.getcwd", return_value=str(tmp_path)):
-        mock_run.return_value = MagicMock(returncode=0, stdout="v0.20.0\n")
-        upgrade(dry_run=False)
-        mock_extract.assert_called_with(str(tmp_path))
