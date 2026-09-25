@@ -1,5 +1,25 @@
 # Agy Devlog
 
+## 2026-09-25 — Knowledge Graph UX Improvements: Canonical Labels, Topbar Multi-Select Dropdown & Monorepo Tab Streamlining (PR #1782)
+
+### Shipped & Verified
+- **Canonical Human-Readable Community Labels (`synlynk/viz_views.py`, `synlynk/viz.py`):**
+  - Implemented `derive_canonical_community_names(raw_nodes)` analyzing node distributions per community.
+  - Prioritizes dominant file ($ \ge 35\% $) + dominant class (e.g. `synlynk/viz.py · VizorHandler`), directory namespace span ($ \ge 50\% $), or high-degree/centrality symbol name, completely replacing opaque `Community N` numbers.
+  - Attached `community_name` to state projection node metadata and injected into Graphify `RAW_NODES` inside `graphify.html`/`graph.html`.
+- **Topbar Multi-Select Dropdown Toolbar & 100% Full-Width Canvas (`synlynk/viz.py`):**
+  - Replaced the 260px left `.am-communities-sidebar` with a compact `.am-kg-topbar` floating dropdown menu (`.am-dropdown`) in both Architect Map (`tube.html`) and Logical View (`logical.html`).
+  - Added multi-select checkboxes with real-time selection summary badges (`N of Total selected`), batch actions (*Select All*, *Deselect All*), symbol search input, and direct iframe postMessage routing (`filter-communities-batch`, `filter-community`, `search`).
+  - Expanded graph container (`.am-kg-canvas-full`) to take 100% horizontal width.
+- **Monorepo Topology Tab Streamlining (`synlynk/viz.py`):**
+  - Streamlined single-repo workspace tab navigation in `tube.html` (`len(repos) <= 1`) to show **Knowledge Graph** and **File Tree**, removing the redundant isolated 1-box **Topology** tab button while preserving multi-repo federated topologies when `len(repos) > 1`.
+- **Testing & Verification:**
+  - Added unit test coverage in `tests/test_viz_unified_canvas.py` and `tests/test_viz_views.py` (`test_derive_canonical_community_names`, `test_logical_view_embeds_graphify_and_communities_dropdown`, `test_architect_map_monorepo_tabs_and_topbar_dropdown`, `test_enrich_graphify_html_canonical_labels_and_batch_listeners`).
+  - Verified 16/16 focused tests and all CI checks green.
+  - Merged to `main` (`a4b95a38`) in PR #1782 via QA approval.
+  - Verified live refresh endpoint `POST /w/synlynk/api/graph/refresh` (200 OK) and confirmed updated UI assets in daemon cache.
+[@agy, @nikhilsoman]
+
 ## 2026-09-25 — Graphify Auto-Extraction & Vizor Unified Clustered Canvas (PR #1777)
 
 ### Shipped & Verified

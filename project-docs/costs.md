@@ -1,5 +1,11 @@
 # Cost Log
  
+## 2026-09-25 — Knowledge Graph UX Improvements: Canonical Labels, Topbar Toolbar & Monorepo Tabs (PR #1782)
+- Interactive Conductor: Agy.
+- Merged PR #1782: Canonical human-readable community names, topbar multi-select dropdown toolbar with batch toggle and search, 100% full-width interactive canvas, and streamlined monorepo tabs.
+- Review and verification dispatches to Codex / QA role (`job-0fc31d19`).
+- Total estimated dispatch spend: ~$0.05.
+
 ## 2026-09-25 — Graphify Auto-Extraction & Vizor Unified Clustered Canvas (PR #1777)
 - Interactive Conductor: Agy.
 - Merged PR #1777: Automatic Graphify AST extraction pipeline, multi-repo federated mesh, Vizor caching & route serving, and Unified Clustered Canvas in `tube.html` (Architect Map) and `logical.html` (Logical View).
