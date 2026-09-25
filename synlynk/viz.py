@@ -7321,6 +7321,8 @@ def _enrich_graphify_html(html_str: str, graph_data: dict) -> str:
 
     lod_styles = """
 <style>
+  #graph-wrap { flex: 1; position: relative; min-width: 0; min-height: 0; }
+  #graph-wrap #graph { position: absolute; inset: 0; flex: none; }
   .vis-map-zoom-bar {
     position: absolute;
     top: 16px;
@@ -7334,9 +7336,10 @@ def _enrich_graphify_html(html_str: str, graph_data: dict) -> str:
     border: 1px solid rgba(255, 255, 255, 0.18);
     border-radius: 8px;
     padding: 6px;
-    z-index: 50;
+    z-index: 1000;
     box-shadow: 0 4px 16px rgba(0,0,0,0.35);
     user-select: none;
+    pointer-events: auto;
   }
   .vis-zoom-btn {
     width: 28px;
@@ -7452,7 +7455,11 @@ def _enrich_graphify_html(html_str: str, graph_data: dict) -> str:
 </div>
 """
     if '<div id="graph"></div>' in html_str and 'id="vis-zoom-bar"' not in html_str:
-        html_str = html_str.replace('<div id="graph"></div>', '<div id="graph" style="position:relative;">' + zoom_bar_html + '</div>', 1)
+        html_str = html_str.replace(
+            '<div id="graph"></div>',
+            '<div id="graph-wrap">' + zoom_bar_html + '<div id="graph"></div></div>',
+            1,
+        )
 
     lod_and_info_script = """
 // Level-of-Detail (LOD) Manager & Enhanced Node Details
