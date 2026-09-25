@@ -157,6 +157,13 @@ function showInfo(nodeId) {}
     enriched = _enrich_graphify_html(sample_html, graph_data)
     # Check LOD controls and thresholds
     assert "vis-map-zoom-bar" in enriched
+    assert 'id="graph-wrap"' in enriched
+    # vis-network owns #graph; the zoom bar must be a sibling, not a child.
+    graph_open = enriched.find('<div id="graph"')
+    graph_close = enriched.find("</div>", graph_open)
+    graph_inner = enriched[graph_open:graph_close]
+    assert "vis-zoom-bar" not in graph_inner
+    assert enriched.find("vis-zoom-bar") < graph_open
     assert "LOD_THRESHOLDS" in enriched or "currentLODLevel" in enriched or "setLODLevel" in enriched
     assert "Level 0" in enriched or "L0" in enriched
     # Check default degree threshold >= 3 for Level 0
