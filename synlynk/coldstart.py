@@ -506,18 +506,23 @@ def _bootstrap_4docs(
     build_cmd: str,
     hotspots: List[str],
     user_name: str,
-    force: bool = False
+    force: bool = False,
+    replace_generated_docs: bool = False,
 ) -> List[str]:
     """Generate or update the mandatory 4-doc structure in project-docs/."""
+    from synlynk import _generated_docs_locked
+
     docs_dir = os.path.join(root, "project-docs")
     os.makedirs(docs_dir, exist_ok=True)
     os.makedirs(os.path.join(docs_dir, "devlogs"), exist_ok=True)
     today = time.strftime("%Y-%m-%d", time.gmtime())
     created = []
 
+    locked = _generated_docs_locked(replace_generated_docs, root=root)
+
     # 1. roadmap.md
     roadmap_path = os.path.join(docs_dir, "roadmap.md")
-    if not os.path.exists(roadmap_path) or force:
+    if not locked and (not os.path.exists(roadmap_path) or force):
         roadmap_content = f"""# Project Roadmap
 
 > **Repository Baseline:** Brownfield Ingestion ({today})  
@@ -539,7 +544,7 @@ def _bootstrap_4docs(
 
     # 2. memory.md
     memory_path = os.path.join(docs_dir, "memory.md")
-    if not os.path.exists(memory_path) or force:
+    if not locked and (not os.path.exists(memory_path) or force):
         hotspot_str = ", ".join(hotspots[:3]) if hotspots else "core workspace modules"
         memory_content = f"""# Project Memory & Architectural Decisions
 
@@ -555,7 +560,7 @@ def _bootstrap_4docs(
 
     # 3. todo.md
     todo_path = os.path.join(docs_dir, "todo.md")
-    if not os.path.exists(todo_path) or force:
+    if not locked and (not os.path.exists(todo_path) or force):
         todo_content = f"""# Tasks (TODO)
 
 <!-- Auto-projected from state.db — updated via synlynk story -->
@@ -571,7 +576,7 @@ def _bootstrap_4docs(
 
     # 4. costs.md
     costs_path = os.path.join(docs_dir, "costs.md")
-    if not os.path.exists(costs_path) or force:
+    if not locked and (not os.path.exists(costs_path) or force):
         costs_content = f"""# Project AI Costs & Token Ledger
 
 | Date | Agent / Harness | Operation | Input Tokens | Output Tokens | Cost (USD) | Notes |
@@ -607,6 +612,7 @@ def run_brownfield_init(
     interactive: bool = True,
     dry_run: bool = False,
     force: bool = False,
+    replace_generated_docs: bool = False,
 ) -> Dict[str, Any]:
     """Deep Brownfield Ingestion Engine for existing codebases.
 
@@ -614,7 +620,8 @@ def run_brownfield_init(
     presents 1-click confirmation chips, and bootstraps the mandatory 4-doc standard.
     """
     repo_path = os.path.abspath(repo_root)
-    project_name = os.path.basename(repo_path) or "workspace"
+    from synlynk.product_store import resolve_product_display_name
+    project_name = resolve_product_display_name(repo_path) or os.path.basename(repo_path) or "workspace"
 
     # 1. Reverse-engineer tech stack & commands
     stack_info = _detect_brownfield_stack(repo_path)
@@ -669,7 +676,8 @@ def run_brownfield_init(
     from synlynk import init, _update_config
     with _working_directory(repo_path):
         # 3. Initialize synlynk base structure
-        init(force=force, mode="solo", quiet=True)
+        init(force=force, mode="solo", quiet=True,
+             replace_generated_docs=replace_generated_docs)
 
         # 4. Save brownfield configs
         os.makedirs(os.path.join(repo_path, ".synlynk"), exist_ok=True)
@@ -687,7 +695,8 @@ def run_brownfield_init(
 
         # 5. Bootstrap 4-doc structure
         created_docs = _bootstrap_4docs(
-            repo_path, stack_info["label"], test_cmd, lint_cmd, build_cmd, hotspots, user_name, force=force
+            repo_path, stack_info["label"], test_cmd, lint_cmd, build_cmd, hotspots, user_name,
+            force=force, replace_generated_docs=replace_generated_docs,
         )
 
         # 6. Seed state.db with initial brownfield goals & stories

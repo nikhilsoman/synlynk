@@ -481,7 +481,10 @@ def test_fix_checkpoint_todomd_handling_it_bypass_migrated_archives_and_regenera
     assert rows[1][1] is None
     assert "Finished work" not in generated_todo.read_text()
     assert "Still active" in generated_todo.read_text()
-    assert "legacy wrong path" in (project_dir / "project-docs" / "todo.md").read_text()
+    tracked = (project_dir / "project-docs" / "todo.md").read_text()
+    assert "legacy wrong path" not in tracked
+    assert "Still active" in tracked
+    assert "source of truth is state.db" in tracked
 
 
 def test_fix_checkpoint_todomd_handling_it_bypass_pre_migration_backfill_is_idempotent(

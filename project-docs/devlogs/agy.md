@@ -14,6 +14,24 @@
   - Formalized how structured graph features ground Jev for sub-20ms typed model/harness routing, speculative fan-out arbitration, and merge-gate policy checks (`synlynk policy check-merge`).
   - Updated issue [#1712](https://github.com/nikhilsoman/synlynk/issues/1712) with architectural findings.
 - **Implementation Status:** Stories minted and linked; implementation held per user request.
+## 2026-09-25 — AST Knowledge Graph Lifecycle Triggers, Rich Context Packager & AST-Scoped Sparse Worktrees (PR #1788, Closes #1787, Goal goal-e3840370)
+
+### Shipped & Verified
+- **Rich AST Context Packager (`synlynk/pack.py`):**
+  - Upgraded `synthesize_context_pack()` to group target symbols by canonical community subsystem (e.g. `synlynk/viz.py · VizorHandler`).
+  - Inlined concise function signatures and AST docstrings directly into Turn-1 dispatch prompt context packs.
+  - Added automated reverse test suite discovery: follows inbound caller edges to discover test files (e.g. `pytest tests/test_*.py`) exercising the target symbols and renders `### Suggested Verification Test Targets`.
+- **AST-Guided Sparse Worktrees (`synlynk/worktree_sparse.py`):**
+  - Implemented `derive_sparse_cone_paths_from_graph(repo_root, task_text, story_id)` to automatically extract minimal directory cones (`scoped_paths`) from target AST symbols and 1-hop caller/callee dependencies.
+- **Automated Lifecycle Triggers (`synlynk/daemon.py`, `synlynk/dispatch.py`):**
+  - Added `_check_graph_staleness_and_refresh()` to `WatchDaemon`: detects git `HEAD` commit drift in the background with 30s debounce cooldown and triggers non-blocking AST extraction.
+  - Added JIT cache validator in `_format_prompt_for_agent()`: auto-extracts AST graph if missing before packaging context.
+- **Topbar Manual Refresh Action & Dynamic Feedback (`synlynk/viz.py`):**
+  - Added `#am-kg-refresh-btn` and `#bs6-kg-refresh-btn` to the floating topbar dropdown toolbar in Architect Map (`tube.html`) and Logical View (`logical.html`).
+  - Added `triggerAmKgRefresh()` and `triggerBs6KgRefresh()` JS handlers: disables button, shows spinner/progress text, executes `POST /w/<slug>/api/graph/refresh`, reloads iframe on completion, updates status chips, and shows toast feedback.
+- **Testing & Verification:**
+  - Added unit test suites `tests/test_pack_rich.py`, `tests/test_worktree_sparse_ast.py`, `tests/test_watch_graph_drift.py`, `tests/test_viz_refresh_button.py`.
+  - 36/36 focused unit tests and 361/361 full test suite passing cleanly.
 [@agy, @nikhilsoman]
 
 ## 2026-09-25 — Knowledge Graph LOD Zoom, Connection Filtering & Rich Node Detail Sidebar (PR #1785, Closes #1783, Goal goal-e3840370)

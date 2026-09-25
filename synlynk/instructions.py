@@ -243,7 +243,8 @@ def _find_existing_doc(basename: str, target_dir: str, project_name: str) -> Opt
                 pass
     return None
 
-def _write_informed_skeleton(scan: dict, skip_existing: bool = True) -> list:
+def _write_informed_skeleton(scan: dict, skip_existing: bool = True,
+                             replace_generated_docs: bool = False) -> list:
     """Writes project-docs skeleton, seeding from existing docs when available.
 
     Priority order for each file:
@@ -320,8 +321,20 @@ Each arc below can be tagged `<!-- goal:goal-xxxxxxxx -->` to link it to a goal.
         (os.path.join(dd, "todo.md"),    fallback_todo),
     ]
 
+    locked = False
+    try:
+        locked = bool(_pkg("_generated_docs_locked")(replace_generated_docs))
+    except Exception:
+        is_migrated = _pkg("_is_migrated")
+        locked = bool(is_migrated()) if callable(is_migrated) else False
+    generated_names = _pkg("_GENERATED_DOC_FILES") or (
+        "roadmap.md", "todo.md", "memory.md", "costs.md"
+    )
+
     written = []
     for path, fallback in targets:
+        if locked and os.path.basename(path) in generated_names:
+            continue
         if skip_existing and os.path.exists(path):
             continue
 
@@ -395,6 +408,11 @@ Keep it short. Infer from the evidence. Do not invent features not supported by 
         if result.returncode != 0 or not result.stdout.strip():
             return False
         enriched = result.stdout.strip()
+        try:
+            if _pkg("_generated_docs_locked")():
+                return False
+        except Exception:
+            pass
         with open("project-docs/roadmap.md", "w") as f:
             f.write(enriched + "\n")
         return True

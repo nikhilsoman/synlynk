@@ -363,6 +363,48 @@ class WatchDaemon:
                     file=sys.stderr,
                 )
 
+    def _check_graph_staleness_and_refresh(self) -> None:
+        """Checks if the knowledge graph is stale compared to HEAD commit and triggers background refresh."""
+        now = time.time()
+        if now - getattr(self, "_last_graph_refresh_attempt", 0.0) < 30.0:
+            return  # Debounce 30s cooldown
+
+        self._last_graph_refresh_attempt = now
+        repo_root = self.workspace_root
+        current_head = _current_repo_revision(repo_root)
+        if not current_head:
+            return
+
+        manifest_path = os.path.join(repo_root, ".synlynk", "graphify-out", "manifest.json")
+        graph_path = os.path.join(repo_root, ".synlynk", "graphify-out", "graph.json")
+
+        need_refresh = False
+        if not os.path.exists(graph_path):
+            need_refresh = True
+        elif os.path.exists(manifest_path):
+            try:
+                with open(manifest_path) as fh:
+                    man = json.load(fh)
+                if man.get("head_commit") != current_head:
+                    need_refresh = True
+            except Exception:
+                pass
+
+        if need_refresh:
+            threading.Thread(
+                target=self._run_background_graph_refresh,
+                args=(repo_root,),
+                daemon=True,
+                name="synlynk-bg-graph-refresh"
+            ).start()
+
+    def _run_background_graph_refresh(self, repo_root: str) -> None:
+        try:
+            from synlynk.scan import _run_graphify_extract
+            _run_graphify_extract(repo_root)
+        except Exception:
+            pass
+
     def _run_loop(self) -> None:
         config = _pkg("load_config")()
         interval = config.get("watch_interval_seconds", 30)
@@ -371,6 +413,7 @@ class WatchDaemon:
         # network I/O in the foreground process.  This also keeps the refresh
         # in the same post-daemonization execution path as periodic refreshes.
         self._refresh_github_tokens()
+        self._check_graph_staleness_and_refresh()
         last_token_refresh = time.time()
         while True:
             time.sleep(interval)
@@ -383,9 +426,11 @@ class WatchDaemon:
                 self.on_change(changed[0])
                 _pkg("set_state")("watching")
                 last_mtimes = self._get_mtimes("project-docs")
+            self._check_graph_staleness_and_refresh()
             if time.time() - last_token_refresh >= self.token_refresh_interval_seconds:
                 self._refresh_github_tokens()
                 last_token_refresh = time.time()
+
 
 
 def _watch_daemon_child_main() -> None:
