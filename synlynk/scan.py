@@ -74,7 +74,23 @@ def _run_graphify_extract(repo_root: str) -> bool:
             text=True,
             timeout=120,
         )
-        return res.returncode == 0
+        if res.returncode == 0:
+            manifest_file = os.path.join(out_dir, "manifest.json")
+            if os.path.isfile(manifest_file):
+                try:
+                    from synlynk.discovery import _get_head_commit
+                    head_sha = _get_head_commit(repo_root)
+                    if head_sha:
+                        with open(manifest_file, "r", encoding="utf-8") as f:
+                            mdata = json.load(f)
+                        if isinstance(mdata, dict):
+                            mdata["built_at_commit"] = head_sha
+                            with open(manifest_file, "w", encoding="utf-8") as f:
+                                json.dump(mdata, f, indent=2)
+                except Exception:
+                    pass
+            return True
+        return False
     except Exception:
         return False
 

@@ -3563,6 +3563,32 @@ if (svgEl) {
   });
 }
 
+function triggerGraphRefresh(el) {
+  if (el) el.textContent = '[Refreshing...]';
+  const pathParts = window.location.pathname.split('/');
+  let refreshUrl = '/api/graph/refresh';
+  if (pathParts[1] === 'w' && pathParts[2]) {
+    refreshUrl = '/w/' + encodeURIComponent(pathParts[2]) + '/api/graph/refresh';
+  }
+  fetch(refreshUrl, {
+    method: 'POST',
+    headers: window.vizorAuthHeaders ? window.vizorAuthHeaders({ 'Content-Type': 'application/json' }) : { 'Content-Type': 'application/json' },
+    body: JSON.stringify({})
+  })
+  .then(res => {
+    if (!res.ok) throw new Error('Refresh failed with status ' + res.status);
+    return res.json();
+  })
+  .then(data => {
+    if (el) el.textContent = '[Refreshed ✓]';
+    setTimeout(() => { location.reload(); }, 600);
+  })
+  .catch(err => {
+    if (el) el.textContent = '[Refresh Failed ✗]';
+    console.error(err);
+  });
+}
+
 renderGraph();
 """
 
@@ -3678,7 +3704,7 @@ def generate_architect_map_html(data: dict, port: int) -> str:
         staleness_banner_html = (
             '<div class="am-stale-banner" id="graph-stale-banner">'
             '<span>⚠️ Graph Stale (differs from HEAD commit) — '
-            '<a href="javascript:location.reload()" style="color:#b45309;text-decoration:underline;">[Refresh Index]</a></span>'
+            '<a href="#" onclick="triggerGraphRefresh(this); return false;" style="color:#b45309;text-decoration:underline;">[Refresh Index]</a></span>'
             '</div>'
         )
 
@@ -3977,6 +4003,32 @@ window.addEventListener('message', function(e) {
   }
 });
 
+function triggerGraphRefresh(el) {
+  if (el) el.textContent = '[Refreshing...]';
+  const pathParts = window.location.pathname.split('/');
+  let refreshUrl = '/api/graph/refresh';
+  if (pathParts[1] === 'w' && pathParts[2]) {
+    refreshUrl = '/w/' + encodeURIComponent(pathParts[2]) + '/api/graph/refresh';
+  }
+  fetch(refreshUrl, {
+    method: 'POST',
+    headers: window.vizorAuthHeaders ? window.vizorAuthHeaders({ 'Content-Type': 'application/json' }) : { 'Content-Type': 'application/json' },
+    body: JSON.stringify({})
+  })
+  .then(res => {
+    if (!res.ok) throw new Error('Refresh failed with status ' + res.status);
+    return res.json();
+  })
+  .then(data => {
+    if (el) el.textContent = '[Refreshed ✓]';
+    setTimeout(() => { location.reload(); }, 600);
+  })
+  .catch(err => {
+    if (el) el.textContent = '[Refresh Failed ✗]';
+    console.error(err);
+  });
+}
+
 try {
   const savedTheme = localStorage.getItem('vizor-theme');
   if (savedTheme) applyTheme(savedTheme);
@@ -4026,7 +4078,7 @@ def _generate_bs6_view_html(data: dict, port: int, view_key: str, view_title: st
         staleness_banner_html = (
             '<div class="am-stale-banner" id="graph-stale-banner">'
             '<span>⚠️ Graph Stale (differs from HEAD commit) — '
-            '<a href="javascript:location.reload()" style="color:#b45309;text-decoration:underline;">[Refresh]</a></span>'
+            '<a href="#" onclick="triggerGraphRefresh(this); return false;" style="color:#b45309;text-decoration:underline;">[Refresh]</a></span>'
             '</div>'
         )
 
@@ -7693,7 +7745,9 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
         super().do_GET()
 
     def do_OPTIONS(self):
-        if self.path not in ("/note", "/dispatch", "/approve", "/kill", "/architect-map/view-pref", "/roles/create", "/worktrees/clean", "/tools/install", "/api/tools/install", "/api/board/status", "/api/board/stage"):
+        clean_path = self.path.split("?")[0]
+        valid_paths = ("/note", "/dispatch", "/approve", "/kill", "/architect-map/view-pref", "/roles/create", "/worktrees/clean", "/tools/install", "/api/tools/install", "/api/board/status", "/api/board/stage", "/graph/refresh", "/api/graph/refresh", "/api/v1/graph/refresh")
+        if clean_path not in valid_paths and not clean_path.endswith("/api/graph/refresh") and not clean_path.endswith("/api/tools/install"):
             self.send_error(404)
             return
         self.send_response(204)
@@ -7702,28 +7756,83 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
     def do_POST(self):
         if not self._authorize_write():
             return
-        if self.path == "/note":
+        clean_path = self.path.split("?")[0]
+        if clean_path == "/note":
             self._handle_note_request()
-        elif self.path == "/dispatch":
+        elif clean_path == "/dispatch":
             self._handle_dispatch_request()
-        elif self.path == "/approve":
+        elif clean_path == "/approve":
             self._handle_approve_request()
-        elif self.path == "/kill":
+        elif clean_path == "/kill":
             self._handle_kill_request()
-        elif self.path == "/architect-map/view-pref":
+        elif clean_path == "/architect-map/view-pref":
             self._handle_view_pref_request()
-        elif self.path == "/roles/create":
+        elif clean_path == "/roles/create":
             self._handle_role_create_request()
-        elif self.path == "/worktrees/clean":
+        elif clean_path == "/worktrees/clean":
             self._handle_worktree_clean_request()
-        elif self.path in ("/tools/install", "/api/tools/install"):
+        elif clean_path in ("/tools/install", "/api/tools/install") or clean_path.endswith("/api/tools/install"):
             self._handle_tool_install_request()
-        elif self.path == "/api/board/status":
+        elif clean_path == "/api/board/status" or clean_path.endswith("/api/board/status"):
             self._handle_board_status_request()
-        elif self.path == "/api/board/stage":
+        elif clean_path == "/api/board/stage" or clean_path.endswith("/api/board/stage"):
             self._handle_board_stage_request()
+        elif clean_path in ("/graph/refresh", "/api/graph/refresh", "/api/v1/graph/refresh") or clean_path.endswith("/api/graph/refresh"):
+            self._handle_graph_refresh_request()
         else:
             self.send_error(404)
+
+    def _handle_graph_refresh_request(self):
+        try:
+            from synlynk.scan import _run_graphify_extract
+            clean_path = self.path.split("?")[0]
+            slug = None
+            if clean_path.startswith("/w/"):
+                parts = clean_path.strip("/").split("/")
+                if len(parts) >= 2:
+                    slug = parts[1]
+            elif clean_path.startswith("/"):
+                parts = clean_path.strip("/").split("/")
+                if len(parts) >= 3 and parts[-2] == "api" and parts[-1] == "refresh":
+                    slug = parts[0]
+
+            repo_root = None
+            if slug:
+                try:
+                    from synlynk.vizor_daemon import _registered_workspaces
+                    workspaces = _registered_workspaces()
+                    if slug in workspaces:
+                        repo_root = workspaces[slug].get("repo_path")
+                except Exception:
+                    pass
+
+            if not repo_root:
+                repo_root = os.getcwd()
+
+            success = _run_graphify_extract(repo_root)
+            if not success:
+                self.send_error(500, "Graph extraction failed or tool unavailable")
+                return
+
+            port = getattr(self.server, "server_port", 8721) if hasattr(self, "server") else 8721
+            if slug:
+                try:
+                    from synlynk.vizor_daemon import refresh_workspace, _registered_workspaces
+                    workspaces = _registered_workspaces()
+                    if slug in workspaces:
+                        refresh_workspace(slug, workspaces[slug], port)
+                except Exception:
+                    pass
+            else:
+                try:
+                    data = generate_viz_data()
+                    _write_cache(data, port)
+                except Exception:
+                    pass
+
+            self._send_json_ok({"status": "ok", "message": "Knowledge graph successfully extracted and refreshed", "workspace": slug or "default"})
+        except Exception as exc:
+            self.send_error(500, str(exc))
 
     def _handle_board_status_request(self):
         try:
