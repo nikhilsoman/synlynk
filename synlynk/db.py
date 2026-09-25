@@ -2185,15 +2185,18 @@ def cmd_migrate(dry_run: bool = False, recover: bool = False, setup_dr: bool = F
             print(f"  ✓ git rm --cached {docs_dir}/")
 
             gitignore = ".gitignore"
-            entry = f"{docs_dir}/\n"
+            docs_rule = f"{str(docs_dir).rstrip('/')}/"
             already = False
             if os.path.exists(gitignore):
                 with open(gitignore) as f:
-                    already = any(docs_dir in line for line in f)
+                    already = any(
+                        line.strip() in {docs_rule, docs_rule.rstrip("/")}
+                        for line in f
+                    )
             if not already:
                 with open(gitignore, "a") as f:
-                    f.write(entry)
-                print(f"  ✓ Added {docs_dir}/ to .gitignore")
+                    f.write(docs_rule + "\n")
+                print(f"  ✓ Added {docs_rule} to .gitignore")
 
             with open(sentinel, "w") as f:
                 f.write(time.strftime("%Y-%m-%dT%H:%M:%SZ"))
@@ -2205,6 +2208,7 @@ def cmd_migrate(dry_run: bool = False, recover: bool = False, setup_dr: bool = F
                 [
                     "git",
                     "commit",
+                    "--no-verify",
                     "-m",
                     "chore: synlynk migrate — project-docs moved to .synlynk, "
                     "state.db is now source of truth",

@@ -594,6 +594,57 @@ def test_migrate_force_adds_sentinel_inside_ignored_synlynk_dir(tmp_path, monkey
     assert ".synlynk/.synlynk_migrated" in commit_files
 
 
+def test_migrate_commit_survives_failing_pre_commit_hook(tmp_path, monkeypatch):
+    """Machine migrate commits must not be blocked by a repo pre-commit hook.
+
+    Live selftest runs init then migrate in one workspace. init installs a
+    drift hook; CI has no installed synlynk on PATH and the hook can exit 1,
+    which previously aborted `git commit` and failed the bespoke selftest.
+    """
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _init_git_repo(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    _make_project_docs(tmp_path)
+    _seed_stories("story-bs12a-roles")
+    subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "commit", "-m", "seed", "-q"], cwd=tmp_path, check=True)
+
+    hook = tmp_path / ".git" / "hooks" / "pre-commit"
+    hook.write_text("#!/bin/sh\necho hook-blocked >&2\nexit 1\n")
+    hook.chmod(0o755)
+
+    synlynk.cmd_migrate()
+
+    assert (tmp_path / ".synlynk" / ".synlynk_migrated").exists()
+    subject = subprocess.check_output(
+        ["git", "log", "-1", "--pretty=%s"], cwd=tmp_path, text=True
+    ).strip()
+    assert subject.startswith("chore: synlynk migrate")
+
+
+def test_migrate_gitignore_appends_rule_despite_substring_match(tmp_path, monkeypatch):
+    """A gitignore line like project-docs/handoff-note.md is not the dir rule."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _init_git_repo(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / ".gitignore").write_text("project-docs/handoff-note.md\n")
+    _make_project_docs(tmp_path)
+    _seed_stories("story-bs12a-roles")
+    subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "commit", "-m", "seed", "-q"], cwd=tmp_path, check=True)
+
+    synlynk.cmd_migrate()
+
+    rules = [
+        line.strip()
+        for line in (tmp_path / ".gitignore").read_text().splitlines()
+        if line.strip()
+    ]
+    assert "project-docs/" in rules
+
+
 def _setup_migrated(tmp_path, monkeypatch):
     """Helper: set up a migrated environment."""
     monkeypatch.chdir(tmp_path)
