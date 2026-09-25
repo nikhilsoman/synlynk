@@ -1,5 +1,11 @@
 # Cost Log
  
+## 2026-09-25 — Knowledge Graph LOD Zoom, Connection Filtering & Rich Node Details (PR #1785)
+- Interactive Conductor: Agy.
+- Merged PR #1785: Level-of-Detail (LOD) zoom degree filtering, Google Maps-style zoom bar, rich node detail sidebar with descriptions/member symbols, and canvas multi-line tooltips.
+- Review and verification dispatches to Claude / QA role (`job-594cc7e4`).
+- Total estimated dispatch spend: ~$0.05.
+
 ## 2026-09-25 — Knowledge Graph UX Improvements: Canonical Labels, Topbar Toolbar & Monorepo Tabs (PR #1782)
 - Interactive Conductor: Agy.
 - Merged PR #1782: Canonical human-readable community names, topbar multi-select dropdown toolbar with batch toggle and search, 100% full-width interactive canvas, and streamlined monorepo tabs.

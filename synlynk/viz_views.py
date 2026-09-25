@@ -18,8 +18,8 @@ from typing import Any, Dict, List, Tuple
 _VIEWS = ("product", "logical", "infra", "world")
 
 
-def derive_canonical_community_names(raw_nodes: List[Dict[str, Any]]) -> Dict[Any, str]:
-    """Derive human-readable canonical community names from AST nodes based on dominant files, classes, and paths."""
+def derive_canonical_community_metadata(raw_nodes: List[Dict[str, Any]]) -> Dict[Any, Dict[str, Any]]:
+    """Derive rich canonical metadata, descriptions, primary paths, and member symbols per community."""
     from collections import defaultdict, Counter
     comm_nodes = defaultdict(list)
     for n in raw_nodes:
@@ -32,12 +32,14 @@ def derive_canonical_community_names(raw_nodes: List[Dict[str, Any]]) -> Dict[An
         if comm is not None:
             comm_nodes[comm].append(n)
 
-    names: Dict[Any, str] = {}
+    result: Dict[Any, Dict[str, Any]] = {}
     for comm, c_nodes in comm_nodes.items():
         file_counts = Counter()
         dir_counts = Counter()
         classes = []
+        functions = []
         top_symbols = []
+        docstrings = []
 
         for n in c_nodes:
             src = str(n.get("source_file") or n.get("source_path") or n.get("file") or n.get("path") or "")
@@ -48,40 +50,102 @@ def derive_canonical_community_names(raw_nodes: List[Dict[str, Any]]) -> Dict[An
                 if d:
                     dir_counts[d] += 1
             label = str(n.get("label") or n.get("id") or "")
-            if n.get("_callable_class") or n.get("kind") == "class":
+            kind = str(n.get("kind") or "")
+            if n.get("_callable_class") or kind == "class":
                 classes.append(label)
-            top_symbols.append((label, n.get("centrality") or n.get("degree") or 0))
+            elif kind == "function":
+                functions.append(label)
+            deg = n.get("centrality") or n.get("degree") or 0
+            top_symbols.append((label, deg, kind))
+
+            doc = n.get("docstring") or n.get("desc") or n.get("description")
+            if doc:
+                doc_clean = str(doc).strip().split("\n")[0].strip()
+                if doc_clean:
+                    docstrings.append((doc_clean, deg))
 
         total = len(c_nodes)
+        dominant_file = ""
+        canonical_name = ""
+
         if file_counts:
-            top_file, file_cnt = file_counts.most_common(1)[0]
+            dominant_file, file_cnt = file_counts.most_common(1)[0]
             if file_cnt / total >= 0.35 or len(file_counts) == 1:
                 if classes:
                     top_class = Counter(classes).most_common(1)[0][0]
-                    if top_class and top_class.lower() not in top_file.lower():
-                        names[comm] = f"{top_file} · {top_class}"
+                    if top_class and top_class.lower() not in dominant_file.lower():
+                        canonical_name = f"{dominant_file} · {top_class}"
                     else:
-                        names[comm] = top_file
+                        canonical_name = dominant_file
                 else:
-                    names[comm] = top_file
+                    canonical_name = dominant_file
             elif dir_counts and dir_counts.most_common(1)[0][1] / total >= 0.5:
                 top_dir = dir_counts.most_common(1)[0][0]
-                base_file = os.path.basename(top_file)
-                names[comm] = f"{top_dir}/* ({base_file})"
+                base_file = os.path.basename(dominant_file)
+                canonical_name = f"{top_dir}/* ({base_file})"
             else:
-                names[comm] = top_file
+                canonical_name = dominant_file
         else:
             if top_symbols:
                 top_symbols.sort(key=lambda x: x[1], reverse=True)
-                names[comm] = f"Community {comm} ({top_symbols[0][0]})"
+                canonical_name = f"Community {comm} ({top_symbols[0][0]})"
             else:
-                names[comm] = f"Community {comm}"
-    return names
+                canonical_name = f"Community {comm}"
+
+        # Determine semantic kind
+        if dominant_file.startswith("tests/") or "test" in dominant_file:
+            kind_label = "Test Suite"
+        elif classes:
+            if "model" in dominant_file or "schema" in dominant_file:
+                kind_label = "Data Model"
+            elif "cli" in dominant_file or "cmd" in dominant_file:
+                kind_label = "CLI Tool"
+            else:
+                kind_label = "Service Class"
+        elif functions:
+            kind_label = "Function Cluster"
+        else:
+            kind_label = "Module Cluster"
+
+        # Determine description
+        description = ""
+        if docstrings:
+            docstrings.sort(key=lambda x: x[1], reverse=True)
+            description = docstrings[0][0]
+        else:
+            if kind_label == "Test Suite":
+                mod_name = os.path.basename(dominant_file).replace("test_", "").replace(".py", "")
+                description = f"Test suite verifying {mod_name} behavior, coverage, and invariants."
+            elif dominant_file:
+                symbol_summary = ", ".join([s[0] for s in top_symbols[:3]]) if top_symbols else dominant_file
+                description = f"Subsystem component in {dominant_file} containing {symbol_summary}."
+            else:
+                description = f"AST symbol cluster with {total} definitions."
+
+        all_syms = [s[0] for s in top_symbols if s[0]]
+
+        result[comm] = {
+            "name": canonical_name,
+            "source_file": dominant_file,
+            "kind": kind_label,
+            "desc": description,
+            "symbols": all_syms[:15],
+            "symbol_count": total,
+        }
+
+    return result
+
+
+def derive_canonical_community_names(raw_nodes: List[Dict[str, Any]]) -> Dict[Any, str]:
+    """Derive human-readable canonical community names from AST nodes based on dominant files, classes, and paths."""
+    meta = derive_canonical_community_metadata(raw_nodes)
+    return {comm: info["name"] for comm, info in meta.items()}
 
 
 
 def _now() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
 
 
 def _repo_name(repo_path: str) -> str:
