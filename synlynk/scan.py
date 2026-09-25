@@ -11,6 +11,7 @@ import threading
 import time
 from typing import Optional
 
+from synlynk.tool_installer import is_tool_available, install_tool
 from synlynk.wizard import _run_scan_tui
 
 def _pkg(name: str, default=None):
@@ -52,6 +53,31 @@ def _detect_harnesses_on_path(names: tuple = None) -> list:
             "path": cli_path,
         })
     return harnesses
+
+
+def _run_graphify_extract(repo_root: str) -> bool:
+    """Ensure Graphify is installed and execute deterministic AST extraction."""
+    if not is_tool_available("graphify"):
+        try:
+            installed = install_tool("graphify")
+            if not installed:
+                return False
+        except Exception:
+            return False
+
+    out_dir = os.path.join(repo_root, ".synlynk", "graphify-out")
+    os.makedirs(out_dir, exist_ok=True)
+    try:
+        res = subprocess.run(
+            ["graphify", "extract", repo_root, "--code-only", "--out", out_dir],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        return res.returncode == 0
+    except Exception:
+        return False
+
 
 def cmd_scan(deep: bool = False, status: bool = False,
              refresh: bool = False, add_path: str = None,
@@ -97,6 +123,7 @@ def cmd_scan(deep: bool = False, status: bool = False,
         print(f"  {_GREEN}▶{_RESET} Deep scanning source tree...")
         skeleton, total_files, total_syms = _pkg("_scan_full_repo")()
         sha_short = (_pkg("_git_head_sha")() or "unknown")[:7]
+        _run_graphify_extract(os.getcwd())
         print(f"  {_GREEN}✓{_RESET} Scanned {total_files} files · {total_syms} symbols · HEAD {sha_short}")
         print(f"  {_CYAN}→{_RESET} project-docs/source-map.md updated")
         return

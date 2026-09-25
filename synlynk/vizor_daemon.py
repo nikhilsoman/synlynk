@@ -173,6 +173,8 @@ def parse_workspace_path(path: str):
     rest = remainder[len(slug):]
     if not rest or rest == "/":
         rest = "/index.html"
+    elif rest in ("/graphify", "/graph"):
+        rest = "/graphify.html"
     return slug, "/" + slug + rest
 
 
@@ -209,12 +211,15 @@ def _workspace_index_html() -> str:
             status_badge = '<span class="badge" style="background:rgba(13,158,135,0.15);color:#14b8a6;">● Rendered</span>' if is_rendered else '<span class="badge" style="background:rgba(234,179,8,0.15);color:#eab308;">○ Registering</span>'
 
             if is_rendered:
+                graphify_chip = ""
+                if (cache_dir / "graphify.html").is_file() or (cache_dir / "graph.html").is_file():
+                    graphify_chip = f'\n                  <a href="/w/{s}/graphify.html" class="view-chip">Graphify</a>'
                 views_html = f"""
                 <div class="view-links">
                   <a href="/w/{s}/index.html" class="view-chip primary">Overview</a>
                   <a href="/w/{s}/effort.html" class="view-chip">Effort & Cost</a>
                   <a href="/w/{s}/roles.html" class="view-chip">Roles</a>
-                  <a href="/w/{s}/tube.html" class="view-chip">Architect</a>
+                  <a href="/w/{s}/tube.html" class="view-chip">Architect</a>{graphify_chip}
                   <a href="/w/{s}/efficiency.html" class="view-chip">Efficiency</a>
                   <a href="/w/{s}/observatory.html" class="view-chip">Observatory</a>
                 </div>

@@ -720,3 +720,39 @@
   - Verified full test suite passes: 3,217 passed, 3 skipped (100% green).
 [@agy]
 
+## 2026-09-25 — Graphify Auto-Extraction, Federated Multi-Repo Mesh & Vizor Unified Canvas
+
+### Context & Objectives
+- Enable automatic AST & semantic code extraction on deep scan and upgrade via Graphify so AI fleet context maps and architectural views are rich and deterministic.
+- Build federated multi-repo knowledge graphs linking registered workspace repositories with namespaced nodes (`repo::node`) and cross-repo dependency bridges.
+- Unify Graphify knowledge graph visualization directly inside Vizor: serve `.graphify/graph.html` at `/w/<slug>/graphify.html`, register nav drawer badge chips, and embed interactive knowledge graphs with multi-repo clustered layout and live CSS theme synchronization across Architect Map (`tube.html`) and Logical View (`logical.html`).
+
+### Shipped & Verified
+- **Automated Graphify Extraction on Deep Scan & Upgrade (`synlynk/scan.py`, `synlynk/upgrade.py`):**
+  - Added `_run_graphify_extract(repo_root)` executing deterministic fast code extraction (`graphify extract <repo> --code-only --out <repo>/.synlynk/graphify-out`) with automated on-demand tool installation via `install_tool("graphify")`.
+  - Wired into `synlynk scan --deep` and `synlynk upgrade`, handling missing tools or execution failures gracefully without breaking the core scan pipeline.
+  - Added 6 unit tests in `tests/test_scan_graphify_auto.py` covering tool discovery, auto-install, failure fallbacks, and command integration.
+- **Federated Multi-Repo Mesh Federation (`synlynk/mesh.py`, `synlynk/cli.py`):**
+  - Added `build_federated_mesh(repos, workspace_root)` scanning registered repositories, ingesting individual `.graphify/graph.json` files, prefixing node IDs with repo namespaces (`repo::node`), and detecting cross-repo dependency bridges.
+  - Calculated federated graph metrics (node count, edge count, cross-repo bridges, community clusters, and degree centrality), persisting output to `.synlynk/federated_mesh.json`.
+  - Added CLI command `synlynk mesh` registered in command taxonomy.
+  - Added 3 unit tests in `tests/test_mesh_federation.py` testing multi-repo federation, bridge detection, and missing/corrupted file fallbacks.
+- **Vizor Interactive Graphify Route & Navigation (`synlynk/viz.py`, `synlynk/vizor_daemon.py`):**
+  - Updated `write_cache()` in `synlynk/viz.py` to copy `.graphify/graph.html` to `graphify.html` in the Vizor workspace cache when available.
+  - Added `/w/<slug>/graphify.html` routing support and automatic redirect handling in `VizorHandler`.
+  - Rendered `Graphify KG` navigation badge chips in workspace index cards when Graphify graph artifacts are present.
+  - Added 5 unit tests in `tests/test_viz_graphify_routes.py`.
+- **Architect Map & Logical View Unified Canvas (`synlynk/viz.py`, `synlynk/viz_views.py`):**
+  - Updated `generate_architect_map_html()`:
+    - Multi-repo workspaces embed federated clustered layout with cross-repo dependency bridges rendered as dashed amber chords.
+    - Single-repo workspaces embed the local Graphify knowledge graph canvas with fallback to Tube Map if absent.
+    - Added theme synchronization listener reacting to parent Vizor theme events and synchronizing CSS variables (`--theme-bg`, `--theme-text`).
+  - Updated `generate_logical_html()`:
+    - Integrated interactive Graphify knowledge graph canvas with communities sidebar, centrality metrics, and amber staleness warning banner if HEAD has moved past extraction SHA.
+  - Added 5 unit tests in `tests/test_viz_unified_canvas.py` and 6 unit tests in `tests/test_viz_graphify.py`.
+- **Verification:**
+  - Ran full test suites: 25 targeted unit tests and all 163 regression tests across `tests/test_scan*.py`, `tests/test_viz*.py`, and `tests/test_mesh*.py` passed (100% green).
+  - Executed `synlynk scan --deep`: confirmed successful AST extraction, 412 files, 3292 symbols scanned, updated `project-docs/source-map.md`.
+  - Verified live daemon endpoints: HTTP 200 on `http://localhost:8721/w/synlynk/tube.html` and `logical.html`.
+[@agy]
+

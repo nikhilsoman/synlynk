@@ -1,5 +1,5 @@
 # Source Map
-_Generated: 2026-09-25T00:02:59 · HEAD: 936689c · 408 files_
+_Generated: 2026-09-25T08:31:23 · HEAD: 30024f1 · 412 files_
 
 ## [root]/  [python · 1, shell · 1]
 `conftest.py` · 3 symbols
@@ -236,7 +236,7 @@ _Generated: 2026-09-25T00:02:59 · HEAD: 936689c · 408 files_
   _run_pr_check() [function:13], _run_qa_gate() [function:26], require_merge_oracle() [function:36]
 
 `synlynk/mesh.py` · 9 symbols
-  merge_fleet_graphs() [function:17], infer_cross_repo_edges() [function:64], write_global_graph() [function:109], _HUNK_RE [constant:128], AstSymbolInfo [class:132], extract_file_ast_symbols() [function:141], parse_diff_line_ranges() [function:215], map_diff_to_ast_symbols() [function:239], get_worktree_modified_symbols() [function:283]
+  merge_fleet_graphs() [function:17], infer_cross_repo_edges() [function:64], write_global_graph() [function:113], build_federated_mesh() [function:128], _HUNK_RE [constant:168], AstSymbolInfo [class:172], extract_file_ast_symbols() [function:181], parse_diff_line_ranges() [function:255], map_diff_to_ast_symbols() [function:279]
 
 `synlynk/models.py` · 24 symbols
   EntitlementTier [class:23], RateCard [class:31], ContextGeometry [class:39], ModelFamily [class:46], ModelSpec [class:55], _remote() [function:77], BUILTIN_FAMILIES [constant:81], BUILTIN_MODEL_CATALOG [constant:91], MODEL_FAMILIES [constant:111], BUILTIN_MODELS [constant:112], load_model_catalog() [function:115], resolve_tier_model() [function:157], get_models_from_catalog() [function:182], _jsonable() [function:206], model_to_dict() [function:218], family_to_dict() [function:222], _parse_model_names() [function:226], probe_cli_harness() [function:243], _probe_http() [function:256], probe_local_runtimes() [function:266], probe_ollama() [function:285], probe_omlx() [function:290], discover_environment() [function:295], discover_models() [function:300]
@@ -313,8 +313,8 @@ _Generated: 2026-09-25T00:02:59 · HEAD: 936689c · 408 files_
 `synlynk/sandbox.py` · 4 symbols
   scaffold_greenfield_sandbox() [function:7], ping_endpoint() [function:19], test_ping_endpoint_success() [function:39], build_artifact_tour() [function:57]
 
-`synlynk/scan.py` · 13 symbols
-  _pkg() [function:16], _HARNESS_PATH_NAMES [constant:23], _detect_harnesses_on_path() [function:26], cmd_scan() [function:56], _BOLD [constant:237], _GREEN [constant:239], _YELLOW [constant:241], _CYAN [constant:243], _DIM [constant:245], _RESET [constant:247], _RED [constant:249], _MAGENTA [constant:251], _static_scan() [function:253]
+`synlynk/scan.py` · 14 symbols
+  _pkg() [function:17], _HARNESS_PATH_NAMES [constant:24], _detect_harnesses_on_path() [function:27], _run_graphify_extract() [function:58], cmd_scan() [function:82], _BOLD [constant:264], _GREEN [constant:266], _YELLOW [constant:268], _CYAN [constant:270], _DIM [constant:272], _RESET [constant:274], _RED [constant:276], _MAGENTA [constant:278], _static_scan() [function:280]
 
 `synlynk/scheduler.py` · 6 symbols
   MAX_STORY_RETRIES [constant:13], _story_failed_agents() [function:16], _story_retry_count() [function:25], _compute_schedule_plan() [function:34], _enqueue_plan() [function:156], cmd_schedule() [function:200]
@@ -383,7 +383,7 @@ _Generated: 2026-09-25T00:02:59 · HEAD: 936689c · 408 files_
   execute_uninstall() [function:8]
 
 `synlynk/upgrade.py` · 8 symbols
-  _detect_install_type() [function:12], _ver_tuple() [function:34], _run_upgrade() [function:41], _get_pipx_source() [function:75], _warn_stale_script_install() [function:89], _ensure_vizor_daemon_installed() [function:105], upgrade() [function:117], execute_upgrade() [function:177]
+  _detect_install_type() [function:13], _ver_tuple() [function:35], _run_upgrade() [function:42], _get_pipx_source() [function:76], _warn_stale_script_install() [function:90], _ensure_vizor_daemon_installed() [function:106], upgrade() [function:118], execute_upgrade() [function:179]
 
 `synlynk/ux_nudges.py` · 2 symbols
   TUI_TIP_ID [constant:3], pending_ux_tip() [function:6]
@@ -392,13 +392,13 @@ _Generated: 2026-09-25T00:02:59 · HEAD: 936689c · 408 files_
   Role [class:20], Actor [class:27], LocalActor [class:32], DEFAULT_ACTOR [constant:39], UxCoreError [class:42], Event [class:51], WriteResult [class:60], Costs [class:71], Task [class:79], Stage [class:90], Dream [class:102], _KNOWN_AGENTS [constant:115], _looks_like_stage_label() [function:118], _story_cost_est() [function:122], _dream_cost_breakdown() [function:131], _fetch_cost_rows() [function:150], get_costs() [function:159], get_gantt_data() [function:195]
 
 `synlynk/viz.py` · 11 symbols
-  VIZ_CACHE_DIR [constant:26], VIZ_NOTES_PATH [constant:27], VIZ_META_PATH [constant:28], VIZ_WORKSPACE_MAP_PATH [constant:29], DEFAULT_PORT [constant:30], _KNOWN_AGENTS [constant:31], _live_js() [function:34], _load_workspace_repos() [function:101], _load_workspace_map() [function:115], _repo_github_url() [function:125], generate_viz_data() [function:149]
+  VIZ_CACHE_DIR [constant:27], VIZ_NOTES_PATH [constant:28], VIZ_META_PATH [constant:29], VIZ_WORKSPACE_MAP_PATH [constant:30], DEFAULT_PORT [constant:31], _KNOWN_AGENTS [constant:32], _live_js() [function:35], _load_workspace_repos() [function:102], _load_workspace_map() [function:116], _repo_github_url() [function:126], generate_viz_data() [function:150]
 
 `synlynk/viz_views.py` · 11 symbols
-  _VIEWS [constant:18], _now() [function:22], _repo_name() [function:26], _head_sha() [function:30], _id() [function:41], init_workspace_view_tables() [function:46], _save_projection() [function:93], _node() [function:117], _edge() [function:127], extract_product_nodes() [function:135], extract_logical_nodes() [function:162]
+  _VIEWS [constant:18], _now() [function:22], _repo_name() [function:26], _head_sha() [function:30], _id() [function:41], init_workspace_view_tables() [function:46], _save_projection() [function:93], _node() [function:121], _edge() [function:131], extract_product_nodes() [function:139], extract_logical_nodes() [function:166]
 
 `synlynk/vizor_daemon.py` · 18 symbols
-  DAEMON_HOME [constant:16], PIDFILE [constant:17], PORTFILE [constant:18], LOGFILE [constant:19], CACHE_ROOT [constant:20], DEFAULT_POLL_INTERVAL [constant:21], _RENDER_LOCK [constant:23], poll_interval() [function:26], workspace_render_context() [function:38], _is_transient_test_path() [function:66], _registered_workspaces() [function:80], refresh_workspace() [function:114], poll_once() [function:133], _log() [function:148], _known_slugs() [function:156], parse_workspace_path() [function:160], _rewrite_workspace_app_route() [function:179], _workspace_index_html() [function:192]
+  DAEMON_HOME [constant:16], PIDFILE [constant:17], PORTFILE [constant:18], LOGFILE [constant:19], CACHE_ROOT [constant:20], DEFAULT_POLL_INTERVAL [constant:21], _RENDER_LOCK [constant:23], poll_interval() [function:26], workspace_render_context() [function:38], _is_transient_test_path() [function:66], _registered_workspaces() [function:80], refresh_workspace() [function:114], poll_once() [function:133], _log() [function:148], _known_slugs() [function:156], parse_workspace_path() [function:160], _rewrite_workspace_app_route() [function:181], _workspace_index_html() [function:194]
 
 `synlynk/wave6.py` · 6 symbols
   MembershipUnavailable [class:10], GraphUnavailable [class:14], accept_membership() [function:18], connector_dispatch_allowed() [function:29], graph_read() [function:51], hosted_vizor_placeholder() [function:61]
@@ -463,7 +463,7 @@ _Generated: 2026-09-25T00:02:59 · HEAD: 936689c · 408 files_
 `synlynk/testbed/scenarios.py` · 2 symbols
   ScenarioResult [class:13], ScenarioRunner [class:21]
 
-## tests/  [python · 249]
+## tests/  [python · 253]
 `tests/conftest.py` · 6 symbols
   isolated_db() [function:11], isolate_local_http_token() [function:18], git_worktree_repo() [function:27], stub_staleness_check_thread() [function:38], stub_dispatch_worktree() [function:51], project_dir() [function:78]
 
@@ -869,6 +869,9 @@ _Generated: 2026-09-25T00:02:59 · HEAD: 936689c · 408 files_
 `tests/test_mesh_conflict.py` · 12 symbols
   test_extract_file_ast_symbols() [function:20], GLOBAL_VAR [constant:25], helper_func() [function:27], async_fetch() [async_function:30], ServiceManager [class:33], test_parse_diff_line_ranges() [function:54], test_map_diff_to_ast_symbols() [function:74], func_two() [function:78], App [class:81], test_detect_worktree_ast_conflicts_disjoint_and_conflict() [function:99], test_cmd_multirepo_mesh_conflicts_json() [function:144], test_merge_fleet_graphs_and_inferred_edges() [function:161]
 
+`tests/test_mesh_federation.py` · 3 symbols
+  test_build_federated_mesh_two_repos() [function:5], test_build_federated_mesh_cross_repo_bridges() [function:38], test_build_federated_mesh_missing_and_corrupt() [function:69]
+
 `tests/test_migrate.py` · 21 symbols
   test_migrate_db_creates_new_tables() [function:10], test_stories_has_gh_issue_column() [function:26], test_parse_memory_md_sections() [function:35], test_parse_roadmap_md_arcs_and_phases() [function:54], test_parse_costs_md_rows() [function:78], test_parse_devlog_file_entries() [function:91], test_parse_todo_metadata() [function:113], test_is_migrated_false_without_sentinel() [function:128], test_is_migrated_true_with_sentinel() [function:134], test_synlynk_project_docs_dir_returns_path() [function:141], test_dr_sync_copies_file() [function:147], test_dr_sync_silent_skip_if_path_missing() [function:161], _make_project_docs() [function:172], _seed_stories() [function:199], _init_git_repo() [function:210], test_migrate_dry_run_imports_nothing() [function:216], test_migrate_imports_all_tables() [function:229], test_migrate_imports_goal_id_on_roadmap_arcs() [function:246], test_migrate_copies_to_synlynk_project_docs() [function:269], test_migrate_writes_sentinel() [function:283], test_migrate_idempotent() [function:294]
 
@@ -1006,6 +1009,9 @@ _Generated: 2026-09-25T00:02:59 · HEAD: 936689c · 408 files_
 
 `tests/test_sandbox.py` · 2 symbols
   test_scaffold_greenfield_sandbox_creates_ping_app() [function:9], test_build_artifact_tour_returns_core_pillars() [function:17]
+
+`tests/test_scan_graphify_auto.py` · 6 symbols
+  test_run_graphify_extract_when_installed() [function:7], test_run_graphify_extract_auto_installs_if_missing() [function:21], test_run_graphify_extract_install_fails() [function:31], test_run_graphify_extract_subprocess_error() [function:39], test_cmd_scan_deep_calls_run_graphify_extract() [function:46], test_upgrade_calls_run_graphify_extract() [function:61]
 
 `tests/test_selftest.py` · 17 symbols
   EXPECTED_LIVE_SCENARIOS [constant:8], test_selftest_core_exports() [function:27], test_selftest_registry_covers_core_lifecycle_commands() [function:51], test_run_selftest_uses_generic_help_for_all_taxonomy_commands() [function:57], test_run_selftest_sorts_latent_tier_last() [function:82], test_live_selftest_bespoke_lifecycle_scenarios_pass() [function:95], test_live_selftest_init_preserves_existing_files() [function:106], test_live_selftest_migrate_imports_real_rows() [function:118], test_live_selftest_upgrade_respects_install_location() [function:130], test_scenario_join_creates_real_devlog_file() [function:142], test_scenario_decide_surfaces_each_agent_response() [function:154], test_gh_write_scenario_records_capability_per_harness_and_mode() [function:163], test_selftest_subcommand_is_registered() [function:200], test_dispatch_scenario_skips_when_budget_exhausted() [function:214], test_dispatch_scenario_uses_fence_estimate_as_cost() [function:230], test_dispatch_scenario_does_not_increment_context_spend() [function:259], test_exec_scenario_skips_when_budget_exhausted() [function:289]
@@ -1145,6 +1151,9 @@ _Generated: 2026-09-25T00:02:59 · HEAD: 936689c · 408 files_
 `tests/test_viz_graphify.py` · 6 symbols
   test_extract_logical_nodes_enriches_from_graphify_when_present() [function:10], test_extract_logical_nodes_records_community_and_centrality() [function:37], test_extract_logical_nodes_flags_stale_when_head_advanced() [function:65], test_generate_logical_html_renders_amber_staleness_banner() [function:92], test_extract_logical_nodes_malformed_graph_json_falls_back() [function:114], test_generate_logical_html_string_community() [function:131]
 
+`tests/test_viz_graphify_routes.py` · 5 symbols
+  test_write_cache_copies_graphify_html() [function:14], test_write_cache_without_graphify_html() [function:35], test_vizor_handler_graphify_redirect() [function:47], test_vizor_daemon_parse_workspace_path_graphify() [function:66], test_vizor_daemon_index_shows_graphify_chip() [function:82]
+
 `tests/test_viz_nav_restructure.py` · 6 symbols
   sample_viz_data() [function:14], test_generate_overview_html() [function:84], test_generate_overview_html_clean_alerts() [function:118], test_generate_activity_stream_html() [function:124], test_generate_index_html_two_tier_accordion_and_categories() [function:142], test_write_cache_includes_overview_and_activity() [function:180]
 
@@ -1160,8 +1169,11 @@ _Generated: 2026-09-25T00:02:59 · HEAD: 936689c · 408 files_
 `tests/test_viz_serve.py` · 15 symbols
   _DummyVizorHandler [class:12], _make_handler() [function:29], test_post_note_creates_file() [function:49], test_post_note_merges_existing() [function:69], test_post_invalid_json_returns_400() [function:85], test_post_note_without_token_returns_401() [function:95], test_post_note_wrong_token_returns_401() [function:107], test_post_note_cross_origin_is_forbidden() [function:124], test_post_dispatch_without_token_does_not_dispatch() [function:136], test_vizor_write_routes_require_token() [function:149], test_post_json_ok_does_not_set_wildcard_cors() [function:157], test_handle_dispatch_routes_through_uxcore() [function:170], test_handle_approve_routes_through_uxcore() [function:182], test_handle_approve_passes_story_id_to_merge_path() [function:193], test_handle_kill_routes_through_uxcore() [function:204]
 
-`tests/test_viz_views.py` · 6 symbols
-  test_init_workspace_view_tables() [function:13], test_extract_product_nodes_with_journeys() [function:20], test_extract_logical_nodes_structure() [function:33], test_extract_infra_nodes_daemon() [function:44], test_extract_world_nodes_egress() [function:51], test_build_workspace_views_snapshot() [function:64]
+`tests/test_viz_unified_canvas.py` · 5 symbols
+  test_architect_map_single_repo_renders_graphify_or_ast() [function:4], test_logical_view_embeds_graphify_or_vis() [function:16], test_architect_map_multi_repo_renders_clustered_canvas_and_bridges() [function:28], test_architect_map_theme_synchronization() [function:50], test_logical_view_embeds_graphify_and_communities_sidebar() [function:61]
+
+`tests/test_viz_views.py` · 8 symbols
+  test_init_workspace_view_tables() [function:13], test_extract_product_nodes_with_journeys() [function:20], test_extract_logical_nodes_structure() [function:33], test_extract_infra_nodes_daemon() [function:44], test_extract_world_nodes_egress() [function:51], test_build_workspace_views_snapshot() [function:64], test_build_workspace_views_snapshot_with_readonly_db() [function:71], test_query_repo_file_tree_with_explicit_conn() [function:93]
 
 `tests/test_viz_worktrees.py` · 2 symbols
   test_observatory_renders_worktree_lifecycle_section() [function:4], test_handler_handle_worktree_clean() [function:17]
