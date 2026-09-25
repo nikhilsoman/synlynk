@@ -1,5 +1,11 @@
 # Cost Log
  
+## 2026-09-25 — AST Knowledge Graph Lifecycle Triggers, Rich Packager & Sparse Worktrees (PR #1788)
+- Interactive Conductor: Agy.
+- Implemented: Rich AST context packager in `synlynk/pack.py` (subsystem grouping, signature inlining, reverse test suite discovery), AST-guided sparse cone derivation in `synlynk/worktree_sparse.py`, automated background refresh on git drift in `synlynk/daemon.py` + dispatch JIT cache validator, and topbar manual refresh action in `synlynk/viz.py`.
+- 36/36 focused unit tests and 361/361 full test suite passing locally.
+- Zero external fee-bearing dispatch spend ($0.00).
+
 ## 2026-09-25 — Knowledge Graph LOD Zoom, Connection Filtering & Rich Node Details (PR #1785)
 - Interactive Conductor: Agy.
 - Merged PR #1785: Level-of-Detail (LOD) zoom degree filtering, Google Maps-style zoom bar, rich node detail sidebar with descriptions/member symbols, and canvas multi-line tooltips.

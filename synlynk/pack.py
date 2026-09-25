@@ -33,7 +33,7 @@ def synthesize_context_pack(
     story_id: Optional[str] = None,
     token_budget: int = 1500,
 ) -> str:
-    """Synthesize a compact 1-hop AST context pack for a task or story."""
+    """Synthesize a rich AST context pack for a task or story."""
     graph_path = Path(repo_root) / ".synlynk" / "graphify-out" / "graph.json"
     if not graph_path.is_file():
         return ""
@@ -75,14 +75,17 @@ def synthesize_context_pack(
         label = str(node.get("label") or "").lower()
         node_id = str(node.get("id") or "").lower()
         file_path = str(node.get("file") or "").lower()
+        doc = str(node.get("docstring") or node.get("desc") or "").lower()
 
         score = 0
         for kw in keywords:
             if kw in label:
-                score += 3
+                score += 4
             elif kw in node_id:
-                score += 2
+                score += 3
             elif kw in file_path:
+                score += 2
+            elif kw in doc:
                 score += 1
         if score > 0:
             scored_nodes.append((score, node))
@@ -106,26 +109,70 @@ def synthesize_context_pack(
         if src in node_by_id:
             outbound.setdefault(src, []).append(node_by_id.get(tgt, {"label": tgt, "file": ""}))
 
-    lines = ["## Task Context Pack (Generated via Knowledge Graph)", "Target Symbols:"]
+    # Extract primary communities / subsystems
+    subsystems: List[str] = []
+    seen_subs: Set[str] = set()
+    for node in top_nodes:
+        comm_name = node.get("community_name")
+        if not comm_name:
+            file_str = node.get("file", "")
+            comm_name = file_str or node.get("label", "Unknown Subsystem")
+        if comm_name and comm_name not in seen_subs:
+            seen_subs.add(comm_name)
+            subsystems.append(comm_name)
+
+    # Collect suggested test targets
+    test_files: Set[str] = set()
+    for node in top_nodes:
+        file_str = node.get("file", "")
+        if "test" in file_str:
+            test_files.add(file_str)
+        nid = str(node.get("id"))
+        for caller in inbound.get(nid, []):
+            cfile = caller.get("file", "")
+            if "test" in cfile:
+                test_files.add(cfile)
+
+    lines = [
+        "## Task Context Pack (Generated via AST Knowledge Graph)",
+        "",
+        "### Primary Subsystems & Communities",
+    ]
+    for sub in subsystems[:4]:
+        lines.append(f"- **Subsystem:** `{sub}`")
+
+    lines.append("")
+    lines.append("### Target Symbols & Interfaces")
     for node in top_nodes:
         label = node.get("label") or node.get("id")
         file_str = node.get("file", "")
         line_num = node.get("line")
         loc = f"{file_str}:L{line_num}" if line_num else file_str
         loc_str = f" [{loc}]" if loc else ""
-        lines.append(f"- {label}{loc_str}")
+        sig = node.get("signature")
+        doc = node.get("docstring") or node.get("desc")
+
+        if sig:
+            lines.append(f"- `{sig}`{loc_str}")
+        else:
+            lines.append(f"- `{label}`{loc_str}")
+
+        if doc:
+            # Inline concise first line or up to 140 chars
+            first_line = doc.strip().split("\n", 1)[0][:140]
+            lines.append(f"  *{first_line}*")
 
         nid = str(node.get("id"))
         callers = inbound.get(nid, [])
         if callers:
-            lines.append("  - Callers:")
+            lines.append("  - Inbound Callers:")
             for c in callers[:5]:
                 clabel = c.get("label") or c.get("id")
                 cfile = c.get("file", "")
                 cline = c.get("line")
                 cloc = f"{cfile}:L{cline}" if cline else cfile
                 cloc_str = f" [{cloc}]" if cloc else ""
-                lines.append(f"    - {clabel}{cloc_str}")
+                lines.append(f"    - `{clabel}`{cloc_str}")
 
         callees = outbound.get(nid, [])
         if callees:
@@ -136,7 +183,13 @@ def synthesize_context_pack(
                 dline = d.get("line")
                 dloc = f"{dfile}:L{dline}" if dline else dfile
                 dloc_str = f" [{dloc}]" if dloc else ""
-                lines.append(f"    - {dlabel}{dloc_str}")
+                lines.append(f"    - `{dlabel}`{dloc_str}")
+
+    if test_files:
+        lines.append("")
+        lines.append("### Suggested Verification Test Targets")
+        for tf in sorted(test_files)[:5]:
+            lines.append(f"- `pytest {tf}`")
 
     result = "\n".join(lines)
     return _cut_to_token_budget(result, token_budget=token_budget)

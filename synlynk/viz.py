@@ -3630,6 +3630,51 @@ if (svgEl) {
   });
 }
 
+function triggerAmKgRefresh(btn) {
+  if (!btn) btn = document.getElementById('am-kg-refresh-btn');
+  const chip = document.getElementById('am-kg-status-chip') || document.querySelector('.am-kg-chip');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = '🔄 Refreshing...';
+  }
+  if (chip) chip.textContent = '⏳ Extracting AST Knowledge Graph...';
+
+  const pathParts = window.location.pathname.split('/');
+  let refreshUrl = '/api/graph/refresh';
+  if (pathParts[1] === 'w' && pathParts[2]) {
+    refreshUrl = '/w/' + encodeURIComponent(pathParts[2]) + '/api/graph/refresh';
+  }
+
+  fetch(refreshUrl, {
+    method: 'POST',
+    headers: window.vizorAuthHeaders ? window.vizorAuthHeaders({ 'Content-Type': 'application/json' }) : { 'Content-Type': 'application/json' },
+    body: JSON.stringify({})
+  })
+  .then(res => {
+    if (!res.ok) throw new Error('Refresh failed with status ' + res.status);
+    return res.json();
+  })
+  .then(data => {
+    if (btn) {
+      btn.textContent = '✓ Refreshed';
+      setTimeout(() => { btn.textContent = '🔄 Refresh Graph'; btn.disabled = false; }, 2000);
+    }
+    if (chip) chip.textContent = '✓ Graph Refreshed';
+    const iframe = document.getElementById('am-graphify-frame') || document.querySelector('iframe');
+    if (iframe) {
+      iframe.src = iframe.src;
+    }
+  })
+  .catch(err => {
+    console.error(err);
+    if (btn) {
+      btn.textContent = '✗ Failed';
+      setTimeout(() => { btn.textContent = '🔄 Refresh Graph'; btn.disabled = false; }, 2500);
+    }
+    if (chip) chip.textContent = '✗ Extraction Failed';
+  });
+}
+
 function triggerGraphRefresh(el) {
   if (el) el.textContent = '[Refreshing...]';
   const pathParts = window.location.pathname.split('/');
@@ -3732,6 +3777,9 @@ body { margin:0; font-family:'SF Mono',monospace; background:#f6f8fa; color:#1f2
 [data-theme="dark"] .am-cluster-header { fill:#1e2430; }
 [data-theme="dark"] .am-cluster-title { fill:#38bdf8; }
 [data-theme="dark"] .am-cluster-detail { fill:#8b949e; }
+.am-btn-action { background:#fff; border:1px solid #d1d5db; border-radius:6px; padding:6px 12px; font-size:12px; font-family:inherit; cursor:pointer; display:inline-flex; align-items:center; gap:6px; box-shadow:0 1px 2px rgba(0,0,0,0.05); transition:all .15s ease; color:#1e293b; }
+.am-btn-action:hover { background:#f1f5f9; border-color:#94a3b8; }
+.am-btn-action:disabled { opacity:0.6; cursor:not-allowed; }
 [data-theme="dark"] .am-dropdown-btn { background:#13171f; border-color:#1e2430; color:#c9d1d9; }
 [data-theme="dark"] .am-dropdown-btn:hover { background:#1e2430; }
 [data-theme="dark"] .am-dropdown-menu { background:#0a0c10; border-color:#1e2430; color:#c9d1d9; box-shadow:0 10px 25px rgba(0,0,0,0.5); }
@@ -3740,6 +3788,8 @@ body { margin:0; font-family:'SF Mono',monospace; background:#f6f8fa; color:#1f2
 [data-theme="dark"] .am-dropdown-actions { border-bottom-color:#1e2430; }
 [data-theme="dark"] .am-search-input { background:#13171f; border-color:#1e2430; color:#c9d1d9; }
 [data-theme="dark"] .am-kg-chip { background:#13171f; border-color:#1e2430; color:#8b949e; }
+[data-theme="dark"] .am-btn-action { background:#13171f; border-color:#1e2430; color:#c9d1d9; }
+[data-theme="dark"] .am-btn-action:hover { background:#1e2430; border-color:#334155; }
 [data-theme="dark"] .am-kg-canvas-full { border-color:#1e2430; background:#0d0f14; }
 """
 
@@ -3860,7 +3910,8 @@ def generate_architect_map_html(data: dict, port: int) -> str:
         </div>
       </div>
       <input type="text" id="am-kg-search" class="am-search-input" placeholder="🔍 Search symbols..." oninput="filterKgSearch(this.value)">
-      <span class="am-kg-chip">{num_clusters} Clusters · {total_symbols} AST Symbols</span>
+      <span class="am-kg-chip" id="am-kg-status-chip">{num_clusters} Clusters · {total_symbols} AST Symbols</span>
+      <button type="button" id="am-kg-refresh-btn" class="am-btn-action" onclick="triggerAmKgRefresh(this)" title="Re-extract AST Knowledge Graph">🔄 Refresh Graph</button>
     </div>
   </div>
   <div class="am-kg-canvas-full">
@@ -4165,6 +4216,51 @@ window.addEventListener('message', function(e) {
   }
 });
 
+function triggerBs6KgRefresh(btn) {
+  if (!btn) btn = document.getElementById('bs6-kg-refresh-btn');
+  const chip = document.getElementById('bs6-kg-status-chip') || document.querySelector('.am-kg-chip');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = '🔄 Refreshing...';
+  }
+  if (chip) chip.textContent = '⏳ Extracting AST Knowledge Graph...';
+
+  const pathParts = window.location.pathname.split('/');
+  let refreshUrl = '/api/graph/refresh';
+  if (pathParts[1] === 'w' && pathParts[2]) {
+    refreshUrl = '/w/' + encodeURIComponent(pathParts[2]) + '/api/graph/refresh';
+  }
+
+  fetch(refreshUrl, {
+    method: 'POST',
+    headers: window.vizorAuthHeaders ? window.vizorAuthHeaders({ 'Content-Type': 'application/json' }) : { 'Content-Type': 'application/json' },
+    body: JSON.stringify({})
+  })
+  .then(res => {
+    if (!res.ok) throw new Error('Refresh failed with status ' + res.status);
+    return res.json();
+  })
+  .then(data => {
+    if (btn) {
+      btn.textContent = '✓ Refreshed';
+      setTimeout(() => { btn.textContent = '🔄 Refresh Graph'; btn.disabled = false; }, 2000);
+    }
+    if (chip) chip.textContent = '✓ Graph Refreshed';
+    const iframe = document.getElementById('bs6-graphify-frame') || document.querySelector('iframe');
+    if (iframe) {
+      iframe.src = iframe.src;
+    }
+  })
+  .catch(err => {
+    console.error(err);
+    if (btn) {
+      btn.textContent = '✗ Failed';
+      setTimeout(() => { btn.textContent = '🔄 Refresh Graph'; btn.disabled = false; }, 2500);
+    }
+    if (chip) chip.textContent = '✗ Extraction Failed';
+  });
+}
+
 function triggerGraphRefresh(el) {
   if (el) el.textContent = '[Refreshing...]';
   const pathParts = window.location.pathname.split('/');
@@ -4308,7 +4404,8 @@ def _generate_bs6_view_html(data: dict, port: int, view_key: str, view_title: st
         </div>
       </div>
       <input type="text" id="bs6-search" class="am-search-input" placeholder="🔍 Search symbols..." oninput="bs6FilterSearch(this.value)">
-      <span class="am-kg-chip">{num_clusters} Clusters · {total_symbols} AST Symbols</span>
+      <span class="am-kg-chip" id="bs6-kg-status-chip">{num_clusters} Clusters · {total_symbols} AST Symbols</span>
+      <button type="button" id="bs6-kg-refresh-btn" class="am-btn-action" onclick="triggerBs6KgRefresh(this)" title="Re-extract AST Knowledge Graph">🔄 Refresh Graph</button>
     </div>
   </div>
   <div class="am-kg-canvas-full">

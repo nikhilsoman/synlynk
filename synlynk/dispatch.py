@@ -1714,6 +1714,13 @@ def _format_prompt_for_agent(agent: str, context_text: str, story_id: str,
     headers = f"{receipt_instruction}{instruction_receipt}"
 
     repo_root = cwd_hint or os.getcwd()
+    graph_file = os.path.join(repo_root, ".synlynk", "graphify-out", "graph.json")
+    if not os.path.exists(graph_file):
+        try:
+            from synlynk.scan import _run_graphify_extract
+            _run_graphify_extract(repo_root)
+        except Exception:
+            pass
     try:
         from synlynk.pack import synthesize_context_pack
         pack_text = synthesize_context_pack(repo_root, task_text=task, story_id=story_id)
