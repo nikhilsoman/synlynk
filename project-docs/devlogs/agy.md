@@ -1,5 +1,29 @@
 # Agy Devlog
 
+## 2026-09-25 — Knowledge Graph LOD Zoom, Connection Filtering & Rich Node Detail Sidebar (PR #1785, Closes #1783, Goal goal-e3840370)
+
+### Shipped & Verified
+- **Level-of-Detail (LOD) Zoom Degree Filtering (`synlynk/viz.py`):**
+  - Integrated dynamic LOD connection thresholding:
+    - **Level 0 (Macro Overview, scale < 0.45, default):** Displays only nodes with $\ge 3$ connections, removing macro clutter and label overlap.
+    - **Level 1 (Subsystem, scale 0.45–0.85):** Displays nodes with $\ge 2$ connections.
+    - **Level 2 (Component Detail, scale 0.85–1.40):** Displays nodes with $\ge 1$ connection.
+    - **Level 3 (Micro Inspection, scale $\ge 1.40$):** Displays all symbols ($\ge 0$ connections).
+  - Inspection & search override: selected/searched nodes and their direct neighbors always remain visible.
+- **Google Maps-Style Floating Zoom Bar (`synlynk/viz.py`):**
+  - Embedded glassmorphic floating zoom bar on the canvas (`.vis-map-zoom-bar`) with `+` (zoom in step), `−` (zoom out step), `⊙` (reset/fit overview), and interactive stepped level pills (`L0`–`L3`) bound to mousewheel and pinch zoom events.
+- **Rich Canonical Node Metadata & Descriptions (`synlynk/viz_views.py`, `synlynk/viz.py`):**
+  - Added `derive_canonical_community_metadata()` extracting primary source files, functional descriptions (from docstrings and member symbols), member AST symbol lists, and semantic kind labels (`Service Class`, `Module Cluster`, `Test Suite`, `Data Model`, `CLI Tool`).
+  - Redesigned the node inspection sidebar (`showInfo`) with canonical name, semantic type pills, functional description cards, source file links, community ID, connectivity count, contained symbols list, and connected neighbor links.
+  - Enriched canvas hover tooltips with multi-line canonical name + description + connection stats.
+  - Linked parent topbar chips via `postMessage` (`lod-status-update`) displaying real-time visible cluster ratios.
+- **Testing & Verification:**
+  - Added unit test regressions across `tests/test_viz_unified_canvas.py`, `tests/test_viz_views.py`, `tests/test_tool_installer.py`.
+  - 30/30 focused unit tests passing; 100% matrix CI checks green.
+  - Shipped in PR #1785 merged into `main` (`c3916550`) under `goal-e3840370` / Issue #1783.
+  - Live daemon cache refreshed (200 OK).
+[@agy, @nikhilsoman]
+
 ## 2026-09-25 — Knowledge Graph UX Improvements: Canonical Labels, Topbar Multi-Select Dropdown & Monorepo Tab Streamlining (PR #1782)
 
 ### Shipped & Verified
