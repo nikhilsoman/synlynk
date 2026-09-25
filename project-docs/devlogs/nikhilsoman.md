@@ -1,3 +1,13 @@
+## 2026-09-25 — Goal/arc triage and roadmap.md restore from state.db
+
+### Applied
+- Wrote `project-docs/decisions/2026-09-25-goal-and-roadmap-arc-triage.md`.
+- Canonical `state.db`: 6 goals `done`, 2 Vizor shells `superseded`, 4 duplicate brownfield arcs deleted, v0.19–v0.23 + job-truth epic marked shipped, v0.9.5/v0.9.6 superseded, v0.8.1–v0.8.4 deferred.
+- Regenerated git-tracked `project-docs/roadmap.md` from `_generate_roadmap_md()` (no longer the brownfield skeleton).
+- Backup: `~/.synlynk/workspaces/backups/state-20260925T111303Z.db`.
+- `synlynk goal list` now shows 27 active goals (was 35).
+[@grok, @nikhilsoman]
+
 ## 2026-09-24 — Sub-project 1 Shipped: Vizor Navigation & Information Architecture Restructure (PR #1765)
 
 ### Shipped & Verified
