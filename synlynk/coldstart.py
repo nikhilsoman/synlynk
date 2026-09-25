@@ -8,6 +8,7 @@ import json
 import os
 import subprocess
 import time
+from contextlib import contextmanager
 from typing import Any, Dict, List, Optional, Tuple
 
 _MANIFEST_FILES = (
@@ -15,6 +16,17 @@ _MANIFEST_FILES = (
     "Cargo.toml", "go.mod", "pom.xml", "build.gradle", "Gemfile",
 )
 _README_FILES = ("README.md", "README.rst", "README.txt", "README")
+
+
+@contextmanager
+def _working_directory(path: str):
+    """Temporarily run cwd-relative setup code from ``path``."""
+    original_cwd = os.getcwd()
+    os.chdir(path)
+    try:
+        yield
+    finally:
+        os.chdir(original_cwd)
 
 
 def _commit_count(root: str) -> int:
@@ -134,17 +146,18 @@ def _run_new_project_flow(answers: dict) -> None:
     from synlynk.db import cmd_roadmap_add
 
     mode = "team" if answers["team_mode"].startswith("team") else "solo"
-    init(mode=mode, quiet=True)
+    with _working_directory(os.path.abspath(os.curdir)):
+        init(mode=mode, quiet=True)
 
-    version = "v0.1.0"
-    cmd_roadmap_add(
-        version=version,
-        title=answers["goal"],
-        status="planned",
-        notes=f"Deliverable shape: {answers['deliverable_shape']}."
-        + (f" Preferred implementer: {answers['preferred_implementer']}."
-           if answers["preferred_implementer"] else ""),
-    )
+        version = "v0.1.0"
+        cmd_roadmap_add(
+            version=version,
+            title=answers["goal"],
+            status="planned",
+            notes=f"Deliverable shape: {answers['deliverable_shape']}."
+            + (f" Preferred implementer: {answers['preferred_implementer']}."
+               if answers["preferred_implementer"] else ""),
+        )
 
     print(f"\nSetup complete. Next: run `synlynk dispatch {answers['preferred_implementer'] or '<agent>'} "
           f"--task \"{answers['goal']}\"` to start building against {version}.")
@@ -651,41 +664,44 @@ def run_brownfield_init(
             "docs_created": ["roadmap.md", "memory.md", "todo.md", "costs.md", f"devlogs/{user_name}.md"],
         }
 
-    # 3. Initialize synlynk base structure
+    # init() and the follow-up helpers are cwd-relative. Keep the whole
+    # repository write sequence in repo_path and always restore the caller's cwd.
     from synlynk import init, _update_config
-    init(force=force, mode="solo", quiet=True)
+    with _working_directory(repo_path):
+        # 3. Initialize synlynk base structure
+        init(force=force, mode="solo", quiet=True)
 
-    # 4. Save brownfield configs
-    os.makedirs(os.path.join(repo_path, ".synlynk"), exist_ok=True)
-    _update_config({
-        "project_name": project_name,
-        "stack": stack_info["label"],
-        "test_command": test_cmd,
-        "lint_command": lint_cmd,
-        "build_command": build_cmd,
-        "hotspots": hotspots,
-        "primary_author": user_name,
-        "brownfield": True,
-        "initialized_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-    })
+        # 4. Save brownfield configs
+        os.makedirs(os.path.join(repo_path, ".synlynk"), exist_ok=True)
+        _update_config({
+            "project_name": project_name,
+            "stack": stack_info["label"],
+            "test_command": test_cmd,
+            "lint_command": lint_cmd,
+            "build_command": build_cmd,
+            "hotspots": hotspots,
+            "primary_author": user_name,
+            "brownfield": True,
+            "initialized_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        })
 
-    # 5. Bootstrap 4-doc structure
-    created_docs = _bootstrap_4docs(
-        repo_path, stack_info["label"], test_cmd, lint_cmd, build_cmd, hotspots, user_name, force=force
-    )
-
-    # 6. Seed state.db with initial brownfield goals & stories
-    try:
-        from synlynk.db import cmd_goal_create, cmd_story_create
-        cmd_goal_create(
-            outcome=f"Stabilize brownfield {stack_info['label']} codebase and establish verification gates",
-            criterion=f"{test_cmd} passes cleanly with 0 regressions",
-            role="pm"
+        # 5. Bootstrap 4-doc structure
+        created_docs = _bootstrap_4docs(
+            repo_path, stack_info["label"], test_cmd, lint_cmd, build_cmd, hotspots, user_name, force=force
         )
-        cmd_story_create(title=f"Verify automated test harness ({test_cmd}) against top churn files")
-        cmd_story_create(title=f"Establish CI lint and type verification gate ({lint_cmd})")
-    except Exception:
-        pass
+
+        # 6. Seed state.db with initial brownfield goals & stories
+        try:
+            from synlynk.db import cmd_goal_create, cmd_story_create
+            cmd_goal_create(
+                outcome=f"Stabilize brownfield {stack_info['label']} codebase and establish verification gates",
+                criterion=f"{test_cmd} passes cleanly with 0 regressions",
+                role="pm"
+            )
+            cmd_story_create(title=f"Verify automated test harness ({test_cmd}) against top churn files")
+            cmd_story_create(title=f"Establish CI lint and type verification gate ({lint_cmd})")
+        except Exception:
+            pass
 
     return {
         "success": True,
@@ -699,4 +715,3 @@ def run_brownfield_init(
         "contributors": contributors,
         "docs_created": created_docs,
     }
-
