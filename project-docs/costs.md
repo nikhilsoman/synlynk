@@ -1,13 +1,12 @@
 # Cost Log
  
-+## 2026-09-24 — Release v0.22.0: Multi-Workspace Vizor Hub & Resilient State Isolation
-+- Interactive Conductor: Agy.
-+- Merged PR #1758: Modern multi-workspace Vizor Hub UI, status badges, and `/index.html` entrypoint routing fallback.
-+- Merged PR #1759: Unconfigured workspace `DB_PATH` fallback and defensive daemon `repo_path` / `canonical_path` validation.
-+- Merged PR #1760: Unified `HEAD` and `GET` routing in `WorkspaceRoutingHandler`.
-+- Executed `synlynk release --version 0.22.0 --role pm` with 4 doc bundles (HTML & PDF) and website synchronizations.
-+- Zero external fee-bearing dispatch spend.
-+
+## 2026-09-25 — Graphify Auto-Extraction & Vizor Unified Clustered Canvas (PR #1777)
+- Interactive Conductor: Agy.
+- Merged PR #1777: Automatic Graphify AST extraction pipeline, multi-repo federated mesh, Vizor caching & route serving, and Unified Clustered Canvas in `tube.html` (Architect Map) and `logical.html` (Logical View).
+- Review and verification dispatches to Codex / QA role (`job-97ae3b14`, `job-39b230a4`).
+- Total estimated dispatch spend: ~$0.10.
+
+## 2026-09-24 — Release v0.22.0: Multi-Workspace Vizor Hub & Resilient State Isolation
  ## 2026-09-24 — Sprint 3 Sandbox State Migration & Vizor Concurrency Lock (PR #1757)
 - Interactive Conductor: Agy.
 - Resolved Issue #1733 (Defensive sandbox/unwritable worktree error handling during state migration and CLI import) in PR #1757.

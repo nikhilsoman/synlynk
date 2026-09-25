@@ -1,5 +1,28 @@
 # Agy Devlog
 
+## 2026-09-25 — Graphify Auto-Extraction & Vizor Unified Clustered Canvas (PR #1777)
+
+### Shipped & Verified
+- **Auto-Provisioning & Extraction Hook (`synlynk/scan.py`, `synlynk/upgrade.py`):**
+  - Added `_run_graphify_extract(repo_root)` in `synlynk/scan.py` running deterministic `--code-only` AST extraction into `.synlynk/graphify-out/` ($0.00 token cost, <15s).
+  - Wired tool auto-installer `install_tool("graphify")` with graceful fallback for air-gapped environments.
+  - Bound auto-extraction hook into `synlynk scan --deep` and `execute_upgrade(repo_root)`.
+- **Multi-Repo Federated Mesh (`synlynk/mesh.py`):**
+  - Implemented `build_federated_mesh(repos)` to aggregate AST graphs from multiple workspaces into a single graph with namespaced node IDs, repo tags, and cross-repo API links with HTTP route verb sanitization (`GET /api/v1/jobs` -> `/api/v1/jobs`).
+- **Vizor Caching & Route Serving (`synlynk/viz.py`, `synlynk/vizor_daemon.py`):**
+  - Added cache management copying `graphify.html` and `graph.html` into `VIZ_CACHE_DIR`.
+  - Added route handling in `synlynk/vizor_daemon.py` serving interactive Graphify HTML at `/w/<slug>/graphify.html` and `/w/<slug>/graph.html`.
+- **Unified Clustered Canvas (`tube.html`, `logical.html`):**
+  - Architect Map (`tube.html`):
+    - **Monorepo (`len(repos) <= 1`)**: Directly embeds interactive Graphify Knowledge Graph with Communities sidebar, node centrality, symbol search, and commit staleness banner.
+    - **Multi-Repo (`len(repos) > 1`)**: Renders compound clustered repo containers with animated cross-repo API bridges and semantic LOD zoom.
+  - Logical View (`logical.html`): Embeds full Graphify interactive vis-network view with communities sidebar and theme synchronization.
+- **Testing & Verification:**
+  - Added 19 comprehensive unit tests across `tests/test_scan_graphify_auto.py`, `tests/test_mesh_federation.py`, `tests/test_viz_graphify_routes.py`, `tests/test_viz_unified_canvas.py`.
+  - 100% test pass rate across 3,241 CI tests on Python 3.10 and 3.12 (Matrix CI green).
+  - Shipped in PR #1777 merged into `main` (`f4073fcd`) via QA review.
+[@agy, @nikhilsoman]
+
 ## 2026-09-24 — Vizor View Generation, File Tree Rendering & Readonly DB Projections (PR #1772, #1773)
 
 ### Shipped & Verified
