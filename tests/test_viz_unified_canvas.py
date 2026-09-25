@@ -129,3 +129,42 @@ const RAW_NODES = [{"id": "1", "label": "Community 1", "title": "Community 1", "
     assert "filter-communities-batch" in enriched
     assert "filter-community" in enriched
 
+
+def test_enrich_graphify_html_lod_zoom_and_rich_sidebar():
+    from synlynk.viz import _enrich_graphify_html
+
+    sample_html = """<!DOCTYPE html><html><head></head><body>
+<div id="graph"></div>
+<div id="sidebar">
+  <div id="info-panel"><div id="info-content"></div></div>
+</div>
+<script>
+const RAW_NODES = [
+  {"id": "1", "label": "Community 1", "title": "Community 1", "community": 1, "degree": 5},
+  {"id": "2", "label": "Community 2", "title": "Community 2", "community": 2, "degree": 1}
+];
+const LEGEND = [{"cid": 1, "label": "C1", "count": 1, "color": "#fff"}, {"cid": 2, "label": "C2", "count": 1, "color": "#fff"}];
+function showInfo(nodeId) {}
+</script></body></html>"""
+
+    graph_data = {
+        "nodes": [
+            {"id": "n1", "label": "AuthService", "kind": "class", "source_file": "synlynk/auth.py", "community": 1, "docstring": "Core authentication handler."},
+            {"id": "n2", "label": "helper_fn", "kind": "function", "source_file": "synlynk/util.py", "community": 2}
+        ]
+    }
+
+    enriched = _enrich_graphify_html(sample_html, graph_data)
+    # Check LOD controls and thresholds
+    assert "vis-map-zoom-bar" in enriched
+    assert "LOD_THRESHOLDS" in enriched or "currentLODLevel" in enriched or "setLODLevel" in enriched
+    assert "Level 0" in enriched or "L0" in enriched
+    # Check default degree threshold >= 3 for Level 0
+    assert "3" in enriched
+    # Check rich sidebar and tooltips
+    assert "synlynk/auth.py" in enriched
+    assert "Contained Symbols" in enriched or "symbols" in enriched
+    assert "Connectivity" in enriched or "degree" in enriched
+    assert "lod-status-update" in enriched or "set-lod" in enriched
+
+

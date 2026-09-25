@@ -128,4 +128,29 @@ def test_derive_canonical_community_names():
     assert names[3] == "tests/test_auth.py"
 
 
+def test_derive_canonical_community_metadata():
+    from synlynk.viz_views import derive_canonical_community_metadata
+
+    raw_nodes = [
+        {"id": "n1", "label": "auth_login", "source_file": "synlynk/auth.py", "community": 1, "kind": "function", "docstring": "Authenticate user session token."},
+        {"id": "n2", "label": "auth_logout", "source_file": "synlynk/auth.py", "community": 1, "kind": "function"},
+        {"id": "n3", "label": "AuthService", "source_file": "synlynk/auth.py", "community": 1, "kind": "class", "_callable_class": True, "docstring": "Core authentication service."},
+        {"id": "n4", "label": "test_auth", "source_file": "tests/test_auth.py", "community": 2, "kind": "function"},
+    ]
+
+    meta = derive_canonical_community_metadata(raw_nodes)
+    assert 1 in meta
+    assert meta[1]["name"] == "synlynk/auth.py · AuthService"
+    assert meta[1]["source_file"] == "synlynk/auth.py"
+    assert meta[1]["kind"] == "Service Class"
+    assert "authentication service" in meta[1]["desc"].lower() or "auth" in meta[1]["desc"].lower()
+    assert "AuthService" in meta[1]["symbols"]
+    assert meta[1]["symbol_count"] == 3
+
+    assert 2 in meta
+    assert meta[2]["kind"] == "Test Suite"
+    assert "tests/test_auth.py" in meta[2]["source_file"]
+
+
+
 
