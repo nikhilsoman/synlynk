@@ -1,6 +1,7 @@
 import json
 import os
 import subprocess
+from pathlib import Path
 import pytest
 from synlynk.coldstart import (
     _detect_brownfield_stack,
@@ -140,3 +141,19 @@ def test_run_brownfield_init_e2e(tmp_path):
     assert (docs_dir / "todo.md").exists()
     assert (docs_dir / "costs.md").exists()
     assert (docs_dir / "devlogs" / "testbot.md").exists()
+
+
+def test_run_brownfield_init_uses_repo_root_without_changing_cwd(tmp_path, monkeypatch):
+    (tmp_path / "pyproject.toml").write_text("[project]\nname = 'sample-repo'\n")
+    outside = tmp_path / "caller"
+    outside.mkdir()
+    monkeypatch.chdir(outside)
+
+    res = run_brownfield_init(str(tmp_path), interactive=False, dry_run=False, force=True)
+
+    assert res["success"] is True
+    assert Path.cwd() == outside
+    assert (tmp_path / ".synlynk" / "config.json").exists()
+    assert (tmp_path / "project-docs" / "roadmap.md").exists()
+    assert not (outside / ".synlynk").exists()
+    assert not (outside / "project-docs").exists()
