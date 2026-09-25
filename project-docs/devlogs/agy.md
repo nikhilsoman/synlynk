@@ -1,5 +1,21 @@
 # Agy Devlog
 
+## 2026-09-25 — AST Knowledge Graph Lifecycle, Context Packager, Sparse Worktrees & Jev Decisioning Synergy (Issues #1787, #1712)
+
+### Scoped & Minted
+- **Phase 1: Knowledge Graph Lifecycle, Rich Packager & Sparse Worktree Scoping (`story-3cddd9d2`, Issue #1787, Goal `goal-e3840370`):**
+  - Minted story in `state.db` and created GitHub Issue [#1787](https://github.com/nikhilsoman/synlynk/issues/1787).
+  - Designed topbar manual refresh action button for `logical.html` & `tube.html`.
+  - Designed automated background extraction on `HEAD` commit drift in `synlynk watch` and pre-dispatch JIT cache validator in `synlynk/dispatch.py`.
+  - Upgraded context packager architecture (`synlynk/pack.py`) with canonical community clustering, AST signature & docstring inlining, and reverse test suite discovery.
+  - Linked AST dependency closures to `synlynk/worktree_sparse.py` to auto-derive minimal `scoped_paths` for cone-mode worktrees.
+- **Phase 2: Jev (TypeSafe.ai System 1 Decision Model) Synergy (`story-0f7043d7`, Issue #1712, Goal `goal-c7113f58`):**
+  - Analyzed zero-token, sub-10ms feature extraction from local AST Knowledge Graph (`impact_score`, `blast_radius`, `inbound_degree`, `community_span`, `component_kind`).
+  - Formalized how structured graph features ground Jev for sub-20ms typed model/harness routing, speculative fan-out arbitration, and merge-gate policy checks (`synlynk policy check-merge`).
+  - Updated issue [#1712](https://github.com/nikhilsoman/synlynk/issues/1712) with architectural findings.
+- **Implementation Status:** Stories minted and linked; implementation held per user request.
+[@agy, @nikhilsoman]
+
 ## 2026-09-25 — Knowledge Graph LOD Zoom, Connection Filtering & Rich Node Detail Sidebar (PR #1785, Closes #1783, Goal goal-e3840370)
 
 ### Shipped & Verified
