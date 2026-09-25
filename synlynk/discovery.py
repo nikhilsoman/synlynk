@@ -92,8 +92,8 @@ def scan_workspace_static(repo_root: str) -> Dict[str, Any]:
         manifest = _read_graphify_manifest(str(root))
         if manifest:
             head_commit = _get_head_commit(str(root))
-            built_at = manifest.get("built_at_commit", "")
-            stale = (head_commit != built_at) if head_commit else False
+            built_at = str(manifest.get("built_at_commit") or "")
+            stale = bool(head_commit and built_at and head_commit != built_at)
             kg_section = {
                 "available": True,
                 "stale": stale,
