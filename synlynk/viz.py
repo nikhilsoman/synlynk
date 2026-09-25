@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
 import threading
@@ -6610,6 +6611,16 @@ def _write_cache(data: dict, port: int) -> None:
     for filename, html in views.items():
         with open(os.path.join(VIZ_CACHE_DIR, filename), "w") as f:
             f.write(html)
+
+    # Copy graphify.html to cache if present in workspace
+    graphify_src = os.path.join(os.getcwd(), ".synlynk", "graphify-out", "graph.html")
+    if os.path.isfile(graphify_src):
+        try:
+            shutil.copyfile(graphify_src, os.path.join(VIZ_CACHE_DIR, "graphify.html"))
+            shutil.copyfile(graphify_src, os.path.join(VIZ_CACHE_DIR, "graph.html"))
+        except Exception:
+            pass
+
     manifest = {"updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "version": "0.1"}
     with open(os.path.join(VIZ_CACHE_DIR, "manifest.json"), "w") as f:
         json.dump(manifest, f)
@@ -7174,6 +7185,12 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
 
         parsed = urlparse(self.path)
         path = parsed.path
+
+        if path in ("/graphify", "/graph"):
+            self.send_response(302)
+            self.send_header("Location", "/graphify.html")
+            self.end_headers()
+            return
 
         if path in ("/onboarding", "/onboarding/"):
             self.send_response(200)
