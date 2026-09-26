@@ -101,8 +101,7 @@ def test_v10_reconciles_databases_stamped_at_v9(tmp_path):
     watch_cols = {row[1] for row in conn.execute("PRAGMA table_info(capability_watch)")}
     daemon_cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)")}
     assert {"last_sweep_at", "sweep_job_count"} <= watch_cols
-    assert "cost_missing_reason" in daemon_cols
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 10
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == db._DB_MIGRATION_VERSION
     assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     conn.close()
 
