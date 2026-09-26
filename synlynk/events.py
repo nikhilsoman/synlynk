@@ -317,6 +317,13 @@ def emit_event(event_type: str, payload: dict, emitted_by: str,
     conn.commit()
     event_id = cur.lastrowid
     conn.close()
+
+    try:
+        from synlynk.governs_fsm import handle_event_stage_transition
+        handle_event_stage_transition(event_type, payload)
+    except Exception:
+        pass
+
     return event_id
 
 
