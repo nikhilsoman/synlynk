@@ -734,6 +734,17 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
                 conn.execute("ALTER TABLE goals ADD COLUMN kind TEXT NOT NULL DEFAULT 'feature'")
             except sqlite3.OperationalError:
                 pass
+        dec_cols = {row[1] for row in conn.execute("PRAGMA table_info(decisions)")}
+        if "goal_id" not in dec_cols:
+            try:
+                conn.execute("ALTER TABLE decisions ADD COLUMN goal_id TEXT REFERENCES goals(goal_id)")
+            except sqlite3.OperationalError:
+                pass
+        if "story_id" not in dec_cols:
+            try:
+                conn.execute("ALTER TABLE decisions ADD COLUMN story_id TEXT REFERENCES stories(story_id)")
+            except sqlite3.OperationalError:
+                pass
         daemon_job_cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)")}
         if "type_id" not in daemon_job_cols:
             try:
@@ -1174,6 +1185,8 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
                 synthesis     TEXT NOT NULL,
                 decision_text TEXT NOT NULL,
                 signature     TEXT,
+                goal_id       TEXT REFERENCES goals(goal_id),
+                story_id      TEXT REFERENCES stories(story_id),
                 created_at    TEXT DEFAULT (datetime('now'))
             );
             CREATE TABLE IF NOT EXISTS members (
@@ -2653,15 +2666,24 @@ def _write_decision_record_md(decision_id: str) -> None:
 
 
 def cmd_decision_record(decision_id: str, topic: str, date: str, panel: list,
-                         inputs: dict, synthesis: str, decision_text: str) -> None:
+                         inputs: dict, synthesis: str, decision_text: str,
+                         goal_id: str = None, story_id: str = None) -> None:
     """Insert a decision row into state.db, then write through to the flat file pair."""
     from synlynk import _dr_sync, _get_db, _is_migrated
     from synlynk.team import _sign_capability_rating
+    from synlynk.governs_resolver import resolve_parent_goal
+    from synlynk.events import emit_event
+
+    if not goal_id:
+        goal_id, _ = resolve_parent_goal(
+            text_content=f"{topic}\n{synthesis}\n{decision_text}",
+            story_id=story_id
+        )
 
     record_for_signing = {
         "decision_id": decision_id, "topic": topic, "date": date, "panel": panel,
         "status": "approved", "inputs": inputs, "synthesis": synthesis,
-        "decision": decision_text,
+        "decision": decision_text, "goal_id": goal_id, "story_id": story_id,
     }
     signature = _sign_capability_rating(record_for_signing)
     if not signature:
@@ -2669,14 +2691,39 @@ def cmd_decision_record(decision_id: str, topic: str, date: str, panel: list,
               "Run `synlynk identity init` first.")
 
     conn = _get_db()
-    conn.execute(
-        "INSERT INTO decisions (decision_id, topic, date, panel, status, inputs, "
-        "synthesis, decision_text, signature) VALUES (?,?,?,?,?,?,?,?,?)",
-        (decision_id, topic, date, json.dumps(panel), "approved", json.dumps(inputs),
-         synthesis, decision_text, signature)
-    )
+    dec_cols = {row[1] for row in conn.execute("PRAGMA table_info(decisions)")}
+    if "goal_id" in dec_cols and "story_id" in dec_cols:
+        conn.execute(
+            "INSERT INTO decisions (decision_id, topic, date, panel, status, inputs, "
+            "synthesis, decision_text, signature, goal_id, story_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (decision_id, topic, date, json.dumps(panel), "approved", json.dumps(inputs),
+             synthesis, decision_text, signature, goal_id, story_id)
+        )
+    elif "goal_id" in dec_cols:
+        conn.execute(
+            "INSERT INTO decisions (decision_id, topic, date, panel, status, inputs, "
+            "synthesis, decision_text, signature, goal_id) VALUES (?,?,?,?,?,?,?,?,?,?)",
+            (decision_id, topic, date, json.dumps(panel), "approved", json.dumps(inputs),
+             synthesis, decision_text, signature, goal_id)
+        )
+    else:
+        conn.execute(
+            "INSERT INTO decisions (decision_id, topic, date, panel, status, inputs, "
+            "synthesis, decision_text, signature) VALUES (?,?,?,?,?,?,?,?,?)",
+            (decision_id, topic, date, json.dumps(panel), "approved", json.dumps(inputs),
+             synthesis, decision_text, signature)
+        )
     conn.commit()
     conn.close()
+
+    try:
+        emit_event(
+            "decide_recorded",
+            {"decision_id": decision_id, "topic": topic, "goal_id": goal_id, "story_id": story_id},
+            emitted_by="synlynk_decide",
+        )
+    except Exception:
+        pass
 
     _write_decision_record_md(decision_id)
     if _is_migrated():

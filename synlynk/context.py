@@ -562,3 +562,57 @@ def _verify_contract_for_story(story_id: str, task: str) -> str:
         "(that matches 0 tests and exits 5).\n"
         "Expected: all matched tests pass, no new failures.\n"
     )
+
+
+def harvest_workspace_artifacts(repo_root: Optional[str] = None, conn: Optional[sqlite3.Connection] = None) -> list[dict]:
+    """Scan and index specs, plans, and decision records, binding them to parent GOVERNS goals."""
+    import glob
+    import sqlite3 as _sqlite3
+    from synlynk.governs_resolver import resolve_parent_goal
+
+    root = repo_root or os.getcwd()
+    artifacts = []
+
+    # 1. Specs
+    specs_glob = os.path.join(root, "docs", "superpowers", "specs", "*.md")
+    for spec_path in glob.glob(specs_glob):
+        rel_path = os.path.relpath(spec_path, root)
+        goal_id, reason = resolve_parent_goal(file_path=spec_path, conn=conn)
+        artifacts.append({
+            "type": "spec",
+            "path": rel_path,
+            "abs_path": spec_path,
+            "goal_id": goal_id,
+            "governs_stage": "visualize",
+            "reason": reason,
+        })
+
+    # 2. Plans
+    plans_glob = os.path.join(root, "docs", "superpowers", "plans", "*.md")
+    for plan_path in glob.glob(plans_glob):
+        rel_path = os.path.relpath(plan_path, root)
+        goal_id, reason = resolve_parent_goal(file_path=plan_path, conn=conn)
+        artifacts.append({
+            "type": "plan",
+            "path": rel_path,
+            "abs_path": plan_path,
+            "goal_id": goal_id,
+            "governs_stage": "execute",
+            "reason": reason,
+        })
+
+    # 3. Decisions
+    decisions_glob = os.path.join(root, "project-docs", "decisions", "*.md")
+    for dec_path in glob.glob(decisions_glob):
+        rel_path = os.path.relpath(dec_path, root)
+        goal_id, reason = resolve_parent_goal(file_path=dec_path, conn=conn)
+        artifacts.append({
+            "type": "decision",
+            "path": rel_path,
+            "abs_path": dec_path,
+            "goal_id": goal_id,
+            "governs_stage": "visualize",
+            "reason": reason,
+        })
+
+    return artifacts
