@@ -3701,6 +3701,77 @@ function triggerGraphRefresh(el) {
   });
 }
 
+function openKgSourceDrawer(filePath, startLine, endLine) {
+  if (!filePath) return;
+  const drawer = document.getElementById('kg-source-drawer');
+  const ov = document.getElementById('kg-source-ov');
+  const title = document.getElementById('kg-source-title');
+  const badge = document.getElementById('kg-source-badge');
+  const code = document.getElementById('kg-source-code');
+  if (!drawer || !code) return;
+
+  title.textContent = filePath;
+  badge.textContent = startLine && endLine ? 'L' + startLine + '-' + endLine : '';
+  code.textContent = 'Loading source code...';
+  drawer.classList.add('open');
+  if (ov) ov.classList.add('open');
+
+  let url = '/api/source?file=' + encodeURIComponent(filePath);
+  if (startLine) url += '&start=' + startLine;
+  if (endLine) url += '&end=' + endLine;
+
+  fetch(url)
+    .then(r => r.json())
+    .then(res => {
+      if (res.status === 'ok') {
+        code.textContent = res.content || '[Empty content]';
+      } else {
+        code.textContent = 'Error: ' + (res.error || 'Failed to load source');
+      }
+    })
+    .catch(err => {
+      code.textContent = 'Failed to fetch source: ' + err.message;
+    });
+}
+
+function closeKgSourceDrawer() {
+  const drawer = document.getElementById('kg-source-drawer');
+  const ov = document.getElementById('kg-source-ov');
+  if (drawer) drawer.classList.remove('open');
+  if (ov) ov.classList.remove('open');
+}
+
+function toggleAmKindFilter(el) {
+  const frame = document.getElementById('am-graphify-frame');
+  if (!frame || !frame.contentWindow) return;
+  const container = document.getElementById('am-kg-kind-filters');
+  if (!container) return;
+  const checked = Array.from(container.querySelectorAll('input:checked')).map(cb => cb.value);
+  frame.contentWindow.postMessage({ type: 'filter-kind-l0', kinds: checked }, '*');
+}
+
+function resetInspectMode() {
+  const frame = document.getElementById('am-graphify-frame');
+  if (frame && frame.contentWindow) {
+    frame.contentWindow.postMessage({ type: 'reset-inspect' }, '*');
+  }
+}
+
+window.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    closeKgSourceDrawer();
+    closeDrawer();
+    resetInspectMode();
+  }
+});
+
+window.addEventListener('message', function(e) {
+  if (!e.data || typeof e.data !== 'object') return;
+  if (e.data.type === 'open-source-drawer') {
+    openKgSourceDrawer(e.data.file, e.data.start_line, e.data.end_line);
+  }
+});
+
 renderGraph();
 """
 
@@ -3780,6 +3851,25 @@ body { margin:0; font-family:'SF Mono',monospace; background:#f6f8fa; color:#1f2
 .am-btn-action { background:#fff; border:1px solid #d1d5db; border-radius:6px; padding:6px 12px; font-size:12px; font-family:inherit; cursor:pointer; display:inline-flex; align-items:center; gap:6px; box-shadow:0 1px 2px rgba(0,0,0,0.05); transition:all .15s ease; color:#1e293b; }
 .am-btn-action:hover { background:#f1f5f9; border-color:#94a3b8; }
 .am-btn-action:disabled { opacity:0.6; cursor:not-allowed; }
+.kg-source-drawer { position:fixed; top:0; right:-520px; width:500px; height:100%; background:#fff; box-shadow:-4px 0 20px rgba(0,0,0,.2); z-index:1100; transition:right .25s ease-in-out; display:flex; flex-direction:column; box-sizing:border-box; }
+.kg-source-drawer.open { right:0; }
+.kg-source-header { padding:12px 16px; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center; background:#f8fafc; font-weight:600; font-size:13px; }
+.kg-source-title { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:380px; }
+.kg-source-badge { font-size:10px; background:#e2e8f0; color:#475569; padding:2px 6px; border-radius:4px; margin-left:6px; font-weight:normal; }
+.kg-source-close { background:none; border:none; font-size:16px; cursor:pointer; color:#64748b; }
+.kg-source-close:hover { color:#0f172a; }
+.kg-source-body { flex:1; overflow:auto; padding:12px 16px; font-family:'SF Mono',monospace; font-size:12px; line-height:1.5; background:#ffffff; }
+.kg-source-pre { margin:0; tab-size:4; white-space:pre; }
+.am-kg-kind-filters { display:flex; align-items:center; gap:6px; }
+.am-kind-chip { display:inline-flex; align-items:center; gap:4px; font-size:11px; padding:3px 8px; border-radius:12px; border:1px solid #d1d5db; background:#fff; cursor:pointer; user-select:none; }
+.am-kind-chip:hover { background:#f1f5f9; }
+.am-kind-chip input { margin:0; cursor:pointer; }
+[data-theme="dark"] .kg-source-drawer { background:#0d1117; border-left:1px solid #30363d; color:#c9d1d9; box-shadow:-4px 0 20px rgba(0,0,0,.6); }
+[data-theme="dark"] .kg-source-header { background:#161b22; border-bottom-color:#30363d; color:#c9d1d9; }
+[data-theme="dark"] .kg-source-badge { background:#30363d; color:#8b949e; }
+[data-theme="dark"] .kg-source-body { background:#0d1117; color:#c9d1d9; }
+[data-theme="dark"] .am-kind-chip { background:#161b22; border-color:#30363d; color:#c9d1d9; }
+[data-theme="dark"] .am-kind-chip:hover { background:#21262d; }
 [data-theme="dark"] .am-dropdown-btn { background:#13171f; border-color:#1e2430; color:#c9d1d9; }
 [data-theme="dark"] .am-dropdown-btn:hover { background:#1e2430; }
 [data-theme="dark"] .am-dropdown-menu { background:#0a0c10; border-color:#1e2430; color:#c9d1d9; box-shadow:0 10px 25px rgba(0,0,0,0.5); }
@@ -3910,6 +4000,12 @@ def generate_architect_map_html(data: dict, port: int) -> str:
         </div>
       </div>
       <input type="text" id="am-kg-search" class="am-search-input" placeholder="🔍 Search symbols..." oninput="filterKgSearch(this.value)">
+      <div class="am-kg-kind-filters" id="am-kg-kind-filters">
+        <label class="am-kind-chip"><input type="checkbox" checked value="Service Class" onchange="toggleAmKindFilter(this)"> Services</label>
+        <label class="am-kind-chip"><input type="checkbox" checked value="Module Cluster" onchange="toggleAmKindFilter(this)"> Modules</label>
+        <label class="am-kind-chip"><input type="checkbox" checked value="CLI Handler" onchange="toggleAmKindFilter(this)"> Handlers</label>
+        <label class="am-kind-chip"><input type="checkbox" checked value="Test Suite" onchange="toggleAmKindFilter(this)"> Tests</label>
+      </div>
       <span class="am-kg-chip" id="am-kg-status-chip">{num_clusters} Clusters · {total_symbols} AST Symbols</span>
       <button type="button" id="am-kg-refresh-btn" class="am-btn-action" onclick="triggerAmKgRefresh(this)" title="Re-extract AST Knowledge Graph">🔄 Refresh Graph</button>
     </div>
@@ -3967,6 +4063,16 @@ __VIEWS_HTML__
     <button class="btn" onclick="drawerDispatch()">Dispatch to this repo</button>
     <button class="btn" onclick="drawerJumpGantt()">Jump to Gantt view</button>
     <a class="btn" id="am-drawer-github" href="#" target="_blank" rel="noopener">Open on GitHub</a>
+  </div>
+</div>
+<div class="ov" id="kg-source-ov" onclick="closeKgSourceDrawer()"></div>
+<div class="kg-source-drawer" id="kg-source-drawer">
+  <div class="kg-source-header">
+    <div class="kg-source-title"><span id="kg-source-title">—</span><span class="kg-source-badge" id="kg-source-badge"></span></div>
+    <button class="kg-source-close" onclick="closeKgSourceDrawer()">✕</button>
+  </div>
+  <div class="kg-source-body">
+    <pre class="kg-source-pre"><code id="kg-source-code">Loading...</code></pre>
   </div>
 </div>
 <script>
@@ -4287,6 +4393,78 @@ function triggerGraphRefresh(el) {
   });
 }
 
+function openKgSourceDrawer(filePath, startLine, endLine) {
+  if (!filePath) return;
+  const drawer = document.getElementById('kg-source-drawer');
+  const ov = document.getElementById('kg-source-ov');
+  const title = document.getElementById('kg-source-title');
+  const badge = document.getElementById('kg-source-badge');
+  const code = document.getElementById('kg-source-code');
+  if (!drawer || !code) return;
+
+  title.textContent = filePath;
+  badge.textContent = startLine && endLine ? 'L' + startLine + '-' + endLine : '';
+  code.textContent = 'Loading source code...';
+  drawer.classList.add('open');
+  if (ov) ov.classList.add('open');
+
+  let url = '/api/source?file=' + encodeURIComponent(filePath);
+  if (startLine) url += '&start=' + startLine;
+  if (endLine) url += '&end=' + endLine;
+
+  fetch(url)
+    .then(r => r.json())
+    .then(res => {
+      if (res.status === 'ok') {
+        code.textContent = res.content || '[Empty content]';
+      } else {
+        code.textContent = 'Error: ' + (res.error || 'Failed to load source');
+      }
+    })
+    .catch(err => {
+      code.textContent = 'Failed to fetch source: ' + err.message;
+    });
+}
+
+function closeKgSourceDrawer() {
+  const drawer = document.getElementById('kg-source-drawer');
+  const ov = document.getElementById('kg-source-ov');
+  if (drawer) drawer.classList.remove('open');
+  if (ov) ov.classList.remove('open');
+}
+
+function toggleAmKindFilter(el) {
+  const frame = document.getElementById('bs6-graphify-frame') || document.getElementById('am-graphify-frame') || document.querySelector('iframe');
+  if (!frame || !frame.contentWindow) return;
+  const container = document.getElementById('bs6-kg-kind-filters') || document.getElementById('am-kg-kind-filters') || document.querySelector('.am-kg-kind-filters');
+  if (!container) return;
+  const checked = Array.from(container.querySelectorAll('input:checked')).map(cb => cb.value);
+  frame.contentWindow.postMessage({ type: 'filter-kind-l0', kinds: checked }, '*');
+}
+
+function resetInspectMode() {
+  const frame = document.getElementById('bs6-graphify-frame') || document.getElementById('am-graphify-frame') || document.querySelector('iframe');
+  if (frame && frame.contentWindow) {
+    frame.contentWindow.postMessage({ type: 'reset-inspect' }, '*');
+  }
+}
+
+window.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    closeKgSourceDrawer();
+    if (typeof closeDrawer === 'function') closeDrawer();
+    if (typeof bs6CloseDrawer === 'function') bs6CloseDrawer();
+    resetInspectMode();
+  }
+});
+
+window.addEventListener('message', function(e) {
+  if (!e.data || typeof e.data !== 'object') return;
+  if (e.data.type === 'open-source-drawer') {
+    openKgSourceDrawer(e.data.file, e.data.start_line, e.data.end_line);
+  }
+});
+
 try {
   const savedTheme = localStorage.getItem('vizor-theme');
   if (savedTheme) applyTheme(savedTheme);
@@ -4404,6 +4582,12 @@ def _generate_bs6_view_html(data: dict, port: int, view_key: str, view_title: st
         </div>
       </div>
       <input type="text" id="bs6-search" class="am-search-input" placeholder="🔍 Search symbols..." oninput="bs6FilterSearch(this.value)">
+      <div class="am-kg-kind-filters" id="bs6-kg-kind-filters">
+        <label class="am-kind-chip"><input type="checkbox" checked value="Service Class" onchange="toggleAmKindFilter(this)"> Services</label>
+        <label class="am-kind-chip"><input type="checkbox" checked value="Module Cluster" onchange="toggleAmKindFilter(this)"> Modules</label>
+        <label class="am-kind-chip"><input type="checkbox" checked value="CLI Handler" onchange="toggleAmKindFilter(this)"> Handlers</label>
+        <label class="am-kind-chip"><input type="checkbox" checked value="Test Suite" onchange="toggleAmKindFilter(this)"> Tests</label>
+      </div>
       <span class="am-kg-chip" id="bs6-kg-status-chip">{num_clusters} Clusters · {total_symbols} AST Symbols</span>
       <button type="button" id="bs6-kg-refresh-btn" class="am-btn-action" onclick="triggerBs6KgRefresh(this)" title="Re-extract AST Knowledge Graph">🔄 Refresh Graph</button>
     </div>
@@ -4448,6 +4632,16 @@ __MAIN_VIEWS__
     <button onclick="bs6CloseDrawer()">✕</button>
   </div>
   <div class="am-drawer-body" id="am-drawer-body"></div>
+</div>
+<div class="ov" id="kg-source-ov" onclick="closeKgSourceDrawer()"></div>
+<div class="kg-source-drawer" id="kg-source-drawer">
+  <div class="kg-source-header">
+    <div class="kg-source-title"><span id="kg-source-title">—</span><span class="kg-source-badge" id="kg-source-badge"></span></div>
+    <button class="kg-source-close" onclick="closeKgSourceDrawer()">✕</button>
+  </div>
+  <div class="kg-source-body">
+    <pre class="kg-source-pre"><code id="kg-source-code">Loading...</code></pre>
+  </div>
 </div>
 <script>
 window.BS6_NODES = __NODES_JSON__;
@@ -7473,6 +7667,8 @@ const LOD_SCALE_TIERS = [
 ];
 
 let activeInspectedNodeId = null;
+let inspectedEgoSet = new Set();
+let activeKindFilters = null;
 let currentSearchQuery = '';
 
 function updateLODControlUI(level, visibleCount, totalCount) {
@@ -7490,30 +7686,46 @@ function updateLODControlUI(level, visibleCount, totalCount) {
   }
 }
 
+function growEgoNetwork(nodeId) {
+  if (!nodeId || typeof network === 'undefined') return;
+  inspectedEgoSet.add(String(nodeId));
+  try {
+    const neighbors = network.getConnectedNodes(nodeId) || [];
+    neighbors.forEach(nid => inspectedEgoSet.add(String(nid)));
+  } catch (_) {}
+  activeInspectedNodeId = nodeId;
+  showInfo(nodeId);
+  applyLODAndFilter();
+}
+
+function inspectSourceCode(filePath, startLine, endLine) {
+  if (window.parent && window.parent !== window) {
+    window.parent.postMessage({
+      type: 'open-source-drawer',
+      file: filePath,
+      start_line: startLine,
+      end_line: endLine
+    }, '*');
+  }
+}
+
 function applyLODAndFilter() {
   if (typeof RAW_NODES === 'undefined' || typeof nodesDS === 'undefined') return;
   const minDegree = LOD_THRESHOLDS[currentLODLevel] !== undefined ? LOD_THRESHOLDS[currentLODLevel] : 3;
   const updates = [];
   const q = (currentSearchQuery || '').toLowerCase().trim();
 
-  let connectedToInspected = new Set();
-  if (activeInspectedNodeId && typeof network !== 'undefined') {
-    connectedToInspected.add(String(activeInspectedNodeId));
-    try {
-      const neighbors = network.getConnectedNodes(activeInspectedNodeId) || [];
-      neighbors.forEach(nid => connectedToInspected.add(String(nid)));
-    } catch (_) {}
-  }
-
   let visibleCount = 0;
   RAW_NODES.forEach(n => {
     const cKey = String(n.community);
     const isCommEnabled = typeof hiddenCommunities !== 'undefined' ? !hiddenCommunities.has(n.community) && !hiddenCommunities.has(cKey) : true;
+    const k = n.file_type || n._file_type || 'Module Cluster';
+    const isKindAllowed = (!activeKindFilters || activeKindFilters.size === 0 || activeKindFilters.has(k));
     const deg = n.degree || n._degree || 0;
     const meetsDegree = deg >= minDegree;
-    const isInspected = connectedToInspected.has(String(n.id));
+    const isInspected = inspectedEgoSet.size > 0 ? inspectedEgoSet.has(String(n.id)) : false;
 
-    const visible = isCommEnabled && (meetsDegree || isInspected);
+    const visible = isCommEnabled && isKindAllowed && (meetsDegree || isInspected);
     if (visible) visibleCount++;
 
     let opacity = 1.0;
@@ -7590,7 +7802,7 @@ function showInfo(nodeId) {
         const nb = nodesDS.get(nid);
         const color = nb && nb.color ? (nb.color.background || '#555') : '#555';
         const label = nb ? nb.label : nid;
-        return `<span class="neighbor-link" style="border-left-color:${color}; cursor:pointer;" data-nid="${nid}">${label}</span>`;
+        return `<span class="neighbor-link" style="border-left-color:${color}; cursor:pointer;" onclick="growEgoNetwork('${nid}')" title="Click to grow ego network around ${label}">${label}</span>`;
       }).join('');
     } catch (_) {}
   }
@@ -7605,6 +7817,9 @@ function showInfo(nodeId) {
   const descText = n.desc || n._desc || 'Component cluster with cross-module AST connections.';
   const sourceFile = n.source_file || n._source_file || '-';
   const degCount = n.degree !== undefined ? n.degree : (n._degree !== undefined ? n._degree : 0);
+  const inspectBtn = (sourceFile && sourceFile !== '-')
+    ? `<a href="#" style="color:#38bdf8; margin-left:8px; font-size:11px; text-decoration:underline;" onclick="inspectSourceCode('${sourceFile}', ${n.start_line || 1}, ${n.end_line || 50}); return false;">[Inspect Source]</a>`
+    : '';
 
   const infoEl = document.getElementById('info-content');
   if (infoEl) {
@@ -7616,7 +7831,7 @@ function showInfo(nodeId) {
         ${descText}
       </div>
 
-      <div class="field" style="font-size:12px; margin-bottom:4px;"><b>Source:</b> <code style="color:#38bdf8;">${sourceFile}</code></div>
+      <div class="field" style="font-size:12px; margin-bottom:4px;"><b>Source:</b> <code style="color:#38bdf8;">${sourceFile}</code>${inspectBtn}</div>
       <div class="field" style="font-size:12px; margin-bottom:4px;"><b>Community:</b> ${n.community !== undefined ? n.community : '-'}</div>
       <div class="field" style="font-size:12px; margin-bottom:8px;"><b>Connectivity:</b> <span style="font-weight:600; color:#2dd4bf;">${degCount}</span> edges</div>
 
@@ -7645,14 +7860,19 @@ if (typeof network !== 'undefined') {
 
   network.on('selectNode', function(params) {
     if (params.nodes && params.nodes.length > 0) {
-      activeInspectedNodeId = params.nodes[0];
-      showInfo(activeInspectedNodeId);
-      applyLODAndFilter();
+      const selId = params.nodes[0];
+      if (inspectedEgoSet.size > 0 && inspectedEgoSet.has(String(selId))) {
+        growEgoNetwork(selId);
+      } else {
+        inspectedEgoSet.clear();
+        growEgoNetwork(selId);
+      }
     }
   });
 
   network.on('deselectNode', function() {
     activeInspectedNodeId = null;
+    inspectedEgoSet.clear();
     applyLODAndFilter();
   });
 
@@ -7699,6 +7919,15 @@ window.addEventListener('message', function(e) {
         }
       });
     }
+    applyLODAndFilter();
+  } else if (e.data.type === 'filter-kind-l0') {
+    activeKindFilters = Array.isArray(e.data.kinds) ? new Set(e.data.kinds) : null;
+    applyLODAndFilter();
+  } else if (e.data.type === 'grow-ego-network') {
+    growEgoNetwork(e.data.nodeId);
+  } else if (e.data.type === 'reset-inspect') {
+    activeInspectedNodeId = null;
+    inspectedEgoSet.clear();
     applyLODAndFilter();
   } else if (e.data.type === 'search') {
     currentSearchQuery = e.data.query || '';
@@ -8305,6 +8534,65 @@ def generate_roles_onboarding_html(repo_root: str = ".", port: int = 27472) -> s
 </html>'''
 
 
+def _get_source_slice(
+    repo_root: str,
+    file_rel_path: str,
+    start_line: Optional[int] = None,
+    end_line: Optional[int] = None,
+) -> dict:
+    """Safely fetch and slice source code lines from workspace with path traversal protection."""
+    try:
+        norm_root = os.path.abspath(repo_root)
+        target_abs = os.path.abspath(os.path.join(norm_root, file_rel_path.lstrip("/")))
+
+        # Path traversal guard
+        if not (target_abs == norm_root or target_abs.startswith(norm_root + os.sep)):
+            return {"status": "error", "error": "Path traversal rejected", "code": 403}
+
+        if not os.path.isfile(target_abs):
+            return {"status": "error", "error": f"File not found: {file_rel_path}", "code": 404}
+
+        content = Path(target_abs).read_text(encoding="utf-8", errors="replace")
+        lines = content.splitlines()
+        total_lines = len(lines)
+
+        s = max(1, start_line) if start_line is not None else 1
+        e = min(total_lines, end_line) if end_line is not None else total_lines
+
+        if s > total_lines or s > e:
+            sliced = ""
+        else:
+            sliced = "\n".join(lines[s - 1:e])
+
+        ext = os.path.splitext(file_rel_path)[1].lower()
+        lang_map = {
+            ".py": "python",
+            ".js": "javascript",
+            ".ts": "typescript",
+            ".html": "html",
+            ".css": "css",
+            ".json": "json",
+            ".md": "markdown",
+            ".sh": "bash",
+            ".toml": "toml",
+            ".yaml": "yaml",
+            ".yml": "yaml",
+        }
+        lang = lang_map.get(ext, "text")
+
+        return {
+            "status": "ok",
+            "file": file_rel_path,
+            "start_line": s,
+            "end_line": e,
+            "total_lines": total_lines,
+            "content": sliced,
+            "language": lang,
+        }
+    except Exception as exc:
+        return {"status": "error", "error": str(exc), "code": 500}
+
+
 class VizorHandler(http.server.SimpleHTTPRequestHandler):
     """Serves viz-cache/ and handles Vizor POST routes."""
 
@@ -8345,6 +8633,34 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
 
         parsed = urlparse(self.path)
         path = parsed.path
+
+        if path in ("/api/source", "/api/v1/source") or path.endswith("/api/source"):
+            params = parse_qs(parsed.query)
+            file_param = params.get("file", [""])[0]
+            start_p = params.get("start", [None])[0]
+            end_p = params.get("end", [None])[0]
+            slug_p = params.get("slug", [None])[0]
+
+            s_line = int(start_p) if start_p and start_p.isdigit() else None
+            e_line = int(end_p) if end_p and end_p.isdigit() else None
+
+            repo_root = "."
+            if slug_p:
+                try:
+                    from synlynk.state_registry import get_registered_product
+                    entry = get_registered_product(slug_p)
+                    if entry and entry.get("repo_path"):
+                        repo_root = entry["repo_path"]
+                except Exception:
+                    pass
+
+            res = _get_source_slice(repo_root, file_param, s_line, e_line)
+            status_code = 200 if res["status"] == "ok" else res.get("code", 400)
+            self.send_response(status_code)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps(res).encode("utf-8"))
+            return
 
         if path in ("/graphify", "/graph"):
             self.send_response(302)
