@@ -1647,6 +1647,12 @@ implementation plan.
 - Live selftest exposed a scratch-ledger bug: probe metadata provisioning changed `DB_PATH` without changing cwd, causing a canonical-path mismatch. Fixed in PR #1693 (`bd5e9133`) by redirecting both cwd and DB path; focused verification is 155 passed, 1 skipped.
 - Live selftest reaches the full scenario suite. Remaining failures are environment gaps: Grok probe degraded, local harness configuration absent, and Muse probe degraded. A completed Agy child job with a dead PID was reconciled via `synlynk jobs reap --apply`.
 
+## 2026-09-26 — Universal GOVERNS loop goal + every-merge closeout story
+
+- Checked out `main` (`aeb311f7`) before this ledger work so housekeeping is not running inside a merged feature branch.
+- Restated `goal-eacab0dc` as the master persistent GOVERNS goal (`deadline=ongoing`, loop criterion). Minted Issue #1792 / `story-adb0f757` (sustain, tpm): `goals.kind` feature vs loop, required loop story, every-`pr_merged` synlynk-bot closeout from primary `main`. Deferred `story-620ca244` as absorbed.
+- Did not implement closeout yet.
+
 ## 2026-09-26 — Vizor KG usability story + #1789 housekeeping
 
 - Merged PR #1789 (`7619e8d9`) via Codex QA `job-0868ddb2` (approve + gh-write verified). Zoom bar lives outside vis-network `#graph`; migrate commits `--no-verify`. Closed `story-issue-1789` and linked it to `goal-e3840370`.

@@ -1127,7 +1127,7 @@ Executor har [backend] <!-- id:story-adhoc-1788746039 -->
 - [ ] fix(ci): align test matrix with supported Python versions [ml] <!-- id:story-issue-1505 -->
 - [ ] perf(selftest): isolate probe metadata from unit-test runs [testing] <!-- id:story-issue-1506 -->
 - [ ] Plan continuous harness compatibility expansion and Meta Muse + DeepSeek onboarding [devops] <!-- id:story-9791a697 -->
-- [ ] Define tactical versus durable goals and enforce goal association checks in GOVERNS [devops] <!-- id:story-620ca244 -->
+- [-] Define tactical versus durable goals and enforce goal association checks in GOVERNS [devops] <!-- id:story-620ca244 -->
 - [ ] Implement sentinel-to-shipped Platform Health & Performance maintenance loop [devops] <!-- id:story-2e48a8c5 -->
 - [ ] Define autonomous PM/TPM grooming and four-boundary human notification contract [devops] <!-- id:story-5dfe6b3f -->
 - [ ] perf: evaluate pytest-xdist for safe test parallelism [testing] <!-- id:story-issue-1496 -->
@@ -1320,3 +1320,5 @@ Bug 1 -- missing ef [testing] <!-- id:story-adhoc-1790223013 -->
 - [ ] docs: restore roadmap.md from triaged state.db arcs [testing] <!-- id:story-issue-1784 -->
 - [ ] fix: lock generated 4-docs after migrate and dual-write from state.db [testing] <!-- id:story-issue-1786 -->
 - [ ] feat(viz): Knowledge Graph usability — file deep-link, inspect traversal, kind-based L0 (#1790) [frontend] <!-- id:story-503a76f2 -->
+- [ ] docs: mint Vizor KG usability story #1790 [testing] <!-- id:story-issue-1791 -->
+- [ ] feat(governs): loop vs feature goals + every-merge synlynk-bot closeout (#1792) [backend] <!-- id:story-adb0f757 -->
