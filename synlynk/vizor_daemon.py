@@ -611,6 +611,8 @@ def run_forever(port: Optional[int] = None) -> None:
         if p not in os.environ.get("PATH", ""):
             os.environ["PATH"] = p + ":" + os.environ.get("PATH", "")
 
+    probe_health()
+
     resolved_port = port or DEFAULT_PORT
     CACHE_ROOT.mkdir(parents=True, exist_ok=True)
     handler_cls = build_workspace_routing_handler()
@@ -660,10 +662,24 @@ _LAUNCHD_LABEL = "com.synlynk.vizor-daemon"
 _SYSTEMD_UNIT_NAME = "synlynk-vizor-daemon.service"
 
 
+def _synlynk_import_root() -> str:
+    """Directory that must be on PYTHONPATH for `python -m synlynk.vizor_daemon`.
+
+    Launchd/systemd start with cwd `/` or `$HOME`. An editable install that
+    points at a deleted worktree is invisible from those cwds, which is the
+    LIVE-16 crash-loop.
+    """
+    import synlynk
+
+    return str(Path(synlynk.__file__).resolve().parent.parent)
+
+
 def _launchd_plist_contents(python_exe: str) -> str:
     local_bin = os.path.expanduser("~/.local/bin")
     pyenv_shims = os.path.expanduser("~/.pyenv/shims")
     default_path = f"/opt/homebrew/bin:/usr/local/bin:{local_bin}:{pyenv_shims}:/usr/bin:/bin:/usr/sbin:/sbin"
+    pythonpath = _synlynk_import_root()
+    working = str(DAEMON_HOME)
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
   "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -677,15 +693,21 @@ def _launchd_plist_contents(python_exe: str) -> str:
         <string>-m</string>
         <string>synlynk.vizor_daemon</string>
     </array>
+    <key>WorkingDirectory</key>
+    <string>{working}</string>
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
         <string>{default_path}</string>
+        <key>PYTHONPATH</key>
+        <string>{pythonpath}</string>
     </dict>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
     <true/>
+    <key>ThrottleInterval</key>
+    <integer>30</integer>
     <key>StandardOutPath</key>
     <string>{LOGFILE}</string>
     <key>StandardErrorPath</key>
@@ -696,16 +718,58 @@ def _launchd_plist_contents(python_exe: str) -> str:
 
 
 def _systemd_unit_contents(python_exe: str) -> str:
+    pythonpath = _synlynk_import_root()
     return f"""[Unit]
 Description=synlynk Vizor cross-workspace daemon
 
 [Service]
+WorkingDirectory={DAEMON_HOME}
+Environment=PYTHONPATH={pythonpath}
 ExecStart={python_exe} -m synlynk.vizor_daemon
 Restart=on-failure
+RestartSec=30
 
 [Install]
 WantedBy=default.target
 """
+
+
+def probe_health() -> dict:
+    """Detect launchd/systemd import crash-loop or a registered-but-dead service.
+
+    Writes a CRITICAL sentinel. Does not inspect exec/dispatch stdout — that
+    is why LIVE-16 was silent for thousands of KeepAlive failures.
+    """
+    from synlynk.sentinel import _write_sentinel_alert
+
+    running = is_running()
+    registered = False
+    try:
+        registered = bool(status().get("service_registered"))
+    except Exception:
+        registered = False
+
+    crashloop = False
+    try:
+        if LOGFILE.exists():
+            tail = LOGFILE.read_text(errors="replace")[-8000:]
+            crashloop = "ModuleNotFoundError: No module named 'synlynk'" in tail
+    except OSError:
+        tail = ""
+
+    if (crashloop and not running) or (registered and not running):
+        code = "VIZOR_DAEMON_CRASHLOOP" if crashloop else "VIZOR_DAEMON_DOWN"
+        message = (
+            "OS-supervised Vizor daemon cannot import synlynk (launchd KeepAlive "
+            "crash-loop). HUD may be served by a session workaround; GitHub App "
+            "token refresh in vizor_daemon is not running."
+            if crashloop
+            else "Vizor daemon is registered but not running."
+        )
+        _write_sentinel_alert("CRITICAL", code, message)
+        return {"ok": False, "code": code, "running": running, "registered": registered}
+
+    return {"ok": True, "code": "ok", "running": running, "registered": registered}
 
 
 def install() -> dict:

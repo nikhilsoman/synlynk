@@ -340,6 +340,55 @@ def test_uninstall_nonzero_returncode_reports_failure(tmp_path, monkeypatch):
     assert plist_path.exists(), "plist should not be unlinked when unload fails"
 
 
+def test_launchd_plist_sets_pythonpath_and_throttle():
+    from synlynk import vizor_daemon
+
+    xml = vizor_daemon._launchd_plist_contents("/usr/bin/python3")
+    root = vizor_daemon._synlynk_import_root()
+    assert "<key>PYTHONPATH</key>" in xml
+    assert f"<string>{root}</string>" in xml
+    assert "<key>ThrottleInterval</key>" in xml
+    assert "<integer>30</integer>" in xml
+    assert str(vizor_daemon.DAEMON_HOME) in xml
+
+
+def test_systemd_unit_sets_pythonpath():
+    from synlynk import vizor_daemon
+
+    unit = vizor_daemon._systemd_unit_contents("/usr/bin/python3")
+    root = vizor_daemon._synlynk_import_root()
+    assert f"Environment=PYTHONPATH={root}" in unit
+    assert "RestartSec=30" in unit
+
+
+def test_probe_health_alerts_on_import_crashloop(tmp_path, monkeypatch):
+    from synlynk import vizor_daemon
+    from synlynk.sentinel import _write_sentinel_alert
+
+    log = tmp_path / "daemon.log"
+    log.write_text(
+        "/opt/homebrew/opt/python@3.14/bin/python3.14: Error while finding "
+        "module specification for 'synlynk.vizor_daemon' "
+        "(ModuleNotFoundError: No module named 'synlynk')\n" * 3
+    )
+    sentinel = tmp_path / "sentinel.md"
+    monkeypatch.setattr(vizor_daemon, "LOGFILE", log)
+    monkeypatch.setattr(vizor_daemon, "is_running", lambda: False)
+    monkeypatch.setattr(vizor_daemon, "status", lambda: {"service_registered": True, "running": False})
+
+    alerts = []
+
+    def capture(severity, code, message, sentinel_path=None):
+        alerts.append((severity, code, message))
+        return _write_sentinel_alert(severity, code, message, sentinel_path=str(sentinel))
+
+    monkeypatch.setattr("synlynk.sentinel._write_sentinel_alert", capture)
+    result = vizor_daemon.probe_health()
+    assert result["ok"] is False
+    assert result["code"] == "VIZOR_DAEMON_CRASHLOOP"
+    assert alerts and alerts[0][0] == "CRITICAL"
+
+
 def test_install_systemd_nonzero_returncode_reports_failure(tmp_path, monkeypatch):
     from synlynk import vizor_daemon
 
