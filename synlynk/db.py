@@ -728,6 +728,12 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
                 conn.execute("ALTER TABLE goal_contributions ADD COLUMN skip_reason TEXT")
             except sqlite3.OperationalError:
                 pass
+        goal_cols = {row[1] for row in conn.execute("PRAGMA table_info(goals)")}
+        if "kind" not in goal_cols:
+            try:
+                conn.execute("ALTER TABLE goals ADD COLUMN kind TEXT NOT NULL DEFAULT 'feature'")
+            except sqlite3.OperationalError:
+                pass
         daemon_job_cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)")}
         if "type_id" not in daemon_job_cols:
             try:
@@ -3075,11 +3081,14 @@ def _mark_ticket_consumed(ticket_id: int) -> None:
     conn.close()
 
 
-def cmd_goal_create(outcome: str, criterion: str, deadline: str = None, role: str = "pm") -> str:
+def cmd_goal_create(outcome: str, criterion: str, deadline: str = None, role: str = "pm", kind: str = "feature") -> str:
     """Creates a Business Goal record in state.db. Returns the generated goal_id."""
     from synlynk import _GREEN, _RESET, _get_db
     from synlynk.policy import check_authority
     import hashlib as _hashlib
+
+    if kind not in ("feature", "loop"):
+        kind = "feature"
 
     authority = check_authority("goal_create", role=role, repo_path=os.getcwd())
     if not authority.allowed:
@@ -3089,32 +3098,48 @@ def cmd_goal_create(outcome: str, criterion: str, deadline: str = None, role: st
         f"{outcome}{time.time()}".encode()
     ).hexdigest()[:8]
     conn = _get_db()
-    conn.execute(
-        "INSERT INTO goals (goal_id, outcome, criterion, deadline) VALUES (?, ?, ?, ?)",
-        (goal_id, outcome, criterion, deadline)
-    )
+    goal_cols = {row[1] for row in conn.execute("PRAGMA table_info(goals)")}
+    if "kind" in goal_cols:
+        conn.execute(
+            "INSERT INTO goals (goal_id, outcome, criterion, deadline, kind) VALUES (?, ?, ?, ?, ?)",
+            (goal_id, outcome, criterion, deadline, kind)
+        )
+    else:
+        conn.execute(
+            "INSERT INTO goals (goal_id, outcome, criterion, deadline) VALUES (?, ?, ?, ?)",
+            (goal_id, outcome, criterion, deadline)
+        )
     conn.commit()
     conn.close()
-    print(f"  {_GREEN}✓{_RESET} Goal created: {goal_id}  [{outcome}]")
+    print(f"  {_GREEN}✓{_RESET} Goal created: {goal_id}  [{outcome}] (kind: {kind})")
     return goal_id
 
-def cmd_goal_list() -> None:
+def cmd_goal_list(kind: str = None) -> None:
     """Prints all active goals in state.db."""
     from synlynk import _get_db
     conn = _get_db()
-    rows = conn.execute(
-        "SELECT goal_id, outcome, criterion, deadline, status "
+    goal_cols = {row[1] for row in conn.execute("PRAGMA table_info(goals)")}
+    has_kind = "kind" in goal_cols
+    query = (
+        "SELECT goal_id, outcome, criterion, deadline, status, kind "
         "FROM goals WHERE status='active' ORDER BY created_at DESC"
-    ).fetchall()
+        if has_kind
+        else "SELECT goal_id, outcome, criterion, deadline, status, 'feature' as kind "
+        "FROM goals WHERE status='active' ORDER BY created_at DESC"
+    )
+    rows = conn.execute(query).fetchall()
     conn.close()
+    if kind:
+        rows = [r for r in rows if (r[5] or "feature") == kind]
     if not rows:
         print("  No active goals. Use: synlynk goal create --outcome '...' --criterion '...'")
         return
-    print(f"\n  {'ID':<12} {'Outcome':<40} {'Deadline':<12}")
+    print(f"\n  {'ID':<12} {'Kind':<10} {'Outcome':<36} {'Deadline':<12}")
     print("  " + "-" * 80)
     for r in rows:
         deadline = r[3] or "ongoing"
-        print(f"  {r[0]:<12} {(r[1] or '')[:39]:<40} {deadline:<12}")
+        g_kind = r[5] or "feature"
+        print(f"  {r[0]:<12} {g_kind:<10} {(r[1] or '')[:35]:<36} {deadline:<12}")
 
 
 _VALID_SESSION_DISPOSITIONS = {

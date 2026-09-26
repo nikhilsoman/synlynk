@@ -346,7 +346,9 @@ def build_parser() -> argparse.ArgumentParser:
     goal_create_parser.add_argument("--criterion", required=True)
     goal_create_parser.add_argument("--deadline", default=None)
     goal_create_parser.add_argument("--role", default="pm")
-    goal_sub.add_parser("list", help="List active goals")
+    goal_create_parser.add_argument("--kind", choices=["feature", "loop"], default="feature", help="Goal kind: feature (default) or persistent loop")
+    goal_list_parser = goal_sub.add_parser("list", help="List active goals")
+    goal_list_parser.add_argument("--kind", choices=["feature", "loop"], default=None, help="Filter by goal kind")
     goal_link_parser = goal_sub.add_parser("link", help="Link a story to a goal")
     goal_link_parser.add_argument("story_id")
     goal_link_parser.add_argument("--goal", required=True, dest="goal_id")
@@ -2365,9 +2367,9 @@ def main(argv=None) -> None:
         from synlynk.db import cmd_goal_create, cmd_goal_list, cmd_goal_link, cmd_goal_status
         action = getattr(args, "goal_action", None)
         if action == "create":
-            cmd_goal_create(args.outcome, args.criterion, deadline=args.deadline, role=args.role)
+            cmd_goal_create(args.outcome, args.criterion, deadline=args.deadline, role=args.role, kind=getattr(args, "kind", "feature"))
         elif action == "list":
-            cmd_goal_list()
+            cmd_goal_list(kind=getattr(args, "kind", None))
         elif action == "link":
             cmd_goal_link(args.story_id, args.goal_id, secondary=args.secondary)
         elif action == "status" or action is None:
