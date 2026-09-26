@@ -1647,6 +1647,12 @@ implementation plan.
 - Live selftest exposed a scratch-ledger bug: probe metadata provisioning changed `DB_PATH` without changing cwd, causing a canonical-path mismatch. Fixed in PR #1693 (`bd5e9133`) by redirecting both cwd and DB path; focused verification is 155 passed, 1 skipped.
 - Live selftest reaches the full scenario suite. Remaining failures are environment gaps: Grok probe degraded, local harness configuration absent, and Muse probe degraded. A completed Agy child job with a dead PID was reconciled via `synlynk jobs reap --apply`.
 
+## 2026-09-26 — Vizor KG usability story + #1789 housekeeping
+
+- Merged PR #1789 (`7619e8d9`) via Codex QA `job-0868ddb2` (approve + gh-write verified). Zoom bar lives outside vis-network `#graph`; migrate commits `--no-verify`. Closed `story-issue-1789` and linked it to `goal-e3840370`.
+- Minted Issue #1790 / `story-503a76f2` for the seven Knowledge Graph usability items and the recommended inspect-mask / kind-based L0 / File Tree deep-link approach. Linked to `goal-e3840370`. Implementation parked until remaining open Vizor items are reviewed.
+- Removed QA worktrees `job-0868ddb2` and `job-0c51370f`. Left `build/` and `graphify-out/` untracked.
+
 ## 2026-09-23 — Named Release v0.21.0 Ceremony & Daily Release Cadence
 
 - Executed full named release ceremony for `v0.21.0` (The Autonomous Multi-Home & Teams Relay Release) after verifying 3,195 passing tests (100% Green).

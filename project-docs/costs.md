@@ -1,5 +1,12 @@
 # Cost Log
  
+## 2026-09-26 — Vizor KG usability story #1790 + PR #1789 merge
+
+- Interactive Conductor: Grok.
+- Merged PR #1789 (`7619e8d9`) via Codex QA `job-0868ddb2` (gh-write verified). Prior QA `job-0c51370f` recorded as succeeded_gh_write_failed (~$0.96).
+- Minted Issue #1790 / `story-503a76f2` under `goal-e3840370`; implementation parked.
+- Manual Grok session estimate: 180,000 in / 45,000 out, ~$1.22 (`synlynk cost log`, story-503a76f2).
+
 ## 2026-09-25 — AST Knowledge Graph Lifecycle Triggers, Rich Packager & Sparse Worktrees (PR #1788)
 - Interactive Conductor: Agy.
 - Implemented: Rich AST context packager in `synlynk/pack.py` (subsystem grouping, signature inlining, reverse test suite discovery), AST-guided sparse cone derivation in `synlynk/worktree_sparse.py`, automated background refresh on git drift in `synlynk/daemon.py` + dispatch JIT cache validator, and topbar manual refresh action in `synlynk/viz.py`.
