@@ -1,3 +1,15 @@
+## 2026-09-26 — Universal GOVERNS Lifecycle Auto-Association, State Machine & Reconciliation (`goal-eacab0dc`, PR #1798)
+
+### Shipped & Verified
+- **Goal Kinds & Schema Migration:** Extended `goals` table in `state.db` with `kind` (`feature` vs `loop`), allowing persistent continuous workflows (like GOVERNS loop) to be tracked alongside feature goals without premature completion.
+- **Deterministic GovernsResolver:** Implemented 5-tier waterfall resolution resolving parent `goal_id` from explicit input, active branch/story context, spec/plan headers, domain heuristics, and fallback loop goals.
+- **7-Stage Event-Driven FSM (`governs_fsm.py`):** Added event-driven FSM advancing stories across all 7 lifecycle stages (`goal` → `open` → `visualize` → `execute` → `release` → `notify` → `sustain`).
+- **In-Session Artifact Harvesting:** Automatically indexed decisions and specs/plans into `state.db` on creation.
+- **Reconciliation Command (`synlynk governs sweep`):** Implemented workspace reconciliation command, achieving 100% GOVERNS coverage (1,067 stories scanned, 906 linked, 148 advanced, 434 artifacts indexed).
+- **Full Test Suite Verification:** 3,287 / 3,287 tests passing cleanly across the repository.
+- **PR #1798 Merged:** Approved by QA bot and merged into `main`.
+[@agy, @nikhilsoman]
+
 ## 2026-09-25 — Goal/arc triage and roadmap.md restore from state.db
 
 ### Applied

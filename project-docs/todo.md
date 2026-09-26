@@ -1322,3 +1322,5 @@ Bug 1 -- missing ef [testing] <!-- id:story-adhoc-1790223013 -->
 - [ ] feat(viz): Knowledge Graph usability — file deep-link, inspect traversal, kind-based L0 (#1790) [frontend] <!-- id:story-503a76f2 -->
 - [ ] docs: mint Vizor KG usability story #1790 [testing] <!-- id:story-issue-1791 -->
 - [ ] feat(governs): loop vs feature goals + every-merge synlynk-bot closeout (#1792) [backend] <!-- id:story-adb0f757 -->
+- [ ] docs: master GOVERNS loop goal + every-merge closeout story #1792 [testing] <!-- id:story-issue-1793 -->
+- [ ] fix(vizor): LIVE-16 launchd crash-loop (ModuleNotFoundError) [frontend] <!-- id:story-issue-1795 -->
