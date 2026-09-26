@@ -355,6 +355,13 @@ def build_parser() -> argparse.ArgumentParser:
     goal_link_parser.add_argument("--secondary", action="store_true")
     goal_sub.add_parser("status", help="Show goal completion rollup")
 
+    governs_parser = subparsers.add_parser("governs", help="Manage GOVERNS lifecycle and reconciliation")
+    governs_sub = governs_parser.add_subparsers(dest="governs_action")
+    governs_sweep_parser = governs_sub.add_parser("sweep", help="Reconcile and backfill 100% GOVERNS goal linkages and stages across workspace")
+    governs_sweep_parser.add_argument("--dry-run", action="store_true", help="Calculate linkages and stage transitions without writing to state.db")
+    governs_sweep_parser.add_argument("--strict", action="store_true", help="Fail with non-zero exit if any unlinked stories remain")
+    governs_sweep_parser.add_argument("--verbose", action="store_true", help="Print per-story resolution details")
+
     local_parser = subparsers.add_parser("local", help="Manage the local (oMLX) harness")
     local_sub = local_parser.add_subparsers(dest="local_action")
     local_sub.add_parser("doctor", help="Check oMLX endpoint reachability and model roster")
@@ -2376,6 +2383,13 @@ def main(argv=None) -> None:
             cmd_goal_status()
         else:
             help_parsers.get("goal", parser).print_help()
+    elif args.command == "governs":
+        from synlynk.governs_cli import cmd_governs_sweep
+        action = getattr(args, "governs_action", None)
+        if action == "sweep" or action is None:
+            cmd_governs_sweep(dry_run=getattr(args, "dry_run", False), strict=getattr(args, "strict", False), verbose=getattr(args, "verbose", False))
+        else:
+            help_parsers.get("governs", parser).print_help()
     elif args.command == "local":
         from synlynk.local_agent import cmd_local_doctor
         if args.local_action == "doctor":
