@@ -871,6 +871,7 @@ CREATE TABLE IF NOT EXISTS goals (
     criterion   TEXT NOT NULL,
     deadline    TEXT,
     status      TEXT NOT NULL DEFAULT 'active',
+    kind        TEXT NOT NULL DEFAULT 'feature',
     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
