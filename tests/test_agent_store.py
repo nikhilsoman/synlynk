@@ -55,6 +55,62 @@ def test_get_workspace_id_never_overwrites_existing_value(project_dir):
     assert get_workspace_id() == "pre-existing-id"
 
 
+def test_get_workspace_id_recovers_uuid_when_slug_collides_with_identity(project_dir, tmp_path, monkeypatch):
+    """LIVE-16 follow-up: identity_slug written as workspace_id hides the agent registry."""
+    from synlynk.agent_store import get_workspace_id, list_agents
+
+    fake_home = tmp_path / "fake_home"
+    monkeypatch.setattr(os.path, "expanduser", lambda p: p.replace("~", str(fake_home)))
+    real_id = "9e3fbca6-9ee3-421b-bea1-cfc1790d33c6"
+    agents_dir = fake_home / ".synlynk" / "workspaces" / real_id / "agents"
+    agents_dir.mkdir(parents=True)
+    (agents_dir / "registry.json").write_text(json.dumps({
+        "agents": [{
+            "agent_id": "109dc5d1-2935-4cc0-bf27-c08ab31e64b1",
+            "created_at": "2026-08-15T20:14:00Z",
+            "aliases": [{"kind": "role_slug", "value": "dev"}],
+            "history": [],
+        }]
+    }))
+    proj = project_dir / ".synlynk" / "agents"
+    proj.mkdir()
+    (proj / "109dc5d1-2935-4cc0-bf27-c08ab31e64b1.yaml").write_text(
+        f"agent_id: 109dc5d1-2935-4cc0-bf27-c08ab31e64b1\n"
+        f"workspace_id: {real_id}\n"
+        "role: dev\n"
+    )
+    with open(".synlynk/config.json") as f:
+        config = json.load(f)
+    config["workspace_id"] = "synlynk"
+    config["identity_slug"] = "synlynk"
+    with open(".synlynk/config.json", "w") as f:
+        json.dump(config, f)
+
+    assert get_workspace_id() == real_id
+    with open(".synlynk/config.json") as f:
+        saved = json.load(f)
+    assert saved["workspace_id"] == real_id
+    assert saved.get("identity_slug") == "synlynk"
+    agents = list_agents()
+    assert len(agents) == 1
+    assert agents[0]["aliases"][0]["value"] == "dev"
+
+
+def test_get_workspace_id_mints_uuid_not_identity_slug(project_dir):
+    from synlynk.agent_store import get_workspace_id
+    import uuid as uuid_mod
+
+    with open(".synlynk/config.json") as f:
+        config = json.load(f)
+    config["identity_slug"] = "synlynk"
+    with open(".synlynk/config.json", "w") as f:
+        json.dump(config, f)
+
+    workspace_id = get_workspace_id()
+    uuid_mod.UUID(workspace_id)
+    assert workspace_id != "synlynk"
+
+
 def test_agent_store_path_under_workspace_home(project_dir, tmp_path, monkeypatch):
     from synlynk import agent_store
 
