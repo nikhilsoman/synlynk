@@ -1,5 +1,11 @@
 # Cost Log
  
+## 2026-09-26 — GOVERNS master loop goal + #1792
+
+- Interactive Conductor: Grok.
+- Ledger-only: restated `goal-eacab0dc`, minted `story-adb0f757` / Issue #1792. No product code.
+- Estimated: light session continuation; cost already logged against `story-503a76f2` earlier today.
+
 ## 2026-09-26 — Vizor KG usability story #1790 + PR #1789 merge
 
 - Interactive Conductor: Grok.
