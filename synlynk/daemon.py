@@ -362,6 +362,11 @@ class WatchDaemon:
                     f"  ⚠ could not refresh GitHub App token for role '{role}': {exc}",
                     file=sys.stderr,
                 )
+        try:
+            from synlynk.vizor_daemon import probe_health
+            probe_health()
+        except Exception:
+            pass
 
     def _check_graph_staleness_and_refresh(self) -> None:
         """Checks if the knowledge graph is stale compared to HEAD commit and triggers background refresh."""
