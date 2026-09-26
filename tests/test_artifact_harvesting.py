@@ -15,6 +15,8 @@ def test_decisions_table_has_goal_and_story_columns(tmp_path, monkeypatch):
     conn.close()
 
 def test_cmd_decision_record_auto_binds_goal(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "project-docs" / "decisions").mkdir(parents=True, exist_ok=True)
     test_db = tmp_path / "state.db"
     monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(test_db))
     conn = _get_db(db_path=str(test_db))

@@ -92,6 +92,7 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `schedule` (primary) — execute
 - `tpm sweep` (primary) — execute
 - `pm sweep` (primary) — execute
+- `governs sweep` (primary) — sustain
 - `release` (primary) — release
 - `marketing ceremony` (secondary) — release
 - `marketing sync-pr` (secondary) — release

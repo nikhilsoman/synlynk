@@ -2691,6 +2691,21 @@ def cmd_decision_record(decision_id: str, topic: str, date: str, panel: list,
               "Run `synlynk identity init` first.")
 
     conn = _get_db()
+    if goal_id:
+        try:
+            conn.execute(
+                "INSERT OR IGNORE INTO goals (goal_id, outcome, criterion, kind) VALUES (?, ?, ?, ?)",
+                (goal_id, f"GOVERNS Goal: {goal_id}", "Auto-created parent goal for decisions/governs tracking", "loop")
+            )
+        except Exception:
+            pass
+    if story_id:
+        try:
+            s_row = conn.execute("SELECT 1 FROM stories WHERE story_id = ?", (story_id,)).fetchone()
+            if not s_row:
+                story_id = None
+        except Exception:
+            pass
     dec_cols = {row[1] for row in conn.execute("PRAGMA table_info(decisions)")}
     if "goal_id" in dec_cols and "story_id" in dec_cols:
         conn.execute(

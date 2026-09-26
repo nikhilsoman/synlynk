@@ -856,6 +856,7 @@ def test_decisions_table_created_idempotently(tmp_path, monkeypatch):
     assert cols == {
         "decision_id", "topic", "date", "panel", "status", "inputs",
         "synthesis", "decision_text", "signature", "created_at",
+        "goal_id", "story_id",
     }
 
 

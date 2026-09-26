@@ -357,7 +357,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     governs_parser = subparsers.add_parser("governs", help="Manage GOVERNS lifecycle and reconciliation")
     governs_sub = governs_parser.add_subparsers(dest="governs_action")
-    governs_sweep_parser = governs_sub.add_parser("sweep", help="Reconcile and backfill 100% GOVERNS goal linkages and stages across workspace")
+    governs_sweep_parser = governs_sub.add_parser("sweep", help="Reconcile and backfill 100%% GOVERNS goal linkages and stages across workspace")
     governs_sweep_parser.add_argument("--dry-run", action="store_true", help="Calculate linkages and stage transitions without writing to state.db")
     governs_sweep_parser.add_argument("--strict", action="store_true", help="Fail with non-zero exit if any unlinked stories remain")
     governs_sweep_parser.add_argument("--verbose", action="store_true", help="Print per-story resolution details")

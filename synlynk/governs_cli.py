@@ -100,6 +100,14 @@ def cmd_governs_sweep(
         # 3. Apply updates if not dry run
         if not dry_run and story_updates:
             for r_gid, n_stage, s_id in story_updates:
+                if r_gid:
+                    try:
+                        conn.execute(
+                            "INSERT OR IGNORE INTO goals (goal_id, outcome, criterion) VALUES (?, ?, ?)",
+                            (r_gid, f"GOVERNS Goal: {r_gid}", "Auto-reconciled during GOVERNS sweep"),
+                        )
+                    except Exception:
+                        pass
                 if has_governs_stage:
                     conn.execute(
                         "UPDATE stories SET goal_id = ?, governs_stage = ?, stage = ? WHERE story_id = ?",
