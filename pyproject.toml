@@ -48,4 +48,5 @@ include = ["synlynk*"]
 version = { attr = "synlynk.VERSION" }
 
 [tool.setuptools.package-data]
-synlynk = ["py.typed", "capability_baseline.json"]
+synlynk = ["py.typed", "capability_baseline.json", "packs/*.yaml"]
+

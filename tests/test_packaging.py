@@ -108,3 +108,14 @@ def test_run_upgrade_script_prints_pipx_migration(monkeypatch, capsys):
     assert "script install is retired" in out
     assert "pipx install git+https://github.com/nikhilsoman/synlynk" in out
     assert "✓ Upgraded" not in out
+
+
+def test_pyproject_package_data_includes_packs():
+    import tomllib
+    root = os.path.dirname(os.path.dirname(__file__))
+    pyproject_path = os.path.join(root, "pyproject.toml")
+    with open(pyproject_path, "rb") as f:
+        data = tomllib.load(f)
+    pkg_data = data.get("tool", {}).get("setuptools", {}).get("package-data", {}).get("synlynk", [])
+    assert "packs/*.yaml" in pkg_data
+
