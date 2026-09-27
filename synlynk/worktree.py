@@ -434,6 +434,11 @@ def _format_audit_report(verdicts: list, json_output: bool = False) -> str:
 def cmd_worktree_audit(json_output: bool = False) -> str:
     main_repo_path = _get_repo_root()
     cwd_worktree_path = os.getcwd()
+    try:
+        from synlynk.worktree_lease import audit_and_reclaim_stale_worktree_leases
+        audit_and_reclaim_stale_worktree_leases()
+    except Exception:
+        pass
     verdicts = _collect_verdicts(main_repo_path, cwd_worktree_path)
     output = _format_audit_report(verdicts, json_output)
     print(output)
@@ -513,6 +518,12 @@ def cmd_worktree_clean(
                 )
                 if result.returncode != 0:
                     wt_status = f"FAILED({result.stderr.strip()[:80]})"
+                else:
+                    try:
+                        from synlynk.worktree_lease import release_worktree_lease
+                        release_worktree_lease(v.path)
+                    except Exception:
+                        pass
             except (subprocess.SubprocessError, OSError) as exc:
                 wt_status = f"FAILED({exc})"
 

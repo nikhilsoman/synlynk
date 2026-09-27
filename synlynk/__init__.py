@@ -40,7 +40,8 @@ _LEGACY_MODULES = (
     "capability_roles", "taxonomy", "doctor", "team", "heal", "support_engineer",
     "backlog", "backlog_extractor", "charter_injection", "context", "jobs",
     "story_provisioning", "daemon", "instructions", "scan", "hud", "platform_status",
-    "logs", "wizard", "launch", "circuit_breaker", "capability_probe",
+    "logs", "wizard", "launch", "circuit_breaker", "capability_probe", "wal_ledger",
+    "worktree_lease",
 )
 
 
@@ -1010,6 +1011,20 @@ CREATE TABLE IF NOT EXISTS task_leases (
     status             TEXT NOT NULL DEFAULT 'active'
 );
 CREATE INDEX IF NOT EXISTS idx_task_leases_story ON task_leases(story_id, status);
+
+CREATE TABLE IF NOT EXISTS worktree_leases (
+    worktree_id    TEXT PRIMARY KEY,
+    job_id         TEXT,
+    worktree_path  TEXT NOT NULL,
+    leased_by      TEXT NOT NULL,
+    pid            INTEGER NOT NULL,
+    acquired_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    heartbeat_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    expires_at     TIMESTAMP NOT NULL,
+    status         TEXT NOT NULL DEFAULT 'active'
+);
+CREATE INDEX IF NOT EXISTS idx_worktree_leases_status ON worktree_leases(status, expires_at);
+CREATE INDEX IF NOT EXISTS idx_worktree_leases_path ON worktree_leases(worktree_path, status);
 """
 
 _DB_SCORES_VIEW = """
@@ -1142,10 +1157,8 @@ def _get_db(
             # candidate database and its sidecars byte-identical on failure.
             conn.execute("BEGIN IMMEDIATE")
             conn.execute("ROLLBACK")
-            conn.execute("PRAGMA journal_mode=WAL")
-            conn.execute("PRAGMA busy_timeout=30000")
-            conn.execute("PRAGMA synchronous=NORMAL")
-            conn.execute("PRAGMA foreign_keys=ON")
+            from synlynk.wal_ledger import ensure_wal_pragmas
+            ensure_wal_pragmas(conn)
             if migrate:
                 _migrate_db(conn)
             if migrate and not _IS_TESTING and os.path.abspath(path) == os.path.abspath(DB_PATH):

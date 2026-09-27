@@ -2825,6 +2825,13 @@ def cmd_jobs_reap(apply: bool = False, all_projects: bool = False) -> int:
         return 0
 
     reaped = apply_reap_zombies(to_reap)
+    try:
+        from synlynk.worktree_lease import audit_and_reclaim_stale_worktree_leases
+        stale_wt = audit_and_reclaim_stale_worktree_leases()
+        if stale_wt:
+            print(f"  Reclaimed {len(stale_wt)} stale worktree lease(s).")
+    except Exception:
+        pass
     print(
         f"\n  {_GREEN}Reaped {len(reaped)}{_RESET} → status=timed_out exit_code=-9"
         f"  (kept alive: {len(to_keep)})\n"
@@ -3469,6 +3476,12 @@ def _reap_zombie_worktree(job_id: str, log_path: Optional[str], conn=None) -> bo
                 shutil.rmtree(path)
                 reaped = True
         except OSError:
+            pass
+    if reaped:
+        try:
+            from synlynk.worktree_lease import release_worktree_lease
+            release_worktree_lease(path, conn=conn)
+        except Exception:
             pass
     if reaped and central_log_path and conn:
         try:

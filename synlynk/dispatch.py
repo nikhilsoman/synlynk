@@ -2290,6 +2290,11 @@ def _create_job_worktree(
                 )
             if sparse_ok:
                 _assert_dispatch_worktree_base_is_fresh(worktree_path, base_ref)
+                try:
+                    from synlynk.worktree_lease import acquire_worktree_lease
+                    acquire_worktree_lease(worktree_path, leased_by=agent, job_id=job_id, pid=os.getpid())
+                except Exception as exc:
+                    logger.debug("Worktree lease acquisition advisory: %s", exc)
                 return {
                     "path": worktree_path,
                     "branch": worktree_branch,
@@ -2339,6 +2344,11 @@ def _create_job_worktree(
             + (f" {details}" if details else "")
         )
     _assert_dispatch_worktree_base_is_fresh(worktree_path, base_ref)
+    try:
+        from synlynk.worktree_lease import acquire_worktree_lease
+        acquire_worktree_lease(worktree_path, leased_by=agent, job_id=job_id, pid=os.getpid())
+    except Exception as exc:
+        logger.debug("Worktree lease acquisition advisory: %s", exc)
     return {
         "path": worktree_path,
         "branch": worktree_branch,
