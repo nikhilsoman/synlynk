@@ -43,24 +43,24 @@ MODEL_TIERS = (MODEL_TIER_FAST, MODEL_TIER_PRO, MODEL_TIER_REASONING)
 
 _DEFAULT_MODELS_BY_TIER = {
     MODEL_TIER_FAST: {
-        "claude": "claude-3-5-haiku-latest",
-        "agy": "gemini-1.5-flash",
+        "claude": "claude-haiku-4-5-20251001",
+        "agy": "gemini-3.7-flash-medium",
         "codex": "gpt-5.6-luna",
-        "grok": "grok-3-mini",
-        "local": "gemma-2-9b-it",
+        "grok": "grok-4.6",
+        "local": "qwen2.5",
     },
     MODEL_TIER_PRO: {
-        "claude": "claude-3-5-sonnet-latest",
-        "agy": "gemini-1.5-pro",
+        "claude": "claude-sonnet-5",
+        "agy": "gemini-3.1-pro-low",
         "codex": "gpt-5.6-luna",
-        "grok": "grok-3",
-        "local": "qwen2.5-coder",
+        "grok": "grok-4.7",
+        "local": "qwen2.5",
     },
     MODEL_TIER_REASONING: {
-        "claude": "claude-3-5-sonnet-latest",
-        "agy": "gemini-1.5-pro",
+        "claude": "claude-opus-5-5",
+        "agy": "gemini-3.1-pro-high",
         "codex": "gpt-5.6-luna",
-        "grok": "grok-3",
+        "grok": "grok-4.7",
         "local": "deepseek-r1",
     },
 }

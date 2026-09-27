@@ -3,53 +3,53 @@
 
 | Date | Agent | Model | Tokens In | Tokens Out | Cost | Source | Story | Notes |
 |---|---|---|---|---|---|---|---|---|
-| 2026-09-19 14:01 | codex | o4-mini | 312980 | 2775 | $0.9806 | estimated_token_rate | story-adhoc-1789806569 | exec: codex job job-d29c40... |
-| 2026-09-19 14:01 | claude | claude-sonnet-4-6 | 35001 | 664 | $0.1150 | estimated_token_rate | story-adhoc-1789806571 | exec: claude job job-500ca... |
-| 2026-09-19 14:01 | claude | claude-sonnet-4-6 | 35072 | 753 | $0.1165 | estimated_token_rate | story-adhoc-1789806575 | exec: claude job job-0e0b5... |
-| 2026-09-19 14:01 | codex | o4-mini | 370140 | 4329 | $1.1754 | estimated_token_rate | story-adhoc-1789806577 | exec: codex job job-f7e4e0... |
-| 2026-09-19 14:01 | claude | claude-sonnet-4-6 | 34950 | 655 | $0.1147 | estimated_token_rate | story-adhoc-1789806580 | exec: claude job job-1d4e7... |
-| 2026-09-19 14:01 | claude | claude-sonnet-4-6 | 35180 | 903 | $0.1191 | estimated_token_rate | story-adhoc-1789806584 | exec: claude job job-ccba2... |
-| 2026-09-19 14:01 | claude | claude-sonnet-4-6 | 33924 | 602 | $0.1108 | estimated_token_rate | story-adhoc-1789806588 | exec: claude job job-06850... |
-| 2026-09-19 14:01 | claude | claude-sonnet-4-6 | 34336 | 516 | $0.1107 | estimated_token_rate | story-adhoc-1789806592 | exec: claude job job-5c050... |
-| 2026-09-19 14:01 | grok | grok-3 | 5000 | 2000 | $0.0450 | estimated_tshirt | story-adhoc-1789806594 | exec: grok job job-983c58e... |
-| 2026-09-19 14:01 | claude | claude-sonnet-4-6 | 33930 | 692 | $0.1122 | estimated_token_rate | story-adhoc-1789806596 | exec: claude job job-992fa... |
-| 2026-09-19 14:01 | grok | grok-3 | 5000 | 2000 | $0.0450 | estimated_tshirt | story-adhoc-1789806598 | exec: grok job job-57265dd... |
-| 2026-09-19 14:01 | claude | claude-sonnet-4-6 | 34482 | 818 | $0.1157 | estimated_token_rate | story-adhoc-1789806600 | exec: claude job job-70bb6... |
-| 2026-09-19 14:01 | grok | grok-3 | 5000 | 2000 | $0.0450 | estimated_tshirt | story-adhoc-1789806603 | exec: grok job job-1bd2673... |
-| 2026-09-19 14:01 | claude | claude-sonnet-4-6 | 35132 | 753 | $0.1167 | estimated_token_rate | story-adhoc-1789806605 | exec: claude job job-00d13... |
-| 2026-09-19 14:01 | grok | grok-3 | 5000 | 2000 | $0.0450 | estimated_tshirt | story-adhoc-1789806608 | exec: grok job job-b069d09... |
-| 2026-09-19 14:01 | claude | claude-sonnet-4-6 | 34447 | 877 | $0.1165 | estimated_token_rate | story-adhoc-1789806610 | exec: claude job job-154a8... |
-| 2026-09-19 14:01 | grok | grok-3 | 5000 | 2000 | $0.0450 | estimated_tshirt | story-adhoc-1789806613 | exec: grok job job-32efed8... |
-| 2026-09-19 14:01 | claude | claude-sonnet-4-6 | 35078 | 624 | $0.1146 | estimated_token_rate | story-adhoc-1789806615 | exec: claude job job-aa61f... |
-| 2026-09-19 14:01 | grok | grok-3 | 5000 | 2000 | $0.0450 | estimated_tshirt | story-adhoc-1789806618 | exec: grok job job-2ad8db2... |
-| 2026-09-19 14:01 | claude | claude-sonnet-4-6 | 34972 | 670 | $0.1150 | estimated_token_rate | story-adhoc-1789806621 | exec: claude job job-6e026... |
-| 2026-09-19 14:08 | codex | o4-mini | 641373 | 5510 | $2.0068 | estimated_token_rate | story-adhoc-1789806573 | exec: codex job job-f685a6... |
-| 2026-09-19 14:08 | agy | unknown | 5000 | 2000 | $0.0450 | estimated_tshirt | story-adhoc-1789806582 | exec: agy job job-3397844b |
-| 2026-09-19 20:28 | codex | extract_model_version(\"\", | 4463800 | 13974 | $13.6010 | estimated_token_rate | story-ffb0f3e6 | exec: codex job job-e65556... |
-| 2026-09-24 01:08 | codex | o4-mini | 2446479 | 9086 | $7.4757 | estimated_token_rate | story-39ada885 | exec: codex job job-ac805d... |
-| 2026-09-24 08:33 | codex | grok-header\", | 658082 | 11031 | $2.1397 | estimated_token_rate | story-5e2d2db2 | exec: codex job job-612f9b... |
-| 2026-09-24 11:30 | codex | o3 | 5000 | 2000 | $0.0450 | estimated_tshirt | story-adhoc-1790223013 | exec: codex job job-5a655f... |
-| 2026-09-24 14:23 | codex | o4-mini | 2155475 | 16720 | $6.7172 | estimated_token_rate | story-226eb31c | exec: codex job job-2716f7... |
-| 2026-09-24 23:33 | codex | o4-mini | 403726 | 4293 | $1.2756 | estimated_token_rate | story-issue-1766 | exec: codex job job-50d009... |
-| 2026-09-25 01:49 | codex | o4-mini | 927473 | 7409 | $2.8936 | estimated_token_rate | story-issue-1766 | exec: codex job job-fe708c... |
-| 2026-09-25 07:45 | codex | o4-mini | 5000 | 2000 | $0.0450 | estimated_tshirt | story-issue-1774 | exec: codex job job-ebc96b... |
-| 2026-09-25 07:57 | codex | o4-mini | 1832921 | 9720 | $5.6446 | estimated_token_rate | story-issue-1774 | exec: codex job job-127530... |
-| 2026-09-25 08:03 | agy | unknown | 37900 | 3472 | $0.1658 | estimated_token_rate | story-issue-1774 | exec: agy job job-7317b832 |
-| 2026-09-25 13:00 | codex | o4-mini | 1019313 | 10403 | $3.2140 | estimated_token_rate | story-issue-1777 | exec: codex job job-97ae3b... |
-| 2026-09-25 15:37 | codex | o4-mini | 674657 | 5342 | $2.1041 | estimated_token_rate | story-issue-1782 | exec: codex job job-0fc31d... |
-| 2026-09-25 16:45 | grok | grok-3 | 90000 | 12000 | $0.4500 | estimated_manual | - | estimated: review objectives/goals/roadmap; apply state.db goal/arc triage; restore roadmap.md from generated arcs |
-| 2026-09-25 17:07 | codex | o4-mini | 461419 | 5578 | $1.4679 | estimated_token_rate | story-issue-1784 | exec: codex job job-970776... |
-| 2026-09-25 17:22 | claude | claude-sonnet-4-6 | 45245 | 6179 | $0.2284 | estimated_token_rate | story-2c4a0236 | exec: claude job job-594cc... |
-| 2026-09-25 17:24 | codex | o4-mini | 416031 | 5206 | $1.3262 | estimated_token_rate | story-issue-1786 | exec: codex job job-8d2c30... |
-| 2026-09-25 17:48 | codex | o4-mini | 2469576 | 11845 | $7.5864 | estimated_token_rate | story-issue-1786 | exec: codex job job-3a2606... |
-| 2026-09-25 20:45 | codex | o4-mini | 5000 | 2000 | $0.0450 | estimated_tshirt | story-issue-1786 | exec: codex job job-7e470a... |
-| 2026-09-25 21:14 | codex | o4-mini | 294522 | 5365 | $0.9640 | estimated_token_rate | story-issue-1789 | exec: codex job job-0c5137... |
-| 2026-09-25 21:38 | codex | o4-mini | 451395 | 4572 | $1.4228 | estimated_token_rate | story-issue-1789 | exec: codex job job-0868dd... |
-| 2026-09-26 09:00 | grok | grok-3 | 180000 | 45000 | $1.2150 | estimated_manual | story-503a76f2 | KG usability issue #1790 mint + #1789 QA/merge session (LOD bar, migrate --no-verify, approaches parked) |
-| 2026-09-26 09:10 | codex | o4-mini | 5000 | 2000 | $0.0450 | estimated_tshirt | story-issue-1791 | exec: codex job job-4b70cd... |
-| 2026-09-26 11:11 | codex | o4-mini | 505895 | 5210 | $1.5958 | estimated_token_rate | story-issue-1793 | exec: codex job job-92cd62... |
-| 2026-09-26 13:01 | codex | o4-mini | 5000 | 2000 | $0.0450 | estimated_tshirt | story-issue-1795 | exec: codex job job-82e9d2... |
 | 2026-09-26 13:04 | codex | o4-mini | 5000 | 2000 | $0.0450 | estimated_tshirt | story-issue-1797 | exec: codex job job-ae92a7... |
 | 2026-09-26 23:08 | agy | unknown | 120000 | 18000 | $0.6300 | estimated_manual | story-adb0f757 | 100% universal GOVERNS auto-association and reconciliation |
 | 2026-09-27 08:03 | agy | unknown | 140000 | 22000 | $0.7500 | estimated_manual | story-3cddd9d2 | AST KG lifecycle, rich context packaging, sparse cones & deep KG UX |
 | 2026-09-27 10:43 | agy | unknown | 160000 | 25000 | $0.8550 | estimated_manual | story-f5513a93 | Generalized Vizor BS-6 architectural views, dynamic centrality LOD & multi-language AST scanner |
+| 2026-09-27 16:32 | claude | claude-sonnet-4-6 | 60000 | 18000 | $0.4500 | estimated_manual | story-5ef38956 | 3-Round Decide Panel Architecture, Business & Roadmap Synthesis |
+| 2026-09-27 16:32 | codex | o4-mini | 60000 | 18000 | $0.4500 | estimated_manual | story-5ef38956 | 3-Round Decide Panel Architecture, Business & Roadmap Synthesis |
+| 2026-09-27 16:32 | grok | grok-3 | 60000 | 25000 | $0.5550 | estimated_manual | story-5ef38956 | 3-Round Decide Panel Architecture, Business & Roadmap Synthesis |
+| 2026-09-27 16:32 | agy | unknown | 60000 | 15000 | $0.4050 | estimated_manual | story-5ef38956 | 3-Round Decide Panel Architecture, Business & Roadmap Synthesis |
+| 2026-09-27 17:04 | claude | claude-sonnet-4-6 | 74777 | 6240 | $0.3179 | estimated_token_rate | story-adhoc-1790479508 | exec: claude job job-f731b... |
+| 2026-09-27 17:04 | codex | o4-mini | 5000 | 2000 | $0.0450 | estimated_tshirt | story-adhoc-1790479518 | exec: codex job job-79e383... |
+| 2026-09-27 17:04 | claude | claude-sonnet-4-6 | 44588 | 5107 | $0.2104 | estimated_token_rate | story-adhoc-1790479527 | exec: claude job job-a731b... |
+| 2026-09-27 17:04 | codex | o4-mini | 5000 | 2000 | $0.0450 | estimated_tshirt | story-adhoc-1790479536 | exec: codex job job-1bd645... |
+| 2026-09-27 17:04 | claude | claude-sonnet-4-6 | 5000 | 2000 | $0.0450 | estimated_tshirt | story-adhoc-1790479546 | exec: claude job job-3a1a9... |
+| 2026-09-27 17:04 | codex | o4-mini | 5000 | 2000 | $0.0450 | estimated_tshirt | story-adhoc-1790479556 | exec: codex job job-7f6842... |
+| 2026-09-27 17:04 | claude | claude-sonnet-4-6 | 45271 | 6369 | $0.2313 | estimated_token_rate | story-adhoc-1790479567 | exec: claude job job-29742... |
+| 2026-09-27 17:04 | codex | o4-mini | 5000 | 2000 | $0.0450 | estimated_tshirt | story-adhoc-1790479577 | exec: codex job job-565ecb... |
+| 2026-09-27 17:04 | claude | claude-sonnet-4-6 | 40366 | 3674 | $0.1762 | estimated_token_rate | story-adhoc-1790479588 | exec: claude job job-38d0d... |
+| 2026-09-27 17:04 | codex | o4-mini | 5000 | 2000 | $0.0450 | estimated_tshirt | story-adhoc-1790479598 | exec: codex job job-7bfc2b... |
+| 2026-09-27 17:04 | claude | claude-sonnet-4-6 | 56790 | 10003 | $0.3204 | estimated_token_rate | story-adhoc-1790479608 | exec: claude job job-65eb5... |
+| 2026-09-27 17:04 | codex | o4-mini | 5000 | 2000 | $0.0450 | estimated_tshirt | story-adhoc-1790479618 | exec: codex job job-8190ab... |
+| 2026-09-27 17:04 | codex | o4-mini | 556721 | 4519 | $1.7379 | estimated_token_rate | story-adhoc-1790479628 | exec: codex job job-928d6b... |
+| 2026-09-27 17:04 | claude | claude-sonnet-4-6 | 5000 | 2000 | $0.0450 | estimated_tshirt | story-adhoc-1790479639 | exec: claude job job-0ca9d... |
+| 2026-09-27 17:04 | codex | o4-mini | 551929 | 3292 | $1.7052 | estimated_token_rate | story-adhoc-1790479649 | exec: codex job job-1276f8... |
+| 2026-09-27 17:04 | claude | claude-sonnet-4-6 | 5000 | 2000 | $0.0450 | estimated_tshirt | story-adhoc-1790479659 | exec: claude job job-30ffb... |
+| 2026-09-27 17:04 | codex | o4-mini | 418481 | 3695 | $1.3109 | estimated_token_rate | story-adhoc-1790479669 | exec: codex job job-4cd364... |
+| 2026-09-27 17:04 | claude | claude-sonnet-4-6 | 5000 | 2000 | $0.0450 | estimated_tshirt | story-adhoc-1790479679 | exec: claude job job-9bf53... |
+| 2026-09-27 17:04 | codex | o4-mini | 356948 | 2711 | $1.1115 | estimated_token_rate | story-adhoc-1790479689 | exec: codex job job-a20350... |
+| 2026-09-27 17:04 | claude | claude-sonnet-4-6 | 5000 | 2000 | $0.0450 | estimated_tshirt | story-adhoc-1790479699 | exec: claude job job-1f795... |
+| 2026-09-27 17:05 | codex | o4-mini | 489901 | 3810 | $1.5269 | estimated_token_rate | story-adhoc-1790479709 | exec: codex job job-2acaa9... |
+| 2026-09-27 17:05 | claude | claude-sonnet-4-6 | 5000 | 2000 | $0.0450 | estimated_tshirt | story-adhoc-1790479720 | exec: claude job job-70d42... |
+| 2026-09-27 17:05 | codex | o4-mini | 407949 | 3879 | $1.2820 | estimated_token_rate | story-adhoc-1790479730 | exec: codex job job-8851ba... |
+| 2026-09-27 17:05 | claude | claude-sonnet-4-6 | 5000 | 2000 | $0.0450 | estimated_tshirt | story-adhoc-1790479742 | exec: claude job job-2bd9c... |
+| 2026-09-27 17:05 | agy | unknown | 5000 | 2000 | $0.0450 | estimated_tshirt | story-adhoc-1790479756 | exec: agy job job-8d3e4420 |
+| 2026-09-27 17:05 | claude | claude-sonnet-4-6 | 5000 | 2000 | $0.0450 | estimated_tshirt | story-adhoc-1790479769 | exec: claude job job-d623a... |
+| 2026-09-27 17:05 | agy | unknown | 5000 | 2000 | $0.0450 | estimated_tshirt | story-adhoc-1790479783 | exec: agy job job-1a1b0861 |
+| 2026-09-27 17:05 | claude | claude-sonnet-4-6 | 5000 | 2000 | $0.0450 | estimated_tshirt | story-adhoc-1790479796 | exec: claude job job-7c5c5... |
+| 2026-09-27 17:05 | agy | unknown | 51657 | 5588 | $0.2388 | estimated_token_rate | story-adhoc-1790479807 | exec: agy job job-b9c3b952 |
+| 2026-09-27 17:05 | claude | claude-sonnet-4-6 | 5000 | 2000 | $0.0450 | estimated_tshirt | story-adhoc-1790479819 | exec: claude job job-55572... |
+| 2026-09-27 17:05 | grok | grok-3 | 65345 | 6115 | $0.2878 | estimated_token_rate | story-adhoc-1790479829 | exec: grok job job-7b5c729... |
+| 2026-09-27 17:05 | claude | claude-sonnet-4-6 | 5000 | 2000 | $0.0450 | estimated_tshirt | story-adhoc-1790479839 | exec: claude job job-da1c8... |
+| 2026-09-27 17:05 | grok | grok-3 | 126396 | 6313 | $0.4739 | estimated_token_rate | story-adhoc-1790479850 | exec: grok job job-0c382ca... |
+| 2026-09-27 17:05 | claude | claude-sonnet-4-6 | 5000 | 2000 | $0.0450 | estimated_tshirt | story-adhoc-1790479861 | exec: claude job job-e6ebe... |
+| 2026-09-27 17:05 | grok | grok-3 | 86632 | 16812 | $0.5121 | estimated_token_rate | story-adhoc-1790479872 | exec: grok job job-8016861... |
+| 2026-09-27 17:05 | claude | claude-sonnet-4-6 | 5000 | 2000 | $0.0450 | estimated_tshirt | story-adhoc-1790479882 | exec: claude job job-98b3d... |
+| 2026-09-27 17:05 | grok | grok-3 | 63924 | 7145 | $0.2989 | estimated_token_rate | story-adhoc-1790479892 | exec: grok job job-818c849... |
+| 2026-09-27 17:05 | claude | claude-sonnet-4-6 | 5000 | 2000 | $0.0450 | estimated_tshirt | story-adhoc-1790479903 | exec: claude job job-053d0... |
+| 2026-09-27 17:05 | grok | grok-3 | 65450 | 5832 | $0.2838 | estimated_token_rate | story-adhoc-1790479914 | exec: grok job job-9322ddd... |
+| 2026-09-27 17:05 | claude | claude-sonnet-4-6 | 5000 | 2000 | $0.0450 | estimated_tshirt | story-adhoc-1790479925 | exec: claude job job-7671e... |
+| 2026-09-27 17:05 | grok | grok-3 | 164695 | 11374 | $0.6647 | estimated_token_rate | story-adhoc-1790479936 | exec: grok job job-658ea0c... |
+| 2026-09-27 17:05 | claude | claude-sonnet-4-6 | 5000 | 2000 | $0.0450 | estimated_tshirt | story-adhoc-1790479946 | exec: claude job job-e578f... |

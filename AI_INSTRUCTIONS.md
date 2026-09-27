@@ -152,6 +152,7 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
 - "batch these up", "run this fleet-wide" -> `synlynk schedule`
 - "run the TPM sweep", "sweep ready stories" -> `synlynk tpm sweep`
 - "run the competitive sweep", "check for competitor gaps" -> `synlynk pm sweep`
+- "run the governs sweep", "reconcile governs stages", "backfill governs goals", "sweep governs" -> `synlynk governs sweep`
 - "cut a release", "ship v0.x.0" -> `synlynk release`
 - "run marketing release ceremony", "synchronize release collateral" -> `synlynk marketing ceremony`
 - "sync pr blog post", "generate pr blog post", "marketing sync pr" -> `synlynk marketing sync-pr`

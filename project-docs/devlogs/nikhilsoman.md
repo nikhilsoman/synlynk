@@ -1,3 +1,19 @@
+## 2026-09-27 — Align Dispatch Default Model Tiers with 2026 SOTA Catalog (#1803, `story-e8343134`, `goal-5be4eb8b`)
+
+### Shipped & Verified
+- **Model Tier Static Fallback Modernization (`synlynk/dispatch.py`):** Replaced legacy v0.12 model mappings in `_DEFAULT_MODELS_BY_TIER` (`gemini-1.5-flash`, `gemini-1.5-pro`, `claude-3-5-sonnet-latest`, `grok-3`) with canonical 2026 SOTA tier mappings matching `.synlynk/models.json` (`gemini-3.7-flash-medium` for fast, `gemini-3.1-pro-low`/`gemini-3.7-flash-high` for pro, `gemini-3.1-pro-high` for reasoning; `claude-haiku-4-5-20251001`, `claude-sonnet-5`, `claude-opus-5-5`; `grok-4.6`, `grok-4.7`).
+- **Zero Legacy Model Assertions (TDD):** Created `tests/test_dispatch_model_defaults.py` enforcing zero deprecated `gemini-1.5` references across all tiers, strict catalog parity, and verified tier resolution for `agy`, `claude`, `codex`, and `grok`.
+- **Full Test Matrix Green:** All 168 model/dispatch unit tests passing cleanly.
+[@agy, @nikhilsoman]
+
+## 2026-09-27 — 3-Round Multi-Harness Strategic & Architectural Review (Claude, Codex, Agy, Grok) (`goal-d3333441`, `goal-eacab0dc`)
+
+### Completed & Synthesized
+- **Round 1 (Deep Architectural & Performance Review):** Convened full 4-harness decide panel. Established 5 mandatory architectural invariants for v1.0.0 Dev Preview: (1) Effect-verified completion (non-empty diff / PR check required); (2) Hard in-flight token circuit breakers; (3) Fail-closed capability-probed routing; (4) One ledger, one writer (`state.db` SQLite WAL); (5) Compressed default surface (Role + Harness; 3-5 stage default GOVERNS). Authored `project-docs/decisions/2026-09-27-round-1-deep-architectural-review.md` (53KB).
+- **Round 2 (Strategic Business & Market Positioning Review):** Established Synlynk's structural market position as the Host-Local Multi-Agent Fleet Operating Substrate. Defined competitive differentiators vs IDE Copilots, Single Agents, and in-memory DAGs. Structured 3 commercial tiers (Free Personal Apache-2.0, Teams $29/seat/mo, Enterprise Air-Gapped) and day-1 solo-founder wedge. Authored `project-docs/decisions/2026-09-27-round-2-strategic-business-review.md` (94KB).
+- **Round 3 (Firm Roadmap Articulation & The Case For/Against Tokq):** Defined 3-horizon platform progression (Horizon 1 Dev Preview Oct 1; Horizon 2 Connected Teams Q1 2027; Horizon 3 Enterprise Mesh Q2-Q3 2027) gated on concrete quantitative adoption signals (3K stars, 350 WAW, 85% completion rate, 15 non-maintainer PRs). Evaluated Tokq and reached unanimous consensus to DEFER commercial memory marketplace in favor of open Git-based skill taps and real-time AST extraction. Authored `project-docs/decisions/2026-09-27-round-3-roadmap-and-tokq-articulation.md` (83KB).
+[@agy, @nikhilsoman]
+
 ## 2026-09-27 — Generalized Vizor BS-6 Architectural Views, Dynamic Centrality LOD & Deep Interactive UX (`goal-e3840370`, PR #1800)
 
 ### Shipped & Verified

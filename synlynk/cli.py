@@ -2276,9 +2276,11 @@ def main(argv=None) -> None:
                 else:
                     print(f"✗ Calibration failed: {cal.get('reason', 'invalid delta')}")
         elif getattr(args, "tpm_view", False):
+            from synlynk.quota import cmd_quota_tpm_view
             cmd_quota_tpm_view()
         else:
             _warn_deprecated_harness_flag(cli_tokens)
+            from synlynk.quota import cmd_quota
             cmd_quota(
                 agent=getattr(args, "harness", None),
                 json_output=getattr(args, "json_output", False),

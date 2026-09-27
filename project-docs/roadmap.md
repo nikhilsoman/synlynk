@@ -184,6 +184,8 @@ Public GitHub tag v1.0.0 is NOT cut yet. Ceremony: synlynk.com collateral, HN/Pr
   Run fresh-install trials across representative repositories; measure time-to-wow, successful project brief generation, brainstorm completion, dispatch/review truth, recovery, and user drop-off.
 - [ ] P0 Release candidate and announcement (P0)
   Cut v1.0.0 developer preview, publish install/docs/demo assets, prepare HN and Product Hunt copy, verify support/rollback/runbook, obtain final human launch approval, then announce.
+- [ ] P0 Mandatory Architectural Invariants (Round 1 Consensus) (P0)
+  Enforce 5 mandatory invariants from dec-20260927-round-1: (1) Effect-verified completion with non-empty diff & passed tests; (2) Hard in-flight token circuit breakers; (3) Fail-closed capability-probed routing; (4) One ledger, one writer state.db WAL; (5) Compressed default surface (Role+Harness, 3-5 stage GOVERNS). Release-blocking gate for v1.0.0 Dev Preview.
 
 ## v0.19.0 — Foundation, State Reconciliation & Platform Health [shipped] (target: 2026-09-11)
 
