@@ -4673,7 +4673,466 @@ def generate_product_html(data: dict, port: int) -> str:
 
 
 def generate_logical_html(data: dict, port: int) -> str:
-    return _generate_bs6_view_html(data, port, "logical", "Logical View")
+    """Generate rich, differentiated Logical View with Layered HLD Architecture, LLD Component Model, and Interactive Sequence Player."""
+    workspace = data.get("workspace", {})
+    workspace_name = str(workspace.get("name") or "workspace")
+    workspace_views = data.get("workspace_views") or {}
+    logical_data = workspace_views.get("logical") or data.get("logical") or {"nodes": [], "edges": []}
+    nodes = logical_data.get("nodes") or []
+    edges = logical_data.get("edges") or []
+
+    # Dynamic Classification into 5 HLD Architectural Tiers
+    layer_map = {
+        "presentation": [],
+        "orchestration": [],
+        "domain": [],
+        "persistence": [],
+        "egress": [],
+    }
+
+    for n in nodes:
+        label = str(n.get("label") or n.get("id") or "").lower()
+        file_path = str(n.get("file") or n.get("source_file") or "").lower()
+        if any(k in label or k in file_path for k in ("cli", "main", "viz", "server", "handler", "route", "http", "api", "view", "ui")):
+            layer_map["presentation"].append(n)
+        elif any(k in label or k in file_path for k in ("dispatch", "run", "fsm", "governs", "loop", "orchestrat", "tpm", "workflow", "plan")):
+            layer_map["orchestration"].append(n)
+        elif any(k in label or k in file_path for k in ("db", "state", "sqlite", "model", "store", "persist", "identity", "key", "worktree")):
+            layer_map["persistence"].append(n)
+        elif any(k in label or k in file_path for k in ("relay", "daemon", "network", "client", "egress", "adapter", "socket", "sse")):
+            layer_map["egress"].append(n)
+        else:
+            layer_map["domain"].append(n)
+
+    if not any(layer_map.values()):
+        layer_map["presentation"] = [{"label": f"{workspace_name} CLI & API Surface", "kind": "interface"}]
+        layer_map["orchestration"] = [{"label": "Workflow & Orchestration Engine", "kind": "orchestrator"}]
+        layer_map["domain"] = [{"label": "Core Domain Services & Processing", "kind": "service"}]
+        layer_map["persistence"] = [{"label": "Local State Ledger & Storage", "kind": "database"}]
+        layer_map["egress"] = [{"label": "Network Adapters & External APIs", "kind": "gateway"}]
+
+    def _render_layer_cards(items: list, default_title: str) -> str:
+        if not items:
+            return f'<div class="hld-empty-hint">Default {default_title} components</div>'
+        out = []
+        for it in items[:12]:
+            lbl = html.escape(str(it.get("label") or it.get("id") or ""))
+            k = html.escape(str(it.get("kind") or "module").title())
+            out.append(f'<div class="hld-comp-card"><span class="hld-comp-name">{lbl}</span><span class="hld-comp-kind">{k}</span></div>')
+        return "".join(out)
+
+    hld_html = f"""
+<div class="hld-container">
+  <div class="hld-tier hld-tier-pres">
+    <div class="hld-tier-header">
+      <span class="hld-tier-badge">Tier 1</span>
+      <h3>Presentation &amp; API Surface</h3>
+      <span class="hld-tier-desc">CLI entrypoints, HTTP endpoints, WebSocket handlers, and UI routes</span>
+    </div>
+    <div class="hld-tier-body">
+      {_render_layer_cards(layer_map["presentation"], "Presentation")}
+    </div>
+  </div>
+
+  <div class="hld-flow-arrow">▼ Dispatches commands &amp; requests</div>
+
+  <div class="hld-tier hld-tier-orch">
+    <div class="hld-tier-header">
+      <span class="hld-tier-badge">Tier 2</span>
+      <h3>Orchestration &amp; Workflow Control</h3>
+      <span class="hld-tier-desc">Autonomous execution loops, FSM stage managers, TPM synchronizers, and permission sandboxes</span>
+    </div>
+    <div class="hld-tier-body">
+      {_render_layer_cards(layer_map["orchestration"], "Orchestration")}
+    </div>
+  </div>
+
+  <div class="hld-flow-arrow">▼ Invokes business logic &amp; analysis</div>
+
+  <div class="hld-tier hld-tier-domain">
+    <div class="hld-tier-header">
+      <span class="hld-tier-badge">Tier 3</span>
+      <h3>Domain Services &amp; Core Processing</h3>
+      <span class="hld-tier-desc">AST indexing, context packaging, impact calculation, and minimal cone worktree derivation</span>
+    </div>
+    <div class="hld-tier-body">
+      {_render_layer_cards(layer_map["domain"], "Domain Services")}
+    </div>
+  </div>
+
+  <div class="hld-flow-arrow">▼ Queries &amp; commits persistent state</div>
+
+  <div class="hld-dual-row">
+    <div class="hld-tier hld-tier-pers">
+      <div class="hld-tier-header">
+        <span class="hld-tier-badge">Tier 4</span>
+        <h3>Persistence &amp; State Ledger</h3>
+        <span class="hld-tier-desc">Primary SQLite database (WAL/SHM), Ed25519 identity key store, and Git worktrees</span>
+      </div>
+      <div class="hld-tier-body">
+        {_render_layer_cards(layer_map["persistence"], "Persistence")}
+      </div>
+    </div>
+
+    <div class="hld-tier hld-tier-egress">
+      <div class="hld-tier-header">
+        <span class="hld-tier-badge">Tier 5</span>
+        <h3>Network &amp; External Egress</h3>
+        <span class="hld-tier-desc">Local SSE event broker (:27472), background daemons, and air-gapped Cloud AI inference adapters</span>
+      </div>
+      <div class="hld-tier-body">
+        {_render_layer_cards(layer_map["egress"], "Network & Egress")}
+      </div>
+    </div>
+  </div>
+</div>
+"""
+
+    live_js_html = _live_js(port)
+    template = """<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<title>synlynk Vizor — Logical View (System Design & Execution Flows)</title>
+<style>
+body { margin:0; font-family:'SF Mono',monospace; background:#f6f8fa; color:#1f2328; }
+.am-header { display:flex; justify-content:space-between; align-items:center; padding:14px 20px; border-bottom:1px solid #d1d5db; background:#fff; }
+.am-header h1 { font-size:15px; margin:0; }
+.am-switcher { display:flex; gap:6px; }
+.am-tab { background:#fff; border:1px solid #d1d5db; border-radius:6px; padding:5px 12px; font-size:12px; cursor:pointer; font-family:inherit; }
+.am-tab.active { background:#0d9e87; color:#fff; border-color:#0d9e87; }
+.log-view-panel { display:none; padding:20px; max-width:1400px; margin:0 auto; }
+.log-view-panel.active { display:block; }
+
+/* HLD Tier Styles */
+.hld-container { display:flex; flex-direction:column; gap:12px; }
+.hld-tier { background:#fff; border:1px solid #d1d5db; border-radius:8px; padding:14px 18px; box-shadow:0 1px 3px rgba(0,0,0,0.05); }
+.hld-tier-pres { border-left:4px solid #3b82f6; }
+.hld-tier-orch { border-left:4px solid #8b5cf6; }
+.hld-tier-domain { border-left:4px solid #0d9e87; }
+.hld-tier-pers { border-left:4px solid #f59e0b; flex:1; }
+.hld-tier-egress { border-left:4px solid #ec4899; flex:1; }
+.hld-dual-row { display:flex; gap:12px; }
+.hld-tier-header { margin-bottom:10px; }
+.hld-tier-header h3 { margin:0 0 4px 0; font-size:14px; font-weight:700; color:#0f172a; }
+.hld-tier-badge { display:inline-block; font-size:10px; font-weight:600; padding:2px 6px; border-radius:4px; background:#e2e8f0; color:#475569; margin-bottom:4px; }
+.hld-tier-desc { font-size:11px; color:#64748b; }
+.hld-tier-body { display:flex; flex-wrap:wrap; gap:8px; }
+.hld-comp-card { background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:6px 10px; display:inline-flex; align-items:center; gap:6px; font-size:12px; }
+.hld-comp-name { font-weight:600; color:#1e293b; }
+.hld-comp-kind { font-size:10px; color:#64748b; background:#e2e8f0; padding:1px 5px; border-radius:3px; }
+.hld-flow-arrow { text-align:center; font-size:11px; font-weight:600; color:#64748b; user-select:none; }
+.hld-empty-hint { font-size:12px; color:#94a3b8; font-style:italic; }
+
+/* Sequence Player Styles */
+.seq-toolbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:10px; }
+.seq-pills { display:flex; gap:6px; flex-wrap:wrap; }
+.seq-pill { background:#fff; border:1px solid #d1d5db; border-radius:20px; padding:6px 14px; font-size:12px; cursor:pointer; font-family:inherit; }
+.seq-pill.active { background:#0f172a; color:#fff; border-color:#0f172a; font-weight:600; }
+.seq-controls { display:flex; gap:8px; align-items:center; }
+.seq-btn { background:#fff; border:1px solid #d1d5db; border-radius:6px; padding:6px 12px; font-size:12px; cursor:pointer; font-family:inherit; }
+.seq-btn:hover { background:#f1f5f9; }
+.seq-canvas { background:#fff; border:1px solid #d1d5db; border-radius:8px; padding:20px; min-height:480px; position:relative; box-shadow:0 1px 3px rgba(0,0,0,0.05); }
+.seq-step-card { background:#f0fdf4; border:1px solid #86efac; border-radius:6px; padding:10px 14px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:center; }
+.seq-step-title { font-weight:700; font-size:13px; color:#166534; }
+.seq-step-desc { font-size:12px; color:#15803d; }
+
+[data-theme="dark"] body { background:#0d0f14; color:#c9d1d9; }
+[data-theme="dark"] .am-header { background:#161b22; border-bottom-color:#30363d; color:#c9d1d9; }
+[data-theme="dark"] .am-tab { background:#161b22; border-color:#30363d; color:#c9d1d9; }
+[data-theme="dark"] .am-tab.active { background:#0d9e87; color:#fff; border-color:#0d9e87; }
+[data-theme="dark"] .hld-tier { background:#161b22; border-color:#30363d; }
+[data-theme="dark"] .hld-tier-header h3 { color:#f0f6fc; }
+[data-theme="dark"] .hld-comp-card { background:#0d1117; border-color:#30363d; }
+[data-theme="dark"] .hld-comp-name { color:#c9d1d9; }
+[data-theme="dark"] .seq-canvas { background:#161b22; border-color:#30363d; }
+[data-theme="dark"] .seq-pill { background:#161b22; border-color:#30363d; color:#c9d1d9; }
+[data-theme="dark"] .seq-pill.active { background:#38bdf8; color:#0f172a; border-color:#38bdf8; }
+[data-theme="dark"] .seq-btn { background:#161b22; border-color:#30363d; color:#c9d1d9; }
+[data-theme="dark"] .seq-step-card { background:#064e3b; border-color:#059669; }
+[data-theme="dark"] .seq-step-title { color:#a7f3d0; }
+[data-theme="dark"] .seq-step-desc { color:#6ee7b7; }
+</style>
+</head>
+<body>
+<div class="am-header">
+  <h1>Logical View — __WORKSPACE_NAME__</h1>
+  <div class="am-switcher">
+    <button class="am-tab active" data-view="hld" onclick="setLogicalTab('hld')">🏛️ Layered HLD Architecture</button>
+    <button class="am-tab" data-view="lld" onclick="setLogicalTab('lld')">🧩 LLD Component Model</button>
+    <button class="am-tab" data-view="sequence" onclick="setLogicalTab('sequence')">⚡ Interactive Sequence Player</button>
+  </div>
+</div>
+
+<div id="logical-hld-view" class="log-view-panel active">
+  __HLD_CONTENT__
+</div>
+
+<div id="logical-lld-view" class="log-view-panel">
+  <div class="seq-canvas" style="display:flex; flex-direction:column; align-items:center; justify-content:center;">
+    <svg id="lld-svg" width="100%" height="600" style="background:transparent;"></svg>
+  </div>
+</div>
+
+<div id="logical-sequence-view" class="log-view-panel">
+  <div class="seq-toolbar">
+    <div class="seq-pills">
+      <button class="seq-pill active" onclick="loadSequence('loop')">🤖 Autonomous Milestone Loop</button>
+      <button class="seq-pill" onclick="loadSequence('drift')">🔍 AST Drift &amp; Knowledge Graph Lifecycle</button>
+      <button class="seq-pill" onclick="loadSequence('governs')">📋 Universal GOVERNS Lifecycle</button>
+      <button class="seq-pill" onclick="loadSequence('relay')">📡 Real-Time SSE Relay</button>
+      <button class="seq-pill" onclick="loadSequence('pipeline')">⚡ Target Request Pipeline</button>
+    </div>
+    <div class="seq-controls">
+      <button class="seq-btn" onclick="prevSeqStep()">◀ Prev Step</button>
+      <button class="seq-btn" id="seq-next-btn" onclick="nextSeqStep()" style="font-weight:700; background:#0d9e87; color:#fff; border-color:#0d9e87;">▶ Next Step</button>
+      <button class="seq-btn" id="seq-play-btn" onclick="toggleAutoPlay()">▶ Auto Play</button>
+      <button class="seq-btn" onclick="resetSeqStep()">↺ Reset</button>
+    </div>
+  </div>
+
+  <div class="seq-step-card" id="seq-step-banner">
+    <div>
+      <div class="seq-step-title" id="seq-step-title">Step 1: Task Selection &amp; Preflight Verification</div>
+      <div class="seq-step-desc" id="seq-step-desc">Conductor selects next ready story and verifies local ledger state.</div>
+    </div>
+    <div style="font-size:12px; font-weight:700; color:#64748b;" id="seq-step-counter">Step 1 of 6</div>
+  </div>
+
+  <div class="seq-canvas">
+    <svg id="seq-svg" width="100%" height="450" style="background:transparent;"></svg>
+  </div>
+</div>
+
+<script>
+window.LOGICAL_NODES = __NODES_JSON__;
+window.LOGICAL_EDGES = __EDGES_JSON__;
+
+function setLogicalTab(tabKey) {
+  document.querySelectorAll('.am-switcher .am-tab').forEach(b => {
+    b.classList.toggle('active', b.dataset.view === tabKey);
+  });
+  document.querySelectorAll('.log-view-panel').forEach(p => {
+    p.classList.remove('active');
+  });
+  const activeEl = document.getElementById('logical-' + tabKey + '-view');
+  if (activeEl) activeEl.classList.add('active');
+  if (tabKey === 'lld') renderLldModel();
+  if (tabKey === 'sequence') renderSequenceSVG();
+}
+
+const SEQUENCES = {
+  loop: {
+    actors: ['Human/Conductor', 'Task Planner', 'Dispatcher', 'Sandbox Worker', 'QA Gate', 'State Ledger'],
+    steps: [
+      { from: 0, to: 1, label: '1. Select Goal & Mint Story (synlynk story ready)', desc: 'Conductor identifies next prioritized story from state.db.' },
+      { from: 1, to: 2, label: '2. Generate Spec & Plan (docs/superpowers/)', desc: 'Planner formulates TDD implementation plan with verification criteria.' },
+      { from: 2, to: 3, label: '3. Worktree Dispatch (git sparse-checkout cone)', desc: 'Dispatcher derives minimal AST cone and spins isolated worktree.' },
+      { from: 3, to: 3, label: '4. Autonomous TDD Loop (pytest 100% Green)', desc: 'Worker implements feature and executes local test suite.' },
+      { from: 3, to: 4, label: '5. Create PR & QA Gate Review (synlynk pr check)', desc: 'Non-author QA role inspects diff and approves squash merge.' },
+      { from: 4, to: 5, label: '6. Merge & Ledger Closeout (synlynk story done)', desc: 'PR squashed to main, worktree cleaned, and story marked done in state.db.' }
+    ]
+  },
+  drift: {
+    actors: ['Git Repository', 'Watch Daemon', 'AST Extractor', 'manifest.json', 'Vizor Server'],
+    steps: [
+      { from: 0, to: 1, label: '1. Commit Landed (HEAD drift detected)', desc: 'Watch daemon periodically polls workspace HEAD commit SHA.' },
+      { from: 1, to: 2, label: '2. Trigger Background Extract (graphify --code-only)', desc: 'Watch daemon spawns non-blocking offline AST extraction.' },
+      { from: 2, to: 3, label: '3. Update Manifest & AST Cache (.synlynk/graphify-out/)', desc: 'New graph.json and manifest.json written with updated commit stamp.' },
+      { from: 3, to: 4, label: '4. Invalidate Vizor Cache & Broadcast Refresh', desc: 'Vizor reloads fresh AST graph without user intervention.' }
+    ]
+  },
+  governs: {
+    actors: ['Developer/Agent', 'Waterfall Resolver', 'GOVERNS FSM', 'state.db Ledger', 'Sentinel Sweep'],
+    steps: [
+      { from: 0, to: 1, label: '1. Create Artifact (Story / Spec / Decision)', desc: 'Work item created in workspace session.' },
+      { from: 1, to: 2, label: '2. 5-Tier Waterfall Resolution', desc: 'Resolver matches story to canonical active goal (100% coverage).' },
+      { from: 2, to: 3, label: '3. Transition Stage FSM (Draft → Ready → Build → Done)', desc: 'Deterministic state machine stamps stage labels and audit history.' },
+      { from: 3, to: 4, label: '4. Continuous Reconciliation (synlynk governs sweep)', desc: 'Sentinel detects and repairs untracked drift automatically.' }
+    ]
+  },
+  relay: {
+    actors: ['Fleet Worker', 'Local Broker (:27472)', 'SSE Multiplexer', 'Vizor Web HUD'],
+    steps: [
+      { from: 0, to: 1, label: '1. Publish Event (POST /publish)', desc: 'Agent emits live progress, cost, or sentinel warning.' },
+      { from: 1, to: 2, label: '2. Validate & Fan-out', desc: 'Broker authenticates event against local Ed25519 token.' },
+      { from: 2, to: 3, label: '3. Push SSE Stream (GET /events)', desc: 'Browser HUD updates activity stream and status badges in real time.' }
+    ]
+  },
+  pipeline: {
+    actors: ['Client Request', 'Router / CLI Handler', 'Domain Service', 'Database / File Ledger', 'External Service'],
+    steps: [
+      { from: 0, to: 1, label: '1. Incoming CLI Invocation / HTTP Request', desc: 'Presentation layer parses args and authenticates session.' },
+      { from: 1, to: 2, label: '2. Dispatch to Domain Core', desc: 'Executes primary business logic and state transitions.' },
+      { from: 2, to: 3, label: '3. Read / Write State Store', desc: 'Queries SQLite DB and local filesystem.' },
+      { from: 2, to: 4, label: '4. Optional External Outbound Egress', desc: 'Calls AI inference gateways or external APIs if requested.' },
+      { from: 1, to: 0, label: '5. Return Formatted Output / JSON Payload', desc: 'Returns formatted response to client terminal or browser.' }
+    ]
+  }
+};
+
+let currentSeqKey = 'loop';
+let currentStepIdx = 0;
+let autoPlayTimer = null;
+
+function loadSequence(key) {
+  currentSeqKey = key;
+  currentStepIdx = 0;
+  if (autoPlayTimer) toggleAutoPlay();
+  document.querySelectorAll('.seq-pill').forEach((p, i) => {
+    p.classList.toggle('active', p.getAttribute('onclick').includes(key));
+  });
+  renderSequenceSVG();
+}
+
+function renderSequenceSVG() {
+  const seq = SEQUENCES[currentSeqKey];
+  if (!seq) return;
+  const svg = document.getElementById('seq-svg');
+  if (!svg) return;
+
+  const W = svg.clientWidth || 900;
+  const numActors = seq.actors.length;
+  const colW = Math.max(120, W / numActors);
+  const actorPositions = seq.actors.map((_, i) => colW * (i + 0.5));
+
+  const curStep = seq.steps[currentStepIdx] || seq.steps[0];
+  const bannerTitle = document.getElementById('seq-step-title');
+  const bannerDesc = document.getElementById('seq-step-desc');
+  const counter = document.getElementById('seq-step-counter');
+  if (bannerTitle) bannerTitle.textContent = curStep.label;
+  if (bannerDesc) bannerDesc.textContent = curStep.desc;
+  if (counter) counter.textContent = 'Step ' + (currentStepIdx + 1) + ' of ' + seq.steps.length;
+
+  let markup = '';
+  // Draw Actor Columns & Lifelines
+  seq.actors.forEach((act, i) => {
+    const x = actorPositions[i];
+    markup += '<rect x="' + (x - 55) + '" y="10" width="110" height="34" rx="6" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"></rect>';
+    markup += '<text x="' + x + '" y="32" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a" font-family="inherit">' + act + '</text>';
+    markup += '<line x1="' + x + '" y1="44" x2="' + x + '" y2="420" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,4"></line>';
+  });
+
+  // Draw Steps
+  const stepH = Math.min(55, 340 / Math.max(seq.steps.length, 1));
+  seq.steps.forEach((st, idx) => {
+    const y = 80 + idx * stepH;
+    const x1 = actorPositions[st.from];
+    const x2 = actorPositions[st.to];
+    const isActive = idx === currentStepIdx;
+    const isPast = idx < currentStepIdx;
+    const strokeColor = isActive ? '#0d9e87' : (isPast ? '#94a3b8' : '#e2e8f0');
+    const strokeW = isActive ? '2.5' : '1.5';
+    const textColor = isActive ? '#0d9e87' : (isPast ? '#475569' : '#94a3b8');
+    const fontWeight = isActive ? '700' : '500';
+
+    if (st.from === st.to) {
+      // Self loop
+      markup += '<path d="M ' + x1 + ' ' + y + ' C ' + (x1 + 40) + ' ' + (y - 15) + ', ' + (x1 + 40) + ' ' + (y + 15) + ', ' + x1 + ' ' + (y + 10) + '" fill="none" stroke="' + strokeColor + '" stroke-width="' + strokeW + '"></path>';
+      markup += '<text x="' + (x1 + 46) + '" y="' + (y + 4) + '" font-size="10" font-weight="' + fontWeight + '" fill="' + textColor + '" font-family="inherit">' + st.label + '</text>';
+    } else {
+      markup += '<line x1="' + x1 + '" y1="' + y + '" x2="' + x2 + '" y2="' + y + '" stroke="' + strokeColor + '" stroke-width="' + strokeW + '"></line>';
+      // Arrowhead
+      const arrowX = x2 > x1 ? x2 - 6 : x2 + 6;
+      markup += '<polygon points="' + x2 + ',' + y + ' ' + arrowX + ',' + (y - 4) + ' ' + arrowX + ',' + (y + 4) + '" fill="' + strokeColor + '"></polygon>';
+      const midX = (x1 + x2) / 2;
+      markup += '<text x="' + midX + '" y="' + (y - 6) + '" text-anchor="middle" font-size="10" font-weight="' + fontWeight + '" fill="' + textColor + '" font-family="inherit">' + st.label + '</text>';
+    }
+  });
+
+  svg.innerHTML = markup;
+}
+
+function nextSeqStep() {
+  const seq = SEQUENCES[currentSeqKey];
+  if (!seq) return;
+  if (currentStepIdx < seq.steps.length - 1) {
+    currentStepIdx++;
+    renderSequenceSVG();
+  }
+}
+
+function prevSeqStep() {
+  if (currentStepIdx > 0) {
+    currentStepIdx--;
+    renderSequenceSVG();
+  }
+}
+
+function resetSeqStep() {
+  currentStepIdx = 0;
+  if (autoPlayTimer) toggleAutoPlay();
+  renderSequenceSVG();
+}
+
+function toggleAutoPlay() {
+  const btn = document.getElementById('seq-play-btn');
+  if (autoPlayTimer) {
+    clearInterval(autoPlayTimer);
+    autoPlayTimer = null;
+    if (btn) btn.textContent = '▶ Auto Play';
+  } else {
+    if (btn) btn.textContent = '⏸ Pause';
+    autoPlayTimer = setInterval(() => {
+      const seq = SEQUENCES[currentSeqKey];
+      if (!seq) return;
+      if (currentStepIdx < seq.steps.length - 1) {
+        currentStepIdx++;
+      } else {
+        currentStepIdx = 0;
+      }
+      renderSequenceSVG();
+    }, 2200);
+  }
+}
+
+function renderLldModel() {
+  const svg = document.getElementById('lld-svg');
+  if (!svg) return;
+  const nodes = window.LOGICAL_NODES || [];
+  const W = svg.clientWidth || 900, H = 560;
+  let markup = '';
+  const displayNodes = nodes.length ? nodes.slice(0, 16) : [
+    { id: '1', label: 'GovernsResolver', kind: 'service' },
+    { id: '2', label: 'StateDB Ledger', kind: 'database' },
+    { id: '3', label: 'PolicyEngine', kind: 'policy' },
+    { id: '4', label: 'RelayBroker', kind: 'gateway' },
+    { id: '5', label: 'DoctorRunner', kind: 'tool' },
+    { id: '6', label: 'VizorHandler', kind: 'server' }
+  ];
+
+  const cols = 3;
+  displayNodes.forEach((n, i) => {
+    const row = Math.floor(i / cols);
+    const col = i % cols;
+    const x = 80 + col * 260;
+    const y = 50 + row * 110;
+    markup += '<rect x="' + x + '" y="' + y + '" width="220" height="70" rx="8" fill="#ffffff" stroke="#334155" stroke-width="1.5"></rect>';
+    markup += '<rect x="' + x + '" y="' + y + '" width="220" height="24" rx="8" fill="#f1f5f9" stroke="#334155" stroke-width="1.5"></rect>';
+    markup += '<text x="' + (x + 10) + '" y="' + (y + 16) + '" font-size="11" font-weight="700" fill="#0f172a" font-family="inherit">' + (n.label || n.id) + '</text>';
+    markup += '<text x="' + (x + 10) + '" y="' + (y + 45) + '" font-size="10" fill="#64748b" font-family="inherit">Kind: ' + (n.kind || 'component') + '</text>';
+    markup += '<text x="' + (x + 10) + '" y="' + (y + 60) + '" font-size="9" fill="#0d9e87" font-family="inherit">Status: Active Service</text>';
+  });
+  svg.innerHTML = markup;
+}
+
+try {
+  const savedTheme = localStorage.getItem('vizor-theme');
+  if (savedTheme) document.documentElement.setAttribute('data-theme', savedTheme);
+} catch (_) {}
+</script>
+__LIVE_JS_HTML__
+</body>
+</html>"""
+
+    return (
+        template
+        .replace("__WORKSPACE_NAME__", html.escape(workspace_name))
+        .replace("__HLD_CONTENT__", hld_html)
+        .replace("__NODES_JSON__", json.dumps(nodes))
+        .replace("__EDGES_JSON__", json.dumps(edges))
+        .replace("__LIVE_JS_HTML__", live_js_html)
+    )
 
 
 def generate_infra_html(data: dict, port: int) -> str:
