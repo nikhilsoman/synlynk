@@ -356,6 +356,7 @@ def build_parser() -> argparse.ArgumentParser:
     goal_sub.add_parser("status", help="Show goal completion rollup")
 
     governs_parser = subparsers.add_parser("governs", help="Manage GOVERNS lifecycle and reconciliation")
+    governs_parser.add_argument("--full", action="store_true", help="Show full 7-stage internal GOVERNS FSM breakdown")
     governs_sub = governs_parser.add_subparsers(dest="governs_action")
     governs_sweep_parser = governs_sub.add_parser("sweep", help="Reconcile and backfill 100%% GOVERNS goal linkages and stages across workspace")
     governs_sweep_parser.add_argument("--dry-run", action="store_true", help="Calculate linkages and stage transitions without writing to state.db")
@@ -2386,12 +2387,12 @@ def main(argv=None) -> None:
         else:
             help_parsers.get("goal", parser).print_help()
     elif args.command == "governs":
-        from synlynk.governs_cli import cmd_governs_sweep
+        from synlynk.governs_cli import cmd_governs_sweep, cmd_governs
         action = getattr(args, "governs_action", None)
-        if action == "sweep" or action is None:
+        if action == "sweep":
             cmd_governs_sweep(dry_run=getattr(args, "dry_run", False), strict=getattr(args, "strict", False), verbose=getattr(args, "verbose", False))
         else:
-            help_parsers.get("governs", parser).print_help()
+            cmd_governs(full=getattr(args, "full", False))
     elif args.command == "local":
         from synlynk.local_agent import cmd_local_doctor
         if args.local_action == "doctor":
