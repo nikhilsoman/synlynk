@@ -1400,3 +1400,8 @@ Executor har [testing] <!-- id:story-adhoc-1790479925 -->
 - [ ] Review this Requirements Definition and Management calibration task output from another harness and score it 0-10 for quality.
 Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'corre [backend] <!-- id:story-adhoc-1790479946 -->
 - [ ] GitHub Primary Control Surface, Autonomous Ingress & Issue Enrichment Engine [architecture] <!-- id:story-5ef38956 -->
+- [ ] feat(dispatch): Invariant 1 — Effect-verified completion contract (non-empty diff & verified execution gate) [backend] <!-- id:story-2effe49d -->
+- [ ] feat(jobs): Invariant 2 — Hard in-flight token circuit breakers and runaway killer [backend] <!-- id:story-ea693cf8 -->
+- [ ] feat(dispatch): Invariant 3 — Fail-closed capability-probed routing before dispatch [backend] <!-- id:story-9e0b2e71 -->
+- [ ] feat(db): Invariant 4 — Single-writer SQLite WAL ledger with leased worktree locks [backend] <!-- id:story-10057c98 -->
+- [ ] feat(cli): Invariant 5 — Compressed default surface (Role+Harness & 3-5 stage GOVERNS default) [backend] <!-- id:story-b6828d9e -->
