@@ -1673,9 +1673,15 @@ implementation plan.
 
 ## 2026-09-23 — Named Release v0.21.0 Ceremony & Daily Release Cadence
 
-- Executed full named release ceremony for `v0.21.0` (The Autonomous Multi-Home & Teams Relay Release) after verifying 3,195 passing tests (100% Green).
-- Synchronized collateral: README.md badges (3,198 collected), 4 HTML/PDF doc bundles, website release bundle, CHANGELOG.md, and published GitHub Release `v0.21.0`.
-- Established daily release cadence leading into `v1.0.0-rc1` (Oct 01): point releases will incrementally advance robust onboarding, autonomous execution loop, Vizor strengthening, and remote tunnels.
-- Bumped active trunk to `0.22.0-dev`.
+## 2026-09-26 — AST Knowledge Graph Lifecycle, Rich Context Pack, Sparse Cones & Deep KG UX (PR #1799)
+
+- Implemented combined Phase 1 stories `story-3cddd9d2` (Issue #1787) and `story-503a76f2` (Issue #1790) under master goal `goal-e3840370` (*Consolidated Vizor Master Control Plane*).
+- **AST Lifecycle Automation:** Added `check_and_refresh_ast_on_drift` in `synlynk/watch.py` for automatic AST re-extraction on Git `HEAD` drift and wired 1-click on-demand refresh via `POST /api/graph/refresh`.
+- **Rich Context Packaging:** Injected AST signatures, docstrings, and reverse test mapping in `synlynk/pack.py` (`extract_symbol_signatures_and_tests`, `_get_ast_signature`, `synthesize_context_pack`) strictly bounded to 1,500 tokens.
+- **Topological Features & Minimal Cone Worktrees:** Implemented `export_topological_features` in `synlynk/impact.py` for TypeSafe.ai Jev System 1 routing and `derive_sparse_cone_paths_from_graph` in `synlynk/worktree_sparse.py` for shallow worktree derivation.
+- **Secure Source Inspection:** Added `_get_source_slice` in `synlynk/viz.py` with strict path traversal security checks and exposed `GET /api/source`.
+- **Deep Vizor KG Interactive UX:** Implemented 1-hop ego mask and multi-click cluster growth (`grow-ego-network`), sliding syntax-highlighted code drawer (`.kg-source-drawer`) in `tube.html` and `logical.html`, Level 0 kind filter chips (Services, Modules, Handlers, Tests), and ESC / empty-canvas exit ergonomics.
+- **Verification:** All 14 plan tests passed (100%), full suite passed with 3,301 green tests. PR #1799 created, verified by QA gate, approved, and merged to `main`.
+
 
 
