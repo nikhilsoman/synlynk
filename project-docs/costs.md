@@ -3,13 +3,6 @@
 
 | Date | Agent | Model | Tokens In | Tokens Out | Cost | Source | Story | Notes |
 |---|---|---|---|---|---|---|---|---|
-| 2026-09-26 23:08 | agy | unknown | 120000 | 18000 | $0.6300 | estimated_manual | story-adb0f757 | 100% universal GOVERNS auto-association and reconciliation |
-| 2026-09-27 08:03 | agy | unknown | 140000 | 22000 | $0.7500 | estimated_manual | story-3cddd9d2 | AST KG lifecycle, rich context packaging, sparse cones & deep KG UX |
-| 2026-09-27 10:43 | agy | unknown | 160000 | 25000 | $0.8550 | estimated_manual | story-f5513a93 | Generalized Vizor BS-6 architectural views, dynamic centrality LOD & multi-language AST scanner |
-| 2026-09-27 16:32 | claude | claude-sonnet-4-6 | 60000 | 18000 | $0.4500 | estimated_manual | story-5ef38956 | 3-Round Decide Panel Architecture, Business & Roadmap Synthesis |
-| 2026-09-27 16:32 | codex | o4-mini | 60000 | 18000 | $0.4500 | estimated_manual | story-5ef38956 | 3-Round Decide Panel Architecture, Business & Roadmap Synthesis |
-| 2026-09-27 16:32 | grok | grok-3 | 60000 | 25000 | $0.5550 | estimated_manual | story-5ef38956 | 3-Round Decide Panel Architecture, Business & Roadmap Synthesis |
-| 2026-09-27 16:32 | agy | unknown | 60000 | 15000 | $0.4050 | estimated_manual | story-5ef38956 | 3-Round Decide Panel Architecture, Business & Roadmap Synthesis |
 | 2026-09-27 17:04 | claude | claude-sonnet-4-6 | 74777 | 6240 | $0.3179 | estimated_token_rate | story-adhoc-1790479508 | exec: claude job job-f731b... |
 | 2026-09-27 17:04 | codex | o4-mini | 5000 | 2000 | $0.0450 | estimated_tshirt | story-adhoc-1790479518 | exec: codex job job-79e383... |
 | 2026-09-27 17:04 | claude | claude-sonnet-4-6 | 44588 | 5107 | $0.2104 | estimated_token_rate | story-adhoc-1790479527 | exec: claude job job-a731b... |
@@ -53,3 +46,11 @@
 | 2026-09-27 17:05 | grok | grok-3 | 164695 | 11374 | $0.6647 | estimated_token_rate | story-adhoc-1790479936 | exec: grok job job-658ea0c... |
 | 2026-09-27 17:05 | claude | claude-sonnet-4-6 | 5000 | 2000 | $0.0450 | estimated_tshirt | story-adhoc-1790479946 | exec: claude job job-e578f... |
 | 2026-09-27 18:36 | agy | unknown | 110000 | 15000 | $0.5550 | estimated_manual | story-2effe49d | Invariant 1 Effect-Verified Completion Contract Implementation & Tests |
+| 2026-09-27 21:03 | codex | o4-mini | 1387257 | 9307 | $4.3014 | estimated_token_rate | story-issue-1802 | exec: codex job job-a1cb48... |
+| 2026-09-27 21:03 | codex | o4-mini | 775022 | 7107 | $2.4317 | estimated_token_rate | story-issue-1802 | exec: codex job job-cc50e7... |
+| 2026-09-27 21:03 | codex | o4-mini | 509554 | 4761 | $1.6001 | estimated_token_rate | story-2effe49d | exec: codex job job-2caf4b... |
+| 2026-09-27 21:13 | codex | o4-mini | 755224 | 6236 | $2.3592 | estimated_token_rate | story-issue-1809 | exec: codex job job-dc58bf... |
+| 2026-09-27 21:51 | codex | o4-mini | 707454 | 5132 | $2.1993 | estimated_token_rate | story-issue-1809 | exec: codex job job-c817af... |
+| 2026-09-27 21:57 | codex | o4-mini | 666084 | 4438 | $2.0648 | estimated_token_rate | story-issue-1811 | exec: codex job job-bf2449... |
+| 2026-09-27 22:23 | codex | o4-mini | 989938 | 5716 | $3.0556 | estimated_token_rate | story-9e0b2e71 | exec: codex job job-16c640... |
+| 2026-09-27 22:40 | agy | gemini-2.5-pro | 145000 | 18500 | $0.6800 | estimated_manual | story-d3df3fbd | Invariant 4 Single-Writer SQLite WAL Ledger & Leased Worktree Locks |

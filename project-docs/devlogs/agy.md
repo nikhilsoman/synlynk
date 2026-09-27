@@ -897,4 +897,41 @@
 6. **Verification:** Added 22 unit tests across 5 new test files. 100% full regression pass rate (3,336 passed tests). Opened PR #1807.
 [@agy]
 
+## 2026-09-27 — Shipped: Invariant 2 (Hard In-Flight Token Circuit Breakers & Runaway Worker Killer) (Issue #1808, PR #1809)
 
+### Context & Problem
+- Addressed Invariant 2 from the 4-harness Deep Architecture Review: eliminate catastrophic runaway token burns ($32+ on jobs producing zero changes).
+- Enforced real-time in-flight circuit breakers that continuously monitor running jobs and terminate runaway worker process trees before costs spiral.
+
+### Shipped & Landed (PR #1809)
+1. **Job Status Taxonomy (`synlynk/jobs.py`):** Added `STATUS_CIRCUIT_BREAKER_TRIPPED = "circuit_breaker_tripped"`, wired into classification sets and predicates.
+2. **Circuit Breaker Engine (`synlynk/circuit_breaker.py`):** Built `evaluate_job_circuit_breaker()` with tier-aware limit resolution ($T_{\max}$, $C_{\max}$, zero-file threshold), worktree lazy diff checks, and recursive process tree termination (`_kill_process_tree` using `SIGTERM` escalated to `SIGKILL`).
+3. **Reconciliation Integration (`synlynk/jobs.py`):** Wired circuit breaker evaluations into `_reconcile_jobs_unlocked()` across running jobs, updating status and triggering `[CRITICAL]` Sentinel alert `TOKEN_CIRCUIT_BREAKER_TRIPPED`.
+4. **Autonomous Milestone DAG Failover (`synlynk/launch_dag.py`):** Extended `LaunchDAG.handle_job_outcome()` to autonomously reroute to secondary harnesses when a circuit breaker trips.
+5. **Vizor Status Badging & Styling (`synlynk/viz.py`):** Added `⚡ BREAKER` badge and `.status-chip.circuit-breaker` CSS.
+6. **Verification & Merge:** Added 18 unit tests across 5 test suites. Full 3,345-test local and CI matrix pass (100% green). Codex reviewed under `qa` role and squash merged into `main`.
+[@agy]
+
+## 2026-09-27 — Shipped: Invariant 4 (Single-Writer SQLite WAL Ledger with Leased Worktree Locks) (Issue #1812, PR #1813)
+
+### Context & Problem
+- Addressed Invariant 4 from the 4-harness Deep Architecture Review: eliminate unhandled `sqlite3.OperationalError: database is locked` exceptions under heavy multi-agent concurrency and eradicate zombie worktree lock contention.
+- Enforced single-writer SQLite WAL transactions and leased worktree locking with PID tracking, TTL expiration, and dead-PID autonomous recovery.
+
+### Shipped & Landed (PR #1813)
+1. **Single-Writer SQLite WAL Ledger (`synlynk/wal_ledger.py`):**
+   - Implemented `ensure_wal_pragmas()` configuring `journal_mode=WAL`, `synchronous=NORMAL`, `busy_timeout=30000` (30s), and `foreign_keys=ON`.
+   - Built `write_transaction(conn)` context manager enforcing `BEGIN IMMEDIATE` for all mutations with exponential backoff retry jitter on transient locks.
+   - Built `check_wal_health()` for monitoring WAL size and checkpoint status.
+2. **Leased Worktree Locks & Dead-PID Recovery (`synlynk/worktree_lease.py`):**
+   - Implemented `worktree_leases` table schema in `state.db` and synchronized on-disk `.synlynk/lease.json` metadata.
+   - Implemented `acquire_worktree_lease()`, `renew_worktree_lease()`, `release_worktree_lease()`, `get_active_worktree_lease()`, and `audit_and_reclaim_stale_worktree_leases()`.
+   - Auto-reclaims locks when holding process dies (`os.kill(pid, 0)` lookup) or TTL expires (default 15m).
+3. **Core Lifecycle Integration (`synlynk/__init__.py`, `synlynk/dispatch.py`, `synlynk/jobs.py`, `synlynk/worktree.py`):**
+   - Initialized WAL pragmas on all DB connections in `_connect()`.
+   - Wired lease acquisition into `_create_job_worktree()` and lease release into `_reap_zombie_worktree()`.
+   - Wired stale lease auditing into `cmd_jobs_reap()`, `cmd_worktree_audit()`, and `cmd_worktree_clean()`.
+4. **Verification & Regression Isolation:**
+   - Isolated `.synlynk/lease.json` inside gitignored `.synlynk/` directory to prevent false-positive dirty worktree activity during stall checks.
+   - 100% full regression pass rate across 3,382 tests locally. Opened PR #1813.
+[@agy]
