@@ -38,6 +38,87 @@ _AUTOCOMMIT_EXCLUDED_PATHS = (
 )
 _AUTOCOMMIT_TRAILER = "Co-Authored-By: synlynk-dispatch <noreply@synlynk.dev>"
 
+# Job Status Constants
+STATUS_COMPLETED = "completed"
+STATUS_FAILED = "failed"
+STATUS_RUNNING = "running"
+STATUS_UNKNOWN = "unknown"
+STATUS_CANCELLED = "cancelled"
+STATUS_INTERRUPTED = "interrupted"
+STATUS_PERMISSION_DENIED = "permission_denied"
+STATUS_TASK_DELIVERY_FAILED = "task_delivery_failed"
+STATUS_FAILED_UNVERIFIED = "failed_unverified"
+STATUS_NEEDS_FIX = "needs_fix"
+STATUS_STALE_BASE = "stale_base"
+STATUS_SCOPE_VIOLATION = "SCOPE_VIOLATION"
+STATUS_INSTRUCTION_RECEIPT_UNTRUSTED = "instruction_receipt_untrusted"
+
+# Mandatory Invariant 1 Status Constants
+STATUS_COMPLETED_WITHOUT_CHANGES = "completed_without_changes"
+STATUS_FAILED_NOOP_DENIED = "failed_noop_denied"
+STATUS_FAILED_VERIFICATION = "failed_verification"
+
+ALL_JOB_STATUSES = frozenset({
+    STATUS_COMPLETED,
+    STATUS_FAILED,
+    STATUS_RUNNING,
+    STATUS_UNKNOWN,
+    STATUS_CANCELLED,
+    STATUS_INTERRUPTED,
+    STATUS_PERMISSION_DENIED,
+    STATUS_TASK_DELIVERY_FAILED,
+    STATUS_FAILED_UNVERIFIED,
+    STATUS_NEEDS_FIX,
+    STATUS_STALE_BASE,
+    STATUS_SCOPE_VIOLATION,
+    STATUS_INSTRUCTION_RECEIPT_UNTRUSTED,
+    STATUS_COMPLETED_WITHOUT_CHANGES,
+    STATUS_FAILED_NOOP_DENIED,
+    STATUS_FAILED_VERIFICATION,
+})
+
+TERMINAL_JOB_STATUSES = frozenset({
+    STATUS_COMPLETED,
+    STATUS_FAILED,
+    STATUS_UNKNOWN,
+    STATUS_CANCELLED,
+    STATUS_INTERRUPTED,
+    STATUS_PERMISSION_DENIED,
+    STATUS_TASK_DELIVERY_FAILED,
+    STATUS_FAILED_UNVERIFIED,
+    STATUS_NEEDS_FIX,
+    STATUS_STALE_BASE,
+    STATUS_SCOPE_VIOLATION,
+    STATUS_INSTRUCTION_RECEIPT_UNTRUSTED,
+    STATUS_COMPLETED_WITHOUT_CHANGES,
+    STATUS_FAILED_NOOP_DENIED,
+    STATUS_FAILED_VERIFICATION,
+})
+
+NOOP_JOB_STATUSES = frozenset({
+    STATUS_COMPLETED_WITHOUT_CHANGES,
+    STATUS_FAILED_NOOP_DENIED,
+})
+
+SUCCESS_JOB_STATUSES = frozenset({
+    STATUS_COMPLETED,
+})
+
+
+def is_successful_status(status: Optional[str]) -> bool:
+    """Return True if status indicates verified successful execution."""
+    return status in SUCCESS_JOB_STATUSES
+
+
+def is_terminal_status(status: Optional[str]) -> bool:
+    """Return True if status represents a terminal (non-running) job state."""
+    return status in TERMINAL_JOB_STATUSES
+
+
+def is_noop_status(status: Optional[str]) -> bool:
+    """Return True if status represents a job that completed with no effect/changes."""
+    return status in NOOP_JOB_STATUSES
+
 
 def _pkg(name: str, default=None):
     package = sys.modules.get("synlynk")
