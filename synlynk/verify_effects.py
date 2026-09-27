@@ -49,6 +49,9 @@ def _get_worktree_changed_files(
         for p in git_state.get("remote_files_touched") or []:
             if p:
                 files.add(p)
+        if git_state.get("has_activity") or git_state.get("remote_has_activity") or (git_state.get("commits_ahead", 0) > 0) or git_state.get("dirty"):
+            if not files:
+                files.add("(git_activity_verified)")
     
     # 1. Uncommitted changes (working copy & untracked)
     try:
