@@ -2473,6 +2473,7 @@ def test_dispatch_agent_id_takes_precedence_over_story_id_for_gh_token_role(proj
         pid = 1
 
     monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(dispatch_mod, "_run_tc7", lambda: {"passed": True, "missing": [], "error": ""})
     monkeypatch.setattr(sl, "_preflight_dispatch", lambda harness_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
 
     captured_roles = []
