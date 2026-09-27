@@ -1692,6 +1692,53 @@ def _try_write_capability_rating(job: dict, log_text: str, sentinel_path: str) -
         )
 
 
+def _enforce_job_effect_verification(job: dict, git_state: Optional[dict], sentinel_path: str) -> tuple:
+    """Enforces Invariant 1: Effect-Verified Completion Contract before a job is treated as completed.
+
+    Returns (summary_status, summary_note) if verification failed, else (None, None).
+    """
+    if job.get("status") != "completed":
+        return None, None
+
+    task_class = "gh_write" if (job.get("requires_gh_write") or job.get("task_type") in ("review", "gh_write", "github_write")) else (
+        "analysis" if job.get("task_type") in ("analysis", "read_only", "readonly", "probe", "audit") else "mutating"
+    )
+    gh_kwargs = {}
+    if job.get("requires_gh_write") or task_class == "gh_write":
+        gh_kwargs = {
+            "target": job.get("gh_write_target"),
+            "expect": job.get("gh_write_expect") or "closed",
+            "since": job.get("started_at"),
+            "expect_author": job.get("gh_write_author"),
+        }
+    from synlynk.verify_effects import verify_job_effects
+    effect_res = verify_job_effects(
+        worktree_path=job.get("worktree_path"),
+        base_sha=job.get("base_sha"),
+        task_class=task_class,
+        expected_gh_effect=job.get("gh_write_expect"),
+        verification_cmd=job.get("verification_cmd"),
+        receipt_path=job.get("receipt_path"),
+        gh_verify_kwargs=gh_kwargs,
+        git_state=git_state,
+        exit_code=job.get("exit_code") or 0,
+    )
+    # If worktree wasn't given on a mutating task (e.g. synthetic test), don't fail
+    if not effect_res.verified and not (task_class == "mutating" and not job.get("worktree_path")):
+        job["status"] = effect_res.status
+        summary_status = effect_res.status.upper()
+        summary_note = effect_res.reason
+        if effect_res.status in (STATUS_COMPLETED_WITHOUT_CHANGES, STATUS_FAILED_NOOP_DENIED):
+            _write_sentinel_alert(
+                "WARNING",
+                "TASK_NOOP_DENIED",
+                f"Job {job.get('id')} on agent '{job.get('agent')}' finished with exit code 0 but produced no verified effects ({effect_res.reason}).",
+                sentinel_path,
+            )
+        return summary_status, summary_note
+    return None, None
+
+
 def _reconcile_jobs_unlocked() -> None:
     """Probes PIDs of running jobs; marks unreachable ones as failed or completed.
 
@@ -1937,6 +1984,11 @@ def _reconcile_jobs_unlocked() -> None:
             if job.get("status") == "unknown":
                 summary_status = terminal_status_for_unknown_exit()
             if job.get("status") == "completed":
+                eff_status, eff_note = _enforce_job_effect_verification(job, git_state, sentinel_path)
+                if eff_status:
+                    summary_status = eff_status
+                    summary_note = eff_note
+            if job.get("status") == "completed":
                 scope_paths = job.get("scope_paths") or []
                 if scope_paths and git_state and not _check_scope_compliance(
                     git_state.get("changed_files", []), scope_paths
@@ -2178,6 +2230,11 @@ def _reconcile_jobs_unlocked() -> None:
                 summary_status = terminal_status_for_unknown_exit()
             elif job.get("status") == "unknown":
                 summary_status = terminal_status_for_unknown_exit()
+            if job.get("status") == "completed":
+                eff_status, eff_note = _enforce_job_effect_verification(job, git_state, sentinel_path)
+                if eff_status:
+                    summary_status = eff_status
+                    summary_note = eff_note
             if job.get("status") == "completed":
                 scope_paths = job.get("scope_paths") or []
                 if scope_paths and git_state and not _check_scope_compliance(

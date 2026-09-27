@@ -30,12 +30,25 @@ class EffectVerificationResult:
     tests_passed: Optional[bool] = None
 
 
-def _get_worktree_changed_files(worktree_path: str, base_sha: Optional[str] = None) -> List[str]:
+def _get_worktree_changed_files(
+    worktree_path: str,
+    base_sha: Optional[str] = None,
+    git_state: Optional[dict] = None,
+) -> List[str]:
     """Inspect git worktree for all changed files (committed and uncommitted)."""
     if not worktree_path or not os.path.isdir(worktree_path):
         return []
     
     files = set()
+
+    # 0. Pre-computed git_state if supplied
+    if git_state:
+        for p in git_state.get("changed_files") or []:
+            if p:
+                files.add(p)
+        for p in git_state.get("remote_files_touched") or []:
+            if p:
+                files.add(p)
     
     # 1. Uncommitted changes (working copy & untracked)
     try:
@@ -88,6 +101,7 @@ def verify_job_effects(
     verification_cmd: Optional[str] = None,
     receipt_path: Optional[str] = None,
     gh_verify_kwargs: Optional[Dict[str, Any]] = None,
+    git_state: Optional[dict] = None,
     exit_code: int = 0,
 ) -> EffectVerificationResult:
     """Verify that a job with exit code 0 produced real effects before marking succeeded."""
@@ -102,7 +116,7 @@ def verify_job_effects(
 
     # 1. Classification Branch A: Mutating Task
     if task_class_norm in ("mutating", "code", "mutation", "fix", "feat"):
-        files_touched = _get_worktree_changed_files(worktree_path, base_sha) if worktree_path else []
+        files_touched = _get_worktree_changed_files(worktree_path, base_sha, git_state=git_state) if worktree_path else []
         if not files_touched:
             return EffectVerificationResult(
                 verified=False,
