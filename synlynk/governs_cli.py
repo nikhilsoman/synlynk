@@ -141,3 +141,43 @@ def cmd_governs_sweep(
                 conn.close()
             except Exception:
                 pass
+
+
+def cmd_governs(
+    full: bool = False,
+    repo_root: Optional[str] = None,
+    conn: Optional[sqlite3.Connection] = None,
+) -> None:
+    """Print the GOVERNS lifecycle board status (compressed 5-stage by default)."""
+    owns_conn = False
+    if conn is None:
+        try:
+            from synlynk import _get_db
+            conn = _get_db()
+            owns_conn = True
+        except Exception as exc:
+            print(f"  {_RED}✗{_RESET} Failed to open state database: {exc}")
+            return
+
+    try:
+        story_cols = {r[1] for r in conn.execute("PRAGMA table_info(stories)")}
+        has_governs_stage = "governs_stage" in story_cols
+        query = (
+            "SELECT story_id, title, goal_id, governs_stage, status FROM stories WHERE status != 'done'"
+            if has_governs_stage
+            else "SELECT story_id, title, goal_id, 'open' as governs_stage, status FROM stories WHERE status != 'done'"
+        )
+        rows = conn.execute(query).fetchall()
+        items = [
+            {"id": r[0], "title": r[1] or "", "goal_id": r[2] or "", "stage": r[3] or "open", "status": r[4] or "open"}
+            for r in rows
+        ]
+        from synlynk.governs_compressed import format_compressed_governs_summary
+        output = format_compressed_governs_summary(items, full=full)
+        print(f"\n{output}\n")
+    finally:
+        if owns_conn and conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
