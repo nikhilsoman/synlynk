@@ -2833,7 +2833,9 @@ def _preflight_dispatch(
 def resolve_dispatch_harness(agent: str, agent_id: str = None, story_id: str = None,
                               force_agent: bool = False, requires_gh_write: bool = False,
                               static_baseline: bool = False, task_domain: str = None,
-                              criticality: float = 1.0, lambda_: float = 1.0) -> str:
+                              criticality: float = 1.0, lambda_: float = 1.0,
+                              task: str = None, task_type: str = None,
+                              requires: list = None, grants: list = None, revokes: list = None) -> str:
     """Resolve which harness a dispatch will actually run on.
 
     Side-effect-free (no subprocess spawn, no DB write) so both the live
@@ -2864,7 +2866,7 @@ def resolve_dispatch_harness(agent: str, agent_id: str = None, story_id: str = N
             (a["value"] for a in entry["aliases"] if a["kind"] == "role_slug"), None
         )
 
-    if force_agent:
+    if force_agent and not (task or task_type or requires or requires_gh_write):
         return agent
 
     baselines_map = _pkg("HARNESS_CAPABILITY_BASELINES", HARNESS_CAPABILITY_BASELINES)
@@ -2901,7 +2903,21 @@ def resolve_dispatch_harness(agent: str, agent_id: str = None, story_id: str = N
                 picked = best
     if picked is None and resolved_agent_role:
         picked = _harness_for_org_role(resolved_agent_role, baselines_map, requires_gh_write)
-    return picked or agent
+
+    candidate = picked or agent
+    if task or task_type or requires or requires_gh_write:
+        from synlynk.capability_probe import resolve_capable_dispatch_harness
+        return resolve_capable_dispatch_harness(
+            candidate_harness=candidate,
+            task=task or "",
+            requires=requires,
+            force_agent=force_agent,
+            grants=grants,
+            revokes=revokes,
+            task_type=task_type,
+            requires_gh_write=requires_gh_write,
+        )
+    return candidate
 
 
 def dispatch_agent(agent: str, task: str, story_id: str = None,
@@ -2953,12 +2969,19 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     requires_gh_write = bool(
         requires_gh_write or _task_requires_gh_write(task, task_type=task_type)
     )
+    initial_agent = agent
     agent = resolve_dispatch_harness(
         agent, agent_id=agent_id, story_id=story_id,
         force_agent=force_agent, requires_gh_write=requires_gh_write,
         static_baseline=static_baseline,
         task_domain=task_domain, criticality=criticality, lambda_=lambda_,
+        task=task, task_type=task_type, requires=requires, grants=grants, revokes=revokes,
     )
+    if agent != initial_agent and not force_agent:
+        print(
+            f"  ↪ rerouted '{initial_agent}' -> '{agent}' "
+            f"(capability-probed: '{initial_agent}' lacks required capability for task)"
+        )
     resolved_agent_role = None
     if agent_id:
         from synlynk import agent_store

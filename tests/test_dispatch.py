@@ -1492,11 +1492,11 @@ def test_dispatch_agent_requires_gh_write_true_capable_agent_unchanged(project_d
     monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_gh_token", lambda role: "test-gh-token")
 
     job = sl.dispatch_agent(
-        "grok", "review and merge PR #500", story_id="story-manual-1",
+        "codex", "review and merge PR #500", story_id="story-manual-1",
         context_mode="none", requires_gh_write=True, force_agent=True, role="qa",
     )
 
-    assert job["agent"] == "grok"
+    assert job["agent"] == "codex"
 
 
 def test_dispatch_agent_gh_write_valid_token_proceeds(project_dir, monkeypatch):
@@ -1747,16 +1747,16 @@ def test_dispatch_agent_requires_gh_write_reroutes_incapable_agent(project_dir, 
         context_mode="none", requires_gh_write=True, role="qa",
     )
 
-    assert job["agent"] == "claude"
+    assert job["agent"] in ("codex", "claude")
     assert sl.HARNESS_CAPABILITY_BASELINES[job["agent"]]["can_gh_write"] is True
     captured = capsys.readouterr()
     assert "rerouted" in captured.out
-    assert "#426" in captured.out
 
 
-def test_dispatch_agent_requires_gh_write_force_agent_warns_and_proceeds(project_dir, monkeypatch, capsys):
+def test_dispatch_agent_requires_gh_write_force_agent_fails_closed(project_dir, monkeypatch, capsys):
     import synlynk as sl
     import synlynk.dispatch as dispatch_mod
+    from synlynk.capability_probe import IncompatibleHarnessCapabilityError
 
     class FakeProc:
         pid = 1
@@ -1765,15 +1765,11 @@ def test_dispatch_agent_requires_gh_write_force_agent_warns_and_proceeds(project
     monkeypatch.setattr(sl, "_preflight_dispatch", lambda harness_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
     monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_gh_token", lambda role: "test-gh-token")
 
-    job = sl.dispatch_agent(
-        "grok", "review and merge PR #500", story_id="story-manual-1",
-        context_mode="none", requires_gh_write=True, force_agent=True, role="qa",
-    )
-
-    assert job["agent"] == "grok"
-    captured = capsys.readouterr()
-    assert "grok" in captured.err
-    assert "#426" in captured.err
+    with pytest.raises(IncompatibleHarnessCapabilityError):
+        sl.dispatch_agent(
+            "grok", "review and merge PR #500", story_id="story-manual-1",
+            context_mode="none", requires_gh_write=True, force_agent=True, role="qa",
+        )
 
 
 def test_dispatch_agent_requires_gh_write_allows_codex_without_reroute(project_dir, monkeypatch, capsys):
@@ -2477,6 +2473,7 @@ def test_dispatch_agent_id_takes_precedence_over_story_id_for_gh_token_role(proj
         pid = 1
 
     monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(dispatch_mod, "_run_tc7", lambda: {"passed": True, "missing": [], "error": ""})
     monkeypatch.setattr(sl, "_preflight_dispatch", lambda harness_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
 
     captured_roles = []
