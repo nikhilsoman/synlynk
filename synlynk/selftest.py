@@ -60,7 +60,10 @@ def _chdir(path: Path):
 def _workspace_dir(ctx: ScenarioContext) -> Path:
     path = ctx.state.get("workspace_dir")
     if path is None:
-        path = Path(tempfile.mkdtemp(prefix="synlynk-selftest-"))
+        if ctx.repo_path:
+            path = Path(ctx.repo_path)
+        else:
+            path = Path(tempfile.mkdtemp(prefix="synlynk-selftest-"))
         ctx.state["workspace_dir"] = path
     return Path(path)
 
