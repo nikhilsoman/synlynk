@@ -58,6 +58,9 @@ STATUS_COMPLETED_WITHOUT_CHANGES = "completed_without_changes"
 STATUS_FAILED_NOOP_DENIED = "failed_noop_denied"
 STATUS_FAILED_VERIFICATION = "failed_verification"
 
+# Mandatory Invariant 2 Status Constants
+STATUS_CIRCUIT_BREAKER_TRIPPED = "circuit_breaker_tripped"
+
 ALL_JOB_STATUSES = frozenset({
     STATUS_COMPLETED,
     STATUS_FAILED,
@@ -75,6 +78,7 @@ ALL_JOB_STATUSES = frozenset({
     STATUS_COMPLETED_WITHOUT_CHANGES,
     STATUS_FAILED_NOOP_DENIED,
     STATUS_FAILED_VERIFICATION,
+    STATUS_CIRCUIT_BREAKER_TRIPPED,
 })
 
 TERMINAL_JOB_STATUSES = frozenset({
@@ -93,6 +97,7 @@ TERMINAL_JOB_STATUSES = frozenset({
     STATUS_COMPLETED_WITHOUT_CHANGES,
     STATUS_FAILED_NOOP_DENIED,
     STATUS_FAILED_VERIFICATION,
+    STATUS_CIRCUIT_BREAKER_TRIPPED,
 })
 
 NOOP_JOB_STATUSES = frozenset({
@@ -1754,6 +1759,66 @@ def _reconcile_jobs_unlocked() -> None:
         if job.get("status") not in ("running",):
             continue
         job["retry_count"] = _job_retry_count(job)
+
+        # Invariant 2: Hard in-flight token / cost circuit breaker
+        evaluate_cb = _pkg("evaluate_job_circuit_breaker")
+        if not evaluate_cb:
+            try:
+                from synlynk.circuit_breaker import evaluate_job_circuit_breaker as evaluate_cb
+            except Exception:
+                evaluate_cb = None
+        if evaluate_cb:
+            cb_res = evaluate_cb(job, config, sentinel_path)
+            if cb_res.tripped:
+                ended_at = job.get("ended_at") or now
+                started_at = job.get("started_at")
+                duration_s = None
+                try:
+                    duration_s = max(0.0, time.mktime(time.strptime(ended_at, "%Y-%m-%dT%H:%M:%S")) -
+                                     time.mktime(time.strptime(started_at, "%Y-%m-%dT%H:%M:%S")))
+                except Exception:
+                    duration_s = None
+                model_version = job.get("model_version") or job.get("model_at_dispatch")
+                try:
+                    _pkg("update_costs")(
+                        f"{job.get('harness') or job.get('agent', '')} job {job.get('id', '')}",
+                        cb_res.in_tokens,
+                        cb_res.out_tokens,
+                        duration_s or 0,
+                        model_version=model_version,
+                        story_id=job.get("story_id"),
+                        agent=job.get("agent", ""),
+                        basis="circuit_breaker",
+                        job_id=job.get("id"),
+                        harness=job.get("harness") or job.get("agent", ""),
+                        agent_role=job.get("resolved_agent_role") or job.get("role"),
+                    )
+                except Exception as exc:
+                    _reconciliation_persistence_warning(job, "cost/telemetry persistence", exc, sentinel_path)
+
+                task_sha256, task_preview = _task_sha256_and_preview(job.get("task"))
+                summary = _pkg("_write_job_summary")(
+                    job.get("id", ""),
+                    job.get("agent", ""),
+                    job.get("story_id"),
+                    job.get("exit_code"),
+                    duration_s,
+                    cb_res.in_tokens,
+                    cb_res.out_tokens,
+                    cb_res.cost_usd,
+                    _pkg("_worktree_files_touched")(job.get("worktree_path")),
+                    job.get("worktree_path"),
+                    job.get("worktree_branch"),
+                    base_branch=job.get("base_branch"),
+                    base_sha=job.get("base_sha"),
+                    suite_result=job.get("suite_result"),
+                    task_sha256=task_sha256,
+                    task_preview=task_preview,
+                )
+                print(summary, end="")
+                changed = True
+                continue
+
         if _pkg("_check_job_stall")(job, config, sentinel_path):
             ended_at = job.get("ended_at") or now
             started_at = job.get("started_at")

@@ -824,6 +824,8 @@ def generate_overview_html(data: dict, port: int) -> str:
 
             if st in ("running", "active"):
                 st_badge = '<span class="status-chip running">● running</span>'
+            elif st in ("circuit_breaker_tripped", "circuit_breaker"):
+                st_badge = '<span class="status-chip circuit-breaker">⚡ BREAKER</span>'
             elif "pr" in st or pr_url:
                 st_badge = '<span class="status-chip pr-open">✓ PR open</span>'
             elif st in ("completed_without_changes", "failed_noop_denied"):
@@ -1030,6 +1032,7 @@ def generate_overview_html(data: dict, port: int) -> str:
     .status-chip.done { background: rgba(34,197,94,0.15); color: #22c55e; }
     .status-chip.failed { background: rgba(239,68,68,0.15); color: #ef4444; }
     .status-chip.noop { background: rgba(245,158,11,0.15); color: #f59e0b; }
+    .status-chip.circuit-breaker { background: rgba(239,68,68,0.2); color: #f87171; border: 1px solid rgba(239,68,68,0.4); }
     .job-link { font-size: 11px; color: var(--accent); font-weight: 600; }
     .job-link:hover { text-decoration: underline; }
 

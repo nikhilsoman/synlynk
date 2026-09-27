@@ -40,7 +40,7 @@ _LEGACY_MODULES = (
     "capability_roles", "taxonomy", "doctor", "team", "heal", "support_engineer",
     "backlog", "backlog_extractor", "charter_injection", "context", "jobs",
     "story_provisioning", "daemon", "instructions", "scan", "hud", "platform_status",
-    "logs", "wizard", "launch",
+    "logs", "wizard", "launch", "circuit_breaker",
 )
 
 
