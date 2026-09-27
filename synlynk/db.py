@@ -2147,9 +2147,10 @@ def cmd_migrate(dry_run: bool = False, recover: bool = False, setup_dr: bool = F
         print("  Already migrated. Use --recover to re-import from backup.")
         return
 
-    docs_dir = _docs_dir()
+    raw_docs_dir = _docs_dir()
+    docs_dir = os.path.join(project_root, raw_docs_dir) if not os.path.isabs(raw_docs_dir) else raw_docs_dir
     if not os.path.isdir(docs_dir):
-        print(f"  ✗ {docs_dir}/ not found — nothing to migrate")
+        print(f"  ✗ {raw_docs_dir}/ not found — nothing to migrate")
         return
 
     if dry_run:
@@ -2186,7 +2187,7 @@ def cmd_migrate(dry_run: bool = False, recover: bool = False, setup_dr: bool = F
                 print(f"  ✗ {exc}")
                 raise
 
-            print(f"  ▶ Copying {docs_dir}/ → {backup_dir}/ ...")
+            print(f"  ▶ Copying {raw_docs_dir}/ → {backup_dir}/ ...")
             if os.path.exists(backup_dir):
                 _shutil.rmtree(backup_dir)
             _shutil.copytree(docs_dir, backup_dir)
@@ -2194,14 +2195,15 @@ def cmd_migrate(dry_run: bool = False, recover: bool = False, setup_dr: bool = F
             _migrate_dr_mirror(backup_dir)
 
             subprocess.run(
-                ["git", "rm", "--cached", "-r", "--quiet", docs_dir],
+                ["git", "rm", "--cached", "-r", "--quiet", raw_docs_dir],
+                cwd=project_root,
                 check=True,
                 stderr=subprocess.DEVNULL,
             )
-            print(f"  ✓ git rm --cached {docs_dir}/")
+            print(f"  ✓ git rm --cached {raw_docs_dir}/")
 
-            gitignore = ".gitignore"
-            docs_rule = f"{str(docs_dir).rstrip('/')}/"
+            gitignore = os.path.join(project_root, ".gitignore")
+            docs_rule = f"{raw_docs_dir.rstrip('/')}/"
             already = False
             if os.path.exists(gitignore):
                 with open(gitignore) as f:
