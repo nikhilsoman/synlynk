@@ -54,3 +54,29 @@ def test_derive_sparse_cone_paths_fallback_when_no_graph(tmp_path):
         str(tmp_path), task_text="Some random task"
     )
     assert set(cone) == set(MANDATORY_SPARSE_CONE_DIRS)
+
+
+def test_export_topological_features(tmp_path):
+    from synlynk.impact import export_topological_features
+    out_dir = tmp_path / ".synlynk" / "graphify-out"
+    out_dir.mkdir(parents=True)
+    graph = {
+        "nodes": [
+            {"id": "synlynk/db.py::conn", "file": "synlynk/db.py", "community": 1},
+            {"id": "synlynk/viz.py::handler", "file": "synlynk/viz.py", "community": 0},
+            {"id": "tests/test_viz.py::test_h", "file": "tests/test_viz.py", "community": 0}
+        ],
+        "edges": [
+            {"source": "synlynk/viz.py::handler", "target": "synlynk/db.py::conn", "relation": "calls"},
+            {"source": "tests/test_viz.py::test_h", "target": "synlynk/viz.py::handler", "relation": "calls"}
+        ],
+    }
+    (out_dir / "graph.json").write_text(json.dumps(graph))
+
+    feats = export_topological_features(str(tmp_path), task_text="viz handler")
+    assert feats["blast_radius_files"] >= 2
+    assert feats["community_span"] >= 1
+    assert feats["is_core_system"] is True
+    assert feats["has_test_coverage"] is True
+    assert "suggested_harness" in feats
+    assert "impact_score" in feats
