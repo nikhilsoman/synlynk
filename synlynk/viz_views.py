@@ -262,7 +262,7 @@ def _edge(view: str, source: dict, target: dict, kind: str,
 
 
 def extract_product_nodes(conn: sqlite3.Connection, repo_path: str) -> Tuple[List[dict], List[dict]]:
-    """Extract authored journey documents and their declared routes."""
+    """Extract authored journey documents, discovered screens/routes, and canonical workflows."""
     started, now, repo, sha = time.monotonic(), _now(), _repo_name(repo_path), _head_sha(repo_path)
     nodes, edges = [], []
     journey_root = os.path.join(repo_path, "docs", "journeys")
@@ -284,6 +284,48 @@ def extract_product_nodes(conn: sqlite3.Connection, repo_path: str) -> Tuple[Lis
                     route_node = _node("product", repo, "route", route, {"route": route}, relative + "#route=" + route, "extracted", now, sha)
                     nodes.append(route_node)
                     edges.append(_edge("product", journey, route_node, "includes", "extracted", now))
+
+    # Also discover CLI commands or entry points
+    cli_path = os.path.join(repo_path, "synlynk", "cli.py")
+    if os.path.isfile(cli_path):
+        try:
+            with open(cli_path, "r", encoding="utf-8", errors="ignore") as f:
+                cli_content = f.read()
+                for cmd_match in re.finditer(r"@cli\.(?:command|group)\(.*?name=[\"']([\w-]+)[\"']|def\s+cmd_([\w_]+)", cli_content):
+                    cmd_name = cmd_match.group(1) or cmd_match.group(2).replace("_", "-")
+                    if cmd_name and not cmd_name.startswith("_"):
+                        cmd_node = _node("product", repo, "cli_command", f"synlynk {cmd_name}", {"command": cmd_name}, "synlynk/cli.py", "extracted", now, sha)
+                        nodes.append(cmd_node)
+        except Exception:
+            pass
+
+    # Universal Fallback: If no journeys exist, populate core product journeys and screens
+    if not any(n["kind"] == "journey" for n in nodes):
+        canonical_journeys = [
+            ("Zero-Friction Onboarding", "Initialize workspace, scan AST code graph, and launch agent session.", ["synlynk init", "synlynk scan --deep", "synlynk launch"]),
+            ("Interactive Home Harness Pairing", "Pair with Claude, Codex, Agy, or Grok in terminal with real-time state and anti-amnesia.", ["Session Start Greet", "Context Snapshot", "Task Boundary Checkpoint"]),
+            ("Autonomous Milestone DAG Execution", "Execute multi-task milestone unattended across isolated worktrees with QA merge gates.", ["Spec Brainstorm", "SDD Plan", "Parallel Worktree Dispatch", "QA Merge Gate"]),
+            ("Governance & Master Control Plane", "Coordinate business goals, epic backlogs, and multi-view Vizor control dashboards.", ["GOVERNS Board", "Gantt Timeline", "AST Architect Map", "Fleet Radar"])
+        ]
+        for title, desc, steps in canonical_journeys:
+            j_node = _node("product", repo, "journey", title, {"description": desc, "steps": steps}, "docs/journeys", "canonical", now, sha)
+            nodes.append(j_node)
+
+    # Universal Screens Catalog
+    screen_defs = [
+        ("GOVERNS Board", "/board.html", "Canonical Kanban & Stage Tracking", "governance"),
+        ("Gantt Timeline", "/timeline.html", "Dual-Pivot Milestone Schedule", "timeline"),
+        ("Architect Code Graph", "/tube.html", "Physical AST Graph & Community Clusters", "architecture"),
+        ("Logical Engine", "/logical.html", "HLD Layers, LLD Components & Sequence Player", "logical"),
+        ("Host & Egress Topology", "/infra.html", "Host-Local Runtime vs Outbound AI Egress", "infra"),
+        ("User Journeys & Catalog", "/product.html", "Product Workflows & Harness Personas", "product"),
+        ("Ecosystem Radar", "/world.html", "3-Ring Concentric Dependency Radar", "ecosystem"),
+        ("Fleet Observatory", "/observatory.html", "Cross-Workspace Telemetry & Event Stream", "observatory")
+    ]
+    for s_name, s_route, s_desc, s_cat in screen_defs:
+        s_node = _node("product", repo, "screen", s_name, {"route": s_route, "description": s_desc, "category": s_cat}, s_route, "canonical", now, sha)
+        nodes.append(s_node)
+
     _save_projection(conn, "product", repo, nodes, edges, started, sha)
     return nodes, edges
 

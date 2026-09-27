@@ -4669,7 +4669,704 @@ __LIVE_JS_HTML__
 
 
 def generate_product_html(data: dict, port: int) -> str:
-    return _generate_bs6_view_html(data, port, "product", "Product View")
+    """Generate rich, interactive Product View with User Journeys, Screen/Interface Catalog, and Terminal Personas."""
+    workspace = data.get("workspace", {})
+    workspace_name = str(workspace.get("name") or "workspace")
+    workspace_views = data.get("workspace_views") or {}
+    prod_data = workspace_views.get("product") or data.get("product") or {"nodes": [], "edges": []}
+    nodes = prod_data.get("nodes") or []
+    edges = prod_data.get("edges") or []
+
+    live_js_html = _live_js(port)
+
+    # Separate nodes by kind
+    journeys = [n for n in nodes if n.get("kind") == "journey"]
+    screens = [n for n in nodes if n.get("kind") == "screen"]
+    cli_commands = [n for n in nodes if n.get("kind") == "cli_command"]
+    routes = [n for n in nodes if n.get("kind") == "route"]
+
+    # Fallbacks if empty
+    if not journeys:
+        journeys = [
+            {
+                "id": "j1",
+                "label": "Zero-Friction Onboarding",
+                "attrs_json": json.dumps({
+                    "description": "Initialize workspace, scan AST code graph, and launch agent session.",
+                    "steps": ["synlynk init", "synlynk scan --deep", "synlynk launch"]
+                })
+            },
+            {
+                "id": "j2",
+                "label": "Interactive Home Harness Pairing",
+                "attrs_json": json.dumps({
+                    "description": "Pair with Claude, Codex, Agy, or Grok in terminal with real-time state and anti-amnesia.",
+                    "steps": ["Session Start Greet", "Context Snapshot", "Task Boundary Checkpoint"]
+                })
+            },
+            {
+                "id": "j3",
+                "label": "Autonomous Milestone DAG Execution",
+                "attrs_json": json.dumps({
+                    "description": "Execute multi-task milestone unattended across isolated worktrees with QA merge gates.",
+                    "steps": ["Spec Brainstorm", "SDD Plan", "Parallel Worktree Dispatch", "QA Merge Gate"]
+                })
+            },
+            {
+                "id": "j4",
+                "label": "Governance & Master Control Plane",
+                "attrs_json": json.dumps({
+                    "description": "Coordinate business goals, epic backlogs, and multi-view Vizor control dashboards.",
+                    "steps": ["GOVERNS Board", "Gantt Timeline", "AST Architect Map", "Fleet Radar"]
+                })
+            }
+        ]
+
+    if not screens:
+        screens = [
+            {"label": "GOVERNS Board", "attrs_json": json.dumps({"route": "/board.html", "description": "Canonical Kanban & Stage Tracking", "category": "governance"})},
+            {"label": "Gantt Timeline", "attrs_json": json.dumps({"route": "/timeline.html", "description": "Dual-Pivot Milestone Schedule", "category": "timeline"})},
+            {"label": "Architect Code Graph", "attrs_json": json.dumps({"route": "/tube.html", "description": "Physical AST Graph & Community Clusters", "category": "architecture"})},
+            {"label": "Logical Engine", "attrs_json": json.dumps({"route": "/logical.html", "description": "HLD Layers, LLD Components & Sequence Player", "category": "logical"})},
+            {"label": "Host & Egress Topology", "attrs_json": json.dumps({"route": "/infra.html", "description": "Host-Local Runtime vs Outbound AI Egress", "category": "infra"})},
+            {"label": "User Journeys & Catalog", "attrs_json": json.dumps({"route": "/product.html", "description": "Product Workflows & Harness Personas", "category": "product"})},
+            {"label": "Ecosystem Radar", "attrs_json": json.dumps({"route": "/world.html", "description": "3-Ring Concentric Dependency Radar", "category": "ecosystem"})},
+            {"label": "Fleet Observatory", "attrs_json": json.dumps({"route": "/observatory.html", "description": "Cross-Workspace Telemetry & Event Stream", "category": "observatory"})}
+        ]
+
+    template = """<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>synlynk Vizor — Product View & User Journeys</title>
+<style>
+:root {
+  --bg: #0b0f19;
+  --bg-surface: #111827;
+  --bg-card: #1f2937;
+  --bg-card-hover: #283548;
+  --border: #374151;
+  --border-subtle: #242e3f;
+  --text-main: #f9fafb;
+  --text-muted: #9ca3af;
+  --text-dim: #6b7280;
+  --accent: #0d9e87;
+  --accent-light: #14b8a6;
+  --accent-bg: rgba(13, 158, 135, 0.15);
+  --purple: #a855f7;
+  --blue: #3b82f6;
+  --amber: #f59e0b;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+[data-theme="light"] {
+  --bg: #f8fafc;
+  --bg-surface: #ffffff;
+  --bg-card: #f1f5f9;
+  --bg-card-hover: #e2e8f0;
+  --border: #cbd5e1;
+  --border-subtle: #e2e8f0;
+  --text-main: #0f172a;
+  --text-muted: #475569;
+  --text-dim: #94a3b8;
+  --accent: #0d9e87;
+  --accent-light: #0b7a60;
+  --accent-bg: #e6f7f4;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text-main);
+  font-family: var(--font-sans);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header & BS-6 Navigation */
+.header {
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.brand-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.logo-badge {
+  background: var(--accent-bg);
+  color: var(--accent);
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-weight: 700;
+  font-size: 13px;
+  border: 1px solid var(--accent);
+}
+.view-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+.view-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg);
+  padding: 4px;
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+}
+.nav-btn {
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  color: var(--text-muted);
+  transition: all 0.15s ease;
+}
+.nav-btn:hover {
+  color: var(--text-main);
+  background: var(--bg-card);
+}
+.nav-btn.active {
+  background: var(--accent);
+  color: #ffffff;
+}
+
+/* Tab Bar */
+.tab-bar {
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+  display: flex;
+  gap: 20px;
+}
+.tab-btn {
+  padding: 14px 4px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tab-btn:hover {
+  color: var(--text-main);
+}
+.tab-btn.active {
+  color: var(--accent-light);
+  border-bottom-color: var(--accent);
+}
+
+/* Content Container */
+.main-container {
+  flex: 1;
+  padding: 24px;
+  max-width: 1440px;
+  margin: 0 auto;
+  width: 100%;
+}
+.tab-pane {
+  display: none;
+}
+.tab-pane.active {
+  display: block;
+}
+
+/* Journeys Layout */
+.journeys-layout {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 24px;
+}
+.journey-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.journey-card-item {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.journey-card-item:hover {
+  border-color: var(--accent);
+  background: var(--bg-card-hover);
+}
+.journey-card-item.active {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+.journey-card-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-bottom: 4px;
+}
+.journey-card-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.journey-detail-panel {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+}
+.journey-detail-header {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 16px;
+  margin-bottom: 24px;
+}
+.journey-flow-visual {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.flow-step-box {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  position: relative;
+}
+.step-number {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+.step-content {
+  flex: 1;
+}
+.step-cmd {
+  font-family: var(--font-mono);
+  background: var(--bg);
+  border: 1px solid var(--border-subtle);
+  padding: 3px 8px;
+  border-radius: 4px;
+  color: var(--accent-light);
+  font-size: 12px;
+  display: inline-block;
+  margin-bottom: 4px;
+}
+
+/* Screens Grid */
+.screens-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 20px;
+}
+.screen-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: all 0.2s ease;
+}
+.screen-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+.screen-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.screen-category-badge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--bg-card);
+  color: var(--text-muted);
+}
+.screen-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+.screen-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+  flex: 1;
+}
+.screen-link {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-light);
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.screen-link:hover {
+  text-decoration: underline;
+}
+
+/* Personas Grid */
+.personas-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 24px;
+}
+.persona-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.persona-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.persona-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  font-weight: 700;
+}
+.persona-claude { background: rgba(217, 119, 6, 0.2); color: #f59e0b; border: 1px solid #f59e0b; }
+.persona-codex { background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid #10b981; }
+.persona-agy { background: rgba(59, 130, 246, 0.2); color: #3b82f6; border: 1px solid #3b82f6; }
+.persona-grok { background: rgba(168, 85, 247, 0.2); color: #a855f7; border: 1px solid #a855f7; }
+
+.persona-name { font-size: 16px; font-weight: 700; }
+.persona-role { font-size: 12px; color: var(--text-muted); }
+.persona-body { font-size: 13px; color: var(--text-muted); line-height: 1.5; flex: 1; }
+.persona-terminal {
+  background: #000000;
+  border: 1px solid #1e293b;
+  border-radius: 6px;
+  padding: 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #10b981;
+}
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="brand-group">
+    <span class="logo-badge">synlynk</span>
+    <span class="view-title">Product View & User Journeys · __WORKSPACE_NAME__</span>
+  </div>
+  <nav class="view-nav">
+    <a href="/tube.html" class="nav-btn">🚇 Architect Map</a>
+    <a href="/logical.html" class="nav-btn">🧠 Logical Engine</a>
+    <a href="/product.html" class="nav-btn active">📦 Product Journeys</a>
+    <a href="/infra.html" class="nav-btn">⚡ Infra Topology</a>
+    <a href="/world.html" class="nav-btn">🌐 Ecosystem Radar</a>
+    <a href="/board.html" class="nav-btn">📋 Board</a>
+    <a href="/timeline.html" class="nav-btn">⏱️ Timeline</a>
+  </nav>
+</header>
+
+<div class="tab-bar">
+  <button class="tab-btn active" onclick="switchTab('journeys', this)">🗺️ User Journeys (__JOURNEY_COUNT__)</button>
+  <button class="tab-btn" onclick="switchTab('screens', this)">📱 Screen & Interface Catalog (__SCREEN_COUNT__)</button>
+  <button class="tab-btn" onclick="switchTab('personas', this)">💻 Harness Terminal Personas (4)</button>
+</div>
+
+<main class="main-container">
+  <!-- TAB 1: USER JOURNEYS -->
+  <div id="pane-journeys" class="tab-pane active">
+    <div class="journeys-layout">
+      <div class="journey-sidebar">
+        __JOURNEY_SIDEBAR_HTML__
+      </div>
+      <div class="journey-detail-panel" id="journey-detail-container">
+        __ACTIVE_JOURNEY_DETAIL_HTML__
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 2: SCREENS & INTERFACE CATALOG -->
+  <div id="pane-screens" class="tab-pane">
+    <div class="screens-grid">
+      __SCREENS_GRID_HTML__
+    </div>
+  </div>
+
+  <!-- TAB 3: HARNESS TERMINAL PERSONAS -->
+  <div id="pane-personas" class="tab-pane">
+    <div class="personas-grid">
+      <!-- Claude Persona -->
+      <div class="persona-card">
+        <div class="persona-header">
+          <div class="persona-avatar persona-claude">C</div>
+          <div>
+            <div class="persona-name">Claude Sonnet / Opus</div>
+            <div class="persona-role">PM · Architect · Code Review · Spec Brainstorm</div>
+          </div>
+        </div>
+        <div class="persona-body">
+          Primary Home Harness conductor for milestone governance, living charter maintenance, specification brainstorming, and holistic multi-repository architectural review.
+        </div>
+        <div class="persona-terminal">
+          $ /rc<br/>
+          $ synlynk status<br/>
+          $ synlynk dispatch codex --task "implement #124"
+        </div>
+      </div>
+
+      <!-- Codex Persona -->
+      <div class="persona-card">
+        <div class="persona-header">
+          <div class="persona-avatar persona-codex">X</div>
+          <div>
+            <div class="persona-name">OpenAI Codex</div>
+            <div class="persona-role">Python · CLI Plumbing · PR Operations · GitHub Write</div>
+          </div>
+        </div>
+        <div class="persona-body">
+          High-velocity worker for backend Python implementation, rigorous TDD test suite generation, and automated GitHub PR authoring/merging with sandboxed network grants.
+        </div>
+        <div class="persona-terminal">
+          $ synlynk start #124<br/>
+          $ pytest tests/test_core.py<br/>
+          $ gh pr create --fill
+        </div>
+      </div>
+
+      <!-- Agy Persona -->
+      <div class="persona-card">
+        <div class="persona-header">
+          <div class="persona-avatar persona-agy">A</div>
+          <div>
+            <div class="persona-name">Agy (Gemini 1.5 Pro / Flash)</div>
+            <div class="persona-role">HTML · CSS · Canvas · Content · Documentation</div>
+          </div>
+        </div>
+        <div class="persona-body">
+          Specialized in high-volume research reads, full-stack templates, Vizor interactive canvas engines, living documentation updates, and deep AST graph visualizations.
+        </div>
+        <div class="persona-terminal">
+          $ synlynk viz<br/>
+          $ synlynk checkpoint<br/>
+          $ synlynk cost log --amount 0.05
+        </div>
+      </div>
+
+      <!-- Grok Persona -->
+      <div class="persona-card">
+        <div class="persona-header">
+          <div class="persona-avatar persona-grok">G</div>
+          <div>
+            <div class="persona-name">Grok (xAI)</div>
+            <div class="persona-role">JavaScript · Canvas Infra · Pure Mathematical Compute</div>
+          </div>
+        </div>
+        <div class="persona-body">
+          Executes compute-intensive algorithms, spatial graph layouts, coordinate transforms, and browser visualization pipelines in sandboxed, zero-side-effect worktrees.
+        </div>
+        <div class="persona-terminal">
+          $ synlynk dispatch grok --task "optimize AST layout"<br/>
+          &gt; Running isolated worker...<br/>
+          &gt; Job completed (0 tokens egress)
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+const JOURNEYS_DATA = __JOURNEYS_DATA_JSON__;
+
+function switchTab(tabId, btn) {
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  const target = document.getElementById('pane-' + tabId);
+  if (target) target.classList.add('active');
+  if (btn) btn.classList.add('active');
+}
+
+function selectJourney(journeyId) {
+  document.querySelectorAll('.journey-card-item').forEach(item => {
+    item.classList.toggle('active', item.dataset.id === journeyId);
+  });
+  const journey = JOURNEYS_DATA.find(j => j.id === journeyId) || JOURNEYS_DATA[0];
+  if (!journey) return;
+
+  const container = document.getElementById('journey-detail-container');
+  if (!container) return;
+
+  let attrs = {};
+  try {
+    attrs = typeof journey.attrs_json === 'string' ? JSON.parse(journey.attrs_json) : (journey.attrs_json || {});
+  } catch (_) {}
+
+  const steps = attrs.steps || ['Step 1: Initiate', 'Step 2: Process', 'Step 3: Complete'];
+  const desc = attrs.description || journey.label;
+
+  let stepsHtml = steps.map((s, idx) => `
+    <div class="flow-step-box">
+      <div class="step-number">${idx + 1}</div>
+      <div class="step-content">
+        <div class="step-cmd">${escapeHtml(s)}</div>
+        <div style="font-size: 12px; color: var(--text-muted);">Action phase executing ${escapeHtml(s)} against local workspace environment.</div>
+      </div>
+    </div>
+  `).join('');
+
+  container.innerHTML = `
+    <div class="journey-detail-header">
+      <h2 style="font-size: 18px; font-weight: 700; margin-bottom: 6px;">${escapeHtml(journey.label)}</h2>
+      <p style="font-size: 13px; color: var(--text-muted);">${escapeHtml(desc)}</p>
+    </div>
+    <div class="journey-flow-visual">
+      ${stepsHtml}
+    </div>
+  `;
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+try {
+  const savedTheme = localStorage.getItem('vizor-theme');
+  if (savedTheme) document.documentElement.setAttribute('data-theme', savedTheme);
+} catch (_) {}
+</script>
+__LIVE_JS_HTML__
+</body>
+</html>"""
+
+    # Generate Journey Sidebar HTML
+    sidebar_items = []
+    for idx, j in enumerate(journeys):
+        j_id = j.get("id") or f"journey-{idx}"
+        j["id"] = j_id
+        label = j.get("label") or "User Journey"
+        attrs = {}
+        try:
+            attrs = json.loads(j.get("attrs_json") or "{}") if isinstance(j.get("attrs_json"), str) else (j.get("attrs_json") or {})
+        except Exception:
+            pass
+        desc = attrs.get("description") or f"Workflow for {label}"
+        is_active = "active" if idx == 0 else ""
+        sidebar_items.append(f"""
+        <div class="journey-card-item {is_active}" data-id="{html.escape(j_id)}" onclick="selectJourney('{html.escape(j_id)}')">
+          <div class="journey-card-title">{html.escape(label)}</div>
+          <div class="journey-card-desc">{html.escape(desc)}</div>
+        </div>
+        """)
+    sidebar_html = "\n".join(sidebar_items)
+
+    # Active Journey Detail HTML
+    active_j = journeys[0] if journeys else {}
+    active_attrs = {}
+    try:
+        active_attrs = json.loads(active_j.get("attrs_json") or "{}") if isinstance(active_j.get("attrs_json"), str) else (active_j.get("attrs_json") or {})
+    except Exception:
+        pass
+    active_steps = active_attrs.get("steps") or ["synlynk init", "synlynk scan --deep", "synlynk launch"]
+    active_desc = active_attrs.get("description") or active_j.get("label") or "User Workflow"
+    active_steps_html = "\n".join([
+        f"""
+        <div class="flow-step-box">
+          <div class="step-number">{idx + 1}</div>
+          <div class="step-content">
+            <div class="step-cmd">{html.escape(str(s))}</div>
+            <div style="font-size: 12px; color: var(--text-muted);">Action phase executing {html.escape(str(s))} against local workspace environment.</div>
+          </div>
+        </div>
+        """ for idx, s in enumerate(active_steps)
+    ])
+    active_detail_html = f"""
+    <div class="journey-detail-header">
+      <h2 style="font-size: 18px; font-weight: 700; margin-bottom: 6px;">{html.escape(str(active_j.get("label") or "Journey"))}</h2>
+      <p style="font-size: 13px; color: var(--text-muted);">{html.escape(active_desc)}</p>
+    </div>
+    <div class="journey-flow-visual">
+      {active_steps_html}
+    </div>
+    """
+
+    # Screens Grid HTML
+    screen_cards = []
+    for s in screens:
+        s_label = s.get("label") or "Screen"
+        s_attrs = {}
+        try:
+            s_attrs = json.loads(s.get("attrs_json") or "{}") if isinstance(s.get("attrs_json"), str) else (s.get("attrs_json") or {})
+        except Exception:
+            pass
+        s_route = s_attrs.get("route") or "#"
+        s_desc = s_attrs.get("description") or "Vizor interactive interface"
+        s_cat = s_attrs.get("category") or "view"
+        screen_cards.append(f"""
+        <div class="screen-card">
+          <div class="screen-card-top">
+            <div class="screen-title">{html.escape(s_label)}</div>
+            <span class="screen-category-badge">{html.escape(s_cat)}</span>
+          </div>
+          <div class="screen-desc">{html.escape(s_desc)}</div>
+          <a href="{html.escape(s_route)}" class="screen-link">Open View ➔</a>
+        </div>
+        """)
+    screens_grid_html = "\n".join(screen_cards)
+
+    return (
+        template
+        .replace("__WORKSPACE_NAME__", html.escape(workspace_name))
+        .replace("__JOURNEY_COUNT__", str(len(journeys)))
+        .replace("__SCREEN_COUNT__", str(len(screens)))
+        .replace("__JOURNEY_SIDEBAR_HTML__", sidebar_html)
+        .replace("__ACTIVE_JOURNEY_DETAIL_HTML__", active_detail_html)
+        .replace("__SCREENS_GRID_HTML__", screens_grid_html)
+        .replace("__JOURNEYS_DATA_JSON__", json.dumps(journeys))
+        .replace("__LIVE_JS_HTML__", live_js_html)
+    )
 
 
 def generate_logical_html(data: dict, port: int) -> str:
