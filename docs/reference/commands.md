@@ -6,6 +6,7 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 
 ## Orientation gateway (always available)
 
+- `governs` — visualize
 - `status` — visualize
 - `watch` — visualize
 - `viz` — visualize
