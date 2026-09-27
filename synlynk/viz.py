@@ -4004,7 +4004,7 @@ def generate_architect_map_html(data: dict, port: int) -> str:
         <label class="am-kind-chip"><input type="checkbox" checked value="Service Class" onchange="toggleAmKindFilter(this)"> Services</label>
         <label class="am-kind-chip"><input type="checkbox" checked value="Module Cluster" onchange="toggleAmKindFilter(this)"> Modules</label>
         <label class="am-kind-chip"><input type="checkbox" checked value="CLI Handler" onchange="toggleAmKindFilter(this)"> Handlers</label>
-        <label class="am-kind-chip"><input type="checkbox" checked value="Test Suite" onchange="toggleAmKindFilter(this)"> Tests</label>
+        <label class="am-kind-chip"><input type="checkbox" value="Test Suite" onchange="toggleAmKindFilter(this)"> Tests</label>
       </div>
       <span class="am-kg-chip" id="am-kg-status-chip">{num_clusters} Clusters · {total_symbols} AST Symbols</span>
       <button type="button" id="am-kg-refresh-btn" class="am-btn-action" onclick="triggerAmKgRefresh(this)" title="Re-extract AST Knowledge Graph">🔄 Refresh Graph</button>
@@ -4586,7 +4586,7 @@ def _generate_bs6_view_html(data: dict, port: int, view_key: str, view_title: st
         <label class="am-kind-chip"><input type="checkbox" checked value="Service Class" onchange="toggleAmKindFilter(this)"> Services</label>
         <label class="am-kind-chip"><input type="checkbox" checked value="Module Cluster" onchange="toggleAmKindFilter(this)"> Modules</label>
         <label class="am-kind-chip"><input type="checkbox" checked value="CLI Handler" onchange="toggleAmKindFilter(this)"> Handlers</label>
-        <label class="am-kind-chip"><input type="checkbox" checked value="Test Suite" onchange="toggleAmKindFilter(this)"> Tests</label>
+        <label class="am-kind-chip"><input type="checkbox" value="Test Suite" onchange="toggleAmKindFilter(this)"> Tests</label>
       </div>
       <span class="am-kg-chip" id="bs6-kg-status-chip">{num_clusters} Clusters · {total_symbols} AST Symbols</span>
       <button type="button" id="bs6-kg-refresh-btn" class="am-btn-action" onclick="triggerBs6KgRefresh(this)" title="Re-extract AST Knowledge Graph">🔄 Refresh Graph</button>
@@ -7656,16 +7656,36 @@ def _enrich_graphify_html(html_str: str, graph_data: dict) -> str:
         )
 
     lod_and_info_script = """
-// Level-of-Detail (LOD) Manager & Enhanced Node Details
-let currentLODLevel = 0; // 0: Macro (>=3), 1: Subsystem (>=2), 2: Component (>=1), 3: Micro (>=0)
-const LOD_THRESHOLDS = [3, 2, 1, 0];
+// Dynamic Percentile-based LOD Threshold Calculation
+function computeDynamicLODThresholds() {
+  if (typeof RAW_NODES === 'undefined' || !RAW_NODES.length) return [8, 4, 2, 0];
+  const codeNodes = RAW_NODES.filter(n => (n.file_type || n._file_type) !== 'Test Suite');
+  const degs = (codeNodes.length ? codeNodes : RAW_NODES).map(n => n.degree || n._degree || 0).sort((a, b) => b - a);
+  if (!degs.length) return [8, 4, 2, 0];
+
+  // L0: Top 10% or highest 10-12 nodes for clean macro architecture
+  const l0Idx = Math.min(degs.length - 1, Math.max(8, Math.floor(degs.length * 0.10)));
+  const l0 = Math.max(degs[l0Idx] || 6, 5);
+  // L1: Top 30% for subsystem boundaries
+  const l1Idx = Math.min(degs.length - 1, Math.floor(degs.length * 0.30));
+  const l1 = Math.max(degs[l1Idx] || 3, 3);
+  // L2: Top 65% for component modules
+  const l2Idx = Math.min(degs.length - 1, Math.floor(degs.length * 0.65));
+  const l2 = Math.max(degs[l2Idx] || 1, 1);
+  const l3 = 0;
+
+  return [l0, l1, l2, l3];
+}
+
+const LOD_THRESHOLDS = computeDynamicLODThresholds();
 const LOD_SCALE_TIERS = [
-  { minScale: 0.0, maxScale: 0.45, level: 0, label: 'L0 (≥3)', minDegree: 3, targetScale: 0.35 },
-  { minScale: 0.45, maxScale: 0.85, level: 1, label: 'L1 (≥2)', minDegree: 2, targetScale: 0.60 },
-  { minScale: 0.85, maxScale: 1.40, level: 2, label: 'L2 (≥1)', minDegree: 1, targetScale: 1.05 },
-  { minScale: 1.40, maxScale: 99.0, level: 3, label: 'L3 (All)', minDegree: 0, targetScale: 1.60 }
+  { minScale: 0.0, maxScale: 0.45, level: 0, label: 'L0 (Macro Core: ≥' + LOD_THRESHOLDS[0] + ')', minDegree: LOD_THRESHOLDS[0], targetScale: 0.35 },
+  { minScale: 0.45, maxScale: 0.85, level: 1, label: 'L1 (Subsystems: ≥' + LOD_THRESHOLDS[1] + ')', minDegree: LOD_THRESHOLDS[1], targetScale: 0.60 },
+  { minScale: 0.85, maxScale: 1.40, level: 2, label: 'L2 (Components: ≥' + LOD_THRESHOLDS[2] + ')', minDegree: LOD_THRESHOLDS[2], targetScale: 1.05 },
+  { minScale: 1.40, maxScale: 99.0, level: 3, label: 'L3 (All Symbols)', minDegree: 0, targetScale: 1.60 }
 ];
 
+let currentLODLevel = 0; // 0: Macro, 1: Subsystem, 2: Component, 3: Micro
 let activeInspectedNodeId = null;
 let inspectedEgoSet = new Set();
 let activeKindFilters = null;
