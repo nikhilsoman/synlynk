@@ -935,3 +935,23 @@
    - Isolated `.synlynk/lease.json` inside gitignored `.synlynk/` directory to prevent false-positive dirty worktree activity during stall checks.
    - 100% full regression pass rate across 3,382 tests locally. Opened PR #1813.
 [@agy]
+
+## 2026-09-27 — Shipped: Invariant 5 (Compressed Default Surface, Role+Harness Vocabulary & Doc Sync) (Issue #1814, PR #1815)
+
+### Context & Problem
+- Addressed Invariant 5 from the 4-harness Deep Architecture Review: eliminate user-facing semantic overload around Agent/Harness/Role, compress the 7-stage GOVERNS FSM into an intuitive 5-stage default view (`Plan → Build → Verify → Ship → Sustain`), and synchronize stale architecture documentation.
+
+### Shipped & Landed (PR #1815)
+1. **5-Stage Compressed GOVERNS Surface (`synlynk/governs_compressed.py`):**
+   - Implemented `compress_governs_stage()`, `get_compressed_stage_progress()`, and `format_compressed_governs_summary()`.
+   - Maps internal 7 stages (Dream, Plan, Work, Review, Ship, Maint, Engag) to 5 intuitive stages (Plan, Build, Verify, Ship, Sustain).
+2. **CLI Integration (`synlynk/cli.py`, `synlynk/governs_cli.py`):**
+   - `synlynk governs` renders the compressed 5-stage workflow table by default.
+   - Added `--full` flag to inspect the underlying 7-stage FSM on demand.
+3. **Documentation Realignment (`CLAUDE.md`, `GEMINI.md`, `AGENTS.md`):**
+   - Standardized Role (Persona/Intent) and Harness (Execution Engine) definitions.
+   - Updated codebase descriptions from legacy single-file references to the modular ~138-module operating substrate.
+4. **Verification:**
+   - Added unit test coverage in `tests/test_governs_compressed.py` and `tests/test_cli_compressed_surface.py`.
+   - Full regression suite verified.
+[@agy]

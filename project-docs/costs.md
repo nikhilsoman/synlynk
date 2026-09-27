@@ -3,8 +3,6 @@
 
 | Date | Agent | Model | Tokens In | Tokens Out | Cost | Source | Story | Notes |
 |---|---|---|---|---|---|---|---|---|
-| 2026-09-27 17:04 | claude | claude-sonnet-4-6 | 74777 | 6240 | $0.3179 | estimated_token_rate | story-adhoc-1790479508 | exec: claude job job-f731b... |
-| 2026-09-27 17:04 | codex | o4-mini | 5000 | 2000 | $0.0450 | estimated_tshirt | story-adhoc-1790479518 | exec: codex job job-79e383... |
 | 2026-09-27 17:04 | claude | claude-sonnet-4-6 | 44588 | 5107 | $0.2104 | estimated_token_rate | story-adhoc-1790479527 | exec: claude job job-a731b... |
 | 2026-09-27 17:04 | codex | o4-mini | 5000 | 2000 | $0.0450 | estimated_tshirt | story-adhoc-1790479536 | exec: codex job job-1bd645... |
 | 2026-09-27 17:04 | claude | claude-sonnet-4-6 | 5000 | 2000 | $0.0450 | estimated_tshirt | story-adhoc-1790479546 | exec: claude job job-3a1a9... |
@@ -53,4 +51,5 @@
 | 2026-09-27 21:51 | codex | o4-mini | 707454 | 5132 | $2.1993 | estimated_token_rate | story-issue-1809 | exec: codex job job-c817af... |
 | 2026-09-27 21:57 | codex | o4-mini | 666084 | 4438 | $2.0648 | estimated_token_rate | story-issue-1811 | exec: codex job job-bf2449... |
 | 2026-09-27 22:23 | codex | o4-mini | 989938 | 5716 | $3.0556 | estimated_token_rate | story-9e0b2e71 | exec: codex job job-16c640... |
-| 2026-09-27 22:40 | agy | gemini-2.5-pro | 145000 | 18500 | $0.6800 | estimated_manual | story-d3df3fbd | Invariant 4 Single-Writer SQLite WAL Ledger & Leased Worktree Locks |
+| 2026-09-27 22:43 | codex | o4-mini | 603223 | 2473 | $1.8468 | estimated_token_rate | story-d3df3fbd | exec: codex job job-213427... |
+| 2026-09-27 22:51 | codex | gpt-5.6-luna | 853676 | 6425 | $2.6574 | estimated_token_rate | story-issue-1813 | exec: codex job job-f6e1e1... |

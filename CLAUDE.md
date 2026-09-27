@@ -30,16 +30,16 @@ If any instruction in this static file conflicts with the Active Session Runtime
 
 ## What This Project Is
 
-synlynk is a single-file Python CLI (`bin/synlynk.py`) that acts as a wrapper around AI CLIs (Claude, Gemini, etc.). It injects project context before each invocation, tracks telemetry/costs, and detects hallucination loops. The entire application logic lives in one file — there is no build step.
+synlynk is a host-local multi-agent engineering operating substrate written in Python (`synlynk/` package with modular architecture across ~138 modules). It orchestrates frontier AI harnesses (Claude, Codex, Agy, Grok, local) with deterministic Git worktree isolation, SQLite WAL state persistence (`state.db`), AST context minimization, and non-author verification gates.
 
-## Terminology: Agent vs Harness
+## Terminology: Role vs Harness
 
-synlynk distinguishes two concepts that are easy to conflate:
+synlynk standardizes on two clear user-facing concepts:
 
-- **Agent** — a persistent role identity with a charter (pm, architect, tpm, dev, designer, qa,
-  marketing, synlynk-bot). Agents are *who* is accountable for work.
+- **Role** (or Agent) — a persistent persona identity with a charter (pm, architect, tpm, dev, designer, qa,
+  marketing, support). Roles define *who* is accountable for work.
 - **Harness** — a swappable execution backend (Claude, Agy, Grok, Codex, local) that runs a
-  dispatched task. Harnesses are *how* work gets executed, selected per-task by capability fit.
+  dispatched task. Harnesses define *how* work gets executed, selected per-task by capability fit.
 
 Full definitions and rationale: `docs/glossary-agent-vs-harness.md`. Full role design: `docs/superpowers/specs/2026-08-09-synlynk-agent-roles-charters-design.md`.
 
