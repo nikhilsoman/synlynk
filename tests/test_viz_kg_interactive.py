@@ -20,7 +20,7 @@ def test_architect_map_contains_kg_source_drawer_and_interactive_features():
     assert "Escape" in html
     assert "resetInspectMode" in html
 
-def test_logical_html_contains_kg_source_drawer_and_filters():
+def test_logical_html_contains_hld_and_sequence_player():
     data = {
         "nodes": [
             {"id": "node-1", "label": "CoreService", "kind": "service"},
@@ -35,10 +35,10 @@ def test_logical_html_contains_kg_source_drawer_and_filters():
         "repos": [{"name": "synlynk", "path": ".", "primary": True}],
     }
     html = generate_logical_html(data, port=27472)
-    assert "kg-source-drawer" in html
-    assert "bs6-kg-kind-filters" in html
-    assert "openKgSourceDrawer" in html
-    assert "toggleAmKindFilter" in html
+    assert "Logical View" in html
+    assert "Layered HLD Architecture" in html
+    assert "Interactive Sequence Player" in html
+    assert "CoreService" in html
 
 def test_enrich_graphify_html_injects_interactive_ux():
     mock_html = """<!DOCTYPE html>

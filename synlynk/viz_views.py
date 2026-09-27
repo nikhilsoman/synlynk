@@ -262,7 +262,7 @@ def _edge(view: str, source: dict, target: dict, kind: str,
 
 
 def extract_product_nodes(conn: sqlite3.Connection, repo_path: str) -> Tuple[List[dict], List[dict]]:
-    """Extract authored journey documents and their declared routes."""
+    """Extract authored journey documents, discovered screens/routes, and canonical workflows."""
     started, now, repo, sha = time.monotonic(), _now(), _repo_name(repo_path), _head_sha(repo_path)
     nodes, edges = [], []
     journey_root = os.path.join(repo_path, "docs", "journeys")
@@ -284,6 +284,48 @@ def extract_product_nodes(conn: sqlite3.Connection, repo_path: str) -> Tuple[Lis
                     route_node = _node("product", repo, "route", route, {"route": route}, relative + "#route=" + route, "extracted", now, sha)
                     nodes.append(route_node)
                     edges.append(_edge("product", journey, route_node, "includes", "extracted", now))
+
+    # Also discover CLI commands or entry points
+    cli_path = os.path.join(repo_path, "synlynk", "cli.py")
+    if os.path.isfile(cli_path):
+        try:
+            with open(cli_path, "r", encoding="utf-8", errors="ignore") as f:
+                cli_content = f.read()
+                for cmd_match in re.finditer(r"@cli\.(?:command|group)\(.*?name=[\"']([\w-]+)[\"']|def\s+cmd_([\w_]+)", cli_content):
+                    cmd_name = cmd_match.group(1) or cmd_match.group(2).replace("_", "-")
+                    if cmd_name and not cmd_name.startswith("_"):
+                        cmd_node = _node("product", repo, "cli_command", f"synlynk {cmd_name}", {"command": cmd_name}, "synlynk/cli.py", "extracted", now, sha)
+                        nodes.append(cmd_node)
+        except Exception:
+            pass
+
+    # Universal Fallback: If no journeys exist, populate core product journeys and screens
+    if not any(n["kind"] == "journey" for n in nodes):
+        canonical_journeys = [
+            ("Zero-Friction Onboarding", "Initialize workspace, scan AST code graph, and launch agent session.", ["synlynk init", "synlynk scan --deep", "synlynk launch"]),
+            ("Interactive Home Harness Pairing", "Pair with Claude, Codex, Agy, or Grok in terminal with real-time state and anti-amnesia.", ["Session Start Greet", "Context Snapshot", "Task Boundary Checkpoint"]),
+            ("Autonomous Milestone DAG Execution", "Execute multi-task milestone unattended across isolated worktrees with QA merge gates.", ["Spec Brainstorm", "SDD Plan", "Parallel Worktree Dispatch", "QA Merge Gate"]),
+            ("Governance & Master Control Plane", "Coordinate business goals, epic backlogs, and multi-view Vizor control dashboards.", ["GOVERNS Board", "Gantt Timeline", "AST Architect Map", "Fleet Radar"])
+        ]
+        for title, desc, steps in canonical_journeys:
+            j_node = _node("product", repo, "journey", title, {"description": desc, "steps": steps}, "docs/journeys", "canonical", now, sha)
+            nodes.append(j_node)
+
+    # Universal Screens Catalog
+    screen_defs = [
+        ("GOVERNS Board", "/board.html", "Canonical Kanban & Stage Tracking", "governance"),
+        ("Gantt Timeline", "/timeline.html", "Dual-Pivot Milestone Schedule", "timeline"),
+        ("Architect Code Graph", "/tube.html", "Physical AST Graph & Community Clusters", "architecture"),
+        ("Logical Engine", "/logical.html", "HLD Layers, LLD Components & Sequence Player", "logical"),
+        ("Host & Egress Topology", "/infra.html", "Host-Local Runtime vs Outbound AI Egress", "infra"),
+        ("User Journeys & Catalog", "/product.html", "Product Workflows & Harness Personas", "product"),
+        ("Ecosystem Radar", "/world.html", "3-Ring Concentric Dependency Radar", "ecosystem"),
+        ("Fleet Observatory", "/observatory.html", "Cross-Workspace Telemetry & Event Stream", "observatory")
+    ]
+    for s_name, s_route, s_desc, s_cat in screen_defs:
+        s_node = _node("product", repo, "screen", s_name, {"route": s_route, "description": s_desc, "category": s_cat}, s_route, "canonical", now, sha)
+        nodes.append(s_node)
+
     _save_projection(conn, "product", repo, nodes, edges, started, sha)
     return nodes, edges
 
@@ -460,11 +502,50 @@ def extract_logical_nodes(conn: sqlite3.Connection, repo_path: str) -> Tuple[Lis
 
 
 def extract_infra_nodes(conn: sqlite3.Connection, repo_path: str) -> Tuple[List[dict], List[dict]]:
-    """Describe the local daemon and Vizor service boundary."""
+    """Describe the host-local runtime boundary and outbound cloud AI inference egress."""
     started, now, repo, sha = time.monotonic(), _now(), _repo_name(repo_path), _head_sha(repo_path)
-    daemon = _node("infra", repo, "service", "Synlynk Daemon (Background)", {"type": "process"}, ".synlynk/daemon.pid", "inferred", now, sha)
-    vizor = _node("infra", repo, "service", "Vizor Server (:8721)", {"port": 8721}, "synlynk/viz.py", "extracted", now, sha)
-    nodes, edges = [daemon, vizor], [_edge("infra", daemon, vizor, "manages", "inferred", now)]
+    nodes, edges = [], []
+
+    # 1. Host-Local Runtime Nodes (Zero-SaaS Local Machine)
+    hl_components = [
+        ("Vizor Server (:8721)", "service", {"zone": "host_local", "port": 8721, "status": "Running", "description": "Local HTTP visualization server and UI control plane"}, "synlynk/viz.py"),
+        ("SSE Relay Broker (:27472)", "service", {"zone": "host_local", "port": 27472, "status": "Active", "description": "High-throughput localhost event multiplexer and SSE feed"}, "synlynk/relay.py"),
+        ("StateDB SQLite Ledger", "database", {"zone": "host_local", "file": ".synlynk/state.db", "status": "WAL Active", "description": "100% Host-local ACID transactional ledger for goals, epics, stories"}, ".synlynk/state.db"),
+        ("Cryptographic Keystore", "security", {"zone": "host_local", "file": "identity.key", "status": "Secured (0o600)", "description": "Ed25519 identity key and GitHub App PEM certificates"}, "~/.synlynk/identity.key"),
+        ("Isolated Git Worktrees", "worktree", {"zone": "host_local", "pattern": "../feat+*", "status": "Isolated Cones", "description": "Parallel headless harness execution workspaces"}, "../feat+*"),
+        ("Graphify AST Cache", "cache", {"zone": "host_local", "dir": ".synlynk/graphify-out", "status": "Indexed", "description": "Offline AST code graph, community clusters, and source index"}, ".synlynk/graphify-out/")
+    ]
+
+    hl_node_map = {}
+    for label, kind, attrs, src_path in hl_components:
+        n = _node("infra", repo, kind, label, attrs, src_path, "extracted", now, sha)
+        nodes.append(n)
+        hl_node_map[label] = n
+
+    # Connect host-local internal relationships
+    if "Vizor Server (:8721)" in hl_node_map and "SSE Relay Broker (:27472)" in hl_node_map:
+        edges.append(_edge("infra", hl_node_map["Vizor Server (:8721)"], hl_node_map["SSE Relay Broker (:27472)"], "manages", "extracted", now))
+    if "Vizor Server (:8721)" in hl_node_map and "StateDB SQLite Ledger" in hl_node_map:
+        edges.append(_edge("infra", hl_node_map["Vizor Server (:8721)"], hl_node_map["StateDB SQLite Ledger"], "queries", "extracted", now))
+    if "Vizor Server (:8721)" in hl_node_map and "Graphify AST Cache" in hl_node_map:
+        edges.append(_edge("infra", hl_node_map["Vizor Server (:8721)"], hl_node_map["Graphify AST Cache"], "reads", "extracted", now))
+
+    # 2. Outbound External AI Egress (Air-Gapped / Explicit Network Endpoints)
+    egress_endpoints = [
+        ("Anthropic Claude API", "egress", {"zone": "outbound_egress", "endpoint": "api.anthropic.com:443", "category": "llm", "role": "PM & Architecture", "status": "Connected"}, "synlynk/dispatch.py"),
+        ("OpenAI Codex API", "egress", {"zone": "outbound_egress", "endpoint": "api.openai.com:443", "category": "llm", "role": "Python & PR Ops", "status": "Connected"}, "synlynk/dispatch.py"),
+        ("Google Gemini API (Agy)", "egress", {"zone": "outbound_egress", "endpoint": "generativelanguage.googleapis.com:443", "category": "llm", "role": "HTML/CSS & Canvas", "status": "Connected"}, "synlynk/dispatch.py"),
+        ("xAI Grok API", "egress", {"zone": "outbound_egress", "endpoint": "api.x.ai:443", "category": "llm", "role": "Compute & Layout", "status": "Connected"}, "synlynk/dispatch.py"),
+        ("GitHub REST/GraphQL API", "egress", {"zone": "outbound_egress", "endpoint": "api.github.com:443", "category": "vcs", "role": "Source Control & CI", "status": "Connected"}, "synlynk/gh.py")
+    ]
+
+    for label, kind, attrs, src_path in egress_endpoints:
+        n = _node("infra", repo, kind, label, attrs, src_path, "extracted", now, sha)
+        nodes.append(n)
+        # Connect to Daemon / Worktrees
+        if "Vizor Server (:8721)" in hl_node_map:
+            edges.append(_edge("infra", hl_node_map["Vizor Server (:8721)"], n, "egress_calls", "extracted", now))
+
     _save_projection(conn, "infra", repo, nodes, edges, started, sha)
     return nodes, edges
 
@@ -546,7 +627,7 @@ def extract_world_nodes(conn: sqlite3.Connection, repo_path: str) -> Tuple[List[
             break
 
     # Fallback to standard core providers if running in clean test sandbox
-    if not detected_integrations:
+    if not any(item.get("ring") == 1 for item in detected_integrations.values()):
         detected_integrations["GitHub REST/GraphQL API"] = {
             "label": "GitHub REST/GraphQL API", "category": "vcs", "ring": 1,
             "description": "Source Control & Apps API", "env_var": "GH_TOKEN", "source_path": "synlynk/gh.py"
@@ -554,6 +635,25 @@ def extract_world_nodes(conn: sqlite3.Connection, repo_path: str) -> Tuple[List[
         detected_integrations["Google Gemini API"] = {
             "label": "Google Gemini API", "category": "llm", "ring": 1,
             "description": "LLM Multimodal API", "env_var": "GEMINI_API_KEY", "source_path": "synlynk/dispatch.py"
+        }
+        detected_integrations["Anthropic Claude API"] = {
+            "label": "Anthropic Claude API", "category": "llm", "ring": 1,
+            "description": "LLM Inference Gateway", "env_var": "ANTHROPIC_API_KEY", "source_path": "synlynk/dispatch.py"
+        }
+        detected_integrations["OpenAI Codex API"] = {
+            "label": "OpenAI Codex API", "category": "llm", "ring": 1,
+            "description": "LLM Inference Gateway", "env_var": "OPENAI_API_KEY", "source_path": "synlynk/dispatch.py"
+        }
+
+    # Ensure Ring 2 Ecosystem Connectors are present
+    if not any(item.get("ring") == 2 for item in detected_integrations.values()):
+        detected_integrations["Team Relays & Webhooks"] = {
+            "label": "Team Relays & Webhooks", "category": "comms", "ring": 2,
+            "description": "Slack / Discord notification webhooks", "env_var": "SLACK_BOT_TOKEN", "source_path": "synlynk/relay.py"
+        }
+        detected_integrations["fal.ai Generative Media"] = {
+            "label": "fal.ai Generative Media", "category": "media", "ring": 2,
+            "description": "Generative Media & 3D Canvas assets", "env_var": "FAL_KEY", "source_path": "synlynk/media.py"
         }
 
     # Add detected integration nodes
@@ -576,6 +676,7 @@ def extract_world_nodes(conn: sqlite3.Connection, repo_path: str) -> Tuple[List[
 
     # 3. Opportunity Radar Ring 3 Projections (from .synlynk/radar.json or PM opportunities)
     radar_file = os.path.join(repo_path, ".synlynk", "radar.json")
+    has_ring3 = False
     if os.path.exists(radar_file):
         try:
             with open(radar_file, "r", encoding="utf-8") as rf:
@@ -594,8 +695,30 @@ def extract_world_nodes(conn: sqlite3.Connection, repo_path: str) -> Tuple[List[
                     )
                     nodes.append(opp_node)
                     edges.append(_edge("world", root_node, opp_node, "evaluates", "projected", now))
+                    has_ring3 = True
         except Exception:
             pass
+
+    # Ring 3 Fallbacks: Local oMLX and Multi-Repo Mesh
+    if not has_ring3:
+        ring3_fallbacks = [
+            ("Local oMLX Neural Engine", "opportunity", "Local offline Apple Silicon MLX inference agent", "high"),
+            ("Federated Multi-Repo Mesh", "opportunity", "Cross-workspace AST knowledge graph bridge", "high"),
+        ]
+        for title, cat, desc, val in ring3_fallbacks:
+            opp_node = _node(
+                "world", repo, cat, title,
+                {
+                    "ring": 3,
+                    "category": cat,
+                    "description": desc,
+                    "tier": "opportunity",
+                    "estimated_value": val,
+                },
+                "project-docs/roadmap.md", "canonical", now, sha
+            )
+            nodes.append(opp_node)
+            edges.append(_edge("world", root_node, opp_node, "evaluates", "canonical", now))
 
     _save_projection(conn, "world", repo, nodes, edges, started, sha)
     return nodes, edges

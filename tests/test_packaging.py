@@ -111,11 +111,24 @@ def test_run_upgrade_script_prints_pipx_migration(monkeypatch, capsys):
 
 
 def test_pyproject_package_data_includes_packs():
-    import tomllib
     root = os.path.dirname(os.path.dirname(__file__))
     pyproject_path = os.path.join(root, "pyproject.toml")
-    with open(pyproject_path, "rb") as f:
-        data = tomllib.load(f)
-    pkg_data = data.get("tool", {}).get("setuptools", {}).get("package-data", {}).get("synlynk", [])
-    assert "packs/*.yaml" in pkg_data
+    try:
+        import tomllib
+        with open(pyproject_path, "rb") as f:
+            data = tomllib.load(f)
+        pkg_data = data.get("tool", {}).get("setuptools", {}).get("package-data", {}).get("synlynk", [])
+        assert "packs/*.yaml" in pkg_data
+    except ModuleNotFoundError:
+        try:
+            import tomli as tomllib
+            with open(pyproject_path, "rb") as f:
+                data = tomllib.load(f)
+            pkg_data = data.get("tool", {}).get("setuptools", {}).get("package-data", {}).get("synlynk", [])
+            assert "packs/*.yaml" in pkg_data
+        except ModuleNotFoundError:
+            with open(pyproject_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            assert '"packs/*.yaml"' in content or "'packs/*.yaml'" in content
+
 
