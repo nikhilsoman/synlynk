@@ -337,7 +337,7 @@ def test_dispatch_perjob_git_worktree_isolation_uses_distinct_worktrees(git_work
         spawned.append(kwargs["cwd"])
         return FakeProc(1000 + len(spawned))
 
-    times = iter([1_725_000_000.111, 1_725_000_000.222])
+    times = (1_725_000_000.111 + i * 0.111 for i in range(1000))
     monkeypatch.setattr(sl.time, "time", lambda: next(times))
     monkeypatch.setattr(sl.subprocess, "run", fake_run)
     monkeypatch.setattr(sl.subprocess, "Popen", fake_popen)

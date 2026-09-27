@@ -53,6 +53,7 @@ def test_all_terminal_status_functions_consult_gh_write_verified():
             not _source_calls_name(func, "gh_write_verified")
             and not _source_calls_name(func, "_apply_gh_write_verification")
             and not _source_calls_name(func, "_verify_daemon_terminal_status")
+            and not _source_calls_name(func, "_enforce_job_effect_verification")
         ):
             missing.append(f"{module.__name__}.{func_name}")
     assert not missing, (

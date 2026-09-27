@@ -19,7 +19,7 @@ from synlynk.wal_ledger import write_transaction, ensure_wal_pragmas
 
 logger = logging.getLogger("synlynk.worktree_lease")
 
-LEASE_JSON_FILENAME = ".synlynk-lease.json"
+LEASE_JSON_FILENAME = os.path.join(".synlynk", "lease.json")
 DEFAULT_LEASE_DURATION_SECONDS = 900  # 15 minutes
 
 
@@ -65,14 +65,15 @@ def _is_pid_alive(pid: int) -> bool:
 
 
 def _write_disk_lease_file(worktree_path: str, data: Dict[str, Any]) -> None:
-    """Write or overwrite the on-disk .synlynk-lease.json file in the worktree."""
-    if not os.path.exists(worktree_path):
+    """Write or overwrite the on-disk lease.json file in the worktree's .synlynk directory."""
+    synlynk_dir = os.path.join(worktree_path, ".synlynk")
+    if not os.path.exists(synlynk_dir):
         try:
-            os.makedirs(worktree_path, exist_ok=True)
+            os.makedirs(synlynk_dir, exist_ok=True)
         except OSError:
             pass
 
-    file_path = os.path.join(worktree_path, LEASE_JSON_FILENAME)
+    file_path = os.path.join(synlynk_dir, "lease.json")
     try:
         with open(file_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
@@ -81,13 +82,16 @@ def _write_disk_lease_file(worktree_path: str, data: Dict[str, Any]) -> None:
 
 
 def _remove_disk_lease_file(worktree_path: str) -> None:
-    """Safely remove the on-disk .synlynk-lease.json file."""
-    file_path = os.path.join(worktree_path, LEASE_JSON_FILENAME)
-    if os.path.exists(file_path):
-        try:
-            os.remove(file_path)
-        except OSError:
-            pass
+    """Safely remove the on-disk lease.json file (and legacy .synlynk-lease.json)."""
+    for candidate in [
+        os.path.join(worktree_path, ".synlynk", "lease.json"),
+        os.path.join(worktree_path, ".synlynk-lease.json"),
+    ]:
+        if os.path.exists(candidate):
+            try:
+                os.remove(candidate)
+            except OSError:
+                pass
 
 
 def acquire_worktree_lease(
@@ -223,6 +227,8 @@ def renew_worktree_lease(
 
         if success:
             file_path = os.path.join(worktree_path, LEASE_JSON_FILENAME)
+            if not os.path.exists(file_path):
+                file_path = os.path.join(worktree_path, ".synlynk-lease.json")
             if os.path.exists(file_path):
                 try:
                     with open(file_path, "r", encoding="utf-8") as f:

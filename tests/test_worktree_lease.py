@@ -46,7 +46,7 @@ def test_acquire_worktree_lease_success(tmp_path, db_conn):
     assert res["job_id"] == "job-1"
 
     # Verify on-disk lease JSON
-    lease_file = wt_path / ".synlynk-lease.json"
+    lease_file = wt_path / ".synlynk" / "lease.json"
     assert lease_file.exists()
     data = json.loads(lease_file.read_text())
     assert data["leased_by"] == "codex"
@@ -185,7 +185,7 @@ def test_release_worktree_lease(tmp_path, db_conn):
         conn=db_conn,
     )
 
-    lease_file = wt_path / ".synlynk-lease.json"
+    lease_file = wt_path / ".synlynk" / "lease.json"
     assert lease_file.exists()
 
     released = release_worktree_lease(
