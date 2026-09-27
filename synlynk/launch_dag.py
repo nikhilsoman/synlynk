@@ -67,6 +67,7 @@ def raise_escalation_ticket(
 
 
 from synlynk.jobs import (
+    STATUS_CIRCUIT_BREAKER_TRIPPED,
     STATUS_COMPLETED_WITHOUT_CHANGES,
     STATUS_FAILED_NOOP_DENIED,
     STATUS_FAILED_VERIFICATION,
@@ -328,6 +329,29 @@ class LaunchDAG:
                     node_id,
                     "failed",
                     error=f"Retries exhausted ({node.retry_count}/{node.max_retries}) on {status}",
+                )
+                return False
+
+        # Circuit breaker trip -> trigger autonomous harness failover
+        if status == STATUS_CIRCUIT_BREAKER_TRIPPED:
+            if node.retry_count < node.max_retries:
+                if node.harness not in node.failed_harnesses:
+                    node.failed_harnesses.append(node.harness)
+                node.retry_count += 1
+                next_harness = _next_failover_harness(node.harness, node.failed_harnesses)
+                prev_harness = node.harness
+                node.harness = next_harness
+                node.status = "ready"
+                node.lease_token = None
+                node.lease_expires = None
+                node.error = f"Auto-failover: {prev_harness} tripped circuit breaker ({error or status}); retrying with {next_harness}"
+                node.updated_at = time.strftime("%Y-%m-%dT%H:%M:%S")
+                return True
+            else:
+                self.advance_node(
+                    node_id,
+                    "failed",
+                    error=f"Retries exhausted ({node.retry_count}/{node.max_retries}) on circuit breaker trip: {error or status}",
                 )
                 return False
 
