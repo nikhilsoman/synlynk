@@ -74,16 +74,32 @@ from synlynk.jobs import (
     is_noop_status,
     is_successful_status,
 )
+from synlynk.capability_probe import (
+    CAP_GH_WRITE,
+    CAP_SHELL,
+    CAP_WORKSPACE_WRITE,
+    evaluate_harness_capabilities,
+    infer_task_required_capabilities,
+    resolve_capable_dispatch_harness,
+)
 
 _HARNESS_FAILOVER_CHAIN = ["codex", "agy", "claude", "grok"]
 
 
-def _next_failover_harness(current: str, failed_list: List[str]) -> str:
+def _next_failover_harness(current: str, failed_list: List[str], required_capabilities: Optional[Set[str]] = None) -> str:
     for h in _HARNESS_FAILOVER_CHAIN:
         if h != current and h not in failed_list:
+            if required_capabilities:
+                eval_res = evaluate_harness_capabilities(h, required_capabilities)
+                if not eval_res.allowed:
+                    continue
             return h
     for h in _HARNESS_FAILOVER_CHAIN:
         if h != current:
+            if required_capabilities:
+                eval_res = evaluate_harness_capabilities(h, required_capabilities)
+                if not eval_res.allowed:
+                    continue
             return h
     return current
 
@@ -97,6 +113,7 @@ class DAGNode:
     status: str = "pending"  # pending, ready, running, done, failed, blocked, awaiting_approval
     owner_role: str = "builder"
     harness: str = "codex"
+    required_capabilities: Optional[Set[str]] = None
     lease_token: Optional[str] = None
     lease_expires: Optional[float] = None
     pr_number: Optional[int] = None
@@ -123,8 +140,18 @@ class LaunchDAG:
             if not s_id:
                 continue
             role = story.get("role") or "builder"
+            title = story.get("title") or ""
+            requires_gh_write = bool(story.get("requires_gh_write", False))
+
             # Harness specialization matrix
-            harness = "codex" if role in ("builder", "dev", "tester") else ("agy" if role in ("marketing", "docs") else "claude")
+            base_harness = "codex" if role in ("builder", "dev", "tester") else ("agy" if role in ("marketing", "docs") else "claude")
+            impl_caps = infer_task_required_capabilities(title, task_type="implement", requires_gh_write=requires_gh_write)
+            impl_harness = resolve_capable_dispatch_harness(
+                candidate_harness=base_harness,
+                task=title,
+                required_capabilities=impl_caps,
+                requires_gh_write=requires_gh_write,
+            )
 
             impl_id = f"impl:{s_id}"
             rev_id = f"review:{s_id}"
@@ -146,8 +173,11 @@ class LaunchDAG:
                 dependencies=impl_deps,
                 status="ready" if not impl_deps else "pending",
                 owner_role=role,
-                harness=harness,
+                harness=impl_harness,
+                required_capabilities=impl_caps,
             )
+
+            gh_write_caps = {CAP_GH_WRITE, CAP_SHELL, CAP_WORKSPACE_WRITE}
 
             # Review node depends on implementation completing
             self.nodes[rev_id] = DAGNode(
@@ -158,6 +188,7 @@ class LaunchDAG:
                 status="pending",
                 owner_role="qa",
                 harness="codex",
+                required_capabilities=gh_write_caps,
             )
 
             # Merge node depends on review completing
@@ -169,6 +200,7 @@ class LaunchDAG:
                 status="pending",
                 owner_role="qa",
                 harness="codex",
+                required_capabilities=gh_write_caps,
             )
 
     def get_node(self, node_id: str) -> Optional[DAGNode]:
@@ -315,7 +347,7 @@ class LaunchDAG:
                 if node.harness not in node.failed_harnesses:
                     node.failed_harnesses.append(node.harness)
                 node.retry_count += 1
-                next_harness = _next_failover_harness(node.harness, node.failed_harnesses)
+                next_harness = _next_failover_harness(node.harness, node.failed_harnesses, node.required_capabilities)
                 prev_harness = node.harness
                 node.harness = next_harness
                 node.status = "ready"
@@ -338,7 +370,7 @@ class LaunchDAG:
                 if node.harness not in node.failed_harnesses:
                     node.failed_harnesses.append(node.harness)
                 node.retry_count += 1
-                next_harness = _next_failover_harness(node.harness, node.failed_harnesses)
+                next_harness = _next_failover_harness(node.harness, node.failed_harnesses, node.required_capabilities)
                 prev_harness = node.harness
                 node.harness = next_harness
                 node.status = "ready"
@@ -360,7 +392,7 @@ class LaunchDAG:
             if node.harness not in node.failed_harnesses:
                 node.failed_harnesses.append(node.harness)
             node.retry_count += 1
-            next_harness = _next_failover_harness(node.harness, node.failed_harnesses)
+            next_harness = _next_failover_harness(node.harness, node.failed_harnesses, node.required_capabilities)
             node.harness = next_harness
             node.status = "ready"
             node.lease_token = None

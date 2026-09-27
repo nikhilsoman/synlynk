@@ -265,13 +265,13 @@ def test_dispatch_agent_injects_gh_token_when_requires_gh_write(tmp_path, monkey
     dispatch_mod, job, captured_env = _dispatch_with_fake_popen(
         tmp_path,
         monkeypatch,
-        agent="grok",
+        agent="codex",
         requires_gh_write=True,
         token_resolver=lambda role: "minted-token-abc",
         role_for_story="qa",
     )
 
-    assert job["agent"] == "grok"
+    assert job["agent"] == "codex"
     assert captured_env.get("GH_TOKEN") == "minted-token-abc"
 
 
@@ -333,7 +333,7 @@ def test_dispatch_agent_injects_gh_token_and_isolates_config_dir(tmp_path, monke
     dispatch_mod, job, captured_env = _dispatch_with_fake_popen(
         tmp_path,
         monkeypatch,
-        agent="grok",
+        agent="codex",
         requires_gh_write=True,
         token_resolver=lambda role: "minted-token-abc",
         role_for_story="qa",
@@ -357,7 +357,7 @@ def test_dispatch_agent_fail_closed_when_requires_gh_write_token_missing(
         _dispatch_with_fake_popen(
             tmp_path,
             monkeypatch,
-            agent="grok",
+            agent="codex",
             requires_gh_write=True,
             token_resolver=lambda role: None,
             role_for_story="qa",
@@ -375,7 +375,7 @@ def test_dispatch_agent_host_auth_escape_hatch_when_token_missing(
         _dispatch_with_fake_popen(
             tmp_path,
             monkeypatch,
-            agent="grok",
+            agent="codex",
             requires_gh_write=True,
             token_resolver=lambda role: None,
             role_for_story="qa",

@@ -12,7 +12,7 @@
 
 ## Tasks
 
-- [ ] **Task 1: Capability Taxonomy & Task Requirement Inferencer (`synlynk/capability_probe.py`)**
+- [x] **Task 1: Capability Taxonomy & Task Requirement Inferencer (`synlynk/capability_probe.py`)**
   - Define `CAP_SHELL`, `CAP_WORKSPACE_WRITE`, `CAP_GH_WRITE`, `CAP_NET` constants.
   - Implement `infer_task_required_capabilities(task, task_type, requires, requires_gh_write)`.
   - Add `HARNESS_CAPABILITY_PROFILES` with accurate static profiles for all supported harnesses.
@@ -20,25 +20,25 @@
   - Implement `probe_harness_runtime_capability(harness, capability)` with memory cache.
   - Create `tests/test_capability_taxonomy.py` and verify with pytest.
 
-- [ ] **Task 2: Fail-Closed Capability Router (`synlynk/capability_probe.py`)**
+- [x] **Task 2: Fail-Closed Capability Router (`synlynk/capability_probe.py`)**
   - Implement `resolve_capable_dispatch_harness(candidate_harness, task, required_capabilities, force_agent, fallback_chain)`.
   - Define `IncompatibleHarnessCapabilityError` and `NoCapableHarnessError`.
   - Support automatic autonomous rerouting across the fallback chain (`codex` -> `agy` -> `claude` -> `grok`).
   - Create `tests/test_fail_closed_routing.py` and `tests/test_autonomous_capability_rerouting.py`.
 
-- [ ] **Task 3: Integration into Dispatch Pipeline (`synlynk/dispatch.py`)**
+- [x] **Task 3: Integration into Dispatch Pipeline (`synlynk/dispatch.py`)**
   - Wire `resolve_capable_dispatch_harness` and `infer_task_required_capabilities` into `resolve_dispatch_harness()` and `dispatch_agent()`.
   - Ensure `--force-agent` raises explicit `IncompatibleHarnessCapabilityError` when forced onto an incapable harness.
   - Ensure automatic rerouting logs informative notices and updates job context.
   - Trigger Sentinel alert `CAPABILITY_ROUTING_REJECTED` on fail-closed rejections.
   - Verify with `tests/test_dispatch_capability_routing.py`.
 
-- [ ] **Task 4: Autonomous Milestone DAG Capability Filtering (`synlynk/launch_dag.py`)**
+- [x] **Task 4: Autonomous Milestone DAG Capability Filtering (`synlynk/launch_dag.py`)**
   - Update `LaunchDAG` node scheduler to filter harness candidates based on task required capabilities.
   - Update `handle_job_outcome()` failover chain to skip incapable harnesses.
   - Create `tests/test_dag_capability_filtering.py`.
 
 - [ ] **Task 5: End-to-End Regression Verification & Documentation**
   - Run full test suite across the repository (ensure 100% pass across 3,345+ tests).
-  - Open PR [#1811](https://github.com/nikhilsoman/synlynk/pull/1811) closing Issue [#1810](https://github.com/nikhilsoman/synlynk/issues/1810).
+  - Open PR closing Issue [#1810](https://github.com/nikhilsoman/synlynk/issues/1810).
   - Dispatch non-author review to Codex (`qa` role) and merge.
