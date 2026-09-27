@@ -3,7 +3,6 @@
 
 | Date | Agent | Model | Tokens In | Tokens Out | Cost | Source | Story | Notes |
 |---|---|---|---|---|---|---|---|---|
-| 2026-09-26 13:04 | codex | o4-mini | 5000 | 2000 | $0.0450 | estimated_tshirt | story-issue-1797 | exec: codex job job-ae92a7... |
 | 2026-09-26 23:08 | agy | unknown | 120000 | 18000 | $0.6300 | estimated_manual | story-adb0f757 | 100% universal GOVERNS auto-association and reconciliation |
 | 2026-09-27 08:03 | agy | unknown | 140000 | 22000 | $0.7500 | estimated_manual | story-3cddd9d2 | AST KG lifecycle, rich context packaging, sparse cones & deep KG UX |
 | 2026-09-27 10:43 | agy | unknown | 160000 | 25000 | $0.8550 | estimated_manual | story-f5513a93 | Generalized Vizor BS-6 architectural views, dynamic centrality LOD & multi-language AST scanner |
@@ -53,3 +52,4 @@
 | 2026-09-27 17:05 | claude | claude-sonnet-4-6 | 5000 | 2000 | $0.0450 | estimated_tshirt | story-adhoc-1790479925 | exec: claude job job-7671e... |
 | 2026-09-27 17:05 | grok | grok-3 | 164695 | 11374 | $0.6647 | estimated_token_rate | story-adhoc-1790479936 | exec: grok job job-658ea0c... |
 | 2026-09-27 17:05 | claude | claude-sonnet-4-6 | 5000 | 2000 | $0.0450 | estimated_tshirt | story-adhoc-1790479946 | exec: claude job job-e578f... |
+| 2026-09-27 18:36 | agy | unknown | 110000 | 15000 | $0.5550 | estimated_manual | story-2effe49d | Invariant 1 Effect-Verified Completion Contract Implementation & Tests |

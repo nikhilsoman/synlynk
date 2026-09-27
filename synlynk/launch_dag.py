@@ -66,6 +66,27 @@ def raise_escalation_ticket(
     return ""
 
 
+from synlynk.jobs import (
+    STATUS_COMPLETED_WITHOUT_CHANGES,
+    STATUS_FAILED_NOOP_DENIED,
+    STATUS_FAILED_VERIFICATION,
+    is_noop_status,
+    is_successful_status,
+)
+
+_HARNESS_FAILOVER_CHAIN = ["codex", "agy", "claude", "grok"]
+
+
+def _next_failover_harness(current: str, failed_list: List[str]) -> str:
+    for h in _HARNESS_FAILOVER_CHAIN:
+        if h != current and h not in failed_list:
+            return h
+    for h in _HARNESS_FAILOVER_CHAIN:
+        if h != current:
+            return h
+    return current
+
+
 @dataclass
 class DAGNode:
     node_id: str
@@ -82,6 +103,9 @@ class DAGNode:
     worktree_path: Optional[str] = None
     job_id: Optional[str] = None
     error: Optional[str] = None
+    retry_count: int = 0
+    max_retries: int = 2
+    failed_harnesses: List[str] = field(default_factory=list)
     updated_at: str = field(default_factory=lambda: time.strftime("%Y-%m-%dT%H:%M:%S"))
 
 
@@ -250,6 +274,79 @@ class LaunchDAG:
         node.error = f"Escalated to {issue_url}" if issue_url else "Escalation requested"
         node.updated_at = time.strftime("%Y-%m-%dT%H:%M:%S")
         return issue_url
+
+    def handle_job_outcome(
+        self,
+        node_id: str,
+        status: str,
+        job_id: Optional[str] = None,
+        pr_number: Optional[int] = None,
+        branch: Optional[str] = None,
+        worktree_path: Optional[str] = None,
+        error: Optional[str] = None,
+    ) -> bool:
+        """Handle a completed job result. On noop/verification failure, automatically failover to secondary harness.
+        
+        Returns True if the node was failed over for re-dispatch, False if terminal state.
+        """
+        node = self.nodes.get(node_id)
+        if not node:
+            return False
+
+        if is_successful_status(status) or status in ("succeeded", "done", "completed"):
+            self.advance_node(
+                node_id,
+                "done",
+                pr_number=pr_number,
+                branch=branch,
+                worktree_path=worktree_path,
+                error=error,
+            )
+            return False
+
+        # Noop or verification failure -> trigger autonomous harness failover
+        if is_noop_status(status) or status in (
+            STATUS_COMPLETED_WITHOUT_CHANGES,
+            STATUS_FAILED_NOOP_DENIED,
+            STATUS_FAILED_VERIFICATION,
+        ):
+            if node.retry_count < node.max_retries:
+                if node.harness not in node.failed_harnesses:
+                    node.failed_harnesses.append(node.harness)
+                node.retry_count += 1
+                next_harness = _next_failover_harness(node.harness, node.failed_harnesses)
+                prev_harness = node.harness
+                node.harness = next_harness
+                node.status = "ready"
+                node.lease_token = None
+                node.lease_expires = None
+                node.error = f"Auto-failover: {prev_harness} produced {status}; retrying with {next_harness}"
+                node.updated_at = time.strftime("%Y-%m-%dT%H:%M:%S")
+                return True
+            else:
+                self.advance_node(
+                    node_id,
+                    "failed",
+                    error=f"Retries exhausted ({node.retry_count}/{node.max_retries}) on {status}",
+                )
+                return False
+
+        # Other failures
+        if node.retry_count < node.max_retries:
+            if node.harness not in node.failed_harnesses:
+                node.failed_harnesses.append(node.harness)
+            node.retry_count += 1
+            next_harness = _next_failover_harness(node.harness, node.failed_harnesses)
+            node.harness = next_harness
+            node.status = "ready"
+            node.lease_token = None
+            node.lease_expires = None
+            node.error = f"Retry {node.retry_count}/{node.max_retries} with {next_harness}"
+            node.updated_at = time.strftime("%Y-%m-%dT%H:%M:%S")
+            return True
+
+        self.advance_node(node_id, "failed", error=error or f"Job {status}")
+        return False
 
     def render_report(self) -> str:
         """Generate human-readable execution DAG table."""

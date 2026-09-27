@@ -364,6 +364,11 @@ def _read_sentinel_alerts(severity: Optional[str] = None, sentinel_path: str = "
     return alerts
 
 
+def _read_active_sentinel_alerts(sentinel_path: str = ".synlynk/sentinel.md") -> list:
+    """Return parsed active alerts from *sentinel_path*."""
+    return _iter_sentinel_alerts(sentinel_path, active_only=True)
+
+
 def _summarize_sentinel_alerts(alert_lines: list, max_alert_types: int = 20) -> list:
     """Collapses repeated alerts by message content and keeps the latest alert per group."""
     grouped = {}

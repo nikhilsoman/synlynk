@@ -830,8 +830,8 @@ def test_dispatch_gitstateverified_job_reconciliation_uses_waitpid_without_exit_
     job = _dispatch_git_worktree_job(monkeypatch)
 
     monkeypatch.setattr(jobs_mod.os, "waitpid", lambda pid, opts: (job["pid"], 0))
-    monkeypatch.setattr(sl, "_inspect_worktree_git_state", lambda *a, **kw: {"has_activity": False, "remote_has_activity": False})
-    monkeypatch.setattr(sl, "_worktree_files_touched", lambda *a, **kw: [])
+    monkeypatch.setattr(sl, "_inspect_worktree_git_state", lambda *a, **kw: {"has_activity": True, "remote_has_activity": False, "dirty": True})
+    monkeypatch.setattr(sl, "_worktree_files_touched", lambda *a, **kw: ["file.py"])
     monkeypatch.setattr(jobs_mod, "_finalize_completed_worktree_job", lambda *a, **kw: None)
 
     sl._reconcile_jobs()
