@@ -1405,3 +1405,4 @@ Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'corre [backe
 - [ ] feat(dispatch): Invariant 3 — Fail-closed capability-probed routing before dispatch [backend] <!-- id:story-9e0b2e71 -->
 - [ ] feat(db): Invariant 4 — Single-writer SQLite WAL ledger with leased worktree locks [backend] <!-- id:story-10057c98 -->
 - [ ] feat(cli): Invariant 5 — Compressed default surface (Role+Harness & 3-5 stage GOVERNS default) [backend] <!-- id:story-b6828d9e -->
+- [ ] docs(decisions): 3-round architecture, strategy & roadmap panel synthesis + R1 invariants release gate goal [backend] <!-- id:story-issue-1802 -->

@@ -1,3 +1,11 @@
+## 2026-09-27 — Align Dispatch Default Model Tiers with 2026 SOTA Catalog (#1803, `story-e8343134`, `goal-5be4eb8b`)
+
+### Shipped & Verified
+- **Model Tier Static Fallback Modernization (`synlynk/dispatch.py`):** Replaced legacy v0.12 model mappings in `_DEFAULT_MODELS_BY_TIER` (`gemini-1.5-flash`, `gemini-1.5-pro`, `claude-3-5-sonnet-latest`, `grok-3`) with canonical 2026 SOTA tier mappings matching `.synlynk/models.json` (`gemini-3.7-flash-medium` for fast, `gemini-3.1-pro-low`/`gemini-3.7-flash-high` for pro, `gemini-3.1-pro-high` for reasoning; `claude-haiku-4-5-20251001`, `claude-sonnet-5`, `claude-opus-5-5`; `grok-4.6`, `grok-4.7`).
+- **Zero Legacy Model Assertions (TDD):** Created `tests/test_dispatch_model_defaults.py` enforcing zero deprecated `gemini-1.5` references across all tiers, strict catalog parity, and verified tier resolution for `agy`, `claude`, `codex`, and `grok`.
+- **Full Test Matrix Green:** All 168 model/dispatch unit tests passing cleanly.
+[@agy, @nikhilsoman]
+
 ## 2026-09-27 — 3-Round Multi-Harness Strategic & Architectural Review (Claude, Codex, Agy, Grok) (`goal-d3333441`, `goal-eacab0dc`)
 
 ### Completed & Synthesized
