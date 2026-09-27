@@ -6255,7 +6255,434 @@ __LIVE_JS_HTML__
 
 
 def generate_world_html(data: dict, port: int) -> str:
-    return _generate_bs6_view_html(data, port, "world", "World View (Ecosystem Radar)")
+    """Generate rich, 3-ring Concentric Ecosystem Radar View (Core, Primary Egress, Peripherals, Opportunity Horizon)."""
+    workspace = data.get("workspace", {})
+    workspace_name = str(workspace.get("name") or "workspace")
+    workspace_views = data.get("workspace_views") or {}
+    world_data = workspace_views.get("world") or data.get("world") or {"nodes": [], "edges": []}
+    nodes = world_data.get("nodes") or []
+    edges = world_data.get("edges") or []
+
+    live_js_html = _live_js(port)
+
+    # Process nodes by ring
+    ring_nodes = {0: [], 1: [], 2: [], 3: []}
+    for n in nodes:
+        attrs = {}
+        try:
+            attrs = json.loads(n.get("attrs_json") or "{}") if isinstance(n.get("attrs_json"), str) else (n.get("attrs_json") or {})
+        except Exception:
+            pass
+        ring = attrs.get("ring", 1)
+        if ring not in ring_nodes:
+            ring = 1
+        ring_nodes[ring].append((n, attrs))
+
+    template = """<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>synlynk Vizor — Concentric Ecosystem Radar</title>
+<style>
+:root {
+  --bg: #07090e;
+  --bg-surface: #0f131c;
+  --bg-card: #171d2b;
+  --bg-card-hover: #222b3d;
+  --border: #263147;
+  --border-subtle: #1a2233;
+  --text-main: #f9fafb;
+  --text-muted: #94a3b8;
+  --text-dim: #64748b;
+  --accent: #0d9e87;
+  --accent-light: #14b8a6;
+  --accent-bg: rgba(13, 158, 135, 0.15);
+  --cyan: #06b6d4;
+  --purple: #a855f7;
+  --blue: #3b82f6;
+  --amber: #f59e0b;
+  --green: #10b981;
+  --radar-grid: #1e293b;
+  --radar-sweep: rgba(13, 158, 135, 0.15);
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+[data-theme="light"] {
+  --bg: #f8fafc;
+  --bg-surface: #ffffff;
+  --bg-card: #f1f5f9;
+  --bg-card-hover: #e2e8f0;
+  --border: #cbd5e1;
+  --border-subtle: #e2e8f0;
+  --text-main: #0f172a;
+  --text-muted: #475569;
+  --text-dim: #94a3b8;
+  --accent: #0d9e87;
+  --accent-light: #0b7a60;
+  --accent-bg: #e6f7f4;
+  --radar-grid: #cbd5e1;
+  --radar-sweep: rgba(13, 158, 135, 0.08);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text-main);
+  font-family: var(--font-sans);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header & BS-6 Navigation */
+.header {
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.brand-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.logo-badge {
+  background: var(--accent-bg);
+  color: var(--accent);
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-weight: 700;
+  font-size: 13px;
+  border: 1px solid var(--accent);
+}
+.view-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+.view-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg);
+  padding: 4px;
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+}
+.nav-btn {
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  color: var(--text-muted);
+  transition: all 0.15s ease;
+}
+.nav-btn:hover {
+  color: var(--text-main);
+  background: var(--bg-card);
+}
+.nav-btn.active {
+  background: var(--accent);
+  color: #ffffff;
+}
+
+/* Radar Legend Bar */
+.legend-bar {
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.legend-items {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.ring-badge {
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+}
+.ring-0-badge { background: rgba(13, 158, 135, 0.2); color: #0d9e87; border: 1px solid #0d9e87; }
+.ring-1-badge { background: rgba(59, 130, 246, 0.2); color: #3b82f6; border: 1px solid #3b82f6; }
+.ring-2-badge { background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid #f59e0b; }
+.ring-3-badge { background: rgba(168, 85, 247, 0.2); color: #a855f7; border: 1px solid #a855f7; }
+
+/* Main Grid Layout */
+.radar-layout {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: 24px;
+  padding: 24px;
+  max-width: 1540px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+@media (max-width: 1100px) {
+  .radar-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Radar Visual Canvas Container */
+.radar-canvas-container {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  min-height: 600px;
+}
+.radar-svg {
+  width: 100%;
+  max-width: 680px;
+  height: auto;
+  aspect-ratio: 1 / 1;
+  overflow: visible;
+}
+
+/* Side Inspection Panel */
+.radar-inspector {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.inspector-header {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 12px;
+}
+.inspector-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+.blips-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+  max-height: 580px;
+}
+.blip-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.blip-card:hover {
+  border-color: var(--accent);
+  background: var(--bg-card-hover);
+}
+.blip-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+.blip-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+.blip-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+.blip-env {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--accent-light);
+  margin-top: 6px;
+}
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="brand-group">
+    <span class="logo-badge">synlynk</span>
+    <span class="view-title">Ecosystem Radar (World View) · __WORKSPACE_NAME__</span>
+  </div>
+  <nav class="view-nav">
+    <a href="/tube.html" class="nav-btn">🚇 Architect Map</a>
+    <a href="/logical.html" class="nav-btn">🧠 Logical Engine</a>
+    <a href="/product.html" class="nav-btn">📦 Product Journeys</a>
+    <a href="/infra.html" class="nav-btn">⚡ Infra Topology</a>
+    <a href="/world.html" class="nav-btn active">🌐 Ecosystem Radar</a>
+    <a href="/board.html" class="nav-btn">📋 Board</a>
+    <a href="/timeline.html" class="nav-btn">⏱️ Timeline</a>
+  </nav>
+</header>
+
+<div class="legend-bar">
+  <div class="legend-items">
+    <div class="legend-item">
+      <span class="ring-badge ring-0-badge">Ring 0</span>
+      <span>Workspace Core</span>
+    </div>
+    <div class="legend-item">
+      <span class="ring-badge ring-1-badge">Ring 1</span>
+      <span>Primary Egress (AI & VCS)</span>
+    </div>
+    <div class="legend-item">
+      <span class="ring-badge ring-2-badge">Ring 2</span>
+      <span>Ecosystem Peripherals</span>
+    </div>
+    <div class="legend-item">
+      <span class="ring-badge ring-3-badge">Ring 3</span>
+      <span>Opportunity Horizon</span>
+    </div>
+  </div>
+  <div style="font-size: 11px; color: var(--text-dim); font-family: var(--font-mono);">
+    Total Nodes: __TOTAL_NODES__
+  </div>
+</div>
+
+<main class="radar-layout">
+  <!-- RADAR CANVAS -->
+  <div class="radar-canvas-container">
+    <svg class="radar-svg" viewBox="-360 -360 720 720" id="radar-svg">
+      <!-- Concentric Rings -->
+      <circle cx="0" cy="0" r="320" fill="none" stroke="var(--radar-grid)" stroke-width="1" stroke-dasharray="4,4" />
+      <circle cx="0" cy="0" r="230" fill="none" stroke="var(--radar-grid)" stroke-width="1" stroke-dasharray="4,4" />
+      <circle cx="0" cy="0" r="130" fill="none" stroke="var(--radar-grid)" stroke-width="1" stroke-dasharray="4,4" />
+      <circle cx="0" cy="0" r="40" fill="var(--accent-bg)" stroke="var(--accent)" stroke-width="2" />
+
+      <!-- Axes -->
+      <line x1="-340" y1="0" x2="340" y2="0" stroke="var(--radar-grid)" stroke-width="1" />
+      <line x1="0" y1="-340" x2="0" y2="340" stroke="var(--radar-grid)" stroke-width="1" />
+
+      <!-- Ring Labels -->
+      <text x="5" y="-45" font-size="10" font-weight="700" fill="var(--accent)" font-family="inherit">Ring 0: Core</text>
+      <text x="5" y="-135" font-size="10" font-weight="700" fill="#3b82f6" font-family="inherit">Ring 1: Primary Egress</text>
+      <text x="5" y="-235" font-size="10" font-weight="700" fill="#f59e0b" font-family="inherit">Ring 2: Ecosystem</text>
+      <text x="5" y="-325" font-size="10" font-weight="700" fill="#a855f7" font-family="inherit">Ring 3: Opportunity</text>
+
+      <!-- Rendered Blips -->
+      __RADAR_BLIPS_SVG__
+    </svg>
+  </div>
+
+  <!-- RADAR INSPECTION PANEL -->
+  <div class="radar-inspector">
+    <div class="inspector-header">
+      <div class="inspector-title">📡 Ecosystem Integrations</div>
+      <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">All active inside-out connections and opportunities</div>
+    </div>
+    <div class="blips-list">
+      __BLIPS_LIST_HTML__
+    </div>
+  </div>
+</main>
+
+<script>
+try {
+  const savedTheme = localStorage.getItem('vizor-theme');
+  if (savedTheme) document.documentElement.setAttribute('data-theme', savedTheme);
+} catch (_) {}
+</script>
+__LIVE_JS_HTML__
+</body>
+</html>"""
+
+    # Generate Radar Blips SVG and List HTML
+    import math
+    blips_svg_list = []
+    blips_html_list = []
+
+    # Ring radii definitions
+    radii = {0: 0, 1: 130, 2: 230, 3: 320}
+    ring_colors = {0: "#0d9e87", 1: "#3b82f6", 2: "#f59e0b", 3: "#a855f7"}
+
+    # Core node (Ring 0)
+    blips_svg_list.append(f"""
+      <circle cx="0" cy="0" r="10" fill="#0d9e87">
+        <animate attributeName="r" values="8;12;8" dur="3s" repeatCount="indefinite"/>
+      </circle>
+      <text x="0" y="24" text-anchor="middle" font-size="11" font-weight="700" fill="var(--text-main)" font-family="inherit">{html.escape(workspace_name)}</text>
+    """)
+
+    # Populate Rings 1, 2, 3
+    for ring_idx in (1, 2, 3):
+        items = ring_nodes.get(ring_idx, [])
+        num_items = len(items)
+        if num_items == 0:
+            continue
+        radius = radii[ring_idx]
+        color = ring_colors[ring_idx]
+
+        for i, (n, attrs) in enumerate(items):
+            angle = (2 * math.pi / num_items) * i + (ring_idx * 0.4)
+            x = radius * math.cos(angle)
+            y = radius * math.sin(angle)
+
+            label = n.get("label") or "Integration"
+            desc = attrs.get("description") or ""
+            env_var = attrs.get("env_var") or ""
+            cat = attrs.get("category") or "service"
+
+            # SVG Blip
+            blips_svg_list.append(f"""
+              <g class="radar-blip-node" transform="translate({x:.1f},{y:.1f})">
+                <circle cx="0" cy="0" r="14" fill="{color}" fill-opacity="0.2" />
+                <circle cx="0" cy="0" r="6" fill="{color}" />
+                <text x="0" y="-10" text-anchor="middle" font-size="10" font-weight="600" fill="var(--text-main)" font-family="inherit">{html.escape(label[:18])}</text>
+              </g>
+            """)
+
+            # List Item
+            env_html = f'<div class="blip-env">🔑 {html.escape(env_var)}</div>' if env_var else ""
+            blips_html_list.append(f"""
+              <div class="blip-card">
+                <div class="blip-card-top">
+                  <span class="blip-label">{html.escape(label)}</span>
+                  <span class="ring-badge ring-{ring_idx}-badge">Ring {ring_idx}</span>
+                </div>
+                <div class="blip-desc">{html.escape(desc)}</div>
+                {env_html}
+              </div>
+            """)
+
+    total_nodes = len(nodes)
+    return (
+        template
+        .replace("__WORKSPACE_NAME__", html.escape(workspace_name))
+        .replace("__TOTAL_NODES__", str(total_nodes))
+        .replace("__RADAR_BLIPS_SVG__", "\n".join(blips_svg_list))
+        .replace("__BLIPS_LIST_HTML__", "\n".join(blips_html_list))
+        .replace("__LIVE_JS_HTML__", live_js_html)
+    )
 
 
 
