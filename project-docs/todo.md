@@ -1,7 +1,6 @@
 # Tasks (generated - source of truth is state.db)
 # Edit via: synlynk story create/update | Do NOT hand-edit this file
 
-- [ ] BS-6: brainstorm — repo/workspace visualization: product view · logical view · infra view [visualization] <!-- id:story-f5513a93 -->
 - [ ] BS-7: brainstorm — skill pack interoperability + benchmarks (Superpowers/GStack/GSD) [platform] <!-- id:story-bs7-interop -->
 - [ ] BS-8: synlynk probe — ambient harness capability drift detection + publish pipeline [tooling] <!-- id:story-bs8-probe -->
 - [ ] BS-8: dispatch_loop() — composite termination + /goal objective injection + job chain tracking [dispatch] <!-- id:story-bs8-loop -->
@@ -1323,3 +1322,81 @@ Bug 1 -- missing ef [testing] <!-- id:story-adhoc-1790223013 -->
 - [ ] feat(governs): loop vs feature goals + every-merge synlynk-bot closeout (#1792) [backend] <!-- id:story-adb0f757 -->
 - [ ] docs: master GOVERNS loop goal + every-merge closeout story #1792 [testing] <!-- id:story-issue-1793 -->
 - [ ] fix(vizor): LIVE-16 launchd crash-loop (ModuleNotFoundError) [frontend] <!-- id:story-issue-1795 -->
+- [ ] Write a minimal example demonstrating Programming/Software Development for a small Python function. [backend] <!-- id:story-adhoc-1790479508 -->
+- [ ] Review this Programming/Software Development calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<tr [backend] <!-- id:story-adhoc-1790479518 -->
+- [ ] Write a minimal example demonstrating Testing for a small Python function. [testing] <!-- id:story-adhoc-1790479527 -->
+- [ ] Review this Testing calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<true|false>'.
+
+Executor har [testing] <!-- id:story-adhoc-1790479536 -->
+- [ ] Write a minimal example demonstrating Requirements Definition and Management for a small Python function. [backend] <!-- id:story-adhoc-1790479546 -->
+- [ ] Review this Requirements Definition and Management calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'corre [backend] <!-- id:story-adhoc-1790479556 -->
+- [ ] Write a minimal example demonstrating Programming/Software Development for a small Python function. [backend] <!-- id:story-adhoc-1790479567 -->
+- [ ] Review this Programming/Software Development calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<tr [backend] <!-- id:story-adhoc-1790479577 -->
+- [ ] Write a minimal example demonstrating Testing for a small Python function. [testing] <!-- id:story-adhoc-1790479588 -->
+- [ ] Review this Testing calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<true|false>'.
+
+Executor har [testing] <!-- id:story-adhoc-1790479598 -->
+- [ ] Write a minimal example demonstrating Requirements Definition and Management for a small Python function. [backend] <!-- id:story-adhoc-1790479608 -->
+- [ ] Review this Requirements Definition and Management calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'corre [backend] <!-- id:story-adhoc-1790479618 -->
+- [ ] Write a minimal example demonstrating Programming/Software Development for a small Python function. [backend] <!-- id:story-adhoc-1790479628 -->
+- [ ] Review this Programming/Software Development calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<tr [backend] <!-- id:story-adhoc-1790479639 -->
+- [ ] Write a minimal example demonstrating Testing for a small Python function. [testing] <!-- id:story-adhoc-1790479649 -->
+- [ ] Review this Testing calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<true|false>'.
+
+Executor har [testing] <!-- id:story-adhoc-1790479659 -->
+- [ ] Write a minimal example demonstrating Requirements Definition and Management for a small Python function. [backend] <!-- id:story-adhoc-1790479669 -->
+- [ ] Review this Requirements Definition and Management calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'corre [backend] <!-- id:story-adhoc-1790479679 -->
+- [ ] Write a minimal example demonstrating Programming/Software Development for a small Python function. [backend] <!-- id:story-adhoc-1790479689 -->
+- [ ] Review this Programming/Software Development calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<tr [backend] <!-- id:story-adhoc-1790479699 -->
+- [ ] Write a minimal example demonstrating Testing for a small Python function. [testing] <!-- id:story-adhoc-1790479709 -->
+- [ ] Review this Testing calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<true|false>'.
+
+Executor har [testing] <!-- id:story-adhoc-1790479720 -->
+- [ ] Write a minimal example demonstrating Requirements Definition and Management for a small Python function. [backend] <!-- id:story-adhoc-1790479730 -->
+- [ ] Review this Requirements Definition and Management calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'corre [backend] <!-- id:story-adhoc-1790479742 -->
+- [ ] Write a minimal example demonstrating Programming/Software Development for a small Python function. [backend] <!-- id:story-adhoc-1790479756 -->
+- [ ] Review this Programming/Software Development calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<tr [backend] <!-- id:story-adhoc-1790479769 -->
+- [ ] Write a minimal example demonstrating Testing for a small Python function. [testing] <!-- id:story-adhoc-1790479783 -->
+- [ ] Review this Testing calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<true|false>'.
+
+Executor har [testing] <!-- id:story-adhoc-1790479796 -->
+- [ ] Write a minimal example demonstrating Requirements Definition and Management for a small Python function. [backend] <!-- id:story-adhoc-1790479807 -->
+- [ ] Review this Requirements Definition and Management calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'corre [backend] <!-- id:story-adhoc-1790479819 -->
+- [ ] Write a minimal example demonstrating Programming/Software Development for a small Python function. [backend] <!-- id:story-adhoc-1790479829 -->
+- [ ] Review this Programming/Software Development calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<tr [backend] <!-- id:story-adhoc-1790479839 -->
+- [ ] Write a minimal example demonstrating Testing for a small Python function. [testing] <!-- id:story-adhoc-1790479850 -->
+- [ ] Review this Testing calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<true|false>'.
+
+Executor har [testing] <!-- id:story-adhoc-1790479861 -->
+- [ ] Write a minimal example demonstrating Requirements Definition and Management for a small Python function. [backend] <!-- id:story-adhoc-1790479872 -->
+- [ ] Review this Requirements Definition and Management calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'corre [backend] <!-- id:story-adhoc-1790479882 -->
+- [ ] Write a minimal example demonstrating Programming/Software Development for a small Python function. [backend] <!-- id:story-adhoc-1790479892 -->
+- [ ] Review this Programming/Software Development calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<tr [backend] <!-- id:story-adhoc-1790479903 -->
+- [ ] Write a minimal example demonstrating Testing for a small Python function. [testing] <!-- id:story-adhoc-1790479914 -->
+- [ ] Review this Testing calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<true|false>'.
+
+Executor har [testing] <!-- id:story-adhoc-1790479925 -->
+- [ ] Write a minimal example demonstrating Requirements Definition and Management for a small Python function. [backend] <!-- id:story-adhoc-1790479936 -->
+- [ ] Review this Requirements Definition and Management calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'corre [backend] <!-- id:story-adhoc-1790479946 -->
+- [ ] GitHub Primary Control Surface, Autonomous Ingress & Issue Enrichment Engine [architecture] <!-- id:story-5ef38956 -->
