@@ -3,7 +3,6 @@
 
 | Date | Agent | Model | Tokens In | Tokens Out | Cost | Source | Story | Notes |
 |---|---|---|---|---|---|---|---|---|
-| 2026-09-19 14:01 | claude | claude-sonnet-4-6 | 35095 | 699 | $0.1158 | estimated_token_rate | story-adhoc-1789806567 | exec: claude job job-83fc4... |
 | 2026-09-19 14:01 | codex | o4-mini | 312980 | 2775 | $0.9806 | estimated_token_rate | story-adhoc-1789806569 | exec: codex job job-d29c40... |
 | 2026-09-19 14:01 | claude | claude-sonnet-4-6 | 35001 | 664 | $0.1150 | estimated_token_rate | story-adhoc-1789806571 | exec: claude job job-500ca... |
 | 2026-09-19 14:01 | claude | claude-sonnet-4-6 | 35072 | 753 | $0.1165 | estimated_token_rate | story-adhoc-1789806575 | exec: claude job job-0e0b5... |
@@ -53,3 +52,4 @@
 | 2026-09-26 13:04 | codex | o4-mini | 5000 | 2000 | $0.0450 | estimated_tshirt | story-issue-1797 | exec: codex job job-ae92a7... |
 | 2026-09-26 23:08 | agy | unknown | 120000 | 18000 | $0.6300 | estimated_manual | story-adb0f757 | 100% universal GOVERNS auto-association and reconciliation |
 | 2026-09-27 08:03 | agy | unknown | 140000 | 22000 | $0.7500 | estimated_manual | story-3cddd9d2 | AST KG lifecycle, rich context packaging, sparse cones & deep KG UX |
+| 2026-09-27 10:43 | agy | unknown | 160000 | 25000 | $0.8550 | estimated_manual | story-f5513a93 | Generalized Vizor BS-6 architectural views, dynamic centrality LOD & multi-language AST scanner |

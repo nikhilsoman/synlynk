@@ -1,3 +1,15 @@
+## 2026-09-27 — Generalized Vizor BS-6 Architectural Views, Dynamic Centrality LOD & Deep Interactive UX (`goal-e3840370`, PR #1800)
+
+### Shipped & Verified
+- **Dynamic Percentile Top-K Centrality LOD Engine (`synlynk/viz.py`):** Replaced static degree caps with dynamic percentile rank formula (`top 10%` / `top 25%` / `top 50%` / `100%`) alongside a default-off test suite filter (`data-include-tests`), enabling clean L0 module uncluttering across repositories of any size.
+- **Logical Architecture View Separation (`logical.html`):** Distinct from physical AST tube map, delivers a 5-tier Layered HLD Stack (`Interface & Ingress` → `Orchestration & Governance` → `Domain & Execution Core` → `Infrastructure & Bridges` → `Storage & Persistence`), an LLD Component Model with interface contracts, and an Interactive 5-Flow Animated Sequence Player (`Story Lifecycle`, `Dispatch Loop`, `GOVERNS Reconciliation`, `State WAL Isolation`, `Agent Handoff`).
+- **Product Journeys & Multi-Harness Persona Catalog (`product.html`):** Added interactive visual user journey flows (FTUE, Story Execution, Fleet Sovereignty), complete 8-screen/catalog gallery (Master HUD, Architect Canvas, GOVERNS Lifecycle, Gantt, Effort & Cost, Roles & Permissions, Activity Stream, World Ecosystem Radar), and 4 Home Harness terminal personas (`Claude`, `Codex`, `Agy`, `Grok`).
+- **Dual-Zone Infrastructure View (`infra.html`):** Clearly partitioned host-local Zero-SaaS runtime execution (ports `:8721`, `:27472`, `state.db` SQLite WAL, OS keystores, git worktrees) from outbound cloud AI inference egress (`Anthropic`, `Google Generative AI`, `OpenAI`, `xAI`, `GitHub`), reinforced with 4 Trust & Security Badges.
+- **Ecosystem Radar (`world.html`):** 3-ring concentric ecosystem radar (`Core Host Runtime` → `Fleet Partners & Agents` → `Federated Multi-Repo Mesh`) with pulsating SVG status blips, filtering chips, and always-populated fallback extraction.
+- **Universal Multi-Language Scanner Generalization:** Verified dynamic AST generation, view extraction, and fallback rendering across Node/TS, Go, and Rust project workspaces.
+- **Full Test Suite Verification & Clean CI Merge:** 179/179 `tests/test_viz*.py` passing, all 3,311 matrix tests green on Python 3.10 and 3.12, merged into `main` via PR #1800.
+[@agy, @nikhilsoman]
+
 ## 2026-09-26 — Universal GOVERNS Lifecycle Auto-Association, State Machine & Reconciliation (`goal-eacab0dc`, PR #1798)
 
 ### Shipped & Verified
