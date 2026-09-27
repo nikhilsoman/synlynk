@@ -41,7 +41,7 @@ _LEGACY_MODULES = (
     "backlog", "backlog_extractor", "charter_injection", "context", "jobs",
     "story_provisioning", "daemon", "instructions", "scan", "hud", "platform_status",
     "logs", "wizard", "launch", "circuit_breaker", "capability_probe", "wal_ledger",
-    "worktree_lease",
+    "worktree_lease", "governs_compressed",
 )
 
 
