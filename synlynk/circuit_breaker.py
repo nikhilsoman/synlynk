@@ -163,10 +163,8 @@ def evaluate_job_circuit_breaker(
         model_version,
     )
 
-    # 3. Check files touched
     worktree_path = job.get("worktree_path")
-    files_touched_list = _worktree_files_touched(worktree_path) if worktree_path else []
-    files_touched = len(files_touched_list)
+    files_touched = 0
 
     # 4. Resolve limits
     max_tokens, max_cost, zero_file_threshold = _resolve_circuit_breaker_limits(job, config)
@@ -177,8 +175,11 @@ def evaluate_job_circuit_breaker(
         reason = f"Cost limit breached: ${cost_usd:.2f} >= ${max_cost:.2f}"
     elif total_tokens >= max_tokens:
         reason = f"Token limit breached: {total_tokens:,} >= {max_tokens:,} tokens"
-    elif files_touched == 0 and total_tokens >= zero_file_threshold:
-        reason = f"Zero-file runaway: {total_tokens:,} tokens with 0 files touched (limit: {zero_file_threshold:,})"
+    elif total_tokens >= zero_file_threshold:
+        files_touched_list = _worktree_files_touched(worktree_path) if worktree_path else []
+        files_touched = len(files_touched_list)
+        if files_touched == 0:
+            reason = f"Zero-file runaway: {total_tokens:,} tokens with 0 files touched (limit: {zero_file_threshold:,})"
 
     if not reason:
         return CircuitBreakerResult(
