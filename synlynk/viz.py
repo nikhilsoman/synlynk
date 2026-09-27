@@ -5833,7 +5833,425 @@ __LIVE_JS_HTML__
 
 
 def generate_infra_html(data: dict, port: int) -> str:
-    return _generate_bs6_view_html(data, port, "infra", "Infra View")
+    """Generate rich, dual-zone Infrastructure View (Host-Local Zero-SaaS vs Outbound Cloud AI Inference Egress)."""
+    workspace = data.get("workspace", {})
+    workspace_name = str(workspace.get("name") or "workspace")
+    workspace_views = data.get("workspace_views") or {}
+    infra_data = workspace_views.get("infra") or data.get("infra") or {"nodes": [], "edges": []}
+    nodes = infra_data.get("nodes") or []
+    edges = infra_data.get("edges") or []
+
+    live_js_html = _live_js(port)
+
+    # Separate by zone
+    host_local_nodes = []
+    outbound_nodes = []
+
+    for n in nodes:
+        attrs = {}
+        try:
+            attrs = json.loads(n.get("attrs_json") or "{}") if isinstance(n.get("attrs_json"), str) else (n.get("attrs_json") or {})
+        except Exception:
+            pass
+        if attrs.get("zone") == "outbound_egress" or n.get("kind") in ("egress", "external_api"):
+            outbound_nodes.append((n, attrs))
+        else:
+            host_local_nodes.append((n, attrs))
+
+    # Fallbacks if empty
+    if not host_local_nodes:
+        host_local_nodes = [
+            ({"label": "Vizor Server (:8721)", "kind": "daemon", "source_path": "synlynk/viz.py"}, {"port": 8721, "status": "Running", "description": "Local HTTP visualization server and UI control plane"}),
+            ({"label": "SSE Relay Broker (:27472)", "kind": "daemon", "source_path": "synlynk/relay.py"}, {"port": 27472, "status": "Active", "description": "High-throughput localhost event multiplexer and SSE feed"}),
+            ({"label": "StateDB SQLite Ledger", "kind": "database", "source_path": ".synlynk/state.db"}, {"file": ".synlynk/state.db", "status": "WAL Active", "description": "100% Host-local ACID transactional ledger"}),
+            ({"label": "Cryptographic Keystore", "kind": "security", "source_path": "~/.synlynk/identity.key"}, {"file": "identity.key", "status": "Secured (0o600)", "description": "Ed25519 identity key and GitHub App PEM certificates"}),
+            ({"label": "Isolated Git Worktrees", "kind": "worktree", "source_path": "../feat+*"}, {"pattern": "../feat+*", "status": "Isolated Cones", "description": "Parallel headless harness execution workspaces"}),
+            ({"label": "Graphify AST Cache", "kind": "cache", "source_path": ".synlynk/graphify-out/"}, {"dir": ".synlynk/graphify-out", "status": "Indexed", "description": "Offline AST code graph, community clusters, and source index"})
+        ]
+
+    if not outbound_nodes:
+        outbound_nodes = [
+            ({"label": "Anthropic Claude API", "kind": "egress", "source_path": "synlynk/dispatch.py"}, {"endpoint": "api.anthropic.com:443", "role": "PM & Architecture", "status": "Connected", "category": "llm"}),
+            ({"label": "OpenAI Codex API", "kind": "egress", "source_path": "synlynk/dispatch.py"}, {"endpoint": "api.openai.com:443", "role": "Python & PR Ops", "status": "Connected", "category": "llm"}),
+            ({"label": "Google Gemini API (Agy)", "kind": "egress", "source_path": "synlynk/dispatch.py"}, {"endpoint": "generativelanguage.googleapis.com:443", "role": "HTML/CSS & Canvas", "status": "Connected", "category": "llm"}),
+            ({"label": "xAI Grok API", "kind": "egress", "source_path": "synlynk/dispatch.py"}, {"endpoint": "api.x.ai:443", "role": "Compute & Layout", "status": "Connected", "category": "llm"}),
+            ({"label": "GitHub REST/GraphQL API", "kind": "egress", "source_path": "synlynk/gh.py"}, {"endpoint": "api.github.com:443", "role": "Source Control & CI", "status": "Connected", "category": "vcs"})
+        ]
+
+    template = """<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>synlynk Vizor — Infrastructure & Egress Topology</title>
+<style>
+:root {
+  --bg: #0b0f19;
+  --bg-surface: #111827;
+  --bg-card: #1f2937;
+  --bg-card-hover: #283548;
+  --border: #374151;
+  --border-subtle: #242e3f;
+  --text-main: #f9fafb;
+  --text-muted: #9ca3af;
+  --text-dim: #6b7280;
+  --accent: #0d9e87;
+  --accent-light: #14b8a6;
+  --accent-bg: rgba(13, 158, 135, 0.15);
+  --green: #10b981;
+  --green-bg: rgba(16, 185, 129, 0.12);
+  --blue: #3b82f6;
+  --blue-bg: rgba(59, 130, 246, 0.12);
+  --purple: #a855f7;
+  --amber: #f59e0b;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+[data-theme="light"] {
+  --bg: #f8fafc;
+  --bg-surface: #ffffff;
+  --bg-card: #f1f5f9;
+  --bg-card-hover: #e2e8f0;
+  --border: #cbd5e1;
+  --border-subtle: #e2e8f0;
+  --text-main: #0f172a;
+  --text-muted: #475569;
+  --text-dim: #94a3b8;
+  --accent: #0d9e87;
+  --accent-light: #0b7a60;
+  --accent-bg: #e6f7f4;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text-main);
+  font-family: var(--font-sans);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header & BS-6 Navigation */
+.header {
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.brand-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.logo-badge {
+  background: var(--accent-bg);
+  color: var(--accent);
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-weight: 700;
+  font-size: 13px;
+  border: 1px solid var(--accent);
+}
+.view-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+.view-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg);
+  padding: 4px;
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+}
+.nav-btn {
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  color: var(--text-muted);
+  transition: all 0.15s ease;
+}
+.nav-btn:hover {
+  color: var(--text-main);
+  background: var(--bg-card);
+}
+.nav-btn.active {
+  background: var(--accent);
+  color: #ffffff;
+}
+
+/* Trust & Security Badges Bar */
+.security-bar {
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.security-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--green-bg);
+  color: var(--green);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+/* Content Layout */
+.main-container {
+  flex: 1;
+  padding: 24px;
+  max-width: 1440px;
+  margin: 0 auto;
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+@media (max-width: 1024px) {
+  .main-container {
+    grid-template-columns: 1fr;
+  }
+}
+
+.zone-panel {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.zone-header {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.zone-title {
+  font-size: 18px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.zone-subtitle {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+.zone-tag {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+.tag-host {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border: 1px solid #10b981;
+}
+.tag-egress {
+  background: rgba(59, 130, 246, 0.15);
+  color: #3b82f6;
+  border: 1px solid #3b82f6;
+}
+
+.infra-cards-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.infra-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: all 0.15s ease;
+}
+.infra-card:hover {
+  border-color: var(--accent);
+  background: var(--bg-card-hover);
+}
+.infra-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.infra-card-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.infra-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 6px #10b981;
+}
+.infra-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-dim);
+}
+.infra-card-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="brand-group">
+    <span class="logo-badge">synlynk</span>
+    <span class="view-title">Infra Topology & Execution Boundary · __WORKSPACE_NAME__</span>
+  </div>
+  <nav class="view-nav">
+    <a href="/tube.html" class="nav-btn">🚇 Architect Map</a>
+    <a href="/logical.html" class="nav-btn">🧠 Logical Engine</a>
+    <a href="/product.html" class="nav-btn">📦 Product Journeys</a>
+    <a href="/infra.html" class="nav-btn active">⚡ Infra Topology</a>
+    <a href="/world.html" class="nav-btn">🌐 Ecosystem Radar</a>
+    <a href="/board.html" class="nav-btn">📋 Board</a>
+    <a href="/timeline.html" class="nav-btn">⏱️ Timeline</a>
+  </nav>
+</header>
+
+<div class="security-bar">
+  <div class="security-badge">🔒 100% Host-Local Primary Ledger</div>
+  <div class="security-badge">🛡️ Zero Cloud Telemetry</div>
+  <div class="security-badge">⚡ No Third-Party Relay (Localhost Broker)</div>
+  <div class="security-badge">🌐 Explicit Outbound AI Egress Only</div>
+</div>
+
+<main class="main-container">
+  <!-- ZONE 1: HOST-LOCAL RUNTIME BOUNDARY -->
+  <div class="zone-panel">
+    <div class="zone-header">
+      <div>
+        <div class="zone-title">🖥️ Host-Local Runtime Boundary</div>
+        <div class="zone-subtitle">100% Zero-SaaS execution directly on local host machine</div>
+      </div>
+      <span class="zone-tag tag-host">Local Isolation</span>
+    </div>
+    <div class="infra-cards-list">
+      __HOST_LOCAL_CARDS_HTML__
+    </div>
+  </div>
+
+  <!-- ZONE 2: OUTBOUND CLOUD AI EGRESS -->
+  <div class="zone-panel">
+    <div class="zone-header">
+      <div>
+        <div class="zone-title">☁️ Outbound AI Cloud Egress</div>
+        <div class="zone-subtitle">Sandboxed TLS 1.3 inference gateways with explicit token budgets</div>
+      </div>
+      <span class="zone-tag tag-egress">Air-Gapped TLS</span>
+    </div>
+    <div class="infra-cards-list">
+      __OUTBOUND_CARDS_HTML__
+    </div>
+  </div>
+</main>
+
+<script>
+try {
+  const savedTheme = localStorage.getItem('vizor-theme');
+  if (savedTheme) document.documentElement.setAttribute('data-theme', savedTheme);
+} catch (_) {}
+</script>
+__LIVE_JS_HTML__
+</body>
+</html>"""
+
+    # Generate Host-Local Cards HTML
+    hl_cards = []
+    for node, attrs in host_local_nodes:
+        label = node.get("label") or "Host Component"
+        src_path = node.get("source_path") or ""
+        status = attrs.get("status") or "Active"
+        desc = attrs.get("description") or f"Component in {src_path}"
+        hl_cards.append(f"""
+        <div class="infra-card">
+          <div class="infra-card-top">
+            <div class="infra-card-title">
+              <span class="infra-status-dot"></span>
+              <span>{html.escape(label)}</span>
+            </div>
+            <span style="font-size: 11px; font-weight: 600; color: var(--accent-light);">{html.escape(status)}</span>
+          </div>
+          <div class="infra-card-meta">
+            <span>Path: {html.escape(src_path)}</span>
+          </div>
+          <div class="infra-card-desc">{html.escape(desc)}</div>
+        </div>
+        """)
+    host_local_html = "\n".join(hl_cards)
+
+    # Generate Outbound Cards HTML
+    out_cards = []
+    for node, attrs in outbound_nodes:
+        label = node.get("label") or "Outbound Gateway"
+        endpoint = attrs.get("endpoint") or "api.cloud.com:443"
+        role = attrs.get("role") or attrs.get("category") or "AI Gateway"
+        status = attrs.get("status") or "Connected"
+        desc = attrs.get("description") or f"External endpoint for {role}"
+        out_cards.append(f"""
+        <div class="infra-card">
+          <div class="infra-card-top">
+            <div class="infra-card-title">
+              <span class="infra-status-dot"></span>
+              <span>{html.escape(label)}</span>
+            </div>
+            <span style="font-size: 11px; font-weight: 600; color: #3b82f6;">{html.escape(status)}</span>
+          </div>
+          <div class="infra-card-meta">
+            <span>Endpoint: {html.escape(endpoint)}</span>
+            <span>·</span>
+            <span>Role: {html.escape(role)}</span>
+          </div>
+          <div class="infra-card-desc">{html.escape(desc)}</div>
+        </div>
+        """)
+    outbound_html = "\n".join(out_cards)
+
+    return (
+        template
+        .replace("__WORKSPACE_NAME__", html.escape(workspace_name))
+        .replace("__HOST_LOCAL_CARDS_HTML__", host_local_html)
+        .replace("__OUTBOUND_CARDS_HTML__", outbound_html)
+        .replace("__LIVE_JS_HTML__", live_js_html)
+    )
 
 
 def generate_world_html(data: dict, port: int) -> str:

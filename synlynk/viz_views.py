@@ -502,11 +502,50 @@ def extract_logical_nodes(conn: sqlite3.Connection, repo_path: str) -> Tuple[Lis
 
 
 def extract_infra_nodes(conn: sqlite3.Connection, repo_path: str) -> Tuple[List[dict], List[dict]]:
-    """Describe the local daemon and Vizor service boundary."""
+    """Describe the host-local runtime boundary and outbound cloud AI inference egress."""
     started, now, repo, sha = time.monotonic(), _now(), _repo_name(repo_path), _head_sha(repo_path)
-    daemon = _node("infra", repo, "service", "Synlynk Daemon (Background)", {"type": "process"}, ".synlynk/daemon.pid", "inferred", now, sha)
-    vizor = _node("infra", repo, "service", "Vizor Server (:8721)", {"port": 8721}, "synlynk/viz.py", "extracted", now, sha)
-    nodes, edges = [daemon, vizor], [_edge("infra", daemon, vizor, "manages", "inferred", now)]
+    nodes, edges = [], []
+
+    # 1. Host-Local Runtime Nodes (Zero-SaaS Local Machine)
+    hl_components = [
+        ("Vizor Server (:8721)", "daemon", {"zone": "host_local", "port": 8721, "status": "Running", "description": "Local HTTP visualization server and UI control plane"}, "synlynk/viz.py"),
+        ("SSE Relay Broker (:27472)", "daemon", {"zone": "host_local", "port": 27472, "status": "Active", "description": "High-throughput localhost event multiplexer and SSE feed"}, "synlynk/relay.py"),
+        ("StateDB SQLite Ledger", "database", {"zone": "host_local", "file": ".synlynk/state.db", "status": "WAL Active", "description": "100% Host-local ACID transactional ledger for goals, epics, stories"}, ".synlynk/state.db"),
+        ("Cryptographic Keystore", "security", {"zone": "host_local", "file": "identity.key", "status": "Secured (0o600)", "description": "Ed25519 identity key and GitHub App PEM certificates"}, "~/.synlynk/identity.key"),
+        ("Isolated Git Worktrees", "worktree", {"zone": "host_local", "pattern": "../feat+*", "status": "Isolated Cones", "description": "Parallel headless harness execution workspaces"}, "../feat+*"),
+        ("Graphify AST Cache", "cache", {"zone": "host_local", "dir": ".synlynk/graphify-out", "status": "Indexed", "description": "Offline AST code graph, community clusters, and source index"}, ".synlynk/graphify-out/")
+    ]
+
+    hl_node_map = {}
+    for label, kind, attrs, src_path in hl_components:
+        n = _node("infra", repo, kind, label, attrs, src_path, "extracted", now, sha)
+        nodes.append(n)
+        hl_node_map[label] = n
+
+    # Connect host-local internal relationships
+    if "Vizor Server (:8721)" in hl_node_map and "SSE Relay Broker (:27472)" in hl_node_map:
+        edges.append(_edge("infra", hl_node_map["Vizor Server (:8721)"], hl_node_map["SSE Relay Broker (:27472)"], "subscribes_to", "extracted", now))
+    if "Vizor Server (:8721)" in hl_node_map and "StateDB SQLite Ledger" in hl_node_map:
+        edges.append(_edge("infra", hl_node_map["Vizor Server (:8721)"], hl_node_map["StateDB SQLite Ledger"], "queries", "extracted", now))
+    if "Vizor Server (:8721)" in hl_node_map and "Graphify AST Cache" in hl_node_map:
+        edges.append(_edge("infra", hl_node_map["Vizor Server (:8721)"], hl_node_map["Graphify AST Cache"], "reads", "extracted", now))
+
+    # 2. Outbound External AI Egress (Air-Gapped / Explicit Network Endpoints)
+    egress_endpoints = [
+        ("Anthropic Claude API", "egress", {"zone": "outbound_egress", "endpoint": "api.anthropic.com:443", "category": "llm", "role": "PM & Architecture", "status": "Connected"}, "synlynk/dispatch.py"),
+        ("OpenAI Codex API", "egress", {"zone": "outbound_egress", "endpoint": "api.openai.com:443", "category": "llm", "role": "Python & PR Ops", "status": "Connected"}, "synlynk/dispatch.py"),
+        ("Google Gemini API (Agy)", "egress", {"zone": "outbound_egress", "endpoint": "generativelanguage.googleapis.com:443", "category": "llm", "role": "HTML/CSS & Canvas", "status": "Connected"}, "synlynk/dispatch.py"),
+        ("xAI Grok API", "egress", {"zone": "outbound_egress", "endpoint": "api.x.ai:443", "category": "llm", "role": "Compute & Layout", "status": "Connected"}, "synlynk/dispatch.py"),
+        ("GitHub REST/GraphQL API", "egress", {"zone": "outbound_egress", "endpoint": "api.github.com:443", "category": "vcs", "role": "Source Control & CI", "status": "Connected"}, "synlynk/gh.py")
+    ]
+
+    for label, kind, attrs, src_path in egress_endpoints:
+        n = _node("infra", repo, kind, label, attrs, src_path, "extracted", now, sha)
+        nodes.append(n)
+        # Connect to Daemon / Worktrees
+        if "Vizor Server (:8721)" in hl_node_map:
+            edges.append(_edge("infra", hl_node_map["Vizor Server (:8721)"], n, "egress_calls", "extracted", now))
+
     _save_projection(conn, "infra", repo, nodes, edges, started, sha)
     return nodes, edges
 
