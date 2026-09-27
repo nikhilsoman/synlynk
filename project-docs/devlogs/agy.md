@@ -882,3 +882,19 @@
   - Tested live endpoint: `POST /w/synlynk/api/graph/refresh` returned 200 OK, refreshed the 17MB interactive knowledge graph in `tube.html` and `logical.html`, and cleared staleness warning.
 [@agy]
 
+## 2026-09-27 — Shipped: Invariant 1 (Effect-Verified Completion Contract) (Issue #1806, PR #1807)
+
+### Context & Problem
+- Addressed Invariant 1 from the 4-harness Deep Architecture Review: eliminate false-positive agent "success" where a mutating job exits code 0 with zero git diff and zero files touched, or where a review/gh-write job exits 0 without remote effect delivery.
+- Enforced the mathematical invariant: Succeeded <=> (rc == 0) and EffectVerified(Job) and VerificationPassed(Job).
+
+### Shipped & Landed (PR #1807)
+1. **Job Status Taxonomy (`synlynk/jobs.py`):** Added `STATUS_COMPLETED_WITHOUT_CHANGES`, `STATUS_FAILED_NOOP_DENIED`, `STATUS_FAILED_VERIFICATION`, along with status helper predicates `is_successful_status()`, `is_terminal_status()`, and `is_noop_status()`.
+2. **Pure Effect Verification Engine (`synlynk/verify_effects.py`):** Built pure-Python verification engine `verify_job_effects()` inspecting worktree git diffs (uncommitted & committed since `base_sha`), remote GitHub effect timestamps via `gh_write_verified()`, analysis receipts, and optional `verification_cmd` test execution.
+3. **Dispatch & Reconcile Finalizer Integration (`synlynk/jobs.py`, `synlynk/dispatch.py`):** Integrated `_enforce_job_effect_verification()` into `_reconcile_jobs_unlocked()` across both waitpid and external process reaping loops, mapping zero-diff mutating completions to `completed_without_changes` and triggering `TASK_NOOP_DENIED` Sentinel alerts.
+4. **Sentinel Alerting & Status Badging (`synlynk/sentinel.py`, `synlynk/viz.py`):** Added `_read_active_sentinel_alerts()`, updated Vizor HUD with amber `.status-chip.noop` (`⚠ NOOP`) badges and CSS styling.
+5. **Autonomous Milestone DAG Failover (`synlynk/launch_dag.py`):** Added `LaunchDAG.handle_job_outcome()`, tracking `retry_count`, `max_retries`, and `failed_harnesses` to autonomously failover across the core harness chain (`codex` -> `agy` -> `claude` -> `grok`) on noop completions.
+6. **Verification:** Added 22 unit tests across 5 new test files. 100% full regression pass rate (3,336 passed tests). Opened PR #1807.
+[@agy]
+
+
