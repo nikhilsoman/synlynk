@@ -508,8 +508,8 @@ def extract_infra_nodes(conn: sqlite3.Connection, repo_path: str) -> Tuple[List[
 
     # 1. Host-Local Runtime Nodes (Zero-SaaS Local Machine)
     hl_components = [
-        ("Vizor Server (:8721)", "daemon", {"zone": "host_local", "port": 8721, "status": "Running", "description": "Local HTTP visualization server and UI control plane"}, "synlynk/viz.py"),
-        ("SSE Relay Broker (:27472)", "daemon", {"zone": "host_local", "port": 27472, "status": "Active", "description": "High-throughput localhost event multiplexer and SSE feed"}, "synlynk/relay.py"),
+        ("Vizor Server (:8721)", "service", {"zone": "host_local", "port": 8721, "status": "Running", "description": "Local HTTP visualization server and UI control plane"}, "synlynk/viz.py"),
+        ("SSE Relay Broker (:27472)", "service", {"zone": "host_local", "port": 27472, "status": "Active", "description": "High-throughput localhost event multiplexer and SSE feed"}, "synlynk/relay.py"),
         ("StateDB SQLite Ledger", "database", {"zone": "host_local", "file": ".synlynk/state.db", "status": "WAL Active", "description": "100% Host-local ACID transactional ledger for goals, epics, stories"}, ".synlynk/state.db"),
         ("Cryptographic Keystore", "security", {"zone": "host_local", "file": "identity.key", "status": "Secured (0o600)", "description": "Ed25519 identity key and GitHub App PEM certificates"}, "~/.synlynk/identity.key"),
         ("Isolated Git Worktrees", "worktree", {"zone": "host_local", "pattern": "../feat+*", "status": "Isolated Cones", "description": "Parallel headless harness execution workspaces"}, "../feat+*"),
@@ -524,7 +524,7 @@ def extract_infra_nodes(conn: sqlite3.Connection, repo_path: str) -> Tuple[List[
 
     # Connect host-local internal relationships
     if "Vizor Server (:8721)" in hl_node_map and "SSE Relay Broker (:27472)" in hl_node_map:
-        edges.append(_edge("infra", hl_node_map["Vizor Server (:8721)"], hl_node_map["SSE Relay Broker (:27472)"], "subscribes_to", "extracted", now))
+        edges.append(_edge("infra", hl_node_map["Vizor Server (:8721)"], hl_node_map["SSE Relay Broker (:27472)"], "manages", "extracted", now))
     if "Vizor Server (:8721)" in hl_node_map and "StateDB SQLite Ledger" in hl_node_map:
         edges.append(_edge("infra", hl_node_map["Vizor Server (:8721)"], hl_node_map["StateDB SQLite Ledger"], "queries", "extracted", now))
     if "Vizor Server (:8721)" in hl_node_map and "Graphify AST Cache" in hl_node_map:

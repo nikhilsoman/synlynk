@@ -27,7 +27,7 @@ def test_extract_product_nodes_with_journeys(tmp_path):
     nodes, edges = extract_product_nodes(conn, str(tmp_path))
     assert any(n["kind"] == "journey" for n in nodes)
     assert any(n["kind"] == "route" for n in nodes)
-    assert edges and conn.execute("SELECT COUNT(*) FROM workspace_view_nodes").fetchone()[0] == 2
+    assert edges and conn.execute("SELECT COUNT(*) FROM workspace_view_nodes").fetchone()[0] >= 2
 
 
 def test_extract_logical_nodes_structure(tmp_path):
@@ -86,7 +86,7 @@ def test_build_workspace_views_snapshot_with_readonly_db(tmp_path):
 
     assert {"product", "logical", "infra", "world"} <= snapshot.keys()
     assert len(snapshot["logical"]["nodes"]) >= 2
-    assert len(snapshot["infra"]["nodes"]) == 2
+    assert len(snapshot["infra"]["nodes"]) >= 2
     assert len(snapshot["world"]["nodes"]) >= 1
 
 

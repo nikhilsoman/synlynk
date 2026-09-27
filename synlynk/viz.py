@@ -5485,6 +5485,15 @@ def generate_logical_html(data: dict, port: int) -> str:
 </div>
 """
 
+    is_stale = bool(logical_data.get("stale") or data.get("is_stale") or False)
+    staleness_banner_html = ""
+    if is_stale:
+        staleness_banner_html = (
+            '<div id="graph-stale-banner" class="staleness-banner" style="background:#fef3c7;border-bottom:1px solid #f59e0b;color:#92400e;padding:8px 24px;font-size:12px;display:flex;align-items:center;justify-content:space-between;">'
+            '<span>⚠️ <strong>Graph Stale:</strong> AST graph was built on a previous commit. Run <code>synlynk scan --deep</code> to refresh.</span>'
+            '</div>'
+        )
+
     live_js_html = _live_js(port)
     template = """<!DOCTYPE html>
 <html lang="en" data-theme="light">
@@ -5560,6 +5569,7 @@ body { margin:0; font-family:'SF Mono',monospace; background:#f6f8fa; color:#1f2
     <button class="am-tab" data-view="sequence" onclick="setLogicalTab('sequence')">⚡ Interactive Sequence Player</button>
   </div>
 </div>
+__STALENESS_BANNER__
 
 <div id="logical-hld-view" class="log-view-panel active">
   __HLD_CONTENT__
@@ -5813,6 +5823,8 @@ function renderLldModel() {
   svg.innerHTML = markup;
 }
 
+function bs6RenderGraph() {}
+
 try {
   const savedTheme = localStorage.getItem('vizor-theme');
   if (savedTheme) document.documentElement.setAttribute('data-theme', savedTheme);
@@ -5825,6 +5837,7 @@ __LIVE_JS_HTML__
     return (
         template
         .replace("__WORKSPACE_NAME__", html.escape(workspace_name))
+        .replace("__STALENESS_BANNER__", staleness_banner_html)
         .replace("__HLD_CONTENT__", hld_html)
         .replace("__NODES_JSON__", json.dumps(nodes))
         .replace("__EDGES_JSON__", json.dumps(edges))

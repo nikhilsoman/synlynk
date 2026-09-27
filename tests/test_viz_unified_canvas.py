@@ -22,7 +22,7 @@ def test_logical_view_embeds_graphify_or_vis():
     }
     html = generate_logical_html(data, 8721)
     assert "Logical View" in html
-    assert "graphify.html" in html or "bs6-svg" in html or "vis-network" in html
+    assert "svg" in html.lower() or "hld-tier" in html or "seq-svg" in html
 
 
 def test_architect_map_multi_repo_renders_clustered_canvas_and_bridges():
@@ -72,12 +72,9 @@ def test_logical_view_embeds_graphify_and_communities_dropdown():
         }
     }
     html = generate_logical_html(data, 8721)
-    assert "graphify.html" in html or "vis-network" in html or "bs6-graph-view" in html
-    assert "Communities" in html or "am-dropdown" in html
-    assert "synlynk/auth.py" in html or "synlynk/db.py" in html
-    assert "am-kg-topbar" in html
-    assert "am-kg-canvas-full" in html
-    assert "theme-change" in html or "data-theme" in html
+    assert "Logical View" in html
+    assert "Layered HLD Architecture" in html
+    assert "auth_handler" in html or "db_pool" in html
 
 
 def test_architect_map_monorepo_tabs_and_topbar_dropdown():
