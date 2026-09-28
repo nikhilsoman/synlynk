@@ -195,6 +195,26 @@ def test_fast_cli_preserves_help_and_invalid_command_paths():
     assert "invalid choice" in invalid_result.stderr
 
 
+def test_lazy_parser_registers_only_the_selected_top_level_command():
+    parser = cli_mod.build_parser(selected_command="dispatch")
+    subparser_action = parser._subparsers._group_actions[0]
+
+    assert subparser_action.choices["dispatch"].__class__.__name__ == "ArgumentParser"
+    assert subparser_action.choices["status"].__class__.__name__ == "_LazyParserStub"
+    args = parser.parse_args(["dispatch", "codex", "--task", "build"])
+    assert (args.command, args.agent, args.task) == ("dispatch", "codex", "build")
+
+
+def test_lazy_parser_unknown_command_keeps_the_complete_choice_list():
+    parser = cli_mod.build_parser(selected_command="not-a-real-command")
+
+    with pytest.raises(SystemExit):
+        parser.parse_args(["not-a-real-command"])
+    choices = parser._subparsers._group_actions[0].choices
+    assert "dispatch" in choices
+    assert "sentinel" in choices
+
+
 def test_state_restore_cli_prints_json_result(tmp_path, monkeypatch, capsys):
     source = tmp_path / "snapshot.db"
     sqlite3.connect(source).close()
