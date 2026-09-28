@@ -3,7 +3,7 @@ title: "R9 — One Canonical Instruction Protocol"
 date: 2026-09-29
 series: "Building the OS for Multi-Agent Development"
 post: 229
-pr: "TBD"
+pr: "1843"
 issue: "story-025c857c"
 status: draft
 author: "synlynk team"
