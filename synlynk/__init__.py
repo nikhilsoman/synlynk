@@ -3692,9 +3692,11 @@ def init(force: bool = False, agents: list = None,
          non_interactive: bool = False) -> None:
     """Progressive wizard: semantic scan → harness discovery → doc bootstrap → nudge."""
 
-    # CI and headless dispatch commonly close stdin entirely.  Treat either an
-    # explicit flag or a non-TTY stdin as permission to use prompt defaults.
-    auto_defaults = non_interactive or not sys.stdin.isatty()
+    # An explicit non-interactive flag always uses defaults.  Otherwise keep
+    # prompting even when stdin is not a TTY: callers and tests may provide a
+    # working input function.  Closed/exhausted stdin is handled below via
+    # EOFError, which preserves the headless subprocess fallback.
+    auto_defaults = bool(non_interactive)
 
     def _print_step(n: int, label: str) -> None:
         print(f"\n{_BOLD}{_CYAN}Step {n}/{_TOTAL_STEPS} — {label}{_RESET}")
@@ -3863,7 +3865,10 @@ def init(force: bool = False, agents: list = None,
                   f"from this? (costs tokens)")
             answer = ""
             if not auto_defaults:
-                answer = input("  [y/N] ").strip().lower()
+                try:
+                    answer = input("  [y/N] ").strip().lower()
+                except EOFError:
+                    auto_defaults = True
             if answer == "y":
                 print(f"  {_DIM}Calling {enricher['cli']} --print...{_RESET}", end=" ", flush=True)
                 ok = _llm_enrich(enricher["name"], enricher["cli"], scan)
@@ -3884,8 +3889,13 @@ def init(force: bool = False, agents: list = None,
             email = ""
             industry = inferred
         else:
-            email = input("  Email or synlynk ID: ").strip()
-            industry = input(f"  Industry vertical [{inferred}]: ").strip() or inferred
+            try:
+                email = input("  Email or synlynk ID: ").strip()
+                industry = input(f"  Industry vertical [{inferred}]: ").strip() or inferred
+            except EOFError:
+                auto_defaults = True
+                email = ""
+                industry = inferred
         if industry not in list(_INDUSTRY_KEYWORDS.keys()) + ["unknown"]:
             industry = "unknown"
 
