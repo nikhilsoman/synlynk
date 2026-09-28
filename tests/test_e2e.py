@@ -78,7 +78,11 @@ class Cli:
 
     def __init__(self, project_dir: Path):
         self.dir = project_dir
-        self.env = {**os.environ, "HOME": str(project_dir)}
+        self.env = {
+            **os.environ,
+            "HOME": str(project_dir),
+            "SYNLYNK_SKIP_GRAPHIFY_EXTRACT": "1",
+        }
 
     @classmethod
     def from_dir(cls, directory: Path) -> "Cli":

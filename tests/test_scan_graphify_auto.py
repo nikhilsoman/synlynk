@@ -4,7 +4,22 @@ from unittest.mock import patch, MagicMock
 from synlynk.scan import _run_graphify_extract
 
 
-def test_run_graphify_extract_when_installed(tmp_path):
+def test_run_graphify_extract_skips_subprocess_when_opted_out(tmp_path, monkeypatch):
+    monkeypatch.setenv("SYNLYNK_SKIP_GRAPHIFY_EXTRACT", "1")
+
+    with patch("synlynk.scan.is_tool_available") as mock_available, \
+         patch("synlynk.scan.install_tool") as mock_install, \
+         patch("subprocess.run") as mock_run:
+        assert _run_graphify_extract(str(tmp_path)) is True
+
+    mock_available.assert_not_called()
+    mock_install.assert_not_called()
+    mock_run.assert_not_called()
+
+
+def test_run_graphify_extract_when_installed(tmp_path, monkeypatch):
+    monkeypatch.delenv("SYNLYNK_SKIP_GRAPHIFY_EXTRACT", raising=False)
+
     with patch("synlynk.scan.is_tool_available", return_value=True), \
          patch("subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(returncode=0)
