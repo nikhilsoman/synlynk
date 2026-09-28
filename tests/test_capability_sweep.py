@@ -213,7 +213,10 @@ def test_sweep_for_harness_model_dispatches_selected_model(tmp_path, monkeypatch
     capability_sweep.cmd_capability_sweep_for_harness_model("agy", "gemini-specific")
 
     assert calls
-    assert calls[0] == ("agy", {"model": "gemini-specific"})
+    agent, kwargs = calls[0]
+    assert agent == "agy"
+    assert kwargs["model"] == "gemini-specific"
+    assert kwargs["db_conn"] is conn
 
 
 def test_dispatch_calibration_task_passes_model_to_dispatch_agent(monkeypatch):

@@ -4,6 +4,7 @@ import json
 import os
 import re
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Optional
 
@@ -345,6 +346,19 @@ def _list_worktrees(main_repo_path: str, cwd_worktree_path: str) -> list:
     return _build_worktree_entries(raw, main_repo_path, cwd_worktree_path)
 
 
+def _worktree_status_hint_entry(entry: WorktreeEntry):
+    """Return whether one worktree is stale, or None when it cannot be checked."""
+    if not os.path.isdir(entry.path):
+        return True
+    try:
+        is_dirty, _ = _git_status_dirty(entry.path)
+        if is_dirty:
+            return False
+        return _git_is_ancestor(entry.branch, entry.path)
+    except (subprocess.SubprocessError, OSError):
+        return None
+
+
 def _worktree_status_hint():
     """Cheap local-only pre-pass for ``synlynk status``.
 
@@ -359,17 +373,9 @@ def _worktree_status_hint():
     if not entries:
         return None
 
-    stale = 0
-    for entry in entries:
-        if not os.path.isdir(entry.path):
-            stale += 1
-            continue
-        try:
-            is_dirty, _ = _git_status_dirty(entry.path)
-        except (subprocess.SubprocessError, OSError):
-            continue
-        if not is_dirty:
-            stale += 1
+    with ThreadPoolExecutor(max_workers=min(16, len(entries))) as executor:
+        results = executor.map(_worktree_status_hint_entry, entries)
+        stale = sum(result is True for result in results)
 
     return {"local": len(entries), "stale_hint": stale}
 

@@ -181,7 +181,59 @@ def cmd_watch(args) -> None:
         sys.stdout.write("\033[?1049l")
         sys.stdout.flush()
 
-def build_parser() -> argparse.ArgumentParser:
+_TOP_LEVEL_COMMANDS = (
+    "init", "upgrade", "uninstall", "join", "start", "home", "testbed", "tool",
+    "pack", "connector", "impact", "mesh", "spike", "team", "decide", "heal",
+    "audit-docs", "goal", "governs", "local", "models", "media", "scan", "workspace",
+    "migrate", "rollback", "probe", "doctor", "worktree", "tui", "notify", "exit",
+    "repair", "sync", "configure", "identity", "type", "whoami", "events", "session",
+    "harness", "agent", "exec", "gh", "watch", "swarm", "daemon", "checkpoint", "status",
+    "backup", "state", "ops", "selftest", "config", "sentinel", "dispatch", "jobs", "relay",
+    "logs", "shell", "open", "launch", "run", "story", "pm", "tpm", "score", "charters", "cost",
+    "roadmap", "policy", "credit", "backlog", "quota", "schedule", "pr", "capability",
+    "instructions", "marketing", "roles", "release", "viz", "backfill-capability-ratings",
+)
+
+
+class _LazyParserStub:
+    """No-op parser returned while registering a non-selected command."""
+
+    def add_argument(self, *args, **kwargs):
+        return self
+
+    def add_subparsers(self, *args, **kwargs):
+        return self
+
+    def add_parser(self, *args, **kwargs):
+        return self
+
+    def add_mutually_exclusive_group(self, *args, **kwargs):
+        return self
+
+    def set_defaults(self, **kwargs):
+        return self
+
+
+class _LazySubparsers:
+    """Register only one top-level parser while retaining argparse choices."""
+
+    def __init__(self, action, selected_command):
+        self._action = action
+        self._selected_command = selected_command
+        stub = _LazyParserStub()
+        for command in _TOP_LEVEL_COMMANDS:
+            action.choices[command] = stub
+            action._name_parser_map[command] = stub
+
+    def add_parser(self, name, **kwargs):
+        if self._selected_command is None or name != self._selected_command:
+            return _LazyParserStub()
+        self._action._name_parser_map.pop(name, None)
+        parser = self._action.add_parser(name, **kwargs)
+        return parser
+
+
+def build_parser(selected_command=None) -> argparse.ArgumentParser:
     from synlynk._constants import CORE_FLEET
 
     parser = argparse.ArgumentParser(
@@ -191,6 +243,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     parser.add_argument("--version", action="version", version=f"synlynk {VERSION}")
     subparsers = parser.add_subparsers(dest="command")
+    if selected_command is not None:
+        subparsers = _LazySubparsers(subparsers, selected_command)
 
     init_parser = subparsers.add_parser("init", help="Initialize synlynk in a repository")
     init_parser.add_argument("--force", action="store_true",
@@ -1534,18 +1588,35 @@ def _warn_deprecated_harness_flag(argv) -> None:
         print("  warning: --to-agent is deprecated, use --to-harness instead", file=sys.stderr)
 
 
+def _command_from_argv(argv):
+    """Return the first positional token, which is the top-level command."""
+    for token in argv:
+        if token == "--":
+            return None
+        if not token.startswith("-"):
+            return token
+    return None
+
+
 def main(argv=None) -> None:
     import synlynk as _package
 
+    cli_tokens = list(argv) if argv is not None else sys.argv[1:]
+    fast_entrypoint = _package._FAST_CLI
+    selected_command = _command_from_argv(cli_tokens)
     if _package._FAST_CLI:
-        # Parse first so --help, --version, and invalid-command paths do not
-        # import the full compatibility export graph. Real commands load it
-        # only after argparse has accepted the command line.
-        parser = build_parser()
-        parser.parse_args(argv)
+        # Keep the common metadata/error paths free of the legacy import graph.
+        # A real command is parsed lazily after those imports, using only its
+        # own registration block.
+        if "--version" in cli_tokens:
+            from synlynk._constants import VERSION
+            print(f"synlynk {VERSION}")
+            raise SystemExit(0)
+        if "--help" in cli_tokens or selected_command not in _TOP_LEVEL_COMMANDS:
+            parser = build_parser(selected_command=selected_command)
+            parser.parse_args(cli_tokens)
         _package._load_legacy_imports()
         _package._FAST_CLI = False
-        return main(argv)
 
     from synlynk.capability_sweep import cmd_capability_sweep
     from synlynk.db import cmd_story_done
@@ -1644,9 +1715,8 @@ def main(argv=None) -> None:
         spawn_staleness_check_thread(_watch_conn, load_config())
     except Exception:
         pass  # staleness checks are best-effort; never block a real command on this
-    parser = build_parser()
-    args = parser.parse_args(argv)
-    cli_tokens = argv if argv is not None else sys.argv[1:]
+    parser = build_parser(selected_command=selected_command if fast_entrypoint else None)
+    args = parser.parse_args(cli_tokens)
     help_parsers = getattr(parser, "_synlynk_help_parsers", {})
     _warn_stale_repo_version(VERSION)
 
