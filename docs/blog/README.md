@@ -1,5 +1,7 @@
 # synlynk Blog Series: Building the OS for Multi-Agent Development
 
+| [229](./229-prTBD-instruction-file-deduplication.md) | R9 — One Canonical Instruction Protocol | TBD | 2026-09-29 |
+
 | [228](./228-pr1841-init-noninteractive.md) | R8 — Making `synlynk init` safe for CI | [#1841](https://github.com/nikhilsoman/synlynk/pull/1841) | 2026-09-28 |
 | [227](./227-pr1837-harness-workflow-rename.md) | Issue #1837 - Scheduled Workflows Follow the Harness CLI | [#1842](https://github.com/nikhilsoman/synlynk/pull/1842) | 2026-09-28 |
 | [226](./226-prTBD-probe-model-discovery-no-inline-calibration.md) | Probe model discovery without inline calibration | [#1838](https://github.com/nikhilsoman/synlynk/pull/1838) | 2026-09-28 |

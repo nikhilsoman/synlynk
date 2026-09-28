@@ -595,122 +595,70 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
 
     _sop_section = "\n".join(SOP_BLOCKS) + "\n"
 
+    _shared_protocol_pointer = (
+        "## Shared synlynk Protocol\n\n"
+        "Load `AI_INSTRUCTIONS.md` for the full shared synlynk protocol, including "
+        "the session lifecycle, worktree policy, live-issues SOP, document discipline, "
+        "GitHub Projects workflow, and harness SOPs.\n"
+    )
+
+    def _tool_header(name: str, engine: str, trailer: str, prefix: str) -> str:
+        return (
+            f"# {name}\n\n"
+            "## Identity & Attribution\n"
+            f"- **Engine:** {engine}\n"
+            f"- **Commit trailer:** `{trailer}`\n"
+            f"- **Branch prefix:** {prefix}\n\n"
+            "## Domain Ownership\n"
+            "| Domain | Owned by this agent | Notes |\n"
+            "|:---|:---|:---|\n"
+            "| TODO: fill domains for this agent | | |\n\n"
+            + _shared_protocol_pointer
+        )
+
     _claude_md = (
-        "# synlynk Claude Instructions\n\n"
-        "## Identity & Attribution\n"
-        "- **Engine:** claude-sonnet-4-6\n"
-        "- **Commit trailer:** `Co-Authored-By: Claude Sonnet <noreply@anthropic.com>`\n"
-        "- **Branch prefix:** `feat/claude/` or `fix/claude/`\n\n"
-        "## Domain Ownership\n"
-        "| Domain | Owned by this agent | Notes |\n"
-        "|:---|:---|:---|\n"
-        "| TODO: fill domains for this agent | | |\n\n"
-        + _dual_mode_protocol + "\n"
-        + _worktree_policy + "\n"
-        "## Branch Naming\n"
-        "- `feat/claude/<description>` — new functionality\n"
-        "- `fix/claude/<description>` — bug fixes\n"
-        "- `chore/<description>` — deps, docs, config\n\n"
-        + _live_issues_sop + "\n"
-        + _anti_amnesia + "\n"
-        + _four_doc + "\n"
-        + _ghp_block + "\n"
-        + _sop_section
-        + _synlynk_start + "\n"
-        + _session_protocol + "\n\n"
-        + _trigger_registry_section + "\n\n"
-        + _lifecycle_checkpoint_section
+        _tool_header(
+            "synlynk Claude Instructions", "claude-sonnet-4-6",
+            "Co-Authored-By: Claude Sonnet <noreply@anthropic.com>",
+            "`feat/claude/` or `fix/claude/`",
+        )
     )
 
     _gemini_md = (
-        "# synlynk AGY (AntiGravity) Instructions\n\n"
-        "## Identity & Attribution\n"
-        "- **Engine:** agy-2.x\n"
-        "- **Commit trailer:** `Co-Authored-By: AGY <noreply@antigravity.dev>`\n"
-        "- **Branch prefix:** `feat/agy/` or `fix/agy/`\n\n"
-        "## Domain Ownership\n"
-        "| Domain | Owned by this agent | Notes |\n"
-        "|:---|:---|:---|\n"
-        "| TODO: fill domains for this agent | | |\n\n"
-        + _dual_mode_protocol + "\n"
-        + _worktree_policy + "\n"
-        "## Branch Naming\n"
-        "- `feat/agy/<description>` — new functionality\n"
-        "- `fix/agy/<description>` — bug fixes\n"
-        "- `chore/<description>` — deps, docs, config\n\n"
-        + _live_issues_sop + "\n"
-        + _anti_amnesia + "\n"
-        + _four_doc + "\n"
-        + _ghp_block + "\n"
-        + _sop_section
-        + _synlynk_start + "\n"
-        + _session_protocol + "\n\n"
-        + _trigger_registry_section + "\n\n"
-        + _lifecycle_checkpoint_section
+        _tool_header(
+            "synlynk AGY (AntiGravity) Instructions", "agy-2.x",
+            "Co-Authored-By: AGY <noreply@antigravity.dev>",
+            "`feat/agy/` or `fix/agy/`",
+        )
     )
 
     _agents_md = (
-        "# synlynk Codex Instructions\n\n"
-        "## Identity & Attribution\n"
-        "- **Engine:** openai-codex\n"
-        "- **Commit trailer:** `Co-Authored-By: Codex <noreply@openai.com>`\n"
-        "- **Branch prefix:** `feat/codex/` or `fix/codex/`\n\n"
-        "## Domain Ownership\n"
-        "| Domain | Owned by this agent | Notes |\n"
-        "|:---|:---|:---|\n"
-        "| TODO: fill domains for this agent | | |\n\n"
-        + _dual_mode_protocol + "\n"
-        + _worktree_policy + "\n"
-        "## Branch Naming\n"
-        "- `feat/codex/<description>` — new functionality\n"
-        "- `fix/codex/<description>` — bug fixes\n"
-        "- `chore/<description>` — deps, docs, config\n\n"
-        + _live_issues_sop + "\n"
-        + _anti_amnesia + "\n"
-        + _four_doc + "\n"
-        + _ghp_block + "\n"
-        + _sop_section
-        + _synlynk_start + "\n"
-        + _session_protocol + "\n\n"
-        + _trigger_registry_section + "\n\n"
-        + _lifecycle_checkpoint_section
+        _tool_header(
+            "synlynk Codex Instructions", "openai-codex",
+            "Co-Authored-By: Codex <noreply@openai.com>",
+            "`feat/codex/` or `fix/codex/`",
+        )
     )
 
     _grok_md = (
-        "# synlynk Grok Instructions\n\n"
-        "## Identity & Attribution\n"
-        "- **Engine:** grok-composer-2.5-fast\n"
-        "- **Commit trailer:** `Co-Authored-By: Grok <noreply@x.ai>`\n"
-        "- **Branch prefix:** `feat/grok/` or `fix/grok/`\n\n"
-        "## Domain Ownership\n"
-        "| Domain | Owned by this agent | Notes |\n"
-        "|:---|:---|:---|\n"
-        "| TODO: fill domains for this agent | | |\n\n"
-        + _dual_mode_protocol + "\n"
-        + _worktree_policy + "\n"
-        "## Branch Naming\n"
-        "- `feat/grok/<description>` — new functionality\n"
-        "- `fix/grok/<description>` — bug fixes\n"
-        "- `chore/<description>` — deps, docs, config\n\n"
-        + _live_issues_sop + "\n"
-        + _anti_amnesia + "\n"
-        + _four_doc + "\n"
-        + _ghp_block + "\n"
-        + _sop_section
-        + _synlynk_start + "\n"
-        + _session_protocol + "\n\n"
-        + _trigger_registry_section + "\n\n"
-        + _lifecycle_checkpoint_section
+        _tool_header(
+            "synlynk Grok Instructions", "grok-composer-2.5-fast",
+            "Co-Authored-By: Grok <noreply@x.ai>",
+            "`feat/grok/` or `fix/grok/`",
+        )
     )
 
     _ai_instructions_md = (
         "# synlynk Universal AI Instructions\n\n"
         "Apply the following as your system prompt or custom instructions "
         "before starting any session in this repository.\n\n"
+        + _dual_mode_protocol + "\n"
+        + _worktree_policy + "\n"
         + _live_issues_sop + "\n"
         + _anti_amnesia + "\n"
         + _four_doc + "\n"
         + _ghp_block + "\n"
+        + _sop_section
         + _synlynk_start + "\n"
         + _session_protocol + "\n\n"
         + _trigger_registry_section + "\n\n"

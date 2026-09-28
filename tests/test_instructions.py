@@ -257,16 +257,34 @@ def test_instruction_templates_prohibit_direct_todo_edits():
             assert "synlynk story done" in tmpl or "synlynk checkpoint" in tmpl
 
 
-def test_instruction_templates_have_symmetric_dual_mode_protocol():
+def test_tool_templates_point_to_canonical_shared_protocol():
     from synlynk.instructions import _build_templates
 
     templates = _build_templates()
     for name in ("CLAUDE.md", "GEMINI.md", "AGENTS.md", "GROK.md"):
         tmpl = templates[name]
-        assert "## Operating Mode: Home vs. Away" in tmpl
-        assert "Mode A: Interactive Session (Home Conductor)" in tmpl
-        assert "Mode B: Dispatched Task (Away Worker)" in tmpl
-        assert "Constitutional Precedence" in tmpl
-        assert "What you hand back to Claude" not in tmpl
-        assert "without explicit Claude approval" not in tmpl
+        assert "## Identity & Attribution" in tmpl
+        assert "## Shared synlynk Protocol" in tmpl
+        assert "Load `AI_INSTRUCTIONS.md` for the full shared synlynk protocol" in tmpl
+        assert "## Operating Mode: Home vs. Away" not in tmpl
+        assert "## Live Issues SOP" not in tmpl
 
+
+def test_tool_templates_are_substantially_smaller_than_canonical_protocol():
+    from synlynk.instructions import _build_templates
+
+    templates = _build_templates()
+    tool_sizes = [len(templates[name].encode()) for name in ("CLAUDE.md", "GEMINI.md", "AGENTS.md", "GROK.md")]
+    canonical = templates["AI_INSTRUCTIONS.md"]
+    assert max(tool_sizes) < 5000
+    assert len(canonical.encode()) > sum(tool_sizes)
+    for section in (
+        "## Operating Mode: Home vs. Away",
+        "## Git Worktree-First Policy",
+        "## Live Issues SOP",
+        "## Mid-Session Anti-Amnesia Protocol",
+        "## Mandatory 4-Doc Discipline",
+        "## GitHub Projects v2 Integration",
+        "## PR Review Discipline",
+    ):
+        assert section in canonical
