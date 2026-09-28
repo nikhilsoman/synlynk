@@ -86,7 +86,10 @@ def _normalize_sentinel_severity(severity: str) -> str:
 
 
 def _parse_sentinel_timestamp(value: str):
-    value = str(value or "").strip().replace("Z", "+00:00")
+    value = str(value or "").strip()
+    if value.upper().endswith(" UTC"):
+        value = value[:-4].rstrip() + "+00:00"
+    value = value.replace("Z", "+00:00")
     for fmt in (None, "%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
         try:
             parsed = datetime.fromisoformat(value) if fmt is None else datetime.strptime(value, fmt)
@@ -473,7 +476,7 @@ def _read_active_sentinel_alerts(sentinel_path: str = ".synlynk/sentinel.md") ->
 
 
 def _summarize_sentinel_alerts(alert_lines: list, max_alert_types: int = 20) -> list:
-    """Roll up active rows by pattern/code for a compact human-facing view."""
+    """Roll up active rows by pattern/code and severity for a compact view."""
     by_pattern = {}
     passthrough = []
     for raw_line in alert_lines:
@@ -484,7 +487,8 @@ def _summarize_sentinel_alerts(alert_lines: list, max_alert_types: int = 20) -> 
         if alert is None:
             passthrough.append(line)
             continue
-        bucket = by_pattern.setdefault(alert["code"], {
+        pattern = (alert["code"], alert["severity"])
+        bucket = by_pattern.setdefault(pattern, {
             "severity": alert["severity"], "count": 0, "subjects": set(),
             "latest": alert.get("last_seen_dt") or alert.get("timestamp_dt"),
             "line": line,
@@ -497,7 +501,7 @@ def _summarize_sentinel_alerts(alert_lines: list, max_alert_types: int = 20) -> 
             bucket["line"] = line
 
     summarized = []
-    for code, bucket in by_pattern.items():
+    for (code, _severity), bucket in by_pattern.items():
         if len(bucket["subjects"]) == 1:
             line = bucket["line"]
             if bucket["count"] > 1 and "[occurrences:" not in line:
