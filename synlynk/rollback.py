@@ -123,6 +123,7 @@ def _stash_paths(untracked_paths: list) -> list:
     for line in result.stdout.splitlines():
         if len(line) < 4:
             continue
+        status = line[:2]
         path = line[3:]
         if " -> " in path:
             path = path.rsplit(" -> ", 1)[-1]
@@ -139,9 +140,10 @@ def _stash_paths(untracked_paths: list) -> list:
         # disappear between `git status` and `git stash` for the same reason.
         if os.path.basename(path).startswith(".sentinel-"):
             continue
-        # A path reported by status may have been removed before we invoke
-        # stash.  Do not pass a vanished pathspec to git.
-        if not os.path.exists(path):
+        # A missing untracked path may have disappeared before we invoke
+        # stash.  Keep missing tracked paths, especially deletions, in the
+        # pathspec so the stash can preserve them across a rollback.
+        if not os.path.exists(path) and status == "??":
             continue
         if path not in paths:
             paths.append(path)

@@ -162,6 +162,22 @@ def test_rollback_checkpoint_restores_dirty_tree_stash(tmp_path, monkeypatch):
     assert tracked.read_text() == "uncommitted local edit\n"
 
 
+def test_rollback_checkpoint_preserves_deleted_tracked_file(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    _init_git_repo(tmp_path)
+    tracked = tmp_path / "tracked.txt"
+    tracked.write_text("v1\n")
+    subprocess.run(["git", "add", "tracked.txt"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "commit", "-m", "initial", "-q"], cwd=tmp_path, check=True)
+    tracked.unlink()
+
+    with pytest.raises(RuntimeError, match="simulated operation failure"):
+        with rollback.rollback_checkpoint("init", untracked_paths=[]):
+            raise RuntimeError("simulated operation failure")
+
+    assert not tracked.exists()
+
+
 def test_rollback_checkpoint_stash_excludes_out_of_repo_untracked_path(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     _init_git_repo(tmp_path)
