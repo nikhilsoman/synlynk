@@ -9,10 +9,16 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # Keep the ubuntu legs named "test (3.x)" so the branch-protection required
+    # checks keep reporting; other OS legs carry the OS in the name and are
+    # informational until they are added to the required list.
+    name: ${{ matrix.os == 'ubuntu-latest' && format('test ({0})', matrix.python-version) || format('test ({0}, {1})', matrix.os, matrix.python-version) }}
     strategy:
       matrix:
+        os: [ubuntu-latest, macos-latest]
         python-version: ["3.10", "3.12"]
+
+    runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v4
