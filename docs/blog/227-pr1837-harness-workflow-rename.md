@@ -4,6 +4,7 @@ date: 2026-09-28
 series: "Building the OS for Multi-Agent Development"
 post: 227
 issue: "#1837"
+pr: 1842
 author: "synlynk team"
 version: "0.23.0-dev"
 tags: [posts, workflows, reliability]

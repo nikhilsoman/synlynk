@@ -10,6 +10,8 @@ on:
 jobs:
   support-engineer:
     runs-on: ubuntu-latest
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
     permissions:
       contents: write
       issues: write
@@ -29,11 +31,11 @@ jobs:
         run: npm install -g @anthropic-ai/claude-code
 
       - name: Skip Support Engineer when Anthropic API key is missing
-        if: ${{ secrets.ANTHROPIC_API_KEY == '' }}
+        if: ${{ env.ANTHROPIC_API_KEY == '' }}
         run: echo "Skipping Support Engineer harness; ANTHROPIC_API_KEY is not configured."
 
       - name: Run Support Engineer harness
-        if: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+        if: ${{ env.ANTHROPIC_API_KEY != '' }}
         run: python3 bin/synlynk.py harness run support
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
