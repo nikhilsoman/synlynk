@@ -279,6 +279,26 @@ def test_format_prompt_for_agent_includes_instruction_receipt_instruction():
         assert "do the thing" in prompt
 
 
+def test_format_prompt_for_agent_extracts_graph_when_missing(tmp_path, no_stub_graphify_extract):
+    """Verify that _format_prompt_for_agent triggers graphify extract when graph.json is absent, using a mocked subprocess."""
+    from unittest.mock import patch, MagicMock
+    import synlynk.dispatch as dispatch_mod
+
+    with patch("synlynk.scan.is_tool_available", return_value=True), \
+         patch("subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(returncode=0)
+        prompt = dispatch_mod._format_prompt_for_agent(
+            "codex", "context", "story-1", "do the thing", "", "",
+            cwd_hint=str(tmp_path),
+        )
+        assert prompt
+        mock_run.assert_called_once()
+        args = mock_run.call_args[0][0]
+        assert args[0] == "graphify"
+        assert args[1] == "extract"
+        assert str(tmp_path) in args
+
+
 def test_format_prompt_for_agent_adds_codex_gh_write_guardrail():
     import synlynk.dispatch as dispatch_mod
 
