@@ -16,7 +16,10 @@ from synlynk.platform_ops import (
 )
 
 
-def test_collect_platform_report_shape():
+@patch("synlynk.platform_ops._dev_roots", return_value=[])
+@patch("synlynk.platform_ops._project_dbs", return_value=[])
+@patch("synlynk.platform_ops.subprocess.run")
+def test_collect_platform_report_shape(mock_run, mock_dbs, mock_roots):
     report = collect_platform_report(hours=24)
     assert report.hours == 24
     assert "hygiene" in report.scoreboard or report.scoreboard.get("hygiene") in ("GREEN", "RED")
@@ -26,7 +29,10 @@ def test_collect_platform_report_shape():
     assert "summary" in report.scoreboard
 
 
-def test_format_platform_report_contains_layers():
+@patch("synlynk.platform_ops._dev_roots", return_value=[])
+@patch("synlynk.platform_ops._project_dbs", return_value=[])
+@patch("synlynk.platform_ops.subprocess.run")
+def test_format_platform_report_contains_layers(mock_run, mock_dbs, mock_roots):
     report = collect_platform_report(hours=24)
     text = format_platform_report(report)
     assert "SYNLYNK PLATFORM OPS" in text
