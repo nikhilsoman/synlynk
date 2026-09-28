@@ -299,7 +299,45 @@ def test_sentinel_write_deduplicates_recent_alerts(tmp_path):
 
     assert first["status"] == "written"
     assert second["status"] == "deduplicated"
+    assert second["occurrences"] == 2
+    stored = sentinel_file.read_text()
+    assert "occurrences: 2" in stored
+    assert "first seen:" in stored
+    assert "last seen:" in stored
     assert len(_read_sentinel_alerts(sentinel_path=str(sentinel_file))) == 1
+
+
+def test_sentinel_first_write_migrates_duplicate_legacy_rows(tmp_path):
+    from synlynk.sentinel import _read_sentinel_alerts, _write_sentinel_alert
+
+    path = tmp_path / "sentinel.md"
+    path.write_text(
+        "# Sentinel Alerts\n"
+        "- [WARN] [2026-09-01 10:00] FLATLINE: same subject\n"
+        "- [WARN] [2026-09-02 10:00] FLATLINE: same subject\n"
+        "- [CRITICAL] [2026-09-02 11:00] TOKEN_BLOAT: another subject\n"
+    )
+    _write_sentinel_alert("INFO", "NEW_PATTERN", "new subject", str(path))
+
+    content = path.read_text()
+    assert content.count("FLATLINE:") == 1
+    assert "occurrences: 2" in content
+    assert len(_read_sentinel_alerts(sentinel_path=str(path))) == 3
+
+
+def test_sentinel_rollup_groups_distinct_subjects_by_pattern():
+    from synlynk.sentinel import _summarize_sentinel_alerts
+
+    lines = [
+        "- [WARN] [2026-09-01 10:00] FLATLINE: agent a failed",
+        "- [WARN] [2026-09-01 10:01] FLATLINE: agent b failed",
+        "- [WARN] [2026-09-01 10:02] FLATLINE: agent c failed",
+    ]
+    summary = _summarize_sentinel_alerts(lines)
+    assert len(summary) == 1
+    assert "FLATLINE" in summary[0]
+    assert "3 active occurrence(s)" in summary[0]
+    assert "3 subject(s)" in summary[0]
 
 
 def test_sentinel_expiry_applies_to_active_reads_but_preserves_history(tmp_path):
