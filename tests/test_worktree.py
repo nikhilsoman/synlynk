@@ -1,6 +1,8 @@
 import json
 import os
 import subprocess as _subprocess
+import threading
+import time
 
 from synlynk.worktree import (
     WorktreeEntry,
@@ -382,14 +384,46 @@ def test_cli_registers_worktree_audit_and_clean_subcommands():
     assert args2.json_output is False
 
 
-def test_worktree_status_hint_counts_non_dirty_worktrees(tmp_path, monkeypatch):
+def test_worktree_status_hint_counts_integrated_worktrees(tmp_path, monkeypatch):
+    from synlynk.worktree import _worktree_status_hint
+
+    repo, wt_dir = _init_repo_with_worktree(tmp_path, branch_ahead_of_main=False)
+    monkeypatch.chdir(repo)
+
+    hint = _worktree_status_hint()
+    assert hint == {"local": 1, "stale_hint": 1}
+
+
+def test_worktree_status_hint_does_not_count_active_worktrees(tmp_path, monkeypatch):
     from synlynk.worktree import _worktree_status_hint
 
     repo, wt_dir = _init_repo_with_worktree(tmp_path, branch_ahead_of_main=True)
     monkeypatch.chdir(repo)
 
     hint = _worktree_status_hint()
-    assert hint == {"local": 1, "stale_hint": 1}
+    assert hint == {"local": 1, "stale_hint": 0}
+
+
+def test_worktree_status_hint_checks_entries_in_parallel(monkeypatch, tmp_path):
+    from synlynk import worktree as worktree_mod
+
+    entries = [worktree_mod.WorktreeEntry(str(tmp_path / f"wt-{i}"), f"branch-{i}") for i in range(4)]
+    thread_names = set()
+
+    monkeypatch.setattr(worktree_mod, "_get_repo_root", lambda: str(tmp_path))
+    monkeypatch.setattr(worktree_mod, "_list_worktrees", lambda *_: entries)
+    monkeypatch.setattr(worktree_mod.os.path, "isdir", lambda _: True)
+
+    def fake_status(path):
+        thread_names.add(threading.current_thread().name)
+        time.sleep(0.02)
+        return False, ""
+
+    monkeypatch.setattr(worktree_mod, "_git_status_dirty", fake_status)
+    monkeypatch.setattr(worktree_mod, "_git_is_ancestor", lambda *_: False)
+
+    assert worktree_mod._worktree_status_hint() == {"local": 4, "stale_hint": 0}
+    assert len(thread_names) > 1
 
 
 def test_worktree_status_hint_returns_none_when_no_worktrees(tmp_path, monkeypatch):
@@ -526,4 +560,3 @@ def test_classify_detached_head_unmerged_is_needs_review():
     assert v.verdict == "needs-review"
     assert v.branch == "(detached)"
     assert v.reason == "detached HEAD, 2 commits ahead of main"
-
