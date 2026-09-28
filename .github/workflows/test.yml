@@ -44,7 +44,7 @@ jobs:
         run: python -m py_compile bin/synlynk.py
 
       - name: Run tests
-        run: pytest tests/ -v -m "not local_hardware" -n 4 --dist loadfile
+        run: pytest tests/ -v -m "not local_hardware" -n 4 --dist loadfile --durations=25
 
       # Dry fleet matrix (no model spend). Only on one Python version — gate is
       # about repo hygiene/baselines, not interpreter variance.
