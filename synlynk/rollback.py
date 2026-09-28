@@ -214,7 +214,10 @@ def rollback_checkpoint(op_type: str, untracked_paths: Optional[list] = None):
     op_id = _new_op_id()
     backup_dir = _backup_paths(op_id, untracked_paths)
     stash_ref = None
-    if _git_dirty():
+    # `git stash` cannot operate before the repository has its initial
+    # commit. Init is intentionally supported in a freshly-created repo, so
+    # rely on the explicit output backups in that case and skip auto-stashing.
+    if _git_dirty() and _git_head_sha():
         stash_ref = f"synlynk-rollback-{op_id}"
         # untracked_paths are the op's own outputs (already covered by the
         # _backup_paths/_restore_paths mechanism above) — exclude them from

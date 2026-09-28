@@ -1,5 +1,7 @@
 # synlynk Blog Series: Building the OS for Multi-Agent Development
 
+| [227](./227-prTBD-init-noninteractive.md) | R8 — Making `synlynk init` safe for CI | TBD | 2026-09-28 |
+
 | [226](./226-prTBD-probe-model-discovery-no-inline-calibration.md) | Probe model discovery without inline calibration | [#1838](https://github.com/nikhilsoman/synlynk/pull/1838) | 2026-09-28 |
 | [223](./223-pr1833-graphify-e2e-opt-out.md) | Issue #1833 — Keeping Dispatch E2E Tests Focused | TBD | 2026-09-28 |
 

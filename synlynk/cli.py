@@ -247,6 +247,9 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
         subparsers = _LazySubparsers(subparsers, selected_command)
 
     init_parser = subparsers.add_parser("init", help="Initialize synlynk in a repository")
+    init_parser.add_argument("--yes", "--non-interactive", action="store_true",
+                             dest="non_interactive",
+                             help="Use safe defaults without prompting (also used when stdin is not a terminal)")
     init_parser.add_argument("--force", action="store_true",
                              help="Overwrite existing template files")
     init_parser.add_argument("--agents", default="claude,agy,codex,grok",
@@ -1749,6 +1752,7 @@ def main(argv=None) -> None:
                 _update_config({"project_docs_dir": args.docs_dir})
             init(force=args.force, agents=agents, mode=args.mode,
                  org=args.org, repo=args.repo, project_id=args.project_id,
+                 non_interactive=getattr(args, "non_interactive", False),
                  dry_run=getattr(args, "dry_run", False),
                  replace_generated_docs=getattr(args, "replace_generated_docs", False))
     elif args.command == "exec":

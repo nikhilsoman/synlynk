@@ -4310,6 +4310,7 @@ def test_init_writes_workgroup_nudge_to_config(tmp_path, monkeypatch):
     import json as _json
     monkeypatch.chdir(tmp_path)
     subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
+    monkeypatch.setattr(sys, "stdin", type("TerminalStdin", (), {"isatty": lambda self: True})())
     # Simulate user providing email at the cloud nudge step
     inputs = iter(["nikhil@example.com"])
     monkeypatch.setattr("builtins.input", lambda _: next(inputs, ""))

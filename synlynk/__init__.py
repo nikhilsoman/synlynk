@@ -3688,8 +3688,13 @@ _ROBOT_ASCII = "[~]"  # ASCII robot stand-in for terminal (no emoji)
 def init(force: bool = False, agents: list = None,
          org: str = None, repo: str = None, project_id: str = None,
          mode: str = "solo", dry_run: bool = False, quiet: bool = False,
-         replace_generated_docs: bool = False) -> None:
+         replace_generated_docs: bool = False,
+         non_interactive: bool = False) -> None:
     """Progressive wizard: semantic scan → harness discovery → doc bootstrap → nudge."""
+
+    # CI and headless dispatch commonly close stdin entirely.  Treat either an
+    # explicit flag or a non-TTY stdin as permission to use prompt defaults.
+    auto_defaults = non_interactive or not sys.stdin.isatty()
 
     def _print_step(n: int, label: str) -> None:
         print(f"\n{_BOLD}{_CYAN}Step {n}/{_TOTAL_STEPS} — {label}{_RESET}")
@@ -3856,10 +3861,9 @@ def init(force: bool = False, agents: list = None,
             print(f"  I found {scan['commit_count']} commits and {len(scan['recent_topics'])} "
                   f"recent topics.\n  Want me to ask {enricher['name']} to synthesise a roadmap "
                   f"from this? (costs tokens)")
-            try:
+            answer = ""
+            if not auto_defaults:
                 answer = input("  [y/N] ").strip().lower()
-            except EOFError:
-                answer = ""
             if answer == "y":
                 print(f"  {_DIM}Calling {enricher['cli']} --print...{_RESET}", end=" ", flush=True)
                 ok = _llm_enrich(enricher["name"], enricher["cli"], scan)
@@ -3876,14 +3880,12 @@ def init(force: bool = False, agents: list = None,
         _print_step(5, "Team & cloud setup (optional)")
         print("  Add a collaborator or share this workspace with your team.")
         print("  Leave blank to skip.")
-        try:
-            email = input("  Email or synlynk ID: ").strip()
-        except EOFError:
+        if auto_defaults:
             email = ""
-        try:
-            industry = input(f"  Industry vertical [{inferred}]: ").strip() or inferred
-        except EOFError:
             industry = inferred
+        else:
+            email = input("  Email or synlynk ID: ").strip()
+            industry = input(f"  Industry vertical [{inferred}]: ").strip() or inferred
         if industry not in list(_INDUSTRY_KEYWORDS.keys()) + ["unknown"]:
             industry = "unknown"
 
@@ -3906,6 +3908,9 @@ def init(force: bool = False, agents: list = None,
     from synlynk.capability_sweep import _seed_capability_ledger_from_baseline
 
     _seed_capability_ledger_from_baseline(_get_db())
+
+    if auto_defaults:
+        print(f"  Auto-selected defaults: enrichment=no, email=empty, industry={industry}")
 
     print(f"\n{_BOLD}{_GREEN}✓ synlynk initialised — your Hybrid Workgroup is ready.{_RESET}")
     if functional:
