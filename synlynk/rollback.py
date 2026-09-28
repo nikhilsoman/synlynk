@@ -134,9 +134,37 @@ def _stash_paths(untracked_paths: list) -> list:
         # an explicit pathspec fail with "does not match index".
         if path.endswith(("-shm", "-wal")):
             continue
+        # Sentinel alerts are written through a temporary `.sentinel-*` file
+        # before being atomically renamed into place.  The temporary file can
+        # disappear between `git status` and `git stash` for the same reason.
+        if os.path.basename(path).startswith(".sentinel-"):
+            continue
+        # A path reported by status may have been removed before we invoke
+        # stash.  Do not pass a vanished pathspec to git.
+        if not os.path.exists(path):
+            continue
         if path not in paths:
             paths.append(path)
     return paths
+
+
+def _stash_dirty_paths(stash_ref: str, untracked_paths: list) -> None:
+    """Stash dirty paths, retrying once if a path vanished during the race."""
+    stash_paths = _stash_paths(untracked_paths)
+    if not stash_paths:
+        return
+    command = ["git", "stash", "push", "-u", "-m", stash_ref, "--", *stash_paths]
+    try:
+        subprocess.run(command, check=True)
+    except subprocess.CalledProcessError:
+        surviving_paths = _stash_paths(untracked_paths)
+        if surviving_paths == stash_paths:
+            raise
+        if surviving_paths:
+            subprocess.run(
+                ["git", "stash", "push", "-u", "-m", stash_ref, "--", *surviving_paths],
+                check=True,
+            )
 
 
 def _pop_stash(stash_ref: str) -> None:
@@ -194,13 +222,8 @@ def rollback_checkpoint(op_type: str, untracked_paths: Optional[list] = None):
         # pathspec — git treats an exclude pathspec pointing at an ignored
         # path as an attempt to add an ignored file and aborts with exit 1,
         # even though the stash itself already succeeded.
-        stash_paths = _stash_paths(untracked_paths)
         try:
-            if stash_paths:
-                subprocess.run(
-                    ["git", "stash", "push", "-u", "-m", stash_ref, "--", *stash_paths],
-                    check=True,
-                )
+            _stash_dirty_paths(stash_ref, untracked_paths)
         except subprocess.CalledProcessError:
             shutil.rmtree(backup_dir, ignore_errors=True)
             raise

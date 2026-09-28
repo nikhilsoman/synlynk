@@ -35,7 +35,7 @@
 - **2026-09-27 [Round 3 Roadmap Articulation & Tokq Deferral]:** Unanimous panel consensus across Claude, Codex, Agy, Grok on 3-horizon platform roadmap (Horizon 1 Dev Preview Oct 1; Horizon 2 Connected Teams Q1 2027; Horizon 3 Enterprise Mesh Q2-Q3 2027). Progress is gated on quantitative adoption signals (3K stars, 350 WAW, 85% completion, 15 non-maintainer PRs). Decided to DEFER commercial Tokq memory pack marketplace due to context window expansion (10M+ tokens), dynamic AST extraction rendering static packs obsolete, prompt injection supply-chain risks, and slop marketplace decay; retained open Git-based skill tap model as lightweight fallback. Decision: `project-docs/decisions/2026-09-27-round-3-roadmap-and-tokq-articulation.md`. [@agy, @nikhilsoman]
 
 ## Architecture
+- **2026-09-28 [Rollback stash race #1834]:** Rollback checkpoints now exclude atomic `.sentinel-*` temporary files and vanished status paths before explicit stash pathspecs. If a path disappears after collection, the stash is retried once using the refreshed surviving list; unchanged real dirty-file failures still propagate. [@codex]
 - **Vizor Web HUD Architecture:** Modular client/server architecture with OS-supervised persistent daemon (`synlynk.vizor_daemon`), multi-workspace hub (`/`), 7-stage GOVERNS board (`board.html`), Option C dual-pivot timeline (`gantt.html`), 4 BS-6 architectural views (Product, Logical, Infra, World), unified Graphify knowledge graph canvas with theme synchronization, and token-authenticated local API.
-
 
 
