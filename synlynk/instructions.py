@@ -602,13 +602,17 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
         "GitHub Projects workflow, and harness SOPs.\n"
     )
 
-    def _tool_header(name: str, engine: str, trailer: str, prefix: str) -> str:
+    def _tool_header(name: str, engine: str, trailer: str, harness: str) -> str:
         return (
             f"# {name}\n\n"
             "## Identity & Attribution\n"
             f"- **Engine:** {engine}\n"
             f"- **Commit trailer:** `{trailer}`\n"
-            f"- **Branch prefix:** {prefix}\n\n"
+            f"- **Branch prefix:** `feat/{harness}/` or `fix/{harness}/`\n\n"
+            "## Branch Naming\n"
+            f"- `feat/{harness}/<description>` — new functionality\n"
+            f"- `fix/{harness}/<description>` — bug fixes\n"
+            "- `chore/<description>` — deps, docs, config\n\n"
             "## Domain Ownership\n"
             "| Domain | Owned by this agent | Notes |\n"
             "|:---|:---|:---|\n"
@@ -620,7 +624,7 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
         _tool_header(
             "synlynk Claude Instructions", "claude-sonnet-4-6",
             "Co-Authored-By: Claude Sonnet <noreply@anthropic.com>",
-            "`feat/claude/` or `fix/claude/`",
+            "claude",
         )
     )
 
@@ -628,7 +632,7 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
         _tool_header(
             "synlynk AGY (AntiGravity) Instructions", "agy-2.x",
             "Co-Authored-By: AGY <noreply@antigravity.dev>",
-            "`feat/agy/` or `fix/agy/`",
+            "agy",
         )
     )
 
@@ -636,7 +640,7 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
         _tool_header(
             "synlynk Codex Instructions", "openai-codex",
             "Co-Authored-By: Codex <noreply@openai.com>",
-            "`feat/codex/` or `fix/codex/`",
+            "codex",
         )
     )
 
@@ -644,7 +648,7 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
         _tool_header(
             "synlynk Grok Instructions", "grok-composer-2.5-fast",
             "Co-Authored-By: Grok <noreply@x.ai>",
-            "`feat/grok/` or `fix/grok/`",
+            "grok",
         )
     )
 

@@ -4,7 +4,12 @@
 ## Identity & Attribution
 - **Engine:** openai-codex
 - **Commit trailer:** `Co-Authored-By: Codex <noreply@openai.com>`
-- **Branch prefix:** `feat/codex/ or fix/codex/`
+- **Branch prefix:** `feat/codex/` or `fix/codex/`
+
+## Branch Naming
+- `feat/codex/<description>` — new functionality
+- `fix/codex/<description>` — bug fixes
+- `chore/<description>` — deps, docs, config
 
 ## Domain Ownership
 | Domain | Owned by this agent | Notes |

@@ -270,6 +270,29 @@ def test_tool_templates_point_to_canonical_shared_protocol():
         assert "## Live Issues SOP" not in tmpl
 
 
+def test_tool_templates_preserve_harness_branch_naming_and_format_prefixes():
+    from synlynk.instructions import _build_templates
+
+    templates = _build_templates()
+    expected = {
+        "CLAUDE.md": "claude",
+        "GEMINI.md": "agy",
+        "AGENTS.md": "codex",
+        "GROK.md": "grok",
+    }
+
+    for name, harness in expected.items():
+        tmpl = templates[name]
+        assert (
+            f"## Branch Naming\n"
+            f"- `feat/{harness}/<description>` — new functionality\n"
+            f"- `fix/{harness}/<description>` — bug fixes\n"
+            "- `chore/<description>` — deps, docs, config\n"
+        ) in tmpl
+        assert f"- **Branch prefix:** `feat/{harness}/` or `fix/{harness}/`\n" in tmpl
+        assert f"- **Branch prefix:** ``feat/{harness}/` or `fix/{harness}/``" not in tmpl
+
+
 def test_tool_templates_are_substantially_smaller_than_canonical_protocol():
     from synlynk.instructions import _build_templates
 

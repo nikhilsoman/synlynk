@@ -8,7 +8,12 @@ This file provides guidance to Agy (the `agy` CLI, powered by Gemini) when worki
 ## Identity & Attribution
 - **Engine:** agy-2.x
 - **Commit trailer:** `Co-Authored-By: AGY <noreply@antigravity.dev>`
-- **Branch prefix:** `feat/agy/ or fix/agy/`
+- **Branch prefix:** `feat/agy/` or `fix/agy/`
+
+## Branch Naming
+- `feat/agy/<description>` — new functionality
+- `fix/agy/<description>` — bug fixes
+- `chore/<description>` — deps, docs, config
 
 ## Domain Ownership
 | Domain | Owned by this agent | Notes |

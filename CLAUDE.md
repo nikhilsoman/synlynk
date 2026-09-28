@@ -271,7 +271,12 @@ This table is generated from `.synlynk/config.json` so it tracks the repo's own 
 ## Identity & Attribution
 - **Engine:** claude-sonnet-4-6
 - **Commit trailer:** `Co-Authored-By: Claude Sonnet <noreply@anthropic.com>`
-- **Branch prefix:** `feat/claude/ or fix/claude/`
+- **Branch prefix:** `feat/claude/` or `fix/claude/`
+
+## Branch Naming
+- `feat/claude/<description>` — new functionality
+- `fix/claude/<description>` — bug fixes
+- `chore/<description>` — deps, docs, config
 
 ## Domain Ownership
 | Domain | Owned by this agent | Notes |

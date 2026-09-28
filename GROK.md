@@ -4,7 +4,12 @@
 ## Identity & Attribution
 - **Engine:** grok-composer-2.5-fast
 - **Commit trailer:** `Co-Authored-By: Grok <noreply@x.ai>`
-- **Branch prefix:** `feat/grok/ or fix/grok/`
+- **Branch prefix:** `feat/grok/` or `fix/grok/`
+
+## Branch Naming
+- `feat/grok/<description>` — new functionality
+- `fix/grok/<description>` — bug fixes
+- `chore/<description>` — deps, docs, config
 
 ## Domain Ownership
 | Domain | Owned by this agent | Notes |
