@@ -1743,3 +1743,42 @@ invocation including `--version`.
 Cost logged via `synlynk cost log` (~$2.54, native PM work). PR #1818 opened (docs-only).
 
 [@nikhilsoman]
+
+## 2026-09-29 — R9 instruction dedup shipped, wave housekeeping, #1844 filed
+
+Shipped `[R9]` (`story-025c857c`, PERF-P5) as PR #1843: deduplicated the 5 generated instruction
+files (CLAUDE.md/GEMINI.md/AGENTS.md/GROK.md) down to identity header + pointer, with
+`AI_INSTRUCTIONS.md` now the single canonical home for the shared protocol text. Per-file sizes
+dropped ~70-85% (CLAUDE.md 44.4KB → 22.1KB; GEMINI/AGENTS/GROK ~29.5-29.8KB → ~7.3-7.5KB each).
+Marker-fence parsing (`extract_instruction_version()`) unaffected — confirmed by qa review.
+
+First dispatch (job-076a48b9) hit the recurring silent-no-op pattern: reported `done`/`0 files
+touched` while the worktree held complete real work uncommitted — pushed and opened the PR myself
+after direct inspection. Separately, the same worktree had `project-docs/todo.md` truncated
+1408→3 lines despite the task explicitly saying not to touch project-docs — caught via
+`git status --short` before staging, reverted, never committed. qa review (job found via
+`synlynk pr check`) came back CHANGES_REQUESTED: Branch Naming section dropped from all four
+tool files with no replacement, plus a doubled-backtick rendering bug in the branch-prefix line.
+Fix dispatch (job-3f326187) onto the same branch pushed its own commit correctly (no no-op this
+time — confirms the no-op pattern is intermittent per-job, not per-branch). Re-review APPROVED,
+merged as `914ee3d5`.
+
+Also discovered (not R9-caused) and filed **#1844** (sev2): `workspace-lifecycle-nudge` has been
+failing on every run for 5+ days — `completion_tracker.py::compute_completion_verdict` shells out
+to a `claude` binary unconditionally with no availability check, `FileNotFoundError` on every
+GH Actions runner. Not yet dispatched for a fix.
+
+Housekeeping: swept all newly-SAFE worktrees from this + prior batch (`synlynk worktree clean
+--apply`), archived 2 duplicate stale LIVE-17 stories via `synlynk checkpoint`, marked
+`story-025c857c` done, cost logged (~$0.27 est, 50k in / 8k out).
+
+**Budget flag:** `synlynk checkpoint` reports **$36.48 / $10.00 (365%) · 50 requests** for this
+workspace's budget window — over limit, surfaced to Nikhil, no action taken yet pending his call
+on whether to raise the limit or investigate the burn.
+
+Remaining wave stories: R11 (blocked — needs Nikhil's call on roadmap.md version renumbering),
+R6 (blocked on #1831 triage), R12 (needs approved spec first), R14 (not started). Open dispatch-
+infra issues from earlier waves (#1825-1828, #1831) still untouched. #1745 (marketing docs PR)
+still open.
+
+[@nikhilsoman]
