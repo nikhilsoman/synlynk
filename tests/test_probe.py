@@ -179,6 +179,7 @@ def test_probe_clears_all_drift_alerts_for_same_agent(tmp_path, monkeypatch):
 def test_probe_extracts_claude_version_from_descriptive_output(tmp_path, monkeypatch):
     import socket
     import synlynk
+    from synlynk import capability_sweep
     from synlynk.probe import cmd_probe
 
     monkeypatch.chdir(tmp_path)
@@ -191,9 +192,36 @@ def test_probe_extracts_claude_version_from_descriptive_output(tmp_path, monkeyp
     monkeypatch.setattr(socket, "create_connection", lambda *args, **kwargs: _DummySocket())
     monkeypatch.setattr(synlynk, "_get_db", lambda: sqlite3.connect(str(db_path)))
 
+    dispatch_connections = []
+    reservation_connections = []
+
+    def fake_dispatch(agent, task, **kwargs):
+        conn = kwargs["db_conn"]
+        dispatch_connections.append(conn)
+        if len(dispatch_connections) == 1:
+            synlynk._open_reservation(conn, agent, 1, scope="session")
+            reservation_connections.append(conn)
+        return {"output": "calibration complete", "cost_usd": 0}
+
+    monkeypatch.setattr(capability_sweep, "_dispatch_calibration_task", fake_dispatch)
+    monkeypatch.setattr(
+        capability_sweep,
+        "_verify_calibration_result",
+        lambda *args: {"quality": 8.0, "correct": True},
+    )
+
     cmd_probe(agent="claude")
 
     assert _read_installed_version(db_path, "claude") == "2.1.208"
+    assert dispatch_connections
+    assert reservation_connections == [dispatch_connections[0]]
+    conn = sqlite3.connect(str(db_path))
+    try:
+        assert conn.execute(
+            "SELECT COUNT(*) FROM harness_reservations WHERE harness='claude'"
+        ).fetchone()[0] == 1
+    finally:
+        conn.close()
 
 
 # --- #287: Tier-2 model probe reads agent config files, not CLI version text ---
@@ -432,5 +460,4 @@ def test_repair_sops_detects_legacy_claude_references(tmp_path, monkeypatch):
     assert "Run the brainstorm using Claude" not in updated
     assert "without explicit Claude approval" not in updated
     assert "without explicit Home Harness approval" in updated
-
 

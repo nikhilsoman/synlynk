@@ -549,9 +549,16 @@ def _open_reservation(
 ) -> int:
     """Opens an harness_reservations row. Returns the new reservation id.
 
-    scope is one of 'plan' | 'session' | 'adhoc' (not validated here -- callers
-    are internal and already constrained by the design's dispatch-time flow).
+    scope is one of 'plan' | 'session' | 'adhoc'; callers are internal and
+    already constrained by the design's dispatch-time flow.
     """
+    if not harness:
+        raise ValueError("harness is required")
+    if not isinstance(tokens, int) or tokens <= 0:
+        raise ValueError("tokens must be a positive integer")
+    if not scope:
+        raise ValueError("scope is required")
+
     own_conn = conn is None
     if own_conn:
         conn = _pkg("_get_db")()
