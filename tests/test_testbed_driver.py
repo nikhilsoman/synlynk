@@ -100,13 +100,14 @@ def test_orb_driver_destroy_node():
 
 
 def test_docker_driver_lifecycle():
-    driver = DockerDriver(docker_bin="docker", network="synlynk-testbed")
     with patch("subprocess.run") as mock_run:
         mock_run.side_effect = [
+            MagicMock(returncode=0, stdout="synlynk-testbed\n", stderr=""), # network inspect in __init__
             MagicMock(returncode=0, stdout="synlynk-testbed\n", stderr=""), # network inspect/create
             MagicMock(returncode=0, stdout="container-sha-123\n", stderr=""), # docker run -d
             MagicMock(returncode=0, stdout="172.18.0.2\n", stderr=""), # docker inspect IP
         ]
+        driver = DockerDriver(docker_bin="docker", network="synlynk-testbed")
         handle = driver.create_node(node_id="ci-node-1", base_image="ubuntu:noble")
         assert handle.node_id == "ci-node-1"
         assert handle.ip == "172.18.0.2"
