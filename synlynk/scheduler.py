@@ -186,10 +186,12 @@ def _enqueue_plan(plan: list) -> list:
                  item.get("priority", 5), "[]",
                  time.strftime("%Y-%m-%dT%H:%M:%S"), dispatch_context),
             )
-            _open_reservation(
-                conn, agent, int(item.get("estimated_tokens") or 0),
-                scope="plan", scope_id=run_id, job_id=job_id,
-            )
+            estimated_tokens = item.get("estimated_tokens")
+            if estimated_tokens is not None and int(estimated_tokens) > 0:
+                _open_reservation(
+                    conn, agent, int(estimated_tokens),
+                    scope="plan", scope_id=run_id, job_id=job_id,
+                )
             job_ids.append(job_id)
         conn.commit()
     finally:

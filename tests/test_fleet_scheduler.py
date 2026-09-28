@@ -396,6 +396,24 @@ def test_enqueue_plan_writes_one_queued_daemon_job_per_assignment(scheduler_db):
     ]
 
 
+def test_enqueue_plan_without_token_estimate_skips_reservation(scheduler_db):
+    from synlynk import _get_db
+    from synlynk.scheduler import _enqueue_plan
+
+    job_ids = _enqueue_plan([
+        {"story_id": "story-no-estimate", "title": "No estimate", "agent": "codex"},
+    ])
+
+    conn = _get_db()
+    assert conn.execute(
+        "SELECT status FROM daemon_jobs WHERE job_id=?", (job_ids[0],)
+    ).fetchone() == ("queued",)
+    assert conn.execute(
+        "SELECT COUNT(*) FROM harness_reservations WHERE job_id=?", (job_ids[0],)
+    ).fetchone() == (0,)
+    conn.close()
+
+
 def test_enqueue_plan_opens_reservations(scheduler_db):
     from synlynk import _get_db
     from synlynk.scheduler import _enqueue_plan

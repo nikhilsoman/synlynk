@@ -299,7 +299,78 @@ def test_sentinel_write_deduplicates_recent_alerts(tmp_path):
 
     assert first["status"] == "written"
     assert second["status"] == "deduplicated"
+    assert second["occurrences"] == 2
+    stored = sentinel_file.read_text()
+    assert "occurrences: 2" in stored
+    assert "first seen:" in stored
+    assert "last seen:" in stored
     assert len(_read_sentinel_alerts(sentinel_path=str(sentinel_file))) == 1
+
+
+def test_sentinel_written_alert_expires_after_configured_ttl(tmp_path):
+    from datetime import timedelta
+    from synlynk.sentinel import _iter_sentinel_alerts, _write_sentinel_alert
+
+    path = tmp_path / "sentinel.md"
+    _write_sentinel_alert("WARN", "EXPIRING", "fresh finding", str(path))
+    written = _iter_sentinel_alerts(str(path), active_only=False)[0]
+    assert written["last_seen_dt"] is not None
+
+    policy = {"active_ttl_seconds": {"WARN": 1}}
+    before_expiry = written["last_seen_dt"] + timedelta(milliseconds=500)
+    after_expiry = written["last_seen_dt"] + timedelta(seconds=2)
+    assert _iter_sentinel_alerts(
+        str(path), active_only=True, now=before_expiry, policy=policy,
+    )
+    assert not _iter_sentinel_alerts(
+        str(path), active_only=True, now=after_expiry, policy=policy,
+    )
+
+
+def test_sentinel_first_write_migrates_duplicate_legacy_rows(tmp_path):
+    from synlynk.sentinel import _read_sentinel_alerts, _write_sentinel_alert
+
+    path = tmp_path / "sentinel.md"
+    path.write_text(
+        "# Sentinel Alerts\n"
+        "- [WARN] [2026-09-01 10:00] FLATLINE: same subject\n"
+        "- [WARN] [2026-09-02 10:00] FLATLINE: same subject\n"
+        "- [CRITICAL] [2026-09-02 11:00] TOKEN_BLOAT: another subject\n"
+    )
+    _write_sentinel_alert("INFO", "NEW_PATTERN", "new subject", str(path))
+
+    content = path.read_text()
+    assert content.count("FLATLINE:") == 1
+    assert "occurrences: 2" in content
+    assert len(_read_sentinel_alerts(sentinel_path=str(path))) == 3
+
+
+def test_sentinel_rollup_groups_distinct_subjects_by_pattern():
+    from synlynk.sentinel import _summarize_sentinel_alerts
+
+    lines = [
+        "- [WARN] [2026-09-01 10:00] FLATLINE: agent a failed",
+        "- [WARN] [2026-09-01 10:01] FLATLINE: agent b failed",
+        "- [WARN] [2026-09-01 10:02] FLATLINE: agent c failed",
+    ]
+    summary = _summarize_sentinel_alerts(lines)
+    assert len(summary) == 1
+    assert "FLATLINE" in summary[0]
+    assert "3 active occurrence(s)" in summary[0]
+    assert "3 subject(s)" in summary[0]
+
+
+def test_sentinel_rollup_keeps_severity_classes_separate():
+    from synlynk.sentinel import _summarize_sentinel_alerts
+
+    lines = [
+        "- [WARN] [2026-09-01 10:00] SHARED_CODE: same finding",
+        "- [CRITICAL] [2026-09-01 10:01] SHARED_CODE: same finding",
+    ]
+    summary = _summarize_sentinel_alerts(lines)
+    assert len(summary) == 2
+    assert any(line.startswith("- [WARN]") for line in summary)
+    assert any(line.startswith("- [CRITICAL]") for line in summary)
 
 
 def test_sentinel_expiry_applies_to_active_reads_but_preserves_history(tmp_path):
