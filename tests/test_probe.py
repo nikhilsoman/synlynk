@@ -184,6 +184,22 @@ def test_probe_extracts_claude_version_from_descriptive_output(tmp_path, monkeyp
 
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".synlynk").mkdir()
+    home = tmp_path / "home"
+    (home / ".claude").mkdir(parents=True)
+    (home / ".claude" / "settings.json").write_text(
+        '{"model": "claude-sonnet-4-6"}\n'
+    )
+    monkeypatch.setenv("HOME", str(home))
+    real_expanduser = os.path.expanduser
+    monkeypatch.setattr(
+        os.path,
+        "expanduser",
+        lambda path: (
+            str(home / path[2:]) if path.startswith("~/")
+            else str(home) if path == "~"
+            else real_expanduser(path)
+        ),
+    )
 
     db_path = tmp_path / ".synlynk" / "state.db"
     _seed_probe_db(db_path, harness_name="claude", installed_version="2.0.0")
@@ -460,4 +476,3 @@ def test_repair_sops_detects_legacy_claude_references(tmp_path, monkeypatch):
     assert "Run the brainstorm using Claude" not in updated
     assert "without explicit Claude approval" not in updated
     assert "without explicit Home Harness approval" in updated
-
