@@ -1713,3 +1713,33 @@ implementation plan.
 
 
 
+
+## 2026-09-28 — Deep architectural review, LIVE-17, remediation goal
+
+Three-lens architectural review (Developer-Engagement Architect / adversarial GM of Product /
+performance audit) written up at `docs/reviews/2026-09-28-deep-architectural-review.md`.
+
+**Sev1 incident found in the process.** A full serial suite run on `main` at `c35a42e2` gave
+`2 failed, 3385 passed in 488.48s` while CI was green on the same commit. Root-caused to a
+nested-writer self-deadlock: `probe.py` holds an open write connection and reaches
+`dispatch_agent()` via `capability_sweep`, which opens a second connection and `INSERT`s at
+`quota.py:555`. `busy_timeout` provably cannot fix a cycle — both failing tests are among the
+slowest in the suite because each burns the full window before raising. Six hypotheses falsified
+(isolation, stranded lock, pragmas, PATH harnesses, xdist, Python version). The CI/local
+divergence is deliberately *unresolved* — two untested variables (macOS vs ubuntu, populated vs
+empty `~/.synlynk/`) tracked as story `[R3]` rather than guessed at.
+
+Filed `[LIVE-17]` #1816 (sev1, priority:p0) with RCA at
+`docs/rca/2026-09-28-LIVE-17-nested-writer-self-deadlock.md`. Created goal `goal-079e2f37` with
+14 linked remediation stories across four tiers, and a stack-ranked plan. Also filed #1817
+(tech-debt): the story ledger has no `update`/`delete`, so two stories mis-created during this
+session could only be retired by marking them `done`.
+
+Headline measured wins waiting in Tier 1, all small: worktree status fork parallelization **8.3×**
+(2.01s → 0.24s, and it fixes a backwards `clean == stale` heuristic), `state.db` `VACUUM` **8.4×**
+on read connect (287 MB → 28.8 MB, 89.7% freelist), lazy argparse registration ~0.25s off every
+invocation including `--version`.
+
+Cost logged via `synlynk cost log` (~$2.54, native PM work). PR #1818 opened (docs-only).
+
+[@nikhilsoman]
