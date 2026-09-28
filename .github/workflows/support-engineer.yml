@@ -28,8 +28,13 @@ jobs:
       - name: Install Claude CLI
         run: npm install -g @anthropic-ai/claude-code
 
-      - name: Run Support Engineer agent
-        run: python3 bin/synlynk.py agent run support
+      - name: Skip Support Engineer when Anthropic API key is missing
+        if: ${{ secrets.ANTHROPIC_API_KEY == '' }}
+        run: echo "Skipping Support Engineer harness; ANTHROPIC_API_KEY is not configured."
+
+      - name: Run Support Engineer harness
+        if: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+        run: python3 bin/synlynk.py harness run support
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
