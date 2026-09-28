@@ -26,6 +26,6 @@ jobs:
         run: pip install pytest
 
       - name: Run workspace-lifecycle-nudge agent
-        run: python3 bin/synlynk.py agent run workspace-lifecycle-nudge
+        run: python3 bin/synlynk.py harness run workspace-lifecycle-nudge
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
