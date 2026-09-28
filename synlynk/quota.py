@@ -540,10 +540,10 @@ _RESERVATION_EXPIRY_SECONDS = 24 * 3600  # comfortably > longest QUOTA_TYPES win
 
 
 def _open_reservation(
-    conn,
-    harness: str,
-    tokens: int,
-    scope: str,
+    conn=None,
+    harness: str = None,
+    tokens: int = 0,
+    scope: str = None,
     scope_id: Optional[str] = None,
     job_id: Optional[str] = None,
 ) -> int:
@@ -552,13 +552,20 @@ def _open_reservation(
     scope is one of 'plan' | 'session' | 'adhoc' (not validated here -- callers
     are internal and already constrained by the design's dispatch-time flow).
     """
-    cur = conn.execute(
-        "INSERT INTO harness_reservations (harness, tokens, scope, scope_id, job_id, status) "
-        "VALUES (?, ?, ?, ?, ?, 'open')",
-        (harness, int(tokens), scope, scope_id, job_id),
-    )
-    conn.commit()
-    return cur.lastrowid
+    own_conn = conn is None
+    if own_conn:
+        conn = _pkg("_get_db")()
+    try:
+        cur = conn.execute(
+            "INSERT INTO harness_reservations (harness, tokens, scope, scope_id, job_id, status) "
+            "VALUES (?, ?, ?, ?, ?, 'open')",
+            (harness, int(tokens), scope, scope_id, job_id),
+        )
+        conn.commit()
+        return cur.lastrowid
+    finally:
+        if own_conn and conn is not None:
+            conn.close()
 
 
 def _release_reservation(conn, reservation_id: int) -> None:
