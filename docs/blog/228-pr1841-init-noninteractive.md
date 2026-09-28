@@ -2,8 +2,8 @@
 title: "R8 — Making synlynk init safe for CI"
 date: 2026-09-28
 series: "Building the OS for Multi-Agent Development"
-post: 227
-pr: "TBD"
+post: 228
+pr: "1841"
 author: "synlynk team"
 version: "0.23.0-dev"
 tags: [posts]
