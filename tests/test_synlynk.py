@@ -129,7 +129,7 @@ def test_directive_templates_contain_sop_headers(tmp_path, isolated_db, monkeypa
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr("builtins.input", lambda *args, **kwargs: "n")
     synlynk.init(force=True, agents=["claude"], org="test-org", repo="test/repo", mode="solo")
-    content = (tmp_path / "CLAUDE.md").read_text()
+    content = (tmp_path / "AI_INSTRUCTIONS.md").read_text()
     assert "## PR Review Discipline" in content
     assert "## Repo Hygiene" in content
     assert "## Herdr Workspace Protocol" in content
@@ -1670,9 +1670,7 @@ def test_init_claude_md_contains_session_protocol(tmp_path, monkeypatch):
     monkeypatch.setattr(synlynk, "_llm_enrich", lambda *a, **kw: False)
     synlynk.init(force=False)
     content = (tmp_path / "CLAUDE.md").read_text()
-    assert "synlynk watch status" in content
-    assert "synlynk checkpoint" in content
-    assert "context.md" in content
+    assert "Load `AI_INSTRUCTIONS.md` for the full shared synlynk protocol" in content
 
 
 def test_init_appends_to_existing_without_force(tmp_path, monkeypatch):
@@ -1696,7 +1694,7 @@ def test_init_force_overwrites_existing(tmp_path, monkeypatch):
     (tmp_path / "CLAUDE.md").write_text("MY CUSTOM CONTENT")
     synlynk.init(force=True)
     assert (tmp_path / "CLAUDE.md").read_text() != "MY CUSTOM CONTENT"
-    assert "synlynk checkpoint" in (tmp_path / "CLAUDE.md").read_text()
+    assert "AI_INSTRUCTIONS.md" in (tmp_path / "CLAUDE.md").read_text()
 
 
 def test_init_config_schema_version(tmp_path, monkeypatch):
@@ -2125,15 +2123,8 @@ def test_claude_template_enriched_content(tmp_path, monkeypatch):
     content = synlynk._build_templates()["CLAUDE.md"]
     assert "Co-Authored-By: Claude Sonnet" in content
     assert "feat/claude/" in content
-    assert "Git Worktree-First Policy" in content
-    assert "Live Issues SOP" in content
-    assert "Mid-Session Anti-Amnesia" in content
-    assert "Mandatory 4-Doc Discipline" in content
-    assert "GitHub Projects v2 Integration" in content
-    assert "TODO: PROJECT_ID" in content
-    assert "synlynk start" in content
-    assert "synlynk watch status" in content
-    assert "synlynk checkpoint" in content
+    assert "Load `AI_INSTRUCTIONS.md` for the full shared synlynk protocol" in content
+    assert "Git Worktree-First Policy" not in content
 
 
 def test_gemini_template_enriched_content(tmp_path, monkeypatch):
@@ -2142,8 +2133,8 @@ def test_gemini_template_enriched_content(tmp_path, monkeypatch):
     assert "Co-Authored-By: AGY" in content
     assert "agy-2.x" in content
     assert "feat/agy/" in content
-    assert "Git Worktree-First Policy" in content
-    assert "Live Issues SOP" in content
+    assert "Load `AI_INSTRUCTIONS.md` for the full shared synlynk protocol" in content
+    assert "Git Worktree-First Policy" not in content
     assert "2026-06-18" not in content
 
 
@@ -2152,10 +2143,8 @@ def test_agents_template_enriched_content(tmp_path, monkeypatch):
     content = synlynk._build_templates()["AGENTS.md"]
     assert "feat/codex/" in content
     assert "Co-Authored-By: Codex" in content
-    assert "Git Worktree-First Policy" in content
-    assert "Live Issues SOP" in content
-    assert "GitHub Projects v2 Integration" in content
-    assert "TODO: PROJECT_ID" in content
+    assert "Load `AI_INSTRUCTIONS.md` for the full shared synlynk protocol" in content
+    assert "Git Worktree-First Policy" not in content
 
 
 def test_init_creates_agents_md_by_default(tmp_path, monkeypatch):
@@ -2264,16 +2253,15 @@ def test_init_overwrites_synlynk_config_with_force(project_dir, monkeypatch):
 def test_build_templates_with_project_id_fills_placeholder(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     t = synlynk._build_templates(project_id="PJ_abc123")
-    assert "PJ_abc123" in t["CLAUDE.md"]
-    assert "TODO: PROJECT_ID" not in t["CLAUDE.md"]
-    assert "PJ_abc123" in t["GEMINI.md"]
-    assert "PJ_abc123" in t["AGENTS.md"]
+    assert "PJ_abc123" in t["AI_INSTRUCTIONS.md"]
+    assert "TODO: PROJECT_ID" not in t["AI_INSTRUCTIONS.md"]
+    assert "PJ_abc123" not in t["CLAUDE.md"]
 
 
 def test_build_templates_without_project_id_keeps_todo_placeholder(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     t = synlynk._build_templates()
-    assert "TODO: PROJECT_ID" in t["CLAUDE.md"]
+    assert "TODO: PROJECT_ID" in t["AI_INSTRUCTIONS.md"]
 
 
 def test_init_with_project_id_writes_filled_template(tmp_path, monkeypatch):
@@ -2282,7 +2270,7 @@ def test_init_with_project_id_writes_filled_template(tmp_path, monkeypatch):
     monkeypatch.setattr(synlynk, "discover_agents", lambda **kw: [])
     monkeypatch.setattr(synlynk, "_llm_enrich", lambda *a, **kw: False)
     synlynk.init(project_id="PJ_xyz789")
-    content = (tmp_path / "CLAUDE.md").read_text()
+    content = (tmp_path / "AI_INSTRUCTIONS.md").read_text()
     assert "PJ_xyz789" in content
     assert "TODO: PROJECT_ID" not in content
 

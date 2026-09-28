@@ -24,12 +24,15 @@ def test_build_templates_includes_lifecycle_checkpoint_section(tmp_path, monkeyp
     monkeypatch.chdir(tmp_path)
     from synlynk import _build_templates
     templates = _build_templates()
-    for key in ("CLAUDE.md", "GEMINI.md", "AGENTS.md", "GROK.md", "AI_INSTRUCTIONS.md"):
+    for key in ("AI_INSTRUCTIONS.md",):
         content = templates[key]
         assert "## Lifecycle checkpoint directives" in content
         assert "synlynk goal create" in content
         # Checkpoint section must come after the trigger registry, in the same block
         assert content.index("## Trigger registry") < content.index("## Lifecycle checkpoint directives")
+
+    for key in ("CLAUDE.md", "GEMINI.md", "AGENTS.md", "GROK.md"):
+        assert "AI_INSTRUCTIONS.md" in templates[key]
 
 
 def test_extract_synlynk_section_html_markers():
