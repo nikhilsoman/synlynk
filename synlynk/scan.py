@@ -57,6 +57,9 @@ def _detect_harnesses_on_path(names: tuple = None) -> list:
 
 def _run_graphify_extract(repo_root: str) -> bool:
     """Ensure Graphify is installed and execute deterministic AST extraction."""
+    if os.environ.get("SYNLYNK_SKIP_GRAPHIFY_EXTRACT") == "1":
+        return True
+
     extra_paths = [
         os.path.expanduser("~/.local/bin"),
         os.path.expanduser("~/.pyenv/shims"),
