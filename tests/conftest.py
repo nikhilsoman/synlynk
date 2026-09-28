@@ -47,6 +47,27 @@ def stub_staleness_check_thread(monkeypatch):
     monkeypatch.setattr(capability_watch_mod, "spawn_staleness_check_thread", lambda *a, **k: None)
 
 
+@pytest.fixture
+def no_stub_graphify_extract():
+    """Marker fixture to disable stub_graphify_extract for a test."""
+    pass
+
+
+@pytest.fixture(autouse=True)
+def stub_graphify_extract(monkeypatch, request):
+    """Prevent slow graphify extract subprocesses from spawning across tests.
+
+    Tests that specifically exercise _run_graphify_extract or need to test the
+    extract-on-missing-graph path with a mock subprocess can opt out by requesting
+    the no_stub_graphify_extract fixture.
+    """
+    if "no_stub_graphify_extract" in request.fixturenames:
+        return
+    import synlynk.scan as scan_mod
+
+    monkeypatch.setattr(scan_mod, "_run_graphify_extract", lambda repo_root: True)
+
+
 @pytest.fixture(autouse=True)
 def stub_dispatch_worktree(monkeypatch, request):
     """Avoid real git worktree creation unless a test asks for it explicitly."""
