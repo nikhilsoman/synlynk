@@ -3,7 +3,6 @@
 
 | Date | Agent | Model | Tokens In | Tokens Out | Cost | Source | Story | Notes |
 |---|---|---|---|---|---|---|---|---|
-| 2026-09-28 14:27 | codex | o4-mini | 1429765 | 7963 | $4.4087 | estimated_token_rate | story-adhoc-1790585387 | exec: codex job job-c52814... |
 | 2026-09-28 14:29 | codex | o4-mini | 423726 | 4904 | $1.3447 | estimated_token_rate | story-adhoc-1790585834 | exec: codex job job-01e5ea... |
 | 2026-09-28 14:29 | codex | gpt-5.6-luna | 400086 | 4785 | $1.2720 | estimated_token_rate | story-adhoc-1790585869 | exec: codex job job-3f4d62... |
 | 2026-09-28 14:32 | codex | o4-mini | 1533625 | 6638 | $4.7004 | estimated_token_rate | story-adhoc-1790585834 | exec: codex job job-1ac398... |
@@ -13,7 +12,7 @@
 | 2026-09-28 15:09 | codex | o4-mini | 1240735 | 7041 | $3.8278 | estimated_token_rate | story-adhoc-1790587032 | exec: codex job job-56e99c... |
 | 2026-09-28 15:51 | codex | o4-mini | 294105 | 4072 | $0.9434 | estimated_token_rate | story-adhoc-1790588953 | exec: codex job job-119534... |
 | 2026-09-28 15:51 | codex | o4-mini | 743316 | 6774 | $2.3316 | estimated_token_rate | story-adhoc-1790588942 | exec: codex job job-41e083... |
-| 2026-09-28 16:15 | codex | 'unknown'\nsynlynk/db.py:3772: | 1243219 | 5986 | $3.8194 | estimated_token_rate | story-adhoc-1790590880 | exec: codex job job-4ee9e1... |
+| 2026-09-28 16:15 | codex | unknown (sanitized, see #1846) | 1243219 | 5986 | $3.8194 | estimated_token_rate | story-adhoc-1790590880 | exec: codex job job-4ee9e1... |
 | 2026-09-28 16:38 | codex | o4-mini | 293982 | 4360 | $0.9473 | estimated_token_rate | story-adhoc-1790592685 | exec: codex job job-de5097... |
 | 2026-09-28 16:40 | codex | o4-mini | 345660 | 3828 | $1.0944 | estimated_token_rate | story-adhoc-1790593697 | exec: codex job job-4a521d... |
 | 2026-09-28 16:40 | codex | o4-mini | 484085 | 6250 | $1.5460 | estimated_token_rate | story-adhoc-1790593697 | exec: codex job job-116ea0... |
@@ -53,3 +52,4 @@
 | 2026-09-29 00:48 | codex | o4-mini | 643656 | 5115 | $2.0077 | estimated_token_rate | story-adhoc-1790622971 | exec: codex job job-61c99f... |
 | 2026-09-29 00:51 | codex | o4-mini | 526827 | 4543 | $1.6486 | estimated_token_rate | story-adhoc-1790623138 | exec: codex job job-5e7f3c... |
 | 2026-09-29 00:53 | claude | claude-sonnet-4-6 | 50000 | 8000 | $0.2700 | estimated_manual | story-025c857c | R9 dispatch/review/fix/merge orchestration for PR #1843 (instruction file dedup) |
+| 2026-09-29 01:10 | codex | o4-mini | 698193 | 8233 | $2.2181 | estimated_token_rate | story-adhoc-1790623733 | exec: codex job job-aa1e3e... |

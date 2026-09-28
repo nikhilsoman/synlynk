@@ -1409,7 +1409,7 @@ Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'corre [backe
 - [ ] [R2] LIVE-17: decouple probe.py from capability_sweep so a diagnostic never reaches dispatch_agent while holding a write conn [backend] <!-- id:story-514fde89 -->
 - [ ] [R4] LIVE-17: regression test that fails fast on a nested writer instead of on busy_timeout expiry [testing] <!-- id:story-d481115a -->
 - [ ] [R5] PERF-P0: parallelize _worktree_status_hint git status forks and fix the backwards clean==stale heuristic (8.3x on synlynk status) [backend] <!-- id:story-b1f9d66b -->
-- [ ] [R9] PERF-P5: deduplicate the 5 instruction files (71% overlap, 106KB / ~26k tokens written by init) [docs] <!-- id:story-025c857c -->
+- [x] [R9] PERF-P5: deduplicate the 5 instruction files (71% overlap, 106KB / ~26k tokens written by init) [docs] <!-- id:story-025c857c -->
 - [ ] [R10] PERF-P4: age, dedupe and roll up sentinel alerts (261 un-aged, no TTL) [backend] <!-- id:story-a4442387 -->
 - [ ] [R11] ROADMAP: fix roadmap.md ordering and the three colliding 1.0.0 entries [docs] <!-- id:story-08f5e280 -->
 - [ ] [R12] PERF-P3: break the god-module topology — 3924-line __init__.py, 570 function-level imports, 15 _pkg() copies [architecture] <!-- id:story-54515ca1 -->
@@ -1477,3 +1477,4 @@ First, the time to live never takes effect for newly writt [testing] <!-- id:sto
 - [ ] Review pull request number 1843 in this repository as the qa role. Pay special attention to whether the marker-fence format (synlynk:harness, synlynk:start/end) is preserved byte-for-byte in structure [testing] <!-- id:story-adhoc-1790621988 -->
 - [ ] Pull request number 1843 in this repository previously received a request for changes from qa. The author has since pushed a revision addressing every finding.  As the qa role, re-review the current h [testing] <!-- id:story-adhoc-1790622971 -->
 - [ ] Pull request number 1843 in this repository has an approving qa review, all required checks are green, and it reports a clean mergeable state. As the qa role, confirm the approval and the check result [backend] <!-- id:story-adhoc-1790623138 -->
+- [ ] Review pull request number 1845 in this repository as the qa role. This is a docs-only PR adding a devlog entry and regenerating project-docs/todo.md and project-docs/costs.md from state.db after R9 ( [testing] <!-- id:story-adhoc-1790623733 -->
