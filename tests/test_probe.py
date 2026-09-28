@@ -179,7 +179,6 @@ def test_probe_clears_all_drift_alerts_for_same_agent(tmp_path, monkeypatch):
 def test_probe_extracts_claude_version_from_descriptive_output(tmp_path, monkeypatch):
     import socket
     import synlynk
-    from synlynk import capability_sweep
     from synlynk.probe import cmd_probe
 
     monkeypatch.chdir(tmp_path)
@@ -208,34 +207,18 @@ def test_probe_extracts_claude_version_from_descriptive_output(tmp_path, monkeyp
     monkeypatch.setattr(socket, "create_connection", lambda *args, **kwargs: _DummySocket())
     monkeypatch.setattr(synlynk, "_get_db", lambda: sqlite3.connect(str(db_path)))
 
-    dispatch_connections = []
-    reservation_connections = []
-
-    def fake_dispatch(agent, task, **kwargs):
-        conn = kwargs["db_conn"]
-        dispatch_connections.append(conn)
-        if len(dispatch_connections) == 1:
-            synlynk._open_reservation(conn, agent, 1, scope="session")
-            reservation_connections.append(conn)
-        return {"output": "calibration complete", "cost_usd": 0}
-
-    monkeypatch.setattr(capability_sweep, "_dispatch_calibration_task", fake_dispatch)
-    monkeypatch.setattr(
-        capability_sweep,
-        "_verify_calibration_result",
-        lambda *args: {"quality": 8.0, "correct": True},
-    )
-
     cmd_probe(agent="claude")
 
     assert _read_installed_version(db_path, "claude") == "2.1.208"
-    assert dispatch_connections
-    assert reservation_connections == [dispatch_connections[0]]
     conn = sqlite3.connect(str(db_path))
     try:
         assert conn.execute(
+            "SELECT status, discovery_source FROM harness_models "
+            "WHERE harness_name='claude' AND model_id='claude-sonnet-4-6'"
+        ).fetchone() == ("active", "self_report")
+        assert conn.execute(
             "SELECT COUNT(*) FROM harness_reservations WHERE harness='claude'"
-        ).fetchone()[0] == 1
+        ).fetchone()[0] == 0
     finally:
         conn.close()
 
@@ -414,7 +397,10 @@ def test_scan_repo_requirements_detects_artifact_presence(tmp_path, requirements
     assert _scan_repo_requirements(str(repo)) == expected
 
 
-def test_probe_queues_sweep_for_new_model(tmp_path, monkeypatch):
+def test_probe_records_new_model_without_importing_or_dispatching_calibration(tmp_path, monkeypatch, capsys):
+    import builtins
+    import sys
+
     from synlynk import db, probe
     monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(tmp_path / "state.db"))
     conn = db._get_db()
@@ -424,13 +410,54 @@ def test_probe_queues_sweep_for_new_model(tmp_path, monkeypatch):
     )
     conn.commit()
 
-    queued = []
-    monkeypatch.setattr(
-        probe, "_queue_calibration_sweep",
-        lambda harness_name, model_id, conn: queued.append((harness_name, model_id)),
-    )
+    dispatched = []
+    monkeypatch.setattr("synlynk.dispatch.dispatch_agent", lambda *args, **kwargs: dispatched.append(args))
+    imported = []
+    real_import = builtins.__import__
+
+    def guarded_import(name, *args, **kwargs):
+        if name == "synlynk.capability_sweep" or name.startswith("synlynk.capability_sweep."):
+            imported.append(name)
+            raise AssertionError("probe must not import capability_sweep")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", guarded_import)
+    sys.modules.pop("synlynk.capability_sweep", None)
+
     probe._diff_and_queue_new_models("codex", ["gpt-5", "gpt-5.5"], conn)
-    assert queued == [("codex", "gpt-5.5")]
+    assert imported == []
+    assert dispatched == []
+    row = conn.execute(
+        "SELECT status, discovery_source FROM harness_models WHERE harness_name=? AND model_id=?",
+        ("codex", "gpt-5.5"),
+    ).fetchone()
+    assert row == ("active", "self_report")
+    assert "run `synlynk capability sweep` to calibrate" in capsys.readouterr().out
+    assert conn.in_transaction is False
+    conn.close()
+
+
+def test_probe_model_discovery_releases_write_transaction_promptly(tmp_path, monkeypatch):
+    import time
+
+    from synlynk import db, probe
+
+    db_path = tmp_path / "state.db"
+    monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(db_path))
+    conn = db._get_db()
+    conn.execute("BEGIN IMMEDIATE")
+    started = time.monotonic()
+    probe._diff_and_queue_new_models("codex", ["gpt-5.5"], conn)
+    assert time.monotonic() - started < 1.0
+    assert conn.in_transaction is False
+
+    second_conn = db._get_db()
+    try:
+        second_conn.execute("BEGIN IMMEDIATE")
+        second_conn.rollback()
+    finally:
+        second_conn.close()
+        conn.close()
 
 
 def test_sop_blocks_no_hardcoded_claude_authority():

@@ -275,8 +275,13 @@ def _now_iso() -> str:
 
 
 def _diff_and_queue_new_models(harness_name: str, discovered_model_ids: list, conn) -> None:
-    """Diff a harness's discovered models against harness_models; queue a
-    calibration sweep for any model_id not yet recorded (#786 Plan B)."""
+    """Record newly discovered models without doing calibration work.
+
+    Probe is a diagnostic command and must not dispatch agents or spend money.
+    Newly discovered models remain active with no calibration rows; the routing
+    explore bonus will make them eligible until an explicit capability sweep is
+    run.
+    """
     known = {
         row[0]
         for row in conn.execute(
@@ -284,6 +289,7 @@ def _diff_and_queue_new_models(harness_name: str, discovered_model_ids: list, co
         ).fetchall()
     }
     now = _now_iso()
+    discovered_new_model = False
     for model_id in discovered_model_ids:
         if model_id in known:
             conn.execute(
@@ -297,20 +303,10 @@ def _diff_and_queue_new_models(harness_name: str, discovered_model_ids: list, co
             "VALUES (?, ?, ?, ?, 'active', 'self_report')",
             (harness_name, model_id, now, now),
         )
-        conn.commit()
-        _queue_calibration_sweep(harness_name, model_id, conn)
+        discovered_new_model = True
     conn.commit()
-
-
-def _queue_calibration_sweep(harness_name: str, model_id: str, conn) -> None:
-    """Auto-trigger a cost-capped, verified calibration sweep for one newly
-    discovered (harness, model) pair, reusing capability_sweep.py's machinery."""
-    from synlynk.capability_sweep import cmd_capability_sweep_for_harness_model
-    try:
-        cmd_capability_sweep_for_harness_model(harness_name, model_id, conn=conn)
-    except SystemExit:
-        pass  # cost cap exceeded — model stays 'active' with zero calibration data,
-              # picked up by the routing explore-bonus in Task 4 instead
+    if discovered_new_model:
+        print("  New harness model recorded; run `synlynk capability sweep` to calibrate.")
 
 
 def _scan_repo_requirements(repo_path: str) -> set[str]:

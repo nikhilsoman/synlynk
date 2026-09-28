@@ -1,5 +1,6 @@
 # synlynk Blog Series: Building the OS for Multi-Agent Development
 
+| [226](./226-prTBD-probe-model-discovery-no-inline-calibration.md) | Probe model discovery without inline calibration | [#1838](https://github.com/nikhilsoman/synlynk/pull/1838) | 2026-09-28 |
 | [223](./223-pr1833-graphify-e2e-opt-out.md) | Issue #1833 — Keeping Dispatch E2E Tests Focused | TBD | 2026-09-28 |
 
 | [221](./221-pr1726-w10-grok-bot-remote-mcp.md) | W10 - Grok Bot remote MCP surface, blocked on W9 | [#1726](https://github.com/nikhilsoman/synlynk/pull/1726) | 2026-09-20 |
