@@ -162,6 +162,22 @@ def test_rollback_checkpoint_restores_dirty_tree_stash(tmp_path, monkeypatch):
     assert tracked.read_text() == "uncommitted local edit\n"
 
 
+def test_rollback_checkpoint_preserves_deleted_tracked_file(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    _init_git_repo(tmp_path)
+    tracked = tmp_path / "tracked.txt"
+    tracked.write_text("v1\n")
+    subprocess.run(["git", "add", "tracked.txt"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "commit", "-m", "initial", "-q"], cwd=tmp_path, check=True)
+    tracked.unlink()
+
+    with pytest.raises(RuntimeError, match="simulated operation failure"):
+        with rollback.rollback_checkpoint("init", untracked_paths=[]):
+            raise RuntimeError("simulated operation failure")
+
+    assert not tracked.exists()
+
+
 def test_rollback_checkpoint_stash_excludes_out_of_repo_untracked_path(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     _init_git_repo(tmp_path)
@@ -233,7 +249,13 @@ def test_rollback_checkpoint_stash_excludes_gitignored_untracked_path(tmp_path, 
     assert tracked.read_text() == "uncommitted local edit\n"
 
 
-def test_stash_paths_excludes_sqlite_sidecars(monkeypatch):
+def test_stash_paths_excludes_sqlite_sidecars(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "project-docs").mkdir()
+    (tmp_path / "project-docs" / "memory.md").write_text("memory\n")
+    db_path = tmp_path / ".synlynk" / "projects" / "abcd" / "state.db"
+    db_path.parent.mkdir(parents=True)
+    db_path.write_text("db\n")
     status = """ M project-docs/memory.md
 ?? .synlynk/projects/abcd/state.db-shm
 ?? .synlynk/projects/abcd/state.db-wal
@@ -250,6 +272,64 @@ def test_stash_paths_excludes_sqlite_sidecars(monkeypatch):
         "project-docs/memory.md",
         ".synlynk/projects/abcd/state.db",
     ]
+
+
+def test_stash_paths_excludes_transient_sentinel_and_vanished_paths(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "real.txt").write_text("real\n")
+    status = """ M real.txt
+?? .synlynk/workspaces/.sentinel-9wpqc8kv
+?? vanished.txt
+"""
+
+    def fake_run(args, **kwargs):
+        assert args == ["git", "status", "--porcelain"]
+        return subprocess.CompletedProcess(args, 0, stdout=status, stderr="")
+
+    monkeypatch.setattr(rollback.subprocess, "run", fake_run)
+
+    assert rollback._stash_paths([]) == ["real.txt"]
+
+
+def test_rollback_checkpoint_retries_stash_after_path_disappears(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    _init_git_repo(tmp_path)
+    tracked = tmp_path / "tracked.txt"
+    tracked.write_text("v1\n")
+    subprocess.run(["git", "add", "tracked.txt"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "commit", "-m", "initial", "-q"], cwd=tmp_path, check=True)
+    tracked.write_text("uncommitted local edit\n")
+    vanished = tmp_path / ".synlynk" / "workspaces" / ".sentinel-race"
+    vanished.parent.mkdir(parents=True)
+    vanished.write_text("temporary\n")
+
+    original_stash_paths = rollback._stash_paths
+    stash_calls = []
+
+    def disappear_after_status(untracked_paths):
+        paths = original_stash_paths(untracked_paths)
+        if len(stash_calls) == 0:
+            paths.append(str(vanished.relative_to(tmp_path)))
+        return paths
+
+    original_run = rollback.subprocess.run
+
+    def run_and_disappear(args, **kwargs):
+        if args[:4] == ["git", "stash", "push", "-u"]:
+            stash_calls.append(args)
+            vanished.unlink(missing_ok=True)
+            if len(stash_calls) == 1:
+                raise subprocess.CalledProcessError(1, args)
+        return original_run(args, **kwargs)
+
+    monkeypatch.setattr(rollback, "_stash_paths", disappear_after_status)
+    monkeypatch.setattr(rollback.subprocess, "run", run_and_disappear)
+
+    with rollback.rollback_checkpoint("init", untracked_paths=[]):
+        pass
+
+    assert len(stash_calls) == 2
+    assert tracked.read_text() == "uncommitted local edit\n"
 
 
 def test_rollback_checkpoint_leaves_manifest_on_success(tmp_path, monkeypatch):

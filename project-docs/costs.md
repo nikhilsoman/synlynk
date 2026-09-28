@@ -53,3 +53,4 @@
 | 2026-09-27 22:23 | codex | o4-mini | 989938 | 5716 | $3.0556 | estimated_token_rate | story-9e0b2e71 | exec: codex job job-16c640... |
 | 2026-09-27 22:43 | codex | o4-mini | 603223 | 2473 | $1.8468 | estimated_token_rate | story-d3df3fbd | exec: codex job job-213427... |
 | 2026-09-27 22:51 | codex | gpt-5.6-luna | 853676 | 6425 | $2.6574 | estimated_token_rate | story-issue-1813 | exec: codex job job-f6e1e1... |
+| 2026-09-28 | codex | gpt-5.3-codex | n/a | n/a | n/a | estimated_manual | issue-1834 | rollback race fix, focused/full verification, and PR preparation |

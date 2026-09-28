@@ -172,6 +172,7 @@ Public GitHub tag v1.0.0 is NOT cut yet. Ceremony: synlynk.com collateral, HN/Pr
 
 - [ ] P0 Foundation and reset (P0)
   Reconcile main/origin, stale worktrees, daemon/runtime, sentinel noise, and release blockers. Establish a clean baseline and freeze non-launch work.
+  Rollback checkpoint handling for the transient `.sentinel-*` init race is fixed in issue #1834 and pending merge.
 - [ ] P0 Install and first-win path (P0)
   Validate pipx/install.sh or chosen distribution, zero-risk init, dependency checks, browser handoff, and a timed fresh-project-to-first-dispatch journey under 15 minutes.
 - [ ] P0 Existing-project intelligence (P0)
@@ -252,5 +253,4 @@ Named release v0.22.0. Multi-workspace hub UI, HEAD routing, DB_PATH guard, sand
 ## v0.23.0 — Graphify Auto-Extraction & Vizor Unified Canvas [shipped] (target: 2026-09-25)
 
 scan --deep / upgrade auto-extract; synlynk mesh federated graphs; Vizor graphify.html + clustered Architect/Logical canvas. PR #1777. GOVERNS board + dual-pivot Gantt #1771.
-
 

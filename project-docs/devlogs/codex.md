@@ -7,6 +7,19 @@
 - Verification: 143 tests passed, 1 skipped across the modified test files.
 [@codex]
 
+## 2026-09-28 — Rollback stash race hardening (#1834)
+
+- Updated rollback dirty-path collection to ignore transient `.sentinel-*`
+  files and status entries that disappeared before stash.
+- Added a one-time surviving-path retry for the stash race, while preserving
+  failures when real dirty paths still cannot be stashed.
+- Added regression coverage; focused rollback/init tests passed (27), and the
+  force-init end-to-end test passed 20 consecutive runs.
+- Full suite: 3396 passed, 4 skipped, 1 unrelated environment failure in
+  `test_poll_once_isolates_failures` because the default daemon log path was
+  not writable; the test passed with a writable HOME.
+[@codex]
+
 ## 2026-09-09 - PR #1518 QA follow-up
 
 - Serialized local capability-envelope seeding and the final local dispatch
