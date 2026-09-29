@@ -3539,6 +3539,7 @@ def _reconcile_daemon_jobs() -> None:
     ensure_worktree_columns(conn, {
         "worktree_path": "TEXT",
         "worktree_branch": "TEXT",
+        "pid_identity": "TEXT",
     })
     # Repair the split-brain window before selecting running rows.  This is
     # deliberately conditional/idempotent so a late daemon update cannot be
@@ -3547,7 +3548,7 @@ def _reconcile_daemon_jobs() -> None:
     rows = conn.execute(
         "SELECT job_id, agent, story_id, task, pid, started_at, completed_at, log_path, "
         "dispatch_context, requires_gh_write, gh_write_target, gh_write_author, gh_write_expect, "
-        "worktree_path, worktree_branch "
+        "worktree_path, worktree_branch, pid_identity "
         "FROM daemon_jobs WHERE status='running'"
     ).fetchall()
     now = time.strftime("%Y-%m-%dT%H:%M:%S")
@@ -3556,7 +3557,7 @@ def _reconcile_daemon_jobs() -> None:
     try:
         for (job_id, agent, story_id, task, pid, started_at, completed_at, log_path,
              dispatch_context, requires_gh_write, gh_write_target, gh_write_author,
-             gh_write_expect, persisted_worktree_path, persisted_worktree_branch) in rows:
+             gh_write_expect, persisted_worktree_path, persisted_worktree_branch, pid_identity_json) in rows:
             try:
                 # Invariant 2 must be enforced by the daemon's own polling
                 # path.  CLI reconciliation is opportunistic and does not run
@@ -3576,6 +3577,10 @@ def _reconcile_daemon_jobs() -> None:
                     "worktree_path": persisted_worktree_path,
                     "worktree_branch": persisted_worktree_branch,
                 }
+                try:
+                    cb_job["pid_identity"] = json.loads(pid_identity_json) if pid_identity_json else None
+                except (TypeError, ValueError):
+                    cb_job["pid_identity"] = None
                 cb_res = evaluate_cb(cb_job, config, ".synlynk/sentinel.md")
                 if cb_res.tripped:
                     ended_at = cb_job.get("ended_at") or now

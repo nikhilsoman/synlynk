@@ -2,6 +2,7 @@ import json
 import os
 import sqlite3
 import subprocess
+import sys
 
 import pytest
 
@@ -1383,26 +1384,33 @@ def test_reconcile_daemon_jobs_trips_inflight_circuit_breaker(project_dir, monke
         "load_config",
         lambda: {"circuit_breaker": {"max_job_tokens": 1000, "max_job_cost_usd": 100.0}},
     )
-    monkeypatch.setattr(
-        circuit_breaker,
-        "_kill_process_tree",
-        lambda *args, **kwargs: (True, "test-kill"),
-    )
+    # The sandbox does not expose `ps`, so validate the real termination path
+    # while treating this fixture identity as already verified.
+    monkeypatch.setattr(circuit_breaker, "process_identity_check", lambda pid, expected: "safe to kill")
     log_path = os.path.join(project_dir, "job-circuit-breaker.log")
     with open(log_path, "w") as handle:
         handle.write("Input tokens: 4000\nOutput tokens: 2000\n")
 
-    conn = synlynk._get_db()
-    conn.execute(
-        "INSERT INTO daemon_jobs (job_id, agent, task, story_id, pid, status, started_at, enqueued_at, log_path) "
-        "VALUES ('job-circuit-breaker', 'claude', 'runaway', NULL, 999999, 'running', "
-        "'2026-07-13T00:00:00', '2026-07-13T00:00:00', ?)",
-        (log_path,),
-    )
-    conn.commit()
-    conn.close()
+    worker = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
+    try:
+        pid_identity = {"start_time": "test-worker"}
 
-    jobs_mod._reconcile_daemon_jobs()
+        conn = synlynk._get_db()
+        conn.execute(
+            "INSERT INTO daemon_jobs (job_id, agent, task, story_id, pid, pid_identity, status, started_at, enqueued_at, log_path) "
+            "VALUES ('job-circuit-breaker', 'claude', 'runaway', NULL, ?, ?, 'running', "
+            "'2026-07-13T00:00:00', '2026-07-13T00:00:00', ?)",
+            (worker.pid, json.dumps(pid_identity), log_path),
+        )
+        conn.commit()
+        conn.close()
+
+        jobs_mod._reconcile_daemon_jobs()
+        assert worker.poll() is not None, "circuit breaker must terminate the runaway worker"
+    finally:
+        if worker.poll() is None:
+            worker.kill()
+        worker.wait()
 
     conn = synlynk._get_db()
     status = conn.execute(
