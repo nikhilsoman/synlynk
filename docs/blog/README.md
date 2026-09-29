@@ -1,5 +1,7 @@
 # synlynk Blog Series: Building the OS for Multi-Agent Development
 
+| [230](./230-pr1846-cost-table-hardening.md) | Issue #1846 — Keeping the Cost Ledger a Valid Markdown Table | TBD | 2026-09-29 |
+
 | [229](./229-prTBD-instruction-file-deduplication.md) | R9 — One Canonical Instruction Protocol | [#1843](https://github.com/nikhilsoman/synlynk/pull/1843) | 2026-09-29 |
 
 | [228](./228-pr1841-init-noninteractive.md) | R8 — Making `synlynk init` safe for CI | [#1841](https://github.com/nikhilsoman/synlynk/pull/1841) | 2026-09-28 |
