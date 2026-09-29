@@ -1370,6 +1370,52 @@ def test_reconcile_daemon_jobs_writes_cost_row(project_dir, monkeypatch):
     assert row[1] == 500
 
 
+def test_reconcile_daemon_jobs_trips_inflight_circuit_breaker(project_dir, monkeypatch):
+    """Daemon polling kills and stamps an over-limit running job immediately."""
+    import synlynk
+    import synlynk.circuit_breaker as circuit_breaker
+    import synlynk.jobs as jobs_mod
+
+    monkeypatch.setattr(synlynk, "DB_PATH", os.path.join(project_dir, "state.db"))
+    monkeypatch.setattr(synlynk, "_is_migrated", lambda: True)
+    monkeypatch.setattr(
+        synlynk,
+        "load_config",
+        lambda: {"circuit_breaker": {"max_job_tokens": 1000, "max_job_cost_usd": 100.0}},
+    )
+    monkeypatch.setattr(
+        circuit_breaker,
+        "_kill_process_tree",
+        lambda *args, **kwargs: (True, "test-kill"),
+    )
+    log_path = os.path.join(project_dir, "job-circuit-breaker.log")
+    with open(log_path, "w") as handle:
+        handle.write("Input tokens: 4000\nOutput tokens: 2000\n")
+
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, story_id, pid, status, started_at, enqueued_at, log_path) "
+        "VALUES ('job-circuit-breaker', 'claude', 'runaway', NULL, 999999, 'running', "
+        "'2026-07-13T00:00:00', '2026-07-13T00:00:00', ?)",
+        (log_path,),
+    )
+    conn.commit()
+    conn.close()
+
+    jobs_mod._reconcile_daemon_jobs()
+
+    conn = synlynk._get_db()
+    status = conn.execute(
+        "SELECT status, exit_code FROM daemon_jobs WHERE job_id='job-circuit-breaker'"
+    ).fetchone()
+    cost = conn.execute(
+        "SELECT input_tokens, output_tokens FROM cost_entries WHERE job_id='job-circuit-breaker'"
+    ).fetchone()
+    conn.close()
+    assert tuple(status) == ("circuit_breaker_tripped", -9)
+    assert tuple(cost) == (5000, 2000)
+
+
 def test_dispatch_writes_cost_row_even_on_zero_token_extraction(project_dir, monkeypatch):
     import synlynk
     import synlynk.dispatch as dispatch_mod

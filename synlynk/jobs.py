@@ -3551,11 +3551,58 @@ def _reconcile_daemon_jobs() -> None:
         "FROM daemon_jobs WHERE status='running'"
     ).fetchall()
     now = time.strftime("%Y-%m-%dT%H:%M:%S")
+    load_config_fn = _pkg("load_config")
+    config = load_config_fn() if load_config_fn else {}
     try:
         for (job_id, agent, story_id, task, pid, started_at, completed_at, log_path,
              dispatch_context, requires_gh_write, gh_write_target, gh_write_author,
              gh_write_expect, persisted_worktree_path, persisted_worktree_branch) in rows:
             try:
+                # Invariant 2 must be enforced by the daemon's own polling
+                # path.  CLI reconciliation is opportunistic and does not run
+                # while `synlynk dispatch` jobs are active.
+                evaluate_cb = _pkg("evaluate_job_circuit_breaker")
+                if not evaluate_cb:
+                    from synlynk.circuit_breaker import evaluate_job_circuit_breaker as evaluate_cb
+                cb_job = {
+                    "id": job_id,
+                    "agent": agent,
+                    "story_id": story_id,
+                    "task": task,
+                    "pid": pid,
+                    "started_at": started_at,
+                    "status": STATUS_RUNNING,
+                    "log_file": log_path,
+                    "worktree_path": persisted_worktree_path,
+                    "worktree_branch": persisted_worktree_branch,
+                }
+                cb_res = evaluate_cb(cb_job, config, ".synlynk/sentinel.md")
+                if cb_res.tripped:
+                    ended_at = cb_job.get("ended_at") or now
+                    settled = _settle_daemon_job_terminal(
+                        conn,
+                        job_id,
+                        cb_job["status"],
+                        cb_job.get("exit_code", -9),
+                        ended_at,
+                        release_reservation=True,
+                    )
+                    if settled:
+                        cost_recorded = _ensure_daemon_job_cost_entry(
+                            job_id, agent, story_id, _read_job_log(log_path), conn=conn
+                        )
+                        emit_event(
+                            "job_terminal",
+                            {
+                                "job_id": job_id,
+                                "status": cb_job["status"],
+                                "cost_recorded": cost_recorded,
+                                "source": "circuit_breaker",
+                            },
+                            emitted_by="_reconcile_daemon_jobs",
+                        )
+                    continue
+
                 exited = False
                 raw_exit_status = None
                 if pid is None:
