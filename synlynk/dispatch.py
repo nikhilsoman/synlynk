@@ -3617,6 +3617,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         _ensure_daemon_job_columns(dconn, {
             "worktree_path": "TEXT",
             "worktree_branch": "TEXT",
+            "pid_identity": "TEXT",
         })
         dconn.execute(
             "INSERT OR IGNORE INTO daemon_jobs "
@@ -3761,6 +3762,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             _ensure_daemon_job_columns(dconn, {
                 "worktree_path": "TEXT",
                 "worktree_branch": "TEXT",
+                "pid_identity": "TEXT",
             })
             existing = dconn.execute(
                 "SELECT 1 FROM daemon_jobs WHERE job_id=?", (job_id,)
@@ -3770,7 +3772,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 dispatch_context = _dispatch_context()
                 dconn.execute(
                     "UPDATE daemon_jobs SET status='running', pid=?, started_at=?, "
-                    "log_path=?, worktree_path=?, worktree_branch=?, agent=?, harness=?, role=?, task=?, story_id=?, "
+                    "log_path=?, worktree_path=?, worktree_branch=?, pid_identity=?, agent=?, harness=?, role=?, task=?, story_id=?, "
                     "model_tier=?, impact_score=?, requested_model=?, resolved_model=?, "
                     "dispatch_context=COALESCE(dispatch_context, ?), "
                     "context_mode=?, context_bytes=?, "
@@ -3784,6 +3786,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                         log_file,
                         worktree_path,
                         worktree_branch,
+                        json.dumps(job.get("pid_identity")) if job.get("pid_identity") else None,
                         agent,
                         agent,
                         resolved_agent_role or None,
@@ -3807,11 +3810,11 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 dispatch_context = _dispatch_context()
                 dconn.execute(
                     "INSERT OR REPLACE INTO daemon_jobs "
-                    "(job_id, agent, harness, role, task, story_id, status, priority, depends_on, pid, "
+                    "(job_id, agent, harness, role, task, story_id, status, priority, depends_on, pid, pid_identity, "
                     "enqueued_at, started_at, log_path, worktree_path, worktree_branch, dispatch_context, context_mode, context_bytes, session_id, "
                     "agent_id, requires_gh_write, gh_write_target, gh_write_author, gh_write_expect, "
                     "model_tier, impact_score, requested_model, resolved_model) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         job_id,
                         agent,
@@ -3823,6 +3826,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                         5,
                         "[]",
                         proc.pid,
+                        json.dumps(job.get("pid_identity")) if job.get("pid_identity") else None,
                         job["started_at"],
                         job["started_at"],
                         log_file,
