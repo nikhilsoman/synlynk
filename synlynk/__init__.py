@@ -675,8 +675,6 @@ DB_PATH = _resolve_db_path()
 ACTIVE_DB_PATH = None
 
 _DB_SCHEMA = """
-CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
-
 CREATE TABLE IF NOT EXISTS stories (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     story_id      TEXT NOT NULL UNIQUE,

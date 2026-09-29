@@ -37,8 +37,18 @@ def test_gh_write_expectation_explicit_override(isolated_db, project_dir, monkey
     log_dir.mkdir(parents=True, exist_ok=True)
 
     conn = sl._get_db()
-    dispatch_mod._ensure_daemon_job_worktree_columns(conn)
-    dispatch_mod._ensure_daemon_job_gh_write_columns(conn)
+    dispatch_mod._ensure_daemon_job_columns(conn, {
+        "worktree_path": "TEXT",
+        "worktree_branch": "TEXT",
+    })
+    dispatch_mod._ensure_daemon_job_columns(conn, {
+        "requires_gh_write": "INTEGER NOT NULL DEFAULT 0",
+        "gh_write_target": "TEXT",
+        "gh_write_verified": "TEXT",
+        "gh_write_author": "TEXT",
+        "gh_write_expect": "TEXT DEFAULT 'closed'",
+        "gh_write_evidence": "TEXT",
+    })
 
     monkeypatch.setenv("SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH", "1")
     monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_gh_token", lambda role: "test-gh-token")
@@ -88,7 +98,10 @@ def test_reconciler_reads_exit_file_even_if_no_git_activity(tmp_path, project_di
     monkeypatch.setattr(jobs_mod, "_job_has_real_work_landed", lambda git_state: False)
 
     conn = sl._get_db()
-    dispatch_mod._ensure_daemon_job_worktree_columns(conn)
+    dispatch_mod._ensure_daemon_job_columns(conn, {
+        "worktree_path": "TEXT",
+        "worktree_branch": "TEXT",
+    })
     conn.execute(
         "INSERT INTO daemon_jobs (job_id, agent, story_id, task, status, pid, enqueued_at, "
         "started_at, log_path, requires_gh_write, worktree_path) "
@@ -125,7 +138,10 @@ def test_reconciler_preserves_logs_and_updates_db_path_on_worktree_reap(tmp_path
     monkeypatch.setattr(jobs_mod, "_daemon_job_worktree_path", lambda *a, **kw: str(wt))
 
     conn = sl._get_db()
-    dispatch_mod._ensure_daemon_job_worktree_columns(conn)
+    dispatch_mod._ensure_daemon_job_columns(conn, {
+        "worktree_path": "TEXT",
+        "worktree_branch": "TEXT",
+    })
     conn.execute(
         "INSERT INTO daemon_jobs (job_id, agent, story_id, task, status, pid, enqueued_at, "
         "started_at, log_path, requires_gh_write, worktree_path) "
@@ -173,7 +189,10 @@ def test_reconciler_initial_git_inspection_error_fails_closed(tmp_path, project_
     monkeypatch.setattr(jobs_mod, "_worktree_git_state_inspector", lambda: fail_inspect)
 
     conn = sl._get_db()
-    dispatch_mod._ensure_daemon_job_worktree_columns(conn)
+    dispatch_mod._ensure_daemon_job_columns(conn, {
+        "worktree_path": "TEXT",
+        "worktree_branch": "TEXT",
+    })
     conn.execute(
         "INSERT INTO daemon_jobs (job_id, agent, story_id, task, status, pid, enqueued_at, "
         "started_at, log_path, requires_gh_write, worktree_path) "

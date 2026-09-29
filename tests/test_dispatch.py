@@ -1,7 +1,32 @@
+import sqlite3
+
 import pytest
 import synlynk as sl
 
-from synlynk.dispatch import _format_job_summary
+from synlynk.dispatch import _ensure_daemon_job_columns, _format_job_summary
+
+
+def test_ensure_daemon_job_columns_reads_schema_once_and_adds_missing_columns():
+    conn = sqlite3.connect(":memory:")
+    conn.execute("CREATE TABLE daemon_jobs (job_id TEXT PRIMARY KEY)")
+    statements = []
+    conn.set_trace_callback(statements.append)
+
+    _ensure_daemon_job_columns(conn, {
+        "context_mode": "TEXT",
+        "impact_score": "INTEGER DEFAULT 0",
+    })
+    _ensure_daemon_job_columns(conn, {
+        "context_mode": "TEXT",
+        "impact_score": "INTEGER DEFAULT 0",
+    })
+
+    pragma_count = sum("PRAGMA table_info(daemon_jobs)" in statement for statement in statements)
+    assert [row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)").fetchall()] == [
+        "job_id", "context_mode", "impact_score"
+    ]
+    assert pragma_count == 2
+    conn.close()
 
 
 def test_dispatch_agent_raises_when_task_type_not_in_policy_allocation_table(tmp_path, monkeypatch, isolated_db):
