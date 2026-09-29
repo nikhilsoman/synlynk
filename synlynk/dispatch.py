@@ -2810,7 +2810,10 @@ def resolve_dispatch_harness(agent: str, agent_id: str = None, story_id: str = N
     if picked is None and resolved_agent_role:
         picked = _harness_for_org_role(resolved_agent_role, baselines_map, requires_gh_write)
 
-    candidate = picked or agent
+    # An explicitly forced harness is binding.  Auto-routing may still
+    # calculate a preferred harness for non-forced dispatches, but it must
+    # never replace the user's requested harness when force_agent is set.
+    candidate = agent if force_agent else (picked or agent)
     if task or task_type or requires or requires_gh_write:
         from synlynk.capability_probe import resolve_capable_dispatch_harness
         return resolve_capable_dispatch_harness(
