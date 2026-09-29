@@ -270,6 +270,8 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [223](./223-pr1731-w12-discord-herdr-bridge.md) | W12 - Discord/Herdr full-duplex remote-access bridge | [#1731](https://github.com/nikhilsoman/synlynk/pull/1731) | 2026-09-22 |
 | [224](./224-prTBD-v0.21.0.md) | PR #TBD — v0.21.0 Release | [#TBD](https://github.com/nikhilsoman/synlynk/pull/TBD) | 2026-09-23 |
 | [225](./225-prTBD-v0.22.0.md) | PR #TBD — v0.22.0 Release | [#TBD](https://github.com/nikhilsoman/synlynk/pull/TBD) | 2026-09-24 |
+| [229](./229-pr1846-completion-tracker-optional-claude.md) | Completion Tracking Without an Installed Claude CLI | TBD | 2026-09-29 |
+| [232](./232-pr1741-cap-behind-dirty-pr-review-retry-churn-a.md) | PR #1741 — cap BEHIND/DIRTY PR-review retry churn and block retries on critical cost inflation | [#1741](https://github.com/nikhilsoman/synlynk/pull/1741) | 2026-09-23 |
 
 ## Per-PR Post Template
 
