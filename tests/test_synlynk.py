@@ -3565,6 +3565,18 @@ def test_reconcile_auto_finalizes_clean_worktree_with_local_commits(project_dir,
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         if cmd[:6] == prefix + ["diff", "--cached", "--quiet"]:
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        if cmd == prefix + ["rev-parse", "HEAD"]:
+            return subprocess.CompletedProcess(
+                cmd, 0, stdout="a" * 40 + "\n", stderr=""
+            )
+        if cmd[:6] == prefix + ["ls-remote", "--heads", "origin"]:
+            return subprocess.CompletedProcess(
+                cmd, 0, stdout=("a" * 40) + "\trefs/heads/dispatch/codex/job-finalize-clean\n", stderr=""
+            )
+        if cmd[:6] == prefix + ["fetch", "--quiet", "origin"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        if cmd[:5] == prefix + ["merge-base", "--is-ancestor"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         if cmd[:5] == prefix + ["rev-list", "--count"]:
             return subprocess.CompletedProcess(cmd, 0, stdout="2\n", stderr="")
         if cmd[:4] == prefix + ["push"]:
