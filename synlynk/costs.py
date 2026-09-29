@@ -3,18 +3,12 @@
 import json
 import os
 import re
-import sys
 import time
 
 from dataclasses import dataclass
 from typing import Optional
 
-
-def _pkg(name: str, default=None):
-    package = sys.modules.get("synlynk")
-    if package is None:
-        return default
-    return getattr(package, name, default)
+from synlynk._lazy import pkg as _pkg
 
 
 class _TokenCounts(object):

@@ -4,17 +4,11 @@ import json
 import os
 import re
 import subprocess
-import sys
 import time
 from typing import Optional
+
 from synlynk._constants import HARNESS_CAPABILITY_BASELINES
-
-
-def _pkg(name: str, default=None):
-    package = sys.modules.get("synlynk")
-    if package is None:
-        return default
-    return getattr(package, name, default)
+from synlynk._lazy import pkg as _pkg
 
 
 def cmd_agent_run(name: str, dry_run: bool = False, install_cron: bool = False) -> None:

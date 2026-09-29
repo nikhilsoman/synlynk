@@ -6,20 +6,13 @@ import os
 import re
 import sqlite3
 import subprocess
-import sys
 import threading
 import time
 from typing import Optional
 
+from synlynk._lazy import pkg as _pkg
 from synlynk.tool_installer import is_tool_available, install_tool
 from synlynk.wizard import _run_scan_tui
-
-def _pkg(name: str, default=None):
-    package = sys.modules.get("synlynk")
-    if package is None:
-        return default
-    return getattr(package, name, default)
-
 
 _HARNESS_PATH_NAMES = ("claude", "agy", "codex", "grok", "gemini", "aider")
 

@@ -4,8 +4,9 @@ import json
 import os
 import re
 import subprocess
-import sys
 import time
+
+from synlynk._lazy import pkg as _pkg
 
 _ISSUE_NUMBER_RE = re.compile(r"#(\d+)")
 
@@ -24,13 +25,6 @@ _DISCIPLINE_KEYWORDS = {
 _ORG_DOMAIN_LABEL_MAP = {
     "documentation": "content",
 }
-
-
-def _pkg(name: str, default=None):
-    package = sys.modules.get("synlynk")
-    if package is None:
-        return default
-    return getattr(package, name, default)
 
 
 def _detect_issue_number(task_text: str, issue=None):

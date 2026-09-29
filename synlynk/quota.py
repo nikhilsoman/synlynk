@@ -3,22 +3,16 @@
 import json
 import os
 import re
-import sys
 import time
 from datetime import datetime, timezone
 from typing import Any, Optional
+
+from synlynk._lazy import pkg as _pkg
 
 try:
     from datetime import UTC  # Python 3.11+
 except ImportError:  # pragma: no cover
     UTC = timezone.utc  # type: ignore[misc,assignment]
-
-
-def _pkg(name: str, default=None):
-    package = sys.modules.get("synlynk")
-    if package is None:
-        return default
-    return getattr(package, name, default)
 
 
 # Plan-driven quota windows. Harnesses reset on different cadences — not a
