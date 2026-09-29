@@ -224,7 +224,7 @@ def extract_social_changelog_snippets(
         for line in section_text.splitlines():
             line_str = line.strip()
             if line_str.startswith("- ") or line_str.startswith("* ") or re.match(r"^\d+\.\s+", line_str):
-                item = re.sub(r"^[-*]|\d+\.\s*", "", line_str).strip()
+                item = re.sub(r"^([-*]|\d+\.)\s*", "", line_str).strip()
                 if item:
                     highlights.append(item)
     if not highlights:
@@ -504,7 +504,7 @@ def sync_pr_blog_post(
             for line in m_ship.group(2).splitlines():
                 l_str = line.strip()
                 if l_str.startswith("- ") or l_str.startswith("* ") or re.match(r"^\d+\.\s+", l_str):
-                    item = re.sub(r"^[-*]|\d+\.\s*", "", l_str).strip()
+                    item = re.sub(r"^([-*]|\d+\.)\s*", "", l_str).strip()
                     if item and not item.lower().startswith("co-authored-by:"):
                         highlights.append(item)
 
@@ -590,4 +590,3 @@ def cmd_marketing_sync_pr(pr_number: Union[int, str], dry_run: bool = False) -> 
     print(f"✅ [Marketing PR Sync] {action} blog post #{res['post']}: {res['file']}")
     print(f"   Title: {res['title']}")
     print(f"   Date: {res['date']} | Version: v{res['version']} | Author: {res['author']}")
-
