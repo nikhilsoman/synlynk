@@ -2496,11 +2496,20 @@ def _generate_costs_md() -> None:
         "| Date | Agent | Model | Tokens In | Tokens Out | Cost | Source | Story | Notes |\n",
         "|---|---|---|---|---|---|---|---|---|\n",
     ]
+
+    def _markdown_cell(value) -> str:
+        """Keep free-text values from changing the generated table shape."""
+        if value is None:
+            return ""
+        return str(value).replace("\r", " ").replace("\n", " ").replace("|", r"\|")
+
     for session_date, agent, model, input_tokens, output_tokens, total_cost_usd, cost_source, story_id, notes in rows:
         cost_str = f"${total_cost_usd:.4f}" if total_cost_usd is not None else "-"
         lines.append(
-            f"| {session_date} | {agent} | {model or '-'} | {input_tokens} | {output_tokens} | "
-            f"{cost_str} | {cost_source} | {story_id or '-'} | {notes or ''} |\n"
+            f"| {_markdown_cell(session_date)} | {_markdown_cell(agent)} | "
+            f"{_markdown_cell(model) or '-'} | {input_tokens} | {output_tokens} | "
+            f"{cost_str} | {_markdown_cell(cost_source)} | {_markdown_cell(story_id) or '-'} | "
+            f"{_markdown_cell(notes)} |\n"
         )
 
     _write_generated_project_doc("costs.md", "".join(lines))

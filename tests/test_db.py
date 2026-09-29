@@ -329,6 +329,54 @@ def test_generate_costs_md_creates_file_pre_migration(project_dir):
     assert "Do NOT hand-edit" in content
 
 
+def test_generate_costs_md_escapes_newlines_and_pipes_in_text_cells(project_dir):
+    from synlynk import _insert_cost_row
+
+    _insert_cost_row(
+        session_date="2026-07-25 10:00",
+        agent="codex",
+        model="unknown\n`synlynk/db.py:3772:` | corrupted",
+        input_tokens=100,
+        output_tokens=20,
+        cache_read_tokens=0,
+        cost_source="estimated_manual",
+        estimate_basis="cli_manual_entry",
+        total_cost_usd=0.001,
+        notes="note line one\nnote line two | with pipe",
+        story_id=None,
+        api_equivalent_usd=0.001,
+        actual_usd=None,
+        payment_mode=None,
+    )
+
+    _insert_cost_row(
+        session_date="2026-07-25 10:01",
+        agent="codex",
+        model="second-row-model",
+        input_tokens=200,
+        output_tokens=40,
+        cache_read_tokens=0,
+        cost_source="estimated_manual",
+        estimate_basis="cli_manual_entry",
+        total_cost_usd=0.002,
+        notes="second row",
+        story_id=None,
+        api_equivalent_usd=0.002,
+        actual_usd=None,
+        payment_mode=None,
+    )
+
+    _generate_costs_md()
+
+    content = open(os.path.join(str(project_dir), "project-docs", "costs.md")).read()
+    data_rows = [line for line in content.splitlines() if line.startswith("| 2026-")]
+    assert len(data_rows) == 2
+    assert all(line.replace(r"\|", "").count("|") == 10 for line in data_rows)
+    assert "unknown `synlynk/db.py:3772:` \\| corrupted" in data_rows[0]
+    assert "note line one note line two \\| with pipe" in data_rows[0]
+    assert "second-row-model" in data_rows[1]
+
+
 def test_cmd_cost_log_regenerates_costs_md(project_dir):
     cmd_cost_log(agent="codex", tokens_in=500, tokens_out=100, note="from cmd_cost_log")
 
