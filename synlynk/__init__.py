@@ -837,6 +837,7 @@ CREATE TABLE IF NOT EXISTS daemon_jobs (
     priority     INTEGER NOT NULL DEFAULT 5,
     depends_on   TEXT NOT NULL DEFAULT '[]',
     pid          INTEGER,
+    pid_identity TEXT,
     enqueued_at  TEXT NOT NULL,
     started_at   TEXT,
     completed_at TEXT,
