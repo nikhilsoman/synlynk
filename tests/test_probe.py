@@ -178,7 +178,9 @@ def test_probe_clears_all_drift_alerts_for_same_agent(tmp_path, monkeypatch):
 
 def test_probe_extracts_claude_version_from_descriptive_output(tmp_path, monkeypatch):
     import socket
+    import subprocess
     import synlynk
+    from synlynk import probe as probe_mod
     from synlynk.probe import cmd_probe
 
     monkeypatch.chdir(tmp_path)
@@ -207,9 +209,27 @@ def test_probe_extracts_claude_version_from_descriptive_output(tmp_path, monkeyp
     monkeypatch.setattr(socket, "create_connection", lambda *args, **kwargs: _DummySocket())
     monkeypatch.setattr(synlynk, "_get_db", lambda: sqlite3.connect(str(db_path)))
 
+    environmental_probes = []
+    real_run = probe_mod.subprocess.run
+
+    def fake_run(command, *args, **kwargs):
+        if command == ["npm", "info", "@anthropic-ai/claude-code", "version"]:
+            environmental_probes.append(tuple(command))
+            return subprocess.CompletedProcess(command, 0, stdout="2.1.209\n", stderr="")
+        if command == ["gh", "auth", "status"]:
+            environmental_probes.append(tuple(command))
+            return subprocess.CompletedProcess(command, 0, stdout="Logged in\n", stderr="")
+        return real_run(command, *args, **kwargs)
+
+    monkeypatch.setattr(probe_mod.subprocess, "run", fake_run)
+
     cmd_probe(agent="claude")
 
     assert _read_installed_version(db_path, "claude") == "2.1.208"
+    assert environmental_probes == [
+        ("npm", "info", "@anthropic-ai/claude-code", "version"),
+        ("gh", "auth", "status"),
+    ]
     conn = sqlite3.connect(str(db_path))
     try:
         assert conn.execute(
@@ -219,6 +239,9 @@ def test_probe_extracts_claude_version_from_descriptive_output(tmp_path, monkeyp
         assert conn.execute(
             "SELECT COUNT(*) FROM harness_reservations WHERE harness='claude'"
         ).fetchone()[0] == 0
+        # Probe records the model and releases its write transaction without
+        # opening a calibration reservation; calibration is an explicit sweep.
+        assert conn.in_transaction is False
     finally:
         conn.close()
 
