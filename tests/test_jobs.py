@@ -758,7 +758,7 @@ def test_reconcile_jobs_waitpid_ignores_denial_shape_when_git_state_shows_activi
     reconciled = next(job for job in jobs if job["id"] == "job-waitpid-git-corroborated")
 
     assert reconciled["status"] != "permission_denied"
-    assert reconciled["status"] == "completed"
+    assert reconciled["status"] == "unpushed_branch"
 
 
 def test_reconcile_jobs_dead_pid_ignores_denial_shape_when_git_state_shows_activity(tmp_path, monkeypatch, capsys):
@@ -902,7 +902,7 @@ def test_reconcile_jobs_dead_pid_warns_but_does_not_fail_when_activity_present(t
     reconciled = next(job for job in jobs if job["id"] == "job-deadpid-warn")
 
     assert reconciled["status"] != "task_delivery_failed"
-    assert "task-receipt" in out
+    assert reconciled["status"] == "unpushed_branch"
 
 
 def test_apply_dispatch_gate_downgrades_status_on_suite_failure(project_dir, monkeypatch):
@@ -2273,8 +2273,8 @@ def test_reconcile_daemon_jobs_gtv_uses_files_not_empty_summary(project_dir, mon
         "SELECT status, exit_code FROM daemon_jobs WHERE job_id=?", (job_id,)
     ).fetchone()
     conn.close()
-    assert row[0] == "failed_unverified"
-    assert row[1] is None
+    assert row[0] == "unpushed_branch"
+    assert row[1] == 1
 
     summary = (project_dir / ".synlynk" / "logs" / f"{job_id}.summary").read_text()
     assert "FAILED_UNVERIFIED" in summary or "failed_unverified" in summary.lower() or "exit unknown" in summary

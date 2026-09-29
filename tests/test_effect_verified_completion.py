@@ -17,6 +17,7 @@ from synlynk.jobs import (
     STATUS_FAILED_NOOP_DENIED,
     STATUS_FAILED_VERIFICATION,
 )
+from synlynk.verify_effects import verify_job_effects
 
 
 @pytest.fixture
@@ -116,6 +117,29 @@ def test_reconcile_mutating_job_with_diff_becomes_completed(temp_git_worktree, t
     
     reconciled = synlynk._load_jobs()
     assert reconciled[0]["status"] == STATUS_COMPLETED
+
+
+def test_local_commit_without_remote_branch_is_unpushed_and_not_gh_verified(temp_git_worktree):
+    worktree, base_sha = temp_git_worktree
+    subprocess.run(["git", "checkout", "-b", "dispatch/codex/job-stranded"], cwd=worktree, check=True, capture_output=True)
+    with open(os.path.join(worktree, "code.py"), "w") as handle:
+        handle.write("print(1)\n")
+    subprocess.run(["git", "add", "code.py"], cwd=worktree, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "stranded"], cwd=worktree, check=True, capture_output=True)
+
+    result = verify_job_effects(
+        worktree_path=worktree,
+        worktree_branch="dispatch/codex/job-stranded",
+        base_sha=base_sha,
+        task_class="gh_write",
+        gh_verify_kwargs={"target": "pr:1825", "expect": "pr_open"},
+        git_state={"commits_ahead": 1},
+        exit_code=0,
+    )
+
+    assert result.status == "unpushed_branch"
+    assert result.verified is False
+    assert result.gh_verified is None
 
 
 def test_reconcile_gh_write_unverified_becomes_failed_noop_denied(temp_git_worktree, tmp_path, monkeypatch):

@@ -16,7 +16,7 @@ from synlynk.jobs import (
     STATUS_FAILED_VERIFICATION,
     STATUS_FAILED,
 )
-from synlynk.gh_verify import gh_write_verified
+from synlynk.gh_verify import gh_write_verified, local_commits_pushed
 
 
 @dataclass
@@ -106,6 +106,7 @@ def verify_job_effects(
     gh_verify_kwargs: Optional[Dict[str, Any]] = None,
     git_state: Optional[dict] = None,
     exit_code: int = 0,
+    worktree_branch: Optional[str] = None,
 ) -> EffectVerificationResult:
     """Verify that a job with exit code 0 produced real effects before marking succeeded."""
     if exit_code != 0:
@@ -116,6 +117,15 @@ def verify_job_effects(
         )
 
     task_class_norm = (task_class or "mutating").strip().lower()
+
+    commits_ahead = (git_state or {}).get("commits_ahead", 0)
+    if worktree_path and worktree_branch and (commits_ahead or base_sha):
+        if not local_commits_pushed(worktree_path, worktree_branch, base_sha):
+            return EffectVerificationResult(
+                verified=False,
+                status="unpushed_branch",
+                reason=f"local commits are not reachable on origin/{worktree_branch}",
+            )
 
     # 1. Classification Branch A: Mutating Task
     if task_class_norm in ("mutating", "code", "mutation", "fix", "feat"):

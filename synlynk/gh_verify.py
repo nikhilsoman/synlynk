@@ -22,6 +22,43 @@ _LIST_VERIFY_ATTEMPTS = 3
 _LIST_VERIFY_BACKOFF_SECONDS = (0.1, 0.25)
 
 
+def local_commits_pushed(worktree_path: Optional[str], branch: Optional[str], base_sha: Optional[str] = None) -> bool:
+    """Return whether local commits beyond *base_sha* are reachable on origin."""
+    if not worktree_path or not branch:
+        return False
+    try:
+        if base_sha:
+            ahead = subprocess.run(
+                ["git", "-C", worktree_path, "rev-list", "--count", f"{base_sha}..HEAD"],
+                capture_output=True, text=True, timeout=10,
+            )
+            if ahead.returncode != 0 or int((ahead.stdout or "0").strip() or "0") == 0:
+                return True
+        head = subprocess.run(
+            ["git", "-C", worktree_path, "rev-parse", "HEAD"],
+            capture_output=True, text=True, timeout=10,
+        )
+        remote = subprocess.run(
+            ["git", "-C", worktree_path, "ls-remote", "--heads", "origin", f"refs/heads/{branch}"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if head.returncode != 0 or remote.returncode != 0 or not (remote.stdout or "").strip():
+            return False
+        fetch = subprocess.run(
+            ["git", "-C", worktree_path, "fetch", "--quiet", "origin", f"refs/heads/{branch}"],
+            capture_output=True, text=True, timeout=20,
+        )
+        if fetch.returncode == 0:
+            ancestor = subprocess.run(
+                ["git", "-C", worktree_path, "merge-base", "--is-ancestor", "HEAD", "FETCH_HEAD"],
+                capture_output=True, text=True, timeout=10,
+            )
+            return ancestor.returncode == 0
+        return (head.stdout or "").strip() == remote.stdout.split()[0]
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        return False
+
+
 def _naive_local_tz():
     """Timezone used when daemon_jobs.started_at is stored without an offset."""
     return datetime.now().astimezone().tzinfo
