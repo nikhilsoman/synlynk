@@ -3750,6 +3750,11 @@ def _reconcile_daemon_jobs() -> None:
                         zombie_status, zombie_exit_code, _, _ = _gtv_status_for_daemon_exit(
                             None, git_state
                         )
+                        zombie_status = _guard_unpushed_branch(
+                            conn, job_id, zombie_status, worktree_path, worktree_branch, git_state
+                        )
+                        if zombie_status == STATUS_UNPUSHED_BRANCH and zombie_exit_code in (None, 0):
+                            zombie_exit_code = 1
                         zombie_status, gh_write_verified_str = _verify_daemon_terminal_status(
                             conn, job_id, requires_gh_write, gh_write_target, zombie_status,
                             started_at, gh_write_author, gh_write_expect,
@@ -3759,7 +3764,10 @@ def _reconcile_daemon_jobs() -> None:
                             and zombie_status == "timed_out"
                         ):
                             zombie_status, zombie_exit_code = "done", 0
-                        if not requires_gh_write or gh_write_verified_str != "true":
+                        if (
+                            zombie_status != STATUS_UNPUSHED_BRANCH
+                            and (not requires_gh_write or gh_write_verified_str != "true")
+                        ):
                             zombie_status, zombie_exit_code = "killed_zombie", -9
                         # Claim terminal status before deleting the worktree so a
                         # concurrent reconciler that already settled the job as

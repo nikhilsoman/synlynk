@@ -3230,3 +3230,50 @@ def test_verified_gh_write_zombie_is_completed_without_reaping_worktree(
     assert row == ("done", 0, "true")
     assert wt.exists(), "verified GitHub work must prevent zombie worktree reaping"
     assert (wt / "review-notes.md").read_text() == "review submitted"
+
+
+def test_unpushed_commit_blocks_verified_gh_write_zombie_completion(
+    tmp_path, project_dir, monkeypatch
+):
+    """A dead/null-PID job with stranded commits cannot settle as verified done."""
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    wt = tmp_path / "worktrees" / "job-gh-zombie-unpushed"
+    wt.mkdir(parents=True)
+    (wt / ".git").mkdir()
+
+    git_state = {
+        "has_activity": False,
+        "remote_has_activity": False,
+        "changed_files": [],
+        "commits_ahead": 1,
+        "base_commit": "base-sha",
+        "dirty": False,
+    }
+    monkeypatch.setattr(jobs_mod, "_worktree_git_state_inspector", lambda: lambda *args: git_state)
+    monkeypatch.setattr(jobs_mod, "local_commits_pushed", lambda *args: False)
+    monkeypatch.setattr(jobs_mod, "gh_write_verified", lambda target, expect, **kw: True)
+
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, story_id, task, status, pid, enqueued_at, "
+        "started_at, requires_gh_write, gh_write_target, worktree_path) "
+        "VALUES ('job-gh-zombie-unpushed', 'codex', 's-gh-unpushed', 'review PR 1038', "
+        "'running', NULL, '2026-09-08T00:00:00', '2026-09-08T00:00:00', 1, 'pr:1038', ?)",
+        (str(wt),),
+    )
+    conn.commit()
+    conn.close()
+
+    jobs_mod._reconcile_daemon_jobs()
+
+    conn = sl._get_db()
+    row = conn.execute(
+        "SELECT status, exit_code, gh_write_verified FROM daemon_jobs "
+        "WHERE job_id='job-gh-zombie-unpushed'"
+    ).fetchone()
+    conn.close()
+
+    assert row == ("unpushed_branch", -9, "false")
+    assert wt.exists(), "stranded local commits must not be reaped"
