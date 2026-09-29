@@ -18,7 +18,7 @@ from synlynk.sentinel import _write_sentinel_alert
 from synlynk._constants import HARNESS_CAPABILITY_BASELINES
 from synlynk.fleet import terminal_status_for_unknown_exit
 from synlynk.events import emit_event
-from synlynk.gh_verify import _parse_iso8601, gh_write_verified
+from synlynk.gh_verify import _parse_iso8601, gh_write_verified, local_commits_pushed
 
 
 _BOLD = "[1m"
@@ -57,6 +57,7 @@ STATUS_INSTRUCTION_RECEIPT_UNTRUSTED = "instruction_receipt_untrusted"
 STATUS_COMPLETED_WITHOUT_CHANGES = "completed_without_changes"
 STATUS_FAILED_NOOP_DENIED = "failed_noop_denied"
 STATUS_FAILED_VERIFICATION = "failed_verification"
+STATUS_UNPUSHED_BRANCH = "unpushed_branch"
 
 # Mandatory Invariant 2 Status Constants
 STATUS_CIRCUIT_BREAKER_TRIPPED = "circuit_breaker_tripped"
@@ -78,6 +79,7 @@ ALL_JOB_STATUSES = frozenset({
     STATUS_COMPLETED_WITHOUT_CHANGES,
     STATUS_FAILED_NOOP_DENIED,
     STATUS_FAILED_VERIFICATION,
+    STATUS_UNPUSHED_BRANCH,
     STATUS_CIRCUIT_BREAKER_TRIPPED,
 })
 
@@ -97,6 +99,7 @@ TERMINAL_JOB_STATUSES = frozenset({
     STATUS_COMPLETED_WITHOUT_CHANGES,
     STATUS_FAILED_NOOP_DENIED,
     STATUS_FAILED_VERIFICATION,
+    STATUS_UNPUSHED_BRANCH,
     STATUS_CIRCUIT_BREAKER_TRIPPED,
 })
 
@@ -1748,6 +1751,7 @@ def _enforce_job_effect_verification(job: dict, git_state: Optional[dict], senti
         gh_verify_kwargs=gh_kwargs,
         git_state=git_state,
         exit_code=job.get("exit_code") or 0,
+        worktree_branch=job.get("worktree_branch"),
     )
     # If worktree wasn't given on a mutating task (e.g. synthetic test), don't fail
     if not effect_res.verified and not (task_class == "mutating" and not job.get("worktree_path")):
@@ -1761,6 +1765,8 @@ def _enforce_job_effect_verification(job: dict, git_state: Optional[dict], senti
                 f"Job {job.get('id')} on agent '{job.get('agent')}' finished with exit code 0 but produced no verified effects ({effect_res.reason}).",
                 sentinel_path,
             )
+        if effect_res.status == STATUS_UNPUSHED_BRANCH and (job.get("exit_code") in (None, 0)):
+            job["exit_code"] = 1
         return summary_status, summary_note
     return None, None
 
@@ -3447,6 +3453,15 @@ def _verify_daemon_terminal_status(
     gh_write_expect: Optional[str],
 ) -> tuple:
     """Apply the configured GitHub-write check using daemon job metadata."""
+    if status == STATUS_UNPUSHED_BRANCH:
+        try:
+            conn.execute(
+                "UPDATE daemon_jobs SET gh_write_verified='false' WHERE job_id=?",
+                (job_id,),
+            )
+        except sqlite3.OperationalError:
+            pass
+        return status, "false"
     target_is_issue = bool(gh_write_target and gh_write_target.startswith("issue:"))
     resolved_expect = gh_write_expect or ("comment_posted" if target_is_issue else "closed")
     return _apply_gh_write_verification(
@@ -3459,6 +3474,25 @@ def _verify_daemon_terminal_status(
         expect_author=gh_write_author,
         expect=resolved_expect,
     )
+
+
+def _guard_unpushed_branch(
+    conn, job_id: str, status: str, worktree_path: Optional[str],
+    worktree_branch: Optional[str], git_state: Optional[dict],
+) -> str:
+    """Prevent terminal success while local commits remain off origin."""
+    if not git_state or not git_state.get("commits_ahead"):
+        return status
+    if local_commits_pushed(worktree_path, worktree_branch, git_state.get("base_commit")):
+        return status
+    try:
+        conn.execute(
+            "UPDATE daemon_jobs SET gh_write_verified='false' WHERE job_id=?",
+            (job_id,),
+        )
+    except sqlite3.OperationalError:
+        pass
+    return STATUS_UNPUSHED_BRANCH
 
 
 def _reap_zombie_worktree(job_id: str, log_path: Optional[str], conn=None) -> bool:
@@ -3667,6 +3701,19 @@ def _reconcile_daemon_jobs() -> None:
 
                 if preferred is not None:
                     status, exit_code = preferred
+                    preferred_path = persisted_worktree_path or _daemon_job_worktree_path(job_id, log_path)
+                    preferred_branch = persisted_worktree_branch or (f"dispatch/{agent}/{job_id}" if agent else None)
+                    preferred_state = None
+                    if preferred_path:
+                        try:
+                            preferred_state = _worktree_git_state_inspector()(preferred_path, preferred_branch, started_at)
+                        except Exception:
+                            preferred_state = None
+                    status = _guard_unpushed_branch(
+                        conn, job_id, status, preferred_path, preferred_branch, preferred_state
+                    )
+                    if status == STATUS_UNPUSHED_BRANCH and exit_code in (None, 0):
+                        exit_code = 1
                     status, gh_write_verified_str = _verify_daemon_terminal_status(
                         conn, job_id, requires_gh_write, gh_write_target, status,
                         started_at, gh_write_author, gh_write_expect,
@@ -3755,6 +3802,11 @@ def _reconcile_daemon_jobs() -> None:
                         zombie_status, zombie_exit_code, _, _ = _gtv_status_for_daemon_exit(
                             None, git_state
                         )
+                        zombie_status = _guard_unpushed_branch(
+                            conn, job_id, zombie_status, worktree_path, worktree_branch, git_state
+                        )
+                        if zombie_status == STATUS_UNPUSHED_BRANCH and zombie_exit_code in (None, 0):
+                            zombie_exit_code = 1
                         zombie_status, gh_write_verified_str = _verify_daemon_terminal_status(
                             conn, job_id, requires_gh_write, gh_write_target, zombie_status,
                             started_at, gh_write_author, gh_write_expect,
@@ -3764,7 +3816,10 @@ def _reconcile_daemon_jobs() -> None:
                             and zombie_status == "timed_out"
                         ):
                             zombie_status, zombie_exit_code = "done", 0
-                        if not requires_gh_write or gh_write_verified_str != "true":
+                        if (
+                            zombie_status != STATUS_UNPUSHED_BRANCH
+                            and (not requires_gh_write or gh_write_verified_str != "true")
+                        ):
                             zombie_status, zombie_exit_code = "killed_zombie", -9
                         # Claim terminal status before deleting the worktree so a
                         # concurrent reconciler that already settled the job as
@@ -3788,6 +3843,11 @@ def _reconcile_daemon_jobs() -> None:
                 status, exit_code, summary_status, summary_note = _gtv_status_for_daemon_exit(
                     exit_code, git_state
                 )
+                status = _guard_unpushed_branch(
+                    conn, job_id, status, worktree_path, worktree_branch, git_state
+                )
+                if status == STATUS_UNPUSHED_BRANCH and exit_code in (None, 0):
+                    exit_code = 1
                 status, gh_write_verified_str = _verify_daemon_terminal_status(
                     conn, job_id, requires_gh_write, gh_write_target, status,
                     started_at, gh_write_author, gh_write_expect,

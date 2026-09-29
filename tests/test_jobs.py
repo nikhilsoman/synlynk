@@ -1,6 +1,7 @@
 import os
 import sys
 import sqlite3
+import subprocess
 import threading
 import time
 import pytest
@@ -758,7 +759,7 @@ def test_reconcile_jobs_waitpid_ignores_denial_shape_when_git_state_shows_activi
     reconciled = next(job for job in jobs if job["id"] == "job-waitpid-git-corroborated")
 
     assert reconciled["status"] != "permission_denied"
-    assert reconciled["status"] == "completed"
+    assert reconciled["status"] == "unpushed_branch"
 
 
 def test_reconcile_jobs_dead_pid_ignores_denial_shape_when_git_state_shows_activity(tmp_path, monkeypatch, capsys):
@@ -902,7 +903,7 @@ def test_reconcile_jobs_dead_pid_warns_but_does_not_fail_when_activity_present(t
     reconciled = next(job for job in jobs if job["id"] == "job-deadpid-warn")
 
     assert reconciled["status"] != "task_delivery_failed"
-    assert "task-receipt" in out
+    assert reconciled["status"] == "unpushed_branch"
 
 
 def test_apply_dispatch_gate_downgrades_status_on_suite_failure(project_dir, monkeypatch):
@@ -2273,8 +2274,8 @@ def test_reconcile_daemon_jobs_gtv_uses_files_not_empty_summary(project_dir, mon
         "SELECT status, exit_code FROM daemon_jobs WHERE job_id=?", (job_id,)
     ).fetchone()
     conn.close()
-    assert row[0] == "failed_unverified"
-    assert row[1] is None
+    assert row[0] == "unpushed_branch"
+    assert row[1] == 1
 
     summary = (project_dir / ".synlynk" / "logs" / f"{job_id}.summary").read_text()
     assert "FAILED_UNVERIFIED" in summary or "failed_unverified" in summary.lower() or "exit unknown" in summary
@@ -3230,3 +3231,71 @@ def test_verified_gh_write_zombie_is_completed_without_reaping_worktree(
     assert row == ("done", 0, "true")
     assert wt.exists(), "verified GitHub work must prevent zombie worktree reaping"
     assert (wt / "review-notes.md").read_text() == "review submitted"
+
+
+def test_unpushed_commit_blocks_verified_gh_write_zombie_completion(
+    tmp_path, project_dir, monkeypatch
+):
+    """A dead/null-PID job with stranded commits cannot settle as verified done."""
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    # The default test fixture stubs this package-level hook for unrelated
+    # dispatch tests; this regression must exercise the real Git inspector.
+    monkeypatch.setattr(sl, "_inspect_worktree_git_state", jobs_mod._inspect_worktree_git_state)
+
+    wt = tmp_path / "worktrees" / "job-gh-zombie-unpushed"
+    wt.mkdir(parents=True)
+    subprocess.run(["git", "init", "-b", "main"], cwd=wt, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "config", "user.email", "test@synlynk.dev"],
+        cwd=wt,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Synlynk Test"],
+        cwd=wt,
+        check=True,
+        capture_output=True,
+    )
+    (wt / "README.md").write_text("# base\n")
+    subprocess.run(["git", "add", "README.md"], cwd=wt, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "base"], cwd=wt, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "switch", "-c", "dispatch/codex/job-gh-zombie-unpushed"],
+        cwd=wt,
+        check=True,
+        capture_output=True,
+    )
+    (wt / "review-notes.md").write_text("review attempted locally\n")
+    subprocess.run(["git", "add", "review-notes.md"], cwd=wt, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "stranded local review"],
+        cwd=wt,
+        check=True,
+        capture_output=True,
+    )
+
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, story_id, task, status, pid, enqueued_at, "
+        "started_at, requires_gh_write, gh_write_target, worktree_path, worktree_branch) "
+        "VALUES ('job-gh-zombie-unpushed', 'codex', 's-gh-unpushed', 'review PR 1038', "
+        "'running', NULL, '2026-09-08T00:00:00', '2026-09-08T00:00:00', 1, 'pr:1038', ?, ?)",
+        (str(wt), "dispatch/codex/job-gh-zombie-unpushed"),
+    )
+    conn.commit()
+    conn.close()
+
+    jobs_mod._reconcile_daemon_jobs()
+
+    conn = sl._get_db()
+    row = conn.execute(
+        "SELECT status, exit_code, gh_write_verified FROM daemon_jobs "
+        "WHERE job_id='job-gh-zombie-unpushed'"
+    ).fetchone()
+    conn.close()
+
+    assert row == ("unpushed_branch", 1, "false")
+    assert wt.exists(), "stranded local commits must not be reaped"
