@@ -207,7 +207,36 @@ def test_probe_extracts_claude_version_from_descriptive_output(tmp_path, monkeyp
     _make_stub_agent(tmp_path, "claude", "2.1.208", version_output="2.1.208 (Claude Code)")
     monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
     monkeypatch.setattr(socket, "create_connection", lambda *args, **kwargs: _DummySocket())
-    monkeypatch.setattr(synlynk, "_get_db", lambda: sqlite3.connect(str(db_path)))
+
+    probe_conn = None
+
+    class _ProbeConnection:
+        def __init__(self, connection):
+            self._connection = connection
+
+        def __setattr__(self, name, value):
+            if name == "_connection":
+                object.__setattr__(self, name, value)
+            else:
+                setattr(self._connection, name, value)
+
+        def __getattr__(self, name):
+            return getattr(self._connection, name)
+
+        def close(self):
+            # Keep the underlying connection available for the post-probe
+            # transaction assertion; the test closes it in the finally block.
+            pass
+
+    observed_conn = None
+
+    def patched_get_db():
+        nonlocal observed_conn, probe_conn
+        probe_conn = sqlite3.connect(str(db_path))
+        observed_conn = _ProbeConnection(probe_conn)
+        return observed_conn
+
+    monkeypatch.setattr(synlynk, "_get_db", patched_get_db)
 
     environmental_probes = []
     real_run = probe_mod.subprocess.run
@@ -223,27 +252,29 @@ def test_probe_extracts_claude_version_from_descriptive_output(tmp_path, monkeyp
 
     monkeypatch.setattr(probe_mod.subprocess, "run", fake_run)
 
-    cmd_probe(agent="claude")
-
-    assert _read_installed_version(db_path, "claude") == "2.1.208"
-    assert environmental_probes == [
-        ("npm", "info", "@anthropic-ai/claude-code", "version"),
-        ("gh", "auth", "status"),
-    ]
-    conn = sqlite3.connect(str(db_path))
     try:
-        assert conn.execute(
-            "SELECT status, discovery_source FROM harness_models "
-            "WHERE harness_name='claude' AND model_id='claude-sonnet-4-6'"
-        ).fetchone() == ("active", "self_report")
-        assert conn.execute(
+        cmd_probe(agent="claude")
+
+        assert _read_installed_version(db_path, "claude") == "2.1.208"
+        assert environmental_probes == [
+            ("npm", "info", "@anthropic-ai/claude-code", "version"),
+            ("gh", "auth", "status"),
+        ]
+        assert tuple(
+            observed_conn.execute(
+                "SELECT status, discovery_source FROM harness_models "
+                "WHERE harness_name='claude' AND model_id='claude-sonnet-4-6'"
+            ).fetchone()
+        ) == ("active", "self_report")
+        assert observed_conn.execute(
             "SELECT COUNT(*) FROM harness_reservations WHERE harness='claude'"
         ).fetchone()[0] == 0
         # Probe records the model and releases its write transaction without
         # opening a calibration reservation; calibration is an explicit sweep.
-        assert conn.in_transaction is False
+        assert observed_conn.in_transaction is False
     finally:
-        conn.close()
+        if probe_conn is not None:
+            probe_conn.close()
 
 
 # --- #287: Tier-2 model probe reads agent config files, not CLI version text ---
