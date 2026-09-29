@@ -10,7 +10,7 @@ tags: [database, dispatch, maintenance]
 status: open
 ---
 
-# 205 — One Migration Helper for Daemon Job Schemas
+# 231 — One Migration Helper for Daemon Job Schemas
 
 Legacy daemon databases are a compatibility surface, but compatibility code should not multiply every time a column is added. R14 (story 1194) consolidates six near-identical lazy migrations into one helper that reads `daemon_jobs` once and adds any missing columns from a caller-provided definition map.
 
