@@ -1,6 +1,7 @@
 import os
 import sys
 import sqlite3
+import subprocess
 import threading
 import time
 import pytest
@@ -3239,29 +3240,50 @@ def test_unpushed_commit_blocks_verified_gh_write_zombie_completion(
     import synlynk as sl
     import synlynk.jobs as jobs_mod
 
+    # The default test fixture stubs this package-level hook for unrelated
+    # dispatch tests; this regression must exercise the real Git inspector.
+    monkeypatch.setattr(sl, "_inspect_worktree_git_state", jobs_mod._inspect_worktree_git_state)
+
     wt = tmp_path / "worktrees" / "job-gh-zombie-unpushed"
     wt.mkdir(parents=True)
-    (wt / ".git").mkdir()
-
-    git_state = {
-        "has_activity": False,
-        "remote_has_activity": False,
-        "changed_files": [],
-        "commits_ahead": 1,
-        "base_commit": "base-sha",
-        "dirty": False,
-    }
-    monkeypatch.setattr(jobs_mod, "_worktree_git_state_inspector", lambda: lambda *args: git_state)
-    monkeypatch.setattr(jobs_mod, "local_commits_pushed", lambda *args: False)
-    monkeypatch.setattr(jobs_mod, "gh_write_verified", lambda target, expect, **kw: True)
+    subprocess.run(["git", "init", "-b", "main"], cwd=wt, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "config", "user.email", "test@synlynk.dev"],
+        cwd=wt,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Synlynk Test"],
+        cwd=wt,
+        check=True,
+        capture_output=True,
+    )
+    (wt / "README.md").write_text("# base\n")
+    subprocess.run(["git", "add", "README.md"], cwd=wt, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "base"], cwd=wt, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "switch", "-c", "dispatch/codex/job-gh-zombie-unpushed"],
+        cwd=wt,
+        check=True,
+        capture_output=True,
+    )
+    (wt / "review-notes.md").write_text("review attempted locally\n")
+    subprocess.run(["git", "add", "review-notes.md"], cwd=wt, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "stranded local review"],
+        cwd=wt,
+        check=True,
+        capture_output=True,
+    )
 
     conn = sl._get_db()
     conn.execute(
         "INSERT INTO daemon_jobs (job_id, agent, story_id, task, status, pid, enqueued_at, "
-        "started_at, requires_gh_write, gh_write_target, worktree_path) "
+        "started_at, requires_gh_write, gh_write_target, worktree_path, worktree_branch) "
         "VALUES ('job-gh-zombie-unpushed', 'codex', 's-gh-unpushed', 'review PR 1038', "
-        "'running', NULL, '2026-09-08T00:00:00', '2026-09-08T00:00:00', 1, 'pr:1038', ?)",
-        (str(wt),),
+        "'running', NULL, '2026-09-08T00:00:00', '2026-09-08T00:00:00', 1, 'pr:1038', ?, ?)",
+        (str(wt), "dispatch/codex/job-gh-zombie-unpushed"),
     )
     conn.commit()
     conn.close()
@@ -3275,5 +3297,5 @@ def test_unpushed_commit_blocks_verified_gh_write_zombie_completion(
     ).fetchone()
     conn.close()
 
-    assert row == ("unpushed_branch", -9, "false")
+    assert row == ("unpushed_branch", 1, "false")
     assert wt.exists(), "stranded local commits must not be reaped"
