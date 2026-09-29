@@ -2532,6 +2532,7 @@ def test_dispatch_agent_id_takes_precedence_over_story_id_for_gh_token_role(proj
     sl.dispatch_agent(
         "grok", "review and merge PR #500", agent_id=agent_id, story_id="story-with-different-role",
         context_mode="none", requires_gh_write=True, force_agent=True,
+        grants=["run:shell", "write:github"],
     )
 
     assert captured_roles == ["dev", "dev"]
