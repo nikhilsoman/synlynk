@@ -6705,6 +6705,92 @@ def test_reconcile_daemon_jobs_ignores_denial_shape_when_gh_write_verified(
     assert row[2] == "true"
 
 
+def test_reconcile_daemon_jobs_does_not_relabel_settled_done_when_gh_verification_unknown(
+    project_dir, monkeypatch,
+):
+    """Unknown GH read-back is inconclusive, not evidence of permission denial."""
+    import synlynk.jobs as jobs_mod
+
+    log_path = str(project_dir / ".synlynk" / "logs" / "djob-ghw-unknown.log")
+    os.makedirs(os.path.dirname(log_path), exist_ok=True)
+    with open(log_path, "w") as f:
+        f.write(
+            "jetski: no output produced - a tool required the \"command\" permission that "
+            "headless mode cannot prompt for, so it was auto-denied\n"
+        )
+    with open(log_path + ".exit", "w") as f:
+        f.write("0")
+
+    monkeypatch.setattr(jobs_mod, "gh_write_verified", lambda *a, **kw: None)
+
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, "
+        "depends_on, pid, enqueued_at, started_at, log_path, requires_gh_write, "
+        "gh_write_target, gh_write_expect) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        ("djob-ghw-unknown", "codex", "open a pull request", "running", 5, "[]",
+         99999999, "2026-09-04T22:05:38", "2026-09-04T22:05:38", log_path,
+         1, "pr:1416", "pr_open"),
+    )
+    conn.commit()
+    conn.close()
+
+    synlynk._reconcile_daemon_jobs()
+
+    conn2 = synlynk._get_db()
+    row = conn2.execute(
+        "SELECT status, exit_code, gh_write_verified FROM daemon_jobs WHERE job_id=?",
+        ("djob-ghw-unknown",),
+    ).fetchone()
+    conn2.close()
+    assert row[0] == "done"
+    assert row[1] == 0
+    assert row[2] == "unknown"
+
+
+def test_reconcile_daemon_jobs_reports_explicit_gh_verification_failure(
+    project_dir, monkeypatch,
+):
+    """Explicitly absent GH effects remain a GH-write failure, not a log denial."""
+    import synlynk.jobs as jobs_mod
+
+    log_path = str(project_dir / ".synlynk" / "logs" / "djob-ghw-false.log")
+    os.makedirs(os.path.dirname(log_path), exist_ok=True)
+    with open(log_path, "w") as f:
+        f.write(
+            "jetski: no output produced - a tool required the \"command\" permission that "
+            "headless mode cannot prompt for, so it was auto-denied\n"
+        )
+    with open(log_path + ".exit", "w") as f:
+        f.write("0")
+
+    monkeypatch.setattr(jobs_mod, "gh_write_verified", lambda *a, **kw: False)
+
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, "
+        "depends_on, pid, enqueued_at, started_at, log_path, requires_gh_write, "
+        "gh_write_target, gh_write_expect) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        ("djob-ghw-false", "codex", "open a pull request", "running", 5, "[]",
+         99999999, "2026-09-04T22:05:38", "2026-09-04T22:05:38", log_path,
+         1, "pr:1417", "pr_open"),
+    )
+    conn.commit()
+    conn.close()
+
+    synlynk._reconcile_daemon_jobs()
+
+    conn2 = synlynk._get_db()
+    row = conn2.execute(
+        "SELECT status, exit_code, gh_write_verified FROM daemon_jobs WHERE job_id=?",
+        ("djob-ghw-false",),
+    ).fetchone()
+    conn2.close()
+    assert row[0] == "succeeded_gh_write_failed"
+    assert row[1] == 0
+    assert row[2] == "false"
+
+
 def test_reconcile_daemon_jobs_still_marks_permission_denied_without_corroboration(project_dir):
     """Genuine headless auto-denial with no git/GitHub corroboration stays denied."""
     log_path = str(project_dir / ".synlynk" / "logs" / "djob-denied.log")

@@ -300,6 +300,27 @@ def _log_has_permission_denied_signature(log_text: str) -> bool:
     return bool(detector(log_text)) if detector else False
 
 
+def _should_classify_permission_denied(
+    log_text: str,
+    git_state,
+    *,
+    requires_gh_write: bool = False,
+    gh_write_verified: Optional[str] = None,
+) -> bool:
+    """Return whether a denial-shaped log may determine the terminal status.
+
+    A log signature is sufficient for jobs without a required GitHub effect.
+    For GH-write jobs, verification is tri-state: only an explicit ``false``
+    is evidence that the required effect did not happen.  Unknown verification
+    must remain retryable and must not be converted into permission_denied.
+    """
+    if not log_text or not _log_has_permission_denied_signature(log_text):
+        return False
+    if _job_has_real_work_landed(git_state):
+        return False
+    return not requires_gh_write or gh_write_verified == "false"
+
+
 _TASK_RECEIPT_MARKER_PREFIX = "SYNLYNK_TASK_RECEIVED:"
 _INSTRUCTION_RECEIPT_MARKER_PREFIX = "SYNLYNK_INSTRUCTION_VERSION:"
 
@@ -1954,10 +1975,13 @@ def _reconcile_jobs_unlocked() -> None:
                 job["status"] = "completed"
                 job["exit_code"] = 0
             if log_text:
-                permission_denied = _log_has_permission_denied_signature(log_text)
-                if permission_denied and _job_has_real_work_landed(git_state):
-                    permission_denied = False
-                if permission_denied:
+                permission_denied = _should_classify_permission_denied(
+                    log_text,
+                    git_state,
+                    requires_gh_write=bool(job.get("requires_gh_write")),
+                    gh_write_verified=job.get("gh_write_verified"),
+                )
+                if permission_denied and job.get("status") != "succeeded_gh_write_failed":
                     job["status"] = "permission_denied"
             is_harness_timeout_log = bool(log_text) and any(
                 phrase in log_text.lower() for phrase in _pkg("HARNESS_TIMEOUT_PATTERNS")
@@ -2172,9 +2196,12 @@ def _reconcile_jobs_unlocked() -> None:
             if log_file and os.path.exists(log_file):
                 with open(log_file) as f:
                     log_text = f.read()
-                permission_denied = _log_has_permission_denied_signature(log_text)
-                if permission_denied and _job_has_real_work_landed(git_state):
-                    permission_denied = False
+                permission_denied = _should_classify_permission_denied(
+                    log_text,
+                    git_state,
+                    requires_gh_write=bool(job.get("requires_gh_write")),
+                    gh_write_verified=job.get("gh_write_verified"),
+                )
                 if permission_denied:
                     job["status"] = "permission_denied"
                 is_harness_timeout_log = bool(log_text) and any(
@@ -3719,6 +3746,16 @@ def _reconcile_daemon_jobs() -> None:
                 ):
                     status, exit_code = "done", 0
 
+                log_text = _read_job_log(log_path)
+                permission_denied = _should_classify_permission_denied(
+                    log_text,
+                    git_state,
+                    requires_gh_write=bool(requires_gh_write),
+                    gh_write_verified=gh_write_verified_str,
+                )
+                if permission_denied and status != "succeeded_gh_write_failed":
+                    status = "permission_denied"
+
                 files_touched = _git_state_files_touched(git_state)
                 if not files_touched and worktree_path:
                     files_fn = _pkg("_worktree_files_touched")
@@ -3746,24 +3783,7 @@ def _reconcile_daemon_jobs() -> None:
                     duration_s = max(0.0, end_ts - start_ts)
                 except Exception:
                     duration_s = None
-                log_text = _read_job_log(log_path)
-                if (
-                    log_text
-                    and _log_has_permission_denied_signature(log_text)
-                    and not _job_has_real_work_landed(git_state)
-                    and gh_write_verified_str != "true"
-                ):
-                    # Match `_reconcile_jobs`: a log-shaped denial is not
-                    # terminal when real work already landed, or when GitHub
-                    # independently confirms the required write (LIVE-1429 /
-                    # job-be18ebe7: OK exit 0 + files touched, then
-                    # daemon_jobs.status overwritten to permission_denied).
-                    status = "permission_denied"
-                    conn.execute(
-                        "UPDATE daemon_jobs SET status=? WHERE job_id=?",
-                        (status, job_id),
-                    )
-                    conn.commit()
+                if permission_denied and status != "succeeded_gh_write_failed":
                     summary_status = "PERMISSION_DENIED (headless auto-denied)"
                     summary_note = (
                         "headless permission auto-denial detected from log contents "
