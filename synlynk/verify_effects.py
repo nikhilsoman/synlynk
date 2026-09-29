@@ -118,6 +118,29 @@ def verify_job_effects(
 
     task_class_norm = (task_class or "mutating").strip().lower()
 
+    # 1. Classification Branch A: GH Write / Review Task
+    # A review's durable effect is the remote GitHub review. Review workers
+    # are intentionally read-only and may not be able to reach the canonical
+    # state DB from their sandbox, so verify GitHub before any worktree checks.
+    if task_class_norm in ("gh_write", "review", "github_write"):
+        kwargs = dict(gh_verify_kwargs or {})
+        if expected_gh_effect and "expect" not in kwargs:
+            kwargs["expect"] = expected_gh_effect
+
+        gh_ok = gh_write_verified(**kwargs)
+        if not gh_ok:
+            return EffectVerificationResult(
+                verified=False,
+                status=STATUS_FAILED_NOOP_DENIED,
+                gh_verified=False,
+                reason="Expected GitHub effect was not verified directly via gh",
+            )
+        return EffectVerificationResult(
+            verified=True,
+            status=STATUS_COMPLETED,
+            gh_verified=True,
+        )
+
     commits_ahead = (git_state or {}).get("commits_ahead", 0)
     if worktree_path and worktree_branch and (commits_ahead or base_sha):
         if not local_commits_pushed(worktree_path, worktree_branch, base_sha):
@@ -127,7 +150,7 @@ def verify_job_effects(
                 reason=f"local commits are not reachable on origin/{worktree_branch}",
             )
 
-    # 1. Classification Branch A: Mutating Task
+    # 2. Classification Branch B: Mutating Task
     if task_class_norm in ("mutating", "code", "mutation", "fix", "feat"):
         files_touched = _get_worktree_changed_files(worktree_path, base_sha, git_state=git_state) if worktree_path else []
         if not files_touched:
@@ -172,26 +195,6 @@ def verify_job_effects(
             status=STATUS_COMPLETED,
             files_touched=files_touched,
             tests_passed=True if verification_cmd else None,
-        )
-
-    # 2. Classification Branch B: GH Write / Review Task
-    elif task_class_norm in ("gh_write", "review", "github_write"):
-        kwargs = dict(gh_verify_kwargs or {})
-        if expected_gh_effect and "expect" not in kwargs:
-            kwargs["expect"] = expected_gh_effect
-        
-        gh_ok = gh_write_verified(**kwargs)
-        if not gh_ok:
-            return EffectVerificationResult(
-                verified=False,
-                status=STATUS_FAILED_NOOP_DENIED,
-                gh_verified=False,
-                reason="Expected GitHub effect was not verified",
-            )
-        return EffectVerificationResult(
-            verified=True,
-            status=STATUS_COMPLETED,
-            gh_verified=True,
         )
 
     # 3. Classification Branch C: Analysis / Read-Only Task

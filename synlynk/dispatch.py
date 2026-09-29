@@ -3520,8 +3520,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         else:
             cmd_str = " ".join(_shlex.quote(c) for c in [cli] + flags)
         shell_cmd = (
-            f"PROMPT=$(cat {_shlex.quote(prompt_file)}); "
-            f"{cmd_str} \"$PROMPT\" > {_shlex.quote(log_file)} 2>&1; "
+            f"synlynk_prompt=$(cat {_shlex.quote(prompt_file)}); "
+            f"{cmd_str} \"$synlynk_prompt\" > {_shlex.quote(log_file)} 2>&1; "
             f"echo $? > {_shlex.quote(log_file)}.exit"
         )
     else:
