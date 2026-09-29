@@ -247,6 +247,32 @@ def test_check_token_bloat_does_not_trigger_on_normal_usage(tmp_path):
     assert not sentinel_file.exists()
 
 
+def test_review_token_bloat_uses_volume_baseline_instead_of_zero_files(tmp_path):
+    from synlynk.sentinel import check_token_bloat
+
+    sentinel_file = tmp_path / "sentinel.md"
+    assert check_token_bloat(
+        in_tokens=499_999,
+        out_tokens=0,
+        files_touched=0,
+        task_type="review",
+        sentinel_path=str(sentinel_file),
+    ) == []
+    alerts = check_token_bloat(
+        in_tokens=500_000,
+        out_tokens=0,
+        files_touched=0,
+        task_type="review",
+        job_id="job-review",
+        sentinel_path=str(sentinel_file),
+    )
+
+    assert len(alerts) == 1
+    assert alerts[0]["code"] == "TOKEN_BLOAT"
+    assert "0 files touched" not in alerts[0]["message"]
+    assert "review token baseline" in alerts[0]["message"]
+
+
 def test_check_token_bloat_warn_cost_inflation(tmp_path):
     from synlynk.sentinel import check_token_bloat
 

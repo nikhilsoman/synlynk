@@ -226,6 +226,7 @@ def _cost_inflation_is_critical(job: dict, log_text: str, sentinel_path: str) ->
         files_touched=0,
         job_id=job.get("id", ""),
         agent=job.get("agent", ""),
+        task_type=job.get("task_type", ""),
         sentinel_path=sentinel_path,
     )
     blocked = any(
@@ -1911,6 +1912,7 @@ def _reconcile_jobs_unlocked() -> None:
                     files_touched=len(files_touched_list),
                     job_id=job.get("id", ""),
                     agent=job.get("agent", ""),
+                    task_type=job.get("task_type", ""),
                     sentinel_path=sentinel_path,
                 )
             task_sha256, task_preview = _task_sha256_and_preview(job.get("task"))
@@ -2363,6 +2365,7 @@ def _reconcile_jobs_unlocked() -> None:
                     files_touched=files_count,
                     job_id=job.get("id", ""),
                     agent=job.get("agent", ""),
+                    task_type=job.get("task_type", ""),
                     sentinel_path=sentinel_path,
                 )
             task_sha256, task_preview = _task_sha256_and_preview(job.get("task"))
@@ -3947,6 +3950,7 @@ def _reconcile_daemon_jobs() -> None:
                 check_token_bloat = _pkg("check_token_bloat")
                 if check_token_bloat:
                     files_count = len(files_touched) if isinstance(files_touched, (list, tuple, set)) else int(files_touched or 0)
+                    daemon_task_type = "review" if "review" in (task or "").lower() else ""
                     check_token_bloat(
                         in_tokens=in_tokens,
                         out_tokens=out_tokens,
@@ -3954,6 +3958,7 @@ def _reconcile_daemon_jobs() -> None:
                         files_touched=files_count,
                         job_id=job_id,
                         agent=agent,
+                        task_type=daemon_task_type,
                         sentinel_path=os.path.join(
                             persisted_worktree_path or worktree_path or os.getcwd(),
                             ".synlynk", "sentinel.md"),

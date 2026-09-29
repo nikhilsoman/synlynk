@@ -20,6 +20,12 @@ TIER1_CAPACITY = {
 
 TOOL_DEF_OVERHEAD = {"claude": 2200, "agy": 1800, "codex": 1600, "grok": 1400}
 TASK_TYPE_OUTPUT = {"implement": 8000, "review": 2000, "plan": 3000, "debug": 1500, "test": 2500, "docs": 2000, "default": 4000}
+# Review input is dominated by repository/diff reads that are not in the prompt.
+TASK_TYPE_READ_ALLOWANCE = {
+    "review": {"base": 50_000, "per_diff_unit": 20_000},
+    "implement": {"base": 8_000, "per_diff_unit": 4_000},
+    "default": {"base": 4_000, "per_diff_unit": 2_000},
+}
 SYSTEM_OVERHEAD = 2000
 LEGACY_CYCLE_ALIASES = {
     "dream": "goal",
@@ -81,18 +87,48 @@ def _get_avg_tool_calls(harness_name: str, db_conn=None) -> float:
     return default
 
 
-def estimate_dispatch_tokens(prompt: str, context_md: str, harness_name: str) -> dict:
-    """Estimate token pressure before dispatch."""
+def _estimate_target_diff_size(prompt: str) -> int:
+    """Infer a conservative changed-file count when dispatch metadata is absent."""
+    import re
+
+    lower = (prompt or "").lower()
+    match = re.search(r"\b(\d+)\s*[- ]?\s*(?:file|files|fichier)", lower)
+    if match:
+        return max(1, int(match.group(1)))
+    if any(word in lower for word in ("large", "complex", "many files", "broad")):
+        return 5
+    return 1
+
+
+def estimate_dispatch_tokens(
+    prompt: str,
+    context_md: str,
+    harness_name: str,
+    task_type: Optional[str] = None,
+    target_diff_size: Optional[int] = None,
+) -> dict:
+    """Estimate prompt pressure plus expected harness repository reads."""
     input_est = (
         len((context_md or "").split()) * 1.3
         + len((prompt or "").split()) * 1.3
         + TOOL_DEF_OVERHEAD.get(harness_name, 2000)
         + SYSTEM_OVERHEAD
     )
-    task_type = _classify_task_type(prompt)
+    task_type = task_type or _classify_task_type(prompt)
+    diff_size = target_diff_size
+    if diff_size is None:
+        diff_size = _estimate_target_diff_size(prompt) if task_type == "review" else 0
+    try:
+        diff_size = max(0, int(diff_size))
+    except (TypeError, ValueError):
+        diff_size = 0
+    allowance = TASK_TYPE_READ_ALLOWANCE.get(task_type, TASK_TYPE_READ_ALLOWANCE["default"])
+    input_est += allowance["base"] + allowance["per_diff_unit"] * diff_size
     output_est = TASK_TYPE_OUTPUT.get(task_type, TASK_TYPE_OUTPUT["default"])
     tool_est = _get_avg_tool_calls(harness_name) * 800
-    return {"input": int(input_est), "output": int(output_est), "tools": int(tool_est)}
+    return {"input": int(input_est), "output": int(output_est), "tools": int(tool_est),
+            "task_type": task_type, "read_allowance": int(allowance["base"] + allowance["per_diff_unit"] * diff_size),
+            "target_diff_size": diff_size}
 
 
 def _cycle_from_row(row: sqlite3.Row, cols: set[str]) -> Optional[str]:
