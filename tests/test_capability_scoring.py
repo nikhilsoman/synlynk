@@ -1297,10 +1297,10 @@ def test_role_only_job_never_persists_synthetic_story_id_to_daemon_jobs(tmp_path
     monkeypatch.chdir(tmp_path)
     os.makedirs("synlynk/state", exist_ok=True)
     from synlynk import _get_db
-    from synlynk.dispatch import _ensure_daemon_job_agent_id_column
+    from synlynk.dispatch import _ensure_daemon_job_columns
 
     conn = _get_db()
-    _ensure_daemon_job_agent_id_column(conn)
+    _ensure_daemon_job_columns(conn, {"agent_id": "TEXT"})
     conn.execute(
         "INSERT INTO daemon_jobs (job_id, agent, task, story_id, status, priority, depends_on, "
         "enqueued_at, agent_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",

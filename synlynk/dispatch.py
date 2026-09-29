@@ -386,11 +386,11 @@ def _deduplicate_boolean_cli_flags(flags: list) -> list:
     return result
 
 
-def _ensure_daemon_job_context_columns(conn) -> None:
-    """Add context_mode / context_bytes if missing (legacy schemas + unit fixtures).
+def _ensure_daemon_job_columns(conn, definitions: dict[str, str]) -> None:
+    """Add missing daemon_jobs columns for legacy schemas and unit fixtures.
 
-    Safe to call on every dispatch write path. No-ops when columns already exist
-    or when the connection has no daemon_jobs table.
+    Safe to call on every dispatch write path. No-ops when the table is absent
+    or when all requested columns already exist.
     """
     try:
         cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)").fetchall()}
@@ -398,114 +398,10 @@ def _ensure_daemon_job_context_columns(conn) -> None:
         return
     if not cols:
         return
-    if "context_mode" not in cols:
-        try:
-            conn.execute("ALTER TABLE daemon_jobs ADD COLUMN context_mode TEXT")
-        except Exception:
-            pass
-    if "context_bytes" not in cols:
-        try:
-            conn.execute("ALTER TABLE daemon_jobs ADD COLUMN context_bytes INTEGER")
-        except Exception:
-            pass
-
-
-def _ensure_daemon_job_session_column(conn) -> None:
-    """Add session_id if missing (legacy schemas + unit fixtures). Mirrors
-    _ensure_daemon_job_context_columns above — same no-op-on-absence contract.
-    """
-    try:
-        cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)").fetchall()}
-    except Exception:
-        return
-    if not cols:
-        return
-    if "session_id" not in cols:
-        try:
-            conn.execute(
-                "ALTER TABLE daemon_jobs ADD COLUMN session_id TEXT REFERENCES sessions(session_id)"
-            )
-        except Exception:
-            pass
-
-
-def _ensure_daemon_job_agent_id_column(conn) -> None:
-    """Add agent_id if missing (legacy schemas + unit fixtures). Mirrors
-    _ensure_daemon_job_session_column above — same no-op-on-absence contract.
-    """
-    try:
-        cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)").fetchall()}
-    except Exception:
-        return
-    if not cols:
-        return
-    if "agent_id" not in cols:
-        try:
-            conn.execute("ALTER TABLE daemon_jobs ADD COLUMN agent_id TEXT")
-        except Exception:
-            pass
-
-
-def _ensure_daemon_job_gh_write_columns(conn) -> None:
-    """Add Task 0 gh-write columns for legacy/unit-test daemon schemas."""
-    try:
-        cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)").fetchall()}
-    except Exception:
-        return
-    if not cols:
-        return
-    definitions = {
-        "requires_gh_write": "INTEGER NOT NULL DEFAULT 0",
-        "gh_write_target": "TEXT",
-        "gh_write_verified": "TEXT",
-        "gh_write_author": "TEXT",
-        "gh_write_expect": "TEXT DEFAULT 'closed'",
-        "gh_write_evidence": "TEXT",
-    }
     for name, definition in definitions.items():
         if name not in cols:
             try:
                 conn.execute(f"ALTER TABLE daemon_jobs ADD COLUMN {name} {definition}")
-            except Exception:
-                pass
-
-
-def _ensure_daemon_job_harness_columns(conn) -> None:
-    """Add Phase 4 harness and role columns for legacy/unit-test daemon schemas."""
-    try:
-        cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)").fetchall()}
-    except Exception:
-        return
-    if not cols:
-        return
-    definitions = {
-        "harness": "TEXT",
-        "role": "TEXT",
-        "model_tier": "TEXT",
-        "impact_score": "INTEGER DEFAULT 0",
-        "requested_model": "TEXT",
-        "resolved_model": "TEXT",
-    }
-    for name, definition in definitions.items():
-        if name not in cols:
-            try:
-                conn.execute(f"ALTER TABLE daemon_jobs ADD COLUMN {name} {definition}")
-            except Exception:
-                pass
-
-
-def _ensure_daemon_job_worktree_columns(conn) -> None:
-    """Add persisted worktree metadata for legacy daemon schemas."""
-    try:
-        cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)").fetchall()}
-    except Exception:
-        return
-    if not cols:
-        return
-    for name in ("worktree_path", "worktree_branch"):
-        if name not in cols:
-            try:
-                conn.execute(f"ALTER TABLE daemon_jobs ADD COLUMN {name} TEXT")
             except Exception:
                 pass
 
@@ -3691,12 +3587,34 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             if owns_dconn:
                 dconn.close()
             return result
-        _ensure_daemon_job_context_columns(dconn)
-        _ensure_daemon_job_session_column(dconn)
-        _ensure_daemon_job_agent_id_column(dconn)
-        _ensure_daemon_job_gh_write_columns(dconn)
-        _ensure_daemon_job_harness_columns(dconn)
-        _ensure_daemon_job_worktree_columns(dconn)
+        _ensure_daemon_job_columns(dconn, {
+            "context_mode": "TEXT",
+            "context_bytes": "INTEGER",
+        })
+        _ensure_daemon_job_columns(dconn, {
+            "session_id": "TEXT REFERENCES sessions(session_id)",
+        })
+        _ensure_daemon_job_columns(dconn, {"agent_id": "TEXT"})
+        _ensure_daemon_job_columns(dconn, {
+            "requires_gh_write": "INTEGER NOT NULL DEFAULT 0",
+            "gh_write_target": "TEXT",
+            "gh_write_verified": "TEXT",
+            "gh_write_author": "TEXT",
+            "gh_write_expect": "TEXT DEFAULT 'closed'",
+            "gh_write_evidence": "TEXT",
+        })
+        _ensure_daemon_job_columns(dconn, {
+            "harness": "TEXT",
+            "role": "TEXT",
+            "model_tier": "TEXT",
+            "impact_score": "INTEGER DEFAULT 0",
+            "requested_model": "TEXT",
+            "resolved_model": "TEXT",
+        })
+        _ensure_daemon_job_columns(dconn, {
+            "worktree_path": "TEXT",
+            "worktree_branch": "TEXT",
+        })
         dconn.execute(
             "INSERT OR IGNORE INTO daemon_jobs "
             "(job_id, agent, task, story_id, status, priority, depends_on, enqueued_at) "
@@ -3813,12 +3731,34 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         if dconn is not None:
             # Tests and older DBs may create daemon_jobs without these columns;
             # ensure before INSERT so dispatch never hard-fails on schema lag.
-            _ensure_daemon_job_context_columns(dconn)
-            _ensure_daemon_job_session_column(dconn)
-            _ensure_daemon_job_agent_id_column(dconn)
-            _ensure_daemon_job_gh_write_columns(dconn)
-            _ensure_daemon_job_harness_columns(dconn)
-            _ensure_daemon_job_worktree_columns(dconn)
+            _ensure_daemon_job_columns(dconn, {
+                "context_mode": "TEXT",
+                "context_bytes": "INTEGER",
+            })
+            _ensure_daemon_job_columns(dconn, {
+                "session_id": "TEXT REFERENCES sessions(session_id)",
+            })
+            _ensure_daemon_job_columns(dconn, {"agent_id": "TEXT"})
+            _ensure_daemon_job_columns(dconn, {
+                "requires_gh_write": "INTEGER NOT NULL DEFAULT 0",
+                "gh_write_target": "TEXT",
+                "gh_write_verified": "TEXT",
+                "gh_write_author": "TEXT",
+                "gh_write_expect": "TEXT DEFAULT 'closed'",
+                "gh_write_evidence": "TEXT",
+            })
+            _ensure_daemon_job_columns(dconn, {
+                "harness": "TEXT",
+                "role": "TEXT",
+                "model_tier": "TEXT",
+                "impact_score": "INTEGER DEFAULT 0",
+                "requested_model": "TEXT",
+                "resolved_model": "TEXT",
+            })
+            _ensure_daemon_job_columns(dconn, {
+                "worktree_path": "TEXT",
+                "worktree_branch": "TEXT",
+            })
             existing = dconn.execute(
                 "SELECT 1 FROM daemon_jobs WHERE job_id=?", (job_id,)
             ).fetchone()

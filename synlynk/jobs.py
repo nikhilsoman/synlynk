@@ -3506,10 +3506,13 @@ def _reconcile_daemon_jobs() -> None:
     through this same path rather than a divergent startup-only rule.
     """
     conn = _pkg("_get_db")()
-    ensure_worktree_columns = _pkg("_ensure_daemon_job_worktree_columns")
+    ensure_worktree_columns = _pkg("_ensure_daemon_job_columns")
     if ensure_worktree_columns is None:
-        from synlynk.dispatch import _ensure_daemon_job_worktree_columns as ensure_worktree_columns
-    ensure_worktree_columns(conn)
+        from synlynk.dispatch import _ensure_daemon_job_columns as ensure_worktree_columns
+    ensure_worktree_columns(conn, {
+        "worktree_path": "TEXT",
+        "worktree_branch": "TEXT",
+    })
     # Repair the split-brain window before selecting running rows.  This is
     # deliberately conditional/idempotent so a late daemon update cannot be
     # clobbered by an older flat-file event.
@@ -3852,10 +3855,13 @@ def _dispatch_ready_jobs(max_parallel: int = 4) -> int:
     """
     import json as _json
     conn = _pkg("_get_db")()
-    ensure_worktree_columns = _pkg("_ensure_daemon_job_worktree_columns")
+    ensure_worktree_columns = _pkg("_ensure_daemon_job_columns")
     if ensure_worktree_columns is None:
-        from synlynk.dispatch import _ensure_daemon_job_worktree_columns as ensure_worktree_columns
-    ensure_worktree_columns(conn)
+        from synlynk.dispatch import _ensure_daemon_job_columns as ensure_worktree_columns
+    ensure_worktree_columns(conn, {
+        "worktree_path": "TEXT",
+        "worktree_branch": "TEXT",
+    })
     try:
         running_count = conn.execute(
             "SELECT COUNT(*) FROM daemon_jobs WHERE status='running'"
