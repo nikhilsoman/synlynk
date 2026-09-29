@@ -103,6 +103,22 @@ def test_compute_completion_verdict_returns_none_on_unparseable_claude_output(tm
     assert verdict is None
 
 
+def test_compute_completion_verdict_returns_none_when_claude_cli_is_missing(tmp_path, monkeypatch):
+    spec_dir = tmp_path / "docs" / "superpowers" / "specs"
+    spec_dir.mkdir(parents=True)
+    (spec_dir / "x.md").write_text("spec")
+    monkeypatch.chdir(tmp_path)
+    diff_result = MagicMock(returncode=0, stdout="diff")
+
+    def run(command, **kwargs):
+        if command[0] == "claude":
+            raise FileNotFoundError("claude")
+        return diff_result
+
+    monkeypatch.setattr("subprocess.run", run)
+    assert compute_completion_verdict(42, "docs/superpowers/specs/x.md") is None
+
+
 def test_compute_completion_verdict_returns_none_for_invalid_verdict_value(tmp_path, monkeypatch):
     spec_dir = tmp_path / "docs" / "superpowers" / "specs"
     spec_dir.mkdir(parents=True)

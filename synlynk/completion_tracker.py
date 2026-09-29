@@ -105,12 +105,16 @@ def compute_completion_verdict(pr_number, spec_reference):
         "diverged = the diff does something materially different from the "
         "reference, not just incomplete but off-target. "
     )
-    result = subprocess.run(
-        ["claude", "--print", prompt],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    try:
+        result = subprocess.run(
+            ["claude", "--print", prompt],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except FileNotFoundError:
+        # GitHub Actions runners may not have the optional Claude CLI installed.
+        return None
     if result.returncode != 0:
         return None
     try:
