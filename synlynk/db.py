@@ -838,6 +838,11 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
                 conn.execute("ALTER TABLE daemon_jobs ADD COLUMN worktree_branch TEXT")
             except sqlite3.OperationalError:
                 pass
+        if "pid_identity" not in daemon_job_cols:
+            try:
+                conn.execute("ALTER TABLE daemon_jobs ADD COLUMN pid_identity TEXT")
+            except sqlite3.OperationalError:
+                pass
         if "terminal_claim_token" not in daemon_job_cols:
             try:
                 conn.execute("ALTER TABLE daemon_jobs ADD COLUMN terminal_claim_token TEXT")

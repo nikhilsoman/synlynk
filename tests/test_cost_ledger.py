@@ -2,6 +2,7 @@ import json
 import os
 import sqlite3
 import subprocess
+import sys
 
 import pytest
 
@@ -1368,6 +1369,73 @@ def test_reconcile_daemon_jobs_writes_cost_row(project_dir, monkeypatch):
     conn.close()
     assert row is not None
     assert row[1] == 500
+
+
+def test_reconcile_daemon_jobs_trips_inflight_circuit_breaker(project_dir, monkeypatch):
+    """Daemon polling kills and stamps an over-limit running job immediately."""
+    import synlynk
+    import synlynk.circuit_breaker as circuit_breaker
+    import synlynk.jobs as jobs_mod
+
+    monkeypatch.setattr(synlynk, "DB_PATH", os.path.join(project_dir, "state.db"))
+    monkeypatch.setattr(synlynk, "_is_migrated", lambda: True)
+    monkeypatch.setattr(
+        synlynk,
+        "load_config",
+        lambda: {"circuit_breaker": {"max_job_tokens": 1000, "max_job_cost_usd": 100.0}},
+    )
+    # The sandbox does not expose `ps`, so validate the real termination path
+    # while treating this fixture identity as already verified.
+    monkeypatch.setattr(circuit_breaker, "process_identity_check", lambda pid, expected: "safe to kill")
+    kill_calls = []
+    real_kill_process_tree = circuit_breaker._kill_process_tree
+
+    def record_kill(pid, pid_identity, **kwargs):
+        kill_calls.append((pid, pid_identity))
+        return real_kill_process_tree(pid, pid_identity, **kwargs)
+
+    monkeypatch.setattr(circuit_breaker, "_kill_process_tree", record_kill)
+    log_path = os.path.join(project_dir, "job-circuit-breaker.log")
+    with open(log_path, "w") as handle:
+        handle.write("Input tokens: 4000\nOutput tokens: 2000\n")
+
+    worker = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
+    try:
+        pid_identity = {"start_time": "test-worker"}
+
+        conn = synlynk._get_db()
+        conn.execute(
+            "INSERT INTO daemon_jobs (job_id, agent, task, story_id, pid, pid_identity, status, started_at, enqueued_at, log_path) "
+            "VALUES ('job-circuit-breaker', 'claude', 'runaway', NULL, ?, ?, 'running', "
+            "'2026-07-13T00:00:00', '2026-07-13T00:00:00', ?)",
+            (worker.pid, json.dumps(pid_identity), log_path),
+        )
+        conn.commit()
+        conn.close()
+
+        jobs_mod._reconcile_daemon_jobs()
+        assert worker.poll() is not None, "circuit breaker must terminate the runaway worker"
+        assert kill_calls == [(worker.pid, pid_identity)]
+        sentinel = os.path.join(project_dir, ".synlynk", "sentinel.md")
+        with open(sentinel) as handle:
+            sentinel_text = handle.read()
+        assert "TOKEN_CIRCUIT_BREAKER_TRIPPED" in sentinel_text
+        assert "job-circuit-breaker" in sentinel_text
+    finally:
+        if worker.poll() is None:
+            worker.kill()
+        worker.wait()
+
+    conn = synlynk._get_db()
+    status = conn.execute(
+        "SELECT status, exit_code FROM daemon_jobs WHERE job_id='job-circuit-breaker'"
+    ).fetchone()
+    cost = conn.execute(
+        "SELECT input_tokens, output_tokens FROM cost_entries WHERE job_id='job-circuit-breaker'"
+    ).fetchone()
+    conn.close()
+    assert tuple(status) == ("circuit_breaker_tripped", -9)
+    assert tuple(cost) == (5000, 2000)
 
 
 def test_dispatch_writes_cost_row_even_on_zero_token_extraction(project_dir, monkeypatch):
