@@ -1387,6 +1387,14 @@ def test_reconcile_daemon_jobs_trips_inflight_circuit_breaker(project_dir, monke
     # The sandbox does not expose `ps`, so validate the real termination path
     # while treating this fixture identity as already verified.
     monkeypatch.setattr(circuit_breaker, "process_identity_check", lambda pid, expected: "safe to kill")
+    kill_calls = []
+    real_kill_process_tree = circuit_breaker._kill_process_tree
+
+    def record_kill(pid, pid_identity, **kwargs):
+        kill_calls.append((pid, pid_identity))
+        return real_kill_process_tree(pid, pid_identity, **kwargs)
+
+    monkeypatch.setattr(circuit_breaker, "_kill_process_tree", record_kill)
     log_path = os.path.join(project_dir, "job-circuit-breaker.log")
     with open(log_path, "w") as handle:
         handle.write("Input tokens: 4000\nOutput tokens: 2000\n")
@@ -1407,6 +1415,12 @@ def test_reconcile_daemon_jobs_trips_inflight_circuit_breaker(project_dir, monke
 
         jobs_mod._reconcile_daemon_jobs()
         assert worker.poll() is not None, "circuit breaker must terminate the runaway worker"
+        assert kill_calls == [(worker.pid, pid_identity)]
+        sentinel = os.path.join(project_dir, ".synlynk", "sentinel.md")
+        with open(sentinel) as handle:
+            sentinel_text = handle.read()
+        assert "TOKEN_CIRCUIT_BREAKER_TRIPPED" in sentinel_text
+        assert "job-circuit-breaker" in sentinel_text
     finally:
         if worker.poll() is None:
             worker.kill()
