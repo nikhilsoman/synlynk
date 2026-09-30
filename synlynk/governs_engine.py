@@ -83,9 +83,16 @@ def scoped_goals(conn, status: str = "active", repo_root: Optional[str] = None) 
         ).fetchall()
     aliases: dict[str, list[str]] = {}
     try:
-        for goal_id, pattern in conn.execute(
-            "SELECT goal_id, pattern FROM goal_aliases WHERE product_id=?", (product_id,)
-        ).fetchall():
+        if product_id:
+            alias_rows = conn.execute(
+                "SELECT goal_id, pattern FROM goal_aliases WHERE product_id=? OR product_id IS NULL OR product_id=''",
+                (product_id,),
+            ).fetchall()
+        else:
+            alias_rows = conn.execute(
+                "SELECT goal_id, pattern FROM goal_aliases"
+            ).fetchall()
+        for goal_id, pattern in alias_rows:
             aliases.setdefault(goal_id, []).append(pattern)
     except Exception:
         pass
@@ -175,7 +182,7 @@ def resolve_goal_for_story(
     keyword_hits = []
     for goal in goals:
         hits = corpus_words & (_words(goal.get("outcome", "")) | _words(goal.get("criterion", "")))
-        if len(hits) >= 2:
+        if len(hits) >= 2 or (len(hits) >= 1 and len(goals) == 1):
             keyword_hits.append((len(hits), goal["goal_id"]))
     if keyword_hits:
         _, goal_id = max(keyword_hits, key=lambda item: (item[0], item[1]))

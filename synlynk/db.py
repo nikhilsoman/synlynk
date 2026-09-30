@@ -568,6 +568,7 @@ def _migrate_governs_tenancy(conn: sqlite3.Connection) -> None:
     )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_goal_aliases_product ON goal_aliases(product_id)")
 
+    target_pid = None
     identity_cols = {row[1] for row in conn.execute("PRAGMA table_info(state_identity)")}
     if "product_id" in identity_cols:
         identity = conn.execute(
@@ -575,9 +576,31 @@ def _migrate_governs_tenancy(conn: sqlite3.Connection) -> None:
             "ORDER BY rowid LIMIT 1"
         ).fetchone()
         if identity and identity[0]:
+            target_pid = identity[0]
             conn.execute(
                 "UPDATE goals SET product_id=? WHERE product_id IS NULL",
-                (identity[0],),
+                (target_pid,),
+            )
+    if not target_pid:
+        target_pid = "synlynk"
+
+    _HISTORICAL_GOAL_ALIASES = [
+        ("goal-e3840370", r"(?i)\b(?:viz|vizor|canvas|hud|graphify|board|gantt|tube|logical|architect_map|lod|opportunity_radar|world_view)\b"),
+        ("goal-0c4e96ff", r"(?i)\b(?:docs[/-]book|manuscript|readership|book[_-]|book)\b"),
+        ("goal-9011307c", r"(?i)\b(?:testbed|acceptance|soak|isolated_vm|docker_runner)\b"),
+        ("goal-c75ff209", r"(?i)\b(?:models?\.json|quota|calibration|model_catalog|burn_rate)\b"),
+        ("goal-c7113f58", r"(?i)\b(?:jev|deepseek|typesafe|dsh|cordis|strategic_expansion)\b"),
+        ("goal-3b45a961", r"(?i)\b(?:heal|parity|migration_engine|adoption_parity)\b"),
+        ("goal-d3333441", r"(?i)\b(?:unattended_merge|merge_oracle|trust_closure|job_truth)\b"),
+        ("goal-8f64eff5", r"(?i)\b(?:sentinel|doctor|platform_health|zombie|reap|stall)\b"),
+    ]
+    for gid, pat in _HISTORICAL_GOAL_ALIASES:
+        row = conn.execute("SELECT product_id FROM goals WHERE goal_id=?", (gid,)).fetchone()
+        if row:
+            goal_pid = row[0] or target_pid
+            conn.execute(
+                "INSERT OR IGNORE INTO goal_aliases (goal_id, pattern, product_id) VALUES (?, ?, ?)",
+                (gid, pat, goal_pid),
             )
 
     conn.execute(
@@ -2935,7 +2958,7 @@ def cmd_story_create(title: str, engg_domain: str = None,
     )[0:4]
     if engg_domain is None:
         engg_domain = discipline
-    conn = _get_db(db_path=db_path)
+    conn = _get_db(db_path=db_path) if db_path else _get_db()
     conn.execute(
         "INSERT INTO stories (story_id, title, engg_domain, discipline, org_domain, role, stage, "
         "org_domain_tags, stack_tags, industry, phase, estimated_tokens) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -3074,7 +3097,7 @@ def _record_goal_link_status(conn, story_id: str) -> None:
 
     primary_goal_id = story[0]
     secondary = conn.execute(
-        "SELECT goal_id FROM goal_contributions WHERE story_id=?", (story_id,)
+        "SELECT goal_id FROM goal_contributions WHERE story_id=? AND goal_id != 'none'", (story_id,)
     ).fetchall()
     if primary_goal_id:
         conn.execute(
@@ -3094,9 +3117,11 @@ def _record_goal_link_status(conn, story_id: str) -> None:
     conn.execute("PRAGMA foreign_keys=OFF")
     try:
         conn.execute(
-            "INSERT OR IGNORE INTO goal_contributions "
+            "INSERT INTO goal_contributions "
             "(goal_id, story_id, link_status, skip_reason) "
-            "VALUES ('none', ?, 'skipped', ?)",
+            "VALUES ('none', ?, 'skipped', ?) "
+            "ON CONFLICT(goal_id, story_id) DO UPDATE SET "
+            "link_status='skipped', skip_reason=excluded.skip_reason",
             (story_id, "no active goal specified at plan-approval time"),
         )
         conn.commit()
