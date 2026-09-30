@@ -1,5 +1,6 @@
-"""Launch task template catalog for ``synlynk launch``
-Extracted from synlynk/__init__.py (R12, 2026-09-29) - pure data, no logic
+"""Launch task template catalog for ``synlynk launch``.
+
+Extracted from synlynk/__init__.py (R12, 2026-09-29) — pure data, no logic.
 """
 LAUNCH_TASK_TEMPLATES = [
     # ── Core templates (always shown) ───────────────────────────────────────
