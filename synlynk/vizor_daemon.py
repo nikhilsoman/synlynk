@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import contextlib
 import dataclasses
+import json
 import os
 import re
 import threading
@@ -574,9 +575,10 @@ def build_workspace_routing_handler():
             )
 
         def _route_path(self) -> bool:
-            from urllib.parse import urlparse
+            from urllib.parse import parse_qs, urlparse
 
-            path = urlparse(self.path).path
+            parsed = urlparse(self.path)
+            path = parsed.path
             if path == "/" or path == "":
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -585,15 +587,73 @@ def build_workspace_routing_handler():
                     self.wfile.write(_workspace_index_html().encode("utf-8"))
                 return False
             if path.startswith("/w/"):
+                remainder = path[len("/w/"):]
+                slug, separator, subpath = remainder.partition("/")
+                if not separator or not slug:
+                    self.send_error(404, "Invalid workspace path")
+                    return False
+
+                ctx = resolve_workspace_context(slug)
+                if ctx is None:
+                    self.send_error(404, f"Unknown workspace: {slug}")
+                    return False
+
+                if subpath.startswith("api/"):
+                    api_route = subpath[len("api/"):]
+                    if api_route == "board":
+                        from synlynk.board import board_data_for_context
+
+                        filters = parse_qs(parsed.query)
+                        data = board_data_for_context(
+                            ctx,
+                            repo_id=(filters.get("repo_id") or [None])[0],
+                            type_id=(filters.get("type_id") or [None])[0],
+                            goal_id=(filters.get("goal_id") or [None])[0],
+                        )
+                        body = json.dumps(data).encode("utf-8")
+                        self.send_response(200)
+                        self.send_header("Content-Type", "application/json; charset=utf-8")
+                        self.send_header("Content-Length", str(len(body)))
+                        self.end_headers()
+                        if self.command == "GET":
+                            self.wfile.write(body)
+                        return False
+
+                    if api_route == "board/stage" and self.command == "POST":
+                        from synlynk.board import update_stage_for_context
+
+                        length = int(self.headers.get("Content-Length", 0))
+                        payload = json.loads(self.rfile.read(length))
+                        ok = update_stage_for_context(ctx, payload["story_id"], payload["stage"])
+                        res = json.dumps({"ok": ok}).encode("utf-8")
+                        self.send_response(200 if ok else 400)
+                        self.send_header("Content-Type", "application/json")
+                        self.end_headers()
+                        self.wfile.write(res)
+                        return False
+
+                    if api_route == "board/status" and self.command == "POST":
+                        from synlynk.board import update_status_for_context
+
+                        length = int(self.headers.get("Content-Length", 0))
+                        payload = json.loads(self.rfile.read(length))
+                        ok = update_status_for_context(ctx, payload["story_id"], payload["status"])
+                        res = json.dumps({"ok": ok}).encode("utf-8")
+                        self.send_response(200 if ok else 400)
+                        self.send_header("Content-Type", "application/json")
+                        self.end_headers()
+                        self.wfile.write(res)
+                        return False
+
                 app_route = _rewrite_workspace_app_route(path)
                 if app_route is not None:
-                    self.path = app_route + (("?" + urlparse(self.path).query) if urlparse(self.path).query else "")
+                    self.path = app_route + (("?" + parsed.query) if parsed.query else "")
                     return True
                 slug, rewritten = parse_workspace_path(path)
                 if slug is None:
                     self.send_error(404, "Unknown workspace")
                     return False
-                self.path = rewritten + (("?" + urlparse(self.path).query) if urlparse(self.path).query else "")
+                self.path = rewritten + (("?" + parsed.query) if parsed.query else "")
                 return True
             return True
 
@@ -604,6 +664,10 @@ def build_workspace_routing_handler():
         def do_HEAD(self):
             if self._route_path():
                 super().do_HEAD()
+
+        def do_POST(self):
+            if self._route_path():
+                super().do_POST()
 
     return WorkspaceRoutingHandler
 
