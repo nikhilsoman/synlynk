@@ -129,8 +129,6 @@ def _launch_visible_templates() -> list:
     return [template for template in LAUNCH_TASK_TEMPLATES if template["id"] in visible_ids]
 
 
-
-
 def _template_matches(template: dict, scan: dict) -> bool:
     """Returns True if the template's trigger condition is met by scan."""
     condition = template.get("trigger_condition")
