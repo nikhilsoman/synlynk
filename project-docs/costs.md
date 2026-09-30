@@ -53,3 +53,5 @@
 | 2026-09-30 10:30 | codex | gpt-5.6-luna | 1745564 | 4697 | $5.3071 | estimated_token_rate | story-issue-1868 | exec: codex job job-085b9e... |
 | 2026-09-30 10:42 | claude | claude-sonnet-4-6 | 5000 | 2000 | $0.0450 | estimated_tshirt | story-issue-1868 | exec: claude job job-73eaf... |
 | 2026-09-30 10:48 | codex | gpt-5.6-luna | 451065 | 3683 | $1.4084 | estimated_token_rate | story-adhoc-1790745292 | exec: codex job job-ee9255... |
+| 2026-09-30 10:54 | codex | gpt-5.6-luna | 612006 | 7080 | $1.9422 | estimated_token_rate | story-adhoc-1790745590 | exec: codex job job-271b7c... |
+| 2026-09-30 10:55 | claude | claude-sonnet-4-6 | 60000 | 15000 | $0.4050 | estimated_manual | story-54515ca1 | PM-session: R12 wave close-out — blog post PR-number fix (#1869), checkpoint sync (#1871), Worktree Hygiene cleanup x3, issues #1867/#1870 filed, devlog+memory writes (est.) |
