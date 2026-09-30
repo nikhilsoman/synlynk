@@ -1,5 +1,7 @@
 import json
 import stat
+import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -48,6 +50,44 @@ def test_install_pre_commit_hook_rejects_non_shebang_hook(tmp_path, monkeypatch)
 
     with pytest.raises(RuntimeError, match="unexpected pre-commit hook content"):
         install_pre_commit_hook(repo_root=tmp_path)
+
+
+def test_versioned_hook_blocks_feature_branch_in_main_worktree(tmp_path):
+    subprocess.run(["git", "init", "-b", "main"], cwd=tmp_path, check=True,
+                   capture_output=True, text=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"],
+                   cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.name", "Test User"],
+                   cwd=tmp_path, check=True)
+    (tmp_path / "tracked.txt").write_text("tracked\n")
+    subprocess.run(["git", "add", "tracked.txt"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "commit", "-m", "initial"], cwd=tmp_path,
+                   check=True, capture_output=True, text=True)
+    subprocess.run(["git", "switch", "-c", "feature/test"], cwd=tmp_path,
+                   check=True, capture_output=True, text=True)
+
+    hook = Path(__file__).parents[1] / "githooks" / "pre-commit"
+    result = subprocess.run([str(hook)], cwd=tmp_path, capture_output=True,
+                            text=True)
+
+    assert result.returncode != 0
+    assert "shared main worktree" in result.stderr
+    assert "git worktree add worktrees/<name> -b <branch>" in result.stderr
+    assert "CLAUDE.md" in result.stderr
+
+
+def test_init_configures_versioned_hooks_path(tmp_path, monkeypatch):
+    subprocess.run(["git", "init", "-b", "main"], cwd=tmp_path, check=True,
+                   capture_output=True, text=True)
+    from synlynk.instructions import install_pre_commit_hook
+
+    install_pre_commit_hook(repo_root=tmp_path)
+
+    configured = subprocess.run(
+        ["git", "config", "--get", "core.hooksPath"],
+        cwd=tmp_path, check=True, capture_output=True, text=True,
+    )
+    assert configured.stdout.strip() == "githooks"
 
 
 def test_tier0_fixture_only_gets_tier0_and_gateway_phrases():

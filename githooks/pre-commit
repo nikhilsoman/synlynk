@@ -1,0 +1,37 @@
+#!/bin/sh
+# Block commits made from the shared main checkout. Feature work belongs in a
+# dedicated linked worktree; see CLAUDE.md's Git Worktree-First Policy.
+
+set -u
+
+main_worktree=$(git worktree list --porcelain 2>/dev/null | sed -n 's/^worktree //p' | sed -n '1p')
+current_toplevel=$(git rev-parse --show-toplevel 2>/dev/null || true)
+
+if [ -n "$main_worktree" ] && [ "$current_toplevel" = "$main_worktree" ]; then
+    current_branch=$(git symbolic-ref --short HEAD 2>/dev/null || true)
+    if [ -z "$current_branch" ]; then
+        echo "Commit blocked: detached HEAD in the shared main worktree." >&2
+        echo "Create a dedicated worktree first: git worktree add worktrees/<name> -b <branch>" >&2
+        echo "See CLAUDE.md's Git Worktree-First Policy." >&2
+        exit 1
+    fi
+    if [ "$current_branch" = "main" ]; then
+        echo "Commit blocked: direct commits to main are not allowed in the shared main worktree." >&2
+        echo "Create a dedicated worktree first: git worktree add worktrees/<name> -b <branch>" >&2
+        echo "See CLAUDE.md's Git Worktree-First Policy." >&2
+        exit 1
+    fi
+    echo "Commit blocked: feature work cannot use the shared main worktree (branch: $current_branch)." >&2
+    echo "Create a dedicated worktree first: git worktree add worktrees/<name> -b <branch>" >&2
+    echo "See CLAUDE.md's Git Worktree-First Policy." >&2
+    exit 1
+fi
+
+# Preserve the existing instruction-drift guard without starting the full CLI
+# (which may reconcile shared job state as a side effect).
+if [ -f "synlynk/instructions.py" ] && command -v python3 >/dev/null 2>&1; then
+    PYTHONPATH=".${PYTHONPATH:+:$PYTHONPATH}" exec python3 -c \
+        'from synlynk.instructions import cmd_instructions_status; cmd_instructions_status(pre_commit=True)'
+fi
+
+exit 0
