@@ -119,3 +119,16 @@ def test_extract_world_nodes_no_synlynk_source_paths(tmp_path, mock_db):
     assert "synlynk/gh.py" not in all_text
     assert "synlynk/dispatch.py" not in all_text
     assert "synlynk/media.py" not in all_text
+
+
+def test_extract_world_nodes_completely_empty_repo_no_leakage(tmp_path, mock_db):
+    """Even on a completely empty repo with no .env or git, synlynk files must not leak."""
+    repo = tmp_path / "empty_repo"
+    repo.mkdir()
+
+    nodes, edges = extract_world_nodes(mock_db, str(repo))
+
+    all_text = " ".join(n["label"] + " " + (n.get("source_path") or "") + " " + n.get("attrs_json", "") for n in nodes)
+    assert "synlynk/gh.py" not in all_text
+    assert "synlynk/dispatch.py" not in all_text
+    assert "synlynk/media.py" not in all_text

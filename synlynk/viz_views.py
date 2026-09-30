@@ -265,6 +265,8 @@ def extract_product_nodes(conn: sqlite3.Connection, repo_path: str) -> Tuple[Lis
     """Extract authored journey documents, discovered screens/routes, and canonical workflows."""
     started, now, repo, sha = time.monotonic(), _now(), _repo_name(repo_path), _head_sha(repo_path)
     nodes, edges = [], []
+    is_synlynk_core = (repo == "synlynk" or os.path.basename(repo_path) == "synlynk") and os.path.isfile(os.path.join(repo_path, "synlynk", "viz.py"))
+
     journey_root = os.path.join(repo_path, "docs", "journeys")
     if os.path.isdir(journey_root):
         for root, _, files in os.walk(journey_root):
@@ -285,28 +287,93 @@ def extract_product_nodes(conn: sqlite3.Connection, repo_path: str) -> Tuple[Lis
                     nodes.append(route_node)
                     edges.append(_edge("product", journey, route_node, "includes", "extracted", now))
 
-    # Also discover CLI commands or entry points
-    cli_path = os.path.join(repo_path, "synlynk", "cli.py")
-    if os.path.isfile(cli_path):
-        try:
-            with open(cli_path, "r", encoding="utf-8", errors="ignore") as f:
-                cli_content = f.read()
-                for cmd_match in re.finditer(r"@cli\.(?:command|group)\(.*?name=[\"']([\w-]+)[\"']|def\s+cmd_([\w_]+)", cli_content):
-                    cmd_name = cmd_match.group(1) or cmd_match.group(2).replace("_", "-")
-                    if cmd_name and not cmd_name.startswith("_"):
-                        cmd_node = _node("product", repo, "cli_command", f"synlynk {cmd_name}", {"command": cmd_name}, "synlynk/cli.py", "extracted", now, sha)
-                        nodes.append(cmd_node)
-        except Exception:
-            pass
+    # Discover Monorepo Apps & Packages (apps/*, packages/*)
+    for parent_dir in ("apps", "packages"):
+        pdir = os.path.join(repo_path, parent_dir)
+        if os.path.isdir(pdir):
+            try:
+                for item in sorted(os.listdir(pdir)):
+                    subpath = os.path.join(pdir, item)
+                    if not os.path.isdir(subpath):
+                        continue
+                    pkg_json = os.path.join(subpath, "package.json")
+                    display_name = item.replace("-", " ").title()
+                    pkg_name = item
+                    if os.path.isfile(pkg_json):
+                        try:
+                            with open(pkg_json, "r", encoding="utf-8", errors="ignore") as f:
+                                data = json.load(f)
+                                pkg_name = data.get("name") or item
+                                display_name = f"{item.title()} ({pkg_name})"
+                        except Exception:
+                            pass
+                    rel_p = os.path.relpath(subpath, repo_path).replace(os.sep, "/")
+                    app_node = _node("product", repo, "app", display_name, {"path": rel_p, "package": pkg_name, "type": parent_dir[:-1]}, rel_p, "discovered", now, sha)
+                    nodes.append(app_node)
+            except Exception:
+                pass
+
+    # Discover UI Prototypes & Brainstorm Mockups (.superpowers/brainstorm)
+    sp_brainstorm = os.path.join(repo_path, ".superpowers", "brainstorm")
+    if os.path.isdir(sp_brainstorm):
+        for root, dirs, files in os.walk(sp_brainstorm):
+            dirs[:] = [d for d in dirs if d not in (".git", "node_modules")]
+            for filename in sorted(files):
+                if filename.endswith(".html"):
+                    mpath = os.path.join(root, filename)
+                    rel_m = os.path.relpath(mpath, repo_path).replace(os.sep, "/")
+                    screen_title = filename[:-5].replace("-", " ").title()
+                    try:
+                        with open(mpath, "r", encoding="utf-8", errors="ignore") as mf:
+                            m_head = mf.read(2048)
+                        t_match = re.search(r"<title>(.*?)</title>", m_head, re.IGNORECASE)
+                        if t_match and t_match.group(1).strip():
+                            screen_title = t_match.group(1).strip()
+                    except Exception:
+                        pass
+                    mock_node = _node("product", repo, "screen", screen_title, {
+                        "route": rel_m,
+                        "type": "prototype",
+                        "category": "mockup",
+                        "description": f"Interactive brainstorm prototype ({rel_m})"
+                    }, rel_m, "discovered", now, sha)
+                    nodes.append(mock_node)
+
+    # Discover CLI commands or entry points (synlynk core only)
+    if is_synlynk_core:
+        cli_path = os.path.join(repo_path, "synlynk", "cli.py")
+        if os.path.isfile(cli_path):
+            try:
+                with open(cli_path, "r", encoding="utf-8", errors="ignore") as f:
+                    cli_content = f.read()
+                    for cmd_match in re.finditer(r"@cli\.(?:command|group)\(.*?name=[\"']([\w-]+)[\"']|def\s+cmd_([\w_]+)", cli_content):
+                        cmd_name = cmd_match.group(1) or cmd_match.group(2).replace("_", "-")
+                        if cmd_name and not cmd_name.startswith("_"):
+                            cmd_node = _node("product", repo, "cli_command", f"synlynk {cmd_name}", {"command": cmd_name}, "synlynk/cli.py", "extracted", now, sha)
+                            nodes.append(cmd_node)
+            except Exception:
+                pass
 
     # Universal Fallback: If no journeys exist, populate core product journeys and screens
     if not any(n["kind"] == "journey" for n in nodes):
-        canonical_journeys = [
-            ("Zero-Friction Onboarding", "Initialize workspace, scan AST code graph, and launch agent session.", ["synlynk init", "synlynk scan --deep", "synlynk launch"]),
-            ("Interactive Home Harness Pairing", "Pair with Claude, Codex, Agy, or Grok in terminal with real-time state and anti-amnesia.", ["Session Start Greet", "Context Snapshot", "Task Boundary Checkpoint"]),
-            ("Autonomous Milestone DAG Execution", "Execute multi-task milestone unattended across isolated worktrees with QA merge gates.", ["Spec Brainstorm", "SDD Plan", "Parallel Worktree Dispatch", "QA Merge Gate"]),
-            ("Governance & Master Control Plane", "Coordinate business goals, epic backlogs, and multi-view Vizor control dashboards.", ["GOVERNS Board", "Gantt Timeline", "AST Architect Map", "Fleet Radar"])
-        ]
+        if is_synlynk_core:
+            canonical_journeys = [
+                ("Zero-Friction Onboarding", "Initialize workspace, scan AST code graph, and launch agent session.", ["synlynk init", "synlynk scan --deep", "synlynk launch"]),
+                ("Interactive Home Harness Pairing", "Pair with Claude, Codex, Agy, or Grok in terminal with real-time state and anti-amnesia.", ["Session Start Greet", "Context Snapshot", "Task Boundary Checkpoint"]),
+                ("Autonomous Milestone DAG Execution", "Execute multi-task milestone unattended across isolated worktrees with QA merge gates.", ["Spec Brainstorm", "SDD Plan", "Parallel Worktree Dispatch", "QA Merge Gate"]),
+                ("Governance & Master Control Plane", "Coordinate business goals, epic backlogs, and multi-view Vizor control dashboards.", ["GOVERNS Board", "Gantt Timeline", "AST Architect Map", "Fleet Radar"])
+            ]
+        else:
+            apps_found = [n["label"] for n in nodes if n["kind"] == "app"]
+            if apps_found:
+                canonical_journeys = [
+                    (f"Fullstack {repo.title()} Workflow", f"Coordinate end-to-end interactions across {', '.join(apps_found[:3])}.", ["User Sign In", "Service Processing", "Data Ingestion"]),
+                    ("Core Application Pipeline", f"Primary user journey for {repo.title()} services.", ["Intake", "Validation", "Persistence", "Response"])
+                ]
+            else:
+                canonical_journeys = [
+                    (f"{repo.title()} Core Experience", f"Primary workflow and invocation paths for {repo}.", ["Setup & Config", "Core Operation", "Result Export"])
+                ]
         for title, desc, steps in canonical_journeys:
             j_node = _node("product", repo, "journey", title, {"description": desc, "steps": steps}, "docs/journeys", "canonical", now, sha)
             nodes.append(j_node)
@@ -501,20 +568,188 @@ def extract_logical_nodes(conn: sqlite3.Connection, repo_path: str) -> Tuple[Lis
     return nodes, edges
 
 
+def _discover_infra_components(repo_path: str, repo: str) -> Tuple[List[Tuple[str, str, dict, str]], List[Tuple[str, str, dict, str]]]:
+    """Discover host-local services/containers and outbound egress endpoints for repo_path."""
+    hl_components = []
+    egress_endpoints = []
+
+    # Check if this is Synlynk's own codebase
+    is_synlynk_core = (repo == "synlynk" or os.path.basename(repo_path) == "synlynk") and os.path.isfile(os.path.join(repo_path, "synlynk", "viz.py"))
+
+    if is_synlynk_core:
+        hl_components.extend([
+            ("Vizor Server (:8721)", "service", {"zone": "host_local", "port": 8721, "status": "Running", "description": "Local HTTP visualization server and UI control plane"}, "synlynk/viz.py"),
+            ("SSE Relay Broker (:27472)", "service", {"zone": "host_local", "port": 27472, "status": "Active", "description": "High-throughput localhost event multiplexer and SSE feed"}, "synlynk/relay.py"),
+            ("StateDB SQLite Ledger", "database", {"zone": "host_local", "file": ".synlynk/state.db", "status": "WAL Active", "description": "100% Host-local ACID transactional ledger for goals, epics, stories"}, ".synlynk/state.db"),
+            ("Cryptographic Keystore", "security", {"zone": "host_local", "file": "identity.key", "status": "Secured (0o600)", "description": "Ed25519 identity key and GitHub App PEM certificates"}, "~/.synlynk/identity.key"),
+            ("Isolated Git Worktrees", "worktree", {"zone": "host_local", "pattern": "../feat+*", "status": "Isolated Cones", "description": "Parallel headless harness execution workspaces"}, "../feat+*"),
+            ("Graphify AST Cache", "cache", {"zone": "host_local", "dir": ".synlynk/graphify-out", "status": "Indexed", "description": "Offline AST code graph, community clusters, and source index"}, ".synlynk/graphify-out/")
+        ])
+        egress_endpoints.extend([
+            ("Anthropic Claude API", "egress", {"zone": "outbound_egress", "endpoint": "api.anthropic.com:443", "category": "llm", "role": "PM & Architecture", "status": "Connected"}, "synlynk/dispatch.py"),
+            ("OpenAI Codex API", "egress", {"zone": "outbound_egress", "endpoint": "api.openai.com:443", "category": "llm", "role": "Python & PR Ops", "status": "Connected"}, "synlynk/dispatch.py"),
+            ("Google Gemini API (Agy)", "egress", {"zone": "outbound_egress", "endpoint": "generativelanguage.googleapis.com:443", "category": "llm", "role": "HTML/CSS & Canvas", "status": "Connected"}, "synlynk/dispatch.py"),
+            ("xAI Grok API", "egress", {"zone": "outbound_egress", "endpoint": "api.x.ai:443", "category": "llm", "role": "Compute & Layout", "status": "Connected"}, "synlynk/dispatch.py"),
+            ("GitHub REST/GraphQL API", "egress", {"zone": "outbound_egress", "endpoint": "api.github.com:443", "category": "vcs", "role": "Source Control & CI", "status": "Connected"}, "synlynk/gh.py")
+        ])
+        return hl_components, egress_endpoints
+
+    # Dynamic discovery for non-synlynk repositories:
+    # 1. Docker Compose
+    compose_names = ["docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml"]
+    for cname in compose_names:
+        cpath = os.path.join(repo_path, cname)
+        if os.path.isfile(cpath):
+            try:
+                with open(cpath, "r", encoding="utf-8", errors="ignore") as f:
+                    lines = f.readlines()
+                in_services = False
+                current_service = None
+                current_ports = []
+                current_image = ""
+                service_indent = None
+                for line in lines:
+                    stripped = line.strip()
+                    if not stripped or stripped.startswith("#"):
+                        continue
+                    if stripped == "services:":
+                        in_services = True
+                        continue
+                    if in_services:
+                        indent = len(line) - len(line.lstrip())
+                        if service_indent is None and indent > 0 and stripped.endswith(":"):
+                            service_indent = indent
+                        if indent == service_indent and stripped.endswith(":") and not stripped.startswith("-"):
+                            if current_service:
+                                port_desc = f" ({', '.join(current_ports)})" if current_ports else ""
+                                hl_components.append((f"{current_service}{port_desc}", "service", {
+                                    "zone": "host_local",
+                                    "service": current_service,
+                                    "image": current_image or "custom build",
+                                    "ports": current_ports,
+                                    "status": "Container Service",
+                                    "description": f"Container service declared in {cname}"
+                                }, cname))
+                            current_service = stripped[:-1].strip()
+                            current_ports = []
+                            current_image = ""
+                        elif current_service and indent > service_indent:
+                            if stripped.startswith("image:"):
+                                current_image = stripped.split(":", 1)[1].strip().strip('"\'')
+                            elif re.search(r'[\d]+:[\d]+', stripped):
+                                m = re.search(r'[\d]+:[\d]+', stripped)
+                                if m:
+                                    current_ports.append(m.group(0))
+                if current_service:
+                    port_desc = f" ({', '.join(current_ports)})" if current_ports else ""
+                    hl_components.append((f"{current_service}{port_desc}", "service", {
+                        "zone": "host_local",
+                        "service": current_service,
+                        "image": current_image or "custom build",
+                        "ports": current_ports,
+                        "status": "Container Service",
+                        "description": f"Container service declared in {cname}"
+                    }, cname))
+            except Exception:
+                pass
+
+    # 2. Dockerfile
+    try:
+        for fname in sorted(os.listdir(repo_path)):
+            if fname.startswith("Dockerfile"):
+                dpath = os.path.join(repo_path, fname)
+                if os.path.isfile(dpath):
+                    try:
+                        with open(dpath, "r", encoding="utf-8", errors="ignore") as f:
+                            content = f.read()
+                        base_img = re.search(r"(?i)^FROM\s+(\S+)", content, re.MULTILINE)
+                        ports = re.findall(r"(?i)^EXPOSE\s+([\d\s]+)", content, re.MULTILINE)
+                        exposed = []
+                        for p in ports:
+                            exposed.extend(p.strip().split())
+                        img_name = base_img.group(1) if base_img else "base"
+                        port_str = f" (:{','.join(exposed)})" if exposed else ""
+                        hl_components.append((f"Container {fname}{port_str}", "container", {
+                            "zone": "host_local",
+                            "file": fname,
+                            "base_image": img_name,
+                            "exposed_ports": exposed,
+                            "status": "Dockerfile",
+                            "description": f"Target container image based on {img_name}"
+                        }, fname))
+                    except Exception:
+                        pass
+    except Exception:
+        pass
+
+    # 3. Prisma Schema & Databases
+    for root, dirs, files in os.walk(repo_path):
+        dirs[:] = [d for d in dirs if d not in (".git", "node_modules", ".venv", "venv", "dist", "build", "worktrees", ".worktrees", ".pnpm-store", ".turbo")]
+        for f in files:
+            if f.endswith(".prisma"):
+                ppath = os.path.join(root, f)
+                rel_path = os.path.relpath(ppath, repo_path).replace(os.sep, "/")
+                try:
+                    with open(ppath, "r", encoding="utf-8", errors="ignore") as pf:
+                        pcontent = pf.read()
+                    provider_match = re.search(r'provider\s*=\s*["\']([^"\']+)["\']', pcontent)
+                    provider = provider_match.group(1) if provider_match else "relational"
+                    model_count = len(re.findall(r"(?m)^model\s+\w+", pcontent))
+                    hl_components.append((f"{provider.capitalize()} DB (Prisma)", "database", {
+                        "zone": "host_local",
+                        "provider": provider,
+                        "models": model_count,
+                        "schema": rel_path,
+                        "status": "Schema Active",
+                        "description": f"Prisma ORM schema with {model_count} models ({rel_path})"
+                    }, rel_path))
+                except Exception:
+                    pass
+
+    # 4. Outbound Egress from .env.example / .env.sample / .env
+    env_candidates = [".env.example", ".env.sample", ".env.template", ".env"]
+    for ef in env_candidates:
+        epath = os.path.join(repo_path, ef)
+        if os.path.isfile(epath):
+            try:
+                with open(epath, "r", encoding="utf-8", errors="ignore") as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line or line.startswith("#") or "=" not in line:
+                            continue
+                        k, v = line.split("=", 1)
+                        k = k.strip().upper()
+                        if any(s in k for s in ["STRIPE", "PAYPAL", "PAYMENT"]):
+                            egress_endpoints.append((f"Payment Gateway ({k})", "egress", {"zone": "outbound_egress", "category": "payment", "env_var": k, "status": "Configured"}, ef))
+                        elif any(s in k for s in ["OPENAI", "ANTHROPIC", "GEMINI", "GROK", "COHERE", "MISTRAL", "LLM"]):
+                            egress_endpoints.append((f"AI Provider ({k})", "egress", {"zone": "outbound_egress", "category": "llm", "env_var": k, "status": "Configured"}, ef))
+                        elif any(s in k for s in ["AWS", "S3", "AZURE", "GCP", "CLOUDFLARE", "MINIO"]):
+                            egress_endpoints.append((f"Cloud Storage ({k})", "egress", {"zone": "outbound_egress", "category": "cloud", "env_var": k, "status": "Configured"}, ef))
+                        elif any(s in k for s in ["SENDGRID", "POSTMARK", "RESEND", "MAIL"]):
+                            egress_endpoints.append((f"Email Gateway ({k})", "egress", {"zone": "outbound_egress", "category": "email", "env_var": k, "status": "Configured"}, ef))
+                        elif any(s in k for s in ["GITHUB", "GH_"]):
+                            egress_endpoints.append((f"GitHub API ({k})", "egress", {"zone": "outbound_egress", "category": "vcs", "env_var": k, "status": "Configured"}, ef))
+            except Exception:
+                pass
+            break
+
+    # If completely empty, render clean host-local fallback
+    if not hl_components:
+        hl_components.append(("Host-Local Runtime", "host_local", {
+            "zone": "host_local",
+            "status": "Serverless / Pure Codebase",
+            "description": "Codebase executes locally on the developer machine without standalone persistent background daemons."
+        }, ""))
+
+    return hl_components, egress_endpoints
+
+
 def extract_infra_nodes(conn: sqlite3.Connection, repo_path: str) -> Tuple[List[dict], List[dict]]:
     """Describe the host-local runtime boundary and outbound cloud AI inference egress."""
     started, now, repo, sha = time.monotonic(), _now(), _repo_name(repo_path), _head_sha(repo_path)
     nodes, edges = [], []
 
-    # 1. Host-Local Runtime Nodes (Zero-SaaS Local Machine)
-    hl_components = [
-        ("Vizor Server (:8721)", "service", {"zone": "host_local", "port": 8721, "status": "Running", "description": "Local HTTP visualization server and UI control plane"}, "synlynk/viz.py"),
-        ("SSE Relay Broker (:27472)", "service", {"zone": "host_local", "port": 27472, "status": "Active", "description": "High-throughput localhost event multiplexer and SSE feed"}, "synlynk/relay.py"),
-        ("StateDB SQLite Ledger", "database", {"zone": "host_local", "file": ".synlynk/state.db", "status": "WAL Active", "description": "100% Host-local ACID transactional ledger for goals, epics, stories"}, ".synlynk/state.db"),
-        ("Cryptographic Keystore", "security", {"zone": "host_local", "file": "identity.key", "status": "Secured (0o600)", "description": "Ed25519 identity key and GitHub App PEM certificates"}, "~/.synlynk/identity.key"),
-        ("Isolated Git Worktrees", "worktree", {"zone": "host_local", "pattern": "../feat+*", "status": "Isolated Cones", "description": "Parallel headless harness execution workspaces"}, "../feat+*"),
-        ("Graphify AST Cache", "cache", {"zone": "host_local", "dir": ".synlynk/graphify-out", "status": "Indexed", "description": "Offline AST code graph, community clusters, and source index"}, ".synlynk/graphify-out/")
-    ]
+    hl_components, egress_endpoints = _discover_infra_components(repo_path, repo)
 
     hl_node_map = {}
     for label, kind, attrs, src_path in hl_components:
@@ -522,7 +757,7 @@ def extract_infra_nodes(conn: sqlite3.Connection, repo_path: str) -> Tuple[List[
         nodes.append(n)
         hl_node_map[label] = n
 
-    # Connect host-local internal relationships
+    # Connect host-local internal relationships for synlynk
     if "Vizor Server (:8721)" in hl_node_map and "SSE Relay Broker (:27472)" in hl_node_map:
         edges.append(_edge("infra", hl_node_map["Vizor Server (:8721)"], hl_node_map["SSE Relay Broker (:27472)"], "manages", "extracted", now))
     if "Vizor Server (:8721)" in hl_node_map and "StateDB SQLite Ledger" in hl_node_map:
@@ -530,21 +765,12 @@ def extract_infra_nodes(conn: sqlite3.Connection, repo_path: str) -> Tuple[List[
     if "Vizor Server (:8721)" in hl_node_map and "Graphify AST Cache" in hl_node_map:
         edges.append(_edge("infra", hl_node_map["Vizor Server (:8721)"], hl_node_map["Graphify AST Cache"], "reads", "extracted", now))
 
-    # 2. Outbound External AI Egress (Air-Gapped / Explicit Network Endpoints)
-    egress_endpoints = [
-        ("Anthropic Claude API", "egress", {"zone": "outbound_egress", "endpoint": "api.anthropic.com:443", "category": "llm", "role": "PM & Architecture", "status": "Connected"}, "synlynk/dispatch.py"),
-        ("OpenAI Codex API", "egress", {"zone": "outbound_egress", "endpoint": "api.openai.com:443", "category": "llm", "role": "Python & PR Ops", "status": "Connected"}, "synlynk/dispatch.py"),
-        ("Google Gemini API (Agy)", "egress", {"zone": "outbound_egress", "endpoint": "generativelanguage.googleapis.com:443", "category": "llm", "role": "HTML/CSS & Canvas", "status": "Connected"}, "synlynk/dispatch.py"),
-        ("xAI Grok API", "egress", {"zone": "outbound_egress", "endpoint": "api.x.ai:443", "category": "llm", "role": "Compute & Layout", "status": "Connected"}, "synlynk/dispatch.py"),
-        ("GitHub REST/GraphQL API", "egress", {"zone": "outbound_egress", "endpoint": "api.github.com:443", "category": "vcs", "role": "Source Control & CI", "status": "Connected"}, "synlynk/gh.py")
-    ]
-
+    primary_parent = next(iter(hl_node_map.values()), None)
     for label, kind, attrs, src_path in egress_endpoints:
         n = _node("infra", repo, kind, label, attrs, src_path, "extracted", now, sha)
         nodes.append(n)
-        # Connect to Daemon / Worktrees
-        if "Vizor Server (:8721)" in hl_node_map:
-            edges.append(_edge("infra", hl_node_map["Vizor Server (:8721)"], n, "egress_calls", "extracted", now))
+        if primary_parent:
+            edges.append(_edge("infra", primary_parent, n, "egress_calls", "extracted", now))
 
     _save_projection(conn, "infra", repo, nodes, edges, started, sha)
     return nodes, edges
@@ -597,7 +823,7 @@ def extract_world_nodes(conn: sqlite3.Connection, repo_path: str) -> Tuple[List[
     ]
 
     # Quick scan of workspace files for patterns
-    skip_dirs = {".git", ".synlynk", "__pycache__", "node_modules", ".venv", "venv", "dist", "build", ".pytest_cache", ".ruff_cache", "project-docs", "docs"}
+    skip_dirs = {".git", ".synlynk", "__pycache__", "node_modules", ".venv", "venv", "dist", "build", ".pytest_cache", ".ruff_cache", "project-docs", "docs", "worktrees", ".worktrees", ".pnpm-store", ".turbo"}
     scanned_count = 0
     max_scan_files = 150
     for root, dirs, files in os.walk(repo_path):
@@ -626,35 +852,49 @@ def extract_world_nodes(conn: sqlite3.Connection, repo_path: str) -> Tuple[List[
         if scanned_count > max_scan_files:
             break
 
+    is_synlynk_core = (repo == "synlynk" or os.path.basename(repo_path) == "synlynk") and os.path.isfile(os.path.join(repo_path, "synlynk", "viz.py"))
+
     # Fallback to standard core providers if running in clean test sandbox
     if not any(item.get("ring") == 1 for item in detected_integrations.values()):
-        detected_integrations["GitHub REST/GraphQL API"] = {
-            "label": "GitHub REST/GraphQL API", "category": "vcs", "ring": 1,
-            "description": "Source Control & Apps API", "env_var": "GH_TOKEN", "source_path": "synlynk/gh.py"
-        }
-        detected_integrations["Google Gemini API"] = {
-            "label": "Google Gemini API", "category": "llm", "ring": 1,
-            "description": "LLM Multimodal API", "env_var": "GEMINI_API_KEY", "source_path": "synlynk/dispatch.py"
-        }
-        detected_integrations["Anthropic Claude API"] = {
-            "label": "Anthropic Claude API", "category": "llm", "ring": 1,
-            "description": "LLM Inference Gateway", "env_var": "ANTHROPIC_API_KEY", "source_path": "synlynk/dispatch.py"
-        }
-        detected_integrations["OpenAI Codex API"] = {
-            "label": "OpenAI Codex API", "category": "llm", "ring": 1,
-            "description": "LLM Inference Gateway", "env_var": "OPENAI_API_KEY", "source_path": "synlynk/dispatch.py"
-        }
+        if is_synlynk_core:
+            detected_integrations["GitHub REST/GraphQL API"] = {
+                "label": "GitHub REST/GraphQL API", "category": "vcs", "ring": 1,
+                "description": "Source Control & Apps API", "env_var": "GH_TOKEN", "source_path": "synlynk/gh.py"
+            }
+            detected_integrations["Google Gemini API"] = {
+                "label": "Google Gemini API", "category": "llm", "ring": 1,
+                "description": "LLM Multimodal API", "env_var": "GEMINI_API_KEY", "source_path": "synlynk/dispatch.py"
+            }
+            detected_integrations["Anthropic Claude API"] = {
+                "label": "Anthropic Claude API", "category": "llm", "ring": 1,
+                "description": "LLM Inference Gateway", "env_var": "ANTHROPIC_API_KEY", "source_path": "synlynk/dispatch.py"
+            }
+            detected_integrations["OpenAI Codex API"] = {
+                "label": "OpenAI Codex API", "category": "llm", "ring": 1,
+                "description": "LLM Inference Gateway", "env_var": "OPENAI_API_KEY", "source_path": "synlynk/dispatch.py"
+            }
+        else:
+            detected_integrations["Git Source Control"] = {
+                "label": "Git Source Control", "category": "vcs", "ring": 1,
+                "description": "Git Remote Repository", "env_var": "GIT_REMOTE", "source_path": ".git"
+            }
 
     # Ensure Ring 2 Ecosystem Connectors are present
     if not any(item.get("ring") == 2 for item in detected_integrations.values()):
-        detected_integrations["Team Relays & Webhooks"] = {
-            "label": "Team Relays & Webhooks", "category": "comms", "ring": 2,
-            "description": "Slack / Discord notification webhooks", "env_var": "SLACK_BOT_TOKEN", "source_path": "synlynk/relay.py"
-        }
-        detected_integrations["fal.ai Generative Media"] = {
-            "label": "fal.ai Generative Media", "category": "media", "ring": 2,
-            "description": "Generative Media & 3D Canvas assets", "env_var": "FAL_KEY", "source_path": "synlynk/media.py"
-        }
+        if is_synlynk_core:
+            detected_integrations["Team Relays & Webhooks"] = {
+                "label": "Team Relays & Webhooks", "category": "comms", "ring": 2,
+                "description": "Slack / Discord notification webhooks", "env_var": "SLACK_BOT_TOKEN", "source_path": "synlynk/relay.py"
+            }
+            detected_integrations["fal.ai Generative Media"] = {
+                "label": "fal.ai Generative Media", "category": "media", "ring": 2,
+                "description": "Generative Media & 3D Canvas assets", "env_var": "FAL_KEY", "source_path": "synlynk/media.py"
+            }
+        else:
+            detected_integrations["Local Developer Toolchain"] = {
+                "label": "Local Developer Toolchain", "category": "dev", "ring": 2,
+                "description": "Workspace runtime, package manager, and build tools", "env_var": "PATH", "source_path": "runtime"
+            }
 
     # Add detected integration nodes
     for name, item in detected_integrations.items():

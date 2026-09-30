@@ -3887,6 +3887,9 @@ body { margin:0; font-family:'SF Mono',monospace; background:#f6f8fa; color:#1f2
 [data-theme="dark"] .am-btn-action { background:#13171f; border-color:#1e2430; color:#c9d1d9; }
 [data-theme="dark"] .am-btn-action:hover { background:#1e2430; border-color:#334155; }
 [data-theme="dark"] .am-kg-canvas-full { border-color:#1e2430; background:#0d0f14; }
+.am-empty-hud { display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; min-height:480px; background:radial-gradient(circle at center, rgba(30, 41, 59, 0.4) 0%, rgba(15, 23, 42, 0.8) 100%); border:1px solid rgba(255, 255, 255, 0.08); border-radius:12px; margin:16px; text-align:center; backdrop-filter:blur(12px); box-shadow:0 8px 32px 0 rgba(0, 0, 0, 0.37); }
+.am-hud-card { max-width:520px; padding:32px 24px; }
+.am-hud-badge { display:inline-block; padding:4px 10px; background:rgba(59, 130, 246, 0.15); color:#60a5fa; border:1px solid rgba(59, 130, 246, 0.3); border-radius:9999px; font-size:11px; font-weight:600; letter-spacing:0.05em; text-transform:uppercase; }
 """
 
 
@@ -3905,6 +3908,11 @@ def generate_architect_map_html(data: dict, port: int) -> str:
 
     if not repos:
         repos = [{"path": os.getcwd(), "name": workspace_name, "stack_labels": [], "github_url": None}]
+
+    has_graphify = data.get("has_graphify")
+    if has_graphify is None:
+        repo_root = repos[0].get("path", os.getcwd()) if repos and isinstance(repos[0], dict) else os.getcwd()
+        has_graphify = os.path.isfile(os.path.join(repo_root, ".synlynk", "graphify-out", "graph.html")) or os.path.isfile(os.path.join(repo_root, ".synlynk", "graphify-out", "graph.json"))
 
     nodes_json = json.dumps([
         {
@@ -3983,6 +3991,27 @@ def generate_architect_map_html(data: dict, port: int) -> str:
 
         total_symbols = len(logical_nodes)
         num_clusters = len(communities)
+
+        if has_graphify:
+            canvas_inner = '<iframe id="am-graphify-frame" src="graphify.html" width="100%" height="100%" style="border:none;" title="Graphify Knowledge Graph"></iframe>'
+        else:
+            canvas_inner = f"""<div class="am-empty-hud" id="am-empty-hud">
+    <div class="am-hud-card">
+      <div class="am-hud-badge">AWAITING AST INDEXING</div>
+      <h2 style="margin: 16px 0 8px 0; font-size: 20px; font-weight: 600; color: #f1f5f9;">Physical AST Graph Not Yet Indexed</h2>
+      <p style="color: #94a3b8; font-size: 13px; max-width: 480px; line-height: 1.5; margin: 0 auto 20px auto;">
+        The physical AST symbols, call hierarchies, and community clusters have not yet been extracted for workspace <span style="color:#60a5fa; font-weight:600;">{html.escape(workspace_name)}</span>. Run the deep scanner to index symbols and topology.
+      </p>
+      <div style="display:flex; justify-content:center; align-items:center; gap:12px; margin-bottom:14px;">
+        <button type="button" class="am-btn-action" style="padding: 8px 18px; background: #2563eb; color: #fff; border-radius: 6px; font-weight: 500; cursor: pointer; border: none;" onclick="triggerAmKgRefresh(this)">⚡ Run AST Code Scan</button>
+      </div>
+      <div style="font-size: 11px; color: #64748b;">
+        or run in terminal: <code style="background: rgba(255,255,255,0.06); padding: 3px 8px; border-radius: 4px; color: #cbd5e1;">synlynk scan --deep</code>
+      </div>
+    </div>
+  </div>
+  <iframe id="am-graphify-frame" src="graphify.html" width="100%" height="100%" style="border:none; display:none;" title="Graphify Knowledge Graph"></iframe>"""
+
         views_html = f"""{staleness_banner_html}
 <div id="am-knowledge-view" class="am-view active">
   <div class="am-kg-topbar">
@@ -4017,7 +4046,7 @@ def generate_architect_map_html(data: dict, port: int) -> str:
     </div>
   </div>
   <div class="am-kg-canvas-full">
-    <iframe id="am-graphify-frame" src="graphify.html" width="100%" height="100%" style="border:none;" title="Graphify Knowledge Graph"></iframe>
+    {canvas_inner}
   </div>
 </div>
 <div id="am-tree-view" class="am-view">
@@ -10026,8 +10055,13 @@ def _write_cache(data: dict, port: int) -> None:
             f.write(html)
 
     # Copy graphify.html to cache if present in workspace and enrich with canonical labels
-    graphify_src = os.path.join(os.getcwd(), ".synlynk", "graphify-out", "graph.html")
-    graphify_json_src = os.path.join(os.getcwd(), ".synlynk", "graphify-out", "graph.json")
+    repo_root = os.getcwd()
+    repos = data.get("workspace", {}).get("repos") or []
+    if repos and isinstance(repos[0], dict) and repos[0].get("path"):
+        repo_root = repos[0]["path"]
+
+    graphify_src = os.path.join(repo_root, ".synlynk", "graphify-out", "graph.html")
+    graphify_json_src = os.path.join(repo_root, ".synlynk", "graphify-out", "graph.json")
     if os.path.isfile(graphify_src):
         try:
             with open(graphify_src, "r", encoding="utf-8") as gf:
@@ -10049,6 +10083,40 @@ def _write_cache(data: dict, port: int) -> None:
                 shutil.copyfile(graphify_src, os.path.join(VIZ_CACHE_DIR, "graph.html"))
             except Exception:
                 pass
+    else:
+        empty_graphify_html = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>synlynk Vizor — AST Code Graph</title>
+<style>
+  body { margin:0; padding:0; background:#0b0f17; font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif; color:#f8fafc; display:flex; align-items:center; justify-content:center; height:100vh; overflow:hidden; }
+  .card { background:rgba(30,41,59,0.5); border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:36px; text-align:center; max-width:480px; backdrop-filter:blur(16px); box-shadow:0 12px 36px rgba(0,0,0,0.5); }
+  .badge { display:inline-block; padding:4px 12px; background:rgba(59,130,246,0.15); border:1px solid rgba(59,130,246,0.3); color:#60a5fa; border-radius:9999px; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; }
+  h2 { margin:16px 0 8px 0; font-size:20px; font-weight:600; color:#f1f5f9; }
+  p { color:#94a3b8; font-size:13px; line-height:1.5; margin:0 0 20px 0; }
+  code { background:rgba(255,255,255,0.08); padding:3px 8px; border-radius:4px; color:#cbd5e1; font-family:monospace; }
+  button { background:#2563eb; color:#fff; border:none; padding:8px 18px; border-radius:6px; font-size:13px; font-weight:500; cursor:pointer; }
+  button:hover { background:#1d4ed8; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="badge">Awaiting AST Indexing</div>
+    <h2>Physical AST Graph Not Yet Indexed</h2>
+    <p>The AST knowledge graph has not yet been extracted for this workspace. Run the deep scanner to index symbols, communities, and call hierarchies.</p>
+    <div style="margin-bottom:16px;"><button onclick="window.parent.postMessage('trigger-scan', '*');">⚡ Run AST Code Scan</button></div>
+    <div style="font-size:11px; color:#64748b;">or run in terminal: <code>synlynk scan --deep</code></div>
+  </div>
+</body>
+</html>"""
+        try:
+            with open(os.path.join(VIZ_CACHE_DIR, "graphify.html"), "w", encoding="utf-8") as out_f:
+                out_f.write(empty_graphify_html)
+            with open(os.path.join(VIZ_CACHE_DIR, "graph.html"), "w", encoding="utf-8") as out_f:
+                out_f.write(empty_graphify_html)
+        except Exception:
+            pass
 
     manifest = {"updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "version": "0.1"}
     with open(os.path.join(VIZ_CACHE_DIR, "manifest.json"), "w") as f:
