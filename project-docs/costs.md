@@ -74,3 +74,7 @@
 | 2026-09-30 13:51 | claude | claude-sonnet-4-6 | 160000 | 80000 | $1.6800 | estimated_manual | - | PM/native session work: #1862/#1865/#1864 wave — manual merge-conflict resolution on PR #1876 (commit ed9eafc6), worktree deep audit + cleanup (15 superseded worktrees identified/removed, #1877 filed), dispatch coordination for fix+review cycles on PRs #1875/#1876 and #1864 investigation, blog posts #234/#235 |
 | 2026-09-30 14:01 | codex | gpt-5.6-luna | 1144452 | 9777 | $3.5800 | estimated_token_rate | story-issue-1878 | exec: codex job job-6d688f... |
 | 2026-09-30 14:07 | codex | gpt-5.6-luna | 391882 | 5129 | $1.2526 | estimated_token_rate | story-issue-1878 | exec: codex job job-902c56... |
+| 2026-09-30 20:32 | codex | gpt-5.6-luna | 1716851 | 10741 | $5.3117 | estimated_token_rate | story-adhoc-1790780255 | exec: codex job job-49d011... |
+| 2026-09-30 20:45 | codex | gpt-5.6-luna | 1267644 | 8153 | $3.9252 | estimated_token_rate | story-issue-1888 | exec: codex job job-e5e7e1... |
+| 2026-09-30 20:55 | codex | gpt-5.6-luna | 1834154 | 9367 | $5.6430 | estimated_token_rate | story-issue-1888 | exec: codex job job-fa07b1... |
+| 2026-09-30 20:59 | codex | gpt-5.6-luna | 515350 | 3327 | $1.5960 | estimated_token_rate | story-issue-1888 | exec: codex job job-c3a4c1... |
