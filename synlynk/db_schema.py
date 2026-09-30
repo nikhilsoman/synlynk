@@ -1,9 +1,9 @@
-"""SQLite schema DDL for the synlynk state database
-- Extracted from synlynk/__init__.py (R12, 2026-09-29) — pure SQL strings,
-no logic
-- Consumed by synlynk/db.py and synlynk/__init__.py's own DB
-connection helpers via a re-export in __init__.py
-- """
+"""SQLite schema DDL for the synlynk state database.
+
+Extracted from synlynk/__init__.py (R12, 2026-09-29) — pure SQL strings,
+no logic. Consumed by synlynk/db.py and synlynk/__init__.py's own DB
+connection helpers via a re-export in __init__.py.
+"""
 
 _DB_SCHEMA = """
 CREATE TABLE IF NOT EXISTS stories (
