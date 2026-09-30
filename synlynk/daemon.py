@@ -14,7 +14,6 @@ import time
 from typing import Optional
 
 from synlynk._lazy import pkg as _pkg
-
 from synlynk.context import generate_context
 from synlynk.jobs import _dispatch_ready_jobs, _reconcile_daemon_jobs
 from synlynk.sentinel import _write_sentinel_alert, log_telemetry_event
