@@ -305,6 +305,7 @@ def test_wizard_multi_repo_flow(tmp_path, monkeypatch, capsys):
 # === Task B-6: subprocess smoke test for synlynk init --wizard ===
 
 def test_synlynk_init_wizard_dry_run_subprocess(tmp_path, monkeypatch):
+    """A captured, non-TTY wizard subprocess must not hang on screen clearing."""
     import subprocess as sp
     import json
     (tmp_path / '.git').mkdir()
@@ -320,4 +321,4 @@ def test_synlynk_init_wizard_dry_run_subprocess(tmp_path, monkeypatch):
         input=stdin_seq, cwd=str(tmp_path),
         capture_output=True, text=True, env=env, timeout=60,
     )
-    assert result.returncode == 0 or 'Traceback' not in result.stderr, result.stderr
+    assert result.returncode == 0, result.stderr
