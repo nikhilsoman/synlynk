@@ -53,3 +53,4 @@
 | 2026-09-30 23:35 | codex | gpt-5.6-luna | 3450693 | 17525 | $10.6150 | estimated_token_rate | story-b67bce1b | exec: codex job job-84ee67... |
 | 2026-09-30 23:42 | codex | gpt-5.6-luna | 2458556 | 16517 | $7.6234 | estimated_token_rate | story-b67bce1b | exec: codex job job-9213f1... |
 | 2026-09-30 23:47 | codex | gpt-5.6-luna | 2072621 | 10725 | $6.3787 | estimated_token_rate | story-b67bce1b | exec: codex job job-20b458... |
+| 2026-09-30 23:53 | codex | gpt-5.6-luna | 2553185 | 15014 | $7.8848 | estimated_token_rate | story-b67bce1b | exec: codex job job-4a942b... |
