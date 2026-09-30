@@ -46,7 +46,7 @@ def resolve_parent_goal(
                 file_text = "".join(fh.readline() for _ in range(50))
         except OSError:
             pass
-    combined = "\n".join(filter(None, (text_content, file_text, branch)))
+    combined = "\n".join(filter(None, (text_content, file_path, file_text, branch)))
     in_band = extract_in_band_goal(combined)
     if in_band:
         return in_band, "in_band_header"

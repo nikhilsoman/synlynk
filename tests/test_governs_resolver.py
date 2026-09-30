@@ -66,34 +66,63 @@ def test_resolve_parent_story_link(tmp_path, monkeypatch):
     conn.close()
 
 def test_resolve_domain_keyword_heuristic(tmp_path, monkeypatch):
+    from synlynk.db import _migrate_db
     from synlynk.governs_resolver import resolve_parent_goal
     test_db = tmp_path / "state.db"
     monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(test_db))
     conn = _get_db(db_path=str(test_db))
+    _migrate_db(conn)
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS state_identity ("
+        "product_id TEXT NOT NULL, mode TEXT NOT NULL DEFAULT 'repo', "
+        "canonical_path TEXT NOT NULL DEFAULT ''"
+        ")"
+    )
+    conn.execute("INSERT OR REPLACE INTO state_identity (product_id) VALUES ('prod-test')")
+    conn.execute("INSERT INTO goals (goal_id, outcome, criterion, product_id, status) VALUES ('goal-e3840370', 'Vizor Control Plane', 'ok', 'prod-test', 'active')")
+    conn.execute("INSERT INTO goals (goal_id, outcome, criterion, product_id, status) VALUES ('goal-0c4e96ff', 'Book Manuscript', 'ok', 'prod-test', 'active')")
+    conn.execute("INSERT INTO goals (goal_id, outcome, criterion, product_id, status) VALUES ('goal-c7113f58', 'Strategic Expansion', 'ok', 'prod-test', 'active')")
+    conn.execute("INSERT INTO goal_aliases (goal_id, pattern, product_id) VALUES ('goal-e3840370', '(?i)viz|vizor', 'prod-test')")
+    conn.execute("INSERT INTO goal_aliases (goal_id, pattern, product_id) VALUES ('goal-0c4e96ff', '(?i)book', 'prod-test')")
+    conn.execute("INSERT INTO goal_aliases (goal_id, pattern, product_id) VALUES ('goal-c7113f58', '(?i)jev|deepseek', 'prod-test')")
+    conn.commit()
 
     # Path matching vizor
     goal_id, reason = resolve_parent_goal(file_path="synlynk/viz_views.py", conn=conn)
     assert goal_id == "goal-e3840370"
-    assert "domain_heuristic" in reason
+    assert reason == "workspace_alias"
 
     # Branch matching book
     goal_id2, reason2 = resolve_parent_goal(branch="feat/agy/docs-book-chapter-3", conn=conn)
     assert goal_id2 == "goal-0c4e96ff"
-    assert "domain_heuristic" in reason2
+    assert reason2 == "workspace_alias"
 
     # DeepSeek / Jev keyword
     goal_id3, reason3 = resolve_parent_goal(text_content="Implement Jev policy router and TypeSafe model", conn=conn)
     assert goal_id3 == "goal-c7113f58"
-    assert "domain_heuristic" in reason3
+    assert reason3 == "workspace_alias"
     conn.close()
 
 def test_resolve_master_loop_fallback(tmp_path, monkeypatch):
+    from synlynk.db import _migrate_db
     from synlynk.governs_resolver import resolve_parent_goal
     test_db = tmp_path / "state.db"
     monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(test_db))
     conn = _get_db(db_path=str(test_db))
+    _migrate_db(conn)
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS state_identity ("
+        "product_id TEXT NOT NULL, mode TEXT NOT NULL DEFAULT 'repo', "
+        "canonical_path TEXT NOT NULL DEFAULT ''"
+        ")"
+    )
+    conn.execute("INSERT OR REPLACE INTO state_identity (product_id) VALUES ('prod-test')")
+    conn.execute("INSERT INTO goals (goal_id, outcome, criterion, product_id, status, kind) VALUES ('goal-eacab0dc', 'Universal GOVERNS', 'ok', 'prod-test', 'active', 'master')")
+    conn.commit()
 
     goal_id, reason = resolve_parent_goal(text_content="random generic task without keywords", conn=conn)
     assert goal_id == "goal-eacab0dc"
-    assert reason == "master_loop_fallback"
+    assert reason == "workspace_default"
     conn.close()
