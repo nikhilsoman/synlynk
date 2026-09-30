@@ -1782,3 +1782,117 @@ infra issues from earlier waves (#1825-1828, #1831) still untouched. #1745 (mark
 still open.
 
 [@nikhilsoman]
+
+## 2026-09-30 — R12 god-module decomposition shipped, wave cleanup, #1867/#1870 filed
+
+Shipped `[R12]` (`story-54515ca1`, PERF-P3) as PR #1868: consolidated 15 duplicate `_pkg()`
+definitions into a single `synlynk._lazy.pkg()` helper, deleted the dead wizard-TUI scaffold,
+and extracted `LAUNCH_TASK_TEMPLATES` + `_DB_SCHEMA`/`_DB_SCORES_VIEW` out of `__init__.py` into
+`launch_templates.py` and `db_schema.py`. `__init__.py`: 3937 → 3129 lines. Executed via
+`superpowers:subagent-driven-development`, task-by-task (7 tasks), each with implementer →
+spec-compliance reviewer → code-quality reviewer.
+
+qa's non-authoring review on PR #1868 caught a **real regression** my own split-half test runs
+missed: `tests/test_lazy.py`'s tests 1/2 deleted (rather than restored) the real
+`sys.modules["synlynk"]` entry, poisoning cross-file test-collection order — invisible in a
+split-half run if the poisoning test and its victims land in different halves, but red on a
+whole-suite run and on all 4 CI matrix jobs. Fix dispatched to Codex with qa's own validated
+patch; verified myself via a mandatory whole-suite `pytest -q` (3422 passed, 3 skipped, 0
+failed) before merging. This is the split-half technique's known blind spot, now demonstrated
+concretely — worth remembering next time a "split-half all green" claim is the only evidence.
+
+Two more docs-only follow-up PRs (per CLAUDE.md's separate-branch-for-docs rule): #1869 filled
+in the blog post's `pr:`/`status:` frontmatter once #1868's number was known; #1871 ran
+`synlynk checkpoint` to mark `story-54515ca1` done and regenerate `todo.md`/`costs.md`. Both
+qa-reviewed and merged clean.
+
+Job-status false-negative pattern (#1377 lineage) recurred **four more times** this wave —
+`job-650202aa` (Task 6 impl), `job-085b9e18` (test fix), `job-73eafc90`, `job-ee925533`, and
+`job-271b7c73` (three separate qa review/merge jobs) all reported `circuit_breaker_tripped` or
+`timed_out` (exit -9) despite having completed their real work correctly underneath — verified
+directly via `gh pr view --json state,mergedAt,reviews` each time rather than trusting the label.
+
+Filed **#1867** (tech-debt, non-blocking): `synlynk/db.py` still imports `_DB_SCHEMA`/
+`_DB_SCORES_VIEW` via the `synlynk` package re-export rather than directly from the new
+`db_schema.py` module — spec Part B item 3 called for both to import from it directly; PR
+description explicitly notes this as a conscious deviation, not an oversight. Filed **#1870**
+(bug): `synlynk dispatch --dry-run --role qa ...` (agent arg omitted, relying on `--role` to
+resolve it) crashes with `NameError: name 'dispatch_parser' is not defined` instead of a usage
+error — `synlynk/cli.py:1950` references a stale variable name. Also logged the **6th
+recurrence** of the `project-docs/todo.md`/`costs.md` corruption pattern (#1865) — this time in
+job-085b9e18's worktree, another full-content deletion (1477 lines) rather than field reordering;
+discarded via `git checkout --` before it could be committed.
+
+Worktree Hygiene Protocol applied throughout: 3 job worktrees + 2 chore-branch worktrees removed
+and their branches deleted (local + remote confirmed via `git ls-remote --heads`), immediately
+after each PR's merge was independently confirmed rather than deferred to a batch sweep.
+
+R12 was the last item blocking the 2026-09-30 arch-review remediation wave
+(`goal-079e2f37`)'s "review recommended fixes" gate — the deferred FTUE/onboarding brainstorm
+(`story-cf24a4ab`, issue #1866) is now unblocked to start whenever picked up next. Dispatching
+investigation for #1867 and #1870 next; #1865's root cause is still unstarted (6 recurrences
+now, no fix attempted).
+
+[@nikhilsoman]
+
+## 2026-09-30 — #1864 deep investigation, worktree audit close-out (18/18), PR #1878 caught a real costs.md data-loss bug
+
+Deep-dived **#1864** (suspected pytest full-suite hang, from the same review-remediation wave as
+#1862/#1865): a genuine reproduction attempt rather than another static audit — full 3,426-test
+single-process run (340.90s, 1 unrelated failure only), ordered late-suite prefix probing, and a
+static monkeypatch-scope check. Did not reproduce. Posted honest non-reproduction findings as a
+comment rather than closing outright — worth watching for recurrence, possibly incidentally
+resolved by #1875/#1876's fixes to the same test file.
+
+Completed the deep worktree audit's remaining 18 newly-discovered worktrees (on top of the
+periodic-audit bucket): 15 confirmed superseded-by-already-merged-PR, deleted across two cleanup
+rounds (11 hit a detached-HEAD branch-delete false-alarm — `git worktree remove` had already
+succeeded, only the empty-branch-name `git branch -D ""` step errored). 2 confirmed
+active-open-PR, left untouched. 1 (`job-97ae3b14`, Graphify/Vizor mesh work) needed a
+commit-message-grep check against `origin/main` to confirm supersession by #1777 rather than
+being genuinely distinct unmerged work. The 3 that needed individual triage this session
+(`job-ee42c9eb` → #1836, `job-1ac39856` → #1823, `job-97ae3b14` → #1777) all confirmed
+already-merged via the same grep technique; cleanup command handed to Nikhil (destructive git
+ops blocked from my own Bash tool in this environment), still pending on his end due to an
+unrelated `git: command not found` PATH issue in his shim shell.
+
+Archived 46 never-committed lines of stray `tests/test_synlynk.py` work found dirty in the
+`chore/discord-herdr-bridge-spec` parent worktree (`docs/archive/chore-discord-herdr-bridge-
+uncommitted/`) per the standing archive-before-branch-removal policy — parent worktree itself
+left un-deleted, still needs Nikhil's call on whether to finish or discard that work.
+
+Filed **#1877** (tech-debt): a dispatch job (`job-2571fb9d`, #1864 investigation) silently
+produced a full uncommitted 1,525-line deletion of `project-docs/todo.md` in its own worktree —
+same-shape bug as the #1865 lineage (6 prior recurrences), caught before it could be committed.
+
+Wrote blog posts 234/235 for #1862 (PR #1875) and #1865 (PR #1876), logged a `synlynk cost log`
+entry for native PM-session work (~$1.68), and opened docs-only PR #1878 — all per the Blog
+Post and Cost Capture Protocols.
+
+**PR #1878's qa review caught a real bug of my own making**: the branch's `project-docs/
+costs.md` was captured from a stale local snapshot and silently deleted 19 pre-existing
+historical cost rows (2026-09-29 14:04-20:20) while adding the new entry — not a job-status
+false negative, a genuine content defect the non-authoring review was supposed to catch, and
+did. Root cause, now suspected rather than fully confirmed: the local `synlynk exec`/dispatch
+wrapper appears to auto-append a cost-log row to `project-docs/costs.md` in whatever branch is
+currently checked out at the repo root, uncommitted — plausible mechanism for how a branch cut
+mid-session could carry a stale snapshot forward. Worth its own issue if it recurs. Fixed by
+rebuilding `costs.md` from `origin/main`'s current content plus only the branch's genuinely new
+rows (verified via `git diff origin/main -- project-docs/costs.md` showing zero deletions),
+which required a second detour through a diverged-remote-tip reconciliation (force-pushed the
+verified-correct content over a duplicate/broken remote commit — not a discard of independent
+work). PR merged clean on the second review pass at the corrected head. Also newly confirmed:
+`gh pr merge` reporting a local error (blocked by an uncommitted-changes checkout conflict) can
+still mean the merge already succeeded server-side — verify via `gh pr view --json state,
+mergedAt` before assuming a retry is needed, not just for the worktree-conflict case already
+known from earlier in the wave.
+
+Two job-status false negatives this session: `job-6d688fbb` (first PR #1878 review dispatch)
+hit `circuit_breaker_tripped` and posted zero reviews — confirmed via `reviews: []` on the PR,
+not trusted from the label; re-dispatched clean as `job-902c56d1`.
+
+Remaining open: the ~74-entry original periodic-audit bucket still needs Nikhil's disposition
+call (individual triage vs. bulk archive-then-discard); the `chore/discord-herdr-bridge-spec`
+parent worktree's stray test work is still undecided; #1877 not yet dispatched.
+
+[@nikhilsoman]

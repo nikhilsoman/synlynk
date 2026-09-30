@@ -12,18 +12,13 @@ import tarfile
 import uuid
 from typing import Optional, Tuple
 
-from synlynk.taxonomy import entries_for_tier
+from synlynk._lazy import pkg as _pkg
 from synlynk.launch import (
     find_top_scan_finding,
     prompt_first_win_remediation,
     dispatch_first_win_remediation,
 )
-
-def _pkg(name: str, default=None):
-    package = sys.modules.get("synlynk")
-    if package is None:
-        return default
-    return getattr(package, name, default)
+from synlynk.taxonomy import entries_for_tier
 
 _BOLD = "\033[1m"
 
@@ -251,8 +246,11 @@ _WIZ_PRODUCT_BLURB = (
 )
 
 def _wiz_clear() -> None:
-    """Clear the terminal screen."""
-    os.system("clear" if os.name != "nt" else "cls")
+    """Clear the terminal screen without spawning a pipe-inheriting child."""
+    if os.name == "nt":
+        os.system("cls")
+    elif sys.stdout.isatty():
+        print("\033[H\033[2J", end="", flush=True)
 
 def _wiz_read_key() -> str:
     """Read a single keypress without requiring Enter.
@@ -1294,4 +1292,3 @@ def cmd_wizard_init(
         "first_win": first_win_result,
         "elapsed_seconds": elapsed,
     }
-

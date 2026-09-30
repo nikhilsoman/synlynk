@@ -1409,10 +1409,8 @@ Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'corre [backe
 - [ ] [R2] LIVE-17: decouple probe.py from capability_sweep so a diagnostic never reaches dispatch_agent while holding a write conn [backend] <!-- id:story-514fde89 -->
 - [ ] [R4] LIVE-17: regression test that fails fast on a nested writer instead of on busy_timeout expiry [testing] <!-- id:story-d481115a -->
 - [ ] [R5] PERF-P0: parallelize _worktree_status_hint git status forks and fix the backwards clean==stale heuristic (8.3x on synlynk status) [backend] <!-- id:story-b1f9d66b -->
-- [x] [R9] PERF-P5: deduplicate the 5 instruction files (71% overlap, 106KB / ~26k tokens written by init) [docs] <!-- id:story-025c857c -->
 - [ ] [R10] PERF-P4: age, dedupe and roll up sentinel alerts (261 un-aged, no TTL) [backend] <!-- id:story-a4442387 -->
 - [ ] [R11] ROADMAP: fix roadmap.md ordering and the three colliding 1.0.0 entries [docs] <!-- id:story-08f5e280 -->
-- [ ] [R12] PERF-P3: break the god-module topology — 3924-line __init__.py, 570 function-level imports, 15 _pkg() copies [architecture] <!-- id:story-54515ca1 -->
 - [ ] [R13] TESTS: break the ~85s single-worker floor from test_platform_ops.py under --dist loadfile [testing] <!-- id:story-a5032986 -->
 - [ ] [R3] LIVE-17: reconcile CI with local — macOS vs ubuntu-latest and populated ~/.synlynk divergence [devops] <!-- id:story-089c524e -->
 - [ ] [R6] PERF-P1: reclaim 89.7% freelist in state.db via VACUUM plus auto_vacuum policy (287MB to 28.8MB, 8.4x read connect) [data] <!-- id:story-4fcba356 -->
@@ -1478,3 +1476,53 @@ First, the time to live never takes effect for newly writt [testing] <!-- id:sto
 - [ ] Pull request number 1843 in this repository previously received a request for changes from qa. The author has since pushed a revision addressing every finding.  As the qa role, re-review the current h [testing] <!-- id:story-adhoc-1790622971 -->
 - [ ] Pull request number 1843 in this repository has an approving qa review, all required checks are green, and it reports a clean mergeable state. As the qa role, confirm the approval and the check result [backend] <!-- id:story-adhoc-1790623138 -->
 - [ ] Review pull request number 1845 in this repository as the qa role. This is a docs-only PR adding a devlog entry and regenerating project-docs/todo.md and project-docs/costs.md from state.db after R9 ( [testing] <!-- id:story-adhoc-1790623733 -->
+- [ ] costs.md generator doesn't escape newlines/pipes in cost_entries.model, breaking the markdown table [backend] <!-- id:story-issue-1846 -->
+- [ ] Pull request number 1845 in this repository has an approving qa review, all required checks are green, and it reports a clean mergeable state. As the qa role, confirm the approval and the check result [backend] <!-- id:story-adhoc-1790641884 -->
+- [ ] Fix issue 1846: synlynk/completion_tracker.py function compute_completion_verdict calls subprocess.run with the claude binary unconditionally, with no check for whether that binary is installed. On ev [testing] <!-- id:story-adhoc-1790643322 -->
+- [ ] Fix issue 1846. synlynk/db.py function _generate_costs_md at approximately line 2474 writes cost_entries fields directly into a markdown table with pipe delimited rows, with no escaping of the model o [backend] <!-- id:story-adhoc-1790643389 -->
+- [ ] Implement story R14 (state.db 1194): consolidate the ad-hoc lazy column-migration helpers in synlynk/dispatch.py. There are six near-identical functions there, _ensure_daemon_job_context_columns, _ens [testing] <!-- id:story-adhoc-1790643437 -->
+- [ ] Review pull request number 1847 in this repository as the qa role.  Read the full diff, evaluate correctness, test coverage, and any regression the change could introduce. Run the relevant tests and r [testing] <!-- id:story-adhoc-1790643788 -->
+- [ ] Review pull request number 1848 in this repository as the qa role.  Read the full diff, evaluate correctness, test coverage, and any regression the change could introduce. Run the relevant tests and r [testing] <!-- id:story-adhoc-1790643799 -->
+- [ ] Review pull request number 1849 in this repository as the qa role.  Read the full diff, evaluate correctness, test coverage, and any regression the change could introduce. Run the relevant tests and r [testing] <!-- id:story-adhoc-1790643809 -->
+- [ ] Pull request number 1847 in this repository has an approving qa review, all required checks are green, and it reports a clean mergeable state. As the qa role, confirm the approval and the check result [backend] <!-- id:story-adhoc-1790644108 -->
+- [ ] Pull request number 1847 in this repository has an approving qa review, all required checks are green, and it reports a clean mergeable state. As the qa role, confirm the approval and the check result [backend] <!-- id:story-adhoc-1790644144 -->
+- [ ] Pull request number 1848 in this repository has an approving qa review, all required checks are green, and it reports a clean mergeable state. As the qa role, confirm the approval and the check result [backend] <!-- id:story-adhoc-1790644172 -->
+- [ ] Pull request number 1849 in this repository (R14: consolidate daemon job column migrations) has a CHANGES_REQUESTED review with one blocking finding: docs/blog/README.md adds a new post using series n [docs] <!-- id:story-adhoc-1790644808 -->
+- [ ] Pull request number 1849 in this repository previously received a request for changes from qa. The author has since pushed a revision addressing every finding. confirm the blog post series-number renu [testing] <!-- id:story-adhoc-1790645141 -->
+- [ ] Pull request number 1849 in this repository (R14: consolidate daemon job column migrations) has a CHANGES_REQUESTED review with one remaining finding: docs/blog/231-prTBD-1194-daemon-job-schema.md lin [docs] <!-- id:story-adhoc-1790645426 -->
+- [ ] Pull request number 1849 in this repository previously received a request for changes from qa. The author has since pushed a revision addressing every finding. confirm the H1 heading in docs/blog/231- [testing] <!-- id:story-adhoc-1790646026 -->
+- [ ] Pull request number 1849 in this repository has an approving qa review, all required checks are green, and it reports a clean mergeable state. As the qa role, confirm the approval and the check result [backend] <!-- id:story-adhoc-1790646313 -->
+- [ ] fix(dispatch): cap BEHIND/DIRTY PR-review retry churn and block retries on critical cost inflation [testing] <!-- id:story-issue-1741 -->
+- [ ] Pull request number 1852 in this repository has an approving qa review, all required checks are green, and it reports a clean mergeable state. As the qa role, confirm the approval and the check result [backend] <!-- id:story-adhoc-1790648005 -->
+- [ ] Pull request number 1852 in this repository has an approving qa review, all required checks are green, and it reports a clean mergeable state. As the qa role, confirm the approval and the check result [backend] <!-- id:story-adhoc-1790648021 -->
+- [ ] Pull request number 1853 in this repository is a docs/data-only change (a generated blog post, blog README index, and social_drafts.json — no code changes). As the qa role, verify it against origin/ma [docs] <!-- id:story-adhoc-1790648323 -->
+- [ ] Job self-report status unreliable — 7th/8th recurrence, permission_denied co-occurring with TOKEN_BLOAT sentinel [docs] <!-- id:story-issue-1850 -->
+- [ ] [LIVE-18] Dispatch reports done/exit 0 (and GH-WRITE ✓) while never pushing the branch or opening a PR [testing] <!-- id:story-issue-1825 -->
+- [ ] --force-harness is not binding: codex-pinned dispatch ran on agy [testing] <!-- id:story-issue-1826 -->
+- [ ] fix: fail closed on unpushed job branches [testing] <!-- id:story-issue-1855 -->
+- [ ] Dispatch cost inflation: $29+ across 4 small jobs, and the token extractor exceeds its own 2M ceiling [testing] <!-- id:story-issue-1827 -->
+- [ ] fix: honor --force-harness over role/story auto-routing [testing] <!-- id:story-issue-1856 -->
+- [ ] LIVE-17 fix turns a 7s failing probe test into a 62s passing one (+55s to the suite floor) [testing] <!-- id:story-issue-1828 -->
+- [ ] fix: enforce circuit breaker for daemon jobs [testing] <!-- id:story-issue-1857 -->
+- [ ] test: isolate Claude probe environment checks [testing] <!-- id:story-issue-1858 -->
+- [ ] PR 1857 already has an APPROVED review from qa and mergeStateStatus CLEAN. Run synlynk policy check-merge for the qa role, then merge PR 1857 with squash and delete branch. [testing] <!-- id:story-adhoc-1790671510 -->
+- [ ] PR 1858 already has an APPROVED review from qa and mergeStateStatus CLEAN. Run synlynk policy check-merge for the qa role, then merge PR 1858 with squash and delete branch. [testing] <!-- id:story-adhoc-1790671551 -->
+- [ ] PR 1855 has reviewDecision APPROVED and all CI checks green. Run synlynk policy check-merge for the qa role, then merge PR 1855 with squash and delete branch. [devops] <!-- id:story-adhoc-1790672134 -->
+- [ ] PR 1855 has reviewDecision APPROVED, all CI checks green, and qa policy gate already passed. Standard merge is being rejected by GitHub GraphQL with a stale Head branch is out of date error despite th [devops] <!-- id:story-adhoc-1790672631 -->
+- [ ] PR 1855 has reviewDecision APPROVED and all CI checks green (mergeStateStatus CLEAN) on the current head. Merge PR 1855 with squash and delete branch. [testing] <!-- id:story-adhoc-1790675908 -->
+- [ ] Fix gh:1819. The gh-write verification path for review type dispatches cannot open the canonical state db from inside a dispatch worktree since it is sandboxed, so it fails closed and reports succeede [testing] <!-- id:story-adhoc-1790690875 -->
+- [ ] Fix gh:1820. The pre dispatch cost estimator models only the injected prompt context and ignores the dominant input cost term for review type dispatches, which is the harness reading repository files  [testing] <!-- id:story-adhoc-1790690893 -->
+- [ ] Implement Task 1 of the plan at docs/superpowers/plans/2026-09-29-r12-init-god-module-decomposition.md (read that file for full context/spec at docs/superpowers/specs/2026-09-29-r12-init-god-module-de [testing] <!-- id:R12-task1 -->
+- [ ] story-bs12a-roles <!-- id:story-bs12a-roles -->
+- [ ] Do the thing <!-- id:s1 -->
+- [ ] story-v010-pkg <!-- id:story-v010-pkg -->
+- [ ] Test story [cli] <!-- id:story-test-ledger -->
+- [ ] drop test story <!-- id:s-drop-test -->
+- [ ] Continue the R12 refactor (docs/superpowers/plans/2026-09-29-r12-init-god-module-decomposition.md, Task 2). synlynk._lazy.pkg() already exists (committed in a prior task on this branch) — do not recre [testing] <!-- id:R12-task2 -->
+- [ ] In synlynk/scan.py, the _pkg() consolidation commit (cff4eab4) removed 'import sys' but sys.stdin.isatty()/sys.stdout.isatty() are still used at line ~247 in the run_workspace_scan flow (function cont [backend] <!-- id:R12-task2-fix -->
+- [ ] Task 3 of docs/superpowers/plans/2026-09-29-r12-init-god-module-decomposition.md: In synlynk/logs.py and synlynk/platform_status.py, replace the local def _pkg block (def _pkg(name): import synlynk; r [testing] <!-- id:story-adhoc-1790733052 -->
+- [ ] Task 4 of docs/superpowers/plans/2026-09-29-r12-init-god-module-decomposition.md: In synlynk/__init__.py, delete the dead wizard-TUI scaffold block. It starts at the comment line '# -- Wizard TUI prim [frontend] <!-- id:story-adhoc-1790733595 -->
+- [ ] Full pytest suite hangs in a single monolithic run (splits/isolated files pass clean) [frontend] <!-- id:story-issue-1864 -->
+- [ ] Brainstorm + design synlynk's end-to-end FTUE/onboarding: greenfield, brownfield, multi-repo discovery, product narrative, terminal-vs-web, and Vizor's role (post-R12) [architecture] <!-- id:story-cf24a4ab -->
+- [ ] R12: consolidate _pkg() duplication + trim synlynk/__init__.py bloat [frontend] <!-- id:story-issue-1868 -->
+- [ ] Review pull request number 1869 in this repository as the qa role. This is a docs-only PR renaming a blog post file and filling in its pr/status frontmatter fields now that the PR number is known, plu [docs] <!-- id:story-adhoc-1790745292 -->

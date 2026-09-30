@@ -1,0 +1,107 @@
+diff --git a/AGENTS.md b/AGENTS.md
+index b82dcc43..d9f17081 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -321,7 +321,7 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
+   ordinary command usage, not on phrase matches, not mid-brainstorm).
+ <!-- synlynk:end -->
+ 
+-<!-- synlynk:harness v0.154.0 verified:2026-09-19T04:44:21Z -->
++<!-- synlynk:harness v0.155.1 verified:2026-09-22T01:31:46Z -->
+ # Harness Instructions (synlynk-managed — do not edit)
+ 
+ ## PR Review Discipline
+diff --git a/tests/test_probe.py b/tests/test_probe.py
+index bc1b97a1..95218970 100644
+--- a/tests/test_probe.py
++++ b/tests/test_probe.py
+@@ -400,6 +400,15 @@ def test_sop_blocks_no_hardcoded_claude_authority():
+     assert "escalate to the Home Harness" in combined_sops
+ 
+ 
++def test_pr_review_sop_caps_behind_update_branch_cycles():
++    from synlynk.probe import SOP_BLOCKS
++
++    review_sop = next(block for block in SOP_BLOCKS if block.startswith("## PR Review Discipline"))
++    assert "at most 2" in review_sop
++    assert "gh pr update-branch" in review_sop
++    assert "stop retrying" in review_sop
++
++
+ def test_repair_sops_detects_legacy_claude_references(tmp_path, monkeypatch):
+     from synlynk import probe
+ 
+@@ -425,4 +434,3 @@ def test_repair_sops_detects_legacy_claude_references(tmp_path, monkeypatch):
+     assert "without explicit Home Harness approval" in updated
+ 
+ 
+-
+diff --git a/tests/test_sentinel.py b/tests/test_sentinel.py
+index 756bf42b..d264e163 100644
+--- a/tests/test_sentinel.py
++++ b/tests/test_sentinel.py
+@@ -115,6 +115,7 @@ def test_check_token_bloat_triggers_on_zero_files_with_high_tokens(tmp_path):
+ 
+     assert "COST_INFLATION" in codes
+     assert codes["COST_INFLATION"]["severity"] == "CRITICAL"
++    assert codes["COST_INFLATION"]["actionable"] is True
+     assert "$5.26" in codes["COST_INFLATION"]["message"]
+ 
+     content = sentinel_file.read_text()
+diff --git a/tests/test_synlynk.py b/tests/test_synlynk.py
+index 656e5fcf..91b7ffaf 100644
+--- a/tests/test_synlynk.py
++++ b/tests/test_synlynk.py
+@@ -3091,6 +3091,52 @@ def test_reconcile_requeues_clean_harness_internal_timeout(project_dir, monkeypa
+     assert sentinel_calls == []
+ 
+ 
++def test_reconcile_blocks_timeout_retry_after_critical_cost_alert(project_dir, monkeypatch):
++    import synlynk as sl
++    import synlynk.jobs as jobs_mod
++
++    worktree_path = project_dir / "worktrees" / "job-critical-cost"
++    worktree_path.mkdir(parents=True)
++    log_file = project_dir / ".synlynk" / "logs" / "job-critical-cost.log"
++    log_file.parent.mkdir(parents=True, exist_ok=True)
++    log_file.write_text("timeout waiting for response\n")
++    job = {
++        "id": "job-critical-cost",
++        "agent": "codex",
++        "story_id": "story-184",
++        "task": "review and merge PR #1738",
++        "pid": 9999999,
++        "log_file": str(log_file),
++        "worktree_path": str(worktree_path),
++        "worktree_branch": "dispatch/codex/job-critical-cost",
++        "started_at": "2026-07-12T10:00:00",
++        "ended_at": None,
++        "status": "running",
++        "exit_code": None,
++        "dispatch_mode": "agent",
++        "model_at_dispatch": "unknown",
++    }
++    sl._save_jobs([job])
++    dispatched = []
++    sentinel_calls = []
++    monkeypatch.setattr(sl, "dispatch_agent", lambda *a, **kw: dispatched.append((a, kw)))
++    monkeypatch.setattr(sl, "_inspect_worktree_git_state", lambda *a, **kw: {"has_activity": False, "remote_has_activity": False})
++    monkeypatch.setattr(jobs_mod.os, "kill", lambda *a, **kw: (_ for _ in ()).throw(ProcessLookupError()))
++    monkeypatch.setattr(jobs_mod, "_write_sentinel_alert", lambda *a, **kw: sentinel_calls.append((a, kw)))
++    monkeypatch.setattr(
++        sl,
++        "check_token_bloat",
++        lambda **kwargs: [{"severity": "CRITICAL", "code": "COST_INFLATION", "actionable": True}],
++    )
++
++    sl._reconcile_jobs()
++
++    assert dispatched == []
++    reconciled = next(j for j in sl._load_jobs() if j["id"] == "job-critical-cost")
++    assert reconciled["cost_inflation_critical"] is True
++    assert any(call[0][1] == "HARNESS_INTERNAL_TIMEOUT" for call in sentinel_calls)
++
++
+ def test_reconcile_does_not_requeue_timeout_with_real_work(project_dir, monkeypatch):
+     import synlynk as sl
+     import synlynk.jobs as jobs_mod

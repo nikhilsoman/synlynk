@@ -19,6 +19,7 @@ from synlynk._constants import HARNESS_CAPABILITY_BASELINES
 from synlynk.fleet import terminal_status_for_unknown_exit
 from synlynk.events import emit_event
 from synlynk.gh_verify import _parse_iso8601, gh_write_verified, local_commits_pushed
+from synlynk._lazy import pkg as _pkg
 
 
 _BOLD = "[1m"
@@ -126,13 +127,6 @@ def is_terminal_status(status: Optional[str]) -> bool:
 def is_noop_status(status: Optional[str]) -> bool:
     """Return True if status represents a job that completed with no effect/changes."""
     return status in NOOP_JOB_STATUSES
-
-
-def _pkg(name: str, default=None):
-    package = sys.modules.get("synlynk")
-    if package is None:
-        return default
-    return getattr(package, name, default)
 
 
 def _worktree_path_is_available(worktree_path: Optional[str], operation: str) -> bool:

@@ -18,6 +18,7 @@ from dataclasses import dataclass as _dataclass
 from typing import List as _List
 
 from synlynk._constants import HARNESS_CAPABILITY_BASELINES, CORE_FLEET, CORE_INSTRUCTION_FILES, VERSION
+from synlynk._lazy import pkg as _pkg
 from synlynk.db import cmd_remediation_log
 from synlynk.dispatch import dispatch_agent
 from synlynk.fleet import (
@@ -37,13 +38,6 @@ from synlynk.probe import (
     _run_tc6,
     _run_tc9,
 )
-
-
-def _pkg(name: str, default=None):
-    package = sys.modules.get("synlynk")
-    if package is None:
-        return default
-    return getattr(package, name, default)
 
 
 _BOLD = "\033[1m"
