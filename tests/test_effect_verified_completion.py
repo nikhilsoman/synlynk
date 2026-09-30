@@ -119,7 +119,7 @@ def test_reconcile_mutating_job_with_diff_becomes_completed(temp_git_worktree, t
     assert reconciled[0]["status"] == STATUS_COMPLETED
 
 
-def test_local_commit_without_remote_branch_is_unpushed_and_not_gh_verified(temp_git_worktree):
+def test_review_verification_uses_github_even_without_remote_branch(temp_git_worktree, monkeypatch):
     worktree, base_sha = temp_git_worktree
     subprocess.run(["git", "checkout", "-b", "dispatch/codex/job-stranded"], cwd=worktree, check=True, capture_output=True)
     with open(os.path.join(worktree, "code.py"), "w") as handle:
@@ -127,6 +127,11 @@ def test_local_commit_without_remote_branch_is_unpushed_and_not_gh_verified(temp
     subprocess.run(["git", "add", "code.py"], cwd=worktree, check=True, capture_output=True)
     subprocess.run(["git", "commit", "-m", "stranded"], cwd=worktree, check=True, capture_output=True)
 
+    calls = []
+    monkeypatch.setattr(
+        "synlynk.verify_effects.gh_write_verified",
+        lambda **kwargs: calls.append(kwargs) or True,
+    )
     result = verify_job_effects(
         worktree_path=worktree,
         worktree_branch="dispatch/codex/job-stranded",
@@ -137,9 +142,21 @@ def test_local_commit_without_remote_branch_is_unpushed_and_not_gh_verified(temp
         exit_code=0,
     )
 
-    assert result.status == "unpushed_branch"
+    assert result.status == STATUS_COMPLETED
+    assert result.verified is True
+    assert result.gh_verified is True
+    assert calls[0]["target"] == "pr:1825"
+
+
+def test_review_verification_fails_closed_when_github_is_unreachable(monkeypatch):
+    monkeypatch.setattr("synlynk.verify_effects.gh_write_verified", lambda **kwargs: None)
+    result = verify_job_effects(
+        task_class="review",
+        gh_verify_kwargs={"target": "pr:1825", "expect": "review_posted"},
+        exit_code=0,
+    )
+    assert result.status == STATUS_FAILED_NOOP_DENIED
     assert result.verified is False
-    assert result.gh_verified is None
 
 
 def test_reconcile_gh_write_unverified_becomes_failed_noop_denied(temp_git_worktree, tmp_path, monkeypatch):

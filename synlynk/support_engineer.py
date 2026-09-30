@@ -433,8 +433,8 @@ def _run_investigation(finding: dict, agent_cfg: dict) -> dict:
 
     if prompt_via_arg:
         shell_cmd = (
-            f"PROMPT=$(cat {_shlex.quote(prompt_file)}); "
-            f"{cmd_str} \"$PROMPT\" > {_shlex.quote(log_file)} 2>&1; "
+            f"synlynk_prompt=$(cat {_shlex.quote(prompt_file)}); "
+            f"{cmd_str} \"$synlynk_prompt\" > {_shlex.quote(log_file)} 2>&1; "
             f"echo $? > {_shlex.quote(log_file)}.exit"
         )
     else:
