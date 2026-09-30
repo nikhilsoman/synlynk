@@ -814,6 +814,7 @@ def check_model_rates_freshness() -> None:
 
 DEFAULT_TOKEN_BLOAT_ZERO_FILE_THRESHOLD = 500_000
 DEFAULT_TOKEN_PER_FILE_RATIO_THRESHOLD = 500_000
+DEFAULT_REVIEW_TOKEN_BLOAT_THRESHOLD = 500_000
 DEFAULT_COST_INFLATION_WARN_THRESHOLD = 3.00
 DEFAULT_COST_INFLATION_CRITICAL_THRESHOLD = 5.00
 
@@ -883,9 +884,11 @@ def check_token_bloat(
     files_touched: int = 0,
     job_id: str = "",
     agent: str = "",
+    task_type: str = "",
     sentinel_path: Optional[str] = None,
     zero_file_token_threshold: int = DEFAULT_TOKEN_BLOAT_ZERO_FILE_THRESHOLD,
     token_per_file_threshold: int = DEFAULT_TOKEN_PER_FILE_RATIO_THRESHOLD,
+    review_token_threshold: int = DEFAULT_REVIEW_TOKEN_BLOAT_THRESHOLD,
     cost_warn_threshold: float = DEFAULT_COST_INFLATION_WARN_THRESHOLD,
     cost_crit_threshold: float = DEFAULT_COST_INFLATION_CRITICAL_THRESHOLD,
 ) -> list:
@@ -924,6 +927,7 @@ def check_token_bloat(
                         files_touched=e_files,
                         job_id=e_job,
                         agent=e_agent,
+                        task_type=event.get("task_type") or event.get("task_kind") or "",
                         sentinel_path=sentinel_path,
                         zero_file_token_threshold=zero_file_token_threshold,
                         token_per_file_threshold=token_per_file_threshold,
@@ -939,8 +943,20 @@ def check_token_bloat(
     job_label = f"Job {job_id}" if job_id else "Dispatched job"
     agent_label = f" on agent '{agent}'" if agent else ""
 
-    # 1. Zero-files touched with high token consumption
-    if files_count == 0 and total_tokens >= zero_file_token_threshold:
+    # Reviews intentionally leave the worktree untouched; use token volume.
+    if task_type == "review" and total_tokens >= review_token_threshold:
+        severity = "CRITICAL" if total_tokens >= 2_000_000 else "WARN"
+        msg = (
+            f"{job_label}{agent_label} review consumed {total_tokens:,} tokens "
+            f"({in_tokens:,} in / {out_tokens:,} out) — exceeds the review token "
+            f"baseline of {review_token_threshold:,}; anomalous token bloat detected."
+        )
+        _write_sentinel_alert(severity, "TOKEN_BLOAT", msg, sentinel_path=sentinel_path)
+        print(f"\n  ⚠ [TOKEN_BLOAT] {msg}")
+        alerts_generated.append({"severity": severity, "code": "TOKEN_BLOAT", "message": msg})
+
+    # 1. Zero-files touched with high token consumption for non-review jobs
+    elif task_type != "review" and files_count == 0 and total_tokens >= zero_file_token_threshold:
         severity = "CRITICAL" if total_tokens >= 2_000_000 else "WARN"
         msg = (
             f"{job_label}{agent_label} consumed {total_tokens:,} tokens "
@@ -952,7 +968,7 @@ def check_token_bloat(
         alerts_generated.append({"severity": severity, "code": "TOKEN_BLOAT", "message": msg})
 
     # 2. High token-per-file-touched ratio
-    elif files_count > 0:
+    elif task_type != "review" and files_count > 0:
         ratio = total_tokens / files_count
         if ratio >= token_per_file_threshold:
             severity = "CRITICAL" if (ratio >= 1_000_000 or total_tokens >= 2_000_000) else "WARN"
