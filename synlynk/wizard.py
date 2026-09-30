@@ -246,8 +246,11 @@ _WIZ_PRODUCT_BLURB = (
 )
 
 def _wiz_clear() -> None:
-    """Clear the terminal screen."""
-    os.system("clear" if os.name != "nt" else "cls")
+    """Clear the terminal screen without spawning a pipe-inheriting child."""
+    if os.name == "nt":
+        os.system("cls")
+    elif sys.stdout.isatty():
+        print("\033[H\033[2J", end="", flush=True)
 
 def _wiz_read_key() -> str:
     """Read a single keypress without requiring Enter.
