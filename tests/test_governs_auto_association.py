@@ -73,3 +73,40 @@ def test_scoped_goals_accept_config_aliases(tmp_path, monkeypatch):
     goals = scoped_goals(conn, repo_root=str(root))
 
     assert goals[0]["aliases"] == ["payments"]
+
+
+def test_cmd_story_create_associates_in_its_write_transaction(tmp_path):
+    db_path = tmp_path / "state.db"
+    conn = _db(tmp_path)
+    conn.execute(
+        "INSERT INTO goals (goal_id, outcome, criterion, product_id, status) "
+        "VALUES ('goal-alpha', 'User Authentication Flow', 'Login', 'prod-rxcc', 'active')"
+    )
+    conn.commit()
+    conn.close()
+
+    from synlynk.db import cmd_story_create
+
+    story_id = cmd_story_create("Add user login and authentication", db_path=str(db_path))
+
+    conn = sqlite3.connect(str(db_path))
+    assert conn.execute(
+        "SELECT goal_id FROM stories WHERE story_id=?", (story_id,)
+    ).fetchone()[0] == "goal-alpha"
+    assert conn.execute(
+        "SELECT link_status FROM goal_contributions WHERE story_id=?", (story_id,)
+    ).fetchone()[0] == "linked"
+    conn.close()
+
+
+def test_story_write_without_matching_goal_records_unresolved(tmp_path):
+    conn = _db(tmp_path)
+    conn.execute("INSERT INTO stories (story_id, title) VALUES (?, ?)", ("story-write", "Unmapped work"))
+    from synlynk.governs_engine import associate_story
+
+    associate_story(conn, "story-write", title="Unmapped work", emit=False)
+    row = conn.execute(
+        "SELECT link_status, skip_reason FROM goal_contributions WHERE story_id=?",
+        ("story-write",),
+    ).fetchone()
+    assert row == ("unresolved", "no scoped goal matched")

@@ -2887,6 +2887,11 @@ def _import_todo_to_stories(docs_dir: str = None, conn=None) -> int:
                     "INSERT INTO stories (story_id, title, status) VALUES (?, ?, ?)",
                     (story_id, title, status),
                 )
+                try:
+                    from synlynk.governs_engine import associate_story
+                    associate_story(conn, story_id, title=title, emit=False)
+                except sqlite3.OperationalError:
+                    pass
                 imported += 1
                 existing_ids.add(story_id)
             except sqlite3.IntegrityError:
@@ -2907,7 +2912,8 @@ def cmd_story_create(title: str, engg_domain: str = None,
                      discipline: str = None,
                      role: str = None,
                      stage: str = None,
-                     story_id: str = None) -> str:
+                     story_id: str = None,
+                     db_path: str = None) -> str:
     """Creates a story record in state.db. Returns the generated story_id."""
     from synlynk import _GREEN, _RESET, _generate_todo_md, _get_db, load_config
     import hashlib as _hashlib
@@ -2929,13 +2935,15 @@ def cmd_story_create(title: str, engg_domain: str = None,
     )[0:4]
     if engg_domain is None:
         engg_domain = discipline
-    conn = _get_db()
+    conn = _get_db(db_path=db_path)
     conn.execute(
         "INSERT INTO stories (story_id, title, engg_domain, discipline, org_domain, role, stage, "
         "org_domain_tags, stack_tags, industry, phase, estimated_tokens) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (story_id, title, engg_domain, discipline, org_domain, role, stage,
          tags_json, stack_tags_json, industry, phase, estimated_tokens)
     )
+    from synlynk.governs_engine import associate_story
+    associate_story(conn, story_id, title=title, emit=False)
     conn.commit()
     conn.close()
     _generate_todo_md()
@@ -3427,11 +3435,19 @@ def cmd_goal_link(story_id: str, goal_id: str, secondary: bool = False) -> None:
         return
     if secondary:
         conn.execute(
+            "DELETE FROM goal_contributions WHERE story_id=? AND goal_id='none'",
+            (story_id,),
+        )
+        conn.execute(
             "INSERT OR IGNORE INTO goal_contributions (goal_id, story_id) VALUES (?, ?)",
             (goal_id, story_id)
         )
         print(f"  {_GREEN}✓{_RESET} {story_id} linked to {goal_id} (secondary)")
     else:
+        conn.execute(
+            "DELETE FROM goal_contributions WHERE story_id=? AND goal_id='none'",
+            (story_id,),
+        )
         conn.execute("UPDATE stories SET goal_id=? WHERE story_id=?", (goal_id, story_id))
         print(f"  {_GREEN}✓{_RESET} {story_id} linked to {goal_id} (primary)")
     conn.commit()

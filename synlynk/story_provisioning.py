@@ -168,6 +168,15 @@ def resolve_or_create_story_id(task_text: str, issue=None, timestamp: float = No
                 "build",
             ),
         )
+        from synlynk.governs_engine import associate_story
+        associate_story(
+            conn,
+            story_id,
+            title=classification["title"],
+            issue_number=issue_number,
+            text_content=task_text,
+            emit=False,
+        )
         conn.commit()
     except Exception:
         return story_id

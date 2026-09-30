@@ -107,6 +107,14 @@ def _create_story_safe(
                 "VALUES (?, ?, ?, ?, 'ready', ?)",
                 (story_id, title, description, criteria, priority),
             )
+            from synlynk.governs_engine import associate_story
+            associate_story(
+                conn,
+                story_id,
+                title=title,
+                text_content=f"{description}\n{criteria}",
+                emit=False,
+            )
             conn.commit()
             conn.close()
             return story_id
