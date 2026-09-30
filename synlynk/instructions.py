@@ -949,6 +949,16 @@ def install_pre_commit_hook(repo_root: Path) -> None:
     hook_path.write_text(content)
     hook_path.chmod(hook_path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
+    versioned_hook = Path(repo_root) / "githooks" / "pre-commit"
+    if versioned_hook.is_file():
+        subprocess.run(
+            ["git", "config", "core.hooksPath", "githooks"],
+            cwd=repo_root,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
 def _check_instruction_drift() -> list:
     """Check tracked instruction files for external modifications to the synlynk section.
 

@@ -1,5 +1,6 @@
 import json
 import stat
+import subprocess
 
 import pytest
 
@@ -48,6 +49,27 @@ def test_install_pre_commit_hook_rejects_non_shebang_hook(tmp_path, monkeypatch)
 
     with pytest.raises(RuntimeError, match="unexpected pre-commit hook content"):
         install_pre_commit_hook(repo_root=tmp_path)
+
+
+def test_install_pre_commit_hook_configures_versioned_hooks_path(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True)
+    (tmp_path / ".git" / "hooks").mkdir(exist_ok=True)
+    (tmp_path / "githooks").mkdir()
+    (tmp_path / "githooks" / "pre-commit").write_text("#!/bin/sh\nexit 0\n")
+
+    from synlynk.instructions import install_pre_commit_hook
+
+    install_pre_commit_hook(repo_root=tmp_path)
+
+    configured = subprocess.run(
+        ["git", "config", "--get", "core.hooksPath"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert configured.stdout.strip() == "githooks"
 
 
 def test_tier0_fixture_only_gets_tier0_and_gateway_phrases():
