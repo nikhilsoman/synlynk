@@ -3,15 +3,6 @@
 
 | Date | Agent | Model | Tokens In | Tokens Out | Cost | Source | Story | Notes |
 |---|---|---|---|---|---|---|---|---|
-| 2026-09-30 03:24 | codex | o4-mini | 5000 | 2000 | $0.0450 | estimated_tshirt | story-issue-1496 | exec: codex job job-c7032d... |
-| 2026-09-30 07:21 | codex | o4-mini | 5000 | 2000 | $0.0450 | estimated_tshirt | story-issue-1496 | exec: codex job job-892d61... |
-| 2026-09-30 07:21 | codex | o4-mini | 5000 | 2000 | $0.0450 | estimated_tshirt | story-issue-1496 | exec: codex job job-406356... |
-| 2026-09-30 07:21 | codex | o4-mini | 5000 | 2000 | $0.0450 | estimated_tshirt | story-issue-1496 | exec: codex job job-db30dd... |
-| 2026-09-30 07:24 | codex | gpt-5.6-luna | 1425540 | 4692 | $4.3470 | estimated_token_rate | story-adhoc-1790733052 | exec: codex job job-125941... |
-| 2026-09-30 09:20 | codex | o4-mini | 5000 | 2000 | $0.0450 | estimated_tshirt | story-adhoc-1790733595 | exec: codex job job-78fba3... |
-| 2026-09-30 09:20 | codex | o4-mini | 5000 | 2000 | $0.0450 | estimated_tshirt | story-issue-1496 | exec: codex job job-34d838... |
-| 2026-09-30 09:20 | codex | o4-mini | 5000 | 2000 | $0.0450 | estimated_tshirt | story-issue-1496 | exec: codex job job-e8514d... |
-| 2026-09-30 09:20 | codex | o4-mini | 5000 | 2000 | $0.0450 | estimated_tshirt | story-issue-1496 | exec: codex job job-29bacb... |
 | 2026-09-30 09:20 | codex | o4-mini | 5000 | 2000 | $0.0450 | estimated_tshirt | story-issue-1496 | exec: codex job job-623398... |
 | 2026-09-30 09:20 | codex | o4-mini | 5000 | 2000 | $0.0450 | estimated_tshirt | story-issue-1496 | exec: codex job job-141e4e... |
 | 2026-09-30 09:20 | codex | o4-mini | 5000 | 2000 | $0.0450 | estimated_tshirt | story-issue-1496 | exec: codex job job-66403d... |
@@ -53,3 +44,12 @@
 | 2026-09-30 18:34 | claude | claude-sonnet-4-6 | 614 | 190 | $0.0047 | estimated_token_rate | story-adhoc-1790765567 | exec: claude job djob-comm... |
 | 2026-09-30 18:34 | codex | o4-mini | 5000 | 2000 | $0.0450 | estimated_tshirt | story-issue-1882 | exec: codex job job-46abc3... |
 | 2026-09-30 18:40 | claude | claude-sonnet-4-6 | 90000 | 20000 | $0.5700 | estimated_manual | - | PM-session: symlinked .synlynk/github_apps repo-local->canonical (#1881 dual-path root cause fix), installed launchd daemon supervision (--install-service), diagnosed+closed PR#1882 as fully superseded by #1823, filed #1883+#1884, corrected worktree-github-apps-gap memory |
+| 2026-09-30 20:32 | codex | gpt-5.6-luna | 1716851 | 10741 | $5.3117 | estimated_token_rate | story-adhoc-1790780255 | exec: codex job job-49d011... |
+| 2026-09-30 20:45 | codex | gpt-5.6-luna | 1267644 | 8153 | $3.9252 | estimated_token_rate | story-issue-1888 | exec: codex job job-e5e7e1... |
+| 2026-09-30 20:55 | codex | gpt-5.6-luna | 1834154 | 9367 | $5.6430 | estimated_token_rate | story-issue-1888 | exec: codex job job-fa07b1... |
+| 2026-09-30 20:59 | codex | gpt-5.6-luna | 515350 | 3327 | $1.5960 | estimated_token_rate | story-issue-1888 | exec: codex job job-c3a4c1... |
+| 2026-09-30 21:00 | codex | o4-mini | 1267644 | 8153 | $3.9252 | estimated_manual | story-issue-1888 | exec: codex review job job-e5e7e18c (PR #1888 review 1, CHANGES_REQUESTED) |
+| 2026-09-30 21:00 | codex | o4-mini | 1834154 | 9367 | $5.6430 | estimated_manual | story-issue-1888 | exec: codex job job-fa07b112 (PR #1888 fix commit b19dbe81) |
+| 2026-09-30 21:00 | codex | o4-mini | 515350 | 3327 | $1.5960 | estimated_manual | story-issue-1888 | exec: codex review job job-c3a4c1be (PR #1888 review 2, APPROVED+merged 1e1da814) |
+| 2026-09-30 21:11 | codex | gpt-5.6-luna | 848915 | 6110 | $2.6384 | estimated_token_rate | story-issue-1889 | exec: codex job job-ec92e7... |
+| 2026-09-30 22:13 | codex | gpt-5.6-luna | 656120 | 6014 | $2.0586 | estimated_token_rate | story-b24ec68c | exec: codex job job-233d43... |

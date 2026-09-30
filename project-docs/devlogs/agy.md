@@ -13,8 +13,15 @@
   - Implemented `board_data_for_context(ctx, ...)`, `update_stage_for_context(ctx, ...)`, and `update_status_for_context(ctx, ...)`.
   - Scoped database operations strictly to `ctx.db_path` and `ctx.slug` without coupling to process working directory or `repo_path="."`.
   - Verified with `tests/test_board_context_scoping.py` (7/7 passed) and full board suite (13/13 passed).
+- **Task 3: Scoped Routing Dispatcher in `WorkspaceRoutingHandler` (`synlynk/vizor_daemon.py`, commit `063a5061`):**
+  - Dispatched to Codex via `synlynk dispatch codex` (`job-233d436b`) with story `story-b24ec68c`.
+  - Handled dynamic routes `/w/<slug>/api/board` (GET with query filters), `/w/<slug>/api/board/stage` (POST), and `/w/<slug>/api/board/status` (POST).
+  - Added `do_POST()` handler to `WorkspaceRoutingHandler`.
+  - Added `tests/test_vizor_scoped_routing.py` testing two-workspace isolation and rejection of unknown slugs.
+  - Automated cost capture logged $2.06 to `project-docs/costs.md`.
+  - Fast-forward merged commit `063a5061` into `feat/agy/vizor-workspace-scoped-routing`. All 11/11 tests passing.
 - **Fleet Coordination:**
-  - Transitioning task execution to `synlynk dispatch` for Task 3 onwards.
+  - Proceeding with Task 4 using `synlynk dispatch`.
 [@agy, @nikhilsoman]
 
 ## 2026-09-25 — AST Knowledge Graph Lifecycle, Context Packager, Sparse Worktrees & Jev Decisioning Synergy (Issues #1787, #1712)
