@@ -17,6 +17,11 @@ from synlynk import _get_db
 from synlynk.product_store import identity_slug_from_config, repos_path, state_db_path
 from synlynk.state_registry import canonical_path
 
+try:
+    from synlynk.vizor_daemon import WorkspaceContext
+except ImportError:  # pragma: no cover
+    WorkspaceContext = Any  # type: ignore[misc,assignment]
+
 BOARD_STATUSES = ("open", "ready", "in_progress", "blocked", "done")
 GOVERNS_STAGES = ("goal", "open", "visualize", "execute", "release", "notify", "sustain")
 _NWO_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
@@ -210,3 +215,126 @@ def update_stage(story_id: str, stage: str, repo_path: str = ".") -> dict:
         return {"ok": True, "story_id": story_id, "stage": stage}
     finally:
         conn.close()
+
+
+def board_data_for_context(
+    ctx: WorkspaceContext,
+    *,
+    repo_id: Optional[str] = None,
+    type_id: Optional[str] = None,
+    goal_id: Optional[str] = None,
+) -> dict:
+    """Return product-scoped board cards using explicit WorkspaceContext."""
+    conn = _get_db(db_path=str(ctx.db_path), read_only=True, migrate=False)
+    conn.row_factory = sqlite3.Row
+    try:
+        story_cols = _columns(conn, "stories")
+        if not story_cols:
+            return {
+                "identity_slug": ctx.slug,
+                "cards": [],
+                "filters": {"repos": [], "types": [], "goals": []},
+                "statuses": list(BOARD_STATUSES),
+                "governs_stages": list(GOVERNS_STAGES),
+            }
+
+        repo_names = _repo_names(ctx.slug)
+        has_governs_stage = "governs_stage" in story_cols
+        has_goal = "goal_id" in story_cols
+        has_repo = "repo_id" in story_cols
+        has_type = "type_id" in story_cols
+
+        clauses, params = [], []
+        if repo_id and has_repo:
+            clauses.append("repo_id = ?")
+            params.append(repo_id)
+        if type_id and has_type:
+            clauses.append("type_id = ?")
+            params.append(type_id)
+        if goal_id and has_goal:
+            clauses.append("goal_id = ?")
+            params.append(goal_id)
+
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        query = f"SELECT * FROM stories {where} ORDER BY id DESC"
+        rows = conn.execute(query, params).fetchall()
+
+        cards = []
+        repos, types, goals = set(), set(), set()
+        for r in rows:
+            item = dict(r)
+            raw_stage = str(item.get("governs_stage") or item.get("stage") or "open").strip().lower()
+            stage = raw_stage if raw_stage in GOVERNS_STAGES else "open"
+            raw_status = str(item.get("status") or "open").strip().lower()
+            status = raw_status if raw_status in BOARD_STATUSES else "open"
+            gid = item.get("goal_id")
+            rid = item.get("repo_id")
+            tid = item.get("type_id")
+            if gid:
+                goals.add(gid)
+            if rid:
+                repos.add(rid)
+            if tid:
+                types.add(tid)
+
+            cards.append({
+                "story_id": item.get("story_id"),
+                "title": item.get("title"),
+                "status": status,
+                "stage": stage,
+                "governs_stage": stage,
+                "goal_id": gid,
+                "repo_id": rid,
+                "type_id": tid,
+                "repo_name": repo_names.get(str(rid or "")),
+                "tracker": _pointer(item, repo_names),
+                "pr_url": None,
+            })
+
+        return {
+            "identity_slug": ctx.slug,
+            "cards": cards,
+            "filters": {
+                "repos": sorted(list(repos)),
+                "types": sorted(list(types)),
+                "goals": sorted(list(goals)),
+            },
+            "statuses": list(BOARD_STATUSES),
+            "governs_stages": list(GOVERNS_STAGES),
+        }
+    finally:
+        conn.close()
+
+
+def update_stage_for_context(ctx: WorkspaceContext, story_id: str, stage: str) -> bool:
+    stage_val = stage.strip().lower()
+    if stage_val not in GOVERNS_STAGES:
+        raise ValueError(f"invalid stage: {stage!r}")
+    conn = _get_db(db_path=str(ctx.db_path), read_only=False, migrate=False)
+    try:
+        story_cols = _columns(conn, "stories")
+        updates = ["stage=?"]
+        params = [stage_val]
+        if "governs_stage" in story_cols:
+            updates.append("governs_stage=?")
+            params.append(stage_val)
+        params.append(story_id)
+        cur = conn.execute(f"UPDATE stories SET {', '.join(updates)} WHERE story_id = ?", params)
+        conn.commit()
+        return cur.rowcount > 0
+    finally:
+        conn.close()
+
+
+def update_status_for_context(ctx: WorkspaceContext, story_id: str, status: str) -> bool:
+    status_val = status.strip().lower()
+    if status_val not in BOARD_STATUSES:
+        raise ValueError(f"invalid status: {status!r}")
+    conn = _get_db(db_path=str(ctx.db_path), read_only=False, migrate=False)
+    try:
+        cur = conn.execute("UPDATE stories SET status = ? WHERE story_id = ?", (status_val, story_id))
+        conn.commit()
+        return cur.rowcount > 0
+    finally:
+        conn.close()
+
