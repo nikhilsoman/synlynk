@@ -1947,7 +1947,7 @@ def main(argv=None) -> None:
                 from synlynk import agent_cli
                 resolved_agent_id = agent_cli._resolve_or_exit(args.as_agent)
             if not args.agent and not resolved_agent_id:
-                dispatch_parser.error("the following arguments are required: agent (unless --as-agent is given)")
+                parser.error("the following arguments are required: agent (unless --as-agent is given)")
 
             from synlynk.dispatch import _infer_task_type, _task_opens_pr, _task_requires_gh_write
             _effective_requires_gh_write = bool(
