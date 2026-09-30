@@ -26,8 +26,15 @@
   - Added `tests/test_vizor_html_relative_routes.py` verifying presence of relative paths and absence of absolute root paths.
   - Automated cost capture logged $0.93 to `project-docs/costs.md`.
   - Fast-forward merged commit `b8f81d19` into `feat/agy/vizor-workspace-scoped-routing`. All 12/12 tests passing.
-- **Fleet Coordination:**
-  - Proceeding with Task 5 (concurrent multi-workspace regression suite with `CWD = /` immunity).
+- **Task 5: Multi-Workspace Concurrent Regression Suite (`tests/test_vizor_multi_workspace_e2e.py`, commit `0d8c2a12`):**
+  - Dispatched to Codex via `synlynk dispatch codex` (`job-b2b476a9`) with story `story-b24ec68c`.
+  - Added `tests/test_vizor_multi_workspace_e2e.py` testing concurrent thread pool requests across `alpha` and `beta` workspaces with `CWD = /` simulation.
+  - Verified cross-workspace mutation isolation (updating `alpha` to `execute` leaves `beta` untouched in `open`).
+  - Updated legacy assertion in `tests/test_board.py` (`ef96b8fb`) for relative route assertions.
+  - Automated cost capture logged $0.05 to `project-docs/costs.md`.
+  - Fast-forward merged commit `0d8c2a12` into `feat/agy/vizor-workspace-scoped-routing`. Full test suites (57/57 passed).
+- **Spec 1 Complete:**
+  - All 5 tasks of `docs/superpowers/plans/2026-09-30-vizor-workspace-scoped-routing.md` implemented, verified, and committed.
 [@agy, @nikhilsoman]
 
 ## 2026-09-25 — AST Knowledge Graph Lifecycle, Context Packager, Sparse Worktrees & Jev Decisioning Synergy (Issues #1787, #1712)
