@@ -110,9 +110,9 @@ def test_board_view_is_local_and_uses_status_api():
 
     html = generate_board_html(8721)
     assert "Product graph" in html
-    assert "/api/board" in html
-    assert "/api/board/status" in html
-    assert "/api/board/stage" in html
+    assert "api/board" in html
+    assert "api/board/status" in html
+    assert "api/board/stage" in html
     assert "GOVERNS" in html
     assert "github.com" not in html
 

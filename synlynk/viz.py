@@ -9470,24 +9470,24 @@ function draw(){
 async function load(){
   const q=new URLSearchParams();
   ['repo','type','goal'].forEach(k=>{const v=document.getElementById(k).value;if(v)q.set(k+'_id',v)});
-  const r=await fetch('/api/board?'+q.toString());
+  const r=await fetch('api/board?'+q.toString());
   if(!r.ok){document.getElementById('board').textContent='Board unavailable';return}
   boardData=await r.json();
   document.getElementById('identity').textContent='Product: '+(boardData.identity_slug||'unknown');
   draw();
 }
 async function updateStatus(id,status){
-  const r=await fetch('/api/board/status',{method:'POST',headers:window.vizorAuthHeaders({'Content-Type':'application/json'}),body:JSON.stringify({story_id:id,status})});
+  const r=await fetch('api/board/status',{method:'POST',headers:window.vizorAuthHeaders({'Content-Type':'application/json'}),body:JSON.stringify({story_id:id,status})});
   if(!r.ok){alert('Status update failed');return}
   await load();
 }
 async function updateStage(id,stage){
-  const r=await fetch('/api/board/stage',{method:'POST',headers:window.vizorAuthHeaders({'Content-Type':'application/json'}),body:JSON.stringify({story_id:id,stage})});
+  const r=await fetch('api/board/stage',{method:'POST',headers:window.vizorAuthHeaders({'Content-Type':'application/json'}),body:JSON.stringify({story_id:id,stage})});
   if(!r.ok){alert('Stage update failed');return}
   await load();
 }
 ['repo','type','goal','status'].forEach(id=>document.getElementById(id).onchange=()=>id==='status'?draw():load());
-fetch('/api/board').then(r=>r.json()).then(d=>{
+fetch('api/board').then(r=>r.json()).then(d=>{
   boardData=d;
   options('repo',d.filters.repos||[]);
   options('type',d.filters.types||[]);

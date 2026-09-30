@@ -1,5 +1,42 @@
 # Agy Devlog
 
+## 2026-09-30 — Vizor Workspace-Scoped Slug Routing: Tasks 1 & 2 Shipped (Spec 1)
+
+### Shipped & Verified
+- **Spec 1 Implementation Plan Committed (`e59d1430`):**
+  - Authored and committed `docs/superpowers/plans/2026-09-30-vizor-workspace-scoped-routing.md` defining 5 bite-sized TDD tasks with strict isolation invariants.
+- **Task 1: `WorkspaceContext` & Registry Resolver (`synlynk/vizor_daemon.py`, commit `ab7b18e2`):**
+  - Created frozen `WorkspaceContext` dataclass with `slug`, `repo_path`, `db_path`.
+  - Implemented `resolve_workspace_context(slug: str)` querying `synlynk.state_registry.registry_path()`. Rejects invalid regex, traversal attempts (`../../`), and missing disk paths.
+  - Verified with `tests/test_vizor_workspace_context.py` (2/2 passed).
+- **Task 2: Context-Aware Board Data & Mutations (`synlynk/board.py`, commit `4c0a3fd7`):**
+  - Implemented `board_data_for_context(ctx, ...)`, `update_stage_for_context(ctx, ...)`, and `update_status_for_context(ctx, ...)`.
+  - Scoped database operations strictly to `ctx.db_path` and `ctx.slug` without coupling to process working directory or `repo_path="."`.
+  - Verified with `tests/test_board_context_scoping.py` (7/7 passed) and full board suite (13/13 passed).
+- **Task 3: Scoped Routing Dispatcher in `WorkspaceRoutingHandler` (`synlynk/vizor_daemon.py`, commit `063a5061`):**
+  - Dispatched to Codex via `synlynk dispatch codex` (`job-233d436b`) with story `story-b24ec68c`.
+  - Handled dynamic routes `/w/<slug>/api/board` (GET with query filters), `/w/<slug>/api/board/stage` (POST), and `/w/<slug>/api/board/status` (POST).
+  - Added `do_POST()` handler to `WorkspaceRoutingHandler`.
+  - Added `tests/test_vizor_scoped_routing.py` testing two-workspace isolation and rejection of unknown slugs.
+  - Automated cost capture logged $2.06 to `project-docs/costs.md`.
+  - Fast-forward merged commit `063a5061` into `feat/agy/vizor-workspace-scoped-routing`. All 11/11 tests passing.
+- **Task 4: Template Fetch Relative Path Conversion (`synlynk/viz.py`, commit `b8f81d19`):**
+  - Dispatched to Codex via `synlynk dispatch codex` (`job-8814a9e5`) with story `story-b24ec68c`.
+  - Converted board HTML client fetch calls in `generate_board_html()` from absolute `/api/board...` to relative `api/board...` (preserving `api/board?`, `api/board/status`, `api/board/stage`).
+  - Added `tests/test_vizor_html_relative_routes.py` verifying presence of relative paths and absence of absolute root paths.
+  - Automated cost capture logged $0.93 to `project-docs/costs.md`.
+  - Fast-forward merged commit `b8f81d19` into `feat/agy/vizor-workspace-scoped-routing`. All 12/12 tests passing.
+- **Task 5: Multi-Workspace Concurrent Regression Suite (`tests/test_vizor_multi_workspace_e2e.py`, commit `0d8c2a12`):**
+  - Dispatched to Codex via `synlynk dispatch codex` (`job-b2b476a9`) with story `story-b24ec68c`.
+  - Added `tests/test_vizor_multi_workspace_e2e.py` testing concurrent thread pool requests across `alpha` and `beta` workspaces with `CWD = /` simulation.
+  - Verified cross-workspace mutation isolation (updating `alpha` to `execute` leaves `beta` untouched in `open`).
+  - Updated legacy assertion in `tests/test_board.py` (`ef96b8fb`) for relative route assertions.
+  - Automated cost capture logged $0.05 to `project-docs/costs.md`.
+  - Fast-forward merged commit `0d8c2a12` into `feat/agy/vizor-workspace-scoped-routing`. Full test suites (57/57 passed).
+- **Spec 1 Complete:**
+  - All 5 tasks of `docs/superpowers/plans/2026-09-30-vizor-workspace-scoped-routing.md` implemented, verified, and committed.
+[@agy, @nikhilsoman]
+
 ## 2026-09-25 — AST Knowledge Graph Lifecycle, Context Packager, Sparse Worktrees & Jev Decisioning Synergy (Issues #1787, #1712)
 
 ### Scoped & Minted
