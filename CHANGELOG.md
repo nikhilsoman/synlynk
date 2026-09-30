@@ -8,6 +8,7 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ---
 
 ## [Unreleased]
+- feat(vizor): living GOVERNS goal resolution and alignment engine (Spec 3)
 - feat(vizor): repo-truth purge and native view HUD shells (Spec 2)
 - Ongoing Wave 3: Hosted Teams Server Hub, Cloudflare Tunnel full-duplex daemon, and Dynamic Quota Advisory service.
 

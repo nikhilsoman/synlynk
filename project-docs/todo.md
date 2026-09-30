@@ -1554,4 +1554,4 @@ First, the time to live never takes effect for newly writt [testing] <!-- id:sto
 - [ ] feat(vizor): workspace-scoped slug routing engine (Spec 1) [backend] <!-- id:story-b24ec68c -->
 - [x] feat(vizor): repo-truth purge and native view HUD shells (Spec 2) [backend] <!-- id:story-6a18ed23 -->
 - [ ] feat(vizor): repo-truth purge and native view HUD shells (Spec 2) [frontend] <!-- id:story-issue-1891 -->
-- [ ] feat(vizor): living GOVERNS goal resolution and alignment engine (Spec 3) [backend] <!-- id:story-b67bce1b -->
+- [x] feat(vizor): living GOVERNS goal resolution and alignment engine (Spec 3) [backend] <!-- id:story-b67bce1b -->
