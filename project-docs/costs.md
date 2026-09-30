@@ -3,7 +3,6 @@
 
 | Date | Agent | Model | Tokens In | Tokens Out | Cost | Source | Story | Notes |
 |---|---|---|---|---|---|---|---|---|
-| 2026-09-30 10:54 | codex | gpt-5.6-luna | 612006 | 7080 | $1.9422 | estimated_token_rate | story-adhoc-1790745590 | exec: codex job job-271b7c... |
 | 2026-09-30 10:55 | claude | claude-sonnet-4-6 | 60000 | 15000 | $0.4050 | estimated_manual | story-54515ca1 | PM-session: R12 wave close-out — blog post PR-number fix (#1869), checkpoint sync (#1871), Worktree Hygiene cleanup x3, issues #1867/#1870 filed, devlog+memory writes (est.) |
 | 2026-09-30 11:03 | codex | gpt-5.6-luna | 1536633 | 10407 | $4.7660 | estimated_token_rate | story-issue-1872 | exec: codex job job-fdaa6d... |
 | 2026-09-30 11:05 | codex | gpt-5.6-luna | 911074 | 4882 | $2.8065 | estimated_token_rate | story-issue-1867 | exec: codex job job-62286b... |
@@ -53,3 +52,4 @@
 | 2026-09-30 23:24 | codex | gpt-5.6-luna | 1123635 | 7943 | $3.4901 | estimated_token_rate | story-b67bce1b | exec: codex job job-f18336... |
 | 2026-09-30 23:29 | codex | gpt-5.6-luna | 1287034 | 11920 | $4.0399 | estimated_token_rate | story-b67bce1b | exec: codex job job-66897a... |
 | 2026-09-30 23:35 | codex | gpt-5.6-luna | 3450693 | 17525 | $10.6150 | estimated_token_rate | story-b67bce1b | exec: codex job job-84ee67... |
+| 2026-09-30 23:42 | codex | gpt-5.6-luna | 2458556 | 16517 | $7.6234 | estimated_token_rate | story-b67bce1b | exec: codex job job-9213f1... |
