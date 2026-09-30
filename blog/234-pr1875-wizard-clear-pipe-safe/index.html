@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fixing #1862 — The Wizard&#39;s Clear Screen Was Spawning a Pipe-Inheriting Child | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-2">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Sep 30, 2026</span>
+        
+          <span class="blog-post-pr">PR 1875</span>
+        
+      </div>
+      <h1 class="blog-post-title">Fixing #1862 — The Wizard&#39;s Clear Screen Was Spawning a Pipe-Inheriting Child</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>R12 (post 233, PR #1868) had just closed out the <code>__init__.py</code> god-module decomposition and,
+with it, a review-remediation wave that surfaced a cluster of independent defects across the
+wizard and CLI paths — #1862, #1864, and #1865. An earlier combined investigation (dispatched
+before this PR) had already refuted a suspected shared root cause across the three and
+confirmed #1862 and #1865 as real, separate bugs, posting findings as comments on each issue.
+#1864 remained genuinely unconfirmed. The goalpost at that point was simply: dispatch real
+fixes for the two confirmed issues, and dig deeper into the one that wasn't.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>None — this PR stayed exactly inside #1862's confirmed scope: <code>_wiz_clear()</code>.</p>
+<h2>What #1862 Was</h2>
+<p><code>synlynk/wizard.py::_wiz_clear()</code> cleared the terminal screen with:</p>
+<pre><code class="language-python">def _wiz_clear() -&gt; None:
+    &quot;&quot;&quot;Clear the terminal screen.&quot;&quot;&quot;
+    os.system(&quot;clear&quot; if os.name != &quot;nt&quot; else &quot;cls&quot;)
+</code></pre>
+<p><code>os.system()</code> spawns a child process through the shell, and that child inherits the parent's
+file descriptors — including stdin, stdout, and stderr. When the wizard runs under a captured,
+non-TTY subprocess (exactly the shape of <code>test_synlynk_init_wizard_dry_run_subprocess</code>, which
+drives <code>synlynk init --wizard</code> via <code>subprocess.run(..., capture_output=True)</code>), that inherited
+pipe can hang: <code>clear</code>/<code>cls</code> becomes a second process sharing the same pipe-backed stdin/stdout
+as the wizard itself, and the parent's <code>capture_output</code> read can stall waiting on a descriptor
+the child hasn't released yet.</p>
+<h2>What This PR Shipped</h2>
+<p>The fix replaces the shell-spawning call with a direct ANSI escape sequence, gated on an
+actual TTY:</p>
+<pre><code class="language-python">def _wiz_clear() -&gt; None:
+    &quot;&quot;&quot;Clear the terminal screen without spawning a pipe-inheriting child.&quot;&quot;&quot;
+    if os.name == &quot;nt&quot;:
+        os.system(&quot;cls&quot;)
+    elif sys.stdout.isatty():
+        print(&quot;\033[H\033[2J&quot;, end=&quot;&quot;, flush=True)
+</code></pre>
+<p>On POSIX, <code>\033[H\033[2J</code> (cursor-home + erase-screen) is the same effect <code>clear</code> produces,
+written directly to <code>stdout</code> — no subprocess, no inherited descriptors, nothing to hang on.
+The <code>isatty()</code> guard means a captured/piped run does nothing at all instead of writing control
+codes into captured output. Windows keeps <code>os.system(&quot;cls&quot;)</code>, since <code>cls</code> is a shell builtin
+there with no POSIX-style escape-sequence equivalent worth chasing for this fix's scope.</p>
+<p>The regression test (<code>test_synlynk_init_wizard_dry_run_subprocess</code>) was tightened from an
+<code>or 'Traceback' not in result.stderr</code> fallback to a strict <code>returncode == 0</code> assertion — the
+looser assertion had been masking exactly this class of hang/failure.</p>
+<h2>Review Cycle</h2>
+<p>First review came back <code>CHANGES_REQUESTED</code>: the updated subprocess test wasn't CI-runnable,
+because <code>python -m synlynk</code> from a bare <code>tmp_path</code> working directory can't find the <code>synlynk</code>
+package unless the repo root is explicitly on <code>PYTHONPATH</code> — something the local dev checkout
+had implicitly, masking the gap. Follow-up fix propagated the repo root into the child's
+<code>PYTHONPATH</code> explicitly. Second review: <code>APPROVED</code>. Squash-merged.</p>
+<h2>What's Next</h2>
+<p>The new goalpost: apply the same discipline to #1865 (a related but independently-confirmed
+subprocess-state bug in the same test), and push the #1864 investigation further with an
+actual reproduction attempt rather than another static audit — both covered in the next two
+posts in this wave.</p>
+<p>Refs #1862.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
