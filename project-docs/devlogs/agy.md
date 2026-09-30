@@ -1,5 +1,37 @@
 # Agy Devlog
 
+## 2026-09-30 — Vizor Repo-Truth Purge & Native View HUD Shells (Spec 2, Story story-6a18ed23)
+
+### Shipped & Verified
+- **Spec 2 Brainstorm & Plan Committed (`37b8868a`, `3d9eaeac`):**
+  - Authored and committed `docs/superpowers/specs/2026-09-30-vizor-repo-truth-purge-and-native-hud-shells-design.md` and `docs/superpowers/plans/2026-09-30-vizor-repo-truth-purge-and-native-hud-shells.md`.
+  - Registered and linked `story-6a18ed23` to `goal-e3840370`.
+- **Task 1: TDD Verification Suite (`tests/test_vizor_repo_truth.py`, commit `c09a630e`):**
+  - Added failing assertions verifying that external repositories never leak Synlynk daemons, never leak Synlynk onboarding journeys, and discover local UI mockups and monorepo packages.
+- **Task 2: Dynamic Infrastructure Discovery & Daemon Purge (`synlynk/viz_views.py`):**
+  - Refactored `extract_infra_nodes()` with `_discover_infra_components()`:
+    - Scans `docker-compose*.yml`, `Dockerfile*`, and `prisma/schema.prisma` for real container services, exposed ports, and database models.
+    - Scans `.env.example` / `.env` for outbound external service endpoints (payments, cloud storage, AI providers).
+    - Hardcodes Synlynk's internal daemons (:8721, :27472, StateDB, LLM egress) ONLY when `is_synlynk_core` is True; external repositories receive clean, dynamic components or a "Serverless / Pure Codebase" card.
+- **Task 3: Dynamic Monorepo, Screen & UI Prototype Discovery (`synlynk/viz_views.py`):**
+  - Refactored `extract_product_nodes()`:
+    - Discovers monorepo apps and packages in `apps/*` and `packages/*` from `package.json`.
+    - Crawls `.superpowers/brainstorm/*/content/*.html` and `.superpowers/brainstorm/ux-screenshots/` for HTML UI prototypes, registering them as interactive preview screens with extracted `<title>` tags.
+    - Purged hardcoded `synlynk/cli.py` and restricted Synlynk canonical journeys to `is_synlynk_core`.
+- **Task 4: Native Glassmorphic Empty HUD Shell for Architect Map (`synlynk/viz.py`):**
+  - Replaced the broken 404 iframe fallback in `generate_architect_map_html()` (`tube.html`) with an obsidian glassmorphic HUD:
+    - Status badge `AWAITING AST INDEXING` with pulsing lattice background.
+    - Explanatory copy and 1-click trigger button (`triggerAmKgRefresh`) with terminal command `synlynk scan --deep`.
+  - In `_write_cache()`: dynamically writes fallback `graphify.html` and `graph.html` into `VIZ_CACHE_DIR`, eliminating raw browser 404 errors even on direct or iframe URL loads.
+  - Added `tests/test_vizor_architect_hud.py` verifying HUD rendering and zero-404 guarantee (2/2 passed).
+- **Task 5: True Ecosystem Radar & World Purge (`synlynk/viz_views.py`):**
+  - Guarded `extract_world_nodes()` so external repositories default to `.git` and `runtime` rather than leaking `synlynk/gh.py`, `synlynk/dispatch.py`, and `synlynk/media.py`.
+- **Task 6: Live Validation Against `rxcc` & Multi-Workspace Regression (`tests/test_vizor_rxcc_truth.py`):**
+  - Verified against live `/Users/nikhilsoman/dev/rxcc`: discovers all apps (`web`, `api`, `admin`, etc.), extracts brainstorm mockups, discovers Prisma schemas, confirms 0 Synlynk daemons/journeys leak, and renders Architect Map HUD cleanly.
+  - Optimized directory walk skip lists (`worktrees`, `.worktrees`, `.pnpm-store`, `.turbo`) reducing full monorepo scan time from 15.38s to 0.41s.
+  - Full Vizor regression suite passing: 27/27 tests in 2.38s.
+[@agy, @nikhilsoman]
+
 ## 2026-09-30 — Vizor Workspace-Scoped Slug Routing: Tasks 1 & 2 Shipped (Spec 1)
 
 ### Shipped & Verified
