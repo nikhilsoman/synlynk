@@ -545,7 +545,8 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
     if migration_version < _DB_MIGRATION_VERSION:
         _snapshot_before_migration(conn)
         _run_harness_rename_migration(conn)
-        from synlynk import HARNESS_CAPABILITY_BASELINES, _DB_SCHEMA, _DB_SCORES_VIEW, _seed_verb_map
+        from synlynk import HARNESS_CAPABILITY_BASELINES, _seed_verb_map
+        from synlynk.db_schema import _DB_SCHEMA, _DB_SCORES_VIEW
         conn.executescript(_DB_SCHEMA)
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS relay_events (
