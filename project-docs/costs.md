@@ -3,6 +3,8 @@
 
 | Date | Agent | Model | Tokens In | Tokens Out | Cost | Source | Story | Notes |
 |---|---|---|---|---|---|---|---|---|
+| 2026-09-29 14:04 | codex | gpt-5.6-luna | 2233999 | 15187 | $6.9298 | estimated_token_rate | story-issue-1855 | exec: codex job job-9c0775... |
+| 2026-09-29 14:07 | codex | gpt-5.6-luna | 601050 | 5835 | $1.8907 | estimated_token_rate | story-issue-1855 | exec: codex job job-74cd93... |
 | 2026-09-29 14:07 | codex | gpt-5.6-luna | 1547235 | 8907 | $4.7753 | estimated_token_rate | story-issue-1857 | exec: codex job job-dc851d... |
 | 2026-09-29 14:08 | codex | gpt-5.6-luna | 1949892 | 10682 | $6.0099 | estimated_token_rate | story-issue-1858 | exec: codex job job-116440... |
 | 2026-09-29 14:10 | codex | gpt-5.6-luna | 372570 | 3406 | $1.1688 | estimated_token_rate | story-issue-1857 | exec: codex job job-292230... |
