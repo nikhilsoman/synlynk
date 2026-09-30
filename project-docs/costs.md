@@ -55,3 +55,22 @@
 | 2026-09-30 10:48 | codex | gpt-5.6-luna | 451065 | 3683 | $1.4084 | estimated_token_rate | story-adhoc-1790745292 | exec: codex job job-ee9255... |
 | 2026-09-30 10:54 | codex | gpt-5.6-luna | 612006 | 7080 | $1.9422 | estimated_token_rate | story-adhoc-1790745590 | exec: codex job job-271b7c... |
 | 2026-09-30 10:55 | claude | claude-sonnet-4-6 | 60000 | 15000 | $0.4050 | estimated_manual | story-54515ca1 | PM-session: R12 wave close-out — blog post PR-number fix (#1869), checkpoint sync (#1871), Worktree Hygiene cleanup x3, issues #1867/#1870 filed, devlog+memory writes (est.) |
+| 2026-09-30 11:03 | codex | gpt-5.6-luna | 1536633 | 10407 | $4.7660 | estimated_token_rate | story-issue-1872 | exec: codex job job-fdaa6d... |
+| 2026-09-30 11:05 | codex | gpt-5.6-luna | 911074 | 4882 | $2.8065 | estimated_token_rate | story-issue-1867 | exec: codex job job-62286b... |
+| 2026-09-30 11:06 | codex | gpt-5.6-luna | 1582321 | 5900 | $4.8355 | estimated_token_rate | story-issue-1870 | exec: codex job job-6350a2... |
+| 2026-09-30 11:11 | codex | gpt-5.6-luna | 1036916 | 6427 | $3.2072 | estimated_token_rate | story-issue-1862 | exec: codex job job-f2594b... |
+| 2026-09-30 11:18 | codex | o4-mini | 5000 | 2000 | $0.0450 | estimated_tshirt | story-issue-1873 | exec: codex job job-1e14a9... |
+| 2026-09-30 11:18 | codex | o4-mini | 5000 | 2000 | $0.0450 | estimated_tshirt | story-issue-1874 | exec: codex job job-1bda3b... |
+| 2026-09-30 11:36 | codex | gpt-5.6-luna | 811494 | 5443 | $2.5161 | estimated_token_rate | story-issue-1862 | exec: codex job job-cabb8c... |
+| 2026-09-30 11:36 | codex | gpt-5.6-luna | 1000638 | 6657 | $3.1018 | estimated_token_rate | story-issue-1865 | exec: codex job job-d20481... |
+| 2026-09-30 12:18 | codex | gpt-5.6-luna | 938912 | 5966 | $2.9062 | estimated_token_rate | story-issue-1876 | exec: codex job job-00d12f... |
+| 2026-09-30 12:59 | codex | o4-mini | 5000 | 2000 | $0.0450 | estimated_tshirt | story-issue-1875 | exec: codex job job-bd76fc... |
+| 2026-09-30 12:59 | codex | o4-mini | 5000 | 2000 | $0.0450 | estimated_tshirt | story-issue-1875 | exec: codex job job-b90143... |
+| 2026-09-30 12:59 | codex | o4-mini | 5000 | 2000 | $0.0450 | estimated_tshirt | story-issue-1876 | exec: codex job job-6cb424... |
+| 2026-09-30 13:03 | codex | gpt-5.6-luna | 499280 | 6519 | $1.5956 | estimated_token_rate | story-issue-1876 | exec: codex job job-762f9f... |
+| 2026-09-30 13:03 | codex | gpt-5.6-luna | 1590005 | 9703 | $4.9156 | estimated_token_rate | story-issue-1875 | exec: codex job job-9a8e69... |
+| 2026-09-30 13:26 | codex | gpt-5.6-luna | 760013 | 4806 | $2.3521 | estimated_token_rate | story-issue-1876 | exec: codex job job-972515... |
+| 2026-09-30 13:45 | codex | gpt-5.6-luna | 2075135 | 16552 | $6.4737 | estimated_token_rate | story-issue-1864 | exec: codex job job-2571fb... |
+| 2026-09-30 13:51 | claude | claude-sonnet-4-6 | 160000 | 80000 | $1.6800 | estimated_manual | - | PM/native session work: #1862/#1865/#1864 wave — manual merge-conflict resolution on PR #1876 (commit ed9eafc6), worktree deep audit + cleanup (15 superseded worktrees identified/removed, #1877 filed), dispatch coordination for fix+review cycles on PRs #1875/#1876 and #1864 investigation, blog posts #234/#235 |
+| 2026-09-30 14:01 | codex | gpt-5.6-luna | 1144452 | 9777 | $3.5800 | estimated_token_rate | story-issue-1878 | exec: codex job job-6d688f... |
+| 2026-09-30 14:07 | codex | gpt-5.6-luna | 391882 | 5129 | $1.2526 | estimated_token_rate | story-issue-1878 | exec: codex job job-902c56... |
