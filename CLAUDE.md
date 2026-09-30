@@ -61,6 +61,17 @@ synlynk --version
 
 No dependencies beyond Python 3 stdlib. No build, compile, or package step needed.
 
+## Git Workflow
+
+The versioned `githooks/pre-commit` guard blocks commits from the shared main
+checkout, including direct commits to `main`, and allows commits from linked
+worktrees. `synlynk init` configures `core.hooksPath` automatically; existing
+clones can opt in manually with:
+
+```bash
+git config core.hooksPath githooks
+```
+
 ## Architecture
 
 The entire CLI is `bin/synlynk.py`. Key functions and their responsibilities:

@@ -929,6 +929,18 @@ def _resolve_git_dir(repo_root: Path) -> Path:
 
 def install_pre_commit_hook(repo_root: Path) -> None:
     """Install a git pre-commit hook that blocks unreviewed instruction drift."""
+    try:
+        subprocess.run(
+            ["git", "config", "core.hooksPath", "githooks"],
+            cwd=str(repo_root),
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        # Keep init usable for directories that have not been git-initialised.
+        pass
+
     git_dir = _resolve_git_dir(Path(repo_root))
     hook_path = git_dir / "hooks" / "pre-commit"
     hook_path.parent.mkdir(parents=True, exist_ok=True)
