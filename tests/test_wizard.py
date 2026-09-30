@@ -306,6 +306,7 @@ def test_wizard_multi_repo_flow(tmp_path, monkeypatch, capsys):
 # === Task B-6: subprocess smoke test for synlynk init --wizard ===
 
 def test_synlynk_init_wizard_dry_run_subprocess(tmp_path, monkeypatch):
+    """A captured, non-TTY wizard subprocess must not hang on screen clearing."""
     import subprocess as sp
     import json
     (tmp_path / '.git').mkdir()
