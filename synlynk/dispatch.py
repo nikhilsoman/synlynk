@@ -2678,7 +2678,10 @@ def _preflight_dispatch(
                 with open(ctx_path) as f:
                     context_md = f.read()
 
-            est = estimate_dispatch_tokens(_task_hint, context_md, harness_name)
+            est = estimate_dispatch_tokens(
+                _task_hint, context_md, harness_name,
+                task_type=_infer_task_type(_task_hint),
+            )
             cap_row = None
             try:
                 cap_row = db_conn.execute(
@@ -3439,7 +3442,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     if is_fenced_command("dispatch", fence_config):
         rate_fn = _pkg("_model_rate_for_version")
         if context_mode != "none":
-            est = estimate_dispatch_tokens(prompt, context_text, agent)
+            est = estimate_dispatch_tokens(prompt, context_text, agent, task_type=task_type)
             in_tok, out_tok = est["input"], est["output"]
             basis = "prompt_estimate"
         else:
