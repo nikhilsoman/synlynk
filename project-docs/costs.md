@@ -3,7 +3,6 @@
 
 | Date | Agent | Model | Tokens In | Tokens Out | Cost | Source | Story | Notes |
 |---|---|---|---|---|---|---|---|---|
-| 2026-09-30 10:30 | codex | gpt-5.6-luna | 1745564 | 4697 | $5.3071 | estimated_token_rate | story-issue-1868 | exec: codex job job-085b9e... |
 | 2026-09-30 10:42 | claude | claude-sonnet-4-6 | 5000 | 2000 | $0.0450 | estimated_tshirt | story-issue-1868 | exec: claude job job-73eaf... |
 | 2026-09-30 10:48 | codex | gpt-5.6-luna | 451065 | 3683 | $1.4084 | estimated_token_rate | story-adhoc-1790745292 | exec: codex job job-ee9255... |
 | 2026-09-30 10:54 | codex | gpt-5.6-luna | 612006 | 7080 | $1.9422 | estimated_token_rate | story-adhoc-1790745590 | exec: codex job job-271b7c... |
@@ -53,3 +52,4 @@
 | 2026-09-30 22:38 | codex | gpt-5.6-luna | 459659 | 4686 | $1.4493 | estimated_token_rate | story-b24ec68c | exec: codex job job-370185... |
 | 2026-09-30 23:06 | codex | gpt-5.6-luna | 595437 | 6361 | $1.8817 | estimated_token_rate | story-issue-1891 | exec: codex job job-533c3c... |
 | 2026-09-30 23:13 | claude | claude-sonnet-4-6 | 92123 | 23724 | $0.6322 | estimated_token_rate | story-b67bce1b | exec: claude job job-5e506... |
+| 2026-09-30 23:24 | codex | gpt-5.6-luna | 1123635 | 7943 | $3.4901 | estimated_token_rate | story-b67bce1b | exec: codex job job-f18336... |
