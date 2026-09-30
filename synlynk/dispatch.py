@@ -18,6 +18,7 @@ import time
 from typing import List, Optional, Sequence, Tuple
 
 from synlynk._constants import HARNESS_CAPABILITY_BASELINES, _CODEX_NETWORK_PERMISSION
+from synlynk._lazy import pkg as _pkg
 
 _ORG_ROLE_TO_BASELINE_ROLE = {
     "dev": "builder",
@@ -301,13 +302,6 @@ def expected_dispatch_value(success_probability: float, criticality: float,
     """Return the adaptive dispatch expected value."""
     return _capability_expected_value(success_probability, criticality, amortized_cost,
                                       p95_latency, lambda_)
-
-
-def _pkg(name: str, default=None):
-    package = sys.modules.get("synlynk")
-    if package is None:
-        return default
-    return getattr(package, name, default)
 
 
 def _run_tc7() -> dict:

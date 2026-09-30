@@ -13,6 +13,7 @@ import threading
 import time
 from typing import Optional
 
+from synlynk._lazy import pkg as _pkg
 from synlynk.context import generate_context
 from synlynk.jobs import _dispatch_ready_jobs, _reconcile_daemon_jobs
 from synlynk.sentinel import _write_sentinel_alert, log_telemetry_event
@@ -20,13 +21,6 @@ from synlynk.team import get_username
 from synlynk import github_app_auth
 from synlynk import local_http_auth
 from synlynk.product_store import resolve_github_apps_dir
-
-
-def _pkg(name: str, default=None):
-    package = sys.modules.get("synlynk")
-    if package is None:
-        return default
-    return getattr(package, name, default)
 
 
 def _repo_common_dir() -> str:

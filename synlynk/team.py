@@ -21,18 +21,12 @@ from urllib.parse import parse_qs, urlparse
 from urllib.request import Request, urlopen
 
 from synlynk import github_app_auth
+from synlynk._lazy import pkg as _pkg
 from synlynk._constants import (
     HARNESS_CAPABILITY_BASELINES,
     AGENT_PANEL_QUERY_TIMEOUT_SECONDS,
 )
 from synlynk.policy import load_policy
-
-
-def _pkg(name: str, default=None):
-    package = sys.modules.get("synlynk")
-    if package is None:
-        return default
-    return getattr(package, name, default)
 
 
 _BOLD = "\033[1m"
