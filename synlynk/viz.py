@@ -33,7 +33,9 @@ def collect_data(*, db_path: Optional[str] = None) -> dict:
 
         with _open_state_db(db_path=db_path, read_only=True) as conn:
             goals = governs_engine.scoped_goals(conn, status="active")
+            product_id = governs_engine.workspace_product_id(conn)
         return {
+            "product_id": product_id,
             "goals": [
                 {
                     **goal,
@@ -2626,6 +2628,7 @@ const releases = Array.isArray(window.VIZOR_DATA && (window.VIZOR_DATA.releases 
 const dreams = releases; // Backwards compatibility alias
 const goals = Array.isArray(window.VIZOR_DATA && window.VIZOR_DATA.goals) ? window.VIZOR_DATA.goals : [];
 const specVerifications = Array.isArray(window.VIZOR_DATA && window.VIZOR_DATA.spec_verifications) ? window.VIZOR_DATA.spec_verifications : [];
+const currentWorkspaceProductId = window.VIZOR_DATA && window.VIZOR_DATA.product_id ? String(window.VIZOR_DATA.product_id) : null;
 const VERDICT_BADGE = {
   fulfilled: 'background:#dcfce7;border-color:#86efac;color:#15803d',
   partial: 'background:#fef3c7;border-color:#fde68a;color:#d97706',
@@ -2657,6 +2660,25 @@ function safeStorageGet(key, fallback) {
 function safeStorageSet(key, value) {
   try {
     localStorage.setItem(key, value);
+  } catch (err) {}
+}
+
+function applyGovernanceRelayEvent(event) {
+  const eventType = event && (event.event_type || event.type);
+  const eventProductId = event && (event.product_id || event.payload?.product_id);
+  if (!event || !['goal_realigned', 'governs_stage_advanced'].includes(eventType)) return;
+  if (currentWorkspaceProductId && String(eventProductId || '') !== currentWorkspaceProductId) return;
+  // Relay events are advisory. Re-rendering the already scoped snapshot keeps
+  // the HUD consistent without allowing a foreign workspace to patch it.
+  if (eventType === 'goal_realigned') renderTimeline();
+}
+
+if (typeof EventSource !== 'undefined') {
+  try {
+    const relay = new EventSource('/events');
+    relay.onmessage = (message) => {
+      try { applyGovernanceRelayEvent(JSON.parse(message.data)); } catch (err) {}
+    };
   } catch (err) {}
 }
 

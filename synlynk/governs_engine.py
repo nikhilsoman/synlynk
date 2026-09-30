@@ -66,13 +66,21 @@ def scoped_goals(conn, status: str = "active", repo_root: Optional[str] = None) 
     """Return only goals belonging to this workspace, plus their aliases."""
     product_id = workspace_product_id(conn)
     if product_id is None:
-        return []
-    rows = conn.execute(
-        "SELECT goal_id, product_id, outcome, criterion, deadline, status, kind "
-        "FROM goals WHERE status=? AND (product_id=? OR product_id IS NULL) "
-        "ORDER BY created_at, goal_id",
-        (status, product_id),
-    ).fetchall()
+        # Pre-registry ledgers have no state_identity row. Their NULL product
+        # goals are local legacy data and must remain resolvable in place.
+        rows = conn.execute(
+            "SELECT goal_id, product_id, outcome, criterion, deadline, status, kind "
+            "FROM goals WHERE status=? AND product_id IS NULL "
+            "ORDER BY created_at, goal_id",
+            (status,),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT goal_id, product_id, outcome, criterion, deadline, status, kind "
+            "FROM goals WHERE status=? AND (product_id=? OR product_id IS NULL) "
+            "ORDER BY created_at, goal_id",
+            (status, product_id),
+        ).fetchall()
     aliases: dict[str, list[str]] = {}
     try:
         for goal_id, pattern in conn.execute(
@@ -183,6 +191,12 @@ def associate_story(conn, story_id: str, *, title: str = "", explicit_goal: Opti
                     issue_number: Optional[int | str] = None, text_content: Optional[str] = None,
                     repo_root: Optional[str] = None, emit: bool = True) -> GoalResolution:
     """Resolve and associate a story without committing the caller's transaction."""
+    previous_row = conn.execute(
+        "SELECT goal_id, link_status FROM goal_contributions WHERE story_id=? "
+        "ORDER BY resolved_at DESC LIMIT 1",
+        (story_id,),
+    ).fetchone()
+    previous_goal_id = previous_row[0] if previous_row and previous_row[1] == "linked" else None
     resolution = resolve_goal_for_story(
         conn, title=title, explicit_goal=explicit_goal, story_id=story_id,
         issue_number=issue_number, text_content=text_content, repo_root=repo_root,
@@ -217,10 +231,22 @@ def associate_story(conn, story_id: str, *, title: str = "", explicit_goal: Opti
             )
         finally:
             conn.execute("PRAGMA foreign_keys=ON")
-    if emit:
+    changed = previous_goal_id != resolution.goal_id
+    if emit and changed:
         try:
             from synlynk.events import emit_event
-            emit_event("goal_realigned", {"story_id": story_id, "goal_id": resolution.goal_id})
+            emit_event(
+                "goal_realigned",
+                {
+                    "story_id": story_id,
+                    "from_goal": previous_goal_id,
+                    "to_goal": resolution.goal_id,
+                    "goal_id": resolution.goal_id,
+                    "reason": resolution.reason,
+                    "product_id": workspace_product_id(conn),
+                },
+                emitted_by="governs_engine.associate_story",
+            )
         except Exception:
             pass
     return resolution
