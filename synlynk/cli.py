@@ -1743,7 +1743,7 @@ def main(argv=None) -> None:
                 print(f"\n✦ FTUE Onboarding complete. First win prepared on {res['first_win_task'].get('branch')}.")
             return
         elif getattr(args, "wizard", False):
-            wizard_init()
+            wizard_init(dry_run=getattr(args, "dry_run", False))
         else:
             agents = [a.strip() for a in args.agents.split(",") if a.strip()]
             if getattr(args, "docs_dir", None):
