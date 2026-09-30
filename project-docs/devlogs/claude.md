@@ -108,4 +108,60 @@
   be classifier-blocked (based on a different, unrelated earlier block) and
   deferred them to Nikhil unnecessarily; tested directly when challenged,
   found no block, and said so plainly rather than making excuses.
+++ b/project-docs/devlogs/claude.md
+
+## 2026-09-30 — #1886 multi-agent concurrency architecture + PR#1888 pre-commit
+  worktree guard (shipped)
+- Discovered mid-cleanup that the main checkout had switched to
+  `feat/agy/vizor-workspace-scoped-routing` with uncommitted files not
+  created by me — an interactive Agy session working directly in the shared
+  main checkout instead of a worktree. Stopped, did not touch the foreign
+  files, confirmed with Nikhil (was Agy, expected) before continuing. Filed
+  the itemized deferred-cleanup list as #1886 (6 probe worktrees, 1 remote
+  branch, PR#1885's stuck merge, 1 orphaned nested worktree) and held per
+  explicit instruction rather than resuming cleanup mid-collision.
+- Nikhil asked whether multi-agent concurrency on one repo is a git
+  limitation or solvable: answered no — git worktrees already give hard
+  isolation (can't check out the same branch twice, separate HEAD/index per
+  worktree, shared object DB, no ref collisions across branches). The actual
+  gap was procedural: nothing stopped a session from skipping worktree
+  creation and working in the shared main checkout, which is exactly what
+  happened. Presented 3 ranked options; Nikhil approved a pre-commit hook
+  that technically enforces worktree-only commits rather than relying on
+  every harness remembering the rule.
+- Dispatched the hook to Codex per locked Default Agent Role policy (PM
+  writes specs, not code). First dispatch attempt omitted `--base main` and
+  silently based off Agy's checked-out branch in the shared repo — caught
+  from the dispatch tool's own stderr before any commit, killed the
+  subprocess, verified no damage, cleaned up, redispatched correctly with
+  `--base main`.
+- job-49d011d4 shipped `githooks/pre-commit` (blocks commits in the shared
+  main checkout — main branch or detached HEAD — allows any linked
+  worktree), wired `core.hooksPath` into `synlynk init`, documented it in
+  CLAUDE.md, added tests. Opened PR#1888. Dispatched a non-authoring `qa`
+  review per PR Review Discipline (job-e5e7e18c): CHANGES_REQUESTED — found
+  the init wiring unconditionally clobbered any pre-existing
+  `core.hooksPath`, and the tests invoked the hook script directly rather
+  than through a real `git commit`. Dispatched the fix (job-fa07b112,
+  commit b19dbe81): preserves existing hooksPath, tests now drive real
+  `git commit` through main/detached-HEAD/linked-worktree cases.
+- Re-dispatching the re-review (job-c3a4c1be) initially resolved against the
+  stale pre-fix commit because my local branch ref hadn't been updated after
+  the push — caught by diffing the worktree's `git log -1` against origin,
+  killed the job before it reviewed the wrong code, force-updated the local
+  ref to origin's tip, redispatched correctly. Re-review APPROVED, CI green
+  6/6, `qa` cleared via `synlynk policy check-merge`, merged (`1e1da814`).
+- Every job in this PR's lifecycle (implementer, review 1, fix, review 2)
+  reported `FAILED (exit -9)`/`circuit_breaker_tripped` on completion despite
+  doing real, verified work each time (confirmed independently via
+  `gh pr view`/`git log` rather than trusting the exit code) — consistent
+  false-negative pattern already in memory (#202), now observed 4x
+  consecutively on one PR. Worth a dedicated investigation if it keeps
+  recurring at this rate; capturing here rather than opening a ticket this
+  turn since the underlying artifacts were all independently verified.
+- Cleaned up all 3 review-cycle worktrees/branches same-turn per Worktree
+  Hygiene Protocol (PR merged). One (job-e5e7e18c) carried the same
+  1525-line `project-docs/todo.md` test-run side-effect diff already
+  documented in #1886 for `djob-commit-0` — confirmed as a known harmless
+  artifact, not new work, before discarding.
 [@claude]

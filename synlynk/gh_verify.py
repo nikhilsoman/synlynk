@@ -189,6 +189,7 @@ def gh_write_verified(
     timeout: int = 10,
     since: Optional[str] = None,
     expect_author: Optional[str] = None,
+    expect_review_state: Optional[str] = None,
     evidence: Optional[dict] = None,
 ) -> Optional[bool]:
     """Return whether a declared GitHub target reached the expected state, or None if unknown.
@@ -197,7 +198,8 @@ def gh_write_verified(
     (original #701 behavior). ``expect='created'`` checks that the target
     exists, regardless of its current state. ``expect='review_posted'``/``'comment_posted'`` checks
     whether a reviews/comments list entry exists at or after ``since``,
-    optionally matching ``expect_author``'s login.
+    optionally matching ``expect_author``'s login and
+    ``expect_review_state`` (for example, ``APPROVED``).
 
     ``since`` is required for the two list-based expect values. Without a time
     floor, a write from days earlier would false-positive every later job on
@@ -297,6 +299,8 @@ def gh_write_verified(
                     if entry_dt is None or _compare_dt_lt(entry_dt, since_dt):
                         continue
                     if expect_author and not _gh_logins_match(_author_login(entry), expect_author):
+                        continue
+                    if expect_review_state and entry.get("state") != expect_review_state:
                         continue
                     matched = True
                     break

@@ -4476,8 +4476,8 @@ def test_grok_dispatch_single_flag_placed_before_prompt(project_dir, monkeypatch
     assert "--permission-mode dontAsk" not in shell_cmd
     assert "--single" in shell_cmd
     single_pos = shell_cmd.index("--single")
-    prompt_pos = shell_cmd.index('"$PROMPT"')
-    assert single_pos < prompt_pos, "--single must come before $PROMPT"
+    prompt_pos = shell_cmd.index('"$synlynk_prompt"')
+    assert single_pos < prompt_pos, "--single must come before $synlynk_prompt"
     approve_pos = shell_cmd.index("--always-approve")
     assert approve_pos < single_pos, "--always-approve must come before --single"
 
@@ -4540,9 +4540,9 @@ def test_agy_dispatch_prompt_flag_after_other_flags(project_dir, monkeypatch):
     assert "-p" in shell_cmd
     some_flag_pos = shell_cmd.index("--some-flag")
     p_pos = shell_cmd.index(" -p ")
-    prompt_pos = shell_cmd.index('"$PROMPT"')
+    prompt_pos = shell_cmd.index('"$synlynk_prompt"')
     assert some_flag_pos < p_pos, "--some-flag must come before -p"
-    assert p_pos < prompt_pos, "-p must come before $PROMPT"
+    assert p_pos < prompt_pos, "-p must come before $synlynk_prompt"
 
 
 def test_exec_agent_task_claude_does_not_include_dangerously_skip_permissions(project_dir, monkeypatch):

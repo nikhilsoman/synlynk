@@ -59,6 +59,14 @@ synlynk upgrade        # check for updates
 synlynk --version
 ```
 
+## Git Workflow
+
+The versioned `githooks/pre-commit` guard blocks commits from the shared main
+checkout, including direct commits on `main`, and from detached HEAD. Feature
+work must use a linked worktree; the hook allows commits from linked worktrees.
+For an existing clone created before this hook was added, enable it with:
+`git config core.hooksPath githooks`
+
 No dependencies beyond Python 3 stdlib. No build, compile, or package step needed.
 
 ## Architecture

@@ -122,6 +122,21 @@ def test_estimate_dispatch_tokens():
     assert large["input"] > 400_000
 
 
+def test_review_estimate_includes_expected_repository_reads():
+    from synlynk.status import estimate_dispatch_tokens
+
+    prompt_only = estimate_dispatch_tokens("review this small function", "", "codex")
+    two_file = estimate_dispatch_tokens(
+        "review PR #1818", "", "codex", task_type="review", target_diff_size=2
+    )
+
+    assert two_file["task_type"] == "review"
+    assert two_file["target_diff_size"] == 2
+    assert two_file["read_allowance"] > 0
+    assert two_file["input"] > prompt_only["input"]
+    assert two_file["input"] >= two_file["read_allowance"]
+
+
 def test_get_avg_tool_calls_default():
     from synlynk.status import _get_avg_tool_calls
 

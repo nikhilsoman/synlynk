@@ -218,6 +218,49 @@ def test_gh_write_verified_review_posted_true_with_matching_author(monkeypatch):
     assert result is True
 
 
+def test_gh_write_verified_review_posted_matches_expected_author_and_state(monkeypatch):
+    def fake_run(cmd, **kwargs):
+        assert cmd == ["gh", "pr", "view", "1038", "--json", "reviews"]
+        return subprocess.CompletedProcess(
+            cmd,
+            0,
+            stdout='{"reviews":[{"author":{"login":"synlynk-synlynk-qa[bot]"},'
+            '"submittedAt":"2026-08-18T11:00:00Z","state":"APPROVED"}]}',
+            stderr="",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    assert gh_write_verified(
+        "pr:1038",
+        expect="review_posted",
+        since="2026-08-18T10:00:00Z",
+        expect_author="synlynk-synlynk-qa[bot]",
+        expect_review_state="APPROVED",
+    ) is True
+
+
+def test_gh_write_verified_review_posted_rejects_unexpected_state(monkeypatch):
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda cmd, **kwargs: subprocess.CompletedProcess(
+            cmd,
+            0,
+            stdout='{"reviews":[{"author":{"login":"qa[bot]"},'
+            '"submittedAt":"2026-08-18T11:00:00Z","state":"COMMENTED"}]}',
+            stderr="",
+        ),
+    )
+    monkeypatch.setattr("synlynk.gh_verify.time.sleep", lambda seconds: None)
+    assert gh_write_verified(
+        "pr:1038",
+        expect="review_posted",
+        since="2026-08-18T10:00:00Z",
+        expect_author="qa[bot]",
+        expect_review_state="APPROVED",
+    ) is False
+
+
 def test_gh_write_verified_review_posted_true_when_author_omits_bot_suffix(monkeypatch):
     """job-1c68bfd4: GraphQL login is synlynk-synlynk-qa, stored author is …[bot]."""
     def fake_run(cmd, **kwargs):
