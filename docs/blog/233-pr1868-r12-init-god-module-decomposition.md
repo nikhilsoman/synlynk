@@ -3,9 +3,9 @@ title: "R12 — Breaking Up the __init__.py God Module"
 date: 2026-09-30
 series: "Building the OS for Multi-Agent Development"
 post: 233
-pr: "TBD"
+pr: "1868"
 issue: "goal-079e2f37"
-status: draft
+status: published
 author: "synlynk team"
 version: "0.23.0-dev"
 tags: [posts, refactor, architecture]
