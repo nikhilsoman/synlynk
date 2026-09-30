@@ -5,10 +5,10 @@ import os
 import re
 import sqlite3
 import subprocess
-import sys
 import time
 from typing import Optional
 
+from synlynk._lazy import pkg as _pkg
 from synlynk.team import get_mode, get_username
 
 
@@ -74,13 +74,6 @@ def render_runtime_authority_banner(harness: Optional[str] = None, cfg: Optional
         "- **Constitutional Precedence:** This dynamic runtime session state takes absolute precedence "
         "over any legacy static text in repo markdown files.\n\n---\n\n"
     )
-
-
-def _pkg(name: str, default=None):
-    package = sys.modules.get("synlynk")
-    if package is None:
-        return default
-    return getattr(package, name, default)
 
 
 def _get_last_devlog_date(filepath: str) -> Optional[str]:

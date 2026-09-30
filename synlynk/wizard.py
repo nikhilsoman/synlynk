@@ -12,18 +12,13 @@ import tarfile
 import uuid
 from typing import Optional, Tuple
 
-from synlynk.taxonomy import entries_for_tier
+from synlynk._lazy import pkg as _pkg
 from synlynk.launch import (
     find_top_scan_finding,
     prompt_first_win_remediation,
     dispatch_first_win_remediation,
 )
-
-def _pkg(name: str, default=None):
-    package = sys.modules.get("synlynk")
-    if package is None:
-        return default
-    return getattr(package, name, default)
+from synlynk.taxonomy import entries_for_tier
 
 _BOLD = "\033[1m"
 
@@ -1294,4 +1289,3 @@ def cmd_wizard_init(
         "first_win": first_win_result,
         "elapsed_seconds": elapsed,
     }
-

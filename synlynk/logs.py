@@ -4,10 +4,7 @@ import json
 import os
 import re
 
-
-def _pkg(name):
-    import synlynk
-    return getattr(synlynk, name)
+from synlynk._lazy import pkg as _pkg
 
 
 def _render_codex_log_line(line: str):
