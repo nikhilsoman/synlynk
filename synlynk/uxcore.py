@@ -13,6 +13,8 @@ import dataclasses
 import enum
 import json
 import os
+import re
+import sqlite3
 import time
 from typing import Iterator, Optional
 
@@ -84,6 +86,7 @@ class Task:
     cost_est: Optional[float]
     cost_actual: float
     cost_prov_estimated: float
+    skip_reason: Optional[str] = None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -192,142 +195,187 @@ def get_costs() -> Costs:
             pass
 
 
-def get_gantt_data() -> list:
-    """Return roadmap arcs as a list of Dream dataclasses with nested Stage/Task. Raises UxCoreError on DB access failure."""
+def _open_gantt_db(db_path: Optional[str]):
+    if db_path is not None:
+        return sqlite3.connect(str(db_path)), True
+    return _get_db(), True
+
+
+def _goal_edges(conn) -> tuple[dict[str, set[str]], dict[str, str], dict[str, str]]:
+    """Return contribution edges and their status, tolerating pre-Spec-3 DBs."""
+    by_goal, status_by_story, reason_by_story = {}, {}, {}
     try:
-        conn = _get_db()
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(goal_contributions)")}
+        status_expr = "link_status" if "link_status" in columns else "'linked'"
+        rows = conn.execute(
+            f"SELECT goal_id, story_id, {status_expr} FROM goal_contributions"
+        ).fetchall()
+    except Exception:
+        return by_goal, status_by_story, reason_by_story
+    for goal_id, story_id, status in rows:
+        status = status or "linked"
+        status_by_story[story_id] = status
+        if status != "unresolved" and goal_id:
+            by_goal.setdefault(goal_id, set()).add(story_id)
+    try:
+        for story_id, reason in conn.execute(
+            "SELECT story_id, skip_reason FROM goal_contributions "
+            "WHERE link_status='unresolved' AND skip_reason IS NOT NULL"
+        ).fetchall():
+            reason_by_story[story_id] = reason
+    except Exception:
+        pass
+    return by_goal, status_by_story, reason_by_story
+
+
+def _arc_goal_id(notes: str) -> Optional[str]:
+    match = re.search(r"\bgoal-[a-zA-Z0-9_-]+\b", notes or "")
+    return match.group(0) if match else None
+
+
+def _gantt_projection(conn) -> tuple[list[Dream], dict]:
+    arc_columns = {row[1] for row in conn.execute("PRAGMA table_info(roadmap_arcs)")}
+    arc_goal_column = ", goal_id" if "goal_id" in arc_columns else ", NULL"
+    arc_rows = conn.execute(
+        "SELECT version, title, status, target_date, notes" + arc_goal_column +
+        " FROM roadmap_arcs ORDER BY id DESC"
+    ).fetchall()
+    phase_rows = conn.execute(
+        "SELECT id, arc_version, phase_title, status, priority, story_id, notes "
+        "FROM roadmap_phases ORDER BY arc_version, id"
+    ).fetchall()
+    story_cols = {row[1] for row in conn.execute("PRAGMA table_info(stories)").fetchall()}
+    has_goal = "goal_id" in story_cols
+    story_query = (
+        "SELECT story_id, title, status, phase, estimated_tokens, goal_id FROM stories ORDER BY id"
+        if has_goal else
+        "SELECT story_id, title, status, phase, estimated_tokens, NULL FROM stories ORDER BY id"
+    )
+    story_rows = conn.execute(story_query).fetchall()
+    cost_rows = _fetch_cost_rows(conn)
+    goal_map = {}
+    try:
+        for gid, outcome in conn.execute("SELECT goal_id, outcome FROM goals").fetchall():
+            if gid:
+                goal_map[gid] = outcome
+    except Exception:
+        pass
+    edges_by_goal, status_by_story, reason_by_story = _goal_edges(conn)
+    story_goals = {}
+    stories_by_id, stories_by_phase = {}, {}
+    for story_id, title, status, phase, tokens, goal_id in story_rows:
+        task = Task(story_id, title or "", phase or "", status or "open", _story_cost_est(tokens), 0.0, 0.0,
+                    reason_by_story.get(story_id))
+        stories_by_id[story_id] = task
+        stories_by_phase.setdefault((phase or "").strip().casefold(), []).append(task)
+        if goal_id:
+            story_goals[story_id] = goal_id
+    for _date, _agent, amount, notes, cost_source in cost_rows:
+        for story_id, task in stories_by_id.items():
+            if story_id and story_id in (notes or ""):
+                object.__setattr__(task, "cost_actual", task.cost_actual + float(amount or 0.0))
+                if cost_source != "actual":
+                    object.__setattr__(task, "cost_prov_estimated", task.cost_prov_estimated + float(amount or 0.0))
+
+    dreams, placed = [], set()
+    arc_goals = {}
+    for dream_id, dream_name, dream_status, target_date, notes, arc_goal in arc_rows:
+        # A normalized arc.goal_id is authoritative. Notes are retained only
+        # for compatibility with pre-migration ledgers that have no such edge.
+        arc_goals[dream_id] = arc_goal or (
+            _arc_goal_id(notes) if "goal_id" not in arc_columns else None
+        )
+        stage_rows = [row for row in phase_rows if row[1] == dream_id]
+        stages = []
+        for index, (_pid, _arc, title, phase_status, _priority, direct_story_id, phase_notes) in enumerate(stage_rows):
+            phase_key = (title or "").strip()
+            candidates = []
+            # Rank 1: explicit phase story_id.
+            if direct_story_id in stories_by_id:
+                candidates.append(stories_by_id[direct_story_id])
+            # Rank 2: authoritative goal contribution edge, restricted to this arc's goal.
+            goal_id = arc_goals[dream_id]
+            if goal_id:
+                candidates.extend(stories_by_id[sid] for sid in edges_by_goal.get(goal_id, ()) if sid in stories_by_id)
+            # Rank 3: legacy phase label join.
+            candidates.extend(stories_by_phase.get(phase_key.casefold(), []))
+            tasks = []
+            for task in candidates:
+                if task.id in placed or task.id in {t.id for t in tasks}:
+                    continue
+                placed.add(task.id)
+                tasks.append(task)
+                story_goals.setdefault(task.id, goal_id)
+            agents = [a for a in re.findall(r"\bagent:([a-z,]+)\b", phase_notes or "") for a in a.split(",")]
+            agents.extend(t.agent for t in tasks if t.agent and not _looks_like_stage_label(t.agent))
+            stages.append(Stage(phase_key, phase_status or "planned", sorted(dict.fromkeys(agents)),
+                                index / len(stage_rows) if stage_rows else 0.0,
+                                1.0 / len(stage_rows) if stage_rows else 1.0,
+                                sum(t.cost_actual for t in tasks) or None,
+                                sum(t.cost_est or 0.0 for t in tasks) or None, tasks))
+        total, estimated = _dream_cost_breakdown(conn, dream_id)
+        dreams.append(Dream(dream_id, dream_name or "", dream_status or "planned", float(total),
+                            float(estimated), sum(s.cost_est or 0.0 for s in stages) or None, stages,
+                            target_date, arc_goals[dream_id], goal_map.get(arc_goals[dream_id])))
+    return dreams, {"stories": stories_by_id, "edges": edges_by_goal, "statuses": status_by_story,
+                    "arc_goals": arc_goals, "goal_map": goal_map, "placed": placed}
+
+
+def get_gantt_data(db_path: str = None) -> list:
+    """Return release-pivot Gantt data with edge-first, exactly-once story placement."""
+    try:
+        conn, owned = _open_gantt_db(db_path)
     except Exception as exc:
         raise UxCoreError(f"could not open state db: {exc}") from exc
     try:
-        arc_rows = conn.execute(
-            "SELECT version, title, status, target_date, notes FROM roadmap_arcs ORDER BY id DESC"
-        ).fetchall()
-        phase_rows = conn.execute(
-            "SELECT id, arc_version, phase_title, status, priority, story_id, notes "
-            "FROM roadmap_phases ORDER BY arc_version, id"
-        ).fetchall()
-        story_cols = {row[1] for row in conn.execute("PRAGMA table_info(stories)").fetchall()} if conn else set()
-        has_goal = "goal_id" in story_cols
-        story_query = (
-            "SELECT story_id, title, status, phase, estimated_tokens, goal_id FROM stories ORDER BY id"
-            if has_goal
-            else "SELECT story_id, title, status, phase, estimated_tokens, NULL as goal_id FROM stories ORDER BY id"
-        )
-        story_rows = conn.execute(story_query).fetchall()
-        cost_rows = _fetch_cost_rows(conn)
-
-        goal_map = {}
-        try:
-            for gid, outcome in conn.execute("SELECT goal_id, outcome FROM goals").fetchall():
-                if gid:
-                    goal_map[gid] = outcome
-        except Exception:
-            pass
-
-        stories_by_id = {}
-        stories_by_phase = {}
-        story_goals = {}
-        for row in story_rows:
-            story_id, title, status, phase, estimated_tokens, goal_id = row[0], row[1], row[2], row[3], row[4], row[5]
-            task = Task(
-                id=story_id,
-                name=title or "",
-                agent=phase or "",
-                status=status or "open",
-                cost_est=_story_cost_est(estimated_tokens),
-                cost_actual=0.0,
-                cost_prov_estimated=0.0,
-            )
-            stories_by_id[story_id] = task
-            stories_by_phase.setdefault((phase or "").strip().lower(), []).append(task)
-            if goal_id:
-                story_goals[story_id] = goal_id
-
-        for _date, agent, amount, notes, cost_source in cost_rows:
-            amount = float(amount or 0.0)
-            for story_id, task in stories_by_id.items():
-                if story_id and story_id in (notes or ""):
-                    object.__setattr__(task, "cost_actual", task.cost_actual + amount)
-                    if cost_source != "actual":
-                        object.__setattr__(
-                            task, "cost_prov_estimated", task.cost_prov_estimated + amount
-                        )
-
-        dreams = []
-        import re
-
-        for dream_id, dream_name, dream_status, target_date, arc_notes in arc_rows:
-            stage_rows = [row for row in phase_rows if row[1] == dream_id]
-            stage_count = len(stage_rows)
-            dream_stages = []
-            linked_goal_id = None
-            if arc_notes:
-                g_match = re.search(r"\bgoal-([a-zA-Z0-9_-]+)\b", arc_notes)
-                if g_match:
-                    linked_goal_id = g_match.group(0)
-
-            for index, phase_row in enumerate(stage_rows):
-                _pid, _arc, phase_title, phase_status, _prio, story_id, notes = phase_row
-                agent_list = []
-                for match in re.findall(r"\bagent:([a-z,]+)\b", notes or ""):
-                    agent_list.extend([a for a in match.split(",") if a])
-                phase_key = (phase_title or "").strip()
-                matched = []
-                if story_id and story_id in stories_by_id:
-                    matched.append(stories_by_id[story_id])
-                    if not linked_goal_id and story_id in story_goals:
-                        linked_goal_id = story_goals[story_id]
-                matched.extend(stories_by_phase.get(phase_key.lower(), []))
-                deduped, seen = [], set()
-                for task in matched:
-                    if task.id in seen:
-                        continue
-                    seen.add(task.id)
-                    deduped.append(task)
-                    if not linked_goal_id and task.id in story_goals:
-                        linked_goal_id = story_goals[task.id]
-                for task in deduped:
-                    if task.agent and not _looks_like_stage_label(task.agent):
-                        agent_list.append(task.agent)
-                stage_cost_actual = sum(t.cost_actual for t in deduped)
-                stage_cost_est = sum(t.cost_est or 0.0 for t in deduped) or None
-                dream_stages.append(
-                    Stage(
-                        key=phase_key,
-                        status=phase_status or "planned",
-                        agents=sorted(dict.fromkeys(agent_list)),
-                        start_frac=(index / stage_count) if stage_count else 0.0,
-                        width_frac=(1.0 / stage_count) if stage_count else 1.0,
-                        cost_actual=stage_cost_actual or None,
-                        cost_est=stage_cost_est,
-                        tasks=deduped,
-                    )
-                )
-            dream_cost_total, dream_cost_prov_estimated = _dream_cost_breakdown(conn, dream_id)
-            dream_tasks_cost_est = sum(
-                s.cost_est or 0.0 for s in dream_stages
-            ) or None
-            goal_outcome = goal_map.get(linked_goal_id) if linked_goal_id else None
-            dreams.append(
-                Dream(
-                    id=dream_id,
-                    name=dream_name or "",
-                    status=dream_status or "planned",
-                    cost_total=float(dream_cost_total),
-                    cost_total_estimated=float(dream_cost_prov_estimated),
-                    cost_est=dream_tasks_cost_est,
-                    stages=dream_stages,
-                    target_date=target_date,
-                    goal_id=linked_goal_id,
-                    goal_outcome=goal_outcome,
-                )
-            )
-        return dreams
+        return _gantt_projection(conn)[0]
     finally:
-        try:
+        if owned:
             conn.close()
+
+
+def get_gantt_goal_pivot_data(db_path: str = None) -> list[dict]:
+    """Return first-class goal lanes, including synthetic and unresolved lanes."""
+    try:
+        conn, owned = _open_gantt_db(db_path)
+    except Exception as exc:
+        raise UxCoreError(f"could not open state db: {exc}") from exc
+    try:
+        releases, meta = _gantt_projection(conn)
+        try:
+            from synlynk.governs_engine import scoped_goals
+            goals = scoped_goals(conn)
         except Exception:
-            pass
+            goals = [{"goal_id": gid, "outcome": outcome} for gid, outcome in meta["goal_map"].items()]
+        lanes = []
+        for goal in goals:
+            gid = goal["goal_id"]
+            story_ids = meta["edges"].get(gid, set())
+            goal_releases = [r for r in releases if r.goal_id == gid]
+            goal_lanes = []
+            for release in goal_releases:
+                stages = [dataclasses.replace(stage, tasks=[t for t in stage.tasks if t.id in story_ids])
+                          for stage in release.stages]
+                if any(stage.tasks for stage in stages):
+                    goal_lanes.append({"id": release.id, "name": release.name, "type": "release", "stages": stages})
+            attached = {t.id for lane in goal_lanes for stage in lane["stages"] for t in stage.tasks}
+            unscheduled = [meta["stories"][sid] for sid in story_ids if sid in meta["stories"] and sid not in attached]
+            if unscheduled:
+                goal_lanes.append({"id": f"{gid}:unscheduled", "name": "Unscheduled", "type": "synthetic",
+                                   "stages": [Stage("Unscheduled", "planned", [], 0.0, 1.0, None, None, unscheduled)]})
+            lanes.append({"id": gid, "outcome": goal.get("outcome", ""), "criterion": goal.get("criterion", ""), "lanes": goal_lanes})
+        unresolved = [meta["stories"][sid] for sid, status in meta["statuses"].items()
+                      if status == "unresolved" and sid in meta["stories"]]
+        if unresolved:
+            lanes.append({"id": "unmapped", "outcome": "Unmapped", "criterion": "", "lanes": [
+                {"id": "unmapped", "name": "Unmapped", "type": "unmapped", "stages": [
+                    Stage("Unmapped", "unresolved", [], 0.0, 1.0, None, None, unresolved)
+                ]}
+            ]})
+        return lanes
+    finally:
+        if owned:
+            conn.close()
 
 
 @dataclasses.dataclass(frozen=True)

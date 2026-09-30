@@ -22,6 +22,8 @@ RELAY_EVENT_TYPES = (
     "review_requested",
     "steering_injected",
     "agent_completed",
+    "goal_realigned",
+    "governs_stage_advanced",
 )
 
 
@@ -323,6 +325,25 @@ def emit_event(event_type: str, payload: dict, emitted_by: str,
         handle_event_stage_transition(event_type, payload)
     except Exception:
         pass
+
+    # Governance events also fan out through the relay SSE broker. The broker
+    # is machine-wide, so the workspace product_id remains part of the wire
+    # payload and is checked again by Vizor consumers.
+    if event_type in {"goal_realigned", "governs_stage_advanced"}:
+        try:
+            from synlynk.relay import RelayBroker
+
+            product_id = payload.get("product_id") or "local"
+            actor = ActorIdentifier(
+                workspace_id=str(product_id),
+                member_id="local",
+                agent_role="governs",
+                harness="synlynk",
+                job_id=str(emitted_by),
+            )
+            RelayBroker().publish(EventEnvelope.create(actor, event_type, payload))
+        except Exception:
+            pass
 
     return event_id
 

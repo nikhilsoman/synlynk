@@ -13,7 +13,7 @@ from typing import Any, Dict, Optional
 
 from synlynk import _CYAN, _GREEN, _RED, _RESET, _YELLOW
 from synlynk.context import harvest_workspace_artifacts
-from synlynk.governs_resolver import DEFAULT_MASTER_GOAL, resolve_parent_goal
+from synlynk.governs_engine import scoped_goals
 
 
 def cmd_governs_sweep(
@@ -61,67 +61,51 @@ def cmd_governs_sweep(
         stories = conn.execute(query).fetchall()
         stats["total_stories"] = len(stories)
 
-        story_updates = []
+        # Sweep is deliberately an audit.  Association belongs to story-write
+        # transactions; this command must never infer or create a goal.
+        local_goal_ids = {goal["goal_id"] for goal in scoped_goals(conn, status="active")}
+        unresolved_story_ids = []
         for story in stories:
             sid, title, gid, g_stage, status, gh_issue = story[0], story[1] or "", story[2], story[3] or "open", story[4] or "open", story[5]
-            if gid and gid.strip():
+            if gid and gid.strip() in local_goal_ids:
                 stats["initially_linked"] += 1
-                resolved_gid = gid
             else:
                 stats["initially_unlinked"] += 1
-                resolved_gid, reason = resolve_parent_goal(
-                    story_id=sid,
-                    text_content=title,
-                    issue_number=gh_issue,
-                    conn=conn,
-                )
-                if resolved_gid:
-                    stats["linked_updated"] += 1
-                    if verbose:
-                        print(f"    {_GREEN}✓{_RESET} Linked {sid} -> {resolved_gid} ({reason})")
-                else:
-                    stats["unresolved_count"] += 1
-
-            # Check stage advancement for completed work
-            new_stage = g_stage
-            if status == "done" and g_stage in ("open", "visualize", "execute"):
-                new_stage = "sustain"
-                stats["stages_advanced"] += 1
-            elif not g_stage or g_stage == "":
-                new_stage = "open"
-
-            if resolved_gid != gid or new_stage != g_stage:
-                story_updates.append((resolved_gid, new_stage, sid))
+                stats["unresolved_count"] += 1
+                unresolved_story_ids.append(sid)
+                if verbose:
+                    print(f"    {_YELLOW}•{_RESET} Unresolved {sid}: no scoped goal mapping")
 
         # 2. Harvest Workspace Artifacts
         artifacts = harvest_workspace_artifacts(repo_root=root, conn=conn)
         stats["artifacts_harvested"] = len(artifacts)
 
-        # 3. Apply updates if not dry run
-        if not dry_run and story_updates:
-            for r_gid, n_stage, s_id in story_updates:
-                if r_gid:
-                    try:
-                        conn.execute(
-                            "INSERT OR IGNORE INTO goals (goal_id, outcome, criterion) VALUES (?, ?, ?)",
-                            (r_gid, f"GOVERNS Goal: {r_gid}", "Auto-reconciled during GOVERNS sweep"),
-                        )
-                    except Exception:
-                        pass
-                if has_governs_stage:
+        # 3. Record only the audit marker for unmapped stories.  The marker is
+        # intentionally not a goal row and is skipped entirely in dry-run mode.
+        if not dry_run and unresolved_story_ids:
+            from synlynk.governs_engine import _ensure_resolution_columns
+            _ensure_resolution_columns(conn)
+            for s_id in unresolved_story_ids:
+                conn.execute(
+                    "DELETE FROM goal_contributions WHERE story_id=? AND goal_id='none'",
+                    (s_id,),
+                )
+                conn.execute(
+                    "PRAGMA foreign_keys=OFF"
+                )
+                try:
                     conn.execute(
-                        "UPDATE stories SET goal_id = ?, governs_stage = ?, stage = ? WHERE story_id = ?",
-                        (r_gid, n_stage, n_stage, s_id),
+                        "INSERT INTO goal_contributions "
+                        "(goal_id, story_id, link_status, skip_reason, resolution_reason) "
+                        "VALUES ('none', ?, 'unresolved', ?, 'audit_unresolved')",
+                        (s_id, "no scoped goal matched during audit sweep"),
                     )
-                else:
-                    conn.execute(
-                        "UPDATE stories SET goal_id = ? WHERE story_id = ?",
-                        (r_gid, s_id),
-                    )
+                finally:
+                    conn.execute("PRAGMA foreign_keys=ON")
             conn.commit()
 
         # 4. Print Summary
-        final_linked = stats["initially_linked"] + (stats["linked_updated"] if not dry_run else 0)
+        final_linked = stats["initially_linked"]
         coverage_pct = (final_linked / max(1, stats["total_stories"])) * 100
 
         print(f"\n  {_GREEN}✓{_RESET} GOVERNS Fleet Sweep Complete:")
@@ -130,9 +114,6 @@ def cmd_governs_sweep(
         print(f"    • Stages Auto-Advanced:       {stats['stages_advanced']}")
         print(f"    • Session Artifacts Indexed:  {stats['artifacts_harvested']}")
         print(f"    • Workspace Goal Coverage:    {coverage_pct:.1f}%\n")
-
-        if strict and stats["unresolved_count"] > 0:
-            raise RuntimeError(f"GOVERNS strict sweep failed: {stats['unresolved_count']} unlinked stories remain.")
 
         return stats
     finally:

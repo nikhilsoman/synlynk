@@ -63,19 +63,13 @@ def test_governs_sweep_populates_board_and_gantt(tmp_path, monkeypatch):
     unlinked_before = conn.execute("SELECT count(*) FROM stories WHERE goal_id IS NULL").fetchone()[0]
     assert unlinked_before == 5
 
-    # Run sweep
-    cmd_governs_sweep(repo_root=str(repo), dry_run=False, conn=conn)
+    # Run sweep (audit-only under Spec 3: reports coverage, never manufactures foreign goals)
+    stats = cmd_governs_sweep(repo_root=str(repo), dry_run=False, conn=conn)
+    assert stats["total_stories"] == 5
+    assert stats["unresolved_count"] == 5
+    assert conn.execute("SELECT COUNT(*) FROM goals").fetchone()[0] == 2
 
-    # After sweep: 0 unlinked!
-    unlinked_after = conn.execute("SELECT count(*) FROM stories WHERE goal_id IS NULL").fetchone()[0]
-    assert unlinked_after == 0
-
-    # Board cards check
+    # Board cards check: all 5 cards present on board regardless of mapping status
     board_res = board_data(str(repo))
     assert len(board_res["cards"]) == 5
-    assert all(c.get("goal_id") is not None for c in board_res["cards"])
-    
-    # Completed tasks s2 and s4 advanced to sustain
-    s2_card = next(c for c in board_res["cards"] if c["story_id"] == "s2")
-    assert s2_card["governs_stage"] == "sustain"
     conn.close()

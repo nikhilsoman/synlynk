@@ -1,60 +1,61 @@
-import pytest
 import sqlite3
-from synlynk import _get_db
 
-def test_governs_sweep_reconciles_unlinked_stories(tmp_path, monkeypatch, capsys):
-    from synlynk.governs_cli import cmd_governs_sweep
-    test_db = tmp_path / "state.db"
-    monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(test_db))
-    conn = _get_db(db_path=str(test_db))
+from synlynk.db import _migrate_db
 
-    # Insert parent goals
-    conn.execute("INSERT OR IGNORE INTO goals (goal_id, outcome, criterion) VALUES ('goal-e3840370', 'Vizor Control Plane', 'ok')")
-    conn.execute("INSERT OR IGNORE INTO goals (goal_id, outcome, criterion) VALUES ('goal-eacab0dc', 'Universal GOVERNS', 'ok')")
-    
-    # Insert unlinked stories
+
+def _db(tmp_path):
+    conn = sqlite3.connect(str(tmp_path / "state.db"))
+    _migrate_db(conn)
     conn.execute(
-        "INSERT INTO stories (story_id, title, goal_id, governs_stage, status) VALUES (?, ?, ?, ?, ?)",
-        ("story-unlinked-1", "Vizor Canvas Zoom Feature", None, "open", "open")
+        "CREATE TABLE IF NOT EXISTS state_identity ("
+        "product_id TEXT NOT NULL, mode TEXT NOT NULL DEFAULT 'repo', "
+        "canonical_path TEXT NOT NULL DEFAULT ''"
+        ")"
     )
+    conn.execute("INSERT INTO state_identity(product_id) VALUES ('prod-test')")
+    conn.commit()
+    return conn
+
+
+def test_sweep_is_audit_only_and_never_manufactures_goals(tmp_path):
+    from synlynk.governs_cli import cmd_governs_sweep
+
+    conn = _db(tmp_path)
     conn.execute(
-        "INSERT INTO stories (story_id, title, goal_id, governs_stage, status) VALUES (?, ?, ?, ?, ?)",
-        ("story-unlinked-2", "General refactor task", None, "open", "done")
+        "INSERT INTO stories (story_id, title, goal_id, status) "
+        "VALUES ('story-ghost', 'Generic Story', NULL, 'todo')"
     )
     conn.commit()
 
-    # Run sweep
-    stats = cmd_governs_sweep(repo_root=str(tmp_path), dry_run=False, verbose=True, conn=conn)
-    assert stats["total_stories"] == 2
-    assert stats["linked_updated"] == 2
-    assert stats["stages_advanced"] >= 1
+    stats = cmd_governs_sweep(conn=conn, dry_run=False, strict=True)
 
-    # Verify story 1 got linked to vizor goal
-    row1 = conn.execute("SELECT goal_id, governs_stage FROM stories WHERE story_id='story-unlinked-1'").fetchone()
-    assert row1[0] == "goal-e3840370"
+    assert stats["total_stories"] == 1
+    assert stats["unresolved_count"] == 1
+    assert stats["linked_updated"] == 0
+    assert conn.execute("SELECT COUNT(*) FROM goals").fetchone()[0] == 0
+    assert conn.execute(
+        "SELECT link_status, skip_reason FROM goal_contributions WHERE story_id='story-ghost'"
+    ).fetchone() == ("unresolved", "no scoped goal matched during audit sweep")
 
-    # Verify story 2 got linked to master goal and stage advanced to sustain because status is done
-    row2 = conn.execute("SELECT goal_id, governs_stage FROM stories WHERE story_id='story-unlinked-2'").fetchone()
-    assert row2[0] == "goal-eacab0dc"
-    assert row2[1] == "sustain"
-    conn.close()
 
-def test_governs_sweep_dry_run(tmp_path, monkeypatch):
+def test_sweep_reports_existing_scoped_coverage_without_relinking(tmp_path):
     from synlynk.governs_cli import cmd_governs_sweep
-    test_db = tmp_path / "state.db"
-    monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(test_db))
-    conn = _get_db(db_path=str(test_db))
 
+    conn = _db(tmp_path)
     conn.execute(
-        "INSERT INTO stories (story_id, title, goal_id, governs_stage, status) VALUES (?, ?, ?, ?, ?)",
-        ("story-dry-1", "Vizor Feature", None, "open", "open")
+        "INSERT INTO goals (goal_id, outcome, criterion, product_id, status) "
+        "VALUES ('goal-local', 'Local Goal', 'Criteria', 'prod-test', 'active')"
+    )
+    conn.execute(
+        "INSERT INTO stories (story_id, title, goal_id, governs_stage, status) "
+        "VALUES ('story-linked', 'Already linked', 'goal-local', 'open', 'done')"
     )
     conn.commit()
 
-    # Dry run should calculate updates but not commit
-    stats = cmd_governs_sweep(repo_root=str(tmp_path), dry_run=True, conn=conn)
-    assert stats["linked_updated"] == 1
+    stats = cmd_governs_sweep(conn=conn, dry_run=False, strict=True)
 
-    row = conn.execute("SELECT goal_id FROM stories WHERE story_id='story-dry-1'").fetchone()
-    assert row[0] is None
-    conn.close()
+    assert stats["initially_linked"] == 1
+    assert stats["linked_updated"] == 0
+    assert conn.execute(
+        "SELECT governs_stage FROM stories WHERE story_id='story-linked'"
+    ).fetchone()[0] == "open"

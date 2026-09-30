@@ -97,8 +97,8 @@ _PROJECT_DOC_KEEP_N = 50
 # Bump when a new schema migration is added.  This is deliberately kept in
 # SQLite's small built-in metadata slot so checking it does not touch the DB
 # file or create a backup on already-migrated connections.
-# Version 11 adds kind column to goals table and goal_id/story_id to decisions table.
-_DB_MIGRATION_VERSION = 11
+# Version 12 adds workspace tenancy and alias/resolution metadata for GOVERNS.
+_DB_MIGRATION_VERSION = 12
 
 _GENERATORS_BY_FILENAME = {
     "todo.md": "_generate_todo_md",
@@ -539,6 +539,82 @@ def _normalize_org_domain_drift(conn: sqlite3.Connection) -> None:
             )
 
 
+def _migrate_governs_tenancy(conn: sqlite3.Connection) -> None:
+    """Add workspace-scoped goal metadata and quarantine phantom goals.
+
+    This migration is deliberately idempotent because state databases can be
+    upgraded from several historical schema versions.  Existing goals are
+    assigned to the product recorded by ``state_identity`` when available.
+    """
+    goal_cols = {row[1] for row in conn.execute("PRAGMA table_info(goals)")}
+    if "product_id" not in goal_cols:
+        conn.execute("ALTER TABLE goals ADD COLUMN product_id TEXT")
+
+    gc_cols = {row[1] for row in conn.execute("PRAGMA table_info(goal_contributions)")}
+    if "resolution_reason" not in gc_cols:
+        conn.execute("ALTER TABLE goal_contributions ADD COLUMN resolution_reason TEXT")
+    if "resolved_at" not in gc_cols:
+        conn.execute("ALTER TABLE goal_contributions ADD COLUMN resolved_at TIMESTAMP")
+
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS goal_aliases (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            goal_id TEXT NOT NULL REFERENCES goals(goal_id),
+            pattern TEXT NOT NULL,
+            product_id TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(goal_id, pattern)
+        )"""
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_goal_aliases_product ON goal_aliases(product_id)")
+
+    target_pid = None
+    identity_cols = {row[1] for row in conn.execute("PRAGMA table_info(state_identity)")}
+    if "product_id" in identity_cols:
+        identity = conn.execute(
+            "SELECT product_id FROM state_identity WHERE product_id IS NOT NULL "
+            "ORDER BY rowid LIMIT 1"
+        ).fetchone()
+        if identity and identity[0]:
+            target_pid = identity[0]
+            conn.execute(
+                "UPDATE goals SET product_id=? WHERE product_id IS NULL",
+                (target_pid,),
+            )
+    if not target_pid:
+        target_pid = "synlynk"
+
+    _HISTORICAL_GOAL_ALIASES = [
+        ("goal-e3840370", r"(?i)\b(?:viz|vizor|canvas|hud|graphify|board|gantt|tube|logical|architect_map|lod|opportunity_radar|world_view)\b"),
+        ("goal-0c4e96ff", r"(?i)\b(?:docs[/-]book|manuscript|readership|book[_-]|book)\b"),
+        ("goal-9011307c", r"(?i)\b(?:testbed|acceptance|soak|isolated_vm|docker_runner)\b"),
+        ("goal-c75ff209", r"(?i)\b(?:models?\.json|quota|calibration|model_catalog|burn_rate)\b"),
+        ("goal-c7113f58", r"(?i)\b(?:jev|deepseek|typesafe|dsh|cordis|strategic_expansion)\b"),
+        ("goal-3b45a961", r"(?i)\b(?:heal|parity|migration_engine|adoption_parity)\b"),
+        ("goal-d3333441", r"(?i)\b(?:unattended_merge|merge_oracle|trust_closure|job_truth)\b"),
+        ("goal-8f64eff5", r"(?i)\b(?:sentinel|doctor|platform_health|zombie|reap|stall)\b"),
+    ]
+    for gid, pat in _HISTORICAL_GOAL_ALIASES:
+        row = conn.execute("SELECT product_id FROM goals WHERE goal_id=?", (gid,)).fetchone()
+        if row:
+            goal_pid = row[0] or target_pid
+            conn.execute(
+                "INSERT OR IGNORE INTO goal_aliases (goal_id, pattern, product_id) VALUES (?, ?, ?)",
+                (gid, pat, goal_pid),
+            )
+
+    conn.execute(
+        """UPDATE goals
+           SET status='quarantined'
+         WHERE status='active'
+           AND (criterion LIKE 'Auto-reconciled%' OR outcome LIKE 'Auto-reconciled%')
+           AND NOT EXISTS (
+               SELECT 1 FROM goal_contributions gc
+                WHERE gc.goal_id = goals.goal_id
+           )"""
+    )
+
+
 def _migrate_db(conn: sqlite3.Connection) -> None:
     """Idempotent schema migrations. Adds tables/views if absent."""
     migration_version = conn.execute("PRAGMA user_version").fetchone()[0]
@@ -726,6 +802,7 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
                 conn.execute("ALTER TABLE goal_contributions ADD COLUMN skip_reason TEXT")
             except sqlite3.OperationalError:
                 pass
+        _migrate_governs_tenancy(conn)
         goal_cols = {row[1] for row in conn.execute("PRAGMA table_info(goals)")}
         if "kind" not in goal_cols:
             try:
@@ -1583,6 +1660,7 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
         conn.commit()
 
     else:
+        _migrate_governs_tenancy(conn)
         _normalize_org_domain_drift(conn)
         conn.commit()
 
@@ -2832,6 +2910,11 @@ def _import_todo_to_stories(docs_dir: str = None, conn=None) -> int:
                     "INSERT INTO stories (story_id, title, status) VALUES (?, ?, ?)",
                     (story_id, title, status),
                 )
+                try:
+                    from synlynk.governs_engine import associate_story
+                    associate_story(conn, story_id, title=title, emit=False)
+                except sqlite3.OperationalError:
+                    pass
                 imported += 1
                 existing_ids.add(story_id)
             except sqlite3.IntegrityError:
@@ -2852,7 +2935,8 @@ def cmd_story_create(title: str, engg_domain: str = None,
                      discipline: str = None,
                      role: str = None,
                      stage: str = None,
-                     story_id: str = None) -> str:
+                     story_id: str = None,
+                     db_path: str = None) -> str:
     """Creates a story record in state.db. Returns the generated story_id."""
     from synlynk import _GREEN, _RESET, _generate_todo_md, _get_db, load_config
     import hashlib as _hashlib
@@ -2874,13 +2958,15 @@ def cmd_story_create(title: str, engg_domain: str = None,
     )[0:4]
     if engg_domain is None:
         engg_domain = discipline
-    conn = _get_db()
+    conn = _get_db(db_path=db_path) if db_path else _get_db()
     conn.execute(
         "INSERT INTO stories (story_id, title, engg_domain, discipline, org_domain, role, stage, "
         "org_domain_tags, stack_tags, industry, phase, estimated_tokens) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (story_id, title, engg_domain, discipline, org_domain, role, stage,
          tags_json, stack_tags_json, industry, phase, estimated_tokens)
     )
+    from synlynk.governs_engine import associate_story
+    associate_story(conn, story_id, title=title, emit=False)
     conn.commit()
     conn.close()
     _generate_todo_md()
@@ -3011,7 +3097,7 @@ def _record_goal_link_status(conn, story_id: str) -> None:
 
     primary_goal_id = story[0]
     secondary = conn.execute(
-        "SELECT goal_id FROM goal_contributions WHERE story_id=?", (story_id,)
+        "SELECT goal_id FROM goal_contributions WHERE story_id=? AND goal_id != 'none'", (story_id,)
     ).fetchall()
     if primary_goal_id:
         conn.execute(
@@ -3031,9 +3117,11 @@ def _record_goal_link_status(conn, story_id: str) -> None:
     conn.execute("PRAGMA foreign_keys=OFF")
     try:
         conn.execute(
-            "INSERT OR IGNORE INTO goal_contributions "
+            "INSERT INTO goal_contributions "
             "(goal_id, story_id, link_status, skip_reason) "
-            "VALUES ('none', ?, 'skipped', ?)",
+            "VALUES ('none', ?, 'skipped', ?) "
+            "ON CONFLICT(goal_id, story_id) DO UPDATE SET "
+            "link_status='skipped', skip_reason=excluded.skip_reason",
             (story_id, "no active goal specified at plan-approval time"),
         )
         conn.commit()
@@ -3372,11 +3460,19 @@ def cmd_goal_link(story_id: str, goal_id: str, secondary: bool = False) -> None:
         return
     if secondary:
         conn.execute(
+            "DELETE FROM goal_contributions WHERE story_id=? AND goal_id='none'",
+            (story_id,),
+        )
+        conn.execute(
             "INSERT OR IGNORE INTO goal_contributions (goal_id, story_id) VALUES (?, ?)",
             (goal_id, story_id)
         )
         print(f"  {_GREEN}✓{_RESET} {story_id} linked to {goal_id} (secondary)")
     else:
+        conn.execute(
+            "DELETE FROM goal_contributions WHERE story_id=? AND goal_id='none'",
+            (story_id,),
+        )
         conn.execute("UPDATE stories SET goal_id=? WHERE story_id=?", (goal_id, story_id))
         print(f"  {_GREEN}✓{_RESET} {story_id} linked to {goal_id} (primary)")
     conn.commit()

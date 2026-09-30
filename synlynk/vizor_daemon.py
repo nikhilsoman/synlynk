@@ -619,6 +619,18 @@ def build_workspace_routing_handler():
                             self.wfile.write(body)
                         return False
 
+                    if api_route == "goals" and self.command == "GET":
+                        from synlynk.viz import collect_data
+
+                        payload = collect_data(db_path=str(ctx.db_path))
+                        body = json.dumps(payload).encode("utf-8")
+                        self.send_response(200)
+                        self.send_header("Content-Type", "application/json; charset=utf-8")
+                        self.send_header("Content-Length", str(len(body)))
+                        self.end_headers()
+                        self.wfile.write(body)
+                        return False
+
                     if api_route == "board/stage" and self.command == "POST":
                         from synlynk.board import update_stage_for_context
 

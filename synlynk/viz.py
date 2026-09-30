@@ -17,6 +17,35 @@ from typing import Dict, Optional, Tuple
 from synlynk import _get_db, _query_repo_file_tree
 
 _open_state_db = _get_db
+
+
+def collect_data(*, db_path: Optional[str] = None) -> dict:
+    """Collect workspace-owned goal data from an explicitly scoped ledger.
+
+    Goal reads must not fall back to the process CWD: the Vizor daemon can be
+    serving several workspaces while its own CWD is unrelated (and may be
+    ``/``).  A missing or unusable path is an empty, safe read.
+    """
+    if not db_path:
+        return {"goals": []}
+    try:
+        from synlynk import governs_engine
+
+        with _open_state_db(db_path=db_path, read_only=True) as conn:
+            goals = governs_engine.scoped_goals(conn, status="active")
+            product_id = governs_engine.workspace_product_id(conn)
+        return {
+            "product_id": product_id,
+            "goals": [
+                {
+                    **goal,
+                    "id": goal.get("goal_id"),
+                }
+                for goal in goals
+            ]
+        }
+    except Exception:
+        return {"goals": []}
 from synlynk.observatory import (
     build_job_observatory_snapshot,
     write_observatory_snapshot,
@@ -147,7 +176,7 @@ def _repo_github_url(repo_path: str) -> Optional[str]:
     return f"https://github.com/{slug}" if slug else None
 
 
-def generate_viz_data() -> dict:
+def generate_viz_data(db_path: Optional[str] = None) -> dict:
     def _ts() -> str:
         return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
@@ -538,7 +567,11 @@ def generate_viz_data() -> dict:
     active_story_count = 0
 
     try:
-        conn = _get_db()
+        conn = (
+            _open_state_db(db_path=db_path, read_only=True)
+            if db_path
+            else _get_db()
+        )
         tables = {
             row[0]
             for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
@@ -650,20 +683,7 @@ def generate_viz_data() -> dict:
     ]
     data["dreams"] = data["releases"]
 
-    try:
-        conn = _get_db()
-        goal_rows = conn.execute(
-            "SELECT goal_id, outcome, criterion, deadline, status FROM goals WHERE status='active' "
-            "ORDER BY created_at DESC"
-        ).fetchall()
-        goals = [
-            {"id": r[0], "outcome": r[1], "criterion": r[2], "deadline": r[3], "status": r[4]}
-            for r in goal_rows
-        ]
-        conn.close()
-    except Exception:
-        goals = []
-    data["goals"] = goals
+    data["goals"] = collect_data(db_path=db_path).get("goals", [])
 
     ecosystem = {}
     try:
@@ -2608,6 +2628,7 @@ const releases = Array.isArray(window.VIZOR_DATA && (window.VIZOR_DATA.releases 
 const dreams = releases; // Backwards compatibility alias
 const goals = Array.isArray(window.VIZOR_DATA && window.VIZOR_DATA.goals) ? window.VIZOR_DATA.goals : [];
 const specVerifications = Array.isArray(window.VIZOR_DATA && window.VIZOR_DATA.spec_verifications) ? window.VIZOR_DATA.spec_verifications : [];
+const currentWorkspaceProductId = window.VIZOR_DATA && window.VIZOR_DATA.product_id ? String(window.VIZOR_DATA.product_id) : null;
 const VERDICT_BADGE = {
   fulfilled: 'background:#dcfce7;border-color:#86efac;color:#15803d',
   partial: 'background:#fef3c7;border-color:#fde68a;color:#d97706',
@@ -2639,6 +2660,25 @@ function safeStorageGet(key, fallback) {
 function safeStorageSet(key, value) {
   try {
     localStorage.setItem(key, value);
+  } catch (err) {}
+}
+
+function applyGovernanceRelayEvent(event) {
+  const eventType = event && (event.event_type || event.type);
+  const eventProductId = event && (event.product_id || event.payload?.product_id);
+  if (!event || !['goal_realigned', 'governs_stage_advanced'].includes(eventType)) return;
+  if (currentWorkspaceProductId && String(eventProductId || '') !== currentWorkspaceProductId) return;
+  // Relay events are advisory. Re-rendering the already scoped snapshot keeps
+  // the HUD consistent without allowing a foreign workspace to patch it.
+  if (eventType === 'goal_realigned') renderTimeline();
+}
+
+if (typeof EventSource !== 'undefined') {
+  try {
+    const relay = new EventSource('/events');
+    relay.onmessage = (message) => {
+      try { applyGovernanceRelayEvent(JSON.parse(message.data)); } catch (err) {}
+    };
   } catch (err) {}
 }
 
@@ -3104,6 +3144,20 @@ function renderByGoal() {
         </div>
       </div>`;
   });
+  const unmappedReleases = releases.filter(r => !r.goal_id && !r.goal_outcome);
+  if (unmappedReleases.length) {
+    html += `
+      <div class="section-divider unmapped-goal-lane">
+        <div class="section-header">
+          <div class="section-title">
+            <span class="section-badge">⚪ Unmapped</span>
+            <span>Stories awaiting goal association</span>
+            <span class="section-count">(${unmappedReleases.length})</span>
+          </div>
+        </div>
+        <div class="section-content">${unmappedReleases.map(renderRelease).join('')}</div>
+      </div>`;
+  }
   body.innerHTML = html;
 }
 
@@ -9481,7 +9535,7 @@ function draw(){
           </div>
           <h3>${esc(c.title)}</h3>
           <div class="meta">${esc(c.repo_name||c.repo_id||'unassigned')} · ${esc(c.type_id||'untyped')}</div>
-          ${c.goal_id?`<div class="meta goal-meta">🎯 ${esc(c.goal_id)}</div>`:''}
+          ${c.goal_id?`<div class="meta goal-meta">🎯 ${esc(c.goal_id)}</div>`:`<div class="meta goal-meta unmapped-goal">⚪ Unmapped</div>`}
           <div class="links">${link(c.tracker)}${c.pr_url?`<a href="${esc(c.pr_url)}" target="_blank" rel="noopener">PR</a>`:''}</div>
           <div class="card-actions">
             <div class="status-btns">
