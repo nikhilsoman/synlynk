@@ -1526,3 +1526,29 @@ First, the time to live never takes effect for newly writt [testing] <!-- id:sto
 - [ ] Brainstorm + design synlynk's end-to-end FTUE/onboarding: greenfield, brownfield, multi-repo discovery, product narrative, terminal-vs-web, and Vizor's role (post-R12) [architecture] <!-- id:story-cf24a4ab -->
 - [ ] R12: consolidate _pkg() duplication + trim synlynk/__init__.py bloat [frontend] <!-- id:story-issue-1868 -->
 - [ ] Review pull request number 1869 in this repository as the qa role. This is a docs-only PR renaming a blog post file and filling in its pr/status frontmatter fields now that the PR number is known, plu [docs] <!-- id:story-adhoc-1790745292 -->
+- [ ] Review pull request number 1871 in this repository as the qa role. This is a docs-only project-docs checkpoint-sync PR: it marks story-54515ca1 (R12) done and regenerates project-docs/todo.md and proj [docs] <!-- id:story-adhoc-1790745590 -->
+- [ ] docs: devlog entry — R12 god-module decomposition shipped [testing] <!-- id:story-issue-1872 -->
+- [ ] synlynk/db.py has its own circular-shim pattern, distinct from __init__.py's _pkg() duplication (R12) [backend] <!-- id:story-issue-1867 -->
+- [ ] synlynk dispatch crashes with NameError instead of usage error when agent arg omitted [testing] <!-- id:story-issue-1870 -->
+- [ ] test_wizard.py subprocess test hangs indefinitely via os.system("clear") pipe-inheritance [frontend] <!-- id:story-issue-1862 -->
+- [ ] fix(db): import schema constants directly [testing] <!-- id:story-issue-1873 -->
+- [ ] fix(cli): report missing dispatch agent cleanly [testing] <!-- id:story-issue-1874 -->
+- [ ] Test suite (or a dispatch side-effect) touched real production state.db during R12 Task 2 verification [backend] <!-- id:story-issue-1865 -->
+- [ ] fix(wizard): avoid pipe-inheriting clear subprocess [testing] <!-- id:story-issue-1875 -->
+- [ ] fix(cli): isolate wizard dry-run subprocess state [backend] <!-- id:story-issue-1876 -->
+- [ ] docs: blog posts for #1862/#1865 fixes + cost log + worktree audit archive [testing] <!-- id:story-issue-1878 -->
+- [ ] docs: devlog checkpoint — #1864 investigation, worktree audit close-out [testing] <!-- id:story-issue-1879 -->
+- [ ] fix: model review dispatch read costs [testing] <!-- id:story-issue-1860 -->
+- [ ] fix: verify review completion from GitHub ground truth [testing] <!-- id:story-issue-1861 -->
+- [ ] do something [backend] <!-- id:story-adhoc-1790765547 -->
+- [ ] do the thing [backend] <!-- id:story-adhoc-1790765558 -->
+- [ ] do it [backend] <!-- id:story-adhoc-1790765567 -->
+- [ ] task [backend] <!-- id:story-adhoc-1790765578 -->
+- [ ] task [backend] <!-- id:story-adhoc-1790765618 -->
+- [ ] do it [backend] <!-- id:story-adhoc-1790765629 -->
+- [ ] fix(quota): reuse active reservation connection, skip zero-token reservations [testing] <!-- id:story-issue-1882 -->
+- [ ] Add a git pre-commit guard that stops the shared main repo checkout from being used as scratch space for feature work (root cause of a 2026-09-30 incident: an interactive Agy session ran 'git checkout [testing] <!-- id:story-adhoc-1790780168 -->
+- [ ] Add a git pre-commit guard that stops the shared main repo checkout from being used as scratch space for feature work (root cause of a 2026-09-30 incident: an interactive Agy session ran 'git checkout [testing] <!-- id:story-adhoc-1790780255 -->
+- [ ] fix: guard commits from shared main checkout [testing] <!-- id:story-issue-1888 -->
+- [ ] docs: devlog checkpoint — #1886 concurrency architecture + PR#1888 worktree guard [security] <!-- id:story-issue-1889 -->
+- [ ] feat(vizor): workspace-scoped slug routing engine (Spec 1) [backend] <!-- id:story-b24ec68c -->
