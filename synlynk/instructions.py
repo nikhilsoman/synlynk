@@ -951,13 +951,28 @@ def install_pre_commit_hook(repo_root: Path) -> None:
 
     versioned_hook = Path(repo_root) / "githooks" / "pre-commit"
     if versioned_hook.is_file():
-        subprocess.run(
-            ["git", "config", "core.hooksPath", "githooks"],
+        configured_hooks_path = subprocess.run(
+            ["git", "config", "--get", "core.hooksPath"],
             cwd=repo_root,
-            check=True,
+            check=False,
             capture_output=True,
             text=True,
         )
+        if configured_hooks_path.returncode == 0 and configured_hooks_path.stdout.strip():
+            print(
+                f"  core.hooksPath already set to "
+                f"{configured_hooks_path.stdout.strip()!r}; leaving it unchanged"
+            )
+        else:
+            if configured_hooks_path.returncode not in (0, 1):
+                configured_hooks_path.check_returncode()
+            subprocess.run(
+                ["git", "config", "core.hooksPath", "githooks"],
+                cwd=repo_root,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
 
 def _check_instruction_drift() -> list:
     """Check tracked instruction files for external modifications to the synlynk section.
