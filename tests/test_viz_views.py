@@ -43,6 +43,9 @@ def test_extract_logical_nodes_structure(tmp_path):
 
 def test_extract_infra_nodes_daemon(tmp_path):
     conn = sqlite3.connect(":memory:")
+    pkg_dir = tmp_path / "synlynk"
+    pkg_dir.mkdir()
+    (pkg_dir / "viz.py").write_text("import os\n")
     nodes, edges = extract_infra_nodes(conn, str(tmp_path))
     assert any(n["kind"] == "service" and "vizor" in n["label"].lower() for n in nodes)
     assert edges[0]["kind"] == "manages"

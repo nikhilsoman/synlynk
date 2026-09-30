@@ -9,6 +9,9 @@ from synlynk.viz_views import extract_infra_nodes
 
 def test_extract_infra_nodes_dual_zone():
     with tempfile.TemporaryDirectory() as tmpdir:
+        import os
+        with open(os.path.join(tmpdir, ".env.example"), "w") as f:
+            f.write("OPENAI_API_KEY=sk-test-123\n")
         conn = sqlite3.connect(":memory:")
         nodes, edges = extract_infra_nodes(conn, tmpdir)
         assert len(nodes) > 0, "extract_infra_nodes must extract infra nodes"
