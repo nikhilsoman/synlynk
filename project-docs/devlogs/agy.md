@@ -20,8 +20,14 @@
   - Added `tests/test_vizor_scoped_routing.py` testing two-workspace isolation and rejection of unknown slugs.
   - Automated cost capture logged $2.06 to `project-docs/costs.md`.
   - Fast-forward merged commit `063a5061` into `feat/agy/vizor-workspace-scoped-routing`. All 11/11 tests passing.
+- **Task 4: Template Fetch Relative Path Conversion (`synlynk/viz.py`, commit `b8f81d19`):**
+  - Dispatched to Codex via `synlynk dispatch codex` (`job-8814a9e5`) with story `story-b24ec68c`.
+  - Converted board HTML client fetch calls in `generate_board_html()` from absolute `/api/board...` to relative `api/board...` (preserving `api/board?`, `api/board/status`, `api/board/stage`).
+  - Added `tests/test_vizor_html_relative_routes.py` verifying presence of relative paths and absence of absolute root paths.
+  - Automated cost capture logged $0.93 to `project-docs/costs.md`.
+  - Fast-forward merged commit `b8f81d19` into `feat/agy/vizor-workspace-scoped-routing`. All 12/12 tests passing.
 - **Fleet Coordination:**
-  - Proceeding with Task 4 using `synlynk dispatch`.
+  - Proceeding with Task 5 (concurrent multi-workspace regression suite with `CWD = /` immunity).
 [@agy, @nikhilsoman]
 
 ## 2026-09-25 — AST Knowledge Graph Lifecycle, Context Packager, Sparse Worktrees & Jev Decisioning Synergy (Issues #1787, #1712)
