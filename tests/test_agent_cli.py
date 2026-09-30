@@ -1421,6 +1421,18 @@ def test_cli_dispatch_as_agent_unresolvable_exits_1(project_dir):
     assert exc_info.value.code == 1
 
 
+def test_cli_dispatch_without_agent_reports_usage_error(project_dir, capsys):
+    from synlynk.cli import main
+
+    with pytest.raises(SystemExit) as exc_info:
+        main(["dispatch", "--task", "do work", "--role", "qa", "--dry-run"])
+
+    assert exc_info.value.code == 2
+    captured = capsys.readouterr()
+    assert "the following arguments are required: agent (unless --as-agent is given)" in captured.err
+    assert "NameError" not in captured.err
+
+
 def test_cli_dispatch_as_agent_without_explicit_harness(project_dir, monkeypatch, capsys):
     from synlynk.cli import main
     import synlynk.dispatch as dispatch_mod
