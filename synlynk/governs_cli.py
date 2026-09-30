@@ -13,7 +13,7 @@ from typing import Any, Dict, Optional
 
 from synlynk import _CYAN, _GREEN, _RED, _RESET, _YELLOW
 from synlynk.context import harvest_workspace_artifacts
-from synlynk.governs_resolver import DEFAULT_MASTER_GOAL, resolve_parent_goal
+from synlynk.governs_resolver import resolve_parent_goal
 
 
 def cmd_governs_sweep(
