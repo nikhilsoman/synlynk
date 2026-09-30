@@ -315,15 +315,30 @@ def test_synlynk_init_wizard_dry_run_subprocess(tmp_path, monkeypatch):
         json.dumps({"auto_launch_after_wizard": False})
     )
     stdin_seq = '\r\r1\r\r\r\r'
+    state_db = tmp_path / 'isolated-state.db'
     env = os.environ.copy()
     env['HOME'] = str(tmp_path)
+    env['SYNLYNK_STATE_DB_PATH'] = str(state_db)
     repo_root = str(Path(__file__).resolve().parents[1])
     env['PYTHONPATH'] = os.pathsep.join(
-        value for value in (repo_root, env.get('PYTHONPATH')) if value
+        filter(None, [repo_root, env.get('PYTHONPATH', '')])
     )
     result = sp.run(
-        ['python', '-m', 'synlynk', 'init', '--wizard'],
+        ['python', '-m', 'synlynk', 'init', '--wizard', '--dry-run'],
         input=stdin_seq, cwd=str(tmp_path),
         capture_output=True, text=True, env=env, timeout=60,
     )
     assert result.returncode == 0, result.stderr
+
+    db_artifacts = {
+        path
+        for path in tmp_path.rglob('isolated-state.db*')
+        if path.is_file()
+    }
+    assert db_artifacts
+    assert db_artifacts <= {
+        state_db,
+        state_db.with_name(f'{state_db.name}-wal'),
+        state_db.with_name(f'{state_db.name}-shm'),
+    }
+    assert not (tmp_path / '.synlynk' / 'state.db').exists()
