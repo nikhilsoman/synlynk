@@ -85,9 +85,10 @@ def tpm_reallocate(conn, job_id: str, new_harness: str) -> dict:
     if res_row:
         old_id, tokens, scope, scope_id = res_row
         _release_reservation(conn, old_id)
-        new_reservation_id = _open_reservation(
-            conn, new_harness, tokens, scope=scope, scope_id=scope_id, job_id=job_id
-        )
+        if tokens > 0:
+            new_reservation_id = _open_reservation(
+                conn, new_harness, tokens, scope=scope, scope_id=scope_id, job_id=job_id
+            )
     conn.commit()
 
     return {

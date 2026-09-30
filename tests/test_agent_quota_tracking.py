@@ -2154,6 +2154,27 @@ def test_a3_set_dispatch_context_to_homeheadless_scheduler(project_dir, monkeypa
     assert row == ("headless",)
 
 
+def test_scheduler_skips_reservation_for_plan_item_without_token_estimate(project_dir):
+    import synlynk
+    from synlynk.scheduler import _enqueue_plan
+
+    job_ids = _enqueue_plan([
+        {"story_id": "story-no-estimate", "title": "No estimate", "agent": "codex"},
+    ])
+
+    conn = synlynk._get_db()
+    reservation_count = conn.execute(
+        "SELECT COUNT(*) FROM harness_reservations WHERE job_id=?", (job_ids[0],)
+    ).fetchone()[0]
+    job_status = conn.execute(
+        "SELECT status FROM daemon_jobs WHERE job_id=?", (job_ids[0],)
+    ).fetchone()[0]
+    conn.close()
+
+    assert reservation_count == 0
+    assert job_status == "queued"
+
+
 def test_bug__secret_patterns_regex_doesnt_redact_ghs_installation_token():
     from synlynk import _redact_secret_patterns
 
