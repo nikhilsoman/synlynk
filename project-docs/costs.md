@@ -3,10 +3,6 @@
 
 | Date | Agent | Model | Tokens In | Tokens Out | Cost | Source | Story | Notes |
 |---|---|---|---|---|---|---|---|---|
-| 2026-09-30 09:20 | codex | o4-mini | 5000 | 2000 | $0.0450 | estimated_tshirt | story-issue-1496 | exec: codex job job-66403d... |
-| 2026-09-30 09:23 | codex | gpt-5.6-luna | 789942 | 5695 | $2.4553 | estimated_token_rate | story-issue-1864 | exec: codex job job-c436ec... |
-| 2026-09-30 09:41 | codex | gpt-5.6-luna | 1677906 | 12648 | $5.2234 | estimated_token_rate | story-issue-1864 | exec: codex job job-650202... |
-| 2026-09-30 10:22 | claude | claude-sonnet-4-6 | 71937 | 11362 | $0.3862 | estimated_token_rate | story-issue-1868 | exec: claude job job-37648... |
 | 2026-09-30 10:30 | codex | gpt-5.6-luna | 1745564 | 4697 | $5.3071 | estimated_token_rate | story-issue-1868 | exec: codex job job-085b9e... |
 | 2026-09-30 10:42 | claude | claude-sonnet-4-6 | 5000 | 2000 | $0.0450 | estimated_tshirt | story-issue-1868 | exec: claude job job-73eaf... |
 | 2026-09-30 10:48 | codex | gpt-5.6-luna | 451065 | 3683 | $1.4084 | estimated_token_rate | story-adhoc-1790745292 | exec: codex job job-ee9255... |
@@ -53,3 +49,7 @@
 | 2026-09-30 22:13 | codex | gpt-5.6-luna | 656120 | 6014 | $2.0586 | estimated_token_rate | story-b24ec68c | exec: codex job job-233d43... |
 | 2026-09-30 22:16 | codex | o4-mini | 297033 | 2552 | $0.9294 | estimated_token_rate | story-b24ec68c | exec: codex job job-8814a9... |
 | 2026-09-30 22:19 | codex | o4-mini | 5000 | 2000 | $0.0450 | estimated_tshirt | story-b24ec68c | exec: codex job job-b2b476... |
+| 2026-09-30 22:28 | codex | gpt-5.6-luna | 379117 | 4232 | $1.2008 | estimated_token_rate | story-b24ec68c | exec: codex job job-211305... |
+| 2026-09-30 22:38 | codex | gpt-5.6-luna | 459659 | 4686 | $1.4493 | estimated_token_rate | story-b24ec68c | exec: codex job job-370185... |
+| 2026-09-30 23:06 | codex | gpt-5.6-luna | 595437 | 6361 | $1.8817 | estimated_token_rate | story-issue-1891 | exec: codex job job-533c3c... |
+| 2026-09-30 23:13 | claude | claude-sonnet-4-6 | 92123 | 23724 | $0.6322 | estimated_token_rate | story-b67bce1b | exec: claude job job-5e506... |
