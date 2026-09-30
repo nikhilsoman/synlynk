@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>R12 — Breaking Up the __init__.py God Module | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-1">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Sep 30, 2026</span>
+        
+          <span class="blog-post-pr">PR TBD</span>
+        
+      </div>
+      <h1 class="blog-post-title">R12 — Breaking Up the __init__.py God Module</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>The 2026-09-28 deep architectural review flagged <code>synlynk/__init__.py</code> as the project's
+single largest correctness and readability risk: 3,937 lines, 570 function-level imports
+(a workaround for circular-import boundaries), and 15 separate copies of the same <code>_pkg()</code>
+helper function pasted across <code>synlynk/*.py</code> files — one per file that needed a lazy handle
+back into the <code>synlynk</code> package. R9 through R11 had already been chipping away at other
+god-module symptoms (instruction duplication, cost-table hardening); R12 was scoped
+specifically to this file's own bloat and its most-duplicated internal pattern.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>None — R12 stayed inside its originally brainstormed scope. The one deliberate exclusion,
+called out explicitly in both the design doc and this PR, is <code>synlynk/db.py</code>'s own
+circular-shim pattern (late in-body re-imports back into <code>synlynk</code>, e.g.
+<code>detect_remote_owner_repo()</code>'s self-import). It looks similar to the <code>_pkg()</code> duplication
+but is a distinct problem shape and needs its own investigation — tracked as a fresh
+follow-up issue rather than folded into this refactor.</p>
+<h2>What R12 Shipped</h2>
+<p><strong>A shared lazy-import helper.</strong> <code>synlynk/_lazy.py</code> now holds one <code>pkg(name, default=None)</code>
+function, backed by <code>tests/test_lazy.py</code>'s three cases (attribute found, attribute missing →
+default, <code>synlynk</code> not yet imported → default). It replaces 15 files' worth of duplicate
+<code>def _pkg(...)</code> bodies — <code>context.py</code>, <code>costs.py</code>, <code>daemon.py</code>, <code>dispatch.py</code>, <code>doctor.py</code>,
+<code>instructions.py</code>, <code>jobs.py</code>, <code>logs.py</code>, <code>platform_status.py</code>, <code>quota.py</code>, <code>scan.py</code>,
+<code>story_provisioning.py</code>, <code>support_engineer.py</code>, <code>team.py</code>, <code>wizard.py</code> — each now does
+<code>from synlynk._lazy import pkg as _pkg</code> instead of defining its own copy. Two of those
+files (<code>logs.py</code>, <code>platform_status.py</code>) previously had no explicit default; consolidating
+onto <code>pkg()</code>'s <code>default=None</code> was verified behavior-preserving call-site by call-site before
+merging.</p>
+<p><strong>Three extractions out of <code>__init__.py</code>:</strong></p>
+<ul>
+<li>~80 lines of dead wizard-TUI scaffold (<code>_WIZ_SYNAPTIC_BLURB</code>, <code>_WIZ_PRODUCT_BLURB</code>,
+<code>_STAGE_LABELS</code>, <code>_STAGE_COLORS</code>, <code>_ROBOT_ASCII</code>) — confirmed unreferenced anywhere else
+in the tree before deleting.</li>
+<li><code>LAUNCH_TASK_TEMPLATES</code> (a 15-entry template list) into <code>synlynk/launch_templates.py</code>.</li>
+<li><code>_DB_SCHEMA</code> and <code>_DB_SCORES_VIEW</code> (the SQL DDL strings) into <code>synlynk/db_schema.py</code>,
+re-exported through <code>__init__.py</code> so <code>synlynk/db.py</code>'s existing late-import consumer and
+both dependent test files keep working unchanged.</li>
+</ul>
+<p><strong>Net result:</strong> <code>synlynk/__init__.py</code> dropped from 3,937 to 3,129 lines. <code>grep -rln &quot;^def _pkg&quot; synlynk/</code>
+now returns nothing outside <code>_lazy.py</code> itself. <code>time python3 bin/synlynk.py --version</code> still
+completes in ~0.1s — the new top-of-file imports in <code>__init__.py</code> don't reintroduce any of
+the eager-loading <code>_load_legacy_imports()</code> was built to avoid.</p>
+<h2>Process</h2>
+<p>Executed task-by-task via <code>superpowers:subagent-driven-development</code>, seven tasks total, each
+run through the full pipeline: a Codex/Claude implementer, then an independent spec-compliance
+reviewer, then an independent code-quality reviewer, before merging up through a stack of
+worktrees. Two of the seven tasks needed a small direct fix from the PM/reviewer role after
+review — a docstring reformatted with dropped punctuation in <code>launch_templates.py</code>, and a
+worse docstring corruption (stray markdown-list dashes injected mid-paragraph) in
+<code>db_schema.py</code> — both caught by spec-compliance review, fixed directly, and re-verified before
+code-quality review. A recurring job-status false-negative (<code>circuit_breaker_tripped</code>, exit
+-9) showed up again on the <code>_DB_SCHEMA</code> extraction task; per standing project practice the
+status label was ignored in favor of direct git/diff/test inspection, which found a fully
+correct commit underneath.</p>
+<p>A whole-implementation final review (all 11 commits, full 3,425-test suite, both halves
+independently re-run) came back READY FOR PR with no code-level blockers.</p>
+<h2>What's Next</h2>
+<p>Filed <code>synlynk/db.py</code>'s circular-shim pattern as its own follow-up issue, deliberately kept
+out of this PR's scope. Also opened a new goal/story to hold a future end-to-end FTUE/
+onboarding rethink (greenfield, brownfield, and multi-repo discovery; the product's own value
+narrative; terminal-vs-web framing; Vizor's role) — explicitly deferred until this review-
+remediation wave closes, per the Brainstorm-First Policy: no design work starts until that
+future brainstorm session runs.</p>
+<p>Refs goal-079e2f37.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
