@@ -8,7 +8,9 @@ machine-scoped and must not anchor to whichever repo happened to start it.
 from __future__ import annotations
 
 import contextlib
+import dataclasses
 import os
+import re
 import threading
 from pathlib import Path
 from typing import Optional
@@ -21,6 +23,51 @@ CACHE_ROOT = Path(os.path.expanduser("~/.synlynk/vizor-cache"))
 DEFAULT_POLL_INTERVAL = 15
 
 _RENDER_LOCK = threading.Lock()
+
+
+@dataclasses.dataclass(frozen=True)
+class WorkspaceContext:
+    slug: str
+    repo_path: Path
+    db_path: Path
+
+
+def resolve_workspace_context(slug: str) -> Optional[WorkspaceContext]:
+    """Look up slug in machine state_registry and return verified WorkspaceContext.
+
+    Rejects unregistered slugs or missing filesystem targets.
+    Never accepts client-provided filesystem paths.
+    """
+    from synlynk.state_registry import _read_unlocked, registry_path
+
+    if not slug or not re.match(r"^[a-zA-Z0-9_-]+$", slug):
+        return None
+
+    p = registry_path()
+    if not p.exists():
+        return None
+
+    try:
+        data = _read_unlocked(p)
+    except Exception:
+        return None
+
+    products = data.get("products", {}) if isinstance(data, dict) else {}
+    entry = products.get(slug)
+    if not isinstance(entry, dict):
+        return None
+
+    repo_path = entry.get("repo_path")
+    db_path = entry.get("canonical_path")
+    if not repo_path or not db_path:
+        return None
+
+    repo_p = Path(repo_path)
+    db_p = Path(db_path)
+    if not repo_p.is_dir() or not db_p.is_file():
+        return None
+
+    return WorkspaceContext(slug=slug, repo_path=repo_p, db_path=db_p)
 
 
 def poll_interval() -> int:
