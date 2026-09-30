@@ -97,8 +97,8 @@ _PROJECT_DOC_KEEP_N = 50
 # Bump when a new schema migration is added.  This is deliberately kept in
 # SQLite's small built-in metadata slot so checking it does not touch the DB
 # file or create a backup on already-migrated connections.
-# Version 11 adds kind column to goals table and goal_id/story_id to decisions table.
-_DB_MIGRATION_VERSION = 11
+# Version 12 adds workspace tenancy and alias/resolution metadata for GOVERNS.
+_DB_MIGRATION_VERSION = 12
 
 _GENERATORS_BY_FILENAME = {
     "todo.md": "_generate_todo_md",
@@ -539,6 +539,59 @@ def _normalize_org_domain_drift(conn: sqlite3.Connection) -> None:
             )
 
 
+def _migrate_governs_tenancy(conn: sqlite3.Connection) -> None:
+    """Add workspace-scoped goal metadata and quarantine phantom goals.
+
+    This migration is deliberately idempotent because state databases can be
+    upgraded from several historical schema versions.  Existing goals are
+    assigned to the product recorded by ``state_identity`` when available.
+    """
+    goal_cols = {row[1] for row in conn.execute("PRAGMA table_info(goals)")}
+    if "product_id" not in goal_cols:
+        conn.execute("ALTER TABLE goals ADD COLUMN product_id TEXT")
+
+    gc_cols = {row[1] for row in conn.execute("PRAGMA table_info(goal_contributions)")}
+    if "resolution_reason" not in gc_cols:
+        conn.execute("ALTER TABLE goal_contributions ADD COLUMN resolution_reason TEXT")
+    if "resolved_at" not in gc_cols:
+        conn.execute("ALTER TABLE goal_contributions ADD COLUMN resolved_at TIMESTAMP")
+
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS goal_aliases (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            goal_id TEXT NOT NULL REFERENCES goals(goal_id),
+            pattern TEXT NOT NULL,
+            product_id TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(goal_id, pattern)
+        )"""
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_goal_aliases_product ON goal_aliases(product_id)")
+
+    identity_cols = {row[1] for row in conn.execute("PRAGMA table_info(state_identity)")}
+    if "product_id" in identity_cols:
+        identity = conn.execute(
+            "SELECT product_id FROM state_identity WHERE product_id IS NOT NULL "
+            "ORDER BY rowid LIMIT 1"
+        ).fetchone()
+        if identity and identity[0]:
+            conn.execute(
+                "UPDATE goals SET product_id=? WHERE product_id IS NULL",
+                (identity[0],),
+            )
+
+    conn.execute(
+        """UPDATE goals
+           SET status='quarantined'
+         WHERE status='active'
+           AND (criterion LIKE 'Auto-reconciled%' OR outcome LIKE 'Auto-reconciled%')
+           AND NOT EXISTS (
+               SELECT 1 FROM goal_contributions gc
+                WHERE gc.goal_id = goals.goal_id
+           )"""
+    )
+
+
 def _migrate_db(conn: sqlite3.Connection) -> None:
     """Idempotent schema migrations. Adds tables/views if absent."""
     migration_version = conn.execute("PRAGMA user_version").fetchone()[0]
@@ -726,6 +779,7 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
                 conn.execute("ALTER TABLE goal_contributions ADD COLUMN skip_reason TEXT")
             except sqlite3.OperationalError:
                 pass
+        _migrate_governs_tenancy(conn)
         goal_cols = {row[1] for row in conn.execute("PRAGMA table_info(goals)")}
         if "kind" not in goal_cols:
             try:
@@ -1583,6 +1637,7 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
         conn.commit()
 
     else:
+        _migrate_governs_tenancy(conn)
         _normalize_org_domain_drift(conn)
         conn.commit()
 

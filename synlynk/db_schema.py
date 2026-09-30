@@ -198,6 +198,7 @@ CREATE INDEX IF NOT EXISTS idx_daemon_jobs_status ON daemon_jobs(status);
 CREATE TABLE IF NOT EXISTS goals (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     goal_id     TEXT NOT NULL UNIQUE,
+    product_id  TEXT,
     outcome     TEXT NOT NULL,
     criterion   TEXT NOT NULL,
     deadline    TEXT,
@@ -207,11 +208,23 @@ CREATE TABLE IF NOT EXISTS goals (
 );
 
 CREATE TABLE IF NOT EXISTS goal_contributions (
-    id       INTEGER PRIMARY KEY AUTOINCREMENT,
-    goal_id  TEXT NOT NULL REFERENCES goals(goal_id),
-    story_id TEXT NOT NULL REFERENCES stories(story_id),
+    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    goal_id            TEXT NOT NULL REFERENCES goals(goal_id),
+    story_id           TEXT NOT NULL REFERENCES stories(story_id),
+    resolution_reason  TEXT,
+    resolved_at        TIMESTAMP,
     UNIQUE(goal_id, story_id)
 );
+
+CREATE TABLE IF NOT EXISTS goal_aliases (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    goal_id    TEXT NOT NULL REFERENCES goals(goal_id),
+    pattern    TEXT NOT NULL,
+    product_id TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(goal_id, pattern)
+);
+CREATE INDEX IF NOT EXISTS idx_goal_aliases_product ON goal_aliases(product_id);
 
 CREATE TABLE IF NOT EXISTS sessions (
     id               INTEGER PRIMARY KEY AUTOINCREMENT,
