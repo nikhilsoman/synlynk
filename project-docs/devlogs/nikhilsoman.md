@@ -1782,3 +1782,55 @@ infra issues from earlier waves (#1825-1828, #1831) still untouched. #1745 (mark
 still open.
 
 [@nikhilsoman]
+
+## 2026-09-30 — R12 god-module decomposition shipped, wave cleanup, #1867/#1870 filed
+
+Shipped `[R12]` (`story-54515ca1`, PERF-P3) as PR #1868: consolidated 15 duplicate `_pkg()`
+definitions into a single `synlynk._lazy.pkg()` helper, deleted the dead wizard-TUI scaffold,
+and extracted `LAUNCH_TASK_TEMPLATES` + `_DB_SCHEMA`/`_DB_SCORES_VIEW` out of `__init__.py` into
+`launch_templates.py` and `db_schema.py`. `__init__.py`: 3937 → 3129 lines. Executed via
+`superpowers:subagent-driven-development`, task-by-task (7 tasks), each with implementer →
+spec-compliance reviewer → code-quality reviewer.
+
+qa's non-authoring review on PR #1868 caught a **real regression** my own split-half test runs
+missed: `tests/test_lazy.py`'s tests 1/2 deleted (rather than restored) the real
+`sys.modules["synlynk"]` entry, poisoning cross-file test-collection order — invisible in a
+split-half run if the poisoning test and its victims land in different halves, but red on a
+whole-suite run and on all 4 CI matrix jobs. Fix dispatched to Codex with qa's own validated
+patch; verified myself via a mandatory whole-suite `pytest -q` (3422 passed, 3 skipped, 0
+failed) before merging. This is the split-half technique's known blind spot, now demonstrated
+concretely — worth remembering next time a "split-half all green" claim is the only evidence.
+
+Two more docs-only follow-up PRs (per CLAUDE.md's separate-branch-for-docs rule): #1869 filled
+in the blog post's `pr:`/`status:` frontmatter once #1868's number was known; #1871 ran
+`synlynk checkpoint` to mark `story-54515ca1` done and regenerate `todo.md`/`costs.md`. Both
+qa-reviewed and merged clean.
+
+Job-status false-negative pattern (#1377 lineage) recurred **four more times** this wave —
+`job-650202aa` (Task 6 impl), `job-085b9e18` (test fix), `job-73eafc90`, `job-ee925533`, and
+`job-271b7c73` (three separate qa review/merge jobs) all reported `circuit_breaker_tripped` or
+`timed_out` (exit -9) despite having completed their real work correctly underneath — verified
+directly via `gh pr view --json state,mergedAt,reviews` each time rather than trusting the label.
+
+Filed **#1867** (tech-debt, non-blocking): `synlynk/db.py` still imports `_DB_SCHEMA`/
+`_DB_SCORES_VIEW` via the `synlynk` package re-export rather than directly from the new
+`db_schema.py` module — spec Part B item 3 called for both to import from it directly; PR
+description explicitly notes this as a conscious deviation, not an oversight. Filed **#1870**
+(bug): `synlynk dispatch --dry-run --role qa ...` (agent arg omitted, relying on `--role` to
+resolve it) crashes with `NameError: name 'dispatch_parser' is not defined` instead of a usage
+error — `synlynk/cli.py:1950` references a stale variable name. Also logged the **6th
+recurrence** of the `project-docs/todo.md`/`costs.md` corruption pattern (#1865) — this time in
+job-085b9e18's worktree, another full-content deletion (1477 lines) rather than field reordering;
+discarded via `git checkout --` before it could be committed.
+
+Worktree Hygiene Protocol applied throughout: 3 job worktrees + 2 chore-branch worktrees removed
+and their branches deleted (local + remote confirmed via `git ls-remote --heads`), immediately
+after each PR's merge was independently confirmed rather than deferred to a batch sweep.
+
+R12 was the last item blocking the 2026-09-30 arch-review remediation wave
+(`goal-079e2f37`)'s "review recommended fixes" gate — the deferred FTUE/onboarding brainstorm
+(`story-cf24a4ab`, issue #1866) is now unblocked to start whenever picked up next. Dispatching
+investigation for #1867 and #1870 next; #1865's root cause is still unstarted (6 recurrences
+now, no fix attempted).
+
+[@nikhilsoman]
