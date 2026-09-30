@@ -1834,3 +1834,65 @@ investigation for #1867 and #1870 next; #1865's root cause is still unstarted (6
 now, no fix attempted).
 
 [@nikhilsoman]
+
+## 2026-09-30 — #1864 deep investigation, worktree audit close-out (18/18), PR #1878 caught a real costs.md data-loss bug
+
+Deep-dived **#1864** (suspected pytest full-suite hang, from the same review-remediation wave as
+#1862/#1865): a genuine reproduction attempt rather than another static audit — full 3,426-test
+single-process run (340.90s, 1 unrelated failure only), ordered late-suite prefix probing, and a
+static monkeypatch-scope check. Did not reproduce. Posted honest non-reproduction findings as a
+comment rather than closing outright — worth watching for recurrence, possibly incidentally
+resolved by #1875/#1876's fixes to the same test file.
+
+Completed the deep worktree audit's remaining 18 newly-discovered worktrees (on top of the
+periodic-audit bucket): 15 confirmed superseded-by-already-merged-PR, deleted across two cleanup
+rounds (11 hit a detached-HEAD branch-delete false-alarm — `git worktree remove` had already
+succeeded, only the empty-branch-name `git branch -D ""` step errored). 2 confirmed
+active-open-PR, left untouched. 1 (`job-97ae3b14`, Graphify/Vizor mesh work) needed a
+commit-message-grep check against `origin/main` to confirm supersession by #1777 rather than
+being genuinely distinct unmerged work. The 3 that needed individual triage this session
+(`job-ee42c9eb` → #1836, `job-1ac39856` → #1823, `job-97ae3b14` → #1777) all confirmed
+already-merged via the same grep technique; cleanup command handed to Nikhil (destructive git
+ops blocked from my own Bash tool in this environment), still pending on his end due to an
+unrelated `git: command not found` PATH issue in his shim shell.
+
+Archived 46 never-committed lines of stray `tests/test_synlynk.py` work found dirty in the
+`chore/discord-herdr-bridge-spec` parent worktree (`docs/archive/chore-discord-herdr-bridge-
+uncommitted/`) per the standing archive-before-branch-removal policy — parent worktree itself
+left un-deleted, still needs Nikhil's call on whether to finish or discard that work.
+
+Filed **#1877** (tech-debt): a dispatch job (`job-2571fb9d`, #1864 investigation) silently
+produced a full uncommitted 1,525-line deletion of `project-docs/todo.md` in its own worktree —
+same-shape bug as the #1865 lineage (6 prior recurrences), caught before it could be committed.
+
+Wrote blog posts 234/235 for #1862 (PR #1875) and #1865 (PR #1876), logged a `synlynk cost log`
+entry for native PM-session work (~$1.68), and opened docs-only PR #1878 — all per the Blog
+Post and Cost Capture Protocols.
+
+**PR #1878's qa review caught a real bug of my own making**: the branch's `project-docs/
+costs.md` was captured from a stale local snapshot and silently deleted 19 pre-existing
+historical cost rows (2026-09-29 14:04-20:20) while adding the new entry — not a job-status
+false negative, a genuine content defect the non-authoring review was supposed to catch, and
+did. Root cause, now suspected rather than fully confirmed: the local `synlynk exec`/dispatch
+wrapper appears to auto-append a cost-log row to `project-docs/costs.md` in whatever branch is
+currently checked out at the repo root, uncommitted — plausible mechanism for how a branch cut
+mid-session could carry a stale snapshot forward. Worth its own issue if it recurs. Fixed by
+rebuilding `costs.md` from `origin/main`'s current content plus only the branch's genuinely new
+rows (verified via `git diff origin/main -- project-docs/costs.md` showing zero deletions),
+which required a second detour through a diverged-remote-tip reconciliation (force-pushed the
+verified-correct content over a duplicate/broken remote commit — not a discard of independent
+work). PR merged clean on the second review pass at the corrected head. Also newly confirmed:
+`gh pr merge` reporting a local error (blocked by an uncommitted-changes checkout conflict) can
+still mean the merge already succeeded server-side — verify via `gh pr view --json state,
+mergedAt` before assuming a retry is needed, not just for the worktree-conflict case already
+known from earlier in the wave.
+
+Two job-status false negatives this session: `job-6d688fbb` (first PR #1878 review dispatch)
+hit `circuit_breaker_tripped` and posted zero reviews — confirmed via `reviews: []` on the PR,
+not trusted from the label; re-dispatched clean as `job-902c56d1`.
+
+Remaining open: the ~74-entry original periodic-audit bucket still needs Nikhil's disposition
+call (individual triage vs. bulk archive-then-discard); the `chore/discord-herdr-bridge-spec`
+parent worktree's stray test work is still undecided; #1877 not yet dispatched.
+
+[@nikhilsoman]
