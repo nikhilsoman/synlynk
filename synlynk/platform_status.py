@@ -12,10 +12,7 @@ import shutil
 import subprocess
 import sys
 
-
-def _pkg(name):
-    import synlynk
-    return getattr(synlynk, name)
+from synlynk._lazy import pkg as _pkg
 
 
 def _load_telemetry_events() -> list:
