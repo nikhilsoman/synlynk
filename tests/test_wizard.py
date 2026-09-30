@@ -2,6 +2,7 @@
 import os
 import sys
 import io
+from pathlib import Path
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -317,6 +318,10 @@ def test_synlynk_init_wizard_dry_run_subprocess(tmp_path, monkeypatch):
     env = os.environ.copy()
     env['HOME'] = str(tmp_path)
     env['SYNLYNK_STATE_DB_PATH'] = str(state_db)
+    repo_root = str(Path(__file__).resolve().parents[1])
+    env['PYTHONPATH'] = os.pathsep.join(
+        filter(None, [repo_root, env.get('PYTHONPATH', '')])
+    )
     result = sp.run(
         ['python', '-m', 'synlynk', 'init', '--wizard', '--dry-run'],
         input=stdin_seq, cwd=str(tmp_path),
