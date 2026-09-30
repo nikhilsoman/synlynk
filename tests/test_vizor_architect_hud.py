@@ -19,22 +19,14 @@ def test_generate_architect_map_html_renders_hud_when_unindexed():
     assert "synlynk scan --deep" in html_output
 
 
-def test_generate_all_views_never_omits_graphify_html(tmp_path, monkeypatch):
-    """Even if an external repo has never been scanned, graphify.html must exist and contain a valid HUD shell."""
-    repo = tmp_path / "rxcc_unindexed"
-    repo.mkdir()
+def test_generate_architect_map_html_has_no_active_404_iframe_src():
+    """When graphify is absent, tube.html must not attempt to fetch graphify.html via active iframe src."""
+    data = {
+        "workspace": {"name": "rxcc", "updated_at": "2026-09-30T10:00:00Z", "repos": []},
+        "workspace_map": {"edges": [], "edge_types": {}},
+        "has_graphify": False,
+    }
     
-    # Change cache dir to isolated temp dir
-    cache_dir = tmp_path / "viz_cache"
-    cache_dir.mkdir()
-    monkeypatch.setattr("synlynk.viz.VIZ_CACHE_DIR", str(cache_dir))
-    
-    data = {"workspace": {"name": "rxcc", "repos": [{"path": str(repo), "name": "rxcc"}]}}
-    _write_cache(data=data, port=8721)
-    
-    graphify_file = cache_dir / "graphify.html"
-    assert graphify_file.is_file(), "graphify.html was missing from cache dir, which would cause an iframe 404!"
-    
-    content = graphify_file.read_text(encoding="utf-8")
-    assert "404" not in content
-    assert "AST" in content
+    html_output = generate_architect_map_html(data, port=8721)
+    assert '<iframe id="am-graphify-frame" src="graphify.html"' not in html_output
+    assert 'data-src="graphify.html"' in html_output

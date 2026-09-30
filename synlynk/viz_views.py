@@ -265,7 +265,7 @@ def extract_product_nodes(conn: sqlite3.Connection, repo_path: str) -> Tuple[Lis
     """Extract authored journey documents, discovered screens/routes, and canonical workflows."""
     started, now, repo, sha = time.monotonic(), _now(), _repo_name(repo_path), _head_sha(repo_path)
     nodes, edges = [], []
-    is_synlynk_core = (repo == "synlynk" or os.path.basename(repo_path) == "synlynk") and os.path.isfile(os.path.join(repo_path, "synlynk", "viz.py"))
+    is_synlynk_core = os.path.isfile(os.path.join(repo_path, "synlynk", "viz.py")) or (repo == "synlynk" and os.path.isdir(os.path.join(repo_path, "synlynk")))
 
     journey_root = os.path.join(repo_path, "docs", "journeys")
     if os.path.isdir(journey_root):
@@ -372,7 +372,7 @@ def extract_product_nodes(conn: sqlite3.Connection, repo_path: str) -> Tuple[Lis
                 ]
             else:
                 canonical_journeys = [
-                    (f"{repo.title()} Core Experience", f"Primary workflow and invocation paths for {repo}.", ["Setup & Config", "Core Operation", "Result Export"])
+                    (f"Zero-Friction {repo.title()} Developer Setup", f"Primary workflow and invocation paths for {repo}.", ["Setup & Config", "Core Operation", "Result Export"])
                 ]
         for title, desc, steps in canonical_journeys:
             j_node = _node("product", repo, "journey", title, {"description": desc, "steps": steps}, "docs/journeys", "canonical", now, sha)
@@ -574,7 +574,7 @@ def _discover_infra_components(repo_path: str, repo: str) -> Tuple[List[Tuple[st
     egress_endpoints = []
 
     # Check if this is Synlynk's own codebase
-    is_synlynk_core = (repo == "synlynk" or os.path.basename(repo_path) == "synlynk") and os.path.isfile(os.path.join(repo_path, "synlynk", "viz.py"))
+    is_synlynk_core = os.path.isfile(os.path.join(repo_path, "synlynk", "viz.py")) or (repo == "synlynk" and os.path.isdir(os.path.join(repo_path, "synlynk")))
 
     if is_synlynk_core:
         hl_components.extend([

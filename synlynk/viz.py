@@ -3667,9 +3667,13 @@ function triggerAmKgRefresh(btn) {
     }
     if (chip) chip.textContent = '✓ Graph Refreshed';
     const iframe = document.getElementById('am-graphify-frame') || document.querySelector('iframe');
+    const hud = document.getElementById('am-empty-hud');
     if (iframe) {
-      iframe.src = iframe.src;
+      if (iframe.dataset && iframe.dataset.src) iframe.src = iframe.dataset.src;
+      else iframe.src = iframe.src;
+      iframe.style.display = 'block';
     }
+    if (hud) hud.style.display = 'none';
   })
   .catch(err => {
     console.error(err);
@@ -4010,7 +4014,7 @@ def generate_architect_map_html(data: dict, port: int) -> str:
       </div>
     </div>
   </div>
-  <iframe id="am-graphify-frame" src="graphify.html" width="100%" height="100%" style="border:none; display:none;" title="Graphify Knowledge Graph"></iframe>"""
+  <iframe id="am-graphify-frame" data-src="graphify.html" width="100%" height="100%" style="border:none; display:none;" title="Graphify Knowledge Graph"></iframe>"""
 
         views_html = f"""{staleness_banner_html}
 <div id="am-knowledge-view" class="am-view active">
@@ -10083,40 +10087,6 @@ def _write_cache(data: dict, port: int) -> None:
                 shutil.copyfile(graphify_src, os.path.join(VIZ_CACHE_DIR, "graph.html"))
             except Exception:
                 pass
-    else:
-        empty_graphify_html = """<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<title>synlynk Vizor — AST Code Graph</title>
-<style>
-  body { margin:0; padding:0; background:#0b0f17; font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif; color:#f8fafc; display:flex; align-items:center; justify-content:center; height:100vh; overflow:hidden; }
-  .card { background:rgba(30,41,59,0.5); border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:36px; text-align:center; max-width:480px; backdrop-filter:blur(16px); box-shadow:0 12px 36px rgba(0,0,0,0.5); }
-  .badge { display:inline-block; padding:4px 12px; background:rgba(59,130,246,0.15); border:1px solid rgba(59,130,246,0.3); color:#60a5fa; border-radius:9999px; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; }
-  h2 { margin:16px 0 8px 0; font-size:20px; font-weight:600; color:#f1f5f9; }
-  p { color:#94a3b8; font-size:13px; line-height:1.5; margin:0 0 20px 0; }
-  code { background:rgba(255,255,255,0.08); padding:3px 8px; border-radius:4px; color:#cbd5e1; font-family:monospace; }
-  button { background:#2563eb; color:#fff; border:none; padding:8px 18px; border-radius:6px; font-size:13px; font-weight:500; cursor:pointer; }
-  button:hover { background:#1d4ed8; }
-</style>
-</head>
-<body>
-  <div class="card">
-    <div class="badge">Awaiting AST Indexing</div>
-    <h2>Physical AST Graph Not Yet Indexed</h2>
-    <p>The AST knowledge graph has not yet been extracted for this workspace. Run the deep scanner to index symbols, communities, and call hierarchies.</p>
-    <div style="margin-bottom:16px;"><button onclick="window.parent.postMessage('trigger-scan', '*');">⚡ Run AST Code Scan</button></div>
-    <div style="font-size:11px; color:#64748b;">or run in terminal: <code>synlynk scan --deep</code></div>
-  </div>
-</body>
-</html>"""
-        try:
-            with open(os.path.join(VIZ_CACHE_DIR, "graphify.html"), "w", encoding="utf-8") as out_f:
-                out_f.write(empty_graphify_html)
-            with open(os.path.join(VIZ_CACHE_DIR, "graph.html"), "w", encoding="utf-8") as out_f:
-                out_f.write(empty_graphify_html)
-        except Exception:
-            pass
 
     manifest = {"updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "version": "0.1"}
     with open(os.path.join(VIZ_CACHE_DIR, "manifest.json"), "w") as f:
