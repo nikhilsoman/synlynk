@@ -1055,4 +1055,21 @@
 7. **Verification & CI Gate:**
    - 8 multi-workspace matrix test scenarios (`M1`–`M8`), 52 targeted suite tests, and all 6 GitHub Actions CI jobs passed green (run `36782886904`).
    - Dispatched QA review to Codex under role `qa`, passed merge authority check, approved, and squash-merged to `main`.
+## 2026-10-01 — Brainstorm & Design: Unified Onboarding Journeys & Self-Updating Lifecycle Engine
+
+### Context & Objective
+- Addressed `story-cf24a4ab`: Brainstorm + design synlynk's end-to-end FTUE/onboarding across CLI/TUI and Vizor.
+- Solved key architectural tensions:
+  1. Dual-surface parity between CLI/TUI (`wizard.py`) and Vizor (`/w/<slug>/onboarding`) via headless canonical state engine (`onboarding_state.py`).
+  2. Multi-repo topology discovery distinguishing Container Folders (`~/dev`), Monorepos, Polyrepo Application Groups (frontend + backend + api in 1 workspace), and Standalone Repos.
+  3. Probe-verified harness & dependency binding (`synlynk probe` testing auth, sandbox egress, and token rates).
+  4. First-Win Build Loop replacing conceptual lectures with effect-verified live cycle (Goal -> Arc -> Plan -> Dispatch -> Test -> Non-Author Review -> Merge -> Experience in Vizor).
+  5. Opt-in Dev Preview upgrade safety (`synlynk upgrade --all` with dry-run diffs, rollback checkpoints, no ambient daemon mutations).
+
+### Artifacts & Milestones
+- Convened & signed two DECIDE consensus panels:
+  - `dec-00b401f2`: Unified Onboarding Journeys & Self-Updating Lifecycle Architecture (unanimous Claude, Codex, Agy, Grok).
+  - Phase 2 Topology Discovery & Workspace Clustering Validation (unanimous Claude, Codex, Agy, Grok).
+- Authored full design specification: `docs/superpowers/specs/2026-10-01-unified-onboarding-journeys-and-lifecycle-design.md`.
+- Ready for implementation plan generation per Brainstorm-First policy.
 [@agy]
