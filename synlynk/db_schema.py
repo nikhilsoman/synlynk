@@ -5,6 +5,24 @@ no logic. Consumed by synlynk/db.py and synlynk/__init__.py's own DB
 connection helpers via a re-export in __init__.py.
 """
 
+ONBOARDING_SESSIONS_SCHEMA = """
+CREATE TABLE IF NOT EXISTS onboarding_sessions (
+    session_id TEXT PRIMARY KEY,
+    product_id TEXT NOT NULL,
+    current_stage TEXT NOT NULL DEFAULT 'S1_Orientation',
+    topology_status TEXT NOT NULL DEFAULT 'pending',
+    topology_candidate TEXT,
+    topology_confirmed TEXT,
+    harness_probes TEXT,
+    dependency_checks TEXT,
+    first_win_meta TEXT,
+    completed_at TEXT,
+    created_at REAL NOT NULL,
+    updated_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_onboarding_product ON onboarding_sessions(product_id);
+"""
+
 _DB_SCHEMA = """
 CREATE TABLE IF NOT EXISTS stories (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
