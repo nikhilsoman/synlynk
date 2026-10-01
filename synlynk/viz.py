@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import socket
 import subprocess
 import sys
 import threading
@@ -57,8 +58,32 @@ VIZ_CACHE_DIR = ".synlynk/viz-cache"
 VIZ_NOTES_PATH = ".synlynk/viz-notes.json"
 VIZ_META_PATH = ".synlynk/viz-meta.json"
 VIZ_WORKSPACE_MAP_PATH = ".synlynk/vizor-workspace-map.json"
-DEFAULT_PORT = 8721
+MEMORABLE_VIZOR_PORTS = [33333, 44444, 55555, 22222, 11111]
+DEFAULT_PORT = MEMORABLE_VIZOR_PORTS[0]
 _KNOWN_AGENTS = {"claude", "agy", "codex", "grok", "muse"}
+
+
+def is_port_available(port: int, host: str = "127.0.0.1") -> bool:
+    """Return whether Vizor can bind its local HTTP listener to ``port``."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            sock.bind((host, port))
+            return True
+        except OSError:
+            return False
+
+
+def find_available_vizor_port(preferred: Optional[int] = None) -> int:
+    """Choose a memorable free port, falling back to the legacy port."""
+    candidates = []
+    if preferred:
+        candidates.append(preferred)
+    candidates.extend(MEMORABLE_VIZOR_PORTS)
+    for port in candidates:
+        if is_port_available(port):
+            return port
+    return 8721
 
 
 def _live_js(port: int) -> str:
