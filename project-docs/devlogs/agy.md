@@ -1024,3 +1024,35 @@
    - Added unit test coverage in `tests/test_governs_compressed.py` and `tests/test_cli_compressed_surface.py`.
    - Full regression suite verified.
 [@agy]
+
+## 2026-10-01 — Shipped: Spec 3 — Living GOVERNS Goal Resolution & Alignment Engine (PR #1892)
+
+### Context & Problem
+- Resolved Defect 2 across multi-workspace installs (`synlynk` and `rxcc`): foreign and phantom goals appearing in target workspaces, unmapped stories, and 0-task Gantt releases.
+- Replaced the hardcoded fleet `_DOMAIN_GOAL_MAP` and universal `DEFAULT_MASTER_GOAL` fallback with a deterministic 7-tier workspace-scoped resolution waterfall and continuous write-time association.
+
+### Shipped & Landed (PR #1892, commit `74aa962a`)
+1. **Schema & Tenancy Isolation (`synlynk/db_schema.py`, `synlynk/db.py`):**
+   - Added `goals.product_id` and created `goal_aliases` table (`goal_id`, `pattern`, `product_id`).
+   - Added `resolution_reason` and `resolved_at` columns to `goal_contributions`.
+   - Migration `_migrate_governs_tenancy()` backfills `product_id` from `state_identity`, quarantines phantom auto-reconciled goals, and seeds retired aliases for existing ledger goals only (0 in `rxcc`).
+2. **Living GOVERNS Waterfall Engine (`synlynk/governs_engine.py`):**
+   - Implemented 7-tier waterfall: explicit argument $\rightarrow$ in-band header $\rightarrow$ parent inheritance $\rightarrow$ workspace alias $\rightarrow$ derived keyword $\rightarrow$ workspace default master $\rightarrow$ unresolved.
+   - Deleted hardcoded `_DOMAIN_GOAL_MAP` and `DEFAULT_MASTER_GOAL` from `synlynk/governs_resolver.py`.
+   - Built `scoped_goals()` filtering by workspace `product_id`.
+3. **Continuous Write-Time Association & Audit Sweep:**
+   - Integrated `associate_story()` across all story write paths (`synlynk/backlog.py`, `synlynk/db.py`, `synlynk/story_provisioning.py`, `synlynk/heal_cycles.py`).
+   - Converted `synlynk governs sweep` to an audit-only reconciliation reporter without state mutations.
+4. **Edge-First Dual-Pivot Gantt Projection (`synlynk/uxcore.py`):**
+   - Ranked edge hierarchy: `roadmap_phases.story_id` $\rightarrow$ `goal_contributions` $\rightarrow$ case-folded phase titles.
+   - Built first-class Goal pivot with synthetic lanes for arc-less goals and an Unmapped lane for unresolved stories.
+5. **Scoped Goal Reads & HTTP APIs (`synlynk/viz.py`, `synlynk/vizor_daemon.py`):**
+   - Replaced bare `_get_db()` calls with `_open_state_db(db_path=...)` using `WorkspaceContext.db_path`.
+   - Added `/w/<slug>/api/goals` endpoint scoped to workspace context.
+6. **SSE Governance Relay Events (`synlynk/events.py`, `synlynk/governs_engine.py`):**
+   - Registered `goal_realigned` and `governs_stage_advanced` in `RELAY_EVENT_TYPES`.
+   - Emitted relay events on realigned goals and added consumer-side product filtering in `gantt.html`.
+7. **Verification & CI Gate:**
+   - 8 multi-workspace matrix test scenarios (`M1`–`M8`), 52 targeted suite tests, and all 6 GitHub Actions CI jobs passed green (run `36782886904`).
+   - Dispatched QA review to Codex under role `qa`, passed merge authority check, approved, and squash-merged to `main`.
+[@agy]
