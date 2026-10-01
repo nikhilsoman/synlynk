@@ -268,6 +268,10 @@ def restore_leg2(manifest: dict) -> None:
                 "--force",
             ]
         )
+    elif install_type == "standalone_venv":
+        from synlynk.standalone_venv import rollback_standalone_release
+
+        rollback_standalone_release()
     elif install_type == "script" and manifest.get("backup_dir"):
         _restore_paths(
             manifest["backup_dir"],

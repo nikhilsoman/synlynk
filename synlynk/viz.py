@@ -10350,6 +10350,16 @@ def generate_onboarding_html(data: dict = None, port: int = 27472) -> str:
     <div class="card"><h3>View 1: Physical File Tree</h3><p>Directories, frameworks, and component boundaries.</p></div>
     <div class="card"><h3>View 2: Logical Tubemap</h3><p>Data streams and entity lifecycles.</p></div>
     <div class="card"><h3>View 3: Application Screens</h3><p>Discovered routes and cloud topology.</p></div>
+    <div class="card" id="S1_Orientation"><h3>S1_Orientation</h3><p>Welcome to Synlynk.</p></div>
+    <div class="card" id="S2_Dependencies"><h3>S2_Dependencies</h3><p>Ecosystem Tools.</p></div>
+    <div class="card" id="S3_HarnessBinding"><h3>S3_HarnessBinding</h3><p>Harness Binding.</p></div>
+    <div class="card" id="S4_TopologyConfirmation"><h3>S4_TopologyConfirmation</h3><p>Topology.</p></div>
+    <div class="card" id="S5_GovernsIntro"><h3>S5_GovernsIntro</h3><p>Governance.</p></div>
+    <div class="card" id="S6_DispatchDecide"><h3>S6_DispatchDecide</h3><p>Dispatch Rules.</p></div>
+    <div class="card" id="S7_AgentTeam"><h3>S7_AgentTeam</h3><p>Agent Team.</p></div>
+    <div class="card" id="S8_FleetTemplates"><h3>S8_FleetTemplates</h3><p>Fleet Templates.</p></div>
+    <div class="card" id="S9_FirstWinIntake"><h3>S9_FirstWinIntake</h3><p>First Win Intake.</p></div>
+    <div class="card" id="S10_BuildExperience"><h3>S10_BuildExperience</h3><p>First-Win Loop.</p></div>
   </div>
   <div class="recommendations">
     <h2>Recommended Ecosystem Tools &amp; Substrates</h2>
@@ -10800,13 +10810,25 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             return
 
-        if path in ("/onboarding", "/onboarding/"):
+        if path in ("/onboarding", "/onboarding/") or (path.startswith("/w/") and path.endswith("/onboarding")):
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.end_headers()
             port = getattr(self.server, "server_port", 27472)
             html = generate_onboarding_html(port=port)
             self.wfile.write(html.encode("utf-8"))
+            return
+
+        if path.startswith("/w/") and path.endswith("/api/onboarding/state"):
+            slug = path.split("/")[2]
+            try:
+                from synlynk import open_state_db
+                from synlynk.onboarding_state import get_or_create_session
+                conn, _ = open_state_db()
+                sess = get_or_create_session(conn, slug)
+                self._send_json_ok(sess)
+            except Exception as e:
+                self.send_error(500, str(e))
             return
 
         if path in ("/onboarding/roles", "/onboarding/roles/"):
@@ -10950,6 +10972,10 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
             self._handle_worktree_clean_request()
         elif clean_path in ("/tools/install", "/api/tools/install") or clean_path.endswith("/api/tools/install"):
             self._handle_tool_install_request()
+        elif clean_path.startswith("/w/") and clean_path.endswith("/api/onboarding/step"):
+            self._handle_onboarding_step(clean_path)
+        elif clean_path.startswith("/w/") and clean_path.endswith("/api/onboarding/topology/confirm"):
+            self._handle_onboarding_topology_confirm(clean_path)
         elif clean_path == "/api/board/status" or clean_path.endswith("/api/board/status"):
             self._handle_board_status_request()
         elif clean_path == "/api/board/stage" or clean_path.endswith("/api/board/stage"):
@@ -10958,6 +10984,38 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
             self._handle_graph_refresh_request()
         else:
             self.send_error(404)
+
+    def _handle_onboarding_step(self, path):
+        length = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(length) if length > 0 else b"{}"
+        try:
+            data = json.loads(body.decode("utf-8"))
+            target_stage = data.get("stage")
+            payload = data.get("payload")
+            slug = path.split("/")[2]
+            from synlynk import open_state_db
+            from synlynk.onboarding_state import get_or_create_session, advance_stage
+            conn, _ = open_state_db()
+            sess = get_or_create_session(conn, slug)
+            new_sess = advance_stage(conn, sess["session_id"], target_stage, payload)
+            self._send_json_ok(new_sess)
+        except Exception as e:
+            self.send_error(500, str(e))
+
+    def _handle_onboarding_topology_confirm(self, path):
+        length = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(length) if length > 0 else b"{}"
+        try:
+            confirmed_topology = json.loads(body.decode("utf-8"))
+            slug = path.split("/")[2]
+            from synlynk import open_state_db
+            from synlynk.onboarding_state import get_or_create_session, confirm_topology
+            conn, _ = open_state_db()
+            sess = get_or_create_session(conn, slug)
+            new_sess = confirm_topology(conn, sess["session_id"], confirmed_topology)
+            self._send_json_ok(new_sess)
+        except Exception as e:
+            self.send_error(500, str(e))
 
     def _handle_graph_refresh_request(self):
         try:

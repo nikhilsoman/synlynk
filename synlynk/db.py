@@ -441,6 +441,13 @@ def _get_db():
     return get_db()
 
 
+def _migrate_onboarding_sessions(conn: sqlite3.Connection) -> None:
+    """Create the onboarding session ledger when it is missing."""
+    from synlynk.db_schema import ONBOARDING_SESSIONS_SCHEMA
+
+    conn.executescript(ONBOARDING_SESSIONS_SCHEMA)
+
+
 def _run_harness_rename_migration(conn) -> None:
     """Rename agent-named harness schema objects from Plan A of #786."""
     cols = {row[1] for row in conn.execute("PRAGMA table_info(harness_records)")}
@@ -1663,6 +1670,9 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
         _migrate_governs_tenancy(conn)
         _normalize_org_domain_drift(conn)
         conn.commit()
+
+    _migrate_onboarding_sessions(conn)
+    conn.commit()
 
 
 _VALID_COST_SOURCES = {

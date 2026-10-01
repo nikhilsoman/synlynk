@@ -1040,6 +1040,17 @@ def cmd_doctor(args=None, checks: _List = None) -> int:
     if args is not None and getattr(args, "readiness", False) is True:
         from synlynk.readiness import cmd_doctor_readiness
         return cmd_doctor_readiness(args=args)
+    if args is not None and getattr(args, "provision", False) is True:
+        from synlynk.tool_installer import provision_ecosystem_tools
+        results = provision_ecosystem_tools()
+        any_failed = False
+        print("Provisioning ecosystem tools:")
+        for tool, passed in results.items():
+            status = "✓" if passed else "✗"
+            if not passed:
+                any_failed = True
+            print(f"  {status} {tool}")
+        return 1 if any_failed else 0
     if checks is not None:
         return 1 if _print_health_check_report(checks) else 0
 

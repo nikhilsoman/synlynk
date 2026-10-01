@@ -509,6 +509,8 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
                                help="Execute live in-sandbox gh-write probe during health checks")
     doctor_parser.add_argument("--readiness", action="store_true",
                                help="Evaluate and display the consolidated 4-point fleet readiness matrix")
+    doctor_parser.add_argument("--provision", action="store_true",
+                               help="Provision recommended ecosystem tools if missing")
 
     worktree_parser = subparsers.add_parser(
         "worktree", help="Audit and clean up stale git worktrees/branches"

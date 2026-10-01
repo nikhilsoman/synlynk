@@ -24,3 +24,5 @@ project-docs/handoff-note.md
 .aider*
 node_modules/
 state.db*
+/build/
+/dist/
