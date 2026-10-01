@@ -14,8 +14,16 @@ def test_hermetic_wheel_build_and_sandbox_run(tmp_path):
     dist_dir = tmp_path / "dist"
     dist_dir.mkdir()
 
+    import shutil
+
+    pip_exe = shutil.which("pip3") or shutil.which("pip")
+    wheel_cmd = (
+        [pip_exe, "wheel", "--no-deps", "-w", str(dist_dir), ROOT]
+        if pip_exe
+        else [sys.executable, "-m", "pip", "wheel", "--no-deps", "-w", str(dist_dir), ROOT]
+    )
     build = subprocess.run(
-        [sys.executable, "-m", "pip", "wheel", "--no-deps", "-w", str(dist_dir), ROOT],
+        wheel_cmd,
         capture_output=True,
         text=True,
     )
