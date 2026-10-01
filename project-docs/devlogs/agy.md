@@ -1,5 +1,26 @@
 # Agy Devlog
 
+## 2026-10-01 — Unified Onboarding Journeys & Self-Updating Lifecycle Engine (Tasks 1–9 Complete)
+
+### Shipped & Verified Across Fleet
+- **Spec, Decisions & Implementation Plan Committed:**
+  - `docs/superpowers/specs/2026-10-01-unified-onboarding-journeys-and-lifecycle-design.md` (`31bece57`).
+  - DECIDE panel records `project-docs/decisions/2026-10-01-unified-onboarding-journeys-self-updatin.md` (`dec-00b401f2`) and `project-docs/decisions/2026-10-01-phase-2-topology-discovery-workspace-mod.md`.
+  - Implementation plan `docs/superpowers/plans/2026-10-01-unified-onboarding-journeys-and-lifecycle.md` (`68f26ec6`).
+- **Fleet Execution via `synlynk dispatch`:**
+  - **Task 1 (DB Schema & Migration):** Dispatched to `codex` (`job-38de1722`, `b10f5d7d`). Added `ONBOARDING_SESSIONS_SCHEMA` and `_migrate_onboarding_sessions` in `synlynk/db_schema.py` and `synlynk/db.py`.
+  - **Task 2 (Topology Discovery Engine):** Dispatched to `agy` (`job-55cee61c`, `a5fc3c8d`). Created `synlynk/topology_discovery.py` covering 4 archetypes (Container Directory, Monorepo, Polyrepo App Group, Standalone Repo) with candidate split/merge mutations.
+  - **Task 3 (Headless State Machine):** Dispatched to `claude` (`job-62daddab`, `bb901205`). Created `synlynk/onboarding_state.py` covering 10 lifecycle stages with resume and confirmation helpers.
+  - **Task 4 (Probe-Verified Binding):** Dispatched to `grok` (`job-550979c8`, `1a8c7fcd`). Created `synlynk/probe_binding.py` with multi-harness auth probing and system dependency validation.
+  - **Task 5 (Fleet Templates & Version Policy):** Dispatched to `codex` (`job-52ec8b1b`, `aaf96f86`). Created `synlynk/fleet_templates.py` and `synlynk/version_policy.py`.
+  - **Task 6 (First-Win Loop):** Dispatched to `claude` (`job-32ed806c`, `60aef926`). Created `synlynk/first_win_loop.py` with non-empty git diff effect verification.
+  - **Task 7 (Vizor REST/SSE APIs & HUD):** Dispatched to `agy` (`job-856a4c93`, `c0425649`). Updated `synlynk/viz.py` with 10-stage HUD stepper, `/w/<slug>/api/onboarding/state`, and `/w/<slug>/api/onboarding/topology/confirm`.
+  - **Task 8 (TUI Surface Integration):** Dispatched to `grok` (`job-1d8124f4`, `b56e1a67`). Connected `cmd_wizard_init` in `synlynk/wizard.py` to the state machine with headless non-interactive mode.
+  - **Task 9 (End-to-End Matrix):** Dispatched to `claude` (`job-754f3d79`, `232192e4`). Created `tests/test_unified_onboarding_e2e.py` verifying full container and monorepo matrix paths.
+- **Verification:** Full 25-test onboarding verification suite passing (25/25 green).
+- **Hygiene:** All job worktrees cleanly pruned, costs captured in `project-docs/costs.md`, branch `feat/agy/vizor-onboarding-engine` pushed to origin.
+[@agy, @nikhilsoman]
+
 ## 2026-09-30 — Vizor Repo-Truth Purge & Native View HUD Shells (Spec 2, Story story-6a18ed23)
 
 ### Shipped & Verified
