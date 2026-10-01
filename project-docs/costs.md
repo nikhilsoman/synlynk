@@ -53,3 +53,4 @@
 | 2026-10-01 08:25 | claude | claude-sonnet-4-6 | 56293 | 6628 | $0.2683 | estimated_token_rate | story-adhoc-1790823236 | exec: claude job job-62dad... |
 | 2026-10-01 08:37 | grok | grok-3 | 64792 | 22885 | $0.5377 | estimated_token_rate | story-adhoc-1790823792 | exec: grok job job-550979c... |
 | 2026-10-01 10:25 | codex | gpt-5.6-luna | 550698 | 7259 | $1.7610 | estimated_token_rate | story-adhoc-1790824926 | exec: codex job job-52ec8b... |
+| 2026-10-01 10:29 | claude | claude-sonnet-4-6 | 60575 | 8425 | $0.3100 | structured_output | story-adhoc-1790830649 | exec: claude job job-32ed... |
