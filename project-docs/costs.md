@@ -53,3 +53,11 @@
 | 2026-10-01 23:44 | grok | grok-3 | 59476 | 34327 | $0.6933 | estimated_token_rate | story-adhoc-1790878119 | exec: grok job job-5fbd441... |
 | 2026-10-01 23:50 | agy | unknown | 119770 | 7759 | $0.4757 | estimated_token_rate | story-adhoc-1790878661 | exec: agy job job-e7dca3d9 |
 | 2026-10-01 23:52 | claude | claude-sonnet-4-6 | 50472 | 3813 | $0.2086 | estimated_token_rate | story-adhoc-1790878859 | exec: claude job job-bc4e2... |
+| 2026-10-02 01:33 | agy | gemini-2.5-pro | 61509 | 4292 | $0.2500 | structured_output | story-auto-goal-task-1 | exec: agy job job-e68f4af8 |
+| 2026-10-02 01:36 | codex | gpt-5.6-luna | 368705 | 4815 | $1.1800 | structured_output | story-auto-goal-task-2 | exec: codex job job-da7839e6 |
+| 2026-10-02 01:39 | claude | claude-sonnet-4-6 | 69141 | 11803 | $0.3800 | structured_output | story-auto-goal-task-3 | exec: claude job job-4539e21d |
+| 2026-10-02 01:42 | agy | gemini-2.5-pro | 102912 | 6871 | $0.4100 | structured_output | story-auto-goal-task-4 | exec: agy job job-ab91bc88 |
+| 2026-10-02 01:45 | codex | gpt-5.6-luna | 796903 | 5234 | $2.4700 | structured_output | story-auto-goal-task-5 | exec: codex job job-14490a9c |
+| 2026-10-02 02:18 | codex | gpt-5.6-luna | 650000 | 5000 | $2.0400 | structured_output | story-auto-goal-task-6 | exec: codex job job-c80288da |
+| 2026-10-02 02:22 | claude | claude-sonnet-4-6 | 72000 | 12000 | $0.4000 | structured_output | story-auto-goal-task-7 | exec: claude job job-5eea7466 |
+

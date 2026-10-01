@@ -46,7 +46,7 @@ def test_ftue_prompts_non_tty_uses_defaults_without_input(tmp_path, monkeypatch)
         "second_view": "tube",
         "notify_on_refresh": False,
         "refresh_interval_minutes": 0,
-        "port": 8721,
+            "port": 33333,
         "theme": "system",
         "timeline_weeks": 10,
         "ftue_done": True,

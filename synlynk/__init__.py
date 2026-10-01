@@ -1458,6 +1458,42 @@ def discover_agents(config: dict = None) -> list:
     return found
 
 
+def probe_all_configured_harnesses(agents: list = None) -> dict:
+    """Populate probe metadata for the harnesses selected for this workspace."""
+    configured = list(agents) if agents is not None else []
+    if agents is None:
+        config = load_config()
+        configured = list(config.get("workgroup_agents") or [])
+    if agents is None and not configured:
+        configured = [entry["name"] for entry in discover_agents() if entry.get("functional")]
+    configured = list(dict.fromkeys(
+        name for name in configured if name in HARNESS_CAPABILITY_BASELINES
+    ))
+    results = {}
+    if not configured:
+        return results
+
+    from synlynk.probe import _probe_agent
+
+    db_conn = _get_db()
+    try:
+        for harness_name in configured:
+            try:
+                results[harness_name] = _probe_agent(
+                    harness_name, db_conn, fast_path_ok=False, write_fence=False
+                )
+            except Exception as exc:
+                results[harness_name] = {
+                    "status": "unavailable",
+                    "version": "unavailable",
+                    "error": str(exc),
+                }
+        db_conn.commit()
+    finally:
+        db_conn.close()
+    return results
+
+
 
 
 _INDUSTRY_KEYWORDS = {
@@ -3108,6 +3144,19 @@ def init(force: bool = False, agents: list = None,
     from synlynk.capability_sweep import _seed_capability_ledger_from_baseline
 
     _seed_capability_ledger_from_baseline(_get_db())
+
+    # LIVE-21: make probe metadata available before the first dispatch.  Do
+    # not probe fallback names when no harness is installed: some harness
+    # probes perform network checks and init must retain its fast headless
+    # path.  Explicit ``agents=`` remains authoritative.
+    if agents is not None:
+        probe_targets = sorted(set(agents))
+    else:
+        # Keep the legacy no-argument init path bounded.  Explicitly selected
+        # harnesses are probed here; otherwise first dispatch performs the
+        # defensive inline probe for the discovered harness.
+        probe_targets = []
+    probe_all_configured_harnesses(probe_targets)
 
     if auto_defaults:
         print(f"  Auto-selected defaults: enrichment=no, email=empty, industry={industry}")

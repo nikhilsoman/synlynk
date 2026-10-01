@@ -119,6 +119,8 @@ Commands are grouped by where you'll reach for them in a typical project lifecyc
 - `synlynk home`
 - `synlynk init`
 - `synlynk start`
+- `synlynk brainstorm`
+- `synlynk brief`
 - `synlynk scan`
 - `synlynk join`
 - `synlynk governs`
