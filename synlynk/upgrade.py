@@ -11,12 +11,26 @@ from synlynk.scan import _run_graphify_extract
 
 
 def _detect_install_type() -> str:
-    """Returns 'pipx', 'pip', 'script', or 'unknown'."""
+    """Return the installation tier used by the active ``synlynk`` binary."""
+    from synlynk.install_manifest import get_install_manifest
+
+    manifest = get_install_manifest()
+    if manifest:
+        method = manifest.get("method") or manifest.get("install_type")
+        if method in {"uv", "pipx", "standalone_venv", "pip", "script", "editable"}:
+            return method
+
     import shutil as _shutil
 
     binary = _shutil.which("synlynk") or ""
+    if "uv" in binary or "uv" in os.environ.get("UV_TOOL_DIR", ""):
+        return "uv"
     if "pipx" in binary or "pipx" in os.environ.get("PIPX_HOME", ""):
         return "pipx"
+
+    if os.path.exists(os.path.expanduser("~/.synlynk/releases/current")):
+        return "standalone_venv"
+
     try:
         import importlib.metadata as _meta
 
@@ -29,6 +43,8 @@ def _detect_install_type() -> str:
         pass
     if os.path.exists(os.path.expanduser("~/.synlynk/bin/synlynk")):
         return "script"
+    if os.path.exists(".git") and os.path.exists("synlynk/__init__.py"):
+        return "editable"
     return "unknown"
 
 
@@ -48,29 +64,89 @@ def _run_upgrade(latest: str) -> None:
     get_pipx_source = getattr(package, "_get_pipx_source", _get_pipx_source)
     install_type = detect_install_type()
     with rollback_checkpoint_upgrade(VERSION, install_type):
-        if install_type == "pipx":
-            pipx_source = get_pipx_source()
-            if pipx_source and not pipx_source.startswith(("http://", "https://", "git+")):
-                install_spec = f"git+https://github.com/nikhilsoman/synlynk@v{latest}"
-                result = subprocess.run(["pipx", "install", install_spec, "--force"], text=True)
-                if result.returncode == 0:
-                    print(f"  ✓ Upgraded to v{latest} via pipx (switched to release channel)")
-                    print("  → Run 'synlynk migrate' if prompted, to apply any schema changes")
-                else:
-                    print("  ⚠ pipx reinstall failed — run manually:")
-                    print(f"    pipx install git+https://github.com/nikhilsoman/synlynk@v{latest} --force")
+        _run_upgrade_for_tier(install_type, latest, get_pipx_source=get_pipx_source)
+
+
+def _run_upgrade_for_tier(
+    install_type: str, latest_version: str, *, get_pipx_source=None
+) -> None:
+    """Upgrade an installation using the package manager that owns it."""
+    if get_pipx_source is None:
+        get_pipx_source = _get_pipx_source
+
+    if install_type == "uv":
+        result = subprocess.run(["uv", "tool", "upgrade", "synlynk"], text=True)
+        if result.returncode == 0:
+            print(f"  ✓ Upgraded to v{latest_version} via uv")
+        else:
+            print("  ⚠ uv tool upgrade failed — run manually: uv tool upgrade synlynk")
+        return
+
+    if install_type == "standalone_venv":
+        from synlynk.standalone_venv import (
+            activate_release_symlink,
+            create_standalone_release,
+        )
+
+        release_dir = create_standalone_release(latest_version)
+        python_exe = release_dir / "bin" / "python3"
+        result = subprocess.run(
+            [
+                str(python_exe),
+                "-m",
+                "pip",
+                "install",
+                f"git+https://github.com/nikhilsoman/synlynk@v{latest_version}",
+                "--no-deps",
+            ],
+            text=True,
+        )
+        if result.returncode == 0:
+            activate_release_symlink(release_dir)
+            print(f"  ✓ Upgraded to v{latest_version} via standalone venv")
+        else:
+            print("  ⚠ standalone venv upgrade failed — previous release remains active")
+        return
+
+    if install_type == "pipx":
+        pipx_source = get_pipx_source()
+        if pipx_source and not pipx_source.startswith(("http://", "https://", "git+")):
+            install_spec = f"git+https://github.com/nikhilsoman/synlynk@v{latest_version}"
+            result = subprocess.run(["pipx", "install", install_spec, "--force"], text=True)
+            if result.returncode == 0:
+                print(f"  ✓ Upgraded to v{latest_version} via pipx (switched to release channel)")
+                print("  → Run 'synlynk migrate' if prompted, to apply any schema changes")
             else:
-                result = subprocess.run(["pipx", "upgrade", "synlynk"], text=True)
-                if result.returncode == 0:
-                    print(f"  ✓ Upgraded to v{latest} via pipx")
-                    print("  → Run 'synlynk migrate' if prompted, to apply any schema changes")
-                else:
-                    print("  ⚠ pipx upgrade failed — run manually: pipx upgrade synlynk")
-            return
-        print("  ⚠ script install is retired; no upgrade was performed.")
-        print("  Run: pipx install git+https://github.com/nikhilsoman/synlynk")
-        print("  If a legacy shim exists, remove it with:")
-        print("    rm -rf ~/.synlynk/bin ~/.synlynk/lib")
+                print("  ⚠ pipx reinstall failed — run manually:")
+                print(f"    pipx install git+https://github.com/nikhilsoman/synlynk@v{latest_version} --force")
+        else:
+            result = subprocess.run(["pipx", "upgrade", "synlynk"], text=True)
+            if result.returncode == 0:
+                print(f"  ✓ Upgraded to v{latest_version} via pipx")
+                print("  → Run 'synlynk migrate' if prompted, to apply any schema changes")
+            else:
+                print("  ⚠ pipx upgrade failed — run manually: pipx upgrade synlynk")
+        return
+
+    if install_type == "pip":
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "install", "--upgrade", "synlynk"],
+            text=True,
+        )
+        if result.returncode == 0:
+            print(f"  ✓ Upgraded to v{latest_version} via pip")
+        else:
+            print("  ⚠ pip upgrade failed — run manually: python -m pip install --upgrade synlynk")
+        return
+
+    if install_type == "editable":
+        print("  ⚠ editable install detected; pull the latest source and reinstall to upgrade.")
+        return
+
+    print("  ⚠ script install is retired; no upgrade was performed.")
+    print("  Run: pipx install git+https://github.com/nikhilsoman/synlynk")
+    print("  If a legacy shim exists, remove it with:")
+    print("    rm -rf ~/.synlynk/bin ~/.synlynk/lib")
 
 
 def _get_pipx_source() -> str:
