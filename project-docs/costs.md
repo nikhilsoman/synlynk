@@ -55,3 +55,4 @@
 | 2026-10-01 10:25 | codex | gpt-5.6-luna | 550698 | 7259 | $1.7610 | estimated_token_rate | story-adhoc-1790824926 | exec: codex job job-52ec8b... |
 | 2026-10-01 10:29 | claude | claude-sonnet-4-6 | 60575 | 8425 | $0.3100 | structured_output | story-adhoc-1790830649 | exec: claude job job-32ed... |
 | 2026-10-01 10:55 | agy | gemini-2.5-pro | 263830 | 20079 | $1.0900 | structured_output | story-adhoc-1790832015 | exec: agy job job-856a... |
+| 2026-10-01 11:03 | grok | grok-4.7 | 157962 | 24780 | $0.8500 | structured_output | story-adhoc-1790832592 | exec: grok job job-1d81... |
