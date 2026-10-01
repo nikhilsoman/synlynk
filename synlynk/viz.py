@@ -10347,6 +10347,9 @@ def generate_onboarding_html(data: dict = None, port: int = 27472) -> str:
     <span class="badge">Local Offline Canvas</span>
   </div>
   <div class="grid">
+    <div class="card"><h3>View 1: Physical File Tree</h3><p>Directories, frameworks, and component boundaries.</p></div>
+    <div class="card"><h3>View 2: Logical Tubemap</h3><p>Data streams and entity lifecycles.</p></div>
+    <div class="card"><h3>View 3: Application Screens</h3><p>Discovered routes and cloud topology.</p></div>
     <div class="card" id="S1_Orientation"><h3>S1_Orientation</h3><p>Welcome to Synlynk.</p></div>
     <div class="card" id="S2_Dependencies"><h3>S2_Dependencies</h3><p>Ecosystem Tools.</p></div>
     <div class="card" id="S3_HarnessBinding"><h3>S3_HarnessBinding</h3><p>Harness Binding.</p></div>
