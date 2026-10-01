@@ -1551,7 +1551,3 @@ First, the time to live never takes effect for newly writt [testing] <!-- id:sto
 - [ ] Add a git pre-commit guard that stops the shared main repo checkout from being used as scratch space for feature work (root cause of a 2026-09-30 incident: an interactive Agy session ran 'git checkout [testing] <!-- id:story-adhoc-1790780255 -->
 - [ ] fix: guard commits from shared main checkout [testing] <!-- id:story-issue-1888 -->
 - [ ] docs: devlog checkpoint — #1886 concurrency architecture + PR#1888 worktree guard [security] <!-- id:story-issue-1889 -->
-- [ ] feat(vizor): workspace-scoped slug routing engine (Spec 1) [backend] <!-- id:story-b24ec68c -->
-- [x] feat(vizor): repo-truth purge and native view HUD shells (Spec 2) [backend] <!-- id:story-6a18ed23 -->
-- [ ] feat(vizor): repo-truth purge and native view HUD shells (Spec 2) [frontend] <!-- id:story-issue-1891 -->
-- [x] feat(vizor): living GOVERNS goal resolution and alignment engine (Spec 3) [backend] <!-- id:story-b67bce1b -->
