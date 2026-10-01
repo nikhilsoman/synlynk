@@ -231,12 +231,15 @@ def test_warn_stale_script_install_with_shim_and_pipx(monkeypatch, tmp_path, cap
     assert "rm -rf" in out
 
 
-def test_install_script_dispatches_to_pipx():
+def test_install_script_uses_four_tier_ladder():
     install_script = Path(__file__).resolve().parents[1] / "install.sh"
     content = install_script.read_text()
-    assert "pipx install git+https://github.com/nikhilsoman/synlynk" in content
+    assert 'git+https://github.com/nikhilsoman/synlynk.git' in content
+    assert 'uv tool install "$CANONICAL_SPEC" --force' in content
+    assert 'pipx install "$CANONICAL_SPEC" --force' in content
+    assert 'python3 -m venv "$INSTALL_DIR/releases/current"' in content
     assert "exec pipx install" not in content
-    assert content.count("synlynk viz --install || true") == 2
+    assert "synlynk viz --install || true" not in content
     assert "for f in" not in content
     assert "raw.githubusercontent.com/nikhilsoman/synlynk/main/synlynk/$f" not in content
 

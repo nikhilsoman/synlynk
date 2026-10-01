@@ -20,6 +20,14 @@ RECOMMENDED_TOOLS: Dict[str, Dict[str, Any]] = {
         "license": "MIT",
         "install_methods": ["brew", "apt"],
     },
+    "superpowers": {
+        "binary": "superpowers",
+        "package": "superpowers",
+        "description": "Agentic brainstorming, specification, and TDD skill packs",
+        "license": "MIT",
+        "install_methods": ["skills", "git"],
+    },
+
 }
 
 
@@ -85,3 +93,37 @@ def install_tool(tool_name: str) -> bool:
     except (subprocess.SubprocessError, OSError) as exc:
         print(f"Error: Failed to execute installer '{' '.join(cmd)}': {exc}", file=sys.stderr)
         return False
+
+from typing import Optional, List
+from synlynk.install_manifest import update_ecosystem_status
+
+def provision_ecosystem_tools(tools: Optional[List[str]] = None) -> Dict[str, bool]:
+    """Provision the ecosystem tools by checking and installing missing ones."""
+    if tools is None:
+        tools = list(RECOMMENDED_TOOLS.keys())
+    
+    results = {}
+    for tool in tools:
+        if tool not in RECOMMENDED_TOOLS:
+            results[tool] = False
+            continue
+            
+        try:
+            if is_tool_available(tool):
+                installed = True
+            else:
+                installed = install_tool(tool)
+            
+            results[tool] = installed
+            
+            try:
+                update_ecosystem_status(tool, installed, {"provisioned": True})
+            except Exception as e:
+                # Non-fatal update
+                print(f"Warning: Failed to update install manifest for {tool}: {e}", file=sys.stderr)
+        except Exception as e:
+            # Non-fatal overall loop
+            print(f"Error provisioning {tool}: {e}", file=sys.stderr)
+            results[tool] = False
+            
+    return results
