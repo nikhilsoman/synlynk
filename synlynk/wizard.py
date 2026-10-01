@@ -1156,6 +1156,37 @@ def wizard_init(scan: dict = None, dry_run: bool = False) -> None:
                     pass
 
 
+def _advance_wizard_onboarding_state(repo_dir: str, product_id: str) -> str:
+    """Open ``repo_dir/.synlynk/state.db`` (creating it if needed) and move the
+    headless onboarding session through the stages this init actually covers:
+    orientation is created, then dependency detection and harness binding.
+    Returns the resulting ``current_stage``.
+    """
+    import sqlite3
+
+    from synlynk.db import _migrate_onboarding_sessions
+    from synlynk.onboarding_state import (
+        STAGES,
+        STAGE_S2_DEPENDENCIES,
+        STAGE_S3_HARNESS_BINDING,
+        advance_stage,
+        get_or_create_session,
+    )
+
+    db_path = os.path.join(repo_dir, ".synlynk", "state.db")
+    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+    conn = sqlite3.connect(db_path)
+    try:
+        _migrate_onboarding_sessions(conn)
+        session = get_or_create_session(conn, product_id)
+        for stage in (STAGE_S2_DEPENDENCIES, STAGE_S3_HARNESS_BINDING):
+            if STAGES.index(session["current_stage"]) < STAGES.index(stage):
+                session = advance_stage(conn, session["session_id"], stage)
+        return session["current_stage"]
+    finally:
+        conn.close()
+
+
 def cmd_wizard_init(
     scan: dict = None,
     dry_run: bool = False,
@@ -1164,7 +1195,8 @@ def cmd_wizard_init(
     repo_dir: str = ".",
     workspace_name: str = None,
     prompt_remediation: bool = False,
-) -> dict:
+    non_interactive: bool = False,
+):
     """Streamlined zero-config onboarding: auto-probes installed harnesses,
     detects codebase stack, guards dirty worktree, provisions standard agent charters
     in <5s, auto-invokes synlynk backlog ingest --sync-github, and prompts first-win remediation.
@@ -1282,7 +1314,8 @@ def cmd_wizard_init(
     elapsed = time.time() - start_time
     print(f"\n  {_GREEN}✓{_RESET} Zero-risk onboarding completed in {elapsed:.2f}s\n")
 
-    return {
+    current_stage = _advance_wizard_onboarding_state(repo_dir, ws_name)
+    result = {
         "workspace_name": ws_name,
         "harnesses": harnesses,
         "stack": stack,
@@ -1291,4 +1324,8 @@ def cmd_wizard_init(
         "backup": backup_result,
         "first_win": first_win_result,
         "elapsed_seconds": elapsed,
+        "current_stage": current_stage,
     }
+    if non_interactive:
+        return 0
+    return result
