@@ -2283,6 +2283,43 @@ def _capability_block_remediation(agent: str, declared_requires: list) -> str:
     return f"Run `synlynk probe {agent}` and rerun dispatch."
 
 
+def _probe_record_names(harness_name: str) -> tuple:
+    """Return probe row names, including legacy aliases."""
+    if harness_name == "claude":
+        return ("claude", "claude-cli")
+    return (harness_name,)
+
+
+def _read_harness_probe_row(db_conn, harness_name: str):
+    if db_conn is None:
+        return None
+    for record_name in _probe_record_names(harness_name):
+        try:
+            row = db_conn.execute(
+                "SELECT compliance_status, active_flags FROM harness_records WHERE harness_name=?",
+                (record_name,),
+            ).fetchone()
+        except Exception:
+            return None
+        if row:
+            return row
+    return None
+
+
+def _inline_probe_harness(harness_name: str, db_conn) -> dict:
+    """Run the first-use probe without spawning a second synlynk process."""
+    try:
+        from synlynk.probe import _probe_agent
+
+        result = _probe_agent(
+            harness_name, db_conn, fast_path_ok=False, write_fence=False
+        )
+        db_conn.commit()
+        return result
+    except Exception as exc:
+        return {"status": "unavailable", "error": str(exc)}
+
+
 def _reprobe_harness_sync(agent: str, timeout_s: int = 120) -> dict:
     """Re-run probe in-process via the CLI when the cached probe is stale."""
     try:
@@ -2615,21 +2652,17 @@ def _preflight_dispatch(
     else:
         valid_flags, required_flags = [], []
     if valid_flags or required_flags:
-        probe_row = None
-        if db_conn:
-            try:
-                probe_row = db_conn.execute(
-                    "SELECT compliance_status, active_flags FROM harness_records WHERE harness_name=?",
-                    (harness_name,),
-                ).fetchone()
-            except Exception:
-                probe_row = None
+        probe_row = _read_harness_probe_row(db_conn, harness_name)
         if not probe_row:
-            return {
-                "passed": False,
-                "sentinel": "HARNESS_PREFLIGHT_FAIL",
-                "reason": f"no probe data for agent; run synlynk probe {harness_name}",
-            }
+            if db_conn is not None:
+                _inline_probe_harness(harness_name, db_conn)
+                probe_row = _read_harness_probe_row(db_conn, harness_name)
+            if not probe_row:
+                return {
+                    "passed": False,
+                    "sentinel": "HARNESS_PREFLIGHT_FAIL",
+                    "reason": f"no probe data for agent; run synlynk probe {harness_name}",
+                }
         compliance_status, _active_flags_json = probe_row
         if compliance_status != "ok":
             return {
