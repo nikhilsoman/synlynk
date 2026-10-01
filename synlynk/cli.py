@@ -51,6 +51,102 @@ def _warn_stale_repo_version(installed_version, cwd=None):
         file=sys.stderr,
     )
 
+def _collect_brownfield_evidence(repo_path: str) -> dict:
+    """Walk ``repo_path`` into the list-shaped evidence dict expected by
+    ``synlynk.goal_synthesizer.synthesize_brownfield_goals``."""
+    from synlynk.repo_classifier import _CODE_EXTENSIONS, _EXCLUDED_DIRS, _KNOWN_MANIFESTS
+
+    code_files, test_files, manifests, languages = [], [], [], []
+    for root, dirs, files in os.walk(repo_path):
+        dirs[:] = [d for d in dirs if d not in _EXCLUDED_DIRS]
+        for f in files:
+            rel = os.path.relpath(os.path.join(root, f), repo_path)
+            if f in _KNOWN_MANIFESTS and f not in manifests:
+                manifests.append(f)
+            ext = os.path.splitext(f)[1].lower()
+            if ext not in _CODE_EXTENSIONS:
+                continue
+            if "test" in f.lower() or "spec" in f.lower():
+                test_files.append(rel)
+            else:
+                code_files.append(rel)
+            if ext not in languages:
+                languages.append(ext)
+
+    return {
+        "code_files": code_files,
+        "test_files": test_files,
+        "manifests": manifests,
+        "languages": languages,
+        "open_issues": [],
+        "uncommitted_diffs": [],
+    }
+
+
+def _synthesize_goals_for_repo(repo_path: str, non_interactive: bool, blueprint=None, charters=None):
+    """Shared Welcome Fork + goal synthesis flow used by both
+    ``synlynk brainstorm`` and ``synlynk brief``. Returns (mode, goals, classification)."""
+    from synlynk.repo_classifier import classify_repository, RepoType, prompt_welcome_fork
+    from synlynk.greenfield_blueprints import synthesize_greenfield_goals
+    from synlynk.goal_synthesizer import synthesize_brownfield_goals, enrich_goals_ambient
+
+    classification = classify_repository(repo_path)
+
+    if blueprint:
+        fork = "spin_greenfield"
+    else:
+        fork = prompt_welcome_fork(classification, interactive=not non_interactive)
+
+    if fork == "spin_greenfield":
+        blueprint_id = blueprint or "personal_assistant"
+        selected_charters = [c.strip() for c in (charters or "").split(",") if c.strip()] or None
+        goals = synthesize_greenfield_goals(blueprint_id, selected_charters)
+        return "Greenfield", goals, classification
+
+    evidence = _collect_brownfield_evidence(repo_path)
+    goals = synthesize_brownfield_goals(evidence)
+    goals = enrich_goals_ambient(goals, evidence)
+    return "Brownfield", goals, classification
+
+
+def cmd_brainstorm(args) -> None:
+    """Classify the repo (Welcome Fork), synthesize strategic goals, and
+    offer them for review/approval."""
+    from synlynk.brief import review_and_approve_goals_tui
+
+    repo_path = getattr(args, "path", None) or "."
+    non_interactive = getattr(args, "non_interactive", False)
+    mode, goals, _classification = _synthesize_goals_for_repo(
+        repo_path, non_interactive, getattr(args, "blueprint", None), getattr(args, "charters", None))
+
+    approved = review_and_approve_goals_tui(goals, interactive=not non_interactive)
+
+    print(f"\n✦ {mode} goal synthesis complete — {len(approved)} goal(s) approved.")
+    for g in approved:
+        print(f"  [{g.get('priority')}] {g.get('id')}: {g.get('title')}")
+    print("\nRun `synlynk brief` to generate an Executive Project Brief from these signals.")
+
+
+def cmd_brief(args) -> None:
+    """Generate and save an Executive Project Brief summarizing discovered
+    signals and synthesized strategic goals."""
+    from synlynk.brief import generate_executive_brief, save_executive_brief
+
+    repo_path = getattr(args, "path", None) or "."
+    mode, goals, classification = _synthesize_goals_for_repo(
+        repo_path, non_interactive=True, blueprint=getattr(args, "blueprint", None),
+        charters=getattr(args, "charters", None))
+
+    evidence = {
+        "code_files": classification.code_file_count,
+        "manifests": classification.manifests,
+        "test_files": classification.test_file_count,
+    }
+    content = generate_executive_brief(repo_path, goals, evidence, mode=mode)
+    brief_path = save_executive_brief(repo_path, content)
+    print(f"\n✦ Executive Project Brief saved to {brief_path}")
+
+
 def cmd_watch(args) -> None:
     """Terminal HUD for live workspace state."""
     import select
@@ -276,6 +372,27 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
                              help="Allow init/brownfield to replace generated 4-docs on a migrated ledger (off by default)")
     init_parser.add_argument("--dry-run", action="store_true", dest="dry_run",
                              help="Preview what init would write without writing anything")
+
+    brainstorm_parser = subparsers.add_parser(
+        "brainstorm", help="Classify this repo (Welcome Fork) and synthesize strategic goals")
+    brainstorm_parser.add_argument("--path", default=".",
+                                    help="Repository path to analyze (default: current directory)")
+    brainstorm_parser.add_argument("--yes", "--non-interactive", action="store_true",
+                                    dest="non_interactive",
+                                    help="Use safe defaults without prompting")
+    brainstorm_parser.add_argument("--blueprint", default=None,
+                                    help="Force a Greenfield blueprint id (personal_assistant, dotfiles)")
+    brainstorm_parser.add_argument("--charters", default=None,
+                                    help="Comma-separated charter ids for the personal_assistant blueprint")
+
+    brief_parser = subparsers.add_parser(
+        "brief", help="Generate and save an Executive Project Brief (project-docs/brief.md)")
+    brief_parser.add_argument("--path", default=".",
+                               help="Repository path to analyze (default: current directory)")
+    brief_parser.add_argument("--blueprint", default=None,
+                               help="Force a Greenfield blueprint id (personal_assistant, dotfiles)")
+    brief_parser.add_argument("--charters", default=None,
+                               help="Comma-separated charter ids for the personal_assistant blueprint")
 
     upgrade_parser = subparsers.add_parser("upgrade", help="Check for and apply updates")
     upgrade_parser.add_argument("--dry-run", action="store_true", dest="dry_run",
@@ -1757,6 +1874,10 @@ def main(argv=None) -> None:
                  non_interactive=getattr(args, "non_interactive", False),
                  dry_run=getattr(args, "dry_run", False),
                  replace_generated_docs=getattr(args, "replace_generated_docs", False))
+    elif args.command == "brainstorm":
+        cmd_brainstorm(args)
+    elif args.command == "brief":
+        cmd_brief(args)
     elif args.command == "exec":
         force = getattr(args, 'force', False)
         sys.exit(exec_command(args.cmd, force=force))
