@@ -187,3 +187,22 @@
 - Found version drift: `VERSION`=0.23.0-dev, README badge 0.22.0, CHANGELOG at v0.25.0
   (no v0.23/v0.24 entries), v0.21.0 listed twice. No ticket filed yet.
 [@claude]
+
+## 2026-10-02 — Blog index fix (#1914) + lifted stale Blog Post Protocol hold
+
+- Added missing `docs/blog/README.md` index row for post 236 (flagged by qa's PR #1913
+  review); folded into #1914 rather than a third ticket, per Nikhil's instruction.
+- Lifted the 2026-07-12 "Blog Post Protocol paused" Active Hold: it predates ~165 posts
+  (71→236) written since, and was never actually enforced in the committed
+  `project-docs/memory.md` — it existed only in this machine's local `state.db`
+  (`~/.synlynk/workspaces/synlynk/state.db`, `memory_entries` id=21) and the generated
+  `.synlynk/context.md`, so there was nothing to commit to the repo. Updated that row
+  in place (struck through + LIFTED note) rather than deleting it, so the history of
+  why it existed and why it's lifted stays visible.
+- New finding, not yet ticketed: `_write_memory_md()` regenerating the tracked
+  `project-docs/memory.md` from this machine's registered state.db produces a 249
+  insertion / 49 deletion diff against `origin/main` — i.e. local DB state has drifted
+  well beyond what's committed. Did not commit that regeneration (same risk class as
+  #1915's costs.md finding); flagging for Nikhil rather than filing a third ticket
+  unprompted.
+[@claude]
