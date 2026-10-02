@@ -2,6 +2,8 @@
 
 This file provides guidance to Agy (the `agy` CLI, powered by Gemini) when working in this repository.
 
+synlynk is a Python CLI with a modular architecture across the `synlynk/` package, backed by 3,600+ tests. It coordinates the Claude, Agy/Gemini, Codex, and Grok agent CLIs through shared project state, dispatch, and verification workflows.
+
 <!-- synlynk:start version="0.23.0-dev" tool="agy" -->
 # synlynk AGY (AntiGravity) Instructions
 
@@ -18,7 +20,9 @@ This file provides guidance to Agy (the `agy` CLI, powered by Gemini) when worki
 ## Domain Ownership
 | Domain | Owned by this agent | Notes |
 |:---|:---|:---|
-| TODO: fill domains for this agent | | |
+| Frontend & CSS Architecture | templates, styles, HTML layouts, subpages | |
+| Content & Documentation | project documentation, blogs, specs, guides | |
+| Test Implementation & QA | verification tests, TDD suites, compliance suites | |
 
 ## Shared synlynk Protocol
 
@@ -26,7 +30,7 @@ Load `AI_INSTRUCTIONS.md` for the full shared synlynk protocol, including the se
 
 <!-- synlynk:end -->
 
-<!-- synlynk:harness v1.2.14 verified:2026-10-02T02:52:47Z -->
+<!-- synlynk:harness v2.0.0 verified:2026-10-02T10:15:16Z -->
 # Harness Instructions (synlynk-managed — do not edit)
 
 ## Headless Execution Contract
