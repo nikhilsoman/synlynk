@@ -1619,6 +1619,7 @@ Submit approval via 'gh pr review 1903 --appro [testing] <!-- id:story-issue-190
 - [x] Implement Task 5 of LIVE-19 & LIVE-20: End-to-End Integration, True-Up & Regression Verification [testing] <!-- id:story-b907ad30 -->
 - [x] Review and merge PR #1905: circuit breaker clean-exit preservation & quad-harness subscription dual-ledger (LIVE-19, LIVE-20) [testing] <!-- id:story-c5cb22f7 -->
 - [x] Review and merge PR #1906: 15-minute field trials documentation [backend] <!-- id:story-e5f2381b -->
+- [x] Ghost Issue Burndown: verify and close ~24 remediated issues on GitHub [backend] <!-- id:story-9cbe4cf7 -->
 - [x] Implement Task 1: Tri-Modal Autonomy Dial & Stage Gating [backend] <!-- id:story-v024-t01-autonomy-dial -->
 - [x] Implement Task 2: Sovereign Board Governance & Ed25519 Proposal Gates [security] <!-- id:story-v024-t02-board-governance -->
 - [x] Implement Task 3: Vizor Boardroom HUD Backend & Template [frontend] <!-- id:story-v024-t03-boardroom-hud -->
