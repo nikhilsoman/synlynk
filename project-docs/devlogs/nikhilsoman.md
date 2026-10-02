@@ -1895,4 +1895,8 @@ Remaining open: the ~74-entry original periodic-audit bucket still needs Nikhil'
 call (individual triage vs. bulk archive-then-discard); the `chore/discord-herdr-bridge-spec`
 parent worktree's stray test work is still undecided; #1877 not yet dispatched.
 
+2026-10-03 — Implemented issue #1928: made root `VERSION` the single release source, removed
+runtime/release duplication, updated README metadata, added the required `release-docs` CI gate,
+and added synchronization coverage. Focused tests: 530 passed; `release --check-docs` passes.
+
 [@nikhilsoman]
