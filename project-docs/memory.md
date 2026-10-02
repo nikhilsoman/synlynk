@@ -46,6 +46,6 @@
 ## Architecture & Conventions
 - **Diagrams & Visualizations Format:** All future architecture diagrams and flowcharts must default to a wide layout (~180 columns width, horizontal `flowchart LR` or wide multi-lane layouts) to maximize horizontal viewport utilization across terminal and widescreen displays.
 - **2026-09-28 [Rollback stash race #1834]:** Rollback checkpoints now exclude atomic `.sentinel-*` temporary files and vanished status paths before explicit stash pathspecs. If a path disappears after collection, the stash is retried once using the refreshed surviving list; unchanged real dirty-file failures still propagate. [@codex]
+- **2026-10-03 [Issue #1929 lazy-import cold-start budget]:** Ordinary `jobs` and `status` commands now stop on a command-specific `_FAST_CLI` path before loading the legacy package facade. `jobs` reads the durable ledger directly for its read-only table; `status` skips the optional worktree hint on the budgeted cold-start path. `tests/test_cli_cold_start.py` enforces a 150 ms median subprocess budget for both commands. [@codex]
 - **Vizor Web HUD Architecture:** Modular client/server architecture with OS-supervised persistent daemon (`synlynk.vizor_daemon`), multi-workspace hub (`/`), 7-stage GOVERNS board (`board.html`), Option C dual-pivot timeline (`gantt.html`), 4 BS-6 architectural views (Product, Logical, Infra, World), unified Graphify knowledge graph canvas with theme synchronization, and token-authenticated local API.
-
 

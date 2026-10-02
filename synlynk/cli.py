@@ -1786,6 +1786,96 @@ def _command_from_argv(argv):
     return None
 
 
+def _run_fast_observability_command(cli_tokens, selected_command):
+    """Run the two read-only observability commands without legacy imports.
+
+    ``synlynk`` historically populated :mod:`synlynk` with every command
+    implementation before dispatching.  Keep that compatibility path for the
+    full command surface, but let the common jobs/status probes stop after
+    importing only their own implementation modules.
+    """
+    if selected_command not in {"jobs", "status"}:
+        return False
+
+    parser = build_parser(selected_command=selected_command)
+    args = parser.parse_args(cli_tokens)
+
+    if selected_command == "status":
+        if getattr(args, "platform", False):
+            return False
+        from synlynk import _get_db
+        from synlynk.capability_roles import _load_capability_roles
+        from synlynk.sentinel import _read_sentinel_alerts
+        from synlynk.status import cmd_status
+
+        # ``status`` keeps these names late-bound for compatibility with the
+        # package facade; seed only the one helper it needs in fast mode.
+        _package = sys.modules["synlynk"]
+        _package._read_sentinel_alerts = _read_sentinel_alerts
+        _package._load_capability_roles = _load_capability_roles
+        conn = _get_db(read_only=True)
+        try:
+            cmd_status(
+                db_conn=conn,
+                json_output=args.json_output,
+                include_worktree_hint=False,
+            )
+        finally:
+            conn.close()
+        return True
+
+    # Handoff/reap/summary/stalled have side effects or legacy file-backed
+    # behavior; leave those forms on the established compatibility path.
+    if (
+        getattr(args, "jobs_cmd", None) is not None
+        or getattr(args, "summary", None)
+        or getattr(args, "stalled", False)
+        or getattr(args, "watch", False)
+    ):
+        return False
+
+    from synlynk import _get_db
+
+    conn = _get_db(migrate=False)
+    try:
+        try:
+            rows = conn.execute(
+                "SELECT job_id, agent, story_id, status, enqueued_at, exit_code, "
+                "context_mode, requires_gh_write, gh_write_verified "
+                "FROM daemon_jobs ORDER BY enqueued_at DESC LIMIT 50"
+            ).fetchall()
+        except Exception:
+            rows = []
+    finally:
+        conn.close()
+
+    if not rows:
+        print("  No active jobs. (0 completed — use synlynk jobs --all)")
+        return True
+
+    visible = rows if args.all_jobs else [row for row in rows if row[3] in ("queued", "running")]
+    if not visible:
+        done = sum(1 for row in rows if row[3] in ("done", "failed", "permission_denied"))
+        unknown = sum(1 for row in rows if row[3] == "unknown")
+        suffix = f"{done} completed"
+        if unknown:
+            suffix += f", {unknown} unknown"
+        print(f"  No active jobs. ({suffix} — use synlynk jobs --all)")
+        return True
+
+    print(f"{chr(27)}[1m{'ID':14}  {'AGENT':8}  {'STORY':12}  {'STATUS':10}  {'CTX':6}  {'EXIT':4}  GH-WRITE{chr(27)}[0m")
+    print("  " + "─" * 72)
+    for row in visible:
+        job_id, agent, story_id, status, _enqueued_at, exit_code, ctx_mode, requires_gh_write, verified = row
+        gh_write = "—" if not requires_gh_write else ("✓" if verified == "true" else "✗" if verified == "false" else "?")
+        print(
+            f"  {job_id:14}  {agent:8}  {(story_id or '—')[:12]:12}  "
+            f"{status:10}  {(ctx_mode or '—')[:6]:6}  "
+            f"{str(exit_code) if exit_code is not None else '—':4}  {gh_write}"
+        )
+    return True
+
+
 def main(argv=None) -> None:
     import synlynk as _package
 
@@ -1803,6 +1893,8 @@ def main(argv=None) -> None:
         if "--help" in cli_tokens or selected_command not in _TOP_LEVEL_COMMANDS:
             parser = build_parser(selected_command=selected_command)
             parser.parse_args(cli_tokens)
+        if _run_fast_observability_command(cli_tokens, selected_command):
+            return
         _package._load_legacy_imports()
         _package._FAST_CLI = False
 

@@ -418,7 +418,12 @@ def _format_status_terminal(
     return "\n".join(lines)
 
 
-def cmd_status(db_conn=None, json_output: bool = False) -> str:
+def cmd_status(
+    db_conn=None,
+    json_output: bool = False,
+    *,
+    include_worktree_hint: bool = True,
+) -> str:
     """Print ecosystem status for the current workspace."""
     from synlynk import _get_db, _read_sentinel_alerts, load_config
     from synlynk.capability_watch import capability_sweep_status, is_smoke_test_stale
@@ -444,7 +449,7 @@ def cmd_status(db_conn=None, json_output: bool = False) -> str:
     efficiency = _headless_efficiency_ratio(_load_exec_jobs_from_telemetry())
     sentinels_active = len(_read_sentinel_alerts())
     rates_updated_at = _load_model_rates().get("rates_updated_at")
-    worktree_hint = _worktree_status_hint()
+    worktree_hint = _worktree_status_hint() if include_worktree_hint else None
     reassessment = capability_sweep_status(db_conn)
     output = _format_status_terminal(
         harness_rows,
