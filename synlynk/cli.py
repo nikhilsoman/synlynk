@@ -1795,6 +1795,89 @@ def _command_from_argv(argv):
     return None
 
 
+def _run_fast_observability_command(cli_tokens, selected_command):
+    """Run the two read-only observability commands without legacy imports.
+
+    ``synlynk`` historically populated :mod:`synlynk` with every command
+    implementation before dispatching.  Keep that compatibility path for the
+    full command surface, but let the common jobs/status probes stop after
+    importing only their own implementation modules.
+    """
+    if selected_command not in {"jobs", "status"}:
+        return False
+
+    parser = build_parser(selected_command=selected_command)
+    args = parser.parse_args(cli_tokens)
+
+    if selected_command == "status":
+        if getattr(args, "platform", False) or not getattr(args, "json_output", False):
+            return False
+        import json  # load_config keeps its historical package-level dependency
+
+        sys.modules["synlynk"].json = json
+        from synlynk import _get_db
+        from synlynk.capability_roles import _load_capability_roles
+        from synlynk.sentinel import _read_sentinel_alerts
+        from synlynk.status import cmd_status
+
+        # ``status`` keeps these names late-bound for compatibility with the
+        # package facade; seed only the one helper it needs in fast mode.
+        _package = sys.modules["synlynk"]
+        _package._read_sentinel_alerts = _read_sentinel_alerts
+        _package._load_capability_roles = _load_capability_roles
+        conn = _get_db(read_only=True)
+        try:
+            cmd_status(
+                db_conn=conn,
+                json_output=args.json_output,
+                include_worktree_hint=False,
+            )
+        finally:
+            conn.close()
+        return True
+
+    # Handoff/reap/summary/stalled have side effects or legacy file-backed
+    # behavior; leave those forms on the established compatibility path.
+    if (
+        getattr(args, "jobs_cmd", None) is not None
+        or getattr(args, "summary", None)
+        or getattr(args, "stalled", False)
+        or getattr(args, "watch", False)
+    ):
+        return False
+
+    # The established jobs command reconciles the legacy jobs.json ledger as
+    # well as daemon_jobs.  Keep that path whenever either source contains
+    # data; the fast renderer is only safe for an entirely empty workspace.
+    if os.path.exists(os.path.join(".synlynk", "jobs.json")):
+        return False
+
+    from synlynk import _get_db
+
+    conn = _get_db(migrate=False)
+    try:
+        try:
+            rows = conn.execute(
+                "SELECT job_id, agent, story_id, status, enqueued_at, exit_code, "
+                "context_mode, requires_gh_write, gh_write_verified "
+                "FROM daemon_jobs ORDER BY enqueued_at DESC LIMIT 50"
+            ).fetchall()
+        except Exception:
+            rows = []
+    finally:
+        conn.close()
+
+    if not rows:
+        print("No jobs found. Use `synlynk dispatch <agent> --task <task>` to start one.")
+        return True
+
+    # Non-empty daemon ledgers still need the established reconciliation and
+    # rendering path so stale PIDs and terminal states are refreshed before
+    # being displayed.
+    return False
+
+
+
 def main(argv=None) -> None:
     import synlynk as _package
 
@@ -1812,6 +1895,8 @@ def main(argv=None) -> None:
         if "--help" in cli_tokens or selected_command not in _TOP_LEVEL_COMMANDS:
             parser = build_parser(selected_command=selected_command)
             parser.parse_args(cli_tokens)
+        if _run_fast_observability_command(cli_tokens, selected_command):
+            return
         _package._load_legacy_imports()
         _package._FAST_CLI = False
 
