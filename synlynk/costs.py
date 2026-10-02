@@ -1070,3 +1070,28 @@ def parse_costs_md() -> tuple:
             except ValueError:
                 continue
     return total_usd, total_requests
+
+def cmd_cost_billing(args=None) -> None:
+    """Show harness subscription billing and amortization configuration."""
+    from synlynk import load_config
+    config = load_config()
+    billing = config.get("harness_billing", {})
+    
+    print("Harness Billing & Subscription Status")
+    print("=====================================")
+    
+    total_fee = 0.0
+    for agent, settings in billing.items():
+        if not isinstance(settings, dict):
+            continue
+        mode = settings.get("payment_mode", "pay_as_you_go")
+        if mode == "subscription":
+            fee = settings.get("monthly_base_fee_usd", settings.get("subscription_fee_usd", 0.0))
+            total_fee += fee
+            print(f"- {agent}: {mode} (${fee:.2f}/mo)")
+        else:
+            print(f"- {agent}: {mode}")
+            
+    print(f"\nTotal Monthly Subscription Fees: ${total_fee:.2f}")
+
+

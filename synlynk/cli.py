@@ -1373,6 +1373,7 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     cost_true_up_parser = cost_sub.add_parser("true-up", help="Reconcile subscription costs for a month")
     cost_true_up_parser.add_argument("--month", default=None, help="Billing month in YYYY-MM format")
     cost_true_up_parser.add_argument("--harness", default=None)
+    cost_billing_parser = cost_sub.add_parser("billing", help="Show harness subscription billing and amortization configuration")
 
     roadmap_parser = subparsers.add_parser("roadmap", help="Manage the roadmap")
     roadmap_sub = roadmap_parser.add_subparsers(dest="roadmap_action")
@@ -2335,6 +2336,9 @@ def main(argv=None) -> None:
         elif args.cost_action == "true-up":
             from synlynk.costs import cmd_cost_true_up
             cmd_cost_true_up(month=args.month, harness=args.harness)
+        elif args.cost_action == "billing":
+            from synlynk.costs import cmd_cost_billing
+            cmd_cost_billing(args)
     elif args.command == "roadmap":
         if args.roadmap_action == "add":
             try:

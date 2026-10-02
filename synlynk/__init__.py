@@ -1102,7 +1102,7 @@ def load_config() -> dict:
         for billing in config["harness_billing"].values():
             if isinstance(billing, dict):
                 billing.setdefault("payment_mode", "pay_as_you_go")
-                billing.setdefault("monthly_base_fee_usd", 0.0)
+                billing.setdefault("monthly_base_fee_usd", billing.get("subscription_fee_usd", 0.0))
                 billing.setdefault("projected_monthly_tokens", 10_000_000)
                 billing.setdefault("allow_extra_usage", False)
                 billing.setdefault("extra_usage_cap_usd", None)
