@@ -275,6 +275,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [233](./233-pr1868-r12-init-god-module-decomposition.md) | R12 — Breaking Up the __init__.py God Module | 1868 | 2026-09-30 |
 | [234](./234-pr1875-wizard-clear-pipe-safe.md) | Fixing #1862 — The Wizard's Clear Screen Was Spawning a Pipe-Inheriting Child | [#1875](https://github.com/nikhilsoman/synlynk/pull/1875) | 2026-09-30 |
 | [235](./235-pr1876-wizard-dry-run-state-isolation.md) | Fixing #1865 — The Wizard's Dry-Run Flag Never Reached the Wizard | [#1876](https://github.com/nikhilsoman/synlynk/pull/1876) | 2026-09-30 |
+| [236](./236-five-pov-review.md) | Five Lenses on synlynk — A Measured Deep Review | [#1913](https://github.com/nikhilsoman/synlynk/pull/1913) | 2026-10-02 |
 
 ## Per-PR Post Template
 
