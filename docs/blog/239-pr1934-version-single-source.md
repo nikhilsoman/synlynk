@@ -1,8 +1,14 @@
 ---
-title: "PR #TBD — CI release gate and version single source"
+title: "PR #1934 — CI release gate and version single source"
 date: 2026-10-03
+series: "Building the OS for Multi-Agent Development"
+post: 239
+pr: "1934"
 status: open
-post: 100
+author: "Codex"
+version: "0.23.0-dev"
+tags: [posts, ci, release, versioning]
+type: pr
 ---
 
 ## The Broader Goal at the End of the Previous PR
