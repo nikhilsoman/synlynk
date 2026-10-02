@@ -60,4 +60,6 @@
 | 2026-10-02 01:45 | codex | gpt-5.6-luna | 796903 | 5234 | $2.4700 | structured_output | story-auto-goal-task-5 | exec: codex job job-14490a9c |
 | 2026-10-02 02:18 | codex | gpt-5.6-luna | 650000 | 5000 | $2.0400 | structured_output | story-auto-goal-task-6 | exec: codex job job-c80288da |
 | 2026-10-02 02:22 | claude | claude-sonnet-4-6 | 72000 | 12000 | $0.4000 | structured_output | story-auto-goal-task-7 | exec: claude job job-5eea7466 |
+| 2026-10-02 02:39 | codex | gpt-5.6-luna | 75000 | 2500 | $0.2500 | structured_output | story-issue-1903 | exec: codex job job-c7c39464 |
+
 
