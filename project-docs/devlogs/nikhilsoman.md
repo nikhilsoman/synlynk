@@ -1901,5 +1901,8 @@ and expensive worktree hint during cold start; the fast jobs path renders the re
 table without importing dispatch/reconciliation modules. Added a subprocess median budget test
 (`tests/test_cli_cold_start.py`) enforcing <150 ms for `jobs --all` and `status --json`.
 Focused verification: 174 passed; cold-start budget test: 2 passed.
+2026-10-03 — Implemented issue #1928: made root `VERSION` the single release source, removed
+runtime/release duplication, updated README metadata, added the required `release-docs` CI gate,
+and added synchronization coverage. Focused tests: 530 passed; `release --check-docs` passes.
 
 [@nikhilsoman]

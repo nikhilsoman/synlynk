@@ -1951,10 +1951,10 @@ def test_permissions_to_flags_agy_warns_on_empty_permissions(capsys):
     assert "no write/run permissions granted" in out
 
 
-def test_permissions_to_flags_agy_write_permissions_keep_skip_flag_without_warning(capsys):
+def test_permissions_to_flags_agy_write_permissions_use_sandbox_without_warning(capsys):
     from synlynk.dispatch import _permissions_to_flags
 
-    assert _permissions_to_flags("agy", ["write:src/"]) == ["--dangerously-skip-permissions"]
+    assert _permissions_to_flags("agy", ["write:src/"]) == ["--sandbox"]
     out = capsys.readouterr().out
     assert out == ""
 
