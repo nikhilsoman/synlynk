@@ -3,10 +3,6 @@
 
 | Date | Agent | Model | Tokens In | Tokens Out | Cost | Source | Story | Notes |
 |---|---|---|---|---|---|---|---|---|
-| 2026-10-01 03:28 | codex | gpt-5.6-luna | 664300 | 5269 | $2.0719 | estimated_token_rate | story-b67bce1b | exec: codex job job-2aa89c... |
-| 2026-10-01 03:37 | codex | o4-mini | 5000 | 2000 | $0.0450 | estimated_tshirt | story-b67bce1b | exec: codex job job-fe3bc1... |
-| 2026-10-01 06:32 | codex | o4-mini | 5000 | 2000 | $0.0450 | estimated_tshirt | story-issue-1893 | exec: codex job job-3e60d4... |
-| 2026-10-01 08:19 | codex | gpt-5.6-luna | 804051 | 6815 | $2.5144 | estimated_token_rate | story-adhoc-1790822819 | exec: codex job job-38de17... |
 | 2026-10-01 08:22 | agy | unknown | 49008 | 8159 | $0.2694 | estimated_token_rate | story-adhoc-1790823068 | exec: agy job job-55cee61c |
 | 2026-10-01 08:25 | claude | claude-sonnet-4-6 | 56293 | 6628 | $0.2683 | estimated_token_rate | story-adhoc-1790823236 | exec: claude job job-62dad... |
 | 2026-10-01 08:37 | grok | grok-3 | 64792 | 22885 | $0.5377 | estimated_token_rate | story-adhoc-1790823792 | exec: grok job job-550979c... |
@@ -53,13 +49,17 @@
 | 2026-10-02 14:25 | claude | claude-sonnet-4-6 | 5000 | 2000 | $0.0174 [sub] (API: $0.0450) | estimated_tshirt | story-v024-t11-e2e-verification | exec: claude job job-317f4... |
 | 2026-10-02 14:28 | codex | o4-mini | 489114 | 5062 | $0.0236 [sub] (API: $1.5433) | estimated_token_rate | story-9cbe4cf7 | exec: codex job job-c447e5... |
 | 2026-10-02 14:44 | codex | o4-mini | 489114 | 5062 | $0.0236 [sub] (API: $1.5433) | estimated_manual | story-9cbe4cf7 | Ghost issue burndown: closed 25 remediated issues on GitHub via synlynk-dev |
+| 2026-10-02 15:44 | codex | o4-mini | 432965 | 3326 | $0.0208 [sub] (API: $1.3488) | estimated_token_rate | story-ab44c45c | exec: codex job job-e9256d... |
+| 2026-10-02 15:44 | codex | o4-mini | 82307 | 1022 | $0.0040 [sub] (API: $0.2623) | estimated_token_rate | story-e332c8ea | exec: codex job job-8638fd... |
+| 2026-10-02 15:45 | codex | o4-mini | 801223 | 4612 | $0.0385 [sub] (API: $2.4728) | estimated_token_rate | story-294a855a | exec: codex job job-c3a535... |
+| 2026-10-02 15:46 | codex | o4-mini | 1095363 | 8166 | $0.0527 [sub] (API: $3.4086) | estimated_token_rate | story-8dadb376 | exec: codex job job-bfc336... |
 
 ## Subscription Amortization & Dual-Ledger Summary
 
 | Harness | Base Fee | Actual Amortized Spend | API Equivalent Value | Net Savings |
 |---|---|---|---|---|
 | claude | $20.00 | $14.6364 | $18.6850 | $4.0486 |
-| codex | $20.00 | $0.0472 | $3.0865 | $3.0393 |
+| codex | $20.00 | $0.1633 | $10.5790 | $10.4157 |
 | agy | $20.00 | $0.0000 | $0.0000 | $0.0000 |
 | grok | $30.00 | $0.0000 | $0.0000 | $0.0000 |
-| **Total** | **$90.00** | **$14.6836** | **$21.7715** | **$7.0879** |
+| **Total** | **$90.00** | **$14.7997** | **$29.2640** | **$14.4642** |
