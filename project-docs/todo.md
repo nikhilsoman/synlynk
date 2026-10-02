@@ -1620,6 +1620,10 @@ Submit approval via 'gh pr review 1903 --appro [testing] <!-- id:story-issue-190
 - [x] Review and merge PR #1905: circuit breaker clean-exit preservation & quad-harness subscription dual-ledger (LIVE-19, LIVE-20) [testing] <!-- id:story-c5cb22f7 -->
 - [x] Review and merge PR #1906: 15-minute field trials documentation [backend] <!-- id:story-e5f2381b -->
 - [x] Ghost Issue Burndown: verify and close ~24 remediated issues on GitHub [backend] <!-- id:story-9cbe4cf7 -->
+- [x] fix: synlynk scan agent-file detection omits GROK.md (#341) [testing] <!-- id:story-ab44c45c -->
+- [x] docs: fill GROK.md domain ownership and instruction placeholders (#345) [docs] <!-- id:story-e332c8ea -->
+- [x] fix: GEMINI.md stale prose and cross-contaminated harness flags (#344) [docs] <!-- id:story-294a855a -->
+- [x] fix: Vizor Effort & Cost stage constants and progress bar CSS overlap (#263) [frontend] <!-- id:story-8dadb376 -->
 - [x] Implement Task 1: Tri-Modal Autonomy Dial & Stage Gating [backend] <!-- id:story-v024-t01-autonomy-dial -->
 - [x] Implement Task 2: Sovereign Board Governance & Ed25519 Proposal Gates [security] <!-- id:story-v024-t02-board-governance -->
 - [x] Implement Task 3: Vizor Boardroom HUD Backend & Template [frontend] <!-- id:story-v024-t03-boardroom-hud -->
