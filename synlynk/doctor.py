@@ -978,6 +978,33 @@ def _hc_memory_leak() -> HealthCheck:
         return HealthCheck("memory_leak", "warn", f"Memory leak check unavailable: {exc}")
 
 
+def _hc_daemon_service() -> HealthCheck:
+    """Checks whether synlynk daemon is installed under OS process supervision (launchd/systemd)."""
+    home = os.path.expanduser("~")
+    if sys.platform == "darwin":
+        plist_path = os.path.join(home, "Library", "LaunchAgents", "com.synlynk.daemon.plist")
+        if os.path.exists(plist_path):
+            return HealthCheck("daemon_service", "ok", f"Daemon launchd service installed: {plist_path}")
+        return HealthCheck(
+            "daemon_service",
+            "warn",
+            "Synlynk daemon is not registered as a background system service (launchd)",
+            fix="Run 'synlynk daemon --install-service' to supervise daemon across crashes/reboots",
+        )
+    elif shutil.which("systemctl") or os.path.exists("/run/systemd/system"):
+        unit_path = os.path.join(home, ".config", "systemd", "user", "synlynk-daemon.service")
+        if os.path.exists(unit_path):
+            return HealthCheck("daemon_service", "ok", f"Daemon systemd service installed: {unit_path}")
+        return HealthCheck(
+            "daemon_service",
+            "warn",
+            "Synlynk daemon is not registered as a background system service (systemd)",
+            fix="Run 'synlynk daemon --install-service' to supervise daemon across crashes/reboots",
+        )
+    else:
+        return HealthCheck("daemon_service", "ok", "Daemon supervision check not applicable for this environment")
+
+
 HEALTH_CHECKS = [
     _hc_python_version,
     _hc_project_init,
@@ -1002,6 +1029,7 @@ HEALTH_CHECKS = [
     _hc_capability_reassessment,
     _hc_spof_audit,
     _hc_memory_leak,
+    _hc_daemon_service,
 ]
 
 

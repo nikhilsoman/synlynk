@@ -231,6 +231,7 @@ class WatchDaemon:
             self._await_child_pidfile()
             if self._is_running():
                 print(self._started_message)
+                print("    Tip: run 'synlynk daemon --install-service' so this survives a crash/reboot.")
             else:
                 print(f"  ⚠ Failed to start daemon (check {os.path.basename(self.logfile)} for errors).", file=sys.stderr)
         finally:
@@ -1129,6 +1130,7 @@ class SynlynkDaemon(WatchDaemon):
             if os.path.exists(self.pidfile):
                 os.remove(self.pidfile)
             print("  ✦ synlynk daemon not running")
+            print("    Tip: run 'synlynk daemon --install-service' to supervise and auto-start across reboots.")
             return
         with open(self.pidfile) as f:
             pid = int(f.read().strip())
