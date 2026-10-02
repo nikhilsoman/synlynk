@@ -1131,6 +1131,10 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
         help="Bypass harness preflight checks"
     )
     dispatch_parser.add_argument(
+        "--dangerously-skip-permissions", action="store_true", dest="skip_permissions",
+        help="Explicitly bypass harness permission prompts (unsafe; opt-in only)",
+    )
+    dispatch_parser.add_argument(
         "--base", default=None,
         help="Explicit base branch/ref to anchor the job worktree to (overrides auto-stacking)"
     )
@@ -2221,6 +2225,7 @@ def main(argv=None) -> None:
                                  requires=getattr(args, "requires", []),
                                  context_mode=getattr(args, "context_mode", "task"),
                                  skip_preflight=getattr(args, "skip_preflight", False),
+                                 skip_permissions=getattr(args, "skip_permissions", False),
                                  base=getattr(args, "base", None),
                                  grants=getattr(args, "grant", []),
                                  revokes=getattr(args, "revoke", []),
