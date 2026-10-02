@@ -276,7 +276,8 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [234](./234-pr1875-wizard-clear-pipe-safe.md) | Fixing #1862 — The Wizard's Clear Screen Was Spawning a Pipe-Inheriting Child | [#1875](https://github.com/nikhilsoman/synlynk/pull/1875) | 2026-09-30 |
 | [235](./235-pr1876-wizard-dry-run-state-isolation.md) | Fixing #1865 — The Wizard's Dry-Run Flag Never Reached the Wizard | [#1876](https://github.com/nikhilsoman/synlynk/pull/1876) | 2026-09-30 |
 | [236](./236-five-pov-review.md) | Five Lenses on synlynk — A Measured Deep Review | [#1913](https://github.com/nikhilsoman/synlynk/pull/1913) | 2026-10-02 |
-| [237](./237-decide-panel-roadmap.md) | Convening the Panel on Our Own Review | TBD | 2026-10-02 |
+| [237](./237-decide-panel-roadmap.md) | Convening the Panel on Our Own Review | [#1919](https://github.com/nikhilsoman/synlynk/pull/1919) | 2026-10-02 |
+| [238](./238-decide-panel-roadmap-fidelity-fix.md) | The Synthesis Lost Detail the Panel Actually Gave Us | TBD | 2026-10-03 |
 
 ## Per-PR Post Template
 

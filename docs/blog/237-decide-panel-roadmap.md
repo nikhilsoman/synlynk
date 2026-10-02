@@ -3,7 +3,7 @@ title: "Convening the Panel on Our Own Review"
 date: 2026-10-02
 series: "Building the OS for Multi-Agent Development"
 post: 237
-pr: "TBD"
+pr: "1919"
 status: published
 author: "synlynk team"
 version: "0.23.0-dev"
