@@ -183,3 +183,15 @@ def test_verification_cmd_success_returns_completed(temp_git_repo):
     assert result.verified is True
     assert result.status == STATUS_COMPLETED
     assert result.tests_passed is True
+
+
+def test_structured_completion_overrides_nonzero_wrapper_exit():
+    from synlynk.verify_effects import verify_job_effects
+
+    result = verify_job_effects(
+        task_class="analysis",
+        exit_code=17,
+        structured_telemetry={"available": True, "completed": True},
+    )
+    assert result.verified is True
+    assert result.status == STATUS_COMPLETED
