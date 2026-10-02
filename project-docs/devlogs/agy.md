@@ -1,6 +1,6 @@
 # Agy Devlog
 
-## 2026-10-02 — Autonomous Repo Intelligence & Goal-Forming Engine (Tasks 1–7 Complete)
+## 2026-10-02 — Autonomous Repo Intelligence & Goal-Forming Engine (Shipped & Merged in PR #1903)
 
 ### Shipped & Verified Across Fleet
 - **Spec & Implementation Plan Committed:**
@@ -14,8 +14,10 @@
   - **Task 5 (Memorable Vizor Port Hunting Ladder):** Dispatched to `codex` (`job-14490a9c`, `559d1cdb`). Added `MEMORABLE_VIZOR_PORTS = [33333, 44444, 55555, 22222, 11111]` with sequential hunting and legacy fallback in `synlynk/viz.py`, verified in `tests/test_vizor_memorable_ports.py` (5/5 passing) and `tests/test_viz.py` (44/44 passing).
   - **Task 6 (LIVE-21 Remediation — Auto-Probe in Onboarding & Defensive Dispatch Gate):** Dispatched to `codex` (`job-c80288da`, `350f7be4`). Auto-probes configured harnesses in `init()` and added defensive inline auto-probe in `_preflight_dispatch()`, verified in `tests/test_onboarding_autoprobe.py` (2/2 passing) and `tests/test_dispatch.py` (158/158 passing). Resolves issue #1901.
   - **Task 7 (CLI Integration & End-to-End Verification):** Dispatched to `claude` (`job-5eea7466`, `9b13c52f`). Added `synlynk brainstorm` and `synlynk brief` CLI subcommands in `synlynk/cli.py`, added `tests/test_autonomous_goal_forming_e2e.py` (6/6 passing).
-- **Verification:** Full 42-test epic suite passing (42/42 green) in 6.73s.
-- **Hygiene:** All job worktrees cleanly pruned, branch `feat/agy/autonomous-repo-intelligence-and-goal-forming` ready for PR.
+- **Taxonomy & Docs Parity:** Registered `brainstorm` and `brief` in `synlynk/taxonomy.py` (`daa149a0`) and regenerated documentation via `generate_command_docs.py` (`af2dcb64`).
+- **PR Review & Merge:** PR #1903 approved by QA reviewer (`job-c7c39464`) and squash-merged into `main` (`4574cb6c`).
+- **Verification:** 49/49 feature tests passing; 6/6 GitHub Actions CI matrix checks green.
+- **Hygiene:** All worktrees cleaned up, branch pruned, costs logged in `project-docs/costs.md`.
 [@agy, @nikhilsoman]
 
 ## 2026-10-01 — Zero-Risk Packaging & Standalone Distribution Engine (Tasks 1–7 Complete)
