@@ -3,7 +3,7 @@ title: "Five Lenses on synlynk — A Measured Deep Review"
 date: 2026-10-02
 series: "Building the OS for Multi-Agent Development"
 post: 236
-pr: "TBD"
+pr: "1913"
 status: published
 author: "synlynk team"
 version: "0.25.0"
