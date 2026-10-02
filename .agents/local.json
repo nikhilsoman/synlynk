@@ -2,10 +2,27 @@
   "name": "local",
   "endpoint": "http://127.0.0.1:8000",
   "models": [
-    {"id": "Ornith-1.0-9B-4bit", "pinned": true, "edit_format": "diff"},
-    {"id": "Qwen3.6-27B-4bit", "pinned": false, "edit_format": "whole"},
-    {"id": "gemma-coder", "pinned": false, "edit_format": "diff"}
+    {
+      "id": "Ornith-1.0-9B-4bit",
+      "pinned": false,
+      "edit_format": "diff",
+      "tier": ["8gb-light", "16gb-default"]
+    },
+    {
+      "id": "Qwen3.6-27B-4bit",
+      "pinned": false,
+      "edit_format": "whole",
+      "tier": ["64gb-fleet"]
+    },
+    {
+      "id": "Ternary-Bonsai-2-27B-mlx-2bit",
+      "pinned": false,
+      "edit_format": "diff",
+      "loader": "prism-ml",
+      "tier": ["32gb-pro", "64gb-fleet"]
+    }
   ],
-  "hardware_tier": "16gb-default",
+  "hardware_tier": "32gb-pro",
+  "pinned_model": "Ternary-Bonsai-2-27B-mlx-2bit",
   "max_concurrent": 1
 }
