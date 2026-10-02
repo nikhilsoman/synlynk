@@ -3209,6 +3209,8 @@ def init(force: bool = False, agents: list = None,
         if len(functional) >= 3:
             print(f"    {_CYAN}synlynk run --trio --task \"your task\"{_RESET}  "
                   f"← runs {agent_names} in parallel")
+    print(f"\n  Background Supervision:")
+    print(f"    {_CYAN}synlynk daemon --install-service{_RESET}  ← supervise daemon across reboots (launchd/systemd)")
     print(f"\n  Next: {_DIM}synlynk status  ·  synlynk jobs  ·  synlynk dispatch --help{_RESET}\n")
 
 # --- module extractions (backwards compat) ---
