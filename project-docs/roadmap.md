@@ -275,27 +275,27 @@ Worktree lifecycle cleanup (#1886), daemon service auto-install prompt (#1883), 
 - [ ] Ghost Issue Burndown (~25 remediated issues closed) (P1)
   Systematically verify and close issues already fixed by recent PRs
 
-## v0.24.0 — The Autonomous Platform, Boardroom & Concierge [planned] (target: 2026-10-12)
+## v0.24.0 — The Autonomous Platform, Boardroom & Concierge [shipped] (target: 2026-10-12)
 
 Self-management core, Board governance, Jev AST decisioning, swarms, concierge, and turnkey add-ons
 
-- [ ] Tri-Modal Autonomy Dial (manual/supervised/autonomous) (P0)
+- [x] Tri-Modal Autonomy Dial (manual/supervised/autonomous) (P0) <!-- story:story-v024-t01-autonomy-dial -->
   Seamless switching across CLI, Vizor toggle, and local config
-- [ ] Board Governance Protocol & Vizor Boardroom HUD (P0)
+- [x] Board Governance Protocol & Vizor Boardroom HUD (P0) <!-- story:story-v024-t02-board-governance -->
   Nikhil Soman as Genesis Sponsor with veto power and milestone approval gates
-- [ ] Executable Agent Charters & Authority Matrix (P0)
+- [x] Executable Agent Charters & Authority Matrix (P0) <!-- story:story-v024-t04-agent-charters -->
   Machine-readable charters in .synlynk/charters/ defining autonomous operating bounds
-- [ ] Jev Sub-20ms AST Decision Model (#1712) (P0)
+- [x] Jev Sub-20ms AST Decision Model (#1712) (P0) <!-- story:story-v024-t05-jev-engine -->
   Offline graph topological routing and merge gating before model dispatch
-- [ ] Parallel Worktree Swarms Engine (P1)
+- [x] Parallel Worktree Swarms Engine (P1) <!-- story:story-v024-t06-swarm-engine -->
   Concurrent multi-agent execution DAGs with zero lock collisions
-- [ ] The Concierge Agent (synlynk concierge) (P1)
+- [x] The Concierge Agent (synlynk concierge) (P1) <!-- story:story-v024-t07-concierge-agent -->
   Interactive feature ingress guide synthesizing structured GitHub issues and proposals
-- [ ] Turnkey Plug & Play Add-ons Engine (synlynk addon) (P1)
+- [x] Turnkey Plug & Play Add-ons Engine (synlynk addon) (P1) <!-- story:story-v024-t08-addon-bundles -->
   Pre-vetted bundles for quality, security, and observability
-- [ ] Extended BYOK Product Registry (.synlynk/registry.json) (P1)
+- [x] Extended BYOK Product Registry (.synlynk/registry.json) (P1) <!-- story:story-v024-t09-byok-registry -->
   Configurable integration surface with encrypted local secrets vault
-- [ ] Autonomous Maintainer Zero-Issue Burndown Driver (P1)
+- [x] Autonomous Maintainer Zero-Issue Burndown Driver (P1) <!-- story:story-v024-t10-maintainer-burndown -->
   Continuous sweeping of open GitHub issues, driving open bugs to zero
 
 ## v0.25.0 — Sovereign Silicon: Local oMLX Fleet [planned] (target: 2026-10-22)
