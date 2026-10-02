@@ -1612,3 +1612,8 @@ If reviewer identity allows approval, submit a [testing] <!-- id:story-issue-189
 Run 'synlynk pr check --pr 1903'.
 Run 'synlynk policy check-merge --role qa'.
 Submit approval via 'gh pr review 1903 --appro [testing] <!-- id:story-issue-1903 -->
+- [ ] Implement Task 1 of LIVE-19: Circuit Breaker Clean-Exit Preservation & Ceiling Calibration [backend] <!-- id:story-abc3923f -->
+- [ ] Implement Task 2 of LIVE-19: Jobs Reconciliation Observer-Effect Elimination [backend] <!-- id:story-6f88ef62 -->
+- [ ] Implement Task 3 of LIVE-20: Quad-Harness Subscription Configuration & harness_billing Seed [backend] <!-- id:story-741f9192 -->
+- [ ] Implement Task 4 of LIVE-20: Dual-Ledger Markdown Generation & Monthly Amortization Rollup [backend] <!-- id:story-73e0a8e5 -->
+- [ ] Implement Task 5 of LIVE-19 & LIVE-20: End-to-End Integration, True-Up & Regression Verification [testing] <!-- id:story-b907ad30 -->
