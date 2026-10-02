@@ -337,7 +337,10 @@ def _is_git_worktree() -> bool:
 
 # Resolve once at import time so ordinary test doubles for subprocess calls do
 # not accidentally change DB-path safety decisions mid-test.
-_INITIAL_GIT_WORKTREE = _is_git_worktree()
+# The linked-worktree guard only protects pytest from accidentally touching the
+# shared product ledger.  The CLI fast path has no pytest state to isolate and
+# must not pay for two git subprocesses before a read-only command starts.
+_INITIAL_GIT_WORKTREE = False if _FAST_CLI else _is_git_worktree()
 
 
 def _test_isolation_db_path() -> str:
