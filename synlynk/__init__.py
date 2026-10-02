@@ -995,6 +995,39 @@ def _docs_dir() -> str:
     return "project-docs"
 
 
+_DEFAULT_HARNESS_BILLING = {
+    "claude": {
+        "payment_mode": "subscription",
+        "monthly_base_fee_usd": 20.0,
+        "projected_monthly_tokens": 10_000_000,
+        "allow_extra_usage": False,
+    },
+    "codex": {
+        "payment_mode": "subscription",
+        "monthly_base_fee_usd": 20.0,
+        "projected_monthly_tokens": 10_000_000,
+        "allow_extra_usage": False,
+    },
+    "agy": {
+        "payment_mode": "subscription",
+        "monthly_base_fee_usd": 20.0,
+        "projected_monthly_tokens": 10_000_000,
+        "allow_extra_usage": False,
+    },
+    "grok": {
+        "payment_mode": "subscription",
+        "monthly_base_fee_usd": 30.0,
+        "projected_monthly_tokens": 10_000_000,
+        "allow_extra_usage": False,
+    },
+}
+
+
+def _default_harness_billing() -> dict:
+    """Return an independent copy of the standard quad-harness billing seed."""
+    return {agent: dict(config) for agent, config in _DEFAULT_HARNESS_BILLING.items()}
+
+
 def load_config() -> dict:
     """Loads .synlynk/config.json with schema-v1 defaults."""
     capability_roles = _load_capability_roles()
@@ -1025,7 +1058,7 @@ def load_config() -> dict:
         "review_stall_timeout_minutes": 90,
         "agents": {},
         "payment_models": {},
-        "harness_billing": {},
+        "harness_billing": _default_harness_billing(),
         "capability_sweep": {"cost_cap_usd": 10.0},
         "roles": capability_roles if capability_roles is not None else _default_roles_map(),
         "story_classification": {"method": "heuristic"},
@@ -1041,9 +1074,14 @@ def load_config() -> dict:
     try:
         with open(config_file) as f:
             config = json.load(f)
+        has_harness_billing = "harness_billing" in config
         for key, val in defaults.items():
             if key not in config:
-                config[key] = val
+                # Existing project configs retain legacy pay-as-you-go behavior
+                # unless they explicitly opt into the seeded harness billing
+                # block.  A brand-new config still gets the quad-harness seed
+                # through ``defaults`` above.
+                config[key] = {} if key == "harness_billing" else val
         if capability_roles is not None:
             config["roles"] = capability_roles
         elif "roles" not in config:
@@ -1058,7 +1096,9 @@ def load_config() -> dict:
             if key not in config.get("nudges", {}):
                 config.setdefault("nudges", {})[key] = val
         if not isinstance(config.get("harness_billing"), dict):
-            config["harness_billing"] = {}
+            config["harness_billing"] = _default_harness_billing()
+        elif not config["harness_billing"] and has_harness_billing:
+            config["harness_billing"] = _default_harness_billing()
         for billing in config["harness_billing"].values():
             if isinstance(billing, dict):
                 billing.setdefault("payment_mode", "pay_as_you_go")

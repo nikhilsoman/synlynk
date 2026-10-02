@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "budget": {
+    "limit_usd": 10.0,
+    "limit_requests": 100
+  },
+  "harness_billing": {
+    "claude": {
+      "payment_mode": "subscription",
+      "monthly_base_fee_usd": 20.0,
+      "projected_monthly_tokens": 10000000,
+      "allow_extra_usage": false
+    },
+    "codex": {
+      "payment_mode": "subscription",
+      "monthly_base_fee_usd": 20.0,
+      "projected_monthly_tokens": 10000000,
+      "allow_extra_usage": false
+    },
+    "agy": {
+      "payment_mode": "subscription",
+      "monthly_base_fee_usd": 20.0,
+      "projected_monthly_tokens": 10000000,
+      "allow_extra_usage": false
+    },
+    "grok": {
+      "payment_mode": "subscription",
+      "monthly_base_fee_usd": 30.0,
+      "projected_monthly_tokens": 10000000,
+      "allow_extra_usage": false
+    }
+  }
+}
