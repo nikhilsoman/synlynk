@@ -2885,7 +2885,7 @@ def test_version_matches_module(project_dir):
 
 
 def test_pyproject_version_matches_module(project_dir):
-    """pyproject.toml should source version dynamically from synlynk.VERSION."""
+    """pyproject.toml should source version dynamically from VERSION."""
     import re
 
     repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -2894,12 +2894,23 @@ def test_pyproject_version_matches_module(project_dir):
         pytest.skip("pyproject.toml not present")
     text = open(toml_path).read()
     assert re.search(r'^\s*dynamic\s*=\s*\["version"\]', text, re.MULTILINE)
-    assert re.search(
-        r'^\s*version\s*=\s*\{\s*attr\s*=\s*"synlynk\.VERSION"\s*\}',
-        text,
-        re.MULTILINE,
-    )
+    assert re.search(r'^\s*version\s*=\s*\{\s*file\s*=\s*\["VERSION"\]\s*\}', text, re.MULTILINE)
     assert not re.search(r'^\s*version\s*=\s*"[^"]+"\s*$', text, re.MULTILINE)
+
+
+def test_version_source_drives_runtime_and_release_files():
+    """All release-facing version files must derive from root VERSION."""
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    source_version = (root / "VERSION").read_text(encoding="utf-8").strip()
+    assert synlynk.VERSION == source_version
+    assert synlynk.__version__ == source_version
+    readme = (root / "README.md").read_text(encoding="utf-8")
+    assert f"badge/version-{source_version}-blue" in readme
+    assert f"**v{source_version}:**" in readme
+    assert "VERSION = \"" not in (root / "synlynk" / "_constants.py").read_text(encoding="utf-8")
+    assert "VERSION = \"" not in (root / "synlynk" / "__init__.py").read_text(encoding="utf-8")
 
 
 def test_main_entrypoint_importable():

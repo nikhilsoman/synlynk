@@ -2696,24 +2696,9 @@ merged: YYYY-MM-DD (or status: open)
         print(stub_content.strip())
         print("\n--------------------------------")
     else:
-        # Write VERSION file
+        # Write the single canonical VERSION source.
         with open(version_path, "w") as f:
             f.write(next_version + "\n")
-            
-        # Write to synlynk/__init__.py and synlynk/_constants.py VERSION if they exist
-        for target_module in ("__init__.py", "_constants.py"):
-            target_path = os.path.join(root, "synlynk", target_module)
-            if os.path.exists(target_path):
-                with open(target_path, "r") as f:
-                    content = f.read()
-                new_content = re.sub(
-                    r'^VERSION\s*=\s*".*"',
-                    f'VERSION = "{next_version}"',
-                    content,
-                    flags=re.MULTILINE
-                )
-                with open(target_path, "w") as f:
-                    f.write(new_content)
 
         # Prepend to CHANGELOG.md (create if missing)
         if os.path.exists(changelog_path):
