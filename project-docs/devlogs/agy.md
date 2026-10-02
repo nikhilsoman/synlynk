@@ -80,6 +80,7 @@
 [@agy, @nikhilsoman]
 
 ## 2026-10-01 — Unified Onboarding Journeys & Self-Updating Lifecycle Engine (Tasks 1–9 Complete)
+## 2026-10-01 — Unified Onboarding Journeys & Self-Updating Lifecycle Engine (Tasks 1–9 Complete, PR #1894 Merged)
 
 ### Shipped & Verified Across Fleet
 - **Spec, Decisions & Implementation Plan Committed:**
@@ -96,8 +97,12 @@
   - **Task 7 (Vizor REST/SSE APIs & HUD):** Dispatched to `agy` (`job-856a4c93`, `c0425649`). Updated `synlynk/viz.py` with 10-stage HUD stepper, `/w/<slug>/api/onboarding/state`, and `/w/<slug>/api/onboarding/topology/confirm`.
   - **Task 8 (TUI Surface Integration):** Dispatched to `grok` (`job-1d8124f4`, `b56e1a67`). Connected `cmd_wizard_init` in `synlynk/wizard.py` to the state machine with headless non-interactive mode.
   - **Task 9 (End-to-End Matrix):** Dispatched to `claude` (`job-754f3d79`, `232192e4`). Created `tests/test_unified_onboarding_e2e.py` verifying full container and monorepo matrix paths.
-- **Verification:** Full 25-test onboarding verification suite passing (25/25 green).
-- **Hygiene:** All job worktrees cleanly pruned, costs captured in `project-docs/costs.md`, branch `feat/agy/vizor-onboarding-engine` pushed to origin.
+- **Verification & PR Merge:**
+  - Full 25-test onboarding verification suite passing (25/25 green).
+  - Resolved backward-compatibility in `synlynk/viz.py` for legacy 3-view cards alongside 10 lifecycle stages (`2c5d261f`).
+  - All 6 GitHub Actions CI matrix checks green (Python 3.10, 3.12, macOS, EPUBCheck, QA-gate).
+  - PR #1894 reviewed and approved by `qa` role (`synlynk-synlynk-qa[bot]`) and squash-merged into `main` (`1f5a4bab`).
+- **Hygiene:** All job worktrees cleanly pruned, costs captured in `project-docs/costs.md`, `main` branch synchronized.
 [@agy, @nikhilsoman]
 
 ## 2026-09-30 — Vizor Repo-Truth Purge & Native View HUD Shells (Spec 2, Story story-6a18ed23)

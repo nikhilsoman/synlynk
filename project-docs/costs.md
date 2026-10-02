@@ -63,3 +63,9 @@
 | agy | $20.00 | $0.0000 | $0.0000 | $0.0000 |
 | grok | $30.00 | $0.0000 | $0.0000 | $0.0000 |
 | **Total** | **$90.00** | **$14.7997** | **$29.2640** | **$14.4642** |
+| 2026-10-01 10:29 | claude | claude-sonnet-4-6 | 60575 | 8425 | $0.3100 | structured_output | story-adhoc-1790830649 | exec: claude job job-32ed... |
+| 2026-10-01 10:55 | agy | gemini-2.5-pro | 263830 | 20079 | $1.0900 | structured_output | story-adhoc-1790832015 | exec: agy job job-856a... |
+| 2026-10-01 11:03 | grok | grok-4.7 | 157962 | 24780 | $0.8500 | structured_output | story-adhoc-1790832592 | exec: grok job job-1d81... |
+| 2026-10-01 13:57 | claude | claude-sonnet-4-6 | 69462 | 7553 | $0.3200 | structured_output | story-adhoc-1790842507 | exec: claude job job-754f... |
+| 2026-10-01 21:27 | codex | gpt-5.6-luna | 577346 | 5017 | $1.8073 | estimated_token_rate | story-issue-1894 | exec: codex job job-86a4ed... |
+| 2026-10-01 21:39 | agy | gemini-3.7-flash-medium | 126906 | 3629 | $0.4352 | estimated_token_rate | story-issue-1894 | exec: agy job job-e8d62761 |
