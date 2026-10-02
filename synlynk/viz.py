@@ -7454,10 +7454,12 @@ def generate_effort_html(data: dict, port: int) -> str:
       --green: #1a9e5c;
       --gray: #888888;
       --red: #e05;
-      --stage-design: #f39c6b;
-      --stage-plan: #7b8cff;
-      --stage-build: #1a9e5c;
-      --stage-ship: #0d9e87;
+      --stage-goal: #7b8cff;
+      --stage-open: #60a5fa;
+      --stage-visualize: #f39c6b;
+      --stage-execute: #1a9e5c;
+      --stage-release: #0d9e87;
+      --stage-notify: #fbbf24;
       --stage-sustain: #888888;
     }}
     [data-theme="dark"] {{
@@ -7497,7 +7499,7 @@ def generate_effort_html(data: dict, port: int) -> str:
   <script>window.VIZOR_DATA = {data_json}; function checkManifest() {{ return window.VIZOR_DATA; }}</script>
   <header style="height:44px;padding:0 20px;display:flex;align-items:center;gap:20px;background:#fff;border-bottom:1px solid rgba(15,23,42,.10);flex-shrink:0;font-size:13px;font-family:inherit">
     <span style="font-weight:700;color:#142033">💰 Effort & Cost</span>
-    <span style="color:#64748b">Spend by dream, agent, and stage</span>
+    <span style="color:#64748b">Spend by goal, agent, and stage</span>
   </header>
   <main class="shell">
     <section class="empty">
@@ -7523,7 +7525,7 @@ def generate_effort_html(data: dict, port: int) -> str:
         est_pct = (total_usd_estimated / total_usd * 100.0) if total_usd else 0.0
         cards = [
             ("Total Spend", _fmt_usd(total_usd)),
-            ("Dreams In Flight", str(dreams_in_flight)),
+            ("ACTIVE GOALS", str(dreams_in_flight)),
             ("Over Budget", str(over_budget)),
             ("Top Agent", _svg_text(top_agent)),
             ("~Estimated", f"{_fmt_usd(total_usd_estimated)} ({_fmt_pct(est_pct)})"),
@@ -7535,49 +7537,48 @@ def generate_effort_html(data: dict, port: int) -> str:
 
     def render_bar_chart(rows, title, value_key, color_fn, label_fn, empty_text, max_value=None, estimated_key=None) -> str:
         rows = list(rows)
-        row_count = max(len(rows), 1)
-        svg_height = 54 + row_count * 30
         max_value = max_value or max([float(row.get(value_key) or 0.0) for row in rows] + [0.0]) or 1.0
-        svg_rows = []
+        chart_rows = []
         if rows:
-            for idx, row in enumerate(rows):
+            for row in rows:
                 value = float(row.get(value_key) or 0.0)
                 estimated_val = float(row.get(estimated_key) or 0.0) if estimated_key else 0.0
                 actual_val = max(value - estimated_val, 0.0)
-                y = 18 + idx * 30
                 bar_color = color_fn(row, value)
                 label = label_fn(row, value)
-                actual_width = (actual_val / max_value) * 380 if max_value else 0.0
-                bar_svg = f'<rect x="110" y="{y}" width="{actual_width:.2f}" height="18" rx="9" fill="{bar_color}"></rect>'
+                actual_width = (actual_val / max_value) * 100 if max_value else 0.0
+                estimated_width = (estimated_val / max_value) * 100 if max_value else 0.0
+                bar_html = (
+                    f'<div class="effort-bar-fill" style="width:{actual_width:.2f}%;background:{bar_color};"></div>'
+                )
                 if estimated_val > 0:
-                    est_width = (estimated_val / max_value) * 380 if max_value else 0.0
-                    bar_svg += (
-                        f'<rect x="{110 + actual_width:.2f}" y="{y}" width="{est_width:.2f}" '
-                        f'height="18" fill="{bar_color}" fill-opacity="0.4"></rect>'
+                    bar_html += (
+                        f'<div class="effort-bar-fill effort-bar-estimated" '
+                        f'style="width:{estimated_width:.2f}%;background:{bar_color};"></div>'
                     )
-                svg_rows.append(
-                    f'<text x="0" y="{y + 7}" class="y-label">{_svg_text(row.get("label") or row.get("name") or row.get("key") or "")}</text>'
-                    f'{bar_svg}'
-                    f'<text x="495" y="{y + 7}" text-anchor="end" class="value-label">{_svg_text(label)}</text>'
+                chart_rows.append(
+                    f'<div class="effort-row">'
+                    f'<div class="effort-label">{_svg_text(row.get("label") or row.get("name") or row.get("key") or "")}</div>'
+                    f'<div class="effort-bar-track" aria-hidden="true">{bar_html}</div>'
+                    f'<div class="effort-cost">{_svg_text(label)}</div>'
+                    f'</div>'
                 )
         else:
-            svg_rows.append(f'<text x="250" y="42" text-anchor="middle" class="empty-label">{_svg_text(empty_text)}</text>')
+            chart_rows.append(f'<div class="effort-empty">{_svg_text(empty_text)}</div>')
 
         return f"""
         <section class="panel">
           <div class="panel-head">
             <h2>{_svg_text(title)}</h2>
           </div>
-          <svg viewBox="0 0 500 {svg_height}" aria-label="{_svg_text(title)}">
-            {''.join(svg_rows)}
-          </svg>
+          <div class="effort-chart" aria-label="{_svg_text(title)}">{''.join(chart_rows)}</div>
         </section>
         """
 
     dream_rows = [
         {
-            "label": dream.get("name") or dream.get("id") or "Unnamed dream",
-            "name": dream.get("name") or dream.get("id") or "Unnamed dream",
+            "label": dream.get("name") or dream.get("id") or "Unnamed goal",
+            "name": dream.get("name") or dream.get("id") or "Unnamed goal",
             "value": float(dream.get("cost_total") or 0.0),
             "estimated": float(dream.get("cost_total_estimated") or 0.0),
             "cost_est": dream.get("cost_est"),
@@ -7673,10 +7674,12 @@ def generate_effort_html(data: dict, port: int) -> str:
       --green: #1a9e5c;
       --gray: #888888;
       --red: #e05;
-      --stage-design: #f39c6b;
-      --stage-plan: #7b8cff;
-      --stage-build: #1a9e5c;
-      --stage-ship: #0d9e87;
+      --stage-goal: #7b8cff;
+      --stage-open: #60a5fa;
+      --stage-visualize: #f39c6b;
+      --stage-execute: #1a9e5c;
+      --stage-release: #0d9e87;
+      --stage-notify: #fbbf24;
       --stage-sustain: #888888;
     }}
     [data-theme="dark"] {{
@@ -7754,15 +7757,28 @@ def generate_effort_html(data: dict, port: int) -> str:
       font-size: 18px;
       letter-spacing: -0.02em;
     }}
-    svg {{
-      width: 100%;
-      display: block;
-      overflow: visible;
-      font-size: 12px;
+    .effort-chart {{ display: grid; gap: 12px; }}
+    .effort-row {{
+      display: grid;
+      grid-template-columns: minmax(180px, 1.2fr) minmax(160px, 2fr) minmax(120px, .8fr);
+      align-items: center;
+      gap: 14px;
+      min-width: 0;
     }}
-    .y-label {{ fill: var(--text); font-size: 12px; dominant-baseline: middle; }}
-    .value-label {{ fill: var(--muted); font-size: 12px; dominant-baseline: middle; }}
-    .empty-label {{ fill: var(--muted); font-size: 14px; dominant-baseline: middle; }}
+    .effort-label, .effort-cost {{ min-width: 0; overflow-wrap: anywhere; }}
+    .effort-label {{ color: var(--text); font-size: 12px; line-height: 1.35; }}
+    .effort-cost {{ color: var(--muted); font-size: 12px; text-align: right; }}
+    .effort-bar-track {{
+      display: flex;
+      min-width: 0;
+      height: 18px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: var(--bg);
+    }}
+    .effort-bar-fill {{ height: 100%; flex: 0 0 auto; min-width: 0; }}
+    .effort-bar-estimated {{ opacity: .4; }}
+    .effort-empty {{ color: var(--muted); font-size: 14px; padding: 12px 0; }}
     @media (max-width: 980px) {{
       .summary {{ grid-template-columns: repeat(3, minmax(0, 1fr)); }}
     }}
@@ -7770,6 +7786,8 @@ def generate_effort_html(data: dict, port: int) -> str:
       .wrap {{ width: min(100vw - 20px, 100%); }}
       .summary {{ grid-template-columns: 1fr; }}
       .hero {{ flex-direction: column; align-items: start; }}
+      .effort-row {{ grid-template-columns: 1fr; gap: 6px; }}
+      .effort-cost {{ text-align: left; }}
     }}
   </style>
 </head>
@@ -7779,17 +7797,17 @@ def generate_effort_html(data: dict, port: int) -> str:
     <header class="hero">
       <div>
         <h1>Effort & Cost</h1>
-        <div class="subtle">Workspace spend, dream overruns, and agent allocation at a glance. Faded segments indicate estimated (non-structural) cost.</div>
+        <div class="subtle">Workspace spend, goal overruns, and agent allocation at a glance. Faded segments indicate estimated (non-structural) cost.</div>
       </div>
     </header>
     <section class="summary">{build_summary_cards()}</section>
     {render_bar_chart(
         dream_rows,
-        "By Dream",
+        "By Goal / Milestone",
         "value",
         dream_color,
         dream_label,
-        "No dreams found",
+        "No goals found",
         max_dream_cost,
         estimated_key="estimated",
     )}
