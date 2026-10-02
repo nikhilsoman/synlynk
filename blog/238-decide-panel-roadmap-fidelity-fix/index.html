@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Synthesis Lost Detail the Panel Actually Gave Us | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-2">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Oct 03, 2026</span>
+        
+          <span class="blog-post-pr">PR TBD</span>
+        
+      </div>
+      <h1 class="blog-post-title">The Synthesis Lost Detail the Panel Actually Gave Us</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>PR #1919 synthesized three <code>synlynk decide</code> panel runs into a consolidated architecture
+roadmap, a surface-simplification plan, and a broader-issues remediation plan — the direct
+follow-through on the five-POV review's open questions. The architecture roadmap compressed
+nine distinct improvement opportunities from the review down to seven table rows.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>No code changed here either, and the roadmap's substance doesn't change. What changed is
+fidelity: checking the shipped table against the original nine-item list showed the
+synthesis pass had been too aggressive. Three items — a <code>HarnessAdapter</code> plugin registry for
+third-party harnesses, a CI release-version gate, and an explicit cold-start performance
+budget — were dropped entirely rather than reconciled or deferred. Two more — the
+<code>dispatch_agent</code> pipeline's actual stage shape, and containerized execution for untrusted
+harnesses — survived only as a passing mention, missing the specifics the panel's own
+per-harness responses had given. This is a real lesson about this kind of synthesis step:
+compressing multiple detailed inputs into a short table is exactly where information gets
+silently discarded, and the discard isn't visible unless someone checks the table against
+the raw inputs it claims to summarize.</p>
+<h2>What Shipped</h2>
+<ul>
+<li><code>docs/strategy/2026-10-02-decide-panel-roadmap.md</code>, revised: the architecture roadmap
+table grew from 7 rows to 10, recovered from the session's captured per-harness panel
+output rather than re-running the panel (the original responses were still available).
+<ul>
+<li>Row 5 now names the actual pipeline shape (<code>resolve → authorize → prepare_worktree → spawn → observe → finalize</code>) and the full <code>HarnessAdapter</code> method set (<code>build_cmd()</code>,
+<code>parse_events()</code>, <code>permissions()</code>, <code>detect_quota()</code>, <code>models()</code>), plus the plugin-registry
+detail for third-party harnesses.</li>
+<li>A new row 6, <strong>safe-by-default execution</strong>, separates the permission-default flag flip
+(already covered, in the broader-issues plan) from containerized execution for untrusted
+harnesses (not covered anywhere until now), and cross-references both documents so the
+shared flag change lands once, not twice.</li>
+<li>Row 8 (CLI core/packs split) now names the actual ~15 core commands and the 15–20K LOC
+target instead of a bare direction.</li>
+<li>New rows 9 and 10 restore the CI release gate (tie to the live version-drift issue,
+#1914) and the lazy-import/cold-start performance budget, both previously missing
+entirely.</li>
+<li>The sequencing decision and the cross-cutting note were updated to match the new item
+numbers.</li>
+</ul>
+</li>
+</ul>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>The original panel-decide loop worked end to end — real multi-harness deliberation,
+real synthesis, real committed output. This PR closes the gap between what the panel
+actually said and what the committed document claims it said, which matters more for a
+process meant to be trusted as a planning input than any individual roadmap item does.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>The architecture roadmap and both companion plans are now a complete, faithful
+representation of the five-POV review's findings. The next milestone is unchanged from
+before this patch: ship roadmap items #1+#2 (state/worktree GC and the regen-bug guard)
+first, since they're small, parallel-safe, and stop data loss that has already recurred
+multiple times.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
