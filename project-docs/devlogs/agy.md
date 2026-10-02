@@ -1,5 +1,20 @@
 # Agy Devlog
 
+## 2026-10-02 — Circuit Breaker Clean-Exit Preservation (LIVE-19) & Quad-Harness Subscription Dual-Ledger Cost Reporting (LIVE-20)
+
+### Shipped & Verified Across Fleet
+- **Spec & Implementation Plan Committed:**
+  - `docs/superpowers/specs/2026-10-02-live-19-live-20-circuit-breaker-and-dual-ledger-remediation-design.md` (`d6315fc5`).
+  - Implementation plan `docs/superpowers/plans/2026-10-02-live-19-live-20-circuit-breaker-and-dual-ledger-remediation.md` (`29544f2e`).
+  - Task briefs 1–5 in `.superpowers/sdd/2026-10-02-live-19-live-20-remediation/` (`e7c5ea8f`).
+- **Fleet Execution:**
+  - **Task 1 (Circuit Breaker Clean-Exit Preservation & Ceiling Calibration):** Updated `synlynk/circuit_breaker.py` to evaluate process liveness and only trip when actively killed (`killed=True`), logging telemetry on post-exit limit breaches. Calibrated limits ($15/5M default; $2/500k fast, $10/3M pro, $15/5M reasoning), verified in `tests/test_circuit_breaker_live19.py` (`01ce1dc1`).
+  - **Task 2 (Jobs Reconciliation Observer-Effect Elimination):** Updated `synlynk/jobs.py` (`_reconcile_jobs_unlocked` and `_reconcile_daemon_jobs`) to gate circuit breaker transitions on `cb_res.tripped and cb_res.process_killed`, preserving clean 0 exit codes on completed jobs, verified in `tests/test_jobs_reconcile_live19.py` (`d2d5dd46`).
+  - **Task 3 (Quad-Harness Subscription Configuration & harness_billing Seed):** Configured `.synlynk/config.json` with user's confirmed monthly billing ($20 Claude, $20 Codex, $20 Agy, $30 Grok = $90/mo base). Updated `_default_harness_billing()` and `load_config()`, verified in `tests/test_harness_billing_config.py` (`cc5e5db5`).
+  - **Task 4 (Dual-Ledger Markdown Generation & Monthly Amortization Rollup):** Updated `synlynk/db.py::_generate_costs_md()` with `$actual [sub] (API: $api)` formatting and appended Subscription Amortization & Dual-Ledger Summary section. Added `synlynk cost billing` in `synlynk/costs.py` and `synlynk/cli.py`, updated taxonomy and regenerated command docs, verified in `tests/test_costs_dual_ledger_live20.py` (`d8638a79`).
+  - **Task 5 (End-to-End Integration, True-Up & Regression Verification):** Created `tests/test_live19_live20_e2e.py` verifying full lifecycle worker clean exit under token pressure, true-up reconciliation against $90.00 base, and cost billing output. Full 47-test regression suite green (`fc8d46e9`).
+[@agy, @nikhilsoman]
+
 ## 2026-10-02 — Autonomous Repo Intelligence & Goal-Forming Engine (Shipped & Merged in PR #1903)
 
 ### Shipped & Verified Across Fleet

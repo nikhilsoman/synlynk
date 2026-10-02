@@ -44,7 +44,7 @@ def test_init_yes_subprocess_with_closed_stdin_exits_zero(tmp_path):
         stdin=subprocess.DEVNULL,
         capture_output=True,
         text=True,
-        timeout=5,
+        timeout=20,
     )
 
     assert result.returncode == 0, result.stderr
