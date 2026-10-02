@@ -24,7 +24,7 @@ def test_agent_capability_baselines_exist():
         assert isinstance(caps.get("headless_contract"), dict)
         assert isinstance(caps.get("network_deps"), dict)
     assert synlynk.HARNESS_CAPABILITY_BASELINES["claude"]["non_interactive_flags"] == ["--print"]
-    assert synlynk.HARNESS_CAPABILITY_BASELINES["claude"]["dispatch_flags"]["required_flags"] == ["--dangerously-skip-permissions"]
+    assert synlynk.HARNESS_CAPABILITY_BASELINES["claude"]["dispatch_flags"]["required_flags"] == []
     assert synlynk.HARNESS_CAPABILITY_BASELINES["claude"]["headless_contract"]["non_interactive_flag"] == "--print"
     # Sandbox is enforced via non_interactive_flags (-s workspace-write), not required_flags
     # (required_flags are bare flags with no values; bare --sandbox breaks codex CLI).
@@ -968,18 +968,21 @@ def test_permissions_to_flags_agy_returns_empty_for_no_permissions():
     assert result == []
 
 
-def test_permissions_to_flags_agy_returns_skip_permissions_for_shell():
+def test_permissions_to_flags_agy_defaults_to_sandbox_for_shell():
     from synlynk.dispatch import _permissions_to_flags
 
     result = _permissions_to_flags("agy", ["read:*", "run:shell"])
-    assert result == ["--dangerously-skip-permissions"]
+    assert result == ["--sandbox"]
 
 
-def test_permissions_to_flags_agy_returns_skip_permissions_for_write():
+def test_permissions_to_flags_agy_skip_permissions_requires_explicit_opt_in():
     from synlynk.dispatch import _permissions_to_flags
 
     result = _permissions_to_flags("agy", ["read:*", "write:src/"])
-    assert result == ["--dangerously-skip-permissions"]
+    assert result == ["--sandbox"]
+    assert _permissions_to_flags(
+        "agy", ["read:*", "write:src/"], skip_permissions=True
+    ) == ["--dangerously-skip-permissions"]
 
 
 def test_preflight_allows_agy_dangerously_skip_permissions_flag(tmp_path, monkeypatch):
@@ -4341,7 +4344,7 @@ def test_dispatch_agent_creates_job_entry(project_dir, monkeypatch):
     assert any(j["id"] == job["id"] for j in jobs)
 
 
-def test_dispatch_agent_claude_includes_dangerously_skip_permissions(project_dir, monkeypatch):
+def test_dispatch_agent_claude_uses_scoped_permissions_by_default(project_dir, monkeypatch):
     import synlynk as sl
     captured = {}
 
@@ -4359,7 +4362,30 @@ def test_dispatch_agent_claude_includes_dangerously_skip_permissions(project_dir
 
     sl.dispatch_agent("claude", "implement auth fix", story_id="14")
     shell_cmd = captured["cmd"][2]
-    assert "--dangerously-skip-permissions" in shell_cmd
+    assert "--allowedTools" in shell_cmd
+    assert "--dangerously-skip-permissions" not in shell_cmd
+
+
+def test_dispatch_agent_claude_skip_permissions_is_explicit_opt_in(project_dir, monkeypatch):
+    import synlynk as sl
+    captured = {}
+
+    class FakeProc:
+        pid = 12345
+
+    def fake_popen(cmd, **kw):
+        captured["cmd"] = cmd
+        return FakeProc()
+
+    monkeypatch.setattr(sl.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None: {"passed": True, "sentinel": None, "reason": None})
+    monkeypatch.setattr(sl, "_probe_model_version", lambda *a, **kw: "unknown")
+    monkeypatch.setattr(sl, "generate_context", lambda scope="full", out_path=None: "")
+
+    sl.dispatch_agent(
+        "claude", "implement auth fix", story_id="14", skip_permissions=True
+    )
+    assert "--dangerously-skip-permissions" in captured["cmd"][2]
 
 
 def test_grok_dispatch_uses_always_approve(project_dir, monkeypatch):
@@ -7218,7 +7244,8 @@ def test_dispatch_ready_jobs_creates_worktree_and_applies_dispatch_flags(
     shell = [c for c in captured if c["cmd"] and c["cmd"][0] == "sh"]
     assert len(shell) == 1
     shell_cmd = shell[0]["cmd"][2]
-    assert "--dangerously-skip-permissions" in shell_cmd
+    assert "--dangerously-skip-permissions" not in shell_cmd
+    assert "--allowedTools" in shell_cmd
     assert "--print" in shell_cmd
     assert shell[0]["kwargs"].get("cwd") == expected_wt
 

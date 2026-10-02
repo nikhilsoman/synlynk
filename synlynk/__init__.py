@@ -811,7 +811,7 @@ PROMPTS_DIR = ".synlynk/prompts"
 
 _VERB_MAP_SEED = [
     # (synlynk_verb, category, agent, harness_command, supported, partial_notes)
-    ("dispatch.task",     "dispatch",      "claude", "claude --print {task} --dangerously-skip-permissions", "full", None),
+    ("dispatch.task",     "dispatch",      "claude", "claude --print {task}", "full", None),
     ("dispatch.task",     "dispatch",      "agy",    "agy -p {task}", "full", None),
     ("dispatch.task",     "dispatch",      "grok",   "grok --single {task}", "full", None),
     ("dispatch.task",     "dispatch",      "codex",  "codex exec - -s workspace-write", "full", None),
