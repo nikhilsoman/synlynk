@@ -7,8 +7,7 @@ WORKDIR /install
 # command-line tools used by the local oMLX harness.
 COPY . /src
 RUN pip install --no-cache-dir --prefix=/install/pkg /src \
-    aider-chat \
-    prism-ml
+    aider-chat
 
 # Stage 2: runtime image
 FROM python:3.12-slim AS runtime
