@@ -1,4 +1,5 @@
 import json
+import importlib.util
 import os
 import tempfile
 import unittest
@@ -13,9 +14,49 @@ class TestLocalAgentConfigEditFormat(unittest.TestCase):
         repo_root = Path(__file__).resolve().parents[1]
         with open(repo_root / ".agents" / "local.json") as f:
             config = json.load(f)
-        pinned = next(m for m in config["models"] if m.get("pinned"))
-        self.assertEqual(pinned["id"], "Ornith-1.0-9B-4bit")
-        self.assertEqual(pinned["edit_format"], "diff")
+        self.assertEqual(config["pinned_model"], "Ternary-Bonsai-2-27B-mlx-2bit")
+        ornith = next(m for m in config["models"] if m["id"] == "Ornith-1.0-9B-4bit")
+        self.assertEqual(ornith["edit_format"], "diff")
+
+
+class TestPrismMlCheck(unittest.TestCase):
+    def test_returns_true_when_prism_ml_importable(self):
+        with patch("importlib.util.find_spec", return_value=object()):
+            self.assertTrue(local_agent._check_prism_ml_available())
+
+    def test_returns_false_when_prism_ml_missing(self):
+        with patch("importlib.util.find_spec", return_value=None):
+            self.assertFalse(local_agent._check_prism_ml_available())
+
+
+class TestNewRosterSchema(unittest.TestCase):
+    def test_pinned_model_top_level_key_used_when_present(self):
+        config = {"models": [{"id": "a", "pinned": False}], "pinned_model": "a"}
+        self.assertEqual(local_agent._pinned_model(config), "a")
+
+    def test_falls_back_to_model_pinned_field_when_top_level_absent(self):
+        config = {"models": [{"id": "a", "pinned": True}]}
+        self.assertEqual(local_agent._pinned_model(config), "a")
+
+    def test_bonsai_excluded_when_prism_ml_absent(self):
+        config = {
+            "endpoint": "http://127.0.0.1:8000",
+            "pinned_model": "Ternary-Bonsai-2-27B-mlx-2bit",
+            "models": [
+                {"id": "Ornith-1.0-9B-4bit", "edit_format": "diff"},
+                {"id": "Ternary-Bonsai-2-27B-mlx-2bit", "edit_format": "diff", "loader": "prism-ml"},
+            ],
+        }
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump(config, f)
+            path = f.name
+        try:
+            with patch("importlib.util.find_spec", return_value=None):
+                flags = local_agent._local_dispatch_model_flags(config_path=path)
+        finally:
+            os.unlink(path)
+        self.assertIn("openai/Ornith-1.0-9B-4bit", flags)
+        self.assertNotIn("openai/Ternary-Bonsai-2-27B-mlx-2bit", flags)
 
 
 class TestLoadLocalConfig(unittest.TestCase):

@@ -6,6 +6,7 @@ needs, and the `synlynk local doctor` health-check command. It does not talk to
 Aider or oMLX's chat-completions endpoint directly; Aider does that."""
 
 import json
+import importlib.util
 import os
 import shutil
 import urllib.error
@@ -26,6 +27,11 @@ _DEFAULT_LOCAL_CONFIG = {
 }
 
 
+def _check_prism_ml_available() -> bool:
+    """Returns True if the prism-ml package is importable (needed for Ternary-Bonsai)."""
+    return importlib.util.find_spec("prism_ml") is not None
+
+
 def _load_local_config(path: str = None) -> dict:
     """Reads and parses .agents/local.json. Raises FileNotFoundError if missing."""
     if path is None:
@@ -39,7 +45,9 @@ def _load_local_config(path: str = None) -> dict:
 
 
 def _pinned_model(config: dict) -> str:
-    """Returns the id of the pinned model, or the first roster entry if none pinned."""
+    """Returns the pinned model id, or the first roster entry if none is pinned."""
+    if "pinned_model" in config:
+        return config["pinned_model"]
     for model in config["models"]:
         if model.get("pinned"):
             return model["id"]
@@ -85,7 +93,17 @@ def _local_dispatch_model_flags(config_path: str = None) -> list:
         return []
     endpoint = config["endpoint"]
     model_id = _pinned_model(config)
-    model_entry = next((model for model in config["models"] if model["id"] == model_id), {})
+
+    def _entry_for(mid):
+        return next((model for model in config["models"] if model["id"] == mid), {})
+
+    model_entry = _entry_for(model_id)
+    if model_entry.get("loader") == "prism-ml" and not _check_prism_ml_available():
+        fallback = next((model for model in config["models"] if not model.get("loader")), None)
+        if fallback is None:
+            return []
+        model_id = fallback["id"]
+        model_entry = fallback
     edit_format = model_entry.get("edit_format", "whole")
     return [
         "--openai-api-base", f"{endpoint}/v1",
@@ -120,14 +138,21 @@ def cmd_local_doctor(config_path: str = None) -> int:
     from synlynk.local_agent_seed import seed_local_capability_envelope
     seed_local_capability_envelope(_get_db())
     print("  ✓ starter capability envelope seeded (docs/testing, execute stage)")
-    roster_ids = [model["id"] for model in config["models"]]
     available = set(result["available_models"])
-    missing = [model_id for model_id in roster_ids if model_id not in available]
-    for model_id in roster_ids:
-        mark = "✓" if model_id not in missing else "✗"
-        print(f"  {mark} {model_id}")
+    missing = [model["id"] for model in config["models"] if model["id"] not in available]
+    for model in config["models"]:
+        model_id = model["id"]
+        in_roster = model_id not in missing
+        loader = model.get("loader")
+        loader_ok = True
+        loader_note = ""
+        if loader == "prism-ml":
+            loader_ok = _check_prism_ml_available()
+            loader_note = " [prism-ml: ✓]" if loader_ok else " [prism-ml: ✗ — pip install prism-ml]"
+        mark = "✓" if (in_roster and loader_ok) else ("⚠" if in_roster else "✗")
+        print(f"  {mark} {model_id}{loader_note}")
     if missing:
-        print(f"    Missing models: {', '.join(missing)} — download via oMLX admin panel or CLI")
+        print(f"    Missing from oMLX roster: {', '.join(missing)}")
     aider_missing = shutil.which("aider") is None
     if aider_missing:
         print("  ✗ aider not found on PATH")
