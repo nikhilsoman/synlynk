@@ -9,6 +9,8 @@ import json
 import importlib.util
 import os
 import shutil
+import subprocess as _subprocess
+import sys
 import urllib.error
 import urllib.request
 
@@ -30,6 +32,67 @@ _DEFAULT_LOCAL_CONFIG = {
 def _check_prism_ml_available() -> bool:
     """Returns True if the prism-ml package is importable (needed for Ternary-Bonsai)."""
     return importlib.util.find_spec("prism_ml") is not None
+
+
+_TIER_THRESHOLDS = [
+    (12 * 1024**3, "8gb-light"),
+    (20 * 1024**3, "16gb-default"),
+    (48 * 1024**3, "32gb-pro"),
+    (float("inf"), "64gb-fleet"),
+]
+
+
+def _detect_hardware_tier() -> str:
+    """Detect RAM and return the corresponding local hardware tier.
+
+    Uses ``sysctl`` on macOS and ``/proc/meminfo`` on Linux. Detection
+    failures conservatively fall back to the default tier.
+    """
+    try:
+        if sys.platform == "darwin":
+            raw = _subprocess.check_output(
+                ["sysctl", "-n", "hw.memsize"], timeout=5
+            )
+            ram_bytes = int(raw.strip())
+        else:
+            with open("/proc/meminfo") as meminfo:
+                for line in meminfo:
+                    if line.startswith("MemTotal:"):
+                        ram_bytes = int(line.split()[1]) * 1024
+                        break
+                else:
+                    return "16gb-default"
+    except Exception:
+        return "16gb-default"
+
+    for threshold, tier in _TIER_THRESHOLDS:
+        if ram_bytes < threshold:
+            return tier
+    return "64gb-fleet"
+
+
+def _select_model_for_tier(tier: str, config: dict) -> str:
+    """Return the best available model id for a hardware tier."""
+    candidates = [
+        model for model in config["models"] if tier in model.get("tier", [])
+    ]
+    eligible = [
+        model for model in candidates
+        if not (
+            model.get("loader") == "prism-ml"
+            and not _check_prism_ml_available()
+        )
+    ]
+    if eligible:
+        return eligible[0]["id"]
+
+    fallback = next(
+        (model for model in config["models"] if not model.get("loader")),
+        None,
+    )
+    if fallback:
+        return fallback["id"]
+    return config["models"][0]["id"]
 
 
 def _load_local_config(path: str = None) -> dict:
@@ -112,8 +175,12 @@ def _local_dispatch_model_flags(config_path: str = None) -> list:
     ] + _STARTER_TIER_GUARDRAIL_FLAGS
 
 
-def cmd_local_doctor(config_path: str = None) -> int:
-    """Prints oMLX reachability plus roster status. Returns 0 if healthy, 1 otherwise."""
+def cmd_local_doctor(config_path: str = None, init: bool = False) -> int:
+    """Print oMLX reachability, roster status, and hardware recommendation.
+
+    With ``init=True``, write the detected ``hardware_tier`` and recommended
+    ``pinned_model`` back to the local config.
+    """
     try:
         if config_path is None:
             config_path = _DEFAULT_CONFIG_PATH
@@ -135,6 +202,20 @@ def cmd_local_doctor(config_path: str = None) -> int:
             print("    Start it with: omlx serve")
         return 1
     print(f"  ✓ oMLX reachable at {endpoint}")
+    tier = _detect_hardware_tier()
+    best_model = _select_model_for_tier(tier, config)
+    print(f"  ✓ hardware tier: {tier}")
+    print(f"  ✓ recommended model: {best_model}")
+    if init:
+        config["hardware_tier"] = tier
+        config["pinned_model"] = best_model
+        write_path = config_path or _DEFAULT_CONFIG_PATH
+        with open(write_path, "w") as f:
+            json.dump(config, f, indent=2)
+        print(
+            f"  ✓ wrote hardware_tier={tier!r} and "
+            f"pinned_model={best_model!r} to {write_path}"
+        )
     from synlynk.local_agent_seed import seed_local_capability_envelope
     seed_local_capability_envelope(_get_db())
     print("  ✓ starter capability envelope seeded (docs/testing, execute stage)")

@@ -540,7 +540,15 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
 
     local_parser = subparsers.add_parser("local", help="Manage the local (oMLX) harness")
     local_sub = local_parser.add_subparsers(dest="local_action")
-    local_sub.add_parser("doctor", help="Check oMLX endpoint reachability and model roster")
+    local_doctor_parser = local_sub.add_parser(
+        "doctor", help="Check oMLX endpoint reachability and model roster"
+    )
+    local_doctor_parser.add_argument(
+        "--init",
+        action="store_true",
+        default=False,
+        help="Detect hardware tier and write pinned_model to .agents/local.json",
+    )
 
     models_parser = subparsers.add_parser("models", help="Inspect and discover the model registry")
     models_sub = models_parser.add_subparsers(dest="models_action")
@@ -2641,7 +2649,7 @@ def main(argv=None) -> None:
     elif args.command == "local":
         from synlynk.local_agent import cmd_local_doctor
         if args.local_action == "doctor":
-            sys.exit(cmd_local_doctor())
+            sys.exit(cmd_local_doctor(init=args.init))
         else:
             help_parsers.get("local", parser).print_help()
     elif args.command == "models":
