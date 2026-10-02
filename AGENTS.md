@@ -14,7 +14,9 @@
 ## Domain Ownership
 | Domain | Owned by this agent | Notes |
 |:---|:---|:---|
-| TODO: fill domains for this agent | | |
+| CLI Plumbing & Core Subsystems | synlynk/cli.py, synlynk/dispatch.py, core engine | |
+| Refactoring & Architecture | typing, modular packaging, optimizations | |
+| Testing & Verification Contracts | Pytest suite, Invariant 1 verifications, test fixtures | |
 
 ## Shared synlynk Protocol
 

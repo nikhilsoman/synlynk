@@ -14,7 +14,9 @@
 ## Domain Ownership
 | Domain | Owned by this agent | Notes |
 |:---|:---|:---|
-| TODO: fill domains for this agent | | |
+| Canvas & Frontend Visualizations | synlynk/viz.py, SVG/HTML/JS UI components, interactive HUDs | |
+| Infrastructure & Subprocesses | runners, daemon, packaging, shell runners | |
+| Testing & Diagnostics | browser validation, cross-platform tests | |
 
 ## Shared synlynk Protocol
 
