@@ -3,9 +3,37 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass, field
+from typing import List
 
 from synlynk import _get_db, load_config
 from synlynk.runners.manager import RunnerManager
+
+
+def check_orthogonal_files(touched_lists: List[List[str]]) -> bool:
+    """Return True if no file path appears in more than one touched-files list."""
+    seen = set()
+    for touched in touched_lists:
+        for path in set(touched):
+            if path in seen:
+                return False
+            seen.add(path)
+    return True
+
+
+@dataclass
+class SwarmBatch:
+    batch_id: str
+    task_ids: List[str] = field(default_factory=list)
+    driver: str = "codex"
+    runner_ids: List[str] = field(default_factory=list)
+    status: str = "running"
+    touched_files: List[List[str]] = field(default_factory=list)
+    files_touched_by_task: List[List[str]] = field(default_factory=list)
+
+    @property
+    def is_orthogonal(self) -> bool:
+        return check_orthogonal_files(self.touched_files or self.files_touched_by_task)
 
 
 def _manager():
