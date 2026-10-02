@@ -1736,6 +1736,17 @@ def _enforce_job_effect_verification(job: dict, git_state: Optional[dict], senti
             "expect_author": job.get("gh_write_author"),
         }
     from synlynk.verify_effects import verify_job_effects
+    structured = None
+    parse_telemetry = _pkg("parse_dispatch_telemetry")
+    log_path = job.get("log_file") or job.get("log_path")
+    if parse_telemetry and log_path and os.path.exists(log_path):
+        try:
+            with open(log_path) as log_handle:
+                telemetry = parse_telemetry(log_handle.read(), agent=job.get("agent", ""))
+            if telemetry is not None:
+                structured = telemetry.__dict__
+        except (OSError, AttributeError):
+            structured = None
     effect_res = verify_job_effects(
         worktree_path=job.get("worktree_path"),
         base_sha=job.get("base_sha"),
@@ -1747,6 +1758,7 @@ def _enforce_job_effect_verification(job: dict, git_state: Optional[dict], senti
         git_state=git_state,
         exit_code=job.get("exit_code") or 0,
         worktree_branch=job.get("worktree_branch"),
+        structured_telemetry=structured,
     )
     # If worktree wasn't given on a mutating task (e.g. synthetic test), don't fail
     if not effect_res.verified and not (task_class == "mutating" and not job.get("worktree_path")):
@@ -3344,12 +3356,23 @@ def _mark_daemon_job_cost_missing(conn, job_id: str, reason: str) -> None:
 def _gtv_status_for_daemon_exit(
     exit_code: Optional[int],
     git_state: Optional[dict],
+    structured_telemetry: Optional[dict] = None,
 ) -> tuple:
     """Ground-truth status for a reaped daemon job (#331 / #579 / Epic A1).
 
     Returns ``(status, exit_code, summary_status, summary_note)``.
     Never leaves successful work as open-ended ``unknown`` with 0 files.
     """
+    # Claude/Codex terminal JSON is the primary completion signal.  Keep the
+    # process-exit/git logic below as the explicit fallback for other harnesses
+    # and malformed structured output.
+    if structured_telemetry and structured_telemetry.get("available"):
+        if structured_telemetry.get("completed") is True:
+            return ("done", 0, None, "structured harness completion event")
+        if structured_telemetry.get("completed") is False:
+            resolved_exit = exit_code if exit_code not in (None, 0) else 1
+            return ("failed", resolved_exit, None, "structured harness failure event")
+
     files = _git_state_files_touched(git_state)
     work_landed = _job_has_real_work_landed(git_state)
     has_git_activity = work_landed or bool(files)
@@ -3848,9 +3871,24 @@ def _reconcile_daemon_jobs() -> None:
                         raise
                     continue
 
-                status, exit_code, summary_status, summary_note = _gtv_status_for_daemon_exit(
-                    exit_code, git_state
-                )
+                log_text = _read_job_log(log_path)
+                structured = None
+                parse_telemetry = _pkg("parse_dispatch_telemetry")
+                if parse_telemetry:
+                    try:
+                        telemetry = parse_telemetry(log_text, agent=agent)
+                        if telemetry is not None:
+                            structured = telemetry.__dict__
+                    except (AttributeError, TypeError, ValueError):
+                        structured = None
+                if structured is None:
+                    status, exit_code, summary_status, summary_note = _gtv_status_for_daemon_exit(
+                        exit_code, git_state
+                    )
+                else:
+                    status, exit_code, summary_status, summary_note = _gtv_status_for_daemon_exit(
+                        exit_code, git_state, structured
+                    )
                 status = _guard_unpushed_branch(
                     conn, job_id, status, worktree_path, worktree_branch, git_state
                 )
@@ -3866,7 +3904,6 @@ def _reconcile_daemon_jobs() -> None:
                 ):
                     status, exit_code = "done", 0
 
-                log_text = _read_job_log(log_path)
                 permission_denied = _should_classify_permission_denied(
                     log_text,
                     git_state,

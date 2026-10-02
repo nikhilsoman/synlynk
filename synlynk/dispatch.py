@@ -3412,7 +3412,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     if agent == "grok":
         flags = flags + ["--output-format", "json"]
     if agent == "claude":
-        flags = flags + ["--output-format", "stream-json", "--verbose"]
+        flags = flags + ["--output-format", "json"]
     if agent == "agy":
         flags = flags + ["--output-format", "json"]
         if "--print-timeout" not in flags:

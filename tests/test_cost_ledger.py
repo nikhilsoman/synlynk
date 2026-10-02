@@ -281,7 +281,7 @@ def test_dispatch_agent_codex_flags_include_json(project_dir, monkeypatch):
     assert "--json" in captured_flags["shell_cmd"]
 
 
-def test_dispatch_agent_claude_flags_include_stream_json_verbose(project_dir, monkeypatch):
+def test_dispatch_agent_claude_flags_include_structured_json(project_dir, monkeypatch):
     import synlynk
     from synlynk import dispatch as dispatch_mod
 
@@ -310,8 +310,8 @@ def test_dispatch_agent_claude_flags_include_stream_json_verbose(project_dir, mo
     dispatch_mod.dispatch_agent("claude", "do a thing", skip_preflight=True, job_id="job-test456")
 
     assert "--output-format" in captured_flags["shell_cmd"]
-    assert "stream-json" in captured_flags["shell_cmd"]
-    assert "--verbose" in captured_flags["shell_cmd"]
+    assert "json" in captured_flags["shell_cmd"]
+    assert "stream-json" not in captured_flags["shell_cmd"]
 
 
 def test_dispatch_agent_agy_flags_include_output_format_json(project_dir, monkeypatch):
