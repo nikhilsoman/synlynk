@@ -422,7 +422,7 @@ def _print_pending_nudges() -> None:
         pass
 
 
-def _dispatch_flags_for_agent(agent: str) -> list:
+def _dispatch_flags_for_agent(agent: str, skip_permissions: bool = False) -> list:
     """Return the executable dispatch flags for an agent baseline."""
     baselines_map = _pkg("HARNESS_CAPABILITY_BASELINES", HARNESS_CAPABILITY_BASELINES)
     baselines = baselines_map.get(agent, {})
@@ -438,6 +438,8 @@ def _dispatch_flags_for_agent(agent: str) -> list:
         from synlynk.local_agent import _local_dispatch_model_flags
 
         flags = flags + _local_dispatch_model_flags()
+    if skip_permissions and agent in {"claude", "agy"}:
+        flags.append("--dangerously-skip-permissions")
     return flags
 
 
@@ -735,7 +737,12 @@ def _merge_codex_permission_flags(flags: list, permission_flags: list) -> list:
     return merged + permission_flags
 
 
-def _permissions_to_flags(agent: str, permissions: list, read_only: bool = False) -> list:
+def _permissions_to_flags(
+    agent: str,
+    permissions: list,
+    read_only: bool = False,
+    skip_permissions: bool = False,
+) -> list:
     """Translate permission strings into harness-specific CLI flags."""
     from synlynk._constants import _PERMISSION_TO_TOOL_MAP
 
@@ -748,7 +755,7 @@ def _permissions_to_flags(agent: str, permissions: list, read_only: bool = False
             return []
         if set(permissions) <= {"read:*"}:
             return ["--mode", "plan"]
-        return ["--dangerously-skip-permissions"]
+        return ["--dangerously-skip-permissions"] if skip_permissions else ["--sandbox"]
     if agent == "claude":
         tools = []
         for perm in permissions or []:
@@ -2974,7 +2981,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                    criticality: float = 1.0,
                    lambda_: float = 1.0,
                    db_conn=None,
-                   _startup_failover: bool = True) -> dict:
+                   _startup_failover: bool = True,
+                   skip_permissions: bool = False) -> dict:
     if not task or not task.strip():
         raise ValueError(
             "--task is empty or whitespace-only; refusing to dispatch (see #720)"
@@ -3278,7 +3286,12 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
 
     baselines = baselines_map[agent]
     cli = baselines["cli"]
-    flags = baselines["non_interactive_flags"] + _dispatch_flags_for_agent(agent)
+    dispatch_flags = (
+        _dispatch_flags_for_agent(agent, skip_permissions=True)
+        if skip_permissions
+        else _dispatch_flags_for_agent(agent)
+    )
+    flags = baselines["non_interactive_flags"] + dispatch_flags
     overrides = _load_harness_overrides(agent)
     for key, value in overrides.get("dispatch_flags", {}).items():
         flags = flags + [f"--{key}"] if value in (None, "") else flags + [f"--{key}", str(value)]
@@ -3289,6 +3302,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     load_config = _pkg("load_config")
     cfg = load_config() if load_config else {}
     role_list = (cfg.get("roles", {}) or {}).get(agent, [])
+    import inspect as _inspect
     if task_type == "review":
         role_list = ["review"]
     effective_grants = list(grants or [])
@@ -3308,13 +3322,24 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         # Keep compatibility with test/integration adapters that implement the
         # historical two-argument translator while using the hardened native
         # translator when available.
-        import inspect as _inspect
-        if "read_only" in _inspect.signature(_permissions_to_flags).parameters:
-            permission_flags = _permissions_to_flags(agent, permissions, read_only=True)
+        permission_params = _inspect.signature(_permissions_to_flags).parameters
+        if "read_only" in permission_params or "skip_permissions" in permission_params:
+            permission_kwargs = {}
+            if "read_only" in permission_params:
+                permission_kwargs["read_only"] = True
+            if "skip_permissions" in permission_params:
+                permission_kwargs["skip_permissions"] = skip_permissions
+            permission_flags = _permissions_to_flags(agent, permissions, **permission_kwargs)
         else:
             permission_flags = _permissions_to_flags(agent, permissions)
     else:
-        permission_flags = _permissions_to_flags(agent, permissions)
+        permission_params = _inspect.signature(_permissions_to_flags).parameters
+        if "skip_permissions" in permission_params:
+            permission_flags = _permissions_to_flags(
+                agent, permissions, skip_permissions=skip_permissions
+            )
+        else:
+            permission_flags = _permissions_to_flags(agent, permissions)
     if agent == "codex":
         flags = _merge_codex_permission_flags(flags, permission_flags)
     else:
@@ -3784,6 +3809,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 gh_write_target_kind=gh_write_target_kind, model=model, role=role,
                 model_tier=model_tier,
                 db_conn=db_conn, _startup_failover=False,
+                skip_permissions=skip_permissions,
             )
 
     job = {

@@ -3,7 +3,7 @@ title: "The Synthesis Lost Detail the Panel Actually Gave Us"
 date: 2026-10-03
 series: "Building the OS for Multi-Agent Development"
 post: 238
-pr: "TBD"
+pr: "1920"
 status: published
 author: "synlynk team"
 version: "0.23.0-dev"

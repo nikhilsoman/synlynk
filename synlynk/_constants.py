@@ -70,7 +70,9 @@ HARNESS_CAPABILITY_BASELINES = {
         "dispatch_flags": {
             "valid_flags": ["--dangerously-skip-permissions", "--model", "--output-format"],
             "invalid_flags": ["--always-approve", "--non-interactive"],
-            "required_flags": ["--dangerously-skip-permissions"],
+            # Permission bypass is an explicit per-dispatch opt-in. The
+            # default path uses the scoped --allowedTools profile.
+            "required_flags": [],
         },
         "headless_contract": {
             "requires_pty": False,
