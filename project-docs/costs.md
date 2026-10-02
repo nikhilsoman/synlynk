@@ -3,18 +3,6 @@
 
 | Date | Agent | Model | Tokens In | Tokens Out | Cost | Source | Story | Notes |
 |---|---|---|---|---|---|---|---|---|
-| 2026-09-30 21:00 | codex | o4-mini | 515350 | 3327 | $1.5960 | estimated_manual | story-issue-1888 | exec: codex review job job-c3a4c1be (PR #1888 review 2, APPROVED+merged 1e1da814) |
-| 2026-09-30 21:11 | codex | gpt-5.6-luna | 848915 | 6110 | $2.6384 | estimated_token_rate | story-issue-1889 | exec: codex job job-ec92e7... |
-| 2026-09-30 22:13 | codex | gpt-5.6-luna | 656120 | 6014 | $2.0586 | estimated_token_rate | story-b24ec68c | exec: codex job job-233d43... |
-| 2026-09-30 22:16 | codex | o4-mini | 297033 | 2552 | $0.9294 | estimated_token_rate | story-b24ec68c | exec: codex job job-8814a9... |
-| 2026-09-30 22:19 | codex | o4-mini | 5000 | 2000 | $0.0450 | estimated_tshirt | story-b24ec68c | exec: codex job job-b2b476... |
-| 2026-09-30 22:28 | codex | gpt-5.6-luna | 379117 | 4232 | $1.2008 | estimated_token_rate | story-b24ec68c | exec: codex job job-211305... |
-| 2026-09-30 22:38 | codex | gpt-5.6-luna | 459659 | 4686 | $1.4493 | estimated_token_rate | story-b24ec68c | exec: codex job job-370185... |
-| 2026-09-30 23:06 | codex | gpt-5.6-luna | 595437 | 6361 | $1.8817 | estimated_token_rate | story-issue-1891 | exec: codex job job-533c3c... |
-| 2026-09-30 23:13 | claude | claude-sonnet-4-6 | 92123 | 23724 | $0.6322 | estimated_token_rate | story-b67bce1b | exec: claude job job-5e506... |
-| 2026-09-30 23:24 | codex | gpt-5.6-luna | 1123635 | 7943 | $3.4901 | estimated_token_rate | story-b67bce1b | exec: codex job job-f18336... |
-| 2026-09-30 23:29 | codex | gpt-5.6-luna | 1287034 | 11920 | $4.0399 | estimated_token_rate | story-b67bce1b | exec: codex job job-66897a... |
-| 2026-09-30 23:35 | codex | gpt-5.6-luna | 3450693 | 17525 | $10.6150 | estimated_token_rate | story-b67bce1b | exec: codex job job-84ee67... |
 | 2026-09-30 23:42 | codex | gpt-5.6-luna | 2458556 | 16517 | $7.6234 | estimated_token_rate | story-b67bce1b | exec: codex job job-9213f1... |
 | 2026-09-30 23:47 | codex | gpt-5.6-luna | 2072621 | 10725 | $6.3787 | estimated_token_rate | story-b67bce1b | exec: codex job job-20b458... |
 | 2026-09-30 23:53 | codex | gpt-5.6-luna | 2553185 | 15014 | $7.8848 | estimated_token_rate | story-b67bce1b | exec: codex job job-4a942b... |
@@ -53,13 +41,25 @@
 | 2026-10-02 06:21 | codex | o4-mini | 5000 | 2000 | $0.0450 | estimated_tshirt | story-741f9192 | exec: codex job job-81b2e6... |
 | 2026-10-02 06:24 | codex | o4-mini | 5000 | 2000 | $0.0450 | estimated_tshirt | story-6f88ef62 | exec: codex job job-f2bba1... |
 | 2026-10-02 06:29 | agy | unknown | 5000 | 2000 | $0.0450 | estimated_tshirt | story-73e0a8e5 | exec: agy job job-1fcaa44c |
+| 2026-10-02 06:55 | codex | o4-mini | 5000 | 2000 | $0.0450 | estimated_tshirt | story-c5cb22f7 | exec: codex job job-ef5aa9... |
+| 2026-10-02 12:58 | claude | claude-sonnet-4-6 | 73000 | 3563 | $0.1900 [sub] (API: $0.2724) | estimated_manual | story-v024-t01-autonomy-dial | exec: claude job job-0c9082b9 (Task 1 autonomy dial) |
+| 2026-10-02 13:04 | claude | claude-sonnet-4-6 | 66380 | 14687 | $0.2012 [sub] (API: $0.4194) | estimated_manual | story-v024-t02-board-governance | exec: claude job job-a0e470fd (Task 2 board governance) |
+| 2026-10-02 13:15 | claude | claude-sonnet-4-6 | 107976 | 16042 | $0.3078 [sub] (API: $0.5646) | estimated_manual | story-v024-t03-boardroom-hud | v0.24.0 Task 3: Glassmorphic Boardroom HUD and Autonomy Dial header |
+| 2026-10-02 13:20 | claude | claude-sonnet-4-6 | 61786 | 7614 | $0.1722 [sub] (API: $0.2996) | estimated_manual | story-v024-t04-agent-charters | v0.24.0 Task 4: Machine-Readable Agent Charters and authority schema |
+| 2026-10-02 13:23 | claude | claude-sonnet-4-6 | 521772 | 5231 | $1.3080 [sub] (API: $1.6438) | estimated_manual | story-v024-t05-jev-engine | v0.24.0 Task 5: Jev Sub-20ms AST Decision Engine |
+| 2026-10-02 13:26 | claude | claude-sonnet-4-6 | 43667 | 2928 | $0.1156 [sub] (API: $0.1749) | estimated_manual | story-v024-t06-swarm-engine | v0.24.0 Task 6: Parallel Worktree Swarm Engine and orthogonal file check |
+| 2026-10-02 13:28 | claude | claude-sonnet-4-6 | 42920 | 2602 | $0.1130 [sub] (API: $0.1678) | estimated_manual | story-v024-t07-concierge-agent | v0.24.0 Task 7: The Concierge Agent feature synthesizer |
+| 2026-10-02 13:30 | claude | claude-sonnet-4-6 | 46868 | 2207 | $0.1218 [sub] (API: $0.1737) | estimated_manual | story-v024-t08-addon-bundles | v0.24.0 Task 8: Turnkey plug and play add-ons engine |
+| 2026-10-02 13:33 | claude | claude-sonnet-4-6 | 47799 | 2426 | $0.1247 [sub] (API: $0.1798) | estimated_manual | story-v024-t09-byok-registry | v0.24.0 Task 9: Extended BYOK Product Registry & Encrypted Secret Vault |
+| 2026-10-02 13:36 | claude | claude-sonnet-4-6 | 45000 | 2400 | $0.1176 [sub] (API: $0.1710) | estimated_manual | story-v024-t10-maintainer-burndown | v0.24.0 Task 10: Autonomous Maintainer Zero-Issue Burndown Driver |
+| 2026-10-02 13:48 | claude | claude-sonnet-4-6 | 4752400 | 21051 | $11.8471 [sub] (API: $14.5730) | estimated_manual | story-v024-t11-e2e-verification | Task 11: End-to-End System Verification & Documentation Sync |
 
 ## Subscription Amortization & Dual-Ledger Summary
 
 | Harness | Base Fee | Actual Amortized Spend | API Equivalent Value | Net Savings |
 |---|---|---|---|---|
-| claude | $20.00 | $0.0000 | $0.0000 | $0.0000 |
+| claude | $20.00 | $14.6190 | $18.6400 | $4.0209 |
 | codex | $20.00 | $0.0000 | $0.0000 | $0.0000 |
 | agy | $20.00 | $0.0000 | $0.0000 | $0.0000 |
 | grok | $30.00 | $0.0000 | $0.0000 | $0.0000 |
-| **Total** | **$90.00** | **$0.0000** | **$0.0000** | **$0.0000** |
+| **Total** | **$90.00** | **$14.6190** | **$18.6400** | **$4.0209** |

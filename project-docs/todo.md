@@ -1617,4 +1617,16 @@ Submit approval via 'gh pr review 1903 --appro [testing] <!-- id:story-issue-190
 - [x] Implement Task 3 of LIVE-20: Quad-Harness Subscription Configuration & harness_billing Seed [backend] <!-- id:story-741f9192 -->
 - [x] Implement Task 4 of LIVE-20: Dual-Ledger Markdown Generation & Monthly Amortization Rollup [backend] <!-- id:story-73e0a8e5 -->
 - [x] Implement Task 5 of LIVE-19 & LIVE-20: End-to-End Integration, True-Up & Regression Verification [testing] <!-- id:story-b907ad30 -->
-- [ ] Review and merge PR #1905: circuit breaker clean-exit preservation & quad-harness subscription dual-ledger (LIVE-19, LIVE-20) [testing] <!-- id:story-c5cb22f7 -->
+- [x] Review and merge PR #1905: circuit breaker clean-exit preservation & quad-harness subscription dual-ledger (LIVE-19, LIVE-20) [testing] <!-- id:story-c5cb22f7 -->
+- [x] Review and merge PR #1906: 15-minute field trials documentation [backend] <!-- id:story-e5f2381b -->
+- [x] Implement Task 1: Tri-Modal Autonomy Dial & Stage Gating [backend] <!-- id:story-v024-t01-autonomy-dial -->
+- [x] Implement Task 2: Sovereign Board Governance & Ed25519 Proposal Gates [security] <!-- id:story-v024-t02-board-governance -->
+- [x] Implement Task 3: Vizor Boardroom HUD Backend & Template [frontend] <!-- id:story-v024-t03-boardroom-hud -->
+- [x] Implement Task 4: Machine-Readable Agent Charters & Authority Matrix [architecture] <!-- id:story-v024-t04-agent-charters -->
+- [x] Implement Task 5: Jev Sub-20ms AST Decision Engine (#1712) [architecture] <!-- id:story-v024-t05-jev-engine -->
+- [x] Implement Task 6: Parallel Worktree Swarm Engine [backend] <!-- id:story-v024-t06-swarm-engine -->
+- [x] Implement Task 7: The Concierge Agent (synlynk concierge) [backend] <!-- id:story-v024-t07-concierge-agent -->
+- [x] Implement Task 8: Turnkey Plug & Play Add-ons Engine (synlynk addon) [devops] <!-- id:story-v024-t08-addon-bundles -->
+- [x] Implement Task 9: Extended BYOK Product Registry & Encrypted Secret Vault [security] <!-- id:story-v024-t09-byok-registry -->
+- [x] Implement Task 10: Autonomous Maintainer Zero-Issue Burndown Driver [backend] <!-- id:story-v024-t10-maintainer-burndown -->
+- [x] Implement Task 11: End-to-End System Verification & Documentation Sync [testing] <!-- id:story-v024-t11-e2e-verification -->

@@ -288,6 +288,7 @@ _TOP_LEVEL_COMMANDS = (
     "logs", "shell", "open", "launch", "run", "story", "pm", "tpm", "score", "charters", "cost",
     "roadmap", "policy", "credit", "backlog", "quota", "schedule", "pr", "capability",
     "instructions", "marketing", "roles", "release", "viz", "backfill-capability-ratings",
+    "board", "concierge", "addon", "autonomy",
 )
 
 
@@ -1667,6 +1668,49 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     viz_parser.add_argument("--hosted", action="store_true",
                             help="Show the fail-closed hosted Vizor placeholder")
 
+    autonomy_parser = subparsers.add_parser(
+        "autonomy", help="View or set the workspace autonomy dial (manual/supervised/autonomous)")
+    autonomy_sub = autonomy_parser.add_subparsers(dest="autonomy_action")
+    autonomy_sub.add_parser("show", help="Show the current autonomy mode")
+    autonomy_set_parser = autonomy_sub.add_parser("set", help="Set the autonomy mode")
+    autonomy_set_parser.add_argument(
+        "mode", choices=["manual", "supervised", "autonomous"])
+
+    board_parser = subparsers.add_parser(
+        "board", help="Sovereign Board governance: Ed25519-signed proposal ledger")
+    board_sub = board_parser.add_subparsers(dest="board_action")
+    board_propose_parser = board_sub.add_parser("propose", help="Create a new board proposal")
+    board_propose_parser.add_argument(
+        "--gate", required=True,
+        choices=["master_goal", "spec_ratification", "release_tag", "budget_topup", "board_admission"])
+    board_propose_parser.add_argument("--title", required=True)
+    board_propose_parser.add_argument("--description", default="")
+    board_propose_parser.add_argument("--budget", type=float, default=0.0, dest="budget")
+    board_sign_parser = board_sub.add_parser("sign", help="Sign a pending proposal as the Genesis Chair")
+    board_sign_parser.add_argument("proposal_id")
+    board_sign_parser.add_argument("--key-path", default=None, dest="key_path")
+    board_show_parser = board_sub.add_parser("show", help="Show a proposal's current state")
+    board_show_parser.add_argument("proposal_id")
+
+    concierge_parser = subparsers.add_parser(
+        "concierge", help="Concierge Agent: synthesize structured feature proposals from answers")
+    concierge_sub = concierge_parser.add_subparsers(dest="concierge_action")
+    concierge_synth_parser = concierge_sub.add_parser(
+        "synthesize", help="Synthesize a GitHub-issue-ready feature proposal")
+    concierge_synth_parser.add_argument("--title", required=True)
+    concierge_synth_parser.add_argument("--problem", default="")
+    concierge_synth_parser.add_argument("--scope", default="")
+    concierge_synth_parser.add_argument("--criteria", default="")
+    concierge_synth_parser.add_argument("--out", default=None, help="Write output to this file instead of stdout")
+
+    from synlynk.addon import list_available_addons as _list_available_addons
+    addon_parser = subparsers.add_parser(
+        "addon", help="Turnkey plug-and-play add-on bundles (quality, security, observability)")
+    addon_sub = addon_parser.add_subparsers(dest="addon_action")
+    addon_sub.add_parser("list", help="List available add-on bundles")
+    addon_install_parser = addon_sub.add_parser("install", help="Install an add-on bundle")
+    addon_install_parser.add_argument("bundle", choices=_list_available_addons())
+
     return parser
 
 
@@ -2852,6 +2896,60 @@ def main(argv=None) -> None:
             cmd_session_close(disposition=args.disposition, summary=args.summary)
         else:
             help_parsers.get("session", parser).print_help()
+    elif args.command == "autonomy":
+        from synlynk.autonomy import get_autonomy_mode, set_autonomy_mode
+        action = getattr(args, "autonomy_action", None)
+        if action == "set":
+            mode = set_autonomy_mode(args.mode)
+            print(f"  ✓ autonomy_mode = {mode.value}")
+        else:
+            mode = get_autonomy_mode()
+            print(f"  Autonomy mode: {mode.value}")
+    elif args.command == "board":
+        from synlynk.board_governance import ProposalGate, create_proposal, load_proposal, sign_proposal
+        action = getattr(args, "board_action", None)
+        if action == "propose":
+            prop = create_proposal(
+                ProposalGate(args.gate), args.title,
+                description=args.description, budget_usd=args.budget)
+            print(f"  ✓ Proposal created: {prop.proposal_id} (status={prop.status.value})")
+        elif action == "sign":
+            prop = sign_proposal(args.proposal_id, key_path=args.key_path)
+            print(f"  ✓ Proposal {prop.proposal_id} signed by {prop.signer_identity} (status={prop.status.value})")
+        elif action == "show":
+            prop = load_proposal(args.proposal_id)
+            if prop is None:
+                print(f"  ✗ Proposal {args.proposal_id} not found")
+            else:
+                print(json.dumps(prop.to_dict(), indent=2))
+        else:
+            help_parsers.get("board", parser).print_help()
+    elif args.command == "concierge":
+        from synlynk.concierge import synthesize_github_issue
+        action = getattr(args, "concierge_action", None)
+        if action == "synthesize":
+            answers = {
+                "title": args.title, "problem": args.problem,
+                "scope": args.scope, "criteria": args.criteria,
+            }
+            body = synthesize_github_issue(answers)
+            if args.out:
+                with open(args.out, "w", encoding="utf-8") as f:
+                    f.write(body)
+                print(f"  ✓ Synthesized proposal written to {args.out}")
+            else:
+                print(body)
+        else:
+            help_parsers.get("concierge", parser).print_help()
+    elif args.command == "addon":
+        from synlynk.addon import install_addon_bundle, list_available_addons
+        action = getattr(args, "addon_action", None)
+        if action == "install":
+            install_addon_bundle(args.bundle)
+            print(f"  ✓ Add-on bundle installed: {args.bundle}")
+        else:
+            for name in list_available_addons():
+                print(f"  - {name}")
     else:
         parser.print_help()
 

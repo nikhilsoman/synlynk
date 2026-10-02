@@ -106,10 +106,20 @@ Fable H0 gate: "every number synlynk displays is either structurally sourced or 
 SQLite-canonical project-docs, GOVERNS events, dual-ledger write-through. Followed by v0.13.1 operational reliability patch.
 
 
-## v1.0.0 — GA: Community Layer + Public Launch [planned] (target: post-preview)
+## v1.0.0 — GA: The Tokq Network & Commercial Launch [planned] (target: 2027-01-15)
 
-Distinct from 1.0.0 Developer Preview. Workgroup protocol · signed capability ledger · SME archetype · pipx/Homebrew PyPI · synlynk.com (BS-5). Sequencing: after preview tag; Wave 3/4 deliver the hosted and model-hub slices.
+Public commercial launch, P2P Agent Compute Rental, Tokq Decentralized Intelligence & Skill Marketplace, Proof of Real Work settlement, and Native Mobile/Data Platform domains
 
+- [ ] P2P Agent Compute & Subscription Rental (Airbnb for AI Engineering) (P0)
+  Monetize idle Apple Silicon compute and enterprise model subscriptions
+- [ ] Tokq Decentralized Intelligence & Skill Marketplace (P0)
+  Exchange for verified domain blueprints, AST graphs, datasets, and compliance charters
+- [ ] Proof of Real Work (PoUW) Settlement Layer (P0)
+  Dual-layer settlement: local credit ledger to L2 USDC micro-settlement
+- [ ] Native Mobile & Data Platform Domain Expansion (P1)
+  Specialized blueprints and AST tools for iOS (SwiftUI), Android (Jetpack), and dbt/SQL
+- [ ] GitHub Open Source Infrastructure, Positioning & Docs Overhaul (P1)
+  Contributor templates, community discussions, and comprehensive positioning refresh
 
 ## v1.1.0 — Cross-Workgroup (Team Level) [planned] (target: Q4 2026)
 
@@ -172,7 +182,6 @@ Public GitHub tag v1.0.0 is NOT cut yet. Ceremony: synlynk.com collateral, HN/Pr
 
 - [ ] P0 Foundation and reset (P0)
   Reconcile main/origin, stale worktrees, daemon/runtime, sentinel noise, and release blockers. Establish a clean baseline and freeze non-launch work.
-  Rollback checkpoint handling for the transient `.sentinel-*` init race is fixed in issue #1834 and pending merge.
 - [ ] P0 Install and first-win path (P0)
   Validate pipx/install.sh or chosen distribution, zero-risk init, dependency checks, browser handoff, and a timed fresh-project-to-first-dispatch journey under 15 minutes.
 - [ ] P0 Existing-project intelligence (P0)
@@ -253,4 +262,74 @@ Named release v0.22.0. Multi-workspace hub UI, HEAD routing, DB_PATH guard, sand
 ## v0.23.0 — Graphify Auto-Extraction & Vizor Unified Canvas [shipped] (target: 2026-09-25)
 
 scan --deep / upgrade auto-extract; synlynk mesh federated graphs; Vizor graphify.html + clustered Architect/Logical canvas. PR #1777. GOVERNS board + dual-pivot Gantt #1771.
+
+
+## v0.23.1 — Pre-Release Hygiene & Service Persistence [planned] (target: 2026-10-04)
+
+Worktree lifecycle cleanup (#1886), daemon service auto-install prompt (#1883), and ~25 ghost issue burndown
+
+- [x] Stale Worktree Lifecycle GC (#1886) (P0)
+  Prune leftover probe worktrees and auto-reap on doctor/dispatch
+- [x] Daemon Auto-Install Service Prompt (#1883) (P0)
+  Prompt and install launchd/systemd service during init and doctor
+- [ ] Ghost Issue Burndown (~25 remediated issues closed) (P1)
+  Systematically verify and close issues already fixed by recent PRs
+
+## v0.24.0 — The Autonomous Platform, Boardroom & Concierge [shipped] (target: 2026-10-12)
+
+Self-management core, Board governance, Jev AST decisioning, swarms, concierge, and turnkey add-ons
+
+- [x] Tri-Modal Autonomy Dial (manual/supervised/autonomous) (P0) <!-- story:story-v024-t01-autonomy-dial -->
+  Seamless switching across CLI, Vizor toggle, and local config
+- [x] Board Governance Protocol & Vizor Boardroom HUD (P0) <!-- story:story-v024-t02-board-governance -->
+  Nikhil Soman as Genesis Sponsor with veto power and milestone approval gates
+- [x] Executable Agent Charters & Authority Matrix (P0) <!-- story:story-v024-t04-agent-charters -->
+  Machine-readable charters in .synlynk/charters/ defining autonomous operating bounds
+- [x] Jev Sub-20ms AST Decision Model (#1712) (P0) <!-- story:story-v024-t05-jev-engine -->
+  Offline graph topological routing and merge gating before model dispatch
+- [x] Parallel Worktree Swarms Engine (P1) <!-- story:story-v024-t06-swarm-engine -->
+  Concurrent multi-agent execution DAGs with zero lock collisions
+- [x] The Concierge Agent (synlynk concierge) (P1) <!-- story:story-v024-t07-concierge-agent -->
+  Interactive feature ingress guide synthesizing structured GitHub issues and proposals
+- [x] Turnkey Plug & Play Add-ons Engine (synlynk addon) (P1) <!-- story:story-v024-t08-addon-bundles -->
+  Pre-vetted bundles for quality, security, and observability
+- [x] Extended BYOK Product Registry (.synlynk/registry.json) (P1) <!-- story:story-v024-t09-byok-registry -->
+  Configurable integration surface with encrypted local secrets vault
+- [x] Autonomous Maintainer Zero-Issue Burndown Driver (P1) <!-- story:story-v024-t10-maintainer-burndown -->
+  Continuous sweeping of open GitHub issues, driving open bugs to zero
+
+## v0.25.0 — Sovereign Silicon: Local oMLX Fleet [planned] (target: 2026-10-22)
+
+Zero-cloud offline local model inference harness optimized for Apple Silicon MLX
+
+- [ ] Local oMLX / Aider Harness Integration (#1710) (P0)
+  Real subprocess dispatch to local MLX models (Llama-3, Qwen-2.5, DeepSeek)
+- [ ] Apple Silicon Hardware Tier & Health Prober (P1)
+  synlynk local doctor health check and hardware memory tier allocation
+- [ ] Offline Zero-Cloud AST Tier-0 Routing (P1)
+  Automatic fallback and tier-0 cost routing for self-hosted models
+
+## v0.26.0 — Universal Gateway: OpenRouter & Fal.ai [planned] (target: 2026-11-05)
+
+Single-key BYOK universal model provider gateway and specialist cloud driver roles
+
+- [ ] Universal Provider Aggregator Integration (#1711) (P0)
+  BYOK gateway with provider fallback chains and latency optimization
+- [ ] OpenRouter Single-Key Routing (DeepSeek, Qwen, Frontier) (P0)
+  Unified access to top Chinese and open-weight models via single key
+- [ ] Fal.ai Generative Media Provider Adapter (P1)
+  Multimodal asset and media generation bridge
+- [ ] Specialist 3rd-Party Driver Agents (@supabase, @vercel) (P1)
+  Dedicated driver roles for cloud infrastructure automation
+
+## v0.27.0 — Core 5 Fleet: Meta Muse GA [planned] (target: 2026-11-19)
+
+Meta Muse promoted to first-class 5th Core fleet harness
+
+- [ ] Meta Muse CLI Adapter GA Promotion (P0)
+  Full promotion from experimental to first-class peer in fleet baseline
+- [ ] Heterogeneous 5-Way Cross-Harness PR Review Routing (P1)
+  Rotational non-author review across Claude, Codex, Agy, Grok, and Muse
+- [ ] Muse Structured Output & Cost Ledger Integration (P1)
+  Verified token extraction and dual-ledger cost reporting for Muse
 

@@ -135,6 +135,11 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `relay status` (secondary) — visualize
 - `relay send` (secondary) — execute
 - `relay tail` (secondary) — visualize
+- `autonomy show` (primary) — sustain
+- `autonomy set` (primary) — sustain
+- `concierge synthesize` (primary) — goal
+- `addon list` (secondary) — sustain
+- `addon install` (primary) — sustain
 
 ## Tier 3 — Team / Enterprise
 
@@ -144,6 +149,9 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `score add` (secondary) — sustain
 - `score list` (secondary) — sustain
 - `score attest` (secondary) — sustain
+- `board propose` (primary) — goal
+- `board sign` (primary) — goal
+- `board show` (secondary) — visualize
 
 ## Latent — Autopilot & Hooks Only
 

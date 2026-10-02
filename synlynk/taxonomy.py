@@ -454,6 +454,32 @@ COMMAND_TAXONOMY = [
      "orientation_gateway": False, "audience": "hook", "trigger_phrases": [], "hook_event": "pre-commit"},
     {"command": "instructions register", "governs_stage": "sustain", "maturity_tier": "latent", "prominence": None,
      "orientation_gateway": False, "audience": "hook", "trigger_phrases": [], "hook_event": None},
+
+    # --- v0.24.0: Autonomous Platform, Board Governance, Concierge, Add-ons ---
+    {"command": "autonomy show", "governs_stage": "sustain", "maturity_tier": 2, "prominence": "primary",
+     "orientation_gateway": False, "audience": "human",
+     "trigger_phrases": ["what's our autonomy mode", "show autonomy dial"], "hook_event": None},
+    {"command": "autonomy set", "governs_stage": "sustain", "maturity_tier": 2, "prominence": "primary",
+     "orientation_gateway": False, "audience": "human",
+     "trigger_phrases": ["set autonomy mode", "go fully autonomous"], "hook_event": None},
+    {"command": "board propose", "governs_stage": "goal", "maturity_tier": 3, "prominence": "primary",
+     "orientation_gateway": False, "audience": "human",
+     "trigger_phrases": ["propose to the board", "create a board proposal"], "hook_event": None},
+    {"command": "board sign", "governs_stage": "goal", "maturity_tier": 3, "prominence": "primary",
+     "orientation_gateway": False, "audience": "human",
+     "trigger_phrases": ["sign the board proposal", "approve as genesis chair"], "hook_event": None},
+    {"command": "board show", "governs_stage": "visualize", "maturity_tier": 3, "prominence": "secondary",
+     "orientation_gateway": False, "audience": "human",
+     "trigger_phrases": ["show board proposal status"], "hook_event": None},
+    {"command": "concierge synthesize", "governs_stage": "goal", "maturity_tier": 2, "prominence": "primary",
+     "orientation_gateway": False, "audience": "human",
+     "trigger_phrases": ["synthesize a feature proposal", "turn my answers into a spec"], "hook_event": None},
+    {"command": "addon list", "governs_stage": "sustain", "maturity_tier": 2, "prominence": "secondary",
+     "orientation_gateway": False, "audience": "human",
+     "trigger_phrases": ["list add-on bundles", "what add-ons are available"], "hook_event": None},
+    {"command": "addon install", "governs_stage": "sustain", "maturity_tier": 2, "prominence": "primary",
+     "orientation_gateway": False, "audience": "human",
+     "trigger_phrases": ["install an add-on bundle", "turn on quality tooling"], "hook_event": None},
 ]
 
 

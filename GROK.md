@@ -22,7 +22,7 @@ Load `AI_INSTRUCTIONS.md` for the full shared synlynk protocol, including the se
 
 <!-- synlynk:end -->
 
-<!-- synlynk:harness v2.1.275 verified:2026-09-23T18:58:15Z -->
+<!-- synlynk:harness v1.0.44 verified:2026-10-02T02:52:48Z -->
 # Harness Instructions (synlynk-managed — do not edit)
 
 ## Your Role

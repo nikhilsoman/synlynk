@@ -9473,6 +9473,91 @@ document.querySelector('#role-form').addEventListener('submit',async e=>{{e.prev
 </script></body></html>"""
 
 
+def generate_boardroom_html(workspace_slug: str, autonomy_mode: str = "supervised") -> str:
+    """Render the executive glassmorphic Sovereign Boardroom HUD for a workspace.
+
+    Distinct from generate_board_html() above (the GOVERNS Kanban board of
+    stories) — this is the Ed25519 proposal-ledger/Autonomy Dial governance
+    surface at /w/<slug>/board, backed by synlynk/board_governance.py.
+    """
+    mode = str(autonomy_mode or "supervised").lower()
+    slug_html = html.escape(workspace_slug or "")
+
+    def dial_class(candidate: str) -> str:
+        return "dial-btn active" if mode == candidate else "dial-btn"
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Sovereign Boardroom — {slug_html}</title>
+  <style>
+    :root{{color-scheme:dark}}
+    *{{box-sizing:border-box}}
+    body {{ background: radial-gradient(circle at top, #141b2d, #05070d 70%); color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 32px; min-height: 100vh; }}
+    .board-header {{ display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 20px; margin-bottom: 28px; }}
+    .eyebrow {{ color: #a5b4fc; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; font-size: 11px; margin: 0 0 4px; }}
+    h1 {{ margin: 0; font-size: 26px; font-weight: 700; }}
+    .subtitle {{ margin: 6px 0 0; color: #94a3b8; font-size: 13px; }}
+    .chair-badge {{ background: linear-gradient(135deg, #6366f1, #a855f7); color: white; padding: 6px 14px; border-radius: 9999px; font-weight: 600; font-size: 13px; box-shadow: 0 4px 18px rgba(99,102,241,0.35); }}
+    .dial-container {{ display: flex; gap: 6px; background: rgba(255,255,255,0.06); backdrop-filter: blur(12px); padding: 4px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.08); }}
+    .dial-btn {{ border: none; padding: 8px 16px; border-radius: 7px; cursor: pointer; color: #94a3b8; background: transparent; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }}
+    .dial-btn.active {{ background: #3b82f6; color: white; box-shadow: 0 2px 10px rgba(59,130,246,0.5); }}
+    .panel-row {{ display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }}
+    .proposals-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }}
+    .prop-card {{ background: rgba(30, 41, 59, 0.55); backdrop-filter: blur(14px); border: 1px solid rgba(255,255,255,0.1); border-radius: 14px; padding: 20px; }}
+    .prop-card h3 {{ margin-top: 0; }}
+    .empty-state {{ color: #94a3b8; font-size: 13px; }}
+  </style>
+</head>
+<body>
+  <div class="board-header">
+    <div>
+      <p class="eyebrow">Sovereign Boardroom</p>
+      <h1>Sovereign Boardroom HUD</h1>
+      <p class="subtitle">Workspace: <strong>{slug_html}</strong> &middot; Genesis Chair: <strong>Nikhil Soman</strong></p>
+    </div>
+    <div class="panel-row">
+      <span class="eyebrow" style="margin:0;">Autonomy Dial</span>
+      <div class="dial-container" id="autonomy-dial" data-mode="{mode}">
+        <button class="{dial_class('manual')}" data-mode="manual">Manual</button>
+        <button class="{dial_class('supervised')}" data-mode="supervised">Supervised</button>
+        <button class="{dial_class('autonomous')}" data-mode="autonomous">Autonomous</button>
+      </div>
+      <div class="chair-badge">Genesis Seat Active &mdash; Nikhil Soman</div>
+    </div>
+  </div>
+  <div class="proposals-grid" id="proposals-container">
+    <div class="prop-card empty-state">Loading proposals&hellip;</div>
+  </div>
+  <script>
+    async function loadProposals() {{
+      const container = document.getElementById('proposals-container');
+      try {{
+        const r = await fetch('api/board/proposals');
+        if (!r.ok) {{ container.innerHTML = '<div class="prop-card empty-state">Boardroom proposals unavailable.</div>'; return; }}
+        const data = await r.json();
+        const proposals = data.proposals || [];
+        if (!proposals.length) {{
+          container.innerHTML = '<div class="prop-card empty-state">No pending proposals require board signature.</div>';
+          return;
+        }}
+        container.innerHTML = proposals.map(p => `<div class="prop-card">
+          <h3>${{p.title}}</h3>
+          <p class="empty-state">${{p.gate}} &middot; ${{p.status}}</p>
+          <p>${{p.description || ''}}</p>
+        </div>`).join('');
+      }} catch (err) {{
+        container.innerHTML = '<div class="prop-card empty-state">Boardroom proposals unavailable.</div>';
+      }}
+    }}
+    loadProposals();
+  </script>
+</body>
+</html>"""
+
+
 def generate_board_html(port: int) -> str:
     """Render the local product board shell; cards come from product state.db."""
     live = _live_js(port)

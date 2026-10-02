@@ -26,7 +26,7 @@ Load `AI_INSTRUCTIONS.md` for the full shared synlynk protocol, including the se
 
 <!-- synlynk:end -->
 
-<!-- synlynk:harness v2.0.0 verified:2026-09-24T12:45:03Z -->
+<!-- synlynk:harness v1.2.14 verified:2026-10-02T02:52:47Z -->
 # Harness Instructions (synlynk-managed — do not edit)
 
 ## Headless Execution Contract
