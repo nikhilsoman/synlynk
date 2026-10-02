@@ -2359,6 +2359,8 @@ def _write_generated_project_doc(filename: str, content: str) -> None:
         if parent:
             os.makedirs(parent, exist_ok=True)
         try:
+            from synlynk.regen_guard import check_regen_write_guard
+            check_regen_write_guard(path, content)
             with open(path, "w") as fh:
                 fh.write(content)
         except (OSError, PermissionError):
@@ -2803,6 +2805,8 @@ def _write_decision_record_md(decision_id: str) -> None:
         f"## Decision\n{decision_text}\n\n"
         f"> Signatures: see {date}-{slug}.json\n"
     )
+    from synlynk.regen_guard import check_regen_write_guard
+    check_regen_write_guard(f"{base}.md", md_content)
     with open(f"{base}.md", "w") as f:
         f.write(md_content)
 

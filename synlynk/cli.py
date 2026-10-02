@@ -476,6 +476,11 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     team_sub = team_parser.add_subparsers(dest="team_action")
     team_sub.add_parser("status", help="Show team digest: members, stories, budget")
 
+    gc_parser = subparsers.add_parser("gc", help="Garbage collect merged worktrees and orphaned state.db shards")
+    gc_parser.add_argument("--yes", action="store_true", help="Apply deletions (default is dry-run)")
+    gc_parser.add_argument("--retention-days", type=int, default=14, help="Days to keep inactive shards")
+    gc_parser.add_argument("--size-budget-mb", type=int, default=1024, help="Max size in MB for state.db shards before aggressive pruning")
+
     decide_parser = subparsers.add_parser(
         "decide", help="Convene a multi-agent panel and optionally record a Decision"
     )
@@ -2641,6 +2646,9 @@ def main(argv=None) -> None:
             audit=args.audit,
             model=args.model,
         )
+    elif args.command == "gc":
+        from synlynk.gc_cmd import cmd_gc
+        cmd_gc(dry_run=not getattr(args, "yes", False), yes=getattr(args, "yes", False), retention_days=getattr(args, "retention_days", 14), size_budget_mb=getattr(args, "size_budget_mb", 1024))
     elif args.command == "heal":
         if getattr(args, "cycles", False):
             from synlynk.heal_cycles import cmd_heal_cycles
