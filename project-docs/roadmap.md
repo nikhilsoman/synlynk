@@ -264,7 +264,7 @@ Named release v0.22.0. Multi-workspace hub UI, HEAD routing, DB_PATH guard, sand
 scan --deep / upgrade auto-extract; synlynk mesh federated graphs; Vizor graphify.html + clustered Architect/Logical canvas. PR #1777. GOVERNS board + dual-pivot Gantt #1771.
 
 
-## v0.23.1 — Pre-Release Hygiene & Service Persistence [planned] (target: 2026-10-04)
+## v0.23.1 — Pre-Release Hygiene & Service Persistence [shipped] (target: 2026-10-04)
 
 Worktree lifecycle cleanup (#1886), daemon service auto-install prompt (#1883), and ~25 ghost issue burndown
 
@@ -272,7 +272,7 @@ Worktree lifecycle cleanup (#1886), daemon service auto-install prompt (#1883), 
   Prune leftover probe worktrees and auto-reap on doctor/dispatch
 - [x] Daemon Auto-Install Service Prompt (#1883) (P0)
   Prompt and install launchd/systemd service during init and doctor
-- [ ] Ghost Issue Burndown (~25 remediated issues closed) (P1)
+- [x] Ghost Issue Burndown (~25 remediated issues closed) (P1) <!-- story:story-9cbe4cf7 -->
   Systematically verify and close issues already fixed by recent PRs
 
 ## v0.24.0 — The Autonomous Platform, Boardroom & Concierge [shipped] (target: 2026-10-12)

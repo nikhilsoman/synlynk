@@ -3,9 +3,6 @@
 
 | Date | Agent | Model | Tokens In | Tokens Out | Cost | Source | Story | Notes |
 |---|---|---|---|---|---|---|---|---|
-| 2026-09-30 23:42 | codex | gpt-5.6-luna | 2458556 | 16517 | $7.6234 | estimated_token_rate | story-b67bce1b | exec: codex job job-9213f1... |
-| 2026-09-30 23:47 | codex | gpt-5.6-luna | 2072621 | 10725 | $6.3787 | estimated_token_rate | story-b67bce1b | exec: codex job job-20b458... |
-| 2026-09-30 23:53 | codex | gpt-5.6-luna | 2553185 | 15014 | $7.8848 | estimated_token_rate | story-b67bce1b | exec: codex job job-4a942b... |
 | 2026-10-01 03:28 | codex | gpt-5.6-luna | 664300 | 5269 | $2.0719 | estimated_token_rate | story-b67bce1b | exec: codex job job-2aa89c... |
 | 2026-10-01 03:37 | codex | o4-mini | 5000 | 2000 | $0.0450 | estimated_tshirt | story-b67bce1b | exec: codex job job-fe3bc1... |
 | 2026-10-01 06:32 | codex | o4-mini | 5000 | 2000 | $0.0450 | estimated_tshirt | story-issue-1893 | exec: codex job job-3e60d4... |
@@ -53,13 +50,16 @@
 | 2026-10-02 13:33 | claude | claude-sonnet-4-6 | 47799 | 2426 | $0.1247 [sub] (API: $0.1798) | estimated_manual | story-v024-t09-byok-registry | v0.24.0 Task 9: Extended BYOK Product Registry & Encrypted Secret Vault |
 | 2026-10-02 13:36 | claude | claude-sonnet-4-6 | 45000 | 2400 | $0.1176 [sub] (API: $0.1710) | estimated_manual | story-v024-t10-maintainer-burndown | v0.24.0 Task 10: Autonomous Maintainer Zero-Issue Burndown Driver |
 | 2026-10-02 13:48 | claude | claude-sonnet-4-6 | 4752400 | 21051 | $11.8471 [sub] (API: $14.5730) | estimated_manual | story-v024-t11-e2e-verification | Task 11: End-to-End System Verification & Documentation Sync |
+| 2026-10-02 14:25 | claude | claude-sonnet-4-6 | 5000 | 2000 | $0.0174 [sub] (API: $0.0450) | estimated_tshirt | story-v024-t11-e2e-verification | exec: claude job job-317f4... |
+| 2026-10-02 14:28 | codex | o4-mini | 489114 | 5062 | $0.0236 [sub] (API: $1.5433) | estimated_token_rate | story-9cbe4cf7 | exec: codex job job-c447e5... |
+| 2026-10-02 14:44 | codex | o4-mini | 489114 | 5062 | $0.0236 [sub] (API: $1.5433) | estimated_manual | story-9cbe4cf7 | Ghost issue burndown: closed 25 remediated issues on GitHub via synlynk-dev |
 
 ## Subscription Amortization & Dual-Ledger Summary
 
 | Harness | Base Fee | Actual Amortized Spend | API Equivalent Value | Net Savings |
 |---|---|---|---|---|
-| claude | $20.00 | $14.6190 | $18.6400 | $4.0209 |
-| codex | $20.00 | $0.0000 | $0.0000 | $0.0000 |
+| claude | $20.00 | $14.6364 | $18.6850 | $4.0486 |
+| codex | $20.00 | $0.0472 | $3.0865 | $3.0393 |
 | agy | $20.00 | $0.0000 | $0.0000 | $0.0000 |
 | grok | $30.00 | $0.0000 | $0.0000 | $0.0000 |
-| **Total** | **$90.00** | **$14.6190** | **$18.6400** | **$4.0209** |
+| **Total** | **$90.00** | **$14.6836** | **$21.7715** | **$7.0879** |
