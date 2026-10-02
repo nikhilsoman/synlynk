@@ -1050,8 +1050,8 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     known_agents = sorted(HARNESS_CAPABILITY_BASELINES)
     dispatch_parser.add_argument("agent",
         nargs="?", default=None,
-        choices=known_agents,
-        help=f"Harness name: {', '.join(known_agents)}. Optional when --as-agent triggers auto-selection.")
+        choices=known_agents + ["auto"],
+        help=f"Harness name: {', '.join(known_agents + ['auto'])}. Optional when --as-agent triggers auto-selection.")
     dispatch_parser.add_argument("--task", required=True,
         help="Task description for the harness")
     dispatch_parser.add_argument("--story", default=None, dest="story_id",
@@ -2133,6 +2133,19 @@ def main(argv=None) -> None:
             _effective_task_type = getattr(args, "task_type", None) or (
                 _infer_task_type(args.task) if _effective_requires_gh_write else None
             )
+            if args.agent == "auto":
+                from synlynk import _get_db
+                from synlynk.dispatch import _resolve_dispatch_agent
+
+                db = _get_db(read_only=True)
+                try:
+                    args.agent = _resolve_dispatch_agent(
+                        args.agent,
+                        _effective_task_type or "testing",
+                        db,
+                    )
+                finally:
+                    db.close()
             if _effective_task_type == "review" and not getattr(args, "task_type", None):
                 print(
                     "  info: inferred task_type=review from task text "

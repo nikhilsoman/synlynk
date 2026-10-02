@@ -1035,6 +1035,8 @@ def load_config() -> dict:
         "schema_version": 1,
         "budget": {"limit_usd": 10.0, "limit_requests": 100},
         "dispatch": {"stacking": "auto", "gate_suite_cmd": ""},
+        "local_auto_threshold": 0.5,
+        "local_fallback": "agy",
         "watch_interval_seconds": 30,
         "auto_smoke_test": False,
         "auto_launch_after_wizard": True,
@@ -3110,6 +3112,14 @@ def init(force: bool = False, agents: list = None,
         config_json_content = templates.get("config.json", "")
         if config_json_content:
             if not os.path.exists(config_path) or force:
+                try:
+                    config_payload = json.loads(config_json_content)
+                except (TypeError, json.JSONDecodeError):
+                    config_payload = None
+                if isinstance(config_payload, dict):
+                    config_payload.setdefault("local_auto_threshold", 0.5)
+                    config_payload.setdefault("local_fallback", "agy")
+                    config_json_content = json.dumps(config_payload, indent=2) + "\n"
                 with open(config_path, "w") as f:
                     f.write(config_json_content)
 
