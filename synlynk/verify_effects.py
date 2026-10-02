@@ -107,8 +107,21 @@ def verify_job_effects(
     git_state: Optional[dict] = None,
     exit_code: int = 0,
     worktree_branch: Optional[str] = None,
+    structured_telemetry: Optional[dict] = None,
 ) -> EffectVerificationResult:
     """Verify that a job with exit code 0 produced real effects before marking succeeded."""
+    # Claude/Codex structured terminal events are the completion oracle.  The
+    # subprocess exit code is retained for legacy/fallback callers only.
+    if structured_telemetry and structured_telemetry.get("available"):
+        if structured_telemetry.get("completed") is False:
+            return EffectVerificationResult(
+                verified=False,
+                status=STATUS_FAILED,
+                reason=structured_telemetry.get("error") or "Structured harness completion reported failure",
+            )
+        if structured_telemetry.get("completed") is True:
+            exit_code = 0
+
     if exit_code != 0:
         return EffectVerificationResult(
             verified=False,
