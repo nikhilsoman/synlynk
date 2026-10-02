@@ -230,3 +230,26 @@
   positioning sentence, skip-permissions opt-in, a routing-proof report + benchmark kit,
   a 90-day design-partner program).
 [@claude]
+
+- Follow-up fidelity patch to `docs/strategy/2026-10-02-decide-panel-roadmap.md` (PR #1919's
+  roadmap doc): Nikhil pasted the original 9-item architect recommendation list from the
+  five-POV review and asked whether it was all taken care of. Direct comparison against the
+  actually-merged doc (re-read from `origin/main`, not assumed) found 3 items fully covered,
+  4 partially covered with specifics dropped, and 2 (a CI release-version gate, an explicit
+  cold-start performance budget) missing entirely — the synthesis pass had compressed the
+  panel's raw per-harness responses more aggressively than it should have.
+- Restored the missing/lost detail from this session's own already-captured per-harness panel
+  output rather than re-running `synlynk decide` (cheaper, source text still available):
+  roadmap table grew from 7 rows to 10 — row 5 now names the actual `dispatch_agent` pipeline
+  shape (`resolve → authorize → prepare_worktree → spawn → observe → finalize`) and the full
+  `HarnessAdapter` method set with a plugin registry for third-party harnesses; new row 6
+  separates the permission-default flag flip from containerized execution for untrusted
+  harnesses; row 8 names the actual ~15 core commands and 15–20K LOC target; new rows 9 and
+  10 restore the CI release gate and the lazy-import performance budget. Sequencing decision
+  and cross-cutting note updated to match.
+- Also fixed a stale `pr: "TBD"` in blog post 237's frontmatter and its README index row —
+  PR #1919 had already merged by the time this follow-up started.
+- Lesson for future `decide` synthesis passes: a short table compressing multiple detailed
+  per-harness responses is exactly where information silently drops; worth a direct check
+  against raw inputs before treating a synthesis as final, not just before publishing it.
+[@claude]
