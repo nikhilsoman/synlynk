@@ -206,3 +206,27 @@
   #1915's costs.md finding); flagging for Nikhil rather than filing a third ticket
   unprompted.
 [@claude]
+
+## 2026-10-02 — Decide-panel roadmap from the five-POV review
+
+- Ran three real `synlynk decide --panel claude,codex --record` panel convenings against
+  `docs/strategy/2026-10-02-five-pov-review.md`: architecture roadmap (§2), surface
+  simplification (§1+§2 CLI commentary), and broader non-architecture issues (§1,§3,§4,§5).
+  Each invoked the actual `claude`/`codex` CLIs headlessly — real subprocess calls, real cost.
+- Found a new bug while running it: all three topics shared the same first-40-character
+  prefix, so `cmd_decide`'s slug-based filename (`<date>-<40-char-slug>.md`, no collision
+  check) caused run 2 and run 3 to silently overwrite run 1's and run 2's decision records
+  in `project-docs/decisions/`. Recovered run 1's and run 2's content from this session's
+  captured stdout rather than losing it; only run 3's record survived on disk (renamed to
+  `2026-10-02-decide-panel-broader-issues.{md,json}` so the filename matches its actual
+  content instead of the collided topic-1 slug). Filing as its own issue — same
+  write-through blind-overwrite bug class as #1915/#1917, third occurrence.
+- Synthesized the three panel outputs into `docs/strategy/2026-10-02-decide-panel-roadmap.md`:
+  a fastest-practical-execution architecture roadmap (state/worktree GC + regen-bug guard
+  first, then telemetry, then `viz.py` split in parallel, then `dispatch_agent` decomposition,
+  then `state.db` consolidation and CLI core/packs split last), a capability-preserving
+  surface-simplification plan (tiered help, `quickstart`, inferred dispatch defaults, 6
+  adoption metrics + a power-user guardrail), and a broader-issues remediation plan (one
+  positioning sentence, skip-permissions opt-in, a routing-proof report + benchmark kit,
+  a 90-day design-partner program).
+[@claude]
