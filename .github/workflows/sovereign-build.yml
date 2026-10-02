@@ -34,6 +34,7 @@ jobs:
         with:
           context: .
           file: docker/Dockerfile.sovereign
+          load: true
           push: false
           tags: synlynk-sovereign-test:latest
           cache-from: type=gha
