@@ -53,6 +53,7 @@
 | 2026-10-02 15:44 | codex | o4-mini | 82307 | 1022 | $0.0040 [sub] (API: $0.2623) | estimated_token_rate | story-e332c8ea | exec: codex job job-8638fd... |
 | 2026-10-02 15:45 | codex | o4-mini | 801223 | 4612 | $0.0385 [sub] (API: $2.4728) | estimated_token_rate | story-294a855a | exec: codex job job-c3a535... |
 | 2026-10-02 15:46 | codex | o4-mini | 1095363 | 8166 | $0.0527 [sub] (API: $3.4086) | estimated_token_rate | story-8dadb376 | exec: codex job job-bfc336... |
+| 2026-10-02 19:12 | claude | claude-sonnet-4-6 | 120000 | 12000 | $0.3276 [sub] (API: $0.5400) | estimated_manual | - | PM-session: five-POV deep review (docs/strategy/2026-10-02-five-pov-review.md) |
 
 ## Subscription Amortization & Dual-Ledger Summary
 

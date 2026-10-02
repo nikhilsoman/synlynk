@@ -165,3 +165,25 @@
   documented in #1886 for `djob-commit-0` — confirmed as a known harmless
   artifact, not new work, before discarding.
 [@claude]
+
+## 2026-10-02 — Five-POV deep review (developer / architect / founder / VC / influencer)
+
+- Wrote `docs/strategy/2026-10-02-five-pov-review.md`. Every metric was measured on 2026-10-02
+  (repo, git, CI, GitHub) rather than copied from docs: ~80.7K LOC, 155 commands, 3,667 tests,
+  831 merged PRs, 21 LIVE incidents, 1 star / 0 forks, `~/.synlynk` 8.3 GB.
+- Since the 2026-07-12 Fable review: the daemon queue path now delegates to `dispatch_agent()`
+  (fixed). Unchanged: Claude still defaults to skip-permissions, token accounting is still
+  regex-scraped, and distribution is still the bottleneck.
+- Architect recommendations, in priority order:
+  1. `HarnessAdapter` protocol to replace the `if agent ==` branches
+  2. Split `dispatch_agent` (27 kwargs) into a pipeline with a typed request object
+  3. Structured telemetry + verified-effects job state machine
+  4. Consolidate state behind one DAO; markdown becomes an export; add GC and a size budget
+  5. Safe-by-default permission profiles
+  6. Split core (~15 commands) from optional packs
+  7. Break up `viz.py`
+  8. Make `release --check-docs` a required CI check, with one version source
+  9. Cold-start performance budget
+- Found version drift: `VERSION`=0.23.0-dev, README badge 0.22.0, CHANGELOG at v0.25.0
+  (no v0.23/v0.24 entries), v0.21.0 listed twice. No ticket filed yet.
+[@claude]
