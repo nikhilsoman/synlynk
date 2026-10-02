@@ -39,7 +39,7 @@ def _load_local_config(path: str = None) -> dict:
 
 
 def _pinned_model(config: dict) -> str:
-    """Returns the id of the pinned model, or the first roster entry if none pinned."""
+    """Returns the pinned model id, or the first roster entry if no model is pinned."""
     for model in config["models"]:
         if model.get("pinned"):
             return model["id"]
