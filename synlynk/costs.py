@@ -28,6 +28,92 @@ class _TokenCounts(object):
         return 2
 
 
+@dataclass
+class DispatchTelemetry:
+    """Completion and usage facts emitted by a structured harness stream.
+
+    ``available`` is deliberately separate from ``completed``: an invalid or
+    unsupported stream must go through the legacy stdout fallback, while a
+    valid terminal event is authoritative even when the human-readable output
+    contains words such as "failed".
+    """
+
+    available: bool = False
+    completed: Optional[bool] = None
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cache_read_tokens: int = 0
+    model: Optional[str] = None
+    error: Optional[str] = None
+
+
+def parse_dispatch_telemetry(output_text: str, agent: str = "") -> Optional[DispatchTelemetry]:
+    """Parse Claude/Codex structured completion events.
+
+    Claude's JSON mode emits one result object; Codex emits JSONL events.  A
+    structured stream is considered available only after a recognized
+    terminal event is seen, which keeps Grok/Agy and malformed output on the
+    existing stdout-regex path.
+    """
+    if agent not in {"claude", "codex"}:
+        return None
+    events = []
+    text = (output_text or "").strip()
+    if not text:
+        return None
+    try:
+        whole = json.loads(text)
+    except (TypeError, ValueError):
+        whole = None
+    if isinstance(whole, dict):
+        events = [whole]
+    else:
+        for line in text.splitlines():
+            try:
+                event = json.loads(line.strip())
+            except (TypeError, ValueError):
+                continue
+            if isinstance(event, dict):
+                events.append(event)
+
+    telemetry = DispatchTelemetry()
+    terminal = None
+    usage = None
+    for event in events:
+        event_type = event.get("type")
+        if agent == "codex" and event_type == "turn.completed":
+            terminal = event
+        elif agent == "claude" and event_type == "result":
+            terminal = event
+        elif event_type in {"error", "turn.failed"} or event.get("is_error") is True:
+            terminal = event
+    if terminal is None:
+        return None
+
+    telemetry.available = True
+    failed = terminal.get("is_error") is True or terminal.get("type") in {"error", "turn.failed"}
+    if agent == "claude" and terminal.get("subtype") not in (None, "success"):
+        failed = True
+    telemetry.completed = not failed
+    if failed:
+        telemetry.error = str(terminal.get("error") or terminal.get("subtype") or "structured harness error")
+    usage = terminal.get("usage")
+    if isinstance(usage, dict):
+        try:
+            telemetry.input_tokens = int(usage.get("input_tokens", 0))
+            telemetry.output_tokens = int(usage.get("output_tokens", 0))
+            if agent == "codex":
+                telemetry.output_tokens += int(usage.get("reasoning_output_tokens", 0))
+                telemetry.cache_read_tokens = int(usage.get("cached_input_tokens", 0))
+            else:
+                telemetry.input_tokens += int(usage.get("cache_creation_input_tokens", 0))
+                telemetry.cache_read_tokens = int(usage.get("cache_read_input_tokens", 0))
+        except (TypeError, ValueError):
+            pass
+    telemetry.model = terminal.get("model") or terminal.get("model_version")
+    return telemetry
+
+
 def _extract_codex_structured(output_text: str) -> Optional[_TokenCounts]:
     """Parses codex exec --json's newline-delimited event stream.
 
@@ -1120,5 +1206,4 @@ def cmd_cost_billing(args=None) -> None:
             print(f"- {agent}: {mode}")
             
     print(f"\nTotal Monthly Subscription Fees: ${total_fee:.2f}")
-
 
