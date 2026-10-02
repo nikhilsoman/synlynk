@@ -1957,6 +1957,16 @@ def test_gtv_status_no_exit_no_git_is_timed_out():
     assert exit_code == -9
 
 
+def test_gtv_status_structured_completion_is_authoritative():
+    from synlynk.jobs import _gtv_status_for_daemon_exit
+
+    status, exit_code, label, note = _gtv_status_for_daemon_exit(
+        17, None, {"available": True, "completed": True}
+    )
+    assert (status, exit_code) == ("done", 0)
+    assert "structured" in note
+
+
 def test_terminal_reconciliation_does_not_overwrite_settled_row(tmp_path):
     """A stale reconciler pass must lose the terminal-state CAS race."""
     import sqlite3
