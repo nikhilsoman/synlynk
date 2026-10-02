@@ -268,9 +268,9 @@ scan --deep / upgrade auto-extract; synlynk mesh federated graphs; Vizor graphif
 
 Worktree lifecycle cleanup (#1886), daemon service auto-install prompt (#1883), and ~25 ghost issue burndown
 
-- [ ] Stale Worktree Lifecycle GC (#1886) (P0)
+- [x] Stale Worktree Lifecycle GC (#1886) (P0)
   Prune leftover probe worktrees and auto-reap on doctor/dispatch
-- [ ] Daemon Auto-Install Service Prompt (#1883) (P0)
+- [x] Daemon Auto-Install Service Prompt (#1883) (P0)
   Prompt and install launchd/systemd service during init and doctor
 - [ ] Ghost Issue Burndown (~25 remediated issues closed) (P1)
   Systematically verify and close issues already fixed by recent PRs
