@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Five Lenses on synlynk — A Measured Deep Review | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Oct 02, 2026</span>
+        
+          <span class="blog-post-pr">PR 1913</span>
+        
+      </div>
+      <h1 class="blog-post-title">Five Lenses on synlynk — A Measured Deep Review</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>v0.25.0 &quot;Sovereign Silicon&quot; shipped local oMLX dispatch with $0 cost on Apple Silicon, tier-0
+auto-routing, and an OpenRouter gateway preview. The goal was still fully autonomous
+multi-agent dispatch across Claude, Codex, Agy, Grok, and local.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>No code changed. This PR asks whether that goal is the right one to pursue next. The review
+looks at synlynk as a developer would, as an architect, as a founder of an adjacent company
+(OpenRouter, OpenClaw, Nous Research), as a VC analyst, and as an AI media creator. Its
+conclusion: the next milestone should be <strong>external users and trust</strong>, not more surface area.</p>
+<h2>What Shipped</h2>
+<ul>
+<li><code>docs/strategy/2026-10-02-five-pov-review.md</code>. Every metric in it was measured on the day,
+not copied from earlier docs: ~80.7K LOC, 155 commands, 3,667 tests, 831 merged PRs,
+21 LIVE incidents, 1 star.</li>
+<li>A ranked list of architecture changes:
+<ul>
+<li>a <code>HarnessAdapter</code> protocol</li>
+<li>splitting the dispatch pipeline into stages</li>
+<li>structured telemetry and a job status based on verified side effects</li>
+<li>state consolidation with garbage collection</li>
+<li>safe-by-default permissions</li>
+<li>separating the core commands from optional packs</li>
+</ul>
+</li>
+<li>Version drift recorded: <code>VERSION</code>, the README badge, and the CHANGELOG all disagree.</li>
+</ul>
+<h2>Brainstorm Visuals</h2>
+<p>None.</p>
+<h2>Progress Toward the Goal</h2>
+<p>The dispatch engine is real and heavily dogfooded. The July review's two-dispatch-paths
+finding is now fixed. The product layer (onboarding, focus, trustworthy status) is still not
+ready for a launch.</p>
+<h2>The New Goalpost</h2>
+<p>Settle on one identity: a neutral control plane that routes coding tasks across vendors and
+local models, and proves which choice is best. Then cut the core down to about 15 commands,
+make the defaults safe, and get 10–20 external weekly users before v0.26.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
