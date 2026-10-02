@@ -67,6 +67,94 @@ _DEFAULT_MODELS_BY_TIER = {
 }
 
 
+def _preflight_local_silent(config_path=None) -> bool:
+    """Return whether the local oMLX endpoint is reachable without printing."""
+    try:
+        from synlynk.local_agent import _health_check, _load_local_config
+
+        config = _load_local_config(config_path)
+        health = _health_check(
+            config["endpoint"],
+            timeout=3,
+            api_key=os.environ.get("OPENAI_API_KEY"),
+        )
+        return bool(health.get("reachable", False))
+    except Exception:
+        return False
+
+
+def _get_local_capability_score(task_type: str, db) -> float:
+    """Return the latest local capability score, or zero when unavailable."""
+    try:
+        row = db.execute(
+            "SELECT weighted_score FROM capability_scores "
+            "WHERE agent='local' AND (discipline=? OR stage=?) "
+            "ORDER BY last_seen DESC LIMIT 1",
+            (task_type, task_type),
+        ).fetchone()
+        return float(row[0]) if row and row[0] is not None else 0.0
+    except Exception:
+        # Older/private ledgers may expose the task_type/score shape described
+        # by the routing design instead of the current capability view.
+        try:
+            row = db.execute(
+                "SELECT score FROM capability_scores "
+                "WHERE agent='local' AND task_type=? "
+                "ORDER BY recorded_at DESC LIMIT 1",
+                (task_type,),
+            ).fetchone()
+            return float(row[0]) if row and row[0] is not None else 0.0
+        except Exception:
+            return 0.0
+
+
+def _read_local_fallback(config_path=".synlynk/config.json") -> str:
+    """Read the configured auto-routing fallback, defaulting to ``agy``."""
+    try:
+        with open(config_path) as handle:
+            fallback = json.load(handle).get("local_fallback", "agy")
+        return fallback if isinstance(fallback, str) and fallback else "agy"
+    except Exception:
+        return "agy"
+
+
+def _read_local_threshold(config_path=".synlynk/config.json") -> float:
+    """Read the local auto-routing threshold, defaulting to ``0.5``."""
+    try:
+        with open(config_path) as handle:
+            threshold = float(json.load(handle).get("local_auto_threshold", 0.5))
+        return min(1.0, max(0.0, threshold))
+    except Exception:
+        return 0.5
+
+
+def _resolve_dispatch_agent(
+    requested_agent,
+    task_type: str,
+    db,
+    config_path: str = ".synlynk/config.json",
+) -> str:
+    """Resolve ``auto`` to local when healthy and sufficiently capable."""
+    if requested_agent is not None and requested_agent != "auto":
+        return requested_agent
+
+    fallback = _read_local_fallback(config_path)
+    threshold = _read_local_threshold(config_path)
+    if not _preflight_local_silent():
+        print(f"Routing to: {fallback} (local oMLX unreachable)")
+        return fallback
+
+    score = _get_local_capability_score(task_type, db)
+    if score >= threshold:
+        print(f"Routing to: local (tier-0, capability score: {score:.2f})")
+        return "local"
+    print(
+        f"Routing to: {fallback} (local capability score {score:.2f} "
+        f"< threshold {threshold:.2f})"
+    )
+    return fallback
+
+
 def ast_blast_radius_score(report: Optional[dict]) -> int:
     """Return a stable, conservative score from a Graphify impact report."""
     if not report:

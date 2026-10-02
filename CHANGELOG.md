@@ -8,9 +8,21 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ---
 
 ## [Unreleased]
-- feat(vizor): living GOVERNS goal resolution and alignment engine (Spec 3)
-- feat(vizor): repo-truth purge and native view HUD shells (Spec 2)
 - Ongoing Wave 3: Hosted Teams Server Hub, Cloudflare Tunnel full-duplex daemon, and Dynamic Quota Advisory service.
+
+## [v0.25.0] - 2026-10-02
+### Added
+- feat(local): three-model roster schema supporting `Ornith-1.0-9B-4bit`, `Qwen3.6-27B-4bit`, and `Ternary-Bonsai-2-27B-mlx-2bit`
+- feat(local): custom `prism-ml` loader availability detection and graceful fallback in `synlynk local doctor` and dispatch flag builder
+- feat(local): platform RAM prober (`_detect_hardware_tier()`) and `synlynk local doctor --init` tier detection and model recommendation
+- feat(dispatch): tier-0 zero-trust auto-routing via `synlynk dispatch auto` with health and capability score thresholding
+- feat(gateway): OpenRouter universal gateway configuration preview in `.synlynk/registry.json` and `synlynk gateway probe` CLI command
+- feat(docker): Sovereign Silicon Orb Stack container image (`docker/Dockerfile.sovereign`, `docker/entrypoint.sh`, `.github/workflows/sovereign-build.yml`)
+### Fixed
+- fix(dispatch): isolated local model argument construction to prevent bare model names from overriding oMLX provider configuration
+- fix(cli): graceful rendering of deferred dispatch job responses
+- fix(local): live end-to-end dispatch validation on Apple Silicon M3 (116s execution, 0 cost, clean diff)
+
 
 ## [v0.22.0] - 2026-09-24
 ### Added

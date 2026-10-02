@@ -140,6 +140,7 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `concierge synthesize` (primary) — goal
 - `addon list` (secondary) — sustain
 - `addon install` (primary) — sustain
+- `gateway probe` (primary) — sustain
 
 ## Tier 3 — Team / Enterprise
 

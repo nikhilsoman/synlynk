@@ -7,6 +7,18 @@ DEFAULT_REGISTRY: Dict[str, Any] = {
     "vercel": {"enabled": True, "auth_type": "byok", "vault_key": "VERCEL_TOKEN"},
     "openrouter": {"enabled": True, "auth_type": "byok", "vault_key": "OPENROUTER_API_KEY"},
     "fal_ai": {"enabled": False, "auth_type": "byok", "vault_key": "FAL_KEY"},
+    "gateways": {
+        "openrouter": {
+            "enabled": False,
+            "base_url": "https://openrouter.ai/api/v1",
+            "api_key_env": "OPENROUTER_API_KEY",
+            "models": [],
+            "note": (
+                "Dispatch integration ships in v0.26.0. Use synlynk gateway "
+                "probe to test connectivity."
+            ),
+        }
+    },
 }
 
 
@@ -15,7 +27,13 @@ def load_registry() -> Dict[str, Any]:
     if os.path.exists(path):
         try:
             with open(path, "r", encoding="utf-8") as f:
-                return json.load(f)
+                registry = json.load(f)
+                if not isinstance(registry, dict):
+                    return DEFAULT_REGISTRY
+                # Preserve user-provided gateway settings while making the
+                # preview schema available to older registry files.
+                registry.setdefault("gateways", DEFAULT_REGISTRY["gateways"])
+                return registry
         except (json.JSONDecodeError, OSError):
             return DEFAULT_REGISTRY
     return DEFAULT_REGISTRY

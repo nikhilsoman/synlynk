@@ -480,6 +480,11 @@ COMMAND_TAXONOMY = [
     {"command": "addon install", "governs_stage": "sustain", "maturity_tier": 2, "prominence": "primary",
      "orientation_gateway": False, "audience": "human",
      "trigger_phrases": ["install an add-on bundle", "turn on quality tooling"], "hook_event": None},
+
+    # --- v0.25.0: Sovereign Silicon, Local oMLX Fleet, Universal Gateway Preview ---
+    {"command": "gateway probe", "governs_stage": "sustain", "maturity_tier": 2, "prominence": "primary",
+     "orientation_gateway": False, "audience": "human",
+     "trigger_phrases": ["probe gateway connectivity", "test openrouter gateway"], "hook_event": None},
 ]
 
 

@@ -298,16 +298,20 @@ Self-management core, Board governance, Jev AST decisioning, swarms, concierge, 
 - [x] Autonomous Maintainer Zero-Issue Burndown Driver (P1) <!-- story:story-v024-t10-maintainer-burndown -->
   Continuous sweeping of open GitHub issues, driving open bugs to zero
 
-## v0.25.0 — Sovereign Silicon: Local oMLX Fleet [planned] (target: 2026-10-22)
+## v0.25.0 — Sovereign Silicon: Local oMLX Fleet (2026-10-02)
 
 Zero-cloud offline local model inference harness optimized for Apple Silicon MLX
 
-- [ ] Local oMLX / Aider Harness Integration (#1710) (P0)
-  Real subprocess dispatch to local MLX models (Llama-3, Qwen-2.5, DeepSeek)
-- [ ] Apple Silicon Hardware Tier & Health Prober (P1)
-  synlynk local doctor health check and hardware memory tier allocation
-- [ ] Offline Zero-Cloud AST Tier-0 Routing (P1)
-  Automatic fallback and tier-0 cost routing for self-hosted models
+- [x] Local oMLX / Aider Harness Integration (#1710) (P0)
+  Real subprocess dispatch to local MLX models (Ornith-1.0-9B, Qwen3.6-27B, Ternary-Bonsai-2-27B)
+- [x] Apple Silicon Hardware Tier & Health Prober (P1)
+  synlynk local doctor --init health check, hardware memory tier allocation, and prism-ml loader gate
+- [x] Offline Zero-Cloud AST Tier-0 Routing (P1)
+  Automatic fallback and tier-0 cost routing for self-hosted models (synlynk dispatch auto)
+- [x] Sovereign Silicon Orb Stack Docker Image (P1)
+  Single-container reproducible deployment (ghcr.io/nikhilsoman/synlynk-sovereign:v0.25.0)
+- [x] OpenRouter BYOK Universal Gateway Preview (P2)
+  Configuration schema preview and synlynk gateway probe connectivity check
 
 ## v0.26.0 — Universal Gateway: OpenRouter & Fal.ai [planned] (target: 2026-11-05)
 
