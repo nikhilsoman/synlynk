@@ -2334,7 +2334,7 @@ def cmd_migrate(dry_run: bool = False, recover: bool = False, setup_dr: bool = F
 
 def _write_generated_project_doc(filename: str, content: str) -> None:
     """Write a generated 4-doc to the migrated cache and the git-tracked docs dir."""
-    from synlynk import _docs_dir, _dr_sync, _is_migrated, _synlynk_project_docs_dir
+    from synlynk import DB_PATH, _docs_dir, _dr_sync, _is_migrated, _synlynk_project_docs_dir
 
     paths = []
     if _is_migrated():
@@ -2360,7 +2360,7 @@ def _write_generated_project_doc(filename: str, content: str) -> None:
             os.makedirs(parent, exist_ok=True)
         try:
             from synlynk.regen_guard import check_regen_write_guard
-            check_regen_write_guard(path, content)
+            check_regen_write_guard(path, content, source_path=DB_PATH)
             with open(path, "w") as fh:
                 fh.write(content)
         except (OSError, PermissionError):
@@ -2750,7 +2750,7 @@ def cmd_devlog_append(author: str, entry_date: str, body: str,
 def _write_decision_record_md(decision_id: str) -> None:
     """Regenerate the .md + .json sidecar for a decision from the decisions table.
     Writes to project-docs/decisions/ (git-tracked)."""
-    from synlynk import _docs_dir, _get_db
+    from synlynk import DB_PATH, _docs_dir, _get_db
 
     conn = _get_db()
     row = conn.execute(
@@ -2806,7 +2806,7 @@ def _write_decision_record_md(decision_id: str) -> None:
         f"> Signatures: see {date}-{slug}.json\n"
     )
     from synlynk.regen_guard import check_regen_write_guard
-    check_regen_write_guard(f"{base}.md", md_content)
+    check_regen_write_guard(f"{base}.md", md_content, source_path=DB_PATH)
     with open(f"{base}.md", "w") as f:
         f.write(md_content)
 
