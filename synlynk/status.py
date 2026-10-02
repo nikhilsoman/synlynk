@@ -426,9 +426,11 @@ def cmd_status(
 ) -> str:
     """Print ecosystem status for the current workspace."""
     from synlynk import _get_db, _read_sentinel_alerts, load_config
-    from synlynk.capability_watch import capability_sweep_status, is_smoke_test_stale
-    from synlynk.costs import _load_model_rates
-    from synlynk.worktree import _worktree_status_hint
+
+    if include_worktree_hint:
+        from synlynk.capability_watch import capability_sweep_status, is_smoke_test_stale
+        from synlynk.costs import _load_model_rates
+        from synlynk.worktree import _worktree_status_hint
 
     if db_conn is None:
         db_conn = _get_db()
@@ -437,20 +439,25 @@ def cmd_status(
     dispatch_mode = config.get("dispatch_mode", "daily-grind")
     harness_rows = _load_harness_status_rows(db_conn)
     # Annotate fleet operability tier (Supported / Proven / Experimental / …)
-    try:
-        from synlynk.fleet import tier_for_agent
+    if include_worktree_hint:
+        try:
+            from synlynk.fleet import tier_for_agent
 
-        for row in harness_rows:
-            row["fleet_tier"] = tier_for_agent(db_conn, row.get("harness_name", ""))
-    except Exception:
-        for row in harness_rows:
-            row.setdefault("fleet_tier", "—")
+            for row in harness_rows:
+                row["fleet_tier"] = tier_for_agent(db_conn, row.get("harness_name", ""))
+        except Exception:
+            for row in harness_rows:
+                row.setdefault("fleet_tier", "—")
     cycle_map = _load_cycle_capability_rows(db_conn)
     efficiency = _headless_efficiency_ratio(_load_exec_jobs_from_telemetry())
     sentinels_active = len(_read_sentinel_alerts())
-    rates_updated_at = _load_model_rates().get("rates_updated_at")
+    rates_updated_at = _load_model_rates().get("rates_updated_at") if include_worktree_hint else None
     worktree_hint = _worktree_status_hint() if include_worktree_hint else None
-    reassessment = capability_sweep_status(db_conn)
+    reassessment = (
+        capability_sweep_status(db_conn)
+        if include_worktree_hint
+        else {"overdue": False, "last_sweep_at": None, "jobs_since_sweep": 0, "job_threshold": 25, "max_age_days": 30}
+    )
     output = _format_status_terminal(
         harness_rows,
         cycle_map,

@@ -1,23 +1,10 @@
 #!/usr/bin/env python3
-import argparse
 import sys
 import os
-import subprocess
-import tempfile
-import shutil
-import time
-import json
 import re
-import threading
-import tempfile
-import urllib.request
-from pathlib import Path
 from typing import Optional, Tuple, Union
 import sqlite3 as _sqlite3
 import importlib as _importlib
-
-from synlynk.launch_templates import LAUNCH_TASK_TEMPLATES
-from synlynk.db_schema import _DB_SCHEMA, _DB_SCORES_VIEW
 
 from synlynk._constants import (
     HARNESS_CAPABILITY_BASELINES,
@@ -34,10 +21,28 @@ __version__ = VERSION
 _IS_TESTING = "pytest" in sys.modules or any("pytest" in str(arg) for arg in sys.argv)
 _FAST_CLI = not _IS_TESTING and (
     os.environ.get("SYNLYNK_CLI_ENTRYPOINT") == "1" or (
-        Path(sys.argv[0]).name in {"synlynk", "synlynk.py"}
-        or (Path(sys.argv[0]).name == "__main__.py" and "synlynk" in str(sys.argv[0]))
+        os.path.basename(sys.argv[0]) in {"synlynk", "synlynk.py"}
+        or (os.path.basename(sys.argv[0]) == "__main__.py" and "synlynk" in str(sys.argv[0]))
     ) or any(flag in sys.argv[1:] for flag in ("-h", "--help", "--version"))
 )
+
+if not _FAST_CLI:
+    import argparse
+    from pathlib import Path
+
+# The compatibility surface below historically relied on these names being
+# available from the package module.  Keep that behavior for imports/tests,
+# but do not pay for the modules on the subprocess CLI fast path.
+if not _FAST_CLI:
+    import json
+    import shutil
+    import subprocess
+    import tempfile
+    import threading
+    import time
+    import urllib.request
+
+
 _LEGACY_MODULES = (
     "upgrade", "sentinel", "probe", "fencing", "dispatch", "quota", "costs",
     "capability_roles", "taxonomy", "doctor", "team", "heal", "support_engineer",
@@ -55,6 +60,19 @@ def _load_legacy_imports():
     Keep that API, but avoid importing the entire command graph while argparse
     is only constructing or displaying the parser.
     """
+    # Restore module globals used by the older package-level helpers when a
+    # non-observability command leaves the fast CLI path.
+    for module_name in ("json", "shutil", "subprocess", "tempfile", "threading", "time"):
+        module = _importlib.import_module(module_name)
+        globals()[module_name] = module
+    globals()["urllib"] = _importlib.import_module("urllib")
+    _importlib.import_module("urllib.request")
+    launch_templates = _importlib.import_module("synlynk.launch_templates")
+    db_schema = _importlib.import_module("synlynk.db_schema")
+    globals()["LAUNCH_TASK_TEMPLATES"] = launch_templates.LAUNCH_TASK_TEMPLATES
+    globals()["_DB_SCHEMA"] = db_schema._DB_SCHEMA
+    globals()["_DB_SCORES_VIEW"] = db_schema._DB_SCORES_VIEW
+
     for module_name in _LEGACY_MODULES:
         module = _importlib.import_module(f"synlynk.{module_name}")
         globals().update({
@@ -82,7 +100,23 @@ def _load_legacy_imports():
 
 def main(argv=None):
     """Lazy compatibility entry point for installed console scripts."""
+    cli_tokens = list(argv) if argv is not None else sys.argv[1:]
+    if _FAST_CLI and cli_tokens and cli_tokens[0] in {"jobs", "status"}:
+        from synlynk._fast_cli import run_fast_command
+
+        if run_fast_command(cli_tokens) is True:
+            return None
     return _importlib.import_module("synlynk.cli").main(argv)
+
+
+def __getattr__(name):
+    """Lazily preserve compatibility exports removed from the fast path."""
+    if name in {"LAUNCH_TASK_TEMPLATES", "_DB_SCHEMA", "_DB_SCORES_VIEW"}:
+        module_name = "synlynk.launch_templates" if name == "LAUNCH_TASK_TEMPLATES" else "synlynk.db_schema"
+        value = getattr(_importlib.import_module(module_name), name)
+        globals()[name] = value
+        return value
+    raise AttributeError(name)
 
 CYCLE_COLORS = {
     "dream":   "#a78bfa",
@@ -126,6 +160,8 @@ def _launch_visible_template_ids() -> set:
 
 
 def _launch_visible_templates() -> list:
+    from synlynk.launch_templates import LAUNCH_TASK_TEMPLATES
+
     visible_ids = _launch_visible_template_ids()
     return [template for template in LAUNCH_TASK_TEMPLATES if template["id"] in visible_ids]
 
@@ -228,6 +264,8 @@ TASK_STATUSES = {
 
 def _project_root() -> str:
     """Return the shared repo root for the current git worktree, or CWD fallback."""
+    import subprocess
+
     try:
         common = subprocess.check_output(
             ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
@@ -277,6 +315,8 @@ def _resolve_db_path() -> str:
 
 def _is_git_worktree() -> bool:
     """Return whether the current directory is a linked git worktree."""
+    import subprocess
+
     try:
         git_dir_output = subprocess.check_output(
             ["git", "rev-parse", "--path-format=absolute", "--git-dir"],
@@ -303,6 +343,7 @@ _INITIAL_GIT_WORKTREE = _is_git_worktree()
 def _test_isolation_db_path() -> str:
     """Return a process-local DB path for pytest worktree execution."""
     import hashlib
+    import tempfile
 
     key = hashlib.md5(os.path.abspath(os.getcwd()).encode()).hexdigest()[:12]
     return os.path.join(tempfile.gettempdir(), "synlynk-test-db", f"{key}-{os.getpid()}.db")
@@ -321,7 +362,7 @@ def _should_isolate_worktree_db(db_path: str) -> bool:
     return os.path.abspath(db_path).startswith(canonical_root + os.sep)
 
 
-DB_PATH = _resolve_db_path()
+DB_PATH = os.environ.get("SYNLYNK_STATE_DB_PATH") if _FAST_CLI else _resolve_db_path()
 # The configured path is intentionally distinct from the path selected by the
 # last successful connection.  Away sandboxes may need the local fallback.
 ACTIVE_DB_PATH = None
@@ -370,11 +411,16 @@ def _get_db(
     SYNLYNK_ALLOW_SHARED_STATE_DB=1 only for tests that explicitly exercise
     shared-DB behavior.
     """
-    global ACTIVE_DB_PATH
+    global ACTIVE_DB_PATH, DB_PATH
     ACTIVE_DB_PATH = None
+
+    if DB_PATH is None:
+        DB_PATH = _resolve_db_path()
 
     def _check_write_capability(path: str) -> None:
         """Check access to *path* without opening SQLite or changing it."""
+        import tempfile
+
         parent = os.path.dirname(path) or "."
         if os.path.exists(path):
             fd = os.open(path, os.O_RDWR)

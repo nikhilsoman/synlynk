@@ -1801,8 +1801,11 @@ def _run_fast_observability_command(cli_tokens, selected_command):
     args = parser.parse_args(cli_tokens)
 
     if selected_command == "status":
-        if getattr(args, "platform", False):
+        if getattr(args, "platform", False) or not getattr(args, "json_output", False):
             return False
+        import json  # load_config keeps its historical package-level dependency
+
+        sys.modules["synlynk"].json = json
         from synlynk import _get_db
         from synlynk.capability_roles import _load_capability_roles
         from synlynk.sentinel import _read_sentinel_alerts
@@ -1834,6 +1837,12 @@ def _run_fast_observability_command(cli_tokens, selected_command):
     ):
         return False
 
+    # The established jobs command reconciles the legacy jobs.json ledger as
+    # well as daemon_jobs.  Keep that path whenever either source contains
+    # data; the fast renderer is only safe for an entirely empty workspace.
+    if os.path.exists(os.path.join(".synlynk", "jobs.json")):
+        return False
+
     from synlynk import _get_db
 
     conn = _get_db(migrate=False)
@@ -1850,30 +1859,14 @@ def _run_fast_observability_command(cli_tokens, selected_command):
         conn.close()
 
     if not rows:
-        print("  No active jobs. (0 completed — use synlynk jobs --all)")
+        print("No jobs found. Use `synlynk dispatch <agent> --task <task>` to start one.")
         return True
 
-    visible = rows if args.all_jobs else [row for row in rows if row[3] in ("queued", "running")]
-    if not visible:
-        done = sum(1 for row in rows if row[3] in ("done", "failed", "permission_denied"))
-        unknown = sum(1 for row in rows if row[3] == "unknown")
-        suffix = f"{done} completed"
-        if unknown:
-            suffix += f", {unknown} unknown"
-        print(f"  No active jobs. ({suffix} — use synlynk jobs --all)")
-        return True
+    # Non-empty daemon ledgers still need the established reconciliation and
+    # rendering path so stale PIDs and terminal states are refreshed before
+    # being displayed.
+    return False
 
-    print(f"{chr(27)}[1m{'ID':14}  {'AGENT':8}  {'STORY':12}  {'STATUS':10}  {'CTX':6}  {'EXIT':4}  GH-WRITE{chr(27)}[0m")
-    print("  " + "─" * 72)
-    for row in visible:
-        job_id, agent, story_id, status, _enqueued_at, exit_code, ctx_mode, requires_gh_write, verified = row
-        gh_write = "—" if not requires_gh_write else ("✓" if verified == "true" else "✗" if verified == "false" else "?")
-        print(
-            f"  {job_id:14}  {agent:8}  {(story_id or '—')[:12]:12}  "
-            f"{status:10}  {(ctx_mode or '—')[:6]:6}  "
-            f"{str(exit_code) if exit_code is not None else '—':4}  {gh_write}"
-        )
-    return True
 
 
 def main(argv=None) -> None:
