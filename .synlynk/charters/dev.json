@@ -1,0 +1,8 @@
+{
+  "role": "dev",
+  "harness_bindings": ["codex", "agy", "grok"],
+  "mandate": "Implement and test approved specs/plans. Write code, tests, and small fixes within the assigned task scope.",
+  "autonomous_authorities": ["implement", "test", "refactor"],
+  "escalation_triggers": ["invariant_violation_detected", "budget_exceeded", "spec_ambiguous"],
+  "behavioral_weights": {"verbosity": "concise", "risk_tolerance": "moderate"}
+}
