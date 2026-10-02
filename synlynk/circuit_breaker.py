@@ -20,14 +20,14 @@ from synlynk.sentinel import (
     process_identity_check,
 )
 
-DEFAULT_MAX_JOB_TOKENS = 300_000
-DEFAULT_MAX_JOB_COST_USD = 3.00
-DEFAULT_ZERO_FILE_TOKEN_THRESHOLD = 150_000
+DEFAULT_MAX_JOB_TOKENS = 5_000_000
+DEFAULT_MAX_JOB_COST_USD = 15.00
+DEFAULT_ZERO_FILE_TOKEN_THRESHOLD = 500_000
 
 DEFAULT_TIER_OVERRIDES: Dict[str, Dict[str, Any]] = {
-    "fast": {"max_job_tokens": 100_000, "max_job_cost_usd": 0.50},
-    "pro": {"max_job_tokens": 300_000, "max_job_cost_usd": 3.00},
-    "reasoning": {"max_job_tokens": 500_000, "max_job_cost_usd": 5.00},
+    "fast": {"max_job_tokens": 500_000, "max_job_cost_usd": 2.00},
+    "pro": {"max_job_tokens": 3_000_000, "max_job_cost_usd": 10.00},
+    "reasoning": {"max_job_tokens": 5_000_000, "max_job_cost_usd": 15.00},
 }
 
 
@@ -197,6 +197,26 @@ def evaluate_job_circuit_breaker(
         process=process,
         skip_identity_check=skip_identity_check_for_test,
     )
+
+    if not killed:
+        log_telemetry_event({
+            "type": "circuit_breaker_post_exit_warning",
+            "job_id": job.get("id"),
+            "agent": job.get("agent"),
+            "tokens": total_tokens,
+            "cost_usd": cost_usd,
+            "reason": reason,
+        })
+        return CircuitBreakerResult(
+            tripped=False,
+            reason=reason,
+            in_tokens=in_tokens,
+            out_tokens=out_tokens,
+            total_tokens=total_tokens,
+            cost_usd=cost_usd,
+            process_killed=False,
+            kill_method=kill_method,
+        )
 
     now_iso = time.strftime("%Y-%m-%dT%H:%M:%S")
     job["status"] = STATUS_CIRCUIT_BREAKER_TRIPPED
