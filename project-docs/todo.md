@@ -1523,7 +1523,7 @@ First, the time to live never takes effect for newly writt [testing] <!-- id:sto
 - [ ] Task 3 of docs/superpowers/plans/2026-09-29-r12-init-god-module-decomposition.md: In synlynk/logs.py and synlynk/platform_status.py, replace the local def _pkg block (def _pkg(name): import synlynk; r [testing] <!-- id:story-adhoc-1790733052 -->
 - [ ] Task 4 of docs/superpowers/plans/2026-09-29-r12-init-god-module-decomposition.md: In synlynk/__init__.py, delete the dead wizard-TUI scaffold block. It starts at the comment line '# -- Wizard TUI prim [frontend] <!-- id:story-adhoc-1790733595 -->
 - [ ] Full pytest suite hangs in a single monolithic run (splits/isolated files pass clean) [frontend] <!-- id:story-issue-1864 -->
-- [ ] Brainstorm + design synlynk's end-to-end FTUE/onboarding: greenfield, brownfield, multi-repo discovery, product narrative, terminal-vs-web, and Vizor's role (post-R12) [architecture] <!-- id:story-cf24a4ab -->
+- [x] Brainstorm + design synlynk's end-to-end FTUE/onboarding: greenfield, brownfield, multi-repo discovery, product narrative, terminal-vs-web, and Vizor's role (post-R12) [architecture] <!-- id:story-cf24a4ab -->
 - [ ] R12: consolidate _pkg() duplication + trim synlynk/__init__.py bloat [frontend] <!-- id:story-issue-1868 -->
 - [ ] Review pull request number 1869 in this repository as the qa role. This is a docs-only PR renaming a blog post file and filling in its pr/status frontmatter fields now that the PR number is known, plu [docs] <!-- id:story-adhoc-1790745292 -->
 - [ ] Review pull request number 1871 in this repository as the qa role. This is a docs-only project-docs checkpoint-sync PR: it marks story-54515ca1 (R12) done and regenerates project-docs/todo.md and proj [docs] <!-- id:story-adhoc-1790745590 -->
@@ -1551,3 +1551,87 @@ First, the time to live never takes effect for newly writt [testing] <!-- id:sto
 - [ ] Add a git pre-commit guard that stops the shared main repo checkout from being used as scratch space for feature work (root cause of a 2026-09-30 incident: an interactive Agy session ran 'git checkout [testing] <!-- id:story-adhoc-1790780255 -->
 - [ ] fix: guard commits from shared main checkout [testing] <!-- id:story-issue-1888 -->
 - [ ] docs: devlog checkpoint — #1886 concurrency architecture + PR#1888 worktree guard [security] <!-- id:story-issue-1889 -->
+- [ ] docs: checkpoint Specs 1–3 completion, archive finished stories, and update cost log [devops] <!-- id:story-issue-1893 -->
+- [x] Task 1 of Unified Onboarding Journeys & Lifecycle Engine.
+Read requirements first from:
+/Users/nikhilsoman/dev/synlynk/worktrees/feat-vizor-onboarding-engine/.superpowers/sdd/2026-10-01-unified-onboar [testing] <!-- id:story-adhoc-1790822819 -->
+- [x] Task 2 of Unified Onboarding Journeys & Lifecycle Engine.
+Read requirements first from:
+/Users/nikhilsoman/dev/synlynk/worktrees/feat-vizor-onboarding-engine/.superpowers/sdd/2026-10-01-unified-onboar [testing] <!-- id:story-adhoc-1790823068 -->
+- [x] Task 3 of Unified Onboarding Journeys & Lifecycle Engine.
+Read requirements first from:
+/Users/nikhilsoman/dev/synlynk/worktrees/feat-vizor-onboarding-engine/.superpowers/sdd/2026-10-01-unified-onboar [testing] <!-- id:story-adhoc-1790823236 -->
+- [x] Task 4 of Unified Onboarding Journeys & Lifecycle Engine. Read requirements first from: /Users/nikhilsoman/dev/synlynk/worktrees/feat-vizor-onboarding-engine/.superpowers/sdd/2026-10-01-unified-onboar [backend] <!-- id:story-adhoc-1790823767 -->
+- [x] Task 4 of Unified Onboarding Journeys & Lifecycle Engine. Read requirements first from: /Users/nikhilsoman/dev/synlynk/worktrees/feat-vizor-onboarding-engine/.superpowers/sdd/2026-10-01-unified-onboar [backend] <!-- id:story-adhoc-1790823792 -->
+- [x] Task 5 of Unified Onboarding Journeys & Lifecycle Engine. Read requirements first from: /Users/nikhilsoman/dev/synlynk/worktrees/feat-vizor-onboarding-engine/.superpowers/sdd/2026-10-01-unified-onboar [testing] <!-- id:story-adhoc-1790824926 -->
+- [x] Task 6 of Unified Onboarding Journeys & Lifecycle Engine. Read requirements first from: /Users/nikhilsoman/dev/synlynk/worktrees/feat-vizor-onboarding-engine/.superpowers/sdd/2026-10-01-unified-onboar [backend] <!-- id:story-adhoc-1790830649 -->
+- [x] Task 7 of Unified Onboarding Journeys & Lifecycle Engine. Read requirements first from: /Users/nikhilsoman/dev/synlynk/worktrees/feat-vizor-onboarding-engine/.superpowers/sdd/2026-10-01-unified-onboar [frontend] <!-- id:story-adhoc-1790832015 -->
+- [x] Task 8 of Unified Onboarding Journeys & Lifecycle Engine. Read requirements first from: /Users/nikhilsoman/dev/synlynk/worktrees/feat-vizor-onboarding-engine/.superpowers/sdd/2026-10-01-unified-onboar [frontend] <!-- id:story-adhoc-1790832592 -->
+- [x] Task 9 of Unified Onboarding Journeys & Lifecycle Engine. Read requirements first from: /Users/nikhilsoman/dev/synlynk/worktrees/feat-vizor-onboarding-engine/.superpowers/sdd/2026-10-01-unified-onboar [testing] <!-- id:story-adhoc-1790842507 -->
+- [x] feat(onboarding): Unified Onboarding Journeys & Self-Updating Lifecycle Engine [frontend] <!-- id:story-issue-1894 -->
+- [ ] Implement Task 1 of docs/superpowers/plans/2026-10-01-zero-risk-packaging-and-standalone-distribution.md: Package Standards & PEP 561 Compliance.
+
+1. Write failing test tests/test_packaging_metadata.p [ml] <!-- id:story-adhoc-1790876144 -->
+- [ ] Implement Task 2 of docs/superpowers/plans/2026-10-01-zero-risk-packaging-and-standalone-distribution.md: Install Manifest & Tier Provenance Engine.
+
+Follow TDD strictly:
+1. Write the test in tests/te [testing] <!-- id:story-adhoc-1790877403 -->
+- [ ] Implement Task 3 of docs/superpowers/plans/2026-10-01-zero-risk-packaging-and-standalone-distribution.md: Standalone Venv & Atomic Release Directory Engine.
+
+Follow TDD strictly:
+1. Write the test in  [testing] <!-- id:story-adhoc-1790877582 -->
+- [ ] Implement Task 4 of docs/superpowers/plans/2026-10-01-zero-risk-packaging-and-standalone-distribution.md: Multi-Tier Upgrade & Rollback Parity.
+
+Follow TDD strictly:
+1. Write tests in tests/test_tier_ [testing] <!-- id:story-adhoc-1790877788 -->
+- [ ] Implement Task 5 of docs/superpowers/plans/2026-10-01-zero-risk-packaging-and-standalone-distribution.md: Resilient 4-Tier Installer Ladder (install.sh).
+
+Follow TDD strictly:
+1. Write the test in tes [testing] <!-- id:story-adhoc-1790878119 -->
+- [ ] Implement Task 6 of docs/superpowers/plans/2026-10-01-zero-risk-packaging-and-standalone-distribution.md: Decoupled Ecosystem Provisioner & Doctor Diagnostic.
+
+Follow TDD strictly:
+1. Write the test i [testing] <!-- id:story-adhoc-1790878661 -->
+- [ ] Implement Task 7 of docs/superpowers/plans/2026-10-01-zero-risk-packaging-and-standalone-distribution.md: Hermetic Packaging & Zero-Risk CI Verification Suite.
+
+Create tests/test_zero_risk_packaging.p [testing] <!-- id:story-adhoc-1790878859 -->
+- [ ] Review and merge PR #1898 in nikhilsoman/synlynk per PR Review Discipline.
+
+Run 'synlynk pr check --pr 1898'.
+Run 'synlynk policy check-merge --role qa'.
+If reviewer identity allows approval, submit a [testing] <!-- id:story-issue-1898 -->
+- [x] Implement Task 1 of the Autonomous Repo Intelligence engine per the brief in .superpowers/sdd/2026-10-02-autonomous-repo-intelligence-and-goal-forming/task-1-brief.md. Create synlynk/repo_classifier.p [testing] <!-- id:story-auto-goal-task-1 -->
+- [x] Implement Task 2 of the Autonomous Repo Intelligence engine per the brief in .superpowers/sdd/2026-10-02-autonomous-repo-intelligence-and-goal-forming/task-2-brief.md. Create synlynk/greenfield_bluepr [testing] <!-- id:story-auto-goal-task-2 -->
+- [x] Implement Task 3 of the Autonomous Repo Intelligence engine per the brief in .superpowers/sdd/2026-10-02-autonomous-repo-intelligence-and-goal-forming/task-3-brief.md. Create synlynk/goal_synthesizer. [testing] <!-- id:story-auto-goal-task-3 -->
+- [x] Implement Task 4 of the Autonomous Repo Intelligence engine per the brief in .superpowers/sdd/2026-10-02-autonomous-repo-intelligence-and-goal-forming/task-4-brief.md. Create synlynk/brief.py and test [testing] <!-- id:story-auto-goal-task-4 -->
+- [x] Implement Task 5 of the Autonomous Repo Intelligence engine per the brief in .superpowers/sdd/2026-10-02-autonomous-repo-intelligence-and-goal-forming/task-5-brief.md. Update synlynk/viz.py and create [testing] <!-- id:story-auto-goal-task-5 -->
+- [x] Implement Task 6 of the Autonomous Repo Intelligence engine per the brief in .superpowers/sdd/2026-10-02-autonomous-repo-intelligence-and-goal-forming/task-6-brief.md. Update synlynk/dispatch.py and s [testing] <!-- id:story-auto-goal-task-6 -->
+- [x] Implement Task 7 of the Autonomous Repo Intelligence engine per the brief in .superpowers/sdd/2026-10-02-autonomous-repo-intelligence-and-goal-forming/task-7-brief.md. Update synlynk/cli.py and create [testing] <!-- id:story-auto-goal-task-7 -->
+- [x] Review and merge PR #1903 in nikhilsoman/synlynk per PR Review Discipline.
+
+Run 'synlynk pr check --pr 1903'.
+Run 'synlynk policy check-merge --role qa'.
+Submit approval via 'gh pr review 1903 --appro [testing] <!-- id:story-issue-1903 -->
+- [x] Implement Task 1 of LIVE-19: Circuit Breaker Clean-Exit Preservation & Ceiling Calibration [backend] <!-- id:story-abc3923f -->
+- [x] Implement Task 2 of LIVE-19: Jobs Reconciliation Observer-Effect Elimination [backend] <!-- id:story-6f88ef62 -->
+- [x] Implement Task 3 of LIVE-20: Quad-Harness Subscription Configuration & harness_billing Seed [backend] <!-- id:story-741f9192 -->
+- [x] Implement Task 4 of LIVE-20: Dual-Ledger Markdown Generation & Monthly Amortization Rollup [backend] <!-- id:story-73e0a8e5 -->
+- [x] Implement Task 5 of LIVE-19 & LIVE-20: End-to-End Integration, True-Up & Regression Verification [testing] <!-- id:story-b907ad30 -->
+- [x] Review and merge PR #1905: circuit breaker clean-exit preservation & quad-harness subscription dual-ledger (LIVE-19, LIVE-20) [testing] <!-- id:story-c5cb22f7 -->
+- [x] Review and merge PR #1906: 15-minute field trials documentation [backend] <!-- id:story-e5f2381b -->
+- [x] Ghost Issue Burndown: verify and close ~24 remediated issues on GitHub [backend] <!-- id:story-9cbe4cf7 -->
+- [x] fix: synlynk scan agent-file detection omits GROK.md (#341) [testing] <!-- id:story-ab44c45c -->
+- [x] docs: fill GROK.md domain ownership and instruction placeholders (#345) [docs] <!-- id:story-e332c8ea -->
+- [x] fix: GEMINI.md stale prose and cross-contaminated harness flags (#344) [docs] <!-- id:story-294a855a -->
+- [x] fix: Vizor Effort & Cost stage constants and progress bar CSS overlap (#263) [frontend] <!-- id:story-8dadb376 -->
+- [x] Implement Task 1: Tri-Modal Autonomy Dial & Stage Gating [backend] <!-- id:story-v024-t01-autonomy-dial -->
+- [x] Implement Task 2: Sovereign Board Governance & Ed25519 Proposal Gates [security] <!-- id:story-v024-t02-board-governance -->
+- [x] Implement Task 3: Vizor Boardroom HUD Backend & Template [frontend] <!-- id:story-v024-t03-boardroom-hud -->
+- [x] Implement Task 4: Machine-Readable Agent Charters & Authority Matrix [architecture] <!-- id:story-v024-t04-agent-charters -->
+- [x] Implement Task 5: Jev Sub-20ms AST Decision Engine (#1712) [architecture] <!-- id:story-v024-t05-jev-engine -->
+- [x] Implement Task 6: Parallel Worktree Swarm Engine [backend] <!-- id:story-v024-t06-swarm-engine -->
+- [x] Implement Task 7: The Concierge Agent (synlynk concierge) [backend] <!-- id:story-v024-t07-concierge-agent -->
+- [x] Implement Task 8: Turnkey Plug & Play Add-ons Engine (synlynk addon) [devops] <!-- id:story-v024-t08-addon-bundles -->
+- [x] Implement Task 9: Extended BYOK Product Registry & Encrypted Secret Vault [security] <!-- id:story-v024-t09-byok-registry -->
+- [x] Implement Task 10: Autonomous Maintainer Zero-Issue Burndown Driver [backend] <!-- id:story-v024-t10-maintainer-burndown -->
+- [x] Implement Task 11: End-to-End System Verification & Documentation Sync [testing] <!-- id:story-v024-t11-e2e-verification -->

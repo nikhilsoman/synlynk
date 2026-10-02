@@ -8,6 +8,7 @@
 !.synlynk/skills/
 !.synlynk/social_drafts.json
 !.synlynk/models.json
+!.synlynk/charters/
 __pycache__/
 *.pyc
 .DS_Store

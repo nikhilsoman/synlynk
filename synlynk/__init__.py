@@ -995,6 +995,39 @@ def _docs_dir() -> str:
     return "project-docs"
 
 
+_DEFAULT_HARNESS_BILLING = {
+    "claude": {
+        "payment_mode": "subscription",
+        "monthly_base_fee_usd": 20.0,
+        "projected_monthly_tokens": 10_000_000,
+        "allow_extra_usage": False,
+    },
+    "codex": {
+        "payment_mode": "subscription",
+        "monthly_base_fee_usd": 20.0,
+        "projected_monthly_tokens": 10_000_000,
+        "allow_extra_usage": False,
+    },
+    "agy": {
+        "payment_mode": "subscription",
+        "monthly_base_fee_usd": 20.0,
+        "projected_monthly_tokens": 10_000_000,
+        "allow_extra_usage": False,
+    },
+    "grok": {
+        "payment_mode": "subscription",
+        "monthly_base_fee_usd": 30.0,
+        "projected_monthly_tokens": 10_000_000,
+        "allow_extra_usage": False,
+    },
+}
+
+
+def _default_harness_billing() -> dict:
+    """Return an independent copy of the standard quad-harness billing seed."""
+    return {agent: dict(config) for agent, config in _DEFAULT_HARNESS_BILLING.items()}
+
+
 def load_config() -> dict:
     """Loads .synlynk/config.json with schema-v1 defaults."""
     capability_roles = _load_capability_roles()
@@ -1002,6 +1035,8 @@ def load_config() -> dict:
         "schema_version": 1,
         "budget": {"limit_usd": 10.0, "limit_requests": 100},
         "dispatch": {"stacking": "auto", "gate_suite_cmd": ""},
+        "local_auto_threshold": 0.5,
+        "local_fallback": "agy",
         "watch_interval_seconds": 30,
         "auto_smoke_test": False,
         "auto_launch_after_wizard": True,
@@ -1025,7 +1060,7 @@ def load_config() -> dict:
         "review_stall_timeout_minutes": 90,
         "agents": {},
         "payment_models": {},
-        "harness_billing": {},
+        "harness_billing": _default_harness_billing(),
         "capability_sweep": {"cost_cap_usd": 10.0},
         "roles": capability_roles if capability_roles is not None else _default_roles_map(),
         "story_classification": {"method": "heuristic"},
@@ -1041,9 +1076,14 @@ def load_config() -> dict:
     try:
         with open(config_file) as f:
             config = json.load(f)
+        has_harness_billing = "harness_billing" in config
         for key, val in defaults.items():
             if key not in config:
-                config[key] = val
+                # Existing project configs retain legacy pay-as-you-go behavior
+                # unless they explicitly opt into the seeded harness billing
+                # block.  A brand-new config still gets the quad-harness seed
+                # through ``defaults`` above.
+                config[key] = {} if key == "harness_billing" else val
         if capability_roles is not None:
             config["roles"] = capability_roles
         elif "roles" not in config:
@@ -1058,11 +1098,13 @@ def load_config() -> dict:
             if key not in config.get("nudges", {}):
                 config.setdefault("nudges", {})[key] = val
         if not isinstance(config.get("harness_billing"), dict):
-            config["harness_billing"] = {}
+            config["harness_billing"] = _default_harness_billing()
+        elif not config["harness_billing"] and has_harness_billing:
+            config["harness_billing"] = _default_harness_billing()
         for billing in config["harness_billing"].values():
             if isinstance(billing, dict):
                 billing.setdefault("payment_mode", "pay_as_you_go")
-                billing.setdefault("monthly_base_fee_usd", 0.0)
+                billing.setdefault("monthly_base_fee_usd", billing.get("subscription_fee_usd", 0.0))
                 billing.setdefault("projected_monthly_tokens", 10_000_000)
                 billing.setdefault("allow_extra_usage", False)
                 billing.setdefault("extra_usage_cap_usd", None)
@@ -1456,6 +1498,42 @@ def discover_agents(config: dict = None) -> list:
             "discovery_path": path or "",
         })
     return found
+
+
+def probe_all_configured_harnesses(agents: list = None) -> dict:
+    """Populate probe metadata for the harnesses selected for this workspace."""
+    configured = list(agents) if agents is not None else []
+    if agents is None:
+        config = load_config()
+        configured = list(config.get("workgroup_agents") or [])
+    if agents is None and not configured:
+        configured = [entry["name"] for entry in discover_agents() if entry.get("functional")]
+    configured = list(dict.fromkeys(
+        name for name in configured if name in HARNESS_CAPABILITY_BASELINES
+    ))
+    results = {}
+    if not configured:
+        return results
+
+    from synlynk.probe import _probe_agent
+
+    db_conn = _get_db()
+    try:
+        for harness_name in configured:
+            try:
+                results[harness_name] = _probe_agent(
+                    harness_name, db_conn, fast_path_ok=False, write_fence=False
+                )
+            except Exception as exc:
+                results[harness_name] = {
+                    "status": "unavailable",
+                    "version": "unavailable",
+                    "error": str(exc),
+                }
+        db_conn.commit()
+    finally:
+        db_conn.close()
+    return results
 
 
 
@@ -1977,7 +2055,7 @@ def _update_config(updates: dict) -> None:
 
 # Task 3-5: Repo scanning, maturity detection, section signals, semantic matching, GH ID extraction
 _PROJECT_DOC_NAMES = {"roadmap.md", "todo.md", "memory.md", "costs.md", "devlog.md"}
-_AGENT_FILE_NAMES = {"CLAUDE.md", "GEMINI.md", "AGENTS.md", "AI_INSTRUCTIONS.md"}
+_AGENT_FILE_NAMES = {"CLAUDE.md", "GEMINI.md", "AGENTS.md", "GROK.md", "AI_INSTRUCTIONS.md"}
 _SCAN_SKIP_DIRS = {
     ".git", "node_modules", ".synlynk", "project-docs",
     "__pycache__", ".venv", "venv", "env", ".next", "dist", "build",
@@ -3034,6 +3112,14 @@ def init(force: bool = False, agents: list = None,
         config_json_content = templates.get("config.json", "")
         if config_json_content:
             if not os.path.exists(config_path) or force:
+                try:
+                    config_payload = json.loads(config_json_content)
+                except (TypeError, json.JSONDecodeError):
+                    config_payload = None
+                if isinstance(config_payload, dict):
+                    config_payload.setdefault("local_auto_threshold", 0.5)
+                    config_payload.setdefault("local_fallback", "agy")
+                    config_json_content = json.dumps(config_payload, indent=2) + "\n"
                 with open(config_path, "w") as f:
                     f.write(config_json_content)
 
@@ -3109,6 +3195,19 @@ def init(force: bool = False, agents: list = None,
 
     _seed_capability_ledger_from_baseline(_get_db())
 
+    # LIVE-21: make probe metadata available before the first dispatch.  Do
+    # not probe fallback names when no harness is installed: some harness
+    # probes perform network checks and init must retain its fast headless
+    # path.  Explicit ``agents=`` remains authoritative.
+    if agents is not None:
+        probe_targets = sorted(set(agents))
+    else:
+        # Keep the legacy no-argument init path bounded.  Explicitly selected
+        # harnesses are probed here; otherwise first dispatch performs the
+        # defensive inline probe for the discovered harness.
+        probe_targets = []
+    probe_all_configured_harnesses(probe_targets)
+
     if auto_defaults:
         print(f"  Auto-selected defaults: enrichment=no, email=empty, industry={industry}")
 
@@ -3120,6 +3219,8 @@ def init(force: bool = False, agents: list = None,
         if len(functional) >= 3:
             print(f"    {_CYAN}synlynk run --trio --task \"your task\"{_RESET}  "
                   f"← runs {agent_names} in parallel")
+    print(f"\n  Background Supervision:")
+    print(f"    {_CYAN}synlynk daemon --install-service{_RESET}  ← supervise daemon across reboots (launchd/systemd)")
     print(f"\n  Next: {_DIM}synlynk status  ·  synlynk jobs  ·  synlynk dispatch --help{_RESET}\n")
 
 # --- module extractions (backwards compat) ---

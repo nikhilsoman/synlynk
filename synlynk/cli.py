@@ -51,6 +51,102 @@ def _warn_stale_repo_version(installed_version, cwd=None):
         file=sys.stderr,
     )
 
+def _collect_brownfield_evidence(repo_path: str) -> dict:
+    """Walk ``repo_path`` into the list-shaped evidence dict expected by
+    ``synlynk.goal_synthesizer.synthesize_brownfield_goals``."""
+    from synlynk.repo_classifier import _CODE_EXTENSIONS, _EXCLUDED_DIRS, _KNOWN_MANIFESTS
+
+    code_files, test_files, manifests, languages = [], [], [], []
+    for root, dirs, files in os.walk(repo_path):
+        dirs[:] = [d for d in dirs if d not in _EXCLUDED_DIRS]
+        for f in files:
+            rel = os.path.relpath(os.path.join(root, f), repo_path)
+            if f in _KNOWN_MANIFESTS and f not in manifests:
+                manifests.append(f)
+            ext = os.path.splitext(f)[1].lower()
+            if ext not in _CODE_EXTENSIONS:
+                continue
+            if "test" in f.lower() or "spec" in f.lower():
+                test_files.append(rel)
+            else:
+                code_files.append(rel)
+            if ext not in languages:
+                languages.append(ext)
+
+    return {
+        "code_files": code_files,
+        "test_files": test_files,
+        "manifests": manifests,
+        "languages": languages,
+        "open_issues": [],
+        "uncommitted_diffs": [],
+    }
+
+
+def _synthesize_goals_for_repo(repo_path: str, non_interactive: bool, blueprint=None, charters=None):
+    """Shared Welcome Fork + goal synthesis flow used by both
+    ``synlynk brainstorm`` and ``synlynk brief``. Returns (mode, goals, classification)."""
+    from synlynk.repo_classifier import classify_repository, RepoType, prompt_welcome_fork
+    from synlynk.greenfield_blueprints import synthesize_greenfield_goals
+    from synlynk.goal_synthesizer import synthesize_brownfield_goals, enrich_goals_ambient
+
+    classification = classify_repository(repo_path)
+
+    if blueprint:
+        fork = "spin_greenfield"
+    else:
+        fork = prompt_welcome_fork(classification, interactive=not non_interactive)
+
+    if fork == "spin_greenfield":
+        blueprint_id = blueprint or "personal_assistant"
+        selected_charters = [c.strip() for c in (charters or "").split(",") if c.strip()] or None
+        goals = synthesize_greenfield_goals(blueprint_id, selected_charters)
+        return "Greenfield", goals, classification
+
+    evidence = _collect_brownfield_evidence(repo_path)
+    goals = synthesize_brownfield_goals(evidence)
+    goals = enrich_goals_ambient(goals, evidence)
+    return "Brownfield", goals, classification
+
+
+def cmd_brainstorm(args) -> None:
+    """Classify the repo (Welcome Fork), synthesize strategic goals, and
+    offer them for review/approval."""
+    from synlynk.brief import review_and_approve_goals_tui
+
+    repo_path = getattr(args, "path", None) or "."
+    non_interactive = getattr(args, "non_interactive", False)
+    mode, goals, _classification = _synthesize_goals_for_repo(
+        repo_path, non_interactive, getattr(args, "blueprint", None), getattr(args, "charters", None))
+
+    approved = review_and_approve_goals_tui(goals, interactive=not non_interactive)
+
+    print(f"\n✦ {mode} goal synthesis complete — {len(approved)} goal(s) approved.")
+    for g in approved:
+        print(f"  [{g.get('priority')}] {g.get('id')}: {g.get('title')}")
+    print("\nRun `synlynk brief` to generate an Executive Project Brief from these signals.")
+
+
+def cmd_brief(args) -> None:
+    """Generate and save an Executive Project Brief summarizing discovered
+    signals and synthesized strategic goals."""
+    from synlynk.brief import generate_executive_brief, save_executive_brief
+
+    repo_path = getattr(args, "path", None) or "."
+    mode, goals, classification = _synthesize_goals_for_repo(
+        repo_path, non_interactive=True, blueprint=getattr(args, "blueprint", None),
+        charters=getattr(args, "charters", None))
+
+    evidence = {
+        "code_files": classification.code_file_count,
+        "manifests": classification.manifests,
+        "test_files": classification.test_file_count,
+    }
+    content = generate_executive_brief(repo_path, goals, evidence, mode=mode)
+    brief_path = save_executive_brief(repo_path, content)
+    print(f"\n✦ Executive Project Brief saved to {brief_path}")
+
+
 def cmd_watch(args) -> None:
     """Terminal HUD for live workspace state."""
     import select
@@ -192,6 +288,8 @@ _TOP_LEVEL_COMMANDS = (
     "logs", "shell", "open", "launch", "run", "story", "pm", "tpm", "score", "charters", "cost",
     "roadmap", "policy", "credit", "backlog", "quota", "schedule", "pr", "capability",
     "instructions", "marketing", "roles", "release", "viz", "backfill-capability-ratings",
+    "board", "concierge", "addon", "autonomy",
+    "gateway",
 )
 
 
@@ -276,6 +374,27 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
                              help="Allow init/brownfield to replace generated 4-docs on a migrated ledger (off by default)")
     init_parser.add_argument("--dry-run", action="store_true", dest="dry_run",
                              help="Preview what init would write without writing anything")
+
+    brainstorm_parser = subparsers.add_parser(
+        "brainstorm", help="Classify this repo (Welcome Fork) and synthesize strategic goals")
+    brainstorm_parser.add_argument("--path", default=".",
+                                    help="Repository path to analyze (default: current directory)")
+    brainstorm_parser.add_argument("--yes", "--non-interactive", action="store_true",
+                                    dest="non_interactive",
+                                    help="Use safe defaults without prompting")
+    brainstorm_parser.add_argument("--blueprint", default=None,
+                                    help="Force a Greenfield blueprint id (personal_assistant, dotfiles)")
+    brainstorm_parser.add_argument("--charters", default=None,
+                                    help="Comma-separated charter ids for the personal_assistant blueprint")
+
+    brief_parser = subparsers.add_parser(
+        "brief", help="Generate and save an Executive Project Brief (project-docs/brief.md)")
+    brief_parser.add_argument("--path", default=".",
+                               help="Repository path to analyze (default: current directory)")
+    brief_parser.add_argument("--blueprint", default=None,
+                               help="Force a Greenfield blueprint id (personal_assistant, dotfiles)")
+    brief_parser.add_argument("--charters", default=None,
+                               help="Comma-separated charter ids for the personal_assistant blueprint")
 
     upgrade_parser = subparsers.add_parser("upgrade", help="Check for and apply updates")
     upgrade_parser.add_argument("--dry-run", action="store_true", dest="dry_run",
@@ -422,7 +541,27 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
 
     local_parser = subparsers.add_parser("local", help="Manage the local (oMLX) harness")
     local_sub = local_parser.add_subparsers(dest="local_action")
-    local_sub.add_parser("doctor", help="Check oMLX endpoint reachability and model roster")
+    local_doctor_parser = local_sub.add_parser(
+        "doctor", help="Check oMLX endpoint reachability and model roster"
+    )
+    local_doctor_parser.add_argument(
+        "--init",
+        action="store_true",
+        default=False,
+        help="Detect hardware tier and write pinned_model to .agents/local.json",
+    )
+
+    gateway_parser = subparsers.add_parser("gateway", help="Manage external model gateways")
+    gateway_sub = gateway_parser.add_subparsers(dest="gateway_cmd")
+    probe_gateway_parser = gateway_sub.add_parser("probe", help="Test gateway connectivity")
+    probe_gateway_parser.add_argument(
+        "--gateway", default=None,
+        help="Name of gateway to probe (default: all enabled)",
+    )
+    probe_gateway_parser.add_argument(
+        "--config", default=".synlynk/registry.json",
+        help="Path to registry.json",
+    )
 
     models_parser = subparsers.add_parser("models", help="Inspect and discover the model registry")
     models_sub = models_parser.add_subparsers(dest="models_action")
@@ -924,8 +1063,8 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     known_agents = sorted(HARNESS_CAPABILITY_BASELINES)
     dispatch_parser.add_argument("agent",
         nargs="?", default=None,
-        choices=known_agents,
-        help=f"Harness name: {', '.join(known_agents)}. Optional when --as-agent triggers auto-selection.")
+        choices=known_agents + ["auto"],
+        help=f"Harness name: {', '.join(known_agents + ['auto'])}. Optional when --as-agent triggers auto-selection.")
     dispatch_parser.add_argument("--task", required=True,
         help="Task description for the harness")
     dispatch_parser.add_argument("--story", default=None, dest="story_id",
@@ -1256,6 +1395,7 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     cost_true_up_parser = cost_sub.add_parser("true-up", help="Reconcile subscription costs for a month")
     cost_true_up_parser.add_argument("--month", default=None, help="Billing month in YYYY-MM format")
     cost_true_up_parser.add_argument("--harness", default=None)
+    cost_billing_parser = cost_sub.add_parser("billing", help="Show harness subscription billing and amortization configuration")
 
     roadmap_parser = subparsers.add_parser("roadmap", help="Manage the roadmap")
     roadmap_sub = roadmap_parser.add_subparsers(dest="roadmap_action")
@@ -1549,6 +1689,49 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     viz_parser.add_argument("--hosted", action="store_true",
                             help="Show the fail-closed hosted Vizor placeholder")
 
+    autonomy_parser = subparsers.add_parser(
+        "autonomy", help="View or set the workspace autonomy dial (manual/supervised/autonomous)")
+    autonomy_sub = autonomy_parser.add_subparsers(dest="autonomy_action")
+    autonomy_sub.add_parser("show", help="Show the current autonomy mode")
+    autonomy_set_parser = autonomy_sub.add_parser("set", help="Set the autonomy mode")
+    autonomy_set_parser.add_argument(
+        "mode", choices=["manual", "supervised", "autonomous"])
+
+    board_parser = subparsers.add_parser(
+        "board", help="Sovereign Board governance: Ed25519-signed proposal ledger")
+    board_sub = board_parser.add_subparsers(dest="board_action")
+    board_propose_parser = board_sub.add_parser("propose", help="Create a new board proposal")
+    board_propose_parser.add_argument(
+        "--gate", required=True,
+        choices=["master_goal", "spec_ratification", "release_tag", "budget_topup", "board_admission"])
+    board_propose_parser.add_argument("--title", required=True)
+    board_propose_parser.add_argument("--description", default="")
+    board_propose_parser.add_argument("--budget", type=float, default=0.0, dest="budget")
+    board_sign_parser = board_sub.add_parser("sign", help="Sign a pending proposal as the Genesis Chair")
+    board_sign_parser.add_argument("proposal_id")
+    board_sign_parser.add_argument("--key-path", default=None, dest="key_path")
+    board_show_parser = board_sub.add_parser("show", help="Show a proposal's current state")
+    board_show_parser.add_argument("proposal_id")
+
+    concierge_parser = subparsers.add_parser(
+        "concierge", help="Concierge Agent: synthesize structured feature proposals from answers")
+    concierge_sub = concierge_parser.add_subparsers(dest="concierge_action")
+    concierge_synth_parser = concierge_sub.add_parser(
+        "synthesize", help="Synthesize a GitHub-issue-ready feature proposal")
+    concierge_synth_parser.add_argument("--title", required=True)
+    concierge_synth_parser.add_argument("--problem", default="")
+    concierge_synth_parser.add_argument("--scope", default="")
+    concierge_synth_parser.add_argument("--criteria", default="")
+    concierge_synth_parser.add_argument("--out", default=None, help="Write output to this file instead of stdout")
+
+    from synlynk.addon import list_available_addons as _list_available_addons
+    addon_parser = subparsers.add_parser(
+        "addon", help="Turnkey plug-and-play add-on bundles (quality, security, observability)")
+    addon_sub = addon_parser.add_subparsers(dest="addon_action")
+    addon_sub.add_parser("list", help="List available add-on bundles")
+    addon_install_parser = addon_sub.add_parser("install", help="Install an add-on bundle")
+    addon_install_parser.add_argument("bundle", choices=_list_available_addons())
+
     return parser
 
 
@@ -1757,6 +1940,10 @@ def main(argv=None) -> None:
                  non_interactive=getattr(args, "non_interactive", False),
                  dry_run=getattr(args, "dry_run", False),
                  replace_generated_docs=getattr(args, "replace_generated_docs", False))
+    elif args.command == "brainstorm":
+        cmd_brainstorm(args)
+    elif args.command == "brief":
+        cmd_brief(args)
     elif args.command == "exec":
         force = getattr(args, 'force', False)
         sys.exit(exec_command(args.cmd, force=force))
@@ -1959,6 +2146,19 @@ def main(argv=None) -> None:
             _effective_task_type = getattr(args, "task_type", None) or (
                 _infer_task_type(args.task) if _effective_requires_gh_write else None
             )
+            if args.agent == "auto":
+                from synlynk import _get_db
+                from synlynk.dispatch import _resolve_dispatch_agent
+
+                db = _get_db(read_only=True)
+                try:
+                    args.agent = _resolve_dispatch_agent(
+                        args.agent,
+                        _effective_task_type or "testing",
+                        db,
+                    )
+                finally:
+                    db.close()
             if _effective_task_type == "review" and not getattr(args, "task_type", None):
                 print(
                     "  info: inferred task_type=review from task text "
@@ -2214,6 +2414,9 @@ def main(argv=None) -> None:
         elif args.cost_action == "true-up":
             from synlynk.costs import cmd_cost_true_up
             cmd_cost_true_up(month=args.month, harness=args.harness)
+        elif args.cost_action == "billing":
+            from synlynk.costs import cmd_cost_billing
+            cmd_cost_billing(args)
     elif args.command == "roadmap":
         if args.roadmap_action == "add":
             try:
@@ -2472,9 +2675,15 @@ def main(argv=None) -> None:
     elif args.command == "local":
         from synlynk.local_agent import cmd_local_doctor
         if args.local_action == "doctor":
-            sys.exit(cmd_local_doctor())
+            sys.exit(cmd_local_doctor(init=args.init))
         else:
             help_parsers.get("local", parser).print_help()
+    elif args.command == "gateway":
+        if args.gateway_cmd == "probe":
+            from synlynk.gateway import cmd_gateway_probe
+            sys.exit(cmd_gateway_probe(gateway=args.gateway, config_path=args.config))
+        else:
+            help_parsers.get("gateway", parser).print_help()
     elif args.command == "models":
         from synlynk.models import cmd_models_discover, cmd_models_list, cmd_models_show
         action = getattr(args, "models_action", None)
@@ -2727,6 +2936,60 @@ def main(argv=None) -> None:
             cmd_session_close(disposition=args.disposition, summary=args.summary)
         else:
             help_parsers.get("session", parser).print_help()
+    elif args.command == "autonomy":
+        from synlynk.autonomy import get_autonomy_mode, set_autonomy_mode
+        action = getattr(args, "autonomy_action", None)
+        if action == "set":
+            mode = set_autonomy_mode(args.mode)
+            print(f"  ✓ autonomy_mode = {mode.value}")
+        else:
+            mode = get_autonomy_mode()
+            print(f"  Autonomy mode: {mode.value}")
+    elif args.command == "board":
+        from synlynk.board_governance import ProposalGate, create_proposal, load_proposal, sign_proposal
+        action = getattr(args, "board_action", None)
+        if action == "propose":
+            prop = create_proposal(
+                ProposalGate(args.gate), args.title,
+                description=args.description, budget_usd=args.budget)
+            print(f"  ✓ Proposal created: {prop.proposal_id} (status={prop.status.value})")
+        elif action == "sign":
+            prop = sign_proposal(args.proposal_id, key_path=args.key_path)
+            print(f"  ✓ Proposal {prop.proposal_id} signed by {prop.signer_identity} (status={prop.status.value})")
+        elif action == "show":
+            prop = load_proposal(args.proposal_id)
+            if prop is None:
+                print(f"  ✗ Proposal {args.proposal_id} not found")
+            else:
+                print(json.dumps(prop.to_dict(), indent=2))
+        else:
+            help_parsers.get("board", parser).print_help()
+    elif args.command == "concierge":
+        from synlynk.concierge import synthesize_github_issue
+        action = getattr(args, "concierge_action", None)
+        if action == "synthesize":
+            answers = {
+                "title": args.title, "problem": args.problem,
+                "scope": args.scope, "criteria": args.criteria,
+            }
+            body = synthesize_github_issue(answers)
+            if args.out:
+                with open(args.out, "w", encoding="utf-8") as f:
+                    f.write(body)
+                print(f"  ✓ Synthesized proposal written to {args.out}")
+            else:
+                print(body)
+        else:
+            help_parsers.get("concierge", parser).print_help()
+    elif args.command == "addon":
+        from synlynk.addon import install_addon_bundle, list_available_addons
+        action = getattr(args, "addon_action", None)
+        if action == "install":
+            install_addon_bundle(args.bundle)
+            print(f"  ✓ Add-on bundle installed: {args.bundle}")
+        else:
+            for name in list_available_addons():
+                print(f"  - {name}")
     else:
         parser.print_help()
 

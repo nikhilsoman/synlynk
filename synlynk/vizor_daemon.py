@@ -111,6 +111,47 @@ def workspace_render_context(repo_path: Path, db_path: Path, cache_dir: Path):
             os.chdir(old_cwd)
 
 
+@contextlib.contextmanager
+def _workspace_cwd(repo_path: Path):
+    """Chdir to a workspace repo for the duration of a board_governance/autonomy call.
+
+    Those modules resolve their state (`.synlynk/proposals`, `.synlynk/config.json`)
+    relative to os.getcwd(), same CWD-coupling rationale as workspace_render_context above.
+    """
+    with _RENDER_LOCK:
+        old_cwd = os.getcwd()
+        try:
+            os.chdir(repo_path)
+            yield
+        finally:
+            os.chdir(old_cwd)
+
+
+def _list_proposals_for_context(ctx: "WorkspaceContext") -> list:
+    from synlynk.board_governance import _proposals_dir
+
+    with _workspace_cwd(ctx.repo_path):
+        proposals_dir = _proposals_dir()
+        results = []
+        for name in sorted(os.listdir(proposals_dir)):
+            if not name.endswith(".json"):
+                continue
+            with open(os.path.join(proposals_dir, name), "r", encoding="utf-8") as f:
+                results.append(json.load(f))
+        return results
+
+
+def _sign_proposal_for_context(ctx: "WorkspaceContext", proposal_id: str, key_path: Optional[str]) -> dict:
+    from synlynk.board_governance import sign_proposal
+
+    if not proposal_id:
+        raise ValueError("proposal_id is required")
+
+    with _workspace_cwd(ctx.repo_path):
+        signed = sign_proposal(proposal_id, key_path=key_path)
+        return signed.to_dict()
+
+
 def _is_transient_test_path(path_str: str) -> bool:
     test_markers = (
         "/pytest-",
@@ -598,8 +639,52 @@ def build_workspace_routing_handler():
                     self.send_error(404, f"Unknown workspace: {slug}")
                     return False
 
+                if subpath == "board":
+                    from synlynk.autonomy import get_autonomy_mode
+                    from synlynk.viz import generate_boardroom_html
+
+                    with _workspace_cwd(ctx.repo_path):
+                        mode = get_autonomy_mode()
+                    html_body = generate_boardroom_html(
+                        workspace_slug=slug, autonomy_mode=mode.value
+                    ).encode("utf-8")
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/html; charset=utf-8")
+                    self.send_header("Content-Length", str(len(html_body)))
+                    self.end_headers()
+                    if self.command == "GET":
+                        self.wfile.write(html_body)
+                    return False
+
                 if subpath.startswith("api/"):
                     api_route = subpath[len("api/"):]
+                    if api_route == "board/proposals" and self.command == "GET":
+                        proposals = _list_proposals_for_context(ctx)
+                        body = json.dumps({"proposals": proposals}).encode("utf-8")
+                        self.send_response(200)
+                        self.send_header("Content-Type", "application/json; charset=utf-8")
+                        self.send_header("Content-Length", str(len(body)))
+                        self.end_headers()
+                        self.wfile.write(body)
+                        return False
+
+                    if api_route == "board/proposals/sign" and self.command == "POST":
+                        length = int(self.headers.get("Content-Length", 0))
+                        payload = json.loads(self.rfile.read(length)) if length else {}
+                        proposal_id = payload.get("proposal_id")
+                        key_path = payload.get("key_path")
+                        try:
+                            signed = _sign_proposal_for_context(ctx, proposal_id, key_path)
+                            res = json.dumps({"ok": True, "proposal": signed}).encode("utf-8")
+                            self.send_response(200)
+                        except Exception as exc:
+                            res = json.dumps({"ok": False, "error": str(exc)}).encode("utf-8")
+                            self.send_response(400)
+                        self.send_header("Content-Type", "application/json")
+                        self.end_headers()
+                        self.wfile.write(res)
+                        return False
+
                     if api_route == "board":
                         from synlynk.board import board_data_for_context
 

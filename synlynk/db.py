@@ -2569,7 +2569,7 @@ def _generate_costs_md() -> None:
     """Writes costs.md as a generated view of cost_entries.
     Post-migration: writes to .synlynk/project-docs/costs.md.
     Pre-migration: writes to project-docs/costs.md."""
-    from synlynk import _docs_dir, _get_db, _is_migrated
+    from synlynk import _docs_dir, _get_db, _is_migrated, load_config
     if not _is_migrated():
         docs_dir = _docs_dir()
         if not os.path.exists(docs_dir):
@@ -2578,7 +2578,7 @@ def _generate_costs_md() -> None:
     conn = _get_db()
     cursor = conn.execute(
         "SELECT session_date, agent, model, input_tokens, output_tokens, "
-        "total_cost_usd, cost_source, story_id, notes FROM cost_entries ORDER BY id ASC"
+        "total_cost_usd, cost_source, story_id, notes, api_equivalent_usd, actual_usd, payment_mode FROM cost_entries ORDER BY id ASC"
     )
     rows = cursor.fetchall() if hasattr(cursor, "fetchall") else []
     conn.close()
@@ -2597,14 +2597,53 @@ def _generate_costs_md() -> None:
             return ""
         return str(value).replace("\r", " ").replace("\n", " ").replace("|", r"\|")
 
-    for session_date, agent, model, input_tokens, output_tokens, total_cost_usd, cost_source, story_id, notes in rows:
-        cost_str = f"${total_cost_usd:.4f}" if total_cost_usd is not None else "-"
+    for session_date, agent, model, input_tokens, output_tokens, total_cost_usd, cost_source, story_id, notes, api_equivalent_usd, actual_usd, payment_mode in rows:
+        if payment_mode == 'subscription' and actual_usd is not None:
+            api_eq = api_equivalent_usd if api_equivalent_usd is not None else 0.0
+            cost_str = f"${actual_usd:.4f} [sub] (API: ${api_eq:.4f})"
+        else:
+            cost_str = f"${total_cost_usd:.4f}" if total_cost_usd is not None else "-"
         lines.append(
             f"| {_markdown_cell(session_date)} | {_markdown_cell(agent)} | "
             f"{_markdown_cell(model) or '-'} | {input_tokens} | {output_tokens} | "
             f"{cost_str} | {_markdown_cell(cost_source)} | {_markdown_cell(story_id) or '-'} | "
             f"{_markdown_cell(notes)} |\n"
         )
+        
+    config = load_config()
+    billing = config.get("harness_billing", {})
+    conn2 = _get_db()
+    c2 = conn2.execute("SELECT agent, SUM(actual_usd), SUM(api_equivalent_usd) FROM cost_entries WHERE payment_mode='subscription' GROUP BY agent")
+    sub_data = {r[0]: {"actual": r[1] or 0.0, "api": r[2] or 0.0} for r in c2.fetchall()} if hasattr(c2, "fetchall") else {}
+    conn2.close()
+
+    sub_agents = [
+        (agent, settings)
+        for agent, settings in billing.items()
+        if isinstance(settings, dict) and settings.get("payment_mode") == "subscription"
+    ]
+    if sub_agents or sub_data:
+        lines.append("\n## Subscription Amortization & Dual-Ledger Summary\n\n")
+        total_fee = 0.0
+        total_api = 0.0
+        total_actual = 0.0
+        
+        lines.append("| Harness | Base Fee | Actual Amortized Spend | API Equivalent Value | Net Savings |\n")
+        lines.append("|---|---|---|---|---|\n")
+        
+        for agent, settings in billing.items():
+            if isinstance(settings, dict) and settings.get("payment_mode") == "subscription":
+                fee = settings.get("monthly_base_fee_usd", settings.get("subscription_fee_usd", 0.0))
+                actual = sub_data.get(agent, {}).get("actual", 0.0)
+                api = sub_data.get(agent, {}).get("api", 0.0)
+                savings = api - actual
+                total_fee += fee
+                total_actual += actual
+                total_api += api
+                lines.append(f"| {agent} | ${fee:.2f} | ${actual:.4f} | ${api:.4f} | ${savings:.4f} |\n")
+                
+        total_savings = total_api - total_actual
+        lines.append(f"| **Total** | **${total_fee:.2f}** | **${total_actual:.4f}** | **${total_api:.4f}** | **${total_savings:.4f}** |\n")
 
     _write_generated_project_doc("costs.md", "".join(lines))
 

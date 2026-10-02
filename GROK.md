@@ -14,7 +14,9 @@
 ## Domain Ownership
 | Domain | Owned by this agent | Notes |
 |:---|:---|:---|
-| TODO: fill domains for this agent | | |
+| Canvas & Frontend Visualizations | synlynk/viz.py, SVG/HTML/JS UI components, interactive HUDs | |
+| Infrastructure & Subprocesses | runners, daemon, packaging, shell runners | |
+| Testing & Diagnostics | browser validation, cross-platform tests | |
 
 ## Shared synlynk Protocol
 
@@ -22,7 +24,7 @@ Load `AI_INSTRUCTIONS.md` for the full shared synlynk protocol, including the se
 
 <!-- synlynk:end -->
 
-<!-- synlynk:harness v2.1.275 verified:2026-09-23T18:58:15Z -->
+<!-- synlynk:harness v1.0.44 verified:2026-10-02T02:52:48Z -->
 # Harness Instructions (synlynk-managed — do not edit)
 
 ## Your Role

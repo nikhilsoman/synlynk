@@ -3,9 +3,58 @@
 from __future__ import annotations
 
 import json
+import os
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Dict, List
 
 from synlynk.capability import capability_score
+
+
+@dataclass
+class AgentCharter:
+    role: str
+    harness_bindings: List[str]
+    mandate: str
+    autonomous_authorities: List[str]
+    escalation_triggers: List[str]
+    behavioral_weights: Dict[str, str]
+
+
+def _charters_dir() -> str:
+    return os.path.join(os.getcwd(), ".synlynk", "charters")
+
+
+def validate_charter(charter: AgentCharter) -> bool:
+    if not charter.role or not charter.mandate:
+        return False
+    if not charter.harness_bindings or not isinstance(charter.harness_bindings, list):
+        return False
+    return True
+
+
+def load_charter(role: str) -> AgentCharter:
+    path = os.path.join(_charters_dir(), f"{role}.json")
+    if not os.path.exists(path):
+        return AgentCharter(
+            role=role,
+            harness_bindings=["claude", "codex"] if role in ("architect", "tpm") else ["codex", "agy", "grok"],
+            mandate=f"Default operating charter for role {role}",
+            autonomous_authorities=["draft_spec", "implement", "test"] if role != "qa" else ["review", "verify"],
+            escalation_triggers=["invariant_violation_detected", "budget_exceeded"],
+            behavioral_weights={"verbosity": "concise", "risk_tolerance": "conservative"},
+        )
+
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    return AgentCharter(
+        role=data["role"],
+        harness_bindings=data["harness_bindings"],
+        mandate=data["mandate"],
+        autonomous_authorities=data.get("autonomous_authorities", []),
+        escalation_triggers=data.get("escalation_triggers", []),
+        behavioral_weights=data.get("behavioral_weights", {}),
+    )
 
 
 def _static_capabilities(path: str = ".synlynk/capability-roles.json") -> dict:

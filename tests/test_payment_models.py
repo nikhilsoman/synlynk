@@ -13,6 +13,7 @@ def test_load_config_defaults_payment_models_to_empty_dict(tmp_path, monkeypatch
 
     config = sl.load_config()
     assert config["payment_models"] == {}
+    assert set(config["harness_billing"]) == {"claude", "codex", "agy", "grok"}
 
 
 def test_load_config_preserves_existing_payment_models_section(tmp_path, monkeypatch):
@@ -117,6 +118,8 @@ def test_resolve_payment_value_pay_as_you_go_matches_api_equivalent(tmp_path, mo
     import os
 
     os.makedirs(".synlynk", exist_ok=True)
+    with open(".synlynk/config.json", "w") as f:
+        json.dump({"harness_billing": {"grok": {"payment_mode": "pay_as_you_go"}}}, f)
     from synlynk.costs import resolve_payment_value
 
     result = resolve_payment_value("grok", tokens_in=1000, tokens_out=1000)
@@ -347,6 +350,8 @@ def test_resolve_payment_value_unconfigured_agent_defaults_pay_as_you_go(
     import os
 
     os.makedirs(".synlynk", exist_ok=True)
+    with open(".synlynk/config.json", "w") as f:
+        json.dump({"harness_billing": {"claude": {"payment_mode": "pay_as_you_go"}}}, f)
     from synlynk.costs import resolve_payment_value
 
     result = resolve_payment_value("claude", tokens_in=100, tokens_out=100)

@@ -1,0 +1,49 @@
+{
+  "decision_id": "dec-20261002-tokq-dao-autonomous-expansion",
+  "topic": "Strategic Panel Deliberation: Product-Market Fit for DAO/DeFi Governance, The Evolved Tokq Economy, Proof of Real Work & Autonomous Expansion Stack Ranking",
+  "date": "2026-10-02",
+  "panel": [
+    "claude",
+    "codex",
+    "agy",
+    "grok"
+  ],
+  "status": "approved",
+  "primary_goal": "goal-d3333441",
+  "governing_loop": "goal-eacab0dc",
+  "target_milestone": "2026-10-02 (Autonomous Platform Evolution)",
+  "tokq_reimagined": {
+    "core_thesis": "Marketplace for real engineering output, P2P compute capacity, verified skills, and domain intelligence",
+    "products_and_services": [
+      "P2P Agent Compute Rental (Lease idle Apple Silicon oMLX / cloud model subscriptions)",
+      "Domain-Specific Blueprints & AST Skill Packs (iOS, Android, Data Platforms, ML)",
+      "Curated Datasets & AST Graph Corpora (Fine-tuning pairs, test fixtures)",
+      "Attested Industry Agent Charters (SOC2 auditor, Fintech, Healthcare compliance)"
+    ],
+    "proof_of_real_work": {
+      "analogy": "Useful software engineering output instead of arbitrary Bitcoin SHA-256 hashes",
+      "verification_mechanism": "Invariant 1 Effect Verification (git diff > 0 + passing tests + AST blast radius)",
+      "token_settlement_phases": [
+        "Phase 1: Local dual-ledger credits",
+        "Phase 2: Stablecoin (USDC) micro-settlement on L2 (Base)",
+        "Phase 3: Native $TOKQ utility and staking token for node slashing and governance"
+      ]
+    }
+  },
+  "stack_ranking": [
+    {"rank": 1, "name": "Local oMLX Harness Integration", "lead": "grok"},
+    {"rank": 2, "name": "OpenRouter & Fal.ai Aggregator Support", "lead": "codex"},
+    {"rank": 3, "name": "Meta Muse 5th Core Harness Promotion", "lead": "claude"},
+    {"rank": 4, "name": "Tri-Modal Autonomy Dial (Manual/Supervised/Autonomous)", "lead": "agy"},
+    {"rank": 5, "name": "Board Governance Protocol & Vizor Board Room HUD", "lead": "claude"},
+    {"rank": 6, "name": "Executable Agent Charters & Authority Matrix", "lead": "claude"},
+    {"rank": 7, "name": "Jev Sub-20ms AST Decision Model", "lead": "codex"},
+    {"rank": 8, "name": "Parallel Worktree Swarm Execution Engine", "lead": "grok"},
+    {"rank": 9, "name": "117 GitHub Issue Zero-Burndown", "lead": "agy"},
+    {"rank": 10, "name": "Mobile & Data Platform Domain Blueprints", "lead": "agy"},
+    {"rank": 11, "name": "OSS Contributor Setup, README & Website Refresh", "lead": "agy"},
+    {"rank": 12, "name": "Evolved Tokq Network Architecture & Settlement", "lead": "codex"}
+  ],
+  "verdict": "UNANIMOUS APPROVAL OF RE-IMAGINED TOKQ & 12-STEP EXPANSION ROADMAP",
+  "decision_text": "Decision: The panel unanimously adopts the re-imagined Tokq Decentralized Economy, Proof of Real Work utility thesis, Tri-Modal Autonomy Dial, and the 12-step stack-ranked expansion roadmap. Phase 1 (Fleet Expansion: Local + OpenRouter + Muse) and Phase 2 (Autonomy Dial & Boardroom HUD) are designated as immediate priorities."
+}
