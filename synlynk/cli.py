@@ -289,6 +289,7 @@ _TOP_LEVEL_COMMANDS = (
     "roadmap", "policy", "credit", "backlog", "quota", "schedule", "pr", "capability",
     "instructions", "marketing", "roles", "release", "viz", "backfill-capability-ratings",
     "board", "concierge", "addon", "autonomy",
+    "gateway",
 )
 
 
@@ -548,6 +549,18 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
         action="store_true",
         default=False,
         help="Detect hardware tier and write pinned_model to .agents/local.json",
+    )
+
+    gateway_parser = subparsers.add_parser("gateway", help="Manage external model gateways")
+    gateway_sub = gateway_parser.add_subparsers(dest="gateway_cmd")
+    probe_gateway_parser = gateway_sub.add_parser("probe", help="Test gateway connectivity")
+    probe_gateway_parser.add_argument(
+        "--gateway", default=None,
+        help="Name of gateway to probe (default: all enabled)",
+    )
+    probe_gateway_parser.add_argument(
+        "--config", default=".synlynk/registry.json",
+        help="Path to registry.json",
     )
 
     models_parser = subparsers.add_parser("models", help="Inspect and discover the model registry")
@@ -2665,6 +2678,12 @@ def main(argv=None) -> None:
             sys.exit(cmd_local_doctor(init=args.init))
         else:
             help_parsers.get("local", parser).print_help()
+    elif args.command == "gateway":
+        if args.gateway_cmd == "probe":
+            from synlynk.gateway import cmd_gateway_probe
+            sys.exit(cmd_gateway_probe(gateway=args.gateway, config_path=args.config))
+        else:
+            help_parsers.get("gateway", parser).print_help()
     elif args.command == "models":
         from synlynk.models import cmd_models_discover, cmd_models_list, cmd_models_show
         action = getattr(args, "models_action", None)
