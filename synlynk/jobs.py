@@ -1791,7 +1791,12 @@ def _reconcile_jobs_unlocked() -> None:
                 evaluate_cb = None
         if evaluate_cb:
             cb_res = evaluate_cb(job, config, sentinel_path)
-            if cb_res.tripped:
+            if cb_res.tripped and cb_res.process_killed:
+                # Only a confirmed process termination belongs to the circuit
+                # breaker terminal state.  A limit breach observed after a
+                # natural exit must continue through normal reaping below.
+                job["status"] = STATUS_CIRCUIT_BREAKER_TRIPPED
+                job["exit_code"] = -9
                 ended_at = job.get("ended_at") or now
                 started_at = job.get("started_at")
                 duration_s = None
@@ -3613,7 +3618,13 @@ def _reconcile_daemon_jobs() -> None:
                 except (TypeError, ValueError):
                     cb_job["pid_identity"] = None
                 cb_res = evaluate_cb(cb_job, config, ".synlynk/sentinel.md")
-                if cb_res.tripped:
+                if cb_res.tripped and cb_res.process_killed:
+                    # Only a confirmed process termination belongs to the
+                    # circuit breaker terminal state.  If the worker exited
+                    # naturally, let the waitpid/exit-marker path below
+                    # preserve its real result.
+                    cb_job["status"] = STATUS_CIRCUIT_BREAKER_TRIPPED
+                    cb_job["exit_code"] = -9
                     ended_at = cb_job.get("ended_at") or now
                     settled = _settle_daemon_job_terminal(
                         conn,
