@@ -1,6 +1,6 @@
 """Shared constants used across synlynk modules."""
 
-VERSION = "0.23.0-dev"
+VERSION = "0.25.0"
 __version__ = VERSION
 
 
