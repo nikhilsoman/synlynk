@@ -503,6 +503,7 @@
 | 2026-10-04 01:13 | codex | o4-mini | 221343 | 3564 | $0.0107 [sub] (API: $0.7175) | estimated_token_rate | story-issue-1997 | exec: codex job job-1296ef... |
 | 2026-10-04 01:26 | claude | claude-sonnet-4-6 | 65000 | 4500 | $0.1725 [sub] (API: $0.2625) | estimated_manual | - | PM-session (native, not dispatched): investigated gh:#1995 root cause (traced _rotate_project_doc archive-write path, verified via sqlite3 state.db query + git log on project-docs/archive/), implemented fix (keep_n 50->500 + best-effort git-add of archive file), wrote regression test, ran 236 tests, updated PR #1998 + commented root cause on gh:#1995. Estimated token counts. |
 | 2026-10-04 01:33 | codex | o4-mini | 482336 | 7701 | $0.0234 [sub] (API: $1.5625) | estimated_token_rate | story-issue-1995 | exec: codex job job-7d81ac... |
+| 2026-10-04 01:00 | codex | o4-mini | 913885 | 5591 | $0.0439 [sub] (API: $2.8255) | estimated_token_rate | Review+merge PR 1996 (gh:#1995 regen-drop fix) | exec: codex job job-06a7c9... |
 
 ## Subscription Amortization & Dual-Ledger Summary
 
