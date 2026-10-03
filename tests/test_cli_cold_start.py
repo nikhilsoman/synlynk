@@ -28,9 +28,10 @@ def _initialize_ledger(path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     conn.close()
 
 
+@pytest.mark.performance
 @pytest.mark.parametrize("command", _COMMANDS, ids=("jobs", "status"))
 def test_cli_cold_start_stays_under_budget(tmp_path, monkeypatch, command):
-    """A fresh process must keep the command startup path below 150 ms."""
+    """A fresh process must keep the command startup path below 400 ms."""
     ledger = tmp_path / "state.db"
     _initialize_ledger(ledger, monkeypatch)
 

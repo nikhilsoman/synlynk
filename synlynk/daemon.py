@@ -32,6 +32,9 @@ def _repo_common_dir() -> str:
     named ``.git``.  Commands outside a Git repository retain the historical
     current-working-directory behavior.
     """
+    configured_root = os.environ.get("SYNLYNK_DAEMON_WORKSPACE_ROOT")
+    if configured_root and os.path.isdir(configured_root):
+        return os.path.abspath(configured_root)
     try:
         result = subprocess.run(
             ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
@@ -56,6 +59,23 @@ def _repo_common_dir() -> str:
 
 def _daemon_state_path(*parts: str) -> str:
     return os.path.join(_repo_common_dir(), ".synlynk", *parts)
+
+
+def _daemon_package_path() -> str:
+    """Return the installed source path used to launch the daemon."""
+    return os.path.abspath(__file__)
+
+
+def _is_disposable_worktree_path(path: str) -> bool:
+    path = os.path.abspath(path)
+    return any(marker in path for marker in (
+        f"{os.sep}.claude{os.sep}worktrees{os.sep}",
+        f"{os.sep}worktrees{os.sep}",
+    ))
+
+
+def _daemon_caller_path() -> str:
+    return os.path.abspath(os.getcwd())
 
 
 def _current_repo_revision(repo_dir: Optional[str] = None) -> Optional[str]:
@@ -164,6 +184,8 @@ def _find_pid_listening_on_port(port: int) -> Optional[int]:
 def _daemonize_via_reexec(entry_point: str, logfile: str, cwd: Optional[str] = None) -> None:
     """Spawn a detached child process running a module-level entry point."""
     cwd = os.path.abspath(cwd or os.getcwd())
+    logfile = os.path.abspath(logfile)
+    os.makedirs(os.path.dirname(logfile), exist_ok=True)
     module_path, func_name = entry_point.rsplit(".", 1)
     code = f"from {module_path} import {func_name}; {func_name}()"
     log = open(logfile, "a")
@@ -708,9 +730,30 @@ def _make_daemon_handler(daemon_instance):
 def _daemon_install_service(daemon_instance) -> None:
     import textwrap as _textwrap
 
-    synlynk_path = shutil.which("synlynk") or sys.argv[0]
+    package_path = _daemon_package_path()
+    if _is_disposable_worktree_path(package_path):
+        raise RuntimeError(
+            "refusing to install the daemon service from a disposable worktree: "
+            f"{package_path}"
+        )
+    python_path = os.path.abspath(sys.executable)
     home = os.path.expanduser("~")
-    workspace_root = os.path.abspath(getattr(daemon_instance, "workspace_root", os.getcwd()))
+    caller_root = _daemon_caller_path()
+    if _is_disposable_worktree_path(caller_root):
+        raise RuntimeError(
+            "refusing to install the daemon service with a disposable worktree as its "
+            f"workspace root: {caller_root}"
+        )
+    workspace_root = _repo_common_dir()
+    service_command = [python_path, "-m", "synlynk", "daemon", "run"]
+
+    def _run_checked(command, **kwargs):
+        result = subprocess.run(command, check=False, **kwargs)
+        if getattr(result, "returncode", 0) != 0:
+            raise RuntimeError(
+                f"service command failed ({result.returncode}): {' '.join(command)}"
+            )
+        return result
 
     try:
         if sys.platform == "darwin":
@@ -729,19 +772,25 @@ def _daemon_install_service(daemon_instance) -> None:
                     <string>com.synlynk.daemon</string>
                     <key>ProgramArguments</key>
                     <array>
-                      <string>{synlynk_path}</string>
+                      <string>{service_command[0]}</string>
+                      <string>-m</string>
+                      <string>synlynk</string>
                       <string>daemon</string>
-                      <string>start</string>
+                      <string>run</string>
                     </array>
                     <key>WorkingDirectory</key>
                     <string>{workspace_root}</string>
+                    <key>EnvironmentVariables</key>
+                    <dict>
+                      <key>SYNLYNK_DAEMON_WORKSPACE_ROOT</key>
+                      <string>{workspace_root}</string>
+                    </dict>
                     <key>RunAtLoad</key>
                     <true/>
                     <key>KeepAlive</key>
-                    <dict>
-                      <key>SuccessfulExit</key>
-                      <false/>
-                    </dict>
+                    <true/>
+                    <key>ThrottleInterval</key>
+                    <integer>30</integer>
                     <key>StandardOutPath</key>
                     <string>{log_path}</string>
                     <key>StandardErrorPath</key>
@@ -751,7 +800,7 @@ def _daemon_install_service(daemon_instance) -> None:
             """)
             with open(plist_path, "w", encoding="utf-8") as f:
                 f.write(plist)
-            subprocess.run(["launchctl", "load", "-w", plist_path], check=False)
+            _run_checked(["launchctl", "load", "-w", plist_path])
             print(f"  ✓ installed launchd service: {plist_path}")
             return
 
@@ -767,24 +816,25 @@ def _daemon_install_service(daemon_instance) -> None:
                 After=default.target
 
                 [Service]
-                Type=forking
+                Type=simple
                 WorkingDirectory={workspace_root}
-                ExecStart={synlynk_path} daemon start
-                PIDFile=%h/.synlynk/daemon.pid
+                ExecStart={python_path} -m synlynk daemon run
+                Environment=SYNLYNK_DAEMON_WORKSPACE_ROOT={workspace_root}
                 Restart=on-failure
+                RestartSec=30
 
                 [Install]
                 WantedBy=default.target
             """)
             with open(unit_path, "w", encoding="utf-8") as f:
                 f.write(unit)
-            subprocess.run(["systemctl", "--user", "enable", "--now", "synlynk-daemon"], check=False)
+            _run_checked(["systemctl", "--user", "enable", "--now", "synlynk-daemon"])
             print(f"  ✓ installed systemd user service: {unit_path}")
             return
 
         synlynk_dir = os.path.join(home, ".synlynk")
         os.makedirs(synlynk_dir, exist_ok=True)
-        entry = f"@reboot {synlynk_path} daemon start"
+        entry = f"@reboot {python_path} -m synlynk daemon start"
         result = subprocess.run(["crontab", "-l"], capture_output=True, text=True)
         current = result.stdout if result.returncode == 0 else ""
         if entry not in current:
@@ -792,10 +842,34 @@ def _daemon_install_service(daemon_instance) -> None:
             if new_crontab:
                 new_crontab += "\n"
             new_crontab += entry + "\n"
-            subprocess.run(["crontab", "-"], input=new_crontab, text=True, check=False)
+            _run_checked(["crontab", "-"], input=new_crontab, text=True)
         print("  ✓ installed @reboot crontab entry")
     except FileNotFoundError:
         print("  not installed")
+
+
+def _daemon_service_registration() -> Optional[bool]:
+    """Return whether the configured service is registered, if detectable."""
+    try:
+        if sys.platform == "darwin":
+            result = subprocess.run(
+                ["launchctl", "print", f"gui/{os.getuid()}/com.synlynk.daemon"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            return result.returncode == 0
+        if shutil.which("systemctl"):
+            result = subprocess.run(
+                ["systemctl", "--user", "is-enabled", "synlynk-daemon"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            return result.returncode == 0
+    except OSError:
+        return False
+    return None
 
 def _daemon_uninstall_service() -> None:
     home = os.path.expanduser("~")
@@ -976,7 +1050,7 @@ class SynlynkDaemon(WatchDaemon):
         self._last_autonomous_run = 0.0
         # Bind request handlers to the workspace that created this daemon;
         # relative CWD resolution is unsafe for linked worktrees.
-        self.workspace_root = os.path.abspath(os.getcwd())
+        self.workspace_root = _repo_common_dir()
         self.sentinel_path = os.path.join(self.workspace_root, ".synlynk", "sentinel.md")
         self.start_revision = _current_repo_revision(self.workspace_root)
         self.revision_file = _daemon_state_path("daemon.revision")
@@ -1127,9 +1201,32 @@ class SynlynkDaemon(WatchDaemon):
 
     def status(self) -> None:
         if not self._is_running():
+            stale_pidfile = os.path.exists(self.pidfile)
             if os.path.exists(self.pidfile):
                 os.remove(self.pidfile)
             print("  ✦ synlynk daemon not running")
+            if stale_pidfile:
+                print("    stale pidfile cleaned")
+            if sys.platform == "darwin":
+                service_path = os.path.join(
+                    os.path.expanduser("~"), "Library", "LaunchAgents", "com.synlynk.daemon.plist"
+                )
+            else:
+                service_path = os.path.join(
+                    os.path.expanduser("~"), ".config", "systemd", "user", "synlynk-daemon.service"
+                )
+            if os.path.exists(service_path):
+                registration = _daemon_service_registration()
+                registration_text = (
+                    "registered" if registration is True
+                    else "not registered" if registration is False
+                    else "registration unknown"
+                )
+                print(
+                    f"    service: installed ({registration_text}) but process is not healthy"
+                )
+            else:
+                print("    service: not installed")
             print("    Tip: run 'synlynk daemon --install-service' to supervise and auto-start across reboots.")
             return
         with open(self.pidfile) as f:
@@ -1243,13 +1340,19 @@ class SynlynkDaemon(WatchDaemon):
                 last_token_refresh = time.time()
 
 
-def _synlynk_daemon_child_main() -> None:
+def _synlynk_daemon_child_main(*, blocking_lock: bool = True) -> None:
     workspace_root = os.environ.get("SYNLYNK_DAEMON_WORKSPACE_ROOT")
     if workspace_root:
         os.chdir(workspace_root)
     d = SynlynkDaemon(autonomous=os.environ.get("SYNLYNK_AUTONOMOUS") == "1")
-    # Publish pidfile/start marker before taking the lifetime lock so the
-    # parent start() waiter can observe readiness and release (#349).
+    # Acquire the lifetime lock before publishing the pidfile so a foreground
+    # service cannot overwrite the identity of an already-running daemon.
+    d._lock_fh = _try_acquire_daemon_lock(
+        _daemon_lock_path(d.pidfile), blocking=blocking_lock
+    )
+    if d._lock_fh is None:
+        print("  synlynk daemon is already running.", file=sys.stderr)
+        return
     with open(d.pidfile, "w") as f:
         f.write(str(os.getpid()))
     start_time = time.time()
@@ -1257,12 +1360,16 @@ def _synlynk_daemon_child_main() -> None:
     start_file = d.pidfile.replace(".pid", ".start")
     with open(start_file, "w") as f:
         f.write(str(start_time))
-    d._lock_fh = _try_acquire_daemon_lock(_daemon_lock_path(d.pidfile), blocking=True)
     # Crash-recovery pass: settle dead orphans / adopt still-alive ones before
     # the poll loop begins, so reconciliation is not stuck waiting for a
     # daemon that already died (#349).
     d._reconcile_orphans_on_startup()
     d._run_loop()
+
+
+def _synlynk_daemon_foreground_main() -> None:
+    """Run the daemon in the current process for launchd/systemd supervision."""
+    _synlynk_daemon_child_main(blocking_lock=False)
 
 def cmd_relay_start(port: int = None) -> None:
     """Starts the relay broker in the foreground (Ctrl-C to stop)."""
