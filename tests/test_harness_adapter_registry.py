@@ -40,3 +40,11 @@ def test_registry_register_and_get_roundtrip():
 
     register_adapter("fake-harness-for-test", FakeAdapter())
     assert get_adapter("fake-harness-for-test").build_cmd(None) == ["fake"]
+
+
+def test_all_five_harnesses_resolve_to_an_adapter():
+    from synlynk.harness_adapters.registry import get_adapter
+
+    for name in ("codex", "grok", "agy", "claude", "local"):
+        adapter = get_adapter(name)
+        assert adapter is not None
