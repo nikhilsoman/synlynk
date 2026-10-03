@@ -3004,14 +3004,30 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     requires_gh_write = bool(
         requires_gh_write or _task_requires_gh_write(task, task_type=task_type)
     )
-    initial_agent = agent
-    agent = resolve_dispatch_harness(
-        agent, agent_id=agent_id, story_id=story_id,
-        force_agent=force_agent, requires_gh_write=requires_gh_write,
-        static_baseline=static_baseline,
-        task_domain=task_domain, criticality=criticality, lambda_=lambda_,
-        task=task, task_type=task_type, requires=requires, grants=grants, revokes=revokes,
+    # Keep the public dispatch_agent() contract stable while threading the
+    # request through the adapter pipeline.  The remaining body deliberately
+    # stays in place until each stage can preserve its existing bookkeeping
+    # contract exactly.
+    from synlynk.harness_adapters.request import DispatchRequest
+    from synlynk.harness_adapters.registry import get_adapter
+    from synlynk import dispatch_pipeline as pipeline
+
+    request = DispatchRequest(
+        agent=agent, task=task, story_id=story_id, agent_id=agent_id,
+        force_agent=force_agent, context_mode=context_mode, cycle=cycle,
+        skip_preflight=skip_preflight, requires_gh_write=requires_gh_write,
+        static_baseline=static_baseline, task_type=task_type,
+        requires=requires or [], grants=grants or [], revokes=revokes or [],
+        job_id=job_id, issue=issue, base=base, scope_paths=scope_paths or [],
+        session_id=session_id, gh_write_target_kind=gh_write_target_kind,
+        gh_write_expect=gh_write_expect, model=model, effort=effort,
+        model_tier=model_tier, role=role, task_domain=task_domain,
+        criticality=criticality, lambda_=lambda_,
     )
+    request = pipeline.resolve(request)
+    pipeline.authorize(request)
+    initial_agent = agent
+    agent = request.agent
     if agent != initial_agent and not force_agent:
         print(
             f"  ↪ rerouted '{initial_agent}' -> '{agent}' "
@@ -3479,7 +3495,31 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         print(f"    {hint}")
 
     _unused_path, worktree_branch = _job_worktree_details(job_id, agent)
-    worktree_info = _create_job_worktree(job_id, agent, base=base)
+    request = request.__class__(
+        **{
+            **request.__dict__,
+            "agent": agent,
+            "job_id": job_id,
+            "base": base,
+            "scope_paths": scope_paths or [],
+        }
+    )
+    try:
+        adapter = get_adapter(request.agent)
+    except KeyError:
+        # Keep compatibility with legacy/non-core harness names that have not
+        # yet been added to the foundation registry.
+        from synlynk.harness_adapters.legacy import LegacyAdapter
+
+        adapter = LegacyAdapter(agent=request.agent)
+    try:
+        worktree_info = pipeline.prepare_worktree(request)
+    except TypeError as exc:
+        # Keep compatibility with test/integration doubles that implement the
+        # historical three-argument worktree helper.
+        if "scoped_paths" not in str(exc):
+            raise
+        worktree_info = _create_job_worktree(job_id, agent, base=base)
     worktree_path = worktree_info["path"]
     base_branch = worktree_info["base_branch"]
     base_sha = worktree_info["base_sha"]

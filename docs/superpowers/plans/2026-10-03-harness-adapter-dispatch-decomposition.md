@@ -679,17 +679,35 @@ refactor as a pure extraction, not a rewrite:
 3. Replace the existing inline worktree-creation call with
    `worktree_info = pipeline.prepare_worktree(request)`, keeping every piece
    of existing bookkeeping that reads from `worktree_info` as-is.
-4. Replace the existing inline subprocess-spawn call with
-   `spawn_result = pipeline.spawn(request, adapter, env=proc_env, cwd=worktree_path)`.
-5. Replace the existing inline output-handling with
-   `observed = pipeline.observe(spawn_result, adapter)`.
-6. Replace the existing inline job-summary/telemetry call with
-   `result = pipeline.finalize(request, observed)`.
-7. Leave every line of bookkeeping that isn't one of the five stages
-   (sentinel pattern checks, cost logging, circuit breaker, telemetry writes)
-   exactly where it is in the function body — this step only swaps *which
-   function* builds the command, parses output, and writes the summary; it
-   does not touch surrounding logic.
+4. **Do NOT wire `pipeline.spawn()` / `pipeline.observe()` / `pipeline.finalize()`
+   into `dispatch_agent()`.** This corrects an architecture error in the
+   original version of this task (caught during implementation of
+   job-423915c1 / gh:#1924): `dispatch_agent()`'s real subprocess spawn
+   (`synlynk/dispatch.py` around the `Popen(..., stdout=DEVNULL,
+   stderr=DEVNULL, start_new_session=True)` call) is fire-and-forget — it
+   returns a running `job` dict immediately and does not wait on, read the
+   output of, or summarize the process. `pipeline.spawn()` (Task 5) instead
+   calls `proc.communicate()`, which blocks until exit. Wiring it in here
+   would turn every dispatch synchronous, a real behavior change the "zero
+   behavior change" framing explicitly forbids.
+   `_write_job_summary()` (what `pipeline.finalize()` wraps) confirmed to have
+   no call site inside `dispatch_agent()` at all, on `origin/main`, even
+   before this PR — its one production caller is `_reconcile_jobs_unlocked()`
+   in `synlynk/jobs.py`, a separate ~600-line multi-branch reaper function
+   (circuit-breaker trip, stall, normal exit each have their own
+   `_write_job_summary()` call with different sourced args) that polls PIDs
+   asynchronously and runs on every `synlynk` invocation. Wiring
+   `pipeline.observe()`/`pipeline.finalize()` into that function instead is
+   real, separate work — deserving its own task/PR with its own design pass
+   over each terminal branch, not a drop-in swap. Tracked as a follow-up
+   (file a gh issue referencing gh:#1924 before starting it); out of scope
+   for PR1.
+5. Leave every line of bookkeeping that isn't one of the three stages above
+   (sentinel pattern checks, cost logging, circuit breaker, telemetry writes,
+   the subprocess spawn itself, output handling, job-summary writing) exactly
+   where it is in the function body — this step only swaps *which function*
+   resolves the harness, authorizes the task type, and creates the worktree;
+   it does not touch surrounding logic.
 
 - [ ] **Step 4: Run the full existing dispatch test suite**
 
@@ -704,10 +722,13 @@ before continuing).
 
 ```bash
 git add synlynk/dispatch.py tests/test_dispatch_pipeline_shim.py
-git commit -m "refactor(dispatch): route dispatch_agent() through dispatch_pipeline stages (gh:#1924)
+git commit -m "refactor(dispatch): route dispatch_agent() through resolve/authorize/prepare_worktree (gh:#1924)
 
 No behavior change: every harness still resolves to LegacyAdapter, which
-delegates to the exact same code dispatch_agent() called before this PR."
+delegates to the exact same code dispatch_agent() called before this PR.
+spawn/observe/finalize wiring is deferred to a follow-up targeting
+_reconcile_jobs_unlocked() in synlynk/jobs.py, not dispatch_agent() — see
+Task 6 Step 3.4 for why."
 ```
 
 > **This closes PR 1.** Open a PR titled `feat(dispatch): HarnessAdapter
