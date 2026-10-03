@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Suspending the Policy We Wrote for Our Own Convenience | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Oct 04, 2026</span>
+        
+          <span class="blog-post-pr">PR 1994</span>
+        
+      </div>
+      <h1 class="blog-post-title">Suspending the Policy We Wrote for Our Own Convenience</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>PR5 (#1967) closed gh:#1924 — all five harnesses (Codex, Grok, Agy, Claude, local) now route
+through dedicated <code>HarnessAdapter</code> implementations. The goalpost coming out of that PR was a
+cost-anomaly thread to pull (#1969), not a policy question. This PR is a deliberate detour from
+that thread, prompted directly by Nikhil rather than by anything the adapter work surfaced.</p>
+<h2>Strategic Shift in This PR</h2>
+<p>Nikhil named the shift plainly: the Default Agent Role lock (Claude = PM/review/deploy only,
+Agy/Grok/Codex = implement/test, decided 2026-06-28, gh:#79) was drafted at a moment when Claude
+happened to be the best harness experience available and became his default home harness. That's
+a fact about convenience at one point in time, not a measured capability finding — and synlynk
+has been quietly building the infrastructure to measure capability for a while (<code>capability_ratings</code>,
+<code>cost_entries</code>, <code>synlynk capability sweep</code>) without ever wiring it into routing. This PR is the
+decision to stop treating the heuristic table as policy and start treating the measurement
+infrastructure as policy, even though it means putting Claude's own privileged role back on the
+table.</p>
+<p>Nikhil was explicit that the reassessment includes the lock on <em>himself as PM</em> too: &quot;Agy &amp; Codex
+are as good and Grok + Muse haven't had the opportunity yet.&quot; Deploy specifically traces back to a
+narrower historical fact — Claude handled rxcc/vdowrx's Pulumi IaC well at the time — not a general
+finding that Claude is the right deploy harness everywhere. That specific claim now needs
+re-validation through each project's Infra agent role before it's trusted again.</p>
+<p>Alongside the capability reassessment, Nikhil asked for three independent hardening measures to
+the PR review process, to make the empirical data trustworthy once it starts accumulating:
+exclusive GOVERNS adherence for every dispatched job, a hard line against any agent/harness ever
+touching his personal GitHub token, and a requirement that reviewer and implementer differ in
+harness <em>and</em> model, not just role.</p>
+<h2>What This PR Shipped</h2>
+<p>Before writing anything, the host-auth escape hatch (<code>SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH</code>) was
+verified against the personal-token requirement specifically, since that's a security claim and
+not just a policy preference. Tracing <code>synlynk/dispatch.py</code>'s <code>_gh_write_allow_host_auth()</code> and
+<code>_build_subprocess_env()</code> confirmed the variable is read only from the <em>dispatching</em> process's own
+shell and is absent from <code>_ENV_ALLOWLIST_BASE</code> — a dispatched job cannot see or self-grant it. No
+code gap, no exploit path; the only thing worth adding is audit logging so a manual override is
+distinguishable from routine traffic (gh:#1992).</p>
+<p>With that confirmed safe, the PR:</p>
+<ul>
+<li>Adds a <code>capability_policy</code> block to <code>.synlynk/policy.json</code>: empirical mode, a suspension date and
+rationale, a minimum sample size of 5 merged jobs before a harness×task-type comparison can
+influence routing, and the two metrics that matter — median <code>pr_review_cycles</code> (quality proxy)
+and <code>total_cost_usd</code> per merged PR (token economics) — both already captured in
+<code>capability_ratings</code>/<code>cost_entries</code> and already queried by <code>doctor.py</code>'s existing health check,
+just never fed back into routing.</li>
+<li>Marks <code>task_allocation</code> as an interim default rather than an authoritative ranking, flags Grok and
+Meta Muse as not-yet-calibrated (not excluded), and adds a <code>deploy</code> task type — not previously
+modeled at all — with Claude/Agy/Codex as calibration-eligible pending Infra-role re-validation.</li>
+<li>Adds <code>merge_authority.cross_harness_review_required</code> and a <code>governs_authority</code> block requiring a
+linked GOVERNS goal/story on every dispatched job, plus the <code>host_auth_fallback.audit_log_required</code>
+flag.</li>
+<li>Hand-edits <code>CLAUDE.md</code> (project and global) rather than running <code>synlynk instructions update</code> —
+<code>.synlynk/config.json</code> lacks the <code>roles</code> key the auto-repair generator expects, so a blind
+regen would have replaced the current detailed table with generic fallback text. The managed
+Harness Instructions block gets inline suspension annotations instead of a rewrite.</li>
+<li>Marks <code>docs/harness-capability-baseline.md</code>'s hand-written findings as corroborating evidence
+only, no longer authoritative for routing.</li>
+<li>Files four follow-up issues for enforcement code that doesn't exist yet: GOVERNS hard-fail
+gating (#1990), cross-harness+model review enforcement (#1991), host-auth audit logging (#1992),
+and the <code>synlynk capability report</code> generator itself (#1993) — which depends on <code>state.db</code>
+consolidation (#1926) before aggregate queries across the current 11,000+ scattered workspace
+shards (#1831) are reliable.</li>
+</ul>
+<h2>Caught in Review</h2>
+<p>This PR's own doc-threaded issue numbers needed a correction pass — the first draft of the
+cross-references (gh:#1991/#1992/#1993) was written before the issues existed and didn't match
+the order they were actually filed in. Fixed by grepping every <code>gh:#199[0-3]</code> reference across
+<code>CLAUDE.md</code> and <code>.synlynk/policy.json</code> and reconciling against the real issue numbers before
+commit, rather than trusting the draft numbering.</p>
+<h2>What Was Achieved Toward the Long-Arc Goal</h2>
+<p>The gap this closes isn't a capability gap in any one harness — it's that synlynk had been
+quietly building the exact infrastructure (<code>capability_ratings</code>, <code>cost_entries</code>,
+<code>capability sweep</code>) to answer &quot;which harness is actually best at this task&quot; empirically, while its
+own routing policy and its own PM's role lock kept answering that question heuristically instead.
+This PR doesn't change any routing yet — it suspends the heuristic's authority and commits to
+measuring before the next change. It also doesn't resolve whether Claude keeps PM/review/deploy;
+that's explicitly left open pending data.</p>
+<h2>The New Goalpost</h2>
+<p>Nothing routes empirically yet — the generator (#1993) is unbuilt and blocked on state.db
+consolidation (#1926), and the two review-hardening enforcement points (#1990, #1991) are policy
+intent without a gate. The next goalpost is building that gate before dispatching the next batch
+of parallel Track work (#1985-#1989), since that batch is also meant to be the first real dataset
+this policy will be measured against.</p>
+<p>Refs #1990, #1991, #1992, #1993, #1926, #1831, #79.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
