@@ -633,12 +633,16 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
         conn.executescript(_DB_SCHEMA)
         # Existing daemon rows deliberately receive an explicit unknown contract.
         # Migration must never infer a successful effect from legacy status text.
-        conn.execute("""INSERT OR IGNORE INTO job_effect_contract
+        daemon_job_columns = {
+            row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)").fetchall()
+        }
+        legacy_started_at = "started_at" if "started_at" in daemon_job_columns else "NULL"
+        conn.execute(f"""INSERT OR IGNORE INTO job_effect_contract
             (contract_id, job_id, kind, target, expect, local_change_policy,
              receipt_policy, verification_deadline_at, contract_version, started_at,
              expected_actor, required_predicates_json)
             SELECT 'legacy-' || job_id, job_id, 'unknown_contract', NULL, 'unknown',
-                   'optional', 'optional', NULL, 1, started_at, NULL, '{}'
+                   'optional', 'optional', NULL, 1, {legacy_started_at}, NULL, '{{}}'
             FROM daemon_jobs""")
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS relay_events (
