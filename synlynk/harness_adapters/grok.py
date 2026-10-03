@@ -20,7 +20,10 @@ class GrokAdapter:
         return flags
 
     def parse_output(self, raw_text: str) -> DispatchEvent:
-        return DispatchEvent(raw_text=raw_text, failure=self._classify(raw_text, exit_code=0))
+        from synlynk.lifecycle import compatibility_evidence, parse_output
+        return DispatchEvent(raw_text=raw_text, failure=self._classify(raw_text, exit_code=0),
+                             lifecycle_events=parse_output(raw_text),
+                             compatibility_evidence=compatibility_evidence(raw_text))
 
     def classify_failure(self, exit_code: int, stderr: str, raw_text: str) -> Optional[FailureKind]:
         return self._classify(f"{stderr}\n{raw_text}", exit_code=exit_code)

@@ -126,3 +126,17 @@
 - Verification: focused truth/oracle/reconciliation tests passed; migration,
   cost-ledger, and dispatch suites passed; `git diff --check` passed.
 [@codex]
+
+## 2026-10-03 — Job status truth pilot PR2 (#1933)
+
+- Added versioned `lifecycle.v1` queued/running/observing/verifying/terminal/correction
+  events with contract/job identity, sequence, process results, and evidence refs.
+- Added append-only, idempotent lifecycle ingestion that records out-of-order events
+  as rejected observations; adapter and jobs reconciliation paths retain legacy text
+  only as compatibility evidence.
+- Extended GitHub effect verification evidence with actor/target/SHA attribution and
+  bounded read-after-write retry/quorum metadata. The canonical job-truth ledger
+  remains the only terminal decision writer.
+- Verification: focused telemetry/GitHub/effect suites 75 passed; broader jobs,
+  dispatch, DB, and GitHub guard suites 304 passed; `git diff --check` passed.
+[@codex]

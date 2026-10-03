@@ -473,3 +473,30 @@ def test_gh_write_verified_survives_incompatible_timestamp_types_without_crashin
         "pr:1038", expect="review_posted", since="2026-08-18T10:00:00Z",
         expect_author="bot",
     ) is False
+
+
+def test_gh_write_verified_records_causal_actor_sha_and_retry_quorum(monkeypatch):
+    raw = '{"reviews":[{"author":{"login":"qa[bot]"},"submittedAt":"2026-08-18T11:00:00Z","commitOid":"abc123"}]}'
+    evidence = {}
+    monkeypatch.setattr(subprocess, "run", lambda cmd, **kwargs: subprocess.CompletedProcess(
+        cmd, 0, stdout=raw, stderr=""
+    ))
+    assert gh_write_verified(
+        "pr:1038", expect="review_posted", since="2026-08-18T10:00:00Z",
+        expect_author="qa", expected_sha="abc", evidence=evidence,
+    ) is True
+    assert evidence["expected_actor"] == "qa"
+    assert evidence["expected_sha"] == "abc"
+    assert evidence["quorum"] == {"required": 1, "observed": 1}
+    assert evidence["retry"]["read_after_write"] is True
+
+
+def test_gh_write_verified_rejects_actor_or_sha_mismatch(monkeypatch):
+    raw = '{"reviews":[{"author":{"login":"other"},"submittedAt":"2026-08-18T11:00:00Z","commitOid":"wrong"}]}'
+    monkeypatch.setattr(subprocess, "run", lambda cmd, **kwargs: subprocess.CompletedProcess(
+        cmd, 0, stdout=raw, stderr=""
+    ))
+    assert gh_write_verified(
+        "pr:1038", expect="review_posted", since="2026-08-18T10:00:00Z",
+        expect_author="qa", expected_sha="abc",
+    ) is False
