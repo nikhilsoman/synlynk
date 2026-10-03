@@ -491,6 +491,59 @@ def test_rotate_moves_old_cost_entries_to_archive(tmp_path, monkeypatch):
     assert "costs-" in open(index_path).read()
 
 
+def test_rotate_auto_stages_archive_file_for_git_commit(tmp_path, monkeypatch):
+    """gh:#1995: a dispatched job's ephemeral worktree silently drops the
+    archive file _rotate_project_doc() writes, because nothing commits it.
+    The fix best-effort `git add`s the archive path the moment it's created,
+    so it's already staged if the calling job goes on to `git commit`."""
+    import subprocess
+
+    from tests.test_migrate import _setup_migrated
+    from synlynk import _insert_cost_row
+    from synlynk.db import _generate_costs_md
+
+    backup = _setup_migrated(tmp_path, monkeypatch)
+    monkeypatch.setattr("synlynk.db._PROJECT_DOC_KEEP_N", 1)
+
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=tmp_path, check=True)
+
+    for i in range(4):
+        _insert_cost_row(
+            session_date=f"2026-01-0{i+1} 10:00",
+            agent="claude",
+            model="claude-sonnet-5",
+            input_tokens=1,
+            output_tokens=1,
+            cache_read_tokens=0,
+            cost_source="estimated_manual",
+            estimate_basis="cli_manual_entry",
+            total_cost_usd=1.0,
+            notes=f"row{i}",
+            story_id=None,
+            api_equivalent_usd=1.0,
+            actual_usd=None,
+            payment_mode=None,
+        )
+
+    _generate_costs_md()
+
+    staged = subprocess.run(
+        ["git", "diff", "--cached", "--name-only"],
+        cwd=tmp_path, check=True, capture_output=True, text=True,
+    ).stdout
+
+    archive_dir = backup / "archive"
+    archive_files = [f for f in os.listdir(archive_dir) if f.startswith("costs-")]
+    assert archive_files, "rotation did not create an archive file"
+    archive_rel = os.path.relpath(archive_dir / archive_files[0], tmp_path)
+    index_rel = os.path.relpath(archive_dir / "INDEX.md", tmp_path)
+
+    assert archive_rel in staged
+    assert index_rel in staged
+
+
 def test_detect_hand_edit_no_warning_when_content_matches_regeneration(tmp_path, monkeypatch):
     from tests.test_migrate import _setup_migrated
     from synlynk.db import _generate_costs_md
