@@ -3533,7 +3533,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         adapter = get_adapter(request.agent)
     except KeyError:
         # Keep compatibility with legacy/non-core harness names that have not
-        # yet been added to the foundation registry.
+        # yet been added to the foundation registry
         from synlynk.harness_adapters.legacy import LegacyAdapter
 
         adapter = LegacyAdapter(agent=request.agent)
