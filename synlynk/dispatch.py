@@ -422,7 +422,7 @@ def _print_pending_nudges() -> None:
         pass
 
 
-def _dispatch_flags_for_agent(agent: str) -> list:
+def _dispatch_flags_for_agent(agent: str, skip_permissions: bool = False) -> list:
     """Return the executable dispatch flags for an agent baseline."""
     baselines_map = _pkg("HARNESS_CAPABILITY_BASELINES", HARNESS_CAPABILITY_BASELINES)
     baselines = baselines_map.get(agent, {})
@@ -438,6 +438,8 @@ def _dispatch_flags_for_agent(agent: str) -> list:
         from synlynk.local_agent import _local_dispatch_model_flags
 
         flags = flags + _local_dispatch_model_flags()
+    if skip_permissions and agent in {"claude", "agy"}:
+        flags.append("--dangerously-skip-permissions")
     return flags
 
 
@@ -735,7 +737,12 @@ def _merge_codex_permission_flags(flags: list, permission_flags: list) -> list:
     return merged + permission_flags
 
 
-def _permissions_to_flags(agent: str, permissions: list, read_only: bool = False) -> list:
+def _permissions_to_flags(
+    agent: str,
+    permissions: list,
+    read_only: bool = False,
+    skip_permissions: bool = False,
+) -> list:
     """Translate permission strings into harness-specific CLI flags."""
     from synlynk._constants import _PERMISSION_TO_TOOL_MAP
 
@@ -748,7 +755,7 @@ def _permissions_to_flags(agent: str, permissions: list, read_only: bool = False
             return []
         if set(permissions) <= {"read:*"}:
             return ["--mode", "plan"]
-        return ["--dangerously-skip-permissions"]
+        return ["--dangerously-skip-permissions"] if skip_permissions else ["--sandbox"]
     if agent == "claude":
         tools = []
         for perm in permissions or []:
@@ -2267,6 +2274,7 @@ def _create_job_worktree(
                     scoped_paths=scoped_paths,
                 )
             if sparse_ok:
+                _provision_job_github_apps(worktree_path)
                 _assert_dispatch_worktree_base_is_fresh(worktree_path, base_ref)
                 try:
                     from synlynk.worktree_lease import acquire_worktree_lease
@@ -2321,6 +2329,7 @@ def _create_job_worktree(
             f"on branch {worktree_branch} after 3 attempts."
             + (f" {details}" if details else "")
         )
+    _provision_job_github_apps(worktree_path)
     _assert_dispatch_worktree_base_is_fresh(worktree_path, base_ref)
     try:
         from synlynk.worktree_lease import acquire_worktree_lease
@@ -2333,6 +2342,29 @@ def _create_job_worktree(
         "base_branch": base_ref,
         "base_sha": base_sha,
     }
+
+
+def _provision_job_github_apps(worktree_path: str) -> None:
+    """Expose the main checkout's role-token directory inside a job worktree."""
+    try:
+        common = subprocess.run(
+            ["git", "-C", os.getcwd(), "rev-parse", "--path-format=absolute", "--git-common-dir"],
+            capture_output=True, text=True, check=False,
+        )
+        if common.returncode != 0 or not common.stdout.strip():
+            return
+        git_dir = os.path.realpath(common.stdout.strip())
+        main_repo = os.path.dirname(git_dir) if os.path.basename(git_dir) == ".git" else os.path.dirname(git_dir)
+        source = os.path.join(main_repo, ".synlynk", "github_apps")
+        target = os.path.join(worktree_path, ".synlynk", "github_apps")
+        if os.path.lexists(target):
+            return
+        if not os.path.isdir(source):
+            return
+        os.makedirs(os.path.dirname(target), mode=0o700, exist_ok=True)
+        os.symlink(source, target, target_is_directory=True)
+    except (OSError, ValueError):
+        logger.debug("GitHub App directory provisioning advisory failure", exc_info=True)
 
 
 def _probe_results_trustworthy() -> bool:
@@ -2974,7 +3006,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                    criticality: float = 1.0,
                    lambda_: float = 1.0,
                    db_conn=None,
-                   _startup_failover: bool = True) -> dict:
+                   _startup_failover: bool = True,
+                   skip_permissions: bool = False) -> dict:
     if not task or not task.strip():
         raise ValueError(
             "--task is empty or whitespace-only; refusing to dispatch (see #720)"
@@ -2996,14 +3029,30 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     requires_gh_write = bool(
         requires_gh_write or _task_requires_gh_write(task, task_type=task_type)
     )
-    initial_agent = agent
-    agent = resolve_dispatch_harness(
-        agent, agent_id=agent_id, story_id=story_id,
-        force_agent=force_agent, requires_gh_write=requires_gh_write,
-        static_baseline=static_baseline,
-        task_domain=task_domain, criticality=criticality, lambda_=lambda_,
-        task=task, task_type=task_type, requires=requires, grants=grants, revokes=revokes,
+    # Keep the public dispatch_agent() contract stable while threading the
+    # request through the adapter pipeline.  The remaining body deliberately
+    # stays in place until each stage can preserve its existing bookkeeping
+    # contract exactly.
+    from synlynk.harness_adapters.request import DispatchRequest
+    from synlynk.harness_adapters.registry import get_adapter
+    from synlynk import dispatch_pipeline as pipeline
+
+    request = DispatchRequest(
+        agent=agent, task=task, story_id=story_id, agent_id=agent_id,
+        force_agent=force_agent, context_mode=context_mode, cycle=cycle,
+        skip_preflight=skip_preflight, requires_gh_write=requires_gh_write,
+        static_baseline=static_baseline, task_type=task_type,
+        requires=requires or [], grants=grants or [], revokes=revokes or [],
+        job_id=job_id, issue=issue, base=base, scope_paths=scope_paths or [],
+        session_id=session_id, gh_write_target_kind=gh_write_target_kind,
+        gh_write_expect=gh_write_expect, model=model, effort=effort,
+        model_tier=model_tier, role=role, task_domain=task_domain,
+        criticality=criticality, lambda_=lambda_,
     )
+    request = pipeline.resolve(request)
+    pipeline.authorize(request)
+    initial_agent = agent
+    agent = request.agent
     if agent != initial_agent and not force_agent:
         print(
             f"  ↪ rerouted '{initial_agent}' -> '{agent}' "
@@ -3278,7 +3327,12 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
 
     baselines = baselines_map[agent]
     cli = baselines["cli"]
-    flags = baselines["non_interactive_flags"] + _dispatch_flags_for_agent(agent)
+    dispatch_flags = (
+        _dispatch_flags_for_agent(agent, skip_permissions=True)
+        if skip_permissions
+        else _dispatch_flags_for_agent(agent)
+    )
+    flags = baselines["non_interactive_flags"] + dispatch_flags
     overrides = _load_harness_overrides(agent)
     for key, value in overrides.get("dispatch_flags", {}).items():
         flags = flags + [f"--{key}"] if value in (None, "") else flags + [f"--{key}", str(value)]
@@ -3289,6 +3343,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     load_config = _pkg("load_config")
     cfg = load_config() if load_config else {}
     role_list = (cfg.get("roles", {}) or {}).get(agent, [])
+    import inspect as _inspect
     if task_type == "review":
         role_list = ["review"]
     effective_grants = list(grants or [])
@@ -3308,13 +3363,24 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         # Keep compatibility with test/integration adapters that implement the
         # historical two-argument translator while using the hardened native
         # translator when available.
-        import inspect as _inspect
-        if "read_only" in _inspect.signature(_permissions_to_flags).parameters:
-            permission_flags = _permissions_to_flags(agent, permissions, read_only=True)
+        permission_params = _inspect.signature(_permissions_to_flags).parameters
+        if "read_only" in permission_params or "skip_permissions" in permission_params:
+            permission_kwargs = {}
+            if "read_only" in permission_params:
+                permission_kwargs["read_only"] = True
+            if "skip_permissions" in permission_params:
+                permission_kwargs["skip_permissions"] = skip_permissions
+            permission_flags = _permissions_to_flags(agent, permissions, **permission_kwargs)
         else:
             permission_flags = _permissions_to_flags(agent, permissions)
     else:
-        permission_flags = _permissions_to_flags(agent, permissions)
+        permission_params = _inspect.signature(_permissions_to_flags).parameters
+        if "skip_permissions" in permission_params:
+            permission_flags = _permissions_to_flags(
+                agent, permissions, skip_permissions=skip_permissions
+            )
+        else:
+            permission_flags = _permissions_to_flags(agent, permissions)
     if agent == "codex":
         flags = _merge_codex_permission_flags(flags, permission_flags)
     else:
@@ -3412,7 +3478,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     if agent == "grok":
         flags = flags + ["--output-format", "json"]
     if agent == "claude":
-        flags = flags + ["--output-format", "stream-json", "--verbose"]
+        flags = flags + ["--output-format", "json"]
     if agent == "agy":
         flags = flags + ["--output-format", "json"]
         if "--print-timeout" not in flags:
@@ -3454,7 +3520,31 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         print(f"    {hint}")
 
     _unused_path, worktree_branch = _job_worktree_details(job_id, agent)
-    worktree_info = _create_job_worktree(job_id, agent, base=base)
+    request = request.__class__(
+        **{
+            **request.__dict__,
+            "agent": agent,
+            "job_id": job_id,
+            "base": base,
+            "scope_paths": scope_paths or [],
+        }
+    )
+    try:
+        adapter = get_adapter(request.agent)
+    except KeyError:
+        # Keep compatibility with legacy/non-core harness names that have not
+        # yet been added to the foundation registry.
+        from synlynk.harness_adapters.legacy import LegacyAdapter
+
+        adapter = LegacyAdapter(agent=request.agent)
+    try:
+        worktree_info = pipeline.prepare_worktree(request)
+    except TypeError as exc:
+        # Keep compatibility with test/integration doubles that implement the
+        # historical three-argument worktree helper.
+        if "scoped_paths" not in str(exc):
+            raise
+        worktree_info = _create_job_worktree(job_id, agent, base=base)
     worktree_path = worktree_info["path"]
     base_branch = worktree_info["base_branch"]
     base_sha = worktree_info["base_sha"]
@@ -3784,6 +3874,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 gh_write_target_kind=gh_write_target_kind, model=model, role=role,
                 model_tier=model_tier,
                 db_conn=db_conn, _startup_failover=False,
+                skip_permissions=skip_permissions,
             )
 
     job = {
@@ -3966,6 +4057,17 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                     ),
                 )
             dconn.commit()
+            # PR1: every dispatched daemon job gets an immutable effect
+            # contract.  Legacy/test ledgers without the new tables remain
+            # compatible; normal state DBs are migrated before this point.
+            try:
+                from synlynk.job_truth import ensure_effect_contract
+                ensure_effect_contract(dconn, job)
+                dconn.commit()
+            except (sqlite3.OperationalError, ValueError):
+                # Contract backfill is retried by the migration/reconciler;
+                # it must not turn a launch failure into a false terminal job.
+                dconn.rollback()
     finally:
         if owns_dconn and dconn is not None:
             try:

@@ -213,6 +213,85 @@ CREATE TABLE IF NOT EXISTS daemon_jobs (
 );
 CREATE INDEX IF NOT EXISTS idx_daemon_jobs_status ON daemon_jobs(status);
 
+CREATE TABLE IF NOT EXISTS job_effect_contract (
+    contract_id TEXT PRIMARY KEY,
+    job_id TEXT NOT NULL UNIQUE,
+    kind TEXT NOT NULL,
+    target TEXT,
+    expect TEXT NOT NULL,
+    local_change_policy TEXT NOT NULL,
+    receipt_policy TEXT NOT NULL,
+    verification_deadline_at TEXT,
+    contract_version INTEGER NOT NULL,
+    started_at TEXT,
+    expected_actor TEXT,
+    required_predicates_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS job_evidence (
+    evidence_id TEXT PRIMARY KEY,
+    job_id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    result TEXT NOT NULL,
+    observed_at TEXT NOT NULL,
+    source TEXT NOT NULL,
+    payload_json TEXT NOT NULL DEFAULT '{}',
+    confidence TEXT NOT NULL DEFAULT 'medium',
+    attempt INTEGER NOT NULL DEFAULT 1,
+    event_id TEXT NOT NULL,
+    UNIQUE(job_id, source, attempt, event_id)
+);
+CREATE INDEX IF NOT EXISTS idx_job_evidence_job ON job_evidence(job_id, observed_at);
+CREATE TABLE IF NOT EXISTS job_terminal_decision (
+    job_id TEXT NOT NULL,
+    status TEXT NOT NULL,
+    exit_code INTEGER,
+    verification_state TEXT NOT NULL,
+    primary_evidence_id TEXT,
+    evidence_snapshot_json TEXT NOT NULL DEFAULT '[]',
+    decision_reason TEXT NOT NULL,
+    decided_at TEXT NOT NULL,
+    decided_by TEXT NOT NULL,
+    revision INTEGER NOT NULL,
+    contract_version INTEGER NOT NULL,
+    follow_up TEXT NOT NULL DEFAULT 'none',
+    PRIMARY KEY(job_id, revision),
+    UNIQUE(job_id, revision)
+);
+CREATE INDEX IF NOT EXISTS idx_job_terminal_decision_latest
+    ON job_terminal_decision(job_id, revision DESC);
+CREATE TABLE IF NOT EXISTS job_status_shadow (
+    job_id TEXT PRIMARY KEY,
+    legacy_status TEXT,
+    oracle_status TEXT,
+    reason_code TEXT NOT NULL,
+    disagreement INTEGER NOT NULL DEFAULT 0,
+    harness TEXT,
+    effect_kind TEXT,
+    observed_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_job_status_shadow_reason ON job_status_shadow(reason_code);
+
+CREATE TABLE IF NOT EXISTS job_lifecycle_event (
+    event_id TEXT PRIMARY KEY,
+    job_id TEXT NOT NULL,
+    contract_id TEXT NOT NULL,
+    contract_version INTEGER NOT NULL,
+    event_type TEXT NOT NULL,
+    sequence INTEGER NOT NULL,
+    harness TEXT NOT NULL,
+    role TEXT NOT NULL,
+    process_result_json TEXT NOT NULL DEFAULT '{}',
+    evidence_refs_json TEXT NOT NULL DEFAULT '[]',
+    occurred_at TEXT NOT NULL,
+    schema_version TEXT NOT NULL,
+    compatibility INTEGER NOT NULL DEFAULT 0,
+    accepted INTEGER NOT NULL DEFAULT 1,
+    rejection_reason TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_job_lifecycle_job_sequence
+    ON job_lifecycle_event(job_id, sequence);
+
 CREATE TABLE IF NOT EXISTS goals (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     goal_id     TEXT NOT NULL UNIQUE,

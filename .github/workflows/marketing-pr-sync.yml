@@ -132,7 +132,7 @@ jobs:
             fi
 
             status_url="https://github.com/$GITHUB_REPOSITORY/actions/runs/$dispatch_run"
-            for context in "test (3.10)" "test (3.12)" "EPUBCheck 5.3.0" "qa-gate"; do
+            for context in "test (3.10)" "test (3.12)" "qa-gate"; do
               gh api \
                 --method POST \
                 "repos/$GITHUB_REPOSITORY/statuses/$head_sha" \

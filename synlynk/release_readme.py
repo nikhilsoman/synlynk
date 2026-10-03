@@ -92,6 +92,8 @@ def collect_pytest_test_count(root: str) -> Optional[int]:
         ["pytest", tests_dir, "--collect-only", "-q", "--noconftest"],
         ["python3", "-m", "pytest", tests_dir, "--collect-only", "-q", "--noconftest"],
     ]
+    collection_env = os.environ.copy()
+    collection_env["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] = "1"
     result = None
     for cmd in candidate_cmds:
         try:
@@ -100,6 +102,7 @@ def collect_pytest_test_count(root: str) -> Optional[int]:
                 cwd=root,
                 capture_output=True,
                 text=True,
+                env=collection_env,
                 timeout=180,
             )
             if res.returncode == 0:

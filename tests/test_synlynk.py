@@ -24,7 +24,7 @@ def test_agent_capability_baselines_exist():
         assert isinstance(caps.get("headless_contract"), dict)
         assert isinstance(caps.get("network_deps"), dict)
     assert synlynk.HARNESS_CAPABILITY_BASELINES["claude"]["non_interactive_flags"] == ["--print"]
-    assert synlynk.HARNESS_CAPABILITY_BASELINES["claude"]["dispatch_flags"]["required_flags"] == ["--dangerously-skip-permissions"]
+    assert synlynk.HARNESS_CAPABILITY_BASELINES["claude"]["dispatch_flags"]["required_flags"] == []
     assert synlynk.HARNESS_CAPABILITY_BASELINES["claude"]["headless_contract"]["non_interactive_flag"] == "--print"
     # Sandbox is enforced via non_interactive_flags (-s workspace-write), not required_flags
     # (required_flags are bare flags with no values; bare --sandbox breaks codex CLI).
@@ -968,18 +968,21 @@ def test_permissions_to_flags_agy_returns_empty_for_no_permissions():
     assert result == []
 
 
-def test_permissions_to_flags_agy_returns_skip_permissions_for_shell():
+def test_permissions_to_flags_agy_defaults_to_sandbox_for_shell():
     from synlynk.dispatch import _permissions_to_flags
 
     result = _permissions_to_flags("agy", ["read:*", "run:shell"])
-    assert result == ["--dangerously-skip-permissions"]
+    assert result == ["--sandbox"]
 
 
-def test_permissions_to_flags_agy_returns_skip_permissions_for_write():
+def test_permissions_to_flags_agy_skip_permissions_requires_explicit_opt_in():
     from synlynk.dispatch import _permissions_to_flags
 
     result = _permissions_to_flags("agy", ["read:*", "write:src/"])
-    assert result == ["--dangerously-skip-permissions"]
+    assert result == ["--sandbox"]
+    assert _permissions_to_flags(
+        "agy", ["read:*", "write:src/"], skip_permissions=True
+    ) == ["--dangerously-skip-permissions"]
 
 
 def test_preflight_allows_agy_dangerously_skip_permissions_flag(tmp_path, monkeypatch):
@@ -2885,7 +2888,7 @@ def test_version_matches_module(project_dir):
 
 
 def test_pyproject_version_matches_module(project_dir):
-    """pyproject.toml should source version dynamically from synlynk.VERSION."""
+    """pyproject.toml should source version dynamically from VERSION."""
     import re
 
     repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -2894,12 +2897,23 @@ def test_pyproject_version_matches_module(project_dir):
         pytest.skip("pyproject.toml not present")
     text = open(toml_path).read()
     assert re.search(r'^\s*dynamic\s*=\s*\["version"\]', text, re.MULTILINE)
-    assert re.search(
-        r'^\s*version\s*=\s*\{\s*attr\s*=\s*"synlynk\.VERSION"\s*\}',
-        text,
-        re.MULTILINE,
-    )
+    assert re.search(r'^\s*version\s*=\s*\{\s*file\s*=\s*\["VERSION"\]\s*\}', text, re.MULTILINE)
     assert not re.search(r'^\s*version\s*=\s*"[^"]+"\s*$', text, re.MULTILINE)
+
+
+def test_version_source_drives_runtime_and_release_files():
+    """All release-facing version files must derive from root VERSION."""
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    source_version = (root / "VERSION").read_text(encoding="utf-8").strip()
+    assert synlynk.VERSION == source_version
+    assert synlynk.__version__ == source_version
+    readme = (root / "README.md").read_text(encoding="utf-8")
+    assert f"badge/version-{source_version}-blue" in readme
+    assert f"**v{source_version}:**" in readme
+    assert "VERSION = \"" not in (root / "synlynk" / "_constants.py").read_text(encoding="utf-8")
+    assert "VERSION = \"" not in (root / "synlynk" / "__init__.py").read_text(encoding="utf-8")
 
 
 def test_main_entrypoint_importable():
@@ -4341,7 +4355,7 @@ def test_dispatch_agent_creates_job_entry(project_dir, monkeypatch):
     assert any(j["id"] == job["id"] for j in jobs)
 
 
-def test_dispatch_agent_claude_includes_dangerously_skip_permissions(project_dir, monkeypatch):
+def test_dispatch_agent_claude_uses_scoped_permissions_by_default(project_dir, monkeypatch):
     import synlynk as sl
     captured = {}
 
@@ -4359,7 +4373,30 @@ def test_dispatch_agent_claude_includes_dangerously_skip_permissions(project_dir
 
     sl.dispatch_agent("claude", "implement auth fix", story_id="14")
     shell_cmd = captured["cmd"][2]
-    assert "--dangerously-skip-permissions" in shell_cmd
+    assert "--allowedTools" in shell_cmd
+    assert "--dangerously-skip-permissions" not in shell_cmd
+
+
+def test_dispatch_agent_claude_skip_permissions_is_explicit_opt_in(project_dir, monkeypatch):
+    import synlynk as sl
+    captured = {}
+
+    class FakeProc:
+        pid = 12345
+
+    def fake_popen(cmd, **kw):
+        captured["cmd"] = cmd
+        return FakeProc()
+
+    monkeypatch.setattr(sl.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None: {"passed": True, "sentinel": None, "reason": None})
+    monkeypatch.setattr(sl, "_probe_model_version", lambda *a, **kw: "unknown")
+    monkeypatch.setattr(sl, "generate_context", lambda scope="full", out_path=None: "")
+
+    sl.dispatch_agent(
+        "claude", "implement auth fix", story_id="14", skip_permissions=True
+    )
+    assert "--dangerously-skip-permissions" in captured["cmd"][2]
 
 
 def test_grok_dispatch_uses_always_approve(project_dir, monkeypatch):
@@ -7218,7 +7255,8 @@ def test_dispatch_ready_jobs_creates_worktree_and_applies_dispatch_flags(
     shell = [c for c in captured if c["cmd"] and c["cmd"][0] == "sh"]
     assert len(shell) == 1
     shell_cmd = shell[0]["cmd"][2]
-    assert "--dangerously-skip-permissions" in shell_cmd
+    assert "--dangerously-skip-permissions" not in shell_cmd
+    assert "--allowedTools" in shell_cmd
     assert "--print" in shell_cmd
     assert shell[0]["kwargs"].get("cwd") == expected_wt
 
@@ -7598,10 +7636,14 @@ def test_daemon_cli_uninstall_service_dispatch(project_dir, monkeypatch):
 
 def test_install_service_macos(project_dir, monkeypatch):
     import plistlib
+    import synlynk.daemon as daemon_mod
 
     monkeypatch.setenv("HOME", str(project_dir))
+    monkeypatch.setattr(daemon_mod, "_repo_common_dir", lambda: str(project_dir))
+    monkeypatch.setattr(daemon_mod, "_daemon_package_path", lambda: "/usr/local/lib/synlynk/daemon.py")
+    monkeypatch.setattr(daemon_mod, "_daemon_caller_path", lambda: str(project_dir))
     monkeypatch.setattr(synlynk.sys, "platform", "darwin")
-    monkeypatch.setattr(synlynk.shutil, "which", lambda name: "/usr/local/bin/synlynk" if name == "synlynk" else None)
+    monkeypatch.setattr(synlynk.sys, "executable", "/usr/local/bin/python3")
     monkeypatch.setattr(synlynk.os, "makedirs", lambda *a, **kw: None)
 
     calls = []
@@ -7622,22 +7664,29 @@ def test_install_service_macos(project_dir, monkeypatch):
     plist_path = launchagents_dir / "com.synlynk.daemon.plist"
     assert plist_path.exists()
     plist = plist_path.read_text()
-    assert "<string>/usr/local/bin/synlynk</string>" in plist
+    assert "<string>/usr/local/bin/python3</string>" in plist
     assert "<string>com.synlynk.daemon</string>" in plist
+    assert "<string>run</string>" in plist
     assert ".synlynk/launchd.log" in plist
-    assert plistlib.loads(plist.encode())["KeepAlive"] == {"SuccessfulExit": False}
-    assert "<key>KeepAlive</key>\n    <false/>" not in plist
+    assert plistlib.loads(plist.encode())["KeepAlive"] is True
+    assert plistlib.loads(plist.encode())["ThrottleInterval"] == 30
     assert calls[0][0] == ["launchctl", "load", "-w", str(plist_path)]
 
 
 def test_install_service_linux(project_dir, monkeypatch):
+    import synlynk.daemon as daemon_mod
+
     monkeypatch.setenv("HOME", str(project_dir))
+    monkeypatch.setattr(daemon_mod, "_repo_common_dir", lambda: str(project_dir))
+    monkeypatch.setattr(daemon_mod, "_daemon_package_path", lambda: "/usr/local/lib/synlynk/daemon.py")
+    monkeypatch.setattr(daemon_mod, "_daemon_caller_path", lambda: str(project_dir))
     monkeypatch.setattr(synlynk.sys, "platform", "linux")
     monkeypatch.setattr(
         synlynk.shutil,
         "which",
-        lambda name: "/usr/bin/systemctl" if name == "systemctl" else "/usr/bin/synlynk",
+        lambda name: "/usr/bin/systemctl" if name == "systemctl" else None,
     )
+    monkeypatch.setattr(synlynk.sys, "executable", "/usr/bin/python3")
     monkeypatch.setattr(synlynk.os, "makedirs", lambda *a, **kw: None)
 
     calls = []
@@ -7658,16 +7707,22 @@ def test_install_service_linux(project_dir, monkeypatch):
     unit_path = unit_dir / "synlynk-daemon.service"
     assert unit_path.exists()
     unit = unit_path.read_text()
-    assert "Type=forking" in unit
+    assert "Type=simple" in unit
     assert "After=default.target" in unit
-    assert "ExecStart=/usr/bin/synlynk daemon start" in unit
-    assert "PIDFile=%h/.synlynk/daemon.pid" in unit
+    assert "ExecStart=/usr/bin/python3 -m synlynk daemon run" in unit
+    assert "SYNLYNK_DAEMON_WORKSPACE_ROOT=" in unit
     assert "Restart=on-failure" in unit
+    assert "RestartSec=30" in unit
     assert calls[0][0] == ["systemctl", "--user", "enable", "--now", "synlynk-daemon"]
 
 
 def test_install_service_crontab(project_dir, monkeypatch):
+    import synlynk.daemon as daemon_mod
+
     monkeypatch.setenv("HOME", str(project_dir))
+    monkeypatch.setattr(daemon_mod, "_repo_common_dir", lambda: str(project_dir))
+    monkeypatch.setattr(daemon_mod, "_daemon_package_path", lambda: "/usr/local/lib/synlynk/daemon.py")
+    monkeypatch.setattr(daemon_mod, "_daemon_caller_path", lambda: str(project_dir))
     monkeypatch.setattr(synlynk.sys, "platform", "linux")
     monkeypatch.setattr(synlynk.shutil, "which", lambda name: None)
     monkeypatch.setattr(synlynk.os, "makedirs", lambda *a, **kw: None)
@@ -7693,6 +7748,19 @@ def test_install_service_crontab(project_dir, monkeypatch):
     assert crontab_contents[0].count("daemon start") == 1
     assert calls[0][0] == ["crontab", "-l"]
     assert calls[1][0] == ["crontab", "-"]
+
+
+def test_install_service_rejects_disposable_worktree(project_dir, monkeypatch):
+    import synlynk.daemon as daemon_mod
+
+    monkeypatch.setattr(
+        daemon_mod,
+        "_daemon_package_path",
+        lambda: str(project_dir / "worktrees" / "job-123" / "synlynk" / "daemon.py"),
+    )
+
+    with pytest.raises(RuntimeError, match="disposable worktree"):
+        daemon_mod._daemon_install_service(object())
 
 
 def test_uninstall_service_macos(project_dir, monkeypatch):

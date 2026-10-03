@@ -1,6 +1,21 @@
 """Shared constants used across synlynk modules."""
 
-VERSION = "0.25.0"
+from importlib.metadata import PackageNotFoundError, version as _package_version
+from pathlib import Path
+
+
+def _load_version() -> str:
+    """Read the version from the repository source, or installed metadata."""
+    version_file = Path(__file__).resolve().parents[1] / "VERSION"
+    if version_file.is_file():
+        return version_file.read_text(encoding="utf-8").strip()
+    try:
+        return _package_version("synlynk")
+    except PackageNotFoundError:
+        raise RuntimeError("synlynk version source VERSION is missing")
+
+
+VERSION = _load_version()
 __version__ = VERSION
 
 
@@ -55,7 +70,9 @@ HARNESS_CAPABILITY_BASELINES = {
         "dispatch_flags": {
             "valid_flags": ["--dangerously-skip-permissions", "--model", "--output-format"],
             "invalid_flags": ["--always-approve", "--non-interactive"],
-            "required_flags": ["--dangerously-skip-permissions"],
+            # Permission bypass is an explicit per-dispatch opt-in. The
+            # default path uses the scoped --allowedTools profile.
+            "required_flags": [],
         },
         "headless_contract": {
             "requires_pty": False,

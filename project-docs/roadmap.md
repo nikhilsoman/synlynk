@@ -277,6 +277,9 @@ Worktree lifecycle cleanup (#1886), daemon service auto-install prompt (#1883), 
 
 ## v0.24.0 — The Autonomous Platform, Boardroom & Concierge [shipped] (target: 2026-10-12)
 
+- [x] Job status truth pilot PR3 (#1933): canonical boundary projection,
+  shadow disagreement metrics, rollout gates, and operator reconciliation
+
 Self-management core, Board governance, Jev AST decisioning, swarms, concierge, and turnkey add-ons
 
 - [x] Tri-Modal Autonomy Dial (manual/supervised/autonomous) (P0) <!-- story:story-v024-t01-autonomy-dial -->
@@ -336,4 +339,3 @@ Meta Muse promoted to first-class 5th Core fleet harness
   Rotational non-author review across Claude, Codex, Agy, Grok, and Muse
 - [ ] Muse Structured Output & Cost Ledger Integration (P1)
   Verified token extraction and dual-ledger cost reporting for Muse
-

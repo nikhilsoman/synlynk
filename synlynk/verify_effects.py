@@ -17,6 +17,9 @@ from synlynk.jobs import (
     STATUS_FAILED,
 )
 from synlynk.gh_verify import gh_write_verified, local_commits_pushed
+# PR1 public oracle exports.  The legacy boolean verifier below remains for
+# compatibility callers; new reconciliation code uses the pure tri-state API.
+from synlynk.job_truth import CompletionDecision, TriState, decide_job_outcome
 
 
 @dataclass
@@ -28,6 +31,7 @@ class EffectVerificationResult:
     reason: Optional[str] = None
     gh_verified: Optional[bool] = None
     tests_passed: Optional[bool] = None
+    evidence: Dict[str, Any] = field(default_factory=dict)
 
 
 def _get_worktree_changed_files(
@@ -107,8 +111,21 @@ def verify_job_effects(
     git_state: Optional[dict] = None,
     exit_code: int = 0,
     worktree_branch: Optional[str] = None,
+    structured_telemetry: Optional[dict] = None,
 ) -> EffectVerificationResult:
     """Verify that a job with exit code 0 produced real effects before marking succeeded."""
+    # Claude/Codex structured terminal events are the completion oracle.  The
+    # subprocess exit code is retained for legacy/fallback callers only.
+    if structured_telemetry and structured_telemetry.get("available"):
+        if structured_telemetry.get("completed") is False:
+            return EffectVerificationResult(
+                verified=False,
+                status=STATUS_FAILED,
+                reason=structured_telemetry.get("error") or "Structured harness completion reported failure",
+            )
+        if structured_telemetry.get("completed") is True:
+            exit_code = 0
+
     if exit_code != 0:
         return EffectVerificationResult(
             verified=False,
@@ -127,6 +144,8 @@ def verify_job_effects(
         if expected_gh_effect and "expect" not in kwargs:
             kwargs["expect"] = expected_gh_effect
 
+        evidence = {}
+        kwargs.setdefault("evidence", evidence)
         gh_ok = gh_write_verified(**kwargs)
         if not gh_ok:
             return EffectVerificationResult(
@@ -134,11 +153,13 @@ def verify_job_effects(
                 status=STATUS_FAILED_NOOP_DENIED,
                 gh_verified=False,
                 reason="Expected GitHub effect was not verified directly via gh",
+                evidence=evidence,
             )
         return EffectVerificationResult(
             verified=True,
             status=STATUS_COMPLETED,
             gh_verified=True,
+            evidence=evidence,
         )
 
     commits_ahead = (git_state or {}).get("commits_ahead", 0)

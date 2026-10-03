@@ -1705,6 +1705,34 @@ def _reconciliation_persistence_warning(job: dict, operation: str, exc: Exceptio
         )
 
 
+def _record_job_truth_shadow(job: dict, source: str) -> None:
+    """Append flat-file observations to the canonical ledger when available."""
+    try:
+        conn = _pkg("_get_db")()
+        try:
+            from synlynk.job_truth import record_evidence_and_reconcile
+            record_evidence_and_reconcile(
+                conn,
+                job.get("id", ""),
+                {
+                    "kind": "legacy_terminal_status",
+                    "result": "true",
+                    "source": source,
+                    "event_id": f"{source}:{job.get('id')}:{job.get('ended_at')}",
+                    "observed_at": job.get("ended_at") or time.strftime("%Y-%m-%dT%H:%M:%S"),
+                    "exit_code": job.get("exit_code"),
+                    "legacy_status": job.get("status"),
+                },
+                update_compatibility=False,
+            )
+        finally:
+            conn.close()
+    except (sqlite3.OperationalError, ValueError, OSError):
+        # Flat-file compatibility must remain usable during migration and in
+        # read-only/test ledgers; the SQLite reconciler will retry the signal.
+        return
+
+
 def _try_write_capability_rating(job: dict, log_text: str, sentinel_path: str) -> None:
     """Write one rating, isolating its DB/telemetry failure to this job."""
     try:
@@ -1734,8 +1762,23 @@ def _enforce_job_effect_verification(job: dict, git_state: Optional[dict], senti
             "expect": job.get("gh_write_expect") or "closed",
             "since": job.get("started_at"),
             "expect_author": job.get("gh_write_author"),
+            "expected_sha": job.get("gh_write_sha"),
         }
     from synlynk.verify_effects import verify_job_effects
+    structured = None
+    parse_telemetry = _pkg("parse_dispatch_telemetry")
+    log_path = job.get("log_file") or job.get("log_path")
+    if log_path and os.path.exists(log_path):
+        try:
+            with open(log_path) as log_handle:
+                raw_log = log_handle.read()
+                _ingest_structured_lifecycle(job, raw_log)
+                if parse_telemetry:
+                    telemetry = parse_telemetry(raw_log, agent=job.get("agent", ""))
+                    if telemetry is not None:
+                        structured = telemetry.__dict__
+        except (OSError, AttributeError):
+            structured = None
     effect_res = verify_job_effects(
         worktree_path=job.get("worktree_path"),
         base_sha=job.get("base_sha"),
@@ -1747,6 +1790,7 @@ def _enforce_job_effect_verification(job: dict, git_state: Optional[dict], senti
         git_state=git_state,
         exit_code=job.get("exit_code") or 0,
         worktree_branch=job.get("worktree_branch"),
+        structured_telemetry=structured,
     )
     # If worktree wasn't given on a mutating task (e.g. synthetic test), don't fail
     if not effect_res.verified and not (task_class == "mutating" and not job.get("worktree_path")):
@@ -1764,6 +1808,22 @@ def _enforce_job_effect_verification(job: dict, git_state: Optional[dict], senti
             job["exit_code"] = 1
         return summary_status, summary_note
     return None, None
+
+
+def _ingest_structured_lifecycle(job: dict, raw_log: str) -> None:
+    """Persist adapter events as observations while leaving terminal status to the oracle."""
+    if not raw_log or not job.get("id"):
+        return
+    try:
+        conn = _pkg("_get_db")()
+        try:
+            from synlynk.lifecycle import ingest_output
+            ingest_output(conn, raw_log)
+        finally:
+            conn.close()
+    except (OSError, sqlite3.Error, ValueError):
+        # Compatibility logs must not make an otherwise valid reconciliation fail.
+        return
 
 
 def _reconcile_jobs_unlocked() -> None:
@@ -2104,6 +2164,7 @@ def _reconcile_jobs_unlocked() -> None:
                     _apply_dispatch_gate(job)
                     if job.get("status") == "completed":
                         _finalize_completed_worktree_job(job, git_state)
+            _record_job_truth_shadow(job, "flat_file_reconciliation")
             task_sha256, task_preview = _task_sha256_and_preview(job.get("task"))
             summary = _pkg("_write_job_summary")(
                 job.get("id", ""),
@@ -2463,6 +2524,29 @@ def _settle_daemon_job_terminal(
     release_reservation: bool = False,
 ) -> bool:
     """Persist and commit a daemon terminal transition atomically for callers."""
+    # PR1 shared decision entry point.  The compatibility status projection is
+    # retained during the pilot, while the append-only ledger records the
+    # evidence and the oracle's canonical shadow decision.
+    try:
+        from synlynk.job_truth import record_evidence_and_reconcile
+        record_evidence_and_reconcile(
+            conn,
+            job_id,
+            {
+                "kind": "legacy_terminal_status",
+                "result": "true",
+                "source": "daemon_reconciliation",
+                "event_id": f"terminal:{job_id}:{completed_at}:{status}",
+                "observed_at": completed_at,
+                "exit_code": exit_code,
+                "legacy_status": status,
+            },
+            update_compatibility=False,
+        )
+    except (sqlite3.OperationalError, ValueError):
+        # Unmigrated fixture databases are still supported by the compatibility
+        # path; the next migration creates/backfills the ledger.
+        conn.rollback()
     settled = _persist_daemon_job_terminal(
         conn,
         job_id,
@@ -2570,7 +2654,24 @@ def mark_daemon_job_terminal(
     if not job_id:
         return False
     now = completed_at or time.strftime("%Y-%m-%dT%H:%M:%S")
-    return _persist_daemon_job_terminal(
+    try:
+        from synlynk.job_truth import record_evidence_and_reconcile
+        record_evidence_and_reconcile(
+            conn,
+            job_id,
+            {
+                "kind": "timeout" if status == "timed_out" else "legacy_terminal_status",
+                "result": "true",
+                "source": "zombie_reaper",
+                "event_id": f"zombie:{job_id}:{now}:{status}",
+                "observed_at": now,
+                "exit_code": exit_code,
+            },
+            update_compatibility=False,
+        )
+    except (sqlite3.OperationalError, ValueError):
+        conn.rollback()
+    return _settle_daemon_job_terminal(
         conn, job_id, status, exit_code, now, only_running=True
     )
 
@@ -2920,6 +3021,17 @@ def reclaim_stranded_stories(
                     "reclaimed": not dry_run,
                 })
                 if not dry_run:
+                    terminal_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+                    for job_id, agent, j_status, pid, started_at in job_rows:
+                        if j_status == "running":
+                            _settle_daemon_job_terminal(
+                                conn,
+                                job_id,
+                                "failed",
+                                137,
+                                terminal_at,
+                                only_running=True,
+                            )
                     conn.execute(
                         "UPDATE stories SET status='ready', readiness='ready' WHERE story_id=?",
                         (story_id,),
@@ -2931,12 +3043,6 @@ def reclaim_stranded_stories(
                         )
                     except Exception:
                         pass
-                    for job_id, agent, j_status, pid, started_at in job_rows:
-                        if j_status == "running":
-                            conn.execute(
-                                "UPDATE daemon_jobs SET status='failed', exit_code=137, completed_at=? WHERE job_id=?",
-                                (time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), job_id),
-                            )
 
         if not dry_run and reclaimed:
             conn.commit()
@@ -3221,7 +3327,7 @@ def _reconcile_terminal_jobs_json(conn) -> int:
             verified = None
         exit_code = job.get("exit_code")
         completed_at = job.get("ended_at") or time.strftime("%Y-%m-%dT%H:%M:%S")
-        if _persist_daemon_job_terminal(
+        if _settle_daemon_job_terminal(
             conn, job_id, status, exit_code, completed_at, only_running=True
         ):
             repaired += 1
@@ -3344,12 +3450,23 @@ def _mark_daemon_job_cost_missing(conn, job_id: str, reason: str) -> None:
 def _gtv_status_for_daemon_exit(
     exit_code: Optional[int],
     git_state: Optional[dict],
+    structured_telemetry: Optional[dict] = None,
 ) -> tuple:
     """Ground-truth status for a reaped daemon job (#331 / #579 / Epic A1).
 
     Returns ``(status, exit_code, summary_status, summary_note)``.
     Never leaves successful work as open-ended ``unknown`` with 0 files.
     """
+    # Claude/Codex terminal JSON is the primary completion signal.  Keep the
+    # process-exit/git logic below as the explicit fallback for other harnesses
+    # and malformed structured output.
+    if structured_telemetry and structured_telemetry.get("available"):
+        if structured_telemetry.get("completed") is True:
+            return ("done", 0, None, "structured harness completion event")
+        if structured_telemetry.get("completed") is False:
+            resolved_exit = exit_code if exit_code not in (None, 0) else 1
+            return ("failed", resolved_exit, None, "structured harness failure event")
+
     files = _git_state_files_touched(git_state)
     work_landed = _job_has_real_work_landed(git_state)
     has_git_activity = work_landed or bool(files)
@@ -3848,9 +3965,24 @@ def _reconcile_daemon_jobs() -> None:
                         raise
                     continue
 
-                status, exit_code, summary_status, summary_note = _gtv_status_for_daemon_exit(
-                    exit_code, git_state
-                )
+                log_text = _read_job_log(log_path)
+                structured = None
+                parse_telemetry = _pkg("parse_dispatch_telemetry")
+                if parse_telemetry:
+                    try:
+                        telemetry = parse_telemetry(log_text, agent=agent)
+                        if telemetry is not None:
+                            structured = telemetry.__dict__
+                    except (AttributeError, TypeError, ValueError):
+                        structured = None
+                if structured is None:
+                    status, exit_code, summary_status, summary_note = _gtv_status_for_daemon_exit(
+                        exit_code, git_state
+                    )
+                else:
+                    status, exit_code, summary_status, summary_note = _gtv_status_for_daemon_exit(
+                        exit_code, git_state, structured
+                    )
                 status = _guard_unpushed_branch(
                     conn, job_id, status, worktree_path, worktree_branch, git_state
                 )
@@ -3866,7 +3998,6 @@ def _reconcile_daemon_jobs() -> None:
                 ):
                     status, exit_code = "done", 0
 
-                log_text = _read_job_log(log_path)
                 permission_denied = _should_classify_permission_denied(
                     log_text,
                     git_state,
@@ -4038,11 +4169,9 @@ def _dispatch_ready_jobs(max_parallel: int = 4) -> int:
                 ).fetchall()
                 dep_statuses = {r[0]: r[1] for r in dep_rows}
                 if any(dep_statuses.get(d) == "failed" for d in deps):
-                    conn.execute(
-                        "UPDATE daemon_jobs SET status='failed', completed_at=? WHERE job_id=?",
-                        (now, job_id)
+                    _settle_daemon_job_terminal(
+                        conn, job_id, "failed", 1, now, only_running=False
                     )
-                    conn.commit()
                     continue
                 done_ids = {jid for jid, st in dep_statuses.items() if st == "done"}
                 if done_ids != set(deps):
@@ -4089,11 +4218,9 @@ def _dispatch_ready_jobs(max_parallel: int = 4) -> int:
             except (RuntimeError, ValueError):
                 # Preflight/worktree/unknown-harness failures: fail the queue row so
                 # the daemon does not spin forever on an unlaunchable job.
-                conn.execute(
-                    "UPDATE daemon_jobs SET status='failed', completed_at=? WHERE job_id=?",
-                    (now, job_id),
+                _settle_daemon_job_terminal(
+                    conn, job_id, "failed", 1, now, only_running=False
                 )
-                conn.commit()
                 continue
 
             if isinstance(job, dict) and job.get("deferred"):
@@ -4131,11 +4258,19 @@ def _dispatch_ready_jobs(max_parallel: int = 4) -> int:
         conn.close()
 
 def cmd_jobs(all_jobs: bool = False, watch: bool = False, summary: Optional[str] = None,
-             stalled: bool = False) -> None:
+             stalled: bool = False, json_output: bool = False) -> None:
     """Prints jobs from daemon_jobs in state.db; --all includes done/failed; --watch refreshes."""
     import time as _time
 
     if summary:
+        if json_output:
+            conn = _pkg("_get_db")()
+            try:
+                from synlynk.job_status_projection import project_job_status
+                print(json.dumps(project_job_status(conn, summary), sort_keys=True))
+            finally:
+                conn.close()
+            return
         summary_path = _pkg("_job_summary_path")(summary)
         if not os.path.exists(summary_path):
             print(f"No summary for {summary} -- job may still be running or predates this feature")
@@ -4223,6 +4358,18 @@ def cmd_jobs(all_jobs: bool = False, watch: bool = False, summary: Optional[str]
     def _render() -> None:
         _pkg("_reconcile_daemon_jobs")()
         conn = _pkg("_get_db")()
+        if json_output:
+            try:
+                from synlynk.job_status_projection import project_job_status, record_shadow_comparison
+                job_rows = conn.execute("SELECT job_id FROM daemon_jobs ORDER BY enqueued_at DESC LIMIT 50").fetchall()
+                projections = []
+                for (job_id,) in job_rows:
+                    projections.append(project_job_status(conn, job_id))
+                    record_shadow_comparison(conn, job_id)
+                print(json.dumps({"schema": "job-status-truth.v1", "jobs": projections}, sort_keys=True))
+            finally:
+                conn.close()
+            return
         try:
             rows = conn.execute(
                 "SELECT job_id, agent, story_id, status, enqueued_at, exit_code, "
@@ -4303,6 +4450,32 @@ def cmd_jobs(all_jobs: bool = False, watch: bool = False, summary: Optional[str]
             pass
     else:
         _render()
+
+
+def cmd_jobs_reconcile_truth(job_id: str, evidence_json: str | None = None) -> int:
+    """Append an operator observation through the canonical oracle."""
+    conn = _pkg("_get_db")()
+    try:
+        from synlynk.job_truth import record_evidence_and_reconcile
+        evidence = json.loads(evidence_json) if evidence_json else {
+            "kind": "observer_error", "result": "unknown", "reason": "manual_reconciliation_requested",
+        }
+        if not isinstance(evidence, dict):
+            raise ValueError("--evidence-json must decode to an object")
+        evidence.setdefault("source", "cli-manual-reconciliation")
+        evidence.setdefault("event_id", f"manual:{job_id}:{time.time_ns()}")
+        decision = record_evidence_and_reconcile(conn, job_id, evidence)
+        from synlynk.job_status_projection import project_job_status, record_shadow_comparison
+        record_shadow_comparison(conn, job_id)
+        print(json.dumps({"job_id": job_id, "decision": decision.status,
+                          "reason_code": decision.reason_code,
+                          "projection": project_job_status(conn, job_id)}, sort_keys=True))
+        return 0
+    except (ValueError, TypeError, sqlite3.Error) as exc:
+        print(f"manual reconciliation failed: {exc}", file=sys.stderr)
+        return 1
+    finally:
+        conn.close()
 
 def cmd_jobs_handoff(job_id: str, to_agent: str = None) -> None:
     """Transfer a stalled job to another harness, preserving context."""

@@ -20,6 +20,7 @@ _LIST_EXPECT_FIELD = {
 }
 _LIST_VERIFY_ATTEMPTS = 3
 _LIST_VERIFY_BACKOFF_SECONDS = (0.1, 0.25)
+_READ_QUORUM = 1
 
 
 def local_commits_pushed(worktree_path: Optional[str], branch: Optional[str], base_sha: Optional[str] = None) -> bool:
@@ -190,6 +191,8 @@ def gh_write_verified(
     since: Optional[str] = None,
     expect_author: Optional[str] = None,
     expect_review_state: Optional[str] = None,
+    expected_sha: Optional[str] = None,
+    expected_target: Optional[str] = None,
     evidence: Optional[dict] = None,
 ) -> Optional[bool]:
     """Return whether a declared GitHub target reached the expected state, or None if unknown.
@@ -207,6 +210,11 @@ def gh_write_verified(
     """
     if not target:
         return None
+    if expected_target is not None and expected_target != target:
+        if evidence is not None:
+            evidence.update({"target": target, "expected_target": expected_target,
+                             "matched": False, "reason": "target_mismatch"})
+        return False
     match = _TARGET_RE.match(target)
     if not match:
         return None
@@ -231,7 +239,18 @@ def gh_write_verified(
     is_scalar_expect = expect in _EXPECT_FIELD
     attempts = _LIST_VERIFY_ATTEMPTS if (is_list_expect or is_scalar_expect) else 1
     if evidence is not None:
-        evidence.update({"target": target, "expect": expect, "field": field, "attempts": []})
+        evidence.update({
+            "target": target,
+            "expected_target": expected_target or target,
+            "expect": expect,
+            "field": field,
+            "expected_actor": expect_author,
+            "expected_sha": expected_sha,
+            "attempts": [],
+            "retry": {"max_attempts": attempts, "backoff_seconds": list(_LIST_VERIFY_BACKOFF_SECONDS),
+                      "read_after_write": attempts > 1},
+            "quorum": {"required": _READ_QUORUM, "observed": 0},
+        })
 
     for attempt in range(attempts):
         try:
@@ -277,6 +296,7 @@ def gh_write_verified(
                 if evidence is not None:
                     evidence["matched"] = True
                     evidence["attempt_count"] = attempt + 1
+                    evidence["quorum"]["observed"] = 1
                 return True
             if attempt + 1 < attempts:
                 time.sleep(_LIST_VERIFY_BACKOFF_SECONDS[min(attempt, len(_LIST_VERIFY_BACKOFF_SECONDS) - 1)])
@@ -302,6 +322,8 @@ def gh_write_verified(
                         continue
                     if expect_review_state and entry.get("state") != expect_review_state:
                         continue
+                    if expected_sha and not _entry_matches_sha(entry, expected_sha):
+                        continue
                     matched = True
                     break
         if evidence is not None:
@@ -310,6 +332,7 @@ def gh_write_verified(
             if evidence is not None:
                 evidence["matched"] = True
                 evidence["attempt_count"] = attempt + 1
+                evidence["quorum"]["observed"] = 1
             return True
         if matched is None:
             if attempt + 1 < attempts:
@@ -323,3 +346,12 @@ def gh_write_verified(
             evidence["matched"] = False
             evidence["attempt_count"] = attempt + 1
         return False
+
+
+def _entry_matches_sha(entry: dict, expected_sha: str) -> bool:
+    """Return whether a review/comment carries the causal commit identity."""
+    candidates = [entry.get("commitOid"), entry.get("commit_oid"), entry.get("sha"), entry.get("headSha")]
+    commit = entry.get("commit")
+    if isinstance(commit, dict):
+        candidates.extend((commit.get("oid"), commit.get("sha")))
+    return any(value and str(value).startswith(str(expected_sha)) for value in candidates)

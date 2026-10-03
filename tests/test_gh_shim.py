@@ -92,6 +92,17 @@ def test_shim_routes_known_role_to_synlynk(monkeypatch):
     assert calls[0][1][-6:] == ["--role", "qa", "--", "pr", "view", "1"]
 
 
+def test_internal_gh_runner_refuses_host_auth_in_harness(monkeypatch):
+    from synlynk import gh_shim
+
+    monkeypatch.setenv("SYNLYNK_HARNESS", "1")
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    result = gh_shim.run_gh(["pr", "view", "1"], capture_output=True, text=True)
+    assert result.returncode == 1
+    assert gh_shim.REFUSAL in result.stderr
+
+
 def test_gh_shim_cli_prints_installable_environment(tmp_path, monkeypatch, capsys):
     from synlynk import gh_shim
 

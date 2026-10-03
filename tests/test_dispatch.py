@@ -1363,6 +1363,23 @@ def test_create_job_worktree_anchors_to_base_tip_sha_and_returns_details(git_wor
     assert _os.path.isdir(result["path"])
 
 
+def test_create_job_worktree_provisions_github_apps_symlink(git_worktree_repo, monkeypatch):
+    import synlynk.dispatch as dispatch_mod
+
+    apps_dir = git_worktree_repo / ".synlynk" / "github_apps"
+    apps_dir.mkdir(parents=True)
+    token_path = apps_dir / "qa.token.json"
+    token_path.write_text('{"token":"role-token"}')
+    monkeypatch.chdir(git_worktree_repo)
+
+    result = dispatch_mod._create_job_worktree("job-apps", "codex")
+
+    linked_apps = __import__("pathlib").Path(result["path"]) / ".synlynk" / "github_apps"
+    assert linked_apps.is_symlink()
+    assert linked_apps.resolve() == apps_dir.resolve()
+    assert (linked_apps / "qa.token.json").read_text() == token_path.read_text()
+
+
 def test_create_job_worktree_serializes_git_ref_operation_and_retries_contention(git_worktree_repo, monkeypatch):
     import synlynk.dispatch as dispatch_mod
 
@@ -1951,10 +1968,10 @@ def test_permissions_to_flags_agy_warns_on_empty_permissions(capsys):
     assert "no write/run permissions granted" in out
 
 
-def test_permissions_to_flags_agy_write_permissions_keep_skip_flag_without_warning(capsys):
+def test_permissions_to_flags_agy_write_permissions_use_sandbox_without_warning(capsys):
     from synlynk.dispatch import _permissions_to_flags
 
-    assert _permissions_to_flags("agy", ["write:src/"]) == ["--dangerously-skip-permissions"]
+    assert _permissions_to_flags("agy", ["write:src/"]) == ["--sandbox"]
     out = capsys.readouterr().out
     assert out == ""
 

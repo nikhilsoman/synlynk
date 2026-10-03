@@ -282,7 +282,8 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [235](./235-pr1876-wizard-dry-run-state-isolation.md) | Fixing #1865 — The Wizard's Dry-Run Flag Never Reached the Wizard | [#1876](https://github.com/nikhilsoman/synlynk/pull/1876) | 2026-09-30 |
 | [236](./236-five-pov-review.md) | Five Lenses on synlynk — A Measured Deep Review | [#1913](https://github.com/nikhilsoman/synlynk/pull/1913) | 2026-10-02 |
 | [237](./237-decide-panel-roadmap.md) | Convening the Panel on Our Own Review | [#1919](https://github.com/nikhilsoman/synlynk/pull/1919) | 2026-10-02 |
-| [238](./238-decide-panel-roadmap-fidelity-fix.md) | The Synthesis Lost Detail the Panel Actually Gave Us | TBD | 2026-10-03 |
+| [238](./238-decide-panel-roadmap-fidelity-fix.md) | The Synthesis Lost Detail the Panel Actually Gave Us | [#1920](https://github.com/nikhilsoman/synlynk/pull/1920) | 2026-10-03 |
+| [239](./239-pr1934-version-single-source.md) | PR #1934 — CI release gate and version single source | 1934 | 2026-10-03 |
 
 ## Per-PR Post Template
 

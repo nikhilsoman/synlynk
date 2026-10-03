@@ -476,6 +476,11 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     team_sub = team_parser.add_subparsers(dest="team_action")
     team_sub.add_parser("status", help="Show team digest: members, stories, budget")
 
+    gc_parser = subparsers.add_parser("gc", help="Garbage collect merged worktrees and orphaned state.db shards")
+    gc_parser.add_argument("--yes", action="store_true", help="Apply deletions (default is dry-run)")
+    gc_parser.add_argument("--retention-days", type=int, default=14, help="Days to keep inactive shards")
+    gc_parser.add_argument("--size-budget-mb", type=int, default=1024, help="Max size in MB for state.db shards before aggressive pruning")
+
     decide_parser = subparsers.add_parser(
         "decide", help="Convene a multi-agent panel and optionally record a Decision"
     )
@@ -901,7 +906,7 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
 
     daemon_parser = subparsers.add_parser("daemon", help="Manage the always-on context daemon")
     daemon_parser.add_argument(
-        "action", nargs="?", choices=["start", "stop", "status", "restart"],
+        "action", nargs="?", choices=["start", "stop", "status", "restart", "run"],
         help="Daemon action"
     )
     daemon_parser.add_argument(
@@ -1131,6 +1136,10 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
         help="Bypass harness preflight checks"
     )
     dispatch_parser.add_argument(
+        "--dangerously-skip-permissions", action="store_true", dest="skip_permissions",
+        help="Explicitly bypass harness permission prompts (unsafe; opt-in only)",
+    )
+    dispatch_parser.add_argument(
         "--base", default=None,
         help="Explicit base branch/ref to anchor the job worktree to (overrides auto-stacking)"
     )
@@ -1179,11 +1188,17 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     jobs_parser.add_argument("--all", action="store_true", dest="all_jobs",
         help="Include completed and failed jobs")
     jobs_parser.add_argument("--summary", metavar="JOB_ID")
+    jobs_parser.add_argument("--json", action="store_true", dest="json_output",
+        help="Output canonical job-truth projections and evidence summaries")
     jobs_parser.add_argument("--watch", action="store_true",
         help="Refresh table every 2 seconds until Ctrl-C")
     jobs_parser.add_argument("--stalled", action="store_true",
         help="List jobs awaiting handoff")
     jobs_sub = jobs_parser.add_subparsers(dest="jobs_cmd")
+    reconcile_p = jobs_sub.add_parser("reconcile", help="Append evidence and reconcile one job through the canonical oracle")
+    reconcile_p.add_argument("job_id")
+    reconcile_p.add_argument("--evidence-json", default=None,
+        help="JSON object describing an evidence observation; omitted requests verification")
     handoff_p = jobs_sub.add_parser("handoff", help="Transfer a stalled job to another harness")
     handoff_p.add_argument("job_id")
     handoff_p.add_argument("--to-harness", "--to-agent", "--to", dest="to_agent", default=None,
@@ -1786,6 +1801,89 @@ def _command_from_argv(argv):
     return None
 
 
+def _run_fast_observability_command(cli_tokens, selected_command):
+    """Run the two read-only observability commands without legacy imports.
+
+    ``synlynk`` historically populated :mod:`synlynk` with every command
+    implementation before dispatching.  Keep that compatibility path for the
+    full command surface, but let the common jobs/status probes stop after
+    importing only their own implementation modules.
+    """
+    if selected_command not in {"jobs", "status"}:
+        return False
+
+    parser = build_parser(selected_command=selected_command)
+    args = parser.parse_args(cli_tokens)
+
+    if selected_command == "status":
+        if getattr(args, "platform", False) or not getattr(args, "json_output", False):
+            return False
+        import json  # load_config keeps its historical package-level dependency
+
+        sys.modules["synlynk"].json = json
+        from synlynk import _get_db
+        from synlynk.capability_roles import _load_capability_roles
+        from synlynk.sentinel import _read_sentinel_alerts
+        from synlynk.status import cmd_status
+
+        # ``status`` keeps these names late-bound for compatibility with the
+        # package facade; seed only the one helper it needs in fast mode.
+        _package = sys.modules["synlynk"]
+        _package._read_sentinel_alerts = _read_sentinel_alerts
+        _package._load_capability_roles = _load_capability_roles
+        conn = _get_db(read_only=True)
+        try:
+            cmd_status(
+                db_conn=conn,
+                json_output=args.json_output,
+                include_worktree_hint=False,
+            )
+        finally:
+            conn.close()
+        return True
+
+    # Handoff/reap/summary/stalled have side effects or legacy file-backed
+    # behavior; leave those forms on the established compatibility path.
+    if (
+        getattr(args, "jobs_cmd", None) is not None
+        or getattr(args, "summary", None)
+        or getattr(args, "stalled", False)
+        or getattr(args, "watch", False)
+    ):
+        return False
+
+    # The established jobs command reconciles the legacy jobs.json ledger as
+    # well as daemon_jobs.  Keep that path whenever either source contains
+    # data; the fast renderer is only safe for an entirely empty workspace.
+    if os.path.exists(os.path.join(".synlynk", "jobs.json")):
+        return False
+
+    from synlynk import _get_db
+
+    conn = _get_db(migrate=False)
+    try:
+        try:
+            rows = conn.execute(
+                "SELECT job_id, agent, story_id, status, enqueued_at, exit_code, "
+                "context_mode, requires_gh_write, gh_write_verified "
+                "FROM daemon_jobs ORDER BY enqueued_at DESC LIMIT 50"
+            ).fetchall()
+        except Exception:
+            rows = []
+    finally:
+        conn.close()
+
+    if not rows:
+        print("No jobs found. Use `synlynk dispatch <agent> --task <task>` to start one.")
+        return True
+
+    # Non-empty daemon ledgers still need the established reconciliation and
+    # rendering path so stale PIDs and terminal states are refreshed before
+    # being displayed.
+    return False
+
+
+
 def main(argv=None) -> None:
     import synlynk as _package
 
@@ -1803,6 +1901,8 @@ def main(argv=None) -> None:
         if "--help" in cli_tokens or selected_command not in _TOP_LEVEL_COMMANDS:
             parser = build_parser(selected_command=selected_command)
             parser.parse_args(cli_tokens)
+        if _run_fast_observability_command(cli_tokens, selected_command):
+            return
         _package._load_legacy_imports()
         _package._FAST_CLI = False
 
@@ -2007,6 +2107,9 @@ def main(argv=None) -> None:
             elif action == "restart":
                 d.stop()
                 d.start()
+            elif action == "run":
+                from synlynk.daemon import _synlynk_daemon_foreground_main
+                _synlynk_daemon_foreground_main()
             else:
                 daemon_parser.print_help()
     elif args.command == "checkpoint":
@@ -2221,6 +2324,7 @@ def main(argv=None) -> None:
                                  requires=getattr(args, "requires", []),
                                  context_mode=getattr(args, "context_mode", "task"),
                                  skip_preflight=getattr(args, "skip_preflight", False),
+                                 skip_permissions=getattr(args, "skip_permissions", False),
                                  base=getattr(args, "base", None),
                                  grants=getattr(args, "grant", []),
                                  revokes=getattr(args, "revoke", []),
@@ -2277,11 +2381,15 @@ def main(argv=None) -> None:
                     all_projects=getattr(args, "all_projects", False),
                 )
             )
+        elif getattr(args, "jobs_cmd", None) == "reconcile":
+            from synlynk.jobs import cmd_jobs_reconcile_truth
+            raise SystemExit(cmd_jobs_reconcile_truth(args.job_id, getattr(args, "evidence_json", None)))
         else:
             cmd_jobs(all_jobs=getattr(args, "all_jobs", False),
                      watch=getattr(args, "watch", False),
                      summary=getattr(args, "summary", None),
-                     stalled=getattr(args, "stalled", False))
+                     stalled=getattr(args, "stalled", False),
+                     json_output=getattr(args, "json_output", False))
     elif args.command == "relay":
         action = getattr(args, "relay_action", None)
         if action == "start":
@@ -2641,6 +2749,9 @@ def main(argv=None) -> None:
             audit=args.audit,
             model=args.model,
         )
+    elif args.command == "gc":
+        from synlynk.gc_cmd import cmd_gc
+        cmd_gc(dry_run=not getattr(args, "yes", False), yes=getattr(args, "yes", False), retention_days=getattr(args, "retention_days", 14), size_budget_mb=getattr(args, "size_budget_mb", 1024))
     elif args.command == "heal":
         if getattr(args, "cycles", False):
             from synlynk.heal_cycles import cmd_heal_cycles
