@@ -7639,7 +7639,7 @@ def test_install_service_macos(project_dir, monkeypatch):
 
     monkeypatch.setenv("HOME", str(project_dir))
     monkeypatch.setattr(synlynk.sys, "platform", "darwin")
-    monkeypatch.setattr(synlynk.shutil, "which", lambda name: "/usr/local/bin/synlynk" if name == "synlynk" else None)
+    monkeypatch.setattr(synlynk.sys, "executable", "/usr/local/bin/python3")
     monkeypatch.setattr(synlynk.os, "makedirs", lambda *a, **kw: None)
 
     calls = []
@@ -7660,11 +7660,12 @@ def test_install_service_macos(project_dir, monkeypatch):
     plist_path = launchagents_dir / "com.synlynk.daemon.plist"
     assert plist_path.exists()
     plist = plist_path.read_text()
-    assert "<string>/usr/local/bin/synlynk</string>" in plist
+    assert "<string>/usr/local/bin/python3</string>" in plist
     assert "<string>com.synlynk.daemon</string>" in plist
+    assert "<string>run</string>" in plist
     assert ".synlynk/launchd.log" in plist
-    assert plistlib.loads(plist.encode())["KeepAlive"] == {"SuccessfulExit": False}
-    assert "<key>KeepAlive</key>\n    <false/>" not in plist
+    assert plistlib.loads(plist.encode())["KeepAlive"] is True
+    assert plistlib.loads(plist.encode())["ThrottleInterval"] == 30
     assert calls[0][0] == ["launchctl", "load", "-w", str(plist_path)]
 
 
@@ -7674,8 +7675,9 @@ def test_install_service_linux(project_dir, monkeypatch):
     monkeypatch.setattr(
         synlynk.shutil,
         "which",
-        lambda name: "/usr/bin/systemctl" if name == "systemctl" else "/usr/bin/synlynk",
+        lambda name: "/usr/bin/systemctl" if name == "systemctl" else None,
     )
+    monkeypatch.setattr(synlynk.sys, "executable", "/usr/bin/python3")
     monkeypatch.setattr(synlynk.os, "makedirs", lambda *a, **kw: None)
 
     calls = []
@@ -7696,11 +7698,12 @@ def test_install_service_linux(project_dir, monkeypatch):
     unit_path = unit_dir / "synlynk-daemon.service"
     assert unit_path.exists()
     unit = unit_path.read_text()
-    assert "Type=forking" in unit
+    assert "Type=simple" in unit
     assert "After=default.target" in unit
-    assert "ExecStart=/usr/bin/synlynk daemon start" in unit
-    assert "PIDFile=%h/.synlynk/daemon.pid" in unit
+    assert "ExecStart=/usr/bin/python3 -m synlynk daemon run" in unit
+    assert "SYNLYNK_DAEMON_WORKSPACE_ROOT=" in unit
     assert "Restart=on-failure" in unit
+    assert "RestartSec=30" in unit
     assert calls[0][0] == ["systemctl", "--user", "enable", "--now", "synlynk-daemon"]
 
 

@@ -522,7 +522,7 @@ def test_fix_checkpoint_todomd_handling_it_bypass_has_no_literal_todo_path():
     assert not re.search(r"todo_path\\s*=", source)
 
 
-def test_macos_launchd_daemon_service_has_keepalive_successful_exit_dict(
+def test_macos_launchd_daemon_service_supervises_foreground_process(
     project_dir, monkeypatch
 ):
     import synlynk
@@ -530,11 +530,7 @@ def test_macos_launchd_daemon_service_has_keepalive_successful_exit_dict(
 
     monkeypatch.setenv("HOME", str(project_dir))
     monkeypatch.setattr(synlynk.sys, "platform", "darwin")
-    monkeypatch.setattr(
-        synlynk.shutil,
-        "which",
-        lambda name: "/usr/local/bin/synlynk" if name == "synlynk" else None,
-    )
+    monkeypatch.setattr(synlynk.sys, "executable", "/usr/local/bin/python3")
     monkeypatch.setattr(synlynk.os, "makedirs", lambda *args, **kwargs: None)
     monkeypatch.setattr(
         synlynk.subprocess,
@@ -548,7 +544,10 @@ def test_macos_launchd_daemon_service_has_keepalive_successful_exit_dict(
     synlynk._daemon_install_service(object())
 
     plist = (launchagents_dir / "com.synlynk.daemon.plist").read_text()
-    assert plistlib.loads(plist.encode())["KeepAlive"] == {"SuccessfulExit": False}
+    service = plistlib.loads(plist.encode())
+    assert service["KeepAlive"] is True
+    assert service["ThrottleInterval"] == 30
+    assert service["ProgramArguments"][-2:] == ["daemon", "run"]
     assert "<key>KeepAlive</key>\n    <false/>" not in plist
 
 
