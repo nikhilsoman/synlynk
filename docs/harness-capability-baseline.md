@@ -65,3 +65,4 @@ with four workers, and 162.07s with `-n auto` (16 workers), but all three runs
 shared the same pre-existing live-selftest mutation failure. Keep CI serial;
 see `docs/testing/pytest-xdist-evaluation-1496.md` for the classification and
 scoped experiment command.
+# grok-adapter-probe-verified
