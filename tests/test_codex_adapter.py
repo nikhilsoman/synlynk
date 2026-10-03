@@ -19,3 +19,17 @@ def test_codex_build_cmd_includes_dispatch_flags():
     request = DispatchRequest(agent="codex", task="fix it", permissions=["write:repo"])
     cmd = adapter.build_cmd(request)
     assert isinstance(cmd, list) and len(cmd) > 0
+
+
+def test_codex_classify_failure_flags_ask_for_approval_incompatibility():
+    """Regression fixture: this session's --ask-for-approval CLI incompatibility."""
+    adapter = CodexAdapter()
+    stderr = "error: unrecognized arguments: --ask-for-approval never"
+    result = adapter.classify_failure(exit_code=2, stderr=stderr, raw_text=stderr)
+    assert result.value == "sandbox_denied"
+
+
+def test_codex_classify_failure_returns_none_for_unrelated_errors():
+    adapter = CodexAdapter()
+    result = adapter.classify_failure(exit_code=1, stderr="some unrelated traceback", raw_text="")
+    assert result is None
