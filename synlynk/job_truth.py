@@ -40,12 +40,48 @@ STATUS_ALIASES = {
 }
 
 TERMINAL_WRITER_MANIFEST = {
-    "flat_file_reconciliation": "synlynk.jobs._reconcile_jobs_unlocked",
-    "daemon_reconciliation": "synlynk.jobs._reconcile_daemon_jobs",
-    "daemon_terminal_persistence": "synlynk.jobs._persist_daemon_job_terminal",
-    "zombie_reaper": "synlynk.jobs.apply_reap_zombies",
-    "queue_dependency_failure": "synlynk.jobs._dispatch_ready_jobs",
+    "flat_file_reconciliation": {
+        "entrypoint": "_reconcile_jobs_unlocked",
+        "adapter": "_record_job_truth_shadow",
+    },
+    "daemon_reconciliation": {
+        "entrypoint": "_reconcile_daemon_jobs",
+        "adapter": "_settle_daemon_job_terminal",
+    },
+    "terminal_json_reconciliation": {
+        "entrypoint": "_reconcile_terminal_jobs_json",
+        "adapter": "_settle_daemon_job_terminal",
+    },
+    "zombie_reaper": {
+        "entrypoint": "mark_daemon_job_terminal",
+        "adapter": "record_evidence_and_reconcile",
+    },
+    "queue_dependency_failure": {
+        "entrypoint": "_dispatch_ready_jobs",
+        "adapter": "_settle_daemon_job_terminal",
+    },
 }
+
+
+def validate_terminal_writer_manifest() -> None:
+    """Fail closed if a registered terminal writer bypasses the oracle adapter."""
+    import inspect
+    from synlynk import jobs
+
+    for name, registration in TERMINAL_WRITER_MANIFEST.items():
+        entrypoint = getattr(jobs, registration["entrypoint"], None)
+        adapter = registration["adapter"]
+        adapter_fn = getattr(jobs, adapter, None)
+        if adapter == "record_evidence_and_reconcile":
+            adapter_fn = record_evidence_and_reconcile
+        if entrypoint is None or adapter_fn is None:
+            raise AssertionError(f"terminal writer {name} is not registered: {registration}")
+        entry_source = inspect.getsource(entrypoint)
+        adapter_name = adapter if adapter == "record_evidence_and_reconcile" else adapter
+        if adapter_name not in entry_source:
+            raise AssertionError(
+                f"terminal writer {name} bypasses the shared oracle adapter {adapter_name}"
+            )
 
 
 @dataclass(frozen=True)

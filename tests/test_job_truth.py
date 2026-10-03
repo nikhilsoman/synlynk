@@ -11,6 +11,8 @@ from synlynk.job_truth import (
     decide_job_outcome,
     legacy_unknown_contract,
     record_evidence_and_reconcile,
+    ensure_effect_contract,
+    validate_terminal_writer_manifest,
 )
 
 
@@ -89,7 +91,7 @@ def test_duplicate_evidence_is_idempotent_and_correction_is_revision():
     assert conn.execute("select max(revision) from job_terminal_decision").fetchone()[0] == 2
 
 
-def test_contract_is_immutable_and_concurrent_reconciliation_has_one_revision_per_observation():
+def test_contract_is_immutable_and_concurrent_reconciliation_has_one_revision_per_observation(tmp_path):
     conn = db()
     contract = review_contract()
     record_evidence_and_reconcile(conn, contract["job_id"], {"kind": "github_effect", "result": "unknown", "source": "gh", "event_id": "one"}, contract=contract)
@@ -97,13 +99,55 @@ def test_contract_is_immutable_and_concurrent_reconciliation_has_one_revision_pe
     with pytest.raises(ValueError):
         record_evidence_and_reconcile(conn, contract["job_id"], {"kind": "github_effect", "result": "true", "source": "gh", "event_id": "two"}, contract=changed)
 
-    # SQLite's single connection is deliberately serialized here; the ledger
-    # uses BEGIN IMMEDIATE, so separate connections cannot double-claim a row.
-    file_conn = sqlite3.connect(":memory:")
+    # Use separate connections against a file-backed ledger so BEGIN IMMEDIATE
+    # is exercised by real concurrent writers rather than a serialized mock.
+    ledger_path = tmp_path / "job-truth.db"
+    file_conn = sqlite3.connect(str(ledger_path), check_same_thread=False)
     file_conn.executescript(LEDGER_SCHEMA)
-    record_evidence_and_reconcile(file_conn, "concurrent", {"kind": "github_effect", "result": "unknown", "source": "gh", "event_id": "same"}, contract=review_contract("concurrent"))
-    record_evidence_and_reconcile(file_conn, "concurrent", {"kind": "github_effect", "result": "unknown", "source": "gh", "event_id": "same"})
-    assert file_conn.execute("select count(*) from job_evidence").fetchone()[0] == 1
+    ensure_effect_contract(file_conn, {
+        "id": "concurrent", "requires_gh_write": True, "task_type": "review",
+        "gh_write_expect": "review", "gh_write_target": "pr:1947",
+        "gh_write_author": "qa", "started_at": "2026-10-03T10:00:00+00:00",
+    })
+    file_conn.commit()
+    file_conn.close()
+    barrier = threading.Barrier(2)
+    errors = []
+
+    def write_same_observation():
+        worker = sqlite3.connect(str(ledger_path), timeout=10)
+        try:
+            barrier.wait(timeout=5)
+            record_evidence_and_reconcile(
+                worker, "concurrent",
+                {"kind": "github_effect", "result": "unknown", "source": "gh",
+                 "event_id": "same"},
+            )
+        except Exception as exc:  # pragma: no cover - assertion reports details
+            errors.append(exc)
+        finally:
+            worker.close()
+
+    threads = [threading.Thread(target=write_same_observation) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=15)
+    assert not errors
+    check = sqlite3.connect(str(ledger_path))
+    assert check.execute("select count(*) from job_evidence").fetchone()[0] == 1
+    assert check.execute("select max(revision) from job_terminal_decision").fetchone()[0] == 1
+    record_evidence_and_reconcile(
+        check, "concurrent",
+        {"kind": "github_effect", "result": "true", "source": "gh",
+         "event_id": "correction", "attempt": 2, "causal_match": True},
+    )
+    assert check.execute("select max(revision) from job_terminal_decision").fetchone()[0] == 2
+    check.close()
+
+
+def test_terminal_writer_manifest_enforces_shared_oracle_adapters():
+    validate_terminal_writer_manifest()
 
 
 def test_parity_fixture_matches_both_legacy_reconciliation_paths():
@@ -115,4 +159,3 @@ def test_parity_fixture_matches_both_legacy_reconciliation_paths():
     legacy_flat = "completed"
     legacy_daemon = "completed"
     assert (legacy_flat, legacy_daemon, oracle.status) == ("completed", "completed", "completed")
-

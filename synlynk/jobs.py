@@ -3302,7 +3302,7 @@ def _reconcile_terminal_jobs_json(conn) -> int:
             verified = None
         exit_code = job.get("exit_code")
         completed_at = job.get("ended_at") or time.strftime("%Y-%m-%dT%H:%M:%S")
-        if _persist_daemon_job_terminal(
+        if _settle_daemon_job_terminal(
             conn, job_id, status, exit_code, completed_at, only_running=True
         ):
             repaired += 1
@@ -4144,11 +4144,9 @@ def _dispatch_ready_jobs(max_parallel: int = 4) -> int:
                 ).fetchall()
                 dep_statuses = {r[0]: r[1] for r in dep_rows}
                 if any(dep_statuses.get(d) == "failed" for d in deps):
-                    conn.execute(
-                        "UPDATE daemon_jobs SET status='failed', completed_at=? WHERE job_id=?",
-                        (now, job_id)
+                    _settle_daemon_job_terminal(
+                        conn, job_id, "failed", 1, now, only_running=False
                     )
-                    conn.commit()
                     continue
                 done_ids = {jid for jid, st in dep_statuses.items() if st == "done"}
                 if done_ids != set(deps):
@@ -4195,11 +4193,9 @@ def _dispatch_ready_jobs(max_parallel: int = 4) -> int:
             except (RuntimeError, ValueError):
                 # Preflight/worktree/unknown-harness failures: fail the queue row so
                 # the daemon does not spin forever on an unlaunchable job.
-                conn.execute(
-                    "UPDATE daemon_jobs SET status='failed', completed_at=? WHERE job_id=?",
-                    (now, job_id),
+                _settle_daemon_job_terminal(
+                    conn, job_id, "failed", 1, now, only_running=False
                 )
-                conn.commit()
                 continue
 
             if isinstance(job, dict) and job.get("deferred"):
