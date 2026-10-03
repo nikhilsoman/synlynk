@@ -31,6 +31,7 @@ class EffectVerificationResult:
     reason: Optional[str] = None
     gh_verified: Optional[bool] = None
     tests_passed: Optional[bool] = None
+    evidence: Dict[str, Any] = field(default_factory=dict)
 
 
 def _get_worktree_changed_files(
@@ -143,6 +144,8 @@ def verify_job_effects(
         if expected_gh_effect and "expect" not in kwargs:
             kwargs["expect"] = expected_gh_effect
 
+        evidence = {}
+        kwargs.setdefault("evidence", evidence)
         gh_ok = gh_write_verified(**kwargs)
         if not gh_ok:
             return EffectVerificationResult(
@@ -150,11 +153,13 @@ def verify_job_effects(
                 status=STATUS_FAILED_NOOP_DENIED,
                 gh_verified=False,
                 reason="Expected GitHub effect was not verified directly via gh",
+                evidence=evidence,
             )
         return EffectVerificationResult(
             verified=True,
             status=STATUS_COMPLETED,
             gh_verified=True,
+            evidence=evidence,
         )
 
     commits_ahead = (git_state or {}).get("commits_ahead", 0)

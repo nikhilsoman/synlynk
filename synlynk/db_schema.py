@@ -261,6 +261,26 @@ CREATE TABLE IF NOT EXISTS job_terminal_decision (
 CREATE INDEX IF NOT EXISTS idx_job_terminal_decision_latest
     ON job_terminal_decision(job_id, revision DESC);
 
+CREATE TABLE IF NOT EXISTS job_lifecycle_event (
+    event_id TEXT PRIMARY KEY,
+    job_id TEXT NOT NULL,
+    contract_id TEXT NOT NULL,
+    contract_version INTEGER NOT NULL,
+    event_type TEXT NOT NULL,
+    sequence INTEGER NOT NULL,
+    harness TEXT NOT NULL,
+    role TEXT NOT NULL,
+    process_result_json TEXT NOT NULL DEFAULT '{}',
+    evidence_refs_json TEXT NOT NULL DEFAULT '[]',
+    occurred_at TEXT NOT NULL,
+    schema_version TEXT NOT NULL,
+    compatibility INTEGER NOT NULL DEFAULT 0,
+    accepted INTEGER NOT NULL DEFAULT 1,
+    rejection_reason TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_job_lifecycle_job_sequence
+    ON job_lifecycle_event(job_id, sequence);
+
 CREATE TABLE IF NOT EXISTS goals (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     goal_id     TEXT NOT NULL UNIQUE,

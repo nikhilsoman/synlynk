@@ -17,6 +17,8 @@ class FailureKind(Enum):
 class DispatchEvent:
     raw_text: str
     failure: Optional[FailureKind]
+    lifecycle_events: tuple = ()
+    compatibility_evidence: Optional[dict] = None
 
 
 class HarnessAdapter(Protocol):

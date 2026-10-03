@@ -93,7 +93,10 @@ def observe(spawn_result: dict, adapter: HarnessAdapter) -> dict:
     failure = adapter.classify_failure(
         spawn_result["exit_code"], raw_output, raw_output
     )
-    return {"event": event, "failure": failure, **spawn_result}
+    return {"event": event, "failure": failure,
+            "lifecycle_events": getattr(event, "lifecycle_events", ()),
+            "compatibility_evidence": getattr(event, "compatibility_evidence", None),
+            **spawn_result}
 
 
 def finalize(request: DispatchRequest, observed: dict) -> dict:

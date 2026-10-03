@@ -20,7 +20,10 @@ class LegacyAdapter:
         return _dispatch_flags_for_agent(self.agent)
 
     def parse_output(self, raw_text: str) -> DispatchEvent:
-        return DispatchEvent(raw_text=raw_text, failure=None)
+        from synlynk.lifecycle import compatibility_evidence, parse_output
+        return DispatchEvent(raw_text=raw_text, failure=None,
+                             lifecycle_events=parse_output(raw_text),
+                             compatibility_evidence=compatibility_evidence(raw_text))
 
     def translate_permissions(self, permissions: list, read_only: bool) -> list:
         from synlynk.dispatch import _permissions_to_flags

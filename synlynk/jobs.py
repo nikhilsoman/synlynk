@@ -1762,17 +1762,21 @@ def _enforce_job_effect_verification(job: dict, git_state: Optional[dict], senti
             "expect": job.get("gh_write_expect") or "closed",
             "since": job.get("started_at"),
             "expect_author": job.get("gh_write_author"),
+            "expected_sha": job.get("gh_write_sha"),
         }
     from synlynk.verify_effects import verify_job_effects
     structured = None
     parse_telemetry = _pkg("parse_dispatch_telemetry")
     log_path = job.get("log_file") or job.get("log_path")
-    if parse_telemetry and log_path and os.path.exists(log_path):
+    if log_path and os.path.exists(log_path):
         try:
             with open(log_path) as log_handle:
-                telemetry = parse_telemetry(log_handle.read(), agent=job.get("agent", ""))
-            if telemetry is not None:
-                structured = telemetry.__dict__
+                raw_log = log_handle.read()
+                _ingest_structured_lifecycle(job, raw_log)
+                if parse_telemetry:
+                    telemetry = parse_telemetry(raw_log, agent=job.get("agent", ""))
+                    if telemetry is not None:
+                        structured = telemetry.__dict__
         except (OSError, AttributeError):
             structured = None
     effect_res = verify_job_effects(
@@ -1804,6 +1808,22 @@ def _enforce_job_effect_verification(job: dict, git_state: Optional[dict], senti
             job["exit_code"] = 1
         return summary_status, summary_note
     return None, None
+
+
+def _ingest_structured_lifecycle(job: dict, raw_log: str) -> None:
+    """Persist adapter events as observations while leaving terminal status to the oracle."""
+    if not raw_log or not job.get("id"):
+        return
+    try:
+        conn = _pkg("_get_db")()
+        try:
+            from synlynk.lifecycle import ingest_output
+            ingest_output(conn, raw_log)
+        finally:
+            conn.close()
+    except (OSError, sqlite3.Error, ValueError):
+        # Compatibility logs must not make an otherwise valid reconciliation fail.
+        return
 
 
 def _reconcile_jobs_unlocked() -> None:
