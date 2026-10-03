@@ -33,10 +33,10 @@ decisions or job status.
   provider amount, currency, and usage interval). Vendor API polling is outside
   this phase; source records retain export file digest and import run ID.
 - Preserve normalized audit events, linked aggregates, and correction lineage
-  for the lifetime of the state ledger unless an explicit retention command
-  removes them. Default raw provider payload retention is 30 days, configurable
-  per workspace; redact credentials and prompt content at ingestion. Export
-  files are not copied into the state database.
+  for the lifetime of the state ledger. Do not copy raw provider export files
+  into the state database; import only whitelisted normalized fields and keep
+  the file digest. The original export remains operator-managed. Prompt text
+  and credentials are discarded at ingestion.
 - The first release is opt-in/manual via `synlynk cost audit` commands and a
   shadow report. Terminal decision creation only enqueues the outbox event; it
   never waits for cost reconciliation.
@@ -118,8 +118,8 @@ rows, missing rates, unsupported currencies, and import digest verification.
 
 Files:
 
-- `synlynk/cli.py` — `synlynk cost audit reconcile`, `import`, and `report`
-  subcommands with dry-run as the default for repair-like operations.
+- `synlynk/cli.py` — `synlynk cost audit reconcile`, `import`, `correct`, and
+  `report` subcommands with dry-run as the default for repair-like operations.
 - `synlynk/cost_audit.py` — read-only summaries by date, harness, provider,
   model, confidence, audit state, and currency; coverage and discrepancies
   accompany each total.
@@ -128,7 +128,9 @@ Files:
 CLI import accepts explicit input paths, stores file digest and metadata rather
 than copying raw files, and reports rejected rows without hiding successful
 rows. Report output excludes prompt/secret content and labels estimated,
-provider-billed, and paid amounts separately.
+provider-billed, and paid amounts separately. A correction preview is the
+default; applying a correction requires `--apply`, appends a replacement fact
+and correction event, and then rebuilds the affected projection.
 
 ### 5. Prove status isolation, migration, and operational recovery
 

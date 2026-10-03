@@ -260,6 +260,107 @@ CREATE TABLE IF NOT EXISTS job_terminal_decision (
 );
 CREATE INDEX IF NOT EXISTS idx_job_terminal_decision_latest
     ON job_terminal_decision(job_id, revision DESC);
+CREATE TABLE IF NOT EXISTS job_terminal_outbox (
+    event_id TEXT PRIMARY KEY,
+    job_id TEXT NOT NULL,
+    decision_revision INTEGER NOT NULL,
+    schema_version TEXT NOT NULL,
+    payload_json TEXT NOT NULL,
+    payload_digest TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    UNIQUE(job_id, decision_revision)
+);
+CREATE INDEX IF NOT EXISTS idx_job_terminal_outbox_pending
+    ON job_terminal_outbox(created_at);
+CREATE TABLE IF NOT EXISTS cost_audit_source_record (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_kind TEXT NOT NULL,
+    source_account TEXT NOT NULL DEFAULT '',
+    source_record_id TEXT NOT NULL,
+    job_id TEXT,
+    decision_revision INTEGER,
+    request_id TEXT,
+    measure TEXT NOT NULL DEFAULT 'estimated',
+    provider TEXT,
+    model TEXT,
+    input_tokens INTEGER,
+    output_tokens INTEGER,
+    cache_read_tokens INTEGER,
+    amount_decimal TEXT,
+    currency TEXT,
+    usage_start TEXT,
+    usage_end TEXT,
+    confidence TEXT NOT NULL DEFAULT 'medium',
+    payload_digest TEXT NOT NULL,
+    metadata_json TEXT NOT NULL DEFAULT '{}',
+    imported_at TEXT NOT NULL,
+    UNIQUE(source_kind, source_account, source_record_id)
+);
+CREATE INDEX IF NOT EXISTS idx_cost_audit_source_job
+    ON cost_audit_source_record(job_id, decision_revision);
+CREATE INDEX IF NOT EXISTS idx_cost_audit_source_request
+    ON cost_audit_source_record(request_id);
+CREATE TABLE IF NOT EXISTS cost_audit_source_supersession (
+    source_kind TEXT NOT NULL,
+    source_account TEXT NOT NULL DEFAULT '',
+    superseded_record_id TEXT NOT NULL,
+    replacement_record_id TEXT NOT NULL,
+    correction_event_id TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY(source_kind, source_account, superseded_record_id),
+    UNIQUE(source_kind, source_account, replacement_record_id)
+);
+CREATE TABLE IF NOT EXISTS cost_audit_event (
+    event_id TEXT PRIMARY KEY,
+    audit_id TEXT NOT NULL,
+    job_id TEXT NOT NULL,
+    decision_revision INTEGER NOT NULL,
+    schema_version TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    occurred_at TEXT NOT NULL,
+    recorded_at TEXT NOT NULL,
+    source_kind TEXT,
+    source_id TEXT,
+    payload_digest TEXT NOT NULL,
+    supersedes_event_id TEXT,
+    payload_json TEXT NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS idx_cost_audit_event_revision
+    ON cost_audit_event(job_id, decision_revision, recorded_at);
+CREATE TABLE IF NOT EXISTS cost_audit_link (
+    job_id TEXT NOT NULL,
+    decision_revision INTEGER NOT NULL,
+    state TEXT NOT NULL,
+    reason_code TEXT,
+    source_ids_json TEXT NOT NULL DEFAULT '[]',
+    input_tokens INTEGER,
+    output_tokens INTEGER,
+    cache_read_tokens INTEGER,
+    estimated_amount_decimal TEXT,
+    billed_amount_decimal TEXT,
+    paid_amount_decimal TEXT,
+    currency TEXT,
+    confidence TEXT NOT NULL DEFAULT 'unknown',
+    pricing_basis_json TEXT NOT NULL DEFAULT '{}',
+    reconciled_at TEXT NOT NULL,
+    latest_event_id TEXT NOT NULL,
+    PRIMARY KEY(job_id, decision_revision),
+    CHECK(state IN ('linked', 'missing', 'pending', 'conflict'))
+);
+CREATE TABLE IF NOT EXISTS cost_audit_run (
+    run_id TEXT PRIMARY KEY,
+    run_kind TEXT NOT NULL,
+    source_kind TEXT,
+    input_digest TEXT,
+    started_at TEXT NOT NULL,
+    completed_at TEXT,
+    accepted_count INTEGER NOT NULL DEFAULT 0,
+    duplicate_count INTEGER NOT NULL DEFAULT 0,
+    rejected_count INTEGER NOT NULL DEFAULT 0,
+    outcome TEXT NOT NULL,
+    details_json TEXT NOT NULL DEFAULT '{}'
+);
 CREATE TABLE IF NOT EXISTS job_status_shadow (
     job_id TEXT PRIMARY KEY,
     legacy_status TEXT,

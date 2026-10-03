@@ -1,6 +1,6 @@
 # Independent Cost Audit Linked to Job Decision Revisions
 
-> Status: design proposal; awaiting Nikhil sign-off
+> Status: approved by Nikhil on 2026-10-03
 >
 > Date: 2026-10-03
 >

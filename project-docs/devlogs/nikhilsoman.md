@@ -1905,4 +1905,12 @@ Focused verification: 174 passed; cold-start budget test: 2 passed.
 runtime/release duplication, updated README metadata, added the required `release-docs` CI gate,
 and added synchronization coverage. Focused tests: 530 passed; `release --check-docs` passes.
 
+2026-10-03 — Implemented issue #1951 after approval of the independent cost-audit design and plan.
+Added a transactional terminal-decision outbox, append-only cost source/event tables, structured
+usage and legacy-ledger import, provider JSONL/JSON/CSV import, versioned model-rate estimates,
+idempotent reconciliation/reporting, and dry-run-by-default source corrections. Cost audit only
+reads terminal decisions and cannot write status. Targeted suites: 320 passed, 1 skipped; the
+existing loopback callback test passes when run with local socket permission. CLI help and
+`git diff --check` pass.
+
 [@nikhilsoman]

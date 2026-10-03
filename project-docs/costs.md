@@ -136,3 +136,4 @@
 | 2026-10-03 | codex | gpt-5.3-codex | - | - | $0.20 | estimated_manual | story-issue-1933 | Job truth pilot PR3 projection, shadow metrics, rollout gates, manual reconciliation, and verification |
 | 2026-10-03 | codex | gpt-5.3-codex | - | - | $0.20 | estimated_manual | story-issue-1933 | PR #1962 QA remediation: authoritative predicates, fail-closed promotion SLOs, tests, and verification |
 | 2026-10-03 | codex | gpt-5.3-codex | - | - | $0.20 | estimated_manual | story-issue-1933 | PR #1962 remaining QA blockers: metric presence fail-closed, canonical terminal writer routing, focused/full verification |
+| 2026-10-03 | codex | gpt-5.3-codex | - | - | $0.20 | estimated_manual | story-issue-1951 | Independent terminal-decision cost audit design, implementation, and targeted verification |
