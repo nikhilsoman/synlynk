@@ -1188,11 +1188,17 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     jobs_parser.add_argument("--all", action="store_true", dest="all_jobs",
         help="Include completed and failed jobs")
     jobs_parser.add_argument("--summary", metavar="JOB_ID")
+    jobs_parser.add_argument("--json", action="store_true", dest="json_output",
+        help="Output canonical job-truth projections and evidence summaries")
     jobs_parser.add_argument("--watch", action="store_true",
         help="Refresh table every 2 seconds until Ctrl-C")
     jobs_parser.add_argument("--stalled", action="store_true",
         help="List jobs awaiting handoff")
     jobs_sub = jobs_parser.add_subparsers(dest="jobs_cmd")
+    reconcile_p = jobs_sub.add_parser("reconcile", help="Append evidence and reconcile one job through the canonical oracle")
+    reconcile_p.add_argument("job_id")
+    reconcile_p.add_argument("--evidence-json", default=None,
+        help="JSON object describing an evidence observation; omitted requests verification")
     handoff_p = jobs_sub.add_parser("handoff", help="Transfer a stalled job to another harness")
     handoff_p.add_argument("job_id")
     handoff_p.add_argument("--to-harness", "--to-agent", "--to", dest="to_agent", default=None,
@@ -2375,11 +2381,15 @@ def main(argv=None) -> None:
                     all_projects=getattr(args, "all_projects", False),
                 )
             )
+        elif getattr(args, "jobs_cmd", None) == "reconcile":
+            from synlynk.jobs import cmd_jobs_reconcile_truth
+            raise SystemExit(cmd_jobs_reconcile_truth(args.job_id, getattr(args, "evidence_json", None)))
         else:
             cmd_jobs(all_jobs=getattr(args, "all_jobs", False),
                      watch=getattr(args, "watch", False),
                      summary=getattr(args, "summary", None),
-                     stalled=getattr(args, "stalled", False))
+                     stalled=getattr(args, "stalled", False),
+                     json_output=getattr(args, "json_output", False))
     elif args.command == "relay":
         action = getattr(args, "relay_action", None)
         if action == "start":

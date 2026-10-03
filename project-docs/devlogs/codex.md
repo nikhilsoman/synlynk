@@ -7,6 +7,20 @@
 - Verification: 143 tests passed, 1 skipped across the modified test files.
 [@codex]
 
+## 2026-10-03 — Job status truth pilot PR3 (#1933)
+
+- Added the `job-status-truth.v1` machine-readable boundary projection with
+  canonical status, legacy alias visibility, evidence summary, contract
+  predicates, verification confidence, decision revision, and correction history.
+- Added persisted legacy-vs-oracle shadow comparisons with explicit false
+  failure/success and disagreement reason codes, low-cardinality metrics,
+  promotion gates, and `SYNLYNK_JOB_TRUTH_MODE` rollout control.
+- Added `synlynk jobs --json` and `synlynk jobs reconcile <job-id>`; manual
+  reconciliation appends evidence through the canonical oracle.
+- Verification: focused projection/CLI/oracle suite 32 passed; affected
+  jobs/DB/dispatch integration suite 302 passed.
+[@codex]
+
 ## 2026-09-28 — Rollback stash race hardening (#1834)
 
 - Updated rollback dirty-path collection to ignore transient `.sentinel-*`

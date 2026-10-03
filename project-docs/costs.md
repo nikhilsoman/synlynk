@@ -133,3 +133,4 @@
 | 2026-10-03 | codex | gpt-5.3-codex | - | - | $0.20 | estimated_manual | story-issue-1929 | CLI lazy-import implementation, benchmark, tests, and PR preparation |
 | 2026-10-03 | codex | gpt-5.3-codex | - | - | - | estimated_manual | story-issue-1928 | Implemented VERSION single-source release gate and focused verification |
 | 2026-10-03 | codex | gpt-5.3-codex | - | - | $0.20 | estimated_manual | story-issue-1933 | Job truth pilot PR1 implementation, tests, migration checks, and PR preparation |
+| 2026-10-03 | codex | gpt-5.3-codex | - | - | $0.20 | estimated_manual | story-issue-1933 | Job truth pilot PR3 projection, shadow metrics, rollout gates, manual reconciliation, and verification |
