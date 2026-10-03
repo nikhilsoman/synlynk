@@ -147,7 +147,7 @@ def ingest_source_records(
             if pricing_basis:
                 metadata["pricing_basis"] = pricing_basis
             existing = conn.execute(
-                """SELECT payload_digest FROM cost_audit_source_record
+                """SELECT payload_digest, job_id, decision_revision FROM cost_audit_source_record
                    WHERE source_kind=? AND source_account=? AND source_record_id=?""",
                 (source_kind, source_account, source_record_id),
             ).fetchone()
@@ -170,13 +170,19 @@ def ingest_source_records(
                             "reason_code": "source_identity_conflict",
                             "existing_digest": existing[0], "incoming_digest": payload_digest,
                         }
-                        _append_event(
-                            conn,
-                            _event_id("source-identity-conflict", source_kind, source_account,
-                                      source_record_id, payload_digest),
-                            safe["job_id"], safe["decision_revision"], "conflict_detected",
-                            conflict_payload, source_kind=source_kind, source_id=source_record_id,
-                        )
+                        conflict_targets = {(safe["job_id"], safe["decision_revision"])}
+                        if existing[1] and existing[2] is not None:
+                            conflict_targets.add((existing[1], existing[2]))
+                        for target_job, target_revision in conflict_targets:
+                            if not target_job or target_revision is None:
+                                continue
+                            _append_event(
+                                conn,
+                                _event_id("source-identity-conflict", source_kind, source_account,
+                                          source_record_id, payload_digest, target_job, target_revision),
+                                target_job, target_revision, "conflict_detected",
+                                conflict_payload, source_kind=source_kind, source_id=source_record_id,
+                            )
                 continue
             cursor = conn.execute(
                 """INSERT OR IGNORE INTO cost_audit_source_record
@@ -197,9 +203,9 @@ def ingest_source_records(
                 accepted += 1
             else:
                 duplicate += 1
-        except (KeyError, TypeError, ValueError, OverflowError) as exc:
+        except (KeyError, TypeError, ValueError, OverflowError):
             rejected += 1
-            _append_rejection(conn, run_id, source_kind, index, raw, str(exc))
+            _append_rejection(conn, run_id, source_kind, index, raw)
     outcome = "completed" if rejected == 0 else ("partial" if accepted or duplicate else "rejected")
     conn.execute(
         """UPDATE cost_audit_run SET completed_at=?, accepted_count=?,
@@ -257,7 +263,7 @@ def _estimate_from_catalog(record: Mapping[str, Any]) -> tuple[str | None, dict[
 
 def _append_rejection(
     conn: sqlite3.Connection, run_id: str, source_kind: str, index: int,
-    raw: Mapping[str, Any], reason: str,
+    raw: Mapping[str, Any],
 ) -> None:
     # Rejections are audit events only when the row has a usable decision key.
     job_id = str(raw.get("job_id") or "").strip()
@@ -268,7 +274,8 @@ def _append_rejection(
         revision = int(revision)
     except (TypeError, ValueError):
         return
-    payload = {"reason_code": "source_rejected", "reason": reason, "run_id": run_id}
+    # Never persist exception text: it can contain arbitrary provider field values.
+    payload = {"reason_code": "source_rejected", "run_id": run_id}
     event_id = _event_id("source-rejected", run_id, index)
     _append_event(conn, event_id, job_id, revision, "conflict_detected", payload,
                   source_kind=source_kind, source_id=None)

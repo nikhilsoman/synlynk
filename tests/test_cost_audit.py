@@ -120,6 +120,40 @@ def test_conflicting_provider_source_identity_is_surfaced_and_not_last_write_win
     assert conn.execute("SELECT COUNT(*) FROM cost_audit_source_record").fetchone()[0] == 1
 
 
+def test_source_identity_conflict_marks_original_and_incoming_decisions():
+    conn = ledger()
+    completed_job(conn, "job-a")
+    completed_job(conn, "job-b")
+    original = {"source_record_id": "shared-bill", "job_id": "job-a",
+                "decision_revision": 1, "amount": "0.10", "currency": "USD"}
+    ingest_source_records(conn, [original], source_kind="provider_export", source_account="acct")
+    ingest_source_records(
+        conn, [{**original, "job_id": "job-b", "amount": "0.20"}],
+        source_kind="provider_export", source_account="acct",
+    )
+
+    reconcile_cost_audit(conn, import_legacy=False)
+    states = dict(conn.execute("SELECT job_id, state FROM cost_audit_link"))
+    assert states == {"job-a": "conflict", "job-b": "conflict"}
+
+
+def test_rejected_source_does_not_persist_untrusted_field_values():
+    conn = ledger()
+    completed_job(conn)
+    secret = "sk-live-super-secret"
+    ingest_source_records(
+        conn,
+        [{"source_record_id": "bad-row", "job_id": "job-a", "decision_revision": 1,
+          "amount": secret, "currency": "USD"}],
+        source_kind="provider_export", source_account="acct",
+    )
+
+    persisted = " ".join(row[0] for row in conn.execute(
+        "SELECT payload_json FROM cost_audit_event"
+    ))
+    assert secret not in persisted
+
+
 def test_explicit_source_correction_is_append_only_and_resolves_conflict():
     conn = ledger()
     completed_job(conn)

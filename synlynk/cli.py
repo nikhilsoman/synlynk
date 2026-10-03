@@ -2541,7 +2541,6 @@ def main(argv=None) -> None:
             from synlynk.costs import cmd_cost_billing
             cmd_cost_billing(args)
         elif args.cost_action == "audit":
-            import json
             from synlynk.cost_audit import (
                 cmd_cost_audit_correct, cmd_cost_audit_import,
                 cmd_cost_audit_reconcile, cmd_cost_audit_report,
