@@ -1559,6 +1559,24 @@ def test_mark_daemon_job_terminal_only_running(project_dir):
     conn.close()
 
 
+def test_mark_daemon_job_terminal_routes_through_canonical_settlement(project_dir, monkeypatch):
+    from synlynk import _get_db
+    import synlynk.jobs as jobs_mod
+
+    conn = _get_db()
+    _seed_daemon_job(conn, "job-canonical", agent="codex")
+    calls = []
+    monkeypatch.setattr(
+        jobs_mod,
+        "_settle_daemon_job_terminal",
+        lambda *args, **kwargs: calls.append((args, kwargs)) or True,
+    )
+
+    assert jobs_mod.mark_daemon_job_terminal(conn, "job-canonical") is True
+    assert calls and calls[0][0][1:3] == ("job-canonical", "timed_out")
+    conn.close()
+
+
 def test_mark_daemon_job_terminal_preserves_explicit_completion_time(project_dir):
     from synlynk import _get_db
     from synlynk.jobs import mark_daemon_job_terminal

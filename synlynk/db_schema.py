@@ -260,6 +260,17 @@ CREATE TABLE IF NOT EXISTS job_terminal_decision (
 );
 CREATE INDEX IF NOT EXISTS idx_job_terminal_decision_latest
     ON job_terminal_decision(job_id, revision DESC);
+CREATE TABLE IF NOT EXISTS job_status_shadow (
+    job_id TEXT PRIMARY KEY,
+    legacy_status TEXT,
+    oracle_status TEXT,
+    reason_code TEXT NOT NULL,
+    disagreement INTEGER NOT NULL DEFAULT 0,
+    harness TEXT,
+    effect_kind TEXT,
+    observed_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_job_status_shadow_reason ON job_status_shadow(reason_code);
 
 CREATE TABLE IF NOT EXISTS job_lifecycle_event (
     event_id TEXT PRIMARY KEY,

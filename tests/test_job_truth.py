@@ -56,7 +56,8 @@ def test_closed_status_alias_map_and_truth_table():
     assert "verifying" in CANONICAL_STATUSES
     contract = review_contract()
     result = decide_job_outcome(contract, [
-        {"evidence_id": "remote-1", "kind": "github_effect", "result": "true", "causal_match": True},
+        {"evidence_id": "remote-1", "kind": "github_effect", "result": "true", "causal_match": True,
+         "target_match": True, "actor_match": True, "sha_match": True},
         {"evidence_id": "receipt-1", "kind": "task_receipt", "result": "false"},
     ])
     assert result == CompletionDecision(
@@ -69,8 +70,27 @@ def test_remote_only_review_regression_fixture_and_first_read_unknown():
     contract = review_contract()
     pending = decide_job_outcome(contract, [{"kind": "github_effect", "result": "unknown"}])
     assert (pending.status, pending.verification_state, pending.required_follow_up) == ("verifying", "unknown", "retry_verification")
-    completed = decide_job_outcome(contract, [{"kind": "github_effect", "result": "true", "causal_match": True}])
+    completed = decide_job_outcome(contract, [{"kind": "github_effect", "result": "true", "causal_match": True,
+                                               "target_match": True, "actor_match": True, "sha_match": True}])
     assert completed.status == "completed"
+
+
+@pytest.mark.parametrize("predicate", ["target_match", "actor_match", "sha_match"])
+def test_contract_predicate_mismatch_cannot_complete(predicate):
+    contract = review_contract()
+    evidence = {"kind": "github_effect", "result": "true", "causal_match": True,
+                "target_match": True, "actor_match": True, "sha_match": True}
+    evidence[predicate] = False
+    result = decide_job_outcome(contract, [evidence])
+    assert result.status == "verifying"
+    assert result.reason_code == "contract_predicate_mismatch"
+
+
+def test_unresolved_contract_predicate_is_not_terminal():
+    contract = review_contract()
+    result = decide_job_outcome(contract, [{"kind": "github_effect", "result": "true", "causal_match": True}])
+    assert result.status == "verifying"
+    assert result.reason_code == "contract_predicate_unresolved"
 
 
 def test_unknown_contract_is_explicit_and_never_green():
@@ -163,9 +183,19 @@ def test_terminal_writer_manifest_enforces_shared_oracle_adapters(monkeypatch):
         job_truth.validate_terminal_writer_manifest()
 
 
+def test_terminal_writer_manifest_covers_reclaim_path():
+    import synlynk.job_truth as job_truth
+
+    assert job_truth.TERMINAL_WRITER_MANIFEST["stranded_story_reclaimer"] == {
+        "entrypoint": "reclaim_stranded_stories",
+        "adapter": "_settle_daemon_job_terminal",
+    }
+
+
 def test_parity_fixture_matches_both_legacy_reconciliation_paths():
     contract = review_contract()
-    evidence = [{"kind": "github_effect", "result": "true", "causal_match": True}]
+    evidence = [{"kind": "github_effect", "result": "true", "causal_match": True,
+                 "target_match": True, "actor_match": True, "sha_match": True}]
     oracle = decide_job_outcome(contract, evidence)
     # Both current paths expose the same legacy terminal projection for this
     # remote-only case; the pilot oracle records the stronger canonical result.

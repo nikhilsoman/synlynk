@@ -98,8 +98,9 @@ _PROJECT_DOC_KEEP_N = 50
 # SQLite's small built-in metadata slot so checking it does not touch the DB
 # file or create a backup on already-migrated connections.
 # Version 13 adds the append-only job truth ledger and immutable effect contracts.
-# Version 14 adds structured lifecycle telemetry ingestion.
-_DB_MIGRATION_VERSION = 14
+# Version 14 adds structured lifecycle telemetry ingestion; version 15 adds
+# the legacy-vs-oracle shadow projection used by the status-truth pilot.
+_DB_MIGRATION_VERSION = 15
 
 _GENERATORS_BY_FILENAME = {
     "todo.md": "_generate_todo_md",
