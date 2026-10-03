@@ -2671,7 +2671,7 @@ def mark_daemon_job_terminal(
         )
     except (sqlite3.OperationalError, ValueError):
         conn.rollback()
-    return _persist_daemon_job_terminal(
+    return _settle_daemon_job_terminal(
         conn, job_id, status, exit_code, now, only_running=True
     )
 
@@ -3021,6 +3021,17 @@ def reclaim_stranded_stories(
                     "reclaimed": not dry_run,
                 })
                 if not dry_run:
+                    terminal_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+                    for job_id, agent, j_status, pid, started_at in job_rows:
+                        if j_status == "running":
+                            _settle_daemon_job_terminal(
+                                conn,
+                                job_id,
+                                "failed",
+                                137,
+                                terminal_at,
+                                only_running=True,
+                            )
                     conn.execute(
                         "UPDATE stories SET status='ready', readiness='ready' WHERE story_id=?",
                         (story_id,),
@@ -3032,12 +3043,6 @@ def reclaim_stranded_stories(
                         )
                     except Exception:
                         pass
-                    for job_id, agent, j_status, pid, started_at in job_rows:
-                        if j_status == "running":
-                            conn.execute(
-                                "UPDATE daemon_jobs SET status='failed', exit_code=137, completed_at=? WHERE job_id=?",
-                                (time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), job_id),
-                            )
 
         if not dry_run and reclaimed:
             conn.commit()
@@ -4253,11 +4258,19 @@ def _dispatch_ready_jobs(max_parallel: int = 4) -> int:
         conn.close()
 
 def cmd_jobs(all_jobs: bool = False, watch: bool = False, summary: Optional[str] = None,
-             stalled: bool = False) -> None:
+             stalled: bool = False, json_output: bool = False) -> None:
     """Prints jobs from daemon_jobs in state.db; --all includes done/failed; --watch refreshes."""
     import time as _time
 
     if summary:
+        if json_output:
+            conn = _pkg("_get_db")()
+            try:
+                from synlynk.job_status_projection import project_job_status
+                print(json.dumps(project_job_status(conn, summary), sort_keys=True))
+            finally:
+                conn.close()
+            return
         summary_path = _pkg("_job_summary_path")(summary)
         if not os.path.exists(summary_path):
             print(f"No summary for {summary} -- job may still be running or predates this feature")
@@ -4345,6 +4358,18 @@ def cmd_jobs(all_jobs: bool = False, watch: bool = False, summary: Optional[str]
     def _render() -> None:
         _pkg("_reconcile_daemon_jobs")()
         conn = _pkg("_get_db")()
+        if json_output:
+            try:
+                from synlynk.job_status_projection import project_job_status, record_shadow_comparison
+                job_rows = conn.execute("SELECT job_id FROM daemon_jobs ORDER BY enqueued_at DESC LIMIT 50").fetchall()
+                projections = []
+                for (job_id,) in job_rows:
+                    projections.append(project_job_status(conn, job_id))
+                    record_shadow_comparison(conn, job_id)
+                print(json.dumps({"schema": "job-status-truth.v1", "jobs": projections}, sort_keys=True))
+            finally:
+                conn.close()
+            return
         try:
             rows = conn.execute(
                 "SELECT job_id, agent, story_id, status, enqueued_at, exit_code, "
@@ -4425,6 +4450,32 @@ def cmd_jobs(all_jobs: bool = False, watch: bool = False, summary: Optional[str]
             pass
     else:
         _render()
+
+
+def cmd_jobs_reconcile_truth(job_id: str, evidence_json: str | None = None) -> int:
+    """Append an operator observation through the canonical oracle."""
+    conn = _pkg("_get_db")()
+    try:
+        from synlynk.job_truth import record_evidence_and_reconcile
+        evidence = json.loads(evidence_json) if evidence_json else {
+            "kind": "observer_error", "result": "unknown", "reason": "manual_reconciliation_requested",
+        }
+        if not isinstance(evidence, dict):
+            raise ValueError("--evidence-json must decode to an object")
+        evidence.setdefault("source", "cli-manual-reconciliation")
+        evidence.setdefault("event_id", f"manual:{job_id}:{time.time_ns()}")
+        decision = record_evidence_and_reconcile(conn, job_id, evidence)
+        from synlynk.job_status_projection import project_job_status, record_shadow_comparison
+        record_shadow_comparison(conn, job_id)
+        print(json.dumps({"job_id": job_id, "decision": decision.status,
+                          "reason_code": decision.reason_code,
+                          "projection": project_job_status(conn, job_id)}, sort_keys=True))
+        return 0
+    except (ValueError, TypeError, sqlite3.Error) as exc:
+        print(f"manual reconciliation failed: {exc}", file=sys.stderr)
+        return 1
+    finally:
+        conn.close()
 
 def cmd_jobs_handoff(job_id: str, to_agent: str = None) -> None:
     """Transfer a stalled job to another harness, preserving context."""
