@@ -35,7 +35,7 @@
         "pm": {"harness": "claude", "fallback": ["agy", "codex"]},
         "brainstorm": {"harness": "claude", "fallback": ["agy", "codex"]},
         "architecture-review": {"harness": "claude", "fallback": ["agy", "codex"]},
-        "deploy": {"harness": "claude", "fallback": ["infra"], "calibration_eligible": ["claude", "agy", "codex"], "note": "no empirical samples yet; must be re-tested via the Infra agent role per Nikhil's 2026-10-04 reassessment before any harness claims this empirically"}
+        "deploy": {"harness": "claude", "fallback": ["agy", "codex"], "calibration_eligible": ["claude", "agy", "codex"], "note": "no empirical samples yet; must be re-tested via the Infra agent role (a role, not a harness — see docs/glossary-agent-vs-harness.md) per Nikhil's 2026-10-04 reassessment before any harness claims this empirically"}
       }
     },
     "merge_authority": {

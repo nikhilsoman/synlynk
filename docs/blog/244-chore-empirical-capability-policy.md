@@ -3,7 +3,7 @@ title: "Suspending the Policy We Wrote for Our Own Convenience"
 date: 2026-10-04
 series: "Building the OS for Multi-Agent Development"
 post: 244
-pr: "TBD"
+pr: "1994"
 issue: "1990,1991,1992,1993"
 status: published
 author: "synlynk team"

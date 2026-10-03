@@ -243,7 +243,7 @@ pm, review, deploy
 
 ## Capability-Based Task Allocation
 
-> ⚠️ **SUSPENDED as authoritative, 2026-10-04 — advisory/interim-default only.** This table was hand-authored heuristically and is superseded by the Empirical Capability Assessment Policy above. It remains the *current interim default* only until a harness clears the ≥5-merged-job sample-size bar on a given task type with better median `pr_review_cycles`/`total_cost_usd` than the incumbent. Grok and Meta Muse are explicitly flagged as not-yet-calibrated across every task type below, not excluded. `deploy` is not yet a modeled task type in `.synlynk/policy.json`'s `task_allocation` — it needs to be added and tested via the Infra agent role before any harness (including Claude) can claim it empirically.
+> ⚠️ **SUSPENDED as authoritative, 2026-10-04 — advisory/interim-default only.** This table was hand-authored heuristically and is superseded by the Empirical Capability Assessment Policy above. It remains the *current interim default* only until a harness clears the ≥5-merged-job sample-size bar on a given task type with better median `pr_review_cycles`/`total_cost_usd` than the incumbent. Grok and Meta Muse are explicitly flagged as not-yet-calibrated across every task type below, not excluded. `deploy` is now modeled as a task type in `.synlynk/policy.json`'s `task_allocation` (interim default: claude, fallback agy/codex) but carries zero empirical samples — it still needs to be tested via the Infra agent role before any harness (including Claude) can claim it empirically.
 
 **Note:** "Harness" below means the execution backend (Claude/Agy/Grok/Codex) that runs a 
 task, not the Agent (role) doing the work
