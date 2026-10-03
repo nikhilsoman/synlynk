@@ -213,6 +213,68 @@ CREATE TABLE IF NOT EXISTS daemon_jobs (
 );
 CREATE INDEX IF NOT EXISTS idx_daemon_jobs_status ON daemon_jobs(status);
 
+-- Job-status truth pilot. Contracts are immutable; evidence is append-only;
+-- terminal decisions are revisions, never in-place status history rewrites.
+CREATE TABLE IF NOT EXISTS job_effect_contract (
+    job_id TEXT PRIMARY KEY REFERENCES daemon_jobs(job_id),
+    kind TEXT NOT NULL,
+    target TEXT,
+    expect TEXT,
+    local_change_policy TEXT NOT NULL DEFAULT 'optional',
+    receipt_policy TEXT NOT NULL DEFAULT 'required',
+    verification_deadline_at TEXT,
+    contract_version INTEGER NOT NULL DEFAULT 1,
+    started_at TEXT,
+    expected_actor TEXT,
+    expected_sha TEXT,
+    expected_id TEXT,
+    required_predicates_json TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS job_evidence (
+    evidence_id TEXT PRIMARY KEY,
+    job_id TEXT NOT NULL REFERENCES daemon_jobs(job_id),
+    kind TEXT NOT NULL,
+    result TEXT NOT NULL CHECK (result IN ('true', 'false', 'unknown', 'not_applicable')),
+    observed_at TEXT NOT NULL,
+    source TEXT NOT NULL,
+    payload_json TEXT NOT NULL DEFAULT '{}',
+    confidence TEXT NOT NULL DEFAULT 'medium',
+    attempt INTEGER NOT NULL DEFAULT 1,
+    event_id TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(job_id, source, attempt, event_id)
+);
+CREATE INDEX IF NOT EXISTS idx_job_evidence_job ON job_evidence(job_id, observed_at);
+
+CREATE TABLE IF NOT EXISTS job_terminal_decision (
+    job_id TEXT NOT NULL REFERENCES daemon_jobs(job_id),
+    status TEXT NOT NULL,
+    verification_state TEXT NOT NULL,
+    primary_evidence_id TEXT,
+    evidence_snapshot_json TEXT NOT NULL DEFAULT '[]',
+    decision_reason TEXT NOT NULL,
+    decided_at TEXT NOT NULL,
+    decided_by TEXT NOT NULL,
+    revision INTEGER NOT NULL,
+    contract_version INTEGER NOT NULL DEFAULT 1,
+    follow_up TEXT NOT NULL DEFAULT 'none',
+    PRIMARY KEY(job_id, revision),
+    FOREIGN KEY(primary_evidence_id) REFERENCES job_evidence(evidence_id)
+);
+CREATE INDEX IF NOT EXISTS idx_job_terminal_current ON job_terminal_decision(job_id, revision DESC);
+
+-- Every newly dispatched job is explicit about the absence of a known
+-- contract until dispatch metadata can refine it; never infer success.
+CREATE TRIGGER IF NOT EXISTS daemon_jobs_truth_contract
+AFTER INSERT ON daemon_jobs
+BEGIN
+    INSERT OR IGNORE INTO job_effect_contract
+        (job_id, kind, contract_version, required_predicates_json)
+    VALUES (NEW.job_id, 'unknown_contract', 1, '[]');
+END;
+
 CREATE TABLE IF NOT EXISTS goals (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     goal_id     TEXT NOT NULL UNIQUE,

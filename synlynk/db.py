@@ -98,7 +98,7 @@ _PROJECT_DOC_KEEP_N = 50
 # SQLite's small built-in metadata slot so checking it does not touch the DB
 # file or create a backup on already-migrated connections.
 # Version 12 adds workspace tenancy and alias/resolution metadata for GOVERNS.
-_DB_MIGRATION_VERSION = 12
+_DB_MIGRATION_VERSION = 13
 
 _GENERATORS_BY_FILENAME = {
     "todo.md": "_generate_todo_md",
@@ -631,6 +631,14 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
         from synlynk import HARNESS_CAPABILITY_BASELINES, _seed_verb_map
         from synlynk.db_schema import _DB_SCHEMA, _DB_SCORES_VIEW
         conn.executescript(_DB_SCHEMA)
+        # Job truth pilot backfill: legacy rows receive an explicit
+        # unknown_contract.  This is intentionally INSERT OR IGNORE so a
+        # repeated migration never rewrites contracts or terminal history.
+        conn.execute(
+            """INSERT OR IGNORE INTO job_effect_contract
+               (job_id, kind, contract_version, required_predicates_json)
+               SELECT job_id, 'unknown_contract', 1, '[]' FROM daemon_jobs"""
+        )
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS relay_events (
                 event_id TEXT PRIMARY KEY,
