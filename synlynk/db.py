@@ -92,16 +92,23 @@ _ORG_DOMAIN_DRIFT_MAP = {
     "marketing": "growth",
 }
 
-# gh:#1995 root cause: _rotate_project_doc()'s archive file is written into
-# whatever worktree the calling process happens to be in. A dispatched job's
-# worktree is ephemeral (deleted post-merge per Worktree Hygiene Protocol), so
-# any archive file it creates is silently discarded unless something commits
-# it first -- the live markdown table truncates to keep_n rows regardless.
-# state.db (cost_entries / arcs / memory_entries) never loses the data; only
-# the generated view and its local archive copy are at risk. Raised from 50
-# to buy headroom while archive durability is improved (see _rotate_project_doc
-# below, which now also best-effort `git add`s a freshly created archive file
-# so it rides along with whatever commit the calling job makes next).
+# gh:#1995 root cause: at 50, _PROJECT_DOC_KEEP_N was far smaller than the
+# rate cost_entries grows, so nearly every regen truncated the git-tracked
+# costs.md to its last 50 rows -- the live window slid on almost every PR
+# touching cost logging, indistinguishable in a PR diff from data loss.
+# state.db never actually loses rows; _rotate_project_doc()'s archive file
+# (written to the shared, persistent .synlynk/project-docs/archive/ -- NOT
+# worktree-scoped, since _synlynk_project_docs_dir() resolves through
+# _project_root()'s `git rev-parse --git-common-dir`, identical across every
+# linked worktree) is gitignored by this repo's own .gitignore, by design,
+# not by accident. Raised from 50 to 500 to make window-slide churn rare in
+# practice (see _rotate_project_doc below, which also best-effort `git add`s
+# a freshly created archive file -- a no-op here since the path is
+# gitignored, but it closes the real worktree-loss case for a non-migrated
+# synlynk-managed repo where the archive path is the tracked, worktree-local
+# one). A separate, more severe bug -- the archive itself re-appending the
+# full overflow slice on every call instead of tracking a high-water mark,
+# causing 45x+ duplication -- is tracked at gh:#1999, not fixed here.
 _PROJECT_DOC_KEEP_N = 500
 
 # Bump when a new schema migration is added.  This is deliberately kept in
