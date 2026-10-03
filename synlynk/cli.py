@@ -1410,7 +1410,22 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     cost_true_up_parser = cost_sub.add_parser("true-up", help="Reconcile subscription costs for a month")
     cost_true_up_parser.add_argument("--month", default=None, help="Billing month in YYYY-MM format")
     cost_true_up_parser.add_argument("--harness", default=None)
-    cost_billing_parser = cost_sub.add_parser("billing", help="Show harness subscription billing and amortization configuration")
+    cost_sub.add_parser("billing", help="Show harness subscription billing and amortization configuration")
+    cost_audit_parser = cost_sub.add_parser("audit", help="Reconcile and report cost evidence by job decision revision")
+    cost_audit_sub = cost_audit_parser.add_subparsers(dest="cost_audit_action")
+    cost_audit_sub.add_parser("reconcile", help="Consume terminal decisions and snapshot legacy cost rows")
+    cost_audit_import_parser = cost_audit_sub.add_parser("import", help="Import a provider billing JSONL/JSON/CSV export")
+    cost_audit_import_parser.add_argument("--path", required=True, help="Provider export file")
+    cost_audit_import_parser.add_argument("--provider", required=True, help="Provider name recorded with source facts")
+    cost_audit_import_parser.add_argument("--account", default="", help="Provider account or billing workspace identifier")
+    cost_audit_correct_parser = cost_audit_sub.add_parser("correct", help="Preview or append a source correction")
+    cost_audit_correct_parser.add_argument("--source-kind", required=True)
+    cost_audit_correct_parser.add_argument("--account", default="")
+    cost_audit_correct_parser.add_argument("--record-id", required=True)
+    cost_audit_correct_parser.add_argument("--replacement", required=True, help="JSON file containing replacement source fields")
+    cost_audit_correct_parser.add_argument("--reason", required=True)
+    cost_audit_correct_parser.add_argument("--apply", action="store_true", help="Append the correction; omit to preview")
+    cost_audit_sub.add_parser("report", help="Print the read-only cost audit report as JSON")
 
     roadmap_parser = subparsers.add_parser("roadmap", help="Manage the roadmap")
     roadmap_sub = roadmap_parser.add_subparsers(dest="roadmap_action")
@@ -2525,6 +2540,24 @@ def main(argv=None) -> None:
         elif args.cost_action == "billing":
             from synlynk.costs import cmd_cost_billing
             cmd_cost_billing(args)
+        elif args.cost_action == "audit":
+            from synlynk.cost_audit import (
+                cmd_cost_audit_correct, cmd_cost_audit_import,
+                cmd_cost_audit_reconcile, cmd_cost_audit_report,
+            )
+            if args.cost_audit_action == "reconcile":
+                print(json.dumps(cmd_cost_audit_reconcile(), indent=2, sort_keys=True))
+            elif args.cost_audit_action == "import":
+                result = cmd_cost_audit_import(args.path, args.provider, args.account)
+                print(json.dumps(result, indent=2, sort_keys=True))
+            elif args.cost_audit_action == "report":
+                cmd_cost_audit_report()
+            elif args.cost_audit_action == "correct":
+                result = cmd_cost_audit_correct(
+                    args.source_kind, args.account, args.record_id,
+                    args.replacement, args.reason, apply=args.apply,
+                )
+                print(json.dumps(result, indent=2, sort_keys=True))
     elif args.command == "roadmap":
         if args.roadmap_action == "add":
             try:
