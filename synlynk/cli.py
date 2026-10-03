@@ -906,7 +906,7 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
 
     daemon_parser = subparsers.add_parser("daemon", help="Manage the always-on context daemon")
     daemon_parser.add_argument(
-        "action", nargs="?", choices=["start", "stop", "status", "restart"],
+        "action", nargs="?", choices=["start", "stop", "status", "restart", "run"],
         help="Daemon action"
     )
     daemon_parser.add_argument(
@@ -2101,6 +2101,9 @@ def main(argv=None) -> None:
             elif action == "restart":
                 d.stop()
                 d.start()
+            elif action == "run":
+                from synlynk.daemon import _synlynk_daemon_foreground_main
+                _synlynk_daemon_foreground_main()
             else:
                 daemon_parser.print_help()
     elif args.command == "checkpoint":
