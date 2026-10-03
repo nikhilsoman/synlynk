@@ -3529,7 +3529,14 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             "scope_paths": scope_paths or [],
         }
     )
-    adapter = get_adapter(request.agent)
+    try:
+        adapter = get_adapter(request.agent)
+    except KeyError:
+        # Keep compatibility with legacy/non-core harness names that have not
+        # yet been added to the foundation registry
+        from synlynk.harness_adapters.legacy import LegacyAdapter
+
+        adapter = LegacyAdapter(agent=request.agent)
     try:
         worktree_info = pipeline.prepare_worktree(request)
     except TypeError as exc:
