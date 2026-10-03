@@ -4,38 +4,37 @@ from synlynk.dispatch import resolve_dispatch_harness, dispatch_agent
 
 
 def test_resolve_dispatch_harness_with_task_capability_reroute():
-    # Calling resolve_dispatch_harness for grok on a shell task should resolve to codex
+    # Grok is now capable of shell dispatch after the #1277 permission fix.
     resolved = resolve_dispatch_harness(
         agent="grok",
         task="pytest tests/test_jobs.py",
         force_agent=False,
     )
-    assert resolved == "codex"
+    assert resolved == "grok"
 
 
-def test_resolve_dispatch_harness_with_task_force_agent_incompatible():
-    # Calling resolve_dispatch_harness for grok with force_agent on shell task raises IncompatibleHarnessCapabilityError
-    with pytest.raises(IncompatibleHarnessCapabilityError):
-        resolve_dispatch_harness(
-            agent="grok",
-            task="pytest tests/test_jobs.py",
-            force_agent=True,
-        )
+def test_resolve_dispatch_harness_with_task_force_agent_capable():
+    resolved = resolve_dispatch_harness(
+        agent="grok",
+        task="pytest tests/test_jobs.py",
+        force_agent=True,
+    )
+    assert resolved == "grok"
 
 
 def test_resolve_dispatch_harness_with_explicit_requires():
-    # Explicit requires=["run:shell"] on grok without force_agent reroutes to codex
+    # Explicit requires=["run:shell"] is satisfied by Grok without a grant.
     resolved = resolve_dispatch_harness(
         agent="grok",
         task="inspect something",
         requires=["run:shell"],
         force_agent=False,
     )
-    assert resolved == "codex"
+    assert resolved == "grok"
 
 
-def test_resolve_dispatch_harness_with_grants_allows_forced_harness():
-    # When grok is explicitly granted run:shell, force_agent succeeds
+def test_resolve_dispatch_harness_with_grants_still_allows_forced_harness():
+    # An explicit shell grant remains compatible with the now-capable profile.
     resolved = resolve_dispatch_harness(
         agent="grok",
         task="pytest tests/test_jobs.py",

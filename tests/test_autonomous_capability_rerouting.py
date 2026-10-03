@@ -6,19 +6,17 @@ from synlynk.capability_probe import (
 )
 
 
-def test_autonomous_rerouting_from_grok_to_capable_harness_on_shell():
-    # If grok is requested for a shell-requiring task without force_agent, it should reroute to codex or agy
+def test_autonomous_routing_keeps_grok_for_shell_task():
     resolved = resolve_capable_dispatch_harness(
         candidate_harness="grok",
         task="run pytest tests/test_jobs.py and fix bug",
         fallback_chain=["codex", "agy", "claude"],
         force_agent=False,
     )
-    assert resolved == "codex"
+    assert resolved == "grok"
 
 
-def test_autonomous_rerouting_respects_custom_fallback_chain():
-    # Fallback chain order should determine the rerouted target
+def test_autonomous_routing_keeps_grok_with_custom_fallback_chain():
     resolved = resolve_capable_dispatch_harness(
         candidate_harness="grok",
         task="run pytest tests/test_jobs.py",
@@ -26,7 +24,7 @@ def test_autonomous_rerouting_respects_custom_fallback_chain():
         fallback_chain=["agy", "claude", "codex"],
         force_agent=False,
     )
-    assert resolved == "agy"
+    assert resolved == "grok"
 
 
 def test_no_reroute_needed_when_candidate_is_capable():
