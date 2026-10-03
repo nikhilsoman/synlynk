@@ -55,13 +55,14 @@
 | 2026-10-04 00:17 | claude | claude-sonnet-4-6 | 60000 | 8000 | $0.1688 [sub] (API: $0.3000) | estimated_manual | - | PM-native: drafted empirical-capability-review-policy PR (policy.json, CLAUDE.md x2, baseline doc, 4 follow-up issues, blog post) — estimate, not dispatched |
 | 2026-10-04 00:37 | codex | o4-mini | 1247356 | 9287 | $0.0601 [sub] (API: $3.8814) | estimated_token_rate | story-issue-1994 | exec: codex job job-c99374... |
 | 2026-10-04 00:44 | codex | o4-mini | 603764 | 4859 | $0.0291 [sub] (API: $1.8842) | estimated_token_rate | story-issue-1994 | exec: codex job job-8f03b8... |
+| 2026-10-04 00:53 | codex | o4-mini | 159500 | 3091 | $0.0078 [sub] (API: $0.5249) | estimated_token_rate | story-issue-1994 | exec: codex job job-06f0cb... |
 
 ## Subscription Amortization & Dual-Ledger Summary
 
 | Harness | Base Fee | Actual Amortized Spend | API Equivalent Value | Net Savings |
 |---|---|---|---|---|
 | claude | $20.00 | $17.2635 | $23.7015 | $6.4380 |
-| codex | $20.00 | $9.9285 | $633.0518 | $623.1232 |
+| codex | $20.00 | $9.9363 | $633.5766 | $623.6403 |
 | agy | $20.00 | $0.8525 | $3.9092 | $3.0567 |
 | grok | $30.00 | $0.9654 | $0.7590 | $-0.2065 |
-| **Total** | **$90.00** | **$29.0099** | **$661.4214** | **$632.4115** |
+| **Total** | **$90.00** | **$29.0177** | **$661.9462** | **$632.9286** |
