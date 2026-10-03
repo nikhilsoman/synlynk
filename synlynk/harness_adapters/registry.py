@@ -2,6 +2,7 @@
 
 from synlynk.harness_adapters.base import HarnessAdapter
 from synlynk.harness_adapters.codex import CodexAdapter
+from synlynk.harness_adapters.grok import GrokAdapter
 from synlynk.harness_adapters.legacy import LegacyAdapter
 
 
@@ -17,5 +18,6 @@ def get_adapter(name: str) -> HarnessAdapter:
 
 
 register_adapter("codex", CodexAdapter())
-for _name in ("grok", "agy", "claude", "local"):
+register_adapter("grok", GrokAdapter())
+for _name in ("agy", "claude", "local"):
     register_adapter(_name, LegacyAdapter(agent=_name))
