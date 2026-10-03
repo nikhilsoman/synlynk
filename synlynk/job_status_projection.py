@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
@@ -178,18 +179,70 @@ def promotion_gate(
     Disagreement exclusions are deliberately explicit and reason-coded.  An
     absent allow-list means every disagreement is a blocker.
     """
-    age = metrics.get("unknown_verifying_age_seconds") or {}
-    unknown_age = float(age.get("max", 0) or 0)
-    unknown_count = int(age.get("count", 0) or 0)
-    disagreement_reasons = {
-        str(reason): int(count or 0)
-        for reason, count in (metrics.get("disagreement_reasons") or {}).items()
-    }
-    if not disagreement_reasons and metrics.get("disagreements_by_harness_effect"):
+    missing_metrics: list[str] = []
+
+    def required_int(name: str) -> int | None:
+        value = metrics.get(name)
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not math.isfinite(value)
+        ):
+            missing_metrics.append(name)
+            return None
+        return int(value)
+
+    age = metrics.get("unknown_verifying_age_seconds")
+    if not isinstance(age, Mapping):
+        missing_metrics.extend(("verification_age", "unknown_verifying_count"))
+        unknown_age = None
+        unknown_count = None
+    else:
+        unknown_age = age.get("max")
+        unknown_count = age.get("count")
+        if (
+            isinstance(unknown_age, bool)
+            or not isinstance(unknown_age, (int, float))
+            or not math.isfinite(unknown_age)
+        ):
+            missing_metrics.append("verification_age")
+            unknown_age = None
+        if (
+            isinstance(unknown_count, bool)
+            or not isinstance(unknown_count, (int, float))
+            or not math.isfinite(unknown_count)
+        ):
+            missing_metrics.append("unknown_verifying_count")
+            unknown_count = None
+
+    raw_disagreement_reasons = metrics.get("disagreement_reasons")
+    if raw_disagreement_reasons is None and "disagreement_reasons" in metrics:
+        missing_metrics.append("harness_effect_agreement")
+        disagreement_reasons = {}
+    elif raw_disagreement_reasons is not None and not isinstance(raw_disagreement_reasons, Mapping):
+        missing_metrics.append("harness_effect_agreement")
+        disagreement_reasons = {}
+    else:
+        disagreement_reasons = {
+            str(reason): int(count or 0)
+            for reason, count in (raw_disagreement_reasons or {}).items()
+        }
+    raw_disagreements = metrics.get("disagreements_by_harness_effect")
+    if raw_disagreements is None and "disagreements_by_harness_effect" in metrics:
+        missing_metrics.append("harness_effect_agreement")
+    elif raw_disagreements is not None and not isinstance(raw_disagreements, Mapping):
+        missing_metrics.append("harness_effect_agreement")
+    disagreement_metrics_present = (
+        ("disagreement_reasons" in metrics and isinstance(raw_disagreement_reasons, Mapping))
+        or ("disagreements_by_harness_effect" in metrics and isinstance(raw_disagreements, Mapping))
+    )
+    if not disagreement_metrics_present:
+        missing_metrics.append("harness_effect_agreement")
+    elif not disagreement_reasons and raw_disagreements:
         disagreement_reasons = {
             "unexplained_harness_effect_disagreement": sum(
                 int(count or 0)
-                for effects in metrics["disagreements_by_harness_effect"].values()
+                for effects in raw_disagreements.values()
                 for count in effects.values()
             )
         }
@@ -197,15 +250,19 @@ def promotion_gate(
         count for reason, count in disagreement_reasons.items()
         if reason not in allowed_disagreement_reason_codes
     )
+    false_failure = required_int("false_failure")
+    false_success = required_int("false_success")
+    verification_retries = required_int("verification_retries")
+    contract_missing = required_int("contract_missing")
     checks = {
         "sample_window": int(metrics.get("samples", 0)) >= minimum_samples,
-        "zero_false_failure": int(metrics.get("false_failure", 0)) == 0,
-        "zero_false_success": int(metrics.get("false_success", 0)) == 0,
-        "no_missing_contract": int(metrics.get("contract_missing", 0)) == 0,
-        "verification_age_slo": unknown_age <= max_unknown_age_seconds,
-        "verification_retries_slo": int(metrics.get("verification_retries", 0)) <= max_verification_retries,
-        "unknown_verifying_slo": unknown_count <= max_unknown_verifying,
-        "harness_effect_agreement": unexplained_disagreements == 0,
+        "zero_false_failure": false_failure == 0,
+        "zero_false_success": false_success == 0,
+        "no_missing_contract": contract_missing == 0,
+        "verification_age_slo": unknown_age is not None and unknown_age <= max_unknown_age_seconds,
+        "verification_retries_slo": verification_retries is not None and verification_retries <= max_verification_retries,
+        "unknown_verifying_slo": unknown_count is not None and unknown_count <= max_unknown_verifying,
+        "harness_effect_agreement": disagreement_metrics_present and unexplained_disagreements == 0,
     }
     reason_codes = {
         "sample_window": "insufficient_sample_window",
@@ -218,11 +275,22 @@ def promotion_gate(
         "harness_effect_agreement": "unexplained_harness_effect_disagreement",
     }
     rollback_on = [key for key, passed in checks.items() if not passed]
+    missing_reason_codes = {
+        "verification_age": "verification_age_missing_or_unknown",
+        "verification_retries": "verification_retries_missing_or_unknown",
+        "unknown_verifying_count": "unknown_verifying_count_missing_or_unknown",
+        "false_failure": "false_failure_metric_missing_or_unknown",
+        "false_success": "false_success_metric_missing_or_unknown",
+        "contract_missing": "contract_coverage_metric_missing_or_unknown",
+        "harness_effect_agreement": "harness_effect_disagreement_metric_missing_or_unknown",
+    }
+    reason_code_list = [reason_codes[key] for key in rollback_on]
+    reason_code_list.extend(missing_reason_codes[name] for name in missing_metrics)
     return {
         "eligible": not rollback_on,
         "checks": checks,
         "rollback_on": rollback_on,
-        "reason_codes": [reason_codes[key] for key in rollback_on],
+        "reason_codes": reason_code_list,
         "thresholds": {
             "minimum_samples": minimum_samples,
             "max_unknown_age_seconds": max_unknown_age_seconds,

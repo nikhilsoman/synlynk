@@ -54,7 +54,11 @@ TERMINAL_WRITER_MANIFEST = {
     },
     "zombie_reaper": {
         "entrypoint": "mark_daemon_job_terminal",
-        "adapter": "record_evidence_and_reconcile",
+        "adapter": "_settle_daemon_job_terminal",
+    },
+    "stranded_story_reclaimer": {
+        "entrypoint": "reclaim_stranded_stories",
+        "adapter": "_settle_daemon_job_terminal",
     },
     "queue_dependency_failure": {
         "entrypoint": "_dispatch_ready_jobs",

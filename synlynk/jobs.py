@@ -2671,7 +2671,7 @@ def mark_daemon_job_terminal(
         )
     except (sqlite3.OperationalError, ValueError):
         conn.rollback()
-    return _persist_daemon_job_terminal(
+    return _settle_daemon_job_terminal(
         conn, job_id, status, exit_code, now, only_running=True
     )
 
@@ -3021,6 +3021,17 @@ def reclaim_stranded_stories(
                     "reclaimed": not dry_run,
                 })
                 if not dry_run:
+                    terminal_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+                    for job_id, agent, j_status, pid, started_at in job_rows:
+                        if j_status == "running":
+                            _settle_daemon_job_terminal(
+                                conn,
+                                job_id,
+                                "failed",
+                                137,
+                                terminal_at,
+                                only_running=True,
+                            )
                     conn.execute(
                         "UPDATE stories SET status='ready', readiness='ready' WHERE story_id=?",
                         (story_id,),
@@ -3032,12 +3043,6 @@ def reclaim_stranded_stories(
                         )
                     except Exception:
                         pass
-                    for job_id, agent, j_status, pid, started_at in job_rows:
-                        if j_status == "running":
-                            conn.execute(
-                                "UPDATE daemon_jobs SET status='failed', exit_code=137, completed_at=? WHERE job_id=?",
-                                (time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), job_id),
-                            )
 
         if not dry_run and reclaimed:
             conn.commit()

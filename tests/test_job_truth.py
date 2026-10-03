@@ -183,6 +183,15 @@ def test_terminal_writer_manifest_enforces_shared_oracle_adapters(monkeypatch):
         job_truth.validate_terminal_writer_manifest()
 
 
+def test_terminal_writer_manifest_covers_reclaim_path():
+    import synlynk.job_truth as job_truth
+
+    assert job_truth.TERMINAL_WRITER_MANIFEST["stranded_story_reclaimer"] == {
+        "entrypoint": "reclaim_stranded_stories",
+        "adapter": "_settle_daemon_job_terminal",
+    }
+
+
 def test_parity_fixture_matches_both_legacy_reconciliation_paths():
     contract = review_contract()
     evidence = [{"kind": "github_effect", "result": "true", "causal_match": True,

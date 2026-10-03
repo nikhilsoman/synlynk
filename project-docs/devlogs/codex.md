@@ -165,3 +165,16 @@
 - Verification: focused job-truth/projection tests passed; integration suite
   verification is recorded with the PR update.
 [@codex]
+
+## 2026-10-03 — Job status truth pilot PR3 remaining QA blockers (#1962)
+
+- Promotion gates now require every safety metric to be present and known,
+  returning explicit missing/unknown reason codes; `samples: 100` alone is
+  ineligible.
+- Routed daemon timeout and stranded-story failed transitions through the PR1
+  canonical settlement writer and registered the reclaim path in the terminal
+  writer manifest.
+- Verification: focused suites 152 passed; CI-equivalent matrix 3,740 passed,
+  2 skipped, with one unrelated sandbox-only vizor daemon log permission
+  failure; the isolated test passed with normal user-level log access.
+[@codex]

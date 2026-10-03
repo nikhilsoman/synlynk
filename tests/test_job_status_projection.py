@@ -118,6 +118,60 @@ def test_promotion_gate_blocks_legacy_disagreement_metrics_without_reasons():
     assert "harness_effect_agreement" in gate["rollback_on"]
 
 
+@pytest.mark.parametrize("missing", [
+    "unknown_verifying_age_seconds",
+    "verification_retries",
+    "false_failure",
+    "false_success",
+    "contract_missing",
+    "disagreement_reasons",
+])
+def test_promotion_gate_blocks_missing_required_safety_metric(missing):
+    metrics = {
+        "samples": 100,
+        "false_failure": 0,
+        "false_success": 0,
+        "contract_missing": 0,
+        "verification_retries": 0,
+        "unknown_verifying_age_seconds": {"max": 0, "count": 0},
+        "disagreement_reasons": {},
+    }
+    metrics.pop(missing)
+    gate = promotion_gate(metrics)
+    assert gate["eligible"] is False
+    assert gate["reason_codes"]
+
+
+def test_promotion_gate_samples_only_is_ineligible_with_explicit_missing_reasons():
+    gate = promotion_gate({"samples": 100})
+    assert gate["eligible"] is False
+    assert set(gate["reason_codes"]) >= {
+        "verification_age_missing_or_unknown",
+        "verification_retries_missing_or_unknown",
+        "unknown_verifying_count_missing_or_unknown",
+        "false_failure_metric_missing_or_unknown",
+        "false_success_metric_missing_or_unknown",
+        "contract_coverage_metric_missing_or_unknown",
+        "harness_effect_disagreement_metric_missing_or_unknown",
+    }
+
+
+def test_promotion_gate_blocks_unknown_required_metric_values():
+    metrics = {
+        "samples": 100,
+        "false_failure": None,
+        "false_success": 0,
+        "contract_missing": 0,
+        "verification_retries": 0,
+        "unknown_verifying_age_seconds": {"max": 0, "count": 0},
+        "disagreement_reasons": None,
+    }
+    gate = promotion_gate(metrics)
+    assert gate["eligible"] is False
+    assert "false_failure_metric_missing_or_unknown" in gate["reason_codes"]
+    assert "harness_effect_disagreement_metric_missing_or_unknown" in gate["reason_codes"]
+
+
 def test_rollout_mode_defaults_to_shadow_and_rejects_unknown_values():
     assert rollout_mode({}) == "shadow"
     assert rollout_mode({"SYNLYNK_JOB_TRUTH_MODE": "authoritative"}) == "authoritative"
