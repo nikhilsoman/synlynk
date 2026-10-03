@@ -108,6 +108,16 @@ def test_promotion_gate_allows_only_explicit_reason_coded_exclusions():
     assert allowed["eligible"] is True
 
 
+def test_promotion_gate_blocks_legacy_disagreement_metrics_without_reasons():
+    metrics = {"samples": 100, "false_failure": 0, "false_success": 0,
+               "contract_missing": 0, "verification_retries": 0,
+               "unknown_verifying_age_seconds": {"max": 0, "count": 0},
+               "disagreements_by_harness_effect": {"grok": {"github_review": 1}}}
+    gate = promotion_gate(metrics)
+    assert gate["eligible"] is False
+    assert "harness_effect_agreement" in gate["rollback_on"]
+
+
 def test_rollout_mode_defaults_to_shadow_and_rejects_unknown_values():
     assert rollout_mode({}) == "shadow"
     assert rollout_mode({"SYNLYNK_JOB_TRUTH_MODE": "authoritative"}) == "authoritative"

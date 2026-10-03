@@ -185,6 +185,14 @@ def promotion_gate(
         str(reason): int(count or 0)
         for reason, count in (metrics.get("disagreement_reasons") or {}).items()
     }
+    if not disagreement_reasons and metrics.get("disagreements_by_harness_effect"):
+        disagreement_reasons = {
+            "unexplained_harness_effect_disagreement": sum(
+                int(count or 0)
+                for effects in metrics["disagreements_by_harness_effect"].values()
+                for count in effects.values()
+            )
+        }
     unexplained_disagreements = sum(
         count for reason, count in disagreement_reasons.items()
         if reason not in allowed_disagreement_reason_codes
