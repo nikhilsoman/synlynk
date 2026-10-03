@@ -7636,8 +7636,12 @@ def test_daemon_cli_uninstall_service_dispatch(project_dir, monkeypatch):
 
 def test_install_service_macos(project_dir, monkeypatch):
     import plistlib
+    import synlynk.daemon as daemon_mod
 
     monkeypatch.setenv("HOME", str(project_dir))
+    monkeypatch.setattr(daemon_mod, "_repo_common_dir", lambda: str(project_dir))
+    monkeypatch.setattr(daemon_mod, "_daemon_package_path", lambda: "/usr/local/lib/synlynk/daemon.py")
+    monkeypatch.setattr(daemon_mod, "_daemon_caller_path", lambda: str(project_dir))
     monkeypatch.setattr(synlynk.sys, "platform", "darwin")
     monkeypatch.setattr(synlynk.sys, "executable", "/usr/local/bin/python3")
     monkeypatch.setattr(synlynk.os, "makedirs", lambda *a, **kw: None)
@@ -7670,7 +7674,12 @@ def test_install_service_macos(project_dir, monkeypatch):
 
 
 def test_install_service_linux(project_dir, monkeypatch):
+    import synlynk.daemon as daemon_mod
+
     monkeypatch.setenv("HOME", str(project_dir))
+    monkeypatch.setattr(daemon_mod, "_repo_common_dir", lambda: str(project_dir))
+    monkeypatch.setattr(daemon_mod, "_daemon_package_path", lambda: "/usr/local/lib/synlynk/daemon.py")
+    monkeypatch.setattr(daemon_mod, "_daemon_caller_path", lambda: str(project_dir))
     monkeypatch.setattr(synlynk.sys, "platform", "linux")
     monkeypatch.setattr(
         synlynk.shutil,
@@ -7708,7 +7717,12 @@ def test_install_service_linux(project_dir, monkeypatch):
 
 
 def test_install_service_crontab(project_dir, monkeypatch):
+    import synlynk.daemon as daemon_mod
+
     monkeypatch.setenv("HOME", str(project_dir))
+    monkeypatch.setattr(daemon_mod, "_repo_common_dir", lambda: str(project_dir))
+    monkeypatch.setattr(daemon_mod, "_daemon_package_path", lambda: "/usr/local/lib/synlynk/daemon.py")
+    monkeypatch.setattr(daemon_mod, "_daemon_caller_path", lambda: str(project_dir))
     monkeypatch.setattr(synlynk.sys, "platform", "linux")
     monkeypatch.setattr(synlynk.shutil, "which", lambda name: None)
     monkeypatch.setattr(synlynk.os, "makedirs", lambda *a, **kw: None)
@@ -7734,6 +7748,19 @@ def test_install_service_crontab(project_dir, monkeypatch):
     assert crontab_contents[0].count("daemon start") == 1
     assert calls[0][0] == ["crontab", "-l"]
     assert calls[1][0] == ["crontab", "-"]
+
+
+def test_install_service_rejects_disposable_worktree(project_dir, monkeypatch):
+    import synlynk.daemon as daemon_mod
+
+    monkeypatch.setattr(
+        daemon_mod,
+        "_daemon_package_path",
+        lambda: str(project_dir / "worktrees" / "job-123" / "synlynk" / "daemon.py"),
+    )
+
+    with pytest.raises(RuntimeError, match="disposable worktree"):
+        daemon_mod._daemon_install_service(object())
 
 
 def test_uninstall_service_macos(project_dir, monkeypatch):

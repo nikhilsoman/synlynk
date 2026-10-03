@@ -526,9 +526,13 @@ def test_macos_launchd_daemon_service_supervises_foreground_process(
     project_dir, monkeypatch
 ):
     import synlynk
+    import synlynk.daemon as daemon_mod
     import plistlib
 
     monkeypatch.setenv("HOME", str(project_dir))
+    monkeypatch.setattr(daemon_mod, "_repo_common_dir", lambda: str(project_dir))
+    monkeypatch.setattr(daemon_mod, "_daemon_package_path", lambda: "/usr/local/lib/synlynk/daemon.py")
+    monkeypatch.setattr(daemon_mod, "_daemon_caller_path", lambda: str(project_dir))
     monkeypatch.setattr(synlynk.sys, "platform", "darwin")
     monkeypatch.setattr(synlynk.sys, "executable", "/usr/local/bin/python3")
     monkeypatch.setattr(synlynk.os, "makedirs", lambda *args, **kwargs: None)

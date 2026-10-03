@@ -61,6 +61,23 @@ def _daemon_state_path(*parts: str) -> str:
     return os.path.join(_repo_common_dir(), ".synlynk", *parts)
 
 
+def _daemon_package_path() -> str:
+    """Return the installed source path used to launch the daemon."""
+    return os.path.abspath(__file__)
+
+
+def _is_disposable_worktree_path(path: str) -> bool:
+    path = os.path.abspath(path)
+    return any(marker in path for marker in (
+        f"{os.sep}.claude{os.sep}worktrees{os.sep}",
+        f"{os.sep}worktrees{os.sep}",
+    ))
+
+
+def _daemon_caller_path() -> str:
+    return os.path.abspath(os.getcwd())
+
+
 def _current_repo_revision(repo_dir: Optional[str] = None) -> Optional[str]:
     """Return the current HEAD commit hash of the git repository."""
     try:
@@ -713,19 +730,21 @@ def _make_daemon_handler(daemon_instance):
 def _daemon_install_service(daemon_instance) -> None:
     import textwrap as _textwrap
 
-    package_path = os.path.abspath(__file__)
-    disposable_markers = (
-        f"{os.sep}.claude{os.sep}worktrees{os.sep}",
-        f"{os.sep}worktrees{os.sep}",
-    )
-    if any(marker in package_path for marker in disposable_markers):
+    package_path = _daemon_package_path()
+    if _is_disposable_worktree_path(package_path):
         raise RuntimeError(
             "refusing to install the daemon service from a disposable worktree: "
             f"{package_path}"
         )
     python_path = os.path.abspath(sys.executable)
     home = os.path.expanduser("~")
-    workspace_root = os.path.abspath(getattr(daemon_instance, "workspace_root", os.getcwd()))
+    caller_root = _daemon_caller_path()
+    if _is_disposable_worktree_path(caller_root):
+        raise RuntimeError(
+            "refusing to install the daemon service with a disposable worktree as its "
+            f"workspace root: {caller_root}"
+        )
+    workspace_root = _repo_common_dir()
     service_command = [python_path, "-m", "synlynk", "daemon", "run"]
 
     def _run_checked(command, **kwargs):
@@ -1031,7 +1050,7 @@ class SynlynkDaemon(WatchDaemon):
         self._last_autonomous_run = 0.0
         # Bind request handlers to the workspace that created this daemon;
         # relative CWD resolution is unsafe for linked worktrees.
-        self.workspace_root = os.path.abspath(os.getcwd())
+        self.workspace_root = _repo_common_dir()
         self.sentinel_path = os.path.join(self.workspace_root, ".synlynk", "sentinel.md")
         self.start_revision = _current_repo_revision(self.workspace_root)
         self.revision_file = _daemon_state_path("daemon.revision")
@@ -1321,13 +1340,19 @@ class SynlynkDaemon(WatchDaemon):
                 last_token_refresh = time.time()
 
 
-def _synlynk_daemon_child_main() -> None:
+def _synlynk_daemon_child_main(*, blocking_lock: bool = True) -> None:
     workspace_root = os.environ.get("SYNLYNK_DAEMON_WORKSPACE_ROOT")
     if workspace_root:
         os.chdir(workspace_root)
     d = SynlynkDaemon(autonomous=os.environ.get("SYNLYNK_AUTONOMOUS") == "1")
-    # Publish pidfile/start marker before taking the lifetime lock so the
-    # parent start() waiter can observe readiness and release (#349).
+    # Acquire the lifetime lock before publishing the pidfile so a foreground
+    # service cannot overwrite the identity of an already-running daemon.
+    d._lock_fh = _try_acquire_daemon_lock(
+        _daemon_lock_path(d.pidfile), blocking=blocking_lock
+    )
+    if d._lock_fh is None:
+        print("  synlynk daemon is already running.", file=sys.stderr)
+        return
     with open(d.pidfile, "w") as f:
         f.write(str(os.getpid()))
     start_time = time.time()
@@ -1335,7 +1360,6 @@ def _synlynk_daemon_child_main() -> None:
     start_file = d.pidfile.replace(".pid", ".start")
     with open(start_file, "w") as f:
         f.write(str(start_time))
-    d._lock_fh = _try_acquire_daemon_lock(_daemon_lock_path(d.pidfile), blocking=True)
     # Crash-recovery pass: settle dead orphans / adopt still-alive ones before
     # the poll loop begins, so reconciliation is not stuck waiting for a
     # daemon that already died (#349).
@@ -1345,7 +1369,7 @@ def _synlynk_daemon_child_main() -> None:
 
 def _synlynk_daemon_foreground_main() -> None:
     """Run the daemon in the current process for launchd/systemd supervision."""
-    _synlynk_daemon_child_main()
+    _synlynk_daemon_child_main(blocking_lock=False)
 
 def cmd_relay_start(port: int = None) -> None:
     """Starts the relay broker in the foreground (Ctrl-C to stop)."""
