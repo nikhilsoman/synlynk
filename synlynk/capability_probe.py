@@ -44,7 +44,9 @@ HARNESS_CAPABILITY_PROFILES: Dict[str, Dict[str, bool]] = {
         CAP_NET: True,
     },
     "grok": {
-        CAP_SHELL: False,  # Denies bash/exec in headless sandbox
+        # Shell dispatch works via --always-approve + --permission-mode
+        # bypassPermissions since #1277; the stale deny predates that fix.
+        CAP_SHELL: True,
         CAP_WORKSPACE_WRITE: True,
         CAP_GH_WRITE: False,
         CAP_NET: True,
@@ -209,8 +211,8 @@ def probe_harness_runtime_capability(
 
     # Check runtime overrides (e.g. environment or binary existence)
     if norm_cap == CAP_SHELL:
-        if harness == "grok":
-            allowed = os.environ.get("SYNLYNK_GROK_SHELL_ENABLED", "0") == "1"
+        if harness == "grok" and os.environ.get("SYNLYNK_GROK_SHELL_DISABLED") == "1":
+            allowed = False
             _PROBE_CACHE[cache_key] = (now, allowed)
             return allowed
 

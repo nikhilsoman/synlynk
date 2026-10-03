@@ -8,17 +8,13 @@ from synlynk.capability_probe import (
 )
 
 
-def test_force_agent_incompatible_raises_error():
-    # Grok has no shell capability. Forcing Grok on a task that requires shell must raise IncompatibleHarnessCapabilityError.
-    with pytest.raises(IncompatibleHarnessCapabilityError) as excinfo:
-        resolve_capable_dispatch_harness(
-            candidate_harness="grok",
-            task="run pytest tests/test_jobs.py",
-            required_capabilities={CAP_SHELL},
-            force_agent=True,
-        )
-    assert "forced harness 'grok' lacks required capabilities" in str(excinfo.value)
-    assert "run:shell" in str(excinfo.value)
+def test_force_agent_shell_capability_is_satisfied_by_grok():
+    assert resolve_capable_dispatch_harness(
+        candidate_harness="grok",
+        task="run pytest tests/test_jobs.py",
+        required_capabilities={CAP_SHELL},
+        force_agent=True,
+    ) == "grok"
 
 
 def test_force_agent_gh_write_incompatible_raises_error():
