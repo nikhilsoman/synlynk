@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>gh:#1924 PR4 — Porting Agy to the HarnessAdapter Protocol | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-2">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Oct 03, 2026</span>
+        
+          <span class="blog-post-pr">PR 1965</span>
+        
+      </div>
+      <h1 class="blog-post-title">gh:#1924 PR4 — Porting Agy to the HarnessAdapter Protocol</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>LIVE-22 (#1964) had just closed the GitHub-identity zone-boundary gap, clearing the way back to
+the adapter migration. The goalpost coming into this PR: PR4 of the plan, porting Agy next,
+following the exact same discipline PR2 (Codex) and PR3 (Grok) had already established — one
+harness at a time, verified against that harness's own real failure modes before moving on.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>None — PR4 exactly as scoped in the plan.</p>
+<h2>What This PR Shipped</h2>
+<p><code>AgyAdapter</code> implements the <code>HarnessAdapter</code> protocol for Agy (Gemini):</p>
+<ul>
+<li><strong><code>translate_permissions()</code></strong>: no permission grant → <code>[]</code>; a read-only grant →
+<code>[&quot;--mode&quot;, &quot;plan&quot;]</code>; any write grant → <code>[&quot;--sandbox&quot;]</code>.</li>
+<li><strong><code>build_cmd()</code></strong>: delegates to <code>_dispatch_flags_for_agent(&quot;agy&quot;)</code> plus the translated
+permission flags, matching the pattern <code>CodexAdapter</code>/<code>GrokAdapter</code> already established.</li>
+<li><strong><code>classify_failure()</code> / <code>parse_output()</code></strong>: classifies the 429 <code>RESOURCE_EXHAUSTED</code>
+credit-exhaustion failure mode this session has hit live against Agy more than once (see the
+standing <code>Grok auth / Agy fallback</code> memory — Agy's known failure signature).</li>
+</ul>
+<h2>Caught in Review</h2>
+<p>The first review found a real gap: <code>parse_output()</code> returned only <code>raw_text</code> and <code>failure</code>,
+missing the <code>lifecycle_events</code> and <code>compatibility_evidence</code> population that <code>CodexAdapter</code> and
+<code>GrokAdapter</code> both do by importing <code>compatibility_evidence, parse_output</code> from
+<code>synlynk.lifecycle</code> inside the method body. Without it, Agy dispatches would silently lose
+lifecycle telemetry that the other two ported harnesses already report correctly — exactly the
+kind of asymmetry the adapter pattern is supposed to prevent by construction, caught here
+because it wasn't. The fix was scoped tightly to <code>synlynk/harness_adapters/agy.py</code> and its test
+file, mirrored the Codex/Grok pattern exactly, added a regression test asserting both fields
+populate, and came back with a fresh <code>APPROVE</code> on re-review.</p>
+<p>This PR also hit the same README test-count CI gate as #1964, a second time, for the same
+underlying reason — this PR's own new tests pushed the branch's true <code>pytest --collect-only</code>
+count past what #1964 had already synced it to (3722 → 3727). Fixed the same way: a direct
+commit on the PR's own branch, not a separate docs PR, since the gate is branch-scoped.</p>
+<h2>What Was Achieved Toward the Long-Arc Goal</h2>
+<p>Three of four harnesses (Codex, Grok, Agy) are now off <code>LegacyAdapter</code>. Each port so far has
+independently caught something real — Grok's port surfaced a stale capability-routing bug that
+needed its own fix PR; Agy's port caught a lifecycle-telemetry gap in review before it shipped.
+The strangler pattern is doing exactly the job it was designed for: making each harness's quirks
+a visible, testable, single-adapter concern instead of a silent gap in a shared conditional.</p>
+<h2>The New Goalpost</h2>
+<p>PR5 is the last port: Claude and local, then delete <code>LegacyAdapter</code> once nothing in the
+registry still depends on it — closing out gh:#1924 entirely.</p>
+<p>Refs #1924.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
