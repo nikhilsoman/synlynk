@@ -246,6 +246,13 @@ COMMAND_TAXONOMY = [
          "clear dead running jobs",
          "jobs stuck running with dead pid",
      ], "hook_event": None},
+    {"command": "jobs reconcile", "governs_stage": "execute", "maturity_tier": 2, "prominence": "secondary",
+     "orientation_gateway": False, "audience": "human",
+     "trigger_phrases": [
+         "reconcile a job status",
+         "manually reconcile a job",
+         "repair job completion evidence",
+     ], "hook_event": None},
     {"command": "gc", "governs_stage": "sustain", "maturity_tier": 2, "prominence": "secondary",
      "orientation_gateway": False, "audience": "human",
      "trigger_phrases": ["garbage collect merged worktrees", "clean up orphaned state shards"],
