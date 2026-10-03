@@ -436,6 +436,31 @@ Remote-only jobs may require a receipt for audit quality while still completing
 when the contracted remote effect is independently verified. The summary should
 show `receipt: absent (warning)` rather than `TASK_DELIVERY_FAILED`.
 
+### 10.4 Cost-audit boundary
+
+Cost audit remains an independent design and implementation concern. The job
+status oracle owns only the cost evidence needed to explain lifecycle truth;
+the cost-audit subsystem owns token attribution, provider pricing, aggregation,
+budgets, retention, and financial discrepancy repair.
+
+The integration contract is:
+
+1. Every terminal decision revision emits or links to exactly one cost record.
+2. The stable linkage key is `(job_id, decision_revision)`; retries and
+   observer races must not create duplicate cost rows.
+3. Missing or unavailable cost data is a warning/evidence dimension, not an
+   automatic job failure or permission denial.
+4. A verified cost/token breaker kill may produce
+   `circuit_breaker_tripped`; a cost-observer or pricing error may only produce
+   `observer_error`, `unknown`, or a cost warning.
+5. Cost-audit reconciliation may append a correction/audit event, but cannot
+   independently rewrite the job terminal status.
+
+The cost-audit redesign should consume the versioned job-terminal event and
+decision revision rather than becoming another status writer. Its follow-up
+ticket is tracked separately so this design does not absorb financial-model,
+provider-billing, or ledger-retention scope.
+
 ## 11. Reconciliation and concurrency
 
 All observers call `request_reconciliation(job_id, reason)` or append evidence.
@@ -575,6 +600,9 @@ amber or green label. A green status without a primary evidence ID is invalid.
 
 - Daemon and CLI reconciliation converge to the same row and summary.
 - Two concurrent reconcilers produce one terminal event and one cost record.
+- Reconciliation produces exactly one cost record per terminal decision
+  revision; a missing cost row is surfaced as evidence without changing a
+  verified job outcome.
 - A delayed `.exit` marker and delayed GitHub effect are both recovered.
 - Review jobs with zero local files but a real GitHub review complete correctly.
 - A GitHub API outage leaves a job verifying/unknown, then repairs after retry.
@@ -619,6 +647,8 @@ Emit counters and dimensions without secret content:
 - `job_verified_success_rate`
 - `job_false_negative_rate`
 - `job_terminal_writer_bypass_total` (must remain zero)
+- `job_cost_link_missing_total{status,contract_kind}`
+- `job_cost_link_duplicate_total{job_id,decision_revision}`
 
 Dashboard and CLI reports must distinguish:
 
@@ -644,6 +674,7 @@ independent effects, not by the number of green self-reports.
 | Oracle becomes another god function | keep pure decision logic separate from adapters, persistence, and verification clients |
 | Retry or verification races create duplicate effects/cost | fencing tokens, idempotency keys, bounded retries, and one cost row per decision revision |
 | Shadow mode leaves operators acting on false legacy status | policy and operator surfaces use the shadow oracle's provisional status during promotion |
+| Cost accounting becomes a second status oracle | versioned terminal-event contract; cost audit may append evidence/corrections but cannot rewrite status |
 
 ## 17. Decision gates before implementation
 
@@ -666,6 +697,10 @@ Before implementation begins, this design must also have:
 - explicit per-harness and per-effect-class reliability reporting. A harness
   with no available credits is excluded from the denominator and remains a
   stated coverage gap.
+
+The independent cost-audit redesign is intentionally not an implementation
+phase here. It must consume the terminal-event contract, preserve the
+`(job_id, decision_revision)` linkage, and remain unable to settle job status.
 
 The first success criterion is not a prettier status table. It is that the next
 real reviewer job that posts a valid GitHub review cannot be reported as a task
