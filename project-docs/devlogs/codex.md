@@ -154,3 +154,14 @@
 - Verification: focused telemetry/GitHub/effect suites 75 passed; broader jobs,
   dispatch, DB, and GitHub guard suites 304 passed; `git diff --check` passed.
 [@codex]
+
+## 2026-10-03 — Job status truth pilot PR3 QA remediation (#1962)
+
+- Made persisted contract predicates authoritative: target, actor, and SHA
+  mismatches cannot produce a completed decision; unresolved predicates remain
+  verifying or fail closed after the verification budget.
+- Hardened promotion gates with explicit verification-age, retry, unknown-state,
+  and harness/effect-agreement thresholds plus reason-coded exclusions.
+- Verification: focused job-truth/projection tests passed; integration suite
+  verification is recorded with the PR update.
+[@codex]

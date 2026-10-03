@@ -202,9 +202,37 @@ def decide_job_outcome(
         return [e for e in rows if e.get("kind") == kind and e.get("result") == result]
 
     remote = matches("github_effect") + matches("remote_effect")
-    if remote and any(e.get("result") == "true" and e.get("causal_match", True) for e in remote):
+    required_predicates = {
+        name: bool(required)
+        for name, required in (contract.get("required_predicates") or {}).items()
+        if required
+    }
+    predicate_mismatch = any(
+        any(e.get(name) is False for e in remote if e.get("result") == "true")
+        for name in required_predicates
+    )
+    predicate_unknown = any(
+        not any(e.get(name) is True for e in remote if e.get("result") == "true")
+        for name in required_predicates
+    )
+    verified_remote = any(
+        e.get("result") == "true"
+        and e.get("causal_match", True)
+        and not predicate_mismatch
+        and not predicate_unknown
+        for e in remote
+    )
+    if verified_remote:
         warnings = ("receipt_absent",) if any(e.get("kind") == "task_receipt" and e.get("result") == "false" for e in rows) else ()
         return CompletionDecision("completed", "verified", "contract_effect_verified", "none", ids, warnings)
+    if remote and predicate_mismatch:
+        if deadline_expired or retry_exhausted:
+            return CompletionDecision("failed_verification", "failed", "contract_predicate_mismatch", "manual_review", ids)
+        return CompletionDecision("verifying", "unknown", "contract_predicate_mismatch", "retry_verification", ids)
+    if remote and predicate_unknown:
+        if deadline_expired or retry_exhausted:
+            return CompletionDecision("failed_verification", "failed", "contract_predicate_unresolved", "manual_review", ids)
+        return CompletionDecision("verifying", "unknown", "contract_predicate_unresolved", "retry_verification", ids)
     if any(e.get("kind") == "circuit_breaker" and e.get("result") == "true" and e.get("process_live_at_observation", True) for e in rows):
         return CompletionDecision("circuit_breaker_tripped", "failed", "circuit_breaker_killed_live_process", "none", ids)
     for kind, status, reason in (("cancelled", "cancelled", "explicit_cancellation"), ("timeout", "timed_out", "timeout_observed"), ("zombie", "killed_zombie", "zombie_reaped")):

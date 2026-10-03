@@ -12,6 +12,9 @@ from synlynk.job_truth import STATUS_ALIASES, canonical_status
 
 PROJECTION_SCHEMA = "job-status-truth.v1"
 ROLLOUT_MODES = frozenset({"off", "shadow", "authoritative"})
+DEFAULT_MAX_UNKNOWN_AGE_SECONDS = 300
+DEFAULT_MAX_VERIFICATION_RETRIES = 3
+DEFAULT_MAX_UNKNOWN_VERIFYING = 0
 
 
 def rollout_mode(env: Mapping[str, str] | None = None) -> str:
@@ -138,9 +141,11 @@ def job_truth_metrics(conn) -> dict[str, Any]:
     rows = [dict(row) for row in conn.execute("SELECT job_id, legacy_status, oracle_status, reason_code, disagreement, harness, effect_kind, observed_at FROM job_status_shadow").fetchall()]
     reasons = Counter(row["reason_code"] for row in rows)
     disagreements = defaultdict(Counter)
+    disagreement_reasons = Counter()
     for row in rows:
         if row["disagreement"]:
             disagreements[row["harness"] or "unknown"][row["effect_kind"] or "unknown"] += 1
+            disagreement_reasons[row["reason_code"] or "unexplained_disagreement"] += 1
     retries = conn.execute("SELECT COALESCE(SUM(attempt - 1), 0) FROM job_evidence").fetchone()[0]
     missing = conn.execute("SELECT COUNT(*) FROM job_effect_contract WHERE kind='unknown_contract'").fetchone()[0]
     ages = []
@@ -155,14 +160,66 @@ def job_truth_metrics(conn) -> dict[str, Any]:
         "unknown_verifying_age_seconds": {"count": len(ages), "max": max(ages, default=0), "average": sum(ages) / len(ages) if ages else 0},
         "verification_retries": int(retries or 0), "contract_missing": int(missing or 0),
         "disagreements_by_harness_effect": {harness: dict(values) for harness, values in disagreements.items()},
+        "disagreement_reasons": dict(disagreement_reasons),
     }
 
 
-def promotion_gate(metrics: Mapping[str, Any], *, minimum_samples: int = 100) -> dict[str, Any]:
+def promotion_gate(
+    metrics: Mapping[str, Any],
+    *,
+    minimum_samples: int = 100,
+    max_unknown_age_seconds: int = DEFAULT_MAX_UNKNOWN_AGE_SECONDS,
+    max_verification_retries: int = DEFAULT_MAX_VERIFICATION_RETRIES,
+    max_unknown_verifying: int = DEFAULT_MAX_UNKNOWN_VERIFYING,
+    allowed_disagreement_reason_codes: frozenset[str] = frozenset(),
+) -> dict[str, Any]:
+    """Fail closed unless rollout metrics satisfy every promotion SLO.
+
+    Disagreement exclusions are deliberately explicit and reason-coded.  An
+    absent allow-list means every disagreement is a blocker.
+    """
+    age = metrics.get("unknown_verifying_age_seconds") or {}
+    unknown_age = float(age.get("max", 0) or 0)
+    unknown_count = int(age.get("count", 0) or 0)
+    disagreement_reasons = {
+        str(reason): int(count or 0)
+        for reason, count in (metrics.get("disagreement_reasons") or {}).items()
+    }
+    unexplained_disagreements = sum(
+        count for reason, count in disagreement_reasons.items()
+        if reason not in allowed_disagreement_reason_codes
+    )
     checks = {
         "sample_window": int(metrics.get("samples", 0)) >= minimum_samples,
         "zero_false_failure": int(metrics.get("false_failure", 0)) == 0,
         "zero_false_success": int(metrics.get("false_success", 0)) == 0,
         "no_missing_contract": int(metrics.get("contract_missing", 0)) == 0,
+        "verification_age_slo": unknown_age <= max_unknown_age_seconds,
+        "verification_retries_slo": int(metrics.get("verification_retries", 0)) <= max_verification_retries,
+        "unknown_verifying_slo": unknown_count <= max_unknown_verifying,
+        "harness_effect_agreement": unexplained_disagreements == 0,
     }
-    return {"eligible": all(checks.values()), "checks": checks, "rollback_on": [key for key, passed in checks.items() if not passed]}
+    reason_codes = {
+        "sample_window": "insufficient_sample_window",
+        "zero_false_failure": "false_failure_observed",
+        "zero_false_success": "false_success_observed",
+        "no_missing_contract": "missing_contract_observed",
+        "verification_age_slo": "verification_age_slo_breached",
+        "verification_retries_slo": "verification_retries_exceeded",
+        "unknown_verifying_slo": "unknown_verifying_exceeded",
+        "harness_effect_agreement": "unexplained_harness_effect_disagreement",
+    }
+    rollback_on = [key for key, passed in checks.items() if not passed]
+    return {
+        "eligible": not rollback_on,
+        "checks": checks,
+        "rollback_on": rollback_on,
+        "reason_codes": [reason_codes[key] for key in rollback_on],
+        "thresholds": {
+            "minimum_samples": minimum_samples,
+            "max_unknown_age_seconds": max_unknown_age_seconds,
+            "max_verification_retries": max_verification_retries,
+            "max_unknown_verifying": max_unknown_verifying,
+            "allowed_disagreement_reason_codes": sorted(allowed_disagreement_reason_codes),
+        },
+    }

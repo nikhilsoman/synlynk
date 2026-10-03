@@ -1,6 +1,8 @@
 import json
 import sqlite3
 
+import pytest
+
 from synlynk.job_status_projection import (
     compare_legacy_status,
     job_truth_metrics,
@@ -75,6 +77,35 @@ def test_metrics_and_promotion_gate_report_rollout_blockers():
     gate = promotion_gate(metrics, minimum_samples=1)
     assert gate["eligible"] is False
     assert "zero_false_failure" in gate["rollback_on"]
+
+
+@pytest.mark.parametrize("metric, expected", [
+    ({"unknown_verifying_age_seconds": {"max": 301, "count": 0}}, "verification_age_slo"),
+    ({"verification_retries": 4}, "verification_retries_slo"),
+    ({"unknown_verifying_age_seconds": {"max": 0, "count": 1}}, "unknown_verifying_slo"),
+    ({"disagreement_reasons": {"status_disagreement": 1}}, "harness_effect_agreement"),
+])
+def test_promotion_gate_fails_closed_for_each_verification_blocker(metric, expected):
+    metrics = {"samples": 100, "false_failure": 0, "false_success": 0,
+               "contract_missing": 0, "verification_retries": 0,
+               "unknown_verifying_age_seconds": {"max": 0, "count": 0},
+               "disagreement_reasons": {}}
+    metrics.update(metric)
+    gate = promotion_gate(metrics)
+    assert gate["eligible"] is False
+    assert expected in gate["rollback_on"]
+    assert gate["reason_codes"]
+
+
+def test_promotion_gate_allows_only_explicit_reason_coded_exclusions():
+    metrics = {"samples": 100, "false_failure": 0, "false_success": 0,
+               "contract_missing": 0, "verification_retries": 0,
+               "unknown_verifying_age_seconds": {"max": 0, "count": 0},
+               "disagreement_reasons": {"documented_legacy_alias": 1}}
+    blocked = promotion_gate(metrics)
+    allowed = promotion_gate(metrics, allowed_disagreement_reason_codes=frozenset({"documented_legacy_alias"}))
+    assert blocked["eligible"] is False
+    assert allowed["eligible"] is True
 
 
 def test_rollout_mode_defaults_to_shadow_and_rejects_unknown_values():
