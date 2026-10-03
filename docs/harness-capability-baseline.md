@@ -1,5 +1,16 @@
 # Harness Capability Baseline
 
+> ⚠️ **SUSPENDED as the source of truth for routing, 2026-10-04.** This doc's
+> hand-written Reliable/Unreliable/Untested findings were a reasonable interim
+> signal, but Nikhil's 2026-10-04 reassessment moves routing to empirical
+> measurement from `capability_ratings`/`cost_entries` (median `pr_review_cycles`
+> + `total_cost_usd` per merged PR, min n≥5 samples) instead — see the Empirical
+> Capability Assessment Policy in `CLAUDE.md`. The qualitative findings below
+> (e.g. Grok's sandbox/billing issues, Codex's gh-write egress config) remain
+> useful *evidence* to corroborate or explain an empirical result, but no finding
+> here should drive routing on its own going forward. Blocked on `state.db`
+> consolidation (#1926) before aggregate measurement is reliably queryable.
+
 Living record of what each dispatch harness (Claude, Agy, Codex, Grok) can actually
 be trusted to complete headlessly, versus what it claims or appears to complete.
 Dispatch routing in `.synlynk/policy.json` should track this doc, not the other way

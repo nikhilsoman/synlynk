@@ -1,6 +1,21 @@
 {
   "schema_version": 1,
   "repo_id": "synlynk",
+  "capability_policy": {
+    "mode": "empirical",
+    "suspended_since": "2026-10-04",
+    "suspended_rationale": "Heuristic task_allocation below (and the global Claude PM/review/deploy-only lock, gh:#79) was drafted from convenience, not measurement. Reassessed by Nikhil 2026-10-04 in favor of data-driven routing.",
+    "min_sample_size": 5,
+    "metrics": ["pr_review_cycles", "total_cost_usd"],
+    "metric_source": {
+      "pr_review_cycles": "capability_ratings table, median per harness x task_type",
+      "total_cost_usd": "cost_entries table, median per merged PR per harness x task_type"
+    },
+    "blocking_dependency": "gh:#1926 (state.db consolidation) — aggregate measurement unreliable while capability_ratings/cost_entries are scattered across per-job workspace shards, see gh:#1831",
+    "not_yet_calibrated": ["grok", "muse"],
+    "generator_status": "manual — synlynk capability report / policy regen not yet shipped (gh:#1993)",
+    "note": "task_allocation below is the current interim default, not an authoritative ranking. Any harness that clears min_sample_size with better metrics on a task_type may be promoted; this requires a reviewed PR updating this file plus docs/harness-capability-baseline.md, not a silent edit."
+  },
   "overrides": {
     "dev_authority": {
       "task_allocation": {
@@ -17,16 +32,27 @@
         "cli-plumbing": {"harness": "codex", "fallback": []},
         "review": {"harness": "codex", "fallback": ["claude", "agy"]},
         "gh_write": {"harness": "codex", "fallback": ["claude", "agy"]},
-        "pm": {"harness": "claude", "fallback": []},
-        "brainstorm": {"harness": "claude", "fallback": []},
-        "architecture-review": {"harness": "claude", "fallback": []}
+        "pm": {"harness": "claude", "fallback": ["agy", "codex"]},
+        "brainstorm": {"harness": "claude", "fallback": ["agy", "codex"]},
+        "architecture-review": {"harness": "claude", "fallback": ["agy", "codex"]},
+        "deploy": {"harness": "claude", "fallback": ["infra"], "calibration_eligible": ["claude", "agy", "codex"], "note": "no empirical samples yet; must be re-tested via the Infra agent role per Nikhil's 2026-10-04 reassessment before any harness claims this empirically"}
       }
     },
     "merge_authority": {
       "can_merge": ["qa"],
       "require_non_authoring_review": true,
-      "review_fallback": "same_identity_comment_checklist"
+      "review_fallback": "same_identity_comment_checklist",
+      "cross_harness_review_required": true,
+      "cross_harness_review_note": "Reviewer must differ from implementer in harness AND model, not just role identity. Enforcement in synlynk pr check not yet built (gh:#1991) — verify manually via cost_entries/job metadata until it ships."
     },
-    "release_authority": {"can_cut_release": ["pm"], "requires_human_approval": true}
+    "release_authority": {"can_cut_release": ["pm"], "requires_human_approval": true},
+    "governs_authority": {
+      "require_linked_goal": true,
+      "note": "100% GOVERNS adherence required per Nikhil's 2026-10-04 hardening — every dispatched job must link a GOVERNS goal/story. Hard-fail enforcement in synlynk pr check / dispatch preflight not yet built (gh:#1990)."
+    },
+    "host_auth_fallback": {
+      "audit_log_required": true,
+      "note": "SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH verified 2026-10-04 to require an explicit, manual, per-shell operator opt-in (not in the dispatch subprocess env allowlist, cannot be self-granted by a dispatched job). Every exercise of this fallback must now emit an audit-log event (gh:#1992, not yet built)."
+    }
   }
 }
