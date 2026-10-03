@@ -458,8 +458,9 @@ The integration contract is:
 
 The cost-audit redesign should consume the versioned job-terminal event and
 decision revision rather than becoming another status writer. Its follow-up
-ticket is tracked separately so this design does not absorb financial-model,
-provider-billing, or ledger-retention scope.
+ticket [#1951](https://github.com/nikhilsoman/synlynk/issues/1951) is tracked
+separately so this design does not absorb financial-model, provider-billing, or
+ledger-retention scope.
 
 ## 11. Reconciliation and concurrency
 
@@ -713,6 +714,8 @@ delivery failure merely because it produced no local diff or lost a receipt line
 - `docs/superpowers/specs/2026-08-15-job-truth-gh-write-consolidation-design.md`
 - `project-docs/decisions/2026-08-15-round-2-4-one-problem-or-two.md`
 - `project-docs/memory.md` (job-truth and incident history)
+- GitHub issue [#1951](https://github.com/nikhilsoman/synlynk/issues/1951) for
+  the independent cost-audit redesign
 - GitHub issues [#1922](https://github.com/nikhilsoman/synlynk/issues/1922),
   [#1896](https://github.com/nikhilsoman/synlynk/issues/1896),
   [#1850](https://github.com/nikhilsoman/synlynk/issues/1850),
