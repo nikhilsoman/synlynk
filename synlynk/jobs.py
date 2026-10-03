@@ -1705,6 +1705,34 @@ def _reconciliation_persistence_warning(job: dict, operation: str, exc: Exceptio
         )
 
 
+def _record_job_truth_shadow(job: dict, source: str) -> None:
+    """Append flat-file observations to the canonical ledger when available."""
+    try:
+        conn = _pkg("_get_db")()
+        try:
+            from synlynk.job_truth import record_evidence_and_reconcile
+            record_evidence_and_reconcile(
+                conn,
+                job.get("id", ""),
+                {
+                    "kind": "legacy_terminal_status",
+                    "result": "true",
+                    "source": source,
+                    "event_id": f"{source}:{job.get('id')}:{job.get('ended_at')}",
+                    "observed_at": job.get("ended_at") or time.strftime("%Y-%m-%dT%H:%M:%S"),
+                    "exit_code": job.get("exit_code"),
+                    "legacy_status": job.get("status"),
+                },
+                update_compatibility=False,
+            )
+        finally:
+            conn.close()
+    except (sqlite3.OperationalError, ValueError, OSError):
+        # Flat-file compatibility must remain usable during migration and in
+        # read-only/test ledgers; the SQLite reconciler will retry the signal.
+        return
+
+
 def _try_write_capability_rating(job: dict, log_text: str, sentinel_path: str) -> None:
     """Write one rating, isolating its DB/telemetry failure to this job."""
     try:
@@ -2116,6 +2144,7 @@ def _reconcile_jobs_unlocked() -> None:
                     _apply_dispatch_gate(job)
                     if job.get("status") == "completed":
                         _finalize_completed_worktree_job(job, git_state)
+            _record_job_truth_shadow(job, "flat_file_reconciliation")
             task_sha256, task_preview = _task_sha256_and_preview(job.get("task"))
             summary = _pkg("_write_job_summary")(
                 job.get("id", ""),
@@ -2475,6 +2504,29 @@ def _settle_daemon_job_terminal(
     release_reservation: bool = False,
 ) -> bool:
     """Persist and commit a daemon terminal transition atomically for callers."""
+    # PR1 shared decision entry point.  The compatibility status projection is
+    # retained during the pilot, while the append-only ledger records the
+    # evidence and the oracle's canonical shadow decision.
+    try:
+        from synlynk.job_truth import record_evidence_and_reconcile
+        record_evidence_and_reconcile(
+            conn,
+            job_id,
+            {
+                "kind": "legacy_terminal_status",
+                "result": "true",
+                "source": "daemon_reconciliation",
+                "event_id": f"terminal:{job_id}:{completed_at}:{status}",
+                "observed_at": completed_at,
+                "exit_code": exit_code,
+                "legacy_status": status,
+            },
+            update_compatibility=False,
+        )
+    except (sqlite3.OperationalError, ValueError):
+        # Unmigrated fixture databases are still supported by the compatibility
+        # path; the next migration creates/backfills the ledger.
+        conn.rollback()
     settled = _persist_daemon_job_terminal(
         conn,
         job_id,
@@ -2582,6 +2634,23 @@ def mark_daemon_job_terminal(
     if not job_id:
         return False
     now = completed_at or time.strftime("%Y-%m-%dT%H:%M:%S")
+    try:
+        from synlynk.job_truth import record_evidence_and_reconcile
+        record_evidence_and_reconcile(
+            conn,
+            job_id,
+            {
+                "kind": "timeout" if status == "timed_out" else "legacy_terminal_status",
+                "result": "true",
+                "source": "zombie_reaper",
+                "event_id": f"zombie:{job_id}:{now}:{status}",
+                "observed_at": now,
+                "exit_code": exit_code,
+            },
+            update_compatibility=False,
+        )
+    except (sqlite3.OperationalError, ValueError):
+        conn.rollback()
     return _persist_daemon_job_terminal(
         conn, job_id, status, exit_code, now, only_running=True
     )
@@ -3233,7 +3302,7 @@ def _reconcile_terminal_jobs_json(conn) -> int:
             verified = None
         exit_code = job.get("exit_code")
         completed_at = job.get("ended_at") or time.strftime("%Y-%m-%dT%H:%M:%S")
-        if _persist_daemon_job_terminal(
+        if _settle_daemon_job_terminal(
             conn, job_id, status, exit_code, completed_at, only_running=True
         ):
             repaired += 1
@@ -4075,11 +4144,9 @@ def _dispatch_ready_jobs(max_parallel: int = 4) -> int:
                 ).fetchall()
                 dep_statuses = {r[0]: r[1] for r in dep_rows}
                 if any(dep_statuses.get(d) == "failed" for d in deps):
-                    conn.execute(
-                        "UPDATE daemon_jobs SET status='failed', completed_at=? WHERE job_id=?",
-                        (now, job_id)
+                    _settle_daemon_job_terminal(
+                        conn, job_id, "failed", 1, now, only_running=False
                     )
-                    conn.commit()
                     continue
                 done_ids = {jid for jid, st in dep_statuses.items() if st == "done"}
                 if done_ids != set(deps):
@@ -4126,11 +4193,9 @@ def _dispatch_ready_jobs(max_parallel: int = 4) -> int:
             except (RuntimeError, ValueError):
                 # Preflight/worktree/unknown-harness failures: fail the queue row so
                 # the daemon does not spin forever on an unlaunchable job.
-                conn.execute(
-                    "UPDATE daemon_jobs SET status='failed', completed_at=? WHERE job_id=?",
-                    (now, job_id),
+                _settle_daemon_job_terminal(
+                    conn, job_id, "failed", 1, now, only_running=False
                 )
-                conn.commit()
                 continue
 
             if isinstance(job, dict) and job.get("deferred"):

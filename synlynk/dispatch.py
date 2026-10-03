@@ -4032,6 +4032,17 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                     ),
                 )
             dconn.commit()
+            # PR1: every dispatched daemon job gets an immutable effect
+            # contract.  Legacy/test ledgers without the new tables remain
+            # compatible; normal state DBs are migrated before this point.
+            try:
+                from synlynk.job_truth import ensure_effect_contract
+                ensure_effect_contract(dconn, job)
+                dconn.commit()
+            except (sqlite3.OperationalError, ValueError):
+                # Contract backfill is retried by the migration/reconciler;
+                # it must not turn a launch failure into a false terminal job.
+                dconn.rollback()
     finally:
         if owns_dconn and dconn is not None:
             try:

@@ -97,8 +97,8 @@ _PROJECT_DOC_KEEP_N = 50
 # Bump when a new schema migration is added.  This is deliberately kept in
 # SQLite's small built-in metadata slot so checking it does not touch the DB
 # file or create a backup on already-migrated connections.
-# Version 12 adds workspace tenancy and alias/resolution metadata for GOVERNS.
-_DB_MIGRATION_VERSION = 12
+# Version 13 adds the append-only job truth ledger and immutable effect contracts.
+_DB_MIGRATION_VERSION = 13
 
 _GENERATORS_BY_FILENAME = {
     "todo.md": "_generate_todo_md",
@@ -631,6 +631,19 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
         from synlynk import HARNESS_CAPABILITY_BASELINES, _seed_verb_map
         from synlynk.db_schema import _DB_SCHEMA, _DB_SCORES_VIEW
         conn.executescript(_DB_SCHEMA)
+        # Existing daemon rows deliberately receive an explicit unknown contract.
+        # Migration must never infer a successful effect from legacy status text.
+        daemon_job_columns = {
+            row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)").fetchall()
+        }
+        legacy_started_at = "started_at" if "started_at" in daemon_job_columns else "NULL"
+        conn.execute(f"""INSERT OR IGNORE INTO job_effect_contract
+            (contract_id, job_id, kind, target, expect, local_change_policy,
+             receipt_policy, verification_deadline_at, contract_version, started_at,
+             expected_actor, required_predicates_json)
+            SELECT 'legacy-' || job_id, job_id, 'unknown_contract', NULL, 'unknown',
+                   'optional', 'optional', NULL, 1, {legacy_started_at}, NULL, '{{}}'
+            FROM daemon_jobs""")
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS relay_events (
                 event_id TEXT PRIMARY KEY,
@@ -1234,6 +1247,7 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
                 cost_source       TEXT NOT NULL,
                 estimate_basis    TEXT,
                 job_id            TEXT,
+                decision_revision INTEGER,
                 recorded_at       TEXT DEFAULT (datetime('now')),
                 dispatch_context  TEXT,
                 context_mode      TEXT,
@@ -1404,6 +1418,11 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
         if "job_id" not in cost_cols:
             try:
                 conn.execute("ALTER TABLE cost_entries ADD COLUMN job_id TEXT")
+            except sqlite3.OperationalError:
+                pass
+        if "decision_revision" not in cost_cols:
+            try:
+                conn.execute("ALTER TABLE cost_entries ADD COLUMN decision_revision INTEGER")
             except sqlite3.OperationalError:
                 pass
         if "dispatch_context" not in cost_cols:
@@ -1708,6 +1727,7 @@ def _insert_cost_row(
     session_id: str = None,
     harness: str = None,
     agent_role: str = None,
+    decision_revision: int = None,
 ) -> None:
     """Insert or update a cost_entries row through the single sanctioned path."""
     from synlynk import _get_db
@@ -1725,6 +1745,15 @@ def _insert_cost_row(
     try:
         harness_val = harness or agent
         agent_val = agent or harness
+        if decision_revision is None and job_id:
+            try:
+                row = conn.execute(
+                    "SELECT MAX(revision) FROM job_terminal_decision WHERE job_id=?",
+                    (job_id,),
+                ).fetchone()
+                decision_revision = row[0] if row else None
+            except sqlite3.Error:
+                pass
         role_val = agent_role
         if role_val is None and story_id:
             try:
@@ -1792,6 +1821,7 @@ def _insert_cost_row(
                         dispatch_context=COALESCE(?, dispatch_context),
                         context_mode=COALESCE(?, context_mode),
                         session_id=COALESCE(?, session_id)
+                        ,decision_revision=COALESCE(?, decision_revision)
                     WHERE job_id=?""",
                     (
                         session_date,
@@ -1815,6 +1845,7 @@ def _insert_cost_row(
                         dispatch_context,
                         context_mode,
                         session_id,
+                        decision_revision,
                         job_id,
                     ),
                 )
@@ -1823,8 +1854,8 @@ def _insert_cost_row(
         conn.execute(
             """INSERT INTO cost_entries
                 (session_date, agent, harness, agent_role, model, input_tokens, output_tokens, cache_read_tokens,
-                 cost_source, estimate_basis, total_cost_usd, api_equivalent_usd, actual_usd, payment_mode, notes, story_id, epic_id, phase_id, job_id, dispatch_context, context_mode, session_id)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                 cost_source, estimate_basis, total_cost_usd, api_equivalent_usd, actual_usd, payment_mode, notes, story_id, epic_id, phase_id, job_id, dispatch_context, context_mode, session_id, decision_revision)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 session_date,
                 agent_val,
@@ -1848,6 +1879,7 @@ def _insert_cost_row(
                 dispatch_context,
                 context_mode,
                 session_id,
+                decision_revision,
             ),
         )
         conn.commit()

@@ -213,6 +213,54 @@ CREATE TABLE IF NOT EXISTS daemon_jobs (
 );
 CREATE INDEX IF NOT EXISTS idx_daemon_jobs_status ON daemon_jobs(status);
 
+CREATE TABLE IF NOT EXISTS job_effect_contract (
+    contract_id TEXT PRIMARY KEY,
+    job_id TEXT NOT NULL UNIQUE,
+    kind TEXT NOT NULL,
+    target TEXT,
+    expect TEXT NOT NULL,
+    local_change_policy TEXT NOT NULL,
+    receipt_policy TEXT NOT NULL,
+    verification_deadline_at TEXT,
+    contract_version INTEGER NOT NULL,
+    started_at TEXT,
+    expected_actor TEXT,
+    required_predicates_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS job_evidence (
+    evidence_id TEXT PRIMARY KEY,
+    job_id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    result TEXT NOT NULL,
+    observed_at TEXT NOT NULL,
+    source TEXT NOT NULL,
+    payload_json TEXT NOT NULL DEFAULT '{}',
+    confidence TEXT NOT NULL DEFAULT 'medium',
+    attempt INTEGER NOT NULL DEFAULT 1,
+    event_id TEXT NOT NULL,
+    UNIQUE(job_id, source, attempt, event_id)
+);
+CREATE INDEX IF NOT EXISTS idx_job_evidence_job ON job_evidence(job_id, observed_at);
+CREATE TABLE IF NOT EXISTS job_terminal_decision (
+    job_id TEXT NOT NULL,
+    status TEXT NOT NULL,
+    exit_code INTEGER,
+    verification_state TEXT NOT NULL,
+    primary_evidence_id TEXT,
+    evidence_snapshot_json TEXT NOT NULL DEFAULT '[]',
+    decision_reason TEXT NOT NULL,
+    decided_at TEXT NOT NULL,
+    decided_by TEXT NOT NULL,
+    revision INTEGER NOT NULL,
+    contract_version INTEGER NOT NULL,
+    follow_up TEXT NOT NULL DEFAULT 'none',
+    PRIMARY KEY(job_id, revision),
+    UNIQUE(job_id, revision)
+);
+CREATE INDEX IF NOT EXISTS idx_job_terminal_decision_latest
+    ON job_terminal_decision(job_id, revision DESC);
+
 CREATE TABLE IF NOT EXISTS goals (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     goal_id     TEXT NOT NULL UNIQUE,
