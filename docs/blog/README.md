@@ -1,5 +1,10 @@
 # synlynk Blog Series: Building the OS for Multi-Agent Development
 
+| [242](./242-pr1965-agy-adapter-port.md) | gh:#1924 PR4 — Porting Agy to the HarnessAdapter Protocol | [#1965](https://github.com/nikhilsoman/synlynk/pull/1965) | 2026-10-03 |
+| [241](./241-pr1964-live22-gh-identity-zone-boundary.md) | LIVE-22 — Closing the GitHub-Identity Zone-Boundary Gap | [#1964](https://github.com/nikhilsoman/synlynk/pull/1964) | 2026-10-03 |
+| [240](./240-pr1959-grok-shell-capability-fix.md) | gh:#1924 — Grok's Shell Capability Was Still Living in the Pre-#1277 World | [#1959](https://github.com/nikhilsoman/synlynk/pull/1959) | 2026-10-03 |
+| [239](./239-pr1957-grok-adapter-port.md) | gh:#1924 PR3 — Porting Grok to the HarnessAdapter Protocol | [#1957](https://github.com/nikhilsoman/synlynk/pull/1957) | 2026-10-03 |
+
 | [230](./230-pr1846-cost-table-hardening.md) | Issue #1846 — Keeping the Cost Ledger a Valid Markdown Table | TBD | 2026-09-29 |
 
 | [229](./229-prTBD-instruction-file-deduplication.md) | R9 — One Canonical Instruction Protocol | [#1843](https://github.com/nikhilsoman/synlynk/pull/1843) | 2026-09-29 |
