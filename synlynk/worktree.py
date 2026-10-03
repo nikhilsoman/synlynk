@@ -4,6 +4,7 @@ import json
 import os
 import re
 import subprocess
+from synlynk.gh_shim import run_gh
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Optional
@@ -189,7 +190,7 @@ def _apply_nesting_floor(verdicts: list) -> list:
 
 def _gh_auth_available() -> bool:
     try:
-        result = subprocess.run(["gh", "auth", "status"], capture_output=True, text=True, timeout=5)
+        result = run_gh(["auth", "status"], capture_output=True, text=True, timeout=5)
         return result.returncode == 0
     except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
         return False

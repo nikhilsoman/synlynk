@@ -4,6 +4,7 @@ import json
 import os
 import re
 import subprocess
+from synlynk.gh_shim import run_gh
 import time
 from typing import Optional
 
@@ -636,8 +637,8 @@ def _attempt_fix(finding: dict, investigation: dict, fixer: str, dry_run: bool) 
     )
 
     if test_result.returncode == 0:
-        pr_result = subprocess.run(
-            ["gh", "pr", "create", "--draft",
+        pr_result = run_gh(
+            ["pr", "create", "--draft",
              "--title", f"[support] fix: {finding['summary'][:60]}",
              "--body", (
                  f"Auto-generated fix.\n\n"

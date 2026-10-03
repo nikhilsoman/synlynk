@@ -12,6 +12,7 @@ from __future__ import annotations
 import os
 import shutil
 import stat
+import subprocess
 import sys
 from typing import Mapping, Optional
 
@@ -104,8 +105,40 @@ def run_shim(args: list, env: Optional[Mapping[str, str]] = None, shim_dir: Opti
     return 127
 
 
+def run_gh(args: list, *, env: Optional[Mapping[str, str]] = None, **kwargs):
+    """Run an internal ``gh`` call through the harness identity guard.
+
+    Internal Python callers cannot rely on the caller having sourced the shell
+    shim.  Apply the same fail-closed rule here, and resolve a marked role to
+    its cached App token before invoking the real binary.
+    """
+    child_env = dict(env if env is not None else os.environ)
+    if _is_harness_session(child_env) and not (
+        child_env.get("GH_TOKEN") or child_env.get("GITHUB_TOKEN")
+    ):
+        role = child_env.get("SYNLYNK_GH_ROLE", "")
+        token = None
+        if role in KNOWN_ROLES:
+            try:
+                from synlynk.dispatch import _isolated_gh_config_dir, _resolve_dispatch_gh_token
+                token = _resolve_dispatch_gh_token(role)
+                if token:
+                    child_env["GH_TOKEN"] = token
+                    child_env["GITHUB_TOKEN"] = token
+                    child_env["GH_CONFIG_DIR"] = _isolated_gh_config_dir()
+            except Exception:
+                token = None
+        if not token and not _truthy(child_env.get("SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH", "")):
+            return subprocess.CompletedProcess(
+                ["gh"] + list(args), 1, "", REFUSAL + "\n"
+            )
+    call_kwargs = dict(kwargs)
+    call_kwargs["env"] = child_env
+    return subprocess.run(["gh"] + list(args), **call_kwargs)
+
+
 def main(args: Optional[list] = None, shim_dir: Optional[str] = None) -> int:
     return run_shim(list(sys.argv[1:] if args is None else args), shim_dir=shim_dir)
 
 
-__all__ = ["_is_harness_session", "install_shim", "main", "run_shim", "shim_env", "write_shim"]
+__all__ = ["_is_harness_session", "install_shim", "main", "run_gh", "run_shim", "shim_env", "write_shim"]

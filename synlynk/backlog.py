@@ -11,6 +11,7 @@ import json
 import re
 import sqlite3
 import subprocess
+from synlynk.gh_shim import run_gh
 import time
 from typing import Optional
 
@@ -204,8 +205,8 @@ def is_duplicate_issue(
                 pass
 
         try:
-            gh_proc = subprocess.run(
-                ["gh", "pr", "list", "--state", "merged", "--limit", "50", "--json", "number,title,body"],
+            gh_proc = run_gh(
+                ["pr", "list", "--state", "merged", "--limit", "50", "--json", "number,title,body"],
                 capture_output=True,
                 text=True,
             )

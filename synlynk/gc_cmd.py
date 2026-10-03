@@ -1,5 +1,6 @@
 import os
 import subprocess
+from synlynk.gh_shim import run_gh
 import json
 import shutil
 import time
@@ -36,7 +37,7 @@ def cmd_gc(dry_run: bool = True, yes: bool = False, retention_days: int = 14, si
             
         # Get PRs
         try:
-            pr_out = subprocess.check_output(["gh", "pr", "list", "--state", "all", "--json", "headRefName,state,mergedAt"], stderr=subprocess.DEVNULL).decode()
+            pr_out = run_gh(["pr", "list", "--state", "all", "--json", "headRefName,state,mergedAt"], capture_output=True, stderr=subprocess.DEVNULL, text=True).stdout
             prs = json.loads(pr_out)
         except Exception:
             prs = []

@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import json
 import subprocess
+from synlynk.gh_shim import run_gh
 
 from synlynk.policy import check_authority, load_policy
 
@@ -11,8 +12,8 @@ REQUIRED_STATUS_CHECKS = ["test (3.8)", "test (3.10)", "test (3.12)", "qa-gate"]
 
 
 def _current_repo_slug() -> str:
-    result = subprocess.run(
-        ["gh", "repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"],
+    result = run_gh(
+        ["repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"],
         capture_output=True, text=True, check=True,
     )
     return result.stdout.strip()
@@ -56,9 +57,9 @@ def cmd_policy_sync_branch_protection(dry_run: bool = False) -> int:
         return 0
 
     repo_slug = _current_repo_slug()
-    result = subprocess.run(
+    result = run_gh(
         [
-            "gh", "api", "--method", "PUT",
+            "api", "--method", "PUT",
             f"repos/{repo_slug}/branches/main/protection", "--input", "-",
         ],
         input=json.dumps(body), capture_output=True, text=True,

@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+from synlynk.gh_shim import run_gh
 
 
 def _merged_pr_branch(pr: str) -> str | None:
@@ -60,7 +61,7 @@ def _auto_merge(stories: list[dict], verdicts: list[dict], *, role: str = "qa") 
         oracle = require_merge_oracle(pr_number=int(pr), role=role)
         if not oracle["merge_allowed"]:
             continue
-        result = subprocess.run(["gh", "pr", "merge", str(pr), "--squash", "--delete-branch"],
+        result = run_gh(["pr", "merge", str(pr), "--squash", "--delete-branch"],
                                 capture_output=True, text=True, check=False)
         if result.returncode == 0:
             merged.append(str(pr))

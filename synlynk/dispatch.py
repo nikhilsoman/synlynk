@@ -2274,6 +2274,7 @@ def _create_job_worktree(
                     scoped_paths=scoped_paths,
                 )
             if sparse_ok:
+                _provision_job_github_apps(worktree_path)
                 _assert_dispatch_worktree_base_is_fresh(worktree_path, base_ref)
                 try:
                     from synlynk.worktree_lease import acquire_worktree_lease
@@ -2328,6 +2329,7 @@ def _create_job_worktree(
             f"on branch {worktree_branch} after 3 attempts."
             + (f" {details}" if details else "")
         )
+    _provision_job_github_apps(worktree_path)
     _assert_dispatch_worktree_base_is_fresh(worktree_path, base_ref)
     try:
         from synlynk.worktree_lease import acquire_worktree_lease
@@ -2340,6 +2342,29 @@ def _create_job_worktree(
         "base_branch": base_ref,
         "base_sha": base_sha,
     }
+
+
+def _provision_job_github_apps(worktree_path: str) -> None:
+    """Expose the main checkout's role-token directory inside a job worktree."""
+    try:
+        common = subprocess.run(
+            ["git", "-C", os.getcwd(), "rev-parse", "--path-format=absolute", "--git-common-dir"],
+            capture_output=True, text=True, check=False,
+        )
+        if common.returncode != 0 or not common.stdout.strip():
+            return
+        git_dir = os.path.realpath(common.stdout.strip())
+        main_repo = os.path.dirname(git_dir) if os.path.basename(git_dir) == ".git" else os.path.dirname(git_dir)
+        source = os.path.join(main_repo, ".synlynk", "github_apps")
+        target = os.path.join(worktree_path, ".synlynk", "github_apps")
+        if os.path.lexists(target):
+            return
+        if not os.path.isdir(source):
+            return
+        os.makedirs(os.path.dirname(target), mode=0o700, exist_ok=True)
+        os.symlink(source, target, target_is_directory=True)
+    except (OSError, ValueError):
+        logger.debug("GitHub App directory provisioning advisory failure", exc_info=True)
 
 
 def _probe_results_trustworthy() -> bool:

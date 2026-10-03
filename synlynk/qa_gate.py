@@ -12,6 +12,7 @@ import subprocess
 from typing import Optional
 
 from synlynk.sentinel import _extract_verified_by_ci
+from synlynk.gh_shim import run_gh
 from synlynk import detect_remote_owner_repo
 
 
@@ -26,8 +27,8 @@ def _qa_gate_mode() -> str:
 
 def _gh_pr_changed_files(pr_number) -> list:
     try:
-        result = subprocess.run(
-            ["gh", "pr", "diff", str(pr_number), "--name-only"],
+        result = run_gh(
+            ["pr", "diff", str(pr_number), "--name-only"],
             capture_output=True,
             text=True,
             check=False,
@@ -59,9 +60,9 @@ def _qa_gate_sentinel_health(owner: str, repo: str) -> Optional[bool]:
     rather than reading the gitignored sentinel.md file.
     """
     try:
-        result = subprocess.run(
+        result = run_gh(
             [
-                "gh", "issue", "list",
+                "issue", "list",
                 "--repo", f"{owner}/{repo}",
                 "--label", "support-engineer",
                 "--state", "open",
