@@ -1,6 +1,7 @@
 """Lookup of harness name -> HarnessAdapter instance (gh:#1924)."""
 
 from synlynk.harness_adapters.base import HarnessAdapter
+from synlynk.harness_adapters.codex import CodexAdapter
 from synlynk.harness_adapters.legacy import LegacyAdapter
 
 
@@ -15,5 +16,6 @@ def get_adapter(name: str) -> HarnessAdapter:
     return _ADAPTERS[name]
 
 
-for _name in ("codex", "grok", "agy", "claude", "local"):
+register_adapter("codex", CodexAdapter())
+for _name in ("grok", "agy", "claude", "local"):
     register_adapter(_name, LegacyAdapter(agent=_name))
