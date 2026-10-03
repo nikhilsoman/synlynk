@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Archive Was Never Lost — It Was Gitignored | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-1">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Oct 04, 2026</span>
+        
+          <span class="blog-post-pr">PR 1998</span>
+        
+      </div>
+      <h1 class="blog-post-title">The Archive Was Never Lost — It Was Gitignored</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>PR #1994 (post #244) suspended the heuristic Default Agent Role lock in favor
+of empirical capability measurement, and named <code>project-docs/costs.md</code> —
+specifically <code>cost_entries</code>/<code>capability_ratings</code> — as the data the new
+<code>capability_policy</code> would eventually measure routing against. The goalpost
+coming out of that PR was building the enforcement gates (#1990, #1991) and
+the <code>capability report</code> generator (#1993) that policy depends on.</p>
+<p>This PR is a detour forced by a standing problem with that very data source:
+gh:#1995, a bug that had already triggered three manual &quot;restore the rows
+that got dropped&quot; commits on this branch before this PR shipped an actual
+fix, rather than a fourth restoration.</p>
+<h2>Strategic Shift in This PR</h2>
+<p>No roadmap shift — this is debugging work that had to happen before the
+capability-measurement goalpost above could trust its own inputs. But it's
+worth naming the shift in how the investigation itself went, because it's
+the most useful thing in this post: the first root-cause theory was wrong,
+and the PR body says so rather than quietly fixing the write-up after the
+fact.</p>
+<h2>What This PR Shipped</h2>
+<p><strong>First theory (retracted):</strong> <code>_rotate_project_doc()</code> writes an archive file
+for rows rotated out of the live <code>costs.md</code>/<code>roadmap.md</code>/<code>memory.md</code> view.
+The initial hypothesis was that a dispatched job's ephemeral git worktree —
+deleted post-merge per this repo's Worktree Hygiene Protocol — was silently
+destroying that archive before it ever got committed. Plausible, and matched
+<code>git log --oneline -- project-docs/archive/</code> showing zero history.</p>
+<p><strong>What was actually true:</strong> <code>_synlynk_project_docs_dir()</code> resolves through
+<code>_project_root()</code>, which calls <code>git rev-parse --git-common-dir</code> — identical
+across every linked worktree of a repo, main checkout or nested job worktree
+alike (verified directly from both). The archive was never worktree-scoped;
+it lands in the shared, persistent <code>&lt;main-repo&gt;/.synlynk/project-docs/archive/</code>,
+which survives worktree cleanup fine. It's absent from <code>git log</code> because
+<code>.synlynk/*</code> is bulk-gitignored by this repo's own <code>.gitignore</code> — by design,
+not by accident. Nothing was silently destroyed.</p>
+<p><strong>The real cause of the visible symptom:</strong> <code>_PROJECT_DOC_KEEP_N</code> was 50,
+far smaller than the rate <code>cost_entries</code> grows. Nearly every regen truncated
+the git-tracked <code>costs.md</code> to its last 50 rows, so the live window slid on
+almost every PR touching cost logging — indistinguishable, in a PR diff,
+from data loss. The fix: raise it to 500, shared automatically by the
+roadmap and memory generators since all three call the same function.</p>
+<p><strong>A more severe bug found along the way, not fixed here:</strong> the archive file
+itself is massively duplicated. One monthly shard,
+<code>.synlynk/project-docs/archive/costs-2026-H10.md</code>, had 268,445 lines but
+only ~3,262 unique rows — one row repeated 45+ times, a 160MB file for what
+should be a few hundred KB. <code>_rotate_project_doc()</code> re-appends the <em>entire</em>
+overflow slice on every call instead of tracking a high-water mark of what
+it already archived. Filed separately as gh:#1999 rather than folded into
+this PR, since fixing it changes archival semantics more than a keep_n bump
+does and deserves its own review.</p>
+<p><strong>Also shipped:</strong> <code>_rotate_project_doc()</code> now best-effort <code>git add</code>s a
+freshly written archive file. In this repo's actual migrated-and-gitignored
+configuration that's a no-op in practice (<code>git add</code> refuses an ignored path
+without <code>-f</code>, and force-adding hundred-MB generated files into git history
+would be actively harmful — not done). It's still correct, tested code that
+closes the real worktree-loss case for any non-migrated synlynk-managed repo,
+where the archive path <em>is</em> the tracked, worktree-local one.</p>
+<p>Verification: direct <code>sqlite3</code> query against <code>state.db</code> confirmed the
+<code>cost_entries</code> table never lost the rows in question — all three &quot;regen-drop&quot;
+incidents were generated-view symptoms, not data-loss incidents, throughout.</p>
+<h2>Caught in Review</h2>
+<p>The retraction itself: after pushing the first fix and posting the initial
+root-cause comment to gh:#1995, re-checking <code>_project_root()</code>'s actual
+implementation (not just its name) disproved the ephemeral-worktree framing.
+Rather than leave the wrong claim standing in the issue thread, a correction
+comment went up immediately, and the PR description was rewritten before
+requesting review — the dispatched reviewer saw the corrected version, not
+the retracted one.</p>
+<h2>What Was Achieved Toward the Long-Arc Goal</h2>
+<p><code>project-docs/costs.md</code> stops exhibiting window-slide churn that looked like
+data loss, closing the loop that had produced three restoration commits on
+this branch alone. More importantly for the capability-measurement goalpost
+from PR #1994: the data this policy will eventually route on was confirmed,
+end to end, to be durable in <code>state.db</code> regardless of what the generated
+markdown views show — the measurement substrate is sound even though its
+rendered view had a cosmetic bug.</p>
+<h2>The New Goalpost</h2>
+<p>Two threads now open against the cost-ledger surface: gh:#1999 (archive
+duplication — needs a high-water-mark design, not a quick patch) and the
+still-unbuilt <code>capability report</code> generator (gh:#1993) that PR #1994 flagged
+as blocked on <code>state.db</code> consolidation (gh:#1926). Either is a reasonable
+next pull on this thread; neither has started.</p>
+<p>Refs #1995, #1999, #1994, #1993, #1926.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
