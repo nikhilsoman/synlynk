@@ -148,6 +148,20 @@ Lower-ranked evidence can explain or alert, but cannot contradict a verified
 effect. An unavailable higher-ranked check yields `unknown`, not a guessed
 failure.
 
+Evidence rank is also a confidence ceiling. Structured harness events,
+receipts, exit codes, legacy-text matches, liveness observations, and cost
+sentinels may explain a decision, but none can independently promote a job to
+`completed` or `permission_denied`. Those outcomes require the
+contract-specific GitHub, git, artifact, or explicit-denial predicate.
+
+For remote effects, presence and absence have different proof requirements. An
+observed effect is accepted only when it is causally attributable to this job:
+the expected actor/role matches, the observation is at or after `started_at`,
+and the exact target and relevant head SHA or id match. An absent effect is not
+final after one failed read. The verifier performs a bounded quorum of
+consistent reads, including read-after-write retry and pagination checks; the
+first miss remains `verifying`.
+
 ### 5.3 The task contract determines the expected effect
 
 At dispatch time, persist an explicit effect contract:
@@ -159,14 +173,26 @@ At dispatch time, persist an explicit effect contract:
   "expect": "review_posted",
   "local_change_policy": "optional",
   "receipt_policy": "required",
-  "verification_deadline_seconds": 120
+  "verification_deadline_seconds": 300,
+  "contract_version": 1
 }
 ```
 
 Other contracts include `git_change`, `github_pr_open`, `github_comment`,
-`read_only_report`, and `explicit_noop`. `requires_gh_write` remains a routing
-and authorization input, but the effect contract becomes the source of truth
-for what completion means.
+`read_only_report`, and `explicit_noop`. Contracts are immutable after launch,
+versioned, and conjunctive: a contract may require both a local commit and a
+push, or both a review and a matching target SHA. The result is the minimum of
+its required predicates, so a diff without a push cannot be represented as a
+completed publish operation.
+
+Ad-hoc and legacy dispatches receive a persisted default contract. Read-only
+tasks use `read_only_report`; mutating tasks without a known effect contract
+use `unknown_contract` and cannot receive an unqualified green result. A
+missing contract is an explicit migration state, not an invitation for a
+legacy classifier to infer success.
+
+`requires_gh_write` remains a routing and authorization input, but the effect
+contract becomes the source of truth for what completion means.
 
 ### 5.4 One writer, many observers
 
@@ -210,8 +236,9 @@ queued
   -> observing
   -> verifying
   -> completed | completed_without_changes | failed
-                       | failed_verification | task_delivery_failed
-                       | permission_denied | timed_out | killed_zombie
+                       | failed_noop_denied | failed_verification
+                       | task_delivery_failed | permission_denied
+                       | timed_out | killed_zombie | circuit_breaker_tripped
                        | cancelled | unknown
 ```
 
@@ -224,6 +251,28 @@ The state machine is monotonic after a terminal claim. A later observer may
 append contradictory evidence and open a correction event, but it may not
 silently rewrite a terminal result. Corrections require a new `status_revision`
 and preserve the original decision, deciding agent, evidence IDs, and reason.
+
+The canonical status enum is closed. Compatibility aliases are mapped only at
+the API boundary:
+
+| Canonical status | Legacy aliases | Required proof |
+| --- | --- | --- |
+| `completed` | `succeeded`, `success` | all contract predicates verified |
+| `completed_without_changes` | `completed_noop` | explicit no-op or allowed no-change |
+| `failed_noop_denied` | `task_noop_denied` | mutating contract, no effect, no explicit no-op |
+| `failed_verification` | `verification_failed` | retry budget exhausted unresolved predicate |
+| `permission_denied` | `access_denied` | verified denial prevented the effect |
+| `circuit_breaker_tripped` | `killed_by_breaker` | breaker killed a live process |
+
+`cancelled`, `killed_zombie`, `timed_out`, `permission_denied`,
+`circuit_breaker_tripped`, and `failed_verification` are mutually exclusive.
+The oracle applies this precedence: verified contracted effect first; then an
+actual breaker kill; then explicit cancellation/timeout/zombie evidence; then
+verified permission denial; then exhausted verification failure. A cancellation
+or timeout observed after an effect landed keeps `completed` and adds warning
+evidence. `unknown` and `verifying` have a hard maximum age; a daemon restart
+or exhausted retry budget must idempotently advance them to
+`failed_verification` with a reason code.
 
 ## 8. Evidence and schema design
 
@@ -241,6 +290,9 @@ One row per job:
 | `receipt_policy` | required, optional, or waived |
 | `verification_deadline_at` | end of bounded verification window |
 | `contract_version` | schema version |
+| `started_at` | dispatch start used for causal attribution |
+| `expected_actor` | role/login permitted to create the effect |
+| `required_predicates_json` | immutable conjunction of effect predicates |
 
 ### 8.2 `job_evidence`
 
@@ -257,6 +309,12 @@ Append-only observations:
 | `payload_json` | redacted structured evidence |
 | `confidence` | high, medium, low |
 | `attempt` | verification attempt number |
+| `event_id` | source event id for deduplication |
+
+Evidence is idempotent on `(job_id, source, attempt, event_id)`. Payloads must
+include only redacted identifiers, hashes, timestamps, actor ids, and error
+classes. Clock skew is handled by recording source time and observer time;
+causal attribution never relies on an unbounded local timestamp alone.
 
 No access token, private key, or full harness transcript is stored in the
 payload. Evidence stores identifiers, exit codes, target URLs/IDs, hashes,
@@ -278,6 +336,8 @@ One current decision plus immutable revisions:
 | `decided_at` | UTC timestamp |
 | `decided_by` | oracle version / code identity |
 | `revision` | monotonic decision revision |
+| `contract_version` | contract schema used by the oracle |
+| `follow_up` | `none`, `retry_verification`, or `manual_review` |
 
 Existing `daemon_jobs.status`, `exit_code`, and `gh_write_verified` remain
 compatibility projections during migration. They are not independent writers.
@@ -310,7 +370,7 @@ Representative rules:
 | `github_review` + explicit absent review after deadline | `failed_verification`, `failed` |
 | `github_review` + GitHub API unavailable | `verifying`, `unknown`, retry |
 | `git_change` + exit 0 + verified scoped diff | `completed`, `verified` |
-| mutating task + exit 0 + no effect + no explicit no-op | `completed_without_changes` or `failed_noop_denied`, per policy |
+| mutating task + exit 0 + no effect + no explicit no-op | `failed_noop_denied` |
 | read-only report + exit 0 + report artifact verified | `completed`, `verified` |
 | receipt absent + verified remote effect | `completed`, with receipt warning evidence |
 | permission-shaped log + remote effect unknown | `verifying`, not `permission_denied` |
@@ -321,6 +381,12 @@ Representative rules:
 the contracted effect. `task_delivery_failed` is reserved for a task that was
 not accepted by the worker and has no verified effect; it is not a synonym for
 missing receipt.
+
+The truth table is executable and versioned with the oracle. A mutating task
+may return `completed_without_changes` only when its immutable contract
+explicitly permits a no-change result; otherwise the default is
+`failed_noop_denied`. No policy-level `or` may reintroduce the old ambiguous
+behavior.
 
 ## 10. Structured harness telemetry
 
@@ -393,6 +459,14 @@ the next verification attempt before a job is declared irrecoverably failed.
 The daemon and CLI paths must share this reconciler. The legacy JSON path becomes
 read-only migration input and cannot settle SQLite rows independently.
 
+The claim uses a fencing token and never performs network calls while holding
+the SQLite transaction. Verification happens outside the claim, then evidence
+and the decision are committed conditionally on that token. There is exactly
+one cost row per decision revision, written in the same transaction as the
+terminal projection. Verification retries, API calls, and evidence payload
+sizes have explicit caps to prevent a repair loop from creating unbounded cost
+or storage growth.
+
 ## 12. CLI and product surface
 
 ### `synlynk jobs`
@@ -431,10 +505,16 @@ amber or green label. A green status without a primary evidence ID is invalid.
 ### Phase 0: inventory and guardrails
 
 - Enumerate every write to terminal status, summary, `jobs.json`, and
-  `daemon_jobs`.
+  `daemon_jobs` in a checked-in manifest. Add a failing test when a new
+  terminal writer is not in that manifest or bypasses the oracle.
 - Add a test that fails if a terminal writer bypasses the oracle.
 - Add telemetry counters for status changes by writer and reason code.
-- Preserve current behavior while recording shadow oracle decisions.
+- Run the oracle in shadow mode and record disagreements, but do not treat the
+  legacy status as trustworthy for operator or policy decisions.
+- Promote only after a numeric gate: at least 100 representative jobs per
+  effect class, zero unexplained terminal-status disagreements, and zero false
+  negatives in the replay corpus. Any unexplained disagreement blocks
+  promotion and resets the window.
 
 ### Phase 1: evidence tables and shared oracle
 
@@ -454,6 +534,8 @@ amber or green label. A green status without a primary evidence ID is invalid.
 
 - Route all `requires_gh_write` contracts through the shared GitHub verifier.
 - Add bounded read-after-write retries and persist `true/false/unknown`.
+- Require causal actor/target/SHA attribution and an absence quorum before
+  recording `false` for a remote effect.
 - Make review/merge policy consume the verified projection.
 - Add fresh live dispatch trials for read-only, git-only, PR-open, review, and
   comment effects.
@@ -465,6 +547,9 @@ amber or green label. A green status without a primary evidence ID is invalid.
 - Retain parsers only for evidence extraction and backward-compatible imports.
 - Add retention/GC for logs and evidence payloads, with immutable decision rows
   retained longer than raw transcripts.
+- Cap evidence payload bytes per event, partition retention classes, and add a
+  metric for state-shard growth so the evidence ledger cannot repeat the
+  multi-gigabyte growth seen in #1831.
 
 ## 14. Verification plan
 
@@ -476,6 +561,15 @@ amber or green label. A green status without a primary evidence ID is invalid.
 - Receipt absent plus verified remote effect completes with a warning.
 - Circuit breaker only settles when a process was actually killed.
 - Terminal decision revision is monotonic and idempotent.
+- Closed status enum and compatibility aliases reject unknown statuses.
+- Weak evidence cannot promote a job above its verification confidence ceiling.
+- Causal attribution accepts only matching actor, target, time window, and SHA.
+- A single missed remote read remains `verifying`; quorum is required for
+  explicit absence.
+- A mutating no-op is `failed_noop_denied` unless the contract explicitly
+  permits no change.
+- Contract rows are immutable and conjunction predicates are evaluated as a
+  minimum, not an any-match.
 
 ### Integration tests
 
@@ -487,6 +581,8 @@ amber or green label. A green status without a primary evidence ID is invalid.
 - A real permission denial with no effect remains `permission_denied`.
 - A harness exit 0 with no effect becomes the contract-specific no-op/failure
   status, never an unqualified success.
+- Known incident fixtures (#1377, #1429, #1825, #1896, and `job-726172fb`)
+  replay to the expected status with independent GitHub ground truth.
 
 ### Live acceptance matrix
 
@@ -506,6 +602,10 @@ The release gate should report a measured `verified_status_rate` and
 `false_negative_rate` from these trials. The target is greater than 99% verified
 terminal decisions and zero unclassified terminal decisions for required GH
 effects before the product claims trustworthy cross-vendor routing.
+
+Metrics are reported per harness and per effect class. A harness unavailable
+for the review window is excluded from that denominator and called out
+explicitly; it must not be silently counted as a successful or failed sample.
 
 ## 15. Observability and success metrics
 
@@ -542,6 +642,8 @@ independent effects, not by the number of green self-reports.
 | Remote-only jobs appear to have no files | effect contracts and remote evidence are first-class |
 | Evidence volume grows like current 8.3 GB footprint | retention classes, redaction, hashes, GC, and payload size limits |
 | Oracle becomes another god function | keep pure decision logic separate from adapters, persistence, and verification clients |
+| Retry or verification races create duplicate effects/cost | fencing tokens, idempotency keys, bounded retries, and one cost row per decision revision |
+| Shadow mode leaves operators acting on false legacy status | policy and operator surfaces use the shadow oracle's provisional status during promotion |
 
 ## 17. Decision gates before implementation
 
@@ -553,6 +655,17 @@ follow-on plan. The plan must preserve the sequence:
 3. Route one effect class (GitHub review) end to end.
 4. Verify with a fresh live dispatch and independent `gh` ground truth.
 5. Expand to other effect classes and retire split-brain writers.
+
+Before implementation begins, this design must also have:
+
+- a checked-in terminal-writer manifest enforced by a failing test;
+- fixture replays for the known incidents and `job-726172fb`;
+- the closed enum, alias map, and executable truth table;
+- causal attribution/quorum rules and a hard verification maximum age;
+- the numeric shadow-mode promotion gate and rollback criteria;
+- explicit per-harness and per-effect-class reliability reporting. A harness
+  with no available credits is excluded from the denominator and remains a
+  stated coverage gap.
 
 The first success criterion is not a prettier status table. It is that the next
 real reviewer job that posts a valid GitHub review cannot be reported as a task
