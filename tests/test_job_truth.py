@@ -146,8 +146,21 @@ def test_contract_is_immutable_and_concurrent_reconciliation_has_one_revision_pe
     check.close()
 
 
-def test_terminal_writer_manifest_enforces_shared_oracle_adapters():
+def test_terminal_writer_manifest_enforces_shared_oracle_adapters(monkeypatch):
     validate_terminal_writer_manifest()
+
+    # Exercise the fail-closed path: a low-level persistence function is not
+    # an acceptable replacement for the shared oracle settlement adapter.
+    import synlynk.job_truth as job_truth
+
+    broken = dict(job_truth.TERMINAL_WRITER_MANIFEST)
+    broken["daemon_reconciliation"] = {
+        "entrypoint": "_reconcile_daemon_jobs",
+        "adapter": "_persist_daemon_job_terminal",
+    }
+    monkeypatch.setattr(job_truth, "TERMINAL_WRITER_MANIFEST", broken)
+    with pytest.raises(AssertionError, match="daemon_reconciliation"):
+        job_truth.validate_terminal_writer_manifest()
 
 
 def test_parity_fixture_matches_both_legacy_reconciliation_paths():
