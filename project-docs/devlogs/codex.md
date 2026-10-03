@@ -115,3 +115,14 @@
   evidence.
 - Focused backup verification: 5 passed, 2 skipped.
 [@codex]
+
+## 2026-10-03 — Job status truth pilot PR1 (#1933)
+
+- Added immutable versioned effect contracts, append-only evidence, and
+  revisioned terminal decisions in the canonical SQLite schema.
+- Added the pure tri-state completion oracle with closed statuses, aliases,
+  precedence rules, remote-only review regression coverage, duplicate/correction
+  tests, and compatibility routing from both reconciliation paths.
+- Verification: focused truth/oracle/reconciliation tests passed; migration,
+  cost-ledger, and dispatch suites passed; `git diff --check` passed.
+[@codex]

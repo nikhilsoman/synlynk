@@ -17,6 +17,9 @@ from synlynk.jobs import (
     STATUS_FAILED,
 )
 from synlynk.gh_verify import gh_write_verified, local_commits_pushed
+# PR1 public oracle exports.  The legacy boolean verifier below remains for
+# compatibility callers; new reconciliation code uses the pure tri-state API.
+from synlynk.job_truth import CompletionDecision, TriState, decide_job_outcome
 
 
 @dataclass
