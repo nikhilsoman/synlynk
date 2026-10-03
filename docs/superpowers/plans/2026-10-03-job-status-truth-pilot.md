@@ -170,21 +170,31 @@ projection determinism tests, and metric-label cardinality checks.
 Rollout order:
 
 1. Enable schema/evidence writes and shadow oracle for all new dispatches.
-2. Replay incident fixtures and historical sampled jobs; require zero
-   unexplained false-success promotions and documented explanations for every
-   legacy disagreement.
+2. Replay the known incident fixtures, including the `job-726172fb`
+   remote-review false-failure case, and a representative sample of at least
+   100 jobs per effect class. Require zero replay-corpus false negatives, zero
+   unexplained terminal-status disagreements, and documented explanations for
+   every expected compatibility difference.
 3. Promote GitHub review/comment effects to oracle-authoritative status for a
    bounded cohort.
-4. Require the pilot to meet the design gates: at least 99% verified-success
-   agreement on the sampled corpus, no unbounded `verifying` jobs, and no
-   terminal decision race in concurrency tests.
+4. Require the pilot to meet all promotion gates: at least 99% verified
+   terminal-decision agreement on the eligible sample, zero unclassified
+   required-GitHub decisions, no unbounded `verifying` jobs, and no terminal
+   decision race in concurrency tests. Jobs from unavailable harnesses are
+   excluded from the denominator only when their exclusion is recorded with a
+   reason and reported separately; they must not disappear from the corpus.
 5. Only then route the remaining GitHub effects and eventually other effect
    kinds through the oracle. Retire split-brain writers in a follow-up change.
 
 Operational safeguards: feature flag, migration rollback procedure, bounded
 verification deadline, alert on unknown/verifying age, and a documented
 manual reconciliation command that appends evidence rather than editing
-status directly.
+status directly. Roll back a cohort to shadow mode and block promotion when
+any unexplained disagreement, replay false negative, unclassified required
+decision, verification-age SLO breach, terminal race, or failed live trial is
+observed. The QA/merge reviewer owns the stop decision; the implementation
+owner disables the cohort flag and records the evidence revision that caused
+the rollback.
 
 ## Test and acceptance matrix
 
@@ -195,6 +205,9 @@ status directly.
 - Precedence: verified remote effect over absent receipt/no diff/exit code.
 - Unknown propagation, retry budget, hard max age, and correction revisions.
 - Concurrent reconciliation and single-writer enforcement.
+- Terminal-writer manifest enforcement: every known terminal writer must call
+  the shared decision entry point, and the test must fail when a new writer is
+  added without registration.
 
 ### Integration tests
 
@@ -208,6 +221,11 @@ status directly.
 - Circuit breaker or permission evidence cannot overwrite a verified effect.
 - Legacy text-only dispatch remains observable and is marked compatibility
   fallback.
+- Replay fixtures for the known incident corpus, including `job-726172fb`,
+  assert no false negative for a causally verified remote effect.
+- A parity fixture runs the oracle beside both existing reconciliation paths
+  and records every expected/ unexpected disagreement before end-to-end
+  routing is enabled.
 
 ### Live acceptance
 
@@ -218,8 +236,19 @@ status directly.
 - Confirm cost rows are keyed by `(job_id, decision_revision)` and that no
   cost-audit failure changes the job terminal status; detailed cost redesign
   remains #1951.
+- Assert independent ground truth for each live required GitHub effect: the
+  observed actor, target, and SHA/id must match the dispatch contract, and no
+  terminal decision may remain unclassified.
 
 ## Deliverables and sequencing
+
+Before implementation dispatch, the branch must contain the following
+checked-in gates: the terminal-writer manifest and its enforcement test; the
+known-incident replay fixtures; a closed status enum, alias map, and executable
+truth table; causal attribution/quorum rules with a hard maximum verification
+age; and per-harness/per-effect reporting. The implementation PR must also
+include the parity test against both existing reconciliation paths before
+GitHub review routing is enabled.
 
 1. This plan committed on the plan branch and linked to the approved design.
 2. Implementation PR 1: schema, contracts, evidence ledger, and oracle with
@@ -234,4 +263,3 @@ status directly.
 
 No implementation dispatch should begin until this plan is committed and the
 implementation task is attached to the ready GOVERNS story.
-
