@@ -177,7 +177,7 @@ Rollout order:
    every expected compatibility difference.
 3. Promote GitHub review/comment effects to oracle-authoritative status for a
    bounded cohort.
-4. Require the pilot to meet all promotion gates: at least 99% verified
+4. Require the pilot to meet all promotion gates: greater than 99% verified
    terminal-decision agreement on the eligible sample, zero unclassified
    required-GitHub decisions, no unbounded `verifying` jobs, and no terminal
    decision race in concurrency tests. Jobs from unavailable harnesses are
