@@ -88,6 +88,69 @@ def _job_execution_identity(conn, job_id: str) -> tuple[str | None, str | None]:
     return (row[0], row[1]) if row else (None, None)
 
 
+def _pr_closing_issue_numbers(pr_number: int) -> list[int]:
+    """Read GitHub's closing-issue references for a PR, or return none on failure."""
+    try:
+        result = subprocess.run(
+            [
+                "gh", "pr", "view", str(int(pr_number)),
+                "--json", "closingIssuesReferences",
+                "--jq", "[.closingIssuesReferences[].number]",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except (OSError, ValueError):
+        return []
+    if result.returncode != 0:
+        return []
+    try:
+        numbers = json.loads(result.stdout or "[]")
+    except (TypeError, ValueError):
+        return []
+    if not isinstance(numbers, list):
+        return []
+    return sorted({int(number) for number in numbers if str(number).isdigit()})
+
+
+def _implementation_job_from_linked_issues(conn, pr_number: int) -> tuple[str | None, str | None]:
+    """Find implementation provenance through a PR's linked story issue.
+
+    Jobs created from a story can predate the PR number, leaving the optional
+    capability-rating PR association unset. GitHub's closing-issue relation is
+    the durable link between that PR and its story. Ambiguous stories fail
+    closed; harness/model identity still comes from the job cost ledger.
+    """
+    issue_numbers = _pr_closing_issue_numbers(pr_number)
+    if not issue_numbers:
+        return None, None
+
+    clauses = []
+    params = []
+    for number in issue_numbers:
+        clauses.append("gh_issue IN (?, ?) OR story_id=?")
+        params.extend((str(number), f"#{number}", f"story-issue-{number}"))
+    stories = conn.execute(
+        "SELECT DISTINCT story_id FROM stories WHERE " + " OR ".join(f"({c})" for c in clauses),
+        params,
+    ).fetchall()
+    story_ids = [row[0] for row in stories]
+    if len(story_ids) != 1:
+        return None, None
+
+    row = conn.execute(
+        """SELECT ce.job_id, ce.story_id
+             FROM cost_entries ce
+             JOIN daemon_jobs dj ON dj.job_id=ce.job_id
+            WHERE ce.story_id=?
+              AND lower(COALESCE(dj.task, '')) NOT LIKE '%review%'
+            ORDER BY ce.id DESC LIMIT 1""",
+        (story_ids[0],),
+    ).fetchone()
+    return (row[0], row[1]) if row else (None, None)
+
+
 def _cross_harness_review_verdict(conn, pr_number: int) -> tuple[bool, str]:
     """Verify that the implementation and review jobs use different harness+models."""
     if not _cross_harness_review_required():
@@ -103,27 +166,36 @@ def _cross_harness_review_verdict(conn, pr_number: int) -> tuple[bool, str]:
             ORDER BY ce.id DESC LIMIT 1""",
         (pr_number,),
     ).fetchone()
+    implementation_job_id = implementation[0] if implementation else None
+    if not implementation_job_id:
+        implementation_job_id, _ = _implementation_job_from_linked_issues(conn, pr_number)
 
     review = conn.execute(
         """SELECT ce.job_id
              FROM cost_entries ce
              JOIN daemon_jobs dj ON dj.job_id=ce.job_id
             WHERE lower(dj.task) LIKE '%review%'
-              AND (lower(dj.task) LIKE ? OR lower(dj.task) LIKE ? OR lower(dj.task) LIKE ?)
+              AND (lower(dj.task) LIKE ? OR lower(dj.task) LIKE ? OR lower(dj.task) LIKE ?
+                   OR lower(dj.task) LIKE ?)
             ORDER BY ce.id DESC LIMIT 1""",
-        (f"%pr #{int(pr_number)}%", f"%pull request #{int(pr_number)}%", f"%pr {int(pr_number)}%"),
+        (
+            f"%pr #{int(pr_number)}%",
+            f"%pull request #{int(pr_number)}%",
+            f"%pr {int(pr_number)}%",
+            f"%/pull/{int(pr_number)}%",
+        ),
     ).fetchone()
 
-    if not implementation:
+    if not implementation_job_id:
         return False, f"no implementing job provenance found for PR #{pr_number}"
     if not review:
         return False, f"no reviewing job provenance found for PR #{pr_number}"
 
-    implementing_identity = _job_execution_identity(conn, implementation[0])
+    implementing_identity = _job_execution_identity(conn, implementation_job_id)
     reviewing_identity = _job_execution_identity(conn, review[0])
     if not all(implementing_identity + reviewing_identity):
         return False, (
-            f"incomplete harness/model provenance (implementing={implementation[0]}, "
+            f"incomplete harness/model provenance (implementing={implementation_job_id}, "
             f"reviewing={review[0]})"
         )
     if implementing_identity == reviewing_identity:
