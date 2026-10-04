@@ -4528,7 +4528,36 @@ def cmd_jobs(all_jobs: bool = False, watch: bool = False, summary: Optional[str]
                 "SELECT job_id, agent, story_id, status, enqueued_at, exit_code "
                 "FROM daemon_jobs ORDER BY enqueued_at DESC LIMIT 50"
             ).fetchall()
-        conn.close()
+
+        # #1979: the structured completion oracle is useful to operators only
+        # when its verified evidence is visible on the normal jobs surface.
+        # Keep this compact for the table, while `--json` continues to expose
+        # the full versioned projection.
+        truth_by_job = {}
+        try:
+            for truth_row in conn.execute(
+                "SELECT d.job_id, t.verification_state, t.decision_reason, "
+                "COUNT(e.evidence_id) "
+                "FROM daemon_jobs d "
+                "LEFT JOIN job_terminal_decision t ON t.job_id = d.job_id "
+                "  AND t.revision = (SELECT MAX(t2.revision) "
+                "                    FROM job_terminal_decision t2 "
+                "                    WHERE t2.job_id = d.job_id) "
+                "LEFT JOIN job_evidence e ON e.job_id = d.job_id "
+                "GROUP BY d.job_id, t.verification_state, t.decision_reason"
+            ).fetchall():
+                job_id, verification_state, reason_code, evidence_count = truth_row
+                truth_by_job[job_id] = (
+                    verification_state or "unknown",
+                    reason_code or "oracle_decision_missing",
+                    int(evidence_count or 0),
+                )
+        except (sqlite3.Error, TypeError):
+            # Older state databases may not have the truth tables yet. The
+            # legacy job table remains readable and reports unknown evidence.
+            pass
+        finally:
+            conn.close()
 
         if not rows:
             _render_legacy_jobs()
@@ -4549,10 +4578,10 @@ def cmd_jobs(all_jobs: bool = False, watch: bool = False, summary: Optional[str]
 
         header = (
             f"{'ID':14}  {'AGENT':8}  {'STORY':12}  {'STATUS':10}  "
-            f"{'CTX':6}  {'AGE':8}  {'EXIT':4}  GH-WRITE"
+            f"{'CTX':6}  {'AGE':8}  {'EXIT':4}  GH-WRITE  VERIFY   EVIDENCE"
         )
         print(f"{_BOLD}{header}{_RESET}")
-        print("  " + "─" * 72)
+        print("  " + "─" * 96)
         for row in visible:
             # Support legacy 6-col rows, extended context rows, and gh-write rows.
             if len(row) >= 9:
@@ -4578,9 +4607,15 @@ def cmd_jobs(all_jobs: bool = False, watch: bool = False, summary: Optional[str]
                 gh_write_display = "✗"
             else:
                 gh_write_display = "?"
+            verification_state, reason_code, evidence_count = truth_by_job.get(
+                job_id, ("unknown", "oracle_decision_missing", 0)
+            )
+            verify_display = verification_state[:7]
+            evidence_display = f"{evidence_count} ({reason_code[:24]})"
             print(
                 f"  {job_id:14}  {agent:8}  {sid:12}  "
-                f"{color}{status:10}{_RESET}  {ctx:6}  {age:8}  {exit_str:4}  {gh_write_display}"
+                f"{color}{status:10}{_RESET}  {ctx:6}  {age:8}  {exit_str:4}  "
+                f"{gh_write_display:^8} {verify_display:7}  {evidence_display}"
             )
 
     if watch:

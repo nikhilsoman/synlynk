@@ -1163,6 +1163,15 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
         help="Explicitly bypass harness permission prompts (unsafe; opt-in only)",
     )
     dispatch_parser.add_argument(
+        "--container-image",
+        default=None,
+        dest="container_image",
+        help=(
+            "Run this dispatch inside a container of this image. "
+            "Absent means the host subprocess. There is no default image."
+        ),
+    )
+    dispatch_parser.add_argument(
         "--base", default=None,
         help="Explicit base branch/ref to anchor the job worktree to (overrides auto-stacking)"
     )
@@ -2354,6 +2363,7 @@ def main(argv=None) -> None:
                                  context_mode=getattr(args, "context_mode", "task"),
                                  skip_preflight=getattr(args, "skip_preflight", False),
                                  skip_permissions=getattr(args, "skip_permissions", False),
+                                 container_image=getattr(args, "container_image", None),
                                  base=getattr(args, "base", None),
                                  grants=getattr(args, "grant", []),
                                  revokes=getattr(args, "revoke", []),
