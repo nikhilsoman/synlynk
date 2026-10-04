@@ -146,7 +146,20 @@ surfaced by each wave's own jobs — not a fixed queue decided up front.
 | job-69ba7fa6 | #1974 (Track 2) | **Open PR #2020, review pending** | `unpushed_branch` label WRONG — verified pushed, clean 4-file/104-line diff. |
 | job-45c98165 | #1969 (Track 3) | **Open PR #2021, review pending** | `unpushed_branch` label this time was **correct** — `git ls-remote` confirmed the branch genuinely never reached origin, unlike the other 4 Codex jobs. Local commit was sound (4 files, 133/7 lines, matched the task) — Claude pushed it directly and opened the PR as a deploy action rather than re-dispatching. |
 | job-b1e83605 | #1978 (Track 4) | **Open PR #2022, review pending** | `unpushed_branch` label was WRONG — verified pushed. Diff touches 14 files (README/CHANGELOG/logo SVGs/website pages/CLI wizard strings) — confirmed this is legitimate positioning-copy scope per the issue, not scope creep (#1963's precedent made this worth double-checking). Claude pushed it directly and opened the PR. |
-| job-0f409e7d / dc0c0318 / 9550f92d / f32b385f / a78bf313 / 579024a4 | review+merge PRs #2017/#2018/#2019/#2020/#2021/#2022 | Running | Re-dispatched as `claude`/qa-role jobs (cross-harness+model vs. Codex authorship) for all 6 open Wave 1 PRs, per Hardened PR Review Policy. The first attempt (job-95c665cb, PR #2017 only) genuinely failed; these 6 supersede it. |
+| job-0f409e7d / dc0c0318 / 9550f92d / f32b385f / a78bf313 / 579024a4 | review+merge PRs #2017/#2018/#2019/#2020/#2021/#2022 | **Resolved** — see outcomes below | Re-dispatched as `claude`/qa-role jobs (cross-harness+model vs. Codex authorship) for all 6 open Wave 1 PRs, per Hardened PR Review Policy. The first attempt (job-95c665cb, PR #2017 only) genuinely failed; these 6 superseded it. |
+
+**Final Wave 1 PR outcomes (verified directly via `gh pr view`, not job labels):**
+
+| PR | Issue | Final state | Notes |
+|---|---|---|---|
+| #2017 | #1973 | **MERGED** (11:46 UTC) | README stale-count CHANGES_REQUESTED review was genuine/correct; fixed (3783→3788), re-reviewed APPROVED, merged squash once CLEAN. |
+| #2018 | #1941 | **MERGED** (pre-existing from earlier wave processing) | |
+| #2022 | #1978 | **MERGED** (11:34 UTC) | Pushed+opened directly by Claude after job-45c98165/b1e83605-class push gap; review APPROVED, merged. |
+| #2019 | #1963 | APPROVED, CI pending (macOS) at last check | `gh pr update-branch` run once for a genuine BEHIND state (1 of 2 allowed cycles used). job-9550f92d showed `TASK_DELIVERY_FAILED` ("no corroborating git activity") despite having posted a real `APPROVED` review — **new false-negative subtype**: review-only tasks don't touch the worktree by design, so the receipt-protocol's git-activity check misfires on them specifically. Feeds #2015. |
+| #2020 | #1974 | APPROVED, CI pending (macOS) at last check | `gh pr update-branch` run once (1 of 2 cycles). job-dc0c0318 (re-review, same PR) stalled 20+min with zero log output/zero exit — redundant once the earlier job's APPROVE already posted; left running, not blocking since merge authority doesn't require that specific job to finish. |
+| #2021 | #1969 | APPROVED, CI pending (macOS) at last check | `gh pr update-branch` run **twice** (both allowed cycles used — BEHIND reappeared after #2018/#2022 merged main further forward). If still BEHIND/DIRTY after this, escalate per policy rather than a 3rd cycle. |
+
+**Also discovered and resolved this pass:** PR #2014 (`fix(ci): scope release-docs to release events`, the actual #2012 fix) was APPROVED and BLOCKED on the same macOS-pending pattern — confirmed its Linux checks pass, not failing on the release-docs bug itself. Escalated to front of queue since merging it clears the root cause behind #2021/#2019/#2020's earlier BLOCKED states.
 
 ### New evidence this wave feeds back into prioritization
 
