@@ -33,7 +33,10 @@ _ORG_ROLE_TO_BASELINE_ROLE = {
     "synlynk-bot": "builder",
 }
 
-_GH_WRITE_HARNESS_PRIORITY = ("claude", "agy")
+# grok added 2026-10-04 (gh:#2034): live TC-9 probe confirms gh-write
+# capability post-LIVE-13 fix; listed last pending >=5 empirical
+# gh-write-task samples per the Empirical Capability Assessment Policy.
+_GH_WRITE_HARNESS_PRIORITY = ("claude", "agy", "grok")
 _STARTUP_FAILOVER_ORDER = ("codex", "agy", "claude")
 _CODEX_REVIEW_WRITABLE_ROOTS = "sandbox_workspace_write.writable_roots=[]"
 
