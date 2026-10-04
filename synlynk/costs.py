@@ -12,13 +12,14 @@ from synlynk._lazy import pkg as _pkg
 
 
 class _TokenCounts(object):
-    __slots__ = ("input_tokens", "output_tokens", "cache_read_tokens", "basis")
+    __slots__ = ("input_tokens", "output_tokens", "cache_read_tokens", "basis", "turns")
 
-    def __init__(self, input_tokens, output_tokens, cache_read_tokens, basis="none"):
+    def __init__(self, input_tokens, output_tokens, cache_read_tokens, basis="none", turns=None):
         self.input_tokens = input_tokens
         self.output_tokens = output_tokens
         self.cache_read_tokens = cache_read_tokens
         self.basis = basis
+        self.turns = list(turns or [])
 
     def __iter__(self):
         yield self.input_tokens
@@ -45,6 +46,53 @@ class DispatchTelemetry:
     cache_read_tokens: int = 0
     model: Optional[str] = None
     error: Optional[str] = None
+    turns: list = None
+
+
+def parse_dispatch_turns(output_text: str, agent: str = "") -> list:
+    """Return per-turn usage deltas from a structured harness stream.
+
+    Codex emits ``turn.completed`` usage cumulatively.  The previous parser
+    retained only the final event, which made a repeated full-context retry
+    indistinguishable from an ordinary multi-turn task.  Store both the
+    cumulative counters and the delta charged by each turn so the cost ledger
+    can show where an inflated invocation spent its tokens.
+    """
+    if agent != "codex":
+        return []
+    turns = []
+    previous = {"input_tokens": 0, "output_tokens": 0, "cache_read_tokens": 0}
+    for line in (output_text or "").splitlines():
+        try:
+            event = json.loads(line.strip())
+        except (TypeError, ValueError):
+            continue
+        if not isinstance(event, dict) or event.get("type") != "turn.completed":
+            continue
+        usage = event.get("usage")
+        if not isinstance(usage, dict):
+            continue
+        try:
+            cumulative = {
+                "input_tokens": int(usage["input_tokens"]),
+                "output_tokens": int(usage["output_tokens"]) + int(usage.get("reasoning_output_tokens", 0)),
+                "cache_read_tokens": int(usage.get("cached_input_tokens", 0)),
+            }
+        except (KeyError, TypeError, ValueError):
+            continue
+        delta = {
+            key: value - previous[key] if value >= previous[key] else value
+            for key, value in cumulative.items()
+        }
+        turns.append({
+            "turn": len(turns) + 1,
+            **delta,
+            "cumulative_input_tokens": cumulative["input_tokens"],
+            "cumulative_output_tokens": cumulative["output_tokens"],
+            "cumulative_cache_read_tokens": cumulative["cache_read_tokens"],
+        })
+        previous = cumulative
+    return turns
 
 
 def parse_dispatch_telemetry(output_text: str, agent: str = "") -> Optional[DispatchTelemetry]:
@@ -111,6 +159,7 @@ def parse_dispatch_telemetry(output_text: str, agent: str = "") -> Optional[Disp
         except (TypeError, ValueError):
             pass
     telemetry.model = terminal.get("model") or terminal.get("model_version")
+    telemetry.turns = parse_dispatch_turns(output_text, agent=agent)
     return telemetry
 
 
@@ -140,7 +189,10 @@ def _extract_codex_structured(output_text: str) -> Optional[_TokenCounts]:
         cache_read_tokens = int(usage.get("cached_input_tokens", 0))
     except (KeyError, TypeError, ValueError):
         return None
-    return _TokenCounts(in_tokens, out_tokens, cache_read_tokens, "structured_output")
+    return _TokenCounts(
+        in_tokens, out_tokens, cache_read_tokens, "structured_output",
+        turns=parse_dispatch_turns(output_text, agent="codex"),
+    )
 
 
 def _extract_claude_structured(output_text: str) -> Optional[_TokenCounts]:
@@ -939,7 +991,8 @@ def update_costs(command: str, in_tokens: int, out_tokens: int, duration: float,
                  cache_read_tokens=None, model_version=None, story_id=None,
                  epic_id=None, phase_id=None, agent=None, basis="none",
                  job_id=None, discipline=None, phase=None,
-                 dispatch_context=None, harness=None, agent_role=None) -> None:
+                 dispatch_context=None, harness=None, agent_role=None,
+                 turn_breakdown=None) -> None:
     """Resolves a provenance tier and writes exactly one cost_entries row via
     the _insert_cost_row chokepoint.
 
@@ -1012,6 +1065,7 @@ def update_costs(command: str, in_tokens: int, out_tokens: int, duration: float,
             dispatch_context=dispatch_context,
             harness=harness or agent_name,
             agent_role=agent_role,
+            turn_breakdown=turn_breakdown,
         )
         _pkg("_generate_costs_md")()
         _pkg("_dr_sync")("costs.md")
@@ -1206,4 +1260,3 @@ def cmd_cost_billing(args=None) -> None:
             print(f"- {agent}: {mode}")
             
     print(f"\nTotal Monthly Subscription Fees: ${total_fee:.2f}")
-

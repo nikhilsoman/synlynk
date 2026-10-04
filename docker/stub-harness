@@ -1,0 +1,9 @@
+#!/bin/sh
+printf '%s\n' 'Input tokens: 11' 'Output tokens: 7'
+if [ -w . ]; then
+    printf 'ok\n' > stub-marker
+fi
+if [ -n "${STUB_EXIT:-}" ]; then
+    exit "$STUB_EXIT"
+fi
+exit 0

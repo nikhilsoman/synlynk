@@ -278,7 +278,7 @@ def cmd_watch(args) -> None:
         sys.stdout.flush()
 
 _TOP_LEVEL_COMMANDS = (
-    "init", "upgrade", "uninstall", "join", "start", "home", "testbed", "tool",
+    "help", "init", "upgrade", "uninstall", "join", "start", "home", "testbed", "tool",
     "pack", "connector", "impact", "mesh", "spike", "team", "decide", "heal",
     "audit-docs", "goal", "governs", "local", "models", "media", "scan", "workspace",
     "migrate", "rollback", "probe", "doctor", "worktree", "tui", "notify", "exit",
@@ -335,7 +335,12 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     from synlynk._constants import CORE_FLEET
 
     parser = argparse.ArgumentParser(
-        description="synlynk: The Universal Context Switchboard for AI Devs"
+        description="synlynk: The Universal Context Switchboard for AI Devs",
+        epilog=(
+            "Core commands: init, dispatch, status, jobs, decide, pr check, exec, doctor.\n"
+            "Use `synlynk help --all` or `synlynk help <group>` for taxonomy-backed help."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     from synlynk._constants import VERSION, HARNESS_CAPABILITY_BASELINES
 
@@ -343,6 +348,12 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command")
     if selected_command is not None:
         subparsers = _LazySubparsers(subparsers, selected_command)
+
+    help_parser = subparsers.add_parser("help", help="Show tiered command help from the command taxonomy")
+    help_parser._synlynk_skip_taxonomy = True
+    from synlynk.taxonomy import HELP_GROUPS
+    help_parser.add_argument("group", nargs="?", choices=HELP_GROUPS)
+    help_parser.add_argument("--all", action="store_true", help="Show every taxonomy command")
 
     init_parser = subparsers.add_parser("init", help="Initialize synlynk in a repository")
     init_parser.add_argument("--yes", "--non-interactive", action="store_true",
@@ -1149,6 +1160,15 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
         help="Explicitly bypass harness permission prompts (unsafe; opt-in only)",
     )
     dispatch_parser.add_argument(
+        "--container-image",
+        default=None,
+        dest="container_image",
+        help=(
+            "Run this dispatch inside a container of this image. "
+            "Absent means the host subprocess. There is no default image."
+        ),
+    )
+    dispatch_parser.add_argument(
         "--base", default=None,
         help="Explicit base branch/ref to anchor the job worktree to (overrides auto-stacking)"
     )
@@ -1899,6 +1919,12 @@ def main(argv=None) -> None:
     cli_tokens = list(argv) if argv is not None else sys.argv[1:]
     fast_entrypoint = _package._FAST_CLI
     selected_command = _command_from_argv(cli_tokens)
+    if cli_tokens and cli_tokens[0] == "help":
+        parser = build_parser(selected_command="help" if fast_entrypoint else None)
+        args = parser.parse_args(cli_tokens)
+        from synlynk.taxonomy import format_tiered_help
+        print(format_tiered_help(args.group, include_all=args.all))
+        return
     if _package._FAST_CLI:
         # Keep the common metadata/error paths free of the legacy import graph.
         # A real command is parsed lazily after those imports, using only its
@@ -2334,6 +2360,7 @@ def main(argv=None) -> None:
                                  context_mode=getattr(args, "context_mode", "task"),
                                  skip_preflight=getattr(args, "skip_preflight", False),
                                  skip_permissions=getattr(args, "skip_permissions", False),
+                                 container_image=getattr(args, "container_image", None),
                                  base=getattr(args, "base", None),
                                  grants=getattr(args, "grant", []),
                                  revokes=getattr(args, "revoke", []),
@@ -2347,6 +2374,15 @@ def main(argv=None) -> None:
                 if remediation:
                     print(f"  {remediation}")
                 sys.exit(1)
+            # Keep caller-supplied flags separate from harness-generated flags.
+            # This is the baseline metric needed before the surface changes.
+            from synlynk.baseline import dispatch_invocation_event
+            from synlynk.sentinel import log_telemetry_event
+            log_telemetry_event(dispatch_invocation_event(
+                cli_tokens,
+                args.agent or known_agents[0],
+                job.get("id") if isinstance(job, dict) else None,
+            ))
             print(f"  {_GREEN}▶{_RESET} [{job['id']}] {job.get('agent', args.agent or known_agents[0])} dispatched  PID {job['pid']}")
             print(f"  Log:  {_CYAN}synlynk logs --job {job['id']}{_RESET}")
             if job.get("fence"):

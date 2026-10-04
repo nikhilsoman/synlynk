@@ -1,20 +1,20 @@
 <p align="center">
-  <img src="docs/img/logo/lockup.svg" alt="synlynk — keep your AI tools in sync" height="80">
+  <img src="docs/img/logo/lockup.svg" alt="synlynk — neutral control plane for coding tasks" height="80">
 </p>
 
-<p align="center"><strong>Keep your AI tools in sync with your project.</strong></p>
+<p align="center"><strong>Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result.</strong></p>
 <p align="center"><a href="https://synlynk.com">synlynk.com</a></p>
 
 <p align="center">
-  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/tests-3783%20collected-brightgreen" alt="Tests"></a>
+  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/tests-3806%20collected-brightgreen" alt="Tests"></a>
   <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/version-0.25.0-blue" alt="Version"></a>
   <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/license-MIT-green" alt="License"></a>
   <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/python-3.9%2B-blue" alt="Python"></a>
 </p>
 
-synlynk is a Python CLI that turns your terminal into a hybrid workgroup — one human, multiple AI harnesses, shared project state. It injects scoped project context into every dispatch, routes tasks to the best available harness using a live capability ledger, and tracks costs and hallucination loops. A shared `project-docs/` directory keeps every tool in sync: Claude Code, Codex, and AGY all read the same context, decisions, and progress.
+Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result. The Python CLI injects scoped project context into every dispatch, routes tasks to the best available harness using a live capability ledger, and tracks costs and hallucination loops. A shared `project-docs/` directory keeps every tool in sync: Claude Code, Codex, and AGY all read the same context, decisions, and progress.
 
-**v0.25.0:** Frontier QA acceptance and multi-node soak testbed, cross-workspace Vizor background daemon, defensive worktree sandbox migration resilience, and concurrent schema state isolation, with 3783 tests collected.
+**v0.25.0:** Frontier QA acceptance and multi-node soak testbed, cross-workspace Vizor background daemon, defensive worktree sandbox migration resilience, and concurrent schema state isolation, with 3806 tests collected.
 
 ## Documentation
 

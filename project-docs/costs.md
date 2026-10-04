@@ -530,3 +530,5 @@
 | agy | $20.00 | $0.8525 | $3.9092 | $3.0567 |
 | grok | $30.00 | $0.9654 | $0.7590 | $-0.2065 |
 | **Total** | **$90.00** | **$29.2839** | **$668.3363** | **$639.0524** |
+
+| 2026-10-04 | codex | o4-mini | — | — | $0.0000 [sub] (API: $0.0000) | estimated_manual | gh:1979 | Verified #1922 user-visible evidence, audited #1921 GC, added jobs-table evidence output, filed #2025 |

@@ -53,3 +53,26 @@ jobs:
           tags: |
             ghcr.io/nikhilsoman/synlynk-sovereign:${{ github.ref_name }}
             ghcr.io/nikhilsoman/synlynk-sovereign:latest
+
+  runner-smoke:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build runner image
+        run: docker build -f docker/Dockerfile.runner -t synlynk-runner:test .
+
+      - name: Run stub-harness against a mounted worktree
+        run: |
+          mkdir -p "$RUNNER_TEMP/work"
+          docker run --rm -v "$RUNNER_TEMP/work:/work" -w /work synlynk-runner:test stub-harness
+          test -f "$RUNNER_TEMP/work/stub-marker"
+          set +e
+          docker run --rm -e STUB_EXIT=3 synlynk-runner:test stub-harness >"$RUNNER_TEMP/stub-out"
+          code=$?
+          set -e
+          test "$code" -eq 3
+          grep -q "Input tokens: 11" "$RUNNER_TEMP/stub-out"
+          grep -q "Output tokens: 7" "$RUNNER_TEMP/stub-out"
