@@ -3,7 +3,7 @@ title: "gh:#1925 Part 1 — Making Grok's Permission Bypass Explicit, Not Implic
 date: 2026-10-04
 series: "Building the OS for Multi-Agent Development"
 post: 246
-pr: "TBD"
+pr: "2002"
 issue: "1925"
 status: published
 author: "synlynk team"
