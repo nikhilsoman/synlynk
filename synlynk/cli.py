@@ -2364,6 +2364,15 @@ def main(argv=None) -> None:
                 if remediation:
                     print(f"  {remediation}")
                 sys.exit(1)
+            # Keep caller-supplied flags separate from harness-generated flags.
+            # This is the baseline metric needed before the surface changes.
+            from synlynk.baseline import dispatch_invocation_event
+            from synlynk.sentinel import log_telemetry_event
+            log_telemetry_event(dispatch_invocation_event(
+                cli_tokens,
+                args.agent or known_agents[0],
+                job.get("id") if isinstance(job, dict) else None,
+            ))
             print(f"  {_GREEN}▶{_RESET} [{job['id']}] {job.get('agent', args.agent or known_agents[0])} dispatched  PID {job['pid']}")
             print(f"  Log:  {_CYAN}synlynk logs --job {job['id']}{_RESET}")
             if job.get("fence"):
