@@ -14,8 +14,8 @@ DEFAULT_REGISTRY: Dict[str, Any] = {
             "api_key_env": "OPENROUTER_API_KEY",
             "models": [],
             "note": (
-                "Dispatch integration ships in v0.26.0. Use synlynk gateway "
-                "probe to test connectivity."
+                "Set dispatch_active to true to enable OpenRouter dispatch. "
+                "The models list provides fallback model IDs in attempt order."
             ),
         }
     },

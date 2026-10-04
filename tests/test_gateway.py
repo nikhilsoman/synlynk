@@ -117,3 +117,65 @@ class TestGatewayProbe(unittest.TestCase):
                 0,
             )
         self.assertEqual(urlopen.call_count, 1)
+
+
+class TestOpenRouterDispatch(unittest.TestCase):
+    def _write_registry(self, directory, dispatch_active=True, models=None):
+        path = os.path.join(directory, "registry.json")
+        with open(path, "w", encoding="utf-8") as registry_file:
+            json.dump({"gateways": {"openrouter": {
+                "enabled": True,
+                "dispatch_active": dispatch_active,
+                "base_url": "https://openrouter.ai/api/v1",
+                "api_key_env": "OPENROUTER_API_KEY",
+                "models": models or [],
+            }}}, registry_file)
+        return path
+
+    @staticmethod
+    def _response(payload):
+        response = MagicMock()
+        response.read.return_value = json.dumps(payload).encode()
+        response.__enter__ = lambda value: value
+        response.__exit__ = MagicMock(return_value=False)
+        return response
+
+    def test_successful_mocked_dispatch(self):
+        from synlynk.gateway import dispatch_openrouter
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = self._write_registry(directory)
+            with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key"}):
+                with patch("urllib.request.urlopen", return_value=self._response({"choices": []})) as urlopen:
+                    result = dispatch_openrouter("provider/model-a", [{"role": "user", "content": "hi"}], path)
+        self.assertEqual(result, {"choices": []})
+        request = urlopen.call_args.args[0]
+        self.assertEqual(request.full_url, "https://openrouter.ai/api/v1/chat/completions")
+        self.assertEqual(json.loads(request.data)["model"], "provider/model-a")
+        self.assertEqual(urlopen.call_args.kwargs["timeout"], 30)
+
+    def test_falls_back_to_configured_model_after_primary_failure(self):
+        from synlynk.gateway import dispatch_openrouter
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = self._write_registry(directory, models=["provider/model-b", "provider/model-c"])
+            with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key"}):
+                with patch("urllib.request.urlopen", side_effect=[OSError("primary down"), self._response({"model": "provider/model-b"})]) as urlopen:
+                    result = dispatch_openrouter("provider/model-a", [{"role": "user", "content": "hi"}], path)
+        self.assertEqual(result, {"model": "provider/model-b"})
+        attempted_models = [json.loads(call.args[0].data)["model"] for call in urlopen.call_args_list]
+        self.assertEqual(attempted_models, ["provider/model-a", "provider/model-b"])
+
+    def test_probe_only_registry_stays_probe_only(self):
+        from synlynk.gateway import cmd_gateway_probe, dispatch_openrouter
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = self._write_registry(directory, dispatch_active=False)
+            with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key"}):
+                with patch("urllib.request.urlopen", return_value=self._response({"data": [{"id": "model-a"}]})) as urlopen:
+                    with patch("builtins.print") as printer:
+                        self.assertEqual(cmd_gateway_probe("openrouter", path), 0)
+                with self.assertRaisesRegex(RuntimeError, "dispatch is not active"):
+                    dispatch_openrouter("provider/model-a", [{"role": "user", "content": "hi"}], path)
+        self.assertEqual(urlopen.call_count, 1)
+        self.assertTrue(any("dispatch integration not yet active" in str(call) for call in printer.call_args_list))

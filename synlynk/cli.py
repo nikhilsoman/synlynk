@@ -567,6 +567,15 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
         "--config", default=".synlynk/registry.json",
         help="Path to registry.json",
     )
+    dispatch_gateway_parser = gateway_sub.add_parser(
+        "dispatch", help="Send a prompt through OpenRouter"
+    )
+    dispatch_gateway_parser.add_argument("--model", required=True, help="Primary OpenRouter model ID")
+    dispatch_gateway_parser.add_argument("--prompt", required=True, help="User prompt to send")
+    dispatch_gateway_parser.add_argument(
+        "--config", default=".synlynk/registry.json",
+        help="Path to registry.json",
+    )
 
     models_parser = subparsers.add_parser("models", help="Inspect and discover the model registry")
     models_sub = models_parser.add_subparsers(dest="models_action")
@@ -2793,6 +2802,9 @@ def main(argv=None) -> None:
         if args.gateway_cmd == "probe":
             from synlynk.gateway import cmd_gateway_probe
             sys.exit(cmd_gateway_probe(gateway=args.gateway, config_path=args.config))
+        elif args.gateway_cmd == "dispatch":
+            from synlynk.gateway import cmd_gateway_dispatch
+            sys.exit(cmd_gateway_dispatch(args.model, args.prompt, config_path=args.config))
         else:
             help_parsers.get("gateway", parser).print_help()
     elif args.command == "models":
