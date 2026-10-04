@@ -43,6 +43,39 @@ def test_check_scope_compliance_empty_scope_paths_is_always_compliant():
     assert _check_scope_compliance(["synlynk/jobs.py"], None) is True
 
 
+def test_sentinel_cotrip_forces_scope_review_regardless_of_job_status(monkeypatch):
+    import synlynk.jobs as jobs_mod
+
+    calls = []
+
+    def fake_check_token_bloat(**kwargs):
+        calls.append(kwargs)
+        return [
+            {"code": "TOKEN_BLOAT", "severity": "CRITICAL"},
+            {"code": "COST_INFLATION", "severity": "CRITICAL", "actionable": True},
+        ]
+
+    monkeypatch.setattr(
+        jobs_mod,
+        "_pkg",
+        lambda name, default=None: fake_check_token_bloat if name == "check_token_bloat" else default,
+    )
+    job = {"id": "job-sentinel-cotrip", "agent": "codex", "status": "completed"}
+
+    assert jobs_mod._force_scope_review_for_sentinel_cotrip(
+        job,
+        in_tokens=7_000_000,
+        out_tokens=231_830,
+        cost_usd=21.93,
+        files_touched=14,
+        sentinel_path=".synlynk/sentinel.md",
+    ) is True
+    assert job["status"] == "SCOPE_REVIEW_REQUIRED"
+    assert job["scope_review_required"] is True
+    assert job["scope_review_reason"] == "TOKEN_BLOAT+COST_INFLATION"
+    assert calls[0]["job_id"] == "job-sentinel-cotrip"
+
+
 def test_check_task_receipt_ok_when_marker_is_first_line():
     import synlynk.jobs as jobs_mod
 
