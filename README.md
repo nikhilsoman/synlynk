@@ -133,4 +133,3 @@ Commands are grouped by where you'll reach for them in a typical project lifecyc
 Full command reference: [docs/reference/commands.md](docs/reference/commands.md)
 
 <!-- commands:end -->
-<!-- commands:end -->
