@@ -1947,6 +1947,23 @@ def test_grok_permission_flags_empty_permissions_never_raises():
     assert _grok_permission_flags(None, skip_permissions=False) == []
 
 
+def test_dispatch_flags_for_agent_grok_adds_always_approve_only_when_skipped():
+    from synlynk.dispatch import _dispatch_flags_for_agent
+
+    assert "--always-approve" not in _dispatch_flags_for_agent("grok")
+    assert "--always-approve" not in _dispatch_flags_for_agent("grok", skip_permissions=False)
+    assert "--always-approve" in _dispatch_flags_for_agent("grok", skip_permissions=True)
+
+
+def test_dispatch_flags_for_agent_grok_never_adds_dangerously_skip_permissions():
+    from synlynk.dispatch import _dispatch_flags_for_agent
+
+    # --dangerously-skip-permissions is in Grok's invalid_flags; the skip gate
+    # must add --always-approve for Grok, never this flag.
+    flags = _dispatch_flags_for_agent("grok", skip_permissions=True)
+    assert "--dangerously-skip-permissions" not in flags
+
+
 def test_grok_dispatch_deduplicates_boolean_permission_and_baseline_flags(project_dir, monkeypatch):
     import synlynk.dispatch as dispatch_mod
 
@@ -1961,7 +1978,10 @@ def test_grok_dispatch_deduplicates_boolean_permission_and_baseline_flags(projec
         return FakeProc()
 
     monkeypatch.setattr(dispatch_mod.subprocess, "Popen", fake_popen)
-    monkeypatch.setattr(dispatch_mod, "_dispatch_flags_for_agent", lambda agent: ["--always-approve"])
+    monkeypatch.setattr(
+        dispatch_mod, "_dispatch_flags_for_agent",
+        lambda agent, skip_permissions=False: ["--always-approve"],
+    )
     monkeypatch.setattr(dispatch_mod, "_preflight_dispatch", lambda *a, **kw: {"passed": True})
 
     dispatch_mod.dispatch_agent(

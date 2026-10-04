@@ -440,6 +440,8 @@ def _dispatch_flags_for_agent(agent: str, skip_permissions: bool = False) -> lis
         flags = flags + _local_dispatch_model_flags()
     if skip_permissions and agent in {"claude", "agy"}:
         flags.append("--dangerously-skip-permissions")
+    if skip_permissions and agent == "grok" and "--always-approve" not in flags:
+        flags.append("--always-approve")
     return flags
 
 
