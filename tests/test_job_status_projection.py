@@ -8,6 +8,7 @@ from synlynk.job_status_projection import (
     job_truth_metrics,
     project_job_status,
     promotion_gate,
+    record_shadow_comparison,
     rollout_mode,
 )
 
@@ -46,6 +47,48 @@ def test_aliases_are_boundary_only_and_false_failure_has_reason_code():
     result = compare_legacy_status("task_delivery_failed", "completed")
     assert result["disagreement"] is True
     assert result["reason_code"] == "false_failure"
+
+
+def test_terminal_settle_records_shadow_without_projection_or_json(project_dir):
+    import synlynk
+    from synlynk.jobs import _settle_daemon_job_terminal
+
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, enqueued_at) "
+        "VALUES (?, ?, ?, ?, ?)",
+        ("job-settle-shadow", "codex", "task", "running", "2026-10-04T10:00:00"),
+    )
+    conn.commit()
+
+    assert _settle_daemon_job_terminal(
+        conn,
+        "job-settle-shadow",
+        "completed",
+        0,
+        "2026-10-04T10:01:00",
+    ) is True
+
+    row = conn.execute(
+        "SELECT job_id, legacy_status, oracle_status, reason_code "
+        "FROM job_status_shadow WHERE job_id=?",
+        ("job-settle-shadow",),
+    ).fetchone()
+    assert row == ("job-settle-shadow", "completed", "unknown", "status_disagreement")
+
+    # Re-entry replaces the sample rather than creating duplicates or leaving
+    # an older comparison behind.
+    record_shadow_comparison(conn, "job-settle-shadow")
+    assert conn.execute(
+        "SELECT COUNT(*) FROM job_status_shadow WHERE job_id=?",
+        ("job-settle-shadow",),
+    ).fetchone()[0] == 1
+    assert conn.execute(
+        "SELECT legacy_status, oracle_status, reason_code "
+        "FROM job_status_shadow WHERE job_id=?",
+        ("job-settle-shadow",),
+    ).fetchone() == ("completed", "unknown", "status_disagreement")
+    conn.close()
 
 
 def test_projection_exposes_contract_predicates_evidence_revision_and_corrections():

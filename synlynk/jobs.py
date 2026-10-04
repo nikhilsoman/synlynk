@@ -2557,6 +2557,14 @@ def _settle_daemon_job_terminal(
         terminal_claim_token=terminal_claim_token,
     )
     conn.commit()
+    if settled:
+        try:
+            from synlynk.job_status_projection import record_shadow_comparison
+            record_shadow_comparison(conn, job_id)
+        except (sqlite3.OperationalError, ValueError):
+            # Unmigrated fixture databases are still supported by the legacy
+            # terminal path; the next migration creates the shadow table.
+            conn.rollback()
     if settled and release_reservation:
         _release_daemon_job_reservation(conn, job_id)
     return settled
