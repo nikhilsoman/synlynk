@@ -1,14 +1,12 @@
-"""Registry-driven connectivity probes for external model gateways.
-
-Gateway dispatch is intentionally out of scope for this preview.  The probe
-only validates that a configured provider can be reached and reports a small
-model roster when the provider exposes one.
-"""
+"""Registry-driven OpenRouter dispatch and connectivity probes."""
 
 import json
 import os
 import urllib.error
 import urllib.request
+
+
+GATEWAY_TIMEOUT_SECONDS = 30
 
 
 def _read_gateway_config(config_path: str) -> dict:
@@ -84,3 +82,81 @@ def cmd_gateway_probe(gateway: str = None, config_path: str = ".synlynk/registry
         if result != 0:
             exit_code = result
     return exit_code
+
+
+def dispatch_openrouter(
+    model: str,
+    messages: list,
+    config_path: str = ".synlynk/registry.json",
+    timeout: int = GATEWAY_TIMEOUT_SECONDS,
+) -> dict:
+    """Send a chat completion through OpenRouter, trying configured models in order.
+
+    The requested model is always attempted first. Distinct IDs in the gateway
+    ``models`` list follow it and act as the fallback chain.
+    """
+    gateways = _read_gateway_config(config_path)
+    cfg = gateways.get("openrouter", {})
+    if not cfg.get("enabled", False):
+        raise RuntimeError("OpenRouter gateway is disabled")
+    if not cfg.get("dispatch_active", False):
+        raise RuntimeError("OpenRouter dispatch is not active; use 'synlynk gateway probe' to check connectivity")
+
+    api_key_env = cfg.get("api_key_env", "")
+    api_key = os.environ.get(api_key_env) if api_key_env else None
+    if not api_key:
+        raise RuntimeError(f"{api_key_env or 'OpenRouter API key'} not set in environment")
+    base_url = cfg.get("base_url")
+    if not base_url:
+        raise RuntimeError("OpenRouter base_url is not configured")
+    if not isinstance(messages, list) or not messages:
+        raise ValueError("messages must be a non-empty JSON array")
+
+    models = [model]
+    for fallback in cfg.get("models", []):
+        if isinstance(fallback, str) and fallback and fallback not in models:
+            models.append(fallback)
+
+    errors = []
+    for candidate in models:
+        payload = json.dumps({"model": candidate, "messages": messages}).encode("utf-8")
+        request = urllib.request.Request(
+            f"{base_url.rstrip('/')}/chat/completions",
+            data=payload,
+            method="POST",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "https://synlynk.com",
+                "X-Title": "synlynk",
+            },
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                result = json.loads(response.read().decode("utf-8"))
+            if not isinstance(result, dict):
+                raise ValueError("OpenRouter returned a non-object response")
+            return result
+        except (urllib.error.URLError, urllib.error.HTTPError, OSError, ValueError) as exc:
+            errors.append(f"{candidate}: {exc}")
+
+    raise RuntimeError("OpenRouter dispatch failed for all configured models: " + "; ".join(errors))
+
+
+def cmd_gateway_dispatch(
+    model: str,
+    prompt: str,
+    config_path: str = ".synlynk/registry.json",
+) -> int:
+    """Dispatch a user prompt to OpenRouter and print the JSON response."""
+    try:
+        response = dispatch_openrouter(
+            model,
+            [{"role": "user", "content": prompt}],
+            config_path=config_path,
+        )
+    except (RuntimeError, ValueError) as exc:
+        print(f"  ✗ openrouter: {exc}")
+        return 1
+    print(json.dumps(response, indent=2))
+    return 0

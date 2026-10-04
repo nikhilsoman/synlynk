@@ -496,6 +496,9 @@ COMMAND_TAXONOMY = [
     {"command": "gateway probe", "governs_stage": "sustain", "maturity_tier": 2, "prominence": "primary",
      "orientation_gateway": False, "audience": "human",
      "trigger_phrases": ["probe gateway connectivity", "test openrouter gateway"], "hook_event": None},
+    {"command": "gateway dispatch", "governs_stage": "execute", "maturity_tier": 2, "prominence": "primary",
+     "orientation_gateway": False, "audience": "human",
+     "trigger_phrases": ["dispatch through gateway", "run openrouter dispatch"], "hook_event": None},
 ]
 
 
