@@ -697,15 +697,33 @@ _GROK_PERMISSION_RULES = {
 }
 
 
-def _grok_permission_flags(permissions: list) -> list:
+def _grok_permission_flags(permissions: list, skip_permissions: bool = False) -> list:
     """Translate resolved permission strings into Grok CLI permission flags.
 
-    For headless execution (#1732, #1734), passes `--always-approve` and
-    `--permission-mode bypassPermissions` to prevent tool cancellations.
+    Grok's CLI has no working non-bypass headless mode (LIVE-13:
+    docs/rca/2026-09-22-LIVE-13-grok-headless-dispatch-permission-bypass.md) —
+    under --permission-mode dontAsk it silently cancels tool calls while
+    reporting success. For headless execution (#1732, #1734), passing
+    `--always-approve` and `--permission-mode bypassPermissions` avoids that.
+
+    This is now gated behind `skip_permissions` (gh:#1925 part 1) rather than
+    unconditional: when permissions are requested and the caller has not
+    opted into the bypass, raise instead of silently granting it.
+    dispatch_agent() auto-opts-in for Grok specifically so existing callers
+    are unaffected — see
+    docs/superpowers/specs/2026-10-04-grok-failclosed-permission-enforcement-design.md.
     """
     permission_set = {perm for perm in (permissions or []) if perm}
     if not permission_set:
         return []
+
+    if not skip_permissions:
+        raise PermissionEnforcementError(
+            f"grok has no scoped-permission headless mode for requested permissions "
+            f"{sorted(permission_set)} (LIVE-13: Grok's --permission-mode dontAsk silently "
+            "cancels tool calls). Pass skip_permissions=True to proceed with "
+            "--always-approve --permission-mode bypassPermissions instead."
+        )
 
     return ["--always-approve", "--permission-mode", "bypassPermissions"]
 
@@ -783,7 +801,7 @@ def _permissions_to_flags(
             flags += _codex_network_flags(read_only=read_only and not has_write)
         return flags
     if agent == "grok":
-        return _grok_permission_flags(permissions)
+        return _grok_permission_flags(permissions, skip_permissions=skip_permissions)
     if agent == "local":
         if permissions:
             raise PermissionEnforcementError(

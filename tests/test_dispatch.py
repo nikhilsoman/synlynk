@@ -1918,9 +1918,9 @@ def test_dispatch_agent_requires_gh_write_raises_when_no_capable_agent(project_d
 def test_grok_permission_flags_emits_always_approve_when_shell_or_tests_granted():
     from synlynk.dispatch import _grok_permission_flags
 
-    shell_flags = _grok_permission_flags(["read:*", "run:shell"])
-    test_flags = _grok_permission_flags(["read:*", "run:tests"])
-    write_flags = _grok_permission_flags(["read:*", "write:src/"])
+    shell_flags = _grok_permission_flags(["read:*", "run:shell"], skip_permissions=True)
+    test_flags = _grok_permission_flags(["read:*", "run:tests"], skip_permissions=True)
+    write_flags = _grok_permission_flags(["read:*", "write:src/"], skip_permissions=True)
 
     assert shell_flags == ["--always-approve", "--permission-mode", "bypassPermissions"]
     assert test_flags == ["--always-approve", "--permission-mode", "bypassPermissions"]
@@ -1929,6 +1929,22 @@ def test_grok_permission_flags_emits_always_approve_when_shell_or_tests_granted(
     assert "dontAsk" not in test_flags
     assert "dontAsk" not in write_flags
     assert _grok_permission_flags([]) == []
+    assert _grok_permission_flags([], skip_permissions=False) == []
+
+
+def test_grok_permission_flags_raises_when_not_skipped():
+    from synlynk.dispatch import _grok_permission_flags, PermissionEnforcementError
+
+    with pytest.raises(PermissionEnforcementError, match="grok"):
+        _grok_permission_flags(["run:shell"], skip_permissions=False)
+
+
+def test_grok_permission_flags_empty_permissions_never_raises():
+    from synlynk.dispatch import _grok_permission_flags
+
+    # No permissions requested means nothing to enforce, regardless of the flag.
+    assert _grok_permission_flags([], skip_permissions=False) == []
+    assert _grok_permission_flags(None, skip_permissions=False) == []
 
 
 def test_grok_dispatch_deduplicates_boolean_permission_and_baseline_flags(project_dir, monkeypatch):
