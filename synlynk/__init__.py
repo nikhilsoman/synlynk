@@ -2033,7 +2033,7 @@ def cmd_run_trio(task: str, story_id: str = None) -> None:
     """
     agents = [a for a in discover_agents() if a["functional"]]
     if not agents:
-        print("No functional agents found. Run `synlynk init` to set up your Hybrid Workgroup.")
+        print("No functional agents found. Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result. Run `synlynk init` to configure an agent.")
         return
     if len(agents) < 3:
         print(f"  {_YELLOW}Only {len(agents)} agent(s) available "
@@ -3044,13 +3044,13 @@ def init(force: bool = False, agents: list = None,
     non_functional = [a for a in discovered if not a["functional"]]
 
     if functional:
-        print(f"\n  {_BOLD}{_GREEN}✨ Your Hybrid Workgroup is ready:{_RESET}")
+        print(f"\n  {_BOLD}{_GREEN}✨ Synlynk is ready to route coding tasks:{_RESET}")
         for ag in functional:
             roles = ", ".join(ag["roles"])
             print(f"    {_GREEN}✓ {ag['name']:10}{_RESET} {ag['version']}  "
                   f"roles: {roles}")
     else:
-        print(f"  {_YELLOW}No agents detected. Install Claude, Gemini, or Codex to form your Hybrid Workgroup.{_RESET}")
+        print(f"  {_YELLOW}No agents detected. Install Claude, Gemini, or Codex to route coding tasks.{_RESET}")
 
     if non_functional:
         print(f"\n  {_DIM}Found but not configured (run --version failed):{_RESET}")
@@ -3245,7 +3245,7 @@ def init(force: bool = False, agents: list = None,
     if auto_defaults:
         print(f"  Auto-selected defaults: enrichment=no, email=empty, industry={industry}")
 
-    print(f"\n{_BOLD}{_GREEN}✓ synlynk initialised — your Hybrid Workgroup is ready.{_RESET}")
+    print(f"\n{_BOLD}{_GREEN}✓ synlynk initialised — Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result.{_RESET}")
     if functional:
         agent_names = " + ".join(a["name"] for a in functional)
         print(f"\n  {_BOLD}✨ Magic Moment 2 — dispatch agents now:{_RESET}")
