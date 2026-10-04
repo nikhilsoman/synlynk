@@ -253,3 +253,25 @@
   per-harness responses is exactly where information silently drops; worth a direct check
   against raw inputs before treating a synthesis as final, not just before publishing it.
 [@claude]
+
+## 2026-10-04 — gh:#1925 part 1 shipped (PR #2002), session close before deep cleanup pass
+
+Completed the Grok fail-closed permission enforcement plan (6 tasks, implementation dispatched
+to Codex per role split, reviewed cross-harness per the new Hardened PR Review Policy). PR #2002
+merged (`0a1ed3df`). Full detail already in [[project-synlynk]] memory and PR body; not re-derived
+here.
+
+Session-close note: ending this session cleanly here — no implementation mid-flight, gh:#1925
+part 1 fully merged/verified/worktree-cleaned. Flagged to Nikhil, and carrying into the next
+session, two housekeeping items neither touched nor caused by this session's own work:
+1. Main repo checkout (not a worktree) has pre-existing dirty/staged state: `docs/blog/243-pr1967-claude-local-adapter-port.md`
+   staged, `docs/blog/README.md`/`project-docs/todo.md` modified, two untracked
+   `project-docs/decisions/2026-10-03-review-pr-1949-...` files.
+2. `git worktree list` shows 40+ accumulated worktrees across `/private/tmp/synlynk-*`,
+   `worktrees/*`, `.claude/worktrees/*` spanning many unrelated branches/jobs — needs the full
+   Worktree Hygiene Protocol audit (cross-ref every branch against `gh pr list --state all` +
+   `git merge-base --is-ancestor`, safe/unsafe/needs-review breakdown) before any bulk delete.
+
+Next session: run that cleanup pass first, then resume roadmap work (gh:#1925 part 2 —
+containerized execution — is the next queued item per the blog post's stated goalpost).
+[@claude]
