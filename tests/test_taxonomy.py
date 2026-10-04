@@ -8,6 +8,8 @@ from synlynk.taxonomy import (
     COMMAND_TAXONOMY,
     entries_for_tier,
     entries_up_to_tier,
+    entries_for_help,
+    format_tiered_help,
     get_entry,
     iter_leaf_commands,
 )
@@ -68,6 +70,20 @@ def test_entries_up_to_tier_includes_lower_tiers_only():
     assert "dispatch" not in commands
     assert "status" in commands
     assert "relay start" not in commands
+
+
+def test_tiered_help_uses_core_taxonomy_entries():
+    commands = {entry["command"] for entry in entries_for_help()}
+    assert commands == {"init", "dispatch", "status", "jobs", "decide", "pr check", "exec", "doctor"}
+    assert "workflow" in format_tiered_help("workflow").lower()
+    assert "dispatch" not in {entry["command"] for entry in entries_for_help("workflow")}
+
+
+def test_tiered_help_all_includes_every_taxonomy_entry():
+    rendered = format_tiered_help(include_all=True)
+    assert "All commands" in rendered
+    for entry in COMMAND_TAXONOMY:
+        assert entry["command"] in rendered
 
 
 def test_taxonomy_matches_real_cli_surface():

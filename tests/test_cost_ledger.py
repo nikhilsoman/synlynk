@@ -27,6 +27,40 @@ def test_cost_entries_has_provenance_columns(project_dir, monkeypatch):
     assert "actual_usd" in cols
     assert "payment_mode" in cols
     assert "dispatch_context" in cols
+    assert "turn_usage_json" in cols
+
+
+def test_parse_dispatch_turns_exposes_cumulative_and_incremental_usage():
+    from synlynk.costs import parse_dispatch_turns
+
+    output = (
+        '{"type":"turn.completed","usage":{"input_tokens":100,"output_tokens":10,'
+        '"cached_input_tokens":80}}\n'
+        '{"type":"turn.completed","usage":{"input_tokens":260,"output_tokens":25,'
+        '"cached_input_tokens":200,"reasoning_output_tokens":5}}\n'
+    )
+    turns = parse_dispatch_turns(output, agent="codex")
+
+    assert turns == [
+        {
+            "turn": 1,
+            "input_tokens": 100,
+            "output_tokens": 10,
+            "cache_read_tokens": 80,
+            "cumulative_input_tokens": 100,
+            "cumulative_output_tokens": 10,
+            "cumulative_cache_read_tokens": 80,
+        },
+        {
+            "turn": 2,
+            "input_tokens": 160,
+            "output_tokens": 20,
+            "cache_read_tokens": 120,
+            "cumulative_input_tokens": 260,
+            "cumulative_output_tokens": 30,
+            "cumulative_cache_read_tokens": 200,
+        },
+    ]
 
 
 def test_cost_source_not_null_no_default(project_dir, monkeypatch):
@@ -122,6 +156,30 @@ def test_insert_cost_row_writes_a_row(project_dir, monkeypatch):
     row = conn.execute("SELECT agent, cost_source FROM cost_entries").fetchone()
     conn.close()
     assert row == ("claude", "actual")
+
+
+def test_insert_cost_row_persists_turn_breakdown(project_dir, monkeypatch):
+    import synlynk
+    from synlynk.db import _insert_cost_row
+
+    monkeypatch.setattr(synlynk, "DB_PATH", os.path.join(project_dir, "state.db"))
+    turns = [{"turn": 1, "input_tokens": 100, "output_tokens": 10}]
+    _insert_cost_row(
+        session_date="2026-10-04",
+        agent="codex",
+        model="gpt-5-codex",
+        input_tokens=100,
+        output_tokens=10,
+        cost_source="actual",
+        job_id="job-turns",
+        turn_breakdown=turns,
+    )
+    conn = synlynk._get_db()
+    value = conn.execute(
+        "SELECT turn_usage_json FROM cost_entries WHERE job_id='job-turns'"
+    ).fetchone()[0]
+    conn.close()
+    assert json.loads(value) == turns
 
 
 def test_insert_cost_row_idempotent_on_job_id(project_dir, monkeypatch):

@@ -2,7 +2,7 @@
 title: "gh:#1925 Part 2 — An opt-in container for an untrusted harness"
 date: 2026-10-04
 series: "Building the OS for Multi-Agent Development"
-post: 247
+post: 248
 pr: "2013"
 issue: "1925"
 status: published
