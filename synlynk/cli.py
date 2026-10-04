@@ -278,7 +278,7 @@ def cmd_watch(args) -> None:
         sys.stdout.flush()
 
 _TOP_LEVEL_COMMANDS = (
-    "help", "init", "upgrade", "uninstall", "join", "start", "home", "testbed", "tool",
+    "help", "init", "quickstart", "upgrade", "uninstall", "join", "start", "home", "testbed", "tool",
     "pack", "connector", "impact", "mesh", "spike", "team", "decide", "heal",
     "audit-docs", "goal", "governs", "local", "models", "media", "scan", "workspace",
     "migrate", "rollback", "probe", "doctor", "worktree", "tui", "notify", "exit",
@@ -419,6 +419,9 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
                              help="Opaque membership invite verified by the project minter")
     subparsers.add_parser(
         "start", help="Cold-start entry point: detect new vs existing project and guide setup"
+    )
+    subparsers.add_parser(
+        "quickstart", help="Detect harnesses, initialize the workspace, and dispatch a first task"
     )
     home_parser = subparsers.add_parser("home", help="Display or switch the active home harness")
     home_parser.add_argument("harness", nargs="?", choices=["claude", "agy", "codex", "grok", "local", "muse"], help="Harness to set as home")
@@ -2764,9 +2767,9 @@ def main(argv=None) -> None:
             sys.exit(code)
         else:
             help_parsers.get("ops", parser).print_help()
-    elif args.command == "start":
-        from synlynk.coldstart import cmd_start
-        cmd_start()
+    elif args.command in {"quickstart", "start"}:
+        from synlynk.coldstart import cmd_quickstart
+        cmd_quickstart()
     elif args.command == "join":
         cmd_join(getattr(args, "invite", None))
     elif args.command == "team":
