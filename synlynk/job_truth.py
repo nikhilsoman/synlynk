@@ -7,9 +7,10 @@ observations, but only the functions here derive a terminal decision.
 from __future__ import annotations
 
 import json
+import hashlib
 import sqlite3
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Iterable, Mapping
@@ -28,6 +29,12 @@ CANONICAL_STATUSES = frozenset({
     "cancelled", "killed_zombie", "timed_out", "task_delivery_failed",
     "failed", "unknown", "verifying",
 })
+
+# `unknown` and `verifying` are non-terminal projections even though they are
+# persisted as decision revisions. Keep this explicit so a new status cannot
+# silently enter or leave the cost-audit contract.
+TERMINAL_STATUSES = CANONICAL_STATUSES - {"unknown", "verifying"}
+TERMINAL_EVENT_SCHEMA = "job-terminal-decision.v1"
 
 STATUS_ALIASES = {
     "succeeded": "completed", "success": "completed",
@@ -309,6 +316,16 @@ def record_evidence_and_reconcile(
             decision.evidence_ids[-1] if decision.evidence_ids else evidence_id,
             json.dumps(list(decision.evidence_ids)), decision.reason_code, _now(), decided_by,
             revision, contract_row.get("contract_version", 1), decision.required_follow_up))
+        if decision.status in TERMINAL_STATUSES:
+            _append_terminal_outbox(
+                conn, job_id=job_id, revision=revision, status=decision.status,
+                decision_reason=decision.reason_code,
+                decided_at=conn.execute(
+                    "SELECT decided_at FROM job_terminal_decision WHERE job_id=? AND revision=?",
+                    (job_id, revision),
+                ).fetchone()[0],
+                effect_contract_version=contract_row.get("contract_version", 1),
+            )
         # Compatibility projection only: the decision ledger remains authoritative.
         if update_compatibility and conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='daemon_jobs'").fetchone():
             conn.execute("UPDATE daemon_jobs SET status=?, exit_code=COALESCE(?, exit_code), completed_at=COALESCE(completed_at, ?) WHERE job_id=?", (decision.status, evidence.get("exit_code"), _now(), job_id))
@@ -321,6 +338,102 @@ def record_evidence_and_reconcile(
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _append_terminal_outbox(
+    conn: sqlite3.Connection,
+    *,
+    job_id: str,
+    revision: int,
+    status: str,
+    decision_reason: str,
+    decided_at: str,
+    effect_contract_version: int,
+) -> None:
+    """Append a cost-audit input derived from the canonical persisted decision."""
+    harness = role = None
+    has_jobs = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='daemon_jobs'"
+    ).fetchone()
+    if has_jobs:
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)")}
+        selected = [name for name in ("harness", "agent", "role") if name in columns]
+        if selected:
+            row = conn.execute(
+                f"SELECT {', '.join(selected)} FROM daemon_jobs WHERE job_id=?", (job_id,)
+            ).fetchone()
+            if row:
+                values = dict(zip(selected, row))
+                harness = values.get("harness") or values.get("agent")
+                role = values.get("role")
+    payload = {
+        "schema_version": TERMINAL_EVENT_SCHEMA,
+        "job_id": job_id,
+        "decision_revision": int(revision),
+        "decision_status": status,
+        "decision_reason": decision_reason,
+        "decided_at": decided_at,
+        "effect_contract_version": int(effect_contract_version),
+        "harness": harness,
+        "role": role,
+    }
+    decision_facts = {
+        "job_id": job_id,
+        "decision_revision": int(revision),
+        "decision_status": status,
+        "decision_reason": decision_reason,
+        "decided_at": decided_at,
+        "effect_contract_version": int(effect_contract_version),
+    }
+    payload["source_decision_digest"] = hashlib.sha256(
+        json.dumps(decision_facts, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    event_id = "decision-" + hashlib.sha256(
+        f"{TERMINAL_EVENT_SCHEMA}:{job_id}:{revision}".encode("utf-8")
+    ).hexdigest()
+    conn.execute(
+        """INSERT OR IGNORE INTO job_terminal_outbox
+           (event_id, job_id, decision_revision, schema_version, payload_json,
+            payload_digest, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+        (event_id, job_id, revision, TERMINAL_EVENT_SCHEMA, canonical, digest, decided_at),
+    )
+
+
+def ensure_terminal_outbox(conn: sqlite3.Connection) -> int:
+    """Backfill missing terminal decision events without changing decisions."""
+    rows = conn.execute(
+        """SELECT job_id, revision, status, decision_reason, decided_at, contract_version
+           FROM job_terminal_decision WHERE status NOT IN ('unknown', 'verifying')
+           ORDER BY decided_at, job_id, revision"""
+    ).fetchall()
+    inserted = 0
+    own_transaction = not conn.in_transaction
+    if own_transaction:
+        conn.execute("BEGIN IMMEDIATE")
+    try:
+        for job_id, revision, status, reason, decided_at, contract_version in rows:
+            before = conn.execute(
+                "SELECT 1 FROM job_terminal_outbox WHERE job_id=? AND decision_revision=?",
+                (job_id, revision),
+            ).fetchone()
+            if before:
+                continue
+            _append_terminal_outbox(
+                conn, job_id=job_id, revision=revision, status=status,
+                decision_reason=reason, decided_at=decided_at,
+                effect_contract_version=contract_version,
+            )
+            inserted += 1
+        if own_transaction:
+            conn.commit()
+    except Exception:
+        if own_transaction:
+            conn.rollback()
+        raise
+    return inserted
 
 
 def _contract_fingerprint(value: Mapping[str, Any]) -> str:

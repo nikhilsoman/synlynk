@@ -35,6 +35,11 @@ CREATE TABLE job_terminal_decision (
  decided_at TEXT NOT NULL, decided_by TEXT NOT NULL, revision INTEGER NOT NULL,
  contract_version INTEGER NOT NULL, follow_up TEXT NOT NULL, PRIMARY KEY(job_id, revision)
 );
+CREATE TABLE job_terminal_outbox (
+ event_id TEXT PRIMARY KEY, job_id TEXT NOT NULL, decision_revision INTEGER NOT NULL,
+ schema_version TEXT NOT NULL, payload_json TEXT NOT NULL, payload_digest TEXT NOT NULL,
+ created_at TEXT NOT NULL, UNIQUE(job_id, decision_revision)
+);
 """
 
 
@@ -132,9 +137,49 @@ def test_duplicate_evidence_is_idempotent_and_correction_is_revision():
     first = record_evidence_and_reconcile(conn, contract["job_id"], evidence, contract=contract)
     second = record_evidence_and_reconcile(conn, contract["job_id"], evidence, contract=contract)
     assert first == second
-    record_evidence_and_reconcile(conn, contract["job_id"], {"kind": "github_effect", "result": "true", "source": "gh", "attempt": 2, "event_id": "read-2", "causal_match": True})
+    record_evidence_and_reconcile(conn, contract["job_id"], {
+        "kind": "github_effect", "result": "true", "source": "gh", "attempt": 2,
+        "event_id": "read-2", "causal_match": True, "target_match": True,
+        "actor_match": True, "sha_match": True,
+    })
     assert conn.execute("select count(*) from job_evidence").fetchone()[0] == 2
     assert conn.execute("select max(revision) from job_terminal_decision").fetchone()[0] == 2
+    assert conn.execute("select count(*) from job_terminal_outbox").fetchone()[0] == 1
+    event = conn.execute(
+        "select schema_version, decision_revision, payload_json from job_terminal_outbox"
+    ).fetchone()
+    assert event[0] == "job-terminal-decision.v1"
+    assert event[1] == 2
+    assert '"decision_status":"completed"' in event[2]
+
+
+def test_nonterminal_decision_does_not_enter_cost_audit_outbox():
+    conn = db()
+    contract = review_contract()
+    record_evidence_and_reconcile(
+        conn, contract["job_id"],
+        {"kind": "github_effect", "result": "unknown", "source": "gh", "event_id": "read-unknown"},
+        contract=contract,
+    )
+    assert conn.execute("select status from job_terminal_decision").fetchone()[0] == "verifying"
+    assert conn.execute("select count(*) from job_terminal_outbox").fetchone()[0] == 0
+
+
+def test_outbox_failure_rolls_back_terminal_decision_transaction():
+    conn = db()
+    contract = review_contract()
+    conn.execute(
+        """CREATE TRIGGER fail_terminal_outbox BEFORE INSERT ON job_terminal_outbox
+           BEGIN SELECT RAISE(ABORT, 'outbox unavailable'); END"""
+    )
+    with pytest.raises(sqlite3.IntegrityError, match="outbox unavailable"):
+        record_evidence_and_reconcile(conn, contract["job_id"], {
+            "kind": "github_effect", "result": "true", "source": "gh",
+            "event_id": "verified", "causal_match": True, "target_match": True,
+            "actor_match": True, "sha_match": True,
+        }, contract=contract)
+    assert conn.execute("SELECT COUNT(*) FROM job_terminal_decision").fetchone()[0] == 0
+    assert conn.execute("SELECT COUNT(*) FROM job_evidence").fetchone()[0] == 0
 
 
 def test_contract_is_immutable_and_concurrent_reconciliation_has_one_revision_per_observation(tmp_path):
