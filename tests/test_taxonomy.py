@@ -74,7 +74,7 @@ def test_entries_up_to_tier_includes_lower_tiers_only():
 
 def test_tiered_help_uses_core_taxonomy_entries():
     commands = {entry["command"] for entry in entries_for_help()}
-    assert commands == {"init", "dispatch", "status", "jobs", "decide", "pr check", "exec", "doctor"}
+    assert commands == {"init", "quickstart", "dispatch", "status", "jobs", "decide", "pr check", "exec", "doctor"}
     assert "workflow" in format_tiered_help("workflow").lower()
     assert "dispatch" not in {entry["command"] for entry in entries_for_help("workflow")}
 

@@ -224,6 +224,62 @@ def cmd_start() -> None:
         _run_existing_project_flow(".")
 
 
+def _quickstart_dispatch_verified(job: Any) -> bool:
+    """Verify that dispatch returned a durable-looking first-job receipt."""
+    if not isinstance(job, dict) or not job.get("id"):
+        return False
+    if job.get("status") in {"blocked", "failed", "failed_unverified"}:
+        return False
+    # A PID is present for newly spawned jobs.  Tests and alternate dispatch
+    # backends may return a terminal status instead, which is also a valid
+    # receipt as long as the dispatch supplied an id.
+    return bool(job.get("pid") or job.get("status") or job.get("worktree_path"))
+
+
+def cmd_quickstart() -> dict:
+    """Run the one-question onboarding path and verify its first dispatch.
+
+    Harness discovery and init are deliberately non-interactive.  The only
+    prompt is the task to dispatch, so a new user reaches a useful result
+    without navigating the legacy cold-start questionnaire.
+    """
+    from synlynk import discover_agents, dispatch_agent, init
+    from synlynk.instructions import _load_instruction_manifest
+
+    installed = [agent for agent in discover_agents() if agent.get("functional")]
+    names = [agent["name"] for agent in installed]
+    if installed:
+        print("Installed harnesses: " + ", ".join(names))
+    else:
+        print("No installed harnesses detected. Install Claude, Codex, Agy, or Grok, then run `synlynk quickstart` again.")
+        return {"status": "blocked", "reason": "no installed harnesses", "harnesses": []}
+
+    # init() owns generation and tracking of CLAUDE.md, GEMINI.md, AGENTS.md,
+    # GROK.md, and any detected extended instruction targets.
+    init(agents=names, non_interactive=True, quiet=True)
+    task = input("What should your first dispatch work on? ").strip()
+    task = task or "Inspect this repository and suggest the smallest useful first change."
+
+    harness = installed[0]["name"]
+    job = dispatch_agent(harness, task, context_mode="task", role="dev")
+    manifest = _load_instruction_manifest()
+    manifest_paths = sorted(manifest)
+    verified = _quickstart_dispatch_verified(job)
+    if verified:
+        print(f"First dispatch verified: {job['id']} via {harness}")
+    else:
+        print("First dispatch could not be verified; run `synlynk jobs` for details.")
+    if manifest_paths:
+        print("Instruction manifest: .synlynk/instructions.json (" + ", ".join(manifest_paths) + ")")
+    return {
+        "status": "verified" if verified else "unverified",
+        "harness": harness,
+        "task": task,
+        "job": job,
+        "manifest": manifest_paths,
+    }
+
+
 def run_ftue_journey(repo_root: str = ".", interactive: bool = True, dry_run: bool = False) -> dict:
     """Run end-to-end 5-stage FTUE onboarding journey:
     1. Surface detection & rule binding

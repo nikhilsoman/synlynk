@@ -12,7 +12,9 @@ from synlynk.release_readme import validate_readme_for_release
 def _write_synced_readme(root, version):
     commands_md = root / "docs" / "reference" / "commands.md"
     commands_md.parent.mkdir(parents=True, exist_ok=True)
-    commands_md.write_text("# Command Reference\n")
+    from scripts.generate_command_docs import render_reference_doc
+
+    commands_md.write_text(render_reference_doc())
     (root / "README.md").write_text(
         f"""<p align="center">
   <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/version-{version}-blue" alt="Version"></a>
@@ -55,6 +57,36 @@ python3 bin/synlynk.py --help
     install_findings = [item for item in findings if item.check == "install"]
     assert install_findings
     assert "pipx" in install_findings[0].message
+
+
+def test_release_docs_check_rejects_stale_generated_command_reference(tmp_path):
+    from synlynk.release_readme import validate_readme_for_release
+
+    _write_synced_readme(tmp_path, "0.14.0")
+    (tmp_path / "docs" / "reference" / "commands.md").write_text(
+        "# Command Reference\n\nThis was edited by hand.\n"
+    )
+
+    findings = validate_readme_for_release(
+        str(tmp_path), "0.14.0", collected_test_count=0
+    )
+
+    messages = [item.message for item in findings if item.check == "commands"]
+    assert any("docs/reference/commands.md is stale" in message for message in messages)
+
+
+def test_release_docs_check_rejects_missing_generated_command_reference(tmp_path):
+    from synlynk.release_readme import validate_readme_for_release
+
+    _write_synced_readme(tmp_path, "0.14.0")
+    (tmp_path / "docs" / "reference" / "commands.md").unlink()
+
+    findings = validate_readme_for_release(
+        str(tmp_path), "0.14.0", collected_test_count=0
+    )
+
+    messages = [item.message for item in findings if item.check == "commands"]
+    assert any("generated command reference is missing" in message for message in messages)
 
 
 def test_cmd_release_refuses_when_role_not_authorized(tmp_path, monkeypatch):
