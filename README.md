@@ -6,7 +6,7 @@
 <p align="center"><a href="https://synlynk.com">synlynk.com</a></p>
 
 <p align="center">
-  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/tests-3789%20collected-brightgreen" alt="Tests"></a>
+  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/tests-3797%20collected-brightgreen" alt="Tests"></a>
   <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/version-0.25.0-blue" alt="Version"></a>
   <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/license-MIT-green" alt="License"></a>
   <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/python-3.9%2B-blue" alt="Python"></a>
@@ -119,6 +119,7 @@ Commands are grouped by where you'll reach for them in a typical project lifecyc
 - `synlynk home`
 - `synlynk init`
 - `synlynk start`
+- `synlynk quickstart`
 - `synlynk brainstorm`
 - `synlynk brief`
 - `synlynk scan`
@@ -130,5 +131,4 @@ Commands are grouped by where you'll reach for them in a typical project lifecyc
 
 Full command reference: [docs/reference/commands.md](docs/reference/commands.md)
 
-<!-- commands:end -->
 <!-- commands:end -->
