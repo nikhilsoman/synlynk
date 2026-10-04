@@ -3,8 +3,26 @@ from synlynk.harness_adapters.grok import GrokAdapter
 
 def test_grok_translate_permissions_nonempty_grants_always_approve():
     adapter = GrokAdapter()
-    flags = adapter.translate_permissions(["write:repo"], read_only=False)
+    flags = adapter.translate_permissions(["write:repo"], read_only=False, skip_permissions=True)
     assert flags == ["--always-approve", "--permission-mode", "bypassPermissions"]
+
+
+def test_grok_translate_permissions_raises_when_not_skipped():
+    import pytest
+    from synlynk.harness_adapters.base import PermissionEnforcementError
+
+    adapter = GrokAdapter()
+    with pytest.raises(PermissionEnforcementError):
+        adapter.translate_permissions(["write:repo"], read_only=False, skip_permissions=False)
+
+
+def test_grok_translate_permissions_raises_by_default_when_skip_permissions_omitted():
+    import pytest
+    from synlynk.harness_adapters.base import PermissionEnforcementError
+
+    adapter = GrokAdapter()
+    with pytest.raises(PermissionEnforcementError):
+        adapter.translate_permissions(["write:repo"], read_only=False)
 
 
 def test_grok_translate_permissions_empty_grants_no_flags():

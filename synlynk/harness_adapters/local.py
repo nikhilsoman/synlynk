@@ -1,16 +1,14 @@
 """Local (aider/oMLX) HarnessAdapter (gh:#1924)."""
 from typing import Optional
 
-from synlynk.harness_adapters.base import DispatchEvent, FailureKind
+from synlynk.harness_adapters.base import DispatchEvent, FailureKind, PermissionEnforcementError
 from synlynk.harness_adapters.request import DispatchRequest
 
 
-class PermissionEnforcementError(RuntimeError):
-    pass
-
-
 class LocalAdapter:
-    def translate_permissions(self, permissions: list, read_only: bool) -> list:
+    def translate_permissions(
+        self, permissions: list, read_only: bool, skip_permissions: bool = False
+    ) -> list:
         if permissions:
             raise PermissionEnforcementError(
                 f"local (aider) has no mechanism to enforce permissions {sorted(permissions)}; "

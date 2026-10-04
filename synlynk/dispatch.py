@@ -19,6 +19,7 @@ from typing import List, Optional, Sequence, Tuple
 
 from synlynk._constants import HARNESS_CAPABILITY_BASELINES, _CODEX_NETWORK_PERMISSION
 from synlynk._lazy import pkg as _pkg
+from synlynk.harness_adapters.base import PermissionEnforcementError
 
 _ORG_ROLE_TO_BASELINE_ROLE = {
     "dev": "builder",
@@ -440,6 +441,8 @@ def _dispatch_flags_for_agent(agent: str, skip_permissions: bool = False) -> lis
         flags = flags + _local_dispatch_model_flags()
     if skip_permissions and agent in {"claude", "agy"}:
         flags.append("--dangerously-skip-permissions")
+    if skip_permissions and agent == "grok" and "--always-approve" not in flags:
+        flags.append("--always-approve")
     return flags
 
 
@@ -697,21 +700,35 @@ _GROK_PERMISSION_RULES = {
 }
 
 
-def _grok_permission_flags(permissions: list) -> list:
+def _grok_permission_flags(permissions: list, skip_permissions: bool = False) -> list:
     """Translate resolved permission strings into Grok CLI permission flags.
 
-    For headless execution (#1732, #1734), passes `--always-approve` and
-    `--permission-mode bypassPermissions` to prevent tool cancellations.
+    Grok's CLI has no working non-bypass headless mode (LIVE-13:
+    docs/rca/2026-09-22-LIVE-13-grok-headless-dispatch-permission-bypass.md) —
+    under --permission-mode dontAsk it silently cancels tool calls while
+    reporting success. For headless execution (#1732, #1734), passing
+    `--always-approve` and `--permission-mode bypassPermissions` avoids that.
+
+    This is now gated behind `skip_permissions` (gh:#1925 part 1) rather than
+    unconditional: when permissions are requested and the caller has not
+    opted into the bypass, raise instead of silently granting it.
+    dispatch_agent() auto-opts-in for Grok specifically so existing callers
+    are unaffected — see
+    docs/superpowers/specs/2026-10-04-grok-failclosed-permission-enforcement-design.md.
     """
     permission_set = {perm for perm in (permissions or []) if perm}
     if not permission_set:
         return []
 
+    if not skip_permissions:
+        raise PermissionEnforcementError(
+            f"grok has no scoped-permission headless mode for requested permissions "
+            f"{sorted(permission_set)} (LIVE-13: Grok's --permission-mode dontAsk silently "
+            "cancels tool calls). Pass skip_permissions=True to proceed with "
+            "--always-approve --permission-mode bypassPermissions instead."
+        )
+
     return ["--always-approve", "--permission-mode", "bypassPermissions"]
-
-
-class PermissionEnforcementError(RuntimeError):
-    """Raised when an agent has no real mechanism to enforce requested permissions."""
 
 
 def _merge_codex_permission_flags(flags: list, permission_flags: list) -> list:
@@ -783,7 +800,7 @@ def _permissions_to_flags(
             flags += _codex_network_flags(read_only=read_only and not has_write)
         return flags
     if agent == "grok":
-        return _grok_permission_flags(permissions)
+        return _grok_permission_flags(permissions, skip_permissions=skip_permissions)
     if agent == "local":
         if permissions:
             raise PermissionEnforcementError(
@@ -3182,6 +3199,16 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
 
     if agent not in baselines_map:
         raise ValueError(f"Unknown agent: '{agent}'. Known: {list(baselines_map)}")
+
+    if agent == "grok" and not skip_permissions:
+        # Grok's CLI has no working non-bypass headless mode (LIVE-13:
+        # docs/rca/2026-09-22-LIVE-13-grok-headless-dispatch-permission-bypass.md).
+        # Auto-opt-in here (rather than requiring every caller to pass
+        # --dangerously-skip-permissions) so existing Grok dispatch workflows
+        # keep working unchanged after gh:#1925 part 1 made the bypass gated
+        # instead of unconditional. See
+        # docs/superpowers/specs/2026-10-04-grok-failclosed-permission-enforcement-design.md.
+        skip_permissions = True
 
     # A capability gate may reroute the harness (for example, Grok write
     # denial or GitHub-write routing). Re-resolve against the final harness so

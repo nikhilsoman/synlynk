@@ -34,3 +34,4 @@ class DispatchRequest:
     lambda_: float = 1.0
     permissions: list = field(default_factory=list)
     read_only: bool = False
+    skip_permissions: bool = False
