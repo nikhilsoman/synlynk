@@ -3513,3 +3513,47 @@ def test_detect_drift_between_two_versions_of_a_roadmap_doc():
     assert any("Capability sweep" in phase for phase in report["changed_phases"])
     assert any("Worktree hygiene" in phase for phase in report["added_phases"])
     assert any("Cost ledger" in phase for phase in report["added_phases"])
+
+
+def test_quickstart_and_start_are_parser_aliases():
+    from synlynk.cli import build_parser
+
+    parser = build_parser()
+    assert parser.parse_args(["quickstart"]).command == "quickstart"
+    assert parser.parse_args(["start"]).command == "start"
+
+
+def test_quickstart_asks_once_initializes_and_verifies_dispatch(tmp_path, monkeypatch, capsys):
+    import synlynk
+    import synlynk.instructions as instructions
+    from synlynk.coldstart import cmd_quickstart
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        synlynk,
+        "discover_agents",
+        lambda: [{"name": "codex", "functional": True}],
+    )
+    init_calls = []
+    monkeypatch.setattr(synlynk, "init", lambda **kwargs: init_calls.append(kwargs))
+    monkeypatch.setattr(
+        synlynk,
+        "dispatch_agent",
+        lambda *args, **kwargs: {"id": "job-1", "pid": 1234, "status": "running"},
+    )
+    monkeypatch.setattr(
+        instructions,
+        "_load_instruction_manifest",
+        lambda: {"AGENTS.md": {"tool": "codex", "sha": "abc"}},
+    )
+    answers = iter(["make the first useful change"])
+    monkeypatch.setattr("builtins.input", lambda prompt: next(answers))
+
+    result = cmd_quickstart()
+
+    assert result["status"] == "verified"
+    assert result["manifest"] == ["AGENTS.md"]
+    assert init_calls == [{"agents": ["codex"], "non_interactive": True, "quiet": True}]
+    output = capsys.readouterr().out
+    assert "First dispatch verified: job-1 via codex" in output
+    assert "Instruction manifest" in output

@@ -16,6 +16,7 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `home` (primary) — open
 - `init` (primary) — open
 - `start` (primary) — open
+- `quickstart` (primary) — open
 - `brainstorm` (primary) — goal
 - `brief` (primary) — visualize
 - `tool install` (secondary) — open

@@ -5,6 +5,7 @@ import argparse
 
 CORE_HELP_COMMANDS = (
     "init",
+    "quickstart",
     "dispatch",
     "status",
     "jobs",
@@ -67,6 +68,9 @@ COMMAND_TAXONOMY = [
     {"command": "start", "governs_stage": "open", "maturity_tier": 0, "prominence": "primary",
      "orientation_gateway": False, "audience": "human",
      "trigger_phrases": ["start a new project", "is this a new or existing project"], "hook_event": None},
+    {"command": "quickstart", "governs_stage": "open", "maturity_tier": 0, "prominence": "primary",
+     "orientation_gateway": False, "audience": "human",
+     "trigger_phrases": ["get to a first dispatch", "run the guided quickstart"], "hook_event": None},
     {"command": "brainstorm", "governs_stage": "goal", "maturity_tier": 0, "prominence": "primary",
      "orientation_gateway": False, "audience": "human",
      "trigger_phrases": ["brainstorm goals", "autonomous goal discovery", "brainstorm roadmap"], "hook_event": None},
