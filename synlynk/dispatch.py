@@ -3203,6 +3203,16 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     if agent not in baselines_map:
         raise ValueError(f"Unknown agent: '{agent}'. Known: {list(baselines_map)}")
 
+    if agent == "grok" and not skip_permissions:
+        # Grok's CLI has no working non-bypass headless mode (LIVE-13:
+        # docs/rca/2026-09-22-LIVE-13-grok-headless-dispatch-permission-bypass.md).
+        # Auto-opt-in here (rather than requiring every caller to pass
+        # --dangerously-skip-permissions) so existing Grok dispatch workflows
+        # keep working unchanged after gh:#1925 part 1 made the bypass gated
+        # instead of unconditional. See
+        # docs/superpowers/specs/2026-10-04-grok-failclosed-permission-enforcement-design.md.
+        skip_permissions = True
+
     # A capability gate may reroute the harness (for example, Grok write
     # denial or GitHub-write routing). Re-resolve against the final harness so
     # automatic model defaults never leak across sandbox boundaries.

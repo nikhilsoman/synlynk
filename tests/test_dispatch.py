@@ -1996,6 +1996,40 @@ def test_grok_dispatch_deduplicates_boolean_permission_and_baseline_flags(projec
     assert captured["command"][2].count("--always-approve") == 1
 
 
+def test_grok_dispatch_auto_skips_permissions_by_default(project_dir, monkeypatch):
+    """A Grok dispatch with no explicit skip_permissions arg must still succeed
+    with the bypass flags present — dispatch_agent() auto-opts-in for Grok
+    (gh:#1925 part 1) since Grok's CLI has no working non-bypass headless mode."""
+    import synlynk.dispatch as dispatch_mod
+
+    captured = {}
+
+    def fake_popen(command, *args, **kwargs):
+        captured["command"] = command
+
+        class FakeProc:
+            pid = 12345
+
+        return FakeProc()
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(dispatch_mod, "_preflight_dispatch", lambda *a, **kw: {"passed": True})
+
+    dispatch_mod.dispatch_agent(
+        agent="grok",
+        task="run tests",
+        grants=["run:shell"],
+        force_agent=True,
+        skip_preflight=True,
+        context_mode="none",
+        # skip_permissions deliberately omitted — must default to working behavior.
+    )
+
+    shell_cmd = captured["command"][2]
+    assert "--always-approve" in shell_cmd
+    assert "--permission-mode bypassPermissions" in shell_cmd
+
+
 def test_permissions_to_flags_agy_warns_on_empty_permissions(capsys):
     from synlynk.dispatch import _permissions_to_flags
 
