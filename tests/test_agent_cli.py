@@ -12,6 +12,151 @@ import pytest
 from synlynk.agent_cli import SEED_CHARTERS
 
 
+def _seed_cross_harness_review_case(project_dir, monkeypatch, *, review_harness, review_model):
+    import json
+    import synlynk
+    from synlynk.db import _cross_harness_review_verdict
+
+    policy_path = project_dir / ".synlynk" / "policy.json"
+    policy_path.parent.mkdir(parents=True, exist_ok=True)
+    policy_path.write_text(json.dumps({
+        "overrides": {"merge_authority": {"cross_harness_review_required": True}}
+    }))
+    monkeypatch.chdir(project_dir)
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, harness, task, status, enqueued_at, resolved_model) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("job-impl", "codex", "codex", "implement issue #1991", "done", "2026-10-04T00:00:00", "gpt-5.3-codex"),
+    )
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, harness, task, status, enqueued_at, resolved_model) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("job-review", review_harness, review_harness, "review PR #1991", "done", "2026-10-04T00:00:01", review_model),
+    )
+    conn.execute("INSERT INTO stories (story_id, title) VALUES (?, ?)", ("story-1991", "cross-harness review"))
+    for job_id, harness, model, story_id in (
+        ("job-impl", "codex", "gpt-5.3-codex", "story-1991"),
+        ("job-review", review_harness, review_model, None),
+    ):
+        conn.execute(
+            "INSERT INTO cost_entries (session_date, agent, harness, model, story_id, cost_source, job_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            ("2026-10-04", harness, harness, model, story_id, "test", job_id),
+        )
+    conn.execute(
+        "INSERT INTO capability_ratings (story_id, agent, model_version, quality, pr_number) "
+        "VALUES (?, ?, ?, ?, ?)",
+        ("story-1991", "codex", "gpt-5.3-codex", 1.0, 1991),
+    )
+    conn.commit()
+    ok, message = _cross_harness_review_verdict(conn, 1991)
+    conn.close()
+    return ok, message
+
+
+def test_pr_check_cross_harness_review_rejects_same_harness_and_model(project_dir, monkeypatch):
+    ok, message = _seed_cross_harness_review_case(
+        project_dir, monkeypatch, review_harness="codex", review_model="gpt-5.3-codex"
+    )
+    assert not ok
+    assert "same harness+model" in message
+
+
+def test_pr_check_cross_harness_review_accepts_different_harness(project_dir, monkeypatch):
+    ok, _ = _seed_cross_harness_review_case(
+        project_dir, monkeypatch, review_harness="claude", review_model="gpt-5.3-codex"
+    )
+    assert ok
+
+
+def test_pr_check_cross_harness_review_accepts_different_model(project_dir, monkeypatch):
+    ok, _ = _seed_cross_harness_review_case(
+        project_dir, monkeypatch, review_harness="codex", review_model="gpt-5.2-codex"
+    )
+    assert ok
+
+
+def test_pr_check_recovers_implementer_from_linked_issue_without_rating(project_dir, monkeypatch):
+    import json
+    import synlynk
+    import synlynk.db as db
+
+    policy_path = project_dir / ".synlynk" / "policy.json"
+    policy_path.parent.mkdir(parents=True, exist_ok=True)
+    policy_path.write_text(json.dumps({
+        "overrides": {"merge_authority": {"cross_harness_review_required": True}}
+    }))
+    monkeypatch.chdir(project_dir)
+    monkeypatch.setattr(db, "_pr_closing_issue_numbers", lambda _pr: [1975])
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO stories (story_id, title) VALUES (?, ?)",
+        ("story-issue-1975", "quickstart"),
+    )
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, harness, task, story_id, status, enqueued_at, resolved_model) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            "job-impl-1975", "codex", "codex", "Implement #1975", "story-issue-1975",
+            "done", "2026-10-04T00:00:00", "gpt-5.6-codex",
+        ),
+    )
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, harness, task, status, enqueued_at, resolved_model) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (
+            "job-review-2026", "claude", "claude",
+            "Review https://github.com/nikhilsoman/synlynk/pull/2026",
+            "done", "2026-10-04T00:00:01", "claude-sonnet-4-6",
+        ),
+    )
+    conn.execute(
+        "INSERT INTO cost_entries (session_date, agent, harness, model, story_id, cost_source, job_id) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("2026-10-04", "codex", "codex", "gpt-5.6-codex", "story-issue-1975", "test", "job-impl-1975"),
+    )
+    conn.execute(
+        "INSERT INTO cost_entries (session_date, agent, harness, model, cost_source, job_id) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        ("2026-10-04", "claude", "claude", "claude-sonnet-4-6", "test", "job-review-2026"),
+    )
+    conn.commit()
+
+    ok, message = db._cross_harness_review_verdict(conn, 2026)
+
+    assert ok
+    assert "implementation codex / gpt-5.6-codex" in message
+    assert "reviewed by claude / claude-sonnet-4-6" in message
+    assert conn.execute("SELECT COUNT(*) FROM capability_ratings").fetchone()[0] == 0
+    conn.close()
+
+
+def test_pr_check_linked_issue_fallback_fails_closed_when_ambiguous(project_dir, monkeypatch):
+    import json
+    import synlynk
+    import synlynk.db as db
+
+    policy_path = project_dir / ".synlynk" / "policy.json"
+    policy_path.parent.mkdir(parents=True, exist_ok=True)
+    policy_path.write_text(json.dumps({
+        "overrides": {"merge_authority": {"cross_harness_review_required": True}}
+    }))
+    monkeypatch.chdir(project_dir)
+    monkeypatch.setattr(db, "_pr_closing_issue_numbers", lambda _pr: [1975, 1976])
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO stories (story_id, title) VALUES (?, ?), (?, ?)",
+        ("story-issue-1975", "first linked story", "story-issue-1976", "second linked story"),
+    )
+
+    ok, message = db._cross_harness_review_verdict(conn, 2026)
+
+    assert not ok
+    assert message == "no implementing job provenance found for PR #2026"
+    conn.close()
+
+
 def test_isolate_archived_pytest_modules():
     config = (Path(__file__).parents[1] / "pytest.ini").read_text(encoding="utf-8")
 
@@ -1649,7 +1794,9 @@ def _docs_keep_readme_synchronized_readme(
 
     commands_md = root / "docs" / "reference" / "commands.md"
     commands_md.parent.mkdir(parents=True, exist_ok=True)
-    commands_md.write_text("# Command Reference\n")
+    from scripts.generate_command_docs import render_reference_doc
+
+    commands_md.write_text(render_reference_doc())
     section = (
         "<!-- commands:start -->\n\n- `synlynk init`\n\n<!-- commands:end -->"
         if stale_commands
@@ -3368,3 +3515,47 @@ def test_detect_drift_between_two_versions_of_a_roadmap_doc():
     assert any("Capability sweep" in phase for phase in report["changed_phases"])
     assert any("Worktree hygiene" in phase for phase in report["added_phases"])
     assert any("Cost ledger" in phase for phase in report["added_phases"])
+
+
+def test_quickstart_and_start_are_parser_aliases():
+    from synlynk.cli import build_parser
+
+    parser = build_parser()
+    assert parser.parse_args(["quickstart"]).command == "quickstart"
+    assert parser.parse_args(["start"]).command == "start"
+
+
+def test_quickstart_asks_once_initializes_and_verifies_dispatch(tmp_path, monkeypatch, capsys):
+    import synlynk
+    import synlynk.instructions as instructions
+    from synlynk.coldstart import cmd_quickstart
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        synlynk,
+        "discover_agents",
+        lambda: [{"name": "codex", "functional": True}],
+    )
+    init_calls = []
+    monkeypatch.setattr(synlynk, "init", lambda **kwargs: init_calls.append(kwargs))
+    monkeypatch.setattr(
+        synlynk,
+        "dispatch_agent",
+        lambda *args, **kwargs: {"id": "job-1", "pid": 1234, "status": "running"},
+    )
+    monkeypatch.setattr(
+        instructions,
+        "_load_instruction_manifest",
+        lambda: {"AGENTS.md": {"tool": "codex", "sha": "abc"}},
+    )
+    answers = iter(["make the first useful change"])
+    monkeypatch.setattr("builtins.input", lambda prompt: next(answers))
+
+    result = cmd_quickstart()
+
+    assert result["status"] == "verified"
+    assert result["manifest"] == ["AGENTS.md"]
+    assert init_calls == [{"agents": ["codex"], "non_interactive": True, "quiet": True}]
+    output = capsys.readouterr().out
+    assert "First dispatch verified: job-1 via codex" in output
+    assert "Instruction manifest" in output

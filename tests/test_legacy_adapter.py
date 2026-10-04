@@ -11,8 +11,17 @@ def test_legacy_adapter_translate_permissions_matches_existing_codex_logic():
 
 def test_legacy_adapter_translate_permissions_matches_existing_grok_logic():
     adapter = LegacyAdapter(agent="grok")
-    flags = adapter.translate_permissions(["write:repo"], read_only=False)
+    flags = adapter.translate_permissions(["write:repo"], read_only=False, skip_permissions=True)
     assert flags == ["--always-approve", "--permission-mode", "bypassPermissions"]
+
+
+def test_legacy_adapter_translate_permissions_grok_raises_when_not_skipped():
+    import pytest
+    from synlynk.harness_adapters.base import PermissionEnforcementError
+
+    adapter = LegacyAdapter(agent="grok")
+    with pytest.raises(PermissionEnforcementError):
+        adapter.translate_permissions(["write:repo"], read_only=False, skip_permissions=False)
 
 
 def test_legacy_adapter_classify_failure_returns_none_by_default():

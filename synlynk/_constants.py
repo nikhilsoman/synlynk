@@ -206,7 +206,11 @@ HARNESS_CAPABILITY_BASELINES = {
                 "--single",
             ],
             "invalid_flags": ["--yes", "--dangerously-skip-permissions", "--print", "--non-interactive"],
-            "required_flags": ["--always-approve"],
+            # Not unconditionally required (gh:#1925 part 1) — added explicitly
+            # by _dispatch_flags_for_agent(skip_permissions=True) instead, which
+            # dispatch_agent() auto-sets for Grok (see LIVE-13 and
+            # docs/superpowers/specs/2026-10-04-grok-failclosed-permission-enforcement-design.md).
+            "required_flags": [],
         },
         "headless_contract": {
             "requires_pty": False,

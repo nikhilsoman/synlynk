@@ -10,6 +10,6 @@ def test_dispatch_agent_still_accepts_all_existing_kwargs(monkeypatch):
         "task_type", "requires", "grants", "revokes", "job_id", "issue", "base",
         "scope_paths", "session_id", "gh_write_target_kind", "gh_write_expect",
         "model", "effort", "model_tier", "role", "task_domain", "criticality",
-        "lambda_", "db_conn", "_startup_failover",
+        "lambda_", "db_conn", "_startup_failover", "container_image",
     }
     assert existing_kwargs.issubset(set(sig.parameters.keys()))

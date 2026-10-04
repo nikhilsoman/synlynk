@@ -56,6 +56,32 @@ def review_contract(job_id="job-726172fb"):
     )
 
 
+def test_merge_contract_uses_merge_kind_and_predicates():
+    contract = build_github_effect_contract(
+        "job-2005", operation="merge", target="pr:2003",
+        expected_actor="qa", expected_sha="deadbeef",
+    )
+    assert contract["kind"] == "github_pr_merge"
+    assert contract["required_predicates"] == {
+        "target_match": True, "actor_match": True, "sha_match": True,
+    }
+
+
+def test_verified_merge_effect_completes_job():
+    contract = build_github_effect_contract(
+        "job-2005", operation="github_pr_merge", target="pr:2003",
+        expected_actor="qa", expected_sha="deadbeef",
+    )
+    result = decide_job_outcome(contract, [{
+        "kind": "github_effect", "result": "true", "causal_match": True,
+        "target_match": True, "actor_match": True, "sha_match": True,
+        "state": "MERGED", "mergedBy": {"login": "qa"},
+        "mergeCommit": {"oid": "deadbeef"},
+    }])
+    assert result.status == "completed"
+    assert result.verification_state == "verified"
+
+
 def test_closed_status_alias_map_and_truth_table():
     assert STATUS_ALIASES["success"] == "completed"
     assert "verifying" in CANONICAL_STATUSES

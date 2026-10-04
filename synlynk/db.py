@@ -61,6 +61,153 @@ def _apply_review_cycle_multiplier(conn, pr_number, changes_requested_count):
 
     return apply_multiplier(conn, pr_number, changes_requested_count)
 
+
+def _cross_harness_review_required() -> bool:
+    """Return the repository merge-policy setting for cross-harness review."""
+    try:
+        with open(os.path.join(os.getcwd(), ".synlynk", "policy.json"), encoding="utf-8") as fh:
+            policy = json.load(fh)
+        return bool(policy.get("overrides", {}).get("merge_authority", {}).get(
+            "cross_harness_review_required", False
+        ))
+    except (OSError, TypeError, ValueError):
+        return False
+
+
+def _job_execution_identity(conn, job_id: str) -> tuple[str | None, str | None]:
+    """Read the effective harness/model, preferring the cost ledger evidence."""
+    row = conn.execute(
+        """SELECT COALESCE(NULLIF(ce.harness, ''), NULLIF(dj.harness, ''), NULLIF(ce.agent, ''), NULLIF(dj.agent, '')),
+                  COALESCE(NULLIF(ce.model, ''), NULLIF(dj.resolved_model, ''), NULLIF(dj.requested_model, ''))
+             FROM cost_entries ce
+             LEFT JOIN daemon_jobs dj ON dj.job_id = ce.job_id
+            WHERE ce.job_id=?
+            ORDER BY ce.id DESC LIMIT 1""",
+        (job_id,),
+    ).fetchone()
+    return (row[0], row[1]) if row else (None, None)
+
+
+def _pr_closing_issue_numbers(pr_number: int) -> list[int]:
+    """Read GitHub's closing-issue references for a PR, or return none on failure."""
+    try:
+        result = subprocess.run(
+            [
+                "gh", "pr", "view", str(int(pr_number)),
+                "--json", "closingIssuesReferences",
+                "--jq", "[.closingIssuesReferences[].number]",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except (OSError, ValueError):
+        return []
+    if result.returncode != 0:
+        return []
+    try:
+        numbers = json.loads(result.stdout or "[]")
+    except (TypeError, ValueError):
+        return []
+    if not isinstance(numbers, list):
+        return []
+    return sorted({int(number) for number in numbers if str(number).isdigit()})
+
+
+def _implementation_job_from_linked_issues(conn, pr_number: int) -> tuple[str | None, str | None]:
+    """Find implementation provenance through a PR's linked story issue.
+
+    Jobs created from a story can predate the PR number, leaving the optional
+    capability-rating PR association unset. GitHub's closing-issue relation is
+    the durable link between that PR and its story. Ambiguous stories fail
+    closed; harness/model identity still comes from the job cost ledger.
+    """
+    issue_numbers = _pr_closing_issue_numbers(pr_number)
+    if not issue_numbers:
+        return None, None
+
+    clauses = []
+    params = []
+    for number in issue_numbers:
+        clauses.append("gh_issue IN (?, ?) OR story_id=?")
+        params.extend((str(number), f"#{number}", f"story-issue-{number}"))
+    stories = conn.execute(
+        "SELECT DISTINCT story_id FROM stories WHERE " + " OR ".join(f"({c})" for c in clauses),
+        params,
+    ).fetchall()
+    story_ids = [row[0] for row in stories]
+    if len(story_ids) != 1:
+        return None, None
+
+    row = conn.execute(
+        """SELECT ce.job_id, ce.story_id
+             FROM cost_entries ce
+             JOIN daemon_jobs dj ON dj.job_id=ce.job_id
+            WHERE ce.story_id=?
+              AND lower(COALESCE(dj.task, '')) NOT LIKE '%review%'
+            ORDER BY ce.id DESC LIMIT 1""",
+        (story_ids[0],),
+    ).fetchone()
+    return (row[0], row[1]) if row else (None, None)
+
+
+def _cross_harness_review_verdict(conn, pr_number: int) -> tuple[bool, str]:
+    """Verify that the implementation and review jobs use different harness+models."""
+    if not _cross_harness_review_required():
+        return True, "cross-harness review policy disabled"
+
+    implementation = conn.execute(
+        """SELECT ce.job_id
+             FROM capability_ratings cr
+             JOIN cost_entries ce ON ce.story_id=cr.story_id
+             LEFT JOIN daemon_jobs dj ON dj.job_id=ce.job_id
+            WHERE cr.pr_number=?
+              AND lower(COALESCE(dj.task, '')) NOT LIKE '%review%'
+            ORDER BY ce.id DESC LIMIT 1""",
+        (pr_number,),
+    ).fetchone()
+    implementation_job_id = implementation[0] if implementation else None
+    if not implementation_job_id:
+        implementation_job_id, _ = _implementation_job_from_linked_issues(conn, pr_number)
+
+    review = conn.execute(
+        """SELECT ce.job_id
+             FROM cost_entries ce
+             JOIN daemon_jobs dj ON dj.job_id=ce.job_id
+            WHERE lower(dj.task) LIKE '%review%'
+              AND (lower(dj.task) LIKE ? OR lower(dj.task) LIKE ? OR lower(dj.task) LIKE ?
+                   OR lower(dj.task) LIKE ?)
+            ORDER BY ce.id DESC LIMIT 1""",
+        (
+            f"%pr #{int(pr_number)}%",
+            f"%pull request #{int(pr_number)}%",
+            f"%pr {int(pr_number)}%",
+            f"%/pull/{int(pr_number)}%",
+        ),
+    ).fetchone()
+
+    if not implementation_job_id:
+        return False, f"no implementing job provenance found for PR #{pr_number}"
+    if not review:
+        return False, f"no reviewing job provenance found for PR #{pr_number}"
+
+    implementing_identity = _job_execution_identity(conn, implementation_job_id)
+    reviewing_identity = _job_execution_identity(conn, review[0])
+    if not all(implementing_identity + reviewing_identity):
+        return False, (
+            f"incomplete harness/model provenance (implementing={implementation_job_id}, "
+            f"reviewing={review[0]})"
+        )
+    if implementing_identity == reviewing_identity:
+        return False, (
+            f"implementing and reviewing jobs use the same harness+model "
+            f"({implementing_identity[0]} / {implementing_identity[1]})"
+        )
+    return True, (
+        f"implementation {implementing_identity[0]} / {implementing_identity[1]} "
+        f"reviewed by {reviewing_identity[0]} / {reviewing_identity[1]}"
+    )
+
 _ORG_DOMAINS = (
     "personalization",
     "monetization",
@@ -92,7 +239,24 @@ _ORG_DOMAIN_DRIFT_MAP = {
     "marketing": "growth",
 }
 
-_PROJECT_DOC_KEEP_N = 50
+# gh:#1995 root cause: at 50, _PROJECT_DOC_KEEP_N was far smaller than the
+# rate cost_entries grows, so nearly every regen truncated the git-tracked
+# costs.md to its last 50 rows -- the live window slid on almost every PR
+# touching cost logging, indistinguishable in a PR diff from data loss.
+# state.db never actually loses rows; _rotate_project_doc()'s archive file
+# (written to the shared, persistent .synlynk/project-docs/archive/ -- NOT
+# worktree-scoped, since _synlynk_project_docs_dir() resolves through
+# _project_root()'s `git rev-parse --git-common-dir`, identical across every
+# linked worktree) is gitignored by this repo's own .gitignore, by design,
+# not by accident. Raised from 50 to 500 to make window-slide churn rare in
+# practice (see _rotate_project_doc below, which also best-effort `git add`s
+# a freshly created archive file -- a no-op here since the path is
+# gitignored, but it closes the real worktree-loss case for a non-migrated
+# synlynk-managed repo where the archive path is the tracked, worktree-local
+# one). A separate, more severe bug -- the archive itself re-appending the
+# full overflow slice on every call instead of tracking a high-water mark,
+# causing 45x+ duplication -- is tracked at gh:#1999, not fixed here.
+_PROJECT_DOC_KEEP_N = 500
 
 # Bump when a new schema migration is added.  This is deliberately kept in
 # SQLite's small built-in metadata slot so checking it does not touch the DB
@@ -978,6 +1142,11 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
                 conn.execute("ALTER TABLE cost_entries ADD COLUMN session_id TEXT")
             except sqlite3.OperationalError:
                 pass
+        if "turn_usage_json" not in cost_cols:
+            try:
+                conn.execute("ALTER TABLE cost_entries ADD COLUMN turn_usage_json TEXT")
+            except sqlite3.OperationalError:
+                pass
         conn.execute("DROP VIEW IF EXISTS capability_scores")
         conn.executescript(_DB_SCORES_VIEW)
         conn.executescript("""
@@ -1253,6 +1422,7 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
                 recorded_at       TEXT DEFAULT (datetime('now')),
                 dispatch_context  TEXT,
                 context_mode      TEXT,
+                turn_usage_json   TEXT,
                 session_id        TEXT REFERENCES sessions(session_id)
             );
             CREATE TABLE IF NOT EXISTS remediation_actions (
@@ -1730,6 +1900,7 @@ def _insert_cost_row(
     harness: str = None,
     agent_role: str = None,
     decision_revision: int = None,
+    turn_breakdown=None,
 ) -> None:
     """Insert or update a cost_entries row through the single sanctioned path."""
     from synlynk import _get_db
@@ -1824,6 +1995,7 @@ def _insert_cost_row(
                         context_mode=COALESCE(?, context_mode),
                         session_id=COALESCE(?, session_id)
                         ,decision_revision=COALESCE(?, decision_revision)
+                        ,turn_usage_json=COALESCE(?, turn_usage_json)
                     WHERE job_id=?""",
                     (
                         session_date,
@@ -1848,6 +2020,7 @@ def _insert_cost_row(
                         context_mode,
                         session_id,
                         decision_revision,
+                        json.dumps(turn_breakdown, separators=(",", ":")) if turn_breakdown else None,
                         job_id,
                     ),
                 )
@@ -1856,8 +2029,8 @@ def _insert_cost_row(
         conn.execute(
             """INSERT INTO cost_entries
                 (session_date, agent, harness, agent_role, model, input_tokens, output_tokens, cache_read_tokens,
-                 cost_source, estimate_basis, total_cost_usd, api_equivalent_usd, actual_usd, payment_mode, notes, story_id, epic_id, phase_id, job_id, dispatch_context, context_mode, session_id, decision_revision)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                 cost_source, estimate_basis, total_cost_usd, api_equivalent_usd, actual_usd, payment_mode, notes, story_id, epic_id, phase_id, job_id, dispatch_context, context_mode, session_id, decision_revision, turn_usage_json)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 session_date,
                 agent_val,
@@ -1882,6 +2055,7 @@ def _insert_cost_row(
                 context_mode,
                 session_id,
                 decision_revision,
+                json.dumps(turn_breakdown, separators=(",", ":")) if turn_breakdown else None,
             ),
         )
         conn.commit()
@@ -2438,7 +2612,19 @@ def _generate_todo_md() -> None:
 
 
 def _rotate_project_doc(file_stem: str, all_rows: list, keep_n: int = None) -> list:
-    """Rotate older generated project-doc rows into archive files."""
+    """Rotate older generated project-doc rows into archive files.
+
+    gh:#1995: the archive file this writes lives in whatever working directory
+    the caller is running from. When that's a dispatched job's ephemeral git
+    worktree, the archive is lost the moment the worktree is removed unless
+    something commits it first. We can't guarantee the calling job will do
+    that, so we best-effort `git add` the archive path(s) ourselves the moment
+    they're written -- if the calling process does go on to `git commit`
+    (even with no pathspec, which commits the full index), the archive rides
+    along. This does not fully close the gap (a job that never commits
+    anything still loses it), but it closes the common case and is strictly
+    additive: failures here never block doc generation.
+    """
     from synlynk import _docs_dir, _is_migrated, _synlynk_project_docs_dir
 
     n = keep_n if keep_n is not None else _PROJECT_DOC_KEEP_N
@@ -2469,8 +2655,19 @@ def _rotate_project_doc(file_stem: str, all_rows: list, keep_n: int = None) -> l
             if not existing_index:
                 f.write("# Archive Index\n\n")
             f.write(
-                f"- [{archive_filename}]({archive_filename}) — {file_stem} entries older than the live window\n"
+                f"- [{archive_filename}]({archive_filename}) \u2014 {file_stem} entries older than the live window\n"
             )
+
+    try:
+        subprocess.run(
+            ["git", "add", "--", archive_path, index_path],
+            cwd=base_dir,
+            check=False,
+            capture_output=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError):
+        pass
 
     return live_rows
 
@@ -3965,6 +4162,14 @@ def cmd_pr_check(pr_number=None, impact_attested: bool = False) -> None:
                         ["gh", "pr", "merge", str(pr_number), "--squash"],
                         check=False,
                     )
+
+    if pr_number is not None:
+        cross_harness_ok, cross_harness_message = _cross_harness_review_verdict(conn, pr_number)
+        if not cross_harness_ok:
+            conn.close()
+            print(f"\n  🚫 [PR CHECK BLOCKED] Cross-harness review required: {cross_harness_message}\n")
+            raise SystemExit(1)
+        print(f"  {_GREEN}✓{_RESET} Cross-harness review passed — {cross_harness_message}")
 
     rows = conn.execute(
         "SELECT DISTINCT story_id, agent FROM capability_ratings WHERE model_version='unknown'"

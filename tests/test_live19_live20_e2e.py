@@ -82,10 +82,11 @@ def test_e2e_dispatched_worker_clean_exit_under_token_pressure(tmp_path, monkeyp
 
     jobs_mod._reconcile_jobs_unlocked()
 
-    # Verify job record preserved clean exit
-    assert job["status"] == "completed"
+    # Verify job record: clean exit (exit_code 0), but scope review required (TOKEN_BLOAT + COST_INFLATION sentinel cotrip)
+    assert job["status"] == "SCOPE_REVIEW_REQUIRED"
     assert job["exit_code"] == 0
-    assert len(sentinel_alerts) == 0
+    assert job.get("scope_review_required") is True
+    assert job.get("scope_review_reason") == "TOKEN_BLOAT+COST_INFLATION"
 
     # Record cost update
     sl.update_costs(

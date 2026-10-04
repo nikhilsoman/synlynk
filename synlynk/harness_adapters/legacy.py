@@ -25,10 +25,14 @@ class LegacyAdapter:
                              lifecycle_events=parse_output(raw_text),
                              compatibility_evidence=compatibility_evidence(raw_text))
 
-    def translate_permissions(self, permissions: list, read_only: bool) -> list:
+    def translate_permissions(
+        self, permissions: list, read_only: bool, skip_permissions: bool = False
+    ) -> list:
         from synlynk.dispatch import _permissions_to_flags
 
-        return _permissions_to_flags(self.agent, permissions, read_only=read_only)
+        return _permissions_to_flags(
+            self.agent, permissions, read_only=read_only, skip_permissions=skip_permissions
+        )
 
     def classify_failure(self, exit_code: int, stderr: str, raw_text: str) -> Optional[FailureKind]:
         return None

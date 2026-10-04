@@ -13,6 +13,12 @@ class FailureKind(Enum):
     SANDBOX_DENIED = "sandbox_denied"
 
 
+class PermissionEnforcementError(RuntimeError):
+    """Raised when a harness adapter has no mechanism to enforce requested
+    permissions and the caller has not explicitly opted into a full bypass.
+    """
+
+
 @dataclass
 class DispatchEvent:
     raw_text: str
@@ -28,7 +34,9 @@ class HarnessAdapter(Protocol):
     def parse_output(self, raw_text: str) -> DispatchEvent:
         ...
 
-    def translate_permissions(self, permissions: list, read_only: bool) -> list:
+    def translate_permissions(
+        self, permissions: list, read_only: bool, skip_permissions: bool = False
+    ) -> list:
         ...
 
     def classify_failure(

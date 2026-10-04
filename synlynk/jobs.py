@@ -52,6 +52,7 @@ STATUS_FAILED_UNVERIFIED = "failed_unverified"
 STATUS_NEEDS_FIX = "needs_fix"
 STATUS_STALE_BASE = "stale_base"
 STATUS_SCOPE_VIOLATION = "SCOPE_VIOLATION"
+STATUS_SCOPE_REVIEW_REQUIRED = "SCOPE_REVIEW_REQUIRED"
 STATUS_INSTRUCTION_RECEIPT_UNTRUSTED = "instruction_receipt_untrusted"
 
 # Mandatory Invariant 1 Status Constants
@@ -76,6 +77,7 @@ ALL_JOB_STATUSES = frozenset({
     STATUS_NEEDS_FIX,
     STATUS_STALE_BASE,
     STATUS_SCOPE_VIOLATION,
+    STATUS_SCOPE_REVIEW_REQUIRED,
     STATUS_INSTRUCTION_RECEIPT_UNTRUSTED,
     STATUS_COMPLETED_WITHOUT_CHANGES,
     STATUS_FAILED_NOOP_DENIED,
@@ -96,6 +98,7 @@ TERMINAL_JOB_STATUSES = frozenset({
     STATUS_NEEDS_FIX,
     STATUS_STALE_BASE,
     STATUS_SCOPE_VIOLATION,
+    STATUS_SCOPE_REVIEW_REQUIRED,
     STATUS_INSTRUCTION_RECEIPT_UNTRUSTED,
     STATUS_COMPLETED_WITHOUT_CHANGES,
     STATUS_FAILED_NOOP_DENIED,
@@ -293,6 +296,44 @@ def _check_scope_compliance(changed_files: list, scope_paths: list) -> bool:
     return True
 
 
+def _force_scope_review_for_sentinel_cotrip(
+    job: dict,
+    *,
+    in_tokens: int,
+    out_tokens: int,
+    cost_usd: float,
+    files_touched,
+    sentinel_path: str,
+) -> bool:
+    """Block finalization when token and cost sentinels trip for one job.
+
+    This deliberately derives the decision from sentinel evidence rather than
+    the job's self-reported status.  The sentinel helper also records the
+    alerts in the normal sentinel ledger, so this is only the reconciliation
+    enforcement edge.
+    """
+    check_token_bloat = _pkg("check_token_bloat")
+    if not check_token_bloat:
+        return False
+    alerts = check_token_bloat(
+        in_tokens=in_tokens,
+        out_tokens=out_tokens,
+        cost_usd=cost_usd,
+        files_touched=files_touched,
+        job_id=job.get("id", ""),
+        agent=job.get("agent", ""),
+        task_type=job.get("task_type", ""),
+        sentinel_path=sentinel_path,
+    ) or []
+    codes = {alert.get("code") for alert in alerts if isinstance(alert, dict)}
+    if not {"TOKEN_BLOAT", "COST_INFLATION"}.issubset(codes):
+        return False
+    job["scope_review_required"] = True
+    job["scope_review_reason"] = "TOKEN_BLOAT+COST_INFLATION"
+    job["status"] = STATUS_SCOPE_REVIEW_REQUIRED
+    return True
+
+
 def _log_has_permission_denied_signature(log_text: str) -> bool:
     detector = _pkg("_log_has_permission_denied_signature")
     return bool(detector(log_text)) if detector else False
@@ -401,6 +442,73 @@ def _classify_task_delivery(receipt_status: Optional[str], has_corroborating_act
     if has_corroborating_activity:
         return {"hard_fail": False, "warn": True}
     return {"hard_fail": True, "warn": False}
+
+
+def _gh_write_verification_is_true(value) -> bool:
+    """Treat only an affirmative verification value as verified.
+
+    The daemon schema stores this field as text, so ``bool("false")`` would
+    incorrectly turn a negative verification into corroborating evidence.
+    """
+    return value is True or value == 1 or (isinstance(value, str) and value.lower() == "true")
+
+
+def _job_has_verified_gh_write_evidence(job: Optional[dict]) -> bool:
+    """Return whether a GH-write job has independently verified remote work."""
+    if not job or not job.get("requires_gh_write"):
+        return False
+    if _gh_write_verification_is_true(job.get("gh_write_verified")):
+        return True
+
+    job_id = job.get("id") or job.get("job_id")
+    get_db = _pkg("_get_db")
+    if not job_id or not get_db:
+        return False
+    conn = None
+    try:
+        conn = get_db()
+        row = conn.execute(
+            "SELECT status, verification_state FROM job_terminal_decision "
+            "WHERE job_id=? ORDER BY revision DESC LIMIT 1",
+            (job_id,),
+        ).fetchone()
+        if not row:
+            return False
+        return (
+            (row["status"] if hasattr(row, "keys") else row[0]) == "completed"
+            and (row["verification_state"] if hasattr(row, "keys") else row[1]) == "verified"
+        )
+    except (OSError, sqlite3.Error, TypeError, ValueError):
+        return False
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except (OSError, sqlite3.Error):
+                pass
+
+
+def _task_referenced_branches(task: Optional[str]) -> list[str]:
+    """Extract plausible branch refs explicitly named in task text."""
+    if not task:
+        return []
+    refs = set()
+    for match in re.finditer(r"\b(?:origin/)?([A-Za-z0-9][A-Za-z0-9._-]*(?:/[A-Za-z0-9._-]+)+)", task):
+        refs.add(match.group(1))
+    for match in re.finditer(
+        r"\b(?:branch|ref)(?:\s+name)?\s+[`'\"]?([A-Za-z0-9][A-Za-z0-9._/-]*)",
+        task,
+        re.IGNORECASE,
+    ):
+        refs.add(match.group(1).rstrip(".,;:`'\""))
+    return sorted(ref for ref in refs if ref and ref not in {"https", "http"})
+
+
+def _task_delivery_has_corroborating_activity(job: Optional[dict], git_state) -> bool:
+    """Combine local/remote git evidence with verified GH-write evidence."""
+    if git_state and (git_state.get("has_activity") or git_state.get("remote_has_activity")):
+        return True
+    return _job_has_verified_gh_write_evidence(job)
 
 
 def _normalize_worktree_relative_path(path: str) -> str:
@@ -1137,6 +1245,7 @@ def _inspect_worktree_git_state(
     worktree_path: Optional[str],
     worktree_branch: Optional[str] = None,
     started_at: Optional[str] = None,
+    task: Optional[str] = None,
 ) -> Optional[dict]:
     """Returns git evidence for a worktree, or None when it is unavailable."""
     if not _worktree_path_is_available(worktree_path, "inspect git state"):
@@ -1180,12 +1289,26 @@ def _inspect_worktree_git_state(
     remote_branch_commit_count = 0
     remote_branch_files_touched = []
     if not dirty and commits_ahead == 0:
-        remote_state = _inspect_origin_branch_activity(worktree_path, worktree_branch, started_at)
-        if remote_state:
-            remote_branch_has_activity = remote_state["remote_has_activity"]
-            remote_branch_ref = remote_state["remote_ref"]
-            remote_branch_commit_count = remote_state["remote_commit_count"]
-            remote_branch_files_touched = remote_state["remote_files_touched"]
+        remote_branches = [worktree_branch] + _task_referenced_branches(task)
+        seen_branches = set()
+        remote_states = []
+        for branch in remote_branches:
+            if not branch or branch in seen_branches:
+                continue
+            seen_branches.add(branch)
+            remote_state = _inspect_origin_branch_activity(worktree_path, branch, started_at)
+            if remote_state:
+                remote_states.append(remote_state)
+        active_remote_states = [state for state in remote_states if state["remote_has_activity"]]
+        if active_remote_states:
+            remote_branch_has_activity = True
+            remote_branch_ref = active_remote_states[0]["remote_ref"]
+            remote_branch_commit_count = sum(state["remote_commit_count"] for state in active_remote_states)
+            remote_branch_files_touched = sorted({
+                path
+                for state in active_remote_states
+                for path in state["remote_files_touched"]
+            })
 
     changed_files = []
     if base_commit:
@@ -2027,6 +2150,7 @@ def _reconcile_jobs_unlocked() -> None:
                     job.get("worktree_path"),
                     job.get("worktree_branch"),
                     job.get("started_at"),
+                    job.get("task"),
                 )
             permission_denied = False
             if waitpid_exit_code == 0:
@@ -2059,9 +2183,7 @@ def _reconcile_jobs_unlocked() -> None:
                 if job.get("task"):
                     task_sha256_for_receipt = hashlib.sha256(job["task"].encode("utf-8")).hexdigest()
                 receipt_status = _check_task_receipt(log_text, task_sha256_for_receipt)
-                has_corroborating_activity = bool(
-                    git_state and (git_state.get("has_activity") or git_state.get("remote_has_activity"))
-                )
+                has_corroborating_activity = _task_delivery_has_corroborating_activity(job, git_state)
                 task_delivery = _classify_task_delivery(receipt_status, has_corroborating_activity)
                 if task_delivery["hard_fail"]:
                     job["status"] = "task_delivery_failed"
@@ -2112,6 +2234,20 @@ def _reconcile_jobs_unlocked() -> None:
                 duration_s = None
             summary_status = None
             summary_note = None
+            sentinel_scope_review = _force_scope_review_for_sentinel_cotrip(
+                job,
+                in_tokens=in_tokens,
+                out_tokens=out_tokens,
+                cost_usd=cost_usd,
+                files_touched=len(_git_state_files_touched(git_state)),
+                sentinel_path=sentinel_path,
+            )
+            if sentinel_scope_review:
+                summary_status = STATUS_SCOPE_REVIEW_REQUIRED
+                summary_note = (
+                    "TOKEN_BLOAT and COST_INFLATION tripped for the same job; "
+                    "scope review required before finalization"
+                )
             if permission_denied:
                 summary_status = "PERMISSION_DENIED (headless auto-denied)"
                 summary_note = (
@@ -2215,6 +2351,7 @@ def _reconcile_jobs_unlocked() -> None:
                         job.get("worktree_path"),
                         job.get("worktree_branch"),
                         job.get("started_at"),
+                        job.get("task"),
                     )
                     if git_state and git_state.get("has_activity"):
                         ambiguous_exit = True
@@ -2243,6 +2380,7 @@ def _reconcile_jobs_unlocked() -> None:
                     job.get("worktree_path"),
                     job.get("worktree_branch"),
                     job.get("started_at"),
+                    job.get("task"),
                 )
                 if recovered_git_state and _job_has_real_work_landed(recovered_git_state):
                     git_state = recovered_git_state
@@ -2254,6 +2392,7 @@ def _reconcile_jobs_unlocked() -> None:
                     job.get("worktree_path"),
                     job.get("worktree_branch"),
                     job.get("started_at"),
+                    job.get("task"),
                 )
             permission_denied = False
             task_delivery = {"hard_fail": False, "warn": False}
@@ -2280,9 +2419,7 @@ def _reconcile_jobs_unlocked() -> None:
                     if job.get("task"):
                         task_sha256_for_receipt = hashlib.sha256(job["task"].encode("utf-8")).hexdigest()
                     receipt_status = _check_task_receipt(log_text, task_sha256_for_receipt)
-                    has_corroborating_activity = bool(
-                        git_state and (git_state.get("has_activity") or git_state.get("remote_has_activity"))
-                    )
+                    has_corroborating_activity = _task_delivery_has_corroborating_activity(job, git_state)
                     task_delivery = _classify_task_delivery(receipt_status, has_corroborating_activity)
                     if task_delivery["hard_fail"]:
                         job["status"] = "task_delivery_failed"
@@ -2415,19 +2552,6 @@ def _reconcile_jobs_unlocked() -> None:
                     _apply_dispatch_gate(job)
                     if job.get("status") == "completed":
                         _finalize_completed_worktree_job(job, git_state)
-            check_token_bloat = _pkg("check_token_bloat")
-            if check_token_bloat:
-                files_count = len(summary_files_touched) if isinstance(summary_files_touched, (list, tuple, set)) else int(summary_files_touched or 0)
-                check_token_bloat(
-                    in_tokens=in_tokens,
-                    out_tokens=out_tokens,
-                    cost_usd=cost_usd,
-                    files_touched=files_count,
-                    job_id=job.get("id", ""),
-                    agent=job.get("agent", ""),
-                    task_type=job.get("task_type", ""),
-                    sentinel_path=sentinel_path,
-                )
             task_sha256, task_preview = _task_sha256_and_preview(job.get("task"))
             summary = _pkg("_write_job_summary")(
                 job.get("id", ""),
@@ -2557,6 +2681,14 @@ def _settle_daemon_job_terminal(
         terminal_claim_token=terminal_claim_token,
     )
     conn.commit()
+    if settled:
+        try:
+            from synlynk.job_status_projection import record_shadow_comparison
+            record_shadow_comparison(conn, job_id)
+        except (sqlite3.OperationalError, ValueError):
+            # Unmigrated fixture databases are still supported by the legacy
+            # terminal path; the next migration creates the shadow table.
+            conn.rollback()
     if settled and release_reservation:
         _release_daemon_job_reservation(conn, job_id)
     return settled
@@ -3383,11 +3515,13 @@ def _ensure_daemon_job_cost_entry(
         extract = _pkg("extract_tokens")
         in_tokens, out_tokens = 0, 0
         basis = "none"
+        turn_breakdown = None
         if extract and log_text:
             try:
                 token_counts = extract(log_text, agent=agent or "")
                 in_tokens, out_tokens = token_counts[0], token_counts[1]
                 basis = getattr(token_counts, "basis", "none")
+                turn_breakdown = getattr(token_counts, "turns", None) or None
             except Exception:
                 in_tokens, out_tokens = 0, 0
         model_version = None
@@ -3409,6 +3543,7 @@ def _ensure_daemon_job_cost_entry(
                 basis=basis,
                 job_id=job_id,
                 harness=agent or "",
+                turn_breakdown=turn_breakdown,
             )
             try:
                 recorded = conn.execute(
@@ -4016,6 +4151,32 @@ def _reconcile_daemon_jobs() -> None:
                         except Exception:
                             files_touched = []
 
+                pre_token_counts = _pkg("extract_tokens")(log_text, agent=agent)
+                pre_in_tokens, pre_out_tokens = pre_token_counts
+                pre_model_version = _pkg("extract_model_version")(log_text, agent=agent)
+                pre_cost_usd = _job_cost_usd(agent, pre_in_tokens, pre_out_tokens, pre_model_version)
+                scope_review_job = {
+                    "id": job_id,
+                    "agent": agent,
+                    "task_type": "review" if "review" in (task or "").lower() else "",
+                }
+                if _force_scope_review_for_sentinel_cotrip(
+                    scope_review_job,
+                    in_tokens=pre_in_tokens,
+                    out_tokens=pre_out_tokens,
+                    cost_usd=pre_cost_usd,
+                    files_touched=len(files_touched),
+                    sentinel_path=os.path.join(
+                        persisted_worktree_path or worktree_path or os.getcwd(),
+                        ".synlynk", "sentinel.md"),
+                ):
+                    status = STATUS_SCOPE_REVIEW_REQUIRED
+                    summary_status = STATUS_SCOPE_REVIEW_REQUIRED
+                    summary_note = (
+                        "TOKEN_BLOAT and COST_INFLATION tripped for the same job; "
+                        "scope review required before finalization"
+                    )
+
                 # Reconciliation can overlap with the sentinel path or a
                 # second daemon pass.  Do not let a stale inspection overwrite
                 # a terminal state that another actor already committed.
@@ -4043,6 +4204,7 @@ def _reconcile_daemon_jobs() -> None:
                 token_counts = _pkg("extract_tokens")(log_text, agent=agent)
                 in_tokens, out_tokens = token_counts
                 basis = getattr(token_counts, "basis", "none")
+                turn_breakdown = getattr(token_counts, "turns", None) or None
                 model_version = _pkg("extract_model_version")(log_text, agent=agent)
                 try:
                     _pkg("update_costs")(
@@ -4056,6 +4218,7 @@ def _reconcile_daemon_jobs() -> None:
                         basis=basis,
                         job_id=job_id,
                         harness=agent,
+                        turn_breakdown=turn_breakdown,
                     )
                 except Exception as exc:
                     print(f"  ⚠ update_costs failed for {job_id}: {exc}")
@@ -4083,22 +4246,6 @@ def _reconcile_daemon_jobs() -> None:
                     emitted_by="_reconcile_daemon_jobs",
                 )
                 cost_usd = _job_cost_usd(agent, in_tokens, out_tokens, model_version)
-                check_token_bloat = _pkg("check_token_bloat")
-                if check_token_bloat:
-                    files_count = len(files_touched) if isinstance(files_touched, (list, tuple, set)) else int(files_touched or 0)
-                    daemon_task_type = "review" if "review" in (task or "").lower() else ""
-                    check_token_bloat(
-                        in_tokens=in_tokens,
-                        out_tokens=out_tokens,
-                        cost_usd=cost_usd,
-                        files_touched=files_count,
-                        job_id=job_id,
-                        agent=agent,
-                        task_type=daemon_task_type,
-                        sentinel_path=os.path.join(
-                            persisted_worktree_path or worktree_path or os.getcwd(),
-                            ".synlynk", "sentinel.md"),
-                    )
                 if status == "failed_unverified" and not summary_status:
                     summary_status = terminal_status_for_unknown_exit()
                 task_sha256, task_preview = _task_sha256_and_preview(task)
@@ -4381,7 +4528,36 @@ def cmd_jobs(all_jobs: bool = False, watch: bool = False, summary: Optional[str]
                 "SELECT job_id, agent, story_id, status, enqueued_at, exit_code "
                 "FROM daemon_jobs ORDER BY enqueued_at DESC LIMIT 50"
             ).fetchall()
-        conn.close()
+
+        # #1979: the structured completion oracle is useful to operators only
+        # when its verified evidence is visible on the normal jobs surface.
+        # Keep this compact for the table, while `--json` continues to expose
+        # the full versioned projection.
+        truth_by_job = {}
+        try:
+            for truth_row in conn.execute(
+                "SELECT d.job_id, t.verification_state, t.decision_reason, "
+                "COUNT(e.evidence_id) "
+                "FROM daemon_jobs d "
+                "LEFT JOIN job_terminal_decision t ON t.job_id = d.job_id "
+                "  AND t.revision = (SELECT MAX(t2.revision) "
+                "                    FROM job_terminal_decision t2 "
+                "                    WHERE t2.job_id = d.job_id) "
+                "LEFT JOIN job_evidence e ON e.job_id = d.job_id "
+                "GROUP BY d.job_id, t.verification_state, t.decision_reason"
+            ).fetchall():
+                job_id, verification_state, reason_code, evidence_count = truth_row
+                truth_by_job[job_id] = (
+                    verification_state or "unknown",
+                    reason_code or "oracle_decision_missing",
+                    int(evidence_count or 0),
+                )
+        except (sqlite3.Error, TypeError):
+            # Older state databases may not have the truth tables yet. The
+            # legacy job table remains readable and reports unknown evidence.
+            pass
+        finally:
+            conn.close()
 
         if not rows:
             _render_legacy_jobs()
@@ -4402,10 +4578,10 @@ def cmd_jobs(all_jobs: bool = False, watch: bool = False, summary: Optional[str]
 
         header = (
             f"{'ID':14}  {'AGENT':8}  {'STORY':12}  {'STATUS':10}  "
-            f"{'CTX':6}  {'AGE':8}  {'EXIT':4}  GH-WRITE"
+            f"{'CTX':6}  {'AGE':8}  {'EXIT':4}  GH-WRITE  VERIFY   EVIDENCE"
         )
         print(f"{_BOLD}{header}{_RESET}")
-        print("  " + "─" * 72)
+        print("  " + "─" * 96)
         for row in visible:
             # Support legacy 6-col rows, extended context rows, and gh-write rows.
             if len(row) >= 9:
@@ -4431,9 +4607,15 @@ def cmd_jobs(all_jobs: bool = False, watch: bool = False, summary: Optional[str]
                 gh_write_display = "✗"
             else:
                 gh_write_display = "?"
+            verification_state, reason_code, evidence_count = truth_by_job.get(
+                job_id, ("unknown", "oracle_decision_missing", 0)
+            )
+            verify_display = verification_state[:7]
+            evidence_display = f"{evidence_count} ({reason_code[:24]})"
             print(
                 f"  {job_id:14}  {agent:8}  {sid:12}  "
-                f"{color}{status:10}{_RESET}  {ctx:6}  {age:8}  {exit_str:4}  {gh_write_display}"
+                f"{color}{status:10}{_RESET}  {ctx:6}  {age:8}  {exit_str:4}  "
+                f"{gh_write_display:^8} {verify_display:7}  {evidence_display}"
             )
 
     if watch:

@@ -19,6 +19,8 @@ from typing import List, Optional, Sequence, Tuple
 
 from synlynk._constants import HARNESS_CAPABILITY_BASELINES, _CODEX_NETWORK_PERMISSION
 from synlynk._lazy import pkg as _pkg
+from synlynk.harness_adapters.base import PermissionEnforcementError
+from synlynk.container_exec import ContainerExecError, resolve_container_image, wrap as wrap_container
 
 _ORG_ROLE_TO_BASELINE_ROLE = {
     "dev": "builder",
@@ -440,6 +442,8 @@ def _dispatch_flags_for_agent(agent: str, skip_permissions: bool = False) -> lis
         flags = flags + _local_dispatch_model_flags()
     if skip_permissions and agent in {"claude", "agy"}:
         flags.append("--dangerously-skip-permissions")
+    if skip_permissions and agent == "grok" and "--always-approve" not in flags:
+        flags.append("--always-approve")
     return flags
 
 
@@ -697,21 +701,35 @@ _GROK_PERMISSION_RULES = {
 }
 
 
-def _grok_permission_flags(permissions: list) -> list:
+def _grok_permission_flags(permissions: list, skip_permissions: bool = False) -> list:
     """Translate resolved permission strings into Grok CLI permission flags.
 
-    For headless execution (#1732, #1734), passes `--always-approve` and
-    `--permission-mode bypassPermissions` to prevent tool cancellations.
+    Grok's CLI has no working non-bypass headless mode (LIVE-13:
+    docs/rca/2026-09-22-LIVE-13-grok-headless-dispatch-permission-bypass.md) —
+    under --permission-mode dontAsk it silently cancels tool calls while
+    reporting success. For headless execution (#1732, #1734), passing
+    `--always-approve` and `--permission-mode bypassPermissions` avoids that.
+
+    This is now gated behind `skip_permissions` (gh:#1925 part 1) rather than
+    unconditional: when permissions are requested and the caller has not
+    opted into the bypass, raise instead of silently granting it.
+    dispatch_agent() auto-opts-in for Grok specifically so existing callers
+    are unaffected — see
+    docs/superpowers/specs/2026-10-04-grok-failclosed-permission-enforcement-design.md.
     """
     permission_set = {perm for perm in (permissions or []) if perm}
     if not permission_set:
         return []
 
+    if not skip_permissions:
+        raise PermissionEnforcementError(
+            f"grok has no scoped-permission headless mode for requested permissions "
+            f"{sorted(permission_set)} (LIVE-13: Grok's --permission-mode dontAsk silently "
+            "cancels tool calls). Pass skip_permissions=True to proceed with "
+            "--always-approve --permission-mode bypassPermissions instead."
+        )
+
     return ["--always-approve", "--permission-mode", "bypassPermissions"]
-
-
-class PermissionEnforcementError(RuntimeError):
-    """Raised when an agent has no real mechanism to enforce requested permissions."""
 
 
 def _merge_codex_permission_flags(flags: list, permission_flags: list) -> list:
@@ -783,7 +801,7 @@ def _permissions_to_flags(
             flags += _codex_network_flags(read_only=read_only and not has_write)
         return flags
     if agent == "grok":
-        return _grok_permission_flags(permissions)
+        return _grok_permission_flags(permissions, skip_permissions=skip_permissions)
     if agent == "local":
         if permissions:
             raise PermissionEnforcementError(
@@ -3007,7 +3025,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                    lambda_: float = 1.0,
                    db_conn=None,
                    _startup_failover: bool = True,
-                   skip_permissions: bool = False) -> dict:
+                   skip_permissions: bool = False,
+                   container_image: str | None = None) -> dict:
     if not task or not task.strip():
         raise ValueError(
             "--task is empty or whitespace-only; refusing to dispatch (see #720)"
@@ -3182,6 +3201,16 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
 
     if agent not in baselines_map:
         raise ValueError(f"Unknown agent: '{agent}'. Known: {list(baselines_map)}")
+
+    if agent == "grok" and not skip_permissions:
+        # Grok's CLI has no working non-bypass headless mode (LIVE-13:
+        # docs/rca/2026-09-22-LIVE-13-grok-headless-dispatch-permission-bypass.md).
+        # Auto-opt-in here (rather than requiring every caller to pass
+        # --dangerously-skip-permissions) so existing Grok dispatch workflows
+        # keep working unchanged after gh:#1925 part 1 made the bypass gated
+        # instead of unconditional. See
+        # docs/superpowers/specs/2026-10-04-grok-failclosed-permission-enforcement-design.md.
+        skip_permissions = True
 
     # A capability gate may reroute the harness (for example, Grok write
     # denial or GitHub-write routing). Re-resolve against the final harness so
@@ -3835,19 +3864,43 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         )
         local_slot_claimed = True
 
+    container_image = resolve_container_image(container_image, baselines)
+    spawn_cmd = ["sh", "-c", shell_cmd]
+    spawn_env = proc_env
+    spawn_cwd = worktree_path
+    stderr_target = subprocess.DEVNULL
+    stderr_handle = None
+    if container_image is not None:
+        docker_bin = shutil.which("docker")
+        if not docker_bin:
+            raise ContainerExecError(
+                "docker is not on PATH; refusing to fall back to a host subprocess"
+            )
+        spawn_cmd, spawn_env, spawn_cwd = wrap_container(
+            spawn_cmd,
+            proc_env,
+            worktree_path,
+            container_image,
+            docker_bin=docker_bin,
+        )
+        stderr_handle = open(log_file, "a", encoding="utf-8")
+        stderr_target = stderr_handle
     try:
         proc = subprocess.Popen(
-            ["sh", "-c", shell_cmd],
+            spawn_cmd,
             stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stderr=stderr_target,
             start_new_session=True,
-            cwd=worktree_path,
-            env=proc_env,
+            cwd=spawn_cwd,
+            env=spawn_env,
         )
     except Exception:
         if local_slot_claimed:
             dconn.rollback()
         raise
+    finally:
+        if stderr_handle is not None:
+            stderr_handle.close()
 
     # A process that has already exited failed during CLI startup (bad flag,
     # missing binary, or sandbox setup). Give the task one deterministic
@@ -3857,7 +3910,18 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         startup_exit = proc.poll()
     except (AttributeError, OSError):
         startup_exit = None
-    if _startup_failover and startup_exit not in (None, 0):
+    if container_image is not None and startup_exit is None:
+        try:
+            startup_exit = proc.wait(timeout=1.0)
+        except (AttributeError, OSError, subprocess.TimeoutExpired):
+            startup_exit = None
+    container_failed = container_image is not None and startup_exit not in (None, 0)
+    if container_failed:
+        exit_path = log_file + ".exit"
+        if not os.path.exists(exit_path):
+            with open(exit_path, "w", encoding="utf-8") as exit_handle:
+                exit_handle.write(f"{startup_exit}\n")
+    elif _startup_failover and startup_exit not in (None, 0):
         secondary = _secondary_harness(agent, baselines_map)
         touched = _worktree_files_touched(worktree_path) if worktree_path else []
         if secondary and not touched:
@@ -3874,6 +3938,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 gh_write_target_kind=gh_write_target_kind, model=model, role=role,
                 model_tier=model_tier,
                 db_conn=db_conn, _startup_failover=False,
+                container_image=container_image,
                 skip_permissions=skip_permissions,
             )
 
@@ -3899,9 +3964,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         "base_sha": base_sha,
         "suite_result": None,
         "started_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
-        "ended_at": None,
-        "status": "running",
-        "exit_code": None,
+        "ended_at": time.strftime("%Y-%m-%dT%H:%M:%S") if container_failed else None,
+        "status": "failed" if container_failed else "running",
+        "exit_code": startup_exit if container_failed else None,
         "dispatch_mode": dispatch_mode,
         "dispatch_rework": _pkg("_count_dispatch_rework")(story_id or "") if _pkg("_count_dispatch_rework") else 0,
         "micro_rework": 0,
@@ -4055,6 +4120,11 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                         model_routing["requested_model"],
                         model_routing["resolved_model"],
                     ),
+                )
+            if container_failed:
+                dconn.execute(
+                    "UPDATE daemon_jobs SET status=?, exit_code=?, completed_at=? WHERE job_id=?",
+                    ("failed", startup_exit, job["ended_at"], job_id),
                 )
             dconn.commit()
             # PR1: every dispatched daemon job gets an immutable effect

@@ -43,6 +43,39 @@ def test_check_scope_compliance_empty_scope_paths_is_always_compliant():
     assert _check_scope_compliance(["synlynk/jobs.py"], None) is True
 
 
+def test_sentinel_cotrip_forces_scope_review_regardless_of_job_status(monkeypatch):
+    import synlynk.jobs as jobs_mod
+
+    calls = []
+
+    def fake_check_token_bloat(**kwargs):
+        calls.append(kwargs)
+        return [
+            {"code": "TOKEN_BLOAT", "severity": "CRITICAL"},
+            {"code": "COST_INFLATION", "severity": "CRITICAL", "actionable": True},
+        ]
+
+    monkeypatch.setattr(
+        jobs_mod,
+        "_pkg",
+        lambda name, default=None: fake_check_token_bloat if name == "check_token_bloat" else default,
+    )
+    job = {"id": "job-sentinel-cotrip", "agent": "codex", "status": "completed"}
+
+    assert jobs_mod._force_scope_review_for_sentinel_cotrip(
+        job,
+        in_tokens=7_000_000,
+        out_tokens=231_830,
+        cost_usd=21.93,
+        files_touched=14,
+        sentinel_path=".synlynk/sentinel.md",
+    ) is True
+    assert job["status"] == "SCOPE_REVIEW_REQUIRED"
+    assert job["scope_review_required"] is True
+    assert job["scope_review_reason"] == "TOKEN_BLOAT+COST_INFLATION"
+    assert calls[0]["job_id"] == "job-sentinel-cotrip"
+
+
 def test_check_task_receipt_ok_when_marker_is_first_line():
     import synlynk.jobs as jobs_mod
 
@@ -155,6 +188,40 @@ def test_classify_task_delivery_clean_when_receipt_status_none():
 
     result = jobs_mod._classify_task_delivery(None, has_corroborating_activity=False)
     assert result == {"hard_fail": False, "warn": False}
+
+
+def test_task_delivery_accepts_verified_gh_write_without_local_activity(monkeypatch):
+    import synlynk.jobs as jobs_mod
+
+    monkeypatch.setattr(
+        jobs_mod,
+        "_job_has_verified_gh_write_evidence",
+        lambda job: bool(job.get("requires_gh_write") and job.get("gh_write_verified")),
+    )
+    job = {"id": "job-gh-write", "requires_gh_write": True, "gh_write_verified": True}
+
+    assert jobs_mod._task_delivery_has_corroborating_activity(job, {
+        "has_activity": False,
+        "remote_has_activity": False,
+    }) is True
+    assert jobs_mod._classify_task_delivery("absent", True) == {
+        "hard_fail": False,
+        "warn": True,
+    }
+
+
+def test_task_delivery_still_hard_fails_without_gh_write_or_git_activity():
+    import synlynk.jobs as jobs_mod
+
+    job = {"id": "job-no-activity", "requires_gh_write": False}
+    assert jobs_mod._task_delivery_has_corroborating_activity(job, {
+        "has_activity": False,
+        "remote_has_activity": False,
+    }) is False
+    assert jobs_mod._classify_task_delivery("absent", False) == {
+        "hard_fail": True,
+        "warn": False,
+    }
 
 
 def test_task_sha256_and_preview_returns_none_for_falsy_task():

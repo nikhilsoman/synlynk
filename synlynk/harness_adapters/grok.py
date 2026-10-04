@@ -1,22 +1,33 @@
 """Grok HarnessAdapter (gh:#1924)."""
 from typing import Optional
 
-from synlynk.harness_adapters.base import DispatchEvent, FailureKind
+from synlynk.harness_adapters.base import DispatchEvent, FailureKind, PermissionEnforcementError
 from synlynk.harness_adapters.request import DispatchRequest
 
 
 class GrokAdapter:
-    def translate_permissions(self, permissions: list, read_only: bool) -> list:
+    def translate_permissions(
+        self, permissions: list, read_only: bool, skip_permissions: bool = False
+    ) -> list:
         permission_set = {perm for perm in (permissions or []) if perm}
         if not permission_set:
             return []
+        if not skip_permissions:
+            raise PermissionEnforcementError(
+                f"grok has no scoped-permission headless mode for requested permissions "
+                f"{sorted(permission_set)} (LIVE-13: Grok's --permission-mode dontAsk silently "
+                "cancels tool calls). Pass skip_permissions=True to proceed with "
+                "--always-approve --permission-mode bypassPermissions instead."
+            )
         return ["--always-approve", "--permission-mode", "bypassPermissions"]
 
     def build_cmd(self, request: DispatchRequest) -> list:
         from synlynk.dispatch import _dispatch_flags_for_agent
 
-        flags = _dispatch_flags_for_agent("grok")
-        flags += self.translate_permissions(request.permissions, request.read_only)
+        flags = _dispatch_flags_for_agent("grok", skip_permissions=request.skip_permissions)
+        flags += self.translate_permissions(
+            request.permissions, request.read_only, skip_permissions=request.skip_permissions
+        )
         return flags
 
     def parse_output(self, raw_text: str) -> DispatchEvent:

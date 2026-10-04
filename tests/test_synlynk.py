@@ -5483,6 +5483,48 @@ def test_cmd_jobs_all_shows_completed(project_dir, capsys):
     assert "job-done1" in out
 
 
+def test_cmd_jobs_all_surfaces_oracle_evidence(project_dir, capsys):
+    """Human jobs output must expose verified evidence, not only legacy status."""
+    import synlynk as sl
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, depends_on, "
+        "enqueued_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("job-evidence", "codex", "open PR", "done", 5, "[]", "2026-06-24T07:00:00")
+    )
+    conn.execute(
+        "INSERT INTO job_effect_contract "
+        "(job_id, contract_id, kind, target, expect, local_change_policy, "
+        "receipt_policy, verification_deadline_at, contract_version, "
+        "required_predicates_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        ("job-evidence", "contract-1", "github_pr_open", "issue:1", "effect_verified",
+         "optional", "required", "2026-06-24T07:05:00Z", 1, "{}")
+    )
+    conn.execute(
+        "INSERT INTO job_evidence "
+        "(evidence_id, job_id, kind, result, observed_at, source, confidence, attempt, event_id, payload_json) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        ("evidence-1", "job-evidence", "github_effect", "true", "2026-06-24T07:01:00Z",
+         "gh", "high", 1, "event-1", '{}')
+    )
+    conn.execute(
+        "INSERT INTO job_terminal_decision "
+        "(job_id, revision, status, verification_state, primary_evidence_id, "
+        "evidence_snapshot_json, decision_reason, decided_at, decided_by, "
+        "contract_version, follow_up) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        ("job-evidence", 1, "completed", "verified", "evidence-1", "[]",
+         "contract_effect_verified", "2026-06-24T07:01:01Z", "job_truth.v1", 1, "none")
+    )
+    conn.commit()
+    conn.close()
+
+    sl.cmd_jobs(all_jobs=True)
+    out = capsys.readouterr().out
+    assert "VERIFY" in out
+    assert "verified" in out
+    assert "1 (contract_effect_verified)" in out
+
+
 def test_cmd_jobs_default_hides_completed(project_dir, capsys):
     """cmd_jobs() without --all hides done jobs."""
     import synlynk as sl
@@ -7831,10 +7873,12 @@ def test_agent_capability_baselines_includes_grok():
     assert grok["cli"] == "grok"
     assert grok.get("prompt_flag") == "--single"
     assert "-p" not in grok.get("non_interactive_flags", [])
-    # Headless Grok requires --always-approve to avoid dontAsk auto-cancel (#1277).
+    # --always-approve is no longer an unconditional baseline requirement —
+    # it's added explicitly via _dispatch_flags_for_agent(skip_permissions=True)
+    # and dispatch_agent()'s Grok auto-opt-in instead (gh:#1925 part 1).
     assert "--always-approve" in grok["dispatch_flags"]["valid_flags"]
     assert "--permission-mode" in grok["dispatch_flags"]["valid_flags"]
-    assert grok["dispatch_flags"]["required_flags"] == ["--always-approve"]
+    assert grok["dispatch_flags"]["required_flags"] == []
     assert "--yes" in grok["dispatch_flags"]["invalid_flags"]
     assert "cli-chat-proxy.grok.com:443" in grok["network_deps"]["required_endpoints"]
     assert "builder" in grok["roles"]
@@ -7842,7 +7886,11 @@ def test_agent_capability_baselines_includes_grok():
 
 
 def test_grok_baseline_requires_always_approve():
-    # Headless Grok requires --always-approve so compound shell is not auto-cancelled (#1277).
+    # --always-approve/--permission-mode stay valid Grok CLI flags, but are no
+    # longer an unconditional baseline requirement (gh:#1925 part 1) — the
+    # bypass is now added explicitly and only when skip_permissions=True
+    # (dispatch_agent() auto-sets this for Grok; see
+    # docs/superpowers/specs/2026-10-04-grok-failclosed-permission-enforcement-design.md).
     from synlynk import HARNESS_CAPABILITY_BASELINES
     grok = HARNESS_CAPABILITY_BASELINES.get("grok", {})
     flags = grok.get("dispatch_flags", {})
@@ -7850,8 +7898,8 @@ def test_grok_baseline_requires_always_approve():
         "--always-approve must be valid for Grok (--yes was dropped)"
     assert "--permission-mode" in flags.get("valid_flags", []), \
         "--permission-mode must remain valid for bypassPermissions fallback"
-    assert flags.get("required_flags", []) == ["--always-approve"], \
-        "Grok must require --always-approve for headless dispatch"
+    assert flags.get("required_flags", []) == [], \
+        "Grok's baseline must not unconditionally require --always-approve"
     assert "--yes" in flags.get("invalid_flags", []), \
         "--yes must be invalid for Grok (it was dropped by Grok CLI)"
 

@@ -753,7 +753,7 @@ def test_dispatch_gitstateverified_job_reconciliation_rechecks_failed_job_with_l
 
     inspect_calls = {"count": 0}
 
-    def fake_inspect(worktree_path, worktree_branch=None, started_at=None):
+    def fake_inspect(worktree_path, worktree_branch=None, started_at=None, task=None):
         inspect_calls["count"] += 1
         if inspect_calls["count"] == 1:
             return {

@@ -2,6 +2,8 @@
 
 Generated from `synlynk/taxonomy.py`. Do not edit by hand — run `python3 scripts/generate_command_docs.py`.
 
+Start with the [documentation hub](../README.md), the [10-minute quickstart](../quickstart.md), or a [task-oriented how-to](../how-to/README.md).
+
 See [safe-caller-construction.md](safe-caller-construction.md) for guidance on building dispatch task text programmatically.
 
 ## Orientation gateway (always available)
@@ -16,6 +18,7 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `home` (primary) — open
 - `init` (primary) — open
 - `start` (primary) — open
+- `quickstart` (primary) — open
 - `brainstorm` (primary) — goal
 - `brief` (primary) — visualize
 - `tool install` (secondary) — open
@@ -147,6 +150,7 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `addon list` (secondary) — sustain
 - `addon install` (primary) — sustain
 - `gateway probe` (primary) — sustain
+- `gateway dispatch` (primary) — execute
 
 ## Tier 3 — Team / Enterprise
 
