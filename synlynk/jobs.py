@@ -52,6 +52,7 @@ STATUS_FAILED_UNVERIFIED = "failed_unverified"
 STATUS_NEEDS_FIX = "needs_fix"
 STATUS_STALE_BASE = "stale_base"
 STATUS_SCOPE_VIOLATION = "SCOPE_VIOLATION"
+STATUS_SCOPE_REVIEW_REQUIRED = "SCOPE_REVIEW_REQUIRED"
 STATUS_INSTRUCTION_RECEIPT_UNTRUSTED = "instruction_receipt_untrusted"
 
 # Mandatory Invariant 1 Status Constants
@@ -76,6 +77,7 @@ ALL_JOB_STATUSES = frozenset({
     STATUS_NEEDS_FIX,
     STATUS_STALE_BASE,
     STATUS_SCOPE_VIOLATION,
+    STATUS_SCOPE_REVIEW_REQUIRED,
     STATUS_INSTRUCTION_RECEIPT_UNTRUSTED,
     STATUS_COMPLETED_WITHOUT_CHANGES,
     STATUS_FAILED_NOOP_DENIED,
@@ -96,6 +98,7 @@ TERMINAL_JOB_STATUSES = frozenset({
     STATUS_NEEDS_FIX,
     STATUS_STALE_BASE,
     STATUS_SCOPE_VIOLATION,
+    STATUS_SCOPE_REVIEW_REQUIRED,
     STATUS_INSTRUCTION_RECEIPT_UNTRUSTED,
     STATUS_COMPLETED_WITHOUT_CHANGES,
     STATUS_FAILED_NOOP_DENIED,
@@ -290,6 +293,44 @@ def _check_scope_compliance(changed_files: list, scope_paths: list) -> bool:
     for path in changed_files or []:
         if not any(fnmatch.fnmatch(path, pattern) for pattern in scope_paths):
             return False
+    return True
+
+
+def _force_scope_review_for_sentinel_cotrip(
+    job: dict,
+    *,
+    in_tokens: int,
+    out_tokens: int,
+    cost_usd: float,
+    files_touched,
+    sentinel_path: str,
+) -> bool:
+    """Block finalization when token and cost sentinels trip for one job.
+
+    This deliberately derives the decision from sentinel evidence rather than
+    the job's self-reported status.  The sentinel helper also records the
+    alerts in the normal sentinel ledger, so this is only the reconciliation
+    enforcement edge.
+    """
+    check_token_bloat = _pkg("check_token_bloat")
+    if not check_token_bloat:
+        return False
+    alerts = check_token_bloat(
+        in_tokens=in_tokens,
+        out_tokens=out_tokens,
+        cost_usd=cost_usd,
+        files_touched=files_touched,
+        job_id=job.get("id", ""),
+        agent=job.get("agent", ""),
+        task_type=job.get("task_type", ""),
+        sentinel_path=sentinel_path,
+    ) or []
+    codes = {alert.get("code") for alert in alerts if isinstance(alert, dict)}
+    if not {"TOKEN_BLOAT", "COST_INFLATION"}.issubset(codes):
+        return False
+    job["scope_review_required"] = True
+    job["scope_review_reason"] = "TOKEN_BLOAT+COST_INFLATION"
+    job["status"] = STATUS_SCOPE_REVIEW_REQUIRED
     return True
 
 
@@ -2193,6 +2234,20 @@ def _reconcile_jobs_unlocked() -> None:
                 duration_s = None
             summary_status = None
             summary_note = None
+            sentinel_scope_review = _force_scope_review_for_sentinel_cotrip(
+                job,
+                in_tokens=in_tokens,
+                out_tokens=out_tokens,
+                cost_usd=cost_usd,
+                files_touched=len(_git_state_files_touched(git_state)),
+                sentinel_path=sentinel_path,
+            )
+            if sentinel_scope_review:
+                summary_status = STATUS_SCOPE_REVIEW_REQUIRED
+                summary_note = (
+                    "TOKEN_BLOAT and COST_INFLATION tripped for the same job; "
+                    "scope review required before finalization"
+                )
             if permission_denied:
                 summary_status = "PERMISSION_DENIED (headless auto-denied)"
                 summary_note = (
@@ -2497,19 +2552,6 @@ def _reconcile_jobs_unlocked() -> None:
                     _apply_dispatch_gate(job)
                     if job.get("status") == "completed":
                         _finalize_completed_worktree_job(job, git_state)
-            check_token_bloat = _pkg("check_token_bloat")
-            if check_token_bloat:
-                files_count = len(summary_files_touched) if isinstance(summary_files_touched, (list, tuple, set)) else int(summary_files_touched or 0)
-                check_token_bloat(
-                    in_tokens=in_tokens,
-                    out_tokens=out_tokens,
-                    cost_usd=cost_usd,
-                    files_touched=files_count,
-                    job_id=job.get("id", ""),
-                    agent=job.get("agent", ""),
-                    task_type=job.get("task_type", ""),
-                    sentinel_path=sentinel_path,
-                )
             task_sha256, task_preview = _task_sha256_and_preview(job.get("task"))
             summary = _pkg("_write_job_summary")(
                 job.get("id", ""),
@@ -4109,6 +4151,32 @@ def _reconcile_daemon_jobs() -> None:
                         except Exception:
                             files_touched = []
 
+                pre_token_counts = _pkg("extract_tokens")(log_text, agent=agent)
+                pre_in_tokens, pre_out_tokens = pre_token_counts
+                pre_model_version = _pkg("extract_model_version")(log_text, agent=agent)
+                pre_cost_usd = _job_cost_usd(agent, pre_in_tokens, pre_out_tokens, pre_model_version)
+                scope_review_job = {
+                    "id": job_id,
+                    "agent": agent,
+                    "task_type": "review" if "review" in (task or "").lower() else "",
+                }
+                if _force_scope_review_for_sentinel_cotrip(
+                    scope_review_job,
+                    in_tokens=pre_in_tokens,
+                    out_tokens=pre_out_tokens,
+                    cost_usd=pre_cost_usd,
+                    files_touched=len(files_touched),
+                    sentinel_path=os.path.join(
+                        persisted_worktree_path or worktree_path or os.getcwd(),
+                        ".synlynk", "sentinel.md"),
+                ):
+                    status = STATUS_SCOPE_REVIEW_REQUIRED
+                    summary_status = STATUS_SCOPE_REVIEW_REQUIRED
+                    summary_note = (
+                        "TOKEN_BLOAT and COST_INFLATION tripped for the same job; "
+                        "scope review required before finalization"
+                    )
+
                 # Reconciliation can overlap with the sentinel path or a
                 # second daemon pass.  Do not let a stale inspection overwrite
                 # a terminal state that another actor already committed.
@@ -4178,22 +4246,6 @@ def _reconcile_daemon_jobs() -> None:
                     emitted_by="_reconcile_daemon_jobs",
                 )
                 cost_usd = _job_cost_usd(agent, in_tokens, out_tokens, model_version)
-                check_token_bloat = _pkg("check_token_bloat")
-                if check_token_bloat:
-                    files_count = len(files_touched) if isinstance(files_touched, (list, tuple, set)) else int(files_touched or 0)
-                    daemon_task_type = "review" if "review" in (task or "").lower() else ""
-                    check_token_bloat(
-                        in_tokens=in_tokens,
-                        out_tokens=out_tokens,
-                        cost_usd=cost_usd,
-                        files_touched=files_count,
-                        job_id=job_id,
-                        agent=agent,
-                        task_type=daemon_task_type,
-                        sentinel_path=os.path.join(
-                            persisted_worktree_path or worktree_path or os.getcwd(),
-                            ".synlynk", "sentinel.md"),
-                    )
                 if status == "failed_unverified" and not summary_status:
                     summary_status = terminal_status_for_unknown_exit()
                 task_sha256, task_preview = _task_sha256_and_preview(task)
