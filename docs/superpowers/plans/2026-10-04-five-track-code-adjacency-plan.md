@@ -185,3 +185,20 @@ surfaced by each wave's own jobs — not a fixed queue decided up front.
 ### Wave 1 closeout (2026-10-04)
 
 All 7 Wave 1 PRs merged: #2017 (11:46 UTC), #2014 (11:54 UTC), #2022 (11:34 UTC — earliest), #2018 (pre-existing), #2020 (12:02 UTC), #2019 (12:10 UTC), #2021 (12:17 UTC, last). Worktree Hygiene Protocol run immediately after: removed 7 feature worktrees/branches (`job-92c3cd46`, `job-3561f357`, `job-594ec949`, `job-69ba7fa6`, `job-45c98165`, `job-b1e83605`, `job-b86f460e`), 9 zero-commit review-probe worktrees/branches (`job-0f409e7d`, `job-579024a4`, `job-9550f92d`, `job-95c665cb`, `job-a78bf313`, `job-dc0c0318`, `job-f32b385f`, `job-6013719d`, `job-b2cf88cd` — all confirmed 0 own commits + 0 dirty files before deletion), one stray superseded worktree (`job-review`, duplicate of #2019's already-merged content at a stale test count), and the `/tmp/pr2019-fix` scratch clone. `feat/codex/cost-audit-1951` and `feat/grok/containerized-dispatch` (with its nested dispatch sub-jobs) deliberately left alone — neither has a merged PR.
+
+### Wave 2 launched (2026-10-04, ~12:25 UTC)
+
+All 6 Wave 2 dispatches issued via `synlynk dispatch codex --force-harness --role dev`:
+
+| Job | Issue | Track | Task |
+|---|---|---|---|
+| job-e5daa609 | #1990 | 1 | GOVERNS hard-fail gate in `pr check` + dispatch preflight |
+| job-ebb67741 | #1991 | 1 | `cross_harness_review_required` enforcement in `pr check` |
+| job-34f5240c | #1975 | 2 | `synlynk quickstart`/`start` + guided first-run manifest |
+| job-1794154e | #1977 | 2 | Docs restructure — journey-oriented, taxonomy-generated reference, glossary |
+| job-2b9ba652 | #1979 | 4 | Verify job-outcome evidence is user-visible (narrowed scope) |
+| job-7f4334af | #2023 | 3 | Root-cause-only investigation of the regen/write-through bug family (#1995/#1999/#1917/#1915) — comment-only, no fix; `--requires-gh-write --gh-write-expect comment_posted` |
+
+**Routing correction discovered this wave:** attempted `--force-harness grok` for #1991 first; it failed closed with `IncompatibleHarnessCapabilityError: forced harness 'grok' lacks required capabilities: write:github` — confirms the existing `feedback_grok_auth_agy_fallback`/#426 finding that Grok's sandbox denies GitHub-write capability in this environment. All 5 implementation dispatches (which open PRs, a GH-write action) routed to Codex instead of splitting across Codex/Grok as originally planned. Also discovered `--role dev` is now required even for non-`--requires-gh-write` dispatches that open PRs — passing neither yields `RuntimeError: Dispatch refused: --requires-gh-write requires a resolvable role identity` (PR-opening apparently implies a GH-write capability check under the hood now, consistent with #569's hardening). Noting both for the next harness-capability-baseline reassessment cycle rather than filing fresh issues — neither is a regression, both are consistent with already-documented policy.
+
+**Cost watch:** per the Wave 1 TOKEN_BLOAT/COST_INFLATION finding above (4 of 5 Codex implementation jobs tripped cost alerts, even after #1969/PR#2021 merged claiming to address the root cause), these 6 Wave 2 jobs are the first live test of whether #1969's fix actually reduced the cluster. Will verify actual token/cost figures via `synlynk jobs`/cost_entries once jobs complete, not just trust that the fix landed.
