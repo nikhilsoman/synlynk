@@ -61,6 +61,81 @@ def _apply_review_cycle_multiplier(conn, pr_number, changes_requested_count):
 
     return apply_multiplier(conn, pr_number, changes_requested_count)
 
+
+def _cross_harness_review_required() -> bool:
+    """Return the repository merge-policy setting for cross-harness review."""
+    try:
+        with open(os.path.join(os.getcwd(), ".synlynk", "policy.json"), encoding="utf-8") as fh:
+            policy = json.load(fh)
+        return bool(policy.get("overrides", {}).get("merge_authority", {}).get(
+            "cross_harness_review_required", False
+        ))
+    except (OSError, TypeError, ValueError):
+        return False
+
+
+def _job_execution_identity(conn, job_id: str) -> tuple[str | None, str | None]:
+    """Read the effective harness/model, preferring the cost ledger evidence."""
+    row = conn.execute(
+        """SELECT COALESCE(NULLIF(ce.harness, ''), NULLIF(dj.harness, ''), NULLIF(ce.agent, ''), NULLIF(dj.agent, '')),
+                  COALESCE(NULLIF(ce.model, ''), NULLIF(dj.resolved_model, ''), NULLIF(dj.requested_model, ''))
+             FROM cost_entries ce
+             LEFT JOIN daemon_jobs dj ON dj.job_id = ce.job_id
+            WHERE ce.job_id=?
+            ORDER BY ce.id DESC LIMIT 1""",
+        (job_id,),
+    ).fetchone()
+    return (row[0], row[1]) if row else (None, None)
+
+
+def _cross_harness_review_verdict(conn, pr_number: int) -> tuple[bool, str]:
+    """Verify that the implementation and review jobs use different harness+models."""
+    if not _cross_harness_review_required():
+        return True, "cross-harness review policy disabled"
+
+    implementation = conn.execute(
+        """SELECT ce.job_id
+             FROM capability_ratings cr
+             JOIN cost_entries ce ON ce.story_id=cr.story_id
+             LEFT JOIN daemon_jobs dj ON dj.job_id=ce.job_id
+            WHERE cr.pr_number=?
+              AND lower(COALESCE(dj.task, '')) NOT LIKE '%review%'
+            ORDER BY ce.id DESC LIMIT 1""",
+        (pr_number,),
+    ).fetchone()
+
+    review = conn.execute(
+        """SELECT ce.job_id
+             FROM cost_entries ce
+             JOIN daemon_jobs dj ON dj.job_id=ce.job_id
+            WHERE lower(dj.task) LIKE '%review%'
+              AND (lower(dj.task) LIKE ? OR lower(dj.task) LIKE ? OR lower(dj.task) LIKE ?)
+            ORDER BY ce.id DESC LIMIT 1""",
+        (f"%pr #{int(pr_number)}%", f"%pull request #{int(pr_number)}%", f"%pr {int(pr_number)}%"),
+    ).fetchone()
+
+    if not implementation:
+        return False, f"no implementing job provenance found for PR #{pr_number}"
+    if not review:
+        return False, f"no reviewing job provenance found for PR #{pr_number}"
+
+    implementing_identity = _job_execution_identity(conn, implementation[0])
+    reviewing_identity = _job_execution_identity(conn, review[0])
+    if not all(implementing_identity + reviewing_identity):
+        return False, (
+            f"incomplete harness/model provenance (implementing={implementation[0]}, "
+            f"reviewing={review[0]})"
+        )
+    if implementing_identity == reviewing_identity:
+        return False, (
+            f"implementing and reviewing jobs use the same harness+model "
+            f"({implementing_identity[0]} / {implementing_identity[1]})"
+        )
+    return True, (
+        f"implementation {implementing_identity[0]} / {implementing_identity[1]} "
+        f"reviewed by {reviewing_identity[0]} / {reviewing_identity[1]}"
+    )
+
 _ORG_DOMAINS = (
     "personalization",
     "monetization",
@@ -4015,6 +4090,14 @@ def cmd_pr_check(pr_number=None, impact_attested: bool = False) -> None:
                         ["gh", "pr", "merge", str(pr_number), "--squash"],
                         check=False,
                     )
+
+    if pr_number is not None:
+        cross_harness_ok, cross_harness_message = _cross_harness_review_verdict(conn, pr_number)
+        if not cross_harness_ok:
+            conn.close()
+            print(f"\n  🚫 [PR CHECK BLOCKED] Cross-harness review required: {cross_harness_message}\n")
+            raise SystemExit(1)
+        print(f"  {_GREEN}✓{_RESET} Cross-harness review passed — {cross_harness_message}")
 
     rows = conn.execute(
         "SELECT DISTINCT story_id, agent FROM capability_ratings WHERE model_version='unknown'"
