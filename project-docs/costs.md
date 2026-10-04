@@ -504,6 +504,23 @@
 | 2026-10-04 01:33 | codex | o4-mini | 482336 | 7701 | $0.0234 [sub] (API: $1.5625) | estimated_token_rate | story-issue-1995 | exec: codex job job-7d81ac... |
 | 2026-10-04 01:50 | codex | o4-mini | 323070 | 3520 | $0.0156 [sub] (API: $1.0220) | estimated_token_rate | story-issue-1998 | exec: codex job job-a3ea10... |
 
+| 2026-10-04 06:11 | codex | o4-mini | 555395 | 4620 | $0.0268 [sub] (API: $1.7355) | estimated_token_rate | story-issue-2000 | exec: codex job job-8337b3... |
+| 2026-10-04 06:11 | codex | o4-mini | 2464666 | 10804 | $0.1183 [sub] (API: $7.5561) | estimated_token_rate | story-issue-2001 | exec: codex job job-766281... |
+| 2026-10-04 06:13 | codex | o4-mini | 600496 | 5105 | $0.0289 [sub] (API: $1.8781) | estimated_token_rate | gh:1925-part1-task1 | exec: codex job job-1818fd... |
+| 2026-10-04 06:18 | codex | o4-mini | 990252 | 6124 | $0.0476 [sub] (API: $3.0626) | estimated_token_rate | gh:1925-part1-task2 | exec: codex job job-81404a... |
+| 2026-10-04 06:23 | codex | o4-mini | 243466 | 2592 | $0.0118 [sub] (API: $0.7693) | estimated_token_rate | gh:1925-part1-task3 | exec: codex job job-169b07... |
+| 2026-10-04 06:27 | codex | o4-mini | 494706 | 4533 | $0.0239 [sub] (API: $1.5521) | estimated_token_rate | gh:1925-part1-task3-retry | exec: codex job job-e13d27... |
+| 2026-10-04 06:32 | codex | o4-mini | 521292 | 4067 | $0.0251 [sub] (API: $1.6249) | estimated_token_rate | gh:1925-part1-task4 | exec: codex job job-bbbd94... |
+| 2026-10-04 06:38 | codex | o4-mini | 1479520 | 9816 | $0.0712 [sub] (API: $4.5858) | estimated_token_rate | gh:1925-part1-task5 | exec: codex job job-47b973... |
+| 2026-10-04 06:53 | claude | claude-sonnet-4-6 | 120000 | 20000 | $0.3475 [sub] (API: $0.6600) | estimated_manual | - | PM/reviewer: verified+merged Tasks 2-6 of gh:#1925 part 1 plan, wrote blog post |
+| 2026-10-04 07:18 | claude | claude-sonnet-4-6 | 90804 | 7975 | $0.2452 [sub] (API: $0.3920) | estimated_token_rate | story-issue-2002 | exec: claude job job-ce403... |
+| 2026-10-04 09:54 | codex | o4-mini | 896960 | 4849 | $0.0431 [sub] (API: $2.7636) | estimated_token_rate | story-issue-1925 | exec: codex job job-6c576d... |
+| 2026-10-04 11:55 | codex | o4-mini | 1712371 | 12285 | $0.0824 [sub] (API: $5.3214) | estimated_token_rate | story-issue-2004 | exec: codex job job-10fac5... |
+| 2026-10-04 11:55 | codex | o4-mini | 2214051 | 11270 | $0.1063 [sub] (API: $6.8112) | estimated_token_rate | story-issue-2005 | exec: codex job job-5b6236... |
+| 2026-10-04 13:22 | codex | o4-mini | 1594785 | 10338 | $0.0767 [sub] (API: $4.9394) | estimated_token_rate | story-issue-2008 | exec: codex job job-f9a829... |
+| 2026-10-04 13:47 | codex | o4-mini | 2785455 | 8379 | $0.1335 [sub] (API: $8.4821) | estimated_token_rate | story-issue-2009 | exec: codex job job-054bb9... |
+| 2026-10-04 14:02 | codex | o4-mini | 2884807 | 12815 | $0.1385 [sub] (API: $8.8466) | estimated_manual | - | gh:#1711 OpenRouter dispatch wiring, PR #2010, interactive Codex session (sandbox denied story/cost log inside worktree; logged from main repo post-hoc) |
+
 ## Subscription Amortization & Dual-Ledger Summary
 
 | Harness | Base Fee | Actual Amortized Spend | API Equivalent Value | Net Savings |
