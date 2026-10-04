@@ -420,6 +420,13 @@
 | 2026-10-03 00:18 | agy | unknown | 363367 | 16713 | $0.3074 [sub] (API: $1.3408) | estimated_token_rate | story-issue-1920 | exec: agy job job-0f053a27 |
 | 2026-10-03 00:23 | agy | unknown | 383926 | 31750 | $0.3361 [sub] (API: $1.6280) | estimated_token_rate | story-issue-1921 | exec: agy job job-c337507b |
 | 2026-10-03 00:29 | codex | o4-mini | 762078 | 7136 | $0.0368 [sub] (API: $2.3933) | estimated_token_rate | story-issue-1930 | exec: codex job job-1945df... |
+| 2026-10-03 | codex | gpt-5.3-codex | - | - | $0.20 | estimated_manual | story-issue-1929 | CLI lazy-import implementation, benchmark, tests, and PR preparation |
+| 2026-10-03 | codex | gpt-5.3-codex | - | - | - | estimated_manual | story-issue-1928 | Implemented VERSION single-source release gate and focused verification |
+| 2026-10-03 | codex | gpt-5.3-codex | - | - | $0.20 | estimated_manual | story-issue-1933 | Job truth pilot PR1 implementation, tests, migration checks, and PR preparation |
+| 2026-10-03 | codex | gpt-5.3-codex | - | - | $0.20 | estimated_manual | story-issue-1933 | Job truth pilot PR3 projection, shadow metrics, rollout gates, manual reconciliation, and verification |
+| 2026-10-03 | codex | gpt-5.3-codex | - | - | $0.20 | estimated_manual | story-issue-1933 | PR #1962 QA remediation: authoritative predicates, fail-closed promotion SLOs, tests, and verification |
+| 2026-10-03 | codex | gpt-5.3-codex | - | - | $0.20 | estimated_manual | story-issue-1933 | PR #1962 remaining QA blockers: metric presence fail-closed, canonical terminal writer routing, focused/full verification |
+| 2026-10-03 | codex | gpt-5.3-codex | - | - | $0.20 | estimated_manual | story-issue-1951 | Independent terminal-decision cost audit design, implementation, and targeted verification |
 | 2026-10-03 00:46 | codex | o4-mini | 826840 | 6460 | $0.0398 [sub] (API: $2.5774) | estimated_token_rate | story-issue-1932 | exec: codex job job-a04aca... |
 | 2026-10-03 00:50 | codex | extract_mv(log_text, | 2378419 | 12971 | $0.1143 [sub] (API: $7.3298) | estimated_token_rate | story-issue-1922 | exec: codex job job-2a5f3a... |
 | 2026-10-03 00:52 | codex | o4-mini | 2482370 | 16553 | $0.1194 [sub] (API: $7.6954) | estimated_token_rate | story-issue-1928 | exec: codex job job-2fd06a... |
