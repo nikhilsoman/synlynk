@@ -1793,7 +1793,7 @@ def test_dispatch_agent_persists_agent_id_on_daemon_jobs(project_dir, monkeypatc
     assert row[0] == agent_id
 
 
-def test_dispatch_agent_requires_gh_write_reroutes_incapable_agent(project_dir, monkeypatch, capsys):
+def test_dispatch_agent_requires_gh_write_allows_grok_after_live_retest(project_dir, monkeypatch, capsys):
     import synlynk as sl
     import synlynk.dispatch as dispatch_mod
 
@@ -1809,17 +1809,15 @@ def test_dispatch_agent_requires_gh_write_reroutes_incapable_agent(project_dir, 
         context_mode="none", requires_gh_write=True, role="qa",
     )
 
-    assert job["agent"] in ("codex", "claude")
+    assert job["agent"] == "grok"
     assert sl.HARNESS_CAPABILITY_BASELINES[job["agent"]]["can_gh_write"] is True
     captured = capsys.readouterr()
-    assert "rerouted" in captured.out
+    assert "rerouted" not in captured.out
 
 
-def test_dispatch_agent_requires_gh_write_force_agent_fails_closed(project_dir, monkeypatch, capsys):
+def test_dispatch_agent_requires_gh_write_force_agent_allows_grok(project_dir, monkeypatch, capsys):
     import synlynk as sl
     import synlynk.dispatch as dispatch_mod
-    from synlynk.capability_probe import IncompatibleHarnessCapabilityError
-
     class FakeProc:
         pid = 1
 
@@ -1827,11 +1825,14 @@ def test_dispatch_agent_requires_gh_write_force_agent_fails_closed(project_dir, 
     monkeypatch.setattr(sl, "_preflight_dispatch", lambda harness_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
     monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_gh_token", lambda role: "test-gh-token")
 
-    with pytest.raises(IncompatibleHarnessCapabilityError):
-        sl.dispatch_agent(
-            "grok", "review and merge PR #500", story_id="story-manual-1",
-            context_mode="none", requires_gh_write=True, force_agent=True, role="qa",
-        )
+    job = sl.dispatch_agent(
+        "grok", "review and merge PR #500", story_id="story-manual-1",
+        context_mode="none", requires_gh_write=True, force_agent=True, role="qa",
+    )
+
+    assert job["agent"] == "grok"
+    captured = capsys.readouterr()
+    assert "cannot reliably complete GitHub-write" not in captured.out + captured.err
 
 
 def test_dispatch_agent_requires_gh_write_allows_codex_without_reroute(project_dir, monkeypatch, capsys):

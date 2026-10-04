@@ -40,7 +40,7 @@ def test_can_gh_write_baselines_match_live_verified_reality():
 
     assert HARNESS_CAPABILITY_BASELINES["claude"]["can_gh_write"] is True
     assert HARNESS_CAPABILITY_BASELINES["agy"]["can_gh_write"] is True
-    assert HARNESS_CAPABILITY_BASELINES["grok"]["can_gh_write"] is False
+    assert HARNESS_CAPABILITY_BASELINES["grok"]["can_gh_write"] is True
     assert HARNESS_CAPABILITY_BASELINES["codex"]["can_gh_write"] is True
     assert HARNESS_CAPABILITY_BASELINES["local"]["can_gh_write"] is False
 
