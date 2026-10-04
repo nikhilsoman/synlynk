@@ -1,5 +1,6 @@
 # synlynk Blog Series: Building the OS for Multi-Agent Development
 
+| [247](./247-pr2020-tiered-help.md) | gh:#1974 — Tiered Help from the Command Taxonomy | [#2020](https://github.com/nikhilsoman/synlynk/pull/2020) | 2026-10-04 |
 | [246](./246-prTBD-grok-failclosed-permission-enforcement.md) | gh:#1925 Part 1 — Making Grok's Permission Bypass Explicit, Not Implicit | [#2002](https://github.com/nikhilsoman/synlynk/pull/2002) | 2026-10-04 |
 | [245](./245-pr1998-costs-regen-root-cause.md) | gh:#1995 — The Archive Was Never Lost, It Was Gitignored | [#1998](https://github.com/nikhilsoman/synlynk/pull/1998) | 2026-10-04 |
 | [244](./244-chore-empirical-capability-policy.md) | Suspending the Policy We Wrote for Our Own Convenience | [#1994](https://github.com/nikhilsoman/synlynk/pull/1994) | 2026-10-04 |
