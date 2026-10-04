@@ -12,6 +12,71 @@ import pytest
 from synlynk.agent_cli import SEED_CHARTERS
 
 
+def _seed_cross_harness_review_case(project_dir, monkeypatch, *, review_harness, review_model):
+    import json
+    import synlynk
+    from synlynk.db import _cross_harness_review_verdict
+
+    policy_path = project_dir / ".synlynk" / "policy.json"
+    policy_path.parent.mkdir(parents=True, exist_ok=True)
+    policy_path.write_text(json.dumps({
+        "overrides": {"merge_authority": {"cross_harness_review_required": True}}
+    }))
+    monkeypatch.chdir(project_dir)
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, harness, task, status, enqueued_at, resolved_model) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("job-impl", "codex", "codex", "implement issue #1991", "done", "2026-10-04T00:00:00", "gpt-5.3-codex"),
+    )
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, harness, task, status, enqueued_at, resolved_model) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("job-review", review_harness, review_harness, "review PR #1991", "done", "2026-10-04T00:00:01", review_model),
+    )
+    conn.execute("INSERT INTO stories (story_id, title) VALUES (?, ?)", ("story-1991", "cross-harness review"))
+    for job_id, harness, model, story_id in (
+        ("job-impl", "codex", "gpt-5.3-codex", "story-1991"),
+        ("job-review", review_harness, review_model, None),
+    ):
+        conn.execute(
+            "INSERT INTO cost_entries (session_date, agent, harness, model, story_id, cost_source, job_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            ("2026-10-04", harness, harness, model, story_id, "test", job_id),
+        )
+    conn.execute(
+        "INSERT INTO capability_ratings (story_id, agent, model_version, quality, pr_number) "
+        "VALUES (?, ?, ?, ?, ?)",
+        ("story-1991", "codex", "gpt-5.3-codex", 1.0, 1991),
+    )
+    conn.commit()
+    ok, message = _cross_harness_review_verdict(conn, 1991)
+    conn.close()
+    return ok, message
+
+
+def test_pr_check_cross_harness_review_rejects_same_harness_and_model(project_dir, monkeypatch):
+    ok, message = _seed_cross_harness_review_case(
+        project_dir, monkeypatch, review_harness="codex", review_model="gpt-5.3-codex"
+    )
+    assert not ok
+    assert "same harness+model" in message
+
+
+def test_pr_check_cross_harness_review_accepts_different_harness(project_dir, monkeypatch):
+    ok, _ = _seed_cross_harness_review_case(
+        project_dir, monkeypatch, review_harness="claude", review_model="gpt-5.3-codex"
+    )
+    assert ok
+
+
+def test_pr_check_cross_harness_review_accepts_different_model(project_dir, monkeypatch):
+    ok, _ = _seed_cross_harness_review_case(
+        project_dir, monkeypatch, review_harness="codex", review_model="gpt-5.2-codex"
+    )
+    assert ok
+
+
 def test_isolate_archived_pytest_modules():
     config = (Path(__file__).parents[1] / "pytest.ini").read_text(encoding="utf-8")
 

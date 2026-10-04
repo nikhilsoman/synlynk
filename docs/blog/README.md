@@ -1,5 +1,6 @@
 # synlynk Blog Series: Building the OS for Multi-Agent Development
 
+| [248](./248-pr2013-containerized-dispatch.md) | gh:#1925 Part 2 — An opt-in container for an untrusted harness | [#2013](https://github.com/nikhilsoman/synlynk/pull/2013) | 2026-10-04 |
 | [247](./247-pr2020-tiered-help.md) | gh:#1974 — Tiered Help from the Command Taxonomy | [#2020](https://github.com/nikhilsoman/synlynk/pull/2020) | 2026-10-04 |
 | [246](./246-prTBD-grok-failclosed-permission-enforcement.md) | gh:#1925 Part 1 — Making Grok's Permission Bypass Explicit, Not Implicit | [#2002](https://github.com/nikhilsoman/synlynk/pull/2002) | 2026-10-04 |
 | [245](./245-pr1998-costs-regen-root-cause.md) | gh:#1995 — The Archive Was Never Lost, It Was Gitignored | [#1998](https://github.com/nikhilsoman/synlynk/pull/1998) | 2026-10-04 |

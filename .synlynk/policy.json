@@ -43,7 +43,7 @@
       "require_non_authoring_review": true,
       "review_fallback": "same_identity_comment_checklist",
       "cross_harness_review_required": true,
-      "cross_harness_review_note": "Reviewer must differ from implementer in harness AND model, not just role identity. Enforcement in synlynk pr check not yet built (gh:#1991) — verify manually via cost_entries/job metadata until it ships."
+      "cross_harness_review_note": "Reviewer must differ from implementer in harness AND model, not just role identity. Enforced by synlynk pr check from cost_entries/job metadata (gh:#1991)."
     },
     "release_authority": {"can_cut_release": ["pm"], "requires_human_approval": true},
     "governs_authority": {
