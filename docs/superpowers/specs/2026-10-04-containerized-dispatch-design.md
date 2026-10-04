@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-04
 - **Author:** Grok (infra)
-- **Status:** Revised after decide panel `dec-ff9a9005` (approve with required changes)
+- **Status:** Approved for implementation. Panel `dec-ff9a9005` required changes are folded in.
 - **Issue:** [#1925](https://github.com/nikhilsoman/synlynk/issues/1925) (containerization half only)
 - **Source:** `docs/strategy/2026-10-02-decide-panel-roadmap.md` §1 row 6
 
