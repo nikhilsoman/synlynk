@@ -157,6 +157,40 @@ def test_classify_task_delivery_clean_when_receipt_status_none():
     assert result == {"hard_fail": False, "warn": False}
 
 
+def test_task_delivery_accepts_verified_gh_write_without_local_activity(monkeypatch):
+    import synlynk.jobs as jobs_mod
+
+    monkeypatch.setattr(
+        jobs_mod,
+        "_job_has_verified_gh_write_evidence",
+        lambda job: bool(job.get("requires_gh_write") and job.get("gh_write_verified")),
+    )
+    job = {"id": "job-gh-write", "requires_gh_write": True, "gh_write_verified": True}
+
+    assert jobs_mod._task_delivery_has_corroborating_activity(job, {
+        "has_activity": False,
+        "remote_has_activity": False,
+    }) is True
+    assert jobs_mod._classify_task_delivery("absent", True) == {
+        "hard_fail": False,
+        "warn": True,
+    }
+
+
+def test_task_delivery_still_hard_fails_without_gh_write_or_git_activity():
+    import synlynk.jobs as jobs_mod
+
+    job = {"id": "job-no-activity", "requires_gh_write": False}
+    assert jobs_mod._task_delivery_has_corroborating_activity(job, {
+        "has_activity": False,
+        "remote_has_activity": False,
+    }) is False
+    assert jobs_mod._classify_task_delivery("absent", False) == {
+        "hard_fail": True,
+        "warn": False,
+    }
+
+
 def test_task_sha256_and_preview_returns_none_for_falsy_task():
     from synlynk.jobs import _task_sha256_and_preview
 
