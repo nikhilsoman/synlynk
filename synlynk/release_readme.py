@@ -134,6 +134,16 @@ def _generated_command_section() -> str:
     return render_readme_section()
 
 
+def _generated_command_reference() -> str:
+    """Render the committed command reference from the taxonomy source."""
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if repo_root not in sys.path:
+        sys.path.insert(0, repo_root)
+    from scripts.generate_command_docs import render_reference_doc
+
+    return render_reference_doc()
+
+
 def _relative_link_target(target: str) -> Optional[str]:
     path = target.strip()
     if not path or path.startswith(("#", "http://", "https://", "mailto:", "ftp://")):
@@ -419,6 +429,36 @@ def validate_readme_for_release(
                 )
             )
         body_for_mentions = text[:start] + text[end + len(COMMANDS_END):]
+
+    reference_path = os.path.join(root, "docs", "reference", "commands.md")
+    if not os.path.isfile(reference_path):
+        findings.append(
+            ReadmeFinding(
+                "commands",
+                "generated command reference is missing: "
+                "docs/reference/commands.md",
+            )
+        )
+    else:
+        try:
+            reference = open(reference_path, encoding="utf-8").read()
+            generated_reference = _generated_command_reference()
+        except Exception as exc:
+            findings.append(
+                ReadmeFinding(
+                    "commands",
+                    f"could not render command reference: {exc}",
+                )
+            )
+        else:
+            if reference != generated_reference:
+                findings.append(
+                    ReadmeFinding(
+                        "commands",
+                        "docs/reference/commands.md is stale — run "
+                        "`python3 scripts/generate_command_docs.py`",
+                    )
+                )
 
     shipped = _taxonomy_commands()
     for _line, cmd in _extract_command_candidates(body_for_mentions):

@@ -1649,7 +1649,9 @@ def _docs_keep_readme_synchronized_readme(
 
     commands_md = root / "docs" / "reference" / "commands.md"
     commands_md.parent.mkdir(parents=True, exist_ok=True)
-    commands_md.write_text("# Command Reference\n")
+    from scripts.generate_command_docs import render_reference_doc
+
+    commands_md.write_text(render_reference_doc())
     section = (
         "<!-- commands:start -->\n\n- `synlynk init`\n\n<!-- commands:end -->"
         if stale_commands

@@ -27,6 +27,9 @@ def render_reference_doc() -> str:
     lines = ["# Command Reference", "",
              "Generated from `synlynk/taxonomy.py`. Do not edit by hand — run "
              "`python3 scripts/generate_command_docs.py`.", "",
+             "Start with the [documentation hub](../README.md), the "
+             "[10-minute quickstart](../quickstart.md), or a "
+             "[task-oriented how-to](../how-to/README.md).", "",
              "See [safe-caller-construction.md](safe-caller-construction.md) for guidance on "
              "building dispatch task text programmatically.", ""]
     gateway = [e for e in COMMAND_TAXONOMY if e["orientation_gateway"]]
