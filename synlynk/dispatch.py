@@ -19,6 +19,7 @@ from typing import List, Optional, Sequence, Tuple
 
 from synlynk._constants import HARNESS_CAPABILITY_BASELINES, _CODEX_NETWORK_PERMISSION
 from synlynk._lazy import pkg as _pkg
+from synlynk.harness_adapters.base import PermissionEnforcementError
 
 _ORG_ROLE_TO_BASELINE_ROLE = {
     "dev": "builder",
@@ -728,10 +729,6 @@ def _grok_permission_flags(permissions: list, skip_permissions: bool = False) ->
         )
 
     return ["--always-approve", "--permission-mode", "bypassPermissions"]
-
-
-class PermissionEnforcementError(RuntimeError):
-    """Raised when an agent has no real mechanism to enforce requested permissions."""
 
 
 def _merge_codex_permission_flags(flags: list, permission_flags: list) -> list:
