@@ -5483,6 +5483,48 @@ def test_cmd_jobs_all_shows_completed(project_dir, capsys):
     assert "job-done1" in out
 
 
+def test_cmd_jobs_all_surfaces_oracle_evidence(project_dir, capsys):
+    """Human jobs output must expose verified evidence, not only legacy status."""
+    import synlynk as sl
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, depends_on, "
+        "enqueued_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("job-evidence", "codex", "open PR", "done", 5, "[]", "2026-06-24T07:00:00")
+    )
+    conn.execute(
+        "INSERT INTO job_effect_contract "
+        "(job_id, contract_id, kind, target, expect, local_change_policy, "
+        "receipt_policy, verification_deadline_at, contract_version, "
+        "required_predicates_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        ("job-evidence", "contract-1", "github_pr_open", "issue:1", "effect_verified",
+         "optional", "required", "2026-06-24T07:05:00Z", 1, "{}")
+    )
+    conn.execute(
+        "INSERT INTO job_evidence "
+        "(evidence_id, job_id, kind, result, observed_at, source, confidence, attempt, event_id, payload_json) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        ("evidence-1", "job-evidence", "github_effect", "true", "2026-06-24T07:01:00Z",
+         "gh", "high", 1, "event-1", '{}')
+    )
+    conn.execute(
+        "INSERT INTO job_terminal_decision "
+        "(job_id, revision, status, verification_state, primary_evidence_id, "
+        "evidence_snapshot_json, decision_reason, decided_at, decided_by, "
+        "contract_version, follow_up) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        ("job-evidence", 1, "completed", "verified", "evidence-1", "[]",
+         "contract_effect_verified", "2026-06-24T07:01:01Z", "job_truth.v1", 1, "none")
+    )
+    conn.commit()
+    conn.close()
+
+    sl.cmd_jobs(all_jobs=True)
+    out = capsys.readouterr().out
+    assert "VERIFY" in out
+    assert "verified" in out
+    assert "1 (contract_effect_verified)" in out
+
+
 def test_cmd_jobs_default_hides_completed(project_dir, capsys):
     """cmd_jobs() without --all hides done jobs."""
     import synlynk as sl
