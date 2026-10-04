@@ -3515,11 +3515,13 @@ def _ensure_daemon_job_cost_entry(
         extract = _pkg("extract_tokens")
         in_tokens, out_tokens = 0, 0
         basis = "none"
+        turn_breakdown = None
         if extract and log_text:
             try:
                 token_counts = extract(log_text, agent=agent or "")
                 in_tokens, out_tokens = token_counts[0], token_counts[1]
                 basis = getattr(token_counts, "basis", "none")
+                turn_breakdown = getattr(token_counts, "turns", None) or None
             except Exception:
                 in_tokens, out_tokens = 0, 0
         model_version = None
@@ -3541,6 +3543,7 @@ def _ensure_daemon_job_cost_entry(
                 basis=basis,
                 job_id=job_id,
                 harness=agent or "",
+                turn_breakdown=turn_breakdown,
             )
             try:
                 recorded = conn.execute(
@@ -4201,6 +4204,7 @@ def _reconcile_daemon_jobs() -> None:
                 token_counts = _pkg("extract_tokens")(log_text, agent=agent)
                 in_tokens, out_tokens = token_counts
                 basis = getattr(token_counts, "basis", "none")
+                turn_breakdown = getattr(token_counts, "turns", None) or None
                 model_version = _pkg("extract_model_version")(log_text, agent=agent)
                 try:
                     _pkg("update_costs")(
@@ -4214,6 +4218,7 @@ def _reconcile_daemon_jobs() -> None:
                         basis=basis,
                         job_id=job_id,
                         harness=agent,
+                        turn_breakdown=turn_breakdown,
                     )
                 except Exception as exc:
                     print(f"  ⚠ update_costs failed for {job_id}: {exc}")
