@@ -92,7 +92,24 @@ _ORG_DOMAIN_DRIFT_MAP = {
     "marketing": "growth",
 }
 
-_PROJECT_DOC_KEEP_N = 50
+# gh:#1995 root cause: at 50, _PROJECT_DOC_KEEP_N was far smaller than the
+# rate cost_entries grows, so nearly every regen truncated the git-tracked
+# costs.md to its last 50 rows -- the live window slid on almost every PR
+# touching cost logging, indistinguishable in a PR diff from data loss.
+# state.db never actually loses rows; _rotate_project_doc()'s archive file
+# (written to the shared, persistent .synlynk/project-docs/archive/ -- NOT
+# worktree-scoped, since _synlynk_project_docs_dir() resolves through
+# _project_root()'s `git rev-parse --git-common-dir`, identical across every
+# linked worktree) is gitignored by this repo's own .gitignore, by design,
+# not by accident. Raised from 50 to 500 to make window-slide churn rare in
+# practice (see _rotate_project_doc below, which also best-effort `git add`s
+# a freshly created archive file -- a no-op here since the path is
+# gitignored, but it closes the real worktree-loss case for a non-migrated
+# synlynk-managed repo where the archive path is the tracked, worktree-local
+# one). A separate, more severe bug -- the archive itself re-appending the
+# full overflow slice on every call instead of tracking a high-water mark,
+# causing 45x+ duplication -- is tracked at gh:#1999, not fixed here.
+_PROJECT_DOC_KEEP_N = 500
 
 # Bump when a new schema migration is added.  This is deliberately kept in
 # SQLite's small built-in metadata slot so checking it does not touch the DB
@@ -2438,7 +2455,19 @@ def _generate_todo_md() -> None:
 
 
 def _rotate_project_doc(file_stem: str, all_rows: list, keep_n: int = None) -> list:
-    """Rotate older generated project-doc rows into archive files."""
+    """Rotate older generated project-doc rows into archive files.
+
+    gh:#1995: the archive file this writes lives in whatever working directory
+    the caller is running from. When that's a dispatched job's ephemeral git
+    worktree, the archive is lost the moment the worktree is removed unless
+    something commits it first. We can't guarantee the calling job will do
+    that, so we best-effort `git add` the archive path(s) ourselves the moment
+    they're written -- if the calling process does go on to `git commit`
+    (even with no pathspec, which commits the full index), the archive rides
+    along. This does not fully close the gap (a job that never commits
+    anything still loses it), but it closes the common case and is strictly
+    additive: failures here never block doc generation.
+    """
     from synlynk import _docs_dir, _is_migrated, _synlynk_project_docs_dir
 
     n = keep_n if keep_n is not None else _PROJECT_DOC_KEEP_N
@@ -2469,8 +2498,19 @@ def _rotate_project_doc(file_stem: str, all_rows: list, keep_n: int = None) -> l
             if not existing_index:
                 f.write("# Archive Index\n\n")
             f.write(
-                f"- [{archive_filename}]({archive_filename}) — {file_stem} entries older than the live window\n"
+                f"- [{archive_filename}]({archive_filename}) \u2014 {file_stem} entries older than the live window\n"
             )
+
+    try:
+        subprocess.run(
+            ["git", "add", "--", archive_path, index_path],
+            cwd=base_dir,
+            check=False,
+            capture_output=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError):
+        pass
 
     return live_rows
 

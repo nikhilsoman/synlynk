@@ -1,6 +1,8 @@
 # synlynk Blog Series: Building the OS for Multi-Agent Development
 
 | [246](./246-prTBD-grok-failclosed-permission-enforcement.md) | gh:#1925 Part 1 — Making Grok's Permission Bypass Explicit, Not Implicit | [#2002](https://github.com/nikhilsoman/synlynk/pull/2002) | 2026-10-04 |
+| [245](./245-pr1998-costs-regen-root-cause.md) | gh:#1995 — The Archive Was Never Lost, It Was Gitignored | [#1998](https://github.com/nikhilsoman/synlynk/pull/1998) | 2026-10-04 |
+| [244](./244-chore-empirical-capability-policy.md) | Suspending the Policy We Wrote for Our Own Convenience | [#1994](https://github.com/nikhilsoman/synlynk/pull/1994) | 2026-10-04 |
 | [242](./242-pr1965-agy-adapter-port.md) | gh:#1924 PR4 — Porting Agy to the HarnessAdapter Protocol | [#1965](https://github.com/nikhilsoman/synlynk/pull/1965) | 2026-10-03 |
 | [241](./241-pr1964-live22-gh-identity-zone-boundary.md) | LIVE-22 — Closing the GitHub-Identity Zone-Boundary Gap | [#1964](https://github.com/nikhilsoman/synlynk/pull/1964) | 2026-10-03 |
 | [240](./240-pr1959-grok-shell-capability-fix.md) | gh:#1924 — Grok's Shell Capability Was Still Living in the Pre-#1277 World | [#1959](https://github.com/nikhilsoman/synlynk/pull/1959) | 2026-10-03 |
