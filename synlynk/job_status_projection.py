@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import sqlite3
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from typing import Any, Mapping
@@ -125,7 +126,16 @@ def project_job_status(conn, job_id: str) -> dict[str, Any]:
 
 
 def record_shadow_comparison(conn, job_id: str) -> dict[str, Any]:
-    projection = project_job_status(conn, job_id)
+    # The normal DB helper returns tuple rows.  The projection reader also
+    # supports the Row-based test/integration connections, so provide that
+    # shape locally without changing the caller's connection configuration.
+    previous_row_factory = conn.row_factory
+    if previous_row_factory is None:
+        conn.row_factory = sqlite3.Row
+    try:
+        projection = project_job_status(conn, job_id)
+    finally:
+        conn.row_factory = previous_row_factory
     shadow = projection["shadow_comparison"]
     conn.execute(
         "INSERT OR REPLACE INTO job_status_shadow "
