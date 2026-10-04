@@ -11,7 +11,6 @@ from typing import Optional
 _TARGET_RE = re.compile(r"^(issue|pr):(\d+)$")
 _EXPECT_FIELD = {
     "closed": ("state", "CLOSED"),
-    "merged": ("state", "MERGED"),
     "pr_open": ("state", "OPEN"),
 }
 _LIST_EXPECT_FIELD = {
@@ -224,6 +223,10 @@ def gh_write_verified(
     if expect == "created":
         field = "state"
         cmd = ["gh", subcommand, "view", number, "--json", field]
+    elif expect == "merged":
+        field = "state"
+        expected_value = "MERGED"
+        cmd = ["gh", subcommand, "view", number, "--json", "state,mergedBy,mergeCommit"]
     elif expect in _EXPECT_FIELD:
         field, expected_value = _EXPECT_FIELD[expect]
         cmd = ["gh", subcommand, "view", number, "--json", field]
@@ -236,7 +239,7 @@ def gh_write_verified(
         return None
 
     is_list_expect = expect in _LIST_EXPECT_FIELD
-    is_scalar_expect = expect in _EXPECT_FIELD
+    is_scalar_expect = expect in _EXPECT_FIELD or expect == "merged"
     attempts = _LIST_VERIFY_ATTEMPTS if (is_list_expect or is_scalar_expect) else 1
     if evidence is not None:
         evidence.update({
@@ -287,9 +290,45 @@ def gh_write_verified(
         if expect == "created":
             return payload.get("state") is not None
 
-        if expect in _EXPECT_FIELD:
+        if expect in _EXPECT_FIELD or expect == "merged":
             actual = payload.get(field)
-            matched = None if actual is None else actual == expected_value
+            state_match = None if actual is None else actual == expected_value
+            actor_match = True
+            sha_match = True
+            if expect == "merged":
+                actor_match = _gh_logins_match(
+                    _author_login({"author": payload.get("mergedBy")}), expect_author
+                )
+                sha_match = (
+                    True
+                    if not expected_sha
+                    else _entry_matches_sha(payload.get("mergeCommit") or {}, expected_sha)
+                )
+                matched = (
+                    None
+                    if state_match is None or actor_match is None
+                    else bool(state_match and actor_match and sha_match)
+                )
+                if evidence is not None:
+                    evidence.update({
+                        "target_match": True,
+                        "actor_match": actor_match,
+                        "sha_match": sha_match,
+                        "state": actual,
+                        "mergedBy": payload.get("mergedBy"),
+                        "mergeCommit": payload.get("mergeCommit"),
+                        "merge_state": actual,
+                        "merged_by": payload.get("mergedBy"),
+                        "merge_commit": payload.get("mergeCommit"),
+                    })
+                    evidence["attempts"][-1].update({
+                        "target_match": True,
+                        "actor_match": actor_match,
+                        "sha_match": sha_match,
+                        "merge_state": actual,
+                    })
+            else:
+                matched = state_match
             if evidence is not None:
                 evidence["attempts"][-1]["matched"] = matched
             if matched is True:
@@ -350,7 +389,10 @@ def gh_write_verified(
 
 def _entry_matches_sha(entry: dict, expected_sha: str) -> bool:
     """Return whether a review/comment carries the causal commit identity."""
-    candidates = [entry.get("commitOid"), entry.get("commit_oid"), entry.get("sha"), entry.get("headSha")]
+    candidates = [
+        entry.get("oid"), entry.get("commitOid"), entry.get("commit_oid"),
+        entry.get("sha"), entry.get("headSha"),
+    ]
     commit = entry.get("commit")
     if isinstance(commit, dict):
         candidates.extend((commit.get("oid"), commit.get("sha")))
