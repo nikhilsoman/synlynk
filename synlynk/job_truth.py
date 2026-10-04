@@ -124,10 +124,11 @@ def build_github_effect_contract(
         "review": "github_review", "github_review": "github_review", "review_posted": "github_review",
         "comment": "github_comment", "issue_comment": "github_comment",
         "pr": "github_pr_open", "github_pr_open": "github_pr_open",
+        "merge": "github_pr_merge", "github_pr_merge": "github_pr_merge", "merged": "github_pr_merge",
         "issue": "github_issue_open", "github_issue_open": "github_issue_open",
     }
     kind = kinds.get(operation.strip().lower(), operation.strip().lower())
-    if kind not in {"github_review", "github_comment", "github_pr_open", "github_issue_open"}:
+    if kind not in {"github_review", "github_comment", "github_pr_open", "github_pr_merge", "github_issue_open"}:
         raise ValueError(f"unsupported GitHub contract operation: {operation!r}")
     if receipt_policy not in {"required", "optional", "waived"}:
         raise ValueError("receipt_policy must be required, optional, or waived")

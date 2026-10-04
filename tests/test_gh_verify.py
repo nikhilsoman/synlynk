@@ -26,10 +26,23 @@ def test_gh_write_verified_false_when_issue_still_open(monkeypatch):
 def test_gh_write_verified_true_when_pr_merged(monkeypatch):
     def fake_run(cmd, **kwargs):
         assert cmd[:3] == ["gh", "pr", "view"]
-        return subprocess.CompletedProcess(cmd, 0, stdout='{"state":"MERGED"}', stderr="")
+        assert cmd[-1] == "state,mergedBy,mergeCommit"
+        return subprocess.CompletedProcess(
+            cmd, 0,
+            stdout='{"state":"MERGED","mergedBy":{"login":"qa"},'
+                   '"mergeCommit":{"oid":"deadbeef"}}',
+            stderr="",
+        )
 
     monkeypatch.setattr(subprocess, "run", fake_run)
-    assert gh_write_verified("pr:964", expect="merged") is True
+    evidence = {}
+    assert gh_write_verified(
+        "pr:964", expect="merged", expect_author="qa", expected_sha="deadbeef",
+        evidence=evidence,
+    ) is True
+    assert evidence["target_match"] is True
+    assert evidence["actor_match"] is True
+    assert evidence["sha_match"] is True
 
 
 def test_gh_write_verified_merged_retries_delayed_state(monkeypatch):
