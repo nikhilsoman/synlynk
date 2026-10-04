@@ -10491,7 +10491,7 @@ def generate_onboarding_html(data: dict = None, port: int = 27472) -> str:
   </div>
   <div class="recommendations">
     <h2>Recommended Ecosystem Tools &amp; Substrates</h2>
-    <p style="color: #8b949e; font-size: 14px; margin-bottom: 16px;">Deterministic AST knowledge graphs and official developer CLI tools for multi-agent hybrid workgroups.</p>
+    <p style="color: #8b949e; font-size: 14px; margin-bottom: 16px;">Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result.</p>
     {tools_html}
   </div>
   <div class="tour">
