@@ -8,6 +8,7 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ---
 
 ## [Unreleased]
+- Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result.
 - Ongoing Wave 3: Hosted Teams Server Hub, Cloudflare Tunnel full-duplex daemon, and Dynamic Quota Advisory service.
 
 ## [v0.25.0] - 2026-10-02
@@ -17,7 +18,7 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - feat(local): platform RAM prober (`_detect_hardware_tier()`) and `synlynk local doctor --init` tier detection and model recommendation
 - feat(dispatch): tier-0 zero-trust auto-routing via `synlynk dispatch auto` with health and capability score thresholding
 - feat(gateway): OpenRouter universal gateway configuration preview in `.synlynk/registry.json` and `synlynk gateway probe` CLI command
-- feat(docker): Sovereign Silicon Orb Stack container image (`docker/Dockerfile.sovereign`, `docker/entrypoint.sh`, `.github/workflows/sovereign-build.yml`)
+- feat(docker): local model Orb Stack container image (`docker/Dockerfile.sovereign`, `docker/entrypoint.sh`, `.github/workflows/sovereign-build.yml`)
 ### Fixed
 - fix(dispatch): isolated local model argument construction to prevent bare model names from overriding oMLX provider configuration
 - fix(cli): graceful rendering of deferred dispatch job responses
