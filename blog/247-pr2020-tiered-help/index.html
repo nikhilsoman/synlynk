@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tiered Help from the Command Taxonomy | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-3">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Oct 04, 2026</span>
+        
+          <span class="blog-post-pr">PR 2020</span>
+        
+      </div>
+      <h1 class="blog-post-title">Tiered Help from the Command Taxonomy</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>PR #2010 (2026-10-04) wired the OpenRouter dispatch gateway — expanding harness capability to
+include frontier models beyond the core five. The goalpost at that point was surface polish: the
+core orchestration layer was complete, and user-facing commands needed refinement to match the
+expanded scope.</p>
+<h2>What Changed: Surfacing the Taxonomy to Users</h2>
+<p>The COMMAND_TAXONOMY (previously internal-only, used for telemetry and validation) became the
+source of truth for human-facing command discovery. This PR took that read-only step further by
+building a tiered help system directly from taxonomy entries, grouped into four command tiers:</p>
+<ul>
+<li><strong>Core</strong> (8 commands) — the essential daily set: <code>init</code>, <code>dispatch</code>, <code>status</code>, <code>jobs</code>, <code>decide</code>, <code>pr check</code>, <code>exec</code>, <code>doctor</code></li>
+<li><strong>Workflow</strong> (maturity tier ≤ 2) — intermediate use cases</li>
+<li><strong>Advanced/Admin</strong> (tier 3 and latent) — operator-level utilities</li>
+<li><strong>All</strong> (<code>synlynk help --all</code>) — complete command catalog</li>
+</ul>
+<p>No behavior change to any existing command. The existing <code>--help</code> output and top-level help remain
+untouched. This is pure read-side surface.</p>
+<h2>Technical Implementation</h2>
+<p>The implementation is minimal — under 60 lines of new taxonomy code plus CLI wiring:</p>
+<ul>
+<li><code>entries_for_help(group, include_all=False)</code> filters taxonomy entries by group</li>
+<li><code>format_tiered_help(group, include_all=False)</code> renders compact, human-readable output with
+trigger phrases from the taxonomy as inline hints</li>
+<li><code>synlynk help</code> command added to the top-level CLI with <code>group</code> argument (optional, defaults to
+&quot;core&quot;) and <code>--all</code> flag</li>
+<li>Early exit in <code>main()</code> to handle help before the normal parser boots, avoiding import overhead</li>
+</ul>
+<p>Tests confirm all taxonomy groups render correctly and the core tier matches the canonical list.</p>
+<h2>Guardrail</h2>
+<p>Issue #1973 (sibling to #1974) captured baseline advanced-command usage metrics before this shipped.
+Post-launch monitoring will compare actual usage (from telemetry) against that baseline — the
+guardrail is that advanced-command usage must not drop after this help system ships, confirming
+the new surface didn't inadvertently obscure the commands power users relied on.</p>
+<h2>What Was Achieved</h2>
+<p>One surface command now serves as the entry point to the entire command space, removing the need to
+consult separate documentation for command discovery. The hierarchy (core → workflow → advanced)
+mirrors the maturity model already embedded in COMMAND_TAXONOMY, so it requires zero additional
+maintenance — each taxonomy entry's <code>maturity_tier</code> automatically slots it into the right tier.</p>
+<h2>New Goalpost</h2>
+<p>The command taxonomy is now the bridge between what the system <em>can do</em> (execution capabilities
+tracked in <code>capability_ratings</code>/<code>cost_entries</code>) and what users <em>can discover</em> (surface via
+tiered help). The next step is expanding that bridge: using trigger phrases and taxonomy hints to
+power fuzzy command search, AI-assisted command recommendation, and shell completion scaffolds —
+all derived from the same taxonomy source, keeping discovery, routing, and execution consistently
+aligned as the feature set grows.</p>
+<p>No deploy or migration required. The PR is backward-compatible; all existing commands work exactly
+as before.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
