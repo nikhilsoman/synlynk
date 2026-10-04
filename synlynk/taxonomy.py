@@ -3,6 +3,20 @@
 import argparse
 
 
+CORE_HELP_COMMANDS = (
+    "init",
+    "dispatch",
+    "status",
+    "jobs",
+    "decide",
+    "pr check",
+    "exec",
+    "doctor",
+)
+
+HELP_GROUPS = ("core", "workflow", "advanced", "admin")
+
+
 def iter_leaf_commands(parser: argparse.ArgumentParser, prefix: tuple = ()):
     """Yield every invocable command path from an argparse tree."""
     subparsers_actions = [
@@ -518,3 +532,45 @@ def entries_up_to_tier(tier: int) -> list:
         entry for entry in COMMAND_TAXONOMY
         if isinstance(entry["maturity_tier"], int) and entry["maturity_tier"] <= tier
     ]
+
+
+def entries_for_help(group: str = "core", *, include_all: bool = False) -> list:
+    """Return taxonomy entries for the human-facing tiered help view."""
+    if include_all:
+        return list(COMMAND_TAXONOMY)
+
+    group = group or "core"
+    if group == "core":
+        return [entry for entry in COMMAND_TAXONOMY if entry["command"] in CORE_HELP_COMMANDS]
+    if group == "workflow":
+        return [
+            entry for entry in COMMAND_TAXONOMY
+            if entry["command"] not in CORE_HELP_COMMANDS
+            and isinstance(entry["maturity_tier"], int)
+            and entry["maturity_tier"] <= 2
+        ]
+    if group in {"advanced", "admin"}:
+        return [
+            entry for entry in COMMAND_TAXONOMY
+            if entry["command"] not in CORE_HELP_COMMANDS
+            and (entry["maturity_tier"] == 3 or entry["maturity_tier"] == "latent")
+        ]
+    raise ValueError(f"unknown help group: {group!r}")
+
+
+def format_tiered_help(group: str = "core", *, include_all: bool = False) -> str:
+    """Render compact, taxonomy-backed help without changing command parsing."""
+    group = group or "core"
+    entries = entries_for_help(group, include_all=include_all)
+    title = "All commands" if include_all else f"{group.title()} commands"
+    lines = [f"{title} (from COMMAND_TAXONOMY):"]
+    for entry in entries:
+        hints = entry.get("trigger_phrases") or []
+        hint = hints[0] if hints else ""
+        suffix = f" — {hint}" if hint else ""
+        command = "init --quickstart" if entry["command"] == "init" else entry["command"]
+        lines.append(f"  {command:<32}{suffix}")
+    lines.append("")
+    lines.append("Use `synlynk help --all` for the complete command catalog.")
+    lines.append("Use `synlynk help workflow`, `synlynk help advanced`, or `synlynk help admin` for a tier.")
+    return "\n".join(lines)
