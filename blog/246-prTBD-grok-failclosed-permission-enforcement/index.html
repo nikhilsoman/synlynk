@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>gh:#1925 Part 1 — Making Grok&#39;s Permission Bypass Explicit, Not Implicit | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-2">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Oct 04, 2026</span>
+        
+          <span class="blog-post-pr">PR 2002</span>
+        
+      </div>
+      <h1 class="blog-post-title">gh:#1925 Part 1 — Making Grok&#39;s Permission Bypass Explicit, Not Implicit</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>The gh:#1924 strangler-pattern migration had just finished porting all four core harnesses
+(Codex, Grok, Agy, Claude/local) onto the typed <code>HarnessAdapter</code> Protocol, with <code>LegacyAdapter</code>
+kept as fallback. That work made each harness's permission-translation logic a single,
+independently-testable method instead of a branch buried in <code>dispatch_agent()</code>'s shared
+conditionals. The goalpost at that point was architectural: get every harness onto the same
+interface so quirks stop leaking across harness boundaries.</p>
+<p>gh:#1925 (&quot;Safe-by-default execution&quot;) is a different kind of goalpost — not architecture, but
+a security posture audit of what that newly-explicit interface was actually doing. Row 6 of
+the roadmap's decide-panel review flagged <code>--dangerously-skip-permissions</code>-equivalent bypasses
+as an implicit default across the fleet, with a credible launch-blocking trust objection from
+the five-POV review's Founder/VC/Influencer sections. Part 1 of that issue is scoped to exactly
+one finding: Grok's bypass wasn't opt-in like every other harness's — it was unconditional.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>None within part 1's own scope. The spec explicitly carves containerized/sandboxed execution
+for untrusted harnesses out as gh:#1925 part 2, future work. The one piece of nuance the design
+had to hold onto: Grok's bypass isn't simply a bug to delete. LIVE-13
+(<code>docs/rca/2026-09-22-LIVE-13-grok-headless-dispatch-permission-bypass.md</code>) already root-caused
+<em>why</em> it became unconditional — Grok's CLI has no working non-bypass headless mode, and under
+<code>--permission-mode dontAsk</code> it silently cancels compound tool calls while reporting a false
+success. The fix had to preserve that escape hatch while making it an explicit, gated choice
+instead of a baked-in default.</p>
+<h2>What This PR Shipped</h2>
+<p>Six tasks, each a small commit on <code>docs/claude/grok-failclosed-permission-design</code>:</p>
+<ol>
+<li><strong>Baseline cleanup</strong> — <code>synlynk/_constants.py</code>'s Grok entry dropped <code>required_flags: [&quot;--always-approve&quot;]</code> down to <code>[]</code>, matching Claude/Agy's already-correct opt-in baselines.</li>
+<li><strong>Gate the flag-translation function</strong> — <code>_grok_permission_flags(permissions, skip_permissions=False)</code> now raises <code>PermissionEnforcementError</code> (the same class <code>local</code>'s
+adapter already uses) when permissions are requested and the caller hasn't opted in, instead
+of silently returning the bypass flags.</li>
+<li><strong>Gate the dispatch-flags helper</strong> — <code>_dispatch_flags_for_agent</code> only appends
+<code>--always-approve</code> for Grok when <code>skip_permissions=True</code>, mirroring the existing
+<code>--dangerously-skip-permissions</code> gating for Claude/Agy.</li>
+<li><strong>Auto-opt-in at the call site</strong> — <code>dispatch_agent()</code> sets <code>skip_permissions = True</code>
+specifically for Grok when the caller didn't pass it explicitly. This is the piece that keeps
+LIVE-13 closed: every existing Grok dispatch workflow keeps behaving exactly as before, with
+the bypass now a named, commented, auditable decision instead of an implicit baseline.</li>
+<li><strong>Consolidate the error class</strong> — <code>PermissionEnforcementError</code> existed as two independently
+defined, same-named classes in <code>dispatch.py</code> and <code>harness_adapters/local.py</code>. Both now import
+a single canonical definition from <code>harness_adapters/base.py</code>, and <code>GrokAdapter</code>/
+<code>LegacyAdapter</code> both raise and can be caught via either module's imported name — verified with
+a dedicated identity test (<code>test_harness_adapter_permission_error_identity.py</code>).</li>
+<li><strong>Full regression pass</strong> — verification only, no code changes: all 9 touched test files
+(908 tests) plus the full suite (3,771 tests) pass clean, and a grep confirms no stray
+unconditional <code>--always-approve</code> baseline remains anywhere in <code>_constants.py</code>.</li>
+</ol>
+<p>Every task followed TDD — failing test written and confirmed failing against the pre-change
+code first, then the minimal implementation, then confirmed passing — dispatched one at a time
+to Codex per the project's Capability-Based Task Allocation (cli-plumbing/refactor work routes
+to Codex by default), with each commit independently verified against <code>git diff</code>/<code>git show</code> and
+a direct <code>pytest</code> run rather than trusting the dispatch job's self-reported status label. Two of
+the five implementation jobs self-reported <code>FAILED</code> despite being fully correct, and a plan
+sequencing inconsistency surfaced mid-execution — Task 3's own sanity-check step assumed a test
+would still pass at a point in the sequence where Task 2's already-landed enforcement made it
+fail until Task 4 landed. That was resolved by narrowing the retry's verification scope rather
+than treating it as an implementer error, consistent with the project's standing discipline of
+distrusting job-status labels symmetrically in both directions.</p>
+<h2>What Was Achieved Toward the Long-Arc Goal</h2>
+<p>gh:#1925's first finding is closed: every core-fleet harness's permission bypass is now
+opt-in and explicit in code, with Grok's necessary exception documented at the exact point it's
+exercised rather than living silently in a baseline table. The <code>PermissionEnforcementError</code>
+consolidation is a small but genuine step toward the kind of single-source-of-truth adapter
+layer the gh:#1924 migration was building toward — one error class, one identity, catchable from
+either import path, instead of two classes that happened to share a name.</p>
+<h2>The New Goalpost</h2>
+<p>gh:#1925 part 2 — containerized execution for untrusted/third-party harnesses, building on the
+not-yet-wired-in <code>Dockerfile.sovereign</code> work — is the next piece of the safe-by-default posture
+audit, and gets its own spec once this part merges.</p>
+<p>Refs #1925.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
