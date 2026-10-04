@@ -18,6 +18,8 @@ Synlynk is a neutral control plane that routes coding tasks across AI vendors an
 
 ## Documentation
 
+Start with the [documentation hub](docs/README.md), the [10-minute quickstart](docs/quickstart.md), or a [task-oriented how-to](docs/how-to/README.md). The complete [command reference](docs/reference/commands.md) is generated from `COMMAND_TAXONOMY`.
+
 | | | |
 |:---:|:---:|:---:|
 | [![Official Reference](https://raw.githubusercontent.com/nikhilsoman/synlynk/main/site/src/assets/img/docs/synlynk-official-reference-thumb.png)](https://raw.githubusercontent.com/nikhilsoman/synlynk/main/docs/synlynk-official-reference.pdf) | [![Command Reference](https://raw.githubusercontent.com/nikhilsoman/synlynk/main/site/src/assets/img/docs/synlynk-command-reference-thumb.png)](https://raw.githubusercontent.com/nikhilsoman/synlynk/main/docs/synlynk-command-reference.pdf) | [![Quick Start Guide](https://raw.githubusercontent.com/nikhilsoman/synlynk/main/site/src/assets/img/docs/synlynk-quickstart-guide-thumb.png)](https://raw.githubusercontent.com/nikhilsoman/synlynk/main/docs/synlynk-quickstart-guide.pdf) |

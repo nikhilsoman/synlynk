@@ -1127,10 +1127,10 @@ def test_add_synlynk_release_command_to_synlynk__(tmp_path, monkeypatch):
     version_file.write_text("0.10.0\n")
     changelog_file = tmp_path / "CHANGELOG.md"
     changelog_file.write_text("# Changelog\n\n## [0.9.0] - 2026-06-01\n")
-    from scripts.generate_command_docs import render_readme_section
+    from scripts.generate_command_docs import render_readme_section, render_reference_doc
     commands_md = tmp_path / "docs" / "reference" / "commands.md"
     commands_md.parent.mkdir(parents=True)
-    commands_md.write_text("# Command Reference\n")
+    commands_md.write_text(render_reference_doc())
     (tmp_path / "README.md").write_text(
         "<p align=\"center\">\n"
         "  <a href=\"https://github.com/nikhilsoman/synlynk\">"
