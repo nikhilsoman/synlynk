@@ -129,13 +129,20 @@ def record_shadow_comparison(conn, job_id: str) -> dict[str, Any]:
     # The normal DB helper returns tuple rows.  The projection reader also
     # supports the Row-based test/integration connections, so provide that
     # shape locally without changing the caller's connection configuration.
-    previous_row_factory = conn.row_factory
-    if previous_row_factory is None:
+    has_row_factory = hasattr(conn, "row_factory")
+    previous_row_factory = getattr(conn, "row_factory", None)
+    projection_conn = conn
+    if not has_row_factory:
+        underlying = getattr(conn, "_real", None)
+        if underlying is not None and hasattr(underlying, "row_factory"):
+            projection_conn = underlying
+    if has_row_factory and previous_row_factory is None:
         conn.row_factory = sqlite3.Row
     try:
-        projection = project_job_status(conn, job_id)
+        projection = project_job_status(projection_conn, job_id)
     finally:
-        conn.row_factory = previous_row_factory
+        if has_row_factory:
+            conn.row_factory = previous_row_factory
     shadow = projection["shadow_comparison"]
     conn.execute(
         "INSERT OR REPLACE INTO job_status_shadow "
