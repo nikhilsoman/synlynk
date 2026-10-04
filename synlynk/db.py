@@ -995,6 +995,11 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
                 conn.execute("ALTER TABLE cost_entries ADD COLUMN session_id TEXT")
             except sqlite3.OperationalError:
                 pass
+        if "turn_usage_json" not in cost_cols:
+            try:
+                conn.execute("ALTER TABLE cost_entries ADD COLUMN turn_usage_json TEXT")
+            except sqlite3.OperationalError:
+                pass
         conn.execute("DROP VIEW IF EXISTS capability_scores")
         conn.executescript(_DB_SCORES_VIEW)
         conn.executescript("""
@@ -1270,6 +1275,7 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
                 recorded_at       TEXT DEFAULT (datetime('now')),
                 dispatch_context  TEXT,
                 context_mode      TEXT,
+                turn_usage_json   TEXT,
                 session_id        TEXT REFERENCES sessions(session_id)
             );
             CREATE TABLE IF NOT EXISTS remediation_actions (
@@ -1747,6 +1753,7 @@ def _insert_cost_row(
     harness: str = None,
     agent_role: str = None,
     decision_revision: int = None,
+    turn_breakdown=None,
 ) -> None:
     """Insert or update a cost_entries row through the single sanctioned path."""
     from synlynk import _get_db
@@ -1841,6 +1848,7 @@ def _insert_cost_row(
                         context_mode=COALESCE(?, context_mode),
                         session_id=COALESCE(?, session_id)
                         ,decision_revision=COALESCE(?, decision_revision)
+                        ,turn_usage_json=COALESCE(?, turn_usage_json)
                     WHERE job_id=?""",
                     (
                         session_date,
@@ -1865,6 +1873,7 @@ def _insert_cost_row(
                         context_mode,
                         session_id,
                         decision_revision,
+                        json.dumps(turn_breakdown, separators=(",", ":")) if turn_breakdown else None,
                         job_id,
                     ),
                 )
@@ -1873,8 +1882,8 @@ def _insert_cost_row(
         conn.execute(
             """INSERT INTO cost_entries
                 (session_date, agent, harness, agent_role, model, input_tokens, output_tokens, cache_read_tokens,
-                 cost_source, estimate_basis, total_cost_usd, api_equivalent_usd, actual_usd, payment_mode, notes, story_id, epic_id, phase_id, job_id, dispatch_context, context_mode, session_id, decision_revision)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                 cost_source, estimate_basis, total_cost_usd, api_equivalent_usd, actual_usd, payment_mode, notes, story_id, epic_id, phase_id, job_id, dispatch_context, context_mode, session_id, decision_revision, turn_usage_json)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 session_date,
                 agent_val,
@@ -1899,6 +1908,7 @@ def _insert_cost_row(
                 context_mode,
                 session_id,
                 decision_revision,
+                json.dumps(turn_breakdown, separators=(",", ":")) if turn_breakdown else None,
             ),
         )
         conn.commit()
