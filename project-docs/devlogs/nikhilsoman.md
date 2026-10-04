@@ -1901,6 +1901,15 @@ and expensive worktree hint during cold start; the fast jobs path renders the re
 table without importing dispatch/reconciliation modules. Added a subprocess median budget test
 (`tests/test_cli_cold_start.py`) enforcing <150 ms for `jobs --all` and `status --json`.
 Focused verification: 174 passed; cold-start budget test: 2 passed.
+
+2026-10-04 — Issue #1979 verification: confirmed #1922's `job-status-truth.v1`
+projection was user-visible only through `synlynk jobs --json`; the normal
+`synlynk jobs --all` table omitted oracle verification and evidence details.
+Added compact verification state, reason code, and evidence count to that table,
+with regression coverage. Confirmed #1921 GC is invocation-driven and limited
+to `~/.synlynk/projects/*/state.db`; filed follow-up issue #2025 for the
+remaining local-state bound and coverage gaps. Verification: `tests/test_agent_cli.py -v`
+125 passed, 1 skipped; focused jobs tests 2 passed.
 2026-10-03 — Implemented issue #1928: made root `VERSION` the single release source, removed
 runtime/release duplication, updated README metadata, added the required `release-docs` CI gate,
 and added synchronization coverage. Focused tests: 530 passed; `release --check-docs` passes.
