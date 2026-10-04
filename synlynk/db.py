@@ -4126,6 +4126,20 @@ def cmd_pr_check(pr_number=None, impact_attested: bool = False) -> None:
             changes_requested_count = _extract_pr_review_cycles() or 0
             _apply_review_cycle_multiplier(conn, pr_number, changes_requested_count)
 
+    from synlynk.governs_gate import pr_governs_linkage_violations
+    governs_violations = pr_governs_linkage_violations(conn, pr_number)
+    if governs_violations:
+        print("\n  🚫 [PR CHECK BLOCKED] dispatched jobs missing linked GOVERNS story/goal:")
+        for violation in governs_violations:
+            print(
+                f"    {violation['job_id']} "
+                f"(story={violation.get('story_id') or 'none'}; {violation['reason']})"
+            )
+        print("  Link with: synlynk goal link <story-id> --goal <goal-id>\n")
+        conn.close()
+        raise SystemExit(1)
+
+    if _is_github_remote():
         owner, repo = detect_remote_owner_repo()
         if owner and repo:
             gate = qa_gate_verdict(owner, repo, pr_number=pr_number)

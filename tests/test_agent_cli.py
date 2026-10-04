@@ -155,6 +155,97 @@ def test_pr_check_linked_issue_fallback_fails_closed_when_ambiguous(project_dir,
     assert not ok
     assert message == "no implementing job provenance found for PR #2026"
     conn.close()
+def _governs_gate_db():
+    db = sqlite3.connect(":memory:")
+    db.executescript(
+        """
+        CREATE TABLE goals (goal_id TEXT PRIMARY KEY);
+        CREATE TABLE stories (story_id TEXT PRIMARY KEY, goal_id TEXT);
+        CREATE TABLE goal_contributions (story_id TEXT, goal_id TEXT, link_status TEXT);
+        CREATE TABLE daemon_jobs (job_id TEXT PRIMARY KEY, story_id TEXT, gh_write_target TEXT);
+        CREATE TABLE cost_entries (job_id TEXT, story_id TEXT);
+        CREATE TABLE capability_ratings (id INTEGER PRIMARY KEY, story_id TEXT, pr_number INTEGER);
+        """
+    )
+    return db
+
+
+def test_governs_dispatch_preflight_passes_for_linked_story_goal():
+    from synlynk.dispatch import _preflight_dispatch
+
+    db = _governs_gate_db()
+    db.execute("INSERT INTO goals VALUES ('goal-1')")
+    db.execute("INSERT INTO stories VALUES ('story-1', 'goal-1')")
+    db.commit()
+    result = _preflight_dispatch("unknown", [], db_conn=db, story_id="story-1")
+    assert result["passed"] is True
+
+
+def test_governs_dispatch_preflight_hard_fails_without_story_goal():
+    from synlynk.dispatch import _preflight_dispatch
+
+    db = _governs_gate_db()
+    db.execute("INSERT INTO stories VALUES ('story-1', NULL)")
+    db.commit()
+    result = _preflight_dispatch("unknown", [], db_conn=db, story_id="story-1")
+    assert result["passed"] is False
+    assert result["sentinel"] == "GOVERNS_LINKAGE_MISSING"
+
+
+def test_governs_dispatch_preflight_hard_fails_without_story_id():
+    from synlynk.dispatch import _preflight_dispatch
+
+    db = _governs_gate_db()
+    result = _preflight_dispatch("unknown", [], db_conn=db)
+    assert result["passed"] is False
+    assert result["sentinel"] == "GOVERNS_LINKAGE_MISSING"
+
+
+def test_governs_dispatch_preflight_hard_fails_without_db_evidence():
+    from synlynk.dispatch import _preflight_dispatch
+
+    result = _preflight_dispatch("unknown", [], story_id="story-1")
+    assert result["passed"] is False
+    assert result["sentinel"] == "GOVERNS_LINKAGE_MISSING"
+
+
+def test_governs_pr_check_linkage_passes_for_all_dispatched_jobs():
+    from synlynk.governs_gate import pr_governs_linkage_violations
+
+    db = _governs_gate_db()
+    db.execute("INSERT INTO goals VALUES ('goal-1')")
+    db.execute("INSERT INTO stories VALUES ('story-1', 'goal-1')")
+    db.execute("INSERT INTO capability_ratings VALUES (1, 'story-1', 1990)")
+    db.execute("INSERT INTO daemon_jobs VALUES ('job-1', 'story-1', 'pr:1990')")
+    db.execute("INSERT INTO cost_entries VALUES ('job-1', 'story-1')")
+    db.commit()
+    assert pr_governs_linkage_violations(db, 1990) == []
+
+
+def test_governs_pr_check_hard_fails_for_unlinked_dispatched_job():
+    from synlynk.governs_gate import pr_governs_linkage_violations
+
+    db = _governs_gate_db()
+    db.execute("INSERT INTO stories VALUES ('story-1', NULL)")
+    db.execute("INSERT INTO capability_ratings VALUES (1, 'story-1', 1990)")
+    db.execute("INSERT INTO daemon_jobs VALUES ('job-1', 'story-1', 'pr:1990')")
+    db.execute("INSERT INTO cost_entries VALUES ('job-1', 'story-1')")
+    db.commit()
+    violations = pr_governs_linkage_violations(db, 1990)
+    assert {item["job_id"] for item in violations} == {"job-1"}
+
+
+def test_governs_pr_check_finds_unlinked_job_from_cost_entry_without_rating_or_target():
+    from synlynk.governs_gate import pr_governs_linkage_violations
+
+    db = _governs_gate_db()
+    db.execute("INSERT INTO stories VALUES ('story-unlinked', NULL)")
+    db.execute("INSERT INTO daemon_jobs VALUES ('job-unlinked', 'story-unlinked', NULL)")
+    db.execute("INSERT INTO cost_entries VALUES ('job-unlinked', 'story-unlinked')")
+    db.commit()
+
+    violations = pr_governs_linkage_violations(db, 1990)
+    assert {item["job_id"] for item in violations} == {"job-unlinked"}
 
 
 def test_isolate_archived_pytest_modules():
