@@ -20,5 +20,5 @@
 
   <!-- Wordmark -->
   <text x="84" y="44" font-family="'Courier New', monospace" font-weight="500" font-size="34" fill="#1a1a1a" letter-spacing="-1">syn<tspan fill="#5B8DEF">l</tspan><tspan fill="#A259F7">y</tspan><tspan fill="#2EC4A0">n</tspan><tspan fill="#1a1a1a">k</tspan></text>
-  <text x="86" y="62" font-family="Arial, sans-serif" font-size="10" fill="#aaa" letter-spacing="2">synaptic link for ai dev</text>
+  <text x="86" y="62" font-family="Arial, sans-serif" font-size="10" fill="#aaa" letter-spacing="2">neutral control plane for coding tasks</text>
 </svg>
