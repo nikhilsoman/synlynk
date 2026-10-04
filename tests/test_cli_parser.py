@@ -195,6 +195,19 @@ def test_fast_cli_preserves_help_and_invalid_command_paths():
     assert "invalid choice" in invalid_result.stderr
 
 
+def test_tiered_help_command_supports_core_and_all_views(capsys):
+    cli_mod.main(["help"])
+    core = capsys.readouterr().out
+    assert "Core commands" in core
+    assert "dispatch" in core
+    assert "goal create" not in core
+
+    cli_mod.main(["help", "--all"])
+    all_help = capsys.readouterr().out
+    assert "All commands" in all_help
+    assert "goal create" in all_help
+
+
 def test_lazy_parser_registers_only_the_selected_top_level_command():
     parser = cli_mod.build_parser(selected_command="dispatch")
     subparser_action = parser._subparsers._group_actions[0]
