@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-04
 - **Author:** Grok (infra)
-- **Status:** Draft, awaiting review
+- **Status:** Revised after decide panel `dec-ff9a9005` (approve with required changes)
 - **Issue:** [#1925](https://github.com/nikhilsoman/synlynk/issues/1925) (containerization half only)
 - **Source:** `docs/strategy/2026-10-02-decide-panel-roadmap.md` §1 row 6
 
@@ -17,7 +17,7 @@ Dispatch still starts every harness as a host subprocess. `dispatch_agent` build
 ## 2. Locked decisions
 
 1. **Opt-in only.** First-party harnesses stay on the host unless this dispatch names an image. No entry in `HARNESS_CAPABILITY_BASELINES` gains a `container_image` in this change.
-2. **Boundary.** The container gets the job worktree read-write, the git directory that worktree points at, and the existing env allowlist with the rewrites in §6. The root filesystem is read-only. There is no home mount, no SSH agent socket, and no Docker socket. Capabilities are dropped. The network stays on the default bridge, because a harness that cannot reach its model API cannot do the job.
+2. **Boundary.** The container gets the job worktree read-write, the git directory that worktree points at, and the existing env allowlist with the rewrites in §6. The root filesystem is read-only. There is no home mount, no SSH agent socket, and no Docker socket. Capabilities are dropped. The network is Docker's default bridge. Bridge mode is not a network sandbox: the container can open outbound connections and reach LAN addresses, which is what lets a harness call its model API. Domain-filtered egress and default-deny networking stay deferred to #1392 / #1393. A `GH_TOKEN` passed through `--requires-gh-write` is inside that container and can be used over that open network. That is the existing opt-in, not a new credential mount, and it is not host-keyring access.
 3. **Generic runner image.** synlynk ships one small image. The harness CLI is whatever is already on `PATH` inside the image the operator names. Vendor CLIs are not packaged here. A Mac arm64 host binary cannot run inside a Linux container, so the host CLI is not bind-mounted.
 4. **Git.** Mount the worktree plus the linked git dir and its `commondir`, at the same absolute host paths, so `git commit` works. Residual exposure is that repo's objects, refs, and `.git/config`.
 5. **Shape.** A new `synlynk/container_exec.py` module rewrites the argv at the existing spawn site. `dispatch.py` does not grow a second execution policy. No shell script under `docker/` is the implementation.
@@ -75,6 +75,8 @@ docker run --rm
 
 Forbidden in this argv: `--privileged`, `--network host`, `-v` of the home directory, `-v` of `docker.sock`, and any bind of `SSH_AUTH_SOCK`.
 
+`--network bridge` is the default bridge, not an egress policy. It allows outbound and LAN connections. It does not allow `--network host`. Egress containment is out of scope (§3).
+
 ### Git mounts
 
 Always mount the worktree read-write at its absolute path. `cwd` inside the container is that path, so existing Grok `--cwd`, Codex `-C`, and Muse `-C` flags still name a real directory.
@@ -95,7 +97,7 @@ Rewrites, applied only on the container path:
 | `PATH`, `SHELL` | Drop | The host `PATH` would hide the CLI installed in the image. |
 | `SSH_AUTH_SOCK` | Drop | The socket is not mounted. Passing the variable without the socket is useless, and mounting the socket would hand the harness the operator's agent. |
 
-Git author and committer name and email still pass. A `GH_TOKEN` / `GITHUB_TOKEN` injected by the existing `--requires-gh-write` path still passes. That opt-in already exists. The container does not gain host-keyring access. Other allowlisted variables pass through unchanged.
+Git author and committer name and email still pass. A `GH_TOKEN` / `GITHUB_TOKEN` injected by the existing `--requires-gh-write` path still passes, and because bridge networking is unrestricted the process inside the container can present that token to GitHub. The container does not gain host-keyring access. Other allowlisted variables pass through unchanged.
 
 `--user` is the operator's numeric uid and gid, so files written in the worktree stay owned by that user. The image does not need a matching account.
 
@@ -145,9 +147,10 @@ Required tests use a fake `docker` placed first on `PATH`. The fake appends its 
 2. **Mount contract.** With an image and a linked worktree, the argv contains `--rm`, `--read-only`, `--cap-drop`, `ALL`, `--security-opt`, `no-new-privileges`, `--network`, `bridge`, `--user` with the current uid and gid, `-v <worktree>:<worktree>`, `-v` for the per-worktree git dir, and `-v` for the common git dir. It does not contain the home directory, `docker.sock`, or `--network host`. The image is one token after `--`, followed by `sh -c` and the original shell string. `HOME` and `TMPDIR` are `/tmp`. `PATH`, `SHELL`, and `SSH_AUTH_SOCK` are absent. Git author variables that were in the input env are present.
 3. **Ordinary repo.** A worktree whose `.git` is a directory produces only the worktree mount.
 4. **Broken git link.** A `.git` file whose target does not exist raises, and the fake `docker` is not executed.
-5. **Parity.** Run the same stub shell string on the host and through the fake docker. Log bytes match. `<log>.exit` matches, including a non-zero `STUB_EXIT`. `extract_tokens` on each log returns input `11`, output `7`, and the same cache-read count. The container path does not grow its own cost formula.
-6. **Missing docker.** An image is set and `which("docker")` finds nothing. `dispatch_agent` raises before `Popen` and before `stub-harness` runs. `wrap` is not required to search `PATH` itself.
+5. **Parity, through the fake docker.** Run the same stub shell string on the host and through the fake docker. The test fails unless the fake `docker` was executed and its recorded argv contains the image token and the inner `sh -c` plus the original shell string. Matching log bytes and exit codes alone are not a pass: a wrapper that runs `sh -c` on the host and never execs the fake `docker` must fail. When the fake was invoked, log bytes match, `<log>.exit` matches including a non-zero `STUB_EXIT`, and `extract_tokens` on each log returns input `11`, output `7`, and the same cache-read count. The container path does not grow its own cost formula.
+6. **Missing docker.** An image is set and `which("docker")` finds nothing. `dispatch_agent` raises before `Popen` and before `stub-harness` runs. `wrap` is not required to search `PATH` itself. The secondary-harness failover is not called.
 7. **Flag versus baseline.** `--container-image` overrides a baseline `container_image`. Neither set selects the host path. The shipped `HARNESS_CAPABILITY_BASELINES` dict has no `container_image` key.
+8. **No host failover when the client dies.** The image is set and the fake `docker` exits non-zero without executing the inner shell, so `<log>.exit` was not written by `sh -c`. Dispatch writes that client exit code to `<log>.exit`, records the job failed, and does not call the secondary harness. The stub harness binary is not executed on the host.
 
 The CI job in §8 is the real-image smoke test. The unit tests above are the contract pytest always runs.
 
