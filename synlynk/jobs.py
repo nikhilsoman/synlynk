@@ -403,6 +403,73 @@ def _classify_task_delivery(receipt_status: Optional[str], has_corroborating_act
     return {"hard_fail": True, "warn": False}
 
 
+def _gh_write_verification_is_true(value) -> bool:
+    """Treat only an affirmative verification value as verified.
+
+    The daemon schema stores this field as text, so ``bool("false")`` would
+    incorrectly turn a negative verification into corroborating evidence.
+    """
+    return value is True or value == 1 or (isinstance(value, str) and value.lower() == "true")
+
+
+def _job_has_verified_gh_write_evidence(job: Optional[dict]) -> bool:
+    """Return whether a GH-write job has independently verified remote work."""
+    if not job or not job.get("requires_gh_write"):
+        return False
+    if _gh_write_verification_is_true(job.get("gh_write_verified")):
+        return True
+
+    job_id = job.get("id") or job.get("job_id")
+    get_db = _pkg("_get_db")
+    if not job_id or not get_db:
+        return False
+    conn = None
+    try:
+        conn = get_db()
+        row = conn.execute(
+            "SELECT status, verification_state FROM job_terminal_decision "
+            "WHERE job_id=? ORDER BY revision DESC LIMIT 1",
+            (job_id,),
+        ).fetchone()
+        if not row:
+            return False
+        return (
+            (row["status"] if hasattr(row, "keys") else row[0]) == "completed"
+            and (row["verification_state"] if hasattr(row, "keys") else row[1]) == "verified"
+        )
+    except (OSError, sqlite3.Error, TypeError, ValueError):
+        return False
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except (OSError, sqlite3.Error):
+                pass
+
+
+def _task_referenced_branches(task: Optional[str]) -> list[str]:
+    """Extract plausible branch refs explicitly named in task text."""
+    if not task:
+        return []
+    refs = set()
+    for match in re.finditer(r"\b(?:origin/)?([A-Za-z0-9][A-Za-z0-9._-]*(?:/[A-Za-z0-9._-]+)+)", task):
+        refs.add(match.group(1))
+    for match in re.finditer(
+        r"\b(?:branch|ref)(?:\s+name)?\s+[`'\"]?([A-Za-z0-9][A-Za-z0-9._/-]*)",
+        task,
+        re.IGNORECASE,
+    ):
+        refs.add(match.group(1).rstrip(".,;:`'\""))
+    return sorted(ref for ref in refs if ref and ref not in {"https", "http"})
+
+
+def _task_delivery_has_corroborating_activity(job: Optional[dict], git_state) -> bool:
+    """Combine local/remote git evidence with verified GH-write evidence."""
+    if git_state and (git_state.get("has_activity") or git_state.get("remote_has_activity")):
+        return True
+    return _job_has_verified_gh_write_evidence(job)
+
+
 def _normalize_worktree_relative_path(path: str) -> str:
     normalized = (path or "").replace("\\", "/").strip()
     if normalized.startswith("./"):
@@ -1137,6 +1204,7 @@ def _inspect_worktree_git_state(
     worktree_path: Optional[str],
     worktree_branch: Optional[str] = None,
     started_at: Optional[str] = None,
+    task: Optional[str] = None,
 ) -> Optional[dict]:
     """Returns git evidence for a worktree, or None when it is unavailable."""
     if not _worktree_path_is_available(worktree_path, "inspect git state"):
@@ -1180,12 +1248,26 @@ def _inspect_worktree_git_state(
     remote_branch_commit_count = 0
     remote_branch_files_touched = []
     if not dirty and commits_ahead == 0:
-        remote_state = _inspect_origin_branch_activity(worktree_path, worktree_branch, started_at)
-        if remote_state:
-            remote_branch_has_activity = remote_state["remote_has_activity"]
-            remote_branch_ref = remote_state["remote_ref"]
-            remote_branch_commit_count = remote_state["remote_commit_count"]
-            remote_branch_files_touched = remote_state["remote_files_touched"]
+        remote_branches = [worktree_branch] + _task_referenced_branches(task)
+        seen_branches = set()
+        remote_states = []
+        for branch in remote_branches:
+            if not branch or branch in seen_branches:
+                continue
+            seen_branches.add(branch)
+            remote_state = _inspect_origin_branch_activity(worktree_path, branch, started_at)
+            if remote_state:
+                remote_states.append(remote_state)
+        active_remote_states = [state for state in remote_states if state["remote_has_activity"]]
+        if active_remote_states:
+            remote_branch_has_activity = True
+            remote_branch_ref = active_remote_states[0]["remote_ref"]
+            remote_branch_commit_count = sum(state["remote_commit_count"] for state in active_remote_states)
+            remote_branch_files_touched = sorted({
+                path
+                for state in active_remote_states
+                for path in state["remote_files_touched"]
+            })
 
     changed_files = []
     if base_commit:
@@ -2027,6 +2109,7 @@ def _reconcile_jobs_unlocked() -> None:
                     job.get("worktree_path"),
                     job.get("worktree_branch"),
                     job.get("started_at"),
+                    job.get("task"),
                 )
             permission_denied = False
             if waitpid_exit_code == 0:
@@ -2059,9 +2142,7 @@ def _reconcile_jobs_unlocked() -> None:
                 if job.get("task"):
                     task_sha256_for_receipt = hashlib.sha256(job["task"].encode("utf-8")).hexdigest()
                 receipt_status = _check_task_receipt(log_text, task_sha256_for_receipt)
-                has_corroborating_activity = bool(
-                    git_state and (git_state.get("has_activity") or git_state.get("remote_has_activity"))
-                )
+                has_corroborating_activity = _task_delivery_has_corroborating_activity(job, git_state)
                 task_delivery = _classify_task_delivery(receipt_status, has_corroborating_activity)
                 if task_delivery["hard_fail"]:
                     job["status"] = "task_delivery_failed"
@@ -2215,6 +2296,7 @@ def _reconcile_jobs_unlocked() -> None:
                         job.get("worktree_path"),
                         job.get("worktree_branch"),
                         job.get("started_at"),
+                        job.get("task"),
                     )
                     if git_state and git_state.get("has_activity"):
                         ambiguous_exit = True
@@ -2243,6 +2325,7 @@ def _reconcile_jobs_unlocked() -> None:
                     job.get("worktree_path"),
                     job.get("worktree_branch"),
                     job.get("started_at"),
+                    job.get("task"),
                 )
                 if recovered_git_state and _job_has_real_work_landed(recovered_git_state):
                     git_state = recovered_git_state
@@ -2254,6 +2337,7 @@ def _reconcile_jobs_unlocked() -> None:
                     job.get("worktree_path"),
                     job.get("worktree_branch"),
                     job.get("started_at"),
+                    job.get("task"),
                 )
             permission_denied = False
             task_delivery = {"hard_fail": False, "warn": False}
@@ -2280,9 +2364,7 @@ def _reconcile_jobs_unlocked() -> None:
                     if job.get("task"):
                         task_sha256_for_receipt = hashlib.sha256(job["task"].encode("utf-8")).hexdigest()
                     receipt_status = _check_task_receipt(log_text, task_sha256_for_receipt)
-                    has_corroborating_activity = bool(
-                        git_state and (git_state.get("has_activity") or git_state.get("remote_has_activity"))
-                    )
+                    has_corroborating_activity = _task_delivery_has_corroborating_activity(job, git_state)
                     task_delivery = _classify_task_delivery(receipt_status, has_corroborating_activity)
                     if task_delivery["hard_fail"]:
                         job["status"] = "task_delivery_failed"
