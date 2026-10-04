@@ -139,22 +139,25 @@ surfaced by each wave's own jobs — not a fixed queue decided up front.
 
 | Job | Issue | Status | Notes |
 |---|---|---|---|
-| job-92c3cd46 | #1973 (Track 2 gate) | **Merged pending** (PR #2017) | `unpushed_branch` job-status label was WRONG — verified via direct git/gh inspection (branch was pushed, PR open, clean 330-line diff). 6th+ instance of the job-status-truth false-negative pattern (gh:#2015). Also tripped COST_INFLATION ($11.81/3.8M tokens) despite correct, scoped output — live evidence feeding into #1969's priority bump below. |
-| job-95c665cb | review/merge PR #2017 | Running | Dispatched to `claude` harness specifically for cross-harness+model review per the 2026-10-04 Hardened PR Review Policy (reviewer must differ from implementer in harness+model, not just role). |
-| job-594ec949 | #1963 (Track 1) | Running | **Priority-bumped to Wave 1**: this is the scope-enforcement guard against exactly the failure class we're exposed to by running 5+ parallel dispatches right now (job-20633904 precedent: a narrow task produced a 13-file, 500-line unrelated deletion while tripping the same TOKEN_BLOAT+COST_INFLATION combo seen on #1973 just now). |
-| job-3561f357 | #1941 (Track 2) | Running | Independent of #1973's sequencing gate — flaky CI test fix, reduces false-failure noise for every other PR landing during this run. |
-| job-69ba7fa6 | #1974 (Track 2) | Running | Issue text confirms dependency on #1973 is "not required to block shipping" — safe to run in parallel, only needs to *merge* after #1973 merges. |
-| job-45c98165 | #1969 (Track 3) | Running | **Priority-bumped ahead of the regen-bug cluster and #1923/#1926/#1951**: issue already names a suspected root cause (preflight/context-size decoupling in `dispatch.py` ~2793-2834, worsened by merge-conflict retry loops re-sending full context) and today's #1973 cost spike is a live, fresh data point for it. This is the single highest-leverage fix for "earliest completion of the full roadmap" — every other track's dispatches are being taxed by whatever this bug is. |
-| job-b1e83605 | #1978 (Track 4) | Running | No dependencies, mechanical copy-swap, runs fully parallel. |
+| job-92c3cd46 | #1973 (Track 2 gate) | **Open PR #2017, review pending** | `unpushed_branch` label was WRONG — verified pushed, clean 330-line diff. 6th+ job-status false-negative instance (gh:#2015). Tripped COST_INFLATION ($11.81/3.8M tokens). |
+| job-95c665cb | review/merge PR #2017 | **Genuinely FAILED** | Confirmed via `gh pr view 2017 --json reviews` → `[]` (zero reviews posted) and job exit code 0 with 0 files touched over 30m. Unlike the Codex jobs above, this `failed` label was **correct**, not a false negative — first clean confirmation this wave that the label can also be right. Re-dispatched as job-579024a4 (see below). |
+| job-594ec949 | #1963 (Track 1) | **Open PR #2019, review pending** | `unpushed_branch` label WRONG — verified pushed, clean 2-file/144-line diff matching the task exactly. |
+| job-3561f357 | #1941 (Track 2) | **Open PR #2018, review pending** | `unpushed_branch` label WRONG — verified pushed, clean 1-file/29-line diff. |
+| job-69ba7fa6 | #1974 (Track 2) | **Open PR #2020, review pending** | `unpushed_branch` label WRONG — verified pushed, clean 4-file/104-line diff. |
+| job-45c98165 | #1969 (Track 3) | **Open PR #2021, review pending** | `unpushed_branch` label this time was **correct** — `git ls-remote` confirmed the branch genuinely never reached origin, unlike the other 4 Codex jobs. Local commit was sound (4 files, 133/7 lines, matched the task) — Claude pushed it directly and opened the PR as a deploy action rather than re-dispatching. |
+| job-b1e83605 | #1978 (Track 4) | **Open PR #2022, review pending** | `unpushed_branch` label was WRONG — verified pushed. Diff touches 14 files (README/CHANGELOG/logo SVGs/website pages/CLI wizard strings) — confirmed this is legitimate positioning-copy scope per the issue, not scope creep (#1963's precedent made this worth double-checking). Claude pushed it directly and opened the PR. |
+| job-0f409e7d / dc0c0318 / 9550f92d / f32b385f / a78bf313 / 579024a4 | review+merge PRs #2017/#2018/#2019/#2020/#2021/#2022 | Running | Re-dispatched as `claude`/qa-role jobs (cross-harness+model vs. Codex authorship) for all 6 open Wave 1 PRs, per Hardened PR Review Policy. The first attempt (job-95c665cb, PR #2017 only) genuinely failed; these 6 supersede it. |
 
 ### New evidence this wave feeds back into prioritization
 
-- **#2015 gains a 6th+ false-negative instance** (job-92c3cd46) — strengthens the case that `synlynk pr check`/job-status reporting itself (also Track 1, dispatch.py-adjacent) needs to move up, not just the scope-guard (#1963) and GOVERNS gate (#1990).
+- **#2015 gains a 6th+ false-negative instance** across 5 of 6 Wave-1 jobs (`unpushed_branch` shown when the branch was in fact pushed) — strengthens the case that `synlynk pr check`/job-status reporting itself (also Track 1, dispatch.py-adjacent) needs to move up, not just the scope-guard (#1963) and GOVERNS gate (#1990).
+- **job-45c98165 and job-95c665cb are evidence the label is sometimes right** — `unpushed_branch`/`failed` is not *always* a false negative. The operative rule stays "never trust the label alone, verify every time," not "assume the label is always wrong."
+- **Systemic TOKEN_BLOAT/COST_INFLATION across Wave 1**: all 5 Codex implementation jobs tripped TOKEN_BLOAT (2.15M–4.1M tokens vs. ~500K baseline); 4 of 5 also tripped COST_INFLATION ($11.81/$8.69/$10.52/$12.52/$6.66 — only job-3561f357/#1941 escaped the cost trip). This is a materially worse cluster than #1969's own historical evidence table and is itself the strongest live argument for keeping #1969 (now PR #2021) at the front of the review queue — **merge it before dispatching further Codex-heavy waves** to avoid compounding real-dollar cost on the same root cause. Decision: proceed with Wave 2 dispatch now (per the "continue autonomously" mandate) but hold off issuing *additional parallel Codex implementation jobs* beyond what's already queued until PR #2021 merges or is confirmed not the fix.
 - **#1969's priority is now confirmed correct** by live same-session evidence, not just historical record — keeping it ahead of #1923/#1926/#1951 in Track 3's queue.
 - **#1960 and #2008 confirmed already-fixed-but-open** (PRs #1964/#2009 merged, issues never auto-closed) — zero new work needed, just bookkeeping. Not re-queued.
 - **#2012 was already further along than tracked** (PR #2014 open, not stalled) — removed from the active queue, just needs review like any other open PR.
 
-### Planned Wave 2 (next, pending Wave 1 results)
+### Planned Wave 2 (next, launching now)
 
 1. Root-cause issue for the Track 3 regen-bug family (#1995/#1999/#1917/#1915) — open as one investigation before four separate fixes, per original plan.
 2. Track 1: #1990 (GOVERNS hard-fail gate), #1991 (cross-harness review enforcement) — once #1963 lands, since both touch the same job-finalization path and sequencing avoids rebase churn.
@@ -162,3 +165,4 @@ surfaced by each wave's own jobs — not a fixed queue decided up front.
 4. Track 4: #1979.
 5. Track 5: hold — #1980 needs Track 1 to land first per epic; #1981/#1982/#1983 are mostly business-development/outreach work, not autonomous-dispatch-shaped (flagging for Nikhil's direct attention rather than queuing to Codex/Grok).
 6. Check `feat/codex/cost-audit-1951` worktree before dispatching #1951.
+7. **Cost-inflation circuit breaker (new, this wave):** hold new parallel Codex implementation dispatches until PR #2021 (#1969) merges — reviews/merges of already-open PRs are unaffected, this only throttles *new* implementation-job fan-out.
