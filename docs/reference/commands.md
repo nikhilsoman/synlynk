@@ -143,6 +143,7 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `addon list` (secondary) — sustain
 - `addon install` (primary) — sustain
 - `gateway probe` (primary) — sustain
+- `gateway dispatch` (primary) — execute
 
 ## Tier 3 — Team / Enterprise
 
