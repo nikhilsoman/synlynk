@@ -1624,6 +1624,32 @@ Submit approval via 'gh pr review 1903 --appro [testing] <!-- id:story-issue-190
 - [x] docs: fill GROK.md domain ownership and instruction placeholders (#345) [docs] <!-- id:story-e332c8ea -->
 - [x] fix: GEMINI.md stale prose and cross-contaminated harness flags (#344) [docs] <!-- id:story-294a855a -->
 - [x] fix: Vizor Effort & Cost stage constants and progress bar CSS overlap (#263) [frontend] <!-- id:story-8dadb376 -->
+- [x] TG1 validation: add docstring to _pinned_model [backend] <!-- id:story-361e1724 -->
+- [x] v0.25.0 TG2: Roster Expansion + Ternary-Bonsai Loader Detection [backend] <!-- id:story-a15f2fb9 -->
+- [x] v0.25.0 TG3: Hardware Tier Prober + doctor --init [backend] <!-- id:story-9b576404 -->
+- [x] v0.25.0 TG4: Tier-0 Zero-Trust Auto-Routing [backend] <!-- id:story-ee24704e -->
+- [x] v0.25.0 TG5: OpenRouter Config Preview and synlynk gateway probe [backend] <!-- id:story-72f6eedb -->
+- [x] v0.25.0 TG6: Orb Stack Sovereign Silicon Docker Image [backend] <!-- id:story-e7c3c86a -->
+- [ ] docs(rca): add LIVE-21 RCA for synlynk launch dispatch probe-data block [testing] <!-- id:story-issue-1902 -->
+- [ ] chore(docs): post-merge housekeeping for unified onboarding journeys (#1894) [backend] <!-- id:story-issue-1895 -->
+- [ ] docs: devlog checkpoint — #1881 daemon root-cause, github_apps symlink fix [backend] <!-- id:story-issue-1885 -->
+- [ ] docs(strategy): five-POV deep review (dev/architect/founder/VC/influencer) [backend] <!-- id:story-issue-1913 -->
+- [ ] docs: blog index fix (#1914) + lift stale blog-protocol hold [testing] <!-- id:story-issue-1916 -->
+- [ ] project-docs/memory.md write-through drifts from local state.db (249 ins/49 del on regen) — same class as #1915 [docs] <!-- id:story-issue-1917 -->
+- [ ] docs(strategy): decide-panel roadmap, surface-simplification plan, and broader-issues remediation [testing] <!-- id:story-issue-1919 -->
+- [ ] docs(strategy): restore fidelity-lost architecture items in decide-panel roadmap [testing] <!-- id:story-issue-1920 -->
+- [ ] Roadmap: state+worktree GC and regen-bug write guard (architecture #1+#2) [testing] <!-- id:story-issue-1921 -->
+- [ ] feat: state+worktree GC and regen-bug write guard [testing] <!-- id:story-issue-1930 -->
+- [ ] chore: append 7 cost-log entries dropped by local regen [testing] <!-- id:story-issue-1931 -->
+- [ ] chore: fix stale TBD PR reference for blog post 238 [testing] <!-- id:story-issue-1932 -->
+- [ ] Roadmap: structured telemetry as the dispatch completion oracle (architecture #3) [backend] <!-- id:story-issue-1922 -->
+- [ ] Roadmap: safe-by-default execution — opt-in skip-permissions + containerized untrusted harnesses (architecture #6) [testing] <!-- id:story-issue-1925 -->
+- [ ] Roadmap: CI release gate + single version source of truth (architecture #9) [testing] <!-- id:story-issue-1928 -->
+- [ ] Roadmap: lazy-import cold-start performance budget (architecture #10) [testing] <!-- id:story-issue-1929 -->
+- [ ] feat: use structured dispatch telemetry for job completion [testing] <!-- id:story-issue-1933 -->
+- [ ] fix(dispatch): make skip-permissions opt-in [testing] <!-- id:story-issue-1935 -->
+- [ ] feat: enforce release gate and version single source [testing] <!-- id:story-issue-1934 -->
+- [ ] perf(cli): budget jobs and status cold starts [testing] <!-- id:story-issue-1936 -->
 - [x] Implement Task 1: Tri-Modal Autonomy Dial & Stage Gating [backend] <!-- id:story-v024-t01-autonomy-dial -->
 - [x] Implement Task 2: Sovereign Board Governance & Ed25519 Proposal Gates [security] <!-- id:story-v024-t02-board-governance -->
 - [x] Implement Task 3: Vizor Boardroom HUD Backend & Template [frontend] <!-- id:story-v024-t03-boardroom-hud -->
@@ -1635,3 +1661,22 @@ Submit approval via 'gh pr review 1903 --appro [testing] <!-- id:story-issue-190
 - [x] Implement Task 9: Extended BYOK Product Registry & Encrypted Secret Vault [security] <!-- id:story-v024-t09-byok-registry -->
 - [x] Implement Task 10: Autonomous Maintainer Zero-Issue Burndown Driver [backend] <!-- id:story-v024-t10-maintainer-burndown -->
 - [x] Implement Task 11: End-to-End System Verification & Documentation Sync [testing] <!-- id:story-v024-t11-e2e-verification -->
+- [ ] Review PR #1938 (docs-only: HarnessAdapter dispatch decomposition spec + plan, gh:#1924). Run synlynk pr check from this PR's checked-out branch to auto-detect it, confirm it is docs-only with no code [docs] <!-- id:gh-1938-review -->
+- [ ] Implement Task 1 of gh:#1924 (HarnessAdapter dispatch decomposition). Create synlynk/harness_adapters/__init__.py with a one-line module docstring: "HarnessAdapter protocol and per-harness implementat [testing] <!-- id:1924-task1-dispatch-request -->
+- [ ] Review PR #1939 (gh:#1924 Task 1/6: adds synlynk/harness_adapters/__init__.py and request.py with a frozen DispatchRequest dataclass, plus tests/test_dispatch_request.py). Run synlynk pr check from th [testing] <!-- id:1924-task1-review -->
+- [ ] Implement Task 2 of gh:#1924 (HarnessAdapter dispatch decomposition), building on Task 1's DispatchRequest dataclass already present at synlynk/harness_adapters/request.py. Read docs/superpowers/plans [testing] <!-- id:1924-task2-protocol-registry -->
+- [ ] Review PR #1940 (gh:#1924 Task 2/6: adds synlynk/harness_adapters/base.py with FailureKind enum + DispatchEvent dataclass + HarnessAdapter Protocol, and synlynk/harness_adapters/registry.py with regis [testing] <!-- id:1924-task2-review -->
+- [ ] Implement Task 3 of gh:#1924 (HarnessAdapter dispatch decomposition), building on Task 1's DispatchRequest (synlynk/harness_adapters/request.py) and Task 2's HarnessAdapter Protocol/registry (synlynk/ [testing] <!-- id:1924-task3-pipeline-stages -->
+- [ ] Review PR #1942 (gh:#1924 Task 3/6: adds synlynk/dispatch_pipeline.py with five stage functions -- resolve, authorize, prepare_worktree, spawn, observe, finalize -- over DispatchRequest, plus tests/te [testing] <!-- id:1924-task3-review -->
+- [ ] PR #1940 (gh:#1924 Task 2/6, HarnessAdapter Protocol + registry) is CLEAN, MERGEABLE, and already APPROVED, with all CI checks (test 3.10/3.12 both OSes, EPUBCheck, release-docs, qa-gate) passing. Fro [testing] <!-- id:merge PR 1940 (gh:#1924 Task 2/6) -->
+- [ ] ci: decouple performance and EPUB checks [ml] <!-- id:story-issue-1944 -->
+- [ ] PR #1942 (gh:#1924 Task 3/6, dispatch_pipeline.py stage functions) is CLEAN, MERGEABLE, and already APPROVED, with all CI checks (test 3.10/3.12 both OSes, EPUBCheck, release-docs, qa-gate) passing. F [testing] <!-- id:merge PR 1942 (gh:#1924 Task 3/6) -->
+- [ ] Implement Task 3 of docs/superpowers/plans/2026-10-03-harness-adapter-dispatch-decomposition.md (gh:#1924, PR1 task 3/6): LegacyAdapter that delegates to today's dispatch.py branching unchanged. Creat [testing] <!-- id:Task 3/6: LegacyAdapter (gh:#1924) -->
+- [ ] daemon: supervise the real process and reject stale worktree installs [testing] <!-- id:story-issue-1945 -->
+- [ ] Review and merge PR #1946 (gh:#1924, PR1 task 3/6: LegacyAdapter). From within this worktree, which is checked out on the PR's own branch (dispatch/codex/job-a5a07254), run 'synlynk pr check' to auto- [backend] <!-- id:Review+merge Task 3/6: LegacyAdapter (gh:#1924) -->
+- [ ] Review and merge PR #1946 (gh:#1924, PR1 task 3/6: LegacyAdapter). From within this worktree (checked out on dispatch/codex/job-a5a07254, the PR's own branch), first run 'git status --short' and if pr [docs] <!-- id:Review+merge Task 3/6: LegacyAdapter (gh:#1924), retry 2 -->
+- [ ] Merge PR #1946 (gh:#1924, PR1 task 3/6: LegacyAdapter). It is already fully reviewed and APPROVED (reviewDecision=APPROVED, see gh pr view 1946 --json reviewDecision). From within this worktree (check [docs] <!-- id:Merge Task 3/6: LegacyAdapter (gh:#1924), Agy attempt -->
+- [ ] Merge PR #1946 (gh:#1924, PR1 task 3/6: LegacyAdapter). It is already fully reviewed and APPROVED (reviewDecision=APPROVED, see gh pr view 1946 --json reviewDecision). From within this worktree (check [docs] <!-- id:Merge Task 3/6: LegacyAdapter (gh:#1924), Grok attempt -->
+- [ ] Implement Task 4 of docs/superpowers/plans/2026-10-03-harness-adapter-dispatch-decomposition.md (gh:#1924, PR1 task 4/6): Register all five harnesses (codex, grok, agy, claude, local) to LegacyAdapter [testing] <!-- id:Task 4/6: register harnesses to LegacyAdapter (gh:#1924) -->
+- [ ] Roadmap: dispatch_agent decomposition + HarnessAdapter plugin registry (architecture #5) [backend] <!-- id:story-issue-1924 -->
+- [ ] #1951 Design and implement independent cost-audit reconciliation linked to job decision revisions [testing] <!-- id:story-d070d6ba -->
