@@ -148,3 +148,28 @@ def test_dead_client_records_failure_without_failover(tmp_path, monkeypatch, git
     assert open(exit_file, encoding="utf-8").read().strip() == "3"
     recorded = log_path.read_text(encoding="utf-8")
     assert "example-test/runner:stub" in recorded
+
+
+def test_dispatch_flag_overrides_baseline_and_defaults_to_host():
+    from synlynk.container_exec import resolve_container_image
+    from synlynk._constants import HARNESS_CAPABILITY_BASELINES
+
+    assert resolve_container_image(None, {}) is None
+    assert resolve_container_image("example-test/flag:1", {"container_image": "example-test/base:1"}) == (
+        "example-test/flag:1"
+    )
+    for name, baseline in HARNESS_CAPABILITY_BASELINES.items():
+        assert "container_image" not in baseline, name
+
+
+def test_dispatch_parser_accepts_container_image_without_a_default():
+    from synlynk.cli import build_parser
+
+    parser = build_parser()
+    named = parser.parse_args([
+        "dispatch", "codex", "--task", "review",
+        "--container-image", "example-test/runner:stub",
+    ])
+    assert named.container_image == "example-test/runner:stub"
+    absent = parser.parse_args(["dispatch", "codex", "--task", "review"])
+    assert absent.container_image is None
