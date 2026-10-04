@@ -7831,10 +7831,12 @@ def test_agent_capability_baselines_includes_grok():
     assert grok["cli"] == "grok"
     assert grok.get("prompt_flag") == "--single"
     assert "-p" not in grok.get("non_interactive_flags", [])
-    # Headless Grok requires --always-approve to avoid dontAsk auto-cancel (#1277).
+    # --always-approve is no longer an unconditional baseline requirement —
+    # it's added explicitly via _dispatch_flags_for_agent(skip_permissions=True)
+    # and dispatch_agent()'s Grok auto-opt-in instead (gh:#1925 part 1).
     assert "--always-approve" in grok["dispatch_flags"]["valid_flags"]
     assert "--permission-mode" in grok["dispatch_flags"]["valid_flags"]
-    assert grok["dispatch_flags"]["required_flags"] == ["--always-approve"]
+    assert grok["dispatch_flags"]["required_flags"] == []
     assert "--yes" in grok["dispatch_flags"]["invalid_flags"]
     assert "cli-chat-proxy.grok.com:443" in grok["network_deps"]["required_endpoints"]
     assert "builder" in grok["roles"]
@@ -7842,7 +7844,11 @@ def test_agent_capability_baselines_includes_grok():
 
 
 def test_grok_baseline_requires_always_approve():
-    # Headless Grok requires --always-approve so compound shell is not auto-cancelled (#1277).
+    # --always-approve/--permission-mode stay valid Grok CLI flags, but are no
+    # longer an unconditional baseline requirement (gh:#1925 part 1) — the
+    # bypass is now added explicitly and only when skip_permissions=True
+    # (dispatch_agent() auto-sets this for Grok; see
+    # docs/superpowers/specs/2026-10-04-grok-failclosed-permission-enforcement-design.md).
     from synlynk import HARNESS_CAPABILITY_BASELINES
     grok = HARNESS_CAPABILITY_BASELINES.get("grok", {})
     flags = grok.get("dispatch_flags", {})
@@ -7850,8 +7856,8 @@ def test_grok_baseline_requires_always_approve():
         "--always-approve must be valid for Grok (--yes was dropped)"
     assert "--permission-mode" in flags.get("valid_flags", []), \
         "--permission-mode must remain valid for bypassPermissions fallback"
-    assert flags.get("required_flags", []) == ["--always-approve"], \
-        "Grok must require --always-approve for headless dispatch"
+    assert flags.get("required_flags", []) == [], \
+        "Grok's baseline must not unconditionally require --always-approve"
     assert "--yes" in flags.get("invalid_flags", []), \
         "--yes must be invalid for Grok (it was dropped by Grok CLI)"
 
