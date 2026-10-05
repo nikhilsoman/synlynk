@@ -84,7 +84,7 @@ def pr_governs_linkage_violations(conn, pr_number: int | None) -> list[dict[str,
                 story_ids.add(story_id)
                 rating_story_ids.add(story_id)
 
-    job_metadata: list[tuple[str, str | None, str | None, str | None]] = []
+    job_metadata: dict[str, tuple[str | None, str | None, str | None]] = {}
     if "job_id" in jobs_cols:
         selected = "job_id, story_id"
         if "task" in jobs_cols:
@@ -95,15 +95,7 @@ def pr_governs_linkage_violations(conn, pr_number: int | None) -> list[dict[str,
             job_id, story_id = row[:2]
             task = row[2] if "task" in jobs_cols else None
             target = row[3 if "task" in jobs_cols else 2] if "gh_write_target" in jobs_cols else None
-            job_metadata.append((job_id, story_id, task, target))
-            if (
-                story_id in rating_story_ids
-                or target == f"pr:{pr_number}"
-                or task_mentions_pr(task)
-            ):
-                records[job_id] = {"job_id": job_id, "story_id": story_id}
-                if story_id:
-                    story_ids.add(story_id)
+            job_metadata[job_id] = (story_id, task, target)
 
     linked_issue_numbers: set[int] = set()
     for story_id in story_ids:
@@ -121,24 +113,45 @@ def pr_governs_linkage_violations(conn, pr_number: int | None) -> list[dict[str,
             if match:
                 linked_issue_numbers.add(int(match.group(0)))
 
-    issue_ref_pattern = re.compile(r"(?<![\w/])#(\d+)\b")
-    for job_id, story_id, task, _target in job_metadata:
-        if any(
-            int(match.group(1)) in linked_issue_numbers
-            for match in issue_ref_pattern.finditer(task or "")
-        ):
-            records[job_id] = {"job_id": job_id, "story_id": story_id}
-            if story_id:
-                story_ids.add(story_id)
+    issue_ref_pattern = re.compile(r"(?<![\w/])#(\d+)\b|\bissue:(\d+)\b", re.IGNORECASE)
+
+    def referenced_issue_numbers(text: str | None) -> set[int]:
+        return {
+            int(match.group(1) or match.group(2))
+            for match in issue_ref_pattern.finditer(text or "")
+        }
+
+    def job_attributable(
+        story_id: str | None, task: str | None, target: str | None
+    ) -> bool:
+        own_text = " ".join(value for value in (task, target) if value)
+        direct_pr_tie = target == f"pr:{pr_number}" or task_mentions_pr(task)
+        direct_issue_tie = bool(referenced_issue_numbers(own_text) & linked_issue_numbers)
+        if direct_pr_tie or direct_issue_tie:
+            return True
+        if story_id not in rating_story_ids:
+            return False
+
+        # A shared story is only a fallback attribution.  If the job names any
+        # other PR or issue, the job's own provenance wins over the shared story.
+        references_other_pr = any(
+            match and int(match.group(1)) != int(pr_number)
+            for pattern in pr_ref_patterns
+            for match in [pattern.search(own_text)]
+        )
+        references_other_issue = bool(
+            referenced_issue_numbers(own_text) - linked_issue_numbers
+        )
+        return not (references_other_pr or references_other_issue)
 
     if "job_id" in cost_cols:
-        for job_id, story_id in conn.execute(
+        for job_id, cost_story_id in conn.execute(
             "SELECT job_id, story_id FROM cost_entries WHERE job_id IS NOT NULL"
         ).fetchall():
-            if job_id in records or story_id in story_ids:
-                records.setdefault(job_id, {"job_id": job_id, "story_id": story_id})
-                if not records[job_id].get("story_id"):
-                    records[job_id]["story_id"] = story_id
+            job_story_id, task, target = job_metadata.get(job_id, (None, None, None))
+            story_id = job_story_id or cost_story_id
+            if job_attributable(story_id, task, target):
+                records[job_id] = {"job_id": job_id, "story_id": story_id}
 
     return [
         {**record, **linkage}

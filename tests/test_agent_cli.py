@@ -144,6 +144,31 @@ def test_governs_pr_check_flags_untagged_job_sharing_pr_story():
     assert {item["job_id"] for item in violations} == {"job-untagged"}
 
 
+def test_governs_pr_check_flags_original_gap_two_untagged_job_for_pr_2029():
+    from synlynk.governs_gate import pr_governs_linkage_violations
+
+    db = sqlite3.connect(":memory:")
+    db.executescript(
+        """
+        CREATE TABLE stories (story_id TEXT PRIMARY KEY, goal_id TEXT);
+        CREATE TABLE daemon_jobs (job_id TEXT PRIMARY KEY, story_id TEXT, task TEXT, gh_write_target TEXT);
+        CREATE TABLE cost_entries (job_id TEXT, story_id TEXT);
+        CREATE TABLE capability_ratings (id INTEGER PRIMARY KEY, story_id TEXT, pr_number INTEGER);
+        """
+    )
+    db.execute("INSERT INTO stories VALUES ('story-unlinked-2029', NULL)")
+    db.execute("INSERT INTO capability_ratings VALUES (1, 'story-unlinked-2029', 2029)")
+    db.execute(
+        "INSERT INTO daemon_jobs VALUES (?, ?, ?, ?)",
+        ("job-untagged-2029", "story-unlinked-2029", "implement the requested change", None),
+    )
+    db.execute("INSERT INTO cost_entries VALUES (?, ?)", ("job-untagged-2029", "story-unlinked-2029"))
+    db.commit()
+
+    violations = pr_governs_linkage_violations(db, 2029)
+    assert {item["job_id"] for item in violations} == {"job-untagged-2029"}
+
+
 def test_governs_pr_check_flags_job_referencing_linked_issue():
     from synlynk.governs_gate import pr_governs_linkage_violations
 
