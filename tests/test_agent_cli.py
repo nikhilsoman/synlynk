@@ -171,6 +171,34 @@ def test_governs_pr_check_flags_job_referencing_linked_issue():
     assert {item["job_id"] for item in violations} == {"job-issue"}
 
 
+def test_governs_pr_check_walks_attributable_jobs_and_ignores_other_prs():
+    from synlynk.governs_gate import pr_governs_linkage_violations
+
+    db = sqlite3.connect(":memory:")
+    db.executescript(
+        """
+        CREATE TABLE stories (story_id TEXT PRIMARY KEY, goal_id TEXT);
+        CREATE TABLE daemon_jobs (job_id TEXT PRIMARY KEY, story_id TEXT, task TEXT, gh_write_target TEXT);
+        CREATE TABLE cost_entries (job_id TEXT, story_id TEXT);
+        CREATE TABLE capability_ratings (id INTEGER PRIMARY KEY, story_id TEXT, pr_number INTEGER);
+        """
+    )
+    db.execute("INSERT INTO stories VALUES ('story-unlinked', NULL)")
+    db.execute("INSERT INTO daemon_jobs VALUES (?, ?, ?, ?)",
+               ("job-target", "story-unlinked", "implement feature", "issue:1990"))
+    db.execute("INSERT INTO daemon_jobs VALUES (?, ?, ?, ?)",
+               ("job-pr", "story-unlinked", "implement PR #1990", "issue:1990"))
+    db.execute("INSERT INTO daemon_jobs VALUES (?, ?, ?, ?)",
+               ("job-other", "story-unlinked", "implement PR #1991", "issue:1991"))
+    db.executemany("INSERT INTO cost_entries VALUES (?, ?)", [
+        ("job-pr", "story-unlinked"), ("job-other", "story-unlinked"),
+    ])
+    db.commit()
+
+    violations = pr_governs_linkage_violations(db, 1990)
+    assert {item["job_id"] for item in violations} == {"job-pr"}
+
+
 def _seed_cross_harness_review_case(project_dir, monkeypatch, *, review_harness, review_model):
     import json
     import synlynk
