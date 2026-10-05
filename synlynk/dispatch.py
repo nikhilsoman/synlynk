@@ -2906,7 +2906,7 @@ def _preflight_dispatch(
             pass
 
     # A real dispatch carries a task hint and must be attributable to a
-    # linked GOVERNS story. Keep low-level harness-only preflight calls
+    # linked GOVERNS story.  Keep the low-level harness-only preflight calls
     # without a task hint backward compatible, while still failing closed for
     # an explicitly supplied story when no DB evidence is available.
     if story_id is not None or _task_hint or harness_name not in HARNESS_CAPABILITY_BASELINES:
