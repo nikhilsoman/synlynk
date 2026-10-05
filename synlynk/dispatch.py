@@ -33,10 +33,7 @@ _ORG_ROLE_TO_BASELINE_ROLE = {
     "synlynk-bot": "builder",
 }
 
-# grok added 2026-10-04 (gh:#2034): live TC-9 probe confirms gh-write
-# capability post-LIVE-13 fix; listed last pending >=5 empirical
-# gh-write-task samples per the Empirical Capability Assessment Policy.
-_GH_WRITE_HARNESS_PRIORITY = ("claude", "agy", "grok")
+_GH_WRITE_HARNESS_PRIORITY = ("claude", "agy")
 _STARTUP_FAILOVER_ORDER = ("codex", "agy", "claude")
 _CODEX_REVIEW_WRITABLE_ROOTS = "sandbox_workspace_write.writable_roots=[]"
 
@@ -2906,7 +2903,7 @@ def _preflight_dispatch(
             pass
 
     # A real dispatch carries a task hint and must be attributable to a
-    # linked GOVERNS story.  Keep the low-level harness-only preflight calls
+    # linked GOVERNS story. Keep low-level harness-only preflight calls
     # without a task hint backward compatible, while still failing closed for
     # an explicitly supplied story when no DB evidence is available.
     if story_id is not None or _task_hint or harness_name not in HARNESS_CAPABILITY_BASELINES:

@@ -62,11 +62,7 @@ def pr_governs_linkage_violations(conn, pr_number: int | None) -> list[dict[str,
     records: dict[str, dict[str, Any]] = {}
     story_ids: set[str] = set()
     rating_story_ids: set[str] = set()
-    job_metadata: dict[str, tuple[str | None, str | None]] = {}
 
-    # Only exact PR references are attributable.  In particular, do not treat
-    # an issue target (``issue:123``) or an unrelated ``#123`` mention as work
-    # for PR #123; that would leak jobs from neighbouring PRs into this gate.
     pr_ref_patterns = (
         re.compile(r"\bpr\s*#?\s*(\d+)\b", re.IGNORECASE),
         re.compile(r"\bpull\s+request\s*#?\s*(\d+)\b", re.IGNORECASE),
@@ -74,54 +70,75 @@ def pr_governs_linkage_violations(conn, pr_number: int | None) -> list[dict[str,
     )
 
     def task_mentions_pr(task: str | None) -> bool:
-        text = task or ""
         return any(
             match and int(match.group(1)) == int(pr_number)
             for pattern in pr_ref_patterns
-            for match in [pattern.search(text)]
+            for match in [pattern.search(task or "")]
         )
 
     if "pr_number" in rating_cols:
         for _rating_id, story_id in conn.execute(
             "SELECT id, story_id FROM capability_ratings WHERE pr_number=?", (pr_number,)
         ).fetchall():
-            story_ids.add(story_id or "")
-            rating_story_ids.add(story_id or "")
+            if story_id:
+                story_ids.add(story_id)
+                rating_story_ids.add(story_id)
 
+    job_metadata: list[tuple[str, str | None, str | None, str | None]] = []
     if "job_id" in jobs_cols:
         selected = "job_id, story_id"
         if "task" in jobs_cols:
             selected += ", task"
         if "gh_write_target" in jobs_cols:
             selected += ", gh_write_target"
-        query = f"SELECT {selected} FROM daemon_jobs"
-        rows = conn.execute(query).fetchall()
-        for row in rows:
+        for row in conn.execute(f"SELECT {selected} FROM daemon_jobs").fetchall():
             job_id, story_id = row[:2]
             task = row[2] if "task" in jobs_cols else None
             target = row[3 if "task" in jobs_cols else 2] if "gh_write_target" in jobs_cols else None
-            job_metadata[job_id] = (task, target)
+            job_metadata.append((job_id, story_id, task, target))
             if (
-                story_id not in rating_story_ids
-                and target != f"pr:{pr_number}"
-                and not task_mentions_pr(task)
+                story_id in rating_story_ids
+                or target == f"pr:{pr_number}"
+                or task_mentions_pr(task)
             ):
-                continue
+                records[job_id] = {"job_id": job_id, "story_id": story_id}
+                if story_id:
+                    story_ids.add(story_id)
+
+    linked_issue_numbers: set[int] = set()
+    for story_id in story_ids:
+        match = re.search(r"\bstory-issue-(\d+)\b", story_id, re.IGNORECASE)
+        if match:
+            linked_issue_numbers.add(int(match.group(1)))
+    story_cols = _table_columns(conn, "stories")
+    if "gh_issue" in story_cols and story_ids:
+        placeholders = ",".join("?" for _ in story_ids)
+        for (gh_issue,) in conn.execute(
+            f"SELECT gh_issue FROM stories WHERE story_id IN ({placeholders})",
+            tuple(story_ids),
+        ).fetchall():
+            match = re.search(r"\d+", str(gh_issue or ""))
+            if match:
+                linked_issue_numbers.add(int(match.group(0)))
+
+    issue_ref_pattern = re.compile(r"(?<![\w/])#(\d+)\b")
+    for job_id, story_id, task, _target in job_metadata:
+        if any(
+            int(match.group(1)) in linked_issue_numbers
+            for match in issue_ref_pattern.finditer(task or "")
+        ):
             records[job_id] = {"job_id": job_id, "story_id": story_id}
-            story_ids.add(story_id or "")
+            if story_id:
+                story_ids.add(story_id)
 
     if "job_id" in cost_cols:
         for job_id, story_id in conn.execute(
             "SELECT job_id, story_id FROM cost_entries WHERE job_id IS NOT NULL"
         ).fetchall():
-            if job_id in records or story_id in rating_story_ids:
+            if job_id in records or story_id in story_ids:
                 records.setdefault(job_id, {"job_id": job_id, "story_id": story_id})
                 if not records[job_id].get("story_id"):
                     records[job_id]["story_id"] = story_id
-            elif job_id in job_metadata:
-                task, target = job_metadata[job_id]
-                if target is None and not task_mentions_pr(task):
-                    records[job_id] = {"job_id": job_id, "story_id": story_id}
 
     return [
         {**record, **linkage}
