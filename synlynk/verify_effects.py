@@ -16,7 +16,7 @@ from synlynk.jobs import (
     STATUS_FAILED_VERIFICATION,
     STATUS_FAILED,
 )
-from synlynk.gh_verify import gh_write_verified, local_commits_pushed
+from synlynk.gh_verify import gh_write_verified, local_commits_pushed, github_branch_effect_verified
 # PR1 public oracle exports.  The legacy boolean verifier below remains for
 # compatibility callers; new reconciliation code uses the pure tri-state API.
 from synlynk.job_truth import CompletionDecision, TriState, decide_job_outcome
@@ -111,6 +111,7 @@ def verify_job_effects(
     git_state: Optional[dict] = None,
     exit_code: int = 0,
     worktree_branch: Optional[str] = None,
+    started_at: Optional[str] = None,
     structured_telemetry: Optional[dict] = None,
 ) -> EffectVerificationResult:
     """Verify that a job with exit code 0 produced real effects before marking succeeded."""
@@ -165,16 +166,23 @@ def verify_job_effects(
     commits_ahead = (git_state or {}).get("commits_ahead", 0)
     if worktree_path and worktree_branch and (commits_ahead or base_sha):
         if not local_commits_pushed(worktree_path, worktree_branch, base_sha):
-            return EffectVerificationResult(
-                verified=False,
-                status="unpushed_branch",
-                reason=f"local commits are not reachable on origin/{worktree_branch}",
-            )
+            if github_branch_effect_verified(worktree_branch, since=started_at) is not True:
+                return EffectVerificationResult(
+                    verified=False,
+                    status="unpushed_branch",
+                    reason=f"local commits are not reachable on origin/{worktree_branch}",
+                )
 
     # 2. Classification Branch B: Mutating Task
     if task_class_norm in ("mutating", "code", "mutation", "fix", "feat"):
         files_touched = _get_worktree_changed_files(worktree_path, base_sha, git_state=git_state) if worktree_path else []
         if not files_touched:
+            if github_branch_effect_verified(worktree_branch, since=started_at) is True:
+                return EffectVerificationResult(
+                    verified=True,
+                    status=STATUS_COMPLETED,
+                    reason=f"GitHub PR exists for {worktree_branch}; local branch was removed after delivery",
+                )
             return EffectVerificationResult(
                 verified=False,
                 status=STATUS_COMPLETED_WITHOUT_CHANGES,

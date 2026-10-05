@@ -59,6 +59,60 @@ def local_commits_pushed(worktree_path: Optional[str], branch: Optional[str], ba
         return False
 
 
+def github_branch_effect_verified(
+    branch: Optional[str],
+    *,
+    since: Optional[str] = None,
+    timeout: int = 10,
+    accepted_states: Optional[set[str]] = None,
+    evidence: Optional[dict] = None,
+) -> Optional[bool]:
+    """Check GitHub ground truth when the source branch is no longer local.
+
+    A merged PR normally deletes its head branch.  In that case
+    ``local_commits_pushed`` must return false even though the work landed.
+    Only accept a PR whose head ref matches the job branch and whose creation
+    time is after the dispatch (when a start time is available).
+    """
+    if not branch:
+        return None
+    cmd = [
+        "gh", "pr", "list", "--state", "all", "--head", branch,
+        "--limit", "20", "--json", "state,createdAt,headRefName,mergedAt",
+    ]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        if evidence is not None:
+            evidence["github_branch_check"] = {"matched": None, "error": type(exc).__name__}
+        return None
+    if result.returncode != 0:
+        if evidence is not None:
+            evidence["github_branch_check"] = {"matched": None, "raw": result.stderr or result.stdout}
+        return None
+    try:
+        rows = json.loads(result.stdout or "[]")
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(rows, list):
+        return None
+    since_dt = _parse_iso8601(since, naive_as="local") if since else None
+    states = accepted_states or {"OPEN", "MERGED"}
+    matched = False
+    for row in rows:
+        if not isinstance(row, dict) or row.get("headRefName") not in (None, branch):
+            continue
+        created = _parse_iso8601(row.get("createdAt"), naive_as="utc")
+        if since_dt is not None and (created is None or _compare_dt_lt(created, since_dt)):
+            continue
+        if str(row.get("state") or "").upper() in states:
+            matched = True
+            break
+    if evidence is not None:
+        evidence["github_branch_check"] = {"matched": matched, "raw": result.stdout}
+    return matched
+
+
 def _naive_local_tz():
     """Timezone used when daemon_jobs.started_at is stored without an offset."""
     return datetime.now().astimezone().tzinfo

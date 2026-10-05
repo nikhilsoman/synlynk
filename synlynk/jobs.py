@@ -18,7 +18,12 @@ from synlynk.sentinel import _write_sentinel_alert
 from synlynk._constants import HARNESS_CAPABILITY_BASELINES
 from synlynk.fleet import terminal_status_for_unknown_exit
 from synlynk.events import emit_event
-from synlynk.gh_verify import _parse_iso8601, gh_write_verified, local_commits_pushed
+from synlynk.gh_verify import (
+    _parse_iso8601,
+    gh_write_verified,
+    local_commits_pushed,
+    github_branch_effect_verified,
+)
 from synlynk._lazy import pkg as _pkg
 
 
@@ -1913,6 +1918,7 @@ def _enforce_job_effect_verification(job: dict, git_state: Optional[dict], senti
         git_state=git_state,
         exit_code=job.get("exit_code") or 0,
         worktree_branch=job.get("worktree_branch"),
+        started_at=job.get("started_at"),
         structured_telemetry=structured,
     )
     # If worktree wasn't given on a mutating task (e.g. synthetic test), don't fail
@@ -3733,11 +3739,14 @@ def _verify_daemon_terminal_status(
 def _guard_unpushed_branch(
     conn, job_id: str, status: str, worktree_path: Optional[str],
     worktree_branch: Optional[str], git_state: Optional[dict],
+    started_at: Optional[str] = None,
 ) -> str:
     """Prevent terminal success while local commits remain off origin."""
     if not git_state or not git_state.get("commits_ahead"):
         return status
     if local_commits_pushed(worktree_path, worktree_branch, git_state.get("base_commit")):
+        return status
+    if github_branch_effect_verified(worktree_branch, since=started_at) is True:
         return status
     try:
         conn.execute(
@@ -3747,6 +3756,25 @@ def _guard_unpushed_branch(
     except sqlite3.OperationalError:
         pass
     return STATUS_UNPUSHED_BRANCH
+
+
+def _promote_merged_pr_result(
+    status: str,
+    exit_code: Optional[int],
+    worktree_branch: Optional[str],
+    started_at: Optional[str],
+) -> tuple[str, Optional[int], Optional[str]]:
+    """Use merged-PR state to correct stale process/local terminal labels."""
+    if status not in {
+        "failed", "failed_unverified", "permission_denied",
+        STATUS_COMPLETED_WITHOUT_CHANGES, STATUS_FAILED_NOOP_DENIED,
+    }:
+        return status, exit_code, None
+    if github_branch_effect_verified(
+        worktree_branch, since=started_at, accepted_states={"MERGED"}
+    ) is True:
+        return "done", 0, "GitHub confirms the job branch was merged; corrected stale local result"
+    return status, exit_code, None
 
 
 def _reap_zombie_worktree(job_id: str, log_path: Optional[str], conn=None) -> bool:
@@ -3970,7 +3998,11 @@ def _reconcile_daemon_jobs() -> None:
                         except Exception:
                             preferred_state = None
                     status = _guard_unpushed_branch(
-                        conn, job_id, status, preferred_path, preferred_branch, preferred_state
+                        conn, job_id, status, preferred_path, preferred_branch, preferred_state,
+                        started_at,
+                    )
+                    status, exit_code, _merged_note = _promote_merged_pr_result(
+                        status, exit_code, preferred_branch, started_at
                     )
                     if status == STATUS_UNPUSHED_BRANCH and exit_code in (None, 0):
                         exit_code = 1
@@ -4063,7 +4095,11 @@ def _reconcile_daemon_jobs() -> None:
                             None, git_state
                         )
                         zombie_status = _guard_unpushed_branch(
-                            conn, job_id, zombie_status, worktree_path, worktree_branch, git_state
+                            conn, job_id, zombie_status, worktree_path, worktree_branch, git_state,
+                            started_at,
+                        )
+                        zombie_status, zombie_exit_code, _merged_note = _promote_merged_pr_result(
+                            zombie_status, zombie_exit_code, worktree_branch, started_at
                         )
                         if zombie_status == STATUS_UNPUSHED_BRANCH and zombie_exit_code in (None, 0):
                             zombie_exit_code = 1
@@ -4119,8 +4155,13 @@ def _reconcile_daemon_jobs() -> None:
                         exit_code, git_state, structured
                     )
                 status = _guard_unpushed_branch(
-                    conn, job_id, status, worktree_path, worktree_branch, git_state
+                    conn, job_id, status, worktree_path, worktree_branch, git_state, started_at
                 )
+                status, exit_code, merged_note = _promote_merged_pr_result(
+                    status, exit_code, worktree_branch, started_at
+                )
+                if merged_note:
+                    summary_note = merged_note
                 if status == STATUS_UNPUSHED_BRANCH and exit_code in (None, 0):
                     exit_code = 1
                 status, gh_write_verified_str = _verify_daemon_terminal_status(

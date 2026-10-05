@@ -121,6 +121,49 @@ def test_gh_write_task_verified_returns_completed():
         assert result.gh_verified is True
 
 
+def test_mutating_task_accepts_github_pr_when_merged_branch_is_gone(monkeypatch):
+    from synlynk.verify_effects import verify_job_effects
+
+    monkeypatch.setattr("synlynk.verify_effects.local_commits_pushed", lambda *args: False)
+    monkeypatch.setattr(
+        "synlynk.verify_effects.github_branch_effect_verified",
+        lambda *args, **kwargs: True,
+    )
+
+    result = verify_job_effects(
+        task_class="mutating",
+        worktree_branch="fix/job-merged",
+        base_sha="base-sha",
+        git_state={"commits_ahead": 1},
+        started_at="2026-10-04T09:00:00",
+    )
+
+    assert result.verified is True
+    assert result.status == STATUS_COMPLETED
+    assert "GitHub PR exists" in result.reason
+
+
+def test_mutating_task_still_rejects_unpushed_branch_without_github_effect(monkeypatch, tmp_path):
+    from synlynk.verify_effects import verify_job_effects
+
+    monkeypatch.setattr("synlynk.verify_effects.local_commits_pushed", lambda *args: False)
+    monkeypatch.setattr(
+        "synlynk.verify_effects.github_branch_effect_verified",
+        lambda *args, **kwargs: False,
+    )
+
+    result = verify_job_effects(
+        task_class="mutating",
+        worktree_path=str(tmp_path),
+        worktree_branch="fix/job-unpushed",
+        base_sha="base-sha",
+        git_state={"commits_ahead": 1},
+    )
+
+    assert result.verified is False
+    assert result.status == "unpushed_branch"
+
+
 def test_analysis_task_receipt_verification(tmp_path):
     from synlynk.verify_effects import verify_job_effects
 
