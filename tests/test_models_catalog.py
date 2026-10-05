@@ -74,6 +74,12 @@ def test_load_model_catalog_fallback_on_missing(tmp_path):
     assert resolve_tier_model("fast", "agy", repo_path=str(tmp_path)) is not None
 
 
+def test_hermes_catalog_tier_resolves_for_local_harness(tmp_path):
+    catalog = load_model_catalog(repo_path=str(tmp_path))
+    assert catalog["tiers"]["hermes"]["local"] == "Hermes-3-Llama-3.1-8B"
+    assert resolve_tier_model("hermes", "local", repo_path=str(tmp_path)) == "Hermes-3-Llama-3.1-8B"
+
+
 def test_builtin_codex_catalog_matches_current_account_model(tmp_path):
     catalog = load_model_catalog(repo_path=str(tmp_path))
     assert {catalog["tiers"][tier]["codex"] for tier in ("fast", "pro", "reasoning")} == {"gpt-5.6-luna"}
