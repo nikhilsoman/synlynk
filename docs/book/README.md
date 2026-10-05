@@ -90,7 +90,8 @@ epubcheck docs/book/the-supervised-machine-v0.5-DRAFT.epub
 ```
 
 The current EPUB passes with zero fatals, errors, warnings, or informational messages.
-The same command runs in the required `EPUBCheck 5.3.0` GitHub Actions check for pull requests.
+The same command runs in the dedicated `EPUBCheck 5.3.0` GitHub Actions workflow when book
+files change or the workflow is started manually; it is not part of the required core test CI.
 
 **Regenerate the PDF and EPUB together and commit all three files whenever the HTML changes —
 never let them drift.** The EPUB build is now a standard, default step alongside the PDF for

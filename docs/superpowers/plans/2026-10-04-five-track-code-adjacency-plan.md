@@ -57,7 +57,7 @@ via `synlynk dispatch`.
 | #1977 | Docs restructure | OPEN | |
 | #1927 | CLI core/packs split | OPEN | |
 | #1941 | Flaky cold-start test | OPEN | Perf/CI, CLI cold-start path. |
-| #1943 | Move cold-start/EPUB tests out of required CI | OPEN | Same family as #1941. |
+| #1943 | Move cold-start/EPUB tests out of required CI | DONE (PR #1944) | Performance and book validation now run in dedicated workflows. |
 | #2012 | Release-docs CI gate over-scoped | *(cross-listed, owned by Track 1)* | Also touches `release --check-docs`, which #1977 extends — coordinate, don't duplicate. |
 | #1918 | `decide --record` slug-collision overwrite bug | OPEN | Loose fit (decide.py, not taxonomy.py) — rides along here as a small CLI-command bugfix rather than a standalone track. |
 
