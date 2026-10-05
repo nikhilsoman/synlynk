@@ -31,3 +31,13 @@ def test_local_classify_failure_returns_none():
 
 def test_local_resolve_model():
     assert LocalAdapter().resolve_model("fast", None)
+
+
+def test_local_resolve_model_supports_hermes_tier():
+    assert LocalAdapter().resolve_model("hermes", None) == "Hermes-3-Llama-3.1-8B"
+
+
+def test_local_resolve_model_preserves_existing_local_tiers():
+    adapter = LocalAdapter()
+    assert adapter.resolve_model("fast", None) == "qwen2.5"
+    assert adapter.resolve_model("reasoning", None) == "deepseek-r1"
