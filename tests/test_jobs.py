@@ -2052,6 +2052,21 @@ def test_gtv_status_structured_completion_is_authoritative():
     assert "structured" in note
 
 
+def test_unpushed_guard_accepts_pr_delivery_after_head_branch_deletion(monkeypatch):
+    import synlynk.jobs as jobs_mod
+
+    monkeypatch.setattr(jobs_mod, "local_commits_pushed", lambda *args: False)
+    monkeypatch.setattr(jobs_mod, "github_branch_effect_verified", lambda *args, **kwargs: True)
+
+    conn = type("Conn", (), {"execute": lambda self, *args: (_ for _ in ()).throw(AssertionError("must not mark false"))})()
+    state = {"commits_ahead": 1, "base_commit": "base-sha"}
+
+    assert jobs_mod._guard_unpushed_branch(
+        conn, "job-merged", "done", "/tmp/missing-worktree", "fix/job-merged", state,
+        "2026-10-04T09:00:00",
+    ) == "done"
+
+
 def test_terminal_reconciliation_does_not_overwrite_settled_row(tmp_path):
     """A stale reconciler pass must lose the terminal-state CAS race."""
     import sqlite3

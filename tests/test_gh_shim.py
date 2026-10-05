@@ -11,7 +11,7 @@ def _fake_gh(tmp_path):
     return path
 
 
-def _run_shim(tmp_path, env):
+def _run_shim(tmp_path, env, cwd=None):
     shim = tmp_path / "shim"
     shim.mkdir(exist_ok=True)
     shim_path = shim / "gh"
@@ -21,7 +21,7 @@ def _run_shim(tmp_path, env):
         "raise SystemExit(main(shim_dir=__import__('os').path.dirname(__file__)))\n"
     )
     shim_path.chmod(stat.S_IRWXU)
-    return subprocess.run([str(shim_path), "--version"], env=env, text=True, capture_output=True)
+    return subprocess.run([str(shim_path), "--version"], env=env, cwd=cwd or tmp_path, text=True, capture_output=True)
 
 
 def test_shim_non_harness_execs_real_gh(tmp_path):
@@ -52,6 +52,25 @@ def test_shim_harness_with_allow_host_execs_real_gh(tmp_path):
     result = _run_shim(tmp_path, env)
     assert result.returncode == 0
     assert result.stdout == "gh-ran:"
+
+
+def test_shim_host_auth_records_structured_audit_event(tmp_path):
+    _fake_gh(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    env = {
+        "PATH": str(tmp_path),
+        "PYTHONPATH": os.getcwd(),
+        "SYNLYNK_HARNESS": "1",
+        "SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH": "1",
+        "USER": "operator",
+    }
+    result = _run_shim(tmp_path, env)
+    assert result.returncode == 0
+    events = __import__("json").loads((tmp_path / ".synlynk" / "telemetry.json").read_text())
+    assert events[-1]["type"] == "gh_host_auth"
+    assert events[-1]["actor"] == "operator"
+    assert events[-1]["repo"] == "unknown"
+    assert events[-1]["gh_call"] == "gh --version"
 
 
 def test_shim_harness_with_token_execs_real_gh(tmp_path):

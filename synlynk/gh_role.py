@@ -12,6 +12,7 @@ from synlynk.dispatch import (
     _isolated_gh_config_dir,
     _resolve_dispatch_gh_token,
 )
+from synlynk.gh_shim import record_host_auth_gh_call
 
 
 def cmd_gh(role: str, gh_args: list) -> int:
@@ -47,6 +48,7 @@ def cmd_gh(role: str, gh_args: list) -> int:
             "SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH is set — using host gh keyring.",
             file=sys.stderr,
         )
+        record_host_auth_gh_call(args, env=env)
     else:
         print(
             f"  synlynk gh refused: no role-scoped GitHub App token for {role!r}. "
