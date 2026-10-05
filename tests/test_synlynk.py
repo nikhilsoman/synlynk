@@ -7014,9 +7014,17 @@ def test_dispatch_ready_jobs_launches_queued_job(project_dir, monkeypatch):
         ),
     )
     conn.execute(
+        "INSERT INTO goals (goal_id, outcome, criterion) VALUES (?, ?, ?)",
+        ("goal-dispatch-queued", "Launch queued dispatch jobs", "Queued jobs launch"),
+    )
+    conn.execute(
+        "INSERT INTO stories (story_id, title, goal_id) VALUES (?, ?, ?)",
+        ("story-dispatch-queued", "Launch queued dispatch job", "goal-dispatch-queued"),
+    )
+    conn.execute(
         "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, "
-        "depends_on, enqueued_at) VALUES (?,?,?,?,?,?,?)",
-        ("djob-q1", "claude", "do the thing", "queued", 5, "[]", "2026-06-23T10:00:00")
+        "depends_on, enqueued_at, story_id) VALUES (?,?,?,?,?,?,?,?)",
+        ("djob-q1", "claude", "do the thing", "queued", 5, "[]", "2026-06-23T10:00:00", "story-dispatch-queued")
     )
     conn.commit()
     conn.close()
@@ -7194,12 +7202,21 @@ def test_dispatch_ready_jobs_commits_per_job(project_dir, monkeypatch):
             time.strftime("%Y-%m-%dT%H:%M:%SZ", time.localtime()),
         ),
     )
+    conn.execute(
+        "INSERT INTO goals (goal_id, outcome, criterion) VALUES (?, ?, ?)",
+        ("goal-dispatch-commits", "Commit queued dispatch jobs", "Jobs commit"),
+    )
+    for i in range(2):
+        conn.execute(
+            "INSERT INTO stories (story_id, title, goal_id) VALUES (?, ?, ?)",
+            (f"story-dispatch-commit-{i}", "Commit queued dispatch job", "goal-dispatch-commits"),
+        )
     for i in range(2):
         conn.execute(
             "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, "
-            "depends_on, enqueued_at) VALUES (?,?,?,?,?,?,?)",
+            "depends_on, enqueued_at, story_id) VALUES (?,?,?,?,?,?,?,?)",
             (f"djob-commit-{i}", "claude", "do it", "queued", 5, "[]",
-             f"2026-06-23T10:00:0{i}")
+             f"2026-06-23T10:00:0{i}", f"story-dispatch-commit-{i}")
         )
     conn.commit()
     conn.close()
