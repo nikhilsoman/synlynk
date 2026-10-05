@@ -5,6 +5,13 @@ from synlynk.harness_adapters.base import DispatchEvent, FailureKind, Permission
 from synlynk.harness_adapters.request import DispatchRequest
 
 
+# Hermes is an explicit local-only catalog tier.  It is intentionally not
+# added to dispatch's global fast/pro/reasoning tiers: selecting Hermes is a
+# local adapter concern and must not make remote harnesses accept a tier they
+# cannot resolve.
+HERMES_TIER = "hermes"
+
+
 class LocalAdapter:
     def translate_permissions(
         self, permissions: list, read_only: bool, skip_permissions: bool = False
@@ -31,4 +38,6 @@ class LocalAdapter:
     def resolve_model(self, tier: str, effort: Optional[str]) -> str:
         from synlynk.models import resolve_tier_model
 
+        if tier == HERMES_TIER:
+            return resolve_tier_model(HERMES_TIER, "local")
         return resolve_tier_model(tier, "local")

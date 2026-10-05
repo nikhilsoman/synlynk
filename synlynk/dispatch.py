@@ -611,6 +611,96 @@ def _role_for_story(story_id: str) -> Optional[str]:
     return row[0] if row else None
 
 
+def _infer_dispatch_defaults(
+    task: str,
+    *,
+    story_id: str = None,
+    agent: str = None,
+    role: str = None,
+    task_type: str = None,
+    requires_gh_write: bool = False,
+    base: str = None,
+    grants: Optional[list] = None,
+    revokes: Optional[list] = None,
+) -> dict:
+    """Infer the human-facing dispatch defaults without starting a job.
+
+    Story metadata wins over task wording, and explicit CLI values win over
+    both.  The policy is deliberately consulted here rather than duplicating
+    the routing table in the CLI, so previews and real dispatches describe the
+    same contract.
+    """
+    from synlynk.policy import load_policy
+
+    policy = load_policy(os.getcwd())
+    allocation = ((policy.get("dev_authority") or {}).get("task_allocation") or {})
+    story_role = _role_for_story(story_id)
+    text = (task or "").lower()
+    inferred_task_type = task_type
+    if inferred_task_type is None:
+        if _infer_task_type(task) == "review":
+            inferred_task_type = "review"
+        else:
+            patterns = (
+                ("brainstorm", ("brainstorm", "design proposal", "write a spec")),
+                ("architecture-review", ("architecture review", "architectural review")),
+                ("pm", ("roadmap", "triage backlog", "project management")),
+                ("test", ("run tests", "test suite", "add tests", "pytest")),
+                ("refactor", ("refactor", "restructure")),
+                ("css", ("css", "stylesheet", "styling")),
+                ("templates", ("template", "email template")),
+                ("content", ("copywriting", "blog post", "content")),
+                ("js", ("javascript", "typescript", "frontend")),
+                ("infra", ("infrastructure", "deploy", "ci/cd")),
+                ("implement", ("implement", "build", "add", "fix", "change")),
+            )
+            inferred_task_type = next(
+                (kind for kind, terms in patterns if any(term in text for term in terms)),
+                "implement",
+            )
+
+    inferred_role = role or story_role
+    if inferred_role is None:
+        inferred_role = {
+            "review": "qa",
+            "brainstorm": "architect",
+            "architecture-review": "architect",
+            "pm": "pm",
+        }.get(inferred_task_type, "dev")
+
+    role_entry = (policy.get("agent_roles") or {}).get(inferred_role) or {}
+    allocation_entry = allocation.get(inferred_task_type) or allocation.get("implement") or {}
+    inferred_agent = agent
+    if inferred_agent is None:
+        inferred_agent = role_entry.get("default_harness") or allocation_entry.get("harness")
+    if inferred_agent is None:
+        inferred_agent = "codex"
+
+    config = _pkg("load_config")
+    config = config() if config else {}
+    worktree = (config.get("worktree") or {}).get("mode", "full")
+    if base:
+        worktree = f"{worktree} (base: {base})"
+    explicit_permissions = bool(grants or revokes)
+    if task_type == "review" or inferred_task_type == "review":
+        permission_profile = "read-only"
+    elif explicit_permissions:
+        permission_profile = "explicit"
+    elif requires_gh_write or _task_requires_gh_write(task, inferred_task_type):
+        permission_profile = "scoped + gh-write"
+    else:
+        permission_profile = "scoped"
+
+    return {
+        "role": inferred_role,
+        "harness": inferred_agent,
+        "task_type": inferred_task_type,
+        "worktree": worktree,
+        "permission_profile": permission_profile,
+        "story_role": story_role,
+    }
+
+
 def _local_concurrency_exceeded(conn, max_concurrent: int = 1) -> bool:
     """True if the 'local' agent already has max_concurrent running jobs."""
     try:

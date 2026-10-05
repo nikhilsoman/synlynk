@@ -87,6 +87,17 @@ def _get_avg_tool_calls(harness_name: str, db_conn=None) -> float:
     return default
 
 
+def _host_auth_audit_events() -> list[dict]:
+    """Return persisted host-auth GitHub call audit events."""
+    telemetry_file = os.path.join(".synlynk", "telemetry.json")
+    try:
+        with open(telemetry_file) as handle:
+            events = json.load(handle)
+    except (OSError, json.JSONDecodeError):
+        return []
+    return [event for event in events if event.get("type") == "gh_host_auth"]
+
+
 def _estimate_target_diff_size(prompt: str) -> int:
     """Infer a conservative changed-file count when dispatch metadata is absent."""
     import re
@@ -343,6 +354,7 @@ def _format_status_terminal(
     rates_updated_at: Optional[str] = None,
     worktree_hint: Optional[dict] = None,
     capability_reassessment: Optional[dict] = None,
+    host_auth_events: Optional[list] = None,
 ) -> str:
     """Format status output for terminal or JSON consumers."""
     agents = [r["harness_name"] for r in harness_rows] or sorted(HARNESS_CAPABILITY_BASELINES)
@@ -363,6 +375,7 @@ def _format_status_terminal(
             "rates_updated_at": rates_updated_at,
             "worktrees": worktree_hint or {"local": 0, "stale_hint": 0},
             "capability_reassessment": capability_reassessment or {},
+            "gh_host_auth_audit": host_auth_events or [],
         }
         return json.dumps(payload, indent=2)
 
@@ -415,6 +428,14 @@ def _format_status_terminal(
         dots = "  ".join(f"{support_char.get(agent_cycles.get(cycle, 'none'), '○'):>5}" for cycle in CYCLES)
         lines.append(f"  {agent:<18} {dots}")
     lines += ["", "  ● full  ◐ partial  ○ none", "", f"SENTINELS   {'none active' if sentinels_active == 0 else f'{sentinels_active} active'}"]
+    if host_auth_events:
+        latest = host_auth_events[-1]
+        lines.append(
+            f"GH HOST AUTH  {len(host_auth_events)} call(s); latest {latest.get('recorded_at', 'unknown')} "
+            f"by {latest.get('actor', 'unknown')} on {latest.get('repo', 'unknown')}"
+        )
+    else:
+        lines.append("GH HOST AUTH  none recorded")
     return "\n".join(lines)
 
 
@@ -458,6 +479,7 @@ def cmd_status(
         if include_worktree_hint
         else {"overdue": False, "last_sweep_at": None, "jobs_since_sweep": 0, "job_threshold": 25, "max_age_days": 30}
     )
+    host_auth_events = _host_auth_audit_events()
     output = _format_status_terminal(
         harness_rows,
         cycle_map,
@@ -468,6 +490,7 @@ def cmd_status(
         rates_updated_at=rates_updated_at,
         worktree_hint=worktree_hint,
         capability_reassessment=reassessment,
+        host_auth_events=host_auth_events,
     )
     if not json_output:
         extra_lines = []

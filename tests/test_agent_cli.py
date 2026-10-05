@@ -1781,16 +1781,13 @@ def test_cli_dispatch_as_agent_unresolvable_exits_1(project_dir):
     assert exc_info.value.code == 1
 
 
-def test_cli_dispatch_without_agent_reports_usage_error(project_dir, capsys):
+def test_cli_dispatch_without_agent_infers_from_explicit_role(project_dir, capsys):
     from synlynk.cli import main
 
-    with pytest.raises(SystemExit) as exc_info:
-        main(["dispatch", "--task", "do work", "--role", "qa", "--dry-run"])
-
-    assert exc_info.value.code == 2
+    main(["dispatch", "--task", "do work", "--role", "qa", "--dry-run"])
     captured = capsys.readouterr()
-    assert "the following arguments are required: agent (unless --as-agent is given)" in captured.err
-    assert "NameError" not in captured.err
+    assert "→ qa/claude, worktree full" in captured.out
+    assert "agent:        claude" in captured.out
 
 
 def test_cli_dispatch_as_agent_without_explicit_harness(project_dir, monkeypatch, capsys):
@@ -1992,6 +1989,26 @@ def test_cli_dispatch_dry_run_as_agent_without_explicit_harness_shows_resolved_a
     main(["dispatch", "--task", "run the test suite", "--as-agent", "qa", "--dry-run"])
     captured = capsys.readouterr()
     assert "agent:        agy" in captured.out
+
+
+def test_cli_dispatch_infers_defaults_and_prints_one_line_preview(project_dir, capsys):
+    from synlynk.cli import main
+
+    main(["dispatch", "--task", "implement the CLI plumbing for issue #1976", "--dry-run"])
+    captured = capsys.readouterr()
+
+    assert "→ dev/codex, worktree full, permissions scoped" in captured.out
+    assert "agent:        codex" in captured.out
+
+
+def test_cli_dispatch_explicit_harness_remains_an_override(project_dir, capsys):
+    from synlynk.cli import main
+
+    main(["dispatch", "claude", "--task", "implement a small fix", "--dry-run"])
+    captured = capsys.readouterr()
+
+    assert "→ dev/claude, worktree full" in captured.out
+    assert "agent:        claude" in captured.out
 
 
 def _docs_keep_readme_synchronized_readme(
