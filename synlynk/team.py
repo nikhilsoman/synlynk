@@ -891,13 +891,12 @@ def cmd_decide(
     ).hexdigest()[:8]
 
     today = time.strftime("%Y-%m-%d")
-    slug = re.sub(r'[^a-z0-9]+', '-', topic.lower())[:40].strip('-')
 
-    _pkg("cmd_decision_record")(
+    record_slug = _pkg("cmd_decision_record")(
         decision_id, topic, today, panel, inputs, synthesis, decision_text
     )
 
-    print(f"  {_GREEN}✓{_RESET} Decision recorded: {today}-{slug}")
+    print(f"  {_GREEN}✓{_RESET} Decision recorded: {today}-{record_slug}")
 
 
 def _build_team_digest() -> dict:
