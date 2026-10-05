@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LIVE-13 — Recording the Grok Capability Retest Accurately | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-1">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Oct 05, 2026</span>
+        
+          <span class="blog-post-pr">PR 2036</span>
+        
+      </div>
+      <h1 class="blog-post-title">LIVE-13 — Recording the Grok Capability Retest Accurately</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The broader goal at the end of the previous PR</h2>
+<p>PR #2035 corrected Grok's stale gh-write capability policy after the live TC-9
+retest passed. It also changed the non-live probe path so an unmeasured result
+would no longer be reported as a sandbox denial. The remaining incident work
+was to close the corresponding action in the LIVE-13 RCA with an accurate record.</p>
+<h2>Strategic shifts in this PR</h2>
+<p>There was no product or architecture shift. The documentation needed to record
+what the evidence actually established. The earlier <code>gh pr list</code> succeeded
+through Grok's headless authenticated CLI path, proving read access. Separately,
+job-20114270 created <a href="https://github.com/nikhilsoman/synlynk/issues/2034#issuecomment-5986713400">issue comment #5986713400</a>
+at <code>2026-10-05T01:46:34Z</code> through the authenticated headless <code>gh</code> CLI. That is
+direct write evidence, distinct from the earlier read, and the RCA now records
+both observations without conflating them.</p>
+<h2>What this PR ships</h2>
+<p>The LIVE-13 RCA marks its TC-9 capability retest complete, links the correction
+to PR #2035 and gh:#2034, and records the successful <code>sandbox_allowed</code> result,
+the earlier read, and the separate literal issue-comment write. No runtime
+code or data format changed.</p>
+<h2>What was achieved toward the long-arc goal</h2>
+<p>The capability record now distinguishes a live authenticated GitHub CLI
+success from a literal write sample. That keeps the incident history useful for
+later routing decisions while keeping the one direct write sample distinct from
+the read result.</p>
+<h2>New goalpost</h2>
+<p>Grok remains last in the gh-write priority tuple. This single successful issue
+comment does not change the empirical policy's sample-size requirements or
+promote routing; it records only the newly verified direct-write evidence.</p>
+<p>No deploy or migration required.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
