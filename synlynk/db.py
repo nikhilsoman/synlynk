@@ -2978,7 +2978,7 @@ def cmd_devlog_append(author: str, entry_date: str, body: str,
         _dr_sync(f"devlogs/{author}.md")
 
 
-def _write_decision_record_md(decision_id: str) -> None:
+def _write_decision_record_md(decision_id: str) -> str:
     """Regenerate the .md + .json sidecar for a decision from the decisions table.
     Writes to project-docs/decisions/ (git-tracked)."""
     from synlynk import DB_PATH, _docs_dir, _get_db
@@ -2999,7 +2999,15 @@ def _write_decision_record_md(decision_id: str) -> None:
     os.makedirs(decisions_dir, exist_ok=True)
 
     slug = re.sub(r'[^a-z0-9]+', '-', topic.lower())[:40].strip('-')
-    base = os.path.join(decisions_dir, f"{date}-{slug}")
+    candidate = slug
+    suffix = 1
+    while any(
+        os.path.exists(os.path.join(decisions_dir, f"{date}-{candidate}{extension}"))
+        for extension in (".md", ".json")
+    ):
+        suffix += 1
+        candidate = f"{slug}-{suffix}"
+    base = os.path.join(decisions_dir, f"{date}-{candidate}")
 
     record = {
         "decision_id": decision_id,
@@ -3034,17 +3042,18 @@ def _write_decision_record_md(decision_id: str) -> None:
         f"## Panel Inputs\n{panel_inputs_md}\n"
         f"## Synthesis\n{synthesis}\n\n"
         f"## Decision\n{decision_text}\n\n"
-        f"> Signatures: see {date}-{slug}.json\n"
+        f"> Signatures: see {date}-{candidate}.json\n"
     )
     from synlynk.regen_guard import check_regen_write_guard
     check_regen_write_guard(f"{base}.md", md_content, source_path=DB_PATH)
     with open(f"{base}.md", "w") as f:
         f.write(md_content)
+    return candidate
 
 
 def cmd_decision_record(decision_id: str, topic: str, date: str, panel: list,
                          inputs: dict, synthesis: str, decision_text: str,
-                         goal_id: str = None, story_id: str = None) -> None:
+                         goal_id: str = None, story_id: str = None) -> str:
     """Insert a decision row into state.db, then write through to the flat file pair."""
     from synlynk import _dr_sync, _get_db, _is_migrated
     from synlynk.team import _sign_capability_rating
@@ -3117,11 +3126,11 @@ def cmd_decision_record(decision_id: str, topic: str, date: str, panel: list,
     except Exception:
         pass
 
-    _write_decision_record_md(decision_id)
+    record_slug = _write_decision_record_md(decision_id)
     if _is_migrated():
-        slug = re.sub(r'[^a-z0-9]+', '-', topic.lower())[:40].strip('-')
-        _dr_sync(f"decisions/{date}-{slug}.md")
-        _dr_sync(f"decisions/{date}-{slug}.json")
+        _dr_sync(f"decisions/{date}-{record_slug}.md")
+        _dr_sync(f"decisions/{date}-{record_slug}.json")
+    return record_slug
 
 def _import_todo_to_stories(docs_dir: str = None, conn=None) -> int:
     """Reads checkbox lines from todo.md and inserts missing story rows."""
