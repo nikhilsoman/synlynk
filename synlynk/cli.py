@@ -2291,10 +2291,28 @@ def main(argv=None) -> None:
             if getattr(args, "as_agent", None):
                 from synlynk import agent_cli
                 resolved_agent_id = agent_cli._resolve_or_exit(args.as_agent)
+            from synlynk.dispatch import (
+                _infer_dispatch_defaults,
+                _infer_task_type,
+                _task_opens_pr,
+                _task_requires_gh_write,
+            )
+            defaults = _infer_dispatch_defaults(
+                args.task,
+                story_id=getattr(args, "story_id", None),
+                agent=args.agent,
+                role=getattr(args, "role", None),
+                task_type=getattr(args, "task_type", None),
+                requires_gh_write=getattr(args, "requires_gh_write", False),
+                base=getattr(args, "base", None),
+                grants=getattr(args, "grant", []),
+                revokes=getattr(args, "revoke", []),
+            )
             if not args.agent and not resolved_agent_id:
-                parser.error("the following arguments are required: agent (unless --as-agent is given)")
+                args.agent = defaults["harness"]
+            if not getattr(args, "role", None) and not resolved_agent_id:
+                args.role = defaults["role"]
 
-            from synlynk.dispatch import _infer_task_type, _task_opens_pr, _task_requires_gh_write
             _effective_requires_gh_write = bool(
                 getattr(args, "requires_gh_write", False)
                 or _task_requires_gh_write(args.task, getattr(args, "task_type", None))
@@ -2323,6 +2341,11 @@ def main(argv=None) -> None:
             _explicit_gh_write_target_kind = getattr(args, "gh_write_target_kind", None)
             _resolved_gh_write_target_kind = _explicit_gh_write_target_kind or (
                 "pr" if _effective_task_type == "review" or _task_opens_pr(args.task) else "issue"
+            )
+
+            print(
+                f"→ {args.role}/{args.agent}, worktree {defaults['worktree']}, "
+                f"permissions {defaults['permission_profile']}"
             )
 
             if getattr(args, "dry_run", False):
