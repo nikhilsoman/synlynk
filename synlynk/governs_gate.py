@@ -62,6 +62,7 @@ def pr_governs_linkage_violations(conn, pr_number: int | None) -> list[dict[str,
     records: dict[str, dict[str, Any]] = {}
     story_ids: set[str] = set()
     rating_story_ids: set[str] = set()
+    job_metadata: dict[str, tuple[str | None, str | None]] = {}
 
     # Only exact PR references are attributable.  In particular, do not treat
     # an issue target (``issue:123``) or an unrelated ``#123`` mention as work
@@ -99,6 +100,7 @@ def pr_governs_linkage_violations(conn, pr_number: int | None) -> list[dict[str,
             job_id, story_id = row[:2]
             task = row[2] if "task" in jobs_cols else None
             target = row[3 if "task" in jobs_cols else 2] if "gh_write_target" in jobs_cols else None
+            job_metadata[job_id] = (task, target)
             if (
                 story_id not in rating_story_ids
                 and target != f"pr:{pr_number}"
@@ -116,6 +118,10 @@ def pr_governs_linkage_violations(conn, pr_number: int | None) -> list[dict[str,
                 records.setdefault(job_id, {"job_id": job_id, "story_id": story_id})
                 if not records[job_id].get("story_id"):
                     records[job_id]["story_id"] = story_id
+            elif job_id in job_metadata:
+                task, target = job_metadata[job_id]
+                if target is None and not task_mentions_pr(task):
+                    records[job_id] = {"job_id": job_id, "story_id": story_id}
 
     return [
         {**record, **linkage}
