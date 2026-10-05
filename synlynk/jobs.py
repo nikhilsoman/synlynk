@@ -869,14 +869,21 @@ def _maybe_open_worktree_pr(job: dict, worktree_path: str, worktree_branch: Opti
             "Set SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH=1 to override."
         )
         return
+    host_auth = not (gh_env or {}).get("GH_TOKEN") and allow_host
+    if host_auth:
+        from synlynk.gh_shim import record_host_auth_gh_call
+
     try:
+        list_args = [
+            "gh", "pr", "list",
+            "--repo", repo_slug,
+            "--head", worktree_branch,
+            "--json", "number",
+        ]
+        if host_auth:
+            record_host_auth_gh_call(list_args[1:], env=gh_env)
         list_result = subprocess.run(
-            [
-                "gh", "pr", "list",
-                "--repo", repo_slug,
-                "--head", worktree_branch,
-                "--json", "number",
-            ],
+            list_args,
             capture_output=True,
             text=True,
             check=False,
@@ -915,15 +922,18 @@ def _maybe_open_worktree_pr(job: dict, worktree_path: str, worktree_branch: Opti
     )
     base_branch = _resolve_worktree_pr_base_branch(job, worktree_path)
     try:
+        create_args = [
+            "gh", "pr", "create",
+            "--repo", repo_slug,
+            "--base", base_branch,
+            "--head", worktree_branch,
+            "--title", title,
+            "--body", body,
+        ]
+        if host_auth:
+            record_host_auth_gh_call(create_args[1:], env=gh_env)
         create_result = subprocess.run(
-            [
-                "gh", "pr", "create",
-                "--repo", repo_slug,
-                "--base", base_branch,
-                "--head", worktree_branch,
-                "--title", title,
-                "--body", body,
-            ],
+            create_args,
             capture_output=True,
             text=True,
             check=False,

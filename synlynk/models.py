@@ -86,6 +86,7 @@ BUILTIN_FAMILIES = (
     ModelFamily("gemma-2", "meta", ContextGeometry(8_192, 4_096, False), ("tool_calling",)),
     ModelFamily("deepseek-r1", "local", ContextGeometry(128_000, 8_192, True), ("tool_calling",)),
     ModelFamily("qwen2-5", "alibaba", ContextGeometry(128_000, 8_192, False), ("tool_calling",)),
+    ModelFamily("hermes-3", "nous-research", ContextGeometry(128_000, 8_192, True), ("tool_calling",)),
 )
 
 BUILTIN_MODEL_CATALOG = (
@@ -104,6 +105,9 @@ BUILTIN_MODEL_CATALOG = (
     ModelSpec("gemma-2-9b-it-q4", "gemma-2", "local", locality="on_device_local", quantization="Q4_K_M", entitlement_tier=EntitlementTier.ZERO_COST_LOCAL),
     ModelSpec("deepseek-r1", "deepseek-r1", "local", locality="on_device_local", entitlement_tier=EntitlementTier.ZERO_COST_LOCAL),
     ModelSpec("qwen2.5", "qwen2-5", "local", locality="on_device_local", entitlement_tier=EntitlementTier.ZERO_COST_LOCAL),
+    ModelSpec("Hermes-3-Llama-3.1-8B", "hermes-3", "local", locality="on_device_local", entitlement_tier=EntitlementTier.ZERO_COST_LOCAL),
+    ModelSpec("Hermes-3-Llama-3.1-70B", "hermes-3", "local", locality="on_device_local", entitlement_tier=EntitlementTier.ZERO_COST_LOCAL),
+    ModelSpec("Hermes-3-Llama-3.1-405B", "hermes-3", "local", locality="on_device_local", entitlement_tier=EntitlementTier.ZERO_COST_LOCAL),
 )
 
 # Public aliases kept intentionally simple for callers that want a catalog
@@ -148,6 +152,9 @@ def load_model_catalog(repo_path: Optional[str] = None) -> dict[str, Any]:
                 "codex": "gpt-5.6-luna",
                 "grok": "grok-4.7",
                 "local": "deepseek-r1",
+            },
+            "hermes": {
+                "local": "Hermes-3-Llama-3.1-8B",
             },
         },
         "models": [model_to_dict(m) for m in BUILTIN_MODEL_CATALOG],
