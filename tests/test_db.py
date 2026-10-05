@@ -491,6 +491,85 @@ def test_rotate_moves_old_cost_entries_to_archive(tmp_path, monkeypatch):
     assert "costs-" in open(index_path).read()
 
 
+def test_regeneration_preserves_tracked_cost_row_missing_from_local_db(tmp_path, monkeypatch):
+    from tests.test_migrate import _setup_migrated
+    from synlynk import _get_db, _insert_cost_row
+    from synlynk.db import _generate_costs_md
+
+    backup = _setup_migrated(tmp_path, monkeypatch)
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=tmp_path, check=True)
+
+    for date, note in [("2026-01-01 10:00", "main-only-row"), ("2026-01-02 10:00", "local-row")]:
+        _insert_cost_row(
+            session_date=date,
+            agent="claude",
+            model="claude-sonnet-5",
+            input_tokens=1,
+            output_tokens=1,
+            cache_read_tokens=0,
+            cost_source="estimated_manual",
+            estimate_basis="cli_manual_entry",
+            total_cost_usd=1.0,
+            notes=note,
+            story_id=None,
+            api_equivalent_usd=1.0,
+            actual_usd=None,
+            payment_mode=None,
+        )
+    _generate_costs_md()
+    costs_path = backup / "costs.md"
+    subprocess.run(["git", "add", str(costs_path)], cwd=tmp_path, check=True)
+    subprocess.run(
+        ["git", "-c", "user.email=test@example.com", "-c", "user.name=Test", "commit", "-q", "-m", "seed"],
+        cwd=tmp_path,
+        check=True,
+    )
+
+    conn = _get_db()
+    conn.execute("DELETE FROM cost_entries WHERE session_date=?", ("2026-01-01 10:00",))
+    conn.commit()
+    conn.close()
+    _generate_costs_md()
+
+    regenerated = costs_path.read_text()
+    assert "main-only-row" in regenerated
+    assert "local-row" in regenerated
+
+
+def test_regeneration_does_not_duplicate_archive_rows(tmp_path, monkeypatch):
+    from tests.test_migrate import _setup_migrated
+    from synlynk import _insert_cost_row
+    from synlynk.db import _generate_costs_md
+
+    backup = _setup_migrated(tmp_path, monkeypatch)
+    monkeypatch.setattr("synlynk.db._PROJECT_DOC_KEEP_N", 1)
+    for i in range(3):
+        _insert_cost_row(
+            session_date=f"2026-01-0{i+1} 10:00",
+            agent="claude",
+            model="claude-sonnet-5",
+            input_tokens=1,
+            output_tokens=1,
+            cache_read_tokens=0,
+            cost_source="estimated_manual",
+            estimate_basis="cli_manual_entry",
+            total_cost_usd=1.0,
+            notes=f"row{i}",
+            story_id=None,
+            api_equivalent_usd=1.0,
+            actual_usd=None,
+            payment_mode=None,
+        )
+
+    _generate_costs_md()
+    archive_path = next((backup / "archive").glob("costs-*.md"))
+    first = archive_path.read_text()
+    _generate_costs_md()
+    assert archive_path.read_text() == first
+
+
 def test_rotate_auto_stages_archive_file_for_git_commit(tmp_path, monkeypatch):
     """gh:#1995: a dispatched job's ephemeral worktree silently drops the
     archive file _rotate_project_doc() writes, because nothing commits it.

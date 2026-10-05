@@ -250,12 +250,11 @@ _ORG_DOMAIN_DRIFT_MAP = {
 # linked worktree) is gitignored by this repo's own .gitignore, by design,
 # not by accident. Raised from 50 to 500 to make window-slide churn rare in
 # practice (see _rotate_project_doc below, which also best-effort `git add`s
-# a freshly created archive file -- a no-op here since the path is
+# freshly created archive and cursor files -- a no-op here since the paths are
 # gitignored, but it closes the real worktree-loss case for a non-migrated
 # synlynk-managed repo where the archive path is the tracked, worktree-local
-# one). A separate, more severe bug -- the archive itself re-appending the
-# full overflow slice on every call instead of tracking a high-water mark,
-# causing 45x+ duplication -- is tracked at gh:#1999, not fixed here.
+# one). The archive high-water mark below also prevents repeated regens from
+# appending the full overflow slice again.
 _PROJECT_DOC_KEEP_N = 500
 
 # Bump when a new schema migration is added.  This is deliberately kept in
@@ -2542,7 +2541,117 @@ def cmd_migrate(dry_run: bool = False, recover: bool = False, setup_dr: bool = F
 
 def _write_generated_project_doc(filename: str, content: str) -> None:
     """Write a generated 4-doc to the migrated cache and the git-tracked docs dir."""
-    from synlynk import DB_PATH, _docs_dir, _dr_sync, _is_migrated, _synlynk_project_docs_dir
+    from synlynk import (
+        DB_PATH,
+        _docs_dir,
+        _dr_sync,
+        _is_migrated,
+        _project_root,
+        _synlynk_project_docs_dir,
+    )
+
+    def _is_tracked(path: str) -> bool:
+        try:
+            relative = os.path.relpath(path, _project_root())
+            return subprocess.run(
+                ["git", "ls-files", "--error-unmatch", "--", relative],
+                cwd=_project_root(),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            ).returncode == 0
+        except (OSError, ValueError):
+            return False
+
+    def _split_table_row(line: str) -> list:
+        cells = []
+        current = []
+        escaped = False
+        for char in line.strip().strip("|"):
+            if char == "|" and not escaped:
+                cells.append("".join(current).strip())
+                current = []
+            else:
+                current.append(char)
+            escaped = char == "\\" and not escaped
+            if char != "\\":
+                escaped = False
+        cells.append("".join(current).strip())
+        return cells
+
+    def _reconcile_costs(existing: str, generated: str) -> str:
+        if "| Date | Agent |" not in generated:
+            return generated
+
+        def rows(text: str) -> list:
+            return [
+                line
+                for line in text.splitlines(keepends=True)
+                if line.lstrip().startswith("|")
+                and len(_split_table_row(line)) >= 9
+                and not set(_split_table_row(line)[0]) <= {"-", ":"}
+                and not line.lstrip().startswith("| Date | Agent |")
+            ]
+
+        def key(line: str):
+            cells = _split_table_row(line)
+            return tuple(cells[:2]) if len(cells) >= 2 else None
+
+        local_rows = rows(generated)
+        disk_rows = rows(existing)
+        merged = {}
+        order = []
+        for line in disk_rows + local_rows:
+            row_key = key(line)
+            if row_key is None:
+                continue
+            if row_key not in merged:
+                order.append(row_key)
+            merged[row_key] = line
+        merged_rows = [merged[row_key] for row_key in order]
+
+        generated_lines = generated.splitlines(keepends=True)
+        data_indexes = [
+            index for index, line in enumerate(generated_lines)
+            if line in local_rows
+        ]
+        if not data_indexes:
+            return generated
+        start, end = min(data_indexes), max(data_indexes) + 1
+        return "".join(generated_lines[:start] + merged_rows + generated_lines[end:])
+
+    def _reconcile_memory(existing: str, generated: str) -> str:
+        disk_sections = _parse_memory_md(existing)
+        local_sections = _parse_memory_md(generated)
+        if not disk_sections or not local_sections:
+            return generated
+        merged = {}
+        order = []
+        for row in disk_sections + local_sections:
+            section = row["section"]
+            if section not in merged:
+                order.append(section)
+            merged[section] = row
+        header = generated.split("## ", 1)[0]
+        body = "".join(
+            f"## {merged[section]['section']}\n\n{merged[section]['body']}\n\n"
+            for section in order
+        )
+        return header + body
+
+    def _reconcile(path: str, generated: str) -> str:
+        if filename not in {"costs.md", "memory.md"}:
+            return generated
+        if not os.path.exists(path) or not _is_tracked(path):
+            return generated
+        try:
+            with open(path) as fh:
+                existing = fh.read()
+        except OSError:
+            return generated
+        if filename == "costs.md":
+            return _reconcile_costs(existing, generated)
+        return _reconcile_memory(existing, generated)
 
     paths = []
     if _is_migrated():
@@ -2567,10 +2676,11 @@ def _write_generated_project_doc(filename: str, content: str) -> None:
         if parent:
             os.makedirs(parent, exist_ok=True)
         try:
+            reconciled_content = _reconcile(path, content)
             from synlynk.regen_guard import check_regen_write_guard
-            check_regen_write_guard(path, content, source_path=DB_PATH)
+            check_regen_write_guard(path, reconciled_content, source_path=DB_PATH)
             with open(path, "w") as fh:
-                fh.write(content)
+                fh.write(reconciled_content)
         except (OSError, PermissionError):
             continue
     if _is_migrated():
@@ -2614,7 +2724,7 @@ def _generate_todo_md() -> None:
 def _rotate_project_doc(file_stem: str, all_rows: list, keep_n: int = None) -> list:
     """Rotate older generated project-doc rows into archive files.
 
-    gh:#1995: the archive file this writes lives in whatever working directory
+    gh:#1995/#1999: the archive file this writes lives in whatever working directory
     the caller is running from. When that's a dispatched job's ephemeral git
     worktree, the archive is lost the moment the worktree is removed unless
     something commits it first. We can't guarantee the calling job will do
@@ -2641,9 +2751,32 @@ def _rotate_project_doc(file_stem: str, all_rows: list, keep_n: int = None) -> l
     period = time.strftime("%Y-H%m")
     archive_filename = f"{file_stem}-{period}.md"
     archive_path = os.path.join(archive_dir, archive_filename)
-    with open(archive_path, "a") as f:
-        for row in archived_rows:
-            f.write(str(row) + "\n")
+    cursor_path = os.path.join(archive_dir, f".{file_stem}-archive.cursor")
+
+    def row_key(row) -> str:
+        return json.dumps(row, ensure_ascii=True, default=str, separators=(",", ":"))
+
+    last_archived = None
+    if os.path.exists(cursor_path):
+        try:
+            with open(cursor_path) as f:
+                last_archived = json.load(f).get("last_archived")
+        except (OSError, ValueError, AttributeError):
+            last_archived = None
+
+    append_from = 0
+    if last_archived is not None:
+        for index, row in enumerate(archived_rows):
+            if row_key(row) == last_archived:
+                append_from = index + 1
+                break
+    rows_to_append = archived_rows[append_from:]
+    if rows_to_append:
+        with open(archive_path, "a") as f:
+            for row in rows_to_append:
+                f.write(str(row) + "\n")
+        with open(cursor_path, "w") as f:
+            json.dump({"last_archived": row_key(rows_to_append[-1])}, f)
 
     index_path = os.path.join(archive_dir, "INDEX.md")
     existing_index = ""
@@ -2660,7 +2793,7 @@ def _rotate_project_doc(file_stem: str, all_rows: list, keep_n: int = None) -> l
 
     try:
         subprocess.run(
-            ["git", "add", "--", archive_path, index_path],
+            ["git", "add", "--", archive_path, index_path, cursor_path],
             cwd=base_dir,
             check=False,
             capture_output=True,
