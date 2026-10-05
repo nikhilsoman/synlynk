@@ -193,7 +193,9 @@ HARNESS_CAPABILITY_BASELINES = {
     },
     "grok": {
         "cli": "grok",
-        "can_gh_write": False,
+        # Live TC-9 retest passed on 2026-10-04 (gh:#2034) after LIVE-13
+        # permission-bypass fixes in PRs #1734/#1735.
+        "can_gh_write": True,
         "non_interactive_flags": [],
         "prompt_flag": "--single",  # placed last: grok --single "$PROMPT"
         "prompt_via_arg": True,

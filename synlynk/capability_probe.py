@@ -46,9 +46,14 @@ HARNESS_CAPABILITY_PROFILES: Dict[str, Dict[str, bool]] = {
     "grok": {
         # Shell dispatch works via --always-approve + --permission-mode
         # bypassPermissions since #1277; the stale deny predates that fix.
+        # CAP_GH_WRITE flipped True 2026-10-04 (gh:#2034): live TC-9 probe
+        # (`_run_tc9("grok", live=True)`) passed (mechanism=sandbox_allowed)
+        # after the LIVE-13 permission-bypass fix (PRs #1734/#1735). Every
+        # prior "sandbox_denied" result in harness_version_history was the
+        # non-live stub, not a live measurement.
         CAP_SHELL: True,
         CAP_WORKSPACE_WRITE: True,
-        CAP_GH_WRITE: False,
+        CAP_GH_WRITE: True,
         CAP_NET: True,
     },
     "local": {
