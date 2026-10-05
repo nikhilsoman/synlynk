@@ -22,29 +22,31 @@ was to close the corresponding action in the LIVE-13 RCA with an accurate record
 ## Strategic shifts in this PR
 
 There was no product or architecture shift. The documentation needed to record
-what the probe actually established: `gh pr list` succeeded through Grok's
-headless authenticated CLI path, but that command reads GitHub state and did
-not perform a write. The RCA now preserves that boundary instead of describing
-the observation as a literal write operation.
+what the evidence actually established. The earlier `gh pr list` succeeded
+through Grok's headless authenticated CLI path, proving read access. Separately,
+job-20114270 created [issue comment #5986713400](https://github.com/nikhilsoman/synlynk/issues/2034#issuecomment-5986713400)
+at `2026-10-05T01:46:34Z` through the authenticated headless `gh` CLI. That is
+direct write evidence, distinct from the earlier read, and the RCA now records
+both observations without conflating them.
 
 ## What this PR ships
 
 The LIVE-13 RCA marks its TC-9 capability retest complete, links the correction
-to PR #2035 and gh:#2034, and records the successful `sandbox_allowed` result
-alongside the read-only nature of the probe command. No runtime code or data
-format changed.
+to PR #2035 and gh:#2034, and records the successful `sandbox_allowed` result,
+the earlier read, and the separate literal issue-comment write. No runtime
+code or data format changed.
 
 ## What was achieved toward the long-arc goal
 
 The capability record now distinguishes a live authenticated GitHub CLI
-success from a literal write sample. That keeps the incident history useful
-for later routing decisions and avoids treating a read as direct write proof.
+success from a literal write sample. That keeps the incident history useful for
+later routing decisions while keeping the one direct write sample distinct from
+the read result.
 
 ## New goalpost
 
-Grok remains last in the gh-write priority tuple. Any broader routing change
-still depends on the empirical policy's five-merged-job sample bar for the
-relevant task type. A low-stakes literal write probe would add stronger direct
-evidence; this documentation update does not claim that probe was performed.
+Grok remains last in the gh-write priority tuple. This single successful issue
+comment does not change the empirical policy's sample-size requirements or
+promote routing; it records only the newly verified direct-write evidence.
 
 No deploy or migration required.
