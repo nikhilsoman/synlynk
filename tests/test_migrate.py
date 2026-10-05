@@ -1013,3 +1013,35 @@ def test_migrate_v3_adds_harness_and_role_columns_and_backfills(tmp_path):
     assert cost_row == ("claude", "claude")
     conn.close()
 
+
+def test_migrate_repairs_turn_usage_json_on_bootstrapped_schema(tmp_path):
+    """A current-version DB missing the column is repaired on the next open."""
+    import sqlite3
+    from synlynk.db import _DB_MIGRATION_VERSION, _migrate_db
+
+    conn = sqlite3.connect(str(tmp_path / "state.db"))
+    _migrate_db(conn)
+
+    # Rebuild only cost_entries from the bootstrapped schema, simulating an
+    # older snapshot that predates turn_usage_json while retaining every other
+    # table and the current user_version.
+    columns = [
+        row[1]
+        for row in conn.execute("PRAGMA table_info(cost_entries)")
+        if row[1] != "turn_usage_json"
+    ]
+    quoted_columns = ", ".join('"' + column.replace('"', '""') + '"' for column in columns)
+    conn.execute(
+        "CREATE TABLE cost_entries_legacy AS "
+        f"SELECT {quoted_columns} FROM cost_entries"
+    )
+    conn.execute("DROP TABLE cost_entries")
+    conn.execute("ALTER TABLE cost_entries_legacy RENAME TO cost_entries")
+    conn.execute(f"PRAGMA user_version = {_DB_MIGRATION_VERSION}")
+    conn.commit()
+
+    _migrate_db(conn)
+
+    cost_cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}
+    assert "turn_usage_json" in cost_cols
+    conn.close()
