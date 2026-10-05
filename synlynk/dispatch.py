@@ -2663,6 +2663,7 @@ def _preflight_dispatch(
     force_agent: bool = False,
     root: Optional[str] = None,
     declared_requires: Optional[list] = None,
+    story_id: Optional[str] = None,
 ) -> dict:
     import socket as _socket
     from synlynk._constants import CORE_FLEET as _CORE_FLEET, CORE_INSTRUCTION_FILES as _CORE_INSTRUCTION_FILES
@@ -2903,6 +2904,17 @@ def _preflight_dispatch(
                 )
         except Exception:
             pass
+
+    # A real dispatch carries a task hint and must be attributable to a
+    # linked GOVERNS story.  Keep the low-level harness-only preflight calls
+    # without a task hint backward compatible, while still failing closed for
+    # an explicitly supplied story when no DB evidence is available.
+    if story_id is not None or _task_hint or harness_name not in HARNESS_CAPABILITY_BASELINES:
+        from synlynk.governs_gate import dispatch_governs_linkage
+
+        governs_gate = dispatch_governs_linkage(db_conn, story_id)
+        if not governs_gate["passed"]:
+            return governs_gate
 
     return {"passed": True, "sentinel": None, "reason": None}
 
@@ -3472,6 +3484,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 permissions=permissions,
                 force_agent=force_agent,
                 declared_requires=declared_requires,
+                story_id=story_id,
             )
         except TypeError:
             try:
