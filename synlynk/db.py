@@ -2553,14 +2553,17 @@ def _write_generated_project_doc(filename: str, content: str) -> None:
     def _is_tracked(path: str) -> bool:
         try:
             relative = os.path.relpath(path, _project_root())
-            return subprocess.run(
+            result = subprocess.run(
                 ["git", "ls-files", "--error-unmatch", "--", relative],
                 cwd=_project_root(),
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 check=False,
-            ).returncode == 0
-        except (OSError, ValueError):
+            )
+            return bool(result and getattr(result, "returncode", None) == 0)
+        except Exception:
+            # Tracking is advisory; mocked or unavailable subprocess runners
+            # must not prevent generated docs from being written.
             return False
 
     def _split_table_row(line: str) -> list:
