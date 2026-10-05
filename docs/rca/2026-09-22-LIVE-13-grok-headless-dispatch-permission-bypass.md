@@ -49,4 +49,4 @@ Investigation revealed that Grok CLI (v1.0.30) headless invocation defaults to `
 | :--- | :--- | :--- | :--- |
 | **Action 1** | Update `_grok_permission_flags()` in `synlynk/dispatch.py` to always supply `--always-approve` and `--permission-mode bypassPermissions` for headless dispatches | Codex / Agy | Linked Fix PR |
 | **Action 2** | Add comprehensive unit tests in `tests/test_dispatch_permissions.py` / `tests/test_grok_write_guard.py` verifying Grok command arguments | Codex / Agy | Linked Fix PR |
-| **Action 3** | Re-run TC-9 live write probe in `synlynk doctor` once x.ai quota is replenished | Operator | Live Ops |
+| **Action 3** | ~~Re-run TC-9 live write probe in `synlynk doctor` once x.ai quota is replenished~~ **DONE 2026-10-04/05** — live TC-9 retest confirmed Grok gh-write capability post-fix (gh:#2034, PR #2035, merged `892ce927`); `capability_probe.py` now flips `CAP_GH_WRITE` to true for Grok | Operator | Live Ops |
