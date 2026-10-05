@@ -6529,6 +6529,29 @@ def test_decide_record_writes_md_and_json(project_dir, monkeypatch):
     assert "agy" in record["inputs"]
     assert record["status"] == "approved"
 
+
+def test_decide_record_uses_unique_stem_for_slug_collision(project_dir, monkeypatch):
+    """Repeated records with the same 40-character slug prefix do not overwrite."""
+    import synlynk, json as _json
+
+    monkeypatch.setattr(
+        synlynk, "_run_agent_sync",
+        lambda agent, prompt, timeout=120: f"Analysis from {agent}. Decision: keep both.",
+    )
+    prefix = "Review docs/strategy/2026-10-02-five-pov-review.md section"
+    synlynk.cmd_decide(f"{prefix} 1", panel=["claude"], record=True)
+    synlynk.cmd_decide(f"{prefix} 2", panel=["claude"], record=True)
+
+    decisions_dir = project_dir / "project-docs" / "decisions"
+    md_files = sorted(decisions_dir.glob("*.md"))
+    json_files = sorted(decisions_dir.glob("*.json"))
+    assert len(md_files) == 2
+    assert len(json_files) == 2
+    assert md_files[0].stem != md_files[1].stem
+    assert {record["topic"] for record in map(_json.loads, (path.read_text() for path in json_files))} == {
+        f"{prefix} 1", f"{prefix} 2"
+    }
+
 def test_decide_json_has_decision_id(project_dir, monkeypatch):
     import synlynk, json as _json
     monkeypatch.setattr(synlynk, "_run_agent_sync",
