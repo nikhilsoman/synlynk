@@ -924,6 +924,28 @@ def _hc_capability_reassessment() -> HealthCheck:
         return HealthCheck("capability_reassessment", "warn", f"cadence check unavailable: {exc}")
 
 
+def _hc_gh_host_auth_audit() -> HealthCheck:
+    """Surface explicit host GitHub-auth calls recorded by the gh guard."""
+    telemetry_file = os.path.join(".synlynk", "telemetry.json")
+    try:
+        with open(telemetry_file) as handle:
+            events = json.load(handle)
+        events = [event for event in events if event.get("type") == "gh_host_auth"]
+    except (OSError, json.JSONDecodeError) as exc:
+        return HealthCheck("gh_host_auth_audit", "warn", f"audit unavailable: {exc}")
+    if not events:
+        return HealthCheck("gh_host_auth_audit", "ok", "No host-auth GitHub calls recorded")
+    latest = events[-1]
+    return HealthCheck(
+        "gh_host_auth_audit",
+        "warn",
+        f"{len(events)} host-auth GitHub call(s); latest {latest.get('recorded_at', 'unknown')} "
+        f"by {latest.get('actor', 'unknown')} on {latest.get('repo', 'unknown')}: "
+        f"{latest.get('gh_call', 'unknown')}",
+        fix="Review .synlynk/telemetry.json and provision a role App token when possible",
+    )
+
+
 def _hc_spof_audit() -> HealthCheck:
     """Audit workspace for single points of failure across harness redundancy and roles."""
     try:
@@ -1027,6 +1049,7 @@ HEALTH_CHECKS = [
     _hc_product_specialist_apps,
     _hc_fleet_parity,
     _hc_capability_reassessment,
+    _hc_gh_host_auth_audit,
     _hc_spof_audit,
     _hc_memory_leak,
     _hc_daemon_service,
