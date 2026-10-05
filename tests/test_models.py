@@ -28,6 +28,11 @@ def test_builtin_catalog_uses_current_remote_models_and_preserves_local_models()
         "gpt-5.6-luna", "grok-4.7", "grok-4.6",
     } <= model_ids
     assert {"deepseek-r1", "gemma-2-9b-it-q4", "qwen2.5"} <= model_ids
+    assert {
+        "Hermes-3-Llama-3.1-8B",
+        "Hermes-3-Llama-3.1-70B",
+        "Hermes-3-Llama-3.1-405B",
+    } <= model_ids
     assert not model_ids & {
         "claude-3-5-sonnet-20241022", "claude-3-5-opus-20240229",
         "gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash",
