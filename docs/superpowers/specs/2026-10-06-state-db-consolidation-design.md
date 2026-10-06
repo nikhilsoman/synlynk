@@ -162,6 +162,19 @@ not in-progress work.
   remains blocked on this spec landing (its own stated dependency).
 - Any change to the canonical-path resolution logic in `product_store.py` —
   already correct; not touched by this spec.
+- **Tokq bridge convergence.** The existing `tokq-bridge.md` memory/spec
+  (decided 2026-06-06, `docs/superpowers/specs/2026-06-06-synlynk-unified-roadmap.md`
+  §3.1/§3.2) defines a `capability` memory-unit type sourced directly from
+  this same capability-ratings data, opt-in-publishable to the Tokq
+  marketplace once Tokq Alpha reactivates. That is a distinct, unstarted
+  product integration — not a dependency of this spec and not something this
+  spec adds code for. The only implication for this spec: once the
+  migrations framework in Component 1 touches the `capability_ratings`
+  table's schema, treat its current shape (columns, meaning of `agent`,
+  `model_version`, `quality`, etc.) as a stable public contract, since it is
+  the seed of that future attestation ledger — don't rename/restructure
+  those columns casually in a later migration without checking
+  `tokq-bridge.md`'s Gap 2 mapping first.
 
 ## Testing Plan (summary)
 
