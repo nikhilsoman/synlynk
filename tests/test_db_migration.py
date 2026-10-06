@@ -122,3 +122,22 @@ def test_registry_v2_tables_exist(tmp_path, monkeypatch):
             "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (tbl,)
         ).fetchone()
         assert row is not None, f"{tbl} not created"
+
+
+def test_migrate_db_delegates_to_legacy_function_and_runner(tmp_path, monkeypatch):
+    """Regression guard for the Component 1 rename: _migrate_db must still
+    bring a fresh DB to the current version AND leave a migration_history
+    table behind (proof run_pending_migrations actually ran)."""
+    import sqlite3
+    from synlynk import db
+
+    db_path = tmp_path / "state.db"
+    monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(db_path))
+    conn = db._get_db()
+
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == db._DB_MIGRATION_VERSION
+    history_row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='migration_history'"
+    ).fetchone()
+    assert history_row is not None
+    assert hasattr(db, "_run_legacy_migration_and_repairs")
