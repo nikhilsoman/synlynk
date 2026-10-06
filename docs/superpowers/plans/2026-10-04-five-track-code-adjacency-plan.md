@@ -33,9 +33,9 @@ via `synlynk dispatch`.
 | #1984 | Hermes-class local roster | OPEN | Not yet dispatched. |
 | #2015 | Job status false-negative recurrence (5 instances, 2026-10-04) | OPEN | Filed this session; evidence table for job-f9a82968/9380619d/2908b732/78e8e38c/23e81336. |
 | #1963 | Codex deleted job_truth.py outside assigned scope | OPEN | Dispatch scope-enforcement gap. |
-| #1990 | GOVERNS hard-fail gate in dispatch preflight | OPEN | |
-| #1991 | cross_harness_review_required enforcement in `pr check` | OPEN | |
-| #1992 | Audit-log SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH usage | OPEN | gh_shim.py-adjacent. |
+| #1990 | GOVERNS hard-fail gate in dispatch preflight | **FIXED, not closed** | Merged via PR #2046 (2026-10-05). |
+| #1991 | cross_harness_review_required enforcement in `pr check` | **FIXED, not closed** | Merged via PR #2047 (2026-10-06). |
+| #1992 | Audit-log SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH usage | **FIXED, not closed** | Merged via PR #2050 (2026-10-06). |
 | #1993 | Capability report → task_allocation routing | OPEN | |
 | #1960 | LIVE-22 gh identity zone-boundary | **FIXED, not closed** | Merged via PR #1964 (2026-10-03). Needs manual `gh issue close 1960` — blocked here by auto-mode GH-write restriction. |
 | #2008 | Job-status: lost verified remote task delivery | **FIXED, not closed** | Merged via PR #2009 (2026-10-04). Needs manual `gh issue close 2008` — same restriction. |
