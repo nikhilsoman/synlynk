@@ -16,7 +16,12 @@ from synlynk.jobs import (
     STATUS_FAILED_VERIFICATION,
     STATUS_FAILED,
 )
-from synlynk.gh_verify import gh_write_verified, local_commits_pushed, github_branch_effect_verified
+from synlynk.gh_verify import (
+    cross_branch_pr_effect_verified,
+    gh_write_verified,
+    local_commits_pushed,
+    github_branch_effect_verified,
+)
 # PR1 public oracle exports.  The legacy boolean verifier below remains for
 # compatibility callers; new reconciliation code uses the pure tri-state API.
 from synlynk.job_truth import CompletionDecision, TriState, decide_job_outcome
@@ -113,6 +118,7 @@ def verify_job_effects(
     worktree_branch: Optional[str] = None,
     started_at: Optional[str] = None,
     structured_telemetry: Optional[dict] = None,
+    cross_branch_pr: Optional[str] = None,
 ) -> EffectVerificationResult:
     """Verify that a job with exit code 0 produced real effects before marking succeeded."""
     # Claude/Codex structured terminal events are the completion oracle.  The
@@ -135,6 +141,46 @@ def verify_job_effects(
         )
 
     task_class_norm = (task_class or "mutating").strip().lower()
+    gh_kwargs = dict(gh_verify_kwargs or {})
+    expect = gh_kwargs.get("expect") or expected_gh_effect
+    cross_evidence: Dict[str, Any] = {}
+    if cross_branch_pr:
+        review_only = task_class_norm == "review" or expect == "review_posted"
+        cross = cross_branch_pr_effect_verified(
+            cross_branch_pr,
+            since=started_at or gh_kwargs.get("since"),
+            worktree_branch=worktree_branch,
+            expect_author=gh_kwargs.get("expect_author"),
+            accept_reviews=True,
+            accept_commits=not review_only,
+            evidence=cross_evidence,
+        )
+        if cross is True:
+            return EffectVerificationResult(
+                verified=True,
+                status=STATUS_COMPLETED,
+                gh_verified=True,
+                evidence=cross_evidence,
+            )
+        # A recorded cross-branch PR is the primary evidence. Local diff stays
+        # in place only when this target is actually the job's own branch, or
+        # when no target was recorded. State expectations (merge, pr open)
+        # still use the scalar GitHub check below.
+        state_expects = {"merged", "pr_open", "created"}
+        same_branch = bool(cross_evidence.get("same_branch"))
+        if (
+            not same_branch
+            and expect not in state_expects
+            and task_class_norm not in ("gh_write", "review", "github_write")
+            and cross is not True
+        ):
+            return EffectVerificationResult(
+                verified=False,
+                status=STATUS_FAILED_NOOP_DENIED,
+                gh_verified=False,
+                reason="Cross-branch PR had no review or commit after dispatch start",
+                evidence=cross_evidence,
+            )
 
     # 1. Classification Branch A: GH Write / Review Task
     # A review's durable effect is the remote GitHub review. Review workers

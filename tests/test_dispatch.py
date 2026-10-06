@@ -1749,7 +1749,7 @@ def test_dispatch_agent_warns_and_falls_back_without_gh_write_target(project_dir
     assert row[1] is None
 
 
-def test_dispatch_agent_explicit_issue_takes_precedence_over_task_target(project_dir, monkeypatch):
+def test_dispatch_agent_task_pr_beats_different_issue_link(project_dir, monkeypatch):
     import synlynk as sl
     import synlynk.dispatch as dispatch_mod
 
@@ -1777,7 +1777,9 @@ def test_dispatch_agent_explicit_issue_takes_precedence_over_task_target(project
         "SELECT gh_write_target FROM daemon_jobs ORDER BY enqueued_at DESC LIMIT 1"
     ).fetchone()
     conn.close()
-    assert row[0] == "issue:1300"
+    # #2056: --issue is the GOVERNS link. The PR named in the task is the
+    # verification target when the two numbers differ.
+    assert row[0] == "pr:1180"
 
 
 def test_dispatch_agent_persists_agent_id_on_daemon_jobs(project_dir, monkeypatch):

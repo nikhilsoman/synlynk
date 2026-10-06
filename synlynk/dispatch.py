@@ -1507,9 +1507,79 @@ _PR_OPEN_TASK_RE = re.compile(
     re.IGNORECASE,
 )
 
+# A pull request the task names directly. ``--issue`` is a separate GOVERNS
+# link and must not be substituted for one of these (#2056).
+_EXPLICIT_PR_RE = re.compile(
+    r"\b(?:pull\s+request|pr)\s*#?\s*(\d+)\b|\bpull/(\d+)\b",
+    re.IGNORECASE,
+)
+
 
 def _task_opens_pr(task: str) -> bool:
     return bool(_PR_OPEN_TASK_RE.search(task or ""))
+
+
+def _explicit_pr_numbers(task: str) -> list[int]:
+    """Return PR numbers named in *task*, in first-seen order."""
+    found: list[int] = []
+    for match in _EXPLICIT_PR_RE.finditer(task or ""):
+        raw = match.group(1) or match.group(2)
+        number = int(raw)
+        if number not in found:
+            found.append(number)
+    return found
+
+
+def _resolve_gh_write_target(
+    task: str,
+    issue: Optional[int],
+    kind: Optional[str],
+    requires_gh_write: bool,
+) -> tuple[Optional[str], str, Optional[str]]:
+    """Resolve ``(gh_write_target, kind, cross_branch_pr)``.
+
+    ``--issue`` associates the dispatch (GOVERNS). When the task names a
+    different pull request, that PR is the verification target. ``cross_branch_pr``
+    is set when the named PR is an existing PR rather than a PR this job's own
+    branch is about to open, so the completion oracle can read that PR instead
+    of the local worktree diff.
+    """
+    resolved_kind = kind or "issue"
+    if not requires_gh_write:
+        return None, resolved_kind, None
+
+    pr_numbers = _explicit_pr_numbers(task)
+    issue_number = int(issue) if issue is not None else None
+    distinct = [number for number in pr_numbers if issue_number is None or number != issue_number]
+    number: Optional[int] = None
+    if distinct:
+        number = distinct[0]
+        resolved_kind = "pr"
+    elif issue_number is not None:
+        number = issue_number
+    else:
+        issue_match = re.search(r"\bissues?\s*#?\s*(\d+)\b", task or "", re.IGNORECASE)
+        if pr_numbers:
+            number = pr_numbers[0]
+            resolved_kind = "pr"
+        elif issue_match:
+            number = int(issue_match.group(1))
+            resolved_kind = "issue"
+        else:
+            print(
+                "  ⚠ --requires-gh-write task has no numbered PR/issue target; "
+                "falling back to worktree activity verification",
+                file=sys.stderr,
+            )
+            return None, resolved_kind, None
+
+    prefix = "pr" if resolved_kind == "pr" else "issue"
+    target = f"{prefix}:{number}"
+    # Only a PR number that is not the --issue link is cross-branch. Jobs that
+    # name the same number (or no PR) keep the existing local-diff / gh-write
+    # evidence path, including "open a PR" for the linked issue.
+    cross_branch = f"pr:{number}" if issue_number is not None and distinct else None
+    return target, resolved_kind, cross_branch
 
 
 _COMMENT_TASK_RE = re.compile(
@@ -3888,34 +3958,11 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     gh_write_target_value = None
     gh_write_author_value = None
     gh_write_expect_value = None
-    gh_write_target_number = issue
-    resolved_gh_write_target_kind = gh_write_target_kind
-    if requires_gh_write and gh_write_target_number is None:
-        task_target_match = re.search(
-            r"\b(?:pr|pull\s+request)\s*#?\s*(\d+)\b",
-            task or "",
-            re.IGNORECASE,
-        )
-        issue_target_match = re.search(
-            r"\bissues?\s*#?\s*(\d+)\b",
-            task or "",
-            re.IGNORECASE,
-        )
-        if task_target_match:
-            resolved_gh_write_target_kind = "pr"
-            gh_write_target_number = int(task_target_match.group(1))
-        elif issue_target_match:
-            resolved_gh_write_target_kind = "issue"
-            gh_write_target_number = int(issue_target_match.group(1))
-        else:
-            print(
-                "  ⚠ --requires-gh-write task has no numbered PR/issue target; "
-                "falling back to worktree activity verification",
-                file=sys.stderr,
-            )
-    if requires_gh_write and gh_write_target_number is not None:
-        target_prefix = "pr" if resolved_gh_write_target_kind == "pr" else "issue"
-        gh_write_target_value = f"{target_prefix}:{gh_write_target_number}"
+    cross_branch_pr_value = None
+    gh_write_target_value, _resolved_kind, cross_branch_pr_value = _resolve_gh_write_target(
+        task, issue, gh_write_target_kind, requires_gh_write,
+    )
+    if requires_gh_write and gh_write_target_value is not None:
         gh_write_role = resolved_agent_role or _role_for_story(story_id)
         gh_write_author_value = _resolve_dispatch_gh_bot_login(gh_write_role)
         gh_write_expect_value = gh_write_expect or _gh_write_expectation(task, task_type, target=gh_write_target_value)
@@ -3947,6 +3994,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         _ensure_daemon_job_columns(dconn, {
             "requires_gh_write": "INTEGER NOT NULL DEFAULT 0",
             "gh_write_target": "TEXT",
+            "cross_branch_pr": "TEXT",
             "gh_write_verified": "TEXT",
             "gh_write_author": "TEXT",
             "gh_write_expect": "TEXT DEFAULT 'closed'",
@@ -4089,6 +4137,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         "scope_paths": scope_paths or [],
         "requires_gh_write": requires_gh_write,
         "gh_write_target": gh_write_target_value,
+        "cross_branch_pr": cross_branch_pr_value,
         "gh_write_author": gh_write_author_value,
         "gh_write_expect": gh_write_expect_for_job,
         "task_type": task_type or "",
@@ -4129,6 +4178,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             _ensure_daemon_job_columns(dconn, {
                 "requires_gh_write": "INTEGER NOT NULL DEFAULT 0",
                 "gh_write_target": "TEXT",
+                "cross_branch_pr": "TEXT",
                 "gh_write_verified": "TEXT",
                 "gh_write_author": "TEXT",
                 "gh_write_expect": "TEXT DEFAULT 'closed'",
@@ -4161,6 +4211,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                     "context_mode=?, context_bytes=?, "
                     "session_id=COALESCE(session_id, ?), "
                     "agent_id=COALESCE(agent_id, ?), "
+                    "gh_write_target=COALESCE(?, gh_write_target), "
+                    "cross_branch_pr=COALESCE(?, cross_branch_pr), "
                     "gh_write_author=COALESCE(gh_write_author, ?), "
                     "gh_write_expect=COALESCE(gh_write_expect, ?) WHERE job_id=?",
                     (
@@ -4184,6 +4236,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                         context_bytes,
                         session_id,
                         agent_id,
+                        gh_write_target_value,
+                        cross_branch_pr_value,
                         gh_write_author_value,
                         gh_write_expect_for_job,
                         job_id,
@@ -4230,6 +4284,11 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                         model_routing["resolved_model"],
                     ),
                 )
+                if cross_branch_pr_value:
+                    dconn.execute(
+                        "UPDATE daemon_jobs SET cross_branch_pr=? WHERE job_id=?",
+                        (cross_branch_pr_value, job_id),
+                    )
             if container_failed:
                 dconn.execute(
                     "UPDATE daemon_jobs SET status=?, exit_code=?, completed_at=? WHERE job_id=?",
