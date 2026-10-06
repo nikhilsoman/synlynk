@@ -1,9 +1,9 @@
 ---
-title: "PR #TBD — A Conformance Suite That Names Adapter Drift Instead of Discovering It Live"
+title: "PR #2081 — A Conformance Suite That Names Adapter Drift Instead of Discovering It Live"
 date: 2026-10-06
 series: "Building the OS for Multi-Agent Development"
 post: 255
-pr: "#TBD"
+pr: "#2081"
 status: open
 author: "synlynk team"
 version: "unreleased"
@@ -11,7 +11,7 @@ tags: [posts]
 type: pr
 ---
 
-# PR #TBD — A Conformance Suite That Names Adapter Drift Instead of Discovering It Live
+# PR #2081 — A Conformance Suite That Names Adapter Drift Instead of Discovering It Live
 
 ## The Broader Goal at the End of the Previous PR
 
