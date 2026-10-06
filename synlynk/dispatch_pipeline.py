@@ -46,6 +46,7 @@ def authorize(request: DispatchRequest) -> None:
             f"task_dispatch:{request.task_type}",
             role=request.role or "dev",
             repo_path=".",
+            enforce_role_compat=request.role is not None,
         )
     except ValueError:
         authority = None

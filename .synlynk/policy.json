@@ -17,6 +17,11 @@
     "note": "task_allocation below is the current interim default, not an authoritative ranking. Any harness that clears min_sample_size with better metrics on a task_type may be promoted; this requires a reviewed PR updating this file plus docs/harness-capability-baseline.md, not a silent edit."
   },
   "overrides": {
+    "role_task_type_compat": {
+      "dev": ["implement", "test", "css", "templates", "content", "subpages", "canvas", "js", "infra", "refactor", "cli-plumbing"],
+      "qa": ["review", "test"],
+      "pm": ["pm", "brainstorm", "architecture-review", "deploy"]
+    },
     "dev_authority": {
       "task_allocation": {
         "implement": {"harness": "codex", "fallback": ["grok", "agy"]},

@@ -211,7 +211,85 @@ def test_repo_policy_json_authorizes_review_task_type():
     whole-object replace over the workspace default (see load_policy()'s merge
     rule), so this repo's own .synlynk/policy.json must carry its own "review"
     entry — it does not inherit one from DEFAULT_WORKSPACE_POLICY.
+
+    Review stays an authorized task type, now for qa (#2068). dev is no longer
+    silently accepted for it.
     """
     repo_root = Path(__file__).resolve().parent.parent
-    result = check_authority("task_dispatch:review", role="dev", repo_path=str(repo_root))
+    policy = load_policy(repo_path=str(repo_root))
+    assert "review" in policy["dev_authority"]["task_allocation"]
+    result = check_authority("task_dispatch:review", role="qa", repo_path=str(repo_root))
+    assert result.allowed is True
+    with pytest.raises(RuntimeError, match=r"correct role for task_type 'review' is qa"):
+        check_authority("task_dispatch:review", role="dev", repo_path=str(repo_root))
+
+
+def test_check_authority_pm_implement_names_dev(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    with pytest.raises(RuntimeError, match=r"correct role for task_type 'implement' is dev"):
+        check_authority("task_dispatch:implement", role="pm", repo_path=str(repo))
+
+
+def test_dispatch_agent_pm_implement_names_dev(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.chdir(tmp_path)
+    from synlynk.dispatch import dispatch_agent
+
+    with pytest.raises(RuntimeError, match=r"correct role for task_type 'implement' is dev"):
+        dispatch_agent(
+            "codex", "implement the compatibility check",
+            task_type="implement", role="pm", context_mode="none",
+        )
+
+
+def test_check_authority_compatible_pairs_stay_allowed(tmp_path, monkeypatch):
+    """Every role/task_type pair in role_task_type_compat that is also in the
+    allocation table still passes. Pairs absent from task_allocation stay on
+    the existing deny path (content/subpages/deploy are repo-policy-only).
+    """
+    monkeypatch.setenv("HOME", str(tmp_path))
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    policy = load_policy(repo_path=str(repo), workspace_name="default")
+    table = policy["dev_authority"]["task_allocation"]
+    seen = 0
+    for role, task_types in policy["role_task_type_compat"].items():
+        for task_type in task_types:
+            if task_type not in table:
+                result = check_authority(
+                    f"task_dispatch:{task_type}", role=role, repo_path=str(repo),
+                )
+                assert result.allowed is False
+                continue
+            result = check_authority(
+                f"task_dispatch:{task_type}", role=role, repo_path=str(repo),
+            )
+            assert result.allowed is True, (role, task_type)
+            seen += 1
+    assert seen > 0
+
+
+def test_repo_policy_compatible_pairs_include_repo_only_task_types():
+    repo_root = Path(__file__).resolve().parent.parent
+    policy = load_policy(repo_path=str(repo_root))
+    table = policy["dev_authority"]["task_allocation"]
+    for task_type in ("content", "subpages", "deploy"):
+        assert task_type in table
+    for role, task_types in policy["role_task_type_compat"].items():
+        for task_type in task_types:
+            assert task_type in table, (role, task_type)
+            result = check_authority(
+                f"task_dispatch:{task_type}", role=role, repo_path=str(repo_root),
+            )
+            assert result.allowed is True, (role, task_type)
+
+
+def test_check_authority_gh_write_stays_allocation_only(tmp_path, monkeypatch):
+    """gh_write is in task_allocation and not owned by the compatibility matrix."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    result = check_authority("task_dispatch:gh_write", role="dev", repo_path=str(repo))
     assert result.allowed is True
