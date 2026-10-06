@@ -369,6 +369,69 @@ def test_pr_check_linked_issue_fallback_fails_closed_when_ambiguous(project_dir,
     conn.close()
 
 
+def test_pr_check_recovers_implementer_from_dispatch_branch_without_cost_entry(project_dir, monkeypatch):
+    import json
+    import synlynk
+    import synlynk.db as db
+
+    policy_path = project_dir / ".synlynk" / "policy.json"
+    policy_path.parent.mkdir(parents=True, exist_ok=True)
+    policy_path.write_text(json.dumps({
+        "overrides": {"merge_authority": {"cross_harness_review_required": True}}
+    }))
+    monkeypatch.chdir(project_dir)
+    monkeypatch.setattr(db, "_pr_closing_issue_numbers", lambda _pr: [])
+    monkeypatch.setattr(db, "_pr_head_branch", lambda _pr: "dispatch/codex/job-impl-2051")
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, harness, task, status, enqueued_at, resolved_model) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("job-impl-2051", "codex", "codex", "implement #2051", "done", "2026-10-05T00:00:00", "gpt-5.3-codex"),
+    )
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, harness, task, status, enqueued_at, resolved_model) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("job-review-2051", "claude", "claude", "review PR #2051", "done", "2026-10-05T00:00:01", "claude-sonnet-4-6"),
+    )
+    conn.execute(
+        "INSERT INTO cost_entries (session_date, agent, harness, model, cost_source, job_id) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        ("2026-10-05", "claude", "claude", "claude-sonnet-4-6", "test", "job-review-2051"),
+    )
+    conn.commit()
+
+    ok, message = db._cross_harness_review_verdict(conn, 2051)
+
+    assert ok
+    assert "implementation codex / gpt-5.3-codex" in message
+    assert "reviewed by claude / claude-sonnet-4-6" in message
+    assert conn.execute("SELECT COUNT(*) FROM cost_entries WHERE job_id=?", ("job-impl-2051",)).fetchone()[0] == 0
+    conn.close()
+
+
+def test_pr_check_branch_fallback_still_fails_closed_without_daemon_job(project_dir, monkeypatch, capsys):
+    import json
+    import synlynk
+    import synlynk.db as db
+
+    policy_path = project_dir / ".synlynk" / "policy.json"
+    policy_path.parent.mkdir(parents=True, exist_ok=True)
+    policy_path.write_text(json.dumps({
+        "overrides": {"merge_authority": {"cross_harness_review_required": True}}
+    }))
+    monkeypatch.chdir(project_dir)
+    monkeypatch.setattr(db, "_pr_closing_issue_numbers", lambda _pr: [])
+    monkeypatch.setattr(db, "_pr_head_branch", lambda _pr: "dispatch/codex/job-missing-2051")
+    conn = synlynk._get_db()
+
+    ok, message = db._cross_harness_review_verdict(conn, 2051)
+
+    assert not ok
+    assert message == "no implementing job provenance found for PR #2051"
+    assert "synlynk cost log --story <story-id> --job-id <job-id>" in capsys.readouterr().err
+    conn.close()
+
+
 def test_isolate_archived_pytest_modules():
     config = (Path(__file__).parents[1] / "pytest.ini").read_text(encoding="utf-8")
 
