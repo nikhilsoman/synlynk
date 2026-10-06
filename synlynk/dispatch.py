@@ -1519,6 +1519,45 @@ def _task_opens_pr(task: str) -> bool:
     return bool(_PR_OPEN_TASK_RE.search(task or ""))
 
 
+_GOVERNS_LINKAGE_WARNING = (
+    "GOVERNS linkage missing — dispatch proceeding, but this will hard-fail once #1990 ships"
+)
+_UNSUPPLIED = object()
+
+
+def _governs_linkage_resolvable(
+    *,
+    story_id: Optional[str] = None,
+    issue: Optional[int] = None,
+    pr: Optional[int] = None,
+    task: str = "",
+) -> bool:
+    """True when --story, --issue, or --pr can be resolved for this dispatch.
+
+    ``--issue`` is resolvable from the flag or from a ``#N`` mention in the
+    task (the CLI auto-detect). ``--pr`` is resolvable from an explicit
+    number or from a pull-request number named in the task. An ad-hoc
+    ``story-adhoc-*`` id synthesized later does not count.
+    """
+    if story_id:
+        return True
+    if issue is not None or pr is not None:
+        return True
+    if _explicit_pr_numbers(task):
+        return True
+    from synlynk.story_provisioning import _detect_issue_number
+
+    return _detect_issue_number(task or "", issue=None) is not None
+
+
+def _emit_missing_governs_linkage_warning(sentinel_path: Optional[str] = None) -> None:
+    """Loud, non-blocking notice that #1990's hard-fail is not in force yet."""
+    print(f"  ⚠ {_GOVERNS_LINKAGE_WARNING}")
+    write_alert = _pkg("_write_sentinel_alert", _write_sentinel_alert)
+    path = sentinel_path or os.path.join(".synlynk", "sentinel.md")
+    write_alert("WARNING", "GOVERNS_LINKAGE_MISSING", _GOVERNS_LINKAGE_WARNING, path)
+
+
 def _explicit_pr_numbers(task: str) -> list[int]:
     """Return PR numbers named in *task*, in first-seen order."""
     found: list[int] = []
@@ -2824,6 +2863,9 @@ def _preflight_dispatch(
     root: Optional[str] = None,
     declared_requires: Optional[list] = None,
     story_id: Optional[str] = None,
+    issue: Optional[int] = None,
+    pr: Optional[int] = None,
+    governs_story_id=_UNSUPPLIED,
 ) -> dict:
     import socket as _socket
     from synlynk._constants import CORE_FLEET as _CORE_FLEET, CORE_INSTRUCTION_FILES as _CORE_INSTRUCTION_FILES
@@ -3065,11 +3107,21 @@ def _preflight_dispatch(
         except Exception:
             pass
 
-    # A real dispatch carries a task hint and must be attributable to a
-    # linked GOVERNS story.  Keep the low-level harness-only preflight calls
-    # without a task hint backward compatible, while still failing closed for
-    # an explicitly supplied story when no DB evidence is available.
-    if story_id is not None or _task_hint or harness_name not in HARNESS_CAPABILITY_BASELINES:
+    # A real dispatch carries a task hint. When the caller supplied no
+    # --issue/--pr/--story (and none can be read from the task), warn and
+    # continue. #1990's hard-fail is still unbuilt. An explicitly supplied
+    # story/issue/PR keeps the existing fail-closed goal check. Harness-only
+    # preflight calls without a task hint stay backward compatible.
+    caller_story_id = story_id if governs_story_id is _UNSUPPLIED else governs_story_id
+    linkage_resolvable = _governs_linkage_resolvable(
+        story_id=caller_story_id,
+        issue=issue,
+        pr=pr,
+        task=_task_hint or "",
+    )
+    if _task_hint and not linkage_resolvable:
+        _emit_missing_governs_linkage_warning()
+    elif story_id is not None or _task_hint or harness_name not in HARNESS_CAPABILITY_BASELINES:
         from synlynk.governs_gate import dispatch_governs_linkage
 
         governs_gate = dispatch_governs_linkage(db_conn, story_id)
@@ -3186,6 +3238,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                    revokes: list = None,
                    job_id: str = None,
                    issue: int = None,
+                   pr: int = None,
                    base: str = None,
                    scope_paths: list = None,
                    session_id: str = None,
@@ -3523,6 +3576,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                     job_id=job_id,
                 )
 
+    # Captured before ad-hoc story synthesis. story-adhoc-* is not GOVERNS linkage.
+    caller_story_id = story_id
     resolve_or_create_story_id = _pkg("resolve_or_create_story_id")
     if resolve_or_create_story_id:
         if story_id:
@@ -3648,6 +3703,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 force_agent=force_agent,
                 declared_requires=declared_requires,
                 story_id=story_id,
+                issue=issue,
+                pr=pr,
+                governs_story_id=caller_story_id,
             )
         except TypeError:
             try:
