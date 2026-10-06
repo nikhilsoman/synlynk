@@ -1,9 +1,9 @@
 ---
-title: "PR #TBD — Dispatch names a missing GOVERNS link before #1990 can block on it"
+title: "PR #2074 — Dispatch names a missing GOVERNS link before #1990 can block on it"
 date: 2026-10-06
 series: "Building the OS for Multi-Agent Development"
 post: 253
-pr: "#TBD"
+pr: "#2074"
 status: open
 author: "synlynk team"
 version: "unreleased"
@@ -11,7 +11,7 @@ tags: [posts]
 type: pr
 ---
 
-# PR #TBD — Dispatch names a missing GOVERNS link before #1990 can block on it
+# PR #2074 — Dispatch names a missing GOVERNS link before #1990 can block on it
 
 ## The Broader Goal at the End of the Previous PR
 

@@ -1,6 +1,6 @@
 # synlynk Blog Series: Building the OS for Multi-Agent Development
 
-| [253](./253-prTBD-governs-linkage-preflight-warning.md) | Dispatch names a missing GOVERNS link before #1990 can block on it | TBD | 2026-10-06 |
+| [253](./253-pr2074-governs-linkage-preflight-warning.md) | Dispatch names a missing GOVERNS link before #1990 can block on it | [#2074](https://github.com/nikhilsoman/synlynk/pull/2074) | 2026-10-06 |
 | [252](./252-pr2070-cross-branch-completion-oracle.md) | Completion oracle reads the PR the task actually named | TBD | 2026-10-06 |
 | [251](./251-pr2051-native-session-provenance.md) | PR #TBD — Native Sessions Can Prove Cross-Harness Review Provenance | TBD | 2026-10-06 |
 
