@@ -15,6 +15,14 @@ item as of 2026-10-04, verified directly against `gh pr view` / `gh issue view`
 (not from `synlynk jobs` labels — see `feedback_pr_review_discipline` /
 job-status-truth memory on why labels alone aren't trusted).
 
+**Status refreshed 2026-10-06** against live `gh issue view` state for every
+numbered item in this doc (the prior in-doc statuses had drifted well behind
+actual merges — most items below were already shipped). Genuinely open items
+remaining: #1993, #1927, #1943, #1937, #1926, #2023, #1980, #1981, #1982,
+#1983, #1914, plus the 2026-10-06 fold-in items #2062/#2063/#2064/#2065
+(now in flight — dispatched to Grok this session) and #2066 (filed,
+undispatched).
+
 Role split in force: Claude = PM/review/deploy only. All implementation below routes
 to Codex/Grok (Agy deprioritized per `feedback_prefer_codex_grok_over_agy` memory)
 via `synlynk dispatch`.
@@ -28,18 +36,18 @@ via `synlynk dispatch`.
 
 | # | Title | Status | Notes |
 |---|---|---|---|
-| #1925 | Safe-by-default execution (flag-flip + containerization) | IN PROGRESS | Flag-flip half shipped. Containerization half dispatched to Grok (`feat/grok/containerized-dispatch`), brainstorm/spec stage per Brainstorm-First Policy. |
-| #1976 | Dispatch smart defaults + inference preview | OPEN | Not yet dispatched. |
-| #1984 | Hermes-class local roster | OPEN | Not yet dispatched. |
-| #2015 | Job status false-negative recurrence (5 instances, 2026-10-04) | OPEN | Filed this session; evidence table for job-f9a82968/9380619d/2908b732/78e8e38c/23e81336. |
-| #1963 | Codex deleted job_truth.py outside assigned scope | OPEN | Dispatch scope-enforcement gap. |
-| #1990 | GOVERNS hard-fail gate in dispatch preflight | **FIXED, not closed** | Merged via PR #2046 (2026-10-05). |
-| #1991 | cross_harness_review_required enforcement in `pr check` | **FIXED, not closed** | Merged via PR #2047 (2026-10-06). |
-| #1992 | Audit-log SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH usage | **FIXED, not closed** | Merged via PR #2050 (2026-10-06). |
-| #1993 | Capability report → task_allocation routing | OPEN | |
-| #1960 | LIVE-22 gh identity zone-boundary | **FIXED, not closed** | Merged via PR #1964 (2026-10-03). Needs manual `gh issue close 1960` — blocked here by auto-mode GH-write restriction. |
-| #2008 | Job-status: lost verified remote task delivery | **FIXED, not closed** | Merged via PR #2009 (2026-10-04). Needs manual `gh issue close 2008` — same restriction. |
-| #2012 | Release-docs CI gate over-scoped | IN PROGRESS, stalled | job-b86f460e made correct local commit (`c1d1d726`) but never pushed/opened PR. Needs re-dispatch to finish push+PR, or Claude to push directly as a deploy action. |
+| #1925 | Safe-by-default execution (flag-flip + containerization) | **CLOSED** 2026-10-04 | Shipped. |
+| #1976 | Dispatch smart defaults + inference preview | **CLOSED** 2026-10-05 | Shipped. |
+| #1984 | Hermes-class local roster | **CLOSED** 2026-10-05 | Shipped. |
+| #2015 | Job status false-negative recurrence (5 instances, 2026-10-04) | **CLOSED** 2026-10-05 | Shipped. |
+| #1963 | Codex deleted job_truth.py outside assigned scope | **CLOSED** 2026-10-04 | Shipped. |
+| #1990 | GOVERNS hard-fail gate in dispatch preflight | **CLOSED** 2026-10-05 | Merged via PR #2046, issue closed. |
+| #1991 | cross_harness_review_required enforcement in `pr check` | **CLOSED** 2026-10-04 | Merged via PR #2047, issue closed. |
+| #1992 | Audit-log SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH usage | **CLOSED** 2026-10-05 | Merged via PR #2050, issue closed. |
+| #1993 | Capability report → task_allocation routing | **OPEN** | Still the real gap — nothing dispatched. Highest-leverage pick for making Grok/Muse calibration self-service. |
+| #1960 | LIVE-22 gh identity zone-boundary | **CLOSED** 2026-10-04 | Merged via PR #1964, issue closed. |
+| #2008 | Job-status: lost verified remote task delivery | **CLOSED** 2026-10-04 | Merged via PR #2009, issue closed. |
+| #2012 | Release-docs CI gate over-scoped | **CLOSED** 2026-10-04 | Shipped — the stalled push did land. |
 
 **Sequencing:** #1963/#1990 (scope + gate enforcement) should land before further dispatch-heavy tracks run unattended, since they harden the thing every other track's dispatches depend on.
 
@@ -62,15 +70,15 @@ The panel treated P0-3/P1-3 (host-auth audit log, GOVERNS hard-fail) as **alread
 
 | # | Title | Status | Notes |
 |---|---|---|---|
-| #1973 | Baseline metrics capture | OPEN | Sequencing: do this **first** per epic. |
-| #1974 | Tiered `--help` | OPEN | Sequence before #1975/#1977 per epic. |
-| #1975 | Quickstart + guided first-run | OPEN | |
-| #1977 | Docs restructure | OPEN | |
-| #1927 | CLI core/packs split | OPEN | |
-| #1941 | Flaky cold-start test | OPEN | Perf/CI, CLI cold-start path. |
-| #1943 | Move cold-start/EPUB tests out of required CI | OPEN | Same family as #1941. |
-| #2012 | Release-docs CI gate over-scoped | *(cross-listed, owned by Track 1)* | Also touches `release --check-docs`, which #1977 extends — coordinate, don't duplicate. |
-| #1918 | `decide --record` slug-collision overwrite bug | OPEN | Loose fit (decide.py, not taxonomy.py) — rides along here as a small CLI-command bugfix rather than a standalone track. |
+| #1973 | Baseline metrics capture | **CLOSED** 2026-10-04 | Shipped. |
+| #1974 | Tiered `--help` | **CLOSED** 2026-10-04 | Shipped. |
+| #1975 | Quickstart + guided first-run | **CLOSED** 2026-10-04 | Shipped. |
+| #1977 | Docs restructure | **CLOSED** 2026-10-04 | Shipped. |
+| #1927 | CLI core/packs split | **OPEN** | Still real. |
+| #1941 | Flaky cold-start test | **CLOSED** 2026-10-04 | Shipped. |
+| #1943 | Move cold-start/EPUB tests out of required CI | **OPEN** | Still real. |
+| #2012 | Release-docs CI gate over-scoped | **CLOSED** *(cross-listed, owned by Track 1)* | Shipped. |
+| #1918 | `decide --record` slug-collision overwrite bug | **CLOSED** 2026-10-05 | Shipped. |
 
 **Sequencing (per epic, unchanged):** #1973 → #1974 → {#1975, #1977}.
 
@@ -110,17 +118,17 @@ Nikhil asked whether downstream `synlynk` users get auto-upgraded on every Named
 
 | # | Title | Status | Notes |
 |---|---|---|---|
-| #1923 | Split viz.py | OPEN | |
-| #1926 | state.db consolidation | OPEN | |
-| #1995 | Cost-log regen drops rows on `synlynk cost log` | OPEN | db.py write-through. |
-| #1999 | `_rotate_project_doc()` duplication — 45x+ dupes, 160MB archive | OPEN | Newly surfaced, un-triaged. db.py-adjacent regen-bug class. |
-| #1917 | memory.md write-through drift | OPEN | Same regen-bug family as #1995/#1999. |
-| #1915 | costs.md regen from state.db drops main-only rows | OPEN | Likely same root cause as #1995 — investigate together, don't fix twice. |
-| #1969 | Cost inflation escalation (ongoing) | OPEN | cost_entries/db.py. |
-| #1937 | Cost-inflation record ($133/44M tokens) | OPEN | Same family as #1969. |
-| #1951 | Cost audit redesign | OPEN | Has a stale worktree `feat/codex/cost-audit-1951` already flagged NEEDS-REVIEW from earlier worktree-hygiene pass — check before re-dispatching, may already have partial work. |
+| #1923 | Split viz.py | **CLOSED** 2026-10-05 | Shipped. |
+| #1926 | state.db consolidation | **OPEN** | Still real — blocks #1993's aggregate measurement. |
+| #1995 | Cost-log regen drops rows on `synlynk cost log` | **CLOSED** 2026-10-05 | Shipped. |
+| #1999 | `_rotate_project_doc()` duplication — 45x+ dupes, 160MB archive | **CLOSED** 2026-10-05 | Shipped. |
+| #1917 | memory.md write-through drift | **CLOSED** 2026-10-05 | Shipped. |
+| #1915 | costs.md regen from state.db drops main-only rows | **CLOSED** 2026-10-05 | Shipped. |
+| #1969 | Cost inflation escalation (ongoing) | **CLOSED** 2026-10-04 | Shipped — but see #1937 below, the underlying cost problem is not actually resolved. |
+| #1937 | Cost-inflation record ($133/44M tokens) | **OPEN** | Still real. #1969's fix (PR #2021) did not reduce Codex implementation-job costs — still $5.58–$15.93/job per the Wave 2 closeout below. Needs fresh investigation, not a re-close. |
+| #1951 | Cost audit redesign | **CLOSED** 2026-10-04 | Shipped. |
 
-**Note:** #1995/#1999/#1917/#1915 all look like the same underlying "write-through regen destroys concurrent/main-only state" bug class hitting different files (`project-docs/costs.md`, `memory.md`, archive rotation). Recommend one root-cause investigation issue before four separate fixes. Root-cause issue already filed: #2023.
+**Note:** #1995/#1999/#1917/#1915 (all CLOSED 2026-10-05) were the same underlying "write-through regen destroys concurrent/main-only state" bug class hitting different files. Root-cause issue #2023 is still **OPEN** — worth checking whether it should close alongside the four fixes it was filed to coordinate, or whether it's tracking a residual piece.
 
 ### Recurring autonomous-flow friction (Nikhil, 2026-10-06) — assessed, mostly already tracked here
 
@@ -142,8 +150,8 @@ Nikhil flagged three recurring pain points hurting the autonomous flow and asked
 
 | # | Title | Status | Notes |
 |---|---|---|---|
-| #1978 | Positioning sentence everywhere | OPEN | |
-| #1979 | Verify job outcomes as user-visible evidence (narrowed) | OPEN | |
+| #1978 | Positioning sentence everywhere | **CLOSED** 2026-10-04 | Shipped. |
+| #1979 | Verify job outcomes as user-visible evidence (narrowed) | **CLOSED** 2026-10-04 | Shipped. |
 
 ### Fold-in: 2026-10-06 three-lens decide-panel decision
 
@@ -172,7 +180,7 @@ No new fold-ins from the past 48h.
 
 ## Items considered and NOT placed in a track
 
-- **#1914** (version drift, CI/release) — not a clean adjacency fit to any track; leave standalone, revisit if it recurs.
+- **#1914** (version drift, CI/release) — **OPEN**, not a clean adjacency fit to any track; leave standalone, revisit if it recurs.
 
 ## Immediate next actions
 
