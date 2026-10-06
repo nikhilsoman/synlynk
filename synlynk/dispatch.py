@@ -3139,7 +3139,10 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     if task_type:
         try:
             authority = check_authority(
-                f"task_dispatch:{task_type}", role=role or "dev", repo_path=os.getcwd(),
+                f"task_dispatch:{task_type}",
+                role=role or "dev",
+                repo_path=os.getcwd(),
+                enforce_role_compat=role is not None,
             )
         except ValueError:
             authority = None  # unknown task_type action shape — not a policy-covered task_type, skip gate

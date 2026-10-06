@@ -29,6 +29,18 @@ def test_ensure_daemon_job_columns_reads_schema_once_and_adds_missing_columns():
     conn.close()
 
 
+def test_dispatch_agent_rejects_explicit_incompatible_role(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    monkeypatch.chdir(repo)
+    with pytest.raises(RuntimeError, match=r"correct role for task_type 'implement' is dev"):
+        sl.dispatch_agent(
+            "codex", "implement the feature", task_type="implement", role="pm",
+            context_mode="none",
+        )
+
+
 def test_dispatch_agent_raises_when_task_type_not_in_policy_allocation_table(tmp_path, monkeypatch, isolated_db):
     monkeypatch.setenv("HOME", str(tmp_path))
     repo = tmp_path / "repo"
