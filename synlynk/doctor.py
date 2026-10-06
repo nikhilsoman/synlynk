@@ -107,6 +107,48 @@ def _hc_identity_slug() -> HealthCheck:
     return HealthCheck("identity_slug", "ok", f"product identity configured: {data['identity_slug']}")
 
 
+def _hc_config_schema() -> HealthCheck:
+    """Validates .synlynk/config.json against the known field schema."""
+    from synlynk.config_schema import validate, CONFIG_SCHEMA
+
+    path = os.path.join(".synlynk", "config.json")
+    if not os.path.exists(path):
+        return HealthCheck("config_schema", "warn", "No .synlynk/config.json; schema check skipped")
+    try:
+        with open(path) as config_file:
+            data = json.load(config_file)
+    except (OSError, json.JSONDecodeError) as exc:
+        return HealthCheck("config_schema", "fail", f"Cannot parse .synlynk/config.json: {exc}")
+    errors = validate(data, CONFIG_SCHEMA)
+    if not errors:
+        return HealthCheck("config_schema", "ok", ".synlynk/config.json matches expected schema")
+    return HealthCheck(
+        "config_schema", "fail", "; ".join(errors),
+        fix="Fix the listed field(s) in .synlynk/config.json",
+    )
+
+
+def _hc_policy_schema() -> HealthCheck:
+    """Validates .synlynk/policy.json against the known field schema."""
+    from synlynk.config_schema import validate, POLICY_SCHEMA
+
+    path = os.path.join(".synlynk", "policy.json")
+    if not os.path.exists(path):
+        return HealthCheck("policy_schema", "warn", "No .synlynk/policy.json; schema check skipped")
+    try:
+        with open(path) as policy_file:
+            data = json.load(policy_file)
+    except (OSError, json.JSONDecodeError) as exc:
+        return HealthCheck("policy_schema", "fail", f"Cannot parse .synlynk/policy.json: {exc}")
+    errors = validate(data, POLICY_SCHEMA)
+    if not errors:
+        return HealthCheck("policy_schema", "ok", ".synlynk/policy.json matches expected schema")
+    return HealthCheck(
+        "policy_schema", "fail", "; ".join(errors),
+        fix="Fix the listed field(s) in .synlynk/policy.json",
+    )
+
+
 def _hc_model_registry() -> HealthCheck:
     """Ensure the canonical model catalog is available to doctor consumers."""
     try:
@@ -1031,6 +1073,8 @@ HEALTH_CHECKS = [
     _hc_python_version,
     _hc_project_init,
     _hc_identity_slug,
+    _hc_config_schema,
+    _hc_policy_schema,
     _hc_model_registry,
     _hc_codex_model_catalog,
     _hc_docs_dir,
