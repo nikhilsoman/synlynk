@@ -1,9 +1,9 @@
 ---
-title: "PR #TBD — gh:#1926: A Migrations Framework, and Burying 11,384 Dead Shards"
+title: "PR #2085 — gh:#1926: A Migrations Framework, and Burying 11,384 Dead Shards"
 date: 2026-10-06
 series: "Building the OS for Multi-Agent Development"
 post: 254
-pr: "#TBD"
+pr: "#2085"
 merged: null
 author: "synlynk team"
 version: "unreleased"
@@ -11,6 +11,8 @@ tags: [posts]
 type: pr
 ---
 # 254: gh:#1926 — A Migrations Framework, and Burying 11,384 Dead Shards
+
+PR: [#2085](https://github.com/nikhilsoman/synlynk/pull/2085)
 
 ## Where we left off
 
