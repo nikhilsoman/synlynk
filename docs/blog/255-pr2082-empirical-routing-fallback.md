@@ -1,9 +1,9 @@
 ---
-title: "PR #TBD — Empirical routing promotes a harness only after five measured samples"
+title: "PR #2082 — Empirical routing promotes a harness only after five measured samples"
 date: 2026-10-06
 series: "Building the OS for Multi-Agent Development"
 post: 255
-pr: "#TBD"
+pr: "#2082"
 status: open
 author: "synlynk team"
 version: "unreleased"
@@ -11,7 +11,7 @@ tags: [posts]
 type: pr
 ---
 
-# PR #TBD — Empirical routing promotes a harness only after five measured samples
+# PR #2082 — Empirical routing promotes a harness only after five measured samples
 
 ## The Broader Goal at the End of the Previous PR
 
