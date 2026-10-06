@@ -428,7 +428,75 @@ def test_pr_check_branch_fallback_still_fails_closed_without_daemon_job(project_
 
     assert not ok
     assert message == "no implementing job provenance found for PR #2051"
-    assert "synlynk cost log --story <story-id> --job-id <job-id>" in capsys.readouterr().err
+    assert "synlynk cost log --pr <pr-number> --harness <harness>" in capsys.readouterr().err
+    conn.close()
+
+
+def test_pr_check_accepts_native_cost_entry_provenance(project_dir, monkeypatch):
+    import json
+    import synlynk
+    import synlynk.db as db
+
+    policy_path = project_dir / ".synlynk" / "policy.json"
+    policy_path.parent.mkdir(parents=True, exist_ok=True)
+    policy_path.write_text(json.dumps({
+        "overrides": {"merge_authority": {"cross_harness_review_required": True}}
+    }))
+    monkeypatch.chdir(project_dir)
+    monkeypatch.setattr(db, "_pr_closing_issue_numbers", lambda _pr: [])
+    monkeypatch.setattr(db, "_pr_head_branch", lambda _pr: "feat/native-pr-2051")
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, harness, task, status, enqueued_at, resolved_model) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("job-review-native-2051", "claude", "claude", "review PR #2051", "done", "2026-10-05T00:00:01", "claude-sonnet-4-6"),
+    )
+    conn.execute(
+        "INSERT INTO cost_entries (session_date, agent, harness, model, cost_source, pr_number) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        ("2026-10-05", "codex", "codex", "gpt-5.3-codex", "test", 2051),
+    )
+    conn.execute(
+        "INSERT INTO cost_entries (session_date, agent, harness, model, cost_source, job_id) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        ("2026-10-05", "claude", "claude", "claude-sonnet-4-6", "test", "job-review-native-2051"),
+    )
+    conn.commit()
+
+    ok, message = db._cross_harness_review_verdict(conn, 2051)
+
+    assert ok
+    assert "implementation codex / gpt-5.3-codex" in message
+    assert "reviewed by claude / claude-sonnet-4-6" in message
+    conn.close()
+
+
+def test_pr_check_rejects_mismatched_native_cost_entry_provenance(project_dir, monkeypatch, capsys):
+    import json
+    import synlynk
+    import synlynk.db as db
+
+    policy_path = project_dir / ".synlynk" / "policy.json"
+    policy_path.parent.mkdir(parents=True, exist_ok=True)
+    policy_path.write_text(json.dumps({
+        "overrides": {"merge_authority": {"cross_harness_review_required": True}}
+    }))
+    monkeypatch.chdir(project_dir)
+    monkeypatch.setattr(db, "_pr_closing_issue_numbers", lambda _pr: [])
+    monkeypatch.setattr(db, "_pr_head_branch", lambda _pr: "feat/native-pr-2051")
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO cost_entries (session_date, agent, harness, model, cost_source, pr_number) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        ("2026-10-05", "codex", "codex", "gpt-5.3-codex", "test", 2050),
+    )
+    conn.commit()
+
+    ok, message = db._cross_harness_review_verdict(conn, 2051)
+
+    assert not ok
+    assert message == "no implementing job provenance found for PR #2051"
+    assert "synlynk cost log --pr <pr-number> --harness <harness>" in capsys.readouterr().err
     conn.close()
 
 
