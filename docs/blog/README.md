@@ -1,5 +1,6 @@
 # synlynk Blog Series: Building the OS for Multi-Agent Development
 
+| [252](./252-pr2070-cross-branch-completion-oracle.md) | Completion oracle reads the PR the task actually named | TBD | 2026-10-06 |
 | [251](./251-pr2051-native-session-provenance.md) | PR #TBD — Native Sessions Can Prove Cross-Harness Review Provenance | TBD | 2026-10-06 |
 
 | [250](./250-pr2051-cross-harness-provenance-recovery.md) | PR #TBD — Cross-Harness Review Provenance Survives a Missing Cost Row | TBD | 2026-10-06 |

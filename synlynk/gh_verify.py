@@ -441,6 +441,105 @@ def gh_write_verified(
         return False
 
 
+def cross_branch_pr_effect_verified(
+    target: Optional[str],
+    *,
+    since: Optional[str] = None,
+    worktree_branch: Optional[str] = None,
+    expect_author: Optional[str] = None,
+    accept_reviews: bool = True,
+    accept_commits: bool = True,
+    timeout: int = 10,
+    evidence: Optional[dict] = None,
+) -> Optional[bool]:
+    """Primary evidence when a job's effect is a PR other than its own branch.
+
+    Queries ``gh pr view <N> --json reviews,commits,headRefName`` and accepts a
+    review or commit at or after ``since``. ``headRefName`` is included so a PR
+    whose head is this job's own branch stays on the local-diff path.
+
+    Returns True when a fresh event is present, False when the PR is a different
+    branch and no fresh event is present, and None when the target is not a
+    cross-branch PR (missing target, same branch, or GitHub could not be read).
+    """
+    if not target or not since or not (accept_reviews or accept_commits):
+        return None
+    match = _TARGET_RE.match(target)
+    if not match or match.group(1) != "pr":
+        return None
+    number = match.group(2)
+    cmd = ["gh", "pr", "view", number, "--json", "reviews,commits,headRefName"]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        if evidence is not None:
+            evidence.update({
+                "target": target,
+                "github_unknown": True,
+                "error": type(exc).__name__,
+            })
+        return None
+    if evidence is not None:
+        evidence.update({"target": target, "raw": result.stdout, "command": cmd})
+    if result.returncode != 0:
+        if evidence is not None:
+            evidence["github_unknown"] = True
+            evidence["raw"] = result.stderr or result.stdout
+        return None
+    try:
+        payload = json.loads(result.stdout or "{}")
+    except (TypeError, ValueError):
+        if evidence is not None:
+            evidence["github_unknown"] = True
+        return None
+    if not isinstance(payload, dict):
+        if evidence is not None:
+            evidence["github_unknown"] = True
+        return None
+    head = payload.get("headRefName")
+    if worktree_branch and head and head == worktree_branch:
+        if evidence is not None:
+            evidence.update({"same_branch": True, "cross_branch": False, "head_ref": head})
+        return None
+    since_dt = _parse_iso8601(since, naive_as="local")
+    if since_dt is None:
+        if evidence is not None:
+            evidence["github_unknown"] = True
+        return None
+    if evidence is not None:
+        evidence.update({"cross_branch": True, "head_ref": head, "target_match": True})
+
+    def _is_fresh(entry: dict, *fields: str) -> bool:
+        entry_dt = _parse_iso8601(next((entry.get(field) for field in fields if entry.get(field)), None))
+        return entry_dt is not None and not _compare_dt_lt(entry_dt, since_dt)
+
+    matched = False
+    actor_match = expect_author is None
+    if accept_reviews:
+        for entry in payload.get("reviews") or []:
+            if not isinstance(entry, dict) or not _is_fresh(entry, "submittedAt", "createdAt"):
+                continue
+            if expect_author and not _gh_logins_match(_author_login(entry), expect_author):
+                continue
+            matched = True
+            actor_match = True
+            if evidence is not None:
+                evidence["matched_event"] = "review"
+            break
+    if not matched and accept_commits:
+        for entry in payload.get("commits") or []:
+            if not isinstance(entry, dict) or not _is_fresh(entry, "committedDate", "authoredDate"):
+                continue
+            matched = True
+            if evidence is not None:
+                evidence["matched_event"] = "commit"
+            break
+    if evidence is not None:
+        evidence["matched"] = matched
+        evidence["actor_match"] = actor_match
+    return matched
+
+
 def _entry_matches_sha(entry: dict, expected_sha: str) -> bool:
     """Return whether a review/comment carries the causal commit identity."""
     candidates = [

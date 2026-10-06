@@ -20,6 +20,7 @@ from synlynk.fleet import terminal_status_for_unknown_exit
 from synlynk.events import emit_event
 from synlynk.gh_verify import (
     _parse_iso8601,
+    cross_branch_pr_effect_verified,
     gh_write_verified,
     local_commits_pushed,
     github_branch_effect_verified,
@@ -1930,6 +1931,7 @@ def _enforce_job_effect_verification(job: dict, git_state: Optional[dict], senti
         worktree_branch=job.get("worktree_branch"),
         started_at=job.get("started_at"),
         structured_telemetry=structured,
+        cross_branch_pr=job.get("cross_branch_pr"),
     )
     # If worktree wasn't given on a mutating task (e.g. synthetic test), don't fail
     if not effect_res.verified and not (task_class == "mutating" and not job.get("worktree_path")):
@@ -3470,6 +3472,7 @@ def _reconcile_terminal_jobs_json(conn) -> int:
                 job.get("started_at"),
                 author or job.get("gh_write_author"),
                 expect or job.get("gh_write_expect"),
+                worktree_branch=job.get("worktree_branch"),
             )
         else:
             verified = None
@@ -3712,6 +3715,60 @@ def _apply_gh_write_verification(
     return status, verified_str
 
 
+def _load_cross_branch_pr(conn, job_id: str) -> Optional[str]:
+    """Return the dispatch-time cross-branch PR marker, if the column exists."""
+    try:
+        row = conn.execute(
+            "SELECT cross_branch_pr FROM daemon_jobs WHERE job_id=?",
+            (job_id,),
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return None
+    if not row or not row[0]:
+        return None
+    return str(row[0])
+
+
+def _record_cross_branch_oracle(conn, job_id: str, evidence: dict) -> None:
+    """Feed a confirmed cross-branch GitHub effect into the completion oracle."""
+    try:
+        row = conn.execute(
+            "SELECT kind, required_predicates_json FROM job_effect_contract WHERE job_id=?",
+            (job_id,),
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return
+    if not row or not row[0] or row[0] == "unknown_contract":
+        return
+    try:
+        required = json.loads(row[1] or "{}")
+    except json.JSONDecodeError:
+        required = {}
+    if not isinstance(required, dict):
+        required = {}
+    if required.get("sha_match") and evidence.get("sha_match") is not True:
+        return
+    if required.get("actor_match") and evidence.get("actor_match") is not True:
+        return
+    payload = {
+        "kind": "github_effect",
+        "result": "true",
+        "source": "gh_pr_view",
+        "causal_match": True,
+        "target_match": True,
+        "actor_match": True,
+        "event_id": f"cross-branch:{job_id}:{evidence.get('matched_event') or 'effect'}",
+        "target": evidence.get("target"),
+    }
+    try:
+        from synlynk.job_truth import record_evidence_and_reconcile
+        record_evidence_and_reconcile(
+            conn, job_id, payload, update_compatibility=False,
+        )
+    except (sqlite3.Error, ValueError):
+        conn.rollback()
+
+
 def _verify_daemon_terminal_status(
     conn,
     job_id: str,
@@ -3721,8 +3778,53 @@ def _verify_daemon_terminal_status(
     started_at: Optional[str],
     gh_write_author: Optional[str],
     gh_write_expect: Optional[str],
+    worktree_branch: Optional[str] = None,
 ) -> tuple:
     """Apply the configured GitHub-write check using daemon job metadata."""
+    cross_branch_pr = _load_cross_branch_pr(conn, job_id)
+    if cross_branch_pr:
+        evidence = {}
+        cross = cross_branch_pr_effect_verified(
+            cross_branch_pr,
+            since=started_at,
+            worktree_branch=worktree_branch,
+            expect_author=gh_write_author,
+            accept_reviews=True,
+            accept_commits=(gh_write_expect or "") != "review_posted",
+            evidence=evidence,
+        )
+        if cross is True:
+            verified_str = "true"
+            try:
+                conn.execute(
+                    "UPDATE daemon_jobs SET gh_write_verified=?, gh_write_evidence=? WHERE job_id=?",
+                    (verified_str, json.dumps(evidence) if evidence else None, job_id),
+                )
+            except sqlite3.OperationalError:
+                pass
+            _record_cross_branch_oracle(conn, job_id, evidence)
+            if status in (
+                "timed_out", "failed_unverified", "succeeded_gh_write_failed",
+                STATUS_COMPLETED_WITHOUT_CHANGES, STATUS_FAILED_NOOP_DENIED,
+            ):
+                status = "done"
+            return status, verified_str
+        if (
+            cross is False
+            and not evidence.get("same_branch")
+            and (gh_write_expect or "") not in ("merged", "pr_open", "created")
+        ):
+            verified_str = "false"
+            try:
+                conn.execute(
+                    "UPDATE daemon_jobs SET gh_write_verified=?, gh_write_evidence=? WHERE job_id=?",
+                    (verified_str, json.dumps(evidence) if evidence else None, job_id),
+                )
+            except sqlite3.OperationalError:
+                pass
+            if status in ("done", "failed_unverified"):
+                status = "succeeded_gh_write_failed"
+            return status, verified_str
     if status == STATUS_UNPUSHED_BRANCH:
         try:
             conn.execute(
@@ -4019,6 +4121,7 @@ def _reconcile_daemon_jobs() -> None:
                     status, gh_write_verified_str = _verify_daemon_terminal_status(
                         conn, job_id, requires_gh_write, gh_write_target, status,
                         started_at, gh_write_author, gh_write_expect,
+                        worktree_branch=preferred_branch,
                     )
                     settled = _settle_daemon_job_terminal(
                         conn, job_id, status, exit_code, now, release_reservation=True
@@ -4116,6 +4219,7 @@ def _reconcile_daemon_jobs() -> None:
                         zombie_status, gh_write_verified_str = _verify_daemon_terminal_status(
                             conn, job_id, requires_gh_write, gh_write_target, zombie_status,
                             started_at, gh_write_author, gh_write_expect,
+                            worktree_branch=worktree_branch,
                         )
                         if (
                             requires_gh_write and gh_write_verified_str == "true"
@@ -4177,6 +4281,7 @@ def _reconcile_daemon_jobs() -> None:
                 status, gh_write_verified_str = _verify_daemon_terminal_status(
                     conn, job_id, requires_gh_write, gh_write_target, status,
                     started_at, gh_write_author, gh_write_expect,
+                    worktree_branch=worktree_branch,
                 )
                 if (
                     requires_gh_write and gh_write_verified_str == "true"

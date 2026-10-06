@@ -1148,6 +1148,11 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
                 conn.execute("ALTER TABLE daemon_jobs ADD COLUMN gh_write_target TEXT")
             except sqlite3.OperationalError:
                 pass
+        if "cross_branch_pr" not in daemon_job_cols:
+            try:
+                conn.execute("ALTER TABLE daemon_jobs ADD COLUMN cross_branch_pr TEXT")
+            except sqlite3.OperationalError:
+                pass
         if "gh_write_verified" not in daemon_job_cols:
             try:
                 conn.execute("ALTER TABLE daemon_jobs ADD COLUMN gh_write_verified TEXT")
