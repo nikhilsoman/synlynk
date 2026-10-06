@@ -37,3 +37,39 @@ def test_is_safe_to_delete_rejects_shards_newer_than_cutoff(tmp_path):
 
     assert is_safe_to_delete(old_path, cutoff) is True
     assert is_safe_to_delete(new_path, cutoff) is False
+
+
+# tests/test_cleanup_legacy_project_shards.py (append)
+from datetime import date
+
+
+def test_dry_run_reports_counts_and_leaves_files_untouched(tmp_path, capsys):
+    from scripts.cleanup_legacy_project_shards import run_cleanup
+
+    projects_root = tmp_path / "projects"
+    (projects_root / "old1").mkdir(parents=True)
+    (projects_root / "old2").mkdir(parents=True)
+    (projects_root / "recent").mkdir(parents=True)
+    _touch_with_mtime(projects_root / "old1" / "state.db", time.mktime(date(2026, 8, 1).timetuple()))
+    _touch_with_mtime(projects_root / "old2" / "state.db", time.mktime(date(2026, 8, 15).timetuple()))
+    _touch_with_mtime(projects_root / "recent" / "state.db", time.mktime(date(2026, 9, 20).timetuple()))
+
+    report_path = tmp_path / "report.txt"
+    result = run_cleanup(
+        projects_root=projects_root,
+        cutoff=date(2026, 9, 16),
+        execute=False,
+        report_path=report_path,
+    )
+
+    assert result.deletable_count == 2
+    assert result.skipped_count == 1
+    assert result.deleted_count == 0
+    assert (projects_root / "old1" / "state.db").exists()
+    assert (projects_root / "old2" / "state.db").exists()
+    assert (projects_root / "recent" / "state.db").exists()
+    assert report_path.exists()
+    report_text = report_path.read_text()
+    assert "old1" in report_text
+    assert "old2" in report_text
+    assert "recent" in report_text
