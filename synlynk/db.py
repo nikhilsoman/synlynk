@@ -1141,11 +1141,6 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
                 conn.execute("ALTER TABLE cost_entries ADD COLUMN session_id TEXT")
             except sqlite3.OperationalError:
                 pass
-        if "turn_usage_json" not in cost_cols:
-            try:
-                conn.execute("ALTER TABLE cost_entries ADD COLUMN turn_usage_json TEXT")
-            except sqlite3.OperationalError:
-                pass
         conn.execute("DROP VIEW IF EXISTS capability_scores")
         conn.executescript(_DB_SCORES_VIEW)
         conn.executescript("""
@@ -1859,6 +1854,16 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
     else:
         _migrate_governs_tenancy(conn)
         _normalize_org_domain_drift(conn)
+        conn.commit()
+
+    # Keep this repair outside the schema-version gate.  A database can have
+    # already reached the current version while a prior migration stopped
+    # before adding this column (or while the schema was bootstrapped by an
+    # older build).  In that state, the version-gated migration above is a
+    # no-op and _get_db() must still repair the missing column.
+    cost_cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}
+    if "turn_usage_json" not in cost_cols:
+        conn.execute("ALTER TABLE cost_entries ADD COLUMN turn_usage_json TEXT")
         conn.commit()
 
     _migrate_onboarding_sessions(conn)
