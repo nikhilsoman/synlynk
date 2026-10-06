@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #TBD — Native Sessions Can Prove Cross-Harness Review Provenance | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-3">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Oct 06, 2026</span>
+        
+          <span class="blog-post-pr">PR #TBD</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #TBD — Native Sessions Can Prove Cross-Harness Review Provenance</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>PR #TBD — Native Sessions Can Prove Cross-Harness Review Provenance</h1>
+<h2>The goalpost we inherited</h2>
+<p>The previous provenance recovery work kept <code>synlynk pr check</code> fail-closed when
+a dispatched implementation lost its cost row. The remaining gap was a
+legitimate implementation authored directly from an interactive home session,
+where no dispatch job exists to identify the implementer.</p>
+<h2>The problem this PR addresses</h2>
+<p>The cross-harness review gate only knew how to resolve implementation identity
+through dispatch jobs: capability ratings, linked issues, or a dispatch branch.
+Native sessions therefore failed the gate even when the PR had a recorded
+cost entry and a valid cross-harness review.</p>
+<h2>What shipped</h2>
+<ul>
+<li><code>cost_entries</code> now records an optional <code>pr_number</code>, with additive migration
+support for existing databases.</li>
+<li><code>synlynk cost log --pr &lt;pr-number&gt; --harness &lt;harness&gt;</code> records native
+implementation provenance without reusing the categorical
+<code>dispatch_context</code> field.</li>
+<li><code>synlynk pr check</code> uses the newest matching native cost entry only after all
+existing job-based paths fail, while preserving the same identity and
+incomplete-provenance checks.</li>
+<li>The missing-provenance hint and <code>CLAUDE.md</code> now distinguish native <code>--pr</code>
+logging from dispatched <code>--job-id</code> logging.</li>
+</ul>
+<h2>Verification</h2>
+<p>The focused database, CLI, and cost-ledger suites pass: 310 tests passed and 1
+was skipped before the final persistence assertion was added. Coverage includes
+matching native provenance, mismatched PR numbers failing closed, and all three
+existing job-based recovery paths remaining green.</p>
+<h2>New goalpost</h2>
+<p>Interactive home sessions can now participate in the same measured,
+cross-harness review gate as dispatched work, without weakening fail-closed
+behavior for unrecorded or incomplete provenance.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
