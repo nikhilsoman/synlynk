@@ -1,6 +1,7 @@
 # tests/test_cleanup_legacy_project_shards.py
 import os
 import time
+from pathlib import Path
 
 
 def _touch_with_mtime(path, mtime_ts):
@@ -98,3 +99,21 @@ def test_execute_deletes_only_shards_older_than_cutoff(tmp_path):
     assert result.deleted_count == 1
     assert not old_path.exists()
     assert recent_path.exists()
+
+
+# tests/test_cleanup_legacy_project_shards.py (append)
+def test_parse_args_defaults():
+    from scripts.cleanup_legacy_project_shards import parse_args
+
+    args = parse_args([])
+    assert args.execute is False
+    assert args.cutoff_date == date(2026, 9, 16)
+    assert args.projects_root == Path.home() / ".synlynk" / "projects"
+
+
+def test_parse_args_overrides():
+    from scripts.cleanup_legacy_project_shards import parse_args
+
+    args = parse_args(["--execute", "--cutoff-date", "2026-10-01"])
+    assert args.execute is True
+    assert args.cutoff_date == date(2026, 10, 1)

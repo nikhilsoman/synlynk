@@ -96,3 +96,56 @@ def run_cleanup(
         deleted_count=deleted_count,
         deleted_bytes=deleted_bytes,
     )
+
+
+def parse_args(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--execute",
+        action="store_true",
+        default=False,
+        help="Actually delete shards that pass the safety check. Default is dry-run.",
+    )
+    parser.add_argument(
+        "--cutoff-date",
+        type=lambda s: datetime.strptime(s, "%Y-%m-%d").date(),
+        default=DEFAULT_CUTOFF_DATE,
+        help="Shards with mtime at or after this date are never deleted. Default: 2026-09-16.",
+    )
+    parser.add_argument(
+        "--projects-root",
+        type=Path,
+        default=DEFAULT_PROJECTS_ROOT,
+        help="Root directory to scan for */state.db shards.",
+    )
+    parser.add_argument(
+        "--report-path",
+        type=Path,
+        default=Path("legacy_shard_cleanup_report.txt"),
+        help="Where to write the summary report.",
+    )
+    args = parser.parse_args(argv)
+    args.projects_root = args.projects_root.expanduser()
+    return args
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(sys.argv[1:] if argv is None else argv)
+    result = run_cleanup(
+        projects_root=args.projects_root,
+        cutoff=args.cutoff_date,
+        execute=args.execute,
+        report_path=args.report_path,
+    )
+    mode = "EXECUTED" if args.execute else "DRY RUN"
+    print(f"[{mode}] scanned shards under {args.projects_root}")
+    print(f"  deletable: {result.deletable_count} shard(s), {result.deletable_bytes} bytes")
+    print(f"  skipped (newer than cutoff): {result.skipped_count} shard(s)")
+    if args.execute:
+        print(f"  deleted: {result.deleted_count} shard(s), {result.deleted_bytes} bytes")
+    print(f"  full report: {args.report_path}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
