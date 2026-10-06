@@ -271,6 +271,11 @@ This table is generated from `.synlynk/config.json` so it tracks the repo's own 
 2. Check `synlynk status` for current burn rate.
 3. Confirm all work is captured via telemetry and manual/PM work is logged via `synlynk cost log`.
 4. Append actual cost to `project-docs/costs.md`.
+5. **Reviewer-logged cost provenance backfill (gh:#2071, 2026-10-06).** If a reviewer sees the missing-provenance stderr hint (from `_emit_missing_provenance_hint`) or `synlynk pr check` reports "no implementing job provenance found for PR #N", backfill a `cost_entries` row before re-running `pr check`. `--tokens-in`/`--tokens-out` are required by the CLI — pull the implementing job's actual token counts from its dispatch estimate/actual line (`synlynk logs --job <job-id> | grep "dispatch estimate" -A2`, or the job's own completion summary) rather than guessing:
+   ```
+   synlynk cost log --pr <N> --harness <implementer-harness> --tokens-in <in> --tokens-out <out> --job-id <job-id> --note "logged by reviewer, see design spec 2026-10-06"
+   ```
+   Re-run `synlynk pr check` after logging. Only escalate to a manual `--admin` override if the backfill itself fails or the implementer harness/model genuinely cannot be determined (e.g. no `dispatch/<harness>/job-<id>` branch naming and no native-session record) — do not jump to `--admin` as the first response to a missing-provenance hint.
 
 ## Repo Hygiene
 1. Do not commit directly to main or master.
