@@ -1,4 +1,17 @@
-# PR #TBD — Cross-Harness Review Provenance Survives a Missing Cost Row
+---
+title: "PR #2054 — Cross-Harness Review Provenance Survives a Missing Cost Row"
+date: 2026-10-06
+series: "Building the OS for Multi-Agent Development"
+post: 250
+pr: "#2054"
+merged: 2026-10-06
+author: "synlynk team"
+version: "unreleased"
+tags: [posts]
+type: pr
+---
+
+# PR #2054 — Cross-Harness Review Provenance Survives a Missing Cost Row
 
 ## The goalpost we inherited
 
