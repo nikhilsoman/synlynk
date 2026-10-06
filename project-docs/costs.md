@@ -3,8 +3,6 @@
 
 | Date | Agent | Model | Tokens In | Tokens Out | Cost | Source | Story | Notes |
 |---|---|---|---|---|---|---|---|---|
-| 2026-09-25 17:48 | codex | o4-mini | 2469576 | 11845 | $7.5864 | estimated_token_rate | story-issue-1786 | exec: codex job job-3a2606... |
-| 2026-09-25 20:45 | codex | o4-mini | 5000 | 2000 | $0.0450 | estimated_tshirt | story-issue-1786 | exec: codex job job-7e470a... |
 | 2026-09-25 21:14 | codex | o4-mini | 294522 | 5365 | $0.9640 | estimated_token_rate | story-issue-1789 | exec: codex job job-0c5137... |
 | 2026-09-25 21:38 | codex | o4-mini | 451395 | 4572 | $1.4228 | estimated_token_rate | story-issue-1789 | exec: codex job job-0868dd... |
 | 2026-09-26 09:00 | grok | grok-3 | 180000 | 45000 | $1.2150 | estimated_manual | story-503a76f2 | KG usability issue #1790 mint + #1789 QA/merge session (LOD bar, migrate --no-verify, approaches parked) |
@@ -503,13 +501,15 @@
 | 2026-10-06 15:04 | grok | grok-3 | 128376 | 44344 | $1.1326 [sub] (API: $1.0503) | estimated_token_rate | story-issue-2068 | exec: grok job job-688b117... |
 | 2026-10-06 16:30 | grok | grok-3 | 377176 | 119918 | $3.2597 [sub] (API: $2.9303) | estimated_token_rate | story-issue-2056 | exec: grok job job-561a4b7... |
 | 2026-10-06 23:21 | claude | claude-sonnet-4-6 | 150000 | 8000 | $0.3921 [sub] (API: $0.5700) | estimated_manual | - | PM-session native provenance: coordination, blog post, LIVE-23 migration fix (gh:#2086/#2087); estimated split, not exact telemetry |
+| 2026-10-06 23:43 | agy | unknown | 0 | 0 | $0.0000 [sub] (API: $0.0000) | estimated_token_rate | story-issue-2089 | exec: agy job job-9535787a |
+| 2026-10-06 23:43 | codex | o4-mini | 480732 | 5643 | $0.0232 [sub] (API: $1.5268) | estimated_token_rate | story-issue-2085 | exec: codex job job-6466d6... |
 
 ## Subscription Amortization & Dual-Ledger Summary
 
 | Harness | Base Fee | Actual Amortized Spend | API Equivalent Value | Net Savings |
 |---|---|---|---|---|
 | claude | $20.00 | $18.9798 | $26.5643 | $7.5845 |
-| codex | $20.00 | $13.8996 | $888.3272 | $874.4276 |
+| codex | $20.00 | $13.9229 | $889.8541 | $875.9312 |
 | agy | $20.00 | $0.8525 | $3.9092 | $3.0567 |
 | grok | $30.00 | $9.5636 | $7.8234 | $-1.7402 |
-| **Total** | **$90.00** | **$43.2956** | **$926.6241** | **$883.3285** |
+| **Total** | **$90.00** | **$43.3188** | **$928.1509** | **$884.8321** |
