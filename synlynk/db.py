@@ -6,6 +6,7 @@ import re
 import shutil
 import sqlite3
 import subprocess
+import sys
 import time
 from datetime import datetime, timezone
 
@@ -85,7 +86,69 @@ def _job_execution_identity(conn, job_id: str) -> tuple[str | None, str | None]:
             ORDER BY ce.id DESC LIMIT 1""",
         (job_id,),
     ).fetchone()
+    if row:
+        return row[0], row[1]
+
+    # A job can have completed successfully while its cost ledger row was lost
+    # (for example, when terminal status was a false negative).  daemon_jobs is
+    # still authoritative for the execution identity in that case.
+    row = conn.execute(
+        """SELECT COALESCE(NULLIF(harness, ''), NULLIF(agent, '')),
+                         COALESCE(NULLIF(resolved_model, ''), NULLIF(requested_model, ''))
+             FROM daemon_jobs WHERE job_id=?""",
+        (job_id,),
+    ).fetchone()
     return (row[0], row[1]) if row else (None, None)
+
+
+def _pr_head_branch(pr_number: int) -> str | None:
+    """Read a PR head branch without making the gate depend on GitHub success."""
+    try:
+        result = subprocess.run(
+            ["gh", "pr", "view", str(int(pr_number)), "--json", "headRefName", "--jq", ".headRefName"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except (OSError, ValueError):
+        return None
+    if result.returncode != 0:
+        return None
+    branch = (result.stdout or "").strip()
+    return branch or None
+
+
+def _implementation_job_from_branch(conn, pr_number: int) -> str | None:
+    """Resolve dispatch provenance encoded by a PR head branch.
+
+    Dispatch worktrees use ``dispatch/<harness>/job-<id>`` branches.  Require
+    both the encoded harness and an existing daemon_jobs row so this fallback
+    cannot turn an arbitrary branch name into implementation provenance.
+    """
+    branch = _pr_head_branch(pr_number)
+    if not branch:
+        return None
+    match = re.fullmatch(r"dispatch/([^/]+)/((?:job-)[^/]+)", branch)
+    if not match:
+        return None
+    harness, job_id = match.groups()
+    row = conn.execute(
+        """SELECT job_id FROM daemon_jobs
+             WHERE job_id=? AND lower(COALESCE(NULLIF(harness, ''), agent, ''))=?
+             LIMIT 1""",
+        (job_id, harness.lower()),
+    ).fetchone()
+    return row[0] if row else None
+
+
+def _emit_missing_provenance_hint(pr_number: int) -> None:
+    """Nudge interactive callers to record the cost/job link before retrying."""
+    print(
+        "Hint: interactive sessions should record provenance with "
+        "synlynk cost log --story <story-id> --job-id <job-id> before re-running "
+        f"pr check for PR #{pr_number}.",
+        file=sys.stderr,
+    )
 
 
 def _pr_closing_issue_numbers(pr_number: int) -> list[int]:
@@ -169,6 +232,8 @@ def _cross_harness_review_verdict(conn, pr_number: int) -> tuple[bool, str]:
     implementation_job_id = implementation[0] if implementation else None
     if not implementation_job_id:
         implementation_job_id, _ = _implementation_job_from_linked_issues(conn, pr_number)
+    if not implementation_job_id:
+        implementation_job_id = _implementation_job_from_branch(conn, pr_number)
 
     review = conn.execute(
         """SELECT ce.job_id
@@ -187,6 +252,7 @@ def _cross_harness_review_verdict(conn, pr_number: int) -> tuple[bool, str]:
     ).fetchone()
 
     if not implementation_job_id:
+        _emit_missing_provenance_hint(pr_number)
         return False, f"no implementing job provenance found for PR #{pr_number}"
     if not review:
         return False, f"no reviewing job provenance found for PR #{pr_number}"
@@ -1141,11 +1207,6 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
                 conn.execute("ALTER TABLE cost_entries ADD COLUMN session_id TEXT")
             except sqlite3.OperationalError:
                 pass
-        if "turn_usage_json" not in cost_cols:
-            try:
-                conn.execute("ALTER TABLE cost_entries ADD COLUMN turn_usage_json TEXT")
-            except sqlite3.OperationalError:
-                pass
         conn.execute("DROP VIEW IF EXISTS capability_scores")
         conn.executescript(_DB_SCORES_VIEW)
         conn.executescript("""
@@ -1859,6 +1920,16 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
     else:
         _migrate_governs_tenancy(conn)
         _normalize_org_domain_drift(conn)
+        conn.commit()
+
+    # Keep this repair outside the schema-version gate.  A database can have
+    # already reached the current version while a prior migration stopped
+    # before adding this column (or while the schema was bootstrapped by an
+    # older build).  In that state, the version-gated migration above is a
+    # no-op and _get_db() must still repair the missing column.
+    cost_cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}
+    if "turn_usage_json" not in cost_cols:
+        conn.execute("ALTER TABLE cost_entries ADD COLUMN turn_usage_json TEXT")
         conn.commit()
 
     _migrate_onboarding_sessions(conn)
@@ -4011,6 +4082,7 @@ def cmd_cost_log(
     tokens_in: int,
     tokens_out: int,
     story_id: str = None,
+    job_id: str = None,
     note: str = None,
 ) -> None:
     """Log a manually reported cost row for native/unwrapped sessions."""
@@ -4060,6 +4132,7 @@ def cmd_cost_log(
         api_equivalent_usd=payment_value.api_equivalent_usd,
         actual_usd=payment_value.actual_usd,
         payment_mode=payment_value.mode,
+        job_id=job_id,
     )
     _generate_costs_md()
     if _is_migrated():

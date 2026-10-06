@@ -1437,7 +1437,8 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     cost_log_parser.add_argument("--harness", "--agent", required=True, dest="harness")
     cost_log_parser.add_argument("--tokens-in", type=int, required=True, dest="tokens_in")
     cost_log_parser.add_argument("--tokens-out", type=int, required=True, dest="tokens_out")
-    cost_log_parser.add_argument("--story-id", default=None, dest="story_id")
+    cost_log_parser.add_argument("--story-id", "--story", default=None, dest="story_id")
+    cost_log_parser.add_argument("--job-id", default=None, dest="job_id")
     cost_log_parser.add_argument("--note", default=None)
     cost_true_up_parser = cost_sub.add_parser("true-up", help="Reconcile subscription costs for a month")
     cost_true_up_parser.add_argument("--month", default=None, help="Billing month in YYYY-MM format")
@@ -2603,6 +2604,7 @@ def main(argv=None) -> None:
                 args.tokens_in,
                 args.tokens_out,
                 story_id=args.story_id,
+                job_id=args.job_id,
                 note=args.note,
             )
         elif args.cost_action == "true-up":
