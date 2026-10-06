@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #2054 — Cross-Harness Review Provenance Survives a Missing Cost Row | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-2">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Oct 06, 2026</span>
+        
+          <span class="blog-post-pr">PR #2054</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #2054 — Cross-Harness Review Provenance Survives a Missing Cost Row</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>PR #2054 — Cross-Harness Review Provenance Survives a Missing Cost Row</h1>
+<h2>The goalpost we inherited</h2>
+<p>The previous reliability work made <code>synlynk pr check</code> enforce cross-harness and
+cross-model review using measured dispatch provenance. That gate should remain
+fail-closed: a reviewer must not be allowed to merge when the implementing
+identity is unknown.</p>
+<h2>The problem this PR addresses</h2>
+<p>A successful dispatch can still lose its <code>cost_entries</code> row when job status
+tracking records a false negative. In that case, the gate had no way to connect
+a real implementation PR back to its daemon job, even though dispatch branch
+names already carry the job identity.</p>
+<h2>What shipped</h2>
+<ul>
+<li><code>synlynk/db.py</code> now falls back, after the existing capability-rating and
+linked-story lookups, to a PR head branch shaped like
+<code>dispatch/&lt;harness&gt;/job-&lt;id&gt;</code>.</li>
+<li>The fallback requires a matching <code>daemon_jobs</code> row and uses its harness and
+resolved/requested model. Existing cost-ledger evidence remains preferred.</li>
+<li><code>synlynk cost log</code> accepts the concise <code>--story</code> spelling and <code>--job-id</code>, so
+interactive sessions can record the missing link.</li>
+<li>A missing-provenance check emits a one-line stderr reminder while preserving
+the hard failure.</li>
+</ul>
+<h2>Verification</h2>
+<p>The focused suite passes: <code>tests/test_agent_cli.py</code> reports 147 passed and 1
+skipped; the cost/database regression set reports 161 passed. New tests cover
+branch-based recovery, fail-closed behavior without a daemon row, and the
+existing cost-entry path.</p>
+<h2>New goalpost</h2>
+<p>Review provenance is now resilient to a missing cost ledger row without turning
+an unresolvable PR into an approved one. The next reliability step is to keep
+job status and cost capture aligned at the source so the fallback remains a
+rare recovery path.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
