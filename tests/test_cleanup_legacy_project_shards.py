@@ -73,3 +73,28 @@ def test_dry_run_reports_counts_and_leaves_files_untouched(tmp_path, capsys):
     assert "old1" in report_text
     assert "old2" in report_text
     assert "recent" in report_text
+
+
+# tests/test_cleanup_legacy_project_shards.py (append)
+def test_execute_deletes_only_shards_older_than_cutoff(tmp_path):
+    from scripts.cleanup_legacy_project_shards import run_cleanup
+
+    projects_root = tmp_path / "projects"
+    (projects_root / "old1").mkdir(parents=True)
+    (projects_root / "recent").mkdir(parents=True)
+    old_path = projects_root / "old1" / "state.db"
+    recent_path = projects_root / "recent" / "state.db"
+    _touch_with_mtime(old_path, time.mktime(date(2026, 8, 1).timetuple()))
+    _touch_with_mtime(recent_path, time.mktime(date(2026, 9, 20).timetuple()))
+
+    report_path = tmp_path / "report.txt"
+    result = run_cleanup(
+        projects_root=projects_root,
+        cutoff=date(2026, 9, 16),
+        execute=True,
+        report_path=report_path,
+    )
+
+    assert result.deleted_count == 1
+    assert not old_path.exists()
+    assert recent_path.exists()
