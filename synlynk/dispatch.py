@@ -133,6 +133,54 @@ def _read_local_threshold(config_path=".synlynk/config.json") -> float:
         return 0.5
 
 
+# Last auto-routing fallback, consumed by the CLI when it records the job.
+# Overwritten on the next fallback. Never changes the harness that was chosen.
+_pending_routing_fallback: Optional[dict] = None
+
+
+def _log_routing_fallback(message: str, *, requested: str, actual: str) -> None:
+    """Record a routing fallback in sentinel.md and for the upcoming job row.
+
+    Stdout already prints ``message``. This only adds the durable copy.
+    A sentinel write failure must not change the harness that was chosen.
+    """
+    global _pending_routing_fallback
+    _pending_routing_fallback = {
+        "requested_harness": requested,
+        "actual_harness": actual,
+        "fallback_reason": message,
+    }
+    try:
+        write_alert = _pkg("_write_sentinel_alert", _write_sentinel_alert)
+        write_alert(
+            "WARN",
+            "DISPATCH_ROUTING_FALLBACK",
+            (
+                f"{message} (requested_harness={requested}, "
+                f"actual_harness={actual})"
+            ),
+            os.path.join(".synlynk", "sentinel.md"),
+        )
+    except Exception:
+        return
+
+
+def take_routing_fallback(actual_harness: Optional[str] = None) -> Optional[dict]:
+    """Return and clear the pending fallback when it matches ``actual_harness``.
+
+    Pass ``actual_harness=None`` to discard a decision that will not be
+    stored on a job (dry-run). A mismatch leaves the decision in place.
+    """
+    global _pending_routing_fallback
+    pending = _pending_routing_fallback
+    if pending is None:
+        return None
+    if actual_harness is not None and pending.get("actual_harness") != actual_harness:
+        return None
+    _pending_routing_fallback = None
+    return pending
+
+
 def _resolve_dispatch_agent(
     requested_agent,
     task_type: str,
@@ -146,17 +194,21 @@ def _resolve_dispatch_agent(
     fallback = _read_local_fallback(config_path)
     threshold = _read_local_threshold(config_path)
     if not _preflight_local_silent():
-        print(f"Routing to: {fallback} (local oMLX unreachable)")
+        message = f"Routing to: {fallback} (local oMLX unreachable)"
+        print(message)
+        _log_routing_fallback(message, requested="local", actual=fallback)
         return fallback
 
     score = _get_local_capability_score(task_type, db)
     if score >= threshold:
         print(f"Routing to: local (tier-0, capability score: {score:.2f})")
         return "local"
-    print(
+    message = (
         f"Routing to: {fallback} (local capability score {score:.2f} "
         f"< threshold {threshold:.2f})"
     )
+    print(message)
+    _log_routing_fallback(message, requested="local", actual=fallback)
     return fallback
 
 
