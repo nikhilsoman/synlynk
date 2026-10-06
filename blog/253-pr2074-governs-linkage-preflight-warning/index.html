@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #2074 — Dispatch names a missing GOVERNS link before #1990 can block on it | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-1">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Oct 06, 2026</span>
+        
+          <span class="blog-post-pr">PR #2074</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #2074 — Dispatch names a missing GOVERNS link before #1990 can block on it</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>PR #2074 — Dispatch names a missing GOVERNS link before #1990 can block on it</h1>
+<h2>The Broader Goal at the End of the Previous PR</h2>
+<p>v0.24.0 still needs a dispatch to move from implementation to a trusted review
+verdict on GitHub state alone. The completion oracle now reads the pull
+request the task actually named. The remaining velocity gap called out at the
+end of that work was the GOVERNS preflight: CLAUDE.md already describes a
+hard-fail (#1990) that dispatch does not enforce.</p>
+<h2>Strategic Shifts in This PR (if any)</h2>
+<p>No strategy change. #1990 stays the hard-fail. This PR only makes the gap
+visible, using option (a) from the 2026-10-06 velocity design, so in-flight
+epics are not blocked while that hard-fail is still unbuilt.</p>
+<h2>What This PR Shipped</h2>
+<ul>
+<li><code>dispatch_agent()</code> preflight checks whether <code>--story</code>, <code>--issue</code>, or <code>--pr</code>
+is resolvable. <code>--issue</code> still counts when it is auto-detected from <code>#N</code> in
+the task. <code>--pr</code> counts from an explicit number or from a pull request named
+in the task. An ad-hoc <code>story-adhoc-*</code> id created later does not count.</li>
+<li>When none of those is resolvable, preflight prints
+<code>GOVERNS linkage missing — dispatch proceeding, but this will hard-fail once #1990 ships</code>
+and writes the same line to <code>sentinel.md</code> as <code>GOVERNS_LINKAGE_MISSING</code>.
+The job still starts.</li>
+<li>A dispatch that already has a linked story keeps the previous path: no
+warning, and an explicit story with no goal still fail-closes (#2029).</li>
+<li>CLAUDE.md's #1990 notes (Hardened PR Review Policy and PR Review Discipline)
+now say this warning is live and distinct from the unbuilt hard-fail.</li>
+<li>Tests cover the warning plus a proceeding job, a linked story with no
+warning, and the unchanged unlinked-story hard-fail.</li>
+</ul>
+<p>Plan: <code>docs/superpowers/plans/2026-10-06-governs-velocity-unblock-plan.md</code> §4.
+Design: <code>docs/superpowers/specs/2026-10-06-governs-velocity-unblock-design.md</code> §3.4.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>None. This follows the committed design and plan.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>An operator can see, in the dispatch log and in <code>sentinel.md</code>, that a job
+left without a GOVERNS link. The fleet can keep moving while #1990 is still
+open, instead of rediscovering the documentation gap by running a dispatch
+and watching nothing happen.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>#1990's hard-fail is the next enforcement step for this check. Until it
+ships, a missing <code>--issue</code>/<code>--pr</code>/<code>--story</code> warns and proceeds. Cross-harness
+review still closes #2073.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

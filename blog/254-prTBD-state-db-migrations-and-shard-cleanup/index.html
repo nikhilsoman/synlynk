@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #2085 — gh:#1926: A Migrations Framework, and Burying 11,384 Dead Shards | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-2">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Oct 06, 2026</span>
+        
+          <span class="blog-post-pr">PR #2085</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #2085 — gh:#1926: A Migrations Framework, and Burying 11,384 Dead Shards</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>254: gh:#1926 — A Migrations Framework, and Burying 11,384 Dead Shards</h1>
+<p>PR: <a href="https://github.com/nikhilsoman/synlynk/pull/2085">#2085</a></p>
+<h2>Where we left off</h2>
+<p>gh:#1926 was filed as an architecture roadmap item: &quot;single workspace-owner DB, DAO + unit-of-work transactions, migrations; SQLite becomes canonical, Markdown becomes a verified generated export.&quot; It had been sitting blocked behind two other pieces of work — gh:#1921 (state+worktree GC) and gh:#1924 (dispatch_agent/HarnessAdapter decomposition) — both of which closed earlier this cycle, unblocking it. Separately, gh:#1831 had already documented 11,384 dead <code>state.db</code> shards (6.1GB) sitting under <code>~/.synlynk/projects/&lt;cwd-hash&gt;/state.db</code>, left behind by a CWD-hash-keyed path bug that <code>product_store.py</code> had since fixed. #1926 was the natural place to also clean that up, since the Empirical Capability Assessment Policy (<code>CLAUDE.md</code>, 2026-10-04) explicitly names this shard sprawl as the reason <code>capability_ratings</code>/<code>cost_entries</code> can't be aggregated reliably yet — this work directly unblocks gh:#1993 (capability report generation).</p>
+<h2>What moved the goalpost</h2>
+<p>The brainstorm for this PR found that most of #1926's original body was already done. <code>product_store.py</code> already resolves a single canonical, slug-keyed workspace DB path and already promotes legacy per-repo DBs into it via SQLite's online backup API. The Markdown generators in <code>db.py</code> were already read-from-SQLite, write-Markdown — not a second source of truth. A direct query against the live canonical DB confirmed <code>cost_entries</code> and <code>capability_ratings</code> were healthy and actively written. So the DAO/unit-of-work layer #1926 originally asked for had no second data source left to coordinate — adding one would have been pure YAGNI.</p>
+<p>That re-scoping narrowed this PR to the two pieces that were genuinely still missing: a real migrations framework (replacing <code>db.py</code>'s monolithic <code>_migrate_db</code>), and the one-off cleanup script for #1831's shard debris. Both pieces were independent — they touch disjoint files with no shared dependency — so this was dispatched as two parallel components rather than one sequential implementation, per the standing instruction to use <code>superpowers:subagent-driven-development</code> routed through real dispatch rather than generic subagents.</p>
+<h2>What this PR shipped</h2>
+<p><strong>Component 1 (dispatched to Codex, <code>job-0c49e1eb</code>, refactor/cli-plumbing lane):</strong> a new <code>synlynk/migrations/</code> package. <code>Migration</code> is a frozen dataclass (<code>version: int, name: str, up: Callable[[sqlite3.Connection], None]</code>). Each migration is its own module (<code>m0001_initial.py</code>, <code>m0002_...</code>), exporting a module-level <code>MIGRATION = Migration(...)</code>. <code>migrations/runner.py</code>'s <code>run_pending_migrations(conn)</code> reads <code>PRAGMA user_version</code>, walks a static explicitly-imported registry in ascending version order, runs each pending migration in its own transaction, and records it in a new audit-only <code>migration_history</code> table (<code>version, name, applied_at</code>) — <code>PRAGMA user_version</code> stays the control-flow source of truth; the audit table just answers &quot;when did column X get added&quot; without <code>git blame</code> archaeology. <code>db.py</code>'s old <code>_migrate_db(conn)</code> (previously 877-980, one monolithic function) became <code>_run_legacy_migration_and_repairs</code> plus a thin wrapper calling <code>run_pending_migrations</code> — a pure decomposition, no SQL content changed, same call site. The unlock: each migration step is now independently testable at <code>user_version = N-1</code>, instead of requiring the full chain from version 0.</p>
+<p><strong>Component 2 (dispatched to Grok, <code>job-988e9a2e</code>, infra-scaffold lane):</strong> <code>scripts/cleanup_legacy_project_shards.py</code>, a one-off (not a <code>synlynk</code> subcommand) remediation script for the #1831 shards. It globs <code>~/.synlynk/projects/*/state.db</code>, checks each file's <code>mtime</code> against a default cutoff of 2026-09-16 (one day after #1831's confirmed-inert date), and defaults to dry-run: print a summary, write the candidate-for-deletion list to a report file, touch nothing. <code>--execute</code> is required to actually delete, and even then only shards that passed the mtime safety check — anything newer is excluded and reported separately, regardless of <code>--execute</code>. No archival step was needed here, unlike the standing archive-before-branch-removal policy for unmerged work — these are three-week-dead cache shards, confirmed inert by #1831 itself, not in-progress work.</p>
+<p>Both components shipped with tests seeded against their own isolated fixtures (in-memory SQLite at <code>version - 1</code> for migrations; a temp directory of fake shard files at varying mtimes for cleanup) — 66 tests passing combined after merge, with no regressions against the existing migration/onboarding test suites.</p>
+<p>One notable snag during review, not in the code: both dispatched jobs surfaced as <code>FAILED (exit 1)</code> in <code>synlynk jobs</code>, despite each agent's own turn ending cleanly (<code>stopReason: end_turn</code>) and all tests passing. Direct queries against <code>state.db</code>'s <code>daemon_jobs</code>, <code>job_terminal_decision</code>, and <code>job_status_shadow</code> tables traced this to a pre-existing, unrelated bug: a post-task cost-logging step throwing <code>OperationalError: table cost_entries has no column named pr_number</code>, compounded by the newer job-truth reconciliation layer not yet knowing how to map the legacy <code>unpushed_branch</code> status (<code>reason_code: legacy_status_unmapped</code>). This is exactly the discipline the project's own memory already encodes — &quot;never trust <code>synlynk jobs</code> status alone&quot; — and it held up again here: both components' actual work was sound; the red status was a side effect of infrastructure plumbing in cost capture, not a defect in either implementation.</p>
+<h2>What's next on the capability-report track</h2>
+<p>With the migrations framework in place and the shard sprawl cleared, the remaining blocker on gh:#1993 (capability report generation) and the broader Empirical Capability Assessment Policy is no longer scattered state — it's building the actual <code>synlynk capability report</code> query surface over the now-consolidated <code>capability_ratings</code>/<code>cost_entries</code> tables. The cost-capture schema bug surfaced during this PR's review (<code>cost_entries</code> missing <code>pr_number</code>) is a separate, pre-existing issue worth tracking on its own, since it affects provenance backfill for every dispatched job, not just this one.</p>
+<p>🤖 Generated with <a href="https://claude.com/claude-code">Claude Code</a></p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
