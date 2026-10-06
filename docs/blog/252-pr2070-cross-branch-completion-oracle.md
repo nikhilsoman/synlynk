@@ -1,9 +1,9 @@
 ---
-title: "PR TBD — Completion oracle reads the PR the task actually named"
+title: "PR #2070 — Completion oracle reads the PR the task actually named"
 date: 2026-10-06
 series: "Building the OS for Multi-Agent Development"
 post: 252
-pr: "TBD"
+pr: "#2070"
 status: open
 author: "synlynk team"
 version: "unreleased"
@@ -11,7 +11,7 @@ tags: [posts]
 type: pr
 ---
 
-# PR TBD — Completion oracle reads the PR the task actually named
+# PR #2070 — Completion oracle reads the PR the task actually named
 
 ## The Broader Goal at the End of the Previous PR
 
