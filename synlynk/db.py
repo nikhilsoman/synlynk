@@ -11,6 +11,7 @@ import time
 from datetime import datetime, timezone
 
 from synlynk.hud import CYCLES
+from synlynk.migrations.runner import run_pending_migrations
 from synlynk.taxonomy_standards import _taxonomy_label
 from synlynk.merge_class import is_docs_only_change
 
@@ -874,8 +875,9 @@ def _migrate_governs_tenancy(conn: sqlite3.Connection) -> None:
     )
 
 
-def _migrate_db(conn: sqlite3.Connection) -> None:
-    """Idempotent schema migrations. Adds tables/views if absent."""
+def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
+    """Idempotent schema migrations for versions 1-15. Adds tables/views if
+    absent. Frozen in place — see synlynk/migrations/ for version 16+."""
     migration_version = conn.execute("PRAGMA user_version").fetchone()[0]
     if migration_version < _DB_MIGRATION_VERSION:
         _snapshot_before_migration(conn)
@@ -1966,6 +1968,13 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
 
     _migrate_onboarding_sessions(conn)
     conn.commit()
+
+
+def _migrate_db(conn: sqlite3.Connection) -> None:
+    """Thin entry point: legacy versions 1-15, then the versioned runner
+    for version 16+. See synlynk/migrations/runner.py."""
+    _run_legacy_migration_and_repairs(conn)
+    run_pending_migrations(conn)
 
 
 _VALID_COST_SOURCES = {
