@@ -1220,6 +1220,12 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
                 conn.execute("ALTER TABLE daemon_jobs ADD COLUMN cost_missing_reason TEXT")
             except sqlite3.OperationalError:
                 pass
+        for _routing_col in ("requested_harness", "actual_harness", "fallback_reason"):
+            if _routing_col not in daemon_job_cols:
+                try:
+                    conn.execute(f"ALTER TABLE daemon_jobs ADD COLUMN {_routing_col} TEXT")
+                except sqlite3.OperationalError:
+                    pass
         try:
             conn.execute("UPDATE daemon_jobs SET harness = agent WHERE (harness IS NULL OR harness = '') AND agent IS NOT NULL")
         except sqlite3.OperationalError:

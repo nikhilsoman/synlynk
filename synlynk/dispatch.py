@@ -3306,11 +3306,14 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                    db_conn=None,
                    _startup_failover: bool = True,
                    skip_permissions: bool = False,
-                   container_image: str | None = None) -> dict:
+                   container_image: str | None = None,
+                   routing_fallback: Optional[dict] = None) -> dict:
     if not task or not task.strip():
         raise ValueError(
             "--task is empty or whitespace-only; refusing to dispatch (see #720)"
         )
+    if routing_fallback is None:
+        routing_fallback = take_routing_fallback(agent)
     if task_type:
         try:
             authority = check_authority(
@@ -4195,6 +4198,10 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             if local_slot_claimed:
                 dconn.rollback()
             print(f"  ↪ startup failure on '{agent}' (exit {startup_exit}); failing over to '{secondary}'")
+            failover_route = None
+            if routing_fallback:
+                failover_route = dict(routing_fallback)
+                failover_route["actual_harness"] = secondary
             return dispatch_agent(
                 secondary, task, story_id=story_id, agent_id=agent_id,
                 force_agent=force_agent, context_mode=context_mode, cycle=cycle,
@@ -4207,6 +4214,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 db_conn=db_conn, _startup_failover=False,
                 container_image=container_image,
                 skip_permissions=skip_permissions,
+                routing_fallback=failover_route,
             )
 
     job = {
@@ -4259,6 +4267,10 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         "charter_role": resolved_agent_role or "",
         "charter_revision": _pkg("resolve_role_charter")(role=resolved_agent_role)[2] if (_pkg("resolve_role_charter") and resolved_agent_role) else None,
     }
+    if routing_fallback:
+        job["requested_harness"] = routing_fallback.get("requested_harness")
+        job["actual_harness"] = agent
+        job["fallback_reason"] = routing_fallback.get("fallback_reason")
 
     load_jobs = _pkg("_load_jobs")
     save_jobs = _pkg("_save_jobs")
@@ -4301,6 +4313,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 "impact_score": "INTEGER DEFAULT 0",
                 "requested_model": "TEXT",
                 "resolved_model": "TEXT",
+                "requested_harness": "TEXT",
+                "actual_harness": "TEXT",
+                "fallback_reason": "TEXT",
             })
             _ensure_daemon_job_columns(dconn, {
                 "worktree_path": "TEXT",
@@ -4324,7 +4339,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                     "gh_write_target=COALESCE(?, gh_write_target), "
                     "cross_branch_pr=COALESCE(?, cross_branch_pr), "
                     "gh_write_author=COALESCE(gh_write_author, ?), "
-                    "gh_write_expect=COALESCE(gh_write_expect, ?) WHERE job_id=?",
+                    "gh_write_expect=COALESCE(gh_write_expect, ?), "
+                    "requested_harness=?, actual_harness=?, fallback_reason=? "
+                    "WHERE job_id=?",
                     (
                         proc.pid,
                         job["started_at"],
@@ -4350,6 +4367,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                         cross_branch_pr_value,
                         gh_write_author_value,
                         gh_write_expect_for_job,
+                        job.get("requested_harness"),
+                        job.get("actual_harness"),
+                        job.get("fallback_reason"),
                         job_id,
                     ),
                 )
@@ -4360,8 +4380,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                     "(job_id, agent, harness, role, task, story_id, status, priority, depends_on, pid, pid_identity, "
                     "enqueued_at, started_at, log_path, worktree_path, worktree_branch, dispatch_context, context_mode, context_bytes, session_id, "
                     "agent_id, requires_gh_write, gh_write_target, gh_write_author, gh_write_expect, "
-                    "model_tier, impact_score, requested_model, resolved_model) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "model_tier, impact_score, requested_model, resolved_model, "
+                    "requested_harness, actual_harness, fallback_reason) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         job_id,
                         agent,
@@ -4392,6 +4413,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                         model_routing["impact_score"],
                         model_routing["requested_model"],
                         model_routing["resolved_model"],
+                        job.get("requested_harness"),
+                        job.get("actual_harness"),
+                        job.get("fallback_reason"),
                     ),
                 )
                 if cross_branch_pr_value:
