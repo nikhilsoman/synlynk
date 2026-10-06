@@ -1248,16 +1248,20 @@ def test_cmd_cost_log_writes_estimated_manual_row(project_dir, monkeypatch):
     monkeypatch.setattr(synlynk, "DB_PATH", os.path.join(project_dir, "state.db"))
     monkeypatch.setattr(synlynk, "_is_migrated", lambda: True)
     monkeypatch.setattr(synlynk, "get_username", lambda: "nikhil")
-    cmd_cost_log(agent="claude", tokens_in=2000, tokens_out=800, story_id=None, note="brainstorm session")
+    cmd_cost_log(
+        agent="claude", tokens_in=2000, tokens_out=800, story_id=None,
+        pr=2051, note="brainstorm session",
+    )
     conn = synlynk._get_db()
     row = conn.execute(
-        "SELECT cost_source, estimate_basis, input_tokens, output_tokens, phase_id, notes FROM cost_entries"
+        "SELECT cost_source, estimate_basis, input_tokens, output_tokens, phase_id, notes, pr_number FROM cost_entries"
     ).fetchone()
     conn.close()
     assert row[0] == "estimated_manual"
     assert row[1] == "cli_manual_entry"
     assert (row[2], row[3]) == (2000, 800)
     assert row[5] == "brainstorm session"
+    assert row[6] == 2051
 
 
 def test_cmd_cost_log_populates_payment_columns(project_dir, monkeypatch):

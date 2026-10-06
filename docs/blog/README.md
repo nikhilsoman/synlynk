@@ -1,5 +1,7 @@
 # synlynk Blog Series: Building the OS for Multi-Agent Development
 
+| [251](./251-pr2051-native-session-provenance.md) | PR #TBD — Native Sessions Can Prove Cross-Harness Review Provenance | TBD | 2026-10-06 |
+
 | [250](./250-pr2051-cross-harness-provenance-recovery.md) | PR #TBD — Cross-Harness Review Provenance Survives a Missing Cost Row | TBD | 2026-10-06 |
 | [249](./249-pr2036-live13-action3.md) | LIVE-13 — Recording the Grok capability retest accurately | [#2036](https://github.com/nikhilsoman/synlynk/pull/2036) | 2026-10-05 |
 | [248](./248-pr2013-containerized-dispatch.md) | gh:#1925 Part 2 — An opt-in container for an untrusted harness | [#2013](https://github.com/nikhilsoman/synlynk/pull/2013) | 2026-10-04 |

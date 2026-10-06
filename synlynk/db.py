@@ -141,11 +141,27 @@ def _implementation_job_from_branch(conn, pr_number: int) -> str | None:
     return row[0] if row else None
 
 
+def _implementation_identity_from_native_cost_entry(
+    conn, pr_number: int
+) -> tuple[str | None, str | None]:
+    """Resolve implementation identity recorded by a native session."""
+    row = conn.execute(
+        """SELECT COALESCE(NULLIF(harness, ''), NULLIF(agent, '')),
+                         NULLIF(model, '')
+             FROM cost_entries
+            WHERE pr_number=?
+              AND job_id IS NULL
+            ORDER BY id DESC LIMIT 1""",
+        (pr_number,),
+    ).fetchone()
+    return (row[0], row[1]) if row else (None, None)
+
+
 def _emit_missing_provenance_hint(pr_number: int) -> None:
     """Nudge interactive callers to record the cost/job link before retrying."""
     print(
-        "Hint: interactive sessions should record provenance with "
-        "synlynk cost log --story <story-id> --job-id <job-id> before re-running "
+        "Hint: interactive/native sessions should record provenance with "
+        "synlynk cost log --pr <pr-number> --harness <harness> before re-running "
         f"pr check for PR #{pr_number}.",
         file=sys.stderr,
     )
@@ -235,6 +251,12 @@ def _cross_harness_review_verdict(conn, pr_number: int) -> tuple[bool, str]:
     if not implementation_job_id:
         implementation_job_id = _implementation_job_from_branch(conn, pr_number)
 
+    implementing_identity = (
+        _job_execution_identity(conn, implementation_job_id)
+        if implementation_job_id
+        else _implementation_identity_from_native_cost_entry(conn, pr_number)
+    )
+
     review = conn.execute(
         """SELECT ce.job_id
              FROM cost_entries ce
@@ -251,13 +273,12 @@ def _cross_harness_review_verdict(conn, pr_number: int) -> tuple[bool, str]:
         ),
     ).fetchone()
 
-    if not implementation_job_id:
+    if not implementation_job_id and not any(implementing_identity):
         _emit_missing_provenance_hint(pr_number)
         return False, f"no implementing job provenance found for PR #{pr_number}"
     if not review:
         return False, f"no reviewing job provenance found for PR #{pr_number}"
 
-    implementing_identity = _job_execution_identity(conn, implementation_job_id)
     reviewing_identity = _job_execution_identity(conn, review[0])
     if not all(implementing_identity + reviewing_identity):
         return False, (
@@ -1483,7 +1504,8 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
                 dispatch_context  TEXT,
                 context_mode      TEXT,
                 turn_usage_json   TEXT,
-                session_id        TEXT REFERENCES sessions(session_id)
+                session_id        TEXT REFERENCES sessions(session_id),
+                pr_number         INTEGER
             );
             CREATE TABLE IF NOT EXISTS remediation_actions (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1660,6 +1682,11 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
         if "dispatch_context" not in cost_cols:
             try:
                 conn.execute("ALTER TABLE cost_entries ADD COLUMN dispatch_context TEXT")
+            except sqlite3.OperationalError:
+                pass
+        if "pr_number" not in cost_cols:
+            try:
+                conn.execute("ALTER TABLE cost_entries ADD COLUMN pr_number INTEGER")
             except sqlite3.OperationalError:
                 pass
         if "context_mode" not in cost_cols:
@@ -1967,6 +1994,7 @@ def _insert_cost_row(
     dispatch_context: str = None,
     context_mode: str = None,
     session_id: str = None,
+    pr_number: int = None,
     harness: str = None,
     agent_role: str = None,
     decision_revision: int = None,
@@ -2063,7 +2091,8 @@ def _insert_cost_row(
                         phase_id=?,
                         dispatch_context=COALESCE(?, dispatch_context),
                         context_mode=COALESCE(?, context_mode),
-                        session_id=COALESCE(?, session_id)
+                        session_id=COALESCE(?, session_id),
+                        pr_number=COALESCE(?, pr_number)
                         ,decision_revision=COALESCE(?, decision_revision)
                         ,turn_usage_json=COALESCE(?, turn_usage_json)
                     WHERE job_id=?""",
@@ -2089,6 +2118,7 @@ def _insert_cost_row(
                         dispatch_context,
                         context_mode,
                         session_id,
+                        pr_number,
                         decision_revision,
                         json.dumps(turn_breakdown, separators=(",", ":")) if turn_breakdown else None,
                         job_id,
@@ -2099,8 +2129,8 @@ def _insert_cost_row(
         conn.execute(
             """INSERT INTO cost_entries
                 (session_date, agent, harness, agent_role, model, input_tokens, output_tokens, cache_read_tokens,
-                 cost_source, estimate_basis, total_cost_usd, api_equivalent_usd, actual_usd, payment_mode, notes, story_id, epic_id, phase_id, job_id, dispatch_context, context_mode, session_id, decision_revision, turn_usage_json)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                 cost_source, estimate_basis, total_cost_usd, api_equivalent_usd, actual_usd, payment_mode, notes, story_id, epic_id, phase_id, job_id, dispatch_context, context_mode, session_id, pr_number, decision_revision, turn_usage_json)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 session_date,
                 agent_val,
@@ -2124,6 +2154,7 @@ def _insert_cost_row(
                 dispatch_context,
                 context_mode,
                 session_id,
+                pr_number,
                 decision_revision,
                 json.dumps(turn_breakdown, separators=(",", ":")) if turn_breakdown else None,
             ),
@@ -4083,6 +4114,7 @@ def cmd_cost_log(
     tokens_out: int,
     story_id: str = None,
     job_id: str = None,
+    pr: int = None,
     note: str = None,
 ) -> None:
     """Log a manually reported cost row for native/unwrapped sessions."""
@@ -4133,6 +4165,7 @@ def cmd_cost_log(
         actual_usd=payment_value.actual_usd,
         payment_mode=payment_value.mode,
         job_id=job_id,
+        pr_number=pr,
     )
     _generate_costs_md()
     if _is_migrated():
