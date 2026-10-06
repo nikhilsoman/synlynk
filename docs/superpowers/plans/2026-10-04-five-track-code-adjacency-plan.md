@@ -43,6 +43,17 @@ via `synlynk dispatch`.
 
 **Sequencing:** #1963/#1990 (scope + gate enforcement) should land before further dispatch-heavy tracks run unattended, since they harden the thing every other track's dispatches depend on.
 
+### Fold-in: 2026-10-06 three-lens decide-panel decision
+
+Per `project-docs/decisions/2026-10-06-review-docs-reviews-2026-10-05-three-len.md` (panel: claude/codex/grok, synthesized decision), two new Track 1 items converged on by all three panelists reviewing `docs/reviews/2026-10-05-three-lens-strategic-review.md`:
+
+| # | Title | Status | Notes |
+|---|---|---|---|
+| TBD | Adapter conformance test suite + retire `LegacyAdapter` dual dispatch path | **NOT YET FILED** | All 3 panelists ranked this #1. Verify SHA-256 receipts, cost attribution, timeout handling across `synlynk/harness_adapters/*.py`; `LegacyAdapter` is a second, unconformance-tested dispatch route — same class of drift that produced the turn_usage_json cost-entries bug (#2037/#2055). Issue creation blocked this session by the auto-mode write classifier — file via `synlynk gh --role pm -- issue create` once unblocked. |
+| TBD | `_preflight_local_silent()` should fail closed | **NOT YET FILED** | Grok's concrete find: currently swallows a missing MLX/OrbStack setup silently instead of surfacing it. Dispatch.py-adjacent. Same filing blocker as above. |
+
+The panel treated P0-3/P1-3 (host-auth audit log, GOVERNS hard-fail) as **already resolved** — #1990/#1991/#1992 closed via PRs #2046/#2047/#2050 (2026-10-05/06) — not re-filed.
+
 ---
 
 ## Track 2 — CLI Surface & Taxonomy (gh:#1986)
@@ -63,6 +74,34 @@ via `synlynk dispatch`.
 
 **Sequencing (per epic, unchanged):** #1973 → #1974 → {#1975, #1977}.
 
+### Fold-in: 2026-10-06 three-lens decide-panel decision
+
+| # | Title | Status | Notes |
+|---|---|---|---|
+| TBD | Schema validation of `.synlynk/config.json`/`policy.json` in `synlynk doctor` | **NOT YET FILED** | All 3 panelists raised some version of this; Grok's framing adopted — `doctor` currently only checks file existence, not schema/shape. Filing blocked this session, same as Track 1 items above. |
+
+### Fold-in: pipx/release-docs freshness mechanism (Nikhil, 2026-10-06)
+
+Nikhil flagged that the pipx-installed CLI (`~/.local/bin/synlynk`) silently goes stale against in-development worktree code, and asked for a mechanism ensuring workspace agents (marketing role) keep release-adjacent docs fresh as a standing responsibility, not a one-off fix.
+
+**Proposed approach:** extend `synlynk doctor` with a `pipx_freshness` check (compare installed package version/commit against `origin/main`'s latest tag + `pyproject.toml` version; warn if stale, similar to the existing `HARNESS_VERSION_DRIFT` sentinel pattern from v0.9.9). Pair with a Named Release Policy addition (already a global rule — see CLAUDE.md "Named Release README Sync") requiring the **marketing** role to run a docs-freshness pass (README install instructions, CHANGELOG, blog index) as a mandatory step of every `synlynk release`, not just on request.
+
+| # | Title | Status | Notes |
+|---|---|---|---|
+| TBD | `synlynk doctor` pipx/version-freshness check | **NOT YET FILED** | New Track 2 item. |
+| TBD | Marketing-role docs-freshness pass as mandatory `synlynk release` step | **NOT YET FILED** | New Track 2 item; formalizes existing ad hoc practice. |
+
+### Fold-in: auto-upgrade-on-release mechanism (Nikhil, 2026-10-06)
+
+Nikhil asked whether downstream `synlynk` users get auto-upgraded on every Named Release — currently they do not; there is no push mechanism, only `synlynk upgrade` run manually.
+
+**Proposed approach:** on `synlynk exec`/`synlynk status` startup, check installed version against the latest GitHub Release tag (cached, low-frequency check — e.g. once per 24h, not per-invocation) and surface a non-blocking "upgrade available" notice (reusing the `HARNESS_VERSION_DRIFT`-style sentinel UX), with an explicit opt-in `--auto-upgrade` daemon setting for users who want it fully automatic. Default stays notify-only — auto-upgrading a CLI that drives autonomous dispatch without consent is a real blast-radius risk (a bad release could break an unattended fleet mid-run).
+
+| # | Title | Status | Notes |
+|---|---|---|---|
+| TBD | Upgrade-available notice on startup (version-check against latest Release tag) | **NOT YET FILED** | New Track 2 item, notify-only default. |
+| TBD | Opt-in `--auto-upgrade` daemon setting | **NOT YET FILED** | New Track 2 item, deferred until notify-only path is validated. |
+
 ---
 
 ## Track 3 — Data/Display Layer (gh:#1987)
@@ -81,7 +120,19 @@ via `synlynk dispatch`.
 | #1937 | Cost-inflation record ($133/44M tokens) | OPEN | Same family as #1969. |
 | #1951 | Cost audit redesign | OPEN | Has a stale worktree `feat/codex/cost-audit-1951` already flagged NEEDS-REVIEW from earlier worktree-hygiene pass — check before re-dispatching, may already have partial work. |
 
-**Note:** #1995/#1999/#1917/#1915 all look like the same underlying "write-through regen destroys concurrent/main-only state" bug class hitting different files (`project-docs/costs.md`, `memory.md`, archive rotation). Recommend one root-cause investigation issue before four separate fixes.
+**Note:** #1995/#1999/#1917/#1915 all look like the same underlying "write-through regen destroys concurrent/main-only state" bug class hitting different files (`project-docs/costs.md`, `memory.md`, archive rotation). Recommend one root-cause investigation issue before four separate fixes. Root-cause issue already filed: #2023.
+
+### Recurring autonomous-flow friction (Nikhil, 2026-10-06) — assessed, mostly already tracked here
+
+Nikhil flagged three recurring pain points hurting the autonomous flow and asked whether a new investigation ticket is needed. Assessment: **no new umbrella ticket** — each has real, specific open issues already in this plan or elsewhere; the gap is sequencing/priority, not missing tracking:
+
+1. **Cost entries dropped** → #2037 (turn_usage_json missing column, root-caused and fixed this session via #2055/PR #2054), #2051 (cross-harness gate hard-fails on a missing cost_entries row — the forcing-function that turns a dropped entry into a blocked merge), #481 and #1915/#1995/#1917/#1999/#2023 (the write-through regen family above), #510 (cost formula divergence).
+2. **Forced manual merge/approve** → directly caused by #2051 above (false "no provenance" blocks) plus the broader self-approval/chicken-and-egg pattern (memory: `chicken-and-egg-dispatch-review-selfapproval.md`, LIVE-14/PR #1747) and #1991 (cross-harness review enforcement, Track 1, already open).
+3. **Classifier not permitting certain actions** → hit live in this session: the auto-mode write classifier blocked `gh issue create` for this very roadmap update (External System Writes). No existing issue tracks *classifier scope being miscalibrated for already-authorized PM/role actions* specifically — #781 and #2056 cover classifier/verification *false positives* in dispatched jobs, not this interactive-session case. **This is the one genuinely new gap** — recommend filing it as a Track 1 item once filing is unblocked (see table below).
+
+| # | Title | Status | Notes |
+|---|---|---|---|
+| TBD | Auto-mode classifier blocks role-scoped GH writes already authorized via `.synlynk/github_apps` + explicit user go-ahead | **NOT YET FILED** | New Track 1 item. Concrete repro from this session: `synlynk gh --role pm -- issue create` denied by classifier even though the role-token path exists specifically to make this safe. Filing itself blocked by the same classifier — file from a context where the classifier allows it, or have Nikhil file directly. |
 
 ---
 
@@ -94,7 +145,13 @@ via `synlynk dispatch`.
 | #1978 | Positioning sentence everywhere | OPEN | |
 | #1979 | Verify job outcomes as user-visible evidence (narrowed) | OPEN | |
 
-No new fold-ins from the past 48h — nothing content/positioning-related surfaced. Can run fully parallel to all other tracks per epic.
+### Fold-in: 2026-10-06 three-lens decide-panel decision
+
+| # | Title | Status | Notes |
+|---|---|---|---|
+| TBD | Correct README/site "live capability ledger / best harness" language | **NOT YET FILED** | Grok's addition, all panelists converged on keeping it. The one external-facing claim that contradicts `policy.json`'s `capability_policy.mode=empirical`/`suspended_since: 2026-10-04`. Highest-leverage, lowest-cost item in the whole three-lens review per the panel synthesis — do this before #1993 clears its 5-sample bar, not after. Filing blocked this session, same as above. |
+
+No other new fold-ins from the past 48h beyond the decide-panel item. Can run fully parallel to all other tracks per epic.
 
 ---
 
