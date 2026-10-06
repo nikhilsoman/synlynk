@@ -10,13 +10,15 @@ def test_migration_dataclass_has_expected_fields():
     assert m.up is up
 
 
-def test_run_pending_migrations_creates_history_table_when_registry_empty(tmp_path):
+def test_run_pending_migrations_creates_history_table_when_registry_empty(tmp_path, monkeypatch):
     import sqlite3
-    from synlynk.migrations.runner import run_pending_migrations
+    from synlynk.migrations import runner
+
+    monkeypatch.setattr(runner, "MIGRATIONS", [])
 
     conn = sqlite3.connect(tmp_path / "state.db")
     conn.execute("PRAGMA user_version = 15")
-    run_pending_migrations(conn)
+    runner.run_pending_migrations(conn)
 
     row = conn.execute(
         "SELECT 1 FROM sqlite_master WHERE type='table' AND name='migration_history'"
@@ -66,4 +68,31 @@ def test_run_pending_migrations_applies_pending_migration_in_order(tmp_path, mon
     # Re-running is a no-op (retry-safety).
     runner.run_pending_migrations(conn)
     assert applied == [16, 17]
+    conn.close()
+
+
+def test_migration_0016_adds_cost_entries_pr_number_column(tmp_path):
+    import sqlite3
+    from synlynk.migrations.runner import run_pending_migrations
+
+    conn = sqlite3.connect(tmp_path / "state.db")
+    conn.execute(
+        """CREATE TABLE cost_entries (
+            id INTEGER PRIMARY KEY,
+            job_id TEXT
+        )"""
+    )
+    conn.execute("PRAGMA user_version = 15")
+    conn.commit()
+
+    run_pending_migrations(conn)
+
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}
+    assert "pr_number" in cols
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 16
+
+    # Re-running against an already-migrated db is a no-op, not a crash.
+    run_pending_migrations(conn)
+    cols_after = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}
+    assert cols_after == cols
     conn.close()
