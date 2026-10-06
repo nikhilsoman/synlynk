@@ -216,6 +216,23 @@ def test_format_status_terminal_shows_rates_never_updated_warning():
     assert "RATES   never updated ⚠ (hardcoded defaults)" in output
 
 
+def test_format_status_terminal_shows_host_auth_audit_summary():
+    from synlynk.status import _format_status_terminal
+
+    events = [{
+        "type": "gh_host_auth",
+        "recorded_at": "2026-10-06T01:02:03Z",
+        "actor": "operator",
+        "repo": "nikhilsoman/synlynk",
+    }]
+    output = _format_status_terminal(
+        [], {}, 1.0, "daily-grind", 0, host_auth_events=events
+    )
+
+    assert "GH HOST AUTH  1 call(s); latest 2026-10-06T01:02:03Z" in output
+    assert "by operator on nikhilsoman/synlynk" in output
+
+
 def test_format_status_json_valid():
     from synlynk.status import _format_status_terminal
 

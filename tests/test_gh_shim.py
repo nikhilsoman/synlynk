@@ -84,6 +84,7 @@ def test_shim_harness_with_token_execs_real_gh(tmp_path):
     result = _run_shim(tmp_path, env)
     assert result.returncode == 0
     assert result.stdout == "gh-ran:app-token"
+    assert not (tmp_path / ".synlynk" / "telemetry.json").exists()
 
 
 def test_shim_does_not_classify_ci_as_harness():
