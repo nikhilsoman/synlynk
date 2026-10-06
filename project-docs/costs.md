@@ -3,8 +3,6 @@
 
 | Date | Agent | Model | Tokens In | Tokens Out | Cost | Source | Story | Notes |
 |---|---|---|---|---|---|---|---|---|
-| 2026-09-24 14:23 | codex | o4-mini | 2155475 | 16720 | $6.7172 | estimated_token_rate | story-226eb31c | exec: codex job job-2716f7... |
-| 2026-09-24 23:33 | codex | o4-mini | 403726 | 4293 | $1.2756 | estimated_token_rate | story-issue-1766 | exec: codex job job-50d009... |
 | 2026-09-25 01:49 | codex | o4-mini | 927473 | 7409 | $2.8936 | estimated_token_rate | story-issue-1766 | exec: codex job job-fe708c... |
 | 2026-09-25 07:45 | codex | o4-mini | 5000 | 2000 | $0.0450 | estimated_tshirt | story-issue-1774 | exec: codex job job-ebc96b... |
 | 2026-09-25 07:57 | codex | o4-mini | 1832921 | 9720 | $5.6446 | estimated_token_rate | story-issue-1774 | exec: codex job job-127530... |
@@ -503,13 +501,15 @@
 | 2026-10-05 20:15 | codex | o4-mini | 1172403 | 6801 | $0.0564 [sub] (API: $3.6192) | estimated_token_rate | story-issue-2038 | exec: codex job job-701d05... |
 | 2026-10-05 20:15 | codex | o4-mini | 846242 | 10106 | $0.0409 [sub] (API: $2.6903) | estimated_token_rate | story-issue-2029 | exec: codex job job-17f7dc... |
 | 2026-10-06 07:30 | grok | grok-3 | 1 | 1 | $0.0000 [sub] (API: $0.0000) | estimated_manual | story-8ef76a8f | backfill: cost_entries row lost to pre-#2055 turn_usage_json migration bug (job-3975bbaf, review of PR #2054, verified APPROVE via gh pr view) |
+| 2026-10-06 07:42 | codex | o4-mini | 1 | 1 | $0.0000 [sub] (API: $0.0000) | estimated_manual | story-79319d05 | backfill: cost_entries row lost to pre-#2055 turn_usage_json migration bug (job-68060d20, implementation of PR #2053, fixes gh:#1992) |
+| 2026-10-06 07:44 | grok | grok-3 | 1 | 1 | $0.0000 [sub] (API: $0.0000) | estimated_manual | story-79319d05 | backfill: cost_entries row lost to pre-#2055 turn_usage_json migration bug (job-86ecdc1f, review of PR #2053, verified APPROVE via gh pr view) |
 
 ## Subscription Amortization & Dual-Ledger Summary
 
 | Harness | Base Fee | Actual Amortized Spend | API Equivalent Value | Net Savings |
 |---|---|---|---|---|
 | claude | $20.00 | $18.3916 | $25.7093 | $7.3177 |
-| codex | $20.00 | $13.6580 | $872.6853 | $859.0273 |
+| codex | $20.00 | $13.6580 | $872.6853 | $859.0274 |
 | agy | $20.00 | $0.8525 | $3.9092 | $3.0567 |
 | grok | $30.00 | $4.4299 | $3.2622 | $-1.1677 |
-| **Total** | **$90.00** | **$37.3319** | **$905.5660** | **$868.2340** |
+| **Total** | **$90.00** | **$37.3320** | **$905.5660** | **$868.2341** |
