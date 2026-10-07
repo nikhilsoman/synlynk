@@ -12,7 +12,7 @@
   <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/python-3.9%2B-blue" alt="Python"></a>
 </p>
 
-Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result. The Python CLI injects scoped project context into every dispatch, routes tasks to the best available harness using a live capability ledger, and tracks costs and hallucination loops. A shared `project-docs/` directory keeps every tool in sync: Claude Code, Codex, and AGY all read the same context, decisions, and progress.
+Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result. The Python CLI injects scoped project context into every dispatch, routes tasks to the best-measured harness once it clears a minimum sample size on that task type, falling back to a documented default allocation otherwise, and tracks costs and hallucination loops. A shared `project-docs/` directory keeps every tool in sync: Claude Code, Codex, and AGY all read the same context, decisions, and progress.
 
 **v0.25.0:** Frontier QA acceptance and multi-node soak testbed, cross-workspace Vizor background daemon, defensive worktree sandbox migration resilience, and concurrent schema state isolation, with 3833 tests collected.
 

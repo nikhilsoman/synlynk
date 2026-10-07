@@ -1,5 +1,10 @@
 # synlynk Blog Series: Building the OS for Multi-Agent Development
 
+| [257](./257-pr2083-dispatch-fallback-logging.md) | Routing fallbacks are written down, not only printed | [#2083](https://github.com/nikhilsoman/synlynk/pull/2083) | 2026-10-06 |
+| [256](./256-pr2080-config-schema-doctor.md) | Doctor checks config.json and policy.json without a JSON Schema library | [#2080](https://github.com/nikhilsoman/synlynk/pull/2080) | 2026-10-06 |
+| [255](./255-pr2082-empirical-routing-fallback.md) | Empirical routing promotes a harness only after five measured samples | [#2082](https://github.com/nikhilsoman/synlynk/pull/2082) | 2026-10-06 |
+| [254](./254-prTBD-state-db-migrations-and-shard-cleanup.md) | gh:#1926 — A migrations framework, and burying 11,384 dead shards | [#2085](https://github.com/nikhilsoman/synlynk/pull/2085) | 2026-10-06 |
+| [253](./253-pr2074-governs-linkage-preflight-warning.md) | Dispatch names a missing GOVERNS link before #1990 can block on it | [#2074](https://github.com/nikhilsoman/synlynk/pull/2074) | 2026-10-06 |
 | [252](./252-pr2070-cross-branch-completion-oracle.md) | Completion oracle reads the PR the task actually named | TBD | 2026-10-06 |
 | [251](./251-pr2051-native-session-provenance.md) | PR #TBD — Native Sessions Can Prove Cross-Harness Review Provenance | TBD | 2026-10-06 |
 
