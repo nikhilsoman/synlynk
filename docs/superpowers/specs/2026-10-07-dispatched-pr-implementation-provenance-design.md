@@ -31,6 +31,10 @@ cross-harness and cross-model comparison.
 
 - Resolve dispatched implementation provenance from a canonical cost entry
   that links a PR number to a real daemon job.
+- Classify implementation and review jobs using persisted, typed purpose and
+  role metadata, never by searching task prose for words or numbers.
+- Use exact PR/job identifiers for all joins; a PR number appearing in free
+  text must never establish a provenance link.
 - Keep harness and resolved-model identity sourced from the linked job record.
 - Fail closed when evidence is missing, ambiguous, incomplete, or conflicting.
 - Preserve the current resolution paths for capability ratings, closing issues,
@@ -39,8 +43,7 @@ cross-harness and cross-model comparison.
 
 ### Non-goals
 
-- Change reviewer provenance or add native reviewer recording; that remains
-  #2113.
+- Add native reviewer recording; that remains #2113.
 - Change #2062's conformance-suite scope or close its remaining
   strangler-path work.
 - Modify cost accounting, create duplicate cost entries, or hand-edit
@@ -50,11 +53,30 @@ cross-harness and cross-model comparison.
 
 ## 3. Proposed resolver behavior
 
-After the existing capability-rating, linked-issue, and branch lookups fail,
-query `cost_entries` for rows whose `pr_number` matches the PR and whose
-`job_id` is non-null. Join each candidate to `daemon_jobs`; exclude jobs whose
-task identifies them as review work. The cost row establishes the PR-to-job
-link, while `daemon_jobs` remains the source of the execution identity.
+Persist an explicit `purpose` (`implementation`, `review`, or `other`) and
+the existing dispatch `role` in `daemon_jobs`. Set purpose from the explicit
+`--task-type` using a fixed mapping derived from the configured task
+allocation: `review` maps to review, supported implementation task types map
+to implementation, and other task types map to other. Require an explicit
+task type for jobs that need PR provenance. Do not infer whether a job
+implements or reviews from its natural-language task.
+
+For a dispatched review job, use the existing structured `gh_write_target`
+and `gh_write_expect` fields: the target must equal `pr:<N>` and the
+expectation must equal `review_posted`. Verify the GitHub review event actor
+against the configured GitHub App identity for the recorded role. This
+replaces the current review lookup that searches task text for a PR number
+and review wording. A PR number mentioned incidentally in task prose is
+never a link.
+
+For every implementation lookup path (capability rating, closing issue,
+dispatch branch, or cost entry), require the joined job to have
+`purpose=implementation`. For the new fallback, query `cost_entries` for
+rows whose integer `pr_number` equals the PR number and whose `job_id` is
+non-null. Join each candidate to `daemon_jobs`; the cost row establishes the
+exact PR-to-job link, while `daemon_jobs` remains the source of role, harness,
+and model identity. The resolver must not parse PR numbers from task text or
+use prose to decide whether a job is implementation or review.
 
 Accept this path only when exactly one distinct implementation job remains
 and its harness and resolved model can be read from canonical job metadata.
@@ -63,29 +85,43 @@ produce a clear blocked result. Do not silently choose the newest candidate.
 
 When a canonical link resolves an implementation job, compare its identity to
 the review job exactly as the existing gate does. The reviewer must still use
-both a different harness and a different model. Keep the current dispatched
-review lookup and all other PR checks unchanged.
+both a different harness and a different model. Resolve dispatched reviewers
+using the exact target and expected effect described above; leave native
+reviewer recording to #2113 and keep the other PR checks unchanged.
 
 ## 4. Data and interface
 
-No schema change is expected. `cost_entries.pr_number` and
-`cost_entries.job_id` already store the required link, and `daemon_jobs`
-already stores the job's harness and resolved model. Confirm these fields and
-their uniqueness assumptions in the implementation plan before coding.
+`cost_entries.pr_number` and `cost_entries.job_id` already store the
+implementation link. `daemon_jobs` already stores role, harness, resolved
+model, `gh_write_target`, and `gh_write_expect`; add and persist a typed
+`purpose` field. Resolve the expected GitHub actor from the recorded role and
+the repository's role-to-App identity configuration. Confirm the migration
+and legacy-row behavior in the implementation plan before coding. Rows
+without a typed purpose stay unresolved; never backfill purpose by
+interpreting task prose or by hand-editing canonical state.
 
 No new user-facing command is proposed. `synlynk pr check` should consume the
-existing canonical records and report whether the identity came from a rating,
-linked issue, dispatch branch, or PR-linked cost entry.
+canonical records and report whether the implementer identity came from a
+rating, linked issue, dispatch branch, or PR-linked cost entry. For a
+dispatched reviewer, it should report the exact target, expected effect,
+verified role actor, harness, and model. Native reviewer recording remains
+#2113.
 
 ## 5. Acceptance criteria
 
 - A cost entry with `pr_number=N`, `job_id=J` resolves `J` when `J` is the
-  unique non-review implementation job and its canonical job identity is
+  unique job with `purpose=implementation` and its canonical identity is
   complete.
+- A dispatched review job for PR `N` resolves only when its structured target
+  is `pr:N`, its expected effect is `review_posted`, and the GitHub review
+  actor matches the App identity for its recorded role.
+- Incidental PR numbers or review-like wording in task text never create a
+  provenance link or classify the job.
 - A task-scoped branch can pass provenance resolution through that link
   without a closing issue reference or a capability-rating PR number.
-- A missing job, review-only job, ambiguous job set, conflicting metadata,
-  or missing harness/model remains blocked with an actionable reason.
+- A missing/unknown purpose, missing job, ambiguous job set, conflicting
+  metadata, or missing role/harness/model remains blocked with an actionable
+  reason.
 - Existing branch-name, closing-issue, and capability-rating resolution tests
   continue to pass.
 - Same-harness or same-model implementation/reviewer pairs remain blocked;
@@ -103,15 +139,22 @@ linked issue, dispatch branch, or PR-linked cost entry.
 - A job linked to a PR may have subsequently been amended or superseded. The
   plan should inspect the existing job/commit linkage before deciding whether
   additional validation is needed.
+- Existing daemon rows may lack persisted purpose. The plan must preserve
+  fail-closed behavior for those rows and avoid fabricating purpose from task
+  text; inspect whether a supported migration can recover it from a
+  structured dispatch manifest. If it cannot, the affected PR must remain
+  blocked until its provenance is recorded through a supported, auditable
+  path.
 - Native reviewer provenance (#2113) is a separate missing evidence path and
   is intentionally not resolved by this design.
 
 ## 7. Verification approach
 
 Add focused database-level tests for the new cost-entry lookup, including
-unique, missing, ambiguous, review-only, and incomplete-identity cases. Run
-the targeted PR provenance tests first, then the repository's relevant test
-suite. In the PR worktree, run `synlynk pr check` against the actual linked
-records and capture its output for the independent reviewer. The reviewer
-must also re-run `synlynk pr check` from that worktree and independently apply
-the merge-policy check before merging.
+unique, missing, ambiguous, unknown-purpose, stray-task-number, and
+incomplete-identity cases. Add exact-target tests for dispatched review
+resolution. Run the targeted PR provenance tests first, then the repository's
+relevant test suite. In the PR worktree, run `synlynk pr check` against the
+actual linked records and capture its output for the independent reviewer.
+The reviewer must also re-run `synlynk pr check` from that worktree and
+independently apply the merge-policy check before merging.
