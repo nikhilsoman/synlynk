@@ -6,6 +6,7 @@ from synlynk.harness_adapters.claude import ClaudeAdapter
 from synlynk.harness_adapters.codex import CodexAdapter
 from synlynk.harness_adapters.grok import GrokAdapter
 from synlynk.harness_adapters.local import LocalAdapter
+from synlynk.harness_adapters.muse import MuseAdapter
 
 
 _ADAPTERS: dict[str, HarnessAdapter] = {}
@@ -24,3 +25,4 @@ register_adapter("grok", GrokAdapter())
 register_adapter("agy", AgyAdapter())
 register_adapter("claude", ClaudeAdapter())
 register_adapter("local", LocalAdapter())
+register_adapter("muse", MuseAdapter())
