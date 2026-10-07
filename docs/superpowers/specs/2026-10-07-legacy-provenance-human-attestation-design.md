@@ -1,7 +1,6 @@
 # Legacy PR Provenance Human Attestation Design
 
-> Status: Draft for Nikhil's review. No implementation plan or code is
-> authorized until this spec is committed and approved.
+> Status: Approved by Nikhil on 2026-10-07.
 >
 > Tracking: PR #2081 / issue #2062; provenance implementation in #2114.
 
@@ -137,9 +136,11 @@ source for reviewer identity checks.
 - A non-author reviewer independently verifies the PR gate and merge policy
   before any merge.
 
-## Open design question for approval
+## Approved identity decision
 
-What local identity source should the CLI use for `attested_by`? The spec
-should prefer an existing authenticated human identity if Synlynk has one;
-otherwise it should require a clearly labeled explicit attestor value and
-store the invocation source.
+Resolve `attested_by` with Synlynk's existing `team.get_username()` helper,
+which prefers the authenticated GitHub login and falls back to
+`git config user.name`. Reject an unknown identity, record the source as the
+local CLI, and require an exact confirmation string for the job ID, role, and
+task type. The resolved username is attribution metadata; when the helper
+falls back to Git configuration, it is not presented as authenticated proof.
