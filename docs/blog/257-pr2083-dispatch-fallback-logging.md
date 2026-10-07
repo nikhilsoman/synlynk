@@ -2,7 +2,7 @@
 title: "PR #2083 — Routing fallbacks are written down, not only printed"
 date: 2026-10-06
 series: "Building the OS for Multi-Agent Development"
-post: 255
+post: 257
 pr: "#2083"
 status: open
 author: "synlynk team"
