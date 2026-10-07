@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #2082 — Empirical routing promotes a harness only after five measured samples | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-3">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Oct 06, 2026</span>
+        
+          <span class="blog-post-pr">PR #2082</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #2082 — Empirical routing promotes a harness only after five measured samples</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>PR #2082 — Empirical routing promotes a harness only after five measured samples</h1>
+<h2>The Broader Goal at the End of the Previous PR</h2>
+<p>v0.24.0 still needs dispatch to choose a harness from measured outcomes, and
+to say so honestly in the README. PR #2074 made a missing GOVERNS link visible
+before #1990 can hard-fail on it. Routing itself was still the suspended
+heuristic table.</p>
+<h2>Strategic Shifts in This PR (if any)</h2>
+<p>Single-workspace routing no longer waits on shard consolidation (#1926).
+Each repo's dispatch preview reads that workspace's own canonical <code>state.db</code>.
+Fleet-wide <code>synlynk capability report</code> aggregation (#1993) stays blocked on
+#1926 and #1831. That split is what lets empirical promotion ship now.</p>
+<h2>What This PR Shipped</h2>
+<ul>
+<li><code>ranked_harness_for_task()</code> in <code>synlynk/capability.py</code>. <code>candidates[0]</code> is
+the incumbent. A later harness is preferred only with at least five
+<code>capability_ratings</code> rows whose <code>discipline</code> matches the task type
+(there is no <code>task_type</code> column) and a joined <code>cost_entries</code> row on
+<code>story_id</code> where <code>ce.harness</code> equals <code>cr.agent</code>. It must beat the
+incumbent on both median <code>pr_review_cycles</code> and average <code>total_cost_usd</code>.
+Otherwise the function returns <code>None</code>.</li>
+<li><code>compose_dispatch_preview()</code> is the public name for
+<code>_infer_dispatch_defaults()</code> at the <code>task_allocation</code> read. When no
+explicit agent, role, or story is bound, a promoted harness replaces the
+table default. Explicit CLI values and story metadata still win. The
+local-threshold path in <code>_resolve_dispatch_agent()</code> is unchanged.</li>
+<li><code>.synlynk/policy.json</code> <code>capability_policy</code> drops <code>suspended_since</code> and
+<code>suspended_rationale</code>, restates <code>blocking_dependency</code> for the
+single-workspace vs fleet split, and names <code>README.md:15</code> next to
+<code>task_allocation</code> and <code>docs/harness-capability-baseline.md</code> for any
+future suspension.</li>
+<li>README line 15 now says routing uses the best-measured harness once it
+clears the sample-size bar, and the documented default otherwise.</li>
+</ul>
+<p>Tests seed an in-memory ledger (creating <code>cost_entries</code>, which lives in the
+db.py migration rather than <code>_DB_SCHEMA</code>) and a dispatch preview that stubs
+the ranker. <code>tests/test_governs_linkage_warning.py</code> still passes.</p>
+<p>Plan: <code>docs/superpowers/plans/2026-10-06-three-lens-followups-plan.md</code> Task A.
+Design: <code>docs/superpowers/specs/2026-10-06-three-lens-followups-design.md</code> Section A.
+Issue: #2063.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>None. This follows the committed design and plan.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>Dispatch preview can now prefer a harness the workspace has actually measured,
+and it refuses to do that on a thin sample. Below five rows the documented
+allocation stays in force, which is the honest default until grok and muse
+are calibrated.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>The next follow-up is durable logging of routing fallback (#2064): the
+decision this preview makes has to survive in <code>sentinel.md</code> and job metadata,
+not only on stdout. Fleet-wide capability reporting remains behind #1926.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
