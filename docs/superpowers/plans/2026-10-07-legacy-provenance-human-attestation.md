@@ -3,6 +3,21 @@
 > Spec: `docs/superpowers/specs/2026-10-07-legacy-provenance-human-attestation-design.md`
 > Tracking: PR #2081 / issue #2062; provenance implementation in #2114.
 
+## Implementation progress (2026-10-07)
+
+- Added migration 18 for the immutable `job_provenance_attestations` table,
+  including update/delete guards.
+- Added the `synlynk provenance attest` command with exact confirmation,
+  Synlynk operator attribution, role/task validation, rationale, and
+  idempotent writes.
+- Added PR-check resolution for a unique compatible attestation while
+  preserving the exact cost-entry PR/job association and all existing
+  reviewer and cross-harness/model checks.
+- Focused verification: provenance/migration selection (58 passed) and
+  existing PR-check selection (16 passed).
+- The real #2081 attestation and independent reviewer gate remain to be run
+  after this implementation is committed and reviewed.
+
 ## Objective
 
 Add a supported, append-only human attestation for incomplete historical PR
