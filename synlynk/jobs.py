@@ -4673,10 +4673,18 @@ def cmd_jobs(all_jobs: bool = False, watch: bool = False, summary: Optional[str]
             finally:
                 conn.close()
             return
+        routing_sql = ""
+        try:
+            job_cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)")}
+            if {"requested_harness", "actual_harness"} <= job_cols:
+                routing_sql = ", requested_harness, actual_harness"
+        except Exception:
+            routing_sql = ""
         try:
             rows = conn.execute(
                 "SELECT job_id, agent, story_id, status, enqueued_at, exit_code, "
-                "context_mode, requires_gh_write, gh_write_verified "
+                "context_mode, requires_gh_write, gh_write_verified"
+                f"{routing_sql} "
                 "FROM daemon_jobs ORDER BY enqueued_at DESC LIMIT 50"
             ).fetchall()
         except Exception:
@@ -4768,10 +4776,13 @@ def cmd_jobs(all_jobs: bool = False, watch: bool = False, summary: Optional[str]
             )
             verify_display = verification_state[:7]
             evidence_display = f"{evidence_count} ({reason_code[:24]})"
+            route = ""
+            if len(row) >= 11 and row[9] and row[10] and row[9] != row[10]:
+                route = f"  {row[9]}->{row[10]}"
             print(
                 f"  {job_id:14}  {agent:8}  {sid:12}  "
                 f"{color}{status:10}{_RESET}  {ctx:6}  {age:8}  {exit_str:4}  "
-                f"{gh_write_display:^8} {verify_display:7}  {evidence_display}"
+                f"{gh_write_display:^8} {verify_display:7}  {evidence_display}{route}"
             )
 
     if watch:

@@ -1,5 +1,6 @@
 # synlynk Blog Series: Building the OS for Multi-Agent Development
 
+| [257](./257-pr2083-dispatch-fallback-logging.md) | Routing fallbacks are written down, not only printed | [#2083](https://github.com/nikhilsoman/synlynk/pull/2083) | 2026-10-06 |
 | [256](./256-pr2080-config-schema-doctor.md) | Doctor checks config.json and policy.json without a JSON Schema library | [#2080](https://github.com/nikhilsoman/synlynk/pull/2080) | 2026-10-06 |
 | [255](./255-pr2082-empirical-routing-fallback.md) | Empirical routing promotes a harness only after five measured samples | [#2082](https://github.com/nikhilsoman/synlynk/pull/2082) | 2026-10-06 |
 | [254](./254-prTBD-state-db-migrations-and-shard-cleanup.md) | gh:#1926 — A migrations framework, and burying 11,384 dead shards | [#2085](https://github.com/nikhilsoman/synlynk/pull/2085) | 2026-10-06 |

@@ -2354,6 +2354,8 @@ def main(argv=None) -> None:
             )
 
             if getattr(args, "dry_run", False):
+                from synlynk.dispatch import take_routing_fallback
+                take_routing_fallback(None)
                 if not args.task or not args.task.strip():
                     raise ValueError(
                         "--task is empty or whitespace-only; refusing to dispatch (see #720)"

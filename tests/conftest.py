@@ -8,6 +8,16 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 @pytest.fixture(autouse=True)
+def _reset_routing_fallback():
+    """Drop a routing decision left behind by an earlier test."""
+    from synlynk import dispatch
+
+    dispatch._pending_routing_fallback = None
+    yield
+    dispatch._pending_routing_fallback = None
+
+
+@pytest.fixture(autouse=True)
 def isolated_db(tmp_path, monkeypatch):
     """Redirect DB_PATH to a per-test temp file so tests never share state.db."""
     import synlynk
