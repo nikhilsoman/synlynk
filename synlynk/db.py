@@ -135,7 +135,8 @@ def _implementation_job_from_branch(conn, pr_number: int) -> str | None:
     harness, job_id = match.groups()
     row = conn.execute(
         """SELECT job_id FROM daemon_jobs
-             WHERE job_id=? AND lower(COALESCE(NULLIF(harness, ''), agent, ''))=?
+             WHERE job_id=? AND purpose='implementation'
+               AND lower(COALESCE(NULLIF(harness, ''), agent, ''))=?
              LIMIT 1""",
         (job_id, harness.lower()),
     ).fetchone()
@@ -156,6 +157,38 @@ def _implementation_identity_from_native_cost_entry(
         (pr_number,),
     ).fetchone()
     return (row[0], row[1]) if row else (None, None)
+
+
+def _review_job_for_pr(conn, pr_number: int):
+    """Return the unique typed review job whose exact effect target is this PR."""
+    target = f"pr:{int(pr_number)}"
+    rows = conn.execute(
+        """SELECT job_id, gh_write_author, started_at
+             FROM daemon_jobs
+            WHERE purpose='review' AND gh_write_target=?
+              AND gh_write_expect='review_posted'
+            ORDER BY job_id""", (target,)
+    ).fetchall()
+    if len(rows) != 1:
+        return None
+    job_id, expected_actor, started_at = rows[0]
+    if not expected_actor or not started_at:
+        return None
+    try:
+        result = subprocess.run(
+            ["gh", "pr", "view", str(int(pr_number)), "--json", "reviews"],
+            capture_output=True, text=True, check=False,
+        )
+        reviews = json.loads(result.stdout).get("reviews", []) if result.returncode == 0 else []
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return None
+    from synlynk.gh_verify import _parse_iso8601
+    started = _parse_iso8601(started_at)
+    matching = [r for r in reviews if isinstance(r, dict)
+                and (r.get("author") or {}).get("login", "").casefold() == expected_actor.casefold()
+                and r.get("submittedAt") and _parse_iso8601(r["submittedAt"])
+                and started and _parse_iso8601(r["submittedAt"]) >= started]
+    return (job_id, expected_actor) if matching else None
 
 
 def _emit_missing_provenance_hint(pr_number: int) -> None:
@@ -224,11 +257,11 @@ def _implementation_job_from_linked_issues(conn, pr_number: int) -> tuple[str | 
              FROM cost_entries ce
              JOIN daemon_jobs dj ON dj.job_id=ce.job_id
             WHERE ce.story_id=?
-              AND lower(COALESCE(dj.task, '')) NOT LIKE '%review%'
-            ORDER BY ce.id DESC LIMIT 1""",
+              AND dj.purpose='implementation'
+            ORDER BY ce.id DESC LIMIT 2""",
         (story_ids[0],),
-    ).fetchone()
-    return (row[0], row[1]) if row else (None, None)
+    ).fetchall()
+    return (row[0][0], row[0][1]) if len(row) == 1 else (None, None)
 
 
 def _cross_harness_review_verdict(conn, pr_number: int) -> tuple[bool, str]:
@@ -242,11 +275,23 @@ def _cross_harness_review_verdict(conn, pr_number: int) -> tuple[bool, str]:
              JOIN cost_entries ce ON ce.story_id=cr.story_id
              LEFT JOIN daemon_jobs dj ON dj.job_id=ce.job_id
             WHERE cr.pr_number=?
-              AND lower(COALESCE(dj.task, '')) NOT LIKE '%review%'
-            ORDER BY ce.id DESC LIMIT 1""",
+              AND dj.purpose='implementation'
+            ORDER BY ce.id DESC LIMIT 2""",
         (pr_number,),
-    ).fetchone()
-    implementation_job_id = implementation[0] if implementation else None
+    ).fetchall()
+    implementation_job_id = implementation[0][0] if len(implementation) == 1 else None
+    if len(implementation) > 1:
+        return False, f"ambiguous implementation job provenance for PR #{pr_number}"
+    if not implementation_job_id:
+        exact = conn.execute(
+            """SELECT ce.job_id FROM cost_entries ce JOIN daemon_jobs dj ON dj.job_id=ce.job_id
+                WHERE ce.pr_number=? AND dj.purpose='implementation' ORDER BY ce.id""",
+            (pr_number,),
+        ).fetchall()
+        if len(exact) == 1:
+            implementation_job_id = exact[0][0]
+        elif len(exact) > 1:
+            return False, f"ambiguous implementation job provenance for PR #{pr_number}"
     if not implementation_job_id:
         implementation_job_id, _ = _implementation_job_from_linked_issues(conn, pr_number)
     if not implementation_job_id:
@@ -258,21 +303,7 @@ def _cross_harness_review_verdict(conn, pr_number: int) -> tuple[bool, str]:
         else _implementation_identity_from_native_cost_entry(conn, pr_number)
     )
 
-    review = conn.execute(
-        """SELECT ce.job_id
-             FROM cost_entries ce
-             JOIN daemon_jobs dj ON dj.job_id=ce.job_id
-            WHERE lower(dj.task) LIKE '%review%'
-              AND (lower(dj.task) LIKE ? OR lower(dj.task) LIKE ? OR lower(dj.task) LIKE ?
-                   OR lower(dj.task) LIKE ?)
-            ORDER BY ce.id DESC LIMIT 1""",
-        (
-            f"%pr #{int(pr_number)}%",
-            f"%pull request #{int(pr_number)}%",
-            f"%pr {int(pr_number)}%",
-            f"%/pull/{int(pr_number)}%",
-        ),
-    ).fetchone()
+    review = _review_job_for_pr(conn, pr_number)
 
     if not implementation_job_id and not any(implementing_identity):
         _emit_missing_provenance_hint(pr_number)

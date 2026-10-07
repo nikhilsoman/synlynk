@@ -35,6 +35,25 @@ canonical state outside supported Synlynk code paths.
 
 ## Work breakdown
 
+## Implementation progress (2026-10-07)
+
+- Added migration 17 and persisted `task_type` plus fixed `purpose` in the
+  daemon row and flat dispatch manifest. `synlynk jobs` backfills only missing
+  typed fields from structured manifest entries; mismatches remain unresolved.
+- Provenance lookup now requires typed implementation jobs and exact
+  `cost_entries.pr_number`/`job_id` association. Review lookup requires a
+  unique `purpose=review`, exact `gh_write_target=pr:N`,
+  `gh_write_expect=review_posted`, and a GitHub review by the configured actor
+  submitted after dispatch started. Task prose is not consulted.
+- The historical #2081 job can be backfilled when `synlynk jobs` runs from the
+  root checkout, because its root manifest records `role=dev` and
+  `task_type=test`. The implementation still needs to exercise that supported
+  reconciliation and run `synlynk pr check` from PR #2081's own worktree.
+- Verification so far: provenance-focused tests (9 passed); migration,
+  dispatch, and GitHub identity tests (188 passed). The broader
+  `test_agent_cli.py` run reached 123 passed and 1 skipped before the sandbox
+  denied a localhost socket in an unrelated callback test.
+
 ### 0. Inspect the current provenance records and role identity source
 
 Before changing the resolver:

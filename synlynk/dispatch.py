@@ -47,6 +47,18 @@ MODEL_TIER_PRO = "pro"
 MODEL_TIER_REASONING = "reasoning"
 MODEL_TIERS = (MODEL_TIER_FAST, MODEL_TIER_PRO, MODEL_TIER_REASONING)
 
+
+def _job_purpose(role: str | None, task_type: str | None) -> str:
+    """Classify provenance from dispatch's explicit role and task type."""
+    if role == "qa" and task_type == "review":
+        return "review"
+    if role == "dev" and task_type in {
+        "implement", "test", "css", "templates", "content", "subpages",
+        "canvas", "js", "infra", "refactor", "cli-plumbing",
+    }:
+        return "implementation"
+    return "other"
+
 _DEFAULT_MODELS_BY_TIER = {
     MODEL_TIER_FAST: {
         "claude": "claude-haiku-4-5-20251001",
@@ -4293,6 +4305,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         "gh_write_author": gh_write_author_value,
         "gh_write_expect": gh_write_expect_for_job,
         "task_type": task_type or "",
+        "purpose": _job_purpose(resolved_agent_role, task_type),
         "agent_id": agent_id or "",
         "resolved_agent_role": resolved_agent_role or "",
         "instruction_file": instruction_file or "",
@@ -4350,6 +4363,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 "requested_harness": "TEXT",
                 "actual_harness": "TEXT",
                 "fallback_reason": "TEXT",
+                "task_type": "TEXT",
+                "purpose": "TEXT",
             })
             _ensure_daemon_job_columns(dconn, {
                 "worktree_path": "TEXT",
@@ -4374,7 +4389,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                     "cross_branch_pr=COALESCE(?, cross_branch_pr), "
                     "gh_write_author=COALESCE(gh_write_author, ?), "
                     "gh_write_expect=COALESCE(gh_write_expect, ?), "
-                    "requested_harness=?, actual_harness=?, fallback_reason=? "
+                    "requested_harness=?, actual_harness=?, fallback_reason=?, task_type=?, purpose=? "
                     "WHERE job_id=?",
                     (
                         proc.pid,
@@ -4404,6 +4419,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                         job.get("requested_harness"),
                         job.get("actual_harness"),
                         job.get("fallback_reason"),
+                        job.get("task_type"),
+                        job.get("purpose"),
                         job_id,
                     ),
                 )
@@ -4415,8 +4432,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                     "enqueued_at, started_at, log_path, worktree_path, worktree_branch, dispatch_context, context_mode, context_bytes, session_id, "
                     "agent_id, requires_gh_write, gh_write_target, gh_write_author, gh_write_expect, "
                     "model_tier, impact_score, requested_model, resolved_model, "
-                    "requested_harness, actual_harness, fallback_reason) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "requested_harness, actual_harness, fallback_reason, task_type, purpose) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         job_id,
                         agent,
@@ -4450,6 +4467,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                         job.get("requested_harness"),
                         job.get("actual_harness"),
                         job.get("fallback_reason"),
+                        job.get("task_type"),
+                        job.get("purpose"),
                     ),
                 )
                 if cross_branch_pr_value:

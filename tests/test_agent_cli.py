@@ -228,6 +228,10 @@ def _seed_cross_harness_review_case(project_dir, monkeypatch, *, review_harness,
     import json
     import synlynk
     from synlynk.db import _cross_harness_review_verdict
+    from types import SimpleNamespace
+    monkeypatch.setattr("synlynk.db.subprocess.run", lambda *a, **k: SimpleNamespace(
+        returncode=0, stdout=json.dumps({"reviews": [{"author": {"login": "qa-app[bot]"}, "submittedAt": "2026-10-04T00:01:00Z"}]})
+    ))
 
     policy_path = project_dir / ".synlynk" / "policy.json"
     policy_path.parent.mkdir(parents=True, exist_ok=True)
@@ -237,14 +241,14 @@ def _seed_cross_harness_review_case(project_dir, monkeypatch, *, review_harness,
     monkeypatch.chdir(project_dir)
     conn = synlynk._get_db()
     conn.execute(
-        "INSERT INTO daemon_jobs (job_id, agent, harness, task, status, enqueued_at, resolved_model) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?)",
-        ("job-impl", "codex", "codex", "implement issue #1991", "done", "2026-10-04T00:00:00", "gpt-5.3-codex"),
+        "INSERT INTO daemon_jobs (job_id, agent, harness, task, status, enqueued_at, resolved_model, purpose) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        ("job-impl", "codex", "codex", "implement issue #1991", "done", "2026-10-04T00:00:00", "gpt-5.3-codex", "implementation"),
     )
     conn.execute(
-        "INSERT INTO daemon_jobs (job_id, agent, harness, task, status, enqueued_at, resolved_model) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?)",
-        ("job-review", review_harness, review_harness, "review PR #1991", "done", "2026-10-04T00:00:01", review_model),
+        "INSERT INTO daemon_jobs (job_id, agent, harness, task, status, enqueued_at, resolved_model, purpose, gh_write_target, gh_write_expect, gh_write_author, started_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        ("job-review", review_harness, review_harness, "review PR #1991", "done", "2026-10-04T00:00:01", review_model, "review", "pr:1991", "review_posted", "qa-app[bot]", "2026-10-04T00:00:01Z"),
     )
     conn.execute("INSERT INTO stories (story_id, title) VALUES (?, ?)", ("story-1991", "cross-harness review"))
     for job_id, harness, model, story_id in (
@@ -293,6 +297,8 @@ def test_pr_check_recovers_implementer_from_linked_issue_without_rating(project_
     import json
     import synlynk
     import synlynk.db as db
+    from types import SimpleNamespace
+    monkeypatch.setattr(db.subprocess, "run", lambda *a, **k: SimpleNamespace(returncode=0, stdout=json.dumps({"reviews": [{"author": {"login": "qa-app[bot]"}, "submittedAt": "2026-10-04T00:02:00Z"}]})))
 
     policy_path = project_dir / ".synlynk" / "policy.json"
     policy_path.parent.mkdir(parents=True, exist_ok=True)
@@ -307,20 +313,20 @@ def test_pr_check_recovers_implementer_from_linked_issue_without_rating(project_
         ("story-issue-1975", "quickstart"),
     )
     conn.execute(
-        "INSERT INTO daemon_jobs (job_id, agent, harness, task, story_id, status, enqueued_at, resolved_model) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO daemon_jobs (job_id, agent, harness, task, story_id, status, enqueued_at, resolved_model, purpose) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             "job-impl-1975", "codex", "codex", "Implement #1975", "story-issue-1975",
-            "done", "2026-10-04T00:00:00", "gpt-5.6-codex",
+            "done", "2026-10-04T00:00:00", "gpt-5.6-codex", "implementation",
         ),
     )
     conn.execute(
-        "INSERT INTO daemon_jobs (job_id, agent, harness, task, status, enqueued_at, resolved_model) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO daemon_jobs (job_id, agent, harness, task, status, enqueued_at, resolved_model, purpose, gh_write_target, gh_write_expect, gh_write_author, started_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             "job-review-2026", "claude", "claude",
             "Review https://github.com/nikhilsoman/synlynk/pull/2026",
-            "done", "2026-10-04T00:00:01", "claude-sonnet-4-6",
+            "done", "2026-10-04T00:00:01", "claude-sonnet-4-6", "review", "pr:2026", "review_posted", "qa-app[bot]", "2026-10-04T00:00:01Z",
         ),
     )
     conn.execute(
@@ -373,6 +379,8 @@ def test_pr_check_recovers_implementer_from_dispatch_branch_without_cost_entry(p
     import json
     import synlynk
     import synlynk.db as db
+    from types import SimpleNamespace
+    monkeypatch.setattr(db.subprocess, "run", lambda *a, **k: SimpleNamespace(returncode=0, stdout=json.dumps({"reviews": [{"author": {"login": "qa-app[bot]"}, "submittedAt": "2026-10-05T00:02:00Z"}]})))
 
     policy_path = project_dir / ".synlynk" / "policy.json"
     policy_path.parent.mkdir(parents=True, exist_ok=True)
@@ -384,14 +392,14 @@ def test_pr_check_recovers_implementer_from_dispatch_branch_without_cost_entry(p
     monkeypatch.setattr(db, "_pr_head_branch", lambda _pr: "dispatch/codex/job-impl-2051")
     conn = synlynk._get_db()
     conn.execute(
-        "INSERT INTO daemon_jobs (job_id, agent, harness, task, status, enqueued_at, resolved_model) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?)",
-        ("job-impl-2051", "codex", "codex", "implement #2051", "done", "2026-10-05T00:00:00", "gpt-5.3-codex"),
+        "INSERT INTO daemon_jobs (job_id, agent, harness, task, status, enqueued_at, resolved_model, purpose) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        ("job-impl-2051", "codex", "codex", "implement #2051", "done", "2026-10-05T00:00:00", "gpt-5.3-codex", "implementation"),
     )
     conn.execute(
-        "INSERT INTO daemon_jobs (job_id, agent, harness, task, status, enqueued_at, resolved_model) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?)",
-        ("job-review-2051", "claude", "claude", "review PR #2051", "done", "2026-10-05T00:00:01", "claude-sonnet-4-6"),
+        "INSERT INTO daemon_jobs (job_id, agent, harness, task, status, enqueued_at, resolved_model, purpose, gh_write_target, gh_write_expect, gh_write_author, started_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        ("job-review-2051", "claude", "claude", "review PR #2051", "done", "2026-10-05T00:00:01", "claude-sonnet-4-6", "review", "pr:2051", "review_posted", "qa-app[bot]", "2026-10-05T00:00:01Z"),
     )
     conn.execute(
         "INSERT INTO cost_entries (session_date, agent, harness, model, cost_source, job_id) "
@@ -436,6 +444,8 @@ def test_pr_check_accepts_native_cost_entry_provenance(project_dir, monkeypatch)
     import json
     import synlynk
     import synlynk.db as db
+    from types import SimpleNamespace
+    monkeypatch.setattr(db.subprocess, "run", lambda *a, **k: SimpleNamespace(returncode=0, stdout=json.dumps({"reviews": [{"author": {"login": "qa-app[bot]"}, "submittedAt": "2026-10-05T00:02:00Z"}]})))
 
     policy_path = project_dir / ".synlynk" / "policy.json"
     policy_path.parent.mkdir(parents=True, exist_ok=True)
@@ -447,9 +457,9 @@ def test_pr_check_accepts_native_cost_entry_provenance(project_dir, monkeypatch)
     monkeypatch.setattr(db, "_pr_head_branch", lambda _pr: "feat/native-pr-2051")
     conn = synlynk._get_db()
     conn.execute(
-        "INSERT INTO daemon_jobs (job_id, agent, harness, task, status, enqueued_at, resolved_model) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?)",
-        ("job-review-native-2051", "claude", "claude", "review PR #2051", "done", "2026-10-05T00:00:01", "claude-sonnet-4-6"),
+        "INSERT INTO daemon_jobs (job_id, agent, harness, task, status, enqueued_at, resolved_model, purpose, gh_write_target, gh_write_expect, gh_write_author, started_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        ("job-review-native-2051", "claude", "claude", "review PR #2051", "done", "2026-10-05T00:00:01", "claude-sonnet-4-6", "review", "pr:2051", "review_posted", "qa-app[bot]", "2026-10-05T00:00:01Z"),
     )
     conn.execute(
         "INSERT INTO cost_entries (session_date, agent, harness, model, cost_source, pr_number) "

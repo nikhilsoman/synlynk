@@ -169,6 +169,39 @@ def _load_jobs() -> list:
     except (json.JSONDecodeError, IOError):
         return []
 
+
+def _reconcile_typed_purpose(conn) -> int:
+    """Backfill typed provenance only from structured dispatch manifest fields."""
+    from synlynk.dispatch import _job_purpose
+    jobs = _load_jobs() or []
+    changed = 0
+    for job in jobs:
+        if not isinstance(job, dict) or not job.get("id"):
+            continue
+        task_type = job.get("task_type")
+        role = job.get("resolved_agent_role") or job.get("role")
+        if not task_type or not role:
+            continue
+        purpose = _job_purpose(role, task_type)
+        row = conn.execute(
+            "SELECT task_type, purpose FROM daemon_jobs WHERE job_id=?", (job["id"],)
+        ).fetchone()
+        if not row:
+            continue
+        old_type, old_purpose = row
+        if old_type and old_type != task_type:
+            continue
+        if old_purpose and old_purpose != purpose:
+            continue
+        if old_type is None or old_purpose is None:
+            conn.execute(
+                "UPDATE daemon_jobs SET task_type=COALESCE(task_type, ?), purpose=COALESCE(purpose, ?) WHERE job_id=?",
+                (task_type, purpose, job["id"]),
+            )
+            changed += 1
+    if changed:
+        conn.commit()
+    return changed
 def _save_jobs(jobs: list) -> None:
     """Writes jobs list to .synlynk/jobs.json."""
     jobs_file = _pkg("JOBS_FILE")
@@ -4659,6 +4692,11 @@ def cmd_jobs(all_jobs: bool = False, watch: bool = False, summary: Optional[str]
             print(f"{j['id']:12}  {j['agent']:10}  {color}{status:10}{_RESET}  {sid:6}  {task}")
 
     def _render() -> None:
+        conn_for_purpose = _pkg("_get_db")()
+        try:
+            _reconcile_typed_purpose(conn_for_purpose)
+        finally:
+            conn_for_purpose.close()
         _pkg("_reconcile_daemon_jobs")()
         conn = _pkg("_get_db")()
         if json_output:

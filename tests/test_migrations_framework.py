@@ -89,7 +89,7 @@ def test_migration_0016_adds_cost_entries_pr_number_column(tmp_path):
 
     cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}
     assert "pr_number" in cols
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 16
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 17
 
     # Re-running against an already-migrated db is a no-op, not a crash.
     run_pending_migrations(conn)
