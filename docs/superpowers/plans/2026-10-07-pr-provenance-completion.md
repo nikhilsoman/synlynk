@@ -46,6 +46,9 @@ canonical state outside supported Synlynk code paths.
   unique `purpose=review`, exact `gh_write_target=pr:N`,
   `gh_write_expect=review_posted`, and a GitHub review by the configured actor
   submitted after dispatch started. Task prose is not consulted.
+- Native `synlynk cost log` accepts an optional exact `--model` value so
+  interactive implementation provenance records the runtime model instead of
+  silently using the configured default.
 - The historical #2081 manifest records `role=dev` and `task_type=test` but
   does not record whether the type was explicitly supplied or inferred. It
   therefore cannot be backfilled under the explicit-type rule and remains

@@ -4167,6 +4167,7 @@ def cmd_cost_log(
     job_id: str = None,
     pr: int = None,
     note: str = None,
+    model: str = None,
 ) -> None:
     """Log a manually reported cost row for native/unwrapped sessions."""
     from synlynk import (
@@ -4195,8 +4196,8 @@ def cmd_cost_log(
             _, phase = row
     conn.close()
 
-    model_version = extract_model_version("", agent=agent)
-    payment_value = resolve_payment_value(agent, tokens_in, tokens_out)
+    model_version = model or extract_model_version("", agent=agent)
+    payment_value = resolve_payment_value(agent, tokens_in, tokens_out, model=model_version)
     est_cost = payment_value.api_equivalent_usd
     ts = time.strftime("%Y-%m-%d %H:%M")
 
