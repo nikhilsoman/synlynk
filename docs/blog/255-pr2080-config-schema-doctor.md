@@ -32,20 +32,21 @@ schema. That matches the design's P1-1 scope note.
 
 - `synlynk/config_schema.py` exports `validate()`, `CONFIG_SCHEMA`, and
   `POLICY_SCHEMA`. `validate()` returns a list of human-readable errors.
-  Config fields `identity_slug`, `local_fallback`, and
-  `local_auto_threshold` are optional. Policy requires `schema_version` and
-  `repo_id`, and checks `capability_policy.mode` against `empirical` and
-  `heuristic`.
+  Config requires `schema_version` (int), `budget` (object with
+  `limit_usd` and `limit_requests`), `harness_billing` (object), and
+  `workspace_id` (string). `identity_slug`, `local_fallback`, and
+  `local_auto_threshold` stay optional. Policy requires `schema_version`
+  and `repo_id`, and checks `capability_policy.mode` against `empirical`
+  and `heuristic`.
 - `synlynk doctor` registers `_hc_config_schema` and `_hc_policy_schema`
   immediately after `_hc_identity_slug`. A missing file warns. A parse error
   or schema error fails and names the field. A matching file is ok.
 - The live repo config (`schema_version`, `budget`, `harness_billing`,
-  `workspace_id`) and policy (`mode: empirical`) both pass, because unknown
-  keys are ignored and the optional config fields are absent rather than
-  mistyped.
-- Tests: `tests/test_config_schema.py` (4) and
-  `tests/test_doctor_config_schema.py` (2). `pytest tests/ -k doctor`
-  stayed green (42 passed).
+  `workspace_id`) and policy (`mode: empirical`) both pass. A config that
+  drops a required top-level field, or sets `budget` to a non-object, fails
+  validation, so `synlynk doctor` no longer reports that file as OK.
+- Tests: `tests/test_config_schema.py` (5) and
+  `tests/test_doctor_config_schema.py` (2).
 
 Plan: `docs/superpowers/plans/2026-10-06-three-lens-followups-plan.md` Task C.
 Design: `docs/superpowers/specs/2026-10-06-three-lens-followups-design.md`.

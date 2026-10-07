@@ -44,8 +44,20 @@ def validate(data: dict, schema: dict) -> list:
     return validate_fields(data, schema["fields"])
 
 
+# Stable nested shapes from load_config() schema-v1 defaults and the live
+# .synlynk/config.json contract. Harness names under harness_billing vary
+# (claude/codex/agy/grok/local and others), so only the object type is fixed.
+_BUDGET_FIELDS = {
+    "limit_usd": {"type": (int, float), "required": True},
+    "limit_requests": {"type": int, "required": True},
+}
+
 CONFIG_SCHEMA = {
     "fields": {
+        "schema_version": {"type": int, "required": True},
+        "budget": {"type": dict, "required": True, "fields": _BUDGET_FIELDS},
+        "harness_billing": {"type": dict, "required": True},
+        "workspace_id": {"type": str, "required": True},
         "identity_slug": {"type": str},
         "local_fallback": {"type": str},
         "local_auto_threshold": {"type": (int, float)},
