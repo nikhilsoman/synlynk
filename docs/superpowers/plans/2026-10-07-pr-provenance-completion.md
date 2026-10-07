@@ -52,6 +52,22 @@ Before changing the resolver:
 4. Record the confirmed mapping and legacy-row behavior in this plan before
    implementation proceeds.
 
+Initial audit findings:
+
+- `dispatch.py` places explicit `task_type`, role, harness, and model identity
+  in the flat job object. Its `daemon_jobs` insert/update persists role,
+  harness, resolved model, and GitHub target/expectation, but does not persist
+  `task_type` or a purpose field. `db_schema.py` likewise has no purpose
+  column.
+- Role-scoped GitHub actor provenance already uses the configured role:
+  `_resolve_dispatch_gh_bot_login()` populates `gh_write_author`, and the
+  effect contract stores its expected actor. Reuse that path rather than
+  adding a separate role-to-login map.
+- The job summary CLI for `job-2a2b25fa` does not expose `task_type`. Before
+  selecting a backfill, inspect that job's structured manifest entry and
+  confirm it contains explicit type metadata. The migration must leave the
+  row unresolved if that entry is missing or incomplete.
+
 ### 1. Persist typed job purpose
 
 Files: `synlynk/db_schema.py`, `synlynk/db.py`, `synlynk/dispatch.py`,
