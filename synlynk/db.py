@@ -4443,17 +4443,22 @@ def cmd_pr_check(pr_number=None, impact_attested: bool = False) -> None:
             _apply_review_cycle_multiplier(conn, pr_number, changes_requested_count)
 
     from synlynk.governs_gate import pr_governs_linkage_violations
+    from synlynk.policy_gates import _evaluate_gate, classify_governs_violations
     governs_violations = pr_governs_linkage_violations(conn, pr_number)
-    if governs_violations:
-        print("\n  🚫 [PR CHECK BLOCKED] dispatched jobs missing linked GOVERNS story/goal:")
-        for violation in governs_violations:
-            print(
-                f"    {violation['job_id']} "
-                f"(story={violation.get('story_id') or 'none'}; {violation['reason']})"
-            )
+    governs_eval = _evaluate_gate(
+        conn, pr_number=pr_number, gate="governs_authority",
+        mode_key="require_linked_goal_mode",
+        verdict=classify_governs_violations(governs_violations),
+    )
+    if governs_eval.verdict != "pass":
+        label = "🚫 [PR CHECK BLOCKED]" if governs_eval.should_block else "⚠ [PR CHECK]"
+        print(f"\n  {label} dispatched jobs missing linked GOVERNS story/goal: {governs_eval.message}")
         print("  Link with: synlynk goal link <story-id> --goal <goal-id>\n")
-        conn.close()
-        raise SystemExit(1)
+        if governs_eval.should_block:
+            conn.close()
+            raise SystemExit(1)
+    else:
+        print(f"  {_GREEN}✓{_RESET} GOVERNS linkage passed — {governs_eval.message}")
 
     if _is_github_remote():
         owner, repo = detect_remote_owner_repo()
@@ -4494,12 +4499,21 @@ def cmd_pr_check(pr_number=None, impact_attested: bool = False) -> None:
                     )
 
     if pr_number is not None:
+        from synlynk.policy_gates import classify_cross_harness_verdict
         cross_harness_ok, cross_harness_message = _cross_harness_review_verdict(conn, pr_number)
-        if not cross_harness_ok:
-            conn.close()
-            print(f"\n  🚫 [PR CHECK BLOCKED] Cross-harness review required: {cross_harness_message}\n")
-            raise SystemExit(1)
-        print(f"  {_GREEN}✓{_RESET} Cross-harness review passed — {cross_harness_message}")
+        cross_harness_eval = _evaluate_gate(
+            conn, pr_number=pr_number, gate="cross_harness_review",
+            mode_key="cross_harness_review_required_mode",
+            verdict=classify_cross_harness_verdict(cross_harness_ok, cross_harness_message),
+        )
+        if cross_harness_eval.verdict != "pass":
+            label = "🚫 [PR CHECK BLOCKED]" if cross_harness_eval.should_block else "⚠ [PR CHECK]"
+            print(f"\n  {label} Cross-harness review required: {cross_harness_eval.message}\n")
+            if cross_harness_eval.should_block:
+                conn.close()
+                raise SystemExit(1)
+        else:
+            print(f"  {_GREEN}✓{_RESET} Cross-harness review passed — {cross_harness_eval.message}")
 
     rows = conn.execute(
         "SELECT DISTINCT story_id, agent FROM capability_ratings WHERE model_version='unknown'"

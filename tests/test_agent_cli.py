@@ -3964,3 +3964,62 @@ def test_quickstart_asks_once_initializes_and_verifies_dispatch(tmp_path, monkey
     output = capsys.readouterr().out
     assert "First dispatch verified: job-1 via codex" in output
     assert "Instruction manifest" in output
+
+
+def test_pr_check_governs_gate_observe_mode_does_not_block(project_dir, monkeypatch):
+    import json
+    import synlynk
+    from synlynk.db import cmd_pr_check
+
+    monkeypatch.setattr("synlynk.db._is_github_remote", lambda: False)
+    (project_dir / ".synlynk" / "policy.json").write_text(json.dumps({
+        "overrides": {
+            "governs_authority": {"require_linked_goal": True, "require_linked_goal_mode": "observe"},
+            "merge_authority": {"cross_harness_review_required": False},
+        }
+    }))
+    monkeypatch.chdir(project_dir)
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, harness, task, status, enqueued_at, purpose) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("job-unlinked", "codex", "codex", "implement PR #2100", "done", "2026-10-07T00:00:00", "implementation"),
+    )
+    conn.execute(
+        "INSERT INTO cost_entries (session_date, agent, harness, model, story_id, cost_source, job_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("2026-10-07", "codex", "codex", "gpt-5.3-codex", None, "test", "job-unlinked"),
+    )
+    conn.commit()
+    conn.close()
+    cmd_pr_check(pr_number=2100)
+    conn = synlynk._get_db()
+    row = conn.execute("SELECT gate, mode, verdict FROM policy_gate_events WHERE pr_number=2100 AND gate='governs_authority'").fetchone()
+    conn.close()
+    assert row == ("governs_authority", "observe", "warn")
+
+
+def test_pr_check_governs_gate_enforce_mode_still_blocks(project_dir, monkeypatch):
+    import json
+    import synlynk
+    from synlynk.db import cmd_pr_check
+
+    monkeypatch.setattr("synlynk.db._is_github_remote", lambda: False)
+    (project_dir / ".synlynk" / "policy.json").write_text(json.dumps({
+        "overrides": {
+            "governs_authority": {"require_linked_goal": True, "require_linked_goal_mode": "enforce"},
+            "merge_authority": {"cross_harness_review_required": False},
+        }
+    }))
+    monkeypatch.chdir(project_dir)
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, harness, task, status, enqueued_at, purpose) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("job-unlinked2", "codex", "codex", "implement PR #2101", "done", "2026-10-07T00:00:00", "implementation"),
+    )
+    conn.execute(
+        "INSERT INTO cost_entries (session_date, agent, harness, model, story_id, cost_source, job_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("2026-10-07", "codex", "codex", "gpt-5.3-codex", None, "test", "job-unlinked2"),
+    )
+    conn.commit()
+    conn.close()
+    with pytest.raises(SystemExit):
+        cmd_pr_check(pr_number=2101)
