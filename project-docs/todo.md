@@ -1802,3 +1802,26 @@ Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'corre [backe
 - [ ] P1-5: Adapter conformance test suite + retire incomplete strangler path [testing] <!-- id:story-issue-2062 -->
 - [ ] gh#1926: migrations framework (synlynk/migrations/ + db.py wrapper) [backend] <!-- id:story-0a8483c6 -->
 - [ ] gh#1926: legacy shard cleanup script (gh#1831) [backend] <!-- id:story-788b5588 -->
+- [ ] gh:#1926 — state.db migrations framework + legacy shard cleanup [backend] <!-- id:story-issue-2085 -->
+- [ ] fix(docs): restore todo.md story lines truncated by PR #2026 (LIVE-23b, gh:#2088) [testing] <!-- id:story-issue-2089 -->
+- [ ] fix: un-suspend empirical routing with a sample-size fallback (#2063) [testing] <!-- id:story-issue-2082 -->
+- [ ] docs(blog): fix post-number frontmatter mismatch on PR #2083's post [testing] <!-- id:story-issue-2093 -->
+- [ ] docs(strategy): consolidated roadmap + home harness transition agenda [testing] <!-- id:story-issue-2094 -->
+- [ ] Brainstorm managed execution nodes and swarms (GitHub #2108) [backend] <!-- id:story-6e0ecd2d -->
+- [ ] Productize the local and sovereign harness path beyond Hermes roster (GitHub #2110) [backend] <!-- id:story-d01ffd5a -->
+- [ ] Write a minimal example demonstrating Programming/Software Development for a small Python function. [backend] <!-- id:story-adhoc-1791354753 -->
+- [ ] Review this Programming/Software Development calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<tr [backend] <!-- id:story-adhoc-1791354764 -->
+- [ ] Write a minimal example demonstrating Testing for a small Python function. [testing] <!-- id:story-adhoc-1791354776 -->
+- [ ] Review this Testing calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<true|false>'.
+
+Executor har [testing] <!-- id:story-adhoc-1791354788 -->
+- [ ] Write a minimal example demonstrating Requirements Definition and Management for a small Python function. [backend] <!-- id:story-adhoc-1791354801 -->
+- [ ] Review this Requirements Definition and Management calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'corre [backend] <!-- id:story-adhoc-1791354813 -->
+- [ ] Write a minimal example demonstrating Programming/Software Development for a small Python function. [backend] <!-- id:story-adhoc-1791354826 -->
+- [ ] gh #2097: investigate role-scoped GitHub actions blocked by interactive harness classifier [backend] <!-- id:story-bc8929e5 -->
+- [ ] gh #2098: audit README capability-routing claims against live evidence [docs] <!-- id:story-f7e03fdb -->
+- [ ] Support native reviewer provenance in cross-harness PR checks [backend] <!-- id:story-issue-2113 -->
+- [ ] feat: persist typed PR provenance [testing] <!-- id:story-issue-2115 -->

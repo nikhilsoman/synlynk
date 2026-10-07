@@ -1443,6 +1443,8 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
         "--pr", type=int, default=None,
         help="PR number for native/interactive implementation provenance",
     )
+    cost_log_parser.add_argument("--model", default=None,
+        help="Exact model identifier for this native/interactive session")
     cost_log_parser.add_argument("--note", default=None)
     cost_true_up_parser = cost_sub.add_parser("true-up", help="Reconcile subscription costs for a month")
     cost_true_up_parser.add_argument("--month", default=None, help="Billing month in YYYY-MM format")
@@ -2397,6 +2399,7 @@ def main(argv=None) -> None:
                                  static_baseline=getattr(args, "static_baseline", False),
                                  requires_gh_write=_effective_requires_gh_write,
                                  task_type=_effective_task_type,
+                                 task_type_explicit=bool(getattr(args, "task_type", None)),
                                  model_tier=getattr(args, "model_tier", None),
                                  model=getattr(args, "model", None),
                                  effort=getattr(args, "effort", None),
@@ -2613,6 +2616,7 @@ def main(argv=None) -> None:
                 job_id=args.job_id,
                 pr=args.pr,
                 note=args.note,
+                model=args.model,
             )
         elif args.cost_action == "true-up":
             from synlynk.costs import cmd_cost_true_up
