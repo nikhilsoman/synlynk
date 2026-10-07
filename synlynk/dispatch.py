@@ -669,10 +669,31 @@ def _infer_dispatch_defaults(
         }.get(inferred_task_type, "dev")
 
     role_entry = (policy.get("agent_roles") or {}).get(inferred_role) or {}
-    allocation_entry = allocation.get(inferred_task_type) or allocation.get("implement") or {}
+    from synlynk.capability import ranked_harness_for_task
+
+    entry = allocation.get(inferred_task_type, {}) if inferred_task_type else {}
+    if not entry.get("harness"):
+        # Preserve the previous implement-table fallback for an unknown type.
+        entry = allocation.get("implement") or {}
+    default_harness = entry.get("harness")
+    fallback_list = entry.get("fallback") or []
+    promoted = None
+    if default_harness:
+        promoted = ranked_harness_for_task(
+            inferred_task_type, [default_harness] + list(fallback_list)
+        )
+        if promoted:
+            default_harness = promoted
     inferred_agent = agent
     if inferred_agent is None:
-        inferred_agent = role_entry.get("default_harness") or allocation_entry.get("harness")
+        # Explicit CLI agent (handled above), an explicit --role, and story
+        # metadata keep their harness. Empirical promotion replaces only the
+        # table default on the unbound path.
+        explicit_binding = role is not None or story_role is not None
+        if promoted and not explicit_binding:
+            inferred_agent = promoted
+        else:
+            inferred_agent = role_entry.get("default_harness") or default_harness
     if inferred_agent is None:
         inferred_agent = "codex"
 
@@ -699,6 +720,17 @@ def _infer_dispatch_defaults(
         "permission_profile": permission_profile,
         "story_role": story_role,
     }
+
+
+def compose_dispatch_preview(task: str, **kwargs) -> dict:
+    """Human-facing dispatch default. Alias of ``_infer_dispatch_defaults``.
+
+    The empirical-routing design names this entry point
+    ``compose_dispatch_preview``; the implementation has always lived in
+    ``_infer_dispatch_defaults`` (dispatch.py's policy ``task_allocation``
+    read). Keep both names so previews and real dispatches share one contract.
+    """
+    return _infer_dispatch_defaults(task, **kwargs)
 
 
 def _local_concurrency_exceeded(conn, max_concurrent: int = 1) -> bool:

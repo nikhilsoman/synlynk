@@ -3,18 +3,16 @@
   "repo_id": "synlynk",
   "capability_policy": {
     "mode": "empirical",
-    "suspended_since": "2026-10-04",
-    "suspended_rationale": "Heuristic task_allocation below (and the global Claude PM/review/deploy-only lock, gh:#79) was drafted from convenience, not measurement. Reassessed by Nikhil 2026-10-04 in favor of data-driven routing.",
     "min_sample_size": 5,
     "metrics": ["pr_review_cycles", "total_cost_usd"],
     "metric_source": {
       "pr_review_cycles": "capability_ratings table, median per harness x task_type",
       "total_cost_usd": "cost_entries table, median per merged PR per harness x task_type"
     },
-    "blocking_dependency": "gh:#1926 (state.db consolidation) — aggregate measurement unreliable while capability_ratings/cost_entries are scattered across per-job workspace shards, see gh:#1831",
+    "blocking_dependency": "Single-workspace routing (this repo's own task_allocation) queries only this workspace's canonical state.db and does not require #1926. Fleet-wide synlynk capability report aggregation (#1993) across workspaces remains blocked on #1926/#1831's shard consolidation.",
     "not_yet_calibrated": ["grok", "muse"],
     "generator_status": "manual — synlynk capability report / policy regen not yet shipped (gh:#1993)",
-    "note": "task_allocation below is the current interim default, not an authoritative ranking. Any harness that clears min_sample_size with better metrics on a task_type may be promoted; this requires a reviewed PR updating this file plus docs/harness-capability-baseline.md, not a silent edit."
+    "note": "task_allocation below is the current interim default, not an authoritative ranking. Any harness that clears min_sample_size with better metrics on a task_type may be promoted; this requires a reviewed PR updating this file plus docs/harness-capability-baseline.md, not a silent edit. A future suspension must update task_allocation, docs/harness-capability-baseline.md, and README.md:15 together."
   },
   "overrides": {
     "role_task_type_compat": {
