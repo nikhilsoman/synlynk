@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #2081 — A Conformance Suite That Names Adapter Drift Instead of Discovering It Live | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Oct 06, 2026</span>
+        
+          <span class="blog-post-pr">PR #2081</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #2081 — A Conformance Suite That Names Adapter Drift Instead of Discovering It Live</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>PR #2081 — A Conformance Suite That Names Adapter Drift Instead of Discovering It Live</h1>
+<h2>The Broader Goal at the End of the Previous PR</h2>
+<p>v0.24.0 still needs dispatch to be trustworthy across every registered
+harness. The GOVERNS preflight now names a missing <code>--issue</code>/<code>--pr</code>/<code>--story</code>
+before #1990 can hard-fail. The remaining gap called out in the three-lens
+review was adapter quality: receipt markers, cost attribution, and failure
+classification were only checked live, after a regression had already
+shipped.</p>
+<h2>Strategic Shifts in This PR (if any)</h2>
+<p>No strategy change. #2062 still owns the incomplete strangler retirement.
+This PR only ships the narrowed Task D from the 2026-10-06 three-lens
+follow-ups plan: a parametrized conformance suite over the five registered
+adapters. Adapter implementation drift is tracked, not patched here.</p>
+<h2>What This PR Shipped</h2>
+<ul>
+<li><code>tests/test_adapter_conformance.py</code> parametrizes <code>claude</code>, <code>codex</code>, <code>agy</code>,
+<code>grok</code>, and <code>local</code> for Protocol method presence, <code>translate_permissions</code>
+signature match against <code>HarnessAdapter</code>, receipt-marker parsing through
+<code>jobs._check_task_receipt</code>, <code>classify_failure</code> returning <code>FailureKind</code> or
+<code>None</code>, and one <code>extract_tokens</code> fixture per harness.</li>
+<li>Claude/Codex/Agy <code>translate_permissions</code> is missing the Protocol's
+<code>skip_permissions</code> parameter. Those three cases are <code>xfail</code> against
+<a href="https://github.com/nikhilsoman/synlynk/issues/2078">#2078</a>.</li>
+<li><code>LocalAdapter.parse_output</code> leaves <code>compatibility_evidence</code> unset. Those
+two receipt cases are <code>xfail</code> against
+<a href="https://github.com/nikhilsoman/synlynk/issues/2079">#2079</a>.</li>
+<li>No adapter source files were changed.</li>
+</ul>
+<p>Plan: <code>docs/superpowers/plans/2026-10-06-three-lens-followups-plan.md</code> Task D.
+Design: <code>docs/superpowers/specs/2026-10-06-three-lens-followups-design.md</code>.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>None. This follows the committed design and plan.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>A new adapter, or a signature change on an existing one, now fails in
+pytest instead of in a live dispatch. The suite is green because the known
+drift is named and ticketed, not because it was papered over.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>#2078 and #2079 are the next adapter-side fixes. The strangler-path
+retirement still listed on #2062 stays a separate implementation task.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
