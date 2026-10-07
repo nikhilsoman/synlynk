@@ -38,3 +38,87 @@ def test_expected_value_and_router_choose_evidence_based_candidate():
     assert expected_value(.8, 2, 1, 1, .5) == pytest.approx(1.0666667)
     result = route_expected_value(["codex", "agy"], "cli", conn=conn)
     assert result["harness"] == "codex"
+
+
+def _ensure_cost_entries(conn):
+    """cost_entries is created by the db.py migration, not ``_DB_SCHEMA``."""
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS cost_entries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_date TEXT NOT NULL,
+            harness TEXT,
+            story_id TEXT,
+            total_cost_usd REAL,
+            cost_source TEXT NOT NULL
+        )"""
+    )
+
+
+def test_ranked_harness_for_task_promotes_candidate_with_better_metrics():
+    from synlynk.db_schema import _DB_SCHEMA, _DB_SCORES_VIEW
+    from synlynk.capability import ranked_harness_for_task
+
+    conn = sqlite3.connect(":memory:")
+    conn.executescript(_DB_SCHEMA)
+    conn.executescript(_DB_SCORES_VIEW)
+    _ensure_cost_entries(conn)
+
+    # Incumbent "codex": 5 samples, pr_review_cycles=3 each, cost=$10 each.
+    for i in range(5):
+        story_id = f"story-codex-{i}"
+        conn.execute(
+            "INSERT INTO capability_ratings (story_id, agent, discipline, pr_review_cycles) "
+            "VALUES (?, 'codex', 'implement', 3)",
+            (story_id,),
+        )
+        conn.execute(
+            "INSERT INTO cost_entries (session_date, harness, story_id, cost_source, total_cost_usd) "
+            "VALUES ('2026-10-01', 'codex', ?, 'test', 10.0)",
+            (story_id,),
+        )
+    # Challenger "grok": 5 samples, pr_review_cycles=1 each (better), cost=$4 each (better).
+    for i in range(5):
+        story_id = f"story-grok-{i}"
+        conn.execute(
+            "INSERT INTO capability_ratings (story_id, agent, discipline, pr_review_cycles) "
+            "VALUES (?, 'grok', 'implement', 1)",
+            (story_id,),
+        )
+        conn.execute(
+            "INSERT INTO cost_entries (session_date, harness, story_id, cost_source, total_cost_usd) "
+            "VALUES ('2026-10-01', 'grok', ?, 'test', 4.0)",
+            (story_id,),
+        )
+    conn.commit()
+
+    result = ranked_harness_for_task("implement", ["codex", "grok"], conn=conn)
+    assert result == "grok"
+
+
+def test_ranked_harness_for_task_falls_back_below_sample_size():
+    from synlynk.db_schema import _DB_SCHEMA, _DB_SCORES_VIEW
+    from synlynk.capability import ranked_harness_for_task
+
+    conn = sqlite3.connect(":memory:")
+    conn.executescript(_DB_SCHEMA)
+    conn.executescript(_DB_SCORES_VIEW)
+    _ensure_cost_entries(conn)
+
+    # Challenger "grok" only has 2 samples (below min_sample_size=5), even
+    # though its metrics would otherwise win.
+    for i in range(2):
+        story_id = f"story-grok-{i}"
+        conn.execute(
+            "INSERT INTO capability_ratings (story_id, agent, discipline, pr_review_cycles) "
+            "VALUES (?, 'grok', 'implement', 1)",
+            (story_id,),
+        )
+        conn.execute(
+            "INSERT INTO cost_entries (session_date, harness, story_id, cost_source, total_cost_usd) "
+            "VALUES ('2026-10-01', 'grok', ?, 'test', 4.0)",
+            (story_id,),
+        )
+    conn.commit()
+
+    result = ranked_harness_for_task("implement", ["codex", "grok"], conn=conn)
+    assert result is None

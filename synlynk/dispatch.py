@@ -133,6 +133,56 @@ def _read_local_threshold(config_path=".synlynk/config.json") -> float:
         return 0.5
 
 
+# Last auto-routing fallback, consumed by the CLI when it records the job.
+# Overwritten on the next fallback. Never changes the harness that was chosen.
+_pending_routing_fallback: Optional[dict] = None
+
+
+def _log_routing_fallback(message: str, *, requested: str, actual: str) -> None:
+    """Record a routing fallback in sentinel.md and for the upcoming job row.
+
+    Stdout already prints ``message``. This only adds the durable copy.
+    A sentinel write failure must not change the harness that was chosen.
+    """
+    global _pending_routing_fallback
+    _pending_routing_fallback = {
+        "requested_harness": requested,
+        "actual_harness": actual,
+        "fallback_reason": message,
+    }
+    try:
+        write_alert = _pkg("_write_sentinel_alert", _write_sentinel_alert)
+        write_alert(
+            "WARN",
+            "DISPATCH_ROUTING_FALLBACK",
+            (
+                f"{message} (requested_harness={requested}, "
+                f"actual_harness={actual})"
+            ),
+            os.path.join(".synlynk", "sentinel.md"),
+        )
+    except Exception:
+        return
+
+
+def take_routing_fallback(actual_harness: Optional[str] = None) -> Optional[dict]:
+    """Return the pending fallback when it matches ``actual_harness``, and always clear it.
+
+    Pass ``actual_harness=None`` to discard a decision that will not be
+    stored on a job (dry-run). A mismatch also discards the decision: an
+    abandoned or unrelated dispatch must not keep the record pending for a
+    later job that happens to use the same harness.
+    """
+    global _pending_routing_fallback
+    pending = _pending_routing_fallback
+    _pending_routing_fallback = None
+    if pending is None:
+        return None
+    if actual_harness is not None and pending.get("actual_harness") != actual_harness:
+        return None
+    return pending
+
+
 def _resolve_dispatch_agent(
     requested_agent,
     task_type: str,
@@ -146,17 +196,21 @@ def _resolve_dispatch_agent(
     fallback = _read_local_fallback(config_path)
     threshold = _read_local_threshold(config_path)
     if not _preflight_local_silent():
-        print(f"Routing to: {fallback} (local oMLX unreachable)")
+        message = f"Routing to: {fallback} (local oMLX unreachable)"
+        print(message)
+        _log_routing_fallback(message, requested="local", actual=fallback)
         return fallback
 
     score = _get_local_capability_score(task_type, db)
     if score >= threshold:
         print(f"Routing to: local (tier-0, capability score: {score:.2f})")
         return "local"
-    print(
+    message = (
         f"Routing to: {fallback} (local capability score {score:.2f} "
         f"< threshold {threshold:.2f})"
     )
+    print(message)
+    _log_routing_fallback(message, requested="local", actual=fallback)
     return fallback
 
 
@@ -669,10 +723,31 @@ def _infer_dispatch_defaults(
         }.get(inferred_task_type, "dev")
 
     role_entry = (policy.get("agent_roles") or {}).get(inferred_role) or {}
-    allocation_entry = allocation.get(inferred_task_type) or allocation.get("implement") or {}
+    from synlynk.capability import ranked_harness_for_task
+
+    entry = allocation.get(inferred_task_type, {}) if inferred_task_type else {}
+    if not entry.get("harness"):
+        # Preserve the previous implement-table fallback for an unknown type.
+        entry = allocation.get("implement") or {}
+    default_harness = entry.get("harness")
+    fallback_list = entry.get("fallback") or []
+    promoted = None
+    if default_harness:
+        promoted = ranked_harness_for_task(
+            inferred_task_type, [default_harness] + list(fallback_list)
+        )
+        if promoted:
+            default_harness = promoted
     inferred_agent = agent
     if inferred_agent is None:
-        inferred_agent = role_entry.get("default_harness") or allocation_entry.get("harness")
+        # Explicit CLI agent (handled above), an explicit --role, and story
+        # metadata keep their harness. Empirical promotion replaces only the
+        # table default on the unbound path.
+        explicit_binding = role is not None or story_role is not None
+        if promoted and not explicit_binding:
+            inferred_agent = promoted
+        else:
+            inferred_agent = role_entry.get("default_harness") or default_harness
     if inferred_agent is None:
         inferred_agent = "codex"
 
@@ -699,6 +774,17 @@ def _infer_dispatch_defaults(
         "permission_profile": permission_profile,
         "story_role": story_role,
     }
+
+
+def compose_dispatch_preview(task: str, **kwargs) -> dict:
+    """Human-facing dispatch default. Alias of ``_infer_dispatch_defaults``.
+
+    The empirical-routing design names this entry point
+    ``compose_dispatch_preview``; the implementation has always lived in
+    ``_infer_dispatch_defaults`` (dispatch.py's policy ``task_allocation``
+    read). Keep both names so previews and real dispatches share one contract.
+    """
+    return _infer_dispatch_defaults(task, **kwargs)
 
 
 def _local_concurrency_exceeded(conn, max_concurrent: int = 1) -> bool:
@@ -3254,11 +3340,14 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                    db_conn=None,
                    _startup_failover: bool = True,
                    skip_permissions: bool = False,
-                   container_image: str | None = None) -> dict:
+                   container_image: str | None = None,
+                   routing_fallback: Optional[dict] = None) -> dict:
     if not task or not task.strip():
         raise ValueError(
             "--task is empty or whitespace-only; refusing to dispatch (see #720)"
         )
+    if routing_fallback is None:
+        routing_fallback = take_routing_fallback(agent)
     if task_type:
         try:
             authority = check_authority(
@@ -4143,6 +4232,10 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             if local_slot_claimed:
                 dconn.rollback()
             print(f"  ↪ startup failure on '{agent}' (exit {startup_exit}); failing over to '{secondary}'")
+            failover_route = None
+            if routing_fallback:
+                failover_route = dict(routing_fallback)
+                failover_route["actual_harness"] = secondary
             return dispatch_agent(
                 secondary, task, story_id=story_id, agent_id=agent_id,
                 force_agent=force_agent, context_mode=context_mode, cycle=cycle,
@@ -4155,6 +4248,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 db_conn=db_conn, _startup_failover=False,
                 container_image=container_image,
                 skip_permissions=skip_permissions,
+                routing_fallback=failover_route,
             )
 
     job = {
@@ -4207,6 +4301,10 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         "charter_role": resolved_agent_role or "",
         "charter_revision": _pkg("resolve_role_charter")(role=resolved_agent_role)[2] if (_pkg("resolve_role_charter") and resolved_agent_role) else None,
     }
+    if routing_fallback:
+        job["requested_harness"] = routing_fallback.get("requested_harness")
+        job["actual_harness"] = agent
+        job["fallback_reason"] = routing_fallback.get("fallback_reason")
 
     load_jobs = _pkg("_load_jobs")
     save_jobs = _pkg("_save_jobs")
@@ -4249,6 +4347,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 "impact_score": "INTEGER DEFAULT 0",
                 "requested_model": "TEXT",
                 "resolved_model": "TEXT",
+                "requested_harness": "TEXT",
+                "actual_harness": "TEXT",
+                "fallback_reason": "TEXT",
             })
             _ensure_daemon_job_columns(dconn, {
                 "worktree_path": "TEXT",
@@ -4272,7 +4373,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                     "gh_write_target=COALESCE(?, gh_write_target), "
                     "cross_branch_pr=COALESCE(?, cross_branch_pr), "
                     "gh_write_author=COALESCE(gh_write_author, ?), "
-                    "gh_write_expect=COALESCE(gh_write_expect, ?) WHERE job_id=?",
+                    "gh_write_expect=COALESCE(gh_write_expect, ?), "
+                    "requested_harness=?, actual_harness=?, fallback_reason=? "
+                    "WHERE job_id=?",
                     (
                         proc.pid,
                         job["started_at"],
@@ -4298,6 +4401,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                         cross_branch_pr_value,
                         gh_write_author_value,
                         gh_write_expect_for_job,
+                        job.get("requested_harness"),
+                        job.get("actual_harness"),
+                        job.get("fallback_reason"),
                         job_id,
                     ),
                 )
@@ -4308,8 +4414,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                     "(job_id, agent, harness, role, task, story_id, status, priority, depends_on, pid, pid_identity, "
                     "enqueued_at, started_at, log_path, worktree_path, worktree_branch, dispatch_context, context_mode, context_bytes, session_id, "
                     "agent_id, requires_gh_write, gh_write_target, gh_write_author, gh_write_expect, "
-                    "model_tier, impact_score, requested_model, resolved_model) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "model_tier, impact_score, requested_model, resolved_model, "
+                    "requested_harness, actual_harness, fallback_reason) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         job_id,
                         agent,
@@ -4340,6 +4447,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                         model_routing["impact_score"],
                         model_routing["requested_model"],
                         model_routing["resolved_model"],
+                        job.get("requested_harness"),
+                        job.get("actual_harness"),
+                        job.get("fallback_reason"),
                     ),
                 )
                 if cross_branch_pr_value:

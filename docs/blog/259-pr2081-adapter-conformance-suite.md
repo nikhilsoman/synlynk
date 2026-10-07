@@ -2,7 +2,7 @@
 title: "PR #2081 — A Conformance Suite That Names Adapter Drift Instead of Discovering It Live"
 date: 2026-10-06
 series: "Building the OS for Multi-Agent Development"
-post: 255
+post: 259
 pr: "#2081"
 status: open
 author: "synlynk team"
