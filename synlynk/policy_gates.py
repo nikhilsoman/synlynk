@@ -63,10 +63,13 @@ def record_gate_event(conn, *, pr_number: int, gate: str, mode: str, verdict: st
 
 
 def gate_streak(conn, gate: str) -> int | None:
-    rows = conn.execute(
-        "SELECT verdict FROM policy_gate_events WHERE gate=? ORDER BY id DESC",
-        (gate,),
-    ).fetchall()
+    try:
+        rows = conn.execute(
+            "SELECT verdict FROM policy_gate_events WHERE gate=? ORDER BY id DESC",
+            (gate,),
+        ).fetchall()
+    except Exception:
+        return None
     if not rows:
         return None
     streak = 0
