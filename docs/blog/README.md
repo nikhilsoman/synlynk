@@ -1,6 +1,6 @@
 # synlynk Blog Series: Building the OS for Multi-Agent Development
 
-| [258](./258-prTBD-readme-capability-evidence.md) | README now states the evidence threshold for empirical routing | TBD | 2026-10-07 |
+| [258](./258-pr2112-readme-capability-evidence.md) | README now states the evidence threshold for empirical routing | [#2112](https://github.com/nikhilsoman/synlynk/pull/2112) | 2026-10-07 |
 | [257](./257-pr2083-dispatch-fallback-logging.md) | Routing fallbacks are written down, not only printed | [#2083](https://github.com/nikhilsoman/synlynk/pull/2083) | 2026-10-06 |
 | [256](./256-pr2080-config-schema-doctor.md) | Doctor checks config.json and policy.json without a JSON Schema library | [#2080](https://github.com/nikhilsoman/synlynk/pull/2080) | 2026-10-06 |
 | [255](./255-pr2082-empirical-routing-fallback.md) | Empirical routing promotes a harness only after five measured samples | [#2082](https://github.com/nikhilsoman/synlynk/pull/2082) | 2026-10-06 |

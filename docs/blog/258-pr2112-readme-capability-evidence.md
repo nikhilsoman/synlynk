@@ -1,9 +1,9 @@
 ---
-title: "README Capability Claims Now Carry Their Evidence Threshold"
+title: "PR #2112 — README Capability Claims Now Carry Their Evidence Threshold"
 date: 2026-10-07
 series: "Building the OS for Multi-Agent Development"
 post: 258
-pr: "TBD"
+pr: "#2112"
 issue: "2098"
 status: open
 author: "synlynk team"
@@ -12,7 +12,7 @@ tags: [posts, policy, capability-assessment]
 type: pr
 ---
 
-# README Capability Claims Now Carry Their Evidence Threshold
+# PR #2112 — README Capability Claims Now Carry Their Evidence Threshold
 
 ## The Broader Goal at the End of the Previous PR
 
