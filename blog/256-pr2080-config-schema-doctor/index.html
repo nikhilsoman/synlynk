@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #2080 — Doctor checks config.json and policy.json without a JSON Schema library | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Oct 06, 2026</span>
+        
+          <span class="blog-post-pr">PR #2080</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #2080 — Doctor checks config.json and policy.json without a JSON Schema library</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>PR #2080 — Doctor checks config.json and policy.json without a JSON Schema library</h1>
+<h2>The Broader Goal at the End of the Previous PR</h2>
+<p>v0.24.0 still needs dispatch, review, and local config to fail in the open
+instead of drifting quietly. #2074 made a missing GOVERNS link visible on
+stdout and in <code>sentinel.md</code> while #1990's hard-fail is still unbuilt. The
+three-lens follow-ups plan then split the next config-trust work into four
+independent tasks. This PR is Task C, issue #2065.</p>
+<h2>Strategic Shifts in This PR (if any)</h2>
+<p>No strategy change. <code>pyproject.toml</code> still declares <code>dependencies=[]</code>, so
+this does not add <code>jsonschema</code>. The checker covers the small known key set
+(wrong type, missing required key, bad enum), not <code>$ref</code> or a full recursive
+schema. That matches the design's P1-1 scope note.</p>
+<h2>What This PR Shipped</h2>
+<ul>
+<li><code>synlynk/config_schema.py</code> exports <code>validate()</code>, <code>CONFIG_SCHEMA</code>, and
+<code>POLICY_SCHEMA</code>. <code>validate()</code> returns a list of human-readable errors.
+Config requires <code>schema_version</code> (int), <code>budget</code> (object with
+<code>limit_usd</code> and <code>limit_requests</code>), <code>harness_billing</code> (object), and
+<code>workspace_id</code> (string). <code>identity_slug</code>, <code>local_fallback</code>, and
+<code>local_auto_threshold</code> stay optional. Policy requires <code>schema_version</code>
+and <code>repo_id</code>, and checks <code>capability_policy.mode</code> against <code>empirical</code>
+and <code>heuristic</code>.</li>
+<li><code>synlynk doctor</code> registers <code>_hc_config_schema</code> and <code>_hc_policy_schema</code>
+immediately after <code>_hc_identity_slug</code>. A missing file warns. A parse error
+or schema error fails and names the field. A matching file is ok.</li>
+<li>The live repo config (<code>schema_version</code>, <code>budget</code>, <code>harness_billing</code>,
+<code>workspace_id</code>) and policy (<code>mode: empirical</code>) both pass. A config that
+drops a required top-level field, or sets <code>budget</code> to a non-object, fails
+validation, so <code>synlynk doctor</code> no longer reports that file as OK.</li>
+<li>Tests: <code>tests/test_config_schema.py</code> (5) and
+<code>tests/test_doctor_config_schema.py</code> (2).</li>
+</ul>
+<p>Plan: <code>docs/superpowers/plans/2026-10-06-three-lens-followups-plan.md</code> Task C.
+Design: <code>docs/superpowers/specs/2026-10-06-three-lens-followups-design.md</code>.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>None. This follows the committed design and plan.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>A bad <code>config.json</code> or <code>policy.json</code> now shows up in <code>synlynk doctor</code> before
+dispatch reads the wrong type or an illegal capability mode. The fleet still
+has no third-party schema dependency.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>The other three-lens follow-ups remain independent: sample-size-gated
+empirical routing (#2063), durable routing-fallback logs (#2064), and the
+cross-adapter conformance suite (#2062). #1990's GOVERNS hard-fail is still
+the next enforcement step for the warning #2074 shipped.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
