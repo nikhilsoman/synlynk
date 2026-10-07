@@ -17,8 +17,10 @@ canonical state outside supported Synlynk code paths.
 - `cost_entries.pr_number` plus `cost_entries.job_id` is the exact link for a
   dispatched implementation job on a task-scoped branch.
 - `daemon_jobs.purpose` is a typed value: `implementation`, `review`, or
-  `other`. Set it from explicit dispatch `--task-type` using a fixed mapping
-  derived from `.synlynk/policy.json` task allocation.
+  `other`. Set it from the explicit role and `--task-type` pair using a fixed
+  mapping derived from `.synlynk/policy.json` role compatibility and task
+  allocation: `qa` + `review` is review; `dev` + implementation task type is
+  implementation; other combinations are other.
 - `daemon_jobs.role`, `harness`, and `resolved_model` remain the sources of
   execution identity. A dispatched review also needs exact `gh_write_target`,
   `gh_write_expect=review_posted`, and a GitHub review actor matching the App
@@ -63,10 +65,16 @@ Initial audit findings:
   `_resolve_dispatch_gh_bot_login()` populates `gh_write_author`, and the
   effect contract stores its expected actor. Reuse that path rather than
   adding a separate role-to-login map.
-- The job summary CLI for `job-2a2b25fa` does not expose `task_type`. Before
-  selecting a backfill, inspect that job's structured manifest entry and
-  confirm it contains explicit type metadata. The migration must leave the
-  row unresolved if that entry is missing or incomplete.
+- The job summary CLI for `job-2a2b25fa` does not expose `task_type`, but the
+  structured root job manifest does. The migration must verify the exact job
+  ID and explicit role/type values there before backfilling; absent or
+  incomplete manifest data leaves the row unresolved.
+- The root job manifest confirms `job-2a2b25fa` has `role=dev` and
+  `task_type=test`; under the role/task mapping above it is an implementation
+  job. The manifest also has exact `gh_write_target=pr:2062` and
+  `gh_write_expect=pr_open`. The cost row separately supplies the exact PR
+  #2081 to job link. Migration may backfill its purpose from this structured
+  record; it must not treat the task sentence or its PR numbers as evidence.
 
 ### 1. Persist typed job purpose
 
@@ -75,12 +83,12 @@ Files: `synlynk/db_schema.py`, `synlynk/db.py`, `synlynk/dispatch.py`,
 
 1. Add an additive `purpose` column to `daemon_jobs` with nullable legacy
    behavior. Add migration coverage for existing databases.
-2. Define one deterministic mapping from explicit `--task-type` values to
-   `implementation`, `review`, or `other`. Source implementation task types
-   from the configured task allocation; map `review` to review and all other
-   non-implementation task types to other.
-3. Require explicit `--task-type` on jobs that need PR provenance; do not
-   infer a type from the task string for this path.
+2. Define one deterministic mapping from explicit role + `--task-type` pairs
+   to `implementation`, `review`, or `other`. Treat `qa` + `review` as
+   review, the configured implementation types under `dev` as implementation,
+   and all other pairs as other.
+3. Require explicit role and `--task-type` on jobs that need PR provenance;
+   do not infer purpose from the task string for this path.
 4. Persist purpose and role consistently in both the canonical daemon row and
    the supported job manifest/reconciliation path. Keep both records aligned
    through queued, running, and terminal transitions.

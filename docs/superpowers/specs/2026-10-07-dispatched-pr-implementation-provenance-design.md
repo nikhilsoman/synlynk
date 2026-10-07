@@ -55,11 +55,12 @@ cross-harness and cross-model comparison.
 
 Persist an explicit `purpose` (`implementation`, `review`, or `other`) and
 the existing dispatch `role` in `daemon_jobs`. Set purpose from the explicit
-`--task-type` using a fixed mapping derived from the configured task
-allocation: `review` maps to review, supported implementation task types map
-to implementation, and other task types map to other. Require an explicit
-task type for jobs that need PR provenance. Do not infer whether a job
-implements or reviews from its natural-language task.
+`--task-type` and role using a fixed mapping derived from
+`role_task_type_compat` and `dev_authority.task_allocation`: `review` under
+the `qa` role maps to review; implementation task types under the `dev` role
+map to implementation; other role/type pairs map to other. Require explicit
+role and task type for jobs that need PR provenance. Do not infer whether a
+job implements or reviews from its natural-language task.
 
 For a dispatched review job, use the existing structured `gh_write_target`
 and `gh_write_expect` fields: the target must equal `pr:<N>` and the
