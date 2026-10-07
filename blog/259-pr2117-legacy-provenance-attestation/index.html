@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #2117 — A Human Attestation for Legacy Job Provenance | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-3">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Oct 07, 2026</span>
+        
+          <span class="blog-post-pr">PR #2117</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #2117 — A Human Attestation for Legacy Job Provenance</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>PR #2117 — A Human Attestation for Legacy Job Provenance</h1>
+<h2>The Broader Goal at the End of the Previous PR</h2>
+<p>PR #2116 retired the generic legacy adapter fallback while preserving the
+registered harness behavior. The related adapter conformance suite in #2081
+was still waiting on the cross-harness provenance gate. The wider goal remains
+to make adapter contracts explicit and to require review evidence that can be
+traced to the jobs that performed the work.</p>
+<h2>Strategic Shifts in This PR (if any)</h2>
+<p>The provenance resolver now handles a fact that a new dispatch can record
+directly but an older dispatch cannot: whether its task type was explicitly
+selected. For job <code>job-2a2b25fa</code>, Nikhil confirmed that <code>--task-type test</code> was
+supplied. Synlynk should preserve that as a later human attestation, rather
+than writing it back into the historical manifest as if it had always been
+there.</p>
+<h2>What This PR Shipped</h2>
+<p>Migration 18 adds <code>job_provenance_attestations</code>, an append-only table tied to
+an exact job ID. <code>synlynk provenance attest</code> records the role, task type,
+derived purpose, operator attribution, rationale, and local CLI source. It
+requires the exact <code>JOB_ID:ROLE:TASK_TYPE</code> confirmation and rejects unknown
+operators, incompatible roles, and conflicts with existing job metadata.</p>
+<p>The PR check accepts one compatible attestation only when dispatch purpose is
+missing, and still requires the exact PR/job cost link. Harness and model
+identity continue to come from the existing job/cost records. Reviewer actor,
+cross-harness, and cross-model checks remain in place. The historical
+<code>task_type_explicit</code> field stays unknown.</p>
+<p>Focused verification passed: 59 provenance and migration tests, plus 16
+existing PR-check tests. The implementation PR is open for independent review;
+the attestation for #2081 will be entered through the new CLI after the change
+is reviewed and merged.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>No brainstorm visual informed this change.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>Synlynk can now retain an explicit human decision about an incomplete legacy
+record without blurring it with dispatch telemetry. Review gates can use that
+decision while keeping job identity and PR links anchored to canonical
+records.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>The provenance path has a reviewed design, a supported attestation command,
+and fail-closed resolution. Once this PR passes independent review, apply the
+owner-confirmed <code>dev</code> / <code>test</code> attestation to #2081, rerun its gate, and resume
+the remaining #2062 checks.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
