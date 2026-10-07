@@ -305,14 +305,23 @@ def test_review_job_timestamp_treats_legacy_start_as_local(project_dir, monkeypa
     monkeypatch.setattr(gh_verify, "_naive_local_tz", lambda: timezone(timedelta(hours=5, minutes=30)))
     monkeypatch.setattr(db.subprocess, "run", lambda *a, **k: SimpleNamespace(
         returncode=0,
-        stdout=json.dumps({"reviews": [{"author": {"login": "qa-app[bot]"}, "submittedAt": "2026-10-07T06:01:00Z"}]}),
+        # GitHub APIs may expose the same App login with or without the bot suffix.
+        stdout=json.dumps({"reviews": [{"author": {"login": "qa-app"}, "submittedAt": "2026-10-07T06:01:00Z"}]}),
     ))
     conn = synlynk._get_db()
     conn.execute(
         """INSERT INTO daemon_jobs (job_id, agent, task, status, enqueued_at,
-             purpose, gh_write_target, gh_write_expect, gh_write_author, started_at)
+             purpose, gh_write_target, gh_write_expect, gh_write_author, started_at, completed_at)
+           VALUES ('job-review-old', 'agy', 'review', 'failed', '2026-10-07',
+             'review', 'pr:2115', 'review_posted', 'qa-app[bot]',
+             '2026-10-07T11:00:00', '2026-10-07T11:30:59')"""
+    )
+    conn.execute(
+        """INSERT INTO daemon_jobs (job_id, agent, task, status, enqueued_at,
+             purpose, gh_write_target, gh_write_expect, gh_write_author, started_at, completed_at)
            VALUES ('job-review-time', 'agy', 'review', 'done', '2026-10-07',
-             'review', 'pr:2115', 'review_posted', 'qa-app[bot]', '2026-10-07T11:30:00')"""
+             'review', 'pr:2115', 'review_posted', 'qa-app[bot]',
+             '2026-10-07T11:30:00', '2026-10-07T11:32:00')"""
     )
     conn.commit()
     assert db._review_job_for_pr(conn, 2115) == ("job-review-time", "qa-app[bot]")

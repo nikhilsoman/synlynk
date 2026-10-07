@@ -49,6 +49,12 @@ canonical state outside supported Synlynk code paths.
 - Native `synlynk cost log` accepts an optional exact `--model` value so
   interactive implementation provenance records the runtime model instead of
   silently using the configured default.
+- Review actor verification reuses Synlynk's existing GitHub login normalizer,
+  accepting the configured App login with or without GitHub's `[bot]` suffix.
+  The PR #2115 native implementation record resolves as `codex / o4-mini`;
+  independent QA exposed two overlapping review dispatch candidates. Match the
+  GitHub review timestamp to the dispatch's start/completion interval so a
+  later review cannot be attributed to an earlier failed job.
 - The historical #2081 manifest records `role=dev` and `task_type=test` but
   does not record whether the type was explicitly supplied or inferred. It
   therefore cannot be backfilled under the explicit-type rule and remains

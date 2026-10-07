@@ -163,16 +163,13 @@ def _review_job_for_pr(conn, pr_number: int):
     """Return the unique typed review job whose exact effect target is this PR."""
     target = f"pr:{int(pr_number)}"
     rows = conn.execute(
-        """SELECT job_id, gh_write_author, started_at
+        """SELECT job_id, gh_write_author, started_at, completed_at
              FROM daemon_jobs
             WHERE purpose='review' AND gh_write_target=?
               AND gh_write_expect='review_posted'
             ORDER BY job_id""", (target,)
     ).fetchall()
-    if len(rows) != 1:
-        return None
-    job_id, expected_actor, started_at = rows[0]
-    if not expected_actor or not started_at:
+    if not rows:
         return None
     try:
         result = subprocess.run(
@@ -182,13 +179,29 @@ def _review_job_for_pr(conn, pr_number: int):
         reviews = json.loads(result.stdout).get("reviews", []) if result.returncode == 0 else []
     except (OSError, ValueError, TypeError, json.JSONDecodeError):
         return None
-    from synlynk.gh_verify import _parse_iso8601
-    started = _parse_iso8601(started_at, naive_as="local")
-    matching = [r for r in reviews if isinstance(r, dict)
-                and (r.get("author") or {}).get("login", "").casefold() == expected_actor.casefold()
-                and r.get("submittedAt") and _parse_iso8601(r["submittedAt"])
-                and started and _parse_iso8601(r["submittedAt"]) >= started]
-    return (job_id, expected_actor) if matching else None
+    from synlynk.gh_verify import _gh_logins_match, _parse_iso8601
+    matching_jobs = []
+    for job_id, expected_actor, started_at, completed_at in rows:
+        if not expected_actor or not started_at:
+            continue
+        started = _parse_iso8601(started_at, naive_as="local")
+        completed = _parse_iso8601(completed_at, naive_as="local") if completed_at else None
+        if not started:
+            continue
+        for review in reviews:
+            if not isinstance(review, dict):
+                continue
+            submitted_at = review.get("submittedAt")
+            submitted = _parse_iso8601(submitted_at) if submitted_at else None
+            if (
+                _gh_logins_match((review.get("author") or {}).get("login"), expected_actor)
+                and submitted
+                and submitted >= started
+                and (completed is None or submitted <= completed)
+            ):
+                matching_jobs.append((job_id, expected_actor))
+                break
+    return matching_jobs[0] if len(matching_jobs) == 1 else None
 
 
 def _emit_missing_provenance_hint(pr_number: int) -> None:
