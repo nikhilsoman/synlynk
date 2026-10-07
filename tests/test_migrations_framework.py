@@ -96,3 +96,20 @@ def test_migration_0016_adds_cost_entries_pr_number_column(tmp_path):
     cols_after = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}
     assert cols_after == cols
     conn.close()
+
+
+def test_migration_0017_adds_typed_task_metadata_to_existing_jobs(tmp_path):
+    import sqlite3
+    from synlynk.migrations.runner import run_pending_migrations
+
+    conn = sqlite3.connect(tmp_path / "state.db")
+    conn.execute("CREATE TABLE daemon_jobs (job_id TEXT PRIMARY KEY)")
+    conn.execute("PRAGMA user_version = 16")
+    conn.commit()
+
+    run_pending_migrations(conn)
+
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)")}
+    assert {"task_type", "task_type_explicit", "purpose"} <= cols
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 17
+    conn.close()

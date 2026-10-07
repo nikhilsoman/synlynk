@@ -13,10 +13,12 @@ def _up(conn: sqlite3.Connection) -> None:
     cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)")}
     if "task_type" not in cols:
         conn.execute("ALTER TABLE daemon_jobs ADD COLUMN task_type TEXT")
+    if "task_type_explicit" not in cols:
+        conn.execute("ALTER TABLE daemon_jobs ADD COLUMN task_type_explicit INTEGER")
     if "purpose" not in cols:
         conn.execute("ALTER TABLE daemon_jobs ADD COLUMN purpose TEXT")
     conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_daemon_jobs_purpose ON daemon_jobs(purpose, gh_write_target)"
+        "CREATE INDEX IF NOT EXISTS idx_daemon_jobs_purpose ON daemon_jobs(purpose)"
     )
 
 

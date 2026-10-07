@@ -37,7 +37,8 @@ canonical state outside supported Synlynk code paths.
 
 ## Implementation progress (2026-10-07)
 
-- Added migration 17 and persisted `task_type` plus fixed `purpose` in the
+- Added migration 17 and persisted `task_type`, whether it was explicitly
+  supplied, and a fixed `purpose` in the
   daemon row and flat dispatch manifest. `synlynk jobs` backfills only missing
   typed fields from structured manifest entries; mismatches remain unresolved.
 - Provenance lookup now requires typed implementation jobs and exact
@@ -45,10 +46,11 @@ canonical state outside supported Synlynk code paths.
   unique `purpose=review`, exact `gh_write_target=pr:N`,
   `gh_write_expect=review_posted`, and a GitHub review by the configured actor
   submitted after dispatch started. Task prose is not consulted.
-- The historical #2081 job can be backfilled when `synlynk jobs` runs from the
-  root checkout, because its root manifest records `role=dev` and
-  `task_type=test`. The implementation still needs to exercise that supported
-  reconciliation and run `synlynk pr check` from PR #2081's own worktree.
+- The historical #2081 manifest records `role=dev` and `task_type=test` but
+  does not record whether the type was explicitly supplied or inferred. It
+  therefore cannot be backfilled under the explicit-type rule and remains
+  unresolved. New dispatch manifests preserve that distinction. The review
+  must run `synlynk pr check` from PR #2115's own worktree.
 - Verification so far: provenance-focused tests (9 passed); migration,
   dispatch, and GitHub identity tests (188 passed). The broader
   `test_agent_cli.py` run reached 123 passed and 1 skipped before the sandbox
@@ -89,11 +91,11 @@ Initial audit findings:
   ID and explicit role/type values there before backfilling; absent or
   incomplete manifest data leaves the row unresolved.
 - The root job manifest confirms `job-2a2b25fa` has `role=dev` and
-  `task_type=test`; under the role/task mapping above it is an implementation
-  job. The manifest also has exact `gh_write_target=pr:2062` and
+  `task_type=test`; it also has exact `gh_write_target=pr:2062` and
   `gh_write_expect=pr_open`. The cost row separately supplies the exact PR
-  #2081 to job link. Migration may backfill its purpose from this structured
-  record; it must not treat the task sentence or its PR numbers as evidence.
+  #2081 to job link. The manifest predates `task_type_explicit`, so it cannot
+  prove the type was explicit. Purpose remains unresolved for this legacy job;
+  the task sentence and PR numbers are not evidence of purpose or association.
 
 ### 1. Persist typed job purpose
 

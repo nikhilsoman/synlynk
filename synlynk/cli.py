@@ -2397,6 +2397,7 @@ def main(argv=None) -> None:
                                  static_baseline=getattr(args, "static_baseline", False),
                                  requires_gh_write=_effective_requires_gh_write,
                                  task_type=_effective_task_type,
+                                 task_type_explicit=bool(getattr(args, "task_type", None)),
                                  model_tier=getattr(args, "model_tier", None),
                                  model=getattr(args, "model", None),
                                  effort=getattr(args, "effort", None),

@@ -180,22 +180,22 @@ def _reconcile_typed_purpose(conn) -> int:
             continue
         task_type = job.get("task_type")
         role = job.get("resolved_agent_role") or job.get("role")
-        if not task_type or not role:
+        if not task_type or not role or not bool(job.get("task_type_explicit")):
             continue
         purpose = _job_purpose(role, task_type)
         row = conn.execute(
-            "SELECT task_type, purpose FROM daemon_jobs WHERE job_id=?", (job["id"],)
+            "SELECT task_type, task_type_explicit, purpose FROM daemon_jobs WHERE job_id=?", (job["id"],)
         ).fetchone()
         if not row:
             continue
-        old_type, old_purpose = row
+        old_type, old_explicit, old_purpose = row
         if old_type and old_type != task_type:
             continue
         if old_purpose and old_purpose != purpose:
             continue
-        if old_type is None or old_purpose is None:
+        if old_type is None or old_explicit is None or old_purpose is None:
             conn.execute(
-                "UPDATE daemon_jobs SET task_type=COALESCE(task_type, ?), purpose=COALESCE(purpose, ?) WHERE job_id=?",
+                "UPDATE daemon_jobs SET task_type=COALESCE(task_type, ?), task_type_explicit=COALESCE(task_type_explicit, 1), purpose=COALESCE(purpose, ?) WHERE job_id=?",
                 (task_type, purpose, job["id"]),
             )
             changed += 1

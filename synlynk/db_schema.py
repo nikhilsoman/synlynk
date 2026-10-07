@@ -206,6 +206,7 @@ CREATE TABLE IF NOT EXISTS daemon_jobs (
     requested_model TEXT,
     resolved_model TEXT,
     task_type TEXT,
+    task_type_explicit INTEGER,
     purpose TEXT CHECK (purpose IS NULL OR purpose IN ('implementation', 'review', 'other')),
     requested_harness TEXT,
     actual_harness TEXT,
