@@ -2780,3 +2780,13 @@ def test_dispatch_logs_isolated_and_preserved_on_reap(tmp_path, monkeypatch):
     preserved_log = os.path.join(_daemon_state_path("logs"), os.path.basename(log_path))
     assert os.path.exists(preserved_log)
     assert open(preserved_log).read() == "dispatched worker output"
+
+
+def test_job_purpose_is_fixed_and_requires_explicit_task_type():
+    from synlynk.dispatch import _job_purpose
+
+    assert _job_purpose("qa", "review") == "review"
+    assert _job_purpose("dev", "test") == "implementation"
+    assert _job_purpose("dev", None) == "other"
+    assert _job_purpose("qa", "implement") == "other"
+    assert _job_purpose("qa", "review", explicit=False) == "other"

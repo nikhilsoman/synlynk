@@ -1264,6 +1264,22 @@ def test_cmd_cost_log_writes_estimated_manual_row(project_dir, monkeypatch):
     assert row[6] == 2051
 
 
+def test_cmd_cost_log_accepts_exact_model_for_pr_provenance(project_dir, monkeypatch):
+    import synlynk
+
+    monkeypatch.setattr(synlynk, "DB_PATH", os.path.join(project_dir, "state.db"))
+    monkeypatch.setattr(synlynk, "_is_migrated", lambda: True)
+    monkeypatch.setattr(synlynk, "get_username", lambda: "nikhil")
+    cmd_cost_log(
+        agent="codex", tokens_in=10, tokens_out=5, pr=2115,
+        model="gpt-6.1-sol", note="explicit model identity",
+    )
+    conn = synlynk._get_db()
+    row = conn.execute("SELECT model, pr_number FROM cost_entries").fetchone()
+    conn.close()
+    assert row == ("gpt-6.1-sol", 2115)
+
+
 def test_cmd_cost_log_populates_payment_columns(project_dir, monkeypatch):
     import synlynk
     from synlynk.costs import resolve_payment_value
