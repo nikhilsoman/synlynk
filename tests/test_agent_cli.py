@@ -293,6 +293,32 @@ def test_pr_check_cross_harness_review_accepts_different_model(project_dir, monk
     assert ok
 
 
+def test_review_job_timestamp_treats_legacy_start_as_local(project_dir, monkeypatch):
+    import json
+    from datetime import timezone, timedelta
+    from types import SimpleNamespace
+    import synlynk
+    import synlynk.db as db
+    import synlynk.gh_verify as gh_verify
+
+    monkeypatch.chdir(project_dir)
+    monkeypatch.setattr(gh_verify, "_naive_local_tz", lambda: timezone(timedelta(hours=5, minutes=30)))
+    monkeypatch.setattr(db.subprocess, "run", lambda *a, **k: SimpleNamespace(
+        returncode=0,
+        stdout=json.dumps({"reviews": [{"author": {"login": "qa-app[bot]"}, "submittedAt": "2026-10-07T06:01:00Z"}]}),
+    ))
+    conn = synlynk._get_db()
+    conn.execute(
+        """INSERT INTO daemon_jobs (job_id, agent, task, status, enqueued_at,
+             purpose, gh_write_target, gh_write_expect, gh_write_author, started_at)
+           VALUES ('job-review-time', 'agy', 'review', 'done', '2026-10-07',
+             'review', 'pr:2115', 'review_posted', 'qa-app[bot]', '2026-10-07T11:30:00')"""
+    )
+    conn.commit()
+    assert db._review_job_for_pr(conn, 2115) == ("job-review-time", "qa-app[bot]")
+    conn.close()
+
+
 def test_pr_check_recovers_implementer_from_linked_issue_without_rating(project_dir, monkeypatch):
     import json
     import synlynk

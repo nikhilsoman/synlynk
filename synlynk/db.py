@@ -147,16 +147,16 @@ def _implementation_identity_from_native_cost_entry(
     conn, pr_number: int
 ) -> tuple[str | None, str | None]:
     """Resolve implementation identity recorded by a native session."""
-    row = conn.execute(
+    rows = conn.execute(
         """SELECT COALESCE(NULLIF(harness, ''), NULLIF(agent, '')),
                          NULLIF(model, '')
              FROM cost_entries
             WHERE pr_number=?
               AND job_id IS NULL
-            ORDER BY id DESC LIMIT 1""",
+            ORDER BY id DESC LIMIT 2""",
         (pr_number,),
-    ).fetchone()
-    return (row[0], row[1]) if row else (None, None)
+    ).fetchall()
+    return (rows[0][0], rows[0][1]) if len(rows) == 1 else (None, None)
 
 
 def _review_job_for_pr(conn, pr_number: int):
@@ -183,7 +183,7 @@ def _review_job_for_pr(conn, pr_number: int):
     except (OSError, ValueError, TypeError, json.JSONDecodeError):
         return None
     from synlynk.gh_verify import _parse_iso8601
-    started = _parse_iso8601(started_at)
+    started = _parse_iso8601(started_at, naive_as="local")
     matching = [r for r in reviews if isinstance(r, dict)
                 and (r.get("author") or {}).get("login", "").casefold() == expected_actor.casefold()
                 and r.get("submittedAt") and _parse_iso8601(r["submittedAt"])
@@ -253,7 +253,7 @@ def _implementation_job_from_linked_issues(conn, pr_number: int) -> tuple[str | 
         return None, None
 
     row = conn.execute(
-        """SELECT ce.job_id, ce.story_id
+        """SELECT DISTINCT ce.job_id, ce.story_id
              FROM cost_entries ce
              JOIN daemon_jobs dj ON dj.job_id=ce.job_id
             WHERE ce.story_id=?
@@ -270,7 +270,7 @@ def _cross_harness_review_verdict(conn, pr_number: int) -> tuple[bool, str]:
         return True, "cross-harness review policy disabled"
 
     implementation = conn.execute(
-        """SELECT ce.job_id
+        """SELECT DISTINCT ce.job_id
              FROM capability_ratings cr
              JOIN cost_entries ce ON ce.story_id=cr.story_id
              LEFT JOIN daemon_jobs dj ON dj.job_id=ce.job_id
@@ -284,7 +284,7 @@ def _cross_harness_review_verdict(conn, pr_number: int) -> tuple[bool, str]:
         return False, f"ambiguous implementation job provenance for PR #{pr_number}"
     if not implementation_job_id:
         exact = conn.execute(
-            """SELECT ce.job_id FROM cost_entries ce JOIN daemon_jobs dj ON dj.job_id=ce.job_id
+            """SELECT DISTINCT ce.job_id FROM cost_entries ce JOIN daemon_jobs dj ON dj.job_id=ce.job_id
                 WHERE ce.pr_number=? AND dj.purpose='implementation' ORDER BY ce.id""",
             (pr_number,),
         ).fetchall()

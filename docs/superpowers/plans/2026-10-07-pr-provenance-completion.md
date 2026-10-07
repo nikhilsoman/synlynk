@@ -55,6 +55,13 @@ canonical state outside supported Synlynk code paths.
   dispatch, and GitHub identity tests (188 passed). The broader
   `test_agent_cli.py` run reached 123 passed and 1 skipped before the sandbox
   denied a localhost socket in an unrelated callback test.
+- Independent QA review of PR #2115 found local-time timestamp handling and
+  duplicate-row ambiguity. Fixed the timestamp parser to interpret legacy
+  timezone-naive `started_at` as local time and deduplicated implementation
+  candidates by job ID. Review is pending on the updated head; its initial
+  `synlynk pr check` also reported the repository's `todo.md` hand-edit guard
+  and an undeterminable CI status. The QA identity's `gh api user` probe got
+  HTTP 403, so no GitHub review was posted.
 
 ### 0. Inspect the current provenance records and role identity source
 
