@@ -71,9 +71,10 @@ def test_run_pending_migrations_applies_pending_migration_in_order(tmp_path, mon
     conn.close()
 
 
-def test_migration_0016_adds_cost_entries_pr_number_column(tmp_path):
+def test_migration_0016_adds_cost_entries_pr_number_column(tmp_path, monkeypatch):
     import sqlite3
-    from synlynk.migrations.runner import run_pending_migrations
+    from synlynk.migrations import runner
+    from synlynk.migrations.m0016_cost_entries_pr_number import MIGRATION
 
     conn = sqlite3.connect(tmp_path / "state.db")
     conn.execute(
@@ -85,29 +86,32 @@ def test_migration_0016_adds_cost_entries_pr_number_column(tmp_path):
     conn.execute("PRAGMA user_version = 15")
     conn.commit()
 
-    run_pending_migrations(conn)
+    monkeypatch.setattr(runner, "MIGRATIONS", [MIGRATION])
+    runner.run_pending_migrations(conn)
 
     cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}
     assert "pr_number" in cols
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 17
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 16
 
     # Re-running against an already-migrated db is a no-op, not a crash.
-    run_pending_migrations(conn)
+    runner.run_pending_migrations(conn)
     cols_after = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}
     assert cols_after == cols
     conn.close()
 
 
-def test_migration_0017_adds_typed_task_metadata_to_existing_jobs(tmp_path):
+def test_migration_0017_adds_typed_task_metadata_to_existing_jobs(tmp_path, monkeypatch):
     import sqlite3
-    from synlynk.migrations.runner import run_pending_migrations
+    from synlynk.migrations import runner
+    from synlynk.migrations.m0017_daemon_job_purpose import MIGRATION
 
     conn = sqlite3.connect(tmp_path / "state.db")
     conn.execute("CREATE TABLE daemon_jobs (job_id TEXT PRIMARY KEY)")
     conn.execute("PRAGMA user_version = 16")
     conn.commit()
 
-    run_pending_migrations(conn)
+    monkeypatch.setattr(runner, "MIGRATIONS", [MIGRATION])
+    runner.run_pending_migrations(conn)
 
     cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)")}
     assert {"task_type", "task_type_explicit", "purpose"} <= cols
