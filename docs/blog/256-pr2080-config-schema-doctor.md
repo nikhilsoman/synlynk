@@ -2,7 +2,7 @@
 title: "PR #2080 — Doctor checks config.json and policy.json without a JSON Schema library"
 date: 2026-10-06
 series: "Building the OS for Multi-Agent Development"
-post: 255
+post: 256
 pr: "#2080"
 status: open
 author: "synlynk team"

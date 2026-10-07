@@ -184,3 +184,75 @@ def route_expected_value(candidates: Iterable, task_domain: str, criticality: fl
     finally:
         if owned:
             db.close()
+
+
+def ranked_harness_for_task(
+    task_type: str,
+    candidates: list,
+    *,
+    min_sample_size: int = 5,
+    conn=None,
+) -> str | None:
+    """Return a candidate that beats the incumbent on measured outcomes.
+
+    ``candidates[0]`` is the incumbent (the current ``task_allocation``
+    default). A later candidate is only preferred when it has at least
+    ``min_sample_size`` capability_ratings rows for this ``task_type`` (the
+    closest existing dimension is ``discipline`` — capability_ratings has
+    no task_type column) and beats the incumbent on both median
+    pr_review_cycles and average total_cost_usd. Returns ``None`` when no
+    candidate qualifies, so callers fall back to the incumbent unchanged.
+    """
+    if not candidates:
+        return None
+    db, owned = _connection(conn)
+    try:
+        incumbent = candidates[0]
+        stats = {}
+        for harness in candidates:
+            rows = db.execute(
+                """SELECT cr.pr_review_cycles, ce.total_cost_usd
+                     FROM capability_ratings cr
+                     JOIN cost_entries ce ON ce.story_id = cr.story_id
+                    WHERE cr.agent = ? AND lower(cr.discipline) = lower(?)
+                      AND ce.harness = cr.agent""",
+                (harness, task_type),
+            ).fetchall()
+            if not rows:
+                stats[harness] = None
+                continue
+            cycles = sorted(r[0] for r in rows if r[0] is not None)
+            costs = [r[1] for r in rows if r[1] is not None]
+            if not cycles or not costs:
+                stats[harness] = None
+                continue
+            mid = len(cycles) // 2
+            median_cycles = (
+                cycles[mid] if len(cycles) % 2 else (cycles[mid - 1] + cycles[mid]) / 2
+            )
+            stats[harness] = {
+                "sample_count": len(rows),
+                "median_cycles": median_cycles,
+                "avg_cost": sum(costs) / len(costs),
+            }
+
+        incumbent_stats = stats.get(incumbent)
+        best = None
+        for harness in candidates[1:]:
+            candidate_stats = stats.get(harness)
+            if not candidate_stats or candidate_stats["sample_count"] < min_sample_size:
+                continue
+            if incumbent_stats:
+                if not (
+                    candidate_stats["median_cycles"] < incumbent_stats["median_cycles"]
+                    and candidate_stats["avg_cost"] < incumbent_stats["avg_cost"]
+                ):
+                    continue
+            if best is None or (
+                candidate_stats["median_cycles"] < stats[best]["median_cycles"]
+            ):
+                best = harness
+        return best
+    finally:
+        if owned:
+            db.close()
