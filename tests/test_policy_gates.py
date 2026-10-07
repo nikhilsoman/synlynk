@@ -166,3 +166,30 @@ def test_evaluate_gate_pass_never_blocks_regardless_of_mode(tmp_path, monkeypatc
     conn = _db_with_events(tmp_path, [])
     result = _evaluate_gate(conn, pr_number=2100, gate="governs_authority", mode_key="require_linked_goal_mode", verdict=("pass", "no violations"))
     assert result.should_block is False
+
+
+def test_cmd_policy_gate_status_reports_streak_and_threshold(tmp_path, monkeypatch, capsys):
+    from synlynk.policy_cli import cmd_policy_gate_status
+    monkeypatch.chdir(tmp_path)
+    conn = _db_with_events(tmp_path, [(1, "governs_authority", "pass"), (2, "governs_authority", "pass")])
+    conn.close()
+    monkeypatch.setattr("synlynk.policy_cli._get_db", lambda: sqlite3.connect(tmp_path / "state.db"))
+    exit_code = cmd_policy_gate_status()
+    assert exit_code == 0
+    out = capsys.readouterr().out
+    assert "governs_authority" in out
+    assert "streak: 2" in out
+    assert "100" in out
+
+
+def test_cmd_policy_gate_status_reports_no_data_for_unrecorded_gate(tmp_path, monkeypatch, capsys):
+    from synlynk.migrations.runner import run_pending_migrations
+    from synlynk.policy_cli import cmd_policy_gate_status
+    monkeypatch.chdir(tmp_path)
+    conn = sqlite3.connect(tmp_path / "state.db")
+    run_pending_migrations(conn)
+    conn.close()
+    monkeypatch.setattr("synlynk.policy_cli._get_db", lambda: sqlite3.connect(tmp_path / "state.db"))
+    exit_code = cmd_policy_gate_status()
+    assert exit_code == 0
+    assert "no data yet" in capsys.readouterr().out
