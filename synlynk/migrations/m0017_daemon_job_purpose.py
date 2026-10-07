@@ -10,13 +10,21 @@ def _up(conn: sqlite3.Connection) -> None:
     ).fetchone()
     if not exists:
         return
-    cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)")}
-    if "task_type" not in cols:
-        conn.execute("ALTER TABLE daemon_jobs ADD COLUMN task_type TEXT")
-    if "task_type_explicit" not in cols:
-        conn.execute("ALTER TABLE daemon_jobs ADD COLUMN task_type_explicit INTEGER")
-    if "purpose" not in cols:
-        conn.execute("ALTER TABLE daemon_jobs ADD COLUMN purpose TEXT")
+    for name, definition in (
+        ("task_type", "TEXT"),
+        ("task_type_explicit", "INTEGER"),
+        ("purpose", "TEXT"),
+    ):
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)")}
+        if name in cols:
+            continue
+        try:
+            conn.execute(f"ALTER TABLE daemon_jobs ADD COLUMN {name} {definition}")
+        except sqlite3.OperationalError as exc:
+            # Concurrent CLI startup may apply the same additive migration.
+            # Ignore only the winner's duplicate-column result.
+            if "duplicate column name" not in str(exc).lower():
+                raise
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_daemon_jobs_purpose ON daemon_jobs(purpose)"
     )
