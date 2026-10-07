@@ -89,7 +89,7 @@ def test_migration_0016_adds_cost_entries_pr_number_column(tmp_path):
 
     cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}
     assert "pr_number" in cols
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 17
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 18
 
     # Re-running against an already-migrated db is a no-op, not a crash.
     run_pending_migrations(conn)
@@ -111,5 +111,38 @@ def test_migration_0017_adds_typed_task_metadata_to_existing_jobs(tmp_path):
 
     cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)")}
     assert {"task_type", "task_type_explicit", "purpose"} <= cols
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 17
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 18
     conn.close()
+
+
+def test_m0018_creates_policy_gate_events_table(tmp_path):
+    import sqlite3
+    from synlynk.migrations.m0018_policy_gate_events import MIGRATION
+
+    conn = sqlite3.connect(tmp_path / "state.db")
+    conn.execute("PRAGMA user_version = 17")
+    MIGRATION.up(conn)
+    conn.commit()
+
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(policy_gate_events)")}
+    assert cols == {"id", "pr_number", "gate", "mode", "verdict", "detail", "recorded_at"}
+
+    conn.execute(
+        "INSERT INTO policy_gate_events (pr_number, gate, mode, verdict, detail, recorded_at) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        (2100, "governs_authority", "observe", "pass", "no violations", "2026-10-07T00:00:00+00:00"),
+    )
+    conn.commit()
+    row = conn.execute("SELECT pr_number, gate, verdict FROM policy_gate_events").fetchone()
+    assert row == (2100, "governs_authority", "pass")
+
+
+def test_m0018_is_idempotent(tmp_path):
+    import sqlite3
+    from synlynk.migrations.m0018_policy_gate_events import MIGRATION
+
+    conn = sqlite3.connect(tmp_path / "state.db")
+    conn.execute("PRAGMA user_version = 17")
+    MIGRATION.up(conn)
+    MIGRATION.up(conn)
+    conn.commit()
