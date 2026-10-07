@@ -3537,6 +3537,17 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     if agent not in baselines_map:
         raise ValueError(f"Unknown agent: '{agent}'. Known: {list(baselines_map)}")
 
+    # Adapter coverage is the source of truth for dispatchable harnesses.
+    # Check after capability-driven reroutes, but before opening the DB or
+    # creating any job state/worktree.
+    try:
+        adapter = get_adapter(agent)
+    except KeyError as exc:
+        raise ValueError(
+            f"Harness '{agent}' has no registered dispatch adapter. "
+            "Register an adapter before dispatching it."
+        ) from exc
+
     if agent == "grok" and not skip_permissions:
         # Grok's CLI has no working non-bypass headless mode (LIVE-13:
         # docs/rca/2026-09-22-LIVE-13-grok-headless-dispatch-permission-bypass.md).
@@ -3899,14 +3910,6 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             "scope_paths": scope_paths or [],
         }
     )
-    try:
-        adapter = get_adapter(request.agent)
-    except KeyError:
-        # Keep compatibility with legacy/non-core harness names that have not
-        # yet been added to the foundation registry
-        from synlynk.harness_adapters.legacy import LegacyAdapter
-
-        adapter = LegacyAdapter(agent=request.agent)
     try:
         worktree_info = pipeline.prepare_worktree(request)
     except TypeError as exc:

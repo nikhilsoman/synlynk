@@ -53,6 +53,27 @@ def test_dispatch_agent_raises_when_task_type_not_in_policy_allocation_table(tmp
         )
 
 
+def test_dispatch_agent_rejects_harness_without_adapter_before_opening_db(monkeypatch):
+    import synlynk.dispatch as dispatch_mod
+
+    baselines = dict(dispatch_mod.HARNESS_CAPABILITY_BASELINES)
+    baselines["future-harness"] = {}
+    original_pkg = dispatch_mod._pkg
+
+    def package_value(name, default=None):
+        if name == "HARNESS_CAPABILITY_BASELINES":
+            return baselines
+        if name == "_get_db":
+            raise AssertionError("database must not be opened for an unregistered harness")
+        return original_pkg(name, default)
+
+    monkeypatch.setattr(dispatch_mod, "_pkg", package_value)
+    monkeypatch.setattr(dispatch_mod, "resolve_dispatch_harness", lambda *args, **kwargs: "future-harness")
+
+    with pytest.raises(ValueError, match="Harness 'future-harness' has no registered dispatch adapter"):
+        dispatch_mod.dispatch_agent("future-harness", "run task", force_agent=True, context_mode="none")
+
+
 def test_preflight_blocks_missing_instruction_file(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / "CLAUDE.md").write_text("# Claude")

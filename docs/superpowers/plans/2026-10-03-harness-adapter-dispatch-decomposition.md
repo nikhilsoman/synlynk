@@ -1211,6 +1211,11 @@ git commit -m "feat(dispatch): add AgyAdapter with 429 credit-exhaustion regress
 
 ### Task 12: `ClaudeAdapter`, `LocalAdapter`, remove `LegacyAdapter`
 
+**Execution note (2026-10-07, gh:#2062):** Muse is already dispatchable through
+the experimental baseline and has a live dispatch regression test. Its existing
+behavior is preserved with a registry adapter in the retirement change; this
+does not change the separate roadmap sequence for Muse calibration and promotion.
+
 **Files:**
 - Create: `synlynk/harness_adapters/claude.py`
 - Create: `synlynk/harness_adapters/local.py`
