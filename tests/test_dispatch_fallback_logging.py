@@ -120,6 +120,79 @@ def test_unreachable_fallback_persists_requested_and_actual_harness(tmp_path, mo
     assert "local oMLX unreachable" in row[2]
 
 
+def test_mismatched_dispatch_does_not_leak_fallback_to_later_job(tmp_path, monkeypatch):
+    """An abandoned auto-route must not stamp a later, unrelated job.
+
+    _resolve_dispatch_agent("auto") records local -> codex. That dispatch is
+    not launched. dispatch_agent("agy") used to leave the record pending, so
+    a later dispatch_agent("codex") wrote requested_harness=local and the old
+    reason onto a job that never fell back from local.
+    """
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "AGENTS.md").write_text(
+        '<!-- synlynk:start version="0.23.0-dev" tool="codex" -->\n'
+    )
+    from synlynk import dispatch
+    import synlynk as sl
+
+    monkeypatch.setattr(dispatch, "_preflight_local_silent", lambda: False)
+    monkeypatch.setattr(
+        dispatch, "_read_local_fallback", lambda config_path=".synlynk/config.json": "codex"
+    )
+    monkeypatch.setattr(
+        dispatch,
+        "_preflight_dispatch",
+        lambda *a, **k: {"passed": True, "sentinel": None, "reason": None},
+    )
+
+    class FakeProc:
+        pid = 4242
+
+    monkeypatch.setattr(dispatch.subprocess, "Popen", lambda *a, **kw: FakeProc())
+
+    resolved = dispatch._resolve_dispatch_agent("auto", "implement", None)
+    assert resolved == "codex"
+    assert dispatch._pending_routing_fallback is not None
+    assert dispatch._pending_routing_fallback["actual_harness"] == "codex"
+
+    agy_job = dispatch.dispatch_agent(
+        "agy",
+        "implement an unrelated task",
+        skip_preflight=True,
+        context_mode="none",
+        force_agent=True,
+    )
+    assert agy_job.get("requested_harness") is None
+    assert agy_job.get("fallback_reason") is None
+    assert dispatch._pending_routing_fallback is None
+
+    codex_job = dispatch.dispatch_agent(
+        "codex",
+        "implement another unrelated task",
+        skip_preflight=True,
+        context_mode="none",
+        force_agent=True,
+    )
+    assert codex_job.get("requested_harness") is None
+    assert codex_job.get("fallback_reason") is None
+    assert codex_job.get("actual_harness") is None
+
+    conn = sl._get_db()
+    try:
+        rows = conn.execute(
+            "SELECT job_id, agent, requested_harness, actual_harness, fallback_reason "
+            "FROM daemon_jobs WHERE job_id IN (?, ?)",
+            (agy_job["id"], codex_job["id"]),
+        ).fetchall()
+    finally:
+        conn.close()
+    assert len(rows) == 2
+    for row in rows:
+        assert row[2] is None
+        assert row[3] is None
+        assert row[4] is None
+
+
 def test_low_capability_fallback_persists_score_reason(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / "AGENTS.md").write_text(

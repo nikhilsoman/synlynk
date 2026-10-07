@@ -166,18 +166,20 @@ def _log_routing_fallback(message: str, *, requested: str, actual: str) -> None:
 
 
 def take_routing_fallback(actual_harness: Optional[str] = None) -> Optional[dict]:
-    """Return and clear the pending fallback when it matches ``actual_harness``.
+    """Return the pending fallback when it matches ``actual_harness``, and always clear it.
 
     Pass ``actual_harness=None`` to discard a decision that will not be
-    stored on a job (dry-run). A mismatch leaves the decision in place.
+    stored on a job (dry-run). A mismatch also discards the decision: an
+    abandoned or unrelated dispatch must not keep the record pending for a
+    later job that happens to use the same harness.
     """
     global _pending_routing_fallback
     pending = _pending_routing_fallback
+    _pending_routing_fallback = None
     if pending is None:
         return None
     if actual_harness is not None and pending.get("actual_harness") != actual_harness:
         return None
-    _pending_routing_fallback = None
     return pending
 
 
