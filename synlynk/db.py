@@ -102,6 +102,32 @@ def _job_execution_identity(conn, job_id: str) -> tuple[str | None, str | None]:
     return (row[0], row[1]) if row else (None, None)
 
 
+def _job_has_implementation_purpose(conn, job_id: str | None) -> bool:
+    """Accept typed dispatch purpose or one compatible legacy attestation."""
+    if not job_id:
+        return False
+    row = conn.execute(
+        "SELECT purpose FROM daemon_jobs WHERE job_id=?", (job_id,)
+    ).fetchone()
+    if not row:
+        return False
+    attestation_exists = conn.execute(
+        "SELECT 1 FROM job_provenance_attestations WHERE job_id=? LIMIT 1", (job_id,)
+    ).fetchone() is not None
+    if row[0] == "implementation":
+        return not attestation_exists
+    if row[0] is not None:
+        return False
+    from synlynk.provenance import get_valid_job_provenance_attestation
+    attestation = get_valid_job_provenance_attestation(conn, job_id)
+    return bool(attestation and attestation["purpose"] == "implementation")
+
+
+def _job_provenance_source(conn, job_id: str) -> str:
+    from synlynk.provenance import get_valid_job_provenance_attestation
+    return "human attestation" if get_valid_job_provenance_attestation(conn, job_id) else "dispatch metadata"
+
+
 def _pr_head_branch(pr_number: int) -> str | None:
     """Read a PR head branch without making the gate depend on GitHub success."""
     try:
@@ -134,13 +160,13 @@ def _implementation_job_from_branch(conn, pr_number: int) -> str | None:
         return None
     harness, job_id = match.groups()
     row = conn.execute(
-        """SELECT job_id FROM daemon_jobs
-             WHERE job_id=? AND purpose='implementation'
-               AND lower(COALESCE(NULLIF(harness, ''), agent, ''))=?
-             LIMIT 1""",
-        (job_id, harness.lower()),
+        """SELECT job_id, lower(COALESCE(NULLIF(harness, ''), agent, ''))
+             FROM daemon_jobs WHERE job_id=? LIMIT 1""",
+        (job_id,),
     ).fetchone()
-    return row[0] if row else None
+    if row and row[1] == harness.lower() and _job_has_implementation_purpose(conn, row[0]):
+        return row[0]
+    return None
 
 
 def _implementation_identity_from_native_cost_entry(
@@ -265,16 +291,16 @@ def _implementation_job_from_linked_issues(conn, pr_number: int) -> tuple[str | 
     if len(story_ids) != 1:
         return None, None
 
-    row = conn.execute(
+    rows = conn.execute(
         """SELECT DISTINCT ce.job_id, ce.story_id
-             FROM cost_entries ce
+            FROM cost_entries ce
              JOIN daemon_jobs dj ON dj.job_id=ce.job_id
             WHERE ce.story_id=?
-              AND dj.purpose='implementation'
-            ORDER BY ce.id DESC LIMIT 2""",
+            ORDER BY ce.id DESC""",
         (story_ids[0],),
     ).fetchall()
-    return (row[0][0], row[0][1]) if len(row) == 1 else (None, None)
+    rows = [row for row in rows if _job_has_implementation_purpose(conn, row[0])]
+    return (rows[0][0], rows[0][1]) if len(rows) == 1 else (None, None)
 
 
 def _cross_harness_review_verdict(conn, pr_number: int) -> tuple[bool, str]:
@@ -286,21 +312,22 @@ def _cross_harness_review_verdict(conn, pr_number: int) -> tuple[bool, str]:
         """SELECT DISTINCT ce.job_id
              FROM capability_ratings cr
              JOIN cost_entries ce ON ce.story_id=cr.story_id
-             LEFT JOIN daemon_jobs dj ON dj.job_id=ce.job_id
+            LEFT JOIN daemon_jobs dj ON dj.job_id=ce.job_id
             WHERE cr.pr_number=?
-              AND dj.purpose='implementation'
-            ORDER BY ce.id DESC LIMIT 2""",
+            ORDER BY ce.id DESC""",
         (pr_number,),
     ).fetchall()
+    implementation = [row for row in implementation if _job_has_implementation_purpose(conn, row[0])]
     implementation_job_id = implementation[0][0] if len(implementation) == 1 else None
     if len(implementation) > 1:
         return False, f"ambiguous implementation job provenance for PR #{pr_number}"
     if not implementation_job_id:
         exact = conn.execute(
             """SELECT DISTINCT ce.job_id FROM cost_entries ce JOIN daemon_jobs dj ON dj.job_id=ce.job_id
-                WHERE ce.pr_number=? AND dj.purpose='implementation' ORDER BY ce.id""",
+                WHERE ce.pr_number=? ORDER BY ce.id""",
             (pr_number,),
         ).fetchall()
+        exact = [row for row in exact if _job_has_implementation_purpose(conn, row[0])]
         if len(exact) == 1:
             implementation_job_id = exact[0][0]
         elif len(exact) > 1:
@@ -335,8 +362,12 @@ def _cross_harness_review_verdict(conn, pr_number: int) -> tuple[bool, str]:
             f"implementing and reviewing jobs use the same harness+model "
             f"({implementing_identity[0]} / {implementing_identity[1]})"
         )
+    source = (
+        _job_provenance_source(conn, implementation_job_id)
+        if implementation_job_id else "native cost record"
+    )
     return True, (
-        f"implementation {implementing_identity[0]} / {implementing_identity[1]} "
+        f"implementation {implementing_identity[0]} / {implementing_identity[1]} ({source}) "
         f"reviewed by {reviewing_identity[0]} / {reviewing_identity[1]}"
     )
 
