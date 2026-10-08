@@ -1442,10 +1442,15 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     cost_log_parser.add_argument("--job-id", default=None, dest="job_id")
     cost_log_parser.add_argument(
         "--pr", type=int, default=None,
-        help="PR number for native/interactive implementation provenance",
+        help="PR number for native/interactive implementation or review provenance",
     )
     cost_log_parser.add_argument("--model", default=None,
         help="Exact model identifier for this native/interactive session")
+    cost_log_parser.add_argument(
+        "--role",
+        default=None,
+        help="Workspace role for this native session (qa tags reviewer provenance)",
+    )
     cost_log_parser.add_argument("--note", default=None)
     cost_true_up_parser = cost_sub.add_parser("true-up", help="Reconcile subscription costs for a month")
     cost_true_up_parser.add_argument("--month", default=None, help="Billing month in YYYY-MM format")
@@ -2633,6 +2638,7 @@ def main(argv=None) -> None:
                 pr=args.pr,
                 note=args.note,
                 model=args.model,
+                role=args.role,
             )
         elif args.cost_action == "true-up":
             from synlynk.costs import cmd_cost_true_up
