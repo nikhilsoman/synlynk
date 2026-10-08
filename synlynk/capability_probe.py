@@ -15,6 +15,7 @@ CAP_SHELL = "run:shell"              # Shell/bash subprocess execution
 CAP_WORKSPACE_WRITE = "write:workspace" # Filesystem write/modification in worktree
 CAP_GH_WRITE = "write:github"        # GitHub API write operations (PRs, issues, reviews)
 CAP_NET = "net:external"             # Outbound network connectivity
+CAP_REVIEW = "review"                 # Enforce review task permission profiles
 
 ALL_CAPABILITIES = {
     CAP_SHELL,
@@ -30,18 +31,21 @@ HARNESS_CAPABILITY_PROFILES: Dict[str, Dict[str, bool]] = {
         CAP_WORKSPACE_WRITE: True,
         CAP_GH_WRITE: True,
         CAP_NET: True,
+        CAP_REVIEW: True,
     },
     "codex": {
         CAP_SHELL: True,
         CAP_WORKSPACE_WRITE: True,
         CAP_GH_WRITE: True,
         CAP_NET: True,
+        CAP_REVIEW: True,
     },
     "agy": {
         CAP_SHELL: True,
         CAP_WORKSPACE_WRITE: True,
         CAP_GH_WRITE: True,
         CAP_NET: True,
+        CAP_REVIEW: True,
     },
     "grok": {
         # Shell dispatch works via --always-approve + --permission-mode
@@ -55,12 +59,14 @@ HARNESS_CAPABILITY_PROFILES: Dict[str, Dict[str, bool]] = {
         CAP_WORKSPACE_WRITE: True,
         CAP_GH_WRITE: True,
         CAP_NET: True,
+        CAP_REVIEW: True,
     },
     "local": {
         CAP_SHELL: True,
         CAP_WORKSPACE_WRITE: True,
         CAP_GH_WRITE: False,
         CAP_NET: False,
+        CAP_REVIEW: False,
     },
 }
 
@@ -82,6 +88,7 @@ _CAP_ALIASES = {
     "network": CAP_NET,
     "net:external": CAP_NET,
     "external_net": CAP_NET,
+    "review": CAP_REVIEW,
 }
 
 _SHELL_PATTERNS = re.compile(
@@ -135,6 +142,12 @@ def infer_task_required_capabilities(
     if requires_gh_write or task_type in {"gh_write", "pr_review", "pr_merge", "issue_comment"}:
         required.add(CAP_GH_WRITE)
         required.add(CAP_SHELL)
+
+    # Review dispatches receive a read-only permission profile. The local
+    # aider adapter cannot enforce that profile, so it must not be selected
+    # as an autonomous fallback for review work.
+    if task_type in {"review", "pr_review"}:
+        required.add(CAP_REVIEW)
 
     if task:
         if _GH_WRITE_PATTERNS.search(task):
