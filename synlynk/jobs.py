@@ -70,6 +70,12 @@ STATUS_UNPUSHED_BRANCH = "unpushed_branch"
 # Mandatory Invariant 2 Status Constants
 STATUS_CIRCUIT_BREAKER_TRIPPED = "circuit_breaker_tripped"
 
+# Non-terminal hold for a requires_gh_write job whose only evidence so far is
+# local (log text and worktree state). The daemon's verified pass publishes
+# the user-visible terminal verdict. This value is intentionally absent from
+# TERMINAL_JOB_STATUSES and from _reconcile_terminal_jobs_json's copy map.
+STATUS_PENDING_VERIFICATION = "pending_verification"
+
 ALL_JOB_STATUSES = frozenset({
     STATUS_COMPLETED,
     STATUS_FAILED,
@@ -90,6 +96,7 @@ ALL_JOB_STATUSES = frozenset({
     STATUS_FAILED_VERIFICATION,
     STATUS_UNPUSHED_BRANCH,
     STATUS_CIRCUIT_BREAKER_TRIPPED,
+    STATUS_PENDING_VERIFICATION,
 })
 
 TERMINAL_JOB_STATUSES = frozenset({
@@ -121,6 +128,35 @@ NOOP_JOB_STATUSES = frozenset({
 SUCCESS_JOB_STATUSES = frozenset({
     STATUS_COMPLETED,
 })
+
+# Terminal labels that read as a failed job. A requires_gh_write classification
+# drawn only from local evidence must not be persisted as one of these.
+FAILURE_LOOKING_JOB_STATUSES = frozenset({
+    STATUS_FAILED,
+    STATUS_UNKNOWN,
+    STATUS_CANCELLED,
+    STATUS_INTERRUPTED,
+    STATUS_PERMISSION_DENIED,
+    STATUS_TASK_DELIVERY_FAILED,
+    STATUS_FAILED_UNVERIFIED,
+    STATUS_NEEDS_FIX,
+    STATUS_STALE_BASE,
+    STATUS_SCOPE_VIOLATION,
+    STATUS_SCOPE_REVIEW_REQUIRED,
+    STATUS_INSTRUCTION_RECEIPT_UNTRUSTED,
+    STATUS_COMPLETED_WITHOUT_CHANGES,
+    STATUS_FAILED_NOOP_DENIED,
+    STATUS_FAILED_VERIFICATION,
+    STATUS_UNPUSHED_BRANCH,
+    STATUS_CIRCUIT_BREAKER_TRIPPED,
+    "succeeded_gh_write_failed",
+})
+
+_PENDING_VERIFICATION_SUMMARY = "PENDING_VERIFICATION"
+_PENDING_VERIFICATION_NOTE = (
+    "local log/worktree evidence is provisional until the daemon "
+    "GitHub verification pass runs"
+)
 
 
 def is_successful_status(status: Optional[str]) -> bool:
@@ -2011,11 +2047,59 @@ def _ingest_structured_lifecycle(job: dict, raw_log: str) -> None:
         return
 
 
+def _gh_write_verified_is_false(value) -> bool:
+    """Return whether a stored verification value is an explicit negative."""
+    return value is False or (isinstance(value, str) and value.lower() == "false")
+
+
+def _defer_local_gh_write_failure(job: dict, github_effect_consulted: bool) -> bool:
+    """Hold a local failure-looking gh-write classification as non-terminal.
+
+    ``_reconcile_jobs_unlocked`` does not call GitHub itself. Publishing
+    ``failed`` / ``task_delivery_failed`` / similar from the log and worktree
+    lets the next ``synlynk jobs --all`` copy that verdict before the daemon
+    verification pass. An effect check that already consulted GitHub, or an
+    explicit ``gh_write_verified=false``, is left unchanged.
+    """
+    if not job.get("requires_gh_write"):
+        return False
+    if github_effect_consulted or _gh_write_verified_is_false(job.get("gh_write_verified")):
+        return False
+    if job.get("status") not in FAILURE_LOOKING_JOB_STATUSES:
+        return False
+    job["status"] = STATUS_PENDING_VERIFICATION
+    return True
+
+
+def _displayed_job_status(stored_status: Optional[str], flat_status: Optional[str] = None) -> str:
+    """Show a provisional flat-file hold over a still-active daemon row."""
+    if stored_status in (STATUS_RUNNING, "queued") and flat_status == STATUS_PENDING_VERIFICATION:
+        return STATUS_PENDING_VERIFICATION
+    return stored_status or ""
+
+
+def _job_status_is_active(status: Optional[str]) -> bool:
+    """Return whether a status should stay on the default (non --all) jobs list."""
+    return status in (STATUS_RUNNING, "queued", STATUS_PENDING_VERIFICATION)
+
+
+def _job_status_color(status: Optional[str]) -> str:
+    """Color an in-progress status differently from a recorded failure."""
+    if status in (STATUS_RUNNING, "queued", STATUS_PENDING_VERIFICATION):
+        return _GREEN
+    if status in (STATUS_COMPLETED, "done"):
+        return _DIM
+    return _YELLOW
+
+
 def _reconcile_jobs_unlocked() -> None:
     """Probes PIDs of running jobs; marks unreachable ones as failed or completed.
 
     Called on every synlynk invocation before any command runs.
     Prevents stale jobs surviving reboots or external kills.
+
+    A ``requires_gh_write`` job whose log and worktree look like a failure is
+    stored as ``pending_verification`` until the daemon verification pass runs.
     """
     jobs = _load_jobs()
     changed = False
@@ -2296,6 +2380,7 @@ def _reconcile_jobs_unlocked() -> None:
                 duration_s = None
             summary_status = None
             summary_note = None
+            github_effect_consulted = False
             sentinel_scope_review = _force_scope_review_for_sentinel_cotrip(
                 job,
                 in_tokens=in_tokens,
@@ -2338,6 +2423,8 @@ def _reconcile_jobs_unlocked() -> None:
             if job.get("status") == "unknown":
                 summary_status = terminal_status_for_unknown_exit()
             if job.get("status") == "completed":
+                if job.get("requires_gh_write"):
+                    github_effect_consulted = True
                 eff_status, eff_note = _enforce_job_effect_verification(job, git_state, sentinel_path)
                 if eff_status:
                     summary_status = eff_status
@@ -2362,7 +2449,11 @@ def _reconcile_jobs_unlocked() -> None:
                     _apply_dispatch_gate(job)
                     if job.get("status") == "completed":
                         _finalize_completed_worktree_job(job, git_state)
-            _record_job_truth_shadow(job, "flat_file_reconciliation")
+            if _defer_local_gh_write_failure(job, github_effect_consulted):
+                summary_status = _PENDING_VERIFICATION_SUMMARY
+                summary_note = _PENDING_VERIFICATION_NOTE
+            if job.get("status") != STATUS_PENDING_VERIFICATION:
+                _record_job_truth_shadow(job, "flat_file_reconciliation")
             task_sha256, task_preview = _task_sha256_and_preview(job.get("task"))
             summary = _pkg("_write_job_summary")(
                 job.get("id", ""),
@@ -2525,6 +2616,7 @@ def _reconcile_jobs_unlocked() -> None:
                 duration_s = None
             summary_note = None
             summary_status = None
+            github_effect_consulted = False
             summary_files_touched = _pkg("_worktree_files_touched")(job.get("worktree_path"))
             if permission_denied:
                 summary_status = "PERMISSION_DENIED (headless auto-denied)"
@@ -2590,6 +2682,8 @@ def _reconcile_jobs_unlocked() -> None:
             elif job.get("status") == "unknown":
                 summary_status = terminal_status_for_unknown_exit()
             if job.get("status") == "completed":
+                if job.get("requires_gh_write"):
+                    github_effect_consulted = True
                 eff_status, eff_note = _enforce_job_effect_verification(job, git_state, sentinel_path)
                 if eff_status:
                     summary_status = eff_status
@@ -2614,6 +2708,9 @@ def _reconcile_jobs_unlocked() -> None:
                     _apply_dispatch_gate(job)
                     if job.get("status") == "completed":
                         _finalize_completed_worktree_job(job, git_state)
+            if _defer_local_gh_write_failure(job, github_effect_consulted):
+                summary_status = _PENDING_VERIFICATION_SUMMARY
+                summary_note = _PENDING_VERIFICATION_NOTE
             task_sha256, task_preview = _task_sha256_and_preview(job.get("task"))
             summary = _pkg("_write_job_summary")(
                 job.get("id", ""),
@@ -4683,7 +4780,7 @@ def cmd_jobs(all_jobs: bool = False, watch: bool = False, summary: Optional[str]
         if not jobs:
             print("No jobs found. Use `synlynk dispatch <agent> --task <task>` to start one.")
             return
-        visible = jobs if all_jobs else [j for j in jobs if j["status"] == "running"]
+        visible = jobs if all_jobs else [j for j in jobs if _job_status_is_active(j.get("status"))]
         if not visible:
             completed = len([j for j in jobs if j["status"] in ("completed", "failed", "failed_unverified", "permission_denied", "SCOPE_VIOLATION")])
             unknown = len([j for j in jobs if j["status"] == "unknown"])
@@ -4692,15 +4789,15 @@ def cmd_jobs(all_jobs: bool = False, watch: bool = False, summary: Optional[str]
                 suffix += f", {unknown} unknown"
             print(f"No running jobs. ({suffix} — use `synlynk jobs --all` to see)")
             return
-        header = f"{'ID':12}  {'AGENT':10}  {'STATUS':10}  {'STORY':6}  TASK"
+        header = f"{'ID':12}  {'AGENT':10}  {'STATUS':22}  {'STORY':6}  TASK"
         print(f"{_BOLD}{header}{_RESET}")
         print("─" * 70)
         for j in visible:
             sid = (j.get("story_id") or "—")[:6]
             task = (j.get("task") or "")[:40]
             status = j["status"]
-            color = _GREEN if status == "running" else (_DIM if status == "completed" else _YELLOW)
-            print(f"{j['id']:12}  {j['agent']:10}  {color}{status:10}{_RESET}  {sid:6}  {task}")
+            color = _job_status_color(status)
+            print(f"{j['id']:12}  {j['agent']:10}  {color}{status:22}{_RESET}  {sid:6}  {task}")
 
     def _render() -> None:
         conn_for_purpose = _pkg("_get_db")()
@@ -4776,10 +4873,17 @@ def cmd_jobs(all_jobs: bool = False, watch: bool = False, summary: Optional[str]
             _render_legacy_jobs()
             return
 
+        flat_by_id = {
+            (job.get("id") or job.get("job_id")): job.get("status")
+            for job in _load_jobs()
+            if job.get("id") or job.get("job_id")
+        }
         if all_jobs:
             visible = rows
         else:
-            visible = [r for r in rows if r[3] in ("queued", "running")]
+            visible = [r for r in rows if _job_status_is_active(
+                _displayed_job_status(r[3], flat_by_id.get(r[0]))
+            )]
             if not visible:
                 done = sum(1 for r in rows if r[3] in ("done", "failed", "permission_denied"))
                 unknown = sum(1 for r in rows if r[3] == "unknown")
@@ -4790,7 +4894,7 @@ def cmd_jobs(all_jobs: bool = False, watch: bool = False, summary: Optional[str]
                 return
 
         header = (
-            f"{'ID':14}  {'AGENT':8}  {'STORY':12}  {'STATUS':10}  "
+            f"{'ID':14}  {'AGENT':8}  {'STORY':12}  {'STATUS':22}  "
             f"{'CTX':6}  {'AGE':8}  {'EXIT':4}  GH-WRITE  VERIFY   EVIDENCE"
         )
         print(f"{_BOLD}{header}{_RESET}")
@@ -4809,7 +4913,8 @@ def cmd_jobs(all_jobs: bool = False, watch: bool = False, summary: Optional[str]
                 requires_gh_write, gh_write_verified_val = None, None
             sid = (story_id or "—")[:12]
             age = _parse_age(enqueued_at)
-            color = _GREEN if status == "running" else (_DIM if status in ("done", "failed") else _YELLOW)
+            status = _displayed_job_status(status, flat_by_id.get(job_id))
+            color = _job_status_color(status)
             exit_str = str(exit_code) if exit_code is not None else "—"
             ctx = (ctx_mode or "—")[:6]
             if not requires_gh_write:
@@ -4830,7 +4935,7 @@ def cmd_jobs(all_jobs: bool = False, watch: bool = False, summary: Optional[str]
                 route = f"  {row[9]}->{row[10]}"
             print(
                 f"  {job_id:14}  {agent:8}  {sid:12}  "
-                f"{color}{status:10}{_RESET}  {ctx:6}  {age:8}  {exit_str:4}  "
+                f"{color}{status:22}{_RESET}  {ctx:6}  {age:8}  {exit_str:4}  "
                 f"{gh_write_display:^8} {verify_display:7}  {evidence_display}{route}"
             )
 
