@@ -543,13 +543,14 @@
 | 2026-10-09 01:38 | codex | o4-mini | 1552988 | 5490 | $0.0745 [sub] (API: $4.7413) | estimated_manual | - | Fix-forward: doctor.py _hc_config_schema() CONFIG_SCHEMA->WORKSPACE_SCHEMA, gh:#2101 (job status label was misleading: PERMISSION_DENIED/0-touched but fix verified landed via direct git diff + pytest) |
 | 2026-10-09 01:50 | codex | o4-mini | 2982725 | 13479 | $0.1432 [sub] (API: $9.1504) | estimated_token_rate | story-b04fdd2c | exec: codex job job-87d7d3... |
 | 2026-10-09 02:05 | codex | o4-mini | 2982725 | 13479 | $0.1432 [sub] (API: $9.1504) | estimated_manual | - | Task 2 (load_workspace/load_billing/migration) of gh:#2101 config decomposition plan; TOKEN_BLOAT/COST_INFLATION flagged (SCOPE_REVIEW_REQUIRED) but verified correct and complete via direct diff/test inspection, not the status label |
+| 2026-10-09 02:10 | codex | o4-mini | 725478 | 7061 | $0.0350 [sub] (API: $2.2823) | estimated_token_rate | story-b04fdd2c | exec: codex job job-7e1f45... |
 
 ## Subscription Amortization & Dual-Ledger Summary
 
 | Harness | Base Fee | Actual Amortized Spend | API Equivalent Value | Net Savings |
 |---|---|---|---|---|
 | claude | $20.00 | $22.3083 | $32.6128 | $10.3045 |
-| codex | $20.00 | $15.9871 | $1022.2569 | $1006.2698 |
+| codex | $20.00 | $16.0221 | $1024.5392 | $1008.5172 |
 | agy | $20.00 | $1.8998 | $9.0019 | $7.1021 |
 | grok | $30.00 | $28.5780 | $22.1012 | $-6.4768 |
-| **Total** | **$90.00** | **$68.7732** | **$1085.9728** | **$1017.1996** |
+| **Total** | **$90.00** | **$68.8082** | **$1088.2551** | **$1019.4470** |

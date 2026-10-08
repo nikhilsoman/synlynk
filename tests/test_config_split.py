@@ -112,3 +112,26 @@ def test_migration_aborts_on_corrupt_policy_json(tmp_path, monkeypatch):
     assert os.path.exists(".synlynk/config.json")
     assert not os.path.exists(".synlynk/config.json.bak")
     assert not os.path.exists(".synlynk/workspace.json")
+
+
+def test_load_config_facade_matches_old_flat_shape(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    config = synlynk.load_config()
+    assert config["schema_version"] == 1
+    assert config["budget"] == {"limit_usd": 10.0, "limit_requests": 100}
+    assert config["local_fallback"] == "agy"
+    assert config["qa_gate_mode"] == "block-only"
+    assert config["dispatch"]["stacking"] == "auto"
+
+
+def test_load_config_triggers_migration_on_first_call(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk")
+    with open(".synlynk/config.json", "w") as f:
+        json.dump({"schema_version": 1, "local_fallback": "codex"}, f)
+
+    config = synlynk.load_config()
+
+    assert config["local_fallback"] == "codex"
+    assert os.path.exists(".synlynk/workspace.json")
+    assert os.path.exists(".synlynk/config.json.bak")

@@ -1271,88 +1271,18 @@ def _default_harness_billing() -> dict:
 
 
 def load_config() -> dict:
-    """Loads .synlynk/config.json with schema-v1 defaults."""
-    capability_roles = _load_capability_roles()
-    defaults = {
-        "schema_version": 1,
-        "budget": {"limit_usd": 10.0, "limit_requests": 100},
-        "dispatch": {"stacking": "auto", "gate_suite_cmd": ""},
-        "local_auto_threshold": 0.5,
-        "local_fallback": "agy",
-        "watch_interval_seconds": 30,
-        "auto_smoke_test": False,
-        "auto_launch_after_wizard": True,
-        "dispatch_mode": "daily-grind",
-        "fenced_commands": ["dispatch", "jobs", "exec", "schedule"],
-        "nudges": {"enabled": True, "dismissed_ids": [], "last_shown": {}},
-        "org": None,
-        "owner": None,
-        "repo": None,
-        "project_id": None,
-        "identity_slug": None,
-        "project_docs_dir": "project-docs",
-        "agent_slots": {"claude": "claude", "agy": "agy", "codex": "codex", "grok": "grok"},  # AGY CLI binary is named 'agy' — update when binary is renamed
-        "workgroup_agents": [],
-        "last_housekeeping_date": None,
-        "team": None,
-        "sync_endpoint": None,
-        "exec_timeout_minutes": 30,
-        "stall_timeout_minutes": 30,
-        "swarm_runners": {"default": "local", "enabled": ["local"], "timeout_seconds": 900},
-        "review_stall_timeout_minutes": 90,
-        "agents": {},
-        "payment_models": {},
-        "harness_billing": _default_harness_billing(),
-        "capability_sweep": {"cost_cap_usd": 10.0},
-        "roles": capability_roles if capability_roles is not None else _default_roles_map(),
-        "story_classification": {"method": "heuristic"},
-        "qa_gate_mode": "block-only",
-        "sentinel": {
-            "dedup_window_seconds": 86400,
-            "active_ttl_seconds": {"CRITICAL": 180 * 86400, "WARN": 180 * 86400, "INFO": 180 * 86400},
-        },
-    }
-    config_file = ".synlynk/config.json"
-    if not os.path.exists(config_file):
-        return defaults
-    try:
-        with open(config_file) as f:
-            config = json.load(f)
-        has_harness_billing = "harness_billing" in config
-        for key, val in defaults.items():
-            if key not in config:
-                # Existing project configs retain legacy pay-as-you-go behavior
-                # unless they explicitly opt into the seeded harness billing
-                # block.  A brand-new config still gets the quad-harness seed
-                # through ``defaults`` above.
-                config[key] = {} if key == "harness_billing" else val
-        if capability_roles is not None:
-            config["roles"] = capability_roles
-        elif "roles" not in config:
-            config["roles"] = _default_roles_map()
-        for key, val in defaults["budget"].items():
-            if key not in config.get("budget", {}):
-                config.setdefault("budget", {})[key] = val
-        for key, val in defaults["dispatch"].items():
-            if key not in config.get("dispatch", {}):
-                config.setdefault("dispatch", {})[key] = val
-        for key, val in defaults["nudges"].items():
-            if key not in config.get("nudges", {}):
-                config.setdefault("nudges", {})[key] = val
-        if not isinstance(config.get("harness_billing"), dict):
-            config["harness_billing"] = _default_harness_billing()
-        elif not config["harness_billing"] and has_harness_billing:
-            config["harness_billing"] = _default_harness_billing()
-        for billing in config["harness_billing"].values():
-            if isinstance(billing, dict):
-                billing.setdefault("payment_mode", "pay_as_you_go")
-                billing.setdefault("monthly_base_fee_usd", billing.get("subscription_fee_usd", 0.0))
-                billing.setdefault("projected_monthly_tokens", 10_000_000)
-                billing.setdefault("allow_extra_usage", False)
-                billing.setdefault("extra_usage_cap_usd", None)
-        return config
-    except (json.JSONDecodeError, IOError):
-        return defaults
+    """Facade over workspace.json + billing.json + the four migrated
+    policy.json fields, preserving load_config()'s pre-split flat-dict
+    shape for all existing call sites. Runs the one-time legacy-config
+    migration on every call; the migration itself is a cheap no-op once
+    the split files exist.
+    """
+    _migrate_legacy_config_if_needed()
+    config = {"schema_version": 1}
+    config.update(load_workspace())
+    config.update(load_billing())
+    config.update(_read_policy_migrated_fields())
+    return config
 
 
 def cmd_config_set(key: str, value: str) -> None:
