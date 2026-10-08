@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>gh:#2102 — Soak-testing state.db with 20–50 concurrent WAL writers | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-3">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Oct 08, 2026</span>
+        
+          <span class="blog-post-pr">PR #TBD</span>
+        
+      </div>
+      <h1 class="blog-post-title">gh:#2102 — Soak-testing state.db with 20–50 concurrent WAL writers</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>The previous work kept dispatch and review provenance honest so a fleet
+could merge under measured cross-harness rules. The ledger those jobs
+write — SQLite WAL <code>state.db</code> — still had no representative soak at
+fleet writer counts.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>The three-lens review called out P1-4: WAL helps, but more than about
+ten concurrent writers was untested. This PR adds a repeatable local
+testbed scenario and pytest soak at 20–50 writers instead of assuming
+the journal mode would hold.</p>
+<h2>What This PR Shipped</h2>
+<ul>
+<li><code>synlynk/testbed/state_db_soak.py</code> — isolated temp ledger, synthetic
+job/evidence/story updates, thread and process executors, lock/latency/
+integrity/recovery metrics, named failure modes.</li>
+<li>Testbed scenario <code>state_db_wal_soak</code>, wired to
+<code>synlynk testbed run --scenario state_db_wal</code> and
+<code>synlynk testbed soak --scenario state_db_wal</code> without OrbStack VMs.</li>
+<li><code>tests/test_state_db_soak.py</code> — 20- and 50-writer soaks, process
+executor, JSON report contract, and a DELETE-journal negative control
+that records contention rather than swallowing it.</li>
+<li>Report: <code>project-docs/reports/2026-10-08-state-db-wal-soak.md</code>.</li>
+</ul>
+<p>On this host the WAL path committed 400/400 transactions at 50 writers
+with integrity <code>ok</code>, zero lock errors, and p99 latency 166ms. No
+production reliability gap turned up in that envelope.</p>
+<p>No brainstorm visual informed this soak.</p>
+<h2>Summary Toward the Long-Arc Goal</h2>
+<p>A fleet that productizes a local/sovereign harness path needs a ledger
+that stays correct when many workers write at once. This soak is the
+first measured pass at that claim.</p>
+<h2>The New Goalpost</h2>
+<p>Keep the soak in CI. If a later host or shard size fails integrity,
+lock budget, or starvation thresholds, file a follow-up from the report
+rather than relaxing the gate.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
