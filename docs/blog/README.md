@@ -1,5 +1,7 @@
 # synlynk Blog Series: Building the OS for Multi-Agent Development
 
+| [261](./261-pr2118-reconciliation-lock-best-effort.md) | PR #TBD - Reconciliation Should Survive Read-Only Sandboxes | TBD | 2026-10-08 |
+
 | [259](./259-pr2117-legacy-provenance-attestation.md) | A human confirmation can classify a legacy job without rewriting its dispatch record | [#2117](https://github.com/nikhilsoman/synlynk/pull/2117) | 2026-10-07 |
 | [260](./260-pr2081-adapter-conformance-suite.md) | Adapter conformance suite names receipt/signature/cost drift in pytest | [#2081](https://github.com/nikhilsoman/synlynk/pull/2081) | 2026-10-06 |
 | [258](./258-pr2112-readme-capability-evidence.md) | README now states the evidence threshold for empirical routing | [#2112](https://github.com/nikhilsoman/synlynk/pull/2112) | 2026-10-07 |
