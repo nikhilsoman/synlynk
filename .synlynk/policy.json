@@ -46,12 +46,14 @@
       "require_non_authoring_review": true,
       "review_fallback": "same_identity_comment_checklist",
       "cross_harness_review_required": true,
+      "cross_harness_review_required_mode": "observe",
       "cross_harness_review_note": "Reviewer must differ from implementer in harness AND model, not just role identity. Enforced by synlynk pr check from cost_entries/job metadata (gh:#1991)."
     },
     "release_authority": {"can_cut_release": ["pm"], "requires_human_approval": true},
     "governs_authority": {
       "require_linked_goal": true,
-      "note": "100% GOVERNS adherence required per Nikhil's 2026-10-04 hardening — every dispatched job must link a GOVERNS goal/story. Hard-fail enforcement in synlynk pr check / dispatch preflight not yet built (gh:#1990)."
+      "require_linked_goal_mode": "observe",
+      "note": "100% GOVERNS adherence required per Nikhil's 2026-10-04 hardening — every dispatched job must link a GOVERNS goal/story. Hard-fail enforcement shipped via PR #2029 (gh:#1990, closed 2026-10-05). require_linked_goal_mode set to observe 2026-10-07 pending a 100-pass clean streak — see docs/superpowers/specs/2026-10-07-policy-enforcement-maturity-design.md."
     },
     "host_auth_fallback": {
       "audit_log_required": true,

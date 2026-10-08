@@ -111,6 +111,7 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `policy check-merge` (secondary) — release
 - `policy show` (secondary) — sustain
 - `policy sync-branch-protection` (secondary) — sustain
+- `policy gate-status` (secondary) — sustain
 - `ops report` (primary) — sustain
 - `doctor` (secondary) — sustain
 - `probe` (secondary) — sustain

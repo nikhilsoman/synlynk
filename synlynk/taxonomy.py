@@ -320,6 +320,9 @@ COMMAND_TAXONOMY = [
     {"command": "policy sync-branch-protection", "governs_stage": "sustain", "maturity_tier": 2, "prominence": "secondary",
      "orientation_gateway": False, "audience": "human",
      "trigger_phrases": ["sync branch protection", "enforce policy on github"], "hook_event": None},
+    {"command": "policy gate-status", "governs_stage": "sustain", "maturity_tier": 2, "prominence": "secondary",
+     "orientation_gateway": False, "audience": "human",
+     "trigger_phrases": ["show policy gate status", "show gate streaks"], "hook_event": None},
     {"command": "ops report", "governs_stage": "sustain", "maturity_tier": 2, "prominence": "primary",
      "orientation_gateway": False, "audience": "human",
      "trigger_phrases": [

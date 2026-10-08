@@ -117,3 +117,36 @@ def test_migration_0017_adds_typed_task_metadata_to_existing_jobs(tmp_path, monk
     assert {"task_type", "task_type_explicit", "purpose"} <= cols
     assert conn.execute("PRAGMA user_version").fetchone()[0] == 17
     conn.close()
+
+
+def test_m0019_creates_policy_gate_events_table(tmp_path):
+    import sqlite3
+    from synlynk.migrations.m0019_policy_gate_events import MIGRATION
+
+    conn = sqlite3.connect(tmp_path / "state.db")
+    conn.execute("PRAGMA user_version = 18")
+    MIGRATION.up(conn)
+    conn.commit()
+
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(policy_gate_events)")}
+    assert cols == {"id", "pr_number", "gate", "mode", "verdict", "detail", "recorded_at"}
+
+    conn.execute(
+        "INSERT INTO policy_gate_events (pr_number, gate, mode, verdict, detail, recorded_at) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        (2100, "governs_authority", "observe", "pass", "no violations", "2026-10-07T00:00:00+00:00"),
+    )
+    conn.commit()
+    row = conn.execute("SELECT pr_number, gate, verdict FROM policy_gate_events").fetchone()
+    assert row == (2100, "governs_authority", "pass")
+
+
+def test_m0019_is_idempotent(tmp_path):
+    import sqlite3
+    from synlynk.migrations.m0019_policy_gate_events import MIGRATION
+
+    conn = sqlite3.connect(tmp_path / "state.db")
+    conn.execute("PRAGMA user_version = 18")
+    MIGRATION.up(conn)
+    MIGRATION.up(conn)
+    conn.commit()

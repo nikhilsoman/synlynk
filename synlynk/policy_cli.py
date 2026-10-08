@@ -6,8 +6,26 @@ import json
 import subprocess
 
 from synlynk.policy import check_authority, load_policy
+from synlynk import _get_db
+from synlynk.policy_gates import RE_HARDEN_THRESHOLD, gate_streak
 
 REQUIRED_STATUS_CHECKS = ["test (3.8)", "test (3.10)", "test (3.12)", "qa-gate"]
+GATES = ("governs_authority", "cross_harness_review")
+
+
+def cmd_policy_gate_status() -> int:
+    """Print each observe-mode gate's current clean-pass streak."""
+    conn = _get_db()
+    for gate in GATES:
+        streak = gate_streak(conn, gate)
+        if streak is None:
+            print(f"  {gate}: no data yet")
+            continue
+        print(f"  {gate}: streak: {streak} / {RE_HARDEN_THRESHOLD}")
+        if streak >= RE_HARDEN_THRESHOLD:
+            print(f"    → {streak} consecutive clean passes. Consider flipping this gate's mode to \"enforce\" in .synlynk/policy.json.")
+    conn.close()
+    return 0
 
 
 def _current_repo_slug() -> str:
