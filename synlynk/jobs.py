@@ -3725,7 +3725,7 @@ def _apply_gh_write_verification(
             "SELECT COALESCE(gh_write_verification_attempts, 0) FROM daemon_jobs WHERE job_id=?",
             (job_id,),
         ).fetchone()[0])
-    except (sqlite3.OperationalError, TypeError, ValueError):
+    except (sqlite3.OperationalError, TypeError, ValueError, AttributeError):
         attempts = 0
     if attempts >= _GH_WRITE_VERIFICATION_RETRY_CAP:
         return status, "unknown"
