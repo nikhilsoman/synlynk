@@ -503,13 +503,16 @@
 | 2026-10-07 21:25 | codex | gpt-6.1-sol | 20000 | 2000 | $0.0011 [sub] (API: $0.0900) | estimated_manual | - | Reviewer estimate (~20,000 input / ~2,000 output; not telemetry). Logged by reviewer, see design spec 2026-10-06. |
 | 2026-10-07 21:31 | claude | claude-sonnet-4-6 | 68725 | 4017 | $0.1805 [sub] (API: $0.2664) | estimated_token_rate | story-issue-2062 | exec: claude job job-92200... |
 | 2026-10-07 22:08 | codex | gpt-6.1-sol | 35000 | 9000 | $0.0021 [sub] (API: $0.2400) | estimated_manual | - | Approximate interactive Codex implementation and verification for PR #2117; token counts are estimates, not telemetry. |
+| 2026-10-08 07:28 | claude | claude-sonnet-4-6 | 15000 | 2500 | $0.0434 [sub] (API: $0.0825) | estimated_manual | story-issue-2118 | PM: fixed blog post frontmatter blocking pr check on PR #2122 (found by Grok review job-98e3c6b8) |
+| 2026-10-08 07:51 | claude | claude-sonnet-4-6 | 95000 | 6500 | $0.2519 [sub] (API: $0.3825) | estimated_manual | story-7117bb01 | PM session: opened PR #2123 (policy-enforcement-maturity -> main), GOVERNS linkage lookup, reviewer dispatch coordination, gh:#2124 capability-probe bug investigation/filing |
+| 2026-10-08 07:57 | claude | claude-sonnet-4-6 | 20000 | 3000 | $0.0571 [sub] (API: $0.1050) | estimated_manual | - | PM: backfilled costs.md rows for PR 2122/2123, recovered from main-checkout commit-block error via proper worktree, opened PR 2125 |
 
 ## Subscription Amortization & Dual-Ledger Summary
 
 | Harness | Base Fee | Actual Amortized Spend | API Equivalent Value | Net Savings |
 |---|---|---|---|---|
-| claude | $20.00 | $21.1842 | $30.6732 | $9.4890 |
+| claude | $20.00 | $21.5366 | $31.2432 | $9.7066 |
 | codex | $20.00 | $14.1829 | $907.1081 | $892.9252 |
 | agy | $20.00 | $1.5007 | $6.9278 | $5.4271 |
 | grok | $30.00 | $19.6253 | $15.0696 | $-4.5557 |
-| **Total** | **$90.00** | **$56.4931** | **$959.7787** | **$903.2856** |
+| **Total** | **$90.00** | **$56.8455** | **$960.3487** | **$903.5032** |
