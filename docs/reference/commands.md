@@ -105,11 +105,13 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `marketing ceremony` (secondary) — release
 - `marketing sync-pr` (secondary) — release
 - `pr check` (primary) — release
+- `provenance attest` (secondary) — sustain
 - `gh` (primary) — execute
 - `pr gate-status` (secondary) — release
 - `policy check-merge` (secondary) — release
 - `policy show` (secondary) — sustain
 - `policy sync-branch-protection` (secondary) — sustain
+- `policy gate-status` (secondary) — sustain
 - `ops report` (primary) — sustain
 - `doctor` (secondary) — sustain
 - `probe` (secondary) — sustain

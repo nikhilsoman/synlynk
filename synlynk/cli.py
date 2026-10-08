@@ -287,7 +287,8 @@ _TOP_LEVEL_COMMANDS = (
     "backup", "state", "ops", "selftest", "config", "sentinel", "dispatch", "jobs", "relay",
     "logs", "shell", "open", "launch", "run", "story", "pm", "tpm", "score", "charters", "cost",
     "roadmap", "policy", "credit", "backlog", "quota", "schedule", "pr", "capability",
-    "instructions", "marketing", "roles", "release", "viz", "backfill-capability-ratings",
+    "instructions", "marketing", "roles", "release", "viz", "provenance",
+    "backfill-capability-ratings",
     "board", "concierge", "addon", "autonomy",
     "gateway",
 )
@@ -1490,6 +1491,7 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     )
     policy_sync_bp_parser = policy_subparsers.add_parser("sync-branch-protection", help="Configure GitHub branch protection from policy.json")
     policy_sync_bp_parser.add_argument("--dry-run", action="store_true")
+    policy_subparsers.add_parser("gate-status", help="Show observe-mode gate streaks and the re-harden threshold")
 
     credit_parser = subparsers.add_parser("credit", help="Credit grant ledger commands")
     credit_sub = credit_parser.add_subparsers(dest="credit_action")
@@ -1642,6 +1644,20 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
         help="Verify all modified symbols in PR have associated test coverage via knowledge graph",
     )
     pr_sub.add_parser("gate-status", help="qa block-only merge gate (CI matrix + sentinel health)")
+
+    provenance_parser = subparsers.add_parser("provenance", help="Attest legacy job provenance")
+    provenance_sub = provenance_parser.add_subparsers(dest="provenance_action")
+    provenance_attest = provenance_sub.add_parser(
+        "attest", help="Record a human attestation for incomplete legacy job provenance"
+    )
+    provenance_attest.add_argument("job_id")
+    provenance_attest.add_argument("--role", required=True)
+    provenance_attest.add_argument("--task-type", required=True, dest="task_type")
+    provenance_attest.add_argument("--reason", required=True)
+    provenance_attest.add_argument(
+        "--confirm", required=True,
+        help="Exact confirmation in the form JOB_ID:ROLE:TASK_TYPE after reviewing the displayed job",
+    )
 
     capability_parser = subparsers.add_parser("capability", help="Capability ledger commands")
     capability_sub = capability_parser.add_subparsers(dest="capability_action")
@@ -1968,7 +1984,7 @@ def main(argv=None) -> None:
 
     from synlynk.capability_sweep import cmd_capability_sweep
     from synlynk.db import cmd_story_done
-    from synlynk.policy_cli import cmd_policy_check_merge, cmd_policy_show, cmd_policy_sync_branch_protection
+    from synlynk.policy_cli import cmd_policy_check_merge, cmd_policy_gate_status, cmd_policy_show, cmd_policy_sync_branch_protection
     from synlynk.charters import cmd_charters_adapt
 
     from synlynk import (
@@ -2737,6 +2753,8 @@ def main(argv=None) -> None:
         sys.exit(cmd_policy_check_merge(role=args.role))
     elif args.command == "policy" and args.policy_command == "sync-branch-protection":
         sys.exit(cmd_policy_sync_branch_protection(dry_run=args.dry_run))
+    elif args.command == "policy" and args.policy_command == "gate-status":
+        sys.exit(cmd_policy_gate_status())
     elif args.command == "credit":
         if args.credit_action == "grant":
             _warn_deprecated_harness_flag(cli_tokens)
@@ -2801,6 +2819,12 @@ def main(argv=None) -> None:
         elif args.pr_action == "gate-status":
             from synlynk.qa_gate import cmd_pr_gate_status
             cmd_pr_gate_status()
+    elif args.command == "provenance":
+        if getattr(args, "provenance_action", None) == "attest":
+            from synlynk.provenance import cmd_provenance_attest
+            raise SystemExit(cmd_provenance_attest(
+                args.job_id, args.role, args.task_type, args.reason, args.confirm,
+            ))
     elif args.command == "capability":
         if args.capability_action == "sweep":
             cmd_capability_sweep(cost_cap_override=getattr(args, "cost_cap", None))
