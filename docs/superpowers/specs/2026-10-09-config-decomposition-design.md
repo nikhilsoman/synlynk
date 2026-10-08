@@ -25,7 +25,19 @@ already has its own two-tier workspace-default + repo-override merge system.
   `auto_smoke_test`, `auto_launch_after_wizard`, `dispatch_mode`,
   `fenced_commands`, `nudges{}`, `exec_timeout_minutes`,
   `stall_timeout_minutes`, `review_stall_timeout_minutes`,
-  `swarm_runners{}`, `last_housekeeping_date`.
+  `swarm_runners{}`, `last_housekeeping_date`, `features{}`, `repo_id`,
+  `dr_sync_path`, `mode`.
+  - `features`, `repo_id`, `dr_sync_path`, and `mode` are four legacy/ad-hoc
+    keys discovered during implementation planning, none in `load_config()`'s
+    own defaults dict because all four call sites bypass `load_config()` and
+    hand-roll their own file read/write: `synlynk/uxcore.py`'s
+    `FeatureFlags.is_enabled()` reads `features`; `synlynk/workspace.py`'s
+    `add_repo()` reads/writes `repo_id`; `synlynk/__init__.py`'s `_dr_sync()`
+    and `synlynk/db.py`'s disaster-recovery mirror functions read/write
+    `dr_sync_path`; `synlynk/__init__.py`'s re-init preview function reads
+    `mode` (`cfg.get("mode", "solo")`) to display the workspace's current
+    solo/team mode before a re-init. All four are workspace-identity/behavior
+    data, so `workspace.json` is their natural home.
 - **`billing.json`** — `budget{}`, `harness_billing{}`, `payment_models{}`,
   `capability_sweep{}`.
 - **`policy.json`** (existing governance file, extended) — four flat
@@ -90,22 +102,34 @@ split-file read path.
 
 ## 7. Dogfooding exception: this repo's own tracked files
 
-`.gitignore` lists `.synlynk/*` plus an explicit `.synlynk/config.json`
-line — new workspaces are meant to keep this file untracked. However, `git
-ls-files` confirms **this repo's own** `.synlynk/config.json` and
-`.synlynk/policy.json` are currently force-tracked (pre-existing commit
-`524624e5` for `config.json`), as canonical dogfooded samples.
+**Correction (found during implementation planning):** the premise below was
+backwards. `synlynk/parity.py`'s onboarding `.gitignore` template (the
+template synlynk itself writes into *every newly onboarded repo*, not just
+this one) already negates `.synlynk/config.json` and `.synlynk/policy.json`
+out of the blanket `**/.synlynk/*` ignore — i.e. **config.json/policy.json
+are default-TRACKED by synlynk's own general convention**, not a one-off
+quirk of this repo's dogfooding. `git ls-files` confirming this repo's
+`config.json`/`policy.json` are tracked (commit `524624e5`) is this
+convention working as designed, not an exception to it.
 
-- `.gitignore` gains two new ignore lines, `.synlynk/workspace.json` and
-  `.synlynk/billing.json`, matching `config.json`'s existing default-ignored
-  treatment for downstream projects (`billing.json` in particular carries
-  budget/billing data that should not default to being committed).
+- `synlynk/parity.py`'s `ensure_recursive_gitignore()` gitignore-rules
+  string gains two new **tracked** exceptions, `!**/.synlynk/workspace.json`
+  and `!**/.synlynk/billing.json`, alongside the existing
+  `!**/.synlynk/config.json`/`!**/.synlynk/policy.json` lines — so every
+  newly onboarded repo keeps tracking its split config files by default,
+  matching `config.json`'s current real-world convention. (`billing.json`
+  still carries budget/billing data; if that turns out to warrant different
+  treatment from `workspace.json`, that's a follow-up decision, not blocking
+  here — this design keeps parity with `config.json`'s existing default.)
+- This repo's own root `.gitignore` already has the `**/.synlynk/*` block
+  with those exception lines (`ensure_recursive_gitignore()` is a one-time
+  bootstrap, already run here) — this design adds the two new exception
+  lines to this repo's root `.gitignore` directly, mirroring the
+  `parity.py` template update above.
 - In this repo specifically, the migration step must `git add` the new
-  `workspace.json`/`billing.json` (force-adding past the new ignore lines,
-  the same way `config.json`/`policy.json` are already force-tracked) and
-  `git rm` the old `config.json`, in the same commit that performs the
-  split here — otherwise this repo silently stops tracking its own
-  canonical config sample.
+  `workspace.json`/`billing.json` and `git rm` the old `config.json`, in the
+  same commit that performs the split here — otherwise this repo silently
+  stops tracking its own canonical config sample.
 
 ## 8. Error handling
 
