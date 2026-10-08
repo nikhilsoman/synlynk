@@ -109,7 +109,7 @@ def _hc_identity_slug() -> HealthCheck:
 
 def _hc_config_schema() -> HealthCheck:
     """Validates .synlynk/config.json against the known field schema."""
-    from synlynk.config_schema import validate, CONFIG_SCHEMA
+    from synlynk.config_schema import validate, WORKSPACE_SCHEMA
 
     path = os.path.join(".synlynk", "config.json")
     if not os.path.exists(path):
@@ -119,7 +119,7 @@ def _hc_config_schema() -> HealthCheck:
             data = json.load(config_file)
     except (OSError, json.JSONDecodeError) as exc:
         return HealthCheck("config_schema", "fail", f"Cannot parse .synlynk/config.json: {exc}")
-    errors = validate(data, CONFIG_SCHEMA)
+    errors = validate(data, WORKSPACE_SCHEMA)
     if not errors:
         return HealthCheck("config_schema", "ok", ".synlynk/config.json matches expected schema")
     return HealthCheck(
