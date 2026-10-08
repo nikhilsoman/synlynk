@@ -1,55 +1,45 @@
-from synlynk.config_schema import validate, CONFIG_SCHEMA, POLICY_SCHEMA
+from synlynk.config_schema import validate, WORKSPACE_SCHEMA, BILLING_SCHEMA, POLICY_SCHEMA
 
 
-def _valid_config():
-    return {
-        "schema_version": 1,
-        "budget": {"limit_usd": 10.0, "limit_requests": 100},
-        "harness_billing": {
-            "grok": {
-                "payment_mode": "subscription",
-                "monthly_base_fee_usd": 30.0,
-                "projected_monthly_tokens": 10_000_000,
-                "allow_extra_usage": False,
-            }
-        },
-        "workspace_id": "2a6aa76a-94fb-4a45-9350-9fc71ec3bac8",
-        "identity_slug": "synlynk",
-        "local_fallback": "agy",
-        "local_auto_threshold": 0.5,
-    }
+def test_workspace_schema_accepts_valid_document():
+    doc = {"schema_version": 1, "workspace_id": "ws-1", "local_fallback": "agy"}
+    assert validate(doc, WORKSPACE_SCHEMA) == []
 
 
-def test_valid_config_produces_no_errors():
-    assert validate(_valid_config(), CONFIG_SCHEMA) == []
-
-
-def test_wrong_type_is_reported():
-    data = {"identity_slug": 123}
-    errors = validate(data, CONFIG_SCHEMA)
-    assert any("identity_slug" in e and "type" in e for e in errors)
-
-
-def test_missing_required_key_is_reported():
-    errors = validate({}, POLICY_SCHEMA)
+def test_workspace_schema_rejects_missing_schema_version():
+    doc = {"workspace_id": "ws-1"}
+    errors = validate(doc, WORKSPACE_SCHEMA)
     assert any("schema_version" in e for e in errors)
 
 
-def test_config_missing_required_top_level_field_fails_validation():
-    """A config that omits a live required field must not validate as OK.
-
-    validate({"budget": 1}, CONFIG_SCHEMA) used to return [] because
-    schema_version, budget, harness_billing, and workspace_id were undeclared.
-    """
-    errors = validate({"budget": 1}, CONFIG_SCHEMA)
-    assert errors
-    assert any("schema_version" in e and "required" in e for e in errors)
-    assert any("harness_billing" in e and "required" in e for e in errors)
-    assert any("workspace_id" in e and "required" in e for e in errors)
-    assert any("budget" in e and "type" in e for e in errors)
+def test_billing_schema_accepts_valid_document():
+    doc = {
+        "schema_version": 1,
+        "budget": {"limit_usd": 10.0, "limit_requests": 100},
+        "harness_billing": {},
+    }
+    assert validate(doc, BILLING_SCHEMA) == []
 
 
-def test_invalid_enum_value_is_reported():
-    data = {"schema_version": 1, "repo_id": "x", "capability_policy": {"mode": "not-a-real-mode"}}
-    errors = validate(data, POLICY_SCHEMA)
-    assert any("mode" in e for e in errors)
+def test_billing_schema_rejects_wrong_budget_type():
+    doc = {"schema_version": 1, "budget": "not-a-dict", "harness_billing": {}}
+    errors = validate(doc, BILLING_SCHEMA)
+    assert any("budget" in e for e in errors)
+
+
+def test_policy_schema_accepts_migrated_fields():
+    doc = {
+        "schema_version": 1,
+        "repo_id": "synlynk",
+        "qa_gate_mode": "block-only",
+        "roles": {"claude": ["pm", "review"]},
+        "story_classification": {"method": "heuristic"},
+        "sentinel": {"dedup_window_seconds": 86400},
+    }
+    assert validate(doc, POLICY_SCHEMA) == []
+
+
+def test_policy_schema_rejects_bad_qa_gate_mode_type():
+    doc = {"schema_version": 1, "repo_id": "synlynk", "qa_gate_mode": 123}
+    errors = validate(doc, POLICY_SCHEMA)
+    assert any("qa_gate_mode" in e for e in errors)

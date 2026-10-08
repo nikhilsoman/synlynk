@@ -52,15 +52,31 @@ _BUDGET_FIELDS = {
     "limit_requests": {"type": int, "required": True},
 }
 
-CONFIG_SCHEMA = {
+WORKSPACE_SCHEMA = {
+    "fields": {
+        "schema_version": {"type": int, "required": True},
+        "workspace_id": {"type": str},
+        "identity_slug": {"type": str},
+        "local_fallback": {"type": str},
+        "local_auto_threshold": {"type": (int, float)},
+        "org": {"type": str},
+        "owner": {"type": str},
+        "repo": {"type": str},
+        "project_id": {"type": str},
+        "project_docs_dir": {"type": str},
+        "repo_id": {"type": str},
+        "dr_sync_path": {"type": str},
+        "mode": {"type": str, "enum": ["solo", "team"]},
+    }
+}
+
+BILLING_SCHEMA = {
     "fields": {
         "schema_version": {"type": int, "required": True},
         "budget": {"type": dict, "required": True, "fields": _BUDGET_FIELDS},
         "harness_billing": {"type": dict, "required": True},
-        "workspace_id": {"type": str, "required": True},
-        "identity_slug": {"type": str},
-        "local_fallback": {"type": str},
-        "local_auto_threshold": {"type": (int, float)},
+        "payment_models": {"type": dict},
+        "capability_sweep": {"type": dict},
     }
 }
 
@@ -76,5 +92,9 @@ POLICY_SCHEMA = {
             },
         },
         "overrides": {"type": dict},
+        "qa_gate_mode": {"type": str, "enum": ["block-only", "merge-restricted-classes"]},
+        "roles": {"type": dict},
+        "story_classification": {"type": dict},
+        "sentinel": {"type": dict},
     }
 }
