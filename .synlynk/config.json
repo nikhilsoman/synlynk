@@ -30,5 +30,8 @@
       "allow_extra_usage": false
     }
   },
-  "workspace_id": "2a6aa76a-94fb-4a45-9350-9fc71ec3bac8"
+  "workspace_id": "2a6aa76a-94fb-4a45-9350-9fc71ec3bac8",
+  "worktree": {
+    "mode": "sparse"
+  }
 }
