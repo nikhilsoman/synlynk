@@ -145,6 +145,90 @@ def test_preflight_blocks_unavailable_local_capability(monkeypatch):
     assert "synlynk local doctor" in result["reason"]
 
 
+def test_preflight_blocks_missing_local_config(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    from synlynk.dispatch import _preflight_dispatch
+
+    result = _preflight_dispatch("local", [])
+
+    assert result["passed"] is False
+    assert result["sentinel"] == "LOCAL_CAPABILITY_UNAVAILABLE"
+    assert "configuration is unavailable" in result["reason"]
+
+
+def test_preflight_blocks_local_config_without_endpoint(monkeypatch):
+    from synlynk import local_agent
+    from synlynk.dispatch import _preflight_dispatch
+
+    monkeypatch.setattr(local_agent, "_load_local_config", lambda: {"models": []})
+
+    result = _preflight_dispatch("local", [])
+
+    assert result["passed"] is False
+    assert result["sentinel"] == "LOCAL_CAPABILITY_UNAVAILABLE"
+    assert "no oMLX endpoint" in result["reason"]
+
+
+def test_preflight_blocks_missing_aider(monkeypatch):
+    from synlynk import local_agent
+    from synlynk.dispatch import _preflight_dispatch
+
+    monkeypatch.setattr(
+        local_agent,
+        "_load_local_config",
+        lambda: {"endpoint": "http://127.0.0.1:8000", "models": []},
+    )
+    monkeypatch.setattr(
+        local_agent,
+        "_health_check",
+        lambda endpoint, api_key=None: {"reachable": True},
+    )
+    monkeypatch.setattr("synlynk.dispatch.shutil.which", lambda name: None if name == "aider" else "/usr/bin/orbctl")
+
+    result = _preflight_dispatch("local", [])
+
+    assert result["passed"] is False
+    assert result["sentinel"] == "LOCAL_CAPABILITY_UNAVAILABLE"
+    assert "requires `aider`" in result["reason"]
+
+
+@pytest.mark.parametrize(
+    "orb_health",
+    [
+        {"reachable": False, "error": "orbctl is not installed or not on PATH"},
+        {"reachable": False, "error": "OrbStack is not running"},
+    ],
+    ids=["missing", "unhealthy"],
+)
+def test_preflight_blocks_missing_or_unhealthy_orbstack(monkeypatch, orb_health):
+    from synlynk import local_agent
+    from synlynk.dispatch import _preflight_dispatch
+
+    monkeypatch.setattr(
+        local_agent,
+        "_load_local_config",
+        lambda: {
+            "endpoint": "http://127.0.0.1:8000",
+            "models": [],
+            "container_required": True,
+        },
+    )
+    monkeypatch.setattr(
+        local_agent,
+        "_health_check",
+        lambda endpoint, api_key=None: {"reachable": True},
+    )
+    monkeypatch.setattr("synlynk.dispatch.shutil.which", lambda name: "/usr/local/bin/aider")
+    monkeypatch.setattr(local_agent, "_orbstack_health_check", lambda: orb_health)
+
+    result = _preflight_dispatch("local", [])
+
+    assert result["passed"] is False
+    assert result["sentinel"] == "LOCAL_ORBSTACK_UNAVAILABLE"
+    assert "requires OrbStack" in result["reason"]
+    assert "orbctl" in result["reason"] or "not running" in result["reason"]
+
+
 def test_fleet_parity_agy_stitch_mcp_integration_preflight_blocks(tmp_path, monkeypatch):
     test_preflight_blocks_missing_stitch_mcp_when_required(tmp_path, monkeypatch)
 

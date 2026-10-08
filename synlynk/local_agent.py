@@ -132,6 +132,33 @@ def _health_check(endpoint: str, timeout: int = 5, api_key: str = None) -> dict:
     return {"reachable": True, "available_models": available}
 
 
+def _orbstack_health_check(timeout: int = 3) -> dict:
+    """Return whether OrbStack is installed and running.
+
+    This is intentionally separate from ``_health_check``: a reachable oMLX
+    endpoint does not prove that the container runtime needed by a
+    containerized local setup is available.
+    """
+    orbctl = shutil.which("orbctl")
+    if orbctl is None:
+        return {"reachable": False, "error": "orbctl is not installed or not on PATH"}
+    try:
+        result = _subprocess.run(
+            [orbctl, "status"],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
+        )
+    except (OSError, _subprocess.TimeoutExpired) as exc:
+        return {"reachable": False, "error": str(exc)}
+    status = (result.stdout or result.stderr or "").strip()
+    if result.returncode != 0 or "running" not in status.lower():
+        detail = status or "status check failed"
+        return {"reachable": False, "error": detail}
+    return {"reachable": True}
+
+
 _STARTER_TIER_GUARDRAIL_FLAGS = [
     "--no-auto-lint",
     "--no-auto-test",

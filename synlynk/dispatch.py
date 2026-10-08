@@ -2977,7 +2977,11 @@ def _preflight_dispatch(
         # Aider can exit zero after doing no work when its configured oMLX
         # backend is unavailable.  Verify the actual local capability before
         # spawning it so the job cannot be recorded as a successful no-op.
-        from synlynk.local_agent import _health_check, _load_local_config
+        from synlynk.local_agent import (
+            _health_check,
+            _load_local_config,
+            _orbstack_health_check,
+        )
 
         try:
             local_config = _load_local_config()
@@ -3020,6 +3024,34 @@ def _preflight_dispatch(
                     "Run `synlynk local doctor` or install aider-chat before retrying."
                 ),
             }
+        container = local_config.get("container")
+        container_runtime = (
+            container.get("runtime") if isinstance(container, dict) else None
+        )
+        requires_orbstack = local_config.get("requires_orbstack")
+        if requires_orbstack is None:
+            requires_orbstack = local_config.get("container_required")
+        if requires_orbstack is None:
+            runtime = local_config.get("container_runtime") or container_runtime
+            if runtime is not None:
+                requires_orbstack = str(runtime).lower() == "orbstack"
+            else:
+                # The sovereign image reaches host-served oMLX through
+                # OrbStack's bridge hostname. Treat that endpoint as an
+                # implicit containerized setup for older configs.
+                requires_orbstack = "host.docker.internal" in str(endpoint).lower()
+        if requires_orbstack:
+            orb_health = _orbstack_health_check()
+            if not orb_health.get("reachable"):
+                return {
+                    "passed": False,
+                    "sentinel": "LOCAL_ORBSTACK_UNAVAILABLE",
+                    "reason": (
+                        "Local harness requires OrbStack for its containerized setup, "
+                        f"but OrbStack is unavailable: {orb_health.get('error', 'health check failed')}. "
+                        "Install OrbStack and run `orbctl start` before retrying."
+                    ),
+                }
 
     if harness_name in _CORE_FLEET and repo_has_any_core_instruction_file(check_root):
         expected_file = _CORE_INSTRUCTION_FILES.get(harness_name)
