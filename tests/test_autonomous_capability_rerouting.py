@@ -48,3 +48,22 @@ def test_autonomous_rerouting_gh_write():
         force_agent=False,
     )
     assert resolved == "codex"
+
+
+def test_review_routing_never_falls_back_to_local_permission_crash():
+    """Review permissions require enforcement that the local adapter lacks."""
+    resolved = resolve_capable_dispatch_harness(
+        candidate_harness="local",
+        task="review PR #2123",
+        task_type="review",
+        fallback_chain=["local", "codex", "agy", "claude"],
+        force_agent=False,
+    )
+    assert resolved == "codex"
+
+    from synlynk.dispatch import _permissions_to_flags
+
+    assert _permissions_to_flags(resolved, ["read:*"], read_only=True) == [
+        "-s",
+        "read-only",
+    ]
