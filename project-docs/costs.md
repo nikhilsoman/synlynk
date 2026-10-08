@@ -506,13 +506,50 @@
 | 2026-10-08 07:28 | claude | claude-sonnet-4-6 | 15000 | 2500 | $0.0434 [sub] (API: $0.0825) | estimated_manual | story-issue-2118 | PM: fixed blog post frontmatter blocking pr check on PR #2122 (found by Grok review job-98e3c6b8) |
 | 2026-10-08 07:51 | claude | claude-sonnet-4-6 | 95000 | 6500 | $0.2519 [sub] (API: $0.3825) | estimated_manual | story-7117bb01 | PM session: opened PR #2123 (policy-enforcement-maturity -> main), GOVERNS linkage lookup, reviewer dispatch coordination, gh:#2124 capability-probe bug investigation/filing |
 | 2026-10-08 07:57 | claude | claude-sonnet-4-6 | 20000 | 3000 | $0.0571 [sub] (API: $0.1050) | estimated_manual | - | PM: backfilled costs.md rows for PR 2122/2123, recovered from main-checkout commit-block error via proper worktree, opened PR 2125 |
+| 2026-10-07 22:14 | agy | unknown | 45490 | 3080 | $0.0393 [sub] (API: $0.1827) | estimated_token_rate | story-issue-2117 | exec: agy job job-90fef325 |
+| 2026-10-07 22:27 | claude | claude-sonnet-4-6 | 67716 | 15411 | $0.2063 [sub] (API: $0.4343) | estimated_token_rate | story-issue-2117 | exec: claude job job-4cca7... |
+| 2026-10-07 23:11 | claude | claude-sonnet-4-6 | 52035 | 3969 | $0.1390 [sub] (API: $0.2156) | estimated_token_rate | story-issue-2117 | exec: claude job job-fa3c0... |
+| 2026-10-07 23:35 | claude | claude-sonnet-4-6 | 54729 | 8526 | $0.1570 [sub] (API: $0.2921) | estimated_token_rate | story-issue-2081 | exec: claude job job-a46e7... |
+| 2026-10-08 01:36 | codex | o4-mini | 8015256 | 27603 | $0.3844 [sub] (API: $24.4598) | estimated_manual | - | Dispatched implementation of policy-enforcement-maturity plan Tasks 1-7; job tripped circuit breaker before Task 8 (doc-sync/PR). .46 actual vs ~$0.09 estimate — cost-inflation issue filed separately. |
+| 2026-10-08 05:57 | grok | grok-3 | 101060 | 28294 | $0.8482 [sub] (API: $0.7276) | estimated_manual | - | Grok review of PR #2120, found 2 real defects (migration collision, gate_mode lookup mismatch) |
+| 2026-10-08 06:05 | grok | grok-3 | 61733 | 20793 | $0.5412 [sub] (API: $0.4971) | estimated_token_rate | story-7117bb01 | exec: grok job job-ba1ba39... |
+| 2026-10-08 07:13 | codex | o4-mini | 4732954 | 16256 | $0.2270 [sub] (API: $14.4427) | estimated_token_rate | story-issue-2118 | exec: codex job job-7c7062... |
+| 2026-10-08 07:28 | claude | claude-sonnet-4-6 | 15000 | 2500 | $0.0434 [sub] (API: $0.0825) | estimated_manual | - | PM: fixed blog post frontmatter blocking pr check (found by Grok review job-98e3c6b8) |
+| 2026-10-08 07:49 | grok | grok-3 | 259067 | 49544 | $2.0237 [sub] (API: $1.5204) | estimated_token_rate | story-issue-2124 | exec: grok job job-c2a7c4d... |
+| 2026-10-08 07:51 | claude | claude-sonnet-4-6 | 95000 | 6500 | $0.2519 [sub] (API: $0.3825) | estimated_manual | - | PM session: opened PR #2123 (policy-enforcement-maturity -> main), GOVERNS linkage lookup, reviewer dispatch coordination, gh:#2124 capability-probe bug investigation/filing |
+| 2026-10-08 08:09 | codex | o4-mini | 1276961 | 10968 | $0.0615 [sub] (API: $3.9954) | estimated_token_rate | story-issue-2118 | exec: codex job job-3231b6... |
+| 2026-10-08 13:14 | codex | o4-mini | 4179509 | 12094 | $0.2003 [sub] (API: $12.7199) | estimated_token_rate | story-issue-2124 | exec: codex job job-501cf0... |
+| 2026-10-08 13:14 | grok | grok-3 | 314306 | 31948 | $2.2705 [sub] (API: $1.4221) | estimated_token_rate | story-issue-2113 | exec: grok job job-903538a... |
+| 2026-10-08 13:14 | codex | o4-mini | 4500590 | 16489 | $0.2159 [sub] (API: $13.7491) | estimated_token_rate | story-issue-2099 | exec: codex job job-c48e53... |
+| 2026-10-08 17:15 | grok | grok-4.6 | 5000 | 2000 | $0.0459 [sub] (API: $0.0450) | estimated_tshirt | story-issue-2102 | exec: grok job job-7d9f878... |
+| 2026-10-08 18:31 | codex | o4-mini | 4198507 | 12363 | $0.2012 [sub] (API: $12.7810) | estimated_token_rate | story-issue-2023 | exec: codex job job-a9c642... |
+| 2026-10-08 21:50 | codex | o4-mini | 701531 | 5701 | $0.0338 [sub] (API: $2.1901) | estimated_token_rate | story-issue-2133 | exec: codex job job-1c91a4... |
+| 2026-10-08 22:09 | grok | grok-3 | 126180 | 45851 | $1.1281 [sub] (API: $1.0663) | estimated_token_rate | story-issue-2102 | exec: grok job job-49a7ea2... |
+| 2026-10-08 22:09 | agy | unknown | 94036 | 5652 | $0.0806 [sub] (API: $0.3669) | estimated_token_rate | story-issue-2133 | exec: agy job job-bde25c37 |
+| 2026-10-08 22:35 | codex | o4-mini | 1911222 | 9659 | $0.0918 [sub] (API: $5.8786) | estimated_token_rate | story-issue-2102 | exec: codex job job-c97441... |
+| 2026-10-08 22:35 | codex | o4-mini | 1610562 | 7274 | $0.0773 [sub] (API: $4.9408) | estimated_token_rate | story-issue-2130 | exec: codex job job-5fc8c3... |
+| 2026-10-08 23:25 | codex | o4-mini | 1152831 | 8633 | $0.0555 [sub] (API: $3.5880) | estimated_token_rate | story-issue-2136 | exec: codex job job-aae732... |
+| 2026-10-08 23:21 | codex | o4-mini | 5000 | 2000 | $0.0003 [sub] (API: $0.0450) | estimated_tshirt | story-issue-2130 | exec: codex job job-c75743... |
+| 2026-10-08 23:24 | claude | claude-sonnet-4-6 | 15000 | 2000 | $0.0422 [sub] (API: $0.0750) | estimated_manual | - | native PM-session work: verified job-aae73244's diff/tests directly (files:0-touched label was wrong), committed, pushed, opened PR #2142 for gh:#2136 |
+| 2026-10-08 23:25 | grok | grok-3 | 75210 | 2000 | $0.5063 [sub] (API: $0.2556) | estimated_manual | - | dispatch estimate, cross-harness review of PR #2142 (gh:#2136 fix) |
+| 2026-10-08 23:27 | codex | o4-mini | 9366 | 4000 | $0.0006 [sub] (API: $0.0881) | estimated_manual | - | dispatch estimate, fix gh:#1943 CI cold-start/EPUB required-check cleanup |
+| 2026-10-08 23:43 | agy | unknown | 304615 | 40714 | $0.2793 [sub] (API: $1.5246) | estimated_token_rate | story-issue-1914 | exec: agy job job-5396bd26 |
+| 2026-10-08 23:43 | grok | grok-3 | 128861 | 57791 | $1.2240 [sub] (API: $1.2534) | estimated_token_rate | story-issue-2137 | exec: grok job job-6fc9b8f... |
+| 2026-10-08 23:52 | claude | claude-sonnet-4-6 | 50000 | 4000 | $0.1340 [sub] (API: $0.2100) | estimated_manual | - | native session: applied Grok's #2137 implementation (uncommitted), ran full suite, committed, pushed, opened PR |
+| 2026-10-08 23:53 | claude | claude-sonnet-4-6 | 35000 | 2500 | $0.0931 [sub] (API: $0.1425) | estimated_manual | - | native session: applied Agy's #1914 fix (uncommitted), verified test count + release --check-docs, committed, pushed, opened PR |
+| 2026-10-08 23:59 | grok | grok-3 | 49211 | 6431 | $0.3649 [sub] (API: $0.2441) | estimated_token_rate | story-issue-2136 | exec: grok job job-1ca697f... |
+| 2026-10-09 01:23 | codex | o4-mini | 765216 | 5534 | $0.0368 [sub] (API: $2.3787) | estimated_token_rate | story-b04fdd2c | exec: codex job job-23679c... |
+| 2026-10-09 01:38 | codex | o4-mini | 765216 | 5534 | $0.0368 [sub] (API: $2.3787) | estimated_manual | - | Task 1: config_schema.py split (CONFIG_SCHEMA -> WORKSPACE_SCHEMA/BILLING_SCHEMA), gh:#2101 |
+| 2026-10-09 01:38 | codex | o4-mini | 1552988 | 5490 | $0.0745 [sub] (API: $4.7413) | estimated_manual | - | Fix-forward: doctor.py _hc_config_schema() CONFIG_SCHEMA->WORKSPACE_SCHEMA, gh:#2101 (job status label was misleading: PERMISSION_DENIED/0-touched but fix verified landed via direct git diff + pytest) |
+| 2026-10-09 01:50 | codex | o4-mini | 2982725 | 13479 | $0.1432 [sub] (API: $9.1504) | estimated_token_rate | story-b04fdd2c | exec: codex job job-87d7d3... |
+| 2026-10-09 02:05 | codex | o4-mini | 2982725 | 13479 | $0.1432 [sub] (API: $9.1504) | estimated_manual | - | Task 2 (load_workspace/load_billing/migration) of gh:#2101 config decomposition plan; TOKEN_BLOAT/COST_INFLATION flagged (SCOPE_REVIEW_REQUIRED) but verified correct and complete via direct diff/test inspection, not the status label |
 
 ## Subscription Amortization & Dual-Ledger Summary
 
 | Harness | Base Fee | Actual Amortized Spend | API Equivalent Value | Net Savings |
 |---|---|---|---|---|
-| claude | $20.00 | $21.5366 | $31.2432 | $9.7066 |
-| codex | $20.00 | $14.1829 | $907.1081 | $892.9252 |
-| agy | $20.00 | $1.5007 | $6.9278 | $5.4271 |
-| grok | $30.00 | $19.6253 | $15.0696 | $-4.5557 |
-| **Total** | **$90.00** | **$56.8455** | **$960.3487** | **$903.5032** |
+| claude | $20.00 | $22.3083 | $32.6128 | $10.3045 |
+| codex | $20.00 | $15.9871 | $1022.2569 | $1006.2698 |
+| agy | $20.00 | $1.8998 | $9.0019 | $7.1021 |
+| grok | $30.00 | $28.5780 | $22.1012 | $-6.4768 |
+| **Total** | **$90.00** | **$68.7732** | **$1085.9728** | **$1017.1996** |
