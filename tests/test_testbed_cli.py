@@ -69,3 +69,19 @@ def test_run_testbed_cli_status():
     with patch("synlynk.testbed.cli.get_driver", return_value=mock_driver):
         res = run_testbed_cli(["status"])
         assert res == 0
+
+
+def test_run_testbed_cli_state_db_wal_local(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    with patch("synlynk.testbed.cli.tempfile.mkdtemp", return_value=str(tmp_path)):
+        res = run_testbed_cli(["run", "--scenario", "state_db_wal", "--json"])
+    assert res == 0
+    assert (tmp_path / "state.db").exists()
+
+
+def test_soak_cli_state_db_wal_local(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    with patch("synlynk.testbed.cli.tempfile.mkdtemp", return_value=str(tmp_path)):
+        res = run_testbed_cli(["soak", "--scenario", "state_db_wal", "--writers", "20", "--json"])
+    assert res == 0
+    assert (tmp_path / "state.db").exists()
