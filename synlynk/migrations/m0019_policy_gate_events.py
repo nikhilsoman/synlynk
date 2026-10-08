@@ -1,4 +1,4 @@
-"""Migration 18: durable observe-mode gate verdict log for synlynk pr check."""
+"""Migration 19: durable observe-mode gate verdict log for synlynk pr check."""
 import sqlite3
 
 from synlynk.migrations import Migration
@@ -22,4 +22,4 @@ def _up(conn: sqlite3.Connection) -> None:
     )
 
 
-MIGRATION = Migration(version=18, name="policy_gate_events", up=_up)
+MIGRATION = Migration(version=19, name="policy_gate_events", up=_up)
