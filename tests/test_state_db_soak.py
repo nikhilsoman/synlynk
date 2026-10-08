@@ -15,6 +15,8 @@ from synlynk.testbed.state_db_soak import (
     DEFAULT_WRITERS,
     PASS_THRESHOLDS,
     SoakConfig,
+    _apply_delete_journal_mode,
+    _open_conn,
     classify_failure_modes,
     run_state_db_soak,
 )
@@ -151,3 +153,73 @@ def test_soak_without_wal_or_busy_timeout_captures_lock_failures(tmp_path):
         pytest.skip("DELETE journal still serialized this load; no contention to capture")
     assert "lock_contention" in report.failure_modes or "write_starvation" in report.failure_modes
     assert report.lock_errors > 0 or report.starved_writers > 0
+
+
+class _Cursor:
+    def __init__(self, row):
+        self._row = row
+
+    def fetchone(self):
+        return self._row
+
+
+class _ScriptedConn:
+    def __init__(self, results):
+        self._results = list(results)
+        self.calls = []
+
+    def execute(self, sql):
+        self.calls.append(sql)
+        item = self._results.pop(0)
+        if isinstance(item, BaseException):
+            raise item
+        return _Cursor(item)
+
+
+def test_delete_journal_pragma_retries_locked_then_succeeds():
+    conn = _ScriptedConn(
+        [
+            sqlite3.OperationalError("database is locked"),
+            ("wal",),
+            ("delete",),
+        ]
+    )
+    assert _apply_delete_journal_mode(conn, attempts=4, base_delay_s=0) is True
+    assert conn.calls == [
+        "PRAGMA journal_mode",
+        "PRAGMA journal_mode",
+        "PRAGMA journal_mode=DELETE",
+    ]
+
+
+def test_delete_journal_pragma_falls_through_when_lock_persists():
+    conn = _ScriptedConn([sqlite3.OperationalError("database is locked")] * 5)
+    assert _apply_delete_journal_mode(conn, attempts=3, base_delay_s=0) is False
+    assert len(conn.calls) == 3
+
+
+def test_delete_journal_pragma_does_not_swallow_other_operational_errors():
+    conn = _ScriptedConn([sqlite3.OperationalError("disk I/O error")])
+    with pytest.raises(sqlite3.OperationalError, match="disk I/O error"):
+        _apply_delete_journal_mode(conn, attempts=3, base_delay_s=0)
+
+
+def test_open_conn_survives_locked_delete_pragma(tmp_path, monkeypatch):
+    db_path = tmp_path / "control.db"
+    sqlite3.connect(db_path).close()
+    monkeypatch.setattr(
+        "synlynk.testbed.state_db_soak._apply_delete_journal_mode",
+        lambda conn, **kwargs: False,
+    )
+    conn = _open_conn(
+        SoakConfig(
+            db_path=str(db_path),
+            apply_wal=False,
+            busy_timeout_ms=1,
+            connect_timeout_s=0.05,
+        )
+    )
+    try:
+        assert conn.execute("SELECT 1").fetchone()[0] == 1
+    finally:
+        conn.close()

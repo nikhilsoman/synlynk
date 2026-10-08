@@ -131,6 +131,53 @@ def _story_ids(count: int) -> List[str]:
     return [f"story-soak-{i}" for i in range(count)]
 
 
+_LOCK_RETRY_ATTEMPTS = 6
+_LOCK_RETRY_BASE_S = 0.02
+_LOCK_RETRY_MAX_S = 0.25
+
+
+def _is_lock_error(exc: BaseException) -> bool:
+    message = str(exc).lower()
+    return "locked" in message or "busy" in message
+
+
+def _apply_delete_journal_mode(
+    conn: sqlite3.Connection,
+    *,
+    attempts: int = _LOCK_RETRY_ATTEMPTS,
+    base_delay_s: float = _LOCK_RETRY_BASE_S,
+) -> bool:
+    """Put the ledger in DELETE journal mode.
+
+    ``PRAGMA journal_mode=DELETE`` takes an exclusive lock. The negative-control
+    soak issues it while sibling workers are still opening and writing, so
+    ``sqlite3.OperationalError: database is locked`` is retried with a bounded
+    backoff. When the lock never clears, return False and let the caller fall
+    through into the write loop, which counts lock failures. Setup must not
+    abort the run.
+    """
+    delay = base_delay_s
+    for attempt in range(max(1, attempts)):
+        try:
+            current = conn.execute("PRAGMA journal_mode").fetchone()
+            if current and str(current[0]).lower() == "delete":
+                return True
+            changed = conn.execute("PRAGMA journal_mode=DELETE").fetchone()
+            if changed and str(changed[0]).lower() == "delete":
+                return True
+            # Another connection still holds the file, so SQLite kept the
+            # previous mode instead of raising. Retry, then fall through.
+        except sqlite3.OperationalError as exc:
+            if not _is_lock_error(exc):
+                raise
+        if attempt >= attempts - 1:
+            break
+        if delay > 0:
+            time.sleep(delay)
+            delay = min(delay * 2, _LOCK_RETRY_MAX_S)
+    return False
+
+
 def _init_isolated_db(cfg: SoakConfig) -> None:
     parent = os.path.dirname(cfg.db_path) or "."
     os.makedirs(parent, exist_ok=True)
@@ -149,10 +196,10 @@ def _init_isolated_db(cfg: SoakConfig) -> None:
         conn.close()
 
     if not cfg.apply_wal:
-        raw = sqlite3.connect(cfg.db_path, timeout=cfg.connect_timeout_s)
+        # Switch once before any worker connects. Later connections retry.
+        raw = sqlite3.connect(cfg.db_path, timeout=max(float(cfg.connect_timeout_s), 5.0))
         try:
-            raw.execute("PRAGMA journal_mode=DELETE")
-            raw.execute(f"PRAGMA busy_timeout={int(cfg.busy_timeout_ms)}")
+            _apply_delete_journal_mode(raw, attempts=8)
         finally:
             raw.close()
 
@@ -167,8 +214,11 @@ def _open_conn(cfg: SoakConfig) -> sqlite3.Connection:
     if cfg.apply_wal:
         ensure_wal_pragmas(conn)
     else:
+        # Confirm DELETE before shrinking busy_timeout. A 1ms timeout is what
+        # makes write contention observable; applying it first turns this
+        # pragma into an uncaught "database is locked" and aborts the soak.
+        _apply_delete_journal_mode(conn)
         conn.execute(f"PRAGMA busy_timeout={int(cfg.busy_timeout_ms)}")
-        conn.execute("PRAGMA journal_mode=DELETE")
     return conn
 
 
@@ -246,7 +296,21 @@ def _run_writer(cfg: SoakConfig, worker_id: int) -> Dict[str, Any]:
     committed = 0
     lock_errors = 0
     errors: List[str] = []
-    conn = _open_conn(cfg)
+    try:
+        conn = _open_conn(cfg)
+    except sqlite3.OperationalError as exc:
+        if not _is_lock_error(exc):
+            raise
+        # Opening the control connection lost the lock race. Count it and
+        # return so the soak report still reaches the lock-failure assertions.
+        return {
+            "worker_id": worker_id,
+            "committed": 0,
+            "lock_errors": 1,
+            "latencies": [],
+            "errors": [],
+            "kind": "writer",
+        }
     try:
         for op_index in range(cfg.ops_per_writer):
             started = time.perf_counter()
