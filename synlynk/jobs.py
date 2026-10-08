@@ -34,6 +34,7 @@ _YELLOW = "[33m"
 _DIM = "[2m"
 _RESET = "[0m"
 _HARNESS_INTERNAL_TIMEOUT_RETRY_CAP = 2
+_GH_WRITE_VERIFICATION_RETRY_CAP = 3
 _AUTOCOMMIT_EXCLUDED_PATHS = (
     "GEMINI.md",
     "CLAUDE.md",
@@ -3719,6 +3720,15 @@ def _apply_gh_write_verification(
     """Consult GitHub state for a --requires-gh-write job and return status/outcome."""
     if not requires_gh_write:
         return status, None
+    try:
+        attempts = int(conn.execute(
+            "SELECT COALESCE(gh_write_verification_attempts, 0) FROM daemon_jobs WHERE job_id=?",
+            (job_id,),
+        ).fetchone()[0])
+    except (sqlite3.OperationalError, TypeError, ValueError, AttributeError):
+        attempts = 0
+    if attempts >= _GH_WRITE_VERIFICATION_RETRY_CAP:
+        return status, "unknown"
     # daemon_jobs historically stores started_at without an offset. Normalize
     # it before handing it to the verifier so all timestamp inputs use UTC.
     since_dt = _parse_iso8601(since)
@@ -3747,16 +3757,35 @@ def _apply_gh_write_verification(
         print(f"  ⚠ gh_write_verified failed for {job_id}: {exc}", file=sys.stderr)
         verified = None
     verified_str = "true" if verified is True else ("false" if verified is False else "unknown")
+    if verified_str == "unknown":
+        attempts += 1
     if verified is False and status in ("done", "failed_unverified"):
         status = "succeeded_gh_write_failed"
     try:
         conn.execute(
-            "UPDATE daemon_jobs SET gh_write_verified=?, gh_write_evidence=? WHERE job_id=?",
-            (verified_str, json.dumps(evidence) if evidence else None, job_id),
+            "UPDATE daemon_jobs SET gh_write_verified=?, gh_write_evidence=?, "
+            "gh_write_verification_attempts=? WHERE job_id=?",
+            (verified_str, json.dumps(evidence) if evidence else None, attempts, job_id),
         )
     except sqlite3.OperationalError:
         conn.execute("UPDATE daemon_jobs SET gh_write_verified=? WHERE job_id=?", (verified_str, job_id))
     return status, verified_str
+
+
+def _gh_write_verification_retry_pending(
+    conn, job_id: str, requires_gh_write: bool, verified_str: Optional[str],
+) -> bool:
+    """Return whether an unknown GH-write check should defer terminal settlement."""
+    if not requires_gh_write or verified_str != "unknown":
+        return False
+    try:
+        attempts = conn.execute(
+            "SELECT COALESCE(gh_write_verification_attempts, 0) FROM daemon_jobs WHERE job_id=?",
+            (job_id,),
+        ).fetchone()[0]
+    except (sqlite3.OperationalError, TypeError, ValueError):
+        return False
+    return int(attempts) < _GH_WRITE_VERIFICATION_RETRY_CAP
 
 
 def _load_cross_branch_pr(conn, job_id: str) -> Optional[str]:
@@ -4012,6 +4041,7 @@ def _reconcile_daemon_jobs() -> None:
         "worktree_path": "TEXT",
         "worktree_branch": "TEXT",
         "pid_identity": "TEXT",
+        "gh_write_verification_attempts": "INTEGER NOT NULL DEFAULT 0",
     })
     # Repair the split-brain window before selecting running rows.  This is
     # deliberately conditional/idempotent so a late daemon update cannot be
@@ -4167,6 +4197,11 @@ def _reconcile_daemon_jobs() -> None:
                         started_at, gh_write_author, gh_write_expect,
                         worktree_branch=preferred_branch,
                     )
+                    if _gh_write_verification_retry_pending(
+                        conn, job_id, requires_gh_write, gh_write_verified_str
+                    ):
+                        conn.commit()
+                        continue
                     settled = _settle_daemon_job_terminal(
                         conn, job_id, status, exit_code, now, release_reservation=True
                     )
@@ -4265,6 +4300,13 @@ def _reconcile_daemon_jobs() -> None:
                             started_at, gh_write_author, gh_write_expect,
                             worktree_branch=worktree_branch,
                         )
+                        if _gh_write_verification_retry_pending(
+                            conn, job_id, requires_gh_write, gh_write_verified_str
+                        ):
+                            _release_daemon_job_terminal_claim_and_commit(
+                                conn, job_id, terminal_claim_token
+                            )
+                            continue
                         if (
                             requires_gh_write and gh_write_verified_str == "true"
                             and zombie_status == "timed_out"
@@ -4327,6 +4369,11 @@ def _reconcile_daemon_jobs() -> None:
                     started_at, gh_write_author, gh_write_expect,
                     worktree_branch=worktree_branch,
                 )
+                if _gh_write_verification_retry_pending(
+                    conn, job_id, requires_gh_write, gh_write_verified_str
+                ):
+                    conn.commit()
+                    continue
                 if (
                     requires_gh_write and gh_write_verified_str == "true"
                     and status == "timed_out" and not exit_marker_present

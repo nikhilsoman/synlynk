@@ -2644,6 +2644,81 @@ def test_reconcile_daemon_jobs_sets_succeeded_gh_write_failed_when_verified_fals
     assert row[1] == "false"
 
 
+def test_reconcile_daemon_jobs_retries_unknown_gh_write_before_settling(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, pid, enqueued_at, started_at, "
+        "requires_gh_write, gh_write_target) VALUES "
+        "('job-ghw-retry', 'codex', 'close issue 701', 'running', 999999, "
+        "'2026-08-15T00:00:00', '2026-08-15T00:00:00', 1, 'issue:701')"
+    )
+    conn.commit()
+    conn.close()
+    monkeypatch.setattr(jobs_mod, "_pid_is_alive", lambda pid: False)
+    monkeypatch.setattr(jobs_mod, "_existing_terminal_summary_truth", lambda job_id: ("done", 0))
+    results = iter((RuntimeError("transient network failure"), True))
+
+    def fake_verified(target, expect, **kw):
+        result = next(results)
+        if isinstance(result, Exception):
+            raise result
+        return result
+
+    monkeypatch.setattr(jobs_mod, "gh_write_verified", fake_verified)
+
+    jobs_mod._reconcile_daemon_jobs()
+    conn = sl._get_db()
+    assert conn.execute(
+        "SELECT status, gh_write_verified, gh_write_verification_attempts "
+        "FROM daemon_jobs WHERE job_id='job-ghw-retry'"
+    ).fetchone() == ("running", "unknown", 1)
+    conn.close()
+
+    jobs_mod._reconcile_daemon_jobs()
+    conn = sl._get_db()
+    assert conn.execute(
+        "SELECT status, gh_write_verified, gh_write_verification_attempts "
+        "FROM daemon_jobs WHERE job_id='job-ghw-retry'"
+    ).fetchone() == ("done", "true", 1)
+    conn.close()
+
+
+def test_reconcile_daemon_jobs_settles_after_gh_write_unknown_retry_cap(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, pid, enqueued_at, started_at, "
+        "requires_gh_write, gh_write_target) VALUES "
+        "('job-ghw-cap', 'codex', 'close issue 701', 'running', 999999, "
+        "'2026-08-15T00:00:00', '2026-08-15T00:00:00', 1, 'issue:701')"
+    )
+    conn.commit()
+    conn.close()
+    monkeypatch.setattr(jobs_mod, "_pid_is_alive", lambda pid: False)
+    monkeypatch.setattr(jobs_mod, "_existing_terminal_summary_truth", lambda job_id: ("done", 0))
+    calls = []
+    monkeypatch.setattr(
+        jobs_mod, "gh_write_verified",
+        lambda target, expect, **kw: calls.append(target) or None,
+    )
+
+    for _ in range(3):
+        jobs_mod._reconcile_daemon_jobs()
+
+    conn = sl._get_db()
+    assert conn.execute(
+        "SELECT status, gh_write_verified, gh_write_verification_attempts "
+        "FROM daemon_jobs WHERE job_id='job-ghw-cap'"
+    ).fetchone() == ("done", "unknown", 3)
+    conn.close()
+    assert len(calls) == 3
+
+
 def test_apply_gh_write_verification_persists_evidence(project_dir, monkeypatch):
     import json
     import synlynk as sl

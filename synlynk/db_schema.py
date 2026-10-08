@@ -215,6 +215,7 @@ CREATE TABLE IF NOT EXISTS daemon_jobs (
     superseded_by TEXT DEFAULT NULL,
     lineage_root TEXT DEFAULT NULL,
     gh_write_evidence TEXT,
+    gh_write_verification_attempts INTEGER NOT NULL DEFAULT 0,
     cost_missing_reason TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_daemon_jobs_status ON daemon_jobs(status);
