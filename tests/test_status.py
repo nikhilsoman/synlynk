@@ -128,6 +128,38 @@ def test_cmd_status_platform_flag_wired(project_dir, monkeypatch):
     assert captured == {"json_output": False, "platform": True}
 
 
+def test_cli_subcommand_runs_when_reconciliation_lock_is_read_only(tmp_path, monkeypatch, capsys):
+    import synlynk
+    import synlynk.cli as cli_mod
+    import synlynk.jobs as jobs_mod
+
+    jobs_file = str(tmp_path / "jobs.json")
+    lock_path = f"{jobs_file}.reconcile.lock"
+    called = []
+    real_open = open
+
+    def deny_lock(path, mode="r", *args, **kwargs):
+        if path == lock_path:
+            raise PermissionError("read-only sandbox")
+        return real_open(path, mode, *args, **kwargs)
+
+    def fake_status(**kwargs):
+        called.append(kwargs)
+        raise SystemExit(0)
+
+    monkeypatch.setattr(synlynk, "JOBS_FILE", jobs_file)
+    monkeypatch.setattr(synlynk, "_reconcile_jobs", jobs_mod._reconcile_jobs)
+    monkeypatch.setattr(synlynk, "cmd_status", fake_status)
+    monkeypatch.setattr("builtins.open", deny_lock)
+
+    with pytest.raises(SystemExit) as exc:
+        cli_mod.main(["status", "--platform"])
+
+    assert exc.value.code == 0
+    assert called == [{"json_output": False, "platform": True}]
+    assert "continuing without the lock" in capsys.readouterr().err
+
+
 def test_status_flags_overdue_smoke_test(tmp_path, capsys):
     db_path = tmp_path / "state.db"
     conn = sqlite3.connect(str(db_path))

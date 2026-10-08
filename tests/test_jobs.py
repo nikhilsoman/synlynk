@@ -43,6 +43,32 @@ def test_check_scope_compliance_empty_scope_paths_is_always_compliant():
     assert _check_scope_compliance(["synlynk/jobs.py"], None) is True
 
 
+def test_reconcile_jobs_continues_when_reconciliation_lock_is_unavailable(monkeypatch, capsys):
+    import synlynk.jobs as jobs_mod
+
+    lock_path = ".synlynk/jobs.json.reconcile.lock"
+    calls = []
+    real_open = open
+
+    def deny_lock(path, mode="r", *args, **kwargs):
+        if path == lock_path:
+            raise PermissionError("read-only sandbox")
+        return real_open(path, mode, *args, **kwargs)
+
+    monkeypatch.setattr(
+        jobs_mod,
+        "_pkg",
+        lambda name, default=None: ".synlynk/jobs.json" if name == "JOBS_FILE" else default,
+    )
+    monkeypatch.setattr("builtins.open", deny_lock)
+    monkeypatch.setattr(jobs_mod, "_reconcile_jobs_unlocked", lambda: calls.append("reconciled"))
+
+    jobs_mod._reconcile_jobs()
+
+    assert calls == ["reconciled"]
+    assert "continuing without the lock" in capsys.readouterr().err
+
+
 def test_sentinel_cotrip_forces_scope_review_regardless_of_job_status(monkeypatch):
     import synlynk.jobs as jobs_mod
 

@@ -215,8 +215,18 @@ def _reconciliation_lock():
     """Serialize flat-file reconciliation across concurrent CLI processes."""
     jobs_file = _pkg("JOBS_FILE")
     lock_path = f"{jobs_file}.reconcile.lock"
-    os.makedirs(os.path.dirname(lock_path), exist_ok=True)
-    handle = open(lock_path, "a+")
+    handle = None
+    try:
+        os.makedirs(os.path.dirname(lock_path), exist_ok=True)
+        handle = open(lock_path, "a+")
+    except OSError as exc:
+        print(
+            f"  warning: reconciliation lock unavailable at {lock_path} "
+            f"({type(exc).__name__}: {exc}); continuing without the lock",
+            file=sys.stderr,
+        )
+        yield
+        return
     try:
         try:
             import fcntl
@@ -230,7 +240,8 @@ def _reconciliation_lock():
             fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
         except (ImportError, OSError):
             pass
-        handle.close()
+        if handle is not None:
+            handle.close()
 
 
 def _job_retry_count(job: dict) -> int:
