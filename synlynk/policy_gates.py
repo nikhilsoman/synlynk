@@ -92,8 +92,9 @@ class GateEvaluation:
 
 def _evaluate_gate(
     conn, *, pr_number: int, gate: str, mode_key: str, verdict: tuple[str, str],
+    policy_section: str | None = None,
 ) -> GateEvaluation:
-    mode = gate_mode(gate, mode_key)
+    mode = gate_mode(policy_section or gate, mode_key)
     status, detail = verdict
     record_gate_event(conn, pr_number=pr_number, gate=gate, mode=mode, verdict=status, detail=detail)
 

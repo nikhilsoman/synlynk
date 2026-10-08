@@ -4504,6 +4504,7 @@ def cmd_pr_check(pr_number=None, impact_attested: bool = False) -> None:
         cross_harness_eval = _evaluate_gate(
             conn, pr_number=pr_number, gate="cross_harness_review",
             mode_key="cross_harness_review_required_mode",
+            policy_section="merge_authority",
             verdict=classify_cross_harness_verdict(cross_harness_ok, cross_harness_message),
         )
         if cross_harness_eval.verdict != "pass":
