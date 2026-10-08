@@ -61,6 +61,9 @@ Versioning follows <a href="https://semver.org/spec/v2.0.0.html">Semantic Versio
 - fix(dispatch): isolated local model argument construction to prevent bare model names from overriding oMLX provider configuration
 - fix(cli): graceful rendering of deferred dispatch job responses
 - fix(local): live end-to-end dispatch validation on Apple Silicon M3 (116s execution, 0 cost, clean diff)
+<blockquote>
+<p><em>Historical Note (v0.23.0 / v0.24.0 version arc gap):</em> Changes planned across the v0.23.0 and v0.24.0 arcs (Graphify auto-extraction, unified canvas, boardroom governance, and local oMLX fleet) were consolidated directly into v0.25.0. Per this repo's documented Named-Release version gap policy (CLAUDE.md: &quot;Gaps in the version arc... are acceptable — users see public history, not internal planning slots&quot;), gaps in public release history represent internal planning slots and are preserved without retrofitting synthetic entries.</p>
+</blockquote>
 <div class="changelog-version-header"><span class="changelog-version">vv0.22.0</span><span class="changelog-date">2026-09-24</span></div>
 <h3 class="tag-added">Added</h3>
 - feat(vizor): modern multi-workspace hub UI and /index.html routing fallback (#1758)
@@ -117,31 +120,6 @@ Versioning follows <a href="https://semver.org/spec/v2.0.0.html">Semantic Versio
 - docs: update tasklist, devlog, and cost log for Wave 1 Task 1.1 (PR #1695)
 - chore(release): bump development version to 0.21.0-dev and stamp v0.20.0 in CHANGELOG.md
 <hr>
-<div class="changelog-version-header"><span class="changelog-version">vv0.21.0</span><span class="changelog-date">2026-09-23</span></div>
-<h3>Highlights</h3>
-<ul>
-<li><strong>Tripartite Model Routing &amp; Sovereign Multi-Home Handover:</strong> Dynamic intelligence tiering (<code>fast</code>, <code>pro</code>, <code>reasoning</code>) with AST blast-radius cost routing and proactive drain-to-boundary pipeline handover.</li>
-<li><strong>Deep Brownfield &amp; Magic PR Healing Engines:</strong> Zero-touch repository reverse-engineering (<code>synlynk init --brownfield</code>) and automated AST parity gap discovery and repair (<code>synlynk heal --magic</code>).</li>
-<li><strong>Teams Relay Mesh Substrate:</strong> Ephemeral peer-to-peer WebSocket RFC 6455 / NATS event routing (<code>synlynk relay</code>), 30-min distributed SQLite story leases (<code>synlynk jobs</code>), AST sibling worktree collision preemption (<code>synlynk mesh --conflicts</code>), and 3-tier identity attribution (<code>synlynk whoami</code>).</li>
-<li><strong>Vizor Cross-Workspace Daemon:</strong> Persistent background daemon (<code>synlynk/vizor_daemon.py</code>) serving multi-workspace dashboards on <code>/w/&lt;slug&gt;/...</code> with systemd/launchd lifecycle (<code>synlynk viz install/status</code>).</li>
-<li><strong>Declarative Model Catalog &amp; Rolling Quota Calibrator:</strong> Full 2026 SOTA model catalog (<code>.synlynk/models.json</code>), multi-track Google AI Pro / Claude / Codex / Grok quota isolation, and empirical <code>/usage</code> delta rolling calibration (<code>synlynk quota calibrate</code>).</li>
-<li><strong>Frontier QA Testbed Engine:</strong> Multi-node automated acceptance and soak testbed engine (<code>synlynk/testbed/</code>) running on isolated OrbStack VMs and Docker with Ed25519 attestation receipts.</li>
-</ul>
-<h3 class="tag-added">Added</h3>
-- **Vizor cross-workspace daemon:** a persistent, workspace-registry-driven background daemon
-  (`synlynk/vizor_daemon.py`) that polls every registered product, isolates per-workspace refresh
-  failures, and serves the Vizor dashboard for any workspace via `/w/<slug>/...` routing. Adds
-  launchd/systemd lifecycle commands (`synlynk viz install/uninstall/status`).
-- **Living Trigger Registry & Autonomous Backlog Triage:** Living trigger registry (`synlynk/charters.py`) for automated TPM sweeps and self-healing charter updates.
-- **LIVE-13 Grok Permission Bypass:** Explicit permission mode resolution (`--always-approve`, `--permission-mode bypassPermissions`) for trusted headless Grok jobs.
-<h3 class="tag-fixed">Fixed</h3>
-- **\[LIVE-14\] GitHub App token cache path drift (#1746):** `WatchDaemon._refresh_github_tokens`
-  and two `viz.py` OAuth/App-conversion refresh call sites now resolve the token cache directory
-  via `product_store.resolve_github_apps_dir()`, the same resolver `dispatch.py`/`synlynk gh` use
-  to read tokens. Previously they hardcoded a repo-local path, so a role's token in the global
-  workspace directory (the one dispatch/`synlynk gh` actually reads) never got refreshed once it
-  existed — every provisioned role's global token went silently stale while the daemon reported
-  itself healthy.
 <div class="changelog-version-header"><span class="changelog-version">vv0.20.0</span><span class="changelog-date">2026-09-19</span></div>
 <h3>Highlights</h3>
 <ul>
