@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Native Reviewers Can Record Cross-Harness Provenance | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-2">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Oct 08, 2026</span>
+        
+          <span class="blog-post-pr">PR #TBD</span>
+        
+      </div>
+      <h1 class="blog-post-title">Native Reviewers Can Record Cross-Harness Provenance</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>The previous provenance work let a native implementation session record
+<code>cost_entries.pr_number</code> so <code>synlynk pr check</code> could compare implementer and
+reviewer harness/model identity. Dispatched reviewers were still the only
+review identity the gate could resolve.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>During PR #2112 a real QA review from a different harness and model posted an
+APPROVE, then <code>synlynk pr check</code> blocked with <code>no reviewing job provenance found</code>. The gate had no supported way to record an interactive reviewer
+without fabricating a dispatch job. This PR adds that path, and it tags the
+row with the reviewer role so a QA stub cannot be read as the implementer
+(gh:#2095).</p>
+<h2>What This PR Shipped</h2>
+<ul>
+<li><code>synlynk cost log --pr &lt;n&gt; --harness &lt;harness&gt; --role qa --model &lt;model&gt;</code>
+writes a native reviewer cost row (<code>job_id</code> null, <code>agent_role=qa</code>).</li>
+<li><code>_cross_harness_review_verdict</code> accepts that row when no dispatched review
+job exists, and only when harness and model both differ from the implementer.</li>
+<li>Native implementer lookup excludes <code>qa</code> rows, so a later reviewer stub cannot
+replace implementer identity.</li>
+<li>Dispatched review jobs remain the preferred path when they resolve uniquely.</li>
+<li>Tests cover native accept, missing provenance, untagged rows, same
+harness+model rejection, the #2095 role split, and dispatched-review
+precedence.</li>
+</ul>
+<p>No brainstorm visual informed this focused gate fix.</p>
+<h2>Summary Toward the Long-Arc Goal</h2>
+<p>Interactive QA sessions can now participate in the same measured cross-harness
+review gate as dispatched work, which is a prerequisite for fail-closed merge
+authority without forcing a second review dispatch.</p>
+<h2>The New Goalpost</h2>
+<p>A native reviewer who records role-tagged provenance should pass <code>synlynk pr check</code> on the same terms as a dispatched reviewer: different harness, different
+model, and an exact PR-linked cost row.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
