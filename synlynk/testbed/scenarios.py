@@ -21,9 +21,9 @@ class ScenarioResult:
 class ScenarioRunner:
     """Executes distributed scenarios across provisioned testbed nodes."""
 
-    def __init__(self, driver: TestbedDriver):
+    def __init__(self, driver: Optional[TestbedDriver] = None):
         self.driver = driver
-        self.asserter = InvariantAsserter(driver)
+        self.asserter = InvariantAsserter(driver) if driver is not None else None
 
     def run_brownfield_init(self, node: NodeHandle) -> ScenarioResult:
         start_t = time.time()
@@ -93,4 +93,33 @@ class ScenarioRunner:
             duration_seconds=duration,
             details=res_reclaim.stdout,
             invariants=invariants,
+        )
+
+    def run_state_db_wal_soak(
+        self,
+        db_path: str,
+        writers: int = 24,
+        readers: int = 8,
+        ops_per_writer: int = 8,
+        executor: str = "thread",
+    ) -> ScenarioResult:
+        """Local (no VM) soak of 20–50 concurrent writers against isolated state.db."""
+        from synlynk.testbed.state_db_soak import SoakConfig, run_state_db_soak
+
+        start_t = time.time()
+        report = run_state_db_soak(
+            SoakConfig(
+                db_path=db_path,
+                writers=writers,
+                readers=readers,
+                ops_per_writer=ops_per_writer,
+                executor=executor,
+            )
+        )
+        duration = time.time() - start_t
+        return ScenarioResult(
+            name="state_db_wal_soak",
+            status="PASSED" if report.passed else "FAILED",
+            duration_seconds=duration,
+            details=report.to_json(),
         )
