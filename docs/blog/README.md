@@ -1,5 +1,6 @@
 # synlynk Blog Series: Building the OS for Multi-Agent Development
 
+| [262](./262-prTBD-native-reviewer-provenance.md) | Native Reviewers Can Record Cross-Harness Provenance | TBD | 2026-10-08 |
 | [261](./261-pr2118-reconciliation-lock-best-effort.md) | PR #TBD - Reconciliation Should Survive Read-Only Sandboxes | TBD | 2026-10-08 |
 
 | [259](./259-pr2117-legacy-provenance-attestation.md) | A human confirmation can classify a legacy job without rewriting its dispatch record | [#2117](https://github.com/nikhilsoman/synlynk/pull/2117) | 2026-10-07 |

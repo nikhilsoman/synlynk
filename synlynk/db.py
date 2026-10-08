@@ -169,20 +169,51 @@ def _implementation_job_from_branch(conn, pr_number: int) -> str | None:
     return None
 
 
-def _implementation_identity_from_native_cost_entry(
-    conn, pr_number: int
+# Native reviewer cost_entries must be tagged with a review role so a
+# reviewer stub cannot be mistaken for implementer identity (gh:#2095).
+_NATIVE_REVIEW_ROLES = frozenset({"qa"})
+
+
+def _native_cost_entry_identity(
+    conn, pr_number: int, *, reviewer: bool
 ) -> tuple[str | None, str | None]:
-    """Resolve implementation identity recorded by a native session."""
+    """Resolve native-session harness/model from role-tagged cost_entries.
+
+    Reviewer rows require ``agent_role`` in ``_NATIVE_REVIEW_ROLES``. Implementer
+    rows are every other native PR cost entry, including untagged historical
+    implementer records. Ambiguous (2+) matches fail closed.
+    """
+    roles = tuple(sorted(_NATIVE_REVIEW_ROLES))
+    placeholders = ",".join("?" for _ in roles)
+    if reviewer:
+        role_sql = f"AND lower(COALESCE(agent_role, '')) IN ({placeholders})"
+    else:
+        role_sql = f"AND lower(COALESCE(agent_role, '')) NOT IN ({placeholders})"
     rows = conn.execute(
-        """SELECT COALESCE(NULLIF(harness, ''), NULLIF(agent, '')),
+        f"""SELECT COALESCE(NULLIF(harness, ''), NULLIF(agent, '')),
                          NULLIF(model, '')
              FROM cost_entries
             WHERE pr_number=?
               AND job_id IS NULL
+              {role_sql}
             ORDER BY id DESC LIMIT 2""",
-        (pr_number,),
+        (pr_number, *roles),
     ).fetchall()
     return (rows[0][0], rows[0][1]) if len(rows) == 1 else (None, None)
+
+
+def _implementation_identity_from_native_cost_entry(
+    conn, pr_number: int
+) -> tuple[str | None, str | None]:
+    """Resolve implementation identity recorded by a native session."""
+    return _native_cost_entry_identity(conn, pr_number, reviewer=False)
+
+
+def _review_identity_from_native_cost_entry(
+    conn, pr_number: int
+) -> tuple[str | None, str | None]:
+    """Resolve reviewer identity recorded by a native session."""
+    return _native_cost_entry_identity(conn, pr_number, reviewer=True)
 
 
 def _review_job_for_pr(conn, pr_number: int):
@@ -235,6 +266,17 @@ def _emit_missing_provenance_hint(pr_number: int) -> None:
     print(
         "Hint: interactive/native sessions should record provenance with "
         "synlynk cost log --pr <pr-number> --harness <harness> before re-running "
+        f"pr check for PR #{pr_number}.",
+        file=sys.stderr,
+    )
+
+
+def _emit_missing_review_provenance_hint(pr_number: int) -> None:
+    """Nudge native reviewers to record a role-tagged cost row before retrying."""
+    print(
+        "Hint: native/interactive reviewers should record provenance with "
+        "synlynk cost log --pr <pr-number> --harness <harness> --role qa "
+        "--model <model> before re-running "
         f"pr check for PR #{pr_number}.",
         file=sys.stderr,
     )
@@ -344,18 +386,24 @@ def _cross_harness_review_verdict(conn, pr_number: int) -> tuple[bool, str]:
     )
 
     review = _review_job_for_pr(conn, pr_number)
+    reviewing_identity = (
+        _job_execution_identity(conn, review[0])
+        if review
+        else _review_identity_from_native_cost_entry(conn, pr_number)
+    )
 
     if not implementation_job_id and not any(implementing_identity):
         _emit_missing_provenance_hint(pr_number)
         return False, f"no implementing job provenance found for PR #{pr_number}"
-    if not review:
+    if not review and not any(reviewing_identity):
+        _emit_missing_review_provenance_hint(pr_number)
         return False, f"no reviewing job provenance found for PR #{pr_number}"
 
-    reviewing_identity = _job_execution_identity(conn, review[0])
+    reviewing_label = review[0] if review else "native cost record"
     if not all(implementing_identity + reviewing_identity):
         return False, (
             f"incomplete harness/model provenance (implementing={implementation_job_id}, "
-            f"reviewing={review[0]})"
+            f"reviewing={reviewing_label})"
         )
     if implementing_identity == reviewing_identity:
         return False, (
@@ -366,9 +414,10 @@ def _cross_harness_review_verdict(conn, pr_number: int) -> tuple[bool, str]:
         _job_provenance_source(conn, implementation_job_id)
         if implementation_job_id else "native cost record"
     )
+    review_source = "dispatch metadata" if review else "native cost record"
     return True, (
         f"implementation {implementing_identity[0]} / {implementing_identity[1]} ({source}) "
-        f"reviewed by {reviewing_identity[0]} / {reviewing_identity[1]}"
+        f"reviewed by {reviewing_identity[0]} / {reviewing_identity[1]} ({review_source})"
     )
 
 _ORG_DOMAINS = (
@@ -4212,6 +4261,7 @@ def cmd_cost_log(
     pr: int = None,
     note: str = None,
     model: str = None,
+    role: str = None,
 ) -> None:
     """Log a manually reported cost row for native/unwrapped sessions."""
     from synlynk import (
@@ -4244,6 +4294,9 @@ def cmd_cost_log(
     payment_value = resolve_payment_value(agent, tokens_in, tokens_out, model=model_version)
     est_cost = payment_value.api_equivalent_usd
     ts = time.strftime("%Y-%m-%d %H:%M")
+    role_val = str(role).strip() if role else None
+    if role_val:
+        role_val = _validate_enum_value("role", role_val, _ROLES)
 
     _insert_cost_row(
         session_date=ts,
@@ -4262,6 +4315,7 @@ def cmd_cost_log(
         payment_mode=payment_value.mode,
         job_id=job_id,
         pr_number=pr,
+        agent_role=role_val,
     )
     _generate_costs_md()
     if _is_migrated():
