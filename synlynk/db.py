@@ -2844,7 +2844,11 @@ def _write_generated_project_doc(filename: str, content: str) -> None:
 
         def key(line: str):
             cells = _split_table_row(line)
-            return tuple(cells[:2]) if len(cells) >= 2 else None
+            # Cost entries are immutable ledger rows.  Date + agent is not a
+            # unique identity: concurrent jobs can emit several rows for the
+            # same agent in the same minute.  Union the complete rendered row
+            # so none of those rows can overwrite another during regeneration.
+            return tuple(cells) if len(cells) >= 9 else None
 
         local_rows = rows(generated)
         disk_rows = rows(existing)
@@ -2860,20 +2864,22 @@ def _write_generated_project_doc(filename: str, content: str) -> None:
         merged_rows = [merged[row_key] for row_key in order]
 
         generated_lines = generated.splitlines(keepends=True)
-        data_indexes = [
-            index for index, line in enumerate(generated_lines)
-            if line in local_rows
-        ]
-        if not data_indexes:
+        header_index = next(
+            (index for index, line in enumerate(generated_lines)
+             if line.lstrip().startswith("| Date | Agent |")),
+            None,
+        )
+        if header_index is None:
             return generated
-        start, end = min(data_indexes), max(data_indexes) + 1
+        start = header_index + 2
+        end = start
+        while end < len(generated_lines) and generated_lines[end].lstrip().startswith("|"):
+            end += 1
         return "".join(generated_lines[:start] + merged_rows + generated_lines[end:])
 
     def _reconcile_memory(existing: str, generated: str) -> str:
         disk_sections = _parse_memory_md(existing)
         local_sections = _parse_memory_md(generated)
-        if not disk_sections or not local_sections:
-            return generated
         merged = {}
         order = []
         for row in disk_sections + local_sections:
@@ -2882,6 +2888,8 @@ def _write_generated_project_doc(filename: str, content: str) -> None:
                 order.append(section)
             merged[section] = row
         header = generated.split("## ", 1)[0]
+        if not header and existing:
+            header = existing.split("## ", 1)[0]
         body = "".join(
             f"## {merged[section]['section']}\n\n{merged[section]['body']}\n\n"
             for section in order
@@ -2891,7 +2899,7 @@ def _write_generated_project_doc(filename: str, content: str) -> None:
     def _reconcile(path: str, generated: str) -> str:
         if filename not in {"costs.md", "memory.md"}:
             return generated
-        if not os.path.exists(path) or not _is_tracked(path):
+        if not os.path.exists(path):
             return generated
         try:
             with open(path) as fh:

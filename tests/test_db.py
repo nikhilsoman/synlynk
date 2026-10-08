@@ -538,6 +538,65 @@ def test_regeneration_preserves_tracked_cost_row_missing_from_local_db(tmp_path,
     assert "local-row" in regenerated
 
 
+def test_regeneration_unions_concurrent_cost_rows_with_same_date_and_agent(tmp_path, monkeypatch):
+    from tests.test_migrate import _setup_migrated
+    from synlynk import _insert_cost_row
+    from synlynk.db import _generate_costs_md
+
+    backup = _setup_migrated(tmp_path, monkeypatch)
+    costs_path = backup / "costs.md"
+    costs_path.write_text(
+        "# Costs\n\n"
+        "| Date | Agent | Model | Tokens In | Tokens Out | Cost | Source | Story | Notes |\n"
+        "|---|---|---|---|---|---|---|---|---|\n"
+        "| 2026-10-08 10:00 | codex | model-a | 1 | 2 | $1.0000 | test | - | concurrent-main |\n"
+        "| 2026-10-08 10:00 | codex | model-b | 3 | 4 | $2.0000 | test | - | concurrent-branch |\n"
+    )
+    _insert_cost_row(
+        session_date="2026-10-08 10:00",
+        agent="codex",
+        model="model-a",
+        input_tokens=1,
+        output_tokens=2,
+        cache_read_tokens=0,
+        cost_source="estimated_manual",
+        estimate_basis="test",
+        total_cost_usd=1.0,
+        notes="concurrent-local",
+        story_id=None,
+        api_equivalent_usd=1.0,
+        actual_usd=None,
+        payment_mode=None,
+    )
+
+    _generate_costs_md()
+
+    regenerated = costs_path.read_text()
+    assert "concurrent-main" in regenerated
+    assert "concurrent-branch" in regenerated
+    assert "concurrent-local" in regenerated
+
+
+def test_memory_regeneration_preserves_concurrent_section_missing_from_local_db(tmp_path, monkeypatch):
+    from tests.test_migrate import _setup_migrated
+    from synlynk import cmd_memory_add
+
+    backup = _setup_migrated(tmp_path, monkeypatch)
+    memory_path = backup / "memory.md"
+    memory_path.write_text(
+        "# synlynk Memory\n\n"
+        "## Main-only context\n\nWritten concurrently on main.\n\n"
+    )
+
+    cmd_memory_add("Local context", "Written by the local state.db.")
+
+    regenerated = memory_path.read_text()
+    assert "## Main-only context" in regenerated
+    assert "Written concurrently on main." in regenerated
+    assert "## Local context" in regenerated
+    assert "Written by the local state.db." in regenerated
+
+
 def test_regeneration_does_not_duplicate_archive_rows(tmp_path, monkeypatch):
     from tests.test_migrate import _setup_migrated
     from synlynk import _insert_cost_row
