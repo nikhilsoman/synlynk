@@ -1264,6 +1264,35 @@ def test_cmd_cost_log_writes_estimated_manual_row(project_dir, monkeypatch):
     assert row[6] == 2051
 
 
+def test_cmd_cost_log_records_native_reviewer_role(project_dir, monkeypatch):
+    import synlynk
+
+    monkeypatch.setattr(synlynk, "DB_PATH", os.path.join(project_dir, "state.db"))
+    monkeypatch.setattr(synlynk, "_is_migrated", lambda: True)
+    monkeypatch.setattr(synlynk, "get_username", lambda: "nikhil")
+    cmd_cost_log(
+        agent="claude", tokens_in=10, tokens_out=5, pr=2113,
+        model="claude-sonnet-4-6", role="qa", note="native reviewer provenance",
+    )
+    conn = synlynk._get_db()
+    row = conn.execute(
+        "SELECT harness, model, pr_number, agent_role, job_id FROM cost_entries"
+    ).fetchone()
+    conn.close()
+    assert row == ("claude", "claude-sonnet-4-6", 2113, "qa", None)
+
+
+def test_cmd_cost_log_rejects_invalid_role(project_dir, monkeypatch):
+    import synlynk
+
+    monkeypatch.setattr(synlynk, "DB_PATH", os.path.join(project_dir, "state.db"))
+    monkeypatch.setattr(synlynk, "_is_migrated", lambda: True)
+    with pytest.raises(ValueError, match="Invalid role"):
+        cmd_cost_log(
+            agent="claude", tokens_in=1, tokens_out=1, pr=2113, role="reviewer",
+        )
+
+
 def test_cmd_cost_log_accepts_exact_model_for_pr_provenance(project_dir, monkeypatch):
     import synlynk
 
