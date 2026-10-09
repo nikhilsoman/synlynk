@@ -49,7 +49,8 @@ def _ensure_cost_entries(conn):
             harness TEXT,
             story_id TEXT,
             total_cost_usd REAL,
-            cost_source TEXT NOT NULL
+            cost_source TEXT NOT NULL,
+            pr_number INTEGER
         )"""
     )
 
@@ -136,3 +137,39 @@ def test_discipline_for_task_type_unknown_returns_none():
     from synlynk.capability import _discipline_for_task_type
 
     assert _discipline_for_task_type("not-a-real-task-type") is None
+
+
+def test_median_cost_per_pr_sums_rows_sharing_a_pr_before_median():
+    from synlynk.capability import _median_cost_per_pr
+
+    conn = sqlite3.connect(":memory:")
+    _ensure_cost_entries(conn)
+    conn.execute(
+        "INSERT INTO cost_entries (session_date, harness, story_id, cost_source, total_cost_usd, pr_number) "
+        "VALUES ('2026-10-01', 'codex', 's1', 'test', 6.0, 100)"
+    )
+    conn.execute(
+        "INSERT INTO cost_entries (session_date, harness, story_id, cost_source, total_cost_usd, pr_number) "
+        "VALUES ('2026-10-01', 'codex', 's1', 'test', 3.0, 100)"
+    )
+    conn.execute(
+        "INSERT INTO cost_entries (session_date, harness, story_id, cost_source, total_cost_usd, pr_number) "
+        "VALUES ('2026-10-02', 'codex', 's2', 'test', 5.0, 101)"
+    )
+    conn.commit()
+
+    assert _median_cost_per_pr(conn, "codex") == pytest.approx(7.0)
+
+
+def test_median_cost_per_pr_ignores_null_pr_number():
+    from synlynk.capability import _median_cost_per_pr
+
+    conn = sqlite3.connect(":memory:")
+    _ensure_cost_entries(conn)
+    conn.execute(
+        "INSERT INTO cost_entries (session_date, harness, story_id, cost_source, total_cost_usd, pr_number) "
+        "VALUES ('2026-10-01', 'codex', 's1', 'test', 999.0, NULL)"
+    )
+    conn.commit()
+
+    assert _median_cost_per_pr(conn, "codex") is None

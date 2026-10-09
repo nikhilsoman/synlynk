@@ -282,3 +282,18 @@ _TASK_TYPE_TO_DISCIPLINE = {
 def _discipline_for_task_type(task_type: str) -> str | None:
     """Map a task type to its capability-rating discipline, if known."""
     return _TASK_TYPE_TO_DISCIPLINE.get(task_type)
+
+
+def _median_cost_per_pr(conn, harness: str) -> float | None:
+    """Return the median total cost across merged PRs for a harness."""
+    rows = conn.execute(
+        """SELECT SUM(total_cost_usd) FROM cost_entries
+            WHERE harness = ? AND pr_number IS NOT NULL
+            GROUP BY pr_number""",
+        (harness,),
+    ).fetchall()
+    costs = sorted(row[0] for row in rows if row[0] is not None)
+    if not costs:
+        return None
+    mid = len(costs) // 2
+    return costs[mid] if len(costs) % 2 else (costs[mid - 1] + costs[mid]) / 2
