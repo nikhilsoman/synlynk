@@ -1,6 +1,7 @@
 """Read-only inventory of state DB artifacts."""
 from __future__ import annotations
 
+import datetime
 import hashlib
 import json
 import os
@@ -57,6 +58,20 @@ def _metadata(path: Path) -> dict:
     return result
 
 
+def _row_count(path: Path) -> int | None:
+    try:
+        conn = sqlite3.connect(f"file:{path.resolve()}?mode=ro", uri=True, timeout=5.0)
+        try:
+            tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            if "stories" not in tables:
+                return None
+            return conn.execute("SELECT COUNT(*) FROM stories").fetchone()[0]
+        finally:
+            conn.close()
+    except Exception:
+        return None
+
+
 def inventory(repo_root: str | Path = ".", *, all_artifacts: bool = False) -> list[dict]:
     repo = Path(repo_root).resolve()
     home = Path(os.path.expanduser("~/.synlynk"))
@@ -74,12 +89,18 @@ def inventory(repo_root: str | Path = ".", *, all_artifacts: bool = False) -> li
             paths.update(root.rglob("state.db"))
     rows = []
     for path in sorted(p for p in paths if p.is_file()):
+        mtime = path.stat().st_mtime
+        mtime_dt = datetime.datetime.fromtimestamp(mtime, tz=datetime.timezone.utc)
+        staleness_days = (datetime.datetime.now(tz=datetime.timezone.utc) - mtime_dt).days
         item = {
             "path": str(path),
             "class": _classify(path, repo),
             "size_bytes": path.stat().st_size,
             "sha256": _sha256(path),
             "sidecars": {suffix: Path(f"{path}{suffix}").is_file() for suffix in ("-wal", "-shm", "-journal")},
+            "row_count": _row_count(path),
+            "mtime_iso": mtime_dt.isoformat(),
+            "staleness_days": staleness_days,
         }
         item.update(_metadata(path))
         rows.append(item)
