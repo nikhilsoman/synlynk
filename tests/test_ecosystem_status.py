@@ -97,7 +97,7 @@ def test_config_set_dispatch_mode(tmp_path, monkeypatch):
     from synlynk import cmd_config_set
 
     cmd_config_set("dispatch_mode", "eco")
-    config = json.loads((tmp_path / ".synlynk" / "config.json").read_text())
+    config = json.loads((tmp_path / ".synlynk" / "workspace.json").read_text())
     assert config["dispatch_mode"] == "eco"
 
 
