@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>gh:#2101 — Splitting config.json Into Workspace, Billing, and Policy Files | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Oct 09, 2026</span>
+        
+          <span class="blog-post-pr">PR #TBD</span>
+        
+      </div>
+      <h1 class="blog-post-title">gh:#2101 — Splitting config.json Into Workspace, Billing, and Policy Files</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>gh:#2101 — Splitting config.json Into Workspace, Billing, and Policy Files</h1>
+<h2>The Broader Goal at the End of the Previous PR</h2>
+<p>A single <code>.synlynk/config.json</code> had been accreting unrelated concerns for
+months: workspace identity, harness billing rates, and policy/enforcement
+settings all lived in one flat dict. Nothing enforced a boundary between
+&quot;who is this repo&quot; and &quot;how is cost calculated&quot; and &quot;what does the merge
+gate require&quot; — any module could read or write any of it, and a malformed
+billing edit could corrupt workspace identity in the same file. gh:#2101
+scoped the fix: split the legacy file into <code>workspace.json</code>, <code>billing.json</code>,
+and <code>policy.json</code>, migrate existing repos automatically and idempotently,
+and keep <code>load_config()</code> as a facade so most call sites don't need to
+change at all.</p>
+<h2>Strategic Shifts in This PR (if any)</h2>
+<p>No strategy change from the committed design
+(<code>docs/superpowers/specs/2026-10-09-config-decomposition-design.md</code>) and plan
+(<code>docs/superpowers/plans/2026-10-09-config-decomposition-plan.md</code>). One
+scope correction did surface during final review, documented below.</p>
+<h2>What This PR Shipped</h2>
+<ul>
+<li><code>config_schema.py</code> split into <code>WORKSPACE_SCHEMA</code> and <code>BILLING_SCHEMA</code>,
+and extended the existing policy schema with <code>qa_gate_mode</code>, <code>roles</code>,
+<code>story_classification</code>, and <code>sentinel</code>.</li>
+<li><code>load_workspace()</code> / <code>load_billing()</code> in <code>synlynk/__init__.py</code>, plus a
+rewritten <code>load_config()</code> that splits-then-remerges them as a facade —
+existing callers reading <code>load_config()</code> see the same merged dict as
+before.</li>
+<li>One-time migration: <code>migrate_legacy_config_if_needed()</code> splits a legacy
+<code>config.json</code> into the three new files, renames the original to
+<code>config.json.bak</code>, and no-ops on a second call (idempotent).</li>
+<li><code>.gitignore</code> entries for <code>.synlynk/workspace.json</code> and
+<code>.synlynk/billing.json</code>.</li>
+<li>This repo's own dogfooded migration: <code>.synlynk/config.json</code> split locally,
+<code>config.json</code> removed from git tracking, the three new files added.</li>
+<li>All 15 plan tasks landed with a clean full-suite run at each checkpoint
+(baseline: 4029 passed / 3 skipped / 5 xfailed).</li>
+</ul>
+<h3>The bug found in final review</h3>
+<p>A dispatched final-review pass (per subagent-driven-development's
+mandatory end-of-plan code-quality review) surfaced a real data-loss bug
+that none of the 15 planned tasks had covered: <code>add_repo()</code> in
+<code>synlynk/workspace.py</code> read <code>workspace.json</code> directly, defaulting to <code>{}</code>
+when the file didn't exist, and wrote back only <code>repo_id</code>. Because
+<code>migrate_legacy_config_if_needed()</code> treats the mere <em>existence</em> of
+<code>workspace.json</code> as &quot;already migrated,&quot; calling <code>add_repo()</code> on a
+not-yet-migrated repo created a stub <code>workspace.json</code> that permanently
+blocked proper migration — every other field in the legacy <code>config.json</code>
+(budget, harness_billing, roles, qa_gate_mode) became silently unreachable.</p>
+<p>This was fixed as a scoped fix-forward, dispatched to Codex
+(<code>dispatch/codex/job-2b7777cf</code>) with an explicit spec limiting the change
+to <code>synlynk/workspace.py</code> and its test file: before touching
+<code>workspace.json</code>, <code>add_repo()</code> now reuses the existing pure
+<code>_split_legacy_config()</code> helper to perform the full split, writes
+<code>billing.json</code>/<code>policy.json</code>, and renames the legacy file to
+<code>config.json.bak</code> — mirroring what <code>migrate_legacy_config_if_needed()</code>
+already does elsewhere. A new regression test
+(<code>test_add_repo_splits_legacy_config_before_writing_workspace</code>) covers both
+the full split and idempotency on a second call.</p>
+<h3>The scope gap, tracked rather than silently expanded</h3>
+<p>The same review found that 8 modules (<code>autonomy.py</code>, <code>agent_store.py</code>,
+<code>handover.py</code>, <code>github_app_auth.py</code>, <code>governs_engine.py</code>,
+<code>state_registry.py</code>, <code>team.py</code>, <code>version_policy.py</code>) still read
+<code>.synlynk/config.json</code> directly with no split-file fallback — the plan's
+implicit claim of exhaustive call-site coverage was inaccurate. Rather than
+expand this PR's scope to cover them, that gap is filed as
+<a href="https://github.com/nikhilsoman/synlynk/issues/2147">gh:#2147</a>, a tracked
+follow-up.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>None — this followed the committed design and plan directly.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>Config state now has enforceable boundaries: billing can be edited without
+risking workspace identity corruption, and policy enforcement settings live
+separately from both. The facade means most of the ~138-module codebase
+didn't need to change at all, and the one real gap this created (<code>add_repo</code>)
+was caught by the review discipline the plan already required, not by a
+production incident.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>gh:#2147's 8 remaining call-sites are the next piece of this decomposition
+— they should gain the same split-file fallback <code>add_repo()</code> now has, most
+likely via a direct <code>load_config()</code>/<code>load_workspace()</code> facade swap rather
+than new split logic, since the facade already exists.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
