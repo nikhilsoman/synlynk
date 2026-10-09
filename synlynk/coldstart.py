@@ -203,11 +203,17 @@ def _run_existing_project_flow(root: str = ".") -> None:
 
 def cmd_start() -> None:
     """Entry point for `synlynk start` -- see spec's "synlynk start EXACT FLOW"."""
+    workspace_exists = os.path.exists(".synlynk/workspace.json")
     config_exists = os.path.exists(".synlynk/config.json")
     dir_exists = os.path.isdir(".synlynk")
-    already_initialized = config_exists or dir_exists
+    already_initialized = workspace_exists or config_exists or dir_exists
     if already_initialized:
-        what_exists = ".synlynk/config.json" if config_exists else ".synlynk/"
+        if workspace_exists:
+            what_exists = ".synlynk/workspace.json"
+        elif config_exists:
+            what_exists = ".synlynk/config.json"
+        else:
+            what_exists = ".synlynk/"
         answer = input(
             f"{what_exists} already exists -- refresh cold-start detection "
             "and re-run the relevant flow? [y/N] "
