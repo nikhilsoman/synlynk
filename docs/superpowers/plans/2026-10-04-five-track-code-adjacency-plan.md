@@ -15,17 +15,22 @@ item as of 2026-10-04, verified directly against `gh pr view` / `gh issue view`
 (not from `synlynk jobs` labels — see `feedback_pr_review_discipline` /
 job-status-truth memory on why labels alone aren't trusted).
 
-**Status refreshed 2026-10-06** against live `gh issue view` state for every
-numbered item in this doc (the prior in-doc statuses had drifted well behind
-actual merges — most items below were already shipped). Genuinely open items
-remaining: #1993, #1927, #1943, #1937, #1926, #2023, #1980, #1981, #1982,
-#1983, #1914, plus the 2026-10-06 fold-in items #2062/#2063/#2064/#2065
-(now in flight — dispatched to Grok this session) and #2066 (filed,
-undispatched).
+**Status refreshed 2026-10-09** against the live PM-scoped GitHub issue state.
+Open issues in this plan include #1993, #1927, #1937, #2023, #1980–#1983,
+#1914, #2061, #2066, #2078, and #2079. #1926 and #1943 have since closed;
+the three-lens fold-ins #2062–#2065 have also closed. The remaining adapter
+conformance follow-ups are tracked explicitly below.
 
 Role split in force: Claude = PM/review/deploy only. All implementation below routes
 to Codex/Grok (Agy deprioritized per `feedback_prefer_codex_grok_over_agy` memory)
 via `synlynk dispatch`.
+
+**Policy-gate posture update (PR #2120, merged 2026-10-08):** this repository now
+records GOVERNS and cross-harness review gate outcomes in `observe` mode, so those
+gates diagnose without blocking merges. A 100-consecutive-clean-pass streak is the
+re-hardening recommendation threshold. This lowers the current merge-enforcement
+posture while evidence accumulates; it does not remove the adapter conformance suite
+or close its residual failures (#2078/#2079).
 
 ---
 
@@ -57,8 +62,10 @@ Per `project-docs/decisions/2026-10-06-review-docs-reviews-2026-10-05-three-len.
 
 | # | Title | Status | Notes |
 |---|---|---|---|
-| TBD | Adapter conformance test suite + retire `LegacyAdapter` dual dispatch path | **NOT YET FILED** | All 3 panelists ranked this #1. Verify SHA-256 receipts, cost attribution, timeout handling across `synlynk/harness_adapters/*.py`; `LegacyAdapter` is a second, unconformance-tested dispatch route — same class of drift that produced the turn_usage_json cost-entries bug (#2037/#2055). Issue creation blocked this session by the auto-mode write classifier — file via `synlynk gh --role pm -- issue create` once unblocked. |
-| TBD | `_preflight_local_silent()` should fail closed | **NOT YET FILED** | Grok's concrete find: currently swallows a missing MLX/OrbStack setup silently instead of surfacing it. Dispatch.py-adjacent. Same filing blocker as above. |
+| #2062 | Adapter conformance test suite + retire `LegacyAdapter` dual dispatch path | **CLOSED** 2026-10-08 | Suite landed and the incomplete legacy path was retired. The suite exposed residual adapter gaps tracked in #2078 and #2079. |
+| #2078 | `translate_permissions` signature drift in Claude/Codex/Agy adapters | **OPEN** | Conformance follow-up: three adapter overrides omit the protocol's `skip_permissions` argument. |
+| #2079 | LocalAdapter receipt SHA evidence missing from `parse_output` | **OPEN** | Conformance follow-up: local adapter does not populate `compatibility_evidence`. |
+| #2064 | `_preflight_local_silent()` fallback visibility | **CLOSED** 2026-10-07 | Filed and resolved as a visible fallback/fail-closed behavior change. |
 
 The panel treated P0-3/P1-3 (host-auth audit log, GOVERNS hard-fail) as **already resolved** — #1990/#1991/#1992 closed via PRs #2046/#2047/#2050 (2026-10-05/06) — not re-filed.
 
@@ -76,7 +83,7 @@ The panel treated P0-3/P1-3 (host-auth audit log, GOVERNS hard-fail) as **alread
 | #1977 | Docs restructure | **CLOSED** 2026-10-04 | Shipped. |
 | #1927 | CLI core/packs split | **OPEN** | Still real. |
 | #1941 | Flaky cold-start test | **CLOSED** 2026-10-04 | Shipped. |
-| #1943 | Move cold-start/EPUB tests out of required CI | **OPEN** | Still real. |
+| #1943 | Move cold-start/EPUB tests out of required CI | **CLOSED** 2026-10-08 | Required CI no longer blocks on EPUB validation; the validation workflow and marketing check were updated. |
 | #2012 | Release-docs CI gate over-scoped | **CLOSED** *(cross-listed, owned by Track 1)* | Shipped. |
 | #1918 | `decide --record` slug-collision overwrite bug | **CLOSED** 2026-10-05 | Shipped. |
 
@@ -86,7 +93,7 @@ The panel treated P0-3/P1-3 (host-auth audit log, GOVERNS hard-fail) as **alread
 
 | # | Title | Status | Notes |
 |---|---|---|---|
-| TBD | Schema validation of `.synlynk/config.json`/`policy.json` in `synlynk doctor` | **NOT YET FILED** | All 3 panelists raised some version of this; Grok's framing adopted — `doctor` currently only checks file existence, not schema/shape. Filing blocked this session, same as Track 1 items above. |
+| #2065 | Schema validation of `.synlynk/config.json`/`policy.json` in `synlynk doctor` | **CLOSED** 2026-10-07 | JSON Schema validation was added to `synlynk doctor`. |
 
 ### Fold-in: pipx/release-docs freshness mechanism (Nikhil, 2026-10-06)
 
@@ -96,8 +103,8 @@ Nikhil flagged that the pipx-installed CLI (`~/.local/bin/synlynk`) silently goe
 
 | # | Title | Status | Notes |
 |---|---|---|---|
-| TBD | `synlynk doctor` pipx/version-freshness check | **NOT YET FILED** | New Track 2 item. |
-| TBD | Marketing-role docs-freshness pass as mandatory `synlynk release` step | **NOT YET FILED** | New Track 2 item; formalizes existing ad hoc practice. |
+| #2066 | `synlynk doctor` pipx/version-freshness check | **OPEN** | Bundled with the opt-in auto-upgrade notice below. |
+| #2066 | Marketing-role docs-freshness pass as mandatory `synlynk release` step | **IN SCOPE** | The #2066 issue requires release docs to be refreshed when the version-freshness behavior ships; no separate issue was filed. |
 
 ### Fold-in: auto-upgrade-on-release mechanism (Nikhil, 2026-10-06)
 
@@ -107,8 +114,8 @@ Nikhil asked whether downstream `synlynk` users get auto-upgraded on every Named
 
 | # | Title | Status | Notes |
 |---|---|---|---|
-| TBD | Upgrade-available notice on startup (version-check against latest Release tag) | **NOT YET FILED** | New Track 2 item, notify-only default. |
-| TBD | Opt-in `--auto-upgrade` daemon setting | **NOT YET FILED** | New Track 2 item, deferred until notify-only path is validated. |
+| #2066 | Upgrade-available notice on startup (version-check against latest Release tag) | **OPEN** | Notify-only default. |
+| #2066 | Opt-in `--auto-upgrade` daemon setting | **OPEN** | Same issue; deferred until the notify-only path is validated. |
 
 ---
 
@@ -119,7 +126,7 @@ Nikhil asked whether downstream `synlynk` users get auto-upgraded on every Named
 | # | Title | Status | Notes |
 |---|---|---|---|
 | #1923 | Split viz.py | **CLOSED** 2026-10-05 | Shipped. |
-| #1926 | state.db consolidation | **OPEN** | Still real — blocks #1993's aggregate measurement. |
+| #1926 | state.db consolidation | **CLOSED** 2026-10-08 | Single workspace-owner DB consolidation landed. This removes the stated data-aggregation dependency for #1993. |
 | #1995 | Cost-log regen drops rows on `synlynk cost log` | **CLOSED** 2026-10-05 | Shipped. |
 | #1999 | `_rotate_project_doc()` duplication — 45x+ dupes, 160MB archive | **CLOSED** 2026-10-05 | Shipped. |
 | #1917 | memory.md write-through drift | **CLOSED** 2026-10-05 | Shipped. |
@@ -128,7 +135,7 @@ Nikhil asked whether downstream `synlynk` users get auto-upgraded on every Named
 | #1937 | Cost-inflation record ($133/44M tokens) | **OPEN** | Still real. #1969's fix (PR #2021) did not reduce Codex implementation-job costs — still $5.58–$15.93/job per the Wave 2 closeout below. Needs fresh investigation, not a re-close. |
 | #1951 | Cost audit redesign | **CLOSED** 2026-10-04 | Shipped. |
 
-**Note:** #1995/#1999/#1917/#1915 (all CLOSED 2026-10-05) were the same underlying "write-through regen destroys concurrent/main-only state" bug class hitting different files. Root-cause issue #2023 is still **OPEN** — worth checking whether it should close alongside the four fixes it was filed to coordinate, or whether it's tracking a residual piece.
+**Note:** #1995/#1999/#1917/#1915 (all CLOSED 2026-10-05) were the same underlying "write-through regen destroys concurrent/main-only state" bug class hitting different files. Root-cause issue #2023 remains **OPEN** after #1926 closed; check whether it tracks a residual piece before closing it.
 
 ### Recurring autonomous-flow friction (Nikhil, 2026-10-06) — assessed, mostly already tracked here
 
@@ -140,7 +147,7 @@ Nikhil flagged three recurring pain points hurting the autonomous flow and asked
 
 | # | Title | Status | Notes |
 |---|---|---|---|
-| TBD | Auto-mode classifier blocks role-scoped GH writes already authorized via `.synlynk/github_apps` + explicit user go-ahead | **NOT YET FILED** | New Track 1 item. Concrete repro from this session: `synlynk gh --role pm -- issue create` denied by classifier even though the role-token path exists specifically to make this safe. Filing itself blocked by the same classifier — file from a context where the classifier allows it, or have Nikhil file directly. |
+| #2096 | Auto-mode classifier blocks role-scoped GH writes already authorized via `.synlynk/github_apps` + explicit user go-ahead | **OPEN** | Investigation filed; the interactive role-scoped PM failure is tracked here. |
 
 ---
 
@@ -157,7 +164,7 @@ Nikhil flagged three recurring pain points hurting the autonomous flow and asked
 
 | # | Title | Status | Notes |
 |---|---|---|---|
-| TBD | Correct README/site "live capability ledger / best harness" language | **NOT YET FILED** | Grok's addition, all panelists converged on keeping it. The one external-facing claim that contradicts `policy.json`'s `capability_policy.mode=empirical`/`suspended_since: 2026-10-04`. Highest-leverage, lowest-cost item in the whole three-lens review per the panel synthesis — do this before #1993 clears its 5-sample bar, not after. Filing blocked this session, same as above. |
+| #2063 | Correct README/site "live capability ledger / best harness" language | **CLOSED** 2026-10-07 | External claims were corrected to describe suspended empirical routing while #1926/#1993 work remained incomplete. |
 
 No other new fold-ins from the past 48h beyond the decide-panel item. Can run fully parallel to all other tracks per epic.
 
