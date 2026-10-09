@@ -15,7 +15,7 @@ def test_review_mode_uses_comment_checklist_only_for_same_identity():
 def test_feature_flags_missing_key_is_disabled(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     os.makedirs(".synlynk")
-    with open(".synlynk/config.json", "w") as f:
+    with open(".synlynk/workspace.json", "w") as f:
         json.dump({}, f)
     assert uxcore.FeatureFlags.is_enabled("gantt_view", tier="individual") is False
 
@@ -23,7 +23,7 @@ def test_feature_flags_missing_key_is_disabled(tmp_path, monkeypatch):
 def test_feature_flags_enabled_for_tier(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     os.makedirs(".synlynk")
-    with open(".synlynk/config.json", "w") as f:
+    with open(".synlynk/workspace.json", "w") as f:
         json.dump({"features": {"gantt_view": ["individual", "team"]}}, f)
     assert uxcore.FeatureFlags.is_enabled("gantt_view", tier="individual") is True
     assert uxcore.FeatureFlags.is_enabled("gantt_view", tier="enterprise") is False
