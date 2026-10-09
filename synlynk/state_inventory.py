@@ -146,6 +146,54 @@ def _match_project(shard_path: Path, workspaces_root: Path) -> dict:
     return {"slug": None, "method": "none", "confidence": None}
 
 
+def _read_stories(path: Path) -> dict[str, dict]:
+    """Read all stories from a DB keyed by story_id. Returns {} if no stories table."""
+    result: dict[str, dict] = {}
+    try:
+        conn = sqlite3.connect(f"file:{path.resolve()}?mode=ro", uri=True, timeout=5.0)
+        try:
+            tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            if "stories" not in tables:
+                return result
+            cols = {row[1] for row in conn.execute("PRAGMA table_info(stories)")}
+            if "story_id" not in cols:
+                return result
+            select_cols = ["story_id", "title"]
+            if "gh_issue" in cols:
+                select_cols.append("gh_issue")
+            if "created_at" in cols:
+                select_cols.append("created_at")
+            for row in conn.execute(f"SELECT {', '.join(select_cols)} FROM stories"):
+                record = dict(zip(select_cols, row))
+                result[record["story_id"]] = record
+        finally:
+            conn.close()
+    except Exception:
+        pass
+    return result
+
+
+def _reconcile_plan(shard_path: Path, canonical_path: Path) -> dict:
+    """Compute a union-merge plan for shard_path's stories into canonical_path's."""
+    shard_stories = _read_stories(shard_path)
+    canonical_stories = _read_stories(canonical_path)
+
+    to_add = []
+    already_present = []
+    conflicts = []
+
+    for story_id, shard_row in shard_stories.items():
+        canonical_row = canonical_stories.get(story_id)
+        if canonical_row is None:
+            to_add.append(shard_row)
+        elif canonical_row.get("title") == shard_row.get("title"):
+            already_present.append(shard_row)
+        else:
+            conflicts.append(shard_row)
+
+    return {"to_add": to_add, "already_present": already_present, "conflicts": conflicts}
+
+
 def inventory(repo_root: str | Path = ".", *, all_artifacts: bool = False) -> list[dict]:
     repo = Path(repo_root).resolve()
     home = Path(os.path.expanduser("~/.synlynk"))

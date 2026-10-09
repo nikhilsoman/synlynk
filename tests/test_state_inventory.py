@@ -187,3 +187,64 @@ def test_inventory_adds_project_match_for_legacy_shards(tmp_path, monkeypatch):
     legacy_rows = [r for r in rows if r["class"] == "legacy-project"]
     assert len(legacy_rows) == 1
     assert legacy_rows[0]["project_match"]["slug"] == "myproj"
+
+
+def _make_stories_db(path, rows):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(path)
+    conn.execute(
+        "CREATE TABLE stories (id INTEGER PRIMARY KEY, story_id TEXT UNIQUE, title TEXT, "
+        "gh_issue TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
+    )
+    for story_id, title, gh_issue in rows:
+        conn.execute(
+            "INSERT INTO stories (story_id, title, gh_issue) VALUES (?, ?, ?)",
+            (story_id, title, gh_issue),
+        )
+    conn.commit()
+    conn.close()
+
+
+def test_reconcile_plan_no_overlap_unions_everything(tmp_path):
+    from synlynk.state_inventory import _reconcile_plan
+
+    shard = tmp_path / "shard" / "state.db"
+    canonical = tmp_path / "canonical" / "state.db"
+    _make_stories_db(shard, [("s-1", "Story A", None)])
+    _make_stories_db(canonical, [("c-1", "Story B", None)])
+
+    plan = _reconcile_plan(shard, canonical)
+
+    assert [r["story_id"] for r in plan["to_add"]] == ["s-1"]
+    assert plan["already_present"] == []
+    assert plan["conflicts"] == []
+
+
+def test_reconcile_plan_full_overlap_is_noop(tmp_path):
+    from synlynk.state_inventory import _reconcile_plan
+
+    shard = tmp_path / "shard" / "state.db"
+    canonical = tmp_path / "canonical" / "state.db"
+    _make_stories_db(shard, [("s-1", "Story A", "#100")])
+    _make_stories_db(canonical, [("s-1", "Story A", "#100")])
+
+    plan = _reconcile_plan(shard, canonical)
+
+    assert plan["to_add"] == []
+    assert [r["story_id"] for r in plan["already_present"]] == ["s-1"]
+    assert plan["conflicts"] == []
+
+
+def test_reconcile_plan_detects_conflict(tmp_path):
+    from synlynk.state_inventory import _reconcile_plan
+
+    shard = tmp_path / "shard" / "state.db"
+    canonical = tmp_path / "canonical" / "state.db"
+    _make_stories_db(shard, [("s-1", "Story A, edited in shard", "#100")])
+    _make_stories_db(canonical, [("s-1", "Story A, edited in canonical", "#100")])
+
+    plan = _reconcile_plan(shard, canonical)
+
+    assert plan["to_add"] == []
+    assert plan["already_present"] == []
+    assert [r["story_id"] for r in plan["conflicts"]] == ["s-1"]
