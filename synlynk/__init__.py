@@ -659,7 +659,9 @@ def _synlynk_project_docs_dir() -> str:
 
 def _dr_sync(relative_path: str) -> None:
     try:
-        cfg_path = os.path.join('.synlynk', 'config.json')
+        workspace_path = os.path.join('.synlynk', 'workspace.json')
+        legacy_path = os.path.join('.synlynk', 'config.json')
+        cfg_path = workspace_path if os.path.exists(workspace_path) else legacy_path
         if not os.path.exists(cfg_path):
             return
         with open(cfg_path) as f:
@@ -1268,11 +1270,14 @@ _MAGENTA = "\033[35m"
 def _docs_dir() -> str:
     """Returns the configured project docs directory (defaults to 'project-docs').
 
-    Reads project_docs_dir from .synlynk/config.json. Pass --docs-dir to
-    synlynk init to set a custom location (e.g. '.' for repos that keep docs
-    at the root).
+    Reads project_docs_dir from .synlynk/workspace.json (falls back to the
+    legacy .synlynk/config.json for projects not yet migrated). Pass
+    --docs-dir to synlynk init to set a custom location (e.g. '.' for repos
+    that keep docs at the root).
     """
-    config_file = ".synlynk/config.json"
+    workspace_file = ".synlynk/workspace.json"
+    legacy_file = ".synlynk/config.json"
+    config_file = workspace_file if os.path.exists(workspace_file) else legacy_file
     if os.path.exists(config_file):
         try:
             with open(config_file) as f:
@@ -1431,9 +1436,10 @@ def cmd_exit(dry_run: bool = True, remove_docs: bool = False) -> int:
         pass
 
     cfg = {}
-    if os.path.exists(".synlynk/config.json"):
+    _cfg_path = ".synlynk/workspace.json" if os.path.exists(".synlynk/workspace.json") else ".synlynk/config.json"
+    if os.path.exists(_cfg_path):
         try:
-            cfg = json.load(open(".synlynk/config.json"))
+            cfg = json.load(open(_cfg_path))
         except Exception:
             pass
 
@@ -1548,9 +1554,10 @@ def cmd_repair(dry_run: bool = True) -> int:
     Dry-run by default — pass --confirm to execute.
     """
     cfg = {}
-    if os.path.exists(".synlynk/config.json"):
+    _cfg_path = ".synlynk/workspace.json" if os.path.exists(".synlynk/workspace.json") else ".synlynk/config.json"
+    if os.path.exists(_cfg_path):
         try:
-            cfg = json.load(open(".synlynk/config.json"))
+            cfg = json.load(open(_cfg_path))
         except Exception:
             pass
 
@@ -2001,8 +2008,9 @@ cmd_harness_configure = cmd_agent_configure
 
 def _run_daily_housekeeping() -> None:
     """Run the once-per-day drift check triggered by exec flow."""
-    config_path = ".synlynk/config.json"
-    if not os.path.exists(config_path):
+    workspace_path = ".synlynk/workspace.json"
+    legacy_path = ".synlynk/config.json"
+    if not os.path.exists(workspace_path) and not os.path.exists(legacy_path):
         return
 
     config = load_config()
@@ -2066,7 +2074,12 @@ def _run_daily_housekeeping() -> None:
             db_conn.close()
 
     config["last_housekeeping_date"] = today
-    _write_json_atomic(config_path, config)
+    if os.path.exists(workspace_path):
+        workspace_data = load_workspace()
+        workspace_data["last_housekeeping_date"] = today
+        _write_json_atomic(workspace_path, workspace_data)
+    else:
+        _write_json_atomic(legacy_path, config)
 
     if not printed:
         return
@@ -2284,13 +2297,36 @@ def detect_remote_owner_repo() -> tuple:
 
 
 def _update_config(updates: dict) -> None:
-    """Merges updates into .synlynk/config.json in-place."""
-    config_file = ".synlynk/config.json"
+    """Merges updates into the owning split config file(s) (workspace.json / billing.json / policy.json)."""
     if not os.path.exists(".synlynk"):
         return
-    config = load_config()
-    config.update(updates)
-    _write_json_atomic(config_file, config)
+
+    workspace_updates = {}
+    billing_updates = {}
+    policy_updates = {}
+    for key, value in updates.items():
+        if key in _BILLING_KEYS:
+            billing_updates[key] = value
+        elif key in _POLICY_MIGRATED_KEYS:
+            policy_updates[key] = value
+        else:
+            workspace_updates[key] = value
+
+    if workspace_updates:
+        workspace_data = load_workspace()
+        workspace_data.update(workspace_updates)
+        _write_json_atomic(".synlynk/workspace.json", workspace_data)
+
+    if billing_updates:
+        billing_data = load_billing()
+        billing_data.update(billing_updates)
+        _write_json_atomic(".synlynk/billing.json", billing_data)
+
+    if policy_updates:
+        policy_data = _read_raw_policy()
+        policy_data.setdefault("schema_version", 1)
+        policy_data.update(policy_updates)
+        _write_json_atomic(".synlynk/policy.json", policy_data)
 
 
 # Task 3-5: Repo scanning, maturity detection, section signals, semantic matching, GH ID extraction
