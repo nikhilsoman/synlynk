@@ -1002,6 +1002,22 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
         "--all", action="store_true", dest="all_artifacts",
         help="Include the full ~/.synlynk legacy/quarantine/backup tree",
     )
+    state_inventory.add_argument(
+        "--reconcile", default=None, dest="reconcile_slug", metavar="SLUG",
+        help="Plan (default) or apply merging matched legacy shards into workspace SLUG's state.db",
+    )
+    state_inventory.add_argument(
+        "--apply", action="store_true",
+        help="Actually write the reconcile merge (default is dry-run plan only)",
+    )
+    state_inventory.add_argument(
+        "--ignore-conflicts", action="store_true", dest="ignore_conflicts",
+        help="Skip conflicting story rows instead of refusing to apply",
+    )
+    state_inventory.add_argument(
+        "--cutoff-days", type=int, default=None, dest="cutoff_days", metavar="N",
+        help="With --reconcile, skip matched shards whose staleness exceeds N days",
+    )
     state_promote = state_sub.add_parser("promote", help="Promote a verified DB without overwriting canonical state")
     state_promote.add_argument("source")
     state_promote.add_argument("destination")
@@ -2237,6 +2253,10 @@ def main(argv=None) -> None:
             sys.exit(cmd_state_inventory(
                 json_output=args.json_output,
                 all_artifacts=getattr(args, "all_artifacts", False),
+                reconcile_slug=getattr(args, "reconcile_slug", None),
+                apply=getattr(args, "apply", False),
+                ignore_conflicts=getattr(args, "ignore_conflicts", False),
+                cutoff_days=getattr(args, "cutoff_days", None),
             ))
         elif args.state_action == "promote":
             from synlynk.state_repair import promote_state_db

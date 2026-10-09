@@ -1,4 +1,6 @@
+import os
 import sqlite3
+import time
 
 import pytest
 
@@ -360,3 +362,90 @@ def test_apply_reconcile_rolls_back_on_failure(tmp_path, monkeypatch):
 
     after = _read_stories(canonical)
     assert after == before
+
+
+def _add_identity(path, product_id):
+    """Stamp an existing stories DB with a state_identity row for fingerprint matching."""
+    conn = sqlite3.connect(path)
+    conn.execute(
+        """CREATE TABLE state_identity (
+            product_id TEXT NOT NULL,
+            mode TEXT NOT NULL,
+            canonical_path TEXT NOT NULL,
+            lineage_generation INTEGER NOT NULL DEFAULT 1,
+            source_sha256 TEXT,
+            bootstrapped_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )"""
+    )
+    conn.execute(
+        "INSERT INTO state_identity(product_id, mode, canonical_path) VALUES (?, 'canonical', ?)",
+        (product_id, str(path)),
+    )
+    conn.commit()
+    conn.close()
+
+
+def test_cmd_state_inventory_reconcile_dry_run_prints_plan(tmp_path, monkeypatch, capsys):
+    from synlynk.state_inventory import cmd_state_inventory
+
+    home = tmp_path / "home" / ".synlynk"
+    monkeypatch.setattr(
+        "os.path.expanduser",
+        lambda p: str(tmp_path / "home" / ".synlynk") if p == "~/.synlynk" else p,
+    )
+
+    canonical = home / "workspaces" / "myproj" / "state.db"
+    _make_stories_db(canonical, [("c-1", "Existing story", None)])
+    legacy = home / "projects" / "abc12345" / "state.db"
+    _make_stories_db(legacy, [("s-1", "Orphaned story", None)])
+    # Give the shard and canonical a shared product_id so _match_project's
+    # fingerprint matching can resolve the legacy shard to slug "myproj"
+    # (the two DBs have no overlapping story titles to match on otherwise).
+    _add_identity(canonical, "prod-myproj")
+    _add_identity(legacy, "prod-myproj")
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    exit_code = cmd_state_inventory(repo_root=str(repo), reconcile_slug="myproj", apply=False)
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "to_add" in captured.out or "Orphaned story" in captured.out
+    # Dry run: canonical must be untouched
+    canonical_after = _read_stories(canonical)
+    assert set(canonical_after.keys()) == {"c-1"}
+    assert canonical_after["c-1"]["story_id"] == "c-1"
+    assert canonical_after["c-1"]["title"] == "Existing story"
+
+
+def test_cmd_state_inventory_reconcile_respects_cutoff_days(tmp_path, monkeypatch, capsys):
+    from synlynk.state_inventory import cmd_state_inventory
+
+    monkeypatch.setattr(
+        "os.path.expanduser",
+        lambda p: str(tmp_path / "home" / ".synlynk") if p == "~/.synlynk" else p,
+    )
+    home = tmp_path / "home" / ".synlynk"
+
+    canonical = home / "workspaces" / "myproj" / "state.db"
+    _make_stories_db(canonical, [("c-1", "Existing story", None)])
+    legacy = home / "projects" / "abc12345" / "state.db"
+    _make_stories_db(legacy, [("s-1", "Orphaned story", None)])
+    _add_identity(canonical, "prod-myproj")
+    _add_identity(legacy, "prod-myproj")
+
+    old_time = time.time() - (100 * 86400)
+    os.utime(legacy, (old_time, old_time))
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    exit_code = cmd_state_inventory(
+        repo_root=str(repo), reconcile_slug="myproj", apply=False, cutoff_days=10,
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "skipping" in captured.out
+    assert "no legacy shards matched" in captured.out or "skipping" in captured.out

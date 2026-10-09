@@ -282,7 +282,25 @@ def inventory(repo_root: str | Path = ".", *, all_artifacts: bool = False) -> li
     return rows
 
 
-def cmd_state_inventory(*, repo_root: str = ".", json_output: bool = False, all_artifacts: bool = False) -> int:
+def cmd_state_inventory(
+    *,
+    repo_root: str = ".",
+    json_output: bool = False,
+    all_artifacts: bool = False,
+    reconcile_slug: str | None = None,
+    apply: bool = False,
+    ignore_conflicts: bool = False,
+    cutoff_days: int | None = None,
+) -> int:
+    if reconcile_slug is not None:
+        return _cmd_reconcile(
+            repo_root,
+            reconcile_slug,
+            apply=apply,
+            ignore_conflicts=ignore_conflicts,
+            cutoff_days=cutoff_days,
+        )
+
     rows = inventory(repo_root, all_artifacts=all_artifacts)
     if json_output:
         print(json.dumps(rows, indent=2, sort_keys=True))
@@ -294,3 +312,54 @@ def cmd_state_inventory(*, repo_root: str = ".", json_output: bool = False, all_
                 f"{row['sha256']}\t{row.get('integrity', 'unknown')}"
             )
     return 0
+
+
+def _cmd_reconcile(
+    repo_root: str,
+    slug: str,
+    *,
+    apply: bool,
+    ignore_conflicts: bool,
+    cutoff_days: int | None = None,
+) -> int:
+    home = Path(os.path.expanduser("~/.synlynk"))
+    canonical_path = home / "workspaces" / slug / "state.db"
+    if not canonical_path.is_file():
+        print(f"error: no canonical state.db found for slug {slug!r} at {canonical_path}")
+        return 1
+
+    rows = inventory(repo_root, all_artifacts=True)
+    matched_shards = [
+        r
+        for r in rows
+        if r["class"] == "legacy-project" and r.get("project_match", {}).get("slug") == slug
+    ]
+    if cutoff_days is not None:
+        skipped = [r for r in matched_shards if r["staleness_days"] > cutoff_days]
+        matched_shards = [r for r in matched_shards if r["staleness_days"] <= cutoff_days]
+        for shard in skipped:
+            print(
+                f"skipping {shard['path']}: staleness {shard['staleness_days']}d "
+                f"exceeds --cutoff-days {cutoff_days}"
+            )
+    if not matched_shards:
+        print(f"no legacy shards matched to slug {slug!r}")
+        return 0
+
+    exit_code = 0
+    for shard in matched_shards:
+        shard_path = Path(shard["path"])
+        plan = _reconcile_plan(shard_path, canonical_path)
+        print(f"=== {shard_path} -> {canonical_path} ===")
+        print(json.dumps(plan, indent=2, sort_keys=True, default=str))
+        if apply:
+            if plan["conflicts"] and not ignore_conflicts:
+                print(
+                    f"refusing to apply: {len(plan['conflicts'])} conflict(s). "
+                    "Re-run with --ignore-conflicts to skip them."
+                )
+                exit_code = 1
+                continue
+            result = apply_reconcile(shard_path, canonical_path, ignore_conflicts=True)
+            print(json.dumps(result, indent=2, sort_keys=True))
+    return exit_code
