@@ -122,3 +122,17 @@ def test_ranked_harness_for_task_falls_back_below_sample_size():
 
     result = ranked_harness_for_task("implement", ["codex", "grok"], conn=conn)
     assert result is None
+
+
+def test_discipline_for_task_type_known_mapping():
+    from synlynk.capability import _discipline_for_task_type
+
+    assert _discipline_for_task_type("implement") == "backend"
+    assert _discipline_for_task_type("test") == "testing"
+    assert _discipline_for_task_type("review") == "architecture"
+
+
+def test_discipline_for_task_type_unknown_returns_none():
+    from synlynk.capability import _discipline_for_task_type
+
+    assert _discipline_for_task_type("not-a-real-task-type") is None

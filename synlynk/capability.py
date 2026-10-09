@@ -256,3 +256,29 @@ def ranked_harness_for_task(
     finally:
         if owned:
             db.close()
+
+
+_TASK_TYPE_TO_DISCIPLINE = {
+    "implement": "backend",
+    "refactor": "backend",
+    "cli-plumbing": "backend",
+    "infra": "backend",
+    "canvas": "backend",
+    "js": "backend",
+    "test": "testing",
+    "css": "backend",
+    "templates": "backend",
+    "content": "backend",
+    "subpages": "backend",
+    "review": "architecture",
+    "architecture-review": "architecture",
+    "pm": "architecture",
+    "brainstorm": "architecture",
+    "deploy": "architecture",
+    "gh_write": "backend",
+}
+
+
+def _discipline_for_task_type(task_type: str) -> str | None:
+    """Map a task type to its capability-rating discipline, if known."""
+    return _TASK_TYPE_TO_DISCIPLINE.get(task_type)
