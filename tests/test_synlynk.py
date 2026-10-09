@@ -10,6 +10,37 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 import synlynk
 
 
+def test_cmd_config_set_routes_workspace_key(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    synlynk.cmd_config_set("local_fallback", "codex")
+    with open(".synlynk/workspace.json") as f:
+        data = json.load(f)
+    assert data["local_fallback"] == "codex"
+    if os.path.exists(".synlynk/billing.json"):
+        with open(".synlynk/billing.json") as f:
+            assert "local_fallback" not in json.load(f)
+
+
+def test_cmd_config_set_routes_billing_key(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    synlynk.cmd_config_set("budget", {"limit_usd": 5.0, "limit_requests": 10})
+    with open(".synlynk/billing.json") as f:
+        data = json.load(f)
+    assert data["budget"] == {"limit_usd": 5.0, "limit_requests": 10}
+
+
+def test_cmd_config_set_routes_policy_key_preserving_other_policy_content(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk")
+    with open(".synlynk/policy.json", "w") as f:
+        json.dump({"schema_version": 1, "repo_id": "synlynk"}, f)
+    synlynk.cmd_config_set("qa_gate_mode", "merge-restricted-classes")
+    with open(".synlynk/policy.json") as f:
+        data = json.load(f)
+    assert data["qa_gate_mode"] == "merge-restricted-classes"
+    assert data["repo_id"] == "synlynk"
+
+
 def test_agent_capability_baselines_exist():
     assert "claude" in synlynk.HARNESS_CAPABILITY_BASELINES
     assert "agy" in synlynk.HARNESS_CAPABILITY_BASELINES
