@@ -12,6 +12,12 @@ def _fake_gh(tmp_path):
 
 
 def _run_shim(tmp_path, env, cwd=None):
+    # gh_shim runs as a real subprocess with an explicit, non-inheriting env
+    # dict; the conftest autouse fixture only sets this in the pytest
+    # process's own os.environ, so it must be threaded through here too
+    # (gh:#1831 hardening: _project_root() raises in a non-git tmp_path cwd
+    # without it).
+    env = {**env, "SYNLYNK_ALLOW_CWD_FALLBACK": "1"}
     shim = tmp_path / "shim"
     shim.mkdir(exist_ok=True)
     shim_path = shim / "gh"

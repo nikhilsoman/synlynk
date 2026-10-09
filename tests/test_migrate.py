@@ -7,15 +7,6 @@ import pytest
 import synlynk
 
 
-@pytest.fixture(autouse=True)
-def _allow_cwd_fallback(monkeypatch):
-    """This file predates gh:#1831's hardened _project_root() and chdirs into
-    bare (non-git) tmp_path dirs throughout. Scope the explicit override to
-    this file rather than all tests, so other suites still exercise the
-    strict default (see code-quality review on PR for Task 1)."""
-    monkeypatch.setenv("SYNLYNK_ALLOW_CWD_FALLBACK", "1")
-
-
 def test_migrate_db_creates_new_tables(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".synlynk").mkdir()

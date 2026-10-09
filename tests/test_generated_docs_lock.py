@@ -1,10 +1,7 @@
 """goal-6733bbf1: generated 4-doc lock, worktree identity, generator write-through."""
 import json
-import os
 import subprocess
 from pathlib import Path
-
-import pytest
 
 import synlynk
 from synlynk import instructions as instructions_mod
@@ -15,15 +12,6 @@ from synlynk.scan import _static_scan
 
 GENERATED_HEADER = "source of truth is state.db"
 SKELETON_MARK = "Skeleton generated from git history"
-
-
-@pytest.fixture(autouse=True)
-def _allow_cwd_fallback(monkeypatch):
-    """This file predates gh:#1831's hardened _project_root() and chdirs into
-    bare (non-git) tmp_path dirs in several tests. Scope the explicit override
-    to this file rather than all tests, so other suites still exercise the
-    strict default (see code-quality review on PR for Task 1)."""
-    monkeypatch.setenv("SYNLYNK_ALLOW_CWD_FALLBACK", "1")
 
 
 def _git(cwd, *args):
