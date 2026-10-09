@@ -269,3 +269,20 @@ def test_state_restore_cli_prints_json_result(tmp_path, monkeypatch, capsys):
     output = json.loads(capsys.readouterr().out)
     assert output["disposition"] == "planned"
     assert output["destination"] == str(destination)
+
+
+def test_capability_report_writes_json_with_out_flag(tmp_path, monkeypatch, capsys):
+    policy_path = tmp_path / ".synlynk" / "policy.json"
+    policy_path.parent.mkdir(parents=True)
+    policy_path.write_text(json.dumps({
+        "capability_policy": {"min_sample_size": 5},
+        "overrides": {"dev_authority": {"task_allocation": {}}},
+    }))
+    out_path = tmp_path / "report.json"
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("synlynk.capability.capability_report", lambda: {})
+
+    cli_mod.main(["capability", "report", "--out", str(out_path)])
+
+    assert "Capability Report" in capsys.readouterr().out
+    assert json.loads(out_path.read_text()) == {}

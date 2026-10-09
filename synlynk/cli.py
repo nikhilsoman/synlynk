@@ -51,6 +51,29 @@ def _warn_stale_repo_version(installed_version, cwd=None):
         file=sys.stderr,
     )
 
+
+def _print_capability_report(result: dict, *, verbose: bool = False) -> None:
+    import datetime
+
+    today = datetime.date.today().isoformat()
+    print(f"Capability Report — generated {today} from this workspace's state.db")
+    print()
+    if not result:
+        print("No proposed task_allocation changes.")
+        return
+    header = (
+        f"{'task_type':<20}{'incumbent':<12}{'proposed':<12}{'samples':<9}"
+        f"{'median_cycles':<15}{'median_cost':<13}reason"
+    )
+    print(header)
+    for task_type, entry in result.items():
+        candidate = entry["candidate_stats"]
+        print(
+            f"{task_type:<20}{entry['incumbent']:<12}{entry['proposed']:<12}"
+            f"{candidate['sample_count']:<9}{candidate['median_cycles']:<15}"
+            f"${candidate['median_cost']:<12.2f}{entry['reason']}"
+        )
+
 def _collect_brownfield_evidence(repo_path: str) -> dict:
     """Walk ``repo_path`` into the list-shaped evidence dict expected by
     ``synlynk.goal_synthesizer.synthesize_brownfield_goals``."""
@@ -1693,6 +1716,22 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
         dest="cost_cap",
         help="Override the configured cost cap (USD) for this sweep run",
     )
+    report_parser = capability_sub.add_parser(
+        "report",
+        help="Generate a proposed task_allocation diff from capability_ratings/cost_entries (does not write policy.json)",
+    )
+    report_parser.add_argument(
+        "--out",
+        default=None,
+        dest="report_out",
+        help="Write the full structured report as JSON to this path",
+    )
+    report_parser.add_argument(
+        "--verbose",
+        action="store_true",
+        dest="report_verbose",
+        help="Also print task_types evaluated without a proposed change",
+    )
 
     instructions_parser = subparsers.add_parser(
         "instructions", help="Manage synlynk instruction files across AI tools"
@@ -2854,6 +2893,16 @@ def main(argv=None) -> None:
     elif args.command == "capability":
         if args.capability_action == "sweep":
             cmd_capability_sweep(cost_cap_override=getattr(args, "cost_cap", None))
+        elif args.capability_action == "report":
+            from synlynk.capability import capability_report
+
+            result = capability_report()
+            _print_capability_report(result, verbose=getattr(args, "report_verbose", False))
+            out_path = getattr(args, "report_out", None)
+            if out_path:
+                with open(out_path, "w") as handle:
+                    json.dump(result, handle, indent=2)
+                print(f"Full report written to {out_path}")
     elif args.command == "instructions":
         action = getattr(args, "instructions_action", None)
         if action == "status" or action is None:
