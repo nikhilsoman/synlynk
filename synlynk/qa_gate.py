@@ -17,11 +17,11 @@ from synlynk import detect_remote_owner_repo
 
 def _qa_gate_mode() -> str:
     try:
-        with open(".synlynk/config.json") as f:
-            config = json.load(f)
+        with open(".synlynk/policy.json") as f:
+            policy = json.load(f)
     except Exception:
         return "block-only"
-    return config.get("qa_gate_mode") or "block-only"
+    return policy.get("qa_gate_mode") or "block-only"
 
 
 def _gh_pr_changed_files(pr_number) -> list:

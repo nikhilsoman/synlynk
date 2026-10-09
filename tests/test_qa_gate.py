@@ -16,14 +16,14 @@ from synlynk.qa_gate import (
 def test_qa_gate_mode_defaults_to_block_only_when_key_absent(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".synlynk").mkdir()
-    (tmp_path / ".synlynk" / "config.json").write_text('{}')
+    (tmp_path / ".synlynk" / "policy.json").write_text('{}')
     assert _qa_gate_mode() == 'block-only'
 
 
 def test_qa_gate_mode_reads_configured_value(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".synlynk").mkdir()
-    (tmp_path / ".synlynk" / "config.json").write_text('{"qa_gate_mode": "merge-restricted-classes"}')
+    (tmp_path / ".synlynk" / "policy.json").write_text('{"qa_gate_mode": "merge-restricted-classes"}')
     assert _qa_gate_mode() == 'merge-restricted-classes'
 
 
