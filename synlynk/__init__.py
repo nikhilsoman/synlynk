@@ -1030,8 +1030,8 @@ _BILLING_KEYS = ["budget", "harness_billing", "payment_models", "capability_swee
 _POLICY_MIGRATED_KEYS = ["qa_gate_mode", "roles", "story_classification", "sentinel"]
 
 
-def load_workspace() -> dict:
-    """Load .synlynk/workspace.json with schema-v1 defaults."""
+def _apply_workspace_defaults(config: dict) -> dict:
+    """Fill in schema-v1 defaults for a workspace config dict, in place and returned."""
     defaults = {
         "schema_version": 1,
         "dispatch": {"stacking": "auto", "gate_suite_cmd": ""},
@@ -1064,30 +1064,37 @@ def load_workspace() -> dict:
         "dr_sync_path": None,
         "mode": "solo",
     }
+    if not isinstance(config, dict):
+        config = {}
+    for key, val in defaults.items():
+        if key not in config:
+            config[key] = val
+    for key, val in defaults["dispatch"].items():
+        if key not in config.get("dispatch", {}):
+            config.setdefault("dispatch", {})[key] = val
+    for key, val in defaults["nudges"].items():
+        if key not in config.get("nudges", {}):
+            config.setdefault("nudges", {})[key] = val
+    return config
+
+
+def load_workspace() -> dict:
+    """Load .synlynk/workspace.json with schema-v1 defaults."""
     config_file = ".synlynk/workspace.json"
     if not os.path.exists(config_file):
-        return defaults
+        return _apply_workspace_defaults({})
     try:
         with open(config_file) as f:
             config = json.load(f)
         if not isinstance(config, dict):
-            return defaults
-        for key, val in defaults.items():
-            if key not in config:
-                config[key] = val
-        for key, val in defaults["dispatch"].items():
-            if key not in config.get("dispatch", {}):
-                config.setdefault("dispatch", {})[key] = val
-        for key, val in defaults["nudges"].items():
-            if key not in config.get("nudges", {}):
-                config.setdefault("nudges", {})[key] = val
-        return config
+            return _apply_workspace_defaults({})
+        return _apply_workspace_defaults(config)
     except (json.JSONDecodeError, IOError):
-        return defaults
+        return _apply_workspace_defaults({})
 
 
-def load_billing() -> dict:
-    """Load .synlynk/billing.json with schema-v1 defaults."""
+def _apply_billing_defaults(config: dict) -> dict:
+    """Fill in schema-v1 defaults for a billing config dict, in place and returned."""
     defaults = {
         "schema_version": 1,
         "budget": {"limit_usd": 10.0, "limit_requests": 100},
@@ -1095,35 +1102,60 @@ def load_billing() -> dict:
         "harness_billing": _default_harness_billing(),
         "capability_sweep": {"cost_cap_usd": 10.0},
     }
+    if not isinstance(config, dict):
+        config = {}
+    has_harness_billing = "harness_billing" in config
+    for key, val in defaults.items():
+        if key not in config:
+            config[key] = {} if key == "harness_billing" else val
+    for key, val in defaults["budget"].items():
+        if key not in config.get("budget", {}):
+            config.setdefault("budget", {})[key] = val
+    if not isinstance(config.get("harness_billing"), dict):
+        config["harness_billing"] = _default_harness_billing()
+    elif not config["harness_billing"] and has_harness_billing:
+        config["harness_billing"] = _default_harness_billing()
+    for billing in config["harness_billing"].values():
+        if isinstance(billing, dict):
+            billing.setdefault("payment_mode", "pay_as_you_go")
+            billing.setdefault("monthly_base_fee_usd", billing.get("subscription_fee_usd", 0.0))
+            billing.setdefault("projected_monthly_tokens", 10_000_000)
+            billing.setdefault("allow_extra_usage", False)
+            billing.setdefault("extra_usage_cap_usd", None)
+    return config
+
+
+def load_billing() -> dict:
+    """Load .synlynk/billing.json with schema-v1 defaults."""
     config_file = ".synlynk/billing.json"
     if not os.path.exists(config_file):
-        return defaults
+        return {
+            "schema_version": 1,
+            "budget": {"limit_usd": 10.0, "limit_requests": 100},
+            "payment_models": {},
+            "harness_billing": _default_harness_billing(),
+            "capability_sweep": {"cost_cap_usd": 10.0},
+        }
     try:
         with open(config_file) as f:
             config = json.load(f)
         if not isinstance(config, dict):
-            return defaults
-        has_harness_billing = "harness_billing" in config
-        for key, val in defaults.items():
-            if key not in config:
-                config[key] = {} if key == "harness_billing" else val
-        for key, val in defaults["budget"].items():
-            if key not in config.get("budget", {}):
-                config.setdefault("budget", {})[key] = val
-        if not isinstance(config.get("harness_billing"), dict):
-            config["harness_billing"] = _default_harness_billing()
-        elif not config["harness_billing"] and has_harness_billing:
-            config["harness_billing"] = _default_harness_billing()
-        for billing in config["harness_billing"].values():
-            if isinstance(billing, dict):
-                billing.setdefault("payment_mode", "pay_as_you_go")
-                billing.setdefault("monthly_base_fee_usd", billing.get("subscription_fee_usd", 0.0))
-                billing.setdefault("projected_monthly_tokens", 10_000_000)
-                billing.setdefault("allow_extra_usage", False)
-                billing.setdefault("extra_usage_cap_usd", None)
-        return config
+            return {
+                "schema_version": 1,
+                "budget": {"limit_usd": 10.0, "limit_requests": 100},
+                "payment_models": {},
+                "harness_billing": _default_harness_billing(),
+                "capability_sweep": {"cost_cap_usd": 10.0},
+            }
+        return _apply_billing_defaults(config)
     except (json.JSONDecodeError, IOError):
-        return defaults
+        return {
+            "schema_version": 1,
+            "budget": {"limit_usd": 10.0, "limit_requests": 100},
+            "payment_models": {},
+            "harness_billing": _default_harness_billing(),
+            "capability_sweep": {"cost_cap_usd": 10.0},
+        }
 
 
 def _read_raw_policy() -> dict:
@@ -1136,14 +1168,15 @@ def _read_raw_policy() -> dict:
         return {}
 
 
-def _read_policy_migrated_fields() -> dict:
+def _read_policy_migrated_fields(policy: dict | None = None) -> dict:
     """Read the legacy fields that are migrated into policy.json."""
     try:
         from synlynk.capability_roles import _load_capability_roles
         capability_roles = _load_capability_roles()
     except ImportError:
         capability_roles = None
-    policy = _read_raw_policy()
+    if policy is None:
+        policy = _read_raw_policy()
     result = {
         "roles": capability_roles if capability_roles is not None else _default_roles_map(),
         "story_classification": {"method": "heuristic"},
@@ -1161,41 +1194,14 @@ def _read_policy_migrated_fields() -> dict:
     return result
 
 
-def _migrate_legacy_config_if_needed() -> None:
-    """Split .synlynk/config.json into workspace, billing, and policy files once."""
-    legacy_path = ".synlynk/config.json"
-    workspace_path = ".synlynk/workspace.json"
-    billing_path = ".synlynk/billing.json"
-    policy_path = ".synlynk/policy.json"
+def _split_legacy_config(legacy: dict, existing_policy: dict) -> tuple[dict, dict, dict]:
+    """Partition a legacy config.json dict into workspace/billing/policy payloads.
 
-    if not os.path.exists(legacy_path):
-        return
-    if os.path.exists(workspace_path) or os.path.exists(billing_path):
-        return
-
-    try:
-        with open(legacy_path) as f:
-            legacy = json.load(f)
-    except (json.JSONDecodeError, IOError):
-        return
-    if not isinstance(legacy, dict):
-        return
-
-    # A present but corrupt policy file aborts the whole migration. A missing
-    # policy file is valid and uses an empty policy as its base.
-    if os.path.exists(policy_path):
-        try:
-            with open(policy_path) as f:
-                existing_policy = json.load(f)
-            if not isinstance(existing_policy, dict):
-                return
-        except (json.JSONDecodeError, IOError):
-            return
-    else:
-        existing_policy = {}
-
+    Pure, no I/O. Workspace is the catch-all so unclaimed legacy keys are preserved.
+    """
+    claimed = set(_BILLING_KEYS) | set(_POLICY_MIGRATED_KEYS)
     workspace_payload = {"schema_version": 1}
-    workspace_payload.update({k: legacy[k] for k in _WORKSPACE_KEYS if k in legacy})
+    workspace_payload.update({k: v for k, v in legacy.items() if k not in claimed})
 
     billing_payload = {"schema_version": 1}
     billing_payload.update({k: legacy[k] for k in _BILLING_KEYS if k in legacy})
@@ -1204,10 +1210,49 @@ def _migrate_legacy_config_if_needed() -> None:
     policy_payload.update({k: legacy[k] for k in _POLICY_MIGRATED_KEYS if k in legacy})
     policy_payload.setdefault("schema_version", 1)
 
+    return workspace_payload, billing_payload, policy_payload
+
+
+def migrate_legacy_config_if_needed() -> bool:
+    """Explicitly split .synlynk/config.json into workspace, billing, and policy files once."""
+    legacy_path = ".synlynk/config.json"
+    workspace_path = ".synlynk/workspace.json"
+    billing_path = ".synlynk/billing.json"
+    policy_path = ".synlynk/policy.json"
+
+    if not os.path.exists(legacy_path):
+        return False
+    if os.path.exists(workspace_path) or os.path.exists(billing_path):
+        return False
+
+    try:
+        with open(legacy_path) as f:
+            legacy = json.load(f)
+    except (json.JSONDecodeError, IOError):
+        return False
+    if not isinstance(legacy, dict):
+        return False
+
+    # A present but corrupt policy file aborts the whole migration. A missing
+    # policy file is valid and uses an empty policy as its base.
+    if os.path.exists(policy_path):
+        try:
+            with open(policy_path) as f:
+                existing_policy = json.load(f)
+            if not isinstance(existing_policy, dict):
+                return False
+        except (json.JSONDecodeError, IOError):
+            return False
+    else:
+        existing_policy = {}
+
+    workspace_payload, billing_payload, policy_payload = _split_legacy_config(legacy, existing_policy)
+
     _write_json_atomic(workspace_path, workspace_payload)
     _write_json_atomic(billing_path, billing_payload)
     _write_json_atomic(policy_path, policy_payload)
     os.replace(legacy_path, legacy_path + ".bak")
+    return True
 
 # ANSI helpers used by the wizard.
 _BOLD = "\033[1m"
@@ -1271,14 +1316,28 @@ def _default_harness_billing() -> dict:
 
 
 def load_config() -> dict:
-    """Facade over workspace.json + billing.json + the four migrated
-    policy.json fields, preserving load_config()'s pre-split flat-dict
-    shape for all existing call sites. Runs the one-time legacy-config
-    migration on every call; the migration itself is a cheap no-op once
-    the split files exist.
-    """
-    _migrate_legacy_config_if_needed()
+    """Read the composed config without writing, renaming, or deleting files."""
+    workspace_path = ".synlynk/workspace.json"
+    billing_path = ".synlynk/billing.json"
+    legacy_path = ".synlynk/config.json"
+
     config = {"schema_version": 1}
+
+    if not os.path.exists(workspace_path) and not os.path.exists(billing_path) and os.path.exists(legacy_path):
+        legacy = None
+        try:
+            with open(legacy_path) as f:
+                legacy = json.load(f)
+        except (json.JSONDecodeError, IOError):
+            legacy = None
+        if isinstance(legacy, dict):
+            existing_policy = _read_raw_policy()
+            workspace_payload, billing_payload, policy_payload = _split_legacy_config(legacy, existing_policy)
+            config.update(_apply_workspace_defaults(workspace_payload))
+            config.update(_apply_billing_defaults(billing_payload))
+            config.update(_read_policy_migrated_fields(policy_payload))
+            return config
+
     config.update(load_workspace())
     config.update(load_billing())
     config.update(_read_policy_migrated_fields())
