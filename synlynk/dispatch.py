@@ -127,7 +127,7 @@ def _get_local_capability_score(task_type: str, db) -> float:
             return 0.0
 
 
-def _read_local_fallback(config_path=".synlynk/config.json") -> str:
+def _read_local_fallback(config_path=".synlynk/workspace.json") -> str:
     """Read the configured auto-routing fallback, defaulting to ``agy``."""
     try:
         with open(config_path) as handle:
@@ -137,7 +137,7 @@ def _read_local_fallback(config_path=".synlynk/config.json") -> str:
         return "agy"
 
 
-def _read_local_threshold(config_path=".synlynk/config.json") -> float:
+def _read_local_threshold(config_path=".synlynk/workspace.json") -> float:
     """Read the local auto-routing threshold, defaulting to ``0.5``."""
     try:
         with open(config_path) as handle:
@@ -201,7 +201,7 @@ def _resolve_dispatch_agent(
     requested_agent,
     task_type: str,
     db,
-    config_path: str = ".synlynk/config.json",
+    config_path: str = ".synlynk/workspace.json",
 ) -> str:
     """Resolve ``auto`` to local when healthy and sufficiently capable."""
     if requested_agent is not None and requested_agent != "auto":
