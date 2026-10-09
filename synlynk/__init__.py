@@ -263,7 +263,13 @@ TASK_STATUSES = {
 
 
 def _project_root() -> str:
-    """Return the shared repo root for the current git worktree, or CWD fallback."""
+    """Return the shared repo root for the current git worktree.
+
+    Raises RuntimeError if git-common-dir resolution fails, unless
+    SYNLYNK_ALLOW_CWD_FALLBACK=1 is set (see gh:#1831 — a silent CWD
+    fallback here previously minted duplicate per-directory legacy
+    state.db shards for the same project).
+    """
     import subprocess
 
     try:
@@ -273,8 +279,15 @@ def _project_root() -> str:
         ).decode().strip()
         if common:
             return os.path.abspath(os.path.join(common, ".."))
-    except Exception:
-        pass
+    except Exception as exc:
+        if os.environ.get("SYNLYNK_ALLOW_CWD_FALLBACK") == "1":
+            return os.getcwd()
+        raise RuntimeError(
+            "could not resolve git-common-dir; refusing to silently fall back "
+            "to the current working directory (this previously minted stray "
+            "per-directory state shards — see gh:#1831). Set "
+            "SYNLYNK_ALLOW_CWD_FALLBACK=1 to override."
+        ) from exc
     return os.getcwd()
 
 
