@@ -72,6 +72,80 @@ def _row_count(path: Path) -> int | None:
         return None
 
 
+def _identity_product_id(path: Path) -> str | None:
+    try:
+        conn = sqlite3.connect(f"file:{path.resolve()}?mode=ro", uri=True, timeout=5.0)
+        try:
+            tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            if "state_identity" not in tables:
+                return None
+            row = conn.execute("SELECT product_id FROM state_identity LIMIT 1").fetchone()
+            return row[0] if row else None
+        finally:
+            conn.close()
+    except Exception:
+        return None
+
+
+def _recent_story_fingerprints(path: Path, limit: int = 20) -> set[str]:
+    """Return a set of normalized (title, gh_issue) tokens for recent stories."""
+    tokens: set[str] = set()
+    try:
+        conn = sqlite3.connect(f"file:{path.resolve()}?mode=ro", uri=True, timeout=5.0)
+        try:
+            tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            if "stories" not in tables:
+                return tokens
+            cols = {row[1] for row in conn.execute("PRAGMA table_info(stories)")}
+            select_cols = ["title"]
+            if "gh_issue" in cols:
+                select_cols.append("gh_issue")
+            order_col = "created_at" if "created_at" in cols else "id"
+            query = f"SELECT {', '.join(select_cols)} FROM stories ORDER BY {order_col} DESC LIMIT ?"
+            for row in conn.execute(query, (limit,)):
+                for value in row:
+                    if value:
+                        tokens.add(str(value).strip().lower())
+        finally:
+            conn.close()
+    except Exception:
+        pass
+    return tokens
+
+
+def _match_project(shard_path: Path, workspaces_root: Path) -> dict:
+    """Best-effort match of a legacy shard to a known canonical workspace DB."""
+    if not workspaces_root.is_dir():
+        return {"slug": None, "method": "none", "confidence": None}
+
+    candidates = sorted(workspaces_root.glob("*/state.db"))
+
+    shard_product_id = _identity_product_id(shard_path)
+    if shard_product_id is not None:
+        for candidate in candidates:
+            if _identity_product_id(candidate) == shard_product_id:
+                return {
+                    "slug": candidate.parent.name,
+                    "method": "fingerprint",
+                    "confidence": "exact",
+                }
+
+    shard_tokens = _recent_story_fingerprints(shard_path)
+    if shard_tokens:
+        best_slug = None
+        best_overlap = 0
+        for candidate in candidates:
+            candidate_tokens = _recent_story_fingerprints(candidate)
+            overlap = len(shard_tokens & candidate_tokens)
+            if overlap > best_overlap:
+                best_overlap = overlap
+                best_slug = candidate.parent.name
+        if best_slug is not None and best_overlap >= 1:
+            return {"slug": best_slug, "method": "heuristic", "confidence": "heuristic"}
+
+    return {"slug": None, "method": "none", "confidence": None}
+
+
 def inventory(repo_root: str | Path = ".", *, all_artifacts: bool = False) -> list[dict]:
     repo = Path(repo_root).resolve()
     home = Path(os.path.expanduser("~/.synlynk"))
@@ -88,6 +162,7 @@ def inventory(repo_root: str | Path = ".", *, all_artifacts: bool = False) -> li
         elif root.is_dir():
             paths.update(root.rglob("state.db"))
     rows = []
+    workspaces_root = home / "workspaces"
     for path in sorted(p for p in paths if p.is_file()):
         mtime = path.stat().st_mtime
         mtime_dt = datetime.datetime.fromtimestamp(mtime, tz=datetime.timezone.utc)
@@ -103,6 +178,8 @@ def inventory(repo_root: str | Path = ".", *, all_artifacts: bool = False) -> li
             "staleness_days": staleness_days,
         }
         item.update(_metadata(path))
+        if item["class"] == "legacy-project":
+            item["project_match"] = _match_project(path, workspaces_root)
         rows.append(item)
     return rows
 
