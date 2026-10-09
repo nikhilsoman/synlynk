@@ -4352,7 +4352,6 @@ def test_init_wizard_skips_existing_synlynk_without_force(project_dir, monkeypat
 
 def test_init_writes_workgroup_nudge_to_config(tmp_path, monkeypatch):
     import synlynk as sl
-    import json as _json
     monkeypatch.chdir(tmp_path)
     subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
     monkeypatch.setattr(sys, "stdin", type("TerminalStdin", (), {"isatty": lambda self: True})())
@@ -4362,7 +4361,7 @@ def test_init_writes_workgroup_nudge_to_config(tmp_path, monkeypatch):
     monkeypatch.setattr(sl, "discover_agents", lambda **kw: [])
     monkeypatch.setattr(sl, "_llm_enrich", lambda *a, **kw: False)
     sl.init()
-    config = _json.loads(open(".synlynk/config.json").read())
+    config = sl.load_config()
     assert config.get("workgroup_invite_email") == "nikhil@example.com"
 
 
