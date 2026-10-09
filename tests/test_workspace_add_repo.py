@@ -9,7 +9,7 @@ from synlynk.workspace import add_repo
 def _repo(tmp_path, slug="product"):
     synlynk_dir = tmp_path / ".synlynk"
     synlynk_dir.mkdir()
-    (synlynk_dir / "config.json").write_text(json.dumps({"identity_slug": slug}))
+    (synlynk_dir / "workspace.json").write_text(json.dumps({"identity_slug": slug}))
 
 
 def test_add_repo_updates_canonical_apps_and_product_ledger(tmp_path, monkeypatch):
@@ -29,7 +29,7 @@ def test_add_repo_updates_canonical_apps_and_product_ledger(tmp_path, monkeypatc
     result = add_repo("org/api", str(tmp_path))
 
     assert result["repo_id"] == "org/api"
-    assert json.loads((tmp_path / ".synlynk" / "config.json").read_text())["repo_id"] == "org/api"
+    assert json.loads((tmp_path / ".synlynk" / "workspace.json").read_text())["repo_id"] == "org/api"
     assert json.loads((apps / "qa.json").read_text())["repos"] == ["org/api"]
     assert json.loads((apps / "frontend-qa.json").read_text())["repos"] == ["old/api"]
     assert json.loads(repos_path("product").read_text())["repos"] == [{"repo_id": "org/api", "nwo": "org/api"}]
@@ -40,3 +40,18 @@ def test_add_repo_requires_explicit_identity_slug(tmp_path):
     (tmp_path / ".synlynk" / "config.json").write_text("{}")
     with pytest.raises(RuntimeError, match="identity_slug"):
         add_repo("org/api", str(tmp_path))
+
+
+def test_add_repo_falls_back_to_legacy_config_for_identity_slug(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    synlynk_dir = tmp_path / ".synlynk"
+    synlynk_dir.mkdir()
+    (synlynk_dir / "config.json").write_text(json.dumps({"identity_slug": "legacy-product"}))
+    product = tmp_path / "home" / ".synlynk" / "workspaces" / "legacy-product"
+    product.mkdir(parents=True)
+
+    result = add_repo("org/legacy", str(tmp_path))
+
+    assert result["identity_slug"] == "legacy-product"
+    assert result["repo_id"] == "org/legacy"
+    assert json.loads((synlynk_dir / "workspace.json").read_text())["repo_id"] == "org/legacy"

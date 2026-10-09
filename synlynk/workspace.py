@@ -28,14 +28,17 @@ def add_repo(nwo: Optional[str] = None, repo_path: str = ".") -> dict:
     slug = configured_identity_slug(repo)
     if not slug:
         raise RuntimeError(
-            "workspace add-repo requires .synlynk/config.json with identity_slug; refusing to guess the product"
+            "workspace add-repo requires a configured identity_slug "
+            "(.synlynk/workspace.json or legacy .synlynk/config.json); refusing to guess the product"
         )
-    config_path = repo / ".synlynk" / "config.json"
-    config = _read_json(config_path)
+    workspace_path = repo / ".synlynk" / "workspace.json"
+    legacy_path = repo / ".synlynk" / "config.json"
+    workspace_config = _read_json(workspace_path)
+    legacy_config = _read_json(legacy_path)
     nwo = (nwo or "").strip() or repo.name
-    repo_id = config.get("repo_id") or nwo or repo.name
-    config["repo_id"] = repo_id
-    _write_json(config_path, config)
+    repo_id = workspace_config.get("repo_id") or legacy_config.get("repo_id") or nwo or repo.name
+    workspace_config["repo_id"] = repo_id
+    _write_json(workspace_path, workspace_config)
 
     types = load_types(slug)
     changed_apps = []
