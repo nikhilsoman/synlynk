@@ -44,8 +44,8 @@ def test_init_writes_industry_to_config(tmp_path, monkeypatch):
     monkeypatch.setattr("builtins.input", mock_input)
     from synlynk import init
     init(force=True)
-    import json
-    config = json.load(open(".synlynk/config.json"))
+    import synlynk as sl
+    config = sl.load_config()
     assert config.get("industry") == "ott"
     assert config.get("workgroup_invite_email") == "user@example.com"
 
@@ -65,8 +65,8 @@ def test_init_infers_industry_from_readme(tmp_path, monkeypatch):
     inferred = _infer_industry(str(tmp_path))
     assert inferred == "fintech"
     init(force=True)
-    import json
-    config = json.load(open(".synlynk/config.json"))
+    import synlynk as sl
+    config = sl.load_config()
     assert config.get("industry") == "fintech"
 
 def test_story_create_writes_to_db(tmp_path, monkeypatch):
