@@ -2627,7 +2627,9 @@ def _migrate_dr_mirror(backup_dir: str) -> None:
     import shutil as _shutil
 
     try:
-        cfg_path = os.path.join(".synlynk", "config.json")
+        workspace_path = os.path.join(".synlynk", "workspace.json")
+        legacy_path = os.path.join(".synlynk", "config.json")
+        cfg_path = workspace_path if os.path.exists(workspace_path) else legacy_path
         if not os.path.exists(cfg_path):
             return
         with open(cfg_path) as f:
@@ -2663,7 +2665,9 @@ def cmd_migrate(dry_run: bool = False, recover: bool = False, setup_dr: bool = F
         if not os.path.isdir(path):
             print(f"  ✗ Path not found: {path}")
             return
-        cfg_path = os.path.join(project_root, ".synlynk", "config.json")
+        workspace_path = os.path.join(project_root, ".synlynk", "workspace.json")
+        legacy_path = os.path.join(project_root, ".synlynk", "config.json")
+        cfg_path = workspace_path if os.path.exists(workspace_path) else legacy_path
         cfg = {}
         if os.path.exists(cfg_path):
             with open(cfg_path) as f:
