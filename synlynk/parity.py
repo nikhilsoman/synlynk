@@ -177,6 +177,8 @@ def ensure_recursive_gitignore(repo_path: str) -> bool:
         "\n# synlynk state & secret stores\n"
         "**/.synlynk/*\n"
         "!**/.synlynk/config.json\n"
+        "!**/.synlynk/workspace.json\n"
+        "!**/.synlynk/billing.json\n"
         "!**/.synlynk/policy.json\n"
         "!**/.synlynk/roles.yaml\n"
         "!**/.synlynk/instructions.json\n"
@@ -296,6 +298,8 @@ def run_parity_remediation(
 
     files_to_touch = list(directive_map.keys()) + [
         ".synlynk/config.json",
+        ".synlynk/workspace.json",
+        ".synlynk/billing.json",
         ".synlynk/policy.json",
         ".synlynk/roles.yaml",
         ".agents/claude.json",
@@ -487,7 +491,10 @@ def check_fleet_parity(repo_path: str = ".") -> Dict[str, Any]:
             except Exception:
                 gaps.append(f"{doc} unreadable")
 
-    cfg_path = path / ".synlynk" / "config.json"
+    workspace_path = path / ".synlynk" / "workspace.json"
+    legacy_cfg_path = path / ".synlynk" / "config.json"
+    cfg_path = workspace_path if workspace_path.exists() else legacy_cfg_path
+    cfg_label = cfg_path.name
     if cfg_path.exists():
         try:
             cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
@@ -501,7 +508,7 @@ def check_fleet_parity(repo_path: str = ".") -> Dict[str, Any]:
             if missing_slots:
                 gaps.append(f"agent_slots missing: {', '.join(missing_slots)}")
         except Exception:
-            gaps.append(".synlynk/config.json malformed")
+            gaps.append(f".synlynk/{cfg_label} malformed")
     else:
         gaps.append(".synlynk/config.json missing")
 
@@ -524,5 +531,4 @@ def check_fleet_parity(repo_path: str = ".") -> Dict[str, Any]:
         "details": {"gaps": []},
         "remediation": "",
     }
-
 
