@@ -25,6 +25,19 @@ def isolated_db(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def allow_cwd_fallback_in_tests(monkeypatch):
+    """Default tests to the explicit CWD-fallback override.
+
+    Many existing tests do `monkeypatch.chdir(tmp_path)` to simulate an
+    isolated project directory that is never a real git repo, which
+    `_project_root()`'s post-gh:#1831 hardening now refuses to silently
+    fall back from. Tests opt into the strict behavior per-test via
+    `monkeypatch.delenv("SYNLYNK_ALLOW_CWD_FALLBACK", raising=False)`.
+    """
+    monkeypatch.setenv("SYNLYNK_ALLOW_CWD_FALLBACK", "1")
+
+
+@pytest.fixture(autouse=True)
 def isolate_local_http_token(tmp_path, monkeypatch):
     """Keep daemon/Vizor HTTP tokens out of the real home directory."""
     import synlynk.local_http_auth as http_auth
