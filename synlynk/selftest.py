@@ -18,7 +18,7 @@ from unittest.mock import patch
 
 from synlynk.dispatch import dispatch_agent, exec_command
 from synlynk.cli import build_parser
-from synlynk import discover_agents
+from synlynk import discover_agents, migrate_legacy_config_if_needed
 from synlynk.probe import cmd_probe
 from synlynk.jobs import _resolve_worktree_pr_base_branch
 from synlynk.taxonomy import COMMAND_TAXONOMY
@@ -100,8 +100,17 @@ def _ensure_workspace_scaffold(ctx: ScenarioContext) -> Path:
             check=True,
         )
         (docs_dir / ".gitkeep").touch(exist_ok=True)
+        with _chdir(workspace):
+            migrate_legacy_config_if_needed()
         subprocess.run(
-            ["git", "add", ".synlynk/config.json", "project-docs/.gitkeep"],
+            [
+                "git",
+                "add",
+                ".synlynk/workspace.json",
+                ".synlynk/billing.json",
+                ".synlynk/policy.json",
+                "project-docs/.gitkeep",
+            ],
             cwd=workspace,
             check=True,
         )

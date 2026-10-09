@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from synlynk.product_store import (
-    github_apps_dir, identity_slug_from_config, migrate_repo_apps_if_needed,
+    configured_identity_slug, github_apps_dir, identity_slug_from_config, migrate_repo_apps_if_needed,
     migrate_state_db_if_needed, product_root, resolve_github_apps_dir, state_db_path,
     types_yaml_path, write_apps_dir_for_init,
 )
@@ -24,6 +24,46 @@ def test_identity_slug_and_product_paths(tmp_path, monkeypatch):
     assert root == tmp_path / "home" / ".synlynk" / "workspaces" / "vdowrx"
     assert github_apps_dir("vdowrx") == root / "github_apps"
     assert types_yaml_path("vdowrx") == root / "types.yaml"
+
+
+def test_identity_slug_from_config_prefers_workspace_json(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    synlynk_dir = tmp_path / ".synlynk"
+    synlynk_dir.mkdir()
+    (synlynk_dir / "config.json").write_text(json.dumps({"identity_slug": "legacy-slug"}))
+    (synlynk_dir / "workspace.json").write_text(json.dumps({"identity_slug": "workspace-slug"}))
+    assert identity_slug_from_config(tmp_path) == "workspace-slug"
+
+
+def test_identity_slug_from_config_falls_back_to_legacy_config(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    synlynk_dir = tmp_path / ".synlynk"
+    synlynk_dir.mkdir()
+    (synlynk_dir / "config.json").write_text(json.dumps({"identity_slug": "legacy-slug"}))
+    assert identity_slug_from_config(tmp_path) == "legacy-slug"
+
+
+def test_configured_identity_slug_prefers_workspace_json(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    synlynk_dir = tmp_path / ".synlynk"
+    synlynk_dir.mkdir()
+    (synlynk_dir / "config.json").write_text(json.dumps({"identity_slug": "legacy-slug"}))
+    (synlynk_dir / "workspace.json").write_text(json.dumps({"identity_slug": "workspace-slug"}))
+    assert configured_identity_slug(tmp_path) == "workspace-slug"
+
+
+def test_configured_identity_slug_falls_back_to_legacy_config(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    synlynk_dir = tmp_path / ".synlynk"
+    synlynk_dir.mkdir()
+    (synlynk_dir / "config.json").write_text(json.dumps({"identity_slug": "legacy-slug"}))
+    assert configured_identity_slug(tmp_path) == "legacy-slug"
+
+
+def test_configured_identity_slug_none_without_any_config(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    (tmp_path / ".synlynk").mkdir()
+    assert configured_identity_slug(tmp_path) is None
 
 
 def test_resolve_prefers_product_then_repo_fallback(tmp_path, monkeypatch):
@@ -159,5 +199,4 @@ def test_resolve_db_path_unregistered_non_project_directory(tmp_path, monkeypatc
     # DB_PATH resolution should gracefully return prod_db path rather than failing closed
     resolved = synlynk._resolve_db_path()
     assert resolved == str(prod_db)
-
 

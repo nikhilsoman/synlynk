@@ -659,7 +659,9 @@ def _synlynk_project_docs_dir() -> str:
 
 def _dr_sync(relative_path: str) -> None:
     try:
-        cfg_path = os.path.join('.synlynk', 'config.json')
+        workspace_path = os.path.join('.synlynk', 'workspace.json')
+        legacy_path = os.path.join('.synlynk', 'config.json')
+        cfg_path = workspace_path if os.path.exists(workspace_path) else legacy_path
         if not os.path.exists(cfg_path):
             return
         with open(cfg_path) as f:
@@ -1016,6 +1018,244 @@ def _write_json_atomic(path: str, payload: dict) -> None:
             except OSError:
                 pass
 
+
+_WORKSPACE_KEYS = [
+    "org", "owner", "repo", "project_id", "identity_slug", "project_docs_dir",
+    "workspace_id", "agent_slots", "workgroup_agents", "agents", "team",
+    "sync_endpoint", "dispatch", "local_auto_threshold", "local_fallback",
+    "watch_interval_seconds", "auto_smoke_test", "auto_launch_after_wizard",
+    "dispatch_mode", "fenced_commands", "nudges", "exec_timeout_minutes",
+    "stall_timeout_minutes", "review_stall_timeout_minutes", "swarm_runners",
+    "last_housekeeping_date", "features", "repo_id", "dr_sync_path", "mode",
+]
+_BILLING_KEYS = ["budget", "harness_billing", "payment_models", "capability_sweep"]
+_POLICY_MIGRATED_KEYS = ["qa_gate_mode", "roles", "story_classification", "sentinel"]
+
+
+def _apply_workspace_defaults(config: dict) -> dict:
+    """Fill in schema-v1 defaults for a workspace config dict, in place and returned."""
+    defaults = {
+        "schema_version": 1,
+        "dispatch": {"stacking": "auto", "gate_suite_cmd": ""},
+        "local_auto_threshold": 0.5,
+        "local_fallback": "agy",
+        "watch_interval_seconds": 30,
+        "auto_smoke_test": False,
+        "auto_launch_after_wizard": True,
+        "dispatch_mode": "daily-grind",
+        "fenced_commands": ["dispatch", "jobs", "exec", "schedule"],
+        "nudges": {"enabled": True, "dismissed_ids": [], "last_shown": {}},
+        "org": None,
+        "owner": None,
+        "repo": None,
+        "project_id": None,
+        "identity_slug": None,
+        "project_docs_dir": "project-docs",
+        "agent_slots": {"claude": "claude", "agy": "agy", "codex": "codex", "grok": "grok"},
+        "workgroup_agents": [],
+        "last_housekeeping_date": None,
+        "team": None,
+        "sync_endpoint": None,
+        "exec_timeout_minutes": 30,
+        "stall_timeout_minutes": 30,
+        "swarm_runners": {"default": "local", "enabled": ["local"], "timeout_seconds": 900},
+        "review_stall_timeout_minutes": 90,
+        "agents": {},
+        "features": {},
+        "repo_id": None,
+        "dr_sync_path": None,
+        "mode": "solo",
+    }
+    if not isinstance(config, dict):
+        config = {}
+    for key, val in defaults.items():
+        if key not in config:
+            config[key] = val
+    for key, val in defaults["dispatch"].items():
+        if key not in config.get("dispatch", {}):
+            config.setdefault("dispatch", {})[key] = val
+    for key, val in defaults["nudges"].items():
+        if key not in config.get("nudges", {}):
+            config.setdefault("nudges", {})[key] = val
+    return config
+
+
+def load_workspace() -> dict:
+    """Load .synlynk/workspace.json with schema-v1 defaults."""
+    config_file = ".synlynk/workspace.json"
+    if not os.path.exists(config_file):
+        return _apply_workspace_defaults({})
+    try:
+        with open(config_file) as f:
+            config = json.load(f)
+        if not isinstance(config, dict):
+            return _apply_workspace_defaults({})
+        return _apply_workspace_defaults(config)
+    except (json.JSONDecodeError, IOError):
+        return _apply_workspace_defaults({})
+
+
+def _apply_billing_defaults(config: dict) -> dict:
+    """Fill in schema-v1 defaults for a billing config dict, in place and returned."""
+    defaults = {
+        "schema_version": 1,
+        "budget": {"limit_usd": 10.0, "limit_requests": 100},
+        "payment_models": {},
+        "harness_billing": _default_harness_billing(),
+        "capability_sweep": {"cost_cap_usd": 10.0},
+    }
+    if not isinstance(config, dict):
+        config = {}
+    has_harness_billing = "harness_billing" in config
+    for key, val in defaults.items():
+        if key not in config:
+            config[key] = {} if key == "harness_billing" else val
+    for key, val in defaults["budget"].items():
+        if key not in config.get("budget", {}):
+            config.setdefault("budget", {})[key] = val
+    if not isinstance(config.get("harness_billing"), dict):
+        config["harness_billing"] = _default_harness_billing()
+    elif not config["harness_billing"] and has_harness_billing:
+        config["harness_billing"] = _default_harness_billing()
+    for billing in config["harness_billing"].values():
+        if isinstance(billing, dict):
+            billing.setdefault("payment_mode", "pay_as_you_go")
+            billing.setdefault("monthly_base_fee_usd", billing.get("subscription_fee_usd", 0.0))
+            billing.setdefault("projected_monthly_tokens", 10_000_000)
+            billing.setdefault("allow_extra_usage", False)
+            billing.setdefault("extra_usage_cap_usd", None)
+    return config
+
+
+def load_billing() -> dict:
+    """Load .synlynk/billing.json with schema-v1 defaults."""
+    config_file = ".synlynk/billing.json"
+    if not os.path.exists(config_file):
+        return {
+            "schema_version": 1,
+            "budget": {"limit_usd": 10.0, "limit_requests": 100},
+            "payment_models": {},
+            "harness_billing": _default_harness_billing(),
+            "capability_sweep": {"cost_cap_usd": 10.0},
+        }
+    try:
+        with open(config_file) as f:
+            config = json.load(f)
+        if not isinstance(config, dict):
+            return {
+                "schema_version": 1,
+                "budget": {"limit_usd": 10.0, "limit_requests": 100},
+                "payment_models": {},
+                "harness_billing": _default_harness_billing(),
+                "capability_sweep": {"cost_cap_usd": 10.0},
+            }
+        return _apply_billing_defaults(config)
+    except (json.JSONDecodeError, IOError):
+        return {
+            "schema_version": 1,
+            "budget": {"limit_usd": 10.0, "limit_requests": 100},
+            "payment_models": {},
+            "harness_billing": _default_harness_billing(),
+            "capability_sweep": {"cost_cap_usd": 10.0},
+        }
+
+
+def _read_raw_policy() -> dict:
+    """Read .synlynk/policy.json without defaults, or return {} if absent/corrupt."""
+    try:
+        with open(".synlynk/policy.json") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _read_policy_migrated_fields(policy: dict | None = None) -> dict:
+    """Read the legacy fields that are migrated into policy.json."""
+    try:
+        from synlynk.capability_roles import _load_capability_roles
+        capability_roles = _load_capability_roles()
+    except ImportError:
+        capability_roles = None
+    if policy is None:
+        policy = _read_raw_policy()
+    result = {
+        "roles": capability_roles if capability_roles is not None else _default_roles_map(),
+        "story_classification": {"method": "heuristic"},
+        "qa_gate_mode": "block-only",
+        "sentinel": {
+            "dedup_window_seconds": 86400,
+            "active_ttl_seconds": {"CRITICAL": 180 * 86400, "WARN": 180 * 86400, "INFO": 180 * 86400},
+        },
+    }
+    if capability_roles is None and "roles" in policy:
+        result["roles"] = policy["roles"]
+    for key in ("story_classification", "qa_gate_mode", "sentinel"):
+        if key in policy:
+            result[key] = policy[key]
+    return result
+
+
+def _split_legacy_config(legacy: dict, existing_policy: dict) -> tuple[dict, dict, dict]:
+    """Partition a legacy config.json dict into workspace/billing/policy payloads.
+
+    Pure, no I/O. Workspace is the catch-all so unclaimed legacy keys are preserved.
+    """
+    claimed = set(_BILLING_KEYS) | set(_POLICY_MIGRATED_KEYS)
+    workspace_payload = {"schema_version": 1}
+    workspace_payload.update({k: v for k, v in legacy.items() if k not in claimed})
+
+    billing_payload = {"schema_version": 1}
+    billing_payload.update({k: legacy[k] for k in _BILLING_KEYS if k in legacy})
+
+    policy_payload = dict(existing_policy)
+    policy_payload.update({k: legacy[k] for k in _POLICY_MIGRATED_KEYS if k in legacy})
+    policy_payload.setdefault("schema_version", 1)
+
+    return workspace_payload, billing_payload, policy_payload
+
+
+def migrate_legacy_config_if_needed() -> bool:
+    """Explicitly split .synlynk/config.json into workspace, billing, and policy files once."""
+    legacy_path = ".synlynk/config.json"
+    workspace_path = ".synlynk/workspace.json"
+    billing_path = ".synlynk/billing.json"
+    policy_path = ".synlynk/policy.json"
+
+    if not os.path.exists(legacy_path):
+        return False
+    if os.path.exists(workspace_path) or os.path.exists(billing_path):
+        return False
+
+    try:
+        with open(legacy_path) as f:
+            legacy = json.load(f)
+    except (json.JSONDecodeError, IOError):
+        return False
+    if not isinstance(legacy, dict):
+        return False
+
+    # A present but corrupt policy file aborts the whole migration. A missing
+    # policy file is valid and uses an empty policy as its base.
+    if os.path.exists(policy_path):
+        try:
+            with open(policy_path) as f:
+                existing_policy = json.load(f)
+            if not isinstance(existing_policy, dict):
+                return False
+        except (json.JSONDecodeError, IOError):
+            return False
+    else:
+        existing_policy = {}
+
+    workspace_payload, billing_payload, policy_payload = _split_legacy_config(legacy, existing_policy)
+
+    _write_json_atomic(workspace_path, workspace_payload)
+    _write_json_atomic(billing_path, billing_payload)
+    _write_json_atomic(policy_path, policy_payload)
+    os.replace(legacy_path, legacy_path + ".bak")
+    return True
+
 # ANSI helpers used by the wizard.
 _BOLD = "\033[1m"
 _GREEN = "\033[32m"
@@ -1030,11 +1270,14 @@ _MAGENTA = "\033[35m"
 def _docs_dir() -> str:
     """Returns the configured project docs directory (defaults to 'project-docs').
 
-    Reads project_docs_dir from .synlynk/config.json. Pass --docs-dir to
-    synlynk init to set a custom location (e.g. '.' for repos that keep docs
-    at the root).
+    Reads project_docs_dir from .synlynk/workspace.json (falls back to the
+    legacy .synlynk/config.json for projects not yet migrated). Pass
+    --docs-dir to synlynk init to set a custom location (e.g. '.' for repos
+    that keep docs at the root).
     """
-    config_file = ".synlynk/config.json"
+    workspace_file = ".synlynk/workspace.json"
+    legacy_file = ".synlynk/config.json"
+    config_file = workspace_file if os.path.exists(workspace_file) else legacy_file
     if os.path.exists(config_file):
         try:
             with open(config_file) as f:
@@ -1078,97 +1321,50 @@ def _default_harness_billing() -> dict:
 
 
 def load_config() -> dict:
-    """Loads .synlynk/config.json with schema-v1 defaults."""
-    capability_roles = _load_capability_roles()
-    defaults = {
-        "schema_version": 1,
-        "budget": {"limit_usd": 10.0, "limit_requests": 100},
-        "dispatch": {"stacking": "auto", "gate_suite_cmd": ""},
-        "local_auto_threshold": 0.5,
-        "local_fallback": "agy",
-        "watch_interval_seconds": 30,
-        "auto_smoke_test": False,
-        "auto_launch_after_wizard": True,
-        "dispatch_mode": "daily-grind",
-        "fenced_commands": ["dispatch", "jobs", "exec", "schedule"],
-        "nudges": {"enabled": True, "dismissed_ids": [], "last_shown": {}},
-        "org": None,
-        "owner": None,
-        "repo": None,
-        "project_id": None,
-        "identity_slug": None,
-        "project_docs_dir": "project-docs",
-        "agent_slots": {"claude": "claude", "agy": "agy", "codex": "codex", "grok": "grok"},  # AGY CLI binary is named 'agy' — update when binary is renamed
-        "workgroup_agents": [],
-        "last_housekeeping_date": None,
-        "team": None,
-        "sync_endpoint": None,
-        "exec_timeout_minutes": 30,
-        "stall_timeout_minutes": 30,
-        "swarm_runners": {"default": "local", "enabled": ["local"], "timeout_seconds": 900},
-        "review_stall_timeout_minutes": 90,
-        "agents": {},
-        "payment_models": {},
-        "harness_billing": _default_harness_billing(),
-        "capability_sweep": {"cost_cap_usd": 10.0},
-        "roles": capability_roles if capability_roles is not None else _default_roles_map(),
-        "story_classification": {"method": "heuristic"},
-        "qa_gate_mode": "block-only",
-        "sentinel": {
-            "dedup_window_seconds": 86400,
-            "active_ttl_seconds": {"CRITICAL": 180 * 86400, "WARN": 180 * 86400, "INFO": 180 * 86400},
-        },
-    }
-    config_file = ".synlynk/config.json"
-    if not os.path.exists(config_file):
-        return defaults
-    try:
-        with open(config_file) as f:
-            config = json.load(f)
-        has_harness_billing = "harness_billing" in config
-        for key, val in defaults.items():
-            if key not in config:
-                # Existing project configs retain legacy pay-as-you-go behavior
-                # unless they explicitly opt into the seeded harness billing
-                # block.  A brand-new config still gets the quad-harness seed
-                # through ``defaults`` above.
-                config[key] = {} if key == "harness_billing" else val
-        if capability_roles is not None:
-            config["roles"] = capability_roles
-        elif "roles" not in config:
-            config["roles"] = _default_roles_map()
-        for key, val in defaults["budget"].items():
-            if key not in config.get("budget", {}):
-                config.setdefault("budget", {})[key] = val
-        for key, val in defaults["dispatch"].items():
-            if key not in config.get("dispatch", {}):
-                config.setdefault("dispatch", {})[key] = val
-        for key, val in defaults["nudges"].items():
-            if key not in config.get("nudges", {}):
-                config.setdefault("nudges", {})[key] = val
-        if not isinstance(config.get("harness_billing"), dict):
-            config["harness_billing"] = _default_harness_billing()
-        elif not config["harness_billing"] and has_harness_billing:
-            config["harness_billing"] = _default_harness_billing()
-        for billing in config["harness_billing"].values():
-            if isinstance(billing, dict):
-                billing.setdefault("payment_mode", "pay_as_you_go")
-                billing.setdefault("monthly_base_fee_usd", billing.get("subscription_fee_usd", 0.0))
-                billing.setdefault("projected_monthly_tokens", 10_000_000)
-                billing.setdefault("allow_extra_usage", False)
-                billing.setdefault("extra_usage_cap_usd", None)
-        return config
-    except (json.JSONDecodeError, IOError):
-        return defaults
+    """Read the composed config without writing, renaming, or deleting files."""
+    workspace_path = ".synlynk/workspace.json"
+    billing_path = ".synlynk/billing.json"
+    legacy_path = ".synlynk/config.json"
+
+    config = {"schema_version": 1}
+
+    if not os.path.exists(workspace_path) and not os.path.exists(billing_path) and os.path.exists(legacy_path):
+        legacy = None
+        try:
+            with open(legacy_path) as f:
+                legacy = json.load(f)
+        except (json.JSONDecodeError, IOError):
+            legacy = None
+        if isinstance(legacy, dict):
+            existing_policy = _read_raw_policy()
+            workspace_payload, billing_payload, policy_payload = _split_legacy_config(legacy, existing_policy)
+            config.update(_apply_workspace_defaults(workspace_payload))
+            config.update(_apply_billing_defaults(billing_payload))
+            config.update(_read_policy_migrated_fields(policy_payload))
+            return config
+
+    config.update(load_workspace())
+    config.update(load_billing())
+    config.update(_read_policy_migrated_fields())
+    return config
 
 
-def cmd_config_set(key: str, value: str) -> None:
-    """Set a top-level config key in .synlynk/config.json."""
-    config_path = ".synlynk/config.json"
-    config = load_config()
-    config[key] = value
-    _write_json_atomic(config_path, config)
-    print(f"  ✓ {key} = {value!r} saved to .synlynk/config.json")
+def cmd_config_set(key: str, value) -> None:
+    """Set a top-level config key, routed to its owning split config file."""
+    migrate_legacy_config_if_needed()
+    if key in _BILLING_KEYS:
+        path = ".synlynk/billing.json"
+        data = load_billing()
+    elif key in _POLICY_MIGRATED_KEYS:
+        path = ".synlynk/policy.json"
+        data = _read_raw_policy()
+        data.setdefault("schema_version", 1)
+    else:
+        path = ".synlynk/workspace.json"
+        data = load_workspace()
+    data[key] = value
+    _write_json_atomic(path, data)
+    print(f"  ✓ {key} = {value!r} saved to {path}")
 
 
 
@@ -1240,9 +1436,10 @@ def cmd_exit(dry_run: bool = True, remove_docs: bool = False) -> int:
         pass
 
     cfg = {}
-    if os.path.exists(".synlynk/config.json"):
+    _cfg_path = ".synlynk/workspace.json" if os.path.exists(".synlynk/workspace.json") else ".synlynk/config.json"
+    if os.path.exists(_cfg_path):
         try:
-            cfg = json.load(open(".synlynk/config.json"))
+            cfg = json.load(open(_cfg_path))
         except Exception:
             pass
 
@@ -1357,9 +1554,10 @@ def cmd_repair(dry_run: bool = True) -> int:
     Dry-run by default — pass --confirm to execute.
     """
     cfg = {}
-    if os.path.exists(".synlynk/config.json"):
+    _cfg_path = ".synlynk/workspace.json" if os.path.exists(".synlynk/workspace.json") else ".synlynk/config.json"
+    if os.path.exists(_cfg_path):
         try:
-            cfg = json.load(open(".synlynk/config.json"))
+            cfg = json.load(open(_cfg_path))
         except Exception:
             pass
 
@@ -1810,8 +2008,9 @@ cmd_harness_configure = cmd_agent_configure
 
 def _run_daily_housekeeping() -> None:
     """Run the once-per-day drift check triggered by exec flow."""
-    config_path = ".synlynk/config.json"
-    if not os.path.exists(config_path):
+    workspace_path = ".synlynk/workspace.json"
+    legacy_path = ".synlynk/config.json"
+    if not os.path.exists(workspace_path) and not os.path.exists(legacy_path):
         return
 
     config = load_config()
@@ -1875,7 +2074,12 @@ def _run_daily_housekeeping() -> None:
             db_conn.close()
 
     config["last_housekeeping_date"] = today
-    _write_json_atomic(config_path, config)
+    if os.path.exists(workspace_path):
+        workspace_data = load_workspace()
+        workspace_data["last_housekeeping_date"] = today
+        _write_json_atomic(workspace_path, workspace_data)
+    else:
+        _write_json_atomic(legacy_path, config)
 
     if not printed:
         return
@@ -2093,13 +2297,36 @@ def detect_remote_owner_repo() -> tuple:
 
 
 def _update_config(updates: dict) -> None:
-    """Merges updates into .synlynk/config.json in-place."""
-    config_file = ".synlynk/config.json"
+    """Merges updates into the owning split config file(s) (workspace.json / billing.json / policy.json)."""
     if not os.path.exists(".synlynk"):
         return
-    config = load_config()
-    config.update(updates)
-    _write_json_atomic(config_file, config)
+
+    workspace_updates = {}
+    billing_updates = {}
+    policy_updates = {}
+    for key, value in updates.items():
+        if key in _BILLING_KEYS:
+            billing_updates[key] = value
+        elif key in _POLICY_MIGRATED_KEYS:
+            policy_updates[key] = value
+        else:
+            workspace_updates[key] = value
+
+    if workspace_updates:
+        workspace_data = load_workspace()
+        workspace_data.update(workspace_updates)
+        _write_json_atomic(".synlynk/workspace.json", workspace_data)
+
+    if billing_updates:
+        billing_data = load_billing()
+        billing_data.update(billing_updates)
+        _write_json_atomic(".synlynk/billing.json", billing_data)
+
+    if policy_updates:
+        policy_data = _read_raw_policy()
+        policy_data.setdefault("schema_version", 1)
+        policy_data.update(policy_updates)
+        _write_json_atomic(".synlynk/policy.json", policy_data)
 
 
 # Task 3-5: Repo scanning, maturity detection, section signals, semantic matching, GH ID extraction

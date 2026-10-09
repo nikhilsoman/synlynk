@@ -506,7 +506,7 @@ class Capability:
 
 class FeatureFlags:
     """Tiered feature flags, orthogonal to RBAC. Reads a static `features` block
-    from .synlynk/config.json: {"features": {"<flag>": ["individual", "team", ...]}}.
+    from .synlynk/workspace.json: {"features": {"<flag>": ["individual", "team", ...]}}.
     A missing config, missing key, or missing flag is treated as disabled
     (fail-closed) rather than an error.
     """
@@ -514,11 +514,11 @@ class FeatureFlags:
     @staticmethod
     def is_enabled(flag: str, tier: str) -> bool:
         try:
-            with open(".synlynk/config.json") as f:
-                config = json.load(f)
+            with open(".synlynk/workspace.json") as f:
+                workspace = json.load(f)
         except Exception:
             return False
-        tiers_for_flag = config.get("features", {}).get(flag, [])
+        tiers_for_flag = workspace.get("features", {}).get(flag, [])
         return tier in tiers_for_flag
 
 
