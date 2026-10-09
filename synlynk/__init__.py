@@ -1129,15 +1129,33 @@ def load_billing() -> dict:
     """Load .synlynk/billing.json with schema-v1 defaults."""
     config_file = ".synlynk/billing.json"
     if not os.path.exists(config_file):
-        return _apply_billing_defaults({})
+        return {
+            "schema_version": 1,
+            "budget": {"limit_usd": 10.0, "limit_requests": 100},
+            "payment_models": {},
+            "harness_billing": _default_harness_billing(),
+            "capability_sweep": {"cost_cap_usd": 10.0},
+        }
     try:
         with open(config_file) as f:
             config = json.load(f)
         if not isinstance(config, dict):
-            return _apply_billing_defaults({})
+            return {
+                "schema_version": 1,
+                "budget": {"limit_usd": 10.0, "limit_requests": 100},
+                "payment_models": {},
+                "harness_billing": _default_harness_billing(),
+                "capability_sweep": {"cost_cap_usd": 10.0},
+            }
         return _apply_billing_defaults(config)
     except (json.JSONDecodeError, IOError):
-        return _apply_billing_defaults({})
+        return {
+            "schema_version": 1,
+            "budget": {"limit_usd": 10.0, "limit_requests": 100},
+            "payment_models": {},
+            "harness_billing": _default_harness_billing(),
+            "capability_sweep": {"cost_cap_usd": 10.0},
+        }
 
 
 def _read_raw_policy() -> dict:
