@@ -1,6 +1,8 @@
 import sqlite3
 
-from synlynk.state_inventory import inventory
+import pytest
+
+from synlynk.state_inventory import _read_stories, inventory
 
 
 def test_inventory_is_read_only_and_classifies_repo_artifact(tmp_path):
@@ -248,3 +250,82 @@ def test_reconcile_plan_detects_conflict(tmp_path):
     assert plan["to_add"] == []
     assert plan["already_present"] == []
     assert [r["story_id"] for r in plan["conflicts"]] == ["s-1"]
+
+
+def test_apply_reconcile_backs_up_and_merges(tmp_path):
+    from synlynk.state_inventory import apply_reconcile
+
+    shard = tmp_path / "shard" / "state.db"
+    canonical = tmp_path / "canonical" / "state.db"
+    _make_stories_db(shard, [("s-1", "Story A", None), ("s-2", "Story B", None)])
+    _make_stories_db(canonical, [("c-1", "Story C", None)])
+
+    result = apply_reconcile(shard, canonical)
+
+    assert result["added"] == 2
+    assert result["skipped_conflicts"] == 0
+    backups = list(canonical.parent.glob("state.db.pre-reconcile-*.bak"))
+    assert len(backups) == 1
+
+    merged = _read_stories(canonical)
+    assert set(merged.keys()) == {"c-1", "s-1", "s-2"}
+
+
+def test_apply_reconcile_skips_conflicts_by_default(tmp_path):
+    from synlynk.state_inventory import apply_reconcile
+
+    shard = tmp_path / "shard" / "state.db"
+    canonical = tmp_path / "canonical" / "state.db"
+    _make_stories_db(shard, [("s-1", "Story A, shard version", None)])
+    _make_stories_db(canonical, [("s-1", "Story A, canonical version", None)])
+
+    result = apply_reconcile(shard, canonical)
+
+    assert result["added"] == 0
+    assert result["skipped_conflicts"] == 1
+    merged = _read_stories(canonical)
+    assert merged["s-1"]["title"] == "Story A, canonical version"
+
+
+def test_apply_reconcile_raises_on_conflict_without_ignore_flag(tmp_path):
+    from synlynk.state_inventory import apply_reconcile
+
+    shard = tmp_path / "shard" / "state.db"
+    canonical = tmp_path / "canonical" / "state.db"
+    _make_stories_db(shard, [("s-1", "Story A, shard version", None)])
+    _make_stories_db(canonical, [("s-1", "Story A, canonical version", None)])
+
+    with pytest.raises(ValueError, match="conflict"):
+        apply_reconcile(shard, canonical, ignore_conflicts=False)
+
+
+def test_apply_reconcile_rolls_back_on_failure(tmp_path, monkeypatch):
+    from synlynk.state_inventory import apply_reconcile
+
+    shard = tmp_path / "shard" / "state.db"
+    canonical = tmp_path / "canonical" / "state.db"
+    _make_stories_db(shard, [("s-1", "Story A", None)])
+    _make_stories_db(canonical, [("c-1", "Story C", None)])
+
+    before = _read_stories(canonical)
+
+    import sqlite3 as sqlite3_module
+    real_connect = sqlite3_module.connect
+
+    class _BoomConnection(sqlite3_module.Connection):
+        def execute(self, sql, *a, **k):
+            if sql.strip().upper().startswith("INSERT"):
+                raise sqlite3_module.OperationalError("simulated failure")
+            return super().execute(sql, *a, **k)
+
+    def _boom(*args, **kwargs):
+        kwargs["factory"] = _BoomConnection
+        return real_connect(*args, **kwargs)
+
+    monkeypatch.setattr(sqlite3_module, "connect", _boom)
+
+    with pytest.raises(sqlite3_module.OperationalError):
+        apply_reconcile(shard, canonical)
+
+    after = _read_stories(canonical)
+    assert after == before

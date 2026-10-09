@@ -5,7 +5,9 @@ import datetime
 import hashlib
 import json
 import os
+import shutil
 import sqlite3
+import time
 from pathlib import Path
 
 
@@ -192,6 +194,52 @@ def _reconcile_plan(shard_path: Path, canonical_path: Path) -> dict:
             conflicts.append(shard_row)
 
     return {"to_add": to_add, "already_present": already_present, "conflicts": conflicts}
+
+
+def apply_reconcile(shard_path: Path, canonical_path: Path, *, ignore_conflicts: bool = True) -> dict:
+    """Merge shard_path's stories into canonical_path, backing up canonical first.
+
+    Conflicting story_ids (same id, different title) are never overwritten.
+    With ignore_conflicts=True (the default for this function; the CLI
+    defaults to requiring an explicit flag — see Task 6) they are counted
+    and skipped. With ignore_conflicts=False, a ValueError is raised instead
+    and nothing is written.
+    """
+    plan = _reconcile_plan(shard_path, canonical_path)
+    if plan["conflicts"] and not ignore_conflicts:
+        raise ValueError(
+            f"{len(plan['conflicts'])} conflict(s) found; re-run with ignore_conflicts=True "
+            "to skip them, or resolve manually first"
+        )
+
+    backup_path = canonical_path.parent / f"{canonical_path.name}.pre-reconcile-{int(time.time())}.bak"
+    shutil.copy2(canonical_path, backup_path)
+
+    conn = sqlite3.connect(canonical_path)
+    try:
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(stories)")}
+        insert_cols = ["story_id", "title"]
+        if "gh_issue" in cols:
+            insert_cols.append("gh_issue")
+        placeholders = ", ".join("?" for _ in insert_cols)
+        with conn:
+            for row in plan["to_add"]:
+                values = [row.get(c) for c in insert_cols]
+                conn.execute(
+                    f"INSERT INTO stories ({', '.join(insert_cols)}) VALUES ({placeholders})",
+                    values,
+                )
+    except Exception:
+        conn.close()
+        raise
+    conn.close()
+
+    return {
+        "added": len(plan["to_add"]),
+        "already_present": len(plan["already_present"]),
+        "skipped_conflicts": len(plan["conflicts"]),
+        "backup_path": str(backup_path),
+    }
 
 
 def inventory(repo_root: str | Path = ".", *, all_artifacts: bool = False) -> list[dict]:
