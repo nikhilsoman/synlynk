@@ -256,3 +256,133 @@ def ranked_harness_for_task(
     finally:
         if owned:
             db.close()
+
+
+_TASK_TYPE_TO_DISCIPLINE = {
+    "implement": "backend",
+    "refactor": "backend",
+    "cli-plumbing": "backend",
+    "infra": "backend",
+    "canvas": "backend",
+    "js": "backend",
+    "test": "testing",
+    "css": "backend",
+    "templates": "backend",
+    "content": "backend",
+    "subpages": "backend",
+    "review": "architecture",
+    "architecture-review": "architecture",
+    "pm": "architecture",
+    "brainstorm": "architecture",
+    "deploy": "architecture",
+    "gh_write": "backend",
+}
+
+
+def _discipline_for_task_type(task_type: str) -> str | None:
+    """Map a task type to its capability-rating discipline, if known."""
+    return _TASK_TYPE_TO_DISCIPLINE.get(task_type)
+
+
+def _median_cost_per_pr(conn, harness: str) -> float | None:
+    """Return the median total cost across merged PRs for a harness."""
+    rows = conn.execute(
+        """SELECT SUM(total_cost_usd) FROM cost_entries
+            WHERE harness = ? AND pr_number IS NOT NULL
+            GROUP BY pr_number""",
+        (harness,),
+    ).fetchall()
+    costs = sorted(row[0] for row in rows if row[0] is not None)
+    if not costs:
+        return None
+    mid = len(costs) // 2
+    return costs[mid] if len(costs) % 2 else (costs[mid - 1] + costs[mid]) / 2
+
+
+def capability_report(policy_path: str = ".synlynk/policy.json", *, conn=None) -> dict:
+    """Return proposed task-allocation changes without writing policy data."""
+    import json
+    import sys
+
+    with open(policy_path) as handle:
+        policy = json.load(handle)
+
+    min_sample_size = policy.get("capability_policy", {}).get("min_sample_size", 5)
+    task_allocation = policy.get("overrides", {}).get("dev_authority", {}).get(
+        "task_allocation", {}
+    )
+
+    db, owned = _connection(conn)
+    try:
+        diff = {}
+        for task_type, entry in task_allocation.items():
+            incumbent = entry.get("harness")
+            discipline = _discipline_for_task_type(task_type)
+            if discipline is None:
+                print(
+                    f"WARN: no discipline mapping for task_type '{task_type}', skipping",
+                    file=sys.stderr,
+                )
+                continue
+
+            harnesses = [
+                row[0] for row in db.execute(
+                    "SELECT DISTINCT agent FROM capability_ratings WHERE discipline = ?",
+                    (discipline,),
+                ).fetchall()
+            ]
+            stats = {}
+            for harness in harnesses:
+                rows = db.execute(
+                    "SELECT pr_review_cycles FROM capability_ratings "
+                    "WHERE agent = ? AND discipline = ?",
+                    (harness, discipline),
+                ).fetchall()
+                cycles = sorted(row[0] for row in rows if row[0] is not None)
+                if len(cycles) < min_sample_size:
+                    continue
+                median_cost = _median_cost_per_pr(db, harness)
+                if median_cost is None:
+                    continue
+                mid = len(cycles) // 2
+                median_cycles = (
+                    cycles[mid]
+                    if len(cycles) % 2
+                    else (cycles[mid - 1] + cycles[mid]) / 2
+                )
+                stats[harness] = {
+                    "sample_count": len(cycles),
+                    "median_cycles": median_cycles,
+                    "median_cost": median_cost,
+                }
+
+            incumbent_stats = stats.get(incumbent)
+            best_harness, best_stats = None, None
+            for harness, candidate_stats in stats.items():
+                if harness == incumbent:
+                    continue
+                if incumbent_stats and not (
+                    candidate_stats["median_cycles"] < incumbent_stats["median_cycles"]
+                    and candidate_stats["median_cost"] < incumbent_stats["median_cost"]
+                ):
+                    continue
+                if best_stats is None or candidate_stats["median_cycles"] < best_stats["median_cycles"]:
+                    best_harness, best_stats = harness, candidate_stats
+
+            if best_harness is not None:
+                diff[task_type] = {
+                    "incumbent": incumbent,
+                    "proposed": best_harness,
+                    "incumbent_stats": incumbent_stats,
+                    "candidate_stats": best_stats,
+                    "reason": (
+                        f"{best_harness}: {best_stats['median_cycles']} cycles/"
+                        f"${best_stats['median_cost']:.2f} vs {incumbent}: "
+                        f"{incumbent_stats['median_cycles'] if incumbent_stats else 'n/a'} cycles "
+                        f"(n={best_stats['sample_count']})"
+                    ),
+                }
+        return diff
+    finally:
+        if owned:
+            db.close()

@@ -49,7 +49,8 @@ def _ensure_cost_entries(conn):
             harness TEXT,
             story_id TEXT,
             total_cost_usd REAL,
-            cost_source TEXT NOT NULL
+            cost_source TEXT NOT NULL,
+            pr_number INTEGER
         )"""
     )
 
@@ -122,3 +123,145 @@ def test_ranked_harness_for_task_falls_back_below_sample_size():
 
     result = ranked_harness_for_task("implement", ["codex", "grok"], conn=conn)
     assert result is None
+
+
+def test_discipline_for_task_type_known_mapping():
+    from synlynk.capability import _discipline_for_task_type
+
+    assert _discipline_for_task_type("implement") == "backend"
+    assert _discipline_for_task_type("test") == "testing"
+    assert _discipline_for_task_type("review") == "architecture"
+
+
+def test_discipline_for_task_type_unknown_returns_none():
+    from synlynk.capability import _discipline_for_task_type
+
+    assert _discipline_for_task_type("not-a-real-task-type") is None
+
+
+def test_median_cost_per_pr_sums_rows_sharing_a_pr_before_median():
+    from synlynk.capability import _median_cost_per_pr
+
+    conn = sqlite3.connect(":memory:")
+    _ensure_cost_entries(conn)
+    conn.execute(
+        "INSERT INTO cost_entries (session_date, harness, story_id, cost_source, total_cost_usd, pr_number) "
+        "VALUES ('2026-10-01', 'codex', 's1', 'test', 6.0, 100)"
+    )
+    conn.execute(
+        "INSERT INTO cost_entries (session_date, harness, story_id, cost_source, total_cost_usd, pr_number) "
+        "VALUES ('2026-10-01', 'codex', 's1', 'test', 3.0, 100)"
+    )
+    conn.execute(
+        "INSERT INTO cost_entries (session_date, harness, story_id, cost_source, total_cost_usd, pr_number) "
+        "VALUES ('2026-10-02', 'codex', 's2', 'test', 5.0, 101)"
+    )
+    conn.commit()
+
+    assert _median_cost_per_pr(conn, "codex") == pytest.approx(7.0)
+
+
+def test_median_cost_per_pr_ignores_null_pr_number():
+    from synlynk.capability import _median_cost_per_pr
+
+    conn = sqlite3.connect(":memory:")
+    _ensure_cost_entries(conn)
+    conn.execute(
+        "INSERT INTO cost_entries (session_date, harness, story_id, cost_source, total_cost_usd, pr_number) "
+        "VALUES ('2026-10-01', 'codex', 's1', 'test', 999.0, NULL)"
+    )
+    conn.commit()
+
+    assert _median_cost_per_pr(conn, "codex") is None
+
+
+def test_capability_report_proposes_better_candidate(tmp_path):
+    from synlynk.db_schema import _DB_SCHEMA, _DB_SCORES_VIEW
+    from synlynk.capability import capability_report
+    import json
+
+    conn = sqlite3.connect(":memory:")
+    conn.executescript(_DB_SCHEMA)
+    conn.executescript(_DB_SCORES_VIEW)
+    _ensure_cost_entries(conn)
+    policy_path = tmp_path / "policy.json"
+    policy_path.write_text(json.dumps({
+        "capability_policy": {"min_sample_size": 5},
+        "overrides": {"dev_authority": {"task_allocation": {
+            "implement": {"harness": "codex", "fallback": ["grok"]},
+        }}},
+    }))
+
+    for i in range(5):
+        story_id = f"story-codex-{i}"
+        conn.execute(
+            "INSERT INTO capability_ratings (story_id, agent, discipline, pr_review_cycles) "
+            "VALUES (?, 'codex', 'backend', 3)", (story_id,))
+        conn.execute(
+            "INSERT INTO cost_entries (session_date, harness, story_id, cost_source, total_cost_usd, pr_number) "
+            "VALUES ('2026-10-01', 'codex', ?, 'test', 10.0, ?)", (story_id, 200 + i))
+    for i in range(5):
+        story_id = f"story-grok-{i}"
+        conn.execute(
+            "INSERT INTO capability_ratings (story_id, agent, discipline, pr_review_cycles) "
+            "VALUES (?, 'grok', 'backend', 1)", (story_id,))
+        conn.execute(
+            "INSERT INTO cost_entries (session_date, harness, story_id, cost_source, total_cost_usd, pr_number) "
+            "VALUES ('2026-10-01', 'grok', ?, 'test', 4.0, ?)", (story_id, 300 + i))
+    conn.commit()
+
+    result = capability_report(policy_path=str(policy_path), conn=conn)
+
+    assert "implement" in result
+    entry = result["implement"]
+    assert entry["incumbent"] == "codex"
+    assert entry["proposed"] == "grok"
+    assert entry["candidate_stats"]["sample_count"] == 5
+    assert entry["candidate_stats"]["median_cycles"] == pytest.approx(1.0)
+    assert entry["candidate_stats"]["median_cost"] == pytest.approx(4.0)
+
+
+def test_capability_report_omits_unchanged_task_types(tmp_path):
+    from synlynk.db_schema import _DB_SCHEMA, _DB_SCORES_VIEW
+    from synlynk.capability import capability_report
+    import json
+
+    conn = sqlite3.connect(":memory:")
+    conn.executescript(_DB_SCHEMA)
+    conn.executescript(_DB_SCORES_VIEW)
+    _ensure_cost_entries(conn)
+    policy_path = tmp_path / "policy.json"
+    policy_path.write_text(json.dumps({
+        "capability_policy": {"min_sample_size": 5},
+        "overrides": {"dev_authority": {"task_allocation": {
+            "implement": {"harness": "codex", "fallback": []},
+        }}},
+    }))
+    conn.commit()
+
+    result = capability_report(policy_path=str(policy_path), conn=conn)
+    assert "implement" not in result
+
+
+def test_capability_report_skips_unmapped_task_type_with_warning(tmp_path, capsys):
+    from synlynk.db_schema import _DB_SCHEMA, _DB_SCORES_VIEW
+    from synlynk.capability import capability_report
+    import json
+
+    conn = sqlite3.connect(":memory:")
+    conn.executescript(_DB_SCHEMA)
+    conn.executescript(_DB_SCORES_VIEW)
+    _ensure_cost_entries(conn)
+    policy_path = tmp_path / "policy.json"
+    policy_path.write_text(json.dumps({
+        "capability_policy": {"min_sample_size": 5},
+        "overrides": {"dev_authority": {"task_allocation": {
+            "totally-unmapped-type": {"harness": "codex", "fallback": []},
+        }}},
+    }))
+    conn.commit()
+
+    result = capability_report(policy_path=str(policy_path), conn=conn)
+    assert result == {}
+    captured = capsys.readouterr()
+    assert "no discipline mapping for task_type 'totally-unmapped-type'" in captured.err
