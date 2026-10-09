@@ -1299,6 +1299,14 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
                 conn.execute("ALTER TABLE daemon_jobs ADD COLUMN gh_write_evidence TEXT")
             except sqlite3.OperationalError:
                 pass
+        if "gh_write_verification_attempts" not in daemon_job_cols:
+            try:
+                conn.execute(
+                    "ALTER TABLE daemon_jobs ADD COLUMN "
+                    "gh_write_verification_attempts INTEGER NOT NULL DEFAULT 0"
+                )
+            except sqlite3.OperationalError:
+                pass
         if "harness" not in daemon_job_cols:
             try:
                 conn.execute("ALTER TABLE daemon_jobs ADD COLUMN harness TEXT")

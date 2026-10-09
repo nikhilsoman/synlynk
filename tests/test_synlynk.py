@@ -6879,7 +6879,12 @@ def test_reconcile_daemon_jobs_does_not_relabel_settled_done_when_gh_verificatio
     conn.commit()
     conn.close()
 
-    synlynk._reconcile_daemon_jobs()
+    # The bounded-retry fix (gh:#2136) defers terminal settlement on an
+    # "unknown" GH-write read-back until the retry cap is exhausted, so
+    # drive enough reconcile passes to reach the cap before asserting the
+    # final (settled) outcome.
+    for _ in range(jobs_mod._GH_WRITE_VERIFICATION_RETRY_CAP):
+        synlynk._reconcile_daemon_jobs()
 
     conn2 = synlynk._get_db()
     row = conn2.execute(

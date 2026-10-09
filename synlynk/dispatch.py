@@ -4196,6 +4196,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             "gh_write_author": "TEXT",
             "gh_write_expect": "TEXT DEFAULT 'closed'",
             "gh_write_evidence": "TEXT",
+            "gh_write_verification_attempts": "INTEGER NOT NULL DEFAULT 0",
         })
         _ensure_daemon_job_columns(dconn, {
             "harness": "TEXT",
@@ -4394,6 +4395,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 "gh_write_author": "TEXT",
                 "gh_write_expect": "TEXT DEFAULT 'closed'",
                 "gh_write_evidence": "TEXT",
+                "gh_write_verification_attempts": "INTEGER NOT NULL DEFAULT 0",
             })
             _ensure_daemon_job_columns(dconn, {
                 "harness": "TEXT",
