@@ -552,13 +552,15 @@
 | 2026-10-09 09:30 | codex | o4-mini | 707995 | 5388 | $0.0341 [sub] (API: $2.2048) | estimated_token_rate | story-b04fdd2c | exec: codex job job-ec922f... |
 | 2026-10-09 09:44 | codex | o4-mini | 692847 | 3657 | $0.0333 [sub] (API: $2.1334) | estimated_token_rate | story-b04fdd2c | exec: codex job job-18d8ab... |
 | 2026-10-09 10:05 | codex | o4-mini | 2401871 | 9014 | $0.1152 [sub] (API: $7.3408) | estimated_token_rate | story-b04fdd2c | exec: codex job job-223151... |
+| 2026-10-09 10:30 | codex | o4-mini | 1822032 | 8880 | $0.0875 [sub] (API: $5.5993) | estimated_token_rate | story-b04fdd2c | exec: codex job job-f41210... |
+| 2026-10-09 10:47 | codex | o4-mini | 1039481 | 4979 | $0.0499 [sub] (API: $3.1931) | estimated_token_rate | story-b04fdd2c | exec: codex job job-948d98... |
 
 ## Subscription Amortization & Dual-Ledger Summary
 
 | Harness | Base Fee | Actual Amortized Spend | API Equivalent Value | Net Savings |
 |---|---|---|---|---|
 | claude | $20.00 | $22.3256 | $32.6578 | $10.3321 |
-| codex | $20.00 | $16.5973 | $1061.3312 | $1044.7339 |
+| codex | $20.00 | $16.7347 | $1070.1236 | $1053.3889 |
 | agy | $20.00 | $1.9055 | $9.0469 | $7.1414 |
 | grok | $30.00 | $28.5780 | $22.1012 | $-6.4768 |
-| **Total** | **$90.00** | **$69.4064** | **$1125.1371** | **$1055.7307** |
+| **Total** | **$90.00** | **$69.5438** | **$1133.9295** | **$1064.3857** |
