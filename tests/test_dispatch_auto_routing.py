@@ -1,7 +1,27 @@
 """Tests for tier-0 zero-trust local auto-routing."""
 
+import json
+import os
 import unittest
 from unittest.mock import MagicMock, patch
+
+
+def test_read_local_fallback_reads_workspace_json(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk")
+    with open(".synlynk/workspace.json", "w") as f:
+        json.dump({"local_fallback": "codex"}, f)
+    import synlynk.dispatch as dispatch_mod
+    assert dispatch_mod._read_local_fallback() == "codex"
+
+
+def test_read_local_threshold_reads_workspace_json(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk")
+    with open(".synlynk/workspace.json", "w") as f:
+        json.dump({"local_auto_threshold": 0.9}, f)
+    import synlynk.dispatch as dispatch_mod
+    assert dispatch_mod._read_local_threshold() == 0.9
 
 
 class TestResolveDispatchAgent(unittest.TestCase):
@@ -38,4 +58,3 @@ class TestResolveDispatchAgent(unittest.TestCase):
         with patch("sys.stdout") as stdout:
             self._resolve("auto", cap_score=0.72)
         self.assertIn("Routing to:", stdout.write.call_args_list[0].args[0])
-
