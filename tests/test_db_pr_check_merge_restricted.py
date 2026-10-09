@@ -8,7 +8,7 @@ def test_cmd_pr_check_merges_docs_only_pr_when_mode_is_merge_restricted_classes(
 
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".synlynk").mkdir(exist_ok=True)
-    (tmp_path / ".synlynk" / "config.json").write_text(json.dumps({"qa_gate_mode": "merge-restricted-classes"}))
+    (tmp_path / ".synlynk" / "policy.json").write_text(json.dumps({"qa_gate_mode": "merge-restricted-classes"}))
 
     with patch("synlynk.db._is_github_remote", return_value=True), \
          patch("synlynk.db._current_pr_number", return_value=501), \
@@ -35,7 +35,7 @@ def test_cmd_pr_check_does_not_reach_gh_merge_when_policy_blocks(project_dir, tm
 
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".synlynk").mkdir(exist_ok=True)
-    (tmp_path / ".synlynk" / "config.json").write_text(json.dumps({"qa_gate_mode": "merge-restricted-classes"}))
+    (tmp_path / ".synlynk" / "policy.json").write_text(json.dumps({"qa_gate_mode": "merge-restricted-classes"}))
 
     with patch("synlynk.db._is_github_remote", return_value=True), \
          patch("synlynk.db._current_pr_number", return_value=505), \
@@ -62,7 +62,7 @@ def test_cmd_pr_check_does_not_merge_when_mode_is_block_only(project_dir, tmp_pa
 
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".synlynk").mkdir(exist_ok=True)
-    (tmp_path / ".synlynk" / "config.json").write_text(json.dumps({"qa_gate_mode": "block-only"}))
+    (tmp_path / ".synlynk" / "policy.json").write_text(json.dumps({"qa_gate_mode": "block-only"}))
 
     with patch("synlynk.db._is_github_remote", return_value=True), \
          patch("synlynk.db._current_pr_number", return_value=502), \
@@ -86,7 +86,7 @@ def test_cmd_pr_check_does_not_merge_non_docs_only_pr_in_merge_restricted_mode(p
 
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".synlynk").mkdir(exist_ok=True)
-    (tmp_path / ".synlynk" / "config.json").write_text(json.dumps({"qa_gate_mode": "merge-restricted-classes"}))
+    (tmp_path / ".synlynk" / "policy.json").write_text(json.dumps({"qa_gate_mode": "merge-restricted-classes"}))
 
     with patch("synlynk.db._is_github_remote", return_value=True), \
          patch("synlynk.db._current_pr_number", return_value=503), \
@@ -110,7 +110,7 @@ def test_cmd_pr_check_does_not_merge_when_gate_is_red(project_dir, tmp_path, mon
 
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".synlynk").mkdir(exist_ok=True)
-    (tmp_path / ".synlynk" / "config.json").write_text(json.dumps({"qa_gate_mode": "merge-restricted-classes"}))
+    (tmp_path / ".synlynk" / "policy.json").write_text(json.dumps({"qa_gate_mode": "merge-restricted-classes"}))
 
     with patch("synlynk.db._is_github_remote", return_value=True), \
          patch("synlynk.db._current_pr_number", return_value=504), \
