@@ -1,6 +1,8 @@
 .superpowers/
 .synlynk/*
 .synlynk/config.json
+!.synlynk/workspace.json
+!.synlynk/billing.json
 .synlynk/viz-cache/
 .synlynk/viz-meta.json
 !.synlynk/roles.yaml
