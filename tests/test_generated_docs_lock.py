@@ -17,6 +17,15 @@ GENERATED_HEADER = "source of truth is state.db"
 SKELETON_MARK = "Skeleton generated from git history"
 
 
+@pytest.fixture(autouse=True)
+def _allow_cwd_fallback(monkeypatch):
+    """This file predates gh:#1831's hardened _project_root() and chdirs into
+    bare (non-git) tmp_path dirs in several tests. Scope the explicit override
+    to this file rather than all tests, so other suites still exercise the
+    strict default (see code-quality review on PR for Task 1)."""
+    monkeypatch.setenv("SYNLYNK_ALLOW_CWD_FALLBACK", "1")
+
+
 def _git(cwd, *args):
     subprocess.run(["git", *args], cwd=str(cwd), capture_output=True, check=True)
 
