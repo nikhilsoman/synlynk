@@ -192,17 +192,32 @@ def test_inventory_adds_project_match_for_legacy_shards(tmp_path, monkeypatch):
 
 
 def _make_stories_db(path, rows):
+    """Create a stories table and insert rows.
+
+    Each row is a (story_id, title, gh_issue) 3-tuple, or a
+    (story_id, title, gh_issue, created_at) 4-tuple when the test needs to
+    pin an explicit created_at value instead of relying on the column's
+    DEFAULT CURRENT_TIMESTAMP.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(path)
     conn.execute(
         "CREATE TABLE stories (id INTEGER PRIMARY KEY, story_id TEXT UNIQUE, title TEXT, "
         "gh_issue TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
     )
-    for story_id, title, gh_issue in rows:
-        conn.execute(
-            "INSERT INTO stories (story_id, title, gh_issue) VALUES (?, ?, ?)",
-            (story_id, title, gh_issue),
-        )
+    for row in rows:
+        if len(row) == 4:
+            story_id, title, gh_issue, created_at = row
+            conn.execute(
+                "INSERT INTO stories (story_id, title, gh_issue, created_at) VALUES (?, ?, ?, ?)",
+                (story_id, title, gh_issue, created_at),
+            )
+        else:
+            story_id, title, gh_issue = row
+            conn.execute(
+                "INSERT INTO stories (story_id, title, gh_issue) VALUES (?, ?, ?)",
+                (story_id, title, gh_issue),
+            )
     conn.commit()
     conn.close()
 
@@ -269,6 +284,22 @@ def test_apply_reconcile_backs_up_and_merges(tmp_path):
 
     merged = _read_stories(canonical)
     assert set(merged.keys()) == {"c-1", "s-1", "s-2"}
+
+
+def test_apply_reconcile_preserves_gh_issue_and_created_at(tmp_path):
+    from synlynk.state_inventory import apply_reconcile
+
+    shard = tmp_path / "shard" / "state.db"
+    canonical = tmp_path / "canonical" / "state.db"
+    _make_stories_db(shard, [("s-1", "Story A", "#100", "2026-01-01 00:00:00")])
+    _make_stories_db(canonical, [])
+
+    result = apply_reconcile(shard, canonical)
+
+    assert result["added"] == 1
+    merged = _read_stories(canonical)
+    assert merged["s-1"]["gh_issue"] == "#100"
+    assert merged["s-1"]["created_at"] == "2026-01-01 00:00:00"
 
 
 def test_apply_reconcile_skips_conflicts_by_default(tmp_path):

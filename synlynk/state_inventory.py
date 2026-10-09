@@ -221,6 +221,8 @@ def apply_reconcile(shard_path: Path, canonical_path: Path, *, ignore_conflicts:
         insert_cols = ["story_id", "title"]
         if "gh_issue" in cols:
             insert_cols.append("gh_issue")
+        if "created_at" in cols:
+            insert_cols.append("created_at")
         placeholders = ", ".join("?" for _ in insert_cols)
         with conn:
             for row in plan["to_add"]:
