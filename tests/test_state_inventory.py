@@ -1,6 +1,7 @@
 import os
 import sqlite3
 import time
+from pathlib import Path
 
 import pytest
 
@@ -286,6 +287,60 @@ def test_apply_reconcile_backs_up_and_merges(tmp_path):
 
     merged = _read_stories(canonical)
     assert set(merged.keys()) == {"c-1", "s-1", "s-2"}
+
+
+def test_apply_reconcile_backup_includes_uncommitted_wal_data(tmp_path):
+    """Canonical DBs run in WAL mode (synlynk/wal_ledger.py), so a committed
+    row can live only in the `-wal` sidecar, not yet flushed into the main
+    `.db` file. The pre-reconcile backup must checkpoint the WAL before
+    copying, or it can silently omit recently-committed data.
+    """
+    from synlynk.state_inventory import apply_reconcile
+
+    shard = tmp_path / "shard" / "state.db"
+    canonical = tmp_path / "canonical" / "state.db"
+    _make_stories_db(shard, [("s-1", "Story A", None)])
+    _make_stories_db(canonical, [("c-1", "Story C", None)])
+
+    # Put the canonical DB in WAL mode and commit a row without
+    # checkpointing — this is the natural state after an ordinary commit
+    # in WAL mode, and matches how synlynk/wal_ledger.py opens state DBs.
+    #
+    # SQLite auto-checkpoints the WAL when the *last* connection to a
+    # database closes, so a second idle connection is kept open here to
+    # hold the WAL open across the apply_reconcile() call below — without
+    # it, closing `conn` would checkpoint the data itself and the test
+    # would pass regardless of whether apply_reconcile() does its own
+    # checkpoint.
+    idle_conn = sqlite3.connect(canonical)
+    conn = sqlite3.connect(canonical)
+    try:
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute(
+            "INSERT INTO stories (story_id, title, gh_issue) VALUES (?, ?, ?)",
+            ("wal-1", "WAL-only story", None),
+        )
+        conn.commit()
+
+        result = apply_reconcile(shard, canonical)
+    finally:
+        conn.close()
+        idle_conn.close()
+
+    backup_path = Path(result["backup_path"])
+
+    # Read the backup with a fresh connection against the backup file
+    # alone, so it can't fall back to the original's -wal/-shm sidecars.
+    backup_conn = sqlite3.connect(backup_path)
+    try:
+        rows = {
+            row[0]
+            for row in backup_conn.execute("SELECT story_id FROM stories")
+        }
+    finally:
+        backup_conn.close()
+
+    assert "wal-1" in rows
 
 
 def test_apply_reconcile_preserves_gh_issue_and_created_at(tmp_path):

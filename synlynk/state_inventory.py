@@ -213,6 +213,15 @@ def apply_reconcile(shard_path: Path, canonical_path: Path, *, ignore_conflicts:
         )
 
     backup_path = canonical_path.parent / f"{canonical_path.name}.pre-reconcile-{int(time.time())}.bak"
+    # Canonical state DBs run in WAL mode (synlynk/wal_ledger.py), so a
+    # recently-committed transaction can live only in the `-wal` sidecar,
+    # not yet flushed into the main file. shutil.copy2 only copies the main
+    # file, so checkpoint the WAL into it first to make the backup complete.
+    checkpoint_conn = sqlite3.connect(canonical_path)
+    try:
+        checkpoint_conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    finally:
+        checkpoint_conn.close()
     shutil.copy2(canonical_path, backup_path)
 
     conn = sqlite3.connect(canonical_path)
