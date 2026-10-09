@@ -5,7 +5,9 @@ import pytest
 
 
 HARNESSES = ("claude", "codex", "agy", "grok")
-CONFIG_PATH = Path(__file__).parents[1] / ".synlynk" / "config.json"
+# gh:#2101 split this repo's own .synlynk/config.json into workspace/billing/policy
+# files; harness_billing now lives in billing.json.
+BILLING_PATH = Path(__file__).parents[1] / ".synlynk" / "billing.json"
 
 
 def _quad_harness_billing():
@@ -21,8 +23,7 @@ def _quad_harness_billing():
 
 
 def test_repository_config_has_quad_harness_subscription_billing():
-    config = json.loads(CONFIG_PATH.read_text())
-    billing = config["harness_billing"]
+    billing = json.loads(BILLING_PATH.read_text())["harness_billing"]
 
     assert set(billing) == set(HARNESSES)
     assert sum(item["monthly_base_fee_usd"] for item in billing.values()) == pytest.approx(90.0)
