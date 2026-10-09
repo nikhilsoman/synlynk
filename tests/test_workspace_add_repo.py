@@ -55,3 +55,45 @@ def test_add_repo_falls_back_to_legacy_config_for_identity_slug(tmp_path, monkey
     assert result["identity_slug"] == "legacy-product"
     assert result["repo_id"] == "org/legacy"
     assert json.loads((synlynk_dir / "workspace.json").read_text())["repo_id"] == "org/legacy"
+
+
+def test_add_repo_splits_legacy_config_before_writing_workspace(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    synlynk_dir = tmp_path / ".synlynk"
+    synlynk_dir.mkdir()
+    (synlynk_dir / "config.json").write_text(json.dumps({
+        "identity_slug": "legacy-product",
+        "repo_id": "legacy/repo",
+        "budget": {"limit_usd": 10.0},
+        "harness_billing": {"codex": {"payment_mode": "prepaid"}},
+        "qa_gate_mode": "enforce",
+    }))
+    product = tmp_path / "home" / ".synlynk" / "workspaces" / "legacy-product"
+    product.mkdir(parents=True)
+
+    result = add_repo("org/legacy", str(tmp_path))
+
+    workspace = json.loads((synlynk_dir / "workspace.json").read_text())
+    billing = json.loads((synlynk_dir / "billing.json").read_text())
+    policy = json.loads((synlynk_dir / "policy.json").read_text())
+    assert result["repo_id"] == "legacy/repo"
+    assert workspace["repo_id"] == "legacy/repo"
+    assert "budget" not in workspace
+    assert "harness_billing" not in workspace
+    assert "qa_gate_mode" not in workspace
+    assert billing["budget"] == {"limit_usd": 10.0}
+    assert billing["harness_billing"] == {"codex": {"payment_mode": "prepaid"}}
+    assert policy["qa_gate_mode"] == "enforce"
+    assert not (synlynk_dir / "config.json").exists()
+    assert (synlynk_dir / "config.json.bak").exists()
+
+    billing["sentinel"] = "untouched"
+    policy["sentinel"] = "untouched"
+    (synlynk_dir / "billing.json").write_text(json.dumps(billing))
+    (synlynk_dir / "policy.json").write_text(json.dumps(policy))
+
+    add_repo("org/legacy", str(tmp_path))
+
+    assert json.loads((synlynk_dir / "billing.json").read_text()) == billing
+    assert json.loads((synlynk_dir / "policy.json").read_text()) == policy
+    assert (synlynk_dir / "config.json.bak").exists()
