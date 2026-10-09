@@ -1344,13 +1344,22 @@ def load_config() -> dict:
     return config
 
 
-def cmd_config_set(key: str, value: str) -> None:
-    """Set a top-level config key in .synlynk/config.json."""
-    config_path = ".synlynk/config.json"
-    config = load_config()
-    config[key] = value
-    _write_json_atomic(config_path, config)
-    print(f"  ✓ {key} = {value!r} saved to .synlynk/config.json")
+def cmd_config_set(key: str, value) -> None:
+    """Set a top-level config key, routed to its owning split config file."""
+    migrate_legacy_config_if_needed()
+    if key in _BILLING_KEYS:
+        path = ".synlynk/billing.json"
+        data = load_billing()
+    elif key in _POLICY_MIGRATED_KEYS:
+        path = ".synlynk/policy.json"
+        data = _read_raw_policy()
+        data.setdefault("schema_version", 1)
+    else:
+        path = ".synlynk/workspace.json"
+        data = load_workspace()
+    data[key] = value
+    _write_json_atomic(path, data)
+    print(f"  ✓ {key} = {value!r} saved to {path}")
 
 
 
