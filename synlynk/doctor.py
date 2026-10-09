@@ -82,49 +82,61 @@ def _hc_python_version() -> HealthCheck:
 
 
 def _hc_project_init() -> HealthCheck:
-    if os.path.exists(".synlynk/config.json"):
-        return HealthCheck("project_init", "ok", ".synlynk/config.json present")
+    if os.path.exists(".synlynk/workspace.json") or os.path.exists(".synlynk/config.json"):
+        return HealthCheck("project_init", "ok", ".synlynk/workspace.json present")
     return HealthCheck(
         "project_init",
         "fail",
-        "Project not initialized — .synlynk/config.json missing",
+        "Project not initialized — .synlynk/workspace.json missing",
         fix="Run: synlynk init",
     )
 
 
 def _hc_identity_slug() -> HealthCheck:
-    path = os.path.join(".synlynk", "config.json")
+    workspace_path = os.path.join(".synlynk", "workspace.json")
+    legacy_path = os.path.join(".synlynk", "config.json")
+    path = workspace_path if os.path.exists(workspace_path) else legacy_path
     if not os.path.exists(path):
-        return HealthCheck("identity_slug", "warn", "No .synlynk/config.json; product identity checks skipped")
+        return HealthCheck("identity_slug", "warn", "No .synlynk/workspace.json; product identity checks skipped")
     try:
         with open(path) as config_file:
             data = json.load(config_file)
     except (OSError, json.JSONDecodeError):
-        return HealthCheck("identity_slug", "fail", "Cannot read .synlynk/config.json")
+        return HealthCheck("identity_slug", "fail", f"Cannot read {path}")
     if not isinstance(data.get("identity_slug"), str) or not data["identity_slug"].strip():
         return HealthCheck("identity_slug", "warn", "identity_slug is required for workspace add-repo; dispatch will use the repository fallback",
-                           fix="Set identity_slug in .synlynk/config.json")
+                           fix="Set identity_slug in .synlynk/workspace.json")
     return HealthCheck("identity_slug", "ok", f"product identity configured: {data['identity_slug']}")
 
 
 def _hc_config_schema() -> HealthCheck:
-    """Validates .synlynk/config.json against the known field schema."""
-    from synlynk.config_schema import validate, WORKSPACE_SCHEMA
+    """Validates .synlynk/workspace.json and .synlynk/billing.json against their schemas."""
+    from synlynk.config_schema import validate, WORKSPACE_SCHEMA, BILLING_SCHEMA
 
-    path = os.path.join(".synlynk", "config.json")
-    if not os.path.exists(path):
-        return HealthCheck("config_schema", "warn", "No .synlynk/config.json; schema check skipped")
-    try:
-        with open(path) as config_file:
-            data = json.load(config_file)
-    except (OSError, json.JSONDecodeError) as exc:
-        return HealthCheck("config_schema", "fail", f"Cannot parse .synlynk/config.json: {exc}")
-    errors = validate(data, WORKSPACE_SCHEMA)
+    legacy_path = os.path.join(".synlynk", "config.json")
+    workspace_path = os.path.join(".synlynk", "workspace.json")
+    billing_path = os.path.join(".synlynk", "billing.json")
+
+    if not os.path.exists(workspace_path) and not os.path.exists(legacy_path):
+        return HealthCheck("config_schema", "warn", "No .synlynk/workspace.json; schema check skipped")
+
+    errors: list = []
+    for path, schema in (
+        (workspace_path if os.path.exists(workspace_path) else legacy_path, WORKSPACE_SCHEMA),
+        (billing_path if os.path.exists(billing_path) else legacy_path, BILLING_SCHEMA),
+    ):
+        try:
+            with open(path) as f:
+                data = json.load(f)
+        except (OSError, json.JSONDecodeError) as exc:
+            return HealthCheck("config_schema", "fail", f"Cannot parse {path}: {exc}")
+        errors.extend(validate(data, schema))
+
     if not errors:
-        return HealthCheck("config_schema", "ok", ".synlynk/config.json matches expected schema")
+        return HealthCheck("config_schema", "ok", ".synlynk/workspace.json and .synlynk/billing.json match expected schema")
     return HealthCheck(
         "config_schema", "fail", "; ".join(errors),
-        fix="Fix the listed field(s) in .synlynk/config.json",
+        fix="Fix the listed field(s) in .synlynk/workspace.json or .synlynk/billing.json",
     )
 
 
@@ -991,9 +1003,11 @@ def _hc_gh_host_auth_audit() -> HealthCheck:
 def _hc_spof_audit() -> HealthCheck:
     """Audit workspace for single points of failure across harness redundancy and roles."""
     try:
-        config_path = os.path.join(".synlynk", "config.json")
+        workspace_path = os.path.join(".synlynk", "workspace.json")
+        legacy_path = os.path.join(".synlynk", "config.json")
+        config_path = workspace_path if os.path.exists(workspace_path) else legacy_path
         if not os.path.exists(config_path):
-            return HealthCheck("spof_audit", "warn", "No .synlynk/config.json; SPOF audit skipped")
+            return HealthCheck("spof_audit", "warn", "No .synlynk/workspace.json; SPOF audit skipped")
 
         with open(config_path) as f:
             data = json.load(f)
