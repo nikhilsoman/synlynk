@@ -566,6 +566,9 @@
 | 2026-10-09 13:23 | codex | o4-mini | 1087603 | 5147 | $0.0522 [sub] (API: $3.3400) | estimated_token_rate | story-b04fdd2c | exec: codex job job-87c3d6... |
 | 2026-10-09 13:53 | codex | o4-mini | 1062206 | 5228 | $3.2650 | estimated_token_rate | story-b04fdd2c | exec: codex job job-2b7777... |
 | 2026-10-09 14:25 | agy | unknown | 140853 | 13004 | $0.1244 [sub] (API: $0.6176) | estimated_token_rate | story-b04fdd2c | exec: agy job job-8bde97ef |
+| 2026-10-09 14:43 | claude | claude-sonnet-4-6 | 40983 | 3428 | $0.1102 [sub] (API: $0.1744) | estimated_token_rate | story-issue-2101 | exec: claude job job-21a61... |
+| 2026-10-09 14:44 | codex | o4-mini | 356217 | 4372 | $0.0172 [sub] (API: $1.1342) | estimated_token_rate | story-issue-2101 | exec: codex job job-93bc9d... |
+| 2026-10-09 15:44 | codex | o4-mini | 669272 | 4389 | $2.0737 | estimated_token_rate | story-issue-2101 | exec: codex job job-6316ab... |
 
 ## Subscription Amortization & Dual-Ledger Summary
 
