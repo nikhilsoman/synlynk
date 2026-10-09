@@ -544,13 +544,14 @@
 | 2026-10-09 01:50 | codex | o4-mini | 2982725 | 13479 | $0.1432 [sub] (API: $9.1504) | estimated_token_rate | story-b04fdd2c | exec: codex job job-87d7d3... |
 | 2026-10-09 02:05 | codex | o4-mini | 2982725 | 13479 | $0.1432 [sub] (API: $9.1504) | estimated_manual | - | Task 2 (load_workspace/load_billing/migration) of gh:#2101 config decomposition plan; TOKEN_BLOAT/COST_INFLATION flagged (SCOPE_REVIEW_REQUIRED) but verified correct and complete via direct diff/test inspection, not the status label |
 | 2026-10-09 02:10 | codex | o4-mini | 725478 | 7061 | $0.0350 [sub] (API: $2.2823) | estimated_token_rate | story-b04fdd2c | exec: codex job job-7e1f45... |
+| 2026-10-09 03:41 | codex | o4-mini | 3880537 | 16835 | $0.1863 [sub] (API: $11.8941) | estimated_token_rate | story-b04fdd2c | exec: codex job job-43da31... |
 
 ## Subscription Amortization & Dual-Ledger Summary
 
 | Harness | Base Fee | Actual Amortized Spend | API Equivalent Value | Net Savings |
 |---|---|---|---|---|
 | claude | $20.00 | $22.3083 | $32.6128 | $10.3045 |
-| codex | $20.00 | $16.0221 | $1024.5392 | $1008.5172 |
+| codex | $20.00 | $16.2083 | $1036.4334 | $1020.2250 |
 | agy | $20.00 | $1.8998 | $9.0019 | $7.1021 |
 | grok | $30.00 | $28.5780 | $22.1012 | $-6.4768 |
-| **Total** | **$90.00** | **$68.8082** | **$1088.2551** | **$1019.4470** |
+| **Total** | **$90.00** | **$68.9944** | **$1100.1493** | **$1031.1549** |
