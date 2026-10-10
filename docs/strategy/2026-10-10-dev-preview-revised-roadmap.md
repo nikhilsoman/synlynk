@@ -109,6 +109,15 @@ Nikhil's own words, verbatim framing: *"Local is definitely a nice-to-have capab
 
 **Forward note — Teams edition is the named next epic, immediately after dev preview.** No architecture decision made in Weeks 1-4 (especially the hosted-relay design above) should foreclose multi-tenancy. This doesn't mean building Teams features now — it means the personal-use relay's design should not hard-code single-tenant assumptions it would be expensive to unwind in the very next epic.
 
-## 8. Next step
+## 8. R2 arch council verdict (2026-10-10, same day)
 
-Re-run the arch council for an R2 assessment: same panel (claude, agy, codex, grok), topic = this R2 reprioritization, asking specifically whether (a) demoting pillar 4 and elevating pillars 1/7 changes the Week 1-2 foundation-first sequencing the panel already approved, (b) pulling the personal-use hosted relay into active scope (design-now, ship-maybe-after) is achievable without slipping the 2026-10-31 date or without compromising the Week 1/Week 2 gates already in place, and (c) the panel's view on sequencing the new multi-interface work (`#2126`/`#2103`/`#1708`/`#1711`/`#2076`) relative to the swarm/quota work pillar 7 now also carries.
+`synlynk decide` panel (claude, agy, codex, grok) — decision recorded at `project-docs/decisions/2026-10-10-r2-reprioritization-of-the-dev-preview-r*`. Approved R2 as a **reweighting of release-critical claims, not a reordering of execution** — all four panelists converge:
+
+- **(a) Week 1 sequencing is unmoved.** The foundation gates (#1926, #2136, three-lens P0s) stay first regardless of the pillar reweighting — swarms/quota work on an unconsolidated telemetry layer would produce false signals, so demoting pillar 4 frees no slot at the front of the queue. It only removes Hermes-local measurement from the Week 2 go/no-go gate (Section 5, gate 2).
+- **(c) Sequencing within pillar 1/7's new scope:** provider/BYOK plumbing first (OpenRouter/LiteLLM via `#2076`, minimum-viable slice of `#1708`/`#1711`) — both multi-interface clients and swarm/quota logic consume that auth/provider surface, not the reverse. Then **one thin interface proof** (`#2103`, VS Code) before fanning out to Cursor/JetBrains/Warp/Pi under `#2126`. Build the swarm/quota trial on top only once the provider layer and at least one client exist to validate it against.
+- **(b) Personal-use hosted relay — approved for design-now, with hard constraints:** strictly a spec/architecture track (trust boundaries, tenancy model, forward-compatible migration path to Teams), filed under its own goal **outside** the dev-preview GOVERNS tree, **zero implementation or dispatch slots against it before the Week 1 gate is green**, and no code from it ships inside the 10/31 window by construction.
+- **Standing instruction from the panel:** if Week 1's gate slips, pillar 7 and multi-interface work re-park behind it — the schedule does not compress to protect the date.
+
+## 9. Next step
+
+File the new issue (public-model-quota-aware swarm dispatch, under `goal-abecd18c`) and the personal-use-hosted-relay spec issue (own goal, outside the dev-preview GOVERNS tree, per the panel's constraint above) this week, then begin Week 1 execution per Section 2/5. Both R2-elevated pillars (1 and 7) wait behind the Week 1 gate exactly as the panel specified — no dispatch slots against provider/BYOK, interface, swarm, or relay work until `#1926` is queryable and `#2136` is merged.
