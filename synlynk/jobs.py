@@ -295,14 +295,17 @@ def _cost_inflation_is_critical(job: dict, log_text: str, sentinel_path: str) ->
     check_token_bloat = _pkg("check_token_bloat")
     if not check_token_bloat:
         return False
-    in_tokens, out_tokens = _pkg("extract_tokens")(
+    token_counts = _pkg("extract_tokens")(
         log_text, agent=job.get("agent", "")
     )
+    in_tokens, out_tokens = token_counts
+    cache_read_tokens = int(getattr(token_counts, "cache_read_tokens", 0) or 0)
     cost_usd = _job_cost_usd(
         job.get("agent", ""),
         in_tokens,
         out_tokens,
         job.get("model_version") or job.get("model_at_dispatch"),
+        cache_read_tokens=cache_read_tokens,
     )
     alerts = check_token_bloat(
         in_tokens=in_tokens,
@@ -313,6 +316,7 @@ def _cost_inflation_is_critical(job: dict, log_text: str, sentinel_path: str) ->
         agent=job.get("agent", ""),
         task_type=job.get("task_type", ""),
         sentinel_path=sentinel_path,
+        cache_read_tokens=cache_read_tokens,
     )
     blocked = any(
         alert.get("code") == "COST_INFLATION"
@@ -392,6 +396,7 @@ def _force_scope_review_for_sentinel_cotrip(
     cost_usd: float,
     files_touched,
     sentinel_path: str,
+    cache_read_tokens: int = 0,
 ) -> bool:
     """Block finalization when token and cost sentinels trip for one job.
 
@@ -412,6 +417,7 @@ def _force_scope_review_for_sentinel_cotrip(
         agent=job.get("agent", ""),
         task_type=job.get("task_type", ""),
         sentinel_path=sentinel_path,
+        cache_read_tokens=cache_read_tokens,
     ) or []
     codes = {alert.get("code") for alert in alerts if isinstance(alert, dict)}
     if not {"TOKEN_BLOAT", "COST_INFLATION"}.issubset(codes):
@@ -1291,11 +1297,16 @@ def _apply_dispatch_gate(job: dict) -> None:
             )
 
 
-def _job_cost_usd(agent: str, in_tokens: int, out_tokens: int, model_version: Optional[str] = None) -> float:
-    rates = _pkg("_model_rate_for_version")(model_version or "unknown", agent=agent)
-    return (
-        (in_tokens / 1000 * rates["input"]) +
-        (out_tokens / 1000 * rates["output"])
+def _job_cost_usd(
+    agent: str,
+    in_tokens: int,
+    out_tokens: int,
+    model_version: Optional[str] = None,
+    cache_read_tokens: int = 0,
+) -> float:
+    from synlynk.costs import api_equivalent_usd
+    return api_equivalent_usd(
+        agent, in_tokens, out_tokens, cache_read_tokens, model=model_version or "unknown",
     )
 
 
@@ -2196,6 +2207,7 @@ def _reconcile_jobs_unlocked() -> None:
                     log_text = ""
             token_counts = _pkg("extract_tokens")(log_text, agent=job.get("agent", ""))
             in_tokens, out_tokens = token_counts
+            cache_read_tokens = int(getattr(token_counts, "cache_read_tokens", 0) or 0)
             basis = getattr(token_counts, "basis", "none")
             model_version = job.get("model_version") or job.get("model_at_dispatch")
             try:
@@ -2204,6 +2216,7 @@ def _reconcile_jobs_unlocked() -> None:
                     in_tokens,
                     out_tokens,
                     duration_s or 0,
+                    cache_read_tokens=cache_read_tokens,
                     model_version=model_version,
                     story_id=job.get("story_id"),
                     agent=job.get("agent", ""),
@@ -2231,6 +2244,7 @@ def _reconcile_jobs_unlocked() -> None:
                 in_tokens,
                 out_tokens,
                 model_version,
+                cache_read_tokens=cache_read_tokens,
             )
             check_token_bloat = _pkg("check_token_bloat")
             if check_token_bloat:
@@ -2244,6 +2258,7 @@ def _reconcile_jobs_unlocked() -> None:
                     agent=job.get("agent", ""),
                     task_type=job.get("task_type", ""),
                     sentinel_path=sentinel_path,
+                    cache_read_tokens=cache_read_tokens,
                 )
             task_sha256, task_preview = _task_sha256_and_preview(job.get("task"))
             summary = _pkg("_write_job_summary")(
@@ -2367,12 +2382,15 @@ def _reconcile_jobs_unlocked() -> None:
             if log_text:
                 job["micro_rework"] = _extract_micro_rework(log_text)
                 _try_write_capability_rating(job, log_text, sentinel_path)
-            in_tokens, out_tokens = _pkg("extract_tokens")(log_text, agent=job.get("agent", ""))
+            token_counts = _pkg("extract_tokens")(log_text, agent=job.get("agent", ""))
+            in_tokens, out_tokens = token_counts
+            cache_read_tokens = int(getattr(token_counts, "cache_read_tokens", 0) or 0)
             cost_usd = _job_cost_usd(
                 job.get("agent", ""),
                 in_tokens,
                 out_tokens,
                 job.get("model_version") or job.get("model_at_dispatch"),
+                cache_read_tokens=cache_read_tokens,
             )
             duration_s = None
             try:
@@ -2390,6 +2408,7 @@ def _reconcile_jobs_unlocked() -> None:
                 cost_usd=cost_usd,
                 files_touched=len(_git_state_files_touched(git_state)),
                 sentinel_path=sentinel_path,
+                cache_read_tokens=cache_read_tokens,
             )
             if sentinel_scope_review:
                 summary_status = STATUS_SCOPE_REVIEW_REQUIRED
@@ -2603,12 +2622,15 @@ def _reconcile_jobs_unlocked() -> None:
             else:
                 log_text = ""
 
-            in_tokens, out_tokens = _pkg("extract_tokens")(log_text, agent=job.get("agent", ""))
+            token_counts = _pkg("extract_tokens")(log_text, agent=job.get("agent", ""))
+            in_tokens, out_tokens = token_counts
+            cache_read_tokens = int(getattr(token_counts, "cache_read_tokens", 0) or 0)
             cost_usd = _job_cost_usd(
                 job.get("agent", ""),
                 in_tokens,
                 out_tokens,
                 job.get("model_version") or job.get("model_at_dispatch"),
+                cache_read_tokens=cache_read_tokens,
             )
             duration_s = None
             try:
@@ -3687,16 +3709,19 @@ def _ensure_daemon_job_cost_entry(
             return False
         extract = _pkg("extract_tokens")
         in_tokens, out_tokens = 0, 0
+        cache_read_tokens = 0
         basis = "none"
         turn_breakdown = None
         if extract and log_text:
             try:
                 token_counts = extract(log_text, agent=agent or "")
-                in_tokens, out_tokens = token_counts[0], token_counts[1]
+                in_tokens, out_tokens = token_counts
+                cache_read_tokens = int(getattr(token_counts, "cache_read_tokens", 0) or 0)
                 basis = getattr(token_counts, "basis", "none")
                 turn_breakdown = getattr(token_counts, "turns", None) or None
             except Exception:
                 in_tokens, out_tokens = 0, 0
+                cache_read_tokens = 0
         model_version = None
         extract_mv = _pkg("extract_model_version")
         if extract_mv and log_text:
@@ -3710,6 +3735,7 @@ def _ensure_daemon_job_cost_entry(
                 in_tokens,
                 out_tokens,
                 0,
+                cache_read_tokens=cache_read_tokens,
                 model_version=model_version,
                 story_id=story_id,
                 agent=agent or "",
@@ -4557,8 +4583,12 @@ def _reconcile_daemon_jobs() -> None:
 
                 pre_token_counts = _pkg("extract_tokens")(log_text, agent=agent)
                 pre_in_tokens, pre_out_tokens = pre_token_counts
+                pre_cache_read = int(getattr(pre_token_counts, "cache_read_tokens", 0) or 0)
                 pre_model_version = _pkg("extract_model_version")(log_text, agent=agent)
-                pre_cost_usd = _job_cost_usd(agent, pre_in_tokens, pre_out_tokens, pre_model_version)
+                pre_cost_usd = _job_cost_usd(
+                    agent, pre_in_tokens, pre_out_tokens, pre_model_version,
+                    cache_read_tokens=pre_cache_read,
+                )
                 scope_review_job = {
                     "id": job_id,
                     "agent": agent,
@@ -4573,6 +4603,7 @@ def _reconcile_daemon_jobs() -> None:
                     sentinel_path=os.path.join(
                         persisted_worktree_path or worktree_path or os.getcwd(),
                         ".synlynk", "sentinel.md"),
+                    cache_read_tokens=pre_cache_read,
                 ):
                     status = STATUS_SCOPE_REVIEW_REQUIRED
                     summary_status = STATUS_SCOPE_REVIEW_REQUIRED
@@ -4607,6 +4638,7 @@ def _reconcile_daemon_jobs() -> None:
                     )
                 token_counts = _pkg("extract_tokens")(log_text, agent=agent)
                 in_tokens, out_tokens = token_counts
+                cache_read_tokens = int(getattr(token_counts, "cache_read_tokens", 0) or 0)
                 basis = getattr(token_counts, "basis", "none")
                 turn_breakdown = getattr(token_counts, "turns", None) or None
                 model_version = _pkg("extract_model_version")(log_text, agent=agent)
@@ -4616,6 +4648,7 @@ def _reconcile_daemon_jobs() -> None:
                         in_tokens,
                         out_tokens,
                         duration_s or 0,
+                        cache_read_tokens=cache_read_tokens,
                         model_version=model_version,
                         story_id=story_id,
                         agent=agent,
@@ -4649,7 +4682,10 @@ def _reconcile_daemon_jobs() -> None:
                     },
                     emitted_by="_reconcile_daemon_jobs",
                 )
-                cost_usd = _job_cost_usd(agent, in_tokens, out_tokens, model_version)
+                cost_usd = _job_cost_usd(
+                    agent, in_tokens, out_tokens, model_version,
+                    cache_read_tokens=cache_read_tokens,
+                )
                 if status == "failed_unverified" and not summary_status:
                     summary_status = terminal_status_for_unknown_exit()
                 task_sha256, task_preview = _task_sha256_and_preview(task)
