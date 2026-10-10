@@ -550,6 +550,19 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     goal_link_parser.add_argument("--goal", required=True, dest="goal_id")
     goal_link_parser.add_argument("--secondary", action="store_true")
     goal_sub.add_parser("status", help="Show goal completion rollup")
+    goal_update_parser = goal_sub.add_parser("update", help="Update an existing goal")
+    goal_update_parser.add_argument("goal_id")
+    goal_update_parser.add_argument(
+        "--status", choices=["active", "done", "superseded"], default=None,
+        help="Set goal status",
+    )
+    goal_update_parser.add_argument(
+        "--deadline", default=None, help="Set deadline in YYYY-MM-DD format",
+    )
+    goal_update_parser.add_argument(
+        "--supersede-with", dest="supersede_with", default=None,
+        help="Mark this goal superseded and relink its open stories to GOAL_ID",
+    )
 
     governs_parser = subparsers.add_parser("governs", help="Manage GOVERNS lifecycle and reconciliation")
     governs_parser.add_argument("--full", action="store_true", help="Show full 7-stage internal GOVERNS FSM breakdown")
@@ -2944,7 +2957,10 @@ def main(argv=None) -> None:
         if findings and not args.fix:
             sys.exit(1)
     elif args.command == "goal":
-        from synlynk.db import cmd_goal_create, cmd_goal_list, cmd_goal_link, cmd_goal_status
+        from synlynk.db import (
+            cmd_goal_create, cmd_goal_list, cmd_goal_link, cmd_goal_status,
+            cmd_goal_update,
+        )
         action = getattr(args, "goal_action", None)
         if action == "create":
             cmd_goal_create(args.outcome, args.criterion, deadline=args.deadline, role=args.role, kind=getattr(args, "kind", "feature"))
@@ -2954,6 +2970,13 @@ def main(argv=None) -> None:
             cmd_goal_link(args.story_id, args.goal_id, secondary=args.secondary)
         elif action == "status" or action is None:
             cmd_goal_status()
+        elif action == "update":
+            cmd_goal_update(
+                args.goal_id,
+                status=args.status,
+                deadline=args.deadline,
+                supersede_with=args.supersede_with,
+            )
         else:
             help_parsers.get("goal", parser).print_help()
     elif args.command == "governs":

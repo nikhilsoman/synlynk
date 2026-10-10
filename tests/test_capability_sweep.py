@@ -121,7 +121,7 @@ def test_run_sweep_writes_baseline_seed_rows_with_independent_verifier(tmp_path,
 
     def fake_verify(verifier_agent, executor_agent, model, skill, executor_output):
         assert verifier_agent != executor_agent
-        return {"quality": 8.0, "correct": True}
+        return {"quality": 8.0, "correct": True, "quality_verified": True}
 
     monkeypatch.setattr("synlynk.capability_sweep._dispatch_calibration_task", fake_dispatch)
     monkeypatch.setattr("synlynk.capability_sweep._verify_calibration_result", fake_verify)
@@ -153,6 +153,43 @@ def test_pick_verifier_harness_is_not_executor(tmp_path, monkeypatch):
     assert verifier in ("agy", "grok")
 
 
+def test_verify_calibration_result_marks_verified_on_valid_meta(monkeypatch):
+    from synlynk import capability_sweep
+
+    monkeypatch.setattr(
+        capability_sweep, "_dispatch_calibration_task",
+        lambda verifier, task, **kwargs: {
+            "output": "# synlynk-meta\nquality=7\ncorrect=true\n"
+        },
+    )
+
+    verdict = capability_sweep._verify_calibration_result(
+        "codex", "agy", "gemini-2.5-pro", "PROG", {"output": "some code"}
+    )
+
+    assert verdict == {"quality": 7.0, "correct": True, "quality_verified": True}
+
+
+def test_verify_calibration_result_falls_back_and_warns_on_unparseable_output(monkeypatch, capsys):
+    from synlynk import capability_sweep
+
+    monkeypatch.setattr(
+        capability_sweep, "_dispatch_calibration_task",
+        lambda verifier, task, **kwargs: {"output": "I reviewed it, looks fine."},
+    )
+
+    verdict = capability_sweep._verify_calibration_result(
+        "codex", "agy", "gemini-2.5-pro", "PROG", {"output": "some code"}
+    )
+
+    assert verdict == {"quality": 5.0, "correct": True, "quality_verified": False}
+    captured = capsys.readouterr()
+    assert "WARNING" in captured.err
+    assert "codex" in captured.err
+    assert "agy" in captured.err
+    assert "I reviewed it, looks fine." in captured.err
+
+
 def test_calibration_pool_has_all_role_difficulty_combinations(tmp_path, monkeypatch):
     from synlynk import db
     monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(tmp_path / "state.db"))
@@ -177,7 +214,9 @@ def test_sweep_for_harness_model_writes_calibration_result(tmp_path, monkeypatch
     )
     monkeypatch.setattr(
         capability_sweep, "_verify_calibration_result",
-        lambda verifier_agent, executor_agent, model, skill, executor_output: {"quality": 8.0, "correct": True},
+        lambda verifier_agent, executor_agent, model, skill, executor_output: {
+            "quality": 8.0, "correct": True, "quality_verified": True,
+        },
     )
     monkeypatch.setattr(capability_sweep, "_pick_verifier_agent", lambda executor, available: "codex")
 
@@ -206,7 +245,7 @@ def test_sweep_for_harness_model_dispatches_selected_model(tmp_path, monkeypatch
     monkeypatch.setattr(
         capability_sweep,
         "_verify_calibration_result",
-        lambda *args: {"quality": 8.0, "correct": True},
+        lambda *args: {"quality": 8.0, "correct": True, "quality_verified": True},
     )
     monkeypatch.setattr(capability_sweep, "_pick_verifier_agent", lambda *args: "codex")
 
@@ -217,6 +256,63 @@ def test_sweep_for_harness_model_dispatches_selected_model(tmp_path, monkeypatch
     assert agent == "agy"
     assert kwargs["model"] == "gemini-specific"
     assert kwargs["db_conn"] is conn
+
+
+def test_sweep_for_harness_model_persists_quality_verified_false_on_fallback(tmp_path, monkeypatch):
+    from synlynk import db, capability_sweep
+
+    monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(tmp_path / "state.db"))
+    conn = db._get_db()
+    monkeypatch.setattr(capability_sweep, "_get_db", lambda: conn)
+    monkeypatch.setattr(
+        capability_sweep, "_dispatch_calibration_task",
+        lambda agent, task, **kwargs: {"output": "example output"},
+    )
+    monkeypatch.setattr(
+        capability_sweep, "_verify_calibration_result",
+        lambda verifier_agent, executor_agent, model, skill, executor_output: {
+            "quality": 5.0, "correct": True, "quality_verified": False,
+        },
+    )
+    monkeypatch.setattr(capability_sweep, "_pick_verifier_agent", lambda executor, available: "codex")
+
+    capability_sweep.cmd_capability_sweep_for_harness_model("agy", "gemini-3-pro")
+
+    rows = conn.execute(
+        "SELECT quality_verified FROM capability_calibration_results WHERE harness_name='agy'"
+    ).fetchall()
+    assert len(rows) >= 1
+    assert all(r[0] == 0 for r in rows)
+
+
+def test_run_sweep_persists_quality_verified_true_on_real_verdict(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+    import synlynk as sl
+    from synlynk.capability_sweep import _run_sweep
+
+    monkeypatch.setattr(
+        "synlynk.capability_sweep._dispatch_calibration_task",
+        lambda agent, task, **kwargs: {"exit_code": 0, "output": "task complete", "agent": agent},
+    )
+    monkeypatch.setattr(
+        "synlynk.capability_sweep._verify_calibration_result",
+        lambda verifier_agent, executor_agent, model, skill, executor_output: {
+            "quality": 8.0, "correct": True, "quality_verified": True,
+        },
+    )
+
+    discovered = {"codex": ["gpt-5-codex"], "agy": ["gemini-2.5-pro"]}
+    _run_sweep(discovered, ["PROG"])
+
+    conn = sl._get_db()
+    rows = conn.execute(
+        "SELECT quality_verified FROM capability_ratings WHERE signal_source='baseline_seed'"
+    ).fetchall()
+    conn.close()
+
+    assert len(rows) >= 2
+    assert all(r[0] == 1 for r in rows)
 
 
 def test_dispatch_calibration_task_passes_model_to_dispatch_agent(monkeypatch):
