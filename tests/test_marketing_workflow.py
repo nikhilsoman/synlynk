@@ -41,6 +41,13 @@ def test_marketing_sync_is_serialized_and_idempotent():
     assert "Reused existing marketing PR" in workflow
 
 
+def test_marketing_branch_merge_prefers_main_for_generated_conflicts():
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+
+    assert "git merge --no-edit -X theirs origin/main" in workflow
+    assert "regenerate the current PR from the merged source of truth" in workflow
+
+
 def test_required_checks_support_automation_branch_dispatch():
     workflow = Path(".github/workflows/test.yml").read_text(encoding="utf-8")
 
