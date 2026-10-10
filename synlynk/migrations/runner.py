@@ -11,10 +11,11 @@ from synlynk.migrations.m0016_cost_entries_pr_number import MIGRATION as M0016
 from synlynk.migrations.m0017_daemon_job_purpose import MIGRATION as M0017
 from synlynk.migrations.m0018_job_provenance_attestations import MIGRATION as M0018
 from synlynk.migrations.m0019_policy_gate_events import MIGRATION as M0019
+from synlynk.migrations.m0020_quota_snapshots import MIGRATION as M0020
 
 # Static, explicitly-imported registry. Append future Migration entries here
 # in ascending version order — no dynamic directory scanning.
-MIGRATIONS: list[Migration] = [M0016, M0017, M0018, M0019]
+MIGRATIONS: list[Migration] = [M0016, M0017, M0018, M0019, M0020]
 
 
 def _ensure_migration_history_table(conn: sqlite3.Connection) -> None:

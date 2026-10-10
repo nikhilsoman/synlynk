@@ -2852,6 +2852,17 @@ def _settle_daemon_job_terminal(
             conn.rollback()
     if settled and release_reservation:
         _release_daemon_job_reservation(conn, job_id)
+    if settled:
+        try:
+            agent_row = conn.execute(
+                "SELECT agent FROM daemon_jobs WHERE job_id=?",
+                (job_id,),
+            ).fetchone()
+            agent_name = agent_row[0] if agent_row else None
+        except Exception:
+            agent_name = None
+        from synlynk.quota_capture import note_job_settled
+        note_job_settled(settled=True, harness=agent_name, job_id=job_id, status=status)
     return settled
 
 
