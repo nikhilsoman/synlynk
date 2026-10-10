@@ -4,18 +4,24 @@ Date: 2026-09-09
 
 ## Decision
 
-Keep the required CI test job serial. Do not add `pytest-xdist` to the CI
-installation or change the workflow to `-n auto` yet. A bounded xdist command
-is useful for local experimentation after the live-selftest isolation defect
-is fixed, but the current evidence does not support making it the global CI
-default.
+Keep the required CI test job on bounded xdist (`-n 4 --dist loadfile`), but do
+not promote it to `-n auto`. The bounded command was enabled by the follow-up
+CI change after this evaluation; the evidence below supports a fixed worker
+cap, while the known live-selftest mutation risk and higher resource use do not
+support unbounded workers.
 
 ## Baseline and experiment
 
-The workflow command is:
+The evaluated serial workflow command was:
 
 ```text
 pytest tests/ -v -m "not local_hardware"
+```
+
+The current workflow command is:
+
+```text
+pytest tests/ -v -m "not local_hardware and not performance" -n 4 --dist loadfile --durations=25
 ```
 
 The checked-in test collection is 2,689 tests, with 2 local-hardware tests
@@ -86,7 +92,17 @@ pytest tests/ -m "not local_hardware" -n 4 --dist loadfile
 ```
 
 The `-n 4` cap avoids the unbounded resource behavior observed with `-n auto`.
-Do not use retries or quarantine markers. The rollback boundary is the serial
-workflow invocation and this evaluation documentation; reverting the
-evaluation commit restores the pre-experiment repository behavior without
-touching #1497.
+Do not use retries or quarantine markers. The rollback boundary is the current
+bounded workflow invocation and this evaluation documentation; reverting the
+xdist CI commit restores the serial workflow without touching #1497. `-n auto`
+remains an explicit local experiment only and is not a supported CI default.
+
+## Current-state note (2026-10-10)
+
+This evaluation and its CI follow-up are already present on `main` (PRs #1512
+and #1544). A fresh dispatched sparse checkout could not reproduce a clean
+suite-wide comparison: the checkout omitted tracked `bin/`, hook, and docs
+files required by tests, and some tests attempted to write a protected
+user-level daemon log. Those environment failures are not evidence to widen the
+worker cap. Re-run the serial-versus-`-n 4` comparison in a complete CI
+checkout before considering `-n auto`.

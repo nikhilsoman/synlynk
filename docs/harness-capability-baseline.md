@@ -67,12 +67,14 @@ least every ~25 dispatched jobs or monthly (whichever comes first), scan recent
 job telemetry for failure patterns per harness, compare against this table, and
 file findings + policy.json updates in the same PR as this doc's edits.
 
-## Test execution baseline (2026-09-09)
+## Test execution baseline (2026-09-09; current policy 2026-10-10)
 
-Issue #1496 evaluated pytest-xdist after the #1494/#1495 CI changes. The current
-CI baseline is serial: the comparable post-#1495 run took 231s on Python 3.10
-and 165s on Python 3.12. A local Python 3.12 run took 426.78s serial, 180.40s
-with four workers, and 162.07s with `-n auto` (16 workers), but all three runs
-shared the same pre-existing live-selftest mutation failure. Keep CI serial;
-see `docs/testing/pytest-xdist-evaluation-1496.md` for the classification and
-scoped experiment command.
+Issue #1496 evaluated pytest-xdist after the #1494/#1495 CI changes. The
+comparable post-#1495 serial run took 231s on Python 3.10 and 165s on Python
+3.12. A local Python 3.12 run took 426.78s serial, 180.40s with four workers,
+and 162.07s with `-n auto` (16 workers), but all three runs shared the same
+pre-existing live-selftest mutation failure. PR #1544 subsequently enabled the
+bounded `-n 4 --dist loadfile` workflow. Keep the fixed worker cap; do not
+promote `-n auto` without a clean, complete-checkout comparison. See
+`docs/testing/pytest-xdist-evaluation-1496.md` for the classification and
+rollback boundary.
