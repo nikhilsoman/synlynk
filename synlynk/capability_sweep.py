@@ -175,8 +175,8 @@ def cmd_capability_sweep_for_harness_model(harness_name: str, model_id: str, con
         verdict = _verify_calibration_result(verifier_agent, harness_name, model_id, skill, executor_result)
         conn.execute(
             "INSERT INTO capability_calibration_results "
-            "(result_id, harness_name, model_id, task_id, score, cost_usd, verified_by, run_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            "(result_id, harness_name, model_id, task_id, score, cost_usd, verified_by, run_at, quality_verified) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 str(uuid.uuid4()),
                 harness_name,
@@ -186,6 +186,7 @@ def cmd_capability_sweep_for_harness_model(harness_name: str, model_id: str, con
                 cost_usd,
                 verifier_agent,
                 now,
+                1 if verdict["quality_verified"] else 0,
             ),
         )
     conn.commit()
@@ -306,8 +307,8 @@ def _run_sweep(discovered: dict, skills: list) -> None:
                     conn.execute(
                         """INSERT INTO capability_ratings
                            (story_id, agent, model_version, discipline, org_domain, industry, phase,
-                            signal_source, quality, quality_auto, verifier_agent, correct)
-                           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+                            signal_source, quality, quality_auto, verifier_agent, correct, quality_verified)
+                           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                         (
                             "__baseline_seed__",
                             harness,
@@ -321,6 +322,7 @@ def _run_sweep(discovered: dict, skills: list) -> None:
                             verdict["quality"],
                             verifier_harness,
                             1 if verdict.get("correct", True) else 0,
+                            1 if verdict.get("quality_verified", True) else 0,
                         ),
                     )
                 conn.commit()

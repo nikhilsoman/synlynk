@@ -258,6 +258,63 @@ def test_sweep_for_harness_model_dispatches_selected_model(tmp_path, monkeypatch
     assert kwargs["db_conn"] is conn
 
 
+def test_sweep_for_harness_model_persists_quality_verified_false_on_fallback(tmp_path, monkeypatch):
+    from synlynk import db, capability_sweep
+
+    monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(tmp_path / "state.db"))
+    conn = db._get_db()
+    monkeypatch.setattr(capability_sweep, "_get_db", lambda: conn)
+    monkeypatch.setattr(
+        capability_sweep, "_dispatch_calibration_task",
+        lambda agent, task, **kwargs: {"output": "example output"},
+    )
+    monkeypatch.setattr(
+        capability_sweep, "_verify_calibration_result",
+        lambda verifier_agent, executor_agent, model, skill, executor_output: {
+            "quality": 5.0, "correct": True, "quality_verified": False,
+        },
+    )
+    monkeypatch.setattr(capability_sweep, "_pick_verifier_agent", lambda executor, available: "codex")
+
+    capability_sweep.cmd_capability_sweep_for_harness_model("agy", "gemini-3-pro")
+
+    rows = conn.execute(
+        "SELECT quality_verified FROM capability_calibration_results WHERE harness_name='agy'"
+    ).fetchall()
+    assert len(rows) >= 1
+    assert all(r[0] == 0 for r in rows)
+
+
+def test_run_sweep_persists_quality_verified_true_on_real_verdict(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk", exist_ok=True)
+    import synlynk as sl
+    from synlynk.capability_sweep import _run_sweep
+
+    monkeypatch.setattr(
+        "synlynk.capability_sweep._dispatch_calibration_task",
+        lambda agent, task, **kwargs: {"exit_code": 0, "output": "task complete", "agent": agent},
+    )
+    monkeypatch.setattr(
+        "synlynk.capability_sweep._verify_calibration_result",
+        lambda verifier_agent, executor_agent, model, skill, executor_output: {
+            "quality": 8.0, "correct": True, "quality_verified": True,
+        },
+    )
+
+    discovered = {"codex": ["gpt-5-codex"], "agy": ["gemini-2.5-pro"]}
+    _run_sweep(discovered, ["PROG"])
+
+    conn = sl._get_db()
+    rows = conn.execute(
+        "SELECT quality_verified FROM capability_ratings WHERE signal_source='baseline_seed'"
+    ).fetchall()
+    conn.close()
+
+    assert len(rows) >= 2
+    assert all(r[0] == 1 for r in rows)
+
+
 def test_dispatch_calibration_task_passes_model_to_dispatch_agent(monkeypatch):
     from synlynk import capability_sweep
 
