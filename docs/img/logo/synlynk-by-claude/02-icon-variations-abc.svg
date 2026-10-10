@@ -66,5 +66,5 @@
     <circle cx="4" cy="21" r="3" fill="#2EC4A0"/>
   </g>
   <text x="272" y="374" font-family="'Courier New', monospace" font-size="28" font-weight="500" fill="#1a1a1a" letter-spacing="-0.5">syn<tspan fill="#5B8DEF">l</tspan><tspan fill="#A259F7">y</tspan><tspan fill="#2EC4A0">n</tspan><tspan fill="#1a1a1a">k</tspan></text>
-  <text x="272" y="392" font-family="Arial, sans-serif" font-size="9" fill="#aaa" letter-spacing="1.5">synaptic link for ai dev</text>
+  <text x="272" y="392" font-family="Arial, sans-serif" font-size="9" fill="#aaa" letter-spacing="1.5">neutral control plane for coding tasks</text>
 </svg>

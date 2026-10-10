@@ -1895,4 +1895,31 @@ Remaining open: the ~74-entry original periodic-audit bucket still needs Nikhil'
 call (individual triage vs. bulk archive-then-discard); the `chore/discord-herdr-bridge-spec`
 parent worktree's stray test work is still undecided; #1877 not yet dispatched.
 
+**Issue #1929 / PR (pending):** Extended the `_FAST_CLI` path for ordinary `synlynk jobs`
+and `synlynk status` invocations. The fast status path avoids the legacy compatibility graph
+and expensive worktree hint during cold start; the fast jobs path renders the read-only ledger
+table without importing dispatch/reconciliation modules. Added a subprocess median budget test
+(`tests/test_cli_cold_start.py`) enforcing <150 ms for `jobs --all` and `status --json`.
+Focused verification: 174 passed; cold-start budget test: 2 passed.
+
+2026-10-04 — Issue #1979 verification: confirmed #1922's `job-status-truth.v1`
+projection was user-visible only through `synlynk jobs --json`; the normal
+`synlynk jobs --all` table omitted oracle verification and evidence details.
+Added compact verification state, reason code, and evidence count to that table,
+with regression coverage. Confirmed #1921 GC is invocation-driven and limited
+to `~/.synlynk/projects/*/state.db`; filed follow-up issue #2025 for the
+remaining local-state bound and coverage gaps. Verification: `tests/test_agent_cli.py -v`
+125 passed, 1 skipped; focused jobs tests 2 passed.
+2026-10-03 — Implemented issue #1928: made root `VERSION` the single release source, removed
+runtime/release duplication, updated README metadata, added the required `release-docs` CI gate,
+and added synchronization coverage. Focused tests: 530 passed; `release --check-docs` passes.
+
+2026-10-03 — Implemented issue #1951 after approval of the independent cost-audit design and plan.
+Added a transactional terminal-decision outbox, append-only cost source/event tables, structured
+usage and legacy-ledger import, provider JSONL/JSON/CSV import, versioned model-rate estimates,
+idempotent reconciliation/reporting, and dry-run-by-default source corrections. Cost audit only
+reads terminal decisions and cannot write status. Targeted suites: 320 passed, 1 skipped; the
+existing loopback callback test passes when run with local socket permission. CLI help and
+`git diff --check` pass.
+
 [@nikhilsoman]

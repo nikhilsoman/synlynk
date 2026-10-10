@@ -246,17 +246,18 @@ def log_telemetry_event(event: dict) -> None:
     telemetry_file = ".synlynk/telemetry.json"
     if not os.path.exists(".synlynk"):
         return
-    data = []
-    if os.path.exists(telemetry_file):
-        try:
-            with open(telemetry_file) as f:
-                data = json.load(f)
-        except (json.JSONDecodeError, IOError):
-            pass
-    data.append(event)
-    data = data[-100:]
-    with open(telemetry_file, "w") as f:
-        json.dump(data, f, indent=2)
+    with _sentinel_file_lock(telemetry_file):
+        data = []
+        if os.path.exists(telemetry_file):
+            try:
+                with open(telemetry_file) as f:
+                    data = json.load(f)
+            except (json.JSONDecodeError, IOError):
+                pass
+        data.append(event)
+        data = data[-100:]
+        with open(telemetry_file, "w") as f:
+            json.dump(data, f, indent=2)
 
 
 def _check_costs_freshness() -> None:

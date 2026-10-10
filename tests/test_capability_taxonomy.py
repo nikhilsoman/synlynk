@@ -22,9 +22,10 @@ def test_capability_constants_defined_and_distinct():
 
 
 def test_harness_profiles_conform_to_known_constraints():
-    # Grok has no shell execution in headless sandbox and cannot do gh-write
-    assert HARNESS_CAPABILITY_PROFILES["grok"][CAP_SHELL] is False
-    assert HARNESS_CAPABILITY_PROFILES["grok"][CAP_GH_WRITE] is False
+    # Live TC-9 retest 2026-10-04 confirmed Grok GitHub-write capability
+    # post-LIVE-13 fix (gh:#2034).
+    assert HARNESS_CAPABILITY_PROFILES["grok"][CAP_SHELL] is True
+    assert HARNESS_CAPABILITY_PROFILES["grok"][CAP_GH_WRITE] is True
     assert HARNESS_CAPABILITY_PROFILES["grok"][CAP_WORKSPACE_WRITE] is True
 
     # Codex has full capabilities when grants/network are enabled
@@ -82,8 +83,16 @@ def test_evaluate_harness_capabilities_missing():
         "grok",
         {CAP_SHELL, CAP_WORKSPACE_WRITE},
     )
-    assert eval_result.allowed is False
-    assert CAP_SHELL in eval_result.missing_capabilities
+    assert eval_result.allowed is True
+    assert eval_result.missing_capabilities == []
+
+
+def test_grok_runtime_shell_capability_defaults_true_and_supports_kill_switch(monkeypatch):
+    monkeypatch.delenv("SYNLYNK_GROK_SHELL_DISABLED", raising=False)
+    assert probe_harness_runtime_capability("grok", CAP_SHELL, ttl_seconds=0) is True
+
+    monkeypatch.setenv("SYNLYNK_GROK_SHELL_DISABLED", "1")
+    assert probe_harness_runtime_capability("grok", CAP_SHELL, ttl_seconds=0) is False
 
 
 def test_evaluate_harness_capabilities_grants_and_revokes():

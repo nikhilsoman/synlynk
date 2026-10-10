@@ -60,9 +60,10 @@ def test_tc9_grok_sandbox_denied(monkeypatch):
     with patch("synlynk.probe._run_tc6", return_value={"passed": True, "error": "", "output": "ok"}):
         # Dry mode
         res_dry = _run_tc9("grok", live=False)
-        assert res_dry["passed"] is False
-        assert res_dry["can_gh_write"] is False
-        assert res_dry["mechanism"] == "sandbox_denied"
+        assert res_dry["passed"] is True
+        assert res_dry["can_gh_write"] is True
+        assert res_dry["mechanism"] == "not_live_tested"
+        assert "last live retest" in res_dry["note"]
 
         # Live mode
         mock_proc = MagicMock(returncode=1, stdout="Error: execution denied in headless sandbox", stderr="")
@@ -184,7 +185,7 @@ def test_get_harness_gh_write_capability():
     assert cap_claude["source"] == "baseline"
 
     cap_grok = _get_harness_gh_write_capability("grok")
-    assert cap_grok["can_gh_write"] is False
+    assert cap_grok["can_gh_write"] is True
 
     # Dynamic from probe history in db
     db = sqlite3.connect(":memory:")

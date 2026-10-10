@@ -3,6 +3,21 @@
 import argparse
 
 
+CORE_HELP_COMMANDS = (
+    "init",
+    "quickstart",
+    "dispatch",
+    "status",
+    "jobs",
+    "decide",
+    "pr check",
+    "exec",
+    "doctor",
+)
+
+HELP_GROUPS = ("core", "workflow", "advanced", "admin")
+
+
 def iter_leaf_commands(parser: argparse.ArgumentParser, prefix: tuple = ()):
     """Yield every invocable command path from an argparse tree."""
     subparsers_actions = [
@@ -53,6 +68,15 @@ COMMAND_TAXONOMY = [
     {"command": "start", "governs_stage": "open", "maturity_tier": 0, "prominence": "primary",
      "orientation_gateway": False, "audience": "human",
      "trigger_phrases": ["start a new project", "is this a new or existing project"], "hook_event": None},
+    {"command": "quickstart", "governs_stage": "open", "maturity_tier": 0, "prominence": "primary",
+     "orientation_gateway": False, "audience": "human",
+     "trigger_phrases": ["get to a first dispatch", "run the guided quickstart"], "hook_event": None},
+    {"command": "brainstorm", "governs_stage": "goal", "maturity_tier": 0, "prominence": "primary",
+     "orientation_gateway": False, "audience": "human",
+     "trigger_phrases": ["brainstorm goals", "autonomous goal discovery", "brainstorm roadmap"], "hook_event": None},
+    {"command": "brief", "governs_stage": "visualize", "maturity_tier": 0, "prominence": "primary",
+     "orientation_gateway": False, "audience": "human",
+     "trigger_phrases": ["show executive brief", "view project brief", "render brief"], "hook_event": None},
     {"command": "tool install", "governs_stage": "open", "maturity_tier": 0, "prominence": "secondary",
      "orientation_gateway": False, "audience": "human",
      "trigger_phrases": ["install tool", "install recommended tool", "install graphify"], "hook_event": None},
@@ -156,6 +180,9 @@ COMMAND_TAXONOMY = [
     {"command": "goal status", "governs_stage": "goal", "maturity_tier": 1, "prominence": "primary",
      "orientation_gateway": False, "audience": "human",
      "trigger_phrases": ["how close is this goal", "goal completion rollup"], "hook_event": None},
+    {"command": "goal update", "governs_stage": "goal", "maturity_tier": 1, "prominence": "primary",
+     "orientation_gateway": False, "audience": "human",
+     "trigger_phrases": ["update a goal", "change goal details"], "hook_event": None},
     {"command": "story create", "governs_stage": "goal", "maturity_tier": 1, "prominence": "primary",
      "orientation_gateway": False, "audience": "human",
      "trigger_phrases": ["create a story for X", "write up this piece of work"], "hook_event": None},
@@ -240,6 +267,17 @@ COMMAND_TAXONOMY = [
          "clear dead running jobs",
          "jobs stuck running with dead pid",
      ], "hook_event": None},
+    {"command": "jobs reconcile", "governs_stage": "execute", "maturity_tier": 2, "prominence": "secondary",
+     "orientation_gateway": False, "audience": "human",
+     "trigger_phrases": [
+         "reconcile a job status",
+         "manually reconcile a job",
+         "repair job completion evidence",
+     ], "hook_event": None},
+    {"command": "gc", "governs_stage": "sustain", "maturity_tier": 2, "prominence": "secondary",
+     "orientation_gateway": False, "audience": "human",
+     "trigger_phrases": ["garbage collect merged worktrees", "clean up orphaned state shards"],
+     "hook_event": None},
     {"command": "schedule", "governs_stage": "execute", "maturity_tier": 2, "prominence": "primary",
      "orientation_gateway": False, "audience": "human",
      "trigger_phrases": ["batch these up", "run this fleet-wide"], "hook_event": None},
@@ -267,6 +305,9 @@ COMMAND_TAXONOMY = [
     {"command": "pr check", "governs_stage": "release", "maturity_tier": 2, "prominence": "primary",
      "orientation_gateway": False, "audience": "human",
      "trigger_phrases": ["is this PR's model version attested"], "hook_event": None},
+    {"command": "provenance attest", "governs_stage": "sustain", "maturity_tier": 2, "prominence": "secondary",
+     "orientation_gateway": False, "audience": "human",
+     "trigger_phrases": ["attest legacy job provenance", "record a confirmed job task type"], "hook_event": None},
     {"command": "gh", "governs_stage": "execute", "maturity_tier": 2, "prominence": "primary",
      "orientation_gateway": False, "audience": "human",
      "trigger_phrases": ["run gh as a role app", "gh as qa bot", "don't use host gh"], "hook_event": None},
@@ -282,6 +323,9 @@ COMMAND_TAXONOMY = [
     {"command": "policy sync-branch-protection", "governs_stage": "sustain", "maturity_tier": 2, "prominence": "secondary",
      "orientation_gateway": False, "audience": "human",
      "trigger_phrases": ["sync branch protection", "enforce policy on github"], "hook_event": None},
+    {"command": "policy gate-status", "governs_stage": "sustain", "maturity_tier": 2, "prominence": "secondary",
+     "orientation_gateway": False, "audience": "human",
+     "trigger_phrases": ["show policy gate status", "show gate streaks"], "hook_event": None},
     {"command": "ops report", "governs_stage": "sustain", "maturity_tier": 2, "prominence": "primary",
      "orientation_gateway": False, "audience": "human",
      "trigger_phrases": [
@@ -329,6 +373,21 @@ COMMAND_TAXONOMY = [
     {"command": "cost true-up", "governs_stage": "sustain", "maturity_tier": 2, "prominence": "secondary",
      "orientation_gateway": False, "audience": "human",
      "trigger_phrases": ["reconcile subscription costs", "true up monthly subscription spend"], "hook_event": None},
+    {"command": "cost billing", "governs_stage": "sustain", "maturity_tier": 2, "prominence": "secondary",
+     "orientation_gateway": False, "audience": "human",
+     "trigger_phrases": ["show harness subscription billing", "check subscription fees"], "hook_event": None},
+    {"command": "cost audit reconcile", "governs_stage": "sustain", "maturity_tier": 2, "prominence": "secondary",
+     "orientation_gateway": False, "audience": "human",
+     "trigger_phrases": ["reconcile cost audit data", "audit terminal decision costs"], "hook_event": None},
+    {"command": "cost audit import", "governs_stage": "sustain", "maturity_tier": 2, "prominence": "secondary",
+     "orientation_gateway": False, "audience": "human",
+     "trigger_phrases": ["import provider billing export"], "hook_event": None},
+    {"command": "cost audit report", "governs_stage": "sustain", "maturity_tier": 2, "prominence": "secondary",
+     "orientation_gateway": False, "audience": "human",
+     "trigger_phrases": ["report audited costs", "show cost audit coverage"], "hook_event": None},
+    {"command": "cost audit correct", "governs_stage": "sustain", "maturity_tier": 2, "prominence": "secondary",
+     "orientation_gateway": False, "audience": "human",
+     "trigger_phrases": ["correct provider source record"], "hook_event": None},
     {"command": "credit grant", "governs_stage": "sustain", "maturity_tier": 2, "prominence": "secondary",
      "orientation_gateway": False, "audience": "human",
      "trigger_phrases": ["grant a credit balance", "record a credit grant"], "hook_event": None},
@@ -341,6 +400,9 @@ COMMAND_TAXONOMY = [
     {"command": "quota calibrate", "governs_stage": "sustain", "maturity_tier": 2, "prominence": "secondary",
      "orientation_gateway": False, "audience": "human",
      "trigger_phrases": ["calibrate quota", "calibrate harness usage"], "hook_event": None},
+    {"command": "quota federated", "governs_stage": "sustain", "maturity_tier": 2, "prominence": "secondary",
+     "orientation_gateway": False, "audience": "human",
+     "trigger_phrases": ["show federated quota", "which harness has quota headroom"], "hook_event": None},
     {"command": "testbed", "governs_stage": "execute", "maturity_tier": 2, "prominence": "secondary",
      "orientation_gateway": False, "audience": "human",
      "trigger_phrases": ["run acceptance testbed", "testbed soak", "testbed receipt"], "hook_event": None},
@@ -445,6 +507,40 @@ COMMAND_TAXONOMY = [
      "orientation_gateway": False, "audience": "hook", "trigger_phrases": [], "hook_event": "pre-commit"},
     {"command": "instructions register", "governs_stage": "sustain", "maturity_tier": "latent", "prominence": None,
      "orientation_gateway": False, "audience": "hook", "trigger_phrases": [], "hook_event": None},
+
+    # --- v0.24.0: Autonomous Platform, Board Governance, Concierge, Add-ons ---
+    {"command": "autonomy show", "governs_stage": "sustain", "maturity_tier": 2, "prominence": "primary",
+     "orientation_gateway": False, "audience": "human",
+     "trigger_phrases": ["what's our autonomy mode", "show autonomy dial"], "hook_event": None},
+    {"command": "autonomy set", "governs_stage": "sustain", "maturity_tier": 2, "prominence": "primary",
+     "orientation_gateway": False, "audience": "human",
+     "trigger_phrases": ["set autonomy mode", "go fully autonomous"], "hook_event": None},
+    {"command": "board propose", "governs_stage": "goal", "maturity_tier": 3, "prominence": "primary",
+     "orientation_gateway": False, "audience": "human",
+     "trigger_phrases": ["propose to the board", "create a board proposal"], "hook_event": None},
+    {"command": "board sign", "governs_stage": "goal", "maturity_tier": 3, "prominence": "primary",
+     "orientation_gateway": False, "audience": "human",
+     "trigger_phrases": ["sign the board proposal", "approve as genesis chair"], "hook_event": None},
+    {"command": "board show", "governs_stage": "visualize", "maturity_tier": 3, "prominence": "secondary",
+     "orientation_gateway": False, "audience": "human",
+     "trigger_phrases": ["show board proposal status"], "hook_event": None},
+    {"command": "concierge synthesize", "governs_stage": "goal", "maturity_tier": 2, "prominence": "primary",
+     "orientation_gateway": False, "audience": "human",
+     "trigger_phrases": ["synthesize a feature proposal", "turn my answers into a spec"], "hook_event": None},
+    {"command": "addon list", "governs_stage": "sustain", "maturity_tier": 2, "prominence": "secondary",
+     "orientation_gateway": False, "audience": "human",
+     "trigger_phrases": ["list add-on bundles", "what add-ons are available"], "hook_event": None},
+    {"command": "addon install", "governs_stage": "sustain", "maturity_tier": 2, "prominence": "primary",
+     "orientation_gateway": False, "audience": "human",
+     "trigger_phrases": ["install an add-on bundle", "turn on quality tooling"], "hook_event": None},
+
+    # --- v0.25.0: Sovereign Silicon, Local oMLX Fleet, Universal Gateway Preview ---
+    {"command": "gateway probe", "governs_stage": "sustain", "maturity_tier": 2, "prominence": "primary",
+     "orientation_gateway": False, "audience": "human",
+     "trigger_phrases": ["probe gateway connectivity", "test openrouter gateway"], "hook_event": None},
+    {"command": "gateway dispatch", "governs_stage": "execute", "maturity_tier": 2, "prominence": "primary",
+     "orientation_gateway": False, "audience": "human",
+     "trigger_phrases": ["dispatch through gateway", "run openrouter dispatch"], "hook_event": None},
 ]
 
 
@@ -464,3 +560,45 @@ def entries_up_to_tier(tier: int) -> list:
         entry for entry in COMMAND_TAXONOMY
         if isinstance(entry["maturity_tier"], int) and entry["maturity_tier"] <= tier
     ]
+
+
+def entries_for_help(group: str = "core", *, include_all: bool = False) -> list:
+    """Return taxonomy entries for the human-facing tiered help view."""
+    if include_all:
+        return list(COMMAND_TAXONOMY)
+
+    group = group or "core"
+    if group == "core":
+        return [entry for entry in COMMAND_TAXONOMY if entry["command"] in CORE_HELP_COMMANDS]
+    if group == "workflow":
+        return [
+            entry for entry in COMMAND_TAXONOMY
+            if entry["command"] not in CORE_HELP_COMMANDS
+            and isinstance(entry["maturity_tier"], int)
+            and entry["maturity_tier"] <= 2
+        ]
+    if group in {"advanced", "admin"}:
+        return [
+            entry for entry in COMMAND_TAXONOMY
+            if entry["command"] not in CORE_HELP_COMMANDS
+            and (entry["maturity_tier"] == 3 or entry["maturity_tier"] == "latent")
+        ]
+    raise ValueError(f"unknown help group: {group!r}")
+
+
+def format_tiered_help(group: str = "core", *, include_all: bool = False) -> str:
+    """Render compact, taxonomy-backed help without changing command parsing."""
+    group = group or "core"
+    entries = entries_for_help(group, include_all=include_all)
+    title = "All commands" if include_all else f"{group.title()} commands"
+    lines = [f"{title} (from COMMAND_TAXONOMY):"]
+    for entry in entries:
+        hints = entry.get("trigger_phrases") or []
+        hint = hints[0] if hints else ""
+        suffix = f" — {hint}" if hint else ""
+        command = "init --quickstart" if entry["command"] == "init" else entry["command"]
+        lines.append(f"  {command:<32}{suffix}")
+    lines.append("")
+    lines.append("Use `synlynk help --all` for the complete command catalog.")
+    lines.append("Use `synlynk help workflow`, `synlynk help advanced`, or `synlynk help admin` for a tier.")
+    return "\n".join(lines)

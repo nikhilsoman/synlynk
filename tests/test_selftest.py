@@ -1,4 +1,6 @@
 import argparse
+import os
+import subprocess
 from pathlib import Path
 from unittest.mock import patch
 
@@ -113,6 +115,27 @@ def test_live_selftest_init_preserves_existing_files(tmp_path):
 
     assert result.status == "pass"
     assert "without clobbering existing files" in result.detail
+
+
+def test_ensure_workspace_scaffold_bootstrap_commits_split_config_files(tmp_path):
+    from synlynk import selftest as selftest_mod
+
+    ctx = selftest_mod.ScenarioContext(repo_path=str(tmp_path), live=True)
+    selftest_mod._ensure_workspace_scaffold(ctx)
+
+    assert (tmp_path / ".synlynk" / "workspace.json").exists()
+    assert (tmp_path / ".synlynk" / "billing.json").exists()
+    assert (tmp_path / ".synlynk" / "policy.json").exists()
+    assert not (tmp_path / ".synlynk" / "config.json").exists()
+    assert (tmp_path / ".synlynk" / "config.json.bak").exists()
+
+    tracked = subprocess.run(
+        ["git", "ls-files"], cwd=tmp_path, capture_output=True, text=True, check=True
+    ).stdout
+    assert ".synlynk/workspace.json" in tracked
+    assert ".synlynk/billing.json" in tracked
+    assert ".synlynk/policy.json" in tracked
+    assert ".synlynk/config.json" not in tracked
 
 
 def test_live_selftest_migrate_imports_real_rows(tmp_path):
@@ -443,6 +466,7 @@ def test_live_paid_selftest_scenarios_use_scratch_workspace(monkeypatch, tmp_pat
     import synlynk.scheduler as scheduler_mod
 
     host_cwd = Path.cwd()
+    real_chdir = os.chdir
     scratch_workspace = tmp_path / "scratch"
     recorded = []
 
@@ -473,6 +497,7 @@ def test_live_paid_selftest_scenarios_use_scratch_workspace(monkeypatch, tmp_pat
 
     def fake_chdir(path):
         recorded.append(Path(path))
+        real_chdir(path)
 
     monkeypatch.setattr(selftest_mod.os, "chdir", fake_chdir)
 

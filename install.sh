@@ -77,6 +77,13 @@ fi
 
 echo "  ✓ Installed synlynk via tier: $METHOD"
 
+# VERSION is the repository source of truth; report installed metadata without
+# carrying a second hand-edited version in this installer.
+INSTALLED_VERSION=$(python3 -c 'from importlib.metadata import version; print(version("synlynk"))' 2>/dev/null || true)
+if [ -n "$INSTALLED_VERSION" ]; then
+    echo "  ✓ Installed synlynk v$INSTALLED_VERSION"
+fi
+
 # Health check & PATH check. Print a hint only; do not edit shell rc files.
 case ":$PATH:" in
     *:"$BIN_DIR":*) ;;

@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import List, Optional
@@ -61,6 +62,29 @@ def generate_testbed_receipt(
     return receipt_data
 
 
+def _run_local_state_db_wal_soak(args) -> int:
+    """Run the gh:#2102 WAL soak against an isolated temp state.db (no VMs)."""
+    writers = int(getattr(args, "writers", 24) or 24)
+    tmp = tempfile.mkdtemp(prefix="synlynk-state-db-soak-")
+    db_path = str(Path(tmp) / "state.db")
+    runner = ScenarioRunner(driver=None)
+    result = runner.run_state_db_wal_soak(db_path=db_path, writers=writers)
+    receipt = generate_testbed_receipt(
+        target_version=getattr(args, "target", "local"),
+        driver_type="local-isolated-db",
+        scenarios=[result],
+        nodes=[],
+    )
+    if getattr(args, "json", False):
+        print(json.dumps({"receipt": receipt, "details": json.loads(result.details)}, indent=2))
+    else:
+        print(f"\nTestbed Verdict: {receipt['overall_verdict']}")
+        print(f"  - {result.name}: {result.status} ({result.duration_seconds:.2f}s)")
+        print(f"  db: {db_path}")
+        print(f"Attestation: {receipt['signature']}")
+    return 0 if receipt["overall_verdict"] == "PASSED" else 1
+
+
 def run_testbed_cli(argv: List[str]) -> int:
     parser = argparse.ArgumentParser(prog="synlynk testbed", description="Frontier QA Acceptance and Soak Testbed")
     subparsers = parser.add_subparsers(dest="subcommand")
@@ -68,7 +92,11 @@ def run_testbed_cli(argv: List[str]) -> int:
     # run subcommand
     run_p = subparsers.add_parser("run", help="Run acceptance testbed scenario")
     run_p.add_argument("--target", default="unstable", help="Target version (staging, unstable, commit:<sha>, local)")
-    run_p.add_argument("--scenario", default="all", help="Scenario to execute (brownfield_init, p2p_mesh, task_lease_recovery, all)")
+    run_p.add_argument(
+        "--scenario",
+        default="all",
+        help="Scenario to execute (brownfield_init, p2p_mesh, task_lease_recovery, state_db_wal, all)",
+    )
     run_p.add_argument("--driver", default="orbstack", choices=["orbstack", "docker"], help="Driver backend")
     run_p.add_argument("--json", action="store_true", help="Output results in JSON format")
 
@@ -85,6 +113,12 @@ def run_testbed_cli(argv: List[str]) -> int:
     soak_p.add_argument("--chaos", default="kill,partition", help="Comma-separated fault injection types")
     soak_p.add_argument("--driver", default="orbstack", choices=["orbstack", "docker"])
     soak_p.add_argument("--json", action="store_true")
+    soak_p.add_argument(
+        "--scenario",
+        default="chaos",
+        help="chaos (multi-node) or state_db_wal (local isolated ledger)",
+    )
+    soak_p.add_argument("--writers", type=int, default=24, help="Concurrent state.db writers for state_db_wal")
 
     # status subcommand
     status_p = subparsers.add_parser("status", help="List active testbed nodes")
@@ -96,6 +130,16 @@ def run_testbed_cli(argv: List[str]) -> int:
     clean_p.add_argument("--driver", default="orbstack", choices=["orbstack", "docker"])
 
     args = parser.parse_args(argv)
+
+    local_wal = (
+        args.subcommand == "run"
+        and getattr(args, "scenario", "") in ("state_db_wal", "state_db_wal_soak")
+    ) or (
+        args.subcommand == "soak"
+        and getattr(args, "scenario", "chaos") in ("state_db_wal", "state_db_wal_soak")
+    )
+    if local_wal:
+        return _run_local_state_db_wal_soak(args)
 
     driver = get_driver(getattr(args, "driver", "orbstack"))
 

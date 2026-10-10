@@ -131,6 +131,34 @@ def test_ensure_recursive_gitignore(tmp_path):
     assert "!**/.synlynk/roles.yaml" in content
 
 
+def test_ensure_recursive_gitignore_tracks_split_config_files(tmp_path, monkeypatch):
+    from synlynk.parity import ensure_recursive_gitignore
+
+    ensure_recursive_gitignore(str(tmp_path))
+    content = (tmp_path / ".gitignore").read_text()
+    assert "!**/.synlynk/workspace.json" in content
+    assert "!**/.synlynk/billing.json" in content
+    assert "!**/.synlynk/config.json" in content
+
+
+def test_check_fleet_parity_reads_workgroup_agents_from_workspace_json(tmp_path, monkeypatch):
+    from synlynk.parity import check_fleet_parity
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / ".synlynk" / "workspace.json").write_text(
+        json.dumps(
+            {
+                "workgroup_agents": ["claude", "codex", "agy", "grok"],
+                "agent_slots": {"claude": "claude", "codex": "codex", "agy": "agy", "grok": "grok"},
+            }
+        )
+    )
+    result = check_fleet_parity(repo_path=str(tmp_path))
+    assert "workgroup_agents missing" not in result.get("message", "")
+    assert "agent_slots missing" not in result.get("message", "")
+
+
 def test_generate_stack_policy_node(tmp_path):
     stack = {"language": "node", "test_cmd": "npm test"}
     policy = generate_stack_policy(repo_id="test-node-app", stack_info=stack)
@@ -214,5 +242,4 @@ def test_doctor_hc_fleet_parity_runs():
     check = _hc_fleet_parity()
     assert check.name == "fleet_parity"
     assert check.status in ("ok", "warn")
-
 

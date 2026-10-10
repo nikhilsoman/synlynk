@@ -97,7 +97,7 @@ def test_config_set_dispatch_mode(tmp_path, monkeypatch):
     from synlynk import cmd_config_set
 
     cmd_config_set("dispatch_mode", "eco")
-    config = json.loads((tmp_path / ".synlynk" / "config.json").read_text())
+    config = json.loads((tmp_path / ".synlynk" / "workspace.json").read_text())
     assert config["dispatch_mode"] == "eco"
 
 
@@ -214,6 +214,23 @@ def test_format_status_terminal_shows_rates_never_updated_warning():
     cycle_map = {"claude": {c: "full" for c in ["goal", "open", "visualize", "execute", "release", "notify", "sustain"]}}
     output = _format_status_terminal(rows, cycle_map, 4.2, "daily-grind", 0)
     assert "RATES   never updated ⚠ (hardcoded defaults)" in output
+
+
+def test_format_status_terminal_shows_host_auth_audit_summary():
+    from synlynk.status import _format_status_terminal
+
+    events = [{
+        "type": "gh_host_auth",
+        "recorded_at": "2026-10-06T01:02:03Z",
+        "actor": "operator",
+        "repo": "nikhilsoman/synlynk",
+    }]
+    output = _format_status_terminal(
+        [], {}, 1.0, "daily-grind", 0, host_auth_events=events
+    )
+
+    assert "GH HOST AUTH  1 call(s); latest 2026-10-06T01:02:03Z" in output
+    assert "by operator on nikhilsoman/synlynk" in output
 
 
 def test_format_status_json_valid():

@@ -20,6 +20,27 @@ def test_build_parser_exposes_dispatch_tree_without_running_main():
         parser.parse_args(["dispatch", "not-a-real-agent", "--task", "build"])
 
 
+def test_cost_log_parser_accepts_role_and_pr():
+    from synlynk.cli import build_parser
+
+    parser = build_parser()
+    args = parser.parse_args([
+        "cost", "log",
+        "--harness", "claude",
+        "--tokens-in", "10",
+        "--tokens-out", "5",
+        "--pr", "2113",
+        "--role", "qa",
+        "--model", "claude-sonnet-4-6",
+    ])
+
+    assert args.command == "cost"
+    assert args.cost_action == "log"
+    assert args.pr == 2113
+    assert args.role == "qa"
+    assert args.model == "claude-sonnet-4-6"
+
+
 def test_dispatch_parser_accepts_issue_flag():
     from synlynk.cli import build_parser
 
@@ -193,6 +214,19 @@ def test_fast_cli_preserves_help_and_invalid_command_paths():
     assert "sentinel" in help_result.stdout
     assert invalid_result.returncode == 2
     assert "invalid choice" in invalid_result.stderr
+
+
+def test_tiered_help_command_supports_core_and_all_views(capsys):
+    cli_mod.main(["help"])
+    core = capsys.readouterr().out
+    assert "Core commands" in core
+    assert "dispatch" in core
+    assert "goal create" not in core
+
+    cli_mod.main(["help", "--all"])
+    all_help = capsys.readouterr().out
+    assert "All commands" in all_help
+    assert "goal create" in all_help
 
 
 def test_lazy_parser_registers_only_the_selected_top_level_command():

@@ -12,6 +12,741 @@ import pytest
 from synlynk.agent_cli import SEED_CHARTERS
 
 
+def _governs_gate_db():
+    db = sqlite3.connect(":memory:")
+    db.executescript(
+        """
+        CREATE TABLE goals (goal_id TEXT PRIMARY KEY);
+        CREATE TABLE stories (story_id TEXT PRIMARY KEY, goal_id TEXT);
+        CREATE TABLE goal_contributions (story_id TEXT, goal_id TEXT, link_status TEXT);
+        CREATE TABLE daemon_jobs (job_id TEXT PRIMARY KEY, story_id TEXT, gh_write_target TEXT);
+        CREATE TABLE cost_entries (job_id TEXT, story_id TEXT);
+        CREATE TABLE capability_ratings (id INTEGER PRIMARY KEY, story_id TEXT, pr_number INTEGER);
+        """
+    )
+    return db
+
+
+def test_governs_dispatch_preflight_passes_for_linked_story_goal():
+    from synlynk.dispatch import _preflight_dispatch
+
+    db = _governs_gate_db()
+    db.execute("INSERT INTO goals VALUES ('goal-1')")
+    db.execute("INSERT INTO stories VALUES ('story-1', 'goal-1')")
+    db.commit()
+    result = _preflight_dispatch("unknown", [], db_conn=db, story_id="story-1")
+    assert result["passed"] is True
+
+
+def test_governs_dispatch_preflight_hard_fails_without_story_goal():
+    from synlynk.dispatch import _preflight_dispatch
+
+    db = _governs_gate_db()
+    db.execute("INSERT INTO stories VALUES ('story-1', NULL)")
+    db.commit()
+    result = _preflight_dispatch("unknown", [], db_conn=db, story_id="story-1")
+    assert result["passed"] is False
+    assert result["sentinel"] == "GOVERNS_LINKAGE_MISSING"
+
+
+def test_governs_dispatch_preflight_hard_fails_without_story_id():
+    from synlynk.dispatch import _preflight_dispatch
+
+    db = _governs_gate_db()
+    result = _preflight_dispatch("unknown", [], db_conn=db)
+    assert result["passed"] is False
+    assert result["sentinel"] == "GOVERNS_LINKAGE_MISSING"
+
+
+def test_governs_dispatch_preflight_hard_fails_without_db_evidence():
+    from synlynk.dispatch import _preflight_dispatch
+
+    result = _preflight_dispatch("unknown", [], story_id="story-1")
+    assert result["passed"] is False
+    assert result["sentinel"] == "GOVERNS_LINKAGE_MISSING"
+
+
+def test_governs_pr_check_linkage_passes_for_all_dispatched_jobs():
+    from synlynk.governs_gate import pr_governs_linkage_violations
+
+    db = _governs_gate_db()
+    db.execute("INSERT INTO goals VALUES ('goal-1')")
+    db.execute("INSERT INTO stories VALUES ('story-1', 'goal-1')")
+    db.execute("INSERT INTO capability_ratings VALUES (1, 'story-1', 1990)")
+    db.execute("INSERT INTO daemon_jobs VALUES ('job-1', 'story-1', 'pr:1990')")
+    db.execute("INSERT INTO cost_entries VALUES ('job-1', 'story-1')")
+    db.commit()
+    assert pr_governs_linkage_violations(db, 1990) == []
+
+
+def test_governs_pr_check_hard_fails_for_unlinked_dispatched_job():
+    from synlynk.governs_gate import pr_governs_linkage_violations
+
+    db = _governs_gate_db()
+    db.execute("INSERT INTO stories VALUES ('story-1', NULL)")
+    db.execute("INSERT INTO capability_ratings VALUES (1, 'story-1', 1990)")
+    db.execute("INSERT INTO daemon_jobs VALUES ('job-1', 'story-1', 'pr:1990')")
+    db.execute("INSERT INTO cost_entries VALUES ('job-1', 'story-1')")
+    db.commit()
+    violations = pr_governs_linkage_violations(db, 1990)
+    assert {item["job_id"] for item in violations} == {"job-1"}
+
+
+def test_governs_pr_check_ignores_unrelated_null_target_cost_job():
+    from synlynk.governs_gate import pr_governs_linkage_violations
+
+    db = sqlite3.connect(":memory:")
+    db.executescript(
+        """
+        CREATE TABLE stories (story_id TEXT PRIMARY KEY, goal_id TEXT, gh_issue TEXT);
+        CREATE TABLE daemon_jobs (
+            job_id TEXT PRIMARY KEY, story_id TEXT, task TEXT, gh_write_target TEXT
+        );
+        CREATE TABLE cost_entries (job_id TEXT, story_id TEXT);
+        CREATE TABLE capability_ratings (id INTEGER PRIMARY KEY, story_id TEXT, pr_number INTEGER);
+        """
+    )
+    db.execute("INSERT INTO stories VALUES ('story-historical', NULL, NULL)")
+    db.execute(
+        "INSERT INTO daemon_jobs VALUES (?, ?, ?, ?)",
+        ("job-historical", "story-historical", "historical maintenance", None),
+    )
+    db.execute("INSERT INTO cost_entries VALUES ('job-historical', 'story-historical')")
+    db.commit()
+
+    assert pr_governs_linkage_violations(db, 1990) == []
+
+
+def test_governs_pr_check_flags_untagged_job_sharing_pr_story():
+    from synlynk.governs_gate import pr_governs_linkage_violations
+
+    db = sqlite3.connect(":memory:")
+    db.executescript(
+        """
+        CREATE TABLE stories (story_id TEXT PRIMARY KEY, goal_id TEXT, gh_issue TEXT);
+        CREATE TABLE daemon_jobs (
+            job_id TEXT PRIMARY KEY, story_id TEXT, task TEXT, gh_write_target TEXT
+        );
+        CREATE TABLE cost_entries (job_id TEXT, story_id TEXT);
+        CREATE TABLE capability_ratings (id INTEGER PRIMARY KEY, story_id TEXT, pr_number INTEGER);
+        """
+    )
+    db.execute("INSERT INTO stories VALUES ('story-pr-1990', NULL, NULL)")
+    db.execute("INSERT INTO capability_ratings VALUES (1, 'story-pr-1990', 1990)")
+    db.execute(
+        "INSERT INTO daemon_jobs VALUES (?, ?, ?, ?)",
+        ("job-untagged", "story-pr-1990", "implement linked story", None),
+    )
+    db.execute("INSERT INTO cost_entries VALUES ('job-untagged', 'story-pr-1990')")
+    db.commit()
+
+    violations = pr_governs_linkage_violations(db, 1990)
+    assert {item["job_id"] for item in violations} == {"job-untagged"}
+
+
+def test_governs_pr_check_flags_original_gap_two_untagged_job_for_pr_2029():
+    from synlynk.governs_gate import pr_governs_linkage_violations
+
+    db = sqlite3.connect(":memory:")
+    db.executescript(
+        """
+        CREATE TABLE stories (story_id TEXT PRIMARY KEY, goal_id TEXT);
+        CREATE TABLE daemon_jobs (job_id TEXT PRIMARY KEY, story_id TEXT, task TEXT, gh_write_target TEXT);
+        CREATE TABLE cost_entries (job_id TEXT, story_id TEXT);
+        CREATE TABLE capability_ratings (id INTEGER PRIMARY KEY, story_id TEXT, pr_number INTEGER);
+        """
+    )
+    db.execute("INSERT INTO stories VALUES ('story-unlinked-2029', NULL)")
+    db.execute("INSERT INTO capability_ratings VALUES (1, 'story-unlinked-2029', 2029)")
+    db.execute(
+        "INSERT INTO daemon_jobs VALUES (?, ?, ?, ?)",
+        ("job-untagged-2029", "story-unlinked-2029", "implement the requested change", None),
+    )
+    db.execute("INSERT INTO cost_entries VALUES (?, ?)", ("job-untagged-2029", "story-unlinked-2029"))
+    db.commit()
+
+    violations = pr_governs_linkage_violations(db, 2029)
+    assert {item["job_id"] for item in violations} == {"job-untagged-2029"}
+
+
+def test_governs_pr_check_flags_job_referencing_linked_issue():
+    from synlynk.governs_gate import pr_governs_linkage_violations
+
+    db = sqlite3.connect(":memory:")
+    db.executescript(
+        """
+        CREATE TABLE stories (story_id TEXT PRIMARY KEY, goal_id TEXT, gh_issue TEXT);
+        CREATE TABLE daemon_jobs (
+            job_id TEXT PRIMARY KEY, story_id TEXT, task TEXT, gh_write_target TEXT
+        );
+        CREATE TABLE cost_entries (job_id TEXT, story_id TEXT);
+        CREATE TABLE capability_ratings (id INTEGER PRIMARY KEY, story_id TEXT, pr_number INTEGER);
+        """
+    )
+    db.execute("INSERT INTO stories VALUES ('story-issue-1990', NULL, '1990')")
+    db.execute("INSERT INTO capability_ratings VALUES (1, 'story-issue-1990', 2029)")
+    db.execute(
+        "INSERT INTO daemon_jobs VALUES (?, ?, ?, ?)",
+        ("job-issue", "story-issue-1990", "implement issue #1990", None),
+    )
+    db.execute("INSERT INTO cost_entries VALUES ('job-issue', 'story-issue-1990')")
+    db.commit()
+
+    violations = pr_governs_linkage_violations(db, 2029)
+    assert {item["job_id"] for item in violations} == {"job-issue"}
+
+
+def test_governs_pr_check_walks_attributable_jobs_and_ignores_other_prs():
+    from synlynk.governs_gate import pr_governs_linkage_violations
+
+    db = sqlite3.connect(":memory:")
+    db.executescript(
+        """
+        CREATE TABLE stories (story_id TEXT PRIMARY KEY, goal_id TEXT);
+        CREATE TABLE daemon_jobs (job_id TEXT PRIMARY KEY, story_id TEXT, task TEXT, gh_write_target TEXT);
+        CREATE TABLE cost_entries (job_id TEXT, story_id TEXT);
+        CREATE TABLE capability_ratings (id INTEGER PRIMARY KEY, story_id TEXT, pr_number INTEGER);
+        """
+    )
+    db.execute("INSERT INTO stories VALUES ('story-unlinked', NULL)")
+    db.execute("INSERT INTO daemon_jobs VALUES (?, ?, ?, ?)",
+               ("job-target", "story-unlinked", "implement feature", "issue:1990"))
+    db.execute("INSERT INTO daemon_jobs VALUES (?, ?, ?, ?)",
+               ("job-pr", "story-unlinked", "implement PR #1990", "issue:1990"))
+    db.execute("INSERT INTO daemon_jobs VALUES (?, ?, ?, ?)",
+               ("job-other", "story-unlinked", "implement PR #1991", "issue:1991"))
+    db.executemany("INSERT INTO cost_entries VALUES (?, ?)", [
+        ("job-pr", "story-unlinked"), ("job-other", "story-unlinked"),
+    ])
+    db.commit()
+
+    violations = pr_governs_linkage_violations(db, 1990)
+    assert {item["job_id"] for item in violations} == {"job-pr"}
+
+
+def _seed_cross_harness_review_case(project_dir, monkeypatch, *, review_harness, review_model):
+    import json
+    import synlynk
+    from synlynk.db import _cross_harness_review_verdict
+    from types import SimpleNamespace
+    monkeypatch.setattr("synlynk.db.subprocess.run", lambda *a, **k: SimpleNamespace(
+        returncode=0, stdout=json.dumps({"reviews": [{"author": {"login": "qa-app[bot]"}, "submittedAt": "2026-10-04T00:01:00Z"}]})
+    ))
+
+    policy_path = project_dir / ".synlynk" / "policy.json"
+    policy_path.parent.mkdir(parents=True, exist_ok=True)
+    policy_path.write_text(json.dumps({
+        "overrides": {"merge_authority": {"cross_harness_review_required": True}}
+    }))
+    monkeypatch.chdir(project_dir)
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, harness, task, status, enqueued_at, resolved_model, purpose) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        ("job-impl", "codex", "codex", "implement issue #1991", "done", "2026-10-04T00:00:00", "gpt-5.3-codex", "implementation"),
+    )
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, harness, task, status, enqueued_at, resolved_model, purpose, gh_write_target, gh_write_expect, gh_write_author, started_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        ("job-review", review_harness, review_harness, "review PR #1991", "done", "2026-10-04T00:00:01", review_model, "review", "pr:1991", "review_posted", "qa-app[bot]", "2026-10-04T00:00:01Z"),
+    )
+    conn.execute("INSERT INTO stories (story_id, title) VALUES (?, ?)", ("story-1991", "cross-harness review"))
+    for job_id, harness, model, story_id in (
+        ("job-impl", "codex", "gpt-5.3-codex", "story-1991"),
+        ("job-review", review_harness, review_model, None),
+    ):
+        conn.execute(
+            "INSERT INTO cost_entries (session_date, agent, harness, model, story_id, cost_source, job_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            ("2026-10-04", harness, harness, model, story_id, "test", job_id),
+        )
+    conn.execute(
+        "INSERT INTO capability_ratings (story_id, agent, model_version, quality, pr_number) "
+        "VALUES (?, ?, ?, ?, ?)",
+        ("story-1991", "codex", "gpt-5.3-codex", 1.0, 1991),
+    )
+    conn.commit()
+    ok, message = _cross_harness_review_verdict(conn, 1991)
+    conn.close()
+    return ok, message
+
+
+def test_pr_check_cross_harness_review_rejects_same_harness_and_model(project_dir, monkeypatch):
+    ok, message = _seed_cross_harness_review_case(
+        project_dir, monkeypatch, review_harness="codex", review_model="gpt-5.3-codex"
+    )
+    assert not ok
+    assert "same harness+model" in message
+
+
+def test_pr_check_cross_harness_review_accepts_different_harness(project_dir, monkeypatch):
+    ok, _ = _seed_cross_harness_review_case(
+        project_dir, monkeypatch, review_harness="claude", review_model="gpt-5.3-codex"
+    )
+    assert ok
+
+
+def test_pr_check_cross_harness_review_accepts_different_model(project_dir, monkeypatch):
+    ok, _ = _seed_cross_harness_review_case(
+        project_dir, monkeypatch, review_harness="codex", review_model="gpt-5.2-codex"
+    )
+    assert ok
+
+
+def test_review_job_timestamp_treats_legacy_start_as_local(project_dir, monkeypatch):
+    import json
+    from datetime import timezone, timedelta
+    from types import SimpleNamespace
+    import synlynk
+    import synlynk.db as db
+    import synlynk.gh_verify as gh_verify
+
+    monkeypatch.chdir(project_dir)
+    monkeypatch.setattr(gh_verify, "_naive_local_tz", lambda: timezone(timedelta(hours=5, minutes=30)))
+    monkeypatch.setattr(db.subprocess, "run", lambda *a, **k: SimpleNamespace(
+        returncode=0,
+        # GitHub APIs may expose the same App login with or without the bot suffix.
+        stdout=json.dumps({"reviews": [{"author": {"login": "qa-app"}, "submittedAt": "2026-10-07T06:01:00Z"}]}),
+    ))
+    conn = synlynk._get_db()
+    conn.execute(
+        """INSERT INTO daemon_jobs (job_id, agent, task, status, enqueued_at,
+             purpose, gh_write_target, gh_write_expect, gh_write_author, started_at, completed_at)
+           VALUES ('job-review-old', 'agy', 'review', 'failed', '2026-10-07',
+             'review', 'pr:2115', 'review_posted', 'qa-app[bot]',
+             '2026-10-07T11:00:00', '2026-10-07T11:30:59')"""
+    )
+    conn.execute(
+        """INSERT INTO daemon_jobs (job_id, agent, task, status, enqueued_at,
+             purpose, gh_write_target, gh_write_expect, gh_write_author, started_at, completed_at)
+           VALUES ('job-review-time', 'agy', 'review', 'done', '2026-10-07',
+             'review', 'pr:2115', 'review_posted', 'qa-app[bot]',
+             '2026-10-07T11:30:00', '2026-10-07T11:32:00')"""
+    )
+    conn.commit()
+    assert db._review_job_for_pr(conn, 2115) == ("job-review-time", "qa-app[bot]")
+    conn.close()
+
+
+def test_pr_check_recovers_implementer_from_linked_issue_without_rating(project_dir, monkeypatch):
+    import json
+    import synlynk
+    import synlynk.db as db
+    from types import SimpleNamespace
+    monkeypatch.setattr(db.subprocess, "run", lambda *a, **k: SimpleNamespace(returncode=0, stdout=json.dumps({"reviews": [{"author": {"login": "qa-app[bot]"}, "submittedAt": "2026-10-04T00:02:00Z"}]})))
+
+    policy_path = project_dir / ".synlynk" / "policy.json"
+    policy_path.parent.mkdir(parents=True, exist_ok=True)
+    policy_path.write_text(json.dumps({
+        "overrides": {"merge_authority": {"cross_harness_review_required": True}}
+    }))
+    monkeypatch.chdir(project_dir)
+    monkeypatch.setattr(db, "_pr_closing_issue_numbers", lambda _pr: [1975])
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO stories (story_id, title) VALUES (?, ?)",
+        ("story-issue-1975", "quickstart"),
+    )
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, harness, task, story_id, status, enqueued_at, resolved_model, purpose) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            "job-impl-1975", "codex", "codex", "Implement #1975", "story-issue-1975",
+            "done", "2026-10-04T00:00:00", "gpt-5.6-codex", "implementation",
+        ),
+    )
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, harness, task, status, enqueued_at, resolved_model, purpose, gh_write_target, gh_write_expect, gh_write_author, started_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            "job-review-2026", "claude", "claude",
+            "Review https://github.com/nikhilsoman/synlynk/pull/2026",
+            "done", "2026-10-04T00:00:01", "claude-sonnet-4-6", "review", "pr:2026", "review_posted", "qa-app[bot]", "2026-10-04T00:00:01Z",
+        ),
+    )
+    conn.execute(
+        "INSERT INTO cost_entries (session_date, agent, harness, model, story_id, cost_source, job_id) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("2026-10-04", "codex", "codex", "gpt-5.6-codex", "story-issue-1975", "test", "job-impl-1975"),
+    )
+    conn.execute(
+        "INSERT INTO cost_entries (session_date, agent, harness, model, cost_source, job_id) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        ("2026-10-04", "claude", "claude", "claude-sonnet-4-6", "test", "job-review-2026"),
+    )
+    conn.commit()
+
+    ok, message = db._cross_harness_review_verdict(conn, 2026)
+
+    assert ok
+    assert "implementation codex / gpt-5.6-codex" in message
+    assert "reviewed by claude / claude-sonnet-4-6" in message
+    assert conn.execute("SELECT COUNT(*) FROM capability_ratings").fetchone()[0] == 0
+    conn.close()
+
+
+def test_pr_check_linked_issue_fallback_fails_closed_when_ambiguous(project_dir, monkeypatch):
+    import json
+    import synlynk
+    import synlynk.db as db
+
+    policy_path = project_dir / ".synlynk" / "policy.json"
+    policy_path.parent.mkdir(parents=True, exist_ok=True)
+    policy_path.write_text(json.dumps({
+        "overrides": {"merge_authority": {"cross_harness_review_required": True}}
+    }))
+    monkeypatch.chdir(project_dir)
+    monkeypatch.setattr(db, "_pr_closing_issue_numbers", lambda _pr: [1975, 1976])
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO stories (story_id, title) VALUES (?, ?), (?, ?)",
+        ("story-issue-1975", "first linked story", "story-issue-1976", "second linked story"),
+    )
+
+    ok, message = db._cross_harness_review_verdict(conn, 2026)
+
+    assert not ok
+    assert message == "no implementing job provenance found for PR #2026"
+    conn.close()
+
+
+def test_pr_check_recovers_implementer_from_dispatch_branch_without_cost_entry(project_dir, monkeypatch):
+    import json
+    import synlynk
+    import synlynk.db as db
+    from types import SimpleNamespace
+    monkeypatch.setattr(db.subprocess, "run", lambda *a, **k: SimpleNamespace(returncode=0, stdout=json.dumps({"reviews": [{"author": {"login": "qa-app[bot]"}, "submittedAt": "2026-10-05T00:02:00Z"}]})))
+
+    policy_path = project_dir / ".synlynk" / "policy.json"
+    policy_path.parent.mkdir(parents=True, exist_ok=True)
+    policy_path.write_text(json.dumps({
+        "overrides": {"merge_authority": {"cross_harness_review_required": True}}
+    }))
+    monkeypatch.chdir(project_dir)
+    monkeypatch.setattr(db, "_pr_closing_issue_numbers", lambda _pr: [])
+    monkeypatch.setattr(db, "_pr_head_branch", lambda _pr: "dispatch/codex/job-impl-2051")
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, harness, task, status, enqueued_at, resolved_model, purpose) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        ("job-impl-2051", "codex", "codex", "implement #2051", "done", "2026-10-05T00:00:00", "gpt-5.3-codex", "implementation"),
+    )
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, harness, task, status, enqueued_at, resolved_model, purpose, gh_write_target, gh_write_expect, gh_write_author, started_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        ("job-review-2051", "claude", "claude", "review PR #2051", "done", "2026-10-05T00:00:01", "claude-sonnet-4-6", "review", "pr:2051", "review_posted", "qa-app[bot]", "2026-10-05T00:00:01Z"),
+    )
+    conn.execute(
+        "INSERT INTO cost_entries (session_date, agent, harness, model, cost_source, job_id) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        ("2026-10-05", "claude", "claude", "claude-sonnet-4-6", "test", "job-review-2051"),
+    )
+    conn.commit()
+
+    ok, message = db._cross_harness_review_verdict(conn, 2051)
+
+    assert ok
+    assert "implementation codex / gpt-5.3-codex" in message
+    assert "reviewed by claude / claude-sonnet-4-6" in message
+    assert conn.execute("SELECT COUNT(*) FROM cost_entries WHERE job_id=?", ("job-impl-2051",)).fetchone()[0] == 0
+    conn.close()
+
+
+def test_pr_check_branch_fallback_still_fails_closed_without_daemon_job(project_dir, monkeypatch, capsys):
+    import json
+    import synlynk
+    import synlynk.db as db
+
+    policy_path = project_dir / ".synlynk" / "policy.json"
+    policy_path.parent.mkdir(parents=True, exist_ok=True)
+    policy_path.write_text(json.dumps({
+        "overrides": {"merge_authority": {"cross_harness_review_required": True}}
+    }))
+    monkeypatch.chdir(project_dir)
+    monkeypatch.setattr(db, "_pr_closing_issue_numbers", lambda _pr: [])
+    monkeypatch.setattr(db, "_pr_head_branch", lambda _pr: "dispatch/codex/job-missing-2051")
+    conn = synlynk._get_db()
+
+    ok, message = db._cross_harness_review_verdict(conn, 2051)
+
+    assert not ok
+    assert message == "no implementing job provenance found for PR #2051"
+    assert "synlynk cost log --pr <pr-number> --harness <harness>" in capsys.readouterr().err
+    conn.close()
+
+
+def test_pr_check_accepts_native_cost_entry_provenance(project_dir, monkeypatch):
+    import json
+    import synlynk
+    import synlynk.db as db
+    from types import SimpleNamespace
+    monkeypatch.setattr(db.subprocess, "run", lambda *a, **k: SimpleNamespace(returncode=0, stdout=json.dumps({"reviews": [{"author": {"login": "qa-app[bot]"}, "submittedAt": "2026-10-05T00:02:00Z"}]})))
+
+    policy_path = project_dir / ".synlynk" / "policy.json"
+    policy_path.parent.mkdir(parents=True, exist_ok=True)
+    policy_path.write_text(json.dumps({
+        "overrides": {"merge_authority": {"cross_harness_review_required": True}}
+    }))
+    monkeypatch.chdir(project_dir)
+    monkeypatch.setattr(db, "_pr_closing_issue_numbers", lambda _pr: [])
+    monkeypatch.setattr(db, "_pr_head_branch", lambda _pr: "feat/native-pr-2051")
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, harness, task, status, enqueued_at, resolved_model, purpose, gh_write_target, gh_write_expect, gh_write_author, started_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        ("job-review-native-2051", "claude", "claude", "review PR #2051", "done", "2026-10-05T00:00:01", "claude-sonnet-4-6", "review", "pr:2051", "review_posted", "qa-app[bot]", "2026-10-05T00:00:01Z"),
+    )
+    conn.execute(
+        "INSERT INTO cost_entries (session_date, agent, harness, model, cost_source, pr_number) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        ("2026-10-05", "codex", "codex", "gpt-5.3-codex", "test", 2051),
+    )
+    conn.execute(
+        "INSERT INTO cost_entries (session_date, agent, harness, model, cost_source, job_id) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        ("2026-10-05", "claude", "claude", "claude-sonnet-4-6", "test", "job-review-native-2051"),
+    )
+    conn.commit()
+
+    ok, message = db._cross_harness_review_verdict(conn, 2051)
+
+    assert ok
+    assert "implementation codex / gpt-5.3-codex" in message
+    assert "reviewed by claude / claude-sonnet-4-6" in message
+    conn.close()
+
+
+def _enable_cross_harness_policy(project_dir, monkeypatch):
+    import json
+    import synlynk.db as db
+
+    policy_path = project_dir / ".synlynk" / "policy.json"
+    policy_path.parent.mkdir(parents=True, exist_ok=True)
+    policy_path.write_text(json.dumps({
+        "overrides": {"merge_authority": {"cross_harness_review_required": True}}
+    }))
+    monkeypatch.chdir(project_dir)
+    monkeypatch.setattr(db, "_pr_closing_issue_numbers", lambda _pr: [])
+    monkeypatch.setattr(db, "_pr_head_branch", lambda _pr: "feat/native-review-2113")
+
+
+def _insert_implementation_job(conn, *, pr_number, job_id="job-impl-2113",
+                               harness="codex", model="gpt-5.3-codex"):
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, harness, task, status, enqueued_at, resolved_model, purpose) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (job_id, harness, harness, f"implement #{pr_number}", "done",
+         "2026-10-08T00:00:00", model, "implementation"),
+    )
+    conn.execute(
+        "INSERT INTO cost_entries (session_date, agent, harness, model, cost_source, job_id, pr_number) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("2026-10-08", harness, harness, model, "test", job_id, pr_number),
+    )
+
+
+def test_pr_check_accepts_native_reviewer_cost_entry(project_dir, monkeypatch):
+    import synlynk
+    import synlynk.db as db
+
+    _enable_cross_harness_policy(project_dir, monkeypatch)
+    conn = synlynk._get_db()
+    _insert_implementation_job(conn, pr_number=2113)
+    conn.execute(
+        "INSERT INTO cost_entries (session_date, agent, harness, model, cost_source, pr_number, agent_role) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("2026-10-08", "claude", "claude", "claude-sonnet-4-6", "test", 2113, "qa"),
+    )
+    conn.commit()
+
+    ok, message = db._cross_harness_review_verdict(conn, 2113)
+
+    assert ok
+    assert "implementation codex / gpt-5.3-codex" in message
+    assert "reviewed by claude / claude-sonnet-4-6 (native cost record)" in message
+    conn.close()
+
+
+def test_pr_check_native_reviewer_rejects_same_harness_and_model(project_dir, monkeypatch):
+    import synlynk
+    import synlynk.db as db
+
+    _enable_cross_harness_policy(project_dir, monkeypatch)
+    conn = synlynk._get_db()
+    _insert_implementation_job(conn, pr_number=2113)
+    conn.execute(
+        "INSERT INTO cost_entries (session_date, agent, harness, model, cost_source, pr_number, agent_role) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("2026-10-08", "codex", "codex", "gpt-5.3-codex", "test", 2113, "qa"),
+    )
+    conn.commit()
+
+    ok, message = db._cross_harness_review_verdict(conn, 2113)
+
+    assert not ok
+    assert "same harness+model" in message
+    conn.close()
+
+
+def test_pr_check_native_reviewer_rejects_same_model_on_same_harness(project_dir, monkeypatch):
+    """Same-harness/same-model native review is rejected; a different model is accepted."""
+    import synlynk
+    import synlynk.db as db
+
+    _enable_cross_harness_policy(project_dir, monkeypatch)
+    conn = synlynk._get_db()
+    _insert_implementation_job(conn, pr_number=2113, harness="codex", model="gpt-5.3-codex")
+    conn.execute(
+        "INSERT INTO cost_entries (session_date, agent, harness, model, cost_source, pr_number, agent_role) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("2026-10-08", "codex", "codex", "gpt-5.2-codex", "test", 2113, "qa"),
+    )
+    conn.commit()
+
+    ok, message = db._cross_harness_review_verdict(conn, 2113)
+
+    assert ok
+    assert "reviewed by codex / gpt-5.2-codex (native cost record)" in message
+    conn.close()
+
+
+def test_pr_check_missing_native_reviewer_provenance(project_dir, monkeypatch, capsys):
+    import synlynk
+    import synlynk.db as db
+
+    _enable_cross_harness_policy(project_dir, monkeypatch)
+    conn = synlynk._get_db()
+    _insert_implementation_job(conn, pr_number=2113)
+    conn.commit()
+
+    ok, message = db._cross_harness_review_verdict(conn, 2113)
+
+    assert not ok
+    assert message == "no reviewing job provenance found for PR #2113"
+    assert "synlynk cost log --pr <pr-number> --harness <harness> --role qa" in capsys.readouterr().err
+    conn.close()
+
+
+def test_pr_check_untagged_native_row_is_not_reviewer_provenance(project_dir, monkeypatch, capsys):
+    import synlynk
+    import synlynk.db as db
+
+    _enable_cross_harness_policy(project_dir, monkeypatch)
+    conn = synlynk._get_db()
+    _insert_implementation_job(conn, pr_number=2113)
+    conn.execute(
+        "INSERT INTO cost_entries (session_date, agent, harness, model, cost_source, pr_number) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        ("2026-10-08", "claude", "claude", "claude-sonnet-4-6", "test", 2113),
+    )
+    conn.commit()
+
+    ok, message = db._cross_harness_review_verdict(conn, 2113)
+
+    assert not ok
+    assert message == "no reviewing job provenance found for PR #2113"
+    assert "synlynk cost log --pr <pr-number> --harness <harness> --role qa" in capsys.readouterr().err
+    conn.close()
+
+
+def test_pr_check_qa_native_row_does_not_replace_implementer_identity(project_dir, monkeypatch):
+    """A later qa-tagged native row must not be read as the implementer (gh:#2095)."""
+    import synlynk
+    import synlynk.db as db
+
+    _enable_cross_harness_policy(project_dir, monkeypatch)
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO cost_entries (session_date, agent, harness, model, cost_source, pr_number, agent_role) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("2026-10-08", "codex", "codex", "gpt-5.3-codex", "test", 2113, "dev"),
+    )
+    conn.execute(
+        "INSERT INTO cost_entries (session_date, agent, harness, model, cost_source, pr_number, agent_role) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("2026-10-08", "claude", "claude", "claude-sonnet-4-6", "test", 2113, "qa"),
+    )
+    conn.commit()
+
+    ok, message = db._cross_harness_review_verdict(conn, 2113)
+
+    assert ok
+    assert "implementation codex / gpt-5.3-codex (native cost record)" in message
+    assert "reviewed by claude / claude-sonnet-4-6 (native cost record)" in message
+    conn.close()
+
+
+def test_pr_check_dispatched_review_still_preferred_over_native_reviewer(project_dir, monkeypatch):
+    import json
+    import synlynk
+    import synlynk.db as db
+    from types import SimpleNamespace
+
+    _enable_cross_harness_policy(project_dir, monkeypatch)
+    monkeypatch.setattr(db.subprocess, "run", lambda *a, **k: SimpleNamespace(
+        returncode=0,
+        stdout=json.dumps({
+            "reviews": [{"author": {"login": "qa-app[bot]"}, "submittedAt": "2026-10-08T00:02:00Z"}]
+        }),
+    ))
+    conn = synlynk._get_db()
+    _insert_implementation_job(conn, pr_number=2113)
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, harness, task, status, enqueued_at, resolved_model, purpose, "
+        "gh_write_target, gh_write_expect, gh_write_author, started_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        ("job-review-2113", "agy", "agy", "review PR #2113", "done", "2026-10-08T00:00:01",
+         "gemini-2.5-pro", "review", "pr:2113", "review_posted", "qa-app[bot]", "2026-10-08T00:00:01Z"),
+    )
+    conn.execute(
+        "INSERT INTO cost_entries (session_date, agent, harness, model, cost_source, job_id) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        ("2026-10-08", "agy", "agy", "gemini-2.5-pro", "test", "job-review-2113"),
+    )
+    conn.execute(
+        "INSERT INTO cost_entries (session_date, agent, harness, model, cost_source, pr_number, agent_role) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("2026-10-08", "claude", "claude", "claude-sonnet-4-6", "test", 2113, "qa"),
+    )
+    conn.commit()
+
+    ok, message = db._cross_harness_review_verdict(conn, 2113)
+
+    assert ok
+    assert "reviewed by agy / gemini-2.5-pro (dispatch metadata)" in message
+    assert "claude-sonnet-4-6" not in message
+    conn.close()
+
+
+def test_pr_check_rejects_mismatched_native_cost_entry_provenance(project_dir, monkeypatch, capsys):
+    import json
+    import synlynk
+    import synlynk.db as db
+
+    policy_path = project_dir / ".synlynk" / "policy.json"
+    policy_path.parent.mkdir(parents=True, exist_ok=True)
+    policy_path.write_text(json.dumps({
+        "overrides": {"merge_authority": {"cross_harness_review_required": True}}
+    }))
+    monkeypatch.chdir(project_dir)
+    monkeypatch.setattr(db, "_pr_closing_issue_numbers", lambda _pr: [])
+    monkeypatch.setattr(db, "_pr_head_branch", lambda _pr: "feat/native-pr-2051")
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO cost_entries (session_date, agent, harness, model, cost_source, pr_number) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        ("2026-10-05", "codex", "codex", "gpt-5.3-codex", "test", 2050),
+    )
+    conn.commit()
+
+    ok, message = db._cross_harness_review_verdict(conn, 2051)
+
+    assert not ok
+    assert message == "no implementing job provenance found for PR #2051"
+    assert "synlynk cost log --pr <pr-number> --harness <harness>" in capsys.readouterr().err
+    conn.close()
+
+
 def test_isolate_archived_pytest_modules():
     config = (Path(__file__).parents[1] / "pytest.ini").read_text(encoding="utf-8")
 
@@ -522,19 +1257,19 @@ def test_fix_checkpoint_todomd_handling_it_bypass_has_no_literal_todo_path():
     assert not re.search(r"todo_path\\s*=", source)
 
 
-def test_macos_launchd_daemon_service_has_keepalive_successful_exit_dict(
+def test_macos_launchd_daemon_service_supervises_foreground_process(
     project_dir, monkeypatch
 ):
     import synlynk
+    import synlynk.daemon as daemon_mod
     import plistlib
 
     monkeypatch.setenv("HOME", str(project_dir))
+    monkeypatch.setattr(daemon_mod, "_repo_common_dir", lambda: str(project_dir))
+    monkeypatch.setattr(daemon_mod, "_daemon_package_path", lambda: "/usr/local/lib/synlynk/daemon.py")
+    monkeypatch.setattr(daemon_mod, "_daemon_caller_path", lambda: str(project_dir))
     monkeypatch.setattr(synlynk.sys, "platform", "darwin")
-    monkeypatch.setattr(
-        synlynk.shutil,
-        "which",
-        lambda name: "/usr/local/bin/synlynk" if name == "synlynk" else None,
-    )
+    monkeypatch.setattr(synlynk.sys, "executable", "/usr/local/bin/python3")
     monkeypatch.setattr(synlynk.os, "makedirs", lambda *args, **kwargs: None)
     monkeypatch.setattr(
         synlynk.subprocess,
@@ -548,7 +1283,10 @@ def test_macos_launchd_daemon_service_has_keepalive_successful_exit_dict(
     synlynk._daemon_install_service(object())
 
     plist = (launchagents_dir / "com.synlynk.daemon.plist").read_text()
-    assert plistlib.loads(plist.encode())["KeepAlive"] == {"SuccessfulExit": False}
+    service = plistlib.loads(plist.encode())
+    assert service["KeepAlive"] is True
+    assert service["ThrottleInterval"] == 30
+    assert service["ProgramArguments"][-2:] == ["daemon", "run"]
     assert "<key>KeepAlive</key>\n    <false/>" not in plist
 
 
@@ -1421,16 +2159,13 @@ def test_cli_dispatch_as_agent_unresolvable_exits_1(project_dir):
     assert exc_info.value.code == 1
 
 
-def test_cli_dispatch_without_agent_reports_usage_error(project_dir, capsys):
+def test_cli_dispatch_without_agent_infers_from_explicit_role(project_dir, capsys):
     from synlynk.cli import main
 
-    with pytest.raises(SystemExit) as exc_info:
-        main(["dispatch", "--task", "do work", "--role", "qa", "--dry-run"])
-
-    assert exc_info.value.code == 2
+    main(["dispatch", "--task", "do work", "--role", "qa", "--dry-run"])
     captured = capsys.readouterr()
-    assert "the following arguments are required: agent (unless --as-agent is given)" in captured.err
-    assert "NameError" not in captured.err
+    assert "→ qa/claude, worktree full" in captured.out
+    assert "agent:        claude" in captured.out
 
 
 def test_cli_dispatch_as_agent_without_explicit_harness(project_dir, monkeypatch, capsys):
@@ -1634,6 +2369,26 @@ def test_cli_dispatch_dry_run_as_agent_without_explicit_harness_shows_resolved_a
     assert "agent:        agy" in captured.out
 
 
+def test_cli_dispatch_infers_defaults_and_prints_one_line_preview(project_dir, capsys):
+    from synlynk.cli import main
+
+    main(["dispatch", "--task", "implement the CLI plumbing for issue #1976", "--dry-run"])
+    captured = capsys.readouterr()
+
+    assert "→ dev/codex, worktree full, permissions scoped" in captured.out
+    assert "agent:        codex" in captured.out
+
+
+def test_cli_dispatch_explicit_harness_remains_an_override(project_dir, capsys):
+    from synlynk.cli import main
+
+    main(["dispatch", "claude", "--task", "implement a small fix", "--dry-run"])
+    captured = capsys.readouterr()
+
+    assert "→ dev/claude, worktree full" in captured.out
+    assert "agent:        claude" in captured.out
+
+
 def _docs_keep_readme_synchronized_readme(
     root,
     version,
@@ -1646,7 +2401,9 @@ def _docs_keep_readme_synchronized_readme(
 
     commands_md = root / "docs" / "reference" / "commands.md"
     commands_md.parent.mkdir(parents=True, exist_ok=True)
-    commands_md.write_text("# Command Reference\n")
+    from scripts.generate_command_docs import render_reference_doc
+
+    commands_md.write_text(render_reference_doc())
     section = (
         "<!-- commands:start -->\n\n- `synlynk init`\n\n<!-- commands:end -->"
         if stale_commands
@@ -3365,3 +4122,106 @@ def test_detect_drift_between_two_versions_of_a_roadmap_doc():
     assert any("Capability sweep" in phase for phase in report["changed_phases"])
     assert any("Worktree hygiene" in phase for phase in report["added_phases"])
     assert any("Cost ledger" in phase for phase in report["added_phases"])
+
+
+def test_quickstart_and_start_are_parser_aliases():
+    from synlynk.cli import build_parser
+
+    parser = build_parser()
+    assert parser.parse_args(["quickstart"]).command == "quickstart"
+    assert parser.parse_args(["start"]).command == "start"
+
+
+def test_quickstart_asks_once_initializes_and_verifies_dispatch(tmp_path, monkeypatch, capsys):
+    import synlynk
+    import synlynk.instructions as instructions
+    from synlynk.coldstart import cmd_quickstart
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        synlynk,
+        "discover_agents",
+        lambda: [{"name": "codex", "functional": True}],
+    )
+    init_calls = []
+    monkeypatch.setattr(synlynk, "init", lambda **kwargs: init_calls.append(kwargs))
+    monkeypatch.setattr(
+        synlynk,
+        "dispatch_agent",
+        lambda *args, **kwargs: {"id": "job-1", "pid": 1234, "status": "running"},
+    )
+    monkeypatch.setattr(
+        instructions,
+        "_load_instruction_manifest",
+        lambda: {"AGENTS.md": {"tool": "codex", "sha": "abc"}},
+    )
+    answers = iter(["make the first useful change"])
+    monkeypatch.setattr("builtins.input", lambda prompt: next(answers))
+
+    result = cmd_quickstart()
+
+    assert result["status"] == "verified"
+    assert result["manifest"] == ["AGENTS.md"]
+    assert init_calls == [{"agents": ["codex"], "non_interactive": True, "quiet": True}]
+    output = capsys.readouterr().out
+    assert "First dispatch verified: job-1 via codex" in output
+    assert "Instruction manifest" in output
+
+
+def test_pr_check_governs_gate_observe_mode_does_not_block(project_dir, monkeypatch):
+    import json
+    import synlynk
+    from synlynk.db import cmd_pr_check
+
+    monkeypatch.setattr("synlynk.db._is_github_remote", lambda: False)
+    (project_dir / ".synlynk" / "policy.json").write_text(json.dumps({
+        "overrides": {
+            "governs_authority": {"require_linked_goal": True, "require_linked_goal_mode": "observe"},
+            "merge_authority": {"cross_harness_review_required": False},
+        }
+    }))
+    monkeypatch.chdir(project_dir)
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, harness, task, status, enqueued_at, purpose) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("job-unlinked", "codex", "codex", "implement PR #2100", "done", "2026-10-07T00:00:00", "implementation"),
+    )
+    conn.execute(
+        "INSERT INTO cost_entries (session_date, agent, harness, model, story_id, cost_source, job_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("2026-10-07", "codex", "codex", "gpt-5.3-codex", None, "test", "job-unlinked"),
+    )
+    conn.commit()
+    conn.close()
+    cmd_pr_check(pr_number=2100)
+    conn = synlynk._get_db()
+    row = conn.execute("SELECT gate, mode, verdict FROM policy_gate_events WHERE pr_number=2100 AND gate='governs_authority'").fetchone()
+    conn.close()
+    assert row == ("governs_authority", "observe", "warn")
+
+
+def test_pr_check_governs_gate_enforce_mode_still_blocks(project_dir, monkeypatch):
+    import json
+    import synlynk
+    from synlynk.db import cmd_pr_check
+
+    monkeypatch.setattr("synlynk.db._is_github_remote", lambda: False)
+    (project_dir / ".synlynk" / "policy.json").write_text(json.dumps({
+        "overrides": {
+            "governs_authority": {"require_linked_goal": True, "require_linked_goal_mode": "enforce"},
+            "merge_authority": {"cross_harness_review_required": False},
+        }
+    }))
+    monkeypatch.chdir(project_dir)
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, harness, task, status, enqueued_at, purpose) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("job-unlinked2", "codex", "codex", "implement PR #2101", "done", "2026-10-07T00:00:00", "implementation"),
+    )
+    conn.execute(
+        "INSERT INTO cost_entries (session_date, agent, harness, model, story_id, cost_source, job_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("2026-10-07", "codex", "codex", "gpt-5.3-codex", None, "test", "job-unlinked2"),
+    )
+    conn.commit()
+    conn.close()
+    with pytest.raises(SystemExit):
+        cmd_pr_check(pr_number=2101)

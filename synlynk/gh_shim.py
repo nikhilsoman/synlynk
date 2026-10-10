@@ -10,9 +10,12 @@ using their real or test ``gh`` binary.
 from __future__ import annotations
 
 import os
+import shlex
 import shutil
 import stat
+import subprocess
 import sys
+from datetime import datetime, timezone
 from typing import Mapping, Optional
 
 
@@ -39,6 +42,50 @@ def _is_harness_session(env: Optional[Mapping[str, str]] = None) -> bool:
 
 def _truthy(value: str) -> bool:
     return (value or "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _repo_slug(env: Mapping[str, str]) -> str:
+    """Return the repository targeted by a host-auth call, when discoverable."""
+    args = list(env.get("SYNLYNK_GH_CALL_ARGS", "").split("\0")) if env.get("SYNLYNK_GH_CALL_ARGS") else []
+    if "--repo" in args:
+        index = args.index("--repo")
+        if index + 1 < len(args):
+            return args[index + 1]
+    try:
+        remote = subprocess.run(
+            ["git", "-C", os.getcwd(), "remote", "get-url", "origin"],
+            capture_output=True,
+            text=True,
+            check=False,
+        ).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        remote = ""
+    if remote:
+        remote = remote.removesuffix(".git")
+        if remote.startswith("git@github.com:"):
+            return remote.split(":", 1)[1]
+        if "github.com/" in remote:
+            return remote.split("github.com/", 1)[1]
+    return "unknown"
+
+
+def record_host_auth_gh_call(args: list, *, env: Optional[Mapping[str, str]] = None) -> None:
+    """Record an invocation that is proceeding with the host GitHub identity."""
+    values = env if env is not None else os.environ
+    try:
+        from synlynk.sentinel import log_telemetry_event
+
+        log_telemetry_event({
+            "type": "gh_host_auth",
+            "actor": values.get("GITHUB_ACTOR") or values.get("USER") or values.get("LOGNAME") or "unknown",
+            "recorded_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "repo": _repo_slug({**values, "SYNLYNK_GH_CALL_ARGS": "\0".join(str(item) for item in args)}),
+            "gh_call": "gh " + shlex.join([str(item) for item in args]),
+            "args": [str(item) for item in args],
+        })
+    except Exception:
+        # Auditing must never prevent the explicitly opted-in command from running.
+        pass
 
 
 def _real_gh_path(env: Mapping[str, str], shim_dir: str) -> Optional[str]:
@@ -100,12 +147,48 @@ def run_shim(args: list, env: Optional[Mapping[str, str]] = None, shim_dir: Opti
     if not real_gh:
         print("synlynk gh shim: real gh binary not found on PATH", file=sys.stderr)
         return 127
+    if harness and not has_token and _truthy(child_env.get("SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH", "")):
+        record_host_auth_gh_call(args, env=child_env)
     os.execvpe(real_gh, [real_gh] + list(args), child_env)
     return 127
+
+
+def run_gh(args: list, *, env: Optional[Mapping[str, str]] = None, **kwargs):
+    """Run an internal ``gh`` call through the harness identity guard.
+
+    Internal Python callers cannot rely on the caller having sourced the shell
+    shim.  Apply the same fail-closed rule here, and resolve a marked role to
+    its cached App token before invoking the real binary.
+    """
+    child_env = dict(env if env is not None else os.environ)
+    if _is_harness_session(child_env) and not (
+        child_env.get("GH_TOKEN") or child_env.get("GITHUB_TOKEN")
+    ):
+        role = child_env.get("SYNLYNK_GH_ROLE", "")
+        token = None
+        if role in KNOWN_ROLES:
+            try:
+                from synlynk.dispatch import _isolated_gh_config_dir, _resolve_dispatch_gh_token
+                token = _resolve_dispatch_gh_token(role)
+                if token:
+                    child_env["GH_TOKEN"] = token
+                    child_env["GITHUB_TOKEN"] = token
+                    child_env["GH_CONFIG_DIR"] = _isolated_gh_config_dir()
+            except Exception:
+                token = None
+        if not token and not _truthy(child_env.get("SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH", "")):
+            return subprocess.CompletedProcess(
+                ["gh"] + list(args), 1, "", REFUSAL + "\n"
+            )
+        if not token:
+            record_host_auth_gh_call(args, env=child_env)
+    call_kwargs = dict(kwargs)
+    call_kwargs["env"] = child_env
+    return subprocess.run(["gh"] + list(args), **call_kwargs)
 
 
 def main(args: Optional[list] = None, shim_dir: Optional[str] = None) -> int:
     return run_shim(list(sys.argv[1:] if args is None else args), shim_dir=shim_dir)
 
 
-__all__ = ["_is_harness_session", "install_shim", "main", "run_shim", "shim_env", "write_shim"]
+__all__ = ["_is_harness_session", "install_shim", "main", "run_gh", "run_shim", "shim_env", "write_shim"]

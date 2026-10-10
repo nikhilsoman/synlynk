@@ -143,6 +143,8 @@ mandatory on every PR.
 
 **For every PR, before merging:** confirm all dispatched/wrapped work in this PR is auto-captured (nothing to do — it already is via `dispatch_agent()`/`synlynk exec`), and any native/PM-session work (brainstorming, design docs, manual fixes) not tied to a dispatched job has a corresponding `synlynk cost log` entry. If genuinely zero cost was incurred outside dispatched work, note that explicitly in the PR rather than skipping the check silently.
 
+For native/interactive provenance, record the PR directly with `synlynk cost log --pr <pr-number> --harness <harness>`; dispatched work should continue to use `--job-id`.
+
 `synlynk release` sessions use `synlynk cost log` the same way — there is no automatic capture for native CLI invocations of `gh release create` / release tooling.
 
 Enforced by discipline (Claude/PM checks it as part of PR housekeeping), not CI — matches how the Blog Post Protocol already operates. Not a blocking CI gate.
@@ -161,13 +163,36 @@ Rationale: a July 2026 audit found 30 stale worktrees/branches accumulated becau
 
 ## Harness Capability Reassessment Protocol
 
-**Capability isn't static — reassess it on a cadence, not just when something breaks.** Baseline findings live in `docs/harness-capability-baseline.md`; this section defines when and how to refresh it.
+**SUPERSEDED 2026-10-04 by the Empirical Capability Assessment Policy below.** This section's heuristic cadence (manual telemetry scan every ~25 jobs/monthly, hand-edited baseline doc) is kept here for historical context only; `docs/harness-capability-baseline.md` is suspended as ground truth. Do not re-derive routing from it — use `synlynk capability report` (once shipped, gh:#1993) or the raw `capability_ratings`/`cost_entries` tables instead.
+
+<details><summary>Original protocol (suspended, kept for history)</summary>
 
 1. **Trigger:** at least every ~25 dispatched jobs, or monthly, whichever comes first — same cadence discipline as the Worktree Hygiene Protocol's periodic audit above. Also trigger ad hoc after any LIVE-issue investigation that surfaces a new harness capability finding (e.g. LIVE-8/#1166).
 2. **Scan:** review recent job telemetry (`synlynk jobs --all`, job logs for failures/cancellations) for patterns per harness — not just pass/fail counts, but *how* a job failed (sandboxed, timed out, stalled mid-task, went off-script). A green job-status is not sufficient evidence on its own; independently verify the claimed side effect the same way LIVE-8's retest did (`gh pr view --json reviews`, `git diff origin/main`, etc.) before treating a job as a real success or failure signal.
 3. **Compare:** check each finding in `docs/harness-capability-baseline.md` against current evidence. A finding only gets re-tested if something material changed since it was recorded (harness version bump, sandbox policy change, an upstream fix) — not on a blind retry schedule.
 4. **Update in one PR:** if reassessment finds drift (a harness got more/less reliable at something), update both `.synlynk/policy.json`'s `task_allocation` routing and `docs/harness-capability-baseline.md`'s table together, with the evidence cited in both places. This keeps dispatch routing and the documented baseline from diverging the way policy.json and CLAUDE.md's own routing table did before #426's hardening.
 5. **No drift found:** still worth a one-line note in the baseline doc's row (or a dated comment) confirming it was checked, so the next reassessment knows the finding isn't stale just because it's old.
+
+</details>
+
+## Empirical Capability Assessment Policy (2026-10-04)
+
+**Replaces the heuristic baseline above.** Decided 2026-10-04 (supersedes the #79 role-split rationale insofar as it relied on which harness happened to be convenient at the time): harness/model routing is no longer decided by hand-written capability tables. It is decided by measured outcomes, already captured in `capability_ratings` (per agent/model/story: `pr_review_cycles`, `dispatch_rework`, `micro_rework`, `quality`) and `cost_entries` (per harness/role/model/job: token counts, `total_cost_usd`).
+
+**Everything is reassessable, including the Default Agent Role lock.** Claude's PM/review/deploy-only restriction is itself provisional pending data — it was drafted when Claude was the de facto default home harness, including for rxcc/vdowrx's Pulumi-IaC deploy work. Agy and Codex are believed comparably capable for PM/review; Grok and Meta Muse have not yet had the opportunity to be measured on PM/review/deploy tasks at all. **Deploy capability specifically must be re-tested through the Infra agent role**, not assumed from the original Claude-did-Pulumi-well precedent.
+
+**Rules:**
+1. **Minimum sample size:** a harness×task-type comparison needs ≥5 completed+merged jobs before it's allowed to influence routing. Below that, treat it as unmeasured, not as evidence of poor fit.
+2. **Metrics:** median `pr_review_cycles` to merge (quality proxy) and `total_cost_usd` per merged PR (token economics), per harness×task-type, pulled from `capability_ratings`/`cost_entries` — not estimated, not recalled from memory of past incidents.
+3. **`.synlynk/policy.json`'s `task_allocation` is generated output**, not hand-edited. It's annotated with the date/query it was generated from. Until the generator ships (gh:#1993), the current `task_allocation` block is an *interim default* open to override by any harness that clears the sample-size bar — it is not an authoritative capability ranking.
+4. **Blocking dependency:** aggregate measurement requires `state.db` consolidation (#1926, Track 3) — capability/cost data is currently scattered across 11,000+ per-job workspace shards (`[[stray-local-state-db]]`, gh:#1831) and isn't reliably queryable in aggregate until that lands.
+5. **Cadence:** fold into a `synlynk capability report` pull every ~25 jobs or monthly (same cadence as the superseded protocol above), but reading the measured tables, not re-litigating heuristics.
+
+## Hardened PR Review Policy (2026-10-04)
+
+1. **100% GOVERNS adherence.** No dispatched job may proceed without a linked GOVERNS goal/story. `synlynk pr check` and dispatch preflight enforce this gate; the PR-check gate may run in `observe` mode via `.synlynk/policy.json`'s `require_linked_goal_mode`, per `docs/superpowers/specs/2026-10-07-policy-enforcement-maturity-design.md`.
+2. **Personal GitHub token is strictly off-limits to every agent/harness.** Verified 2026-10-04: `synlynk dispatch`'s subprocess env builder does not pass `SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH` to spawned jobs (not in the env allowlist) and only reads it from the *dispatching* process's own shell — a dispatched job cannot see or set it to self-grant host auth. The fallback remains a manual, explicit, per-invocation operator opt-in (`synlynk identity init --role <role>` is the correct fix instead). New requirement: every exercise of this fallback must emit an audited log event (gh:#1992), so a one-off human override is distinguishable from routine traffic.
+3. **Cross-harness+model review required.** A PR's reviewer must differ from its implementer in **harness and model**, not just role identity — a different role on the *same* harness+model no longer satisfies review. `.synlynk/policy.json`'s `merge_authority` gains `cross_harness_review_required: true`; `synlynk pr check` reads the implementing job's harness+model (from `cost_entries`) against the reviewer's and hard-fails on a match when `cross_harness_review_required_mode` is `enforce`; `observe` mode records the verdict without blocking, per `docs/superpowers/specs/2026-10-07-policy-enforcement-maturity-design.md`.
 
 ## Named Release README Sync
 
@@ -190,12 +215,17 @@ Waive a waivable check only with `--waive check=reason` (non-empty reason). `ver
 ## Your Role
 pm, review, deploy
 
+> ⚠️ **SUSPENDED (reassessment, 2026-10-04):** this role lock is explicitly under empirical reassessment per the Empirical Capability Assessment Policy above — Nikhil's own framing ("Agy & Codex are as good and Grok + Muse haven't had the opportunity yet") includes this lock, not just the Capability-Based Task Allocation table below. Deploy specifically must be re-validated through the Infra agent role, not assumed from historical Pulumi/rxcc/vdowrx precedent. Treat `pm, review, deploy` as the *current interim default*, not a fixed grant, until ≥5 merged-job samples exist for an alternative harness on each task type.
+
 ## PR Review Discipline
 1. Assign a non-authoring agent to review the PR.
 2. From within the PR's own checked-out worktree/branch, the reviewer must run `synlynk pr check` so it can auto-detect the PR via git/gh context.
-3. The reviewer alone must merge the PR.
+3. **The reviewer's own dispatched (headless) job performs the merge itself, as the final step of the same dispatch that posted the approval — not the interactive "home" session of whichever harness is acting as PM for this project.** Rationale (RCA'd 2026-10-09, PR #2149): an interactive home session (any harness, not just Claude) can carry its own nondeterministic auto-mode/guardrail layer that denies an already-authorized, policy-cleared action with no stated reason — observed directly with Claude Code's "auto mode classifier" denying `gh pr merge` despite `synlynk policy check-merge` and `synlynk pr check` both passing, then letting an unmodified retry through minutes later. Headless dispatch contracts for every harness (`HARNESS_CAPABILITY_BASELINES` in `synlynk/_constants.py`) are built to run deterministically with no such layer — e.g. Codex's `exec` sets `approval:never`, Agy/Claude support an explicit skip-permissions flag, Grok uses `--always-approve` — so keeping the merge inside the reviewer's dispatch avoids this risk class regardless of which harness is home. This is not yet empirically confirmed for every harness's *interactive* mode (only Claude's has actually executed a merge interactively in this repo so far); see gh:#2150 for tracking.
 4. For a `BEHIND` or `DIRTY` PR, allow at most 2 `gh pr update-branch` → CI-wait cycles. If the PR is still `BEHIND` or `DIRTY` after the second cycle, stop retrying and report back for escalation.
-5. If the reviewer is unavailable, escalate to Claude.
+5. If the reviewer is unavailable, escalate to whichever harness is currently acting as home/PM for this project (not necessarily Claude — see Default Agent Role reassessment above).
+6. **Cross-harness+model review required (2026-10-04).** The reviewer must differ from the implementer in both harness *and* model, not just role identity — same-harness-different-role no longer satisfies review. Enforced via `cross_harness_review_required` in `.synlynk/policy.json`'s `merge_authority`; `synlynk pr check` blocks on a harness+model match in `enforce` mode and records a non-blocking verdict in `observe` mode.
+7. **100% GOVERNS adherence required.** Every dispatched job behind this PR must be linked to a GOVERNS goal/story. `synlynk pr check` and dispatch preflight enforce this gate; `require_linked_goal_mode` in `.synlynk/policy.json` permits a reviewed `observe` mode while the gate's clean-pass streak is established.
+8. **Personal GitHub token is strictly off-limits to every agent/harness.** Only agent-identity tokens may be used at any GOVERNS stage. The `SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH` escape hatch is verified (2026-10-04) to require an explicit, manual, per-shell operator opt-in — a dispatched job cannot see or self-set it (not in the dispatch env allowlist). Every exercise of this fallback must emit an audit-log event (gh:#1992, not yet built).
 
 **GitHub identity note (#423):** qa APPROVE (`gh pr review --approve`) is the default whenever the reviewer identity differs from the PR author login (e.g. role App reviewing a human or sibling App PR). Dispatches under role App identities satisfy GitHub's non-author review requirement for real approvals. Route day-to-day reviews through `qa` and any feature/architecture-impacting review through `architect`. **Fallback (same-identity collision only):** post a formal COMMENT review with an explicit approve checklist (as on PR #417) only when the reviewer GitHub login equals the PR author login, where GitHub rejects self-approval. Do not tell sessions to skip `--approve` by default.
 
@@ -215,6 +245,8 @@ pm, review, deploy
 
 ## Capability-Based Task Allocation
 
+> ⚠️ **SUSPENDED as authoritative, 2026-10-04 — advisory/interim-default only.** This table was hand-authored heuristically and is superseded by the Empirical Capability Assessment Policy above. It remains the *current interim default* only until a harness clears the ≥5-merged-job sample-size bar on a given task type with better median `pr_review_cycles`/`total_cost_usd` than the incumbent. Grok and Meta Muse are explicitly flagged as not-yet-calibrated across every task type below, not excluded. `deploy` is now modeled as a task type in `.synlynk/policy.json`'s `task_allocation` (interim default: claude, fallback agy/codex) but carries zero empirical samples — it still needs to be tested via the Infra agent role before any harness (including Claude) can claim it empirically.
+
 **Note:** "Harness" below means the execution backend (Claude/Agy/Grok/Codex) that runs a 
 task, not the Agent (role) doing the work
 - See `docs/glossary-agent-vs-harness.md`
@@ -228,7 +260,7 @@ task, not the Agent (role) doing the work
 Do not start a task outside your role column without explicit approval from Claude.
 
 **GitHub write routing (#426):** Route any task that requires GitHub write actions to **Codex by default, Claude/Agy as fallbacks** (PR #1271, verified live in job `job-836e13a4`)
-- Grok's dispatch sandbox denies `bash` execution entirely in this environment (confirmed via `git diff origin/main` showing a total silent no-op despite a generic "OK, exit 0" job status — do not trust job-status alone for Grok gh-write attempts)
+- ~~Grok's dispatch sandbox denies `bash` execution entirely in this environment (confirmed via `git diff origin/main` showing a total silent no-op despite a generic "OK, exit 0" job status — do not trust job-status alone for Grok gh-write attempts)~~ **SUPERSEDED 2026-10-04:** LIVE-13's underlying bug was fixed 2026-09-22 (PRs #1734/#1735) and reconfirmed by live retest (gh:#2034). `capability_probe.py` now flips `CAP_GH_WRITE` to true, and `dispatch.py` includes Grok last in `_GH_WRITE_HARNESS_PRIORITY`, pending >=5 empirical gh-write samples per the Empirical Capability Assessment Policy.
 - Codex receives network access only for explicit `--requires-gh-write` dispatches
 - Pass `--requires-gh-write` on synlynk dispatch to enforce the routing hint automatically; it now also auto-implies the `run:shell` permission grant and fails closed with a `RuntimeError` if no role is resolvable via `--as-agent`, `--story`, or `--role` (#569)
 
@@ -239,6 +271,11 @@ This table is generated from `.synlynk/config.json` so it tracks the repo's own 
 2. Check `synlynk status` for current burn rate.
 3. Confirm all work is captured via telemetry and manual/PM work is logged via `synlynk cost log`.
 4. Append actual cost to `project-docs/costs.md`.
+5. **Reviewer-logged cost provenance backfill (gh:#2071, 2026-10-06).** If a reviewer sees the missing-provenance stderr hint (from `_emit_missing_provenance_hint`) or `synlynk pr check` reports "no implementing job provenance found for PR #N", backfill a `cost_entries` row before re-running `pr check`. `--tokens-in`/`--tokens-out` are required by the CLI — pull the implementing job's actual token counts from its dispatch estimate/actual line (`synlynk logs --job <job-id> | grep "dispatch estimate" -A2`, or the job's own completion summary) rather than guessing:
+   ```
+   synlynk cost log --pr <N> --harness <implementer-harness> --tokens-in <in> --tokens-out <out> --job-id <job-id> --note "logged by reviewer, see design spec 2026-10-06"
+   ```
+   Re-run `synlynk pr check` after logging. Only escalate to a manual `--admin` override if the backfill itself fails or the implementer harness/model genuinely cannot be determined (e.g. no `dispatch/<harness>/job-<id>` branch naming and no native-session record) — do not jump to `--admin` as the first response to a missing-provenance hint.
 
 ## Repo Hygiene
 1. Do not commit directly to main or master.

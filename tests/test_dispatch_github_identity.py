@@ -300,6 +300,44 @@ def test_dispatch_agent_defaults_to_issue_target_kind(tmp_path, monkeypatch):
     assert job["gh_write_target"] == "issue:701"
 
 
+def test_dispatch_agent_review_target_uses_named_pr_not_issue(tmp_path, monkeypatch):
+    """job-3975bbaf: --issue 2051 must not become the verification target for PR #2054."""
+    _dispatch_mod, job, _captured_env = _dispatch_with_fake_popen(
+        tmp_path,
+        monkeypatch,
+        task="Review PR #2054. --issue is only the GOVERNS link.",
+        requires_gh_write=True,
+        token_resolver=lambda role: "minted-token-abc",
+        role="qa",
+        issue=2051,
+        gh_write_target_kind="pr",
+        task_type="review",
+    )
+    assert job["gh_write_target"] == "pr:2054"
+    assert job["cross_branch_pr"] == "pr:2054"
+    assert job["gh_write_expect"] == "review_posted"
+
+
+def test_resolve_gh_write_target_pull_path_and_open_pr_issue_link():
+    from synlynk.dispatch import _resolve_gh_write_target
+
+    target, kind, cross = _resolve_gh_write_target(
+        "review pull/2053",
+        1992,
+        "issue",
+        True,
+    )
+    assert (target, kind, cross) == ("pr:2053", "pr", "pr:2053")
+
+    opened, opened_kind, opened_cross = _resolve_gh_write_target(
+        "open a GitHub PR for the completed fix",
+        1375,
+        "pr",
+        True,
+    )
+    assert (opened, opened_kind, opened_cross) == ("pr:1375", "pr", None)
+
+
 def test_dispatch_agent_review_task_uses_review_posted_expectation(tmp_path, monkeypatch):
     _dispatch_mod, job, _captured_env = _dispatch_with_fake_popen(
         tmp_path,

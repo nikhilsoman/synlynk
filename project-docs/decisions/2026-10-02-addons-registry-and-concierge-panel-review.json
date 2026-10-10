@@ -1,0 +1,40 @@
+{
+  "decision_id": "dec-20261002-addons-registry-concierge",
+  "topic": "Strategic Panel Deliberation: Plug & Play Add-ons, Extended Product Registry with BYOK Driver Agents & The Concierge Agent",
+  "date": "2026-10-02",
+  "panel": [
+    "claude",
+    "codex",
+    "agy",
+    "grok"
+  ],
+  "status": "approved",
+  "primary_goal": "goal-d3333441",
+  "governing_loop": "goal-eacab0dc",
+  "target_milestone": "2026-10-02 (Autonomous Platform Evolution)",
+  "dimensions": {
+    "plug_and_play_addons": {
+      "cli": "synlynk addon [list|install|bundle]",
+      "bundles": ["bundle:quality", "bundle:security", "bundle:observability", "bundle:mobile"],
+      "status": "approved for v0.24.0"
+    },
+    "product_registry_and_drivers": {
+      "registry_config": ".synlynk/registry.json",
+      "byok_vault": ".synlynk/secrets/ with Keychain integration",
+      "driver_roles": ["@supabase-migrator", "@vercel-deployer", "@sentry-triager"],
+      "status": "approved for v0.24.0 with iterative driver drops"
+    },
+    "concierge_agent": {
+      "cli": "synlynk concierge",
+      "capabilities": [
+        "Interactive requirements discovery interview",
+        "Structured GitHub issue & proposal synthesis",
+        "Local GOVERNS pipeline initiation",
+        "Upstream feature request filing to nikhilsoman/synlynk"
+      ],
+      "status": "approved for v0.24.0"
+    }
+  },
+  "verdict": "UNANIMOUS APPROVAL & INTEGRATION INTO v0.24.0 ROADMAP",
+  "decision_text": "Decision: The panel unanimously adopts the Plug & Play Add-ons Engine, Extended Product Registry with BYOK Driver Agents, and the Concierge Agent. The core registry, add-on bundles, and Concierge are scheduled for v0.24.0, with specialized 3rd-party driver agents rolling out in subsequent fleet drops."
+}

@@ -44,8 +44,8 @@ def test_init_writes_industry_to_config(tmp_path, monkeypatch):
     monkeypatch.setattr("builtins.input", mock_input)
     from synlynk import init
     init(force=True)
-    import json
-    config = json.load(open(".synlynk/config.json"))
+    import synlynk as sl
+    config = sl.load_config()
     assert config.get("industry") == "ott"
     assert config.get("workgroup_invite_email") == "user@example.com"
 
@@ -65,8 +65,8 @@ def test_init_infers_industry_from_readme(tmp_path, monkeypatch):
     inferred = _infer_industry(str(tmp_path))
     assert inferred == "fintech"
     init(force=True)
-    import json
-    config = json.load(open(".synlynk/config.json"))
+    import synlynk as sl
+    config = sl.load_config()
     assert config.get("industry") == "fintech"
 
 def test_story_create_writes_to_db(tmp_path, monkeypatch):
@@ -1127,10 +1127,10 @@ def test_add_synlynk_release_command_to_synlynk__(tmp_path, monkeypatch):
     version_file.write_text("0.10.0\n")
     changelog_file = tmp_path / "CHANGELOG.md"
     changelog_file.write_text("# Changelog\n\n## [0.9.0] - 2026-06-01\n")
-    from scripts.generate_command_docs import render_readme_section
+    from scripts.generate_command_docs import render_readme_section, render_reference_doc
     commands_md = tmp_path / "docs" / "reference" / "commands.md"
     commands_md.parent.mkdir(parents=True)
-    commands_md.write_text("# Command Reference\n")
+    commands_md.write_text(render_reference_doc())
     (tmp_path / "README.md").write_text(
         "<p align=\"center\">\n"
         "  <a href=\"https://github.com/nikhilsoman/synlynk\">"

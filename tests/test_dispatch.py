@@ -29,6 +29,18 @@ def test_ensure_daemon_job_columns_reads_schema_once_and_adds_missing_columns():
     conn.close()
 
 
+def test_dispatch_agent_rejects_explicit_incompatible_role(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    monkeypatch.chdir(repo)
+    with pytest.raises(RuntimeError, match=r"correct role for task_type 'implement' is dev"):
+        sl.dispatch_agent(
+            "codex", "implement the feature", task_type="implement", role="pm",
+            context_mode="none",
+        )
+
+
 def test_dispatch_agent_raises_when_task_type_not_in_policy_allocation_table(tmp_path, monkeypatch, isolated_db):
     monkeypatch.setenv("HOME", str(tmp_path))
     repo = tmp_path / "repo"
@@ -39,6 +51,27 @@ def test_dispatch_agent_raises_when_task_type_not_in_policy_allocation_table(tmp
             "codex", "do something", task_type="not_a_real_task_type",
             context_mode="none",
         )
+
+
+def test_dispatch_agent_rejects_harness_without_adapter_before_opening_db(monkeypatch):
+    import synlynk.dispatch as dispatch_mod
+
+    baselines = dict(dispatch_mod.HARNESS_CAPABILITY_BASELINES)
+    baselines["future-harness"] = {}
+    original_pkg = dispatch_mod._pkg
+
+    def package_value(name, default=None):
+        if name == "HARNESS_CAPABILITY_BASELINES":
+            return baselines
+        if name == "_get_db":
+            raise AssertionError("database must not be opened for an unregistered harness")
+        return original_pkg(name, default)
+
+    monkeypatch.setattr(dispatch_mod, "_pkg", package_value)
+    monkeypatch.setattr(dispatch_mod, "resolve_dispatch_harness", lambda *args, **kwargs: "future-harness")
+
+    with pytest.raises(ValueError, match="Harness 'future-harness' has no registered dispatch adapter"):
+        dispatch_mod.dispatch_agent("future-harness", "run task", force_agent=True, context_mode="none")
 
 
 def test_preflight_blocks_missing_instruction_file(tmp_path, monkeypatch):
@@ -110,6 +143,90 @@ def test_preflight_blocks_unavailable_local_capability(monkeypatch):
     assert result["passed"] is False
     assert result["sentinel"] == "LOCAL_CAPABILITY_UNAVAILABLE"
     assert "synlynk local doctor" in result["reason"]
+
+
+def test_preflight_blocks_missing_local_config(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    from synlynk.dispatch import _preflight_dispatch
+
+    result = _preflight_dispatch("local", [])
+
+    assert result["passed"] is False
+    assert result["sentinel"] == "LOCAL_CAPABILITY_UNAVAILABLE"
+    assert "configuration is unavailable" in result["reason"]
+
+
+def test_preflight_blocks_local_config_without_endpoint(monkeypatch):
+    from synlynk import local_agent
+    from synlynk.dispatch import _preflight_dispatch
+
+    monkeypatch.setattr(local_agent, "_load_local_config", lambda: {"models": []})
+
+    result = _preflight_dispatch("local", [])
+
+    assert result["passed"] is False
+    assert result["sentinel"] == "LOCAL_CAPABILITY_UNAVAILABLE"
+    assert "no oMLX endpoint" in result["reason"]
+
+
+def test_preflight_blocks_missing_aider(monkeypatch):
+    from synlynk import local_agent
+    from synlynk.dispatch import _preflight_dispatch
+
+    monkeypatch.setattr(
+        local_agent,
+        "_load_local_config",
+        lambda: {"endpoint": "http://127.0.0.1:8000", "models": []},
+    )
+    monkeypatch.setattr(
+        local_agent,
+        "_health_check",
+        lambda endpoint, api_key=None: {"reachable": True},
+    )
+    monkeypatch.setattr("synlynk.dispatch.shutil.which", lambda name: None if name == "aider" else "/usr/bin/orbctl")
+
+    result = _preflight_dispatch("local", [])
+
+    assert result["passed"] is False
+    assert result["sentinel"] == "LOCAL_CAPABILITY_UNAVAILABLE"
+    assert "requires `aider`" in result["reason"]
+
+
+@pytest.mark.parametrize(
+    "orb_health",
+    [
+        {"reachable": False, "error": "orbctl is not installed or not on PATH"},
+        {"reachable": False, "error": "OrbStack is not running"},
+    ],
+    ids=["missing", "unhealthy"],
+)
+def test_preflight_blocks_missing_or_unhealthy_orbstack(monkeypatch, orb_health):
+    from synlynk import local_agent
+    from synlynk.dispatch import _preflight_dispatch
+
+    monkeypatch.setattr(
+        local_agent,
+        "_load_local_config",
+        lambda: {
+            "endpoint": "http://127.0.0.1:8000",
+            "models": [],
+            "container_required": True,
+        },
+    )
+    monkeypatch.setattr(
+        local_agent,
+        "_health_check",
+        lambda endpoint, api_key=None: {"reachable": True},
+    )
+    monkeypatch.setattr("synlynk.dispatch.shutil.which", lambda name: "/usr/local/bin/aider")
+    monkeypatch.setattr(local_agent, "_orbstack_health_check", lambda: orb_health)
+
+    result = _preflight_dispatch("local", [])
+
+    assert result["passed"] is False
+    assert result["sentinel"] == "LOCAL_ORBSTACK_UNAVAILABLE"
+    assert "requires OrbStack" in result["reason"]
+    assert "orbctl" in result["reason"] or "not running" in result["reason"]
 
 
 def test_fleet_parity_agy_stitch_mcp_integration_preflight_blocks(tmp_path, monkeypatch):
@@ -1363,6 +1480,23 @@ def test_create_job_worktree_anchors_to_base_tip_sha_and_returns_details(git_wor
     assert _os.path.isdir(result["path"])
 
 
+def test_create_job_worktree_provisions_github_apps_symlink(git_worktree_repo, monkeypatch):
+    import synlynk.dispatch as dispatch_mod
+
+    apps_dir = git_worktree_repo / ".synlynk" / "github_apps"
+    apps_dir.mkdir(parents=True)
+    token_path = apps_dir / "qa.token.json"
+    token_path.write_text('{"token":"role-token"}')
+    monkeypatch.chdir(git_worktree_repo)
+
+    result = dispatch_mod._create_job_worktree("job-apps", "codex")
+
+    linked_apps = __import__("pathlib").Path(result["path"]) / ".synlynk" / "github_apps"
+    assert linked_apps.is_symlink()
+    assert linked_apps.resolve() == apps_dir.resolve()
+    assert (linked_apps / "qa.token.json").read_text() == token_path.read_text()
+
+
 def test_create_job_worktree_serializes_git_ref_operation_and_retries_contention(git_worktree_repo, monkeypatch):
     import synlynk.dispatch as dispatch_mod
 
@@ -1720,7 +1854,7 @@ def test_dispatch_agent_warns_and_falls_back_without_gh_write_target(project_dir
     assert row[1] is None
 
 
-def test_dispatch_agent_explicit_issue_takes_precedence_over_task_target(project_dir, monkeypatch):
+def test_dispatch_agent_task_pr_beats_different_issue_link(project_dir, monkeypatch):
     import synlynk as sl
     import synlynk.dispatch as dispatch_mod
 
@@ -1748,7 +1882,9 @@ def test_dispatch_agent_explicit_issue_takes_precedence_over_task_target(project
         "SELECT gh_write_target FROM daemon_jobs ORDER BY enqueued_at DESC LIMIT 1"
     ).fetchone()
     conn.close()
-    assert row[0] == "issue:1300"
+    # #2056: --issue is the GOVERNS link. The PR named in the task is the
+    # verification target when the two numbers differ.
+    assert row[0] == "pr:1180"
 
 
 def test_dispatch_agent_persists_agent_id_on_daemon_jobs(project_dir, monkeypatch):
@@ -1776,7 +1912,7 @@ def test_dispatch_agent_persists_agent_id_on_daemon_jobs(project_dir, monkeypatc
     assert row[0] == agent_id
 
 
-def test_dispatch_agent_requires_gh_write_reroutes_incapable_agent(project_dir, monkeypatch, capsys):
+def test_dispatch_agent_requires_gh_write_allows_grok_after_live_retest(project_dir, monkeypatch, capsys):
     import synlynk as sl
     import synlynk.dispatch as dispatch_mod
 
@@ -1792,17 +1928,15 @@ def test_dispatch_agent_requires_gh_write_reroutes_incapable_agent(project_dir, 
         context_mode="none", requires_gh_write=True, role="qa",
     )
 
-    assert job["agent"] in ("codex", "claude")
+    assert job["agent"] == "grok"
     assert sl.HARNESS_CAPABILITY_BASELINES[job["agent"]]["can_gh_write"] is True
     captured = capsys.readouterr()
-    assert "rerouted" in captured.out
+    assert "rerouted" not in captured.out
 
 
-def test_dispatch_agent_requires_gh_write_force_agent_fails_closed(project_dir, monkeypatch, capsys):
+def test_dispatch_agent_requires_gh_write_force_agent_allows_grok(project_dir, monkeypatch, capsys):
     import synlynk as sl
     import synlynk.dispatch as dispatch_mod
-    from synlynk.capability_probe import IncompatibleHarnessCapabilityError
-
     class FakeProc:
         pid = 1
 
@@ -1810,11 +1944,14 @@ def test_dispatch_agent_requires_gh_write_force_agent_fails_closed(project_dir, 
     monkeypatch.setattr(sl, "_preflight_dispatch", lambda harness_name, dispatch_flags, db_conn=None, _task_hint="": {"passed": True, "sentinel": None, "reason": None})
     monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_gh_token", lambda role: "test-gh-token")
 
-    with pytest.raises(IncompatibleHarnessCapabilityError):
-        sl.dispatch_agent(
-            "grok", "review and merge PR #500", story_id="story-manual-1",
-            context_mode="none", requires_gh_write=True, force_agent=True, role="qa",
-        )
+    job = sl.dispatch_agent(
+        "grok", "review and merge PR #500", story_id="story-manual-1",
+        context_mode="none", requires_gh_write=True, force_agent=True, role="qa",
+    )
+
+    assert job["agent"] == "grok"
+    captured = capsys.readouterr()
+    assert "cannot reliably complete GitHub-write" not in captured.out + captured.err
 
 
 def test_dispatch_agent_requires_gh_write_allows_codex_without_reroute(project_dir, monkeypatch, capsys):
@@ -1901,9 +2038,9 @@ def test_dispatch_agent_requires_gh_write_raises_when_no_capable_agent(project_d
 def test_grok_permission_flags_emits_always_approve_when_shell_or_tests_granted():
     from synlynk.dispatch import _grok_permission_flags
 
-    shell_flags = _grok_permission_flags(["read:*", "run:shell"])
-    test_flags = _grok_permission_flags(["read:*", "run:tests"])
-    write_flags = _grok_permission_flags(["read:*", "write:src/"])
+    shell_flags = _grok_permission_flags(["read:*", "run:shell"], skip_permissions=True)
+    test_flags = _grok_permission_flags(["read:*", "run:tests"], skip_permissions=True)
+    write_flags = _grok_permission_flags(["read:*", "write:src/"], skip_permissions=True)
 
     assert shell_flags == ["--always-approve", "--permission-mode", "bypassPermissions"]
     assert test_flags == ["--always-approve", "--permission-mode", "bypassPermissions"]
@@ -1912,6 +2049,39 @@ def test_grok_permission_flags_emits_always_approve_when_shell_or_tests_granted(
     assert "dontAsk" not in test_flags
     assert "dontAsk" not in write_flags
     assert _grok_permission_flags([]) == []
+    assert _grok_permission_flags([], skip_permissions=False) == []
+
+
+def test_grok_permission_flags_raises_when_not_skipped():
+    from synlynk.dispatch import _grok_permission_flags, PermissionEnforcementError
+
+    with pytest.raises(PermissionEnforcementError, match="grok"):
+        _grok_permission_flags(["run:shell"], skip_permissions=False)
+
+
+def test_grok_permission_flags_empty_permissions_never_raises():
+    from synlynk.dispatch import _grok_permission_flags
+
+    # No permissions requested means nothing to enforce, regardless of the flag.
+    assert _grok_permission_flags([], skip_permissions=False) == []
+    assert _grok_permission_flags(None, skip_permissions=False) == []
+
+
+def test_dispatch_flags_for_agent_grok_adds_always_approve_only_when_skipped():
+    from synlynk.dispatch import _dispatch_flags_for_agent
+
+    assert "--always-approve" not in _dispatch_flags_for_agent("grok")
+    assert "--always-approve" not in _dispatch_flags_for_agent("grok", skip_permissions=False)
+    assert "--always-approve" in _dispatch_flags_for_agent("grok", skip_permissions=True)
+
+
+def test_dispatch_flags_for_agent_grok_never_adds_dangerously_skip_permissions():
+    from synlynk.dispatch import _dispatch_flags_for_agent
+
+    # --dangerously-skip-permissions is in Grok's invalid_flags; the skip gate
+    # must add --always-approve for Grok, never this flag.
+    flags = _dispatch_flags_for_agent("grok", skip_permissions=True)
+    assert "--dangerously-skip-permissions" not in flags
 
 
 def test_grok_dispatch_deduplicates_boolean_permission_and_baseline_flags(project_dir, monkeypatch):
@@ -1928,7 +2098,10 @@ def test_grok_dispatch_deduplicates_boolean_permission_and_baseline_flags(projec
         return FakeProc()
 
     monkeypatch.setattr(dispatch_mod.subprocess, "Popen", fake_popen)
-    monkeypatch.setattr(dispatch_mod, "_dispatch_flags_for_agent", lambda agent: ["--always-approve"])
+    monkeypatch.setattr(
+        dispatch_mod, "_dispatch_flags_for_agent",
+        lambda agent, skip_permissions=False: ["--always-approve"],
+    )
     monkeypatch.setattr(dispatch_mod, "_preflight_dispatch", lambda *a, **kw: {"passed": True})
 
     dispatch_mod.dispatch_agent(
@@ -1943,6 +2116,40 @@ def test_grok_dispatch_deduplicates_boolean_permission_and_baseline_flags(projec
     assert captured["command"][2].count("--always-approve") == 1
 
 
+def test_grok_dispatch_auto_skips_permissions_by_default(project_dir, monkeypatch):
+    """A Grok dispatch with no explicit skip_permissions arg must still succeed
+    with the bypass flags present — dispatch_agent() auto-opts-in for Grok
+    (gh:#1925 part 1) since Grok's CLI has no working non-bypass headless mode."""
+    import synlynk.dispatch as dispatch_mod
+
+    captured = {}
+
+    def fake_popen(command, *args, **kwargs):
+        captured["command"] = command
+
+        class FakeProc:
+            pid = 12345
+
+        return FakeProc()
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(dispatch_mod, "_preflight_dispatch", lambda *a, **kw: {"passed": True})
+
+    dispatch_mod.dispatch_agent(
+        agent="grok",
+        task="run tests",
+        grants=["run:shell"],
+        force_agent=True,
+        skip_preflight=True,
+        context_mode="none",
+        # skip_permissions deliberately omitted — must default to working behavior.
+    )
+
+    shell_cmd = captured["command"][2]
+    assert "--always-approve" in shell_cmd
+    assert "--permission-mode bypassPermissions" in shell_cmd
+
+
 def test_permissions_to_flags_agy_warns_on_empty_permissions(capsys):
     from synlynk.dispatch import _permissions_to_flags
 
@@ -1951,10 +2158,10 @@ def test_permissions_to_flags_agy_warns_on_empty_permissions(capsys):
     assert "no write/run permissions granted" in out
 
 
-def test_permissions_to_flags_agy_write_permissions_keep_skip_flag_without_warning(capsys):
+def test_permissions_to_flags_agy_write_permissions_use_sandbox_without_warning(capsys):
     from synlynk.dispatch import _permissions_to_flags
 
-    assert _permissions_to_flags("agy", ["write:src/"]) == ["--dangerously-skip-permissions"]
+    assert _permissions_to_flags("agy", ["write:src/"]) == ["--sandbox"]
     out = capsys.readouterr().out
     assert out == ""
 
@@ -2678,3 +2885,13 @@ def test_dispatch_logs_isolated_and_preserved_on_reap(tmp_path, monkeypatch):
     preserved_log = os.path.join(_daemon_state_path("logs"), os.path.basename(log_path))
     assert os.path.exists(preserved_log)
     assert open(preserved_log).read() == "dispatched worker output"
+
+
+def test_job_purpose_is_fixed_and_requires_explicit_task_type():
+    from synlynk.dispatch import _job_purpose
+
+    assert _job_purpose("qa", "review") == "review"
+    assert _job_purpose("dev", "test") == "implementation"
+    assert _job_purpose("dev", None) == "other"
+    assert _job_purpose("qa", "implement") == "other"
+    assert _job_purpose("qa", "review", explicit=False) == "other"

@@ -1,6 +1,66 @@
 # Agy Devlog
 
+## 2026-10-02 — 15-Minute Time-to-Wow Field Trials Across Target Repositories
+
+### Executed & Verified Across Target Repositories
+- **Trial 1 (rxcc — Monorepo / Full-Stack):**
+  - Executed `synlynk brainstorm` and `synlynk brief` against `/Users/nikhilsoman/dev/rxcc`.
+  - Discovered 53,186 source files, 19,909 test files, and `package.json`.
+  - Calculated healthy test ratio of 0.42 (>= 0.25 safety threshold), appropriately assigning Goal 2 to `[P1] Regression Suite Hardening & CI Acceleration`.
+  - Executive Brief written to `rxcc/project-docs/brief.md` in ~10 seconds.
+- **Trial 2 (cc-videoreframing — Python Backend / Media Processing):**
+  - Executed `synlynk brainstorm` and `synlynk brief` against `/Users/nikhilsoman/dev/cc-videoreframing`.
+  - Discovered 32,339 source files, 10,649 test files, and `package.json`.
+  - Calculated healthy test ratio of 0.45 (>= 0.25 safety threshold), assigning Goal 2 to `[P1] Regression Suite Hardening & CI Acceleration`.
+  - Executive Brief written to `cc-videoreframing/project-docs/brief.md` in ~4 seconds.
+- **Trial 3 (playblazer-ng — Frontend / Angular Web Application):**
+  - Executed `synlynk brainstorm` and `synlynk brief` against `/Users/nikhilsoman/dev/playblazer-ng`.
+  - Discovered 571 source files, 36 test files, and `setup.py`.
+  - Detected low test ratio of 0.06 (< 0.25 safety threshold), dynamically elevating Goal 2 to `[P0] High-Risk Test Coverage Remediation` to guard untested code paths before autonomous feature execution.
+  - Executive Brief written to `playblazer-ng/project-docs/brief.md` in ~4 seconds.
+- **Trial 4 (Greenfield Blueprint Sandboxes):**
+  - Executed `synlynk brainstorm` across `personal_assistant` (with multi-charter options: bills, email, calendar) and `dotfiles`.
+  - Generated durable milestone goals (OAuth hub, agent charters, drift CLI, secret hygiene gate) in <1 second.
+- **Milestone Outcome:** Verified that all 4 criteria for `v1.0.0-rc1` (Zero-Risk Packaging, Autonomous Goal Brainstorm, 15-Minute Field Trials, and Test Suite Runtime Remediation) are fully met.
+[@agy, @nikhilsoman]
+
+## 2026-10-02 — Circuit Breaker Clean-Exit Preservation (LIVE-19) & Quad-Harness Subscription Dual-Ledger Cost Reporting (LIVE-20)
+
+### Shipped & Verified Across Fleet
+- **Spec & Implementation Plan Committed:**
+  - `docs/superpowers/specs/2026-10-02-live-19-live-20-circuit-breaker-and-dual-ledger-remediation-design.md` (`d6315fc5`).
+  - Implementation plan `docs/superpowers/plans/2026-10-02-live-19-live-20-circuit-breaker-and-dual-ledger-remediation.md` (`29544f2e`).
+  - Task briefs 1–5 in `.superpowers/sdd/2026-10-02-live-19-live-20-remediation/` (`e7c5ea8f`).
+- **Fleet Execution:**
+  - **Task 1 (Circuit Breaker Clean-Exit Preservation & Ceiling Calibration):** Updated `synlynk/circuit_breaker.py` to evaluate process liveness and only trip when actively killed (`killed=True`), logging telemetry on post-exit limit breaches. Calibrated limits ($15/5M default; $2/500k fast, $10/3M pro, $15/5M reasoning), verified in `tests/test_circuit_breaker_live19.py` (`01ce1dc1`).
+  - **Task 2 (Jobs Reconciliation Observer-Effect Elimination):** Updated `synlynk/jobs.py` (`_reconcile_jobs_unlocked` and `_reconcile_daemon_jobs`) to gate circuit breaker transitions on `cb_res.tripped and cb_res.process_killed`, preserving clean 0 exit codes on completed jobs, verified in `tests/test_jobs_reconcile_live19.py` (`d2d5dd46`).
+  - **Task 3 (Quad-Harness Subscription Configuration & harness_billing Seed):** Configured `.synlynk/config.json` with user's confirmed monthly billing ($20 Claude, $20 Codex, $20 Agy, $30 Grok = $90/mo base). Updated `_default_harness_billing()` and `load_config()`, verified in `tests/test_harness_billing_config.py` (`cc5e5db5`).
+  - **Task 4 (Dual-Ledger Markdown Generation & Monthly Amortization Rollup):** Updated `synlynk/db.py::_generate_costs_md()` with `$actual [sub] (API: $api)` formatting and appended Subscription Amortization & Dual-Ledger Summary section. Added `synlynk cost billing` in `synlynk/costs.py` and `synlynk/cli.py`, updated taxonomy and regenerated command docs, verified in `tests/test_costs_dual_ledger_live20.py` (`d8638a79`).
+  - **Task 5 (End-to-End Integration, True-Up & Regression Verification):** Created `tests/test_live19_live20_e2e.py` verifying full lifecycle worker clean exit under token pressure, true-up reconciliation against $90.00 base, and cost billing output. Full 47-test regression suite green (`fc8d46e9`).
+[@agy, @nikhilsoman]
+
+## 2026-10-02 — Autonomous Repo Intelligence & Goal-Forming Engine (Shipped & Merged in PR #1903)
+
+### Shipped & Verified Across Fleet
+- **Spec & Implementation Plan Committed:**
+  - `docs/superpowers/specs/2026-10-02-autonomous-repo-intelligence-and-goal-forming-design.md` (`52df20a1`).
+  - Implementation plan `docs/superpowers/plans/2026-10-02-autonomous-repo-intelligence-and-goal-forming.md` (`c49be315`).
+- **Fleet Execution via `synlynk dispatch`:**
+  - **Task 1 (Repo Classifier & Welcome Fork Engine):** Dispatched to `agy` (`job-e68f4af8`, `db2668c7`). Created `synlynk/repo_classifier.py` and `tests/test_repo_classifier.py` (5/5 passing).
+  - **Task 2 (Curated Greenfield Blueprints Engine):** Dispatched to `codex` (`job-da7839e6`, `b93c8b00`). Created `synlynk/greenfield_blueprints.py` with Dotfiles and Personal Assistant blueprints + 6 digital native agent charters (Bills, Reimbursements, Docs, Shopping, Fitness, Nutrition), verified in `tests/test_greenfield_blueprints.py` (3/3 passing).
+  - **Task 3 (Brownfield Evidence & Goal Synthesizer):** Dispatched to `claude` (`job-4539e21d`, `abee70d4`). Created `synlynk/goal_synthesizer.py` with AST evidence mapping, 3–5 durable goals synthesis, and ambient fleet 1-shot refinement with offline fail-safe, verified in `tests/test_brownfield_synthesizer.py` (19/19 passing).
+  - **Task 4 (Executive Brief Generator & TUI Review):** Dispatched to `agy` (`job-ab91bc88`, `d6acc0c1`). Created `synlynk/brief.py` with `project-docs/brief.md` generation and interactive terminal TUI review, verified in `tests/test_brief_and_tui.py` (2/2 passing).
+  - **Task 5 (Memorable Vizor Port Hunting Ladder):** Dispatched to `codex` (`job-14490a9c`, `559d1cdb`). Added `MEMORABLE_VIZOR_PORTS = [33333, 44444, 55555, 22222, 11111]` with sequential hunting and legacy fallback in `synlynk/viz.py`, verified in `tests/test_vizor_memorable_ports.py` (5/5 passing) and `tests/test_viz.py` (44/44 passing).
+  - **Task 6 (LIVE-21 Remediation — Auto-Probe in Onboarding & Defensive Dispatch Gate):** Dispatched to `codex` (`job-c80288da`, `350f7be4`). Auto-probes configured harnesses in `init()` and added defensive inline auto-probe in `_preflight_dispatch()`, verified in `tests/test_onboarding_autoprobe.py` (2/2 passing) and `tests/test_dispatch.py` (158/158 passing). Resolves issue #1901.
+  - **Task 7 (CLI Integration & End-to-End Verification):** Dispatched to `claude` (`job-5eea7466`, `9b13c52f`). Added `synlynk brainstorm` and `synlynk brief` CLI subcommands in `synlynk/cli.py`, added `tests/test_autonomous_goal_forming_e2e.py` (6/6 passing).
+- **Taxonomy & Docs Parity:** Registered `brainstorm` and `brief` in `synlynk/taxonomy.py` (`daa149a0`) and regenerated documentation via `generate_command_docs.py` (`af2dcb64`).
+- **PR Review & Merge:** PR #1903 approved by QA reviewer (`job-c7c39464`) and squash-merged into `main` (`4574cb6c`).
+- **Verification:** 49/49 feature tests passing; 6/6 GitHub Actions CI matrix checks green.
+- **Hygiene:** All worktrees cleaned up, branch pruned, costs logged in `project-docs/costs.md`.
+[@agy, @nikhilsoman]
+
 ## 2026-10-01 — Zero-Risk Packaging & Standalone Distribution Engine (Tasks 1–7 Complete)
+
 
 ### Shipped & Verified Across Fleet
 - **Spec, Decisions & Implementation Plan Committed:**
@@ -20,6 +80,7 @@
 [@agy, @nikhilsoman]
 
 ## 2026-10-01 — Unified Onboarding Journeys & Self-Updating Lifecycle Engine (Tasks 1–9 Complete)
+## 2026-10-01 — Unified Onboarding Journeys & Self-Updating Lifecycle Engine (Tasks 1–9 Complete, PR #1894 Merged)
 
 ### Shipped & Verified Across Fleet
 - **Spec, Decisions & Implementation Plan Committed:**
@@ -36,8 +97,12 @@
   - **Task 7 (Vizor REST/SSE APIs & HUD):** Dispatched to `agy` (`job-856a4c93`, `c0425649`). Updated `synlynk/viz.py` with 10-stage HUD stepper, `/w/<slug>/api/onboarding/state`, and `/w/<slug>/api/onboarding/topology/confirm`.
   - **Task 8 (TUI Surface Integration):** Dispatched to `grok` (`job-1d8124f4`, `b56e1a67`). Connected `cmd_wizard_init` in `synlynk/wizard.py` to the state machine with headless non-interactive mode.
   - **Task 9 (End-to-End Matrix):** Dispatched to `claude` (`job-754f3d79`, `232192e4`). Created `tests/test_unified_onboarding_e2e.py` verifying full container and monorepo matrix paths.
-- **Verification:** Full 25-test onboarding verification suite passing (25/25 green).
-- **Hygiene:** All job worktrees cleanly pruned, costs captured in `project-docs/costs.md`, branch `feat/agy/vizor-onboarding-engine` pushed to origin.
+- **Verification & PR Merge:**
+  - Full 25-test onboarding verification suite passing (25/25 green).
+  - Resolved backward-compatibility in `synlynk/viz.py` for legacy 3-view cards alongside 10 lifecycle stages (`2c5d261f`).
+  - All 6 GitHub Actions CI matrix checks green (Python 3.10, 3.12, macOS, EPUBCheck, QA-gate).
+  - PR #1894 reviewed and approved by `qa` role (`synlynk-synlynk-qa[bot]`) and squash-merged into `main` (`1f5a4bab`).
+- **Hygiene:** All job worktrees cleanly pruned, costs captured in `project-docs/costs.md`, `main` branch synchronized.
 [@agy, @nikhilsoman]
 
 ## 2026-09-30 — Vizor Repo-Truth Purge & Native View HUD Shells (Spec 2, Story story-6a18ed23)

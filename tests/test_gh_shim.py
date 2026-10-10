@@ -11,7 +11,13 @@ def _fake_gh(tmp_path):
     return path
 
 
-def _run_shim(tmp_path, env):
+def _run_shim(tmp_path, env, cwd=None):
+    # gh_shim runs as a real subprocess with an explicit, non-inheriting env
+    # dict; the conftest autouse fixture only sets this in the pytest
+    # process's own os.environ, so it must be threaded through here too
+    # (gh:#1831 hardening: _project_root() raises in a non-git tmp_path cwd
+    # without it).
+    env = {**env, "SYNLYNK_ALLOW_CWD_FALLBACK": "1"}
     shim = tmp_path / "shim"
     shim.mkdir(exist_ok=True)
     shim_path = shim / "gh"
@@ -21,7 +27,7 @@ def _run_shim(tmp_path, env):
         "raise SystemExit(main(shim_dir=__import__('os').path.dirname(__file__)))\n"
     )
     shim_path.chmod(stat.S_IRWXU)
-    return subprocess.run([str(shim_path), "--version"], env=env, text=True, capture_output=True)
+    return subprocess.run([str(shim_path), "--version"], env=env, cwd=cwd or tmp_path, text=True, capture_output=True)
 
 
 def test_shim_non_harness_execs_real_gh(tmp_path):
@@ -54,6 +60,25 @@ def test_shim_harness_with_allow_host_execs_real_gh(tmp_path):
     assert result.stdout == "gh-ran:"
 
 
+def test_shim_host_auth_records_structured_audit_event(tmp_path):
+    _fake_gh(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    env = {
+        "PATH": str(tmp_path),
+        "PYTHONPATH": os.getcwd(),
+        "SYNLYNK_HARNESS": "1",
+        "SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH": "1",
+        "USER": "operator",
+    }
+    result = _run_shim(tmp_path, env)
+    assert result.returncode == 0
+    events = __import__("json").loads((tmp_path / ".synlynk" / "telemetry.json").read_text())
+    assert events[-1]["type"] == "gh_host_auth"
+    assert events[-1]["actor"] == "operator"
+    assert events[-1]["repo"] == "unknown"
+    assert events[-1]["gh_call"] == "gh --version"
+
+
 def test_shim_harness_with_token_execs_real_gh(tmp_path):
     _fake_gh(tmp_path)
     env = {
@@ -65,6 +90,7 @@ def test_shim_harness_with_token_execs_real_gh(tmp_path):
     result = _run_shim(tmp_path, env)
     assert result.returncode == 0
     assert result.stdout == "gh-ran:app-token"
+    assert not (tmp_path / ".synlynk" / "telemetry.json").exists()
 
 
 def test_shim_does_not_classify_ci_as_harness():
@@ -90,6 +116,17 @@ def test_shim_routes_known_role_to_synlynk(monkeypatch):
         assert str(exc) == "exec captured"
     assert calls[0][0] == sys.executable
     assert calls[0][1][-6:] == ["--role", "qa", "--", "pr", "view", "1"]
+
+
+def test_internal_gh_runner_refuses_host_auth_in_harness(monkeypatch):
+    from synlynk import gh_shim
+
+    monkeypatch.setenv("SYNLYNK_HARNESS", "1")
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    result = gh_shim.run_gh(["pr", "view", "1"], capture_output=True, text=True)
+    assert result.returncode == 1
+    assert gh_shim.REFUSAL in result.stderr
 
 
 def test_gh_shim_cli_prints_installable_environment(tmp_path, monkeypatch, capsys):

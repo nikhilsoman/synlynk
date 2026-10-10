@@ -42,6 +42,6 @@
     <line x1="26" y1="0" x2="34" y2="0" stroke="#1a1a1a" stroke-width="1.5"/>
   </g>
   <text x="316" y="228" class="wordmark">syn<tspan fill="#5B8DEF">l</tspan><tspan fill="#A259F7">y</tspan><tspan fill="#2EC4A0">n</tspan><tspan fill="#1a1a1a">k</tspan></text>
-  <text x="316" y="258" class="tagline">synaptic link for ai dev</text>
+  <text x="316" y="258" class="tagline">neutral control plane for coding tasks</text>
   <line x1="316" y1="242" x2="580" y2="242" stroke="#ddd" stroke-width="0.5"/>
 </svg>

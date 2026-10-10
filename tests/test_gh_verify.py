@@ -26,10 +26,23 @@ def test_gh_write_verified_false_when_issue_still_open(monkeypatch):
 def test_gh_write_verified_true_when_pr_merged(monkeypatch):
     def fake_run(cmd, **kwargs):
         assert cmd[:3] == ["gh", "pr", "view"]
-        return subprocess.CompletedProcess(cmd, 0, stdout='{"state":"MERGED"}', stderr="")
+        assert cmd[-1] == "state,mergedBy,mergeCommit"
+        return subprocess.CompletedProcess(
+            cmd, 0,
+            stdout='{"state":"MERGED","mergedBy":{"login":"qa"},'
+                   '"mergeCommit":{"oid":"deadbeef"}}',
+            stderr="",
+        )
 
     monkeypatch.setattr(subprocess, "run", fake_run)
-    assert gh_write_verified("pr:964", expect="merged") is True
+    evidence = {}
+    assert gh_write_verified(
+        "pr:964", expect="merged", expect_author="qa", expected_sha="deadbeef",
+        evidence=evidence,
+    ) is True
+    assert evidence["target_match"] is True
+    assert evidence["actor_match"] is True
+    assert evidence["sha_match"] is True
 
 
 def test_gh_write_verified_merged_retries_delayed_state(monkeypatch):
@@ -472,4 +485,31 @@ def test_gh_write_verified_survives_incompatible_timestamp_types_without_crashin
     assert gh_write_verified(
         "pr:1038", expect="review_posted", since="2026-08-18T10:00:00Z",
         expect_author="bot",
+    ) is False
+
+
+def test_gh_write_verified_records_causal_actor_sha_and_retry_quorum(monkeypatch):
+    raw = '{"reviews":[{"author":{"login":"qa[bot]"},"submittedAt":"2026-08-18T11:00:00Z","commitOid":"abc123"}]}'
+    evidence = {}
+    monkeypatch.setattr(subprocess, "run", lambda cmd, **kwargs: subprocess.CompletedProcess(
+        cmd, 0, stdout=raw, stderr=""
+    ))
+    assert gh_write_verified(
+        "pr:1038", expect="review_posted", since="2026-08-18T10:00:00Z",
+        expect_author="qa", expected_sha="abc", evidence=evidence,
+    ) is True
+    assert evidence["expected_actor"] == "qa"
+    assert evidence["expected_sha"] == "abc"
+    assert evidence["quorum"] == {"required": 1, "observed": 1}
+    assert evidence["retry"]["read_after_write"] is True
+
+
+def test_gh_write_verified_rejects_actor_or_sha_mismatch(monkeypatch):
+    raw = '{"reviews":[{"author":{"login":"other"},"submittedAt":"2026-08-18T11:00:00Z","commitOid":"wrong"}]}'
+    monkeypatch.setattr(subprocess, "run", lambda cmd, **kwargs: subprocess.CompletedProcess(
+        cmd, 0, stdout=raw, stderr=""
+    ))
+    assert gh_write_verified(
+        "pr:1038", expect="review_posted", since="2026-08-18T10:00:00Z",
+        expect_author="qa", expected_sha="abc",
     ) is False
