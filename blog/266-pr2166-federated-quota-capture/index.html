@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Federated quota capture | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-2">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Oct 10, 2026</span>
+        
+          <span class="blog-post-pr">PR 2166</span>
+        
+      </div>
+      <h1 class="blog-post-title">Federated quota capture</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>266 — Federated quota capture</h1>
+<h2>Where the last PR left the goal</h2>
+<p>synlynk could price a job in <code>cost_entries</code> and could store a hand-entered ceiling in <code>harness_quotas</code>. It could not see which subscription was actually near its weekly limit, so PM and review work kept landing on whichever harness was home.</p>
+<h2>What moved</h2>
+<p>The home harness hit 98% of its weekly quota during roadmap work. Allocation has to read the provider's own percent, not a local token estimate. Open-source usage tools were checked and rejected because they label their figures as API-equivalent estimates.</p>
+<h2>What this PR ships</h2>
+<p><code>quota_snapshots</code> (migration 20) stores <code>harness</code>, <code>window</code> (<code>5h</code> or <code>weekly</code>), <code>used_percent</code>, <code>resets_at</code>, <code>captured_at</code>, <code>source</code> (<code>task_boundary</code> or <code>poller</code>), <code>staleness_seconds</code>, and <code>job_id</code>. The registry in <code>synlynk/quota_capture.py</code> maps Claude and Agy to <code>cli -p &quot;/usage&quot; --output-format text</code>, Codex to the newest <code>payload.rate_limits</code> object under <code>~/.codex/sessions</code>, and Grok to <code>billing: fetched credits config</code> in <code>~/.grok/logs/unified.jsonl</code>. Boundary capture runs on a daemon thread after <code>exec_command</code> and after a dispatch job settles <code>done</code>. The daemon poller runs every 15 minutes. For Grok it sends <code>/usage</code> and Enter into <code>interactive_pane_id</code> only when that id is set and the log line is older than 15 minutes. <code>synlynk quota federated</code> prints the latest row per harness and window next to a 7-day <code>cost_entries</code> sum. A reading older than 30 minutes, or a missing reading, is <code>unknown</code>. Unknown falls back to <code>synlynk quota calibrate</code> data in <code>harness_quotas</code>. Unpinned dispatch then prefers the known weekly reading with the most room, and skips a harness whose known 5h reading is at least 100%.</p>
+<h2>Brainstorm</h2>
+<p>No new brainstorm visuals. The approved spec is <code>docs/superpowers/specs/2026-10-10-federated-quota-capture-design.md</code>.</p>
+<h2>On the way to autonomous dispatch</h2>
+<p>The fleet can now see subscription headroom the same way it already sees dollar burn. Grok stays <code>unknown</code> until a standing Herdr pane id is registered. That pane setup is a separate design.</p>
+<h2>The new goalpost</h2>
+<p>Per-harness persistent Herdr panes, so Grok's weekly percent refreshes without a manual calibrate, and Herdr's place as a synlynk dependency gets its own spec.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
