@@ -4089,8 +4089,8 @@ def cmd_goal_update(goal_id: str, status: str = None, deadline: str = None,
             for story_id in story_ids:
                 conn.execute(
                     "UPDATE stories SET goal_id=? WHERE story_id=? "
-                    "AND (status IS NULL OR status != 'done')",
-                    (supersede_with, story_id),
+                    "AND goal_id=? AND (status IS NULL OR status != 'done')",
+                    (supersede_with, story_id, goal_id),
                 )
                 if conn.execute(
                     "SELECT 1 FROM goal_contributions WHERE goal_id=? AND story_id=?",

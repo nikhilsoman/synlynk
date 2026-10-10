@@ -159,10 +159,34 @@ def test_goal_update_supersede_relinks_open_stories_but_not_done_stories():
     old_status = conn.execute("SELECT status FROM goals WHERE goal_id=?", (old_goal,)).fetchone()[0]
     conn.close()
     assert dict(story_rows)[open_primary] == new_goal
-    assert dict(story_rows)[open_secondary] == new_goal
+    assert dict(story_rows)[open_secondary] is None
     assert dict(story_rows)[done_story] == old_goal
     assert contributions == [(open_secondary, new_goal)]
     assert old_status == "superseded"
+
+
+def test_goal_update_supersede_preserves_other_primary_goal_when_secondary_moves():
+    from synlynk.db import cmd_goal_create, cmd_story_create, cmd_goal_link, cmd_goal_update
+
+    primary_goal = cmd_goal_create(outcome="Primary", criterion="Keep me", role="pm")
+    superseded_goal = cmd_goal_create(outcome="Old", criterion="Replace me", role="pm")
+    new_goal = cmd_goal_create(outcome="New", criterion="Replacement", role="pm")
+    story_id = cmd_story_create(title="Cross-cutting work")
+    cmd_goal_link(story_id, primary_goal)
+    cmd_goal_link(story_id, superseded_goal, secondary=True)
+
+    cmd_goal_update(superseded_goal, supersede_with=new_goal)
+
+    conn = _get_db()
+    primary = conn.execute(
+        "SELECT goal_id FROM stories WHERE story_id=?", (story_id,)
+    ).fetchone()[0]
+    contribution = conn.execute(
+        "SELECT goal_id FROM goal_contributions WHERE story_id=?", (story_id,)
+    ).fetchone()[0]
+    conn.close()
+    assert primary == primary_goal
+    assert contribution == new_goal
 
 
 def test_goal_update_rejects_invalid_values():
