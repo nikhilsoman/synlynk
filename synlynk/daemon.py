@@ -1301,6 +1301,7 @@ class SynlynkDaemon(WatchDaemon):
         # openssl signing or a GitHub API request.
         self._refresh_github_tokens()
         last_token_refresh = time.time()
+        last_quota_poll = 0.0
         while True:
             time.sleep(interval)
             current_mtimes = self._get_mtimes("project-docs")
@@ -1338,6 +1339,13 @@ class SynlynkDaemon(WatchDaemon):
             if time.time() - last_token_refresh >= self.token_refresh_interval_seconds:
                 self._refresh_github_tokens()
                 last_token_refresh = time.time()
+            if time.time() - last_quota_poll >= 900:
+                try:
+                    from synlynk.quota_capture import poll_once
+                    poll_once()
+                except Exception:
+                    _traceback.print_exc()
+                last_quota_poll = time.time()
 
 
 def _synlynk_daemon_child_main(*, blocking_lock: bool = True) -> None:

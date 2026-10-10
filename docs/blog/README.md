@@ -1,5 +1,6 @@
 # synlynk Blog Series: Building the OS for Multi-Agent Development
 
+| [266](./266-prTBD-federated-quota-capture.md) | Federated subscription-quota capture | TBD | 2026-10-10 |
 | [265](./265-prTBD-state-shard-reconciliation.md) | gh:#1831 — Reconciling Orphaned State Shards Before Any Deletion | TBD | 2026-10-09 |
 | [264](./264-prTBD-config-decomposition.md) | gh:#2101 — Splitting config.json Into Workspace, Billing, and Policy Files | TBD | 2026-10-09 |
 | [263](./263-prTBD-state-db-wal-soak.md) | gh:#2102 — Soak-testing state.db with 20–50 concurrent WAL writers | TBD | 2026-10-08 |
