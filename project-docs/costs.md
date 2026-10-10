@@ -581,13 +581,20 @@
 | 2026-10-10 09:18 | codex | o4-mini | 2422055 | 13732 | $0.1164 [sub] (API: $7.4721) | estimated_token_rate | story-issue-2136 | exec: codex job job-cd62e1... |
 | 2026-10-10 09:35 | agy | unknown | 114548 | 14195 | $0.1041 [sub] (API: $0.5566) | estimated_token_rate | story-issue-2136 | exec: agy job job-54a21d5d |
 | 2026-10-10 09:41 | codex | o4-mini | 2422055 | 13732 | $0.1164 [sub] (API: $7.4721) | estimated_manual | - | backfill for PR #2160 (gh:#2136/#2137/#2130 fix); flagged TOKEN_BLOAT+COST_INFLATION, see gh:#1937-style anomaly |
+| 2026-10-10 09:56 | agy | unknown | 252991 | 12844 | $0.2150 [sub] (API: $0.9516) | estimated_token_rate | story-issue-2136 | exec: agy job job-2fe76b53 |
+| 2026-10-10 14:11 | codex | o4-mini | 652620 | 5198 | $0.0314 [sub] (API: $2.0358) | estimated_token_rate | story-d84372cd | exec: codex job job-92e716... |
+| 2026-10-10 14:11 | codex | o4-mini | 868026 | 6549 | $0.0418 [sub] (API: $2.7023) | estimated_token_rate | story-d84372cd | exec: codex job job-814542... |
+| 2026-10-10 14:20 | codex | o4-mini | 342914 | 3160 | $0.0165 [sub] (API: $1.0761) | estimated_token_rate | story-d84372cd | exec: codex job job-f77ebb... |
+| 2026-10-10 14:24 | claude | claude-sonnet-4-6 | 69227 | 14122 | $0.2069 [sub] (API: $0.4195) | estimated_token_rate | story-272f0252 | exec: claude job job-3bf18... |
+| 2026-10-10 15:22 | claude | claude-sonnet-5 | 42000 | 7000 | $0.1216 [sub] (API: $0.2310) | estimated_manual | - | native PM session: diagnosed canonical-state-db EPERM blocking pr check, merged origin updates, fixed blog-frontmatter gate, polled CI, ran policy check-merge --role qa, executed gh pr merge --squash, worktree cleanup. Token counts estimated per global CLAUDE.md methodology, not instrumented. |
+| 2026-10-10 15:22 | claude | claude-sonnet-5 | 9000 | 2500 | $0.0285 [sub] (API: $0.0645) | estimated_manual | - | native PM session: edited roadmap Section 7/9 merge-confirmation status, added Section 12 draft harness-mode allocation table, opened docs-only PR. Token counts estimated per global CLAUDE.md methodology, not instrumented. |
 
 ## Subscription Amortization & Dual-Ledger Summary
 
 | Harness | Base Fee | Actual Amortized Spend | API Equivalent Value | Net Savings |
 |---|---|---|---|---|
-| claude | $20.00 | $22.4359 | $32.8321 | $10.3963 |
-| codex | $20.00 | $17.5836 | $1124.8250 | $1107.2415 |
-| agy | $20.00 | $2.1340 | $10.2211 | $8.0871 |
+| claude | $20.00 | $22.7929 | $33.5471 | $10.7543 |
+| codex | $20.00 | $17.6733 | $1130.6393 | $1112.9660 |
+| agy | $20.00 | $2.3490 | $11.1727 | $8.8237 |
 | grok | $30.00 | $29.3078 | $22.8227 | $-6.4850 |
-| **Total** | **$90.00** | **$71.4612** | **$1190.7010** | **$1119.2398** |
+| **Total** | **$90.00** | **$72.1229** | **$1198.1819** | **$1126.0590** |

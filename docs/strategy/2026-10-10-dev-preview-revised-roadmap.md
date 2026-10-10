@@ -99,7 +99,7 @@ Nikhil's own words, verbatim framing: *"Local is definitely a nice-to-have capab
 
 **Pillar 7 (swarms) + public-model-quota utilization — elevated, now a release-critical claim.** This absorbs part of `#2108` ("Exploratory brainstorm: Managed execution nodes and swarms operated by Synlynk," currently PARKED per the held #1927 panel) — specifically the *swarm execution* dimension, not the *hosted managed service* dimension (that stays separate, see hosted-relay note below). "Effective utilization of public model quotas" has **no existing issue or goal** — this is a genuine gap, not a mischaracterized one; file a new issue this week under `goal-abecd18c` (swarm/containerized execution) covering quota-aware dispatch scheduling across public provider rate limits.
 
-**Federated quota capture (`story-d84372cd`/`goal-005ea87d`) folded in as the mechanism satisfying the above, pending merge (2026-10-10).** Design spec + plan (docs-only PR #2165, qa-approved, not yet merged) and implementation + 40 targeted tests (PR #2166, Codex QA review in flight as `job-814542e5`) already exist, built independently this session before this roadmap fold-in was decided. This is the literal "quota-aware dispatch scheduling" mechanism Section 7 calls for above — **no separate new issue needs filing for it**, superseding that line's instruction. `story-d84372cd` gets a secondary GOVERNS link to `goal-abecd18c` (pillar 7) alongside its existing primary link to `goal-005ea87d` (pillar 1, Full Fleet Harness Parity), since the same `quota_snapshots` data feeds both multi-harness parity and swarm/quota-aware dispatch routing. It is also a Week 2 input for pillar 3's capability-matrix allocation — a capability report that ranks harnesses on cost/quality without quota headroom can route work to a harness that is already exhausted. **Caveat:** neither #2165 nor #2166 is merged yet; this fold-in ties two release-critical pillars (3 and 7) to code still in review, not to shipped infrastructure — treat it as "integrated, pending merge" until `gh pr view` on both confirms `MERGED`.
+**Federated quota capture (`story-d84372cd`/`goal-005ea87d`) folded in as the mechanism satisfying the above — merged 2026-10-10.** Design spec + plan (docs-only PR #2165) and implementation + targeted tests (PR #2166) were built independently this session before this roadmap fold-in was decided. This is the literal "quota-aware dispatch scheduling" mechanism Section 7 calls for above — **no separate new issue needs filing for it**, superseding that line's instruction. `story-d84372cd` gets a secondary GOVERNS link to `goal-abecd18c` (pillar 7) alongside its existing primary link to `goal-005ea87d` (pillar 1, Full Fleet Harness Parity), since the same `quota_snapshots` data feeds both multi-harness parity and swarm/quota-aware dispatch routing. It is also a Week 2 input for pillar 3's capability-matrix allocation — a capability report that ranks harnesses on cost/quality without quota headroom can route work to a harness that is already exhausted. **Status:** both #2165 and #2166 confirmed `MERGED` via `gh pr view` (squash commits `cca3822c` and `9e66e519` respectively) — this fold-in now ties pillars 3 and 7 to shipped infrastructure, not code in review.
 
 **Pillar 1 — broadened from "multi-CLI harness" to "multi-interface," and now release-critical, not partial-credit.** Original pillar 1 text ("usable from Claude/Codex/Grok/Agy/Muse CLIs") undersold what Nikhil actually wants: CLI-only is explicitly called out as the current limitation to escape. Existing tracking, now elevated from "future consideration"/P2 to active Week 2-3 work:
 - `#2126` (BS-15, "Harness independence — home/away paradigm, OpenRouter direct API, 3rd-party IDE plugins [Cursor/Warp/Pi]") — explicitly logged as "a future consideration, not urgent" when filed 2026-10-08. **That framing is now superseded** — this is the IDE/agentic-framework/OAuth expansion pillar.
@@ -122,7 +122,7 @@ Nikhil's own words, verbatim framing: *"Local is definitely a nice-to-have capab
 
 ## 9. Next step
 
-File the personal-use-hosted-relay spec issue (own goal, outside the dev-preview GOVERNS tree, per the panel's constraint above) this week, then begin Week 1 execution per Section 2/5. The public-model-quota-aware swarm dispatch issue is **no longer needed** — superseded by folding the federated quota-capture work (`story-d84372cd`/`goal-005ea87d`, secondary-linked to `goal-abecd18c`) directly into Section 7, pending merge of PRs #2165/#2166. Both R2-elevated pillars (1 and 7) wait behind the Week 1 gate exactly as the panel specified — no dispatch slots against provider/BYOK, interface, swarm, or relay work until `#1926` is queryable and `#2136` is merged.
+File the personal-use-hosted-relay spec issue (own goal, outside the dev-preview GOVERNS tree, per the panel's constraint above) this week, then begin Week 1 execution per Section 2/5. The public-model-quota-aware swarm dispatch issue is **no longer needed** — superseded by folding the federated quota-capture work (`story-d84372cd`/`goal-005ea87d`, secondary-linked to `goal-abecd18c`) directly into Section 7; PRs #2165 and #2166 are both merged. Both R2-elevated pillars (1 and 7) wait behind the Week 1 gate exactly as the panel specified — no dispatch slots against provider/BYOK, interface, swarm, or relay work until `#1926` is queryable and `#2136` is merged.
 
 ## 10. Herdr bundling + UX-layer decision — parked, new pillar candidate [NEW]
 
@@ -143,3 +143,44 @@ Raised 2026-10-10: Google DeepMind's "Gemma 4 Developer Agent Competition" (Kagg
 **Gate:** at the end of Week 3, decide go/no-go on **drafting and submitting a paper** by the 2026-11-12 deadline, based strictly on whether Weeks 1-3's actual results (capability report from pillar 3, quota-capture data from Section 7 once merged, swarm trial progress from pillar 7) give enough real measured evidence to write from. No-go is the default if the Week 1 or Week 2 gates (Section 5) have already slipped — a paper written from an unmeasured or descoped pillar is not viable. This gate decides the paper track only; it does **not** reopen, imply, or gate any competitive trained-agent submission, which stays out of scope regardless of this gate's outcome.
 
 **Tracking:** `goal-11ee99c9` / `story-9442caf8` — created as a **standalone project outside this roadmap's GOVERNS tree** (see that goal for the full post-training/distillation framing), not as a dev-preview pillar. This Week-3 gate is the only point of contact between the two: a "go" here authorizes spending time on the paper specifically using this roadmap's own measured data as evidence, nothing more. It does not pull the standalone goal's broader post-training/distillation work into dev-preview scope.
+
+## 12. Harness×mode (home/away) PM-duty allocation, draft [NEW]
+
+Draft allocation across all 4 weeks, built directly from Section 2's task list and the current Default Agent Role / Empirical Capability Assessment policies. This table is **provisional, not binding** — exactly the kind of decision `synlynk capability report` (#1993) is meant to eventually generate from measured data rather than hand-authored heuristics, per the Empirical Capability Assessment Policy (CLAUDE.md). It records today's best-guess routing so Week 1-4 work has a starting allocation, not a locked grant.
+
+**Week 1 — Foundation and reset**
+| Task | Harness | Mode | Note |
+|---|---|---|---|
+| Stale-goal reconciliation | Claude | Home | PM judgment calls on which goals to re-date/close/supersede; log via `synlynk cost log` |
+| #1926 state.db consolidation | Codex | Away | Continuation of existing work (job-1fddce5c branch) |
+| Three-lens P0 security/correctness fixes | Codex / Grok | Away | Split by issue domain once each is filed |
+| Job-status reconciliation Bug A (#2136/#2137/#2130) | Codex | Away | Already dispatched (job-cd62e187/PR #2160) — verify merged |
+
+**Week 2 — Multi-CLI parity + capability measurement (pillars 1 & 3)**
+| Task | Harness | Mode | Note |
+|---|---|---|---|
+| Muse calibration batch (≥5 samples, implement/test) | Muse | Away | First real opportunity for Muse per policy — no interactive Muse pane exists yet, away-only for now |
+| #1993 capability report build | Codex | Away | Spec exists (#1927 held panel); Claude (home) reviews |
+| #1937 cost-inflation re-investigation | Grok | Away | Backend/pipeline debugging; Agy deprioritized per its timeout-reliability history |
+| Three-lens P1 reliability/perf items | Codex / Grok | Away | Split by issue |
+
+**Week 3 — Local model measurement + domain pack (pillars 4 & 6)**
+| Task | Harness | Mode | Note |
+|---|---|---|---|
+| Hermes-tier dispatch routing + measurement wiring | Codex | Away | CLI-plumbing fit |
+| #2102 soak test / #2104 eval wiring | Grok | Away | Infra/data-structure fit |
+| First domain pack onboarding | Agy | Away | Content/template/subpages — Agy's core lane |
+
+**Week 4 — Swarm proof + release (pillar 7 + release)**
+| Task | Harness | Mode | Note |
+|---|---|---|---|
+| Swarm field trial | **Dynamic — not hand-picked** | Away | The whole point of pillar 7 is to pick harnesses from #1993's measured output, not this table |
+| Infra-role deploy re-validation | Agy / Codex / Grok / Muse rotation | Away | Directly tests whether Claude's deploy exclusivity still holds |
+| Release mechanics (CHANGELOG/VERSION/`gh release`) | Claude | Home | PM/deploy lane, interim default |
+| Release blog post content | Agy or Codex | Away | Per Blog Post Protocol — authored by implementation agent, not Claude by hand |
+
+**Cross-cutting rules baked into every row:**
+- Every "Away" row auto-populates `cost_entries`/`capability_ratings` via `dispatch_agent()` — no extra step.
+- Every "Home" row needs a manual `synlynk cost log --pr <N> --harness claude` entry per the Cost Capture Protocol.
+- Every review/merge step must go to a harness+model *different* from the implementer (Hardened PR Review Policy) — so e.g. if Codex implements, Agy or Grok reviews-and-merges, not Codex-approve-fallback.
+- This table itself is provisional — exactly the kind of data `synlynk capability report` (#1993) is meant to eventually replace with generated, measured routing. Revisit once that lands or once any row accumulates ≥5 merged-job samples contradicting it.
