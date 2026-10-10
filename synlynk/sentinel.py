@@ -892,6 +892,7 @@ def check_token_bloat(
     review_token_threshold: int = DEFAULT_REVIEW_TOKEN_BLOAT_THRESHOLD,
     cost_warn_threshold: float = DEFAULT_COST_INFLATION_WARN_THRESHOLD,
     cost_crit_threshold: float = DEFAULT_COST_INFLATION_CRITICAL_THRESHOLD,
+    cache_read_tokens: int = 0,
 ) -> list:
     """Sentinel guard to detect and alert on anomalous token-per-file-touched ratios
     or cost inflation on dispatched agent jobs and historical telemetry.
@@ -938,6 +939,8 @@ def check_token_bloat(
                 )
         return alerts_generated
 
+    from synlynk.costs import split_billed_tokens
+    in_tokens, _cache = split_billed_tokens(agent, in_tokens, cache_read_tokens)
     total_tokens = int(in_tokens or 0) + int(out_tokens or 0)
     cost = float(cost_usd or 0.0)
     files_count = len(files_touched) if isinstance(files_touched, (list, tuple, set)) else int(files_touched or 0)

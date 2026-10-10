@@ -4679,15 +4679,10 @@ def exec_command(cmd_args: list, force: bool = False) -> int:
                     basis=basis,
                 )
             if in_tokens > 0 or out_tokens > 0:
-                rates = model_rate_for_version(model_version, agent=cmd_args[0]) if model_rate_for_version else {
-                    "input": 0.003,
-                    "output": 0.015,
-                    "cache_read": 0.0000003,
-                }
-                est_cost = (
-                    (in_tokens / 1000 * rates["input"]) +
-                    (out_tokens / 1000 * rates["output"]) +
-                    (cache_read_tokens / 1000 * rates["cache_read"])
+                from synlynk.costs import api_equivalent_usd
+                est_cost = api_equivalent_usd(
+                    cmd_args[0], in_tokens, out_tokens, cache_read_tokens,
+                    model=model_version,
                 )
                 load_config_fn = _pkg("load_config")
                 fence_config = load_config_fn() if load_config_fn else {}
