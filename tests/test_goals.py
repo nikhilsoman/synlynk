@@ -107,6 +107,103 @@ def test_goal_status_reports_story_counts(capsys):
     assert "1/2" in captured.out
 
 
+def test_goal_update_changes_status():
+    from synlynk.db import cmd_goal_create, cmd_goal_update
+
+    goal_id = cmd_goal_create(outcome="Ship it", criterion="Done", role="pm")
+    cmd_goal_update(goal_id, status="done")
+    conn = _get_db()
+    status = conn.execute("SELECT status FROM goals WHERE goal_id=?", (goal_id,)).fetchone()[0]
+    conn.close()
+    assert status == "done"
+
+
+def test_goal_update_changes_deadline():
+    from synlynk.db import cmd_goal_create, cmd_goal_update
+
+    goal_id = cmd_goal_create(outcome="Ship it", criterion="Done", role="pm")
+    cmd_goal_update(goal_id, deadline="2026-12-31")
+    conn = _get_db()
+    deadline = conn.execute("SELECT deadline FROM goals WHERE goal_id=?", (goal_id,)).fetchone()[0]
+    conn.close()
+    assert deadline == "2026-12-31"
+
+
+def test_goal_update_supersede_relinks_open_stories_but_not_done_stories():
+    from synlynk.db import cmd_goal_create, cmd_story_create, cmd_goal_link, cmd_goal_update
+
+    old_goal = cmd_goal_create(outcome="Old", criterion="Replace me", role="pm")
+    new_goal = cmd_goal_create(outcome="New", criterion="Replacement", role="pm")
+    open_primary = cmd_story_create(title="Open primary")
+    open_secondary = cmd_story_create(title="Open secondary")
+    done_story = cmd_story_create(title="Done story")
+    cmd_goal_link(open_primary, old_goal)
+    cmd_goal_link(open_secondary, old_goal, secondary=True)
+    cmd_goal_link(done_story, old_goal)
+    conn = _get_db()
+    conn.execute("UPDATE stories SET status='done' WHERE story_id=?", (done_story,))
+    conn.commit()
+    conn.close()
+
+    cmd_goal_update(old_goal, supersede_with=new_goal)
+
+    conn = _get_db()
+    story_rows = conn.execute(
+        "SELECT story_id, goal_id FROM stories WHERE story_id IN (?, ?, ?) ORDER BY story_id",
+        (open_primary, open_secondary, done_story),
+    ).fetchall()
+    contributions = conn.execute(
+        "SELECT story_id, goal_id FROM goal_contributions WHERE story_id=?",
+        (open_secondary,),
+    ).fetchall()
+    old_status = conn.execute("SELECT status FROM goals WHERE goal_id=?", (old_goal,)).fetchone()[0]
+    conn.close()
+    assert dict(story_rows)[open_primary] == new_goal
+    assert dict(story_rows)[open_secondary] is None
+    assert dict(story_rows)[done_story] == old_goal
+    assert contributions == [(open_secondary, new_goal)]
+    assert old_status == "superseded"
+
+
+def test_goal_update_supersede_preserves_other_primary_goal_when_secondary_moves():
+    from synlynk.db import cmd_goal_create, cmd_story_create, cmd_goal_link, cmd_goal_update
+
+    primary_goal = cmd_goal_create(outcome="Primary", criterion="Keep me", role="pm")
+    superseded_goal = cmd_goal_create(outcome="Old", criterion="Replace me", role="pm")
+    new_goal = cmd_goal_create(outcome="New", criterion="Replacement", role="pm")
+    story_id = cmd_story_create(title="Cross-cutting work")
+    cmd_goal_link(story_id, primary_goal)
+    cmd_goal_link(story_id, superseded_goal, secondary=True)
+
+    cmd_goal_update(superseded_goal, supersede_with=new_goal)
+
+    conn = _get_db()
+    primary = conn.execute(
+        "SELECT goal_id FROM stories WHERE story_id=?", (story_id,)
+    ).fetchone()[0]
+    contribution = conn.execute(
+        "SELECT goal_id FROM goal_contributions WHERE story_id=?", (story_id,)
+    ).fetchone()[0]
+    conn.close()
+    assert primary == primary_goal
+    assert contribution == new_goal
+
+
+def test_goal_update_rejects_invalid_values():
+    import pytest
+    from synlynk.db import cmd_goal_create, cmd_goal_update
+
+    goal_id = cmd_goal_create(outcome="O", criterion="C", role="pm")
+    with pytest.raises(ValueError, match="Invalid goal status"):
+        cmd_goal_update(goal_id, status="paused")
+    with pytest.raises(ValueError, match="expected YYYY-MM-DD"):
+        cmd_goal_update(goal_id, deadline="2026-2-30")
+    with pytest.raises(ValueError, match="Goal 'goal-missing' not found"):
+        cmd_goal_update("goal-missing", status="done")
+    with pytest.raises(ValueError, match="Goal 'goal-missing' not found"):
+        cmd_goal_update(goal_id, supersede_with="goal-missing")
+
+
 def test_cli_goal_create_and_list(capsys, monkeypatch):
     import sys
     from synlynk.cli import main
@@ -122,6 +219,23 @@ def test_cli_goal_create_and_list(capsys, monkeypatch):
     main()
     captured = capsys.readouterr()
     assert "Ship BS-8" in captured.out
+
+
+def test_cli_goal_update_status(capsys, monkeypatch):
+    import sys
+    from synlynk.cli import main
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["synlynk", "goal", "create", "--outcome", "CLI goal", "--criterion", "works", "--role", "pm"],
+    )
+    main()
+    created = capsys.readouterr().out
+    goal_id = created.split("Goal created: ", 1)[1].split()[0]
+    monkeypatch.setattr(sys, "argv", ["synlynk", "goal", "update", goal_id, "--status", "done"])
+    main()
+    assert "Goal updated: " + goal_id in capsys.readouterr().out
 
 
 def test_context_from_db_includes_active_goal(tmp_path, monkeypatch):
