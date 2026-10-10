@@ -588,6 +588,7 @@
 | 2026-10-10 14:24 | claude | claude-sonnet-4-6 | 69227 | 14122 | $0.2069 [sub] (API: $0.4195) | estimated_token_rate | story-272f0252 | exec: claude job job-3bf18... |
 | 2026-10-10 15:22 | claude | claude-sonnet-5 | 42000 | 7000 | $0.1216 [sub] (API: $0.2310) | estimated_manual | - | native PM session: diagnosed canonical-state-db EPERM blocking pr check, merged origin updates, fixed blog-frontmatter gate, polled CI, ran policy check-merge --role qa, executed gh pr merge --squash, worktree cleanup. Token counts estimated per global CLAUDE.md methodology, not instrumented. |
 | 2026-10-10 15:22 | claude | claude-sonnet-5 | 9000 | 2500 | $0.0285 [sub] (API: $0.0645) | estimated_manual | - | native PM session: edited roadmap Section 7/9 merge-confirmation status, added Section 12 draft harness-mode allocation table, opened docs-only PR. Token counts estimated per global CLAUDE.md methodology, not instrumented. |
+| 2026-10-10 17:56 | codex | o4-mini | 8400 | 2000 | $0.0005 [sub] (API: $0.0552) | estimated_manual | - | Interactive implementation session; token counts estimated for PR #2179 |
 
 ## Subscription Amortization & Dual-Ledger Summary
 
