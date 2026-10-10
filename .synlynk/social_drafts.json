@@ -238,5 +238,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2184 \u2014 record job-status false-negative fix-strategy decision (PR #2184, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2184.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-10) - PR #2184\n- Merged improvements and fixes for PR #2184."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/269-pr2183-add-synlynk-goal-update-subcommand-gh-21.md",
+    "title": "PR #2183 \u2014 add 'synlynk goal update' subcommand (gh:#2182)",
+    "author": "nikhilsoman",
+    "date": "2026-10-10",
+    "pr": "#2183",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2183."
+    ],
+    "tweet": "\ud83d\ude80 PR #2183 \u2014 add 'synlynk goal update' subcommand (gh:#2182) (PR #2183, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2183.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-10) - PR #2183\n- Merged improvements and fixes for PR #2183."
   }
 ]
