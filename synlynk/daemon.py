@@ -822,6 +822,7 @@ def _daemon_install_service(daemon_instance) -> None:
                 WorkingDirectory={workspace_root}
                 ExecStart={python_path} -m synlynk daemon run
                 Environment=SYNLYNK_DAEMON_WORKSPACE_ROOT={workspace_root}
+                Environment=SYNLYNK_AUTONOMOUS=1
                 Restart=on-failure
                 RestartSec=30
 
