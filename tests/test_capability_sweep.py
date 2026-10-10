@@ -153,6 +153,43 @@ def test_pick_verifier_harness_is_not_executor(tmp_path, monkeypatch):
     assert verifier in ("agy", "grok")
 
 
+def test_verify_calibration_result_marks_verified_on_valid_meta(monkeypatch):
+    from synlynk import capability_sweep
+
+    monkeypatch.setattr(
+        capability_sweep, "_dispatch_calibration_task",
+        lambda verifier, task, **kwargs: {
+            "output": "# synlynk-meta\nquality=7\ncorrect=true\n"
+        },
+    )
+
+    verdict = capability_sweep._verify_calibration_result(
+        "codex", "agy", "gemini-2.5-pro", "PROG", {"output": "some code"}
+    )
+
+    assert verdict == {"quality": 7.0, "correct": True, "quality_verified": True}
+
+
+def test_verify_calibration_result_falls_back_and_warns_on_unparseable_output(monkeypatch, capsys):
+    from synlynk import capability_sweep
+
+    monkeypatch.setattr(
+        capability_sweep, "_dispatch_calibration_task",
+        lambda verifier, task, **kwargs: {"output": "I reviewed it, looks fine."},
+    )
+
+    verdict = capability_sweep._verify_calibration_result(
+        "codex", "agy", "gemini-2.5-pro", "PROG", {"output": "some code"}
+    )
+
+    assert verdict == {"quality": 5.0, "correct": True, "quality_verified": False}
+    captured = capsys.readouterr()
+    assert "WARNING" in captured.err
+    assert "codex" in captured.err
+    assert "agy" in captured.err
+    assert "I reviewed it, looks fine." in captured.err
+
+
 def test_calibration_pool_has_all_role_difficulty_combinations(tmp_path, monkeypatch):
     from synlynk import db
     monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(tmp_path / "state.db"))

@@ -221,7 +221,11 @@ def _verify_calibration_result(
     skill: str,
     executor_output: dict,
 ) -> dict:
-    """Ask a different harness to score the executor output and parse its verdict."""
+    """Ask a different harness to score the executor output and parse its verdict.
+
+    ``quality_verified`` distinguishes a real parsed verdict from the 5.0/True
+    fallback (gh:#2170) so callers do not treat a fallback as a real score.
+    """
     label = SFIA_CODES.get(skill, {}).get("label", skill)
     verify_task = (
         f"Review this {label} calibration task output from another harness and score it "
@@ -236,10 +240,25 @@ def _verify_calibration_result(
     result = _dispatch_calibration_task(verifier_harness, verify_task)
     from synlynk.costs import extract_verifier_meta
 
-    meta = extract_verifier_meta(result.get("output", "")) or {}
+    raw_output = result.get("output", "")
+    meta = extract_verifier_meta(raw_output) or {}
+    quality_verified = "quality" in meta
+
+    if not quality_verified:
+        print(
+            f"  [sweep] WARNING: verifier {verifier_harness} output for "
+            f"{executor_harness}/{model} ({skill}) had no parseable "
+            "'# synlynk-meta' quality block — falling back, marking unverified.\n"
+            "  --- raw verifier output (first 2000 chars) ---\n"
+            f"{raw_output[:2000]}\n"
+            "  --- end raw verifier output ---",
+            file=sys.stderr,
+        )
+
     return {
         "quality": float(meta.get("quality", 5.0)),
         "correct": bool(meta.get("correct", True)),
+        "quality_verified": quality_verified,
     }
 
 
