@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reconciling Orphaned State Shards Before Any Deletion | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-1">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Oct 09, 2026</span>
+        
+          <span class="blog-post-pr">PR 2155</span>
+        
+      </div>
+      <h1 class="blog-post-title">Reconciling Orphaned State Shards Before Any Deletion</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>gh:#1831 — Reconciling Orphaned State Shards Before Any Deletion</h1>
+<h2>The goal as of the last PR</h2>
+<p>PR #2085 (gh:#1926, blog post #254) shipped a migrations framework and buried 11,384 dead
+<code>state.db</code> shards under <code>~/.synlynk/projects/&lt;hash&gt;/</code> — but it explicitly stopped short of
+touching the data inside them. gh:#1831 warned, in its own body, &quot;do not bulk-delete before
+this&quot;: some of those shards hold orphaned story/capability/cost rows that never made it into the
+canonical workspace ledger at <code>~/.synlynk/workspaces/&lt;name&gt;/state.db</code>. Burying the shard
+directories made them stop growing; it didn't recover what was already stranded inside the
+13267207-fingerprint shard (975 rows) or its siblings.</p>
+<p>The Empirical Capability Assessment Policy (2026-10-04) also names this reconciliation as a
+blocking dependency: aggregate <code>capability_ratings</code>/<code>cost_entries</code> measurement across harnesses
+can't be trusted while relevant rows are scattered across thousands of per-job shards instead of
+living in one canonical database.</p>
+<h2>No strategic shift this PR</h2>
+<p>This PR delivers exactly what the design/plan scoped: a safe, dry-run-first reconciliation path
+for <code>synlynk state inventory</code>, plus one <code>_project_root()</code> hardening fix that closes the same
+CWD-fallback bug class as #1228 (a dispatch worktree silently minting its own shard instead of
+resolving to its parent repo's canonical project hash). No scope change from the approved spec
+(<code>docs/superpowers/specs/2026-10-09-state-shard-reconciliation-design.md</code>) or plan
+(<code>docs/superpowers/plans/2026-10-09-state-shard-reconciliation-plan.md</code>).</p>
+<h2>What this PR shipped</h2>
+<p>Seven tasks, executed via <code>superpowers:subagent-driven-development</code> (fresh implementer subagent
+per task, spec-compliance review, then code-quality review, before moving on):</p>
+<ol>
+<li><strong><code>_project_root()</code> hardening</strong> — raises instead of silently falling back to <code>os.getcwd()</code>
+when no project root can be resolved, with a <code>SYNLYNK_ALLOW_CWD_FALLBACK</code> escape hatch scoped
+to the two legacy test files that genuinely need it (not left as a global default).</li>
+<li><strong>Inventory enrichment</strong> — <code>synlynk state inventory</code> now reports <code>row_count</code>, <code>mtime_iso</code>, and
+<code>staleness_days</code> per shard, not just path and size.</li>
+<li><strong>Project matching</strong> — <code>_match_project()</code> resolves a legacy shard to its canonical workspace
+via exact fingerprint match first, falling back to a heuristic (path/name similarity) when no
+exact fingerprint exists.</li>
+<li><strong>Reconcile planning</strong> — <code>_reconcile_plan()</code> computes a union-merge plan between a legacy shard
+and the canonical DB: no-overlap rows union cleanly, full-overlap is a no-op, and genuine
+row-level conflicts are flagged rather than silently resolved.</li>
+<li><strong>Apply with mandatory backup</strong> — <code>apply_reconcile()</code> performs the merge atomically, always
+backing up the canonical DB first and rolling back on any failure mid-merge. <code>created_at</code> is
+preserved from the original row during merge, not overwritten.</li>
+<li><strong>CLI wiring</strong> — <code>--reconcile</code> / <code>--apply</code> / <code>--ignore-conflicts</code> / <code>--cutoff-days</code> flags on
+<code>synlynk state inventory</code>, defaulting to dry-run so a plan is always visible before anything
+is written.</li>
+<li><strong>WAL-checkpoint backup fix</strong> — the final whole-feature code-quality review caught that
+<code>apply_reconcile()</code>'s backup used <code>shutil.copy2()</code> directly on the canonical DB's main file,
+which can omit committed-but-not-yet-checkpointed rows living only in SQLite's <code>-wal</code> sidecar.
+The fix runs <code>PRAGMA wal_checkpoint(TRUNCATE)</code> on a throwaway connection immediately before the
+copy. The regression test needed a second idle connection held open across the call —
+SQLite auto-checkpoints on last-connection-close, so without it the writer's own close would
+mask the bug the test was meant to catch.</li>
+</ol>
+<p>All 18 tests in <code>tests/test_state_inventory.py</code> pass (17 pre-existing + 1 new WAL-checkpoint
+regression test), and the full suite ran clean earlier in this session at 4,052 passed / 0 failed
+/ 3 skipped / 5 xfailed.</p>
+<p>No brainstorm visuals were produced for this PR — the design was scoped directly from gh:#1831's
+own problem statement and the existing <code>2026-10-06-state-db-consolidation-design.md</code>'s adjacent
+(but distinct) single-workspace-DB architecture question.</p>
+<h2>Progress toward the long-arc goal</h2>
+<p>This closes the &quot;safe reconciliation path&quot; piece of gh:#1831 that #1926/PR #2085 deliberately left
+open, and removes one item (orphaned-row recovery) blocking the Empirical Capability Assessment
+Policy's aggregate-measurement dependency. It does not yet perform any bulk deletion of the
+now-buried shard directories — that remains a separate, later step once reconciliation has
+actually been run against the real 11,384-shard population.</p>
+<h2>The new goalpost</h2>
+<p>With <code>_project_root()</code> hardened and a dry-run-first <code>--reconcile</code>/<code>--apply</code> CLI in place, the next
+step is running reconciliation against the real shard population (starting with the known
+13267207 shard) and only then revisiting whether/how to delete the now-reconciled legacy
+directories — plus continuing to track gh:#1993 (<code>synlynk capability report</code>) as the consumer of
+the aggregate data this reconciliation unblocks.</p>
+<p>🤖 Generated with <a href="https://claude.com/claude-code">Claude Code</a></p>
+<p>https://claude.ai/code/session_0167ERumamwnBGV98mN3gXMQ</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
