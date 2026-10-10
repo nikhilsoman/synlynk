@@ -302,5 +302,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2171 \u2014 capability sweep quality signal \u2014 design spec + implementation plan (PR #2171, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2171.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-10) - PR #2171\n- Merged improvements and fixes for PR #2171."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/273-pr2179-clean-up-no-op-job-worktrees.md",
+    "title": "PR #2179 \u2014 clean up no-op job worktrees",
+    "author": "nikhilsoman",
+    "date": "2026-10-10",
+    "pr": "#2179",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2179."
+    ],
+    "tweet": "\ud83d\ude80 PR #2179 \u2014 clean up no-op job worktrees (PR #2179, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2179.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-10) - PR #2179\n- Merged improvements and fixes for PR #2179."
   }
 ]

@@ -332,6 +332,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [270](./270-pr2181-enable-autonomous-ticks-in-installed-ser.md) | PR #2181 — enable autonomous ticks in installed services | [#2181](https://github.com/nikhilsoman/synlynk/pull/2181) | 2026-10-10 |
 | [271](./271-pr2180-align-xdist-evaluation-with-shipped-ci-p.md) | PR #2180 — align xdist evaluation with shipped CI policy | [#2180](https://github.com/nikhilsoman/synlynk/pull/2180) | 2026-10-10 |
 | [272](./272-pr2171-capability-sweep-quality-signal-design-s.md) | PR #2171 — capability sweep quality signal — design spec + implementation plan | [#2171](https://github.com/nikhilsoman/synlynk/pull/2171) | 2026-10-10 |
+| [273](./273-pr2179-clean-up-no-op-job-worktrees.md) | PR #2179 — clean up no-op job worktrees | [#2179](https://github.com/nikhilsoman/synlynk/pull/2179) | 2026-10-10 |
 
 ## Per-PR Post Template
 
