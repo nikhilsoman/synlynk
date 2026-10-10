@@ -327,6 +327,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [239](./239-pr1765-implement-two-tier-accordion-navigation-.md) | PR #1765 — implement two-tier accordion navigation, overview canvas, and activity stream | [#1765](https://github.com/nikhilsoman/synlynk/pull/1765) | 2026-09-24 |
 | [240](./240-pr1768-remove-legacy-embedded-sidebar-and-tab-b.md) | PR #1768 — remove legacy embedded sidebar and tab bar from gantt view | [#1768](https://github.com/nikhilsoman/synlynk/pull/1768) | 2026-09-24 |
 | [267](./267-pr2173-make-post-merge-marketing-sync-idempoten.md) | PR #2173 — make post-merge marketing sync idempotent | [#2173](https://github.com/nikhilsoman/synlynk/pull/2173) | 2026-10-10 |
+| [268](./268-pr2184-record-job-status-false-negative-fix-str.md) | PR #2184 — record job-status false-negative fix-strategy decision | [#2184](https://github.com/nikhilsoman/synlynk/pull/2184) | 2026-10-10 |
 
 ## Per-PR Post Template
 

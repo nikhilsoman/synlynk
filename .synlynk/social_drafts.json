@@ -222,5 +222,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2173 \u2014 make post-merge marketing sync idempotent (PR #2173, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2173.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-10) - PR #2173\n- Merged improvements and fixes for PR #2173."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/268-pr2184-record-job-status-false-negative-fix-str.md",
+    "title": "PR #2184 \u2014 record job-status false-negative fix-strategy decision",
+    "author": "nikhilsoman",
+    "date": "2026-10-10",
+    "pr": "#2184",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2184."
+    ],
+    "tweet": "\ud83d\ude80 PR #2184 \u2014 record job-status false-negative fix-strategy decision (PR #2184, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2184.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-10) - PR #2184\n- Merged improvements and fixes for PR #2184."
   }
 ]
