@@ -1638,6 +1638,16 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
         dest="json_output",
         help="Emit machine-readable JSON",
     )
+    federated_parser = quota_sub.add_parser(
+        "federated",
+        help="Show the latest subscription-quota percent per harness and window, plus 7-day dollar burn",
+    )
+    federated_parser.add_argument(
+        "--json",
+        action="store_true",
+        dest="json_output",
+        help="Emit machine-readable JSON",
+    )
 
     schedule_parser = subparsers.add_parser(
         "schedule", help="Batch-assign ready stories to agents (dry-run by default)"
@@ -2803,6 +2813,9 @@ def main(argv=None) -> None:
                 print(export_advisory_json(adv))
             else:
                 print(format_advisory_text(adv))
+        elif action == "federated":
+            from synlynk.quota_capture import cmd_quota_federated
+            cmd_quota_federated(json_output=getattr(args, "json_output", False))
         elif action == "calibrate":
             from synlynk.quota import calibrate_and_update_quota
             cal = calibrate_and_update_quota(
