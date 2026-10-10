@@ -837,7 +837,7 @@ def _daemon_install_service(daemon_instance) -> None:
 
         synlynk_dir = os.path.join(home, ".synlynk")
         os.makedirs(synlynk_dir, exist_ok=True)
-        entry = f"@reboot {python_path} -m synlynk daemon start"
+        entry = f"@reboot SYNLYNK_AUTONOMOUS=1 {python_path} -m synlynk daemon start"
         result = subprocess.run(["crontab", "-l"], capture_output=True, text=True)
         current = result.stdout if result.returncode == 0 else ""
         if entry not in current:

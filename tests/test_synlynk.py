@@ -7864,6 +7864,7 @@ def test_install_service_crontab(project_dir, monkeypatch):
     synlynk._daemon_install_service(object())
 
     assert "@reboot" in crontab_contents[0]
+    assert "SYNLYNK_AUTONOMOUS=1" in crontab_contents[0]
     assert crontab_contents[0].count("daemon start") == 1
     assert calls[0][0] == ["crontab", "-l"]
     assert calls[1][0] == ["crontab", "-"]
