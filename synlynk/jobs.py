@@ -4313,10 +4313,14 @@ def _reconcile_daemon_jobs() -> None:
                             preferred_state = _worktree_git_state_inspector()(preferred_path, preferred_branch, started_at)
                         except Exception:
                             preferred_state = None
+                    pre_guard_status = status
                     status = _guard_unpushed_branch(
                         conn, job_id, status, preferred_path, preferred_branch, preferred_state,
                         started_at,
                     )
+                    if _unpushed_branch_retry_pending(conn, job_id, pre_guard_status, status):
+                        conn.commit()
+                        continue
                     status, exit_code, _merged_note = _promote_merged_pr_result(
                         status, exit_code, preferred_branch, started_at
                     )
@@ -4416,10 +4420,18 @@ def _reconcile_daemon_jobs() -> None:
                         zombie_status, zombie_exit_code, _, _ = _gtv_status_for_daemon_exit(
                             None, git_state
                         )
+                        pre_guard_zombie_status = zombie_status
                         zombie_status = _guard_unpushed_branch(
                             conn, job_id, zombie_status, worktree_path, worktree_branch, git_state,
                             started_at,
                         )
+                        if _unpushed_branch_retry_pending(
+                            conn, job_id, pre_guard_zombie_status, zombie_status
+                        ):
+                            _release_daemon_job_terminal_claim_and_commit(
+                                conn, job_id, terminal_claim_token
+                            )
+                            continue
                         zombie_status, zombie_exit_code, _merged_note = _promote_merged_pr_result(
                             zombie_status, zombie_exit_code, worktree_branch, started_at
                         )
@@ -4484,9 +4496,13 @@ def _reconcile_daemon_jobs() -> None:
                     status, exit_code, summary_status, summary_note = _gtv_status_for_daemon_exit(
                         exit_code, git_state, structured
                     )
+                pre_guard_status = status
                 status = _guard_unpushed_branch(
                     conn, job_id, status, worktree_path, worktree_branch, git_state, started_at
                 )
+                if _unpushed_branch_retry_pending(conn, job_id, pre_guard_status, status):
+                    conn.commit()
+                    continue
                 status, exit_code, merged_note = _promote_merged_pr_result(
                     status, exit_code, worktree_branch, started_at
                 )
