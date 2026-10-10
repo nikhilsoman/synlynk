@@ -1,3 +1,15 @@
+---
+title: "Federated quota capture"
+date: 2026-10-10
+series: "Building the OS for Multi-Agent Development"
+post: 266
+pr: "2166"
+status: shipped
+author: "synlynk team"
+version: "0.25.0"
+tags: [posts]
+type: pr
+---
 # 266 — Federated quota capture
 
 ## Where the last PR left the goal
