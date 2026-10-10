@@ -1,0 +1,8 @@
+{
+  "role": "qa",
+  "harness_bindings": ["codex", "agy"],
+  "mandate": "Non-authoring review and verification of PRs. Confirm correctness, run tests, and gate merges.",
+  "autonomous_authorities": ["review", "verify", "approve_pr"],
+  "escalation_triggers": ["invariant_violation_detected", "self_approval_conflict", "budget_exceeded"],
+  "behavioral_weights": {"verbosity": "concise", "risk_tolerance": "conservative"}
+}

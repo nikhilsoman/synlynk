@@ -1,0 +1,287 @@
+diff --git a/synlynk/dispatch.py b/synlynk/dispatch.py
+index 1897566d..cd05db86 100644
+--- a/synlynk/dispatch.py
++++ b/synlynk/dispatch.py
+@@ -33,7 +33,10 @@ _ORG_ROLE_TO_BASELINE_ROLE = {
+     "synlynk-bot": "builder",
+ }
+ 
+-_GH_WRITE_HARNESS_PRIORITY = ("claude", "agy")
++# grok added 2026-10-04 (gh:#2034): live TC-9 probe confirms gh-write
++# capability post-LIVE-13 fix; listed last pending >=5 empirical
++# gh-write-task samples per the Empirical Capability Assessment Policy.
++_GH_WRITE_HARNESS_PRIORITY = ("claude", "agy", "grok")
+ _STARTUP_FAILOVER_ORDER = ("codex", "agy", "claude")
+ _CODEX_REVIEW_WRITABLE_ROOTS = "sandbox_workspace_write.writable_roots=[]"
+ 
+@@ -2668,13 +2671,6 @@ def _preflight_dispatch(
+ 
+     check_root = root or os.getcwd()
+ 
+-    if db_conn is not None and story_id is not None:
+-        from synlynk.governs_gate import dispatch_governs_linkage
+-
+-        governs_gate = dispatch_governs_linkage(db_conn, story_id)
+-        if not governs_gate["passed"]:
+-            return governs_gate
+-
+     if harness_name == "local":
+         # Aider can exit zero after doing no work when its configured oMLX
+         # backend is unavailable.  Verify the actual local capability before
+@@ -2909,6 +2905,17 @@ def _preflight_dispatch(
+         except Exception:
+             pass
+ 
++    # A real dispatch carries a task hint and must be attributable to a
++    # linked GOVERNS story.  Keep the low-level harness-only preflight calls
++    # without a task hint backward compatible, while still failing closed for
++    # an explicitly supplied story when no DB evidence is available.
++    if story_id is not None or _task_hint or harness_name not in HARNESS_CAPABILITY_BASELINES:
++        from synlynk.governs_gate import dispatch_governs_linkage
++
++        governs_gate = dispatch_governs_linkage(db_conn, story_id)
++        if not governs_gate["passed"]:
++            return governs_gate
++
+     return {"passed": True, "sentinel": None, "reason": None}
+ 
+ 
+diff --git a/synlynk/governs_gate.py b/synlynk/governs_gate.py
+index b55b7548..9107def8 100644
+--- a/synlynk/governs_gate.py
++++ b/synlynk/governs_gate.py
+@@ -2,6 +2,7 @@
+ 
+ from __future__ import annotations
+ 
++import re
+ from typing import Any
+ 
+ 
+@@ -60,23 +61,75 @@ def pr_governs_linkage_violations(conn, pr_number: int | None) -> list[dict[str,
+     rating_cols = _table_columns(conn, "capability_ratings")
+     records: dict[str, dict[str, Any]] = {}
+     story_ids: set[str] = set()
++    rating_story_ids: set[str] = set()
++
++    pr_ref_patterns = (
++        re.compile(r"\bpr\s*#?\s*(\d+)\b", re.IGNORECASE),
++        re.compile(r"\bpull\s+request\s*#?\s*(\d+)\b", re.IGNORECASE),
++        re.compile(r"/pull/(\d+)\b", re.IGNORECASE),
++    )
++
++    def task_mentions_pr(task: str | None) -> bool:
++        return any(
++            match and int(match.group(1)) == int(pr_number)
++            for pattern in pr_ref_patterns
++            for match in [pattern.search(task or "")]
++        )
+ 
+     if "pr_number" in rating_cols:
+         for _rating_id, story_id in conn.execute(
+             "SELECT id, story_id FROM capability_ratings WHERE pr_number=?", (pr_number,)
+         ).fetchall():
+-            story_ids.add(story_id or "")
++            if story_id:
++                story_ids.add(story_id)
++                rating_story_ids.add(story_id)
+ 
++    job_metadata: list[tuple[str, str | None, str | None, str | None]] = []
+     if "job_id" in jobs_cols:
+-        target_clause = "gh_write_target=?" if "gh_write_target" in jobs_cols else "0"
+-        query = f"SELECT job_id, story_id FROM daemon_jobs WHERE {target_clause}"
+-        params: list[Any] = [f"pr:{pr_number}"] if "gh_write_target" in jobs_cols else []
+-        if story_ids:
+-            query += " OR story_id IN ({})".format(",".join("?" for _ in story_ids))
+-            params.extend(story_ids)
+-        for job_id, story_id in conn.execute(query, params).fetchall():
++        selected = "job_id, story_id"
++        if "task" in jobs_cols:
++            selected += ", task"
++        if "gh_write_target" in jobs_cols:
++            selected += ", gh_write_target"
++        for row in conn.execute(f"SELECT {selected} FROM daemon_jobs").fetchall():
++            job_id, story_id = row[:2]
++            task = row[2] if "task" in jobs_cols else None
++            target = row[3 if "task" in jobs_cols else 2] if "gh_write_target" in jobs_cols else None
++            job_metadata.append((job_id, story_id, task, target))
++            if (
++                story_id in rating_story_ids
++                or target == f"pr:{pr_number}"
++                or task_mentions_pr(task)
++            ):
++                records[job_id] = {"job_id": job_id, "story_id": story_id}
++                if story_id:
++                    story_ids.add(story_id)
++
++    linked_issue_numbers: set[int] = set()
++    for story_id in story_ids:
++        match = re.search(r"\bstory-issue-(\d+)\b", story_id, re.IGNORECASE)
++        if match:
++            linked_issue_numbers.add(int(match.group(1)))
++    story_cols = _table_columns(conn, "stories")
++    if "gh_issue" in story_cols and story_ids:
++        placeholders = ",".join("?" for _ in story_ids)
++        for (gh_issue,) in conn.execute(
++            f"SELECT gh_issue FROM stories WHERE story_id IN ({placeholders})",
++            tuple(story_ids),
++        ).fetchall():
++            match = re.search(r"\d+", str(gh_issue or ""))
++            if match:
++                linked_issue_numbers.add(int(match.group(0)))
++
++    issue_ref_pattern = re.compile(r"(?<![\w/])#(\d+)\b")
++    for job_id, story_id, task, _target in job_metadata:
++        if any(
++            int(match.group(1)) in linked_issue_numbers
++            for match in issue_ref_pattern.finditer(task or "")
++        ):
+             records[job_id] = {"job_id": job_id, "story_id": story_id}
+-            story_ids.add(story_id or "")
++            if story_id:
++                story_ids.add(story_id)
+ 
+     if "job_id" in cost_cols:
+         for job_id, story_id in conn.execute(
+diff --git a/tests/test_agent_cli.py b/tests/test_agent_cli.py
+index 82bce15d..e3370ba6 100644
+--- a/tests/test_agent_cli.py
++++ b/tests/test_agent_cli.py
+@@ -49,6 +49,23 @@ def test_governs_dispatch_preflight_hard_fails_without_story_goal():
+     assert result["sentinel"] == "GOVERNS_LINKAGE_MISSING"
+ 
+ 
++def test_governs_dispatch_preflight_hard_fails_without_story_id():
++    from synlynk.dispatch import _preflight_dispatch
++
++    db = _governs_gate_db()
++    result = _preflight_dispatch("unknown", [], db_conn=db)
++    assert result["passed"] is False
++    assert result["sentinel"] == "GOVERNS_LINKAGE_MISSING"
++
++
++def test_governs_dispatch_preflight_hard_fails_without_db_evidence():
++    from synlynk.dispatch import _preflight_dispatch
++
++    result = _preflight_dispatch("unknown", [], story_id="story-1")
++    assert result["passed"] is False
++    assert result["sentinel"] == "GOVERNS_LINKAGE_MISSING"
++
++
+ def test_governs_pr_check_linkage_passes_for_all_dispatched_jobs():
+     from synlynk.governs_gate import pr_governs_linkage_violations
+ 
+@@ -75,6 +92,113 @@ def test_governs_pr_check_hard_fails_for_unlinked_dispatched_job():
+     assert {item["job_id"] for item in violations} == {"job-1"}
+ 
+ 
++def test_governs_pr_check_ignores_unrelated_null_target_cost_job():
++    from synlynk.governs_gate import pr_governs_linkage_violations
++
++    db = sqlite3.connect(":memory:")
++    db.executescript(
++        """
++        CREATE TABLE stories (story_id TEXT PRIMARY KEY, goal_id TEXT, gh_issue TEXT);
++        CREATE TABLE daemon_jobs (
++            job_id TEXT PRIMARY KEY, story_id TEXT, task TEXT, gh_write_target TEXT
++        );
++        CREATE TABLE cost_entries (job_id TEXT, story_id TEXT);
++        CREATE TABLE capability_ratings (id INTEGER PRIMARY KEY, story_id TEXT, pr_number INTEGER);
++        """
++    )
++    db.execute("INSERT INTO stories VALUES ('story-historical', NULL, NULL)")
++    db.execute(
++        "INSERT INTO daemon_jobs VALUES (?, ?, ?, ?)",
++        ("job-historical", "story-historical", "historical maintenance", None),
++    )
++    db.execute("INSERT INTO cost_entries VALUES ('job-historical', 'story-historical')")
++    db.commit()
++
++    assert pr_governs_linkage_violations(db, 1990) == []
++
++
++def test_governs_pr_check_flags_untagged_job_sharing_pr_story():
++    from synlynk.governs_gate import pr_governs_linkage_violations
++
++    db = sqlite3.connect(":memory:")
++    db.executescript(
++        """
++        CREATE TABLE stories (story_id TEXT PRIMARY KEY, goal_id TEXT, gh_issue TEXT);
++        CREATE TABLE daemon_jobs (
++            job_id TEXT PRIMARY KEY, story_id TEXT, task TEXT, gh_write_target TEXT
++        );
++        CREATE TABLE cost_entries (job_id TEXT, story_id TEXT);
++        CREATE TABLE capability_ratings (id INTEGER PRIMARY KEY, story_id TEXT, pr_number INTEGER);
++        """
++    )
++    db.execute("INSERT INTO stories VALUES ('story-pr-1990', NULL, NULL)")
++    db.execute("INSERT INTO capability_ratings VALUES (1, 'story-pr-1990', 1990)")
++    db.execute(
++        "INSERT INTO daemon_jobs VALUES (?, ?, ?, ?)",
++        ("job-untagged", "story-pr-1990", "implement linked story", None),
++    )
++    db.execute("INSERT INTO cost_entries VALUES ('job-untagged', 'story-pr-1990')")
++    db.commit()
++
++    violations = pr_governs_linkage_violations(db, 1990)
++    assert {item["job_id"] for item in violations} == {"job-untagged"}
++
++
++def test_governs_pr_check_flags_job_referencing_linked_issue():
++    from synlynk.governs_gate import pr_governs_linkage_violations
++
++    db = sqlite3.connect(":memory:")
++    db.executescript(
++        """
++        CREATE TABLE stories (story_id TEXT PRIMARY KEY, goal_id TEXT, gh_issue TEXT);
++        CREATE TABLE daemon_jobs (
++            job_id TEXT PRIMARY KEY, story_id TEXT, task TEXT, gh_write_target TEXT
++        );
++        CREATE TABLE cost_entries (job_id TEXT, story_id TEXT);
++        CREATE TABLE capability_ratings (id INTEGER PRIMARY KEY, story_id TEXT, pr_number INTEGER);
++        """
++    )
++    db.execute("INSERT INTO stories VALUES ('story-issue-1990', NULL, '1990')")
++    db.execute("INSERT INTO capability_ratings VALUES (1, 'story-issue-1990', 2029)")
++    db.execute(
++        "INSERT INTO daemon_jobs VALUES (?, ?, ?, ?)",
++        ("job-issue", "story-issue-1990", "implement issue #1990", None),
++    )
++    db.execute("INSERT INTO cost_entries VALUES ('job-issue', 'story-issue-1990')")
++    db.commit()
++
++    violations = pr_governs_linkage_violations(db, 2029)
++    assert {item["job_id"] for item in violations} == {"job-issue"}
++
++
++def test_governs_pr_check_walks_attributable_jobs_and_ignores_other_prs():
++    from synlynk.governs_gate import pr_governs_linkage_violations
++
++    db = sqlite3.connect(":memory:")
++    db.executescript(
++        """
++        CREATE TABLE stories (story_id TEXT PRIMARY KEY, goal_id TEXT);
++        CREATE TABLE daemon_jobs (job_id TEXT PRIMARY KEY, story_id TEXT, task TEXT, gh_write_target TEXT);
++        CREATE TABLE cost_entries (job_id TEXT, story_id TEXT);
++        CREATE TABLE capability_ratings (id INTEGER PRIMARY KEY, story_id TEXT, pr_number INTEGER);
++        """
++    )
++    db.execute("INSERT INTO stories VALUES ('story-unlinked', NULL)")
++    db.execute("INSERT INTO daemon_jobs VALUES (?, ?, ?, ?)",
++               ("job-target", "story-unlinked", "implement feature", "issue:1990"))
++    db.execute("INSERT INTO daemon_jobs VALUES (?, ?, ?, ?)",
++               ("job-pr", "story-unlinked", "implement PR #1990", "issue:1990"))
++    db.execute("INSERT INTO daemon_jobs VALUES (?, ?, ?, ?)",
++               ("job-other", "story-unlinked", "implement PR #1991", "issue:1991"))
++    db.executemany("INSERT INTO cost_entries VALUES (?, ?)", [
++        ("job-pr", "story-unlinked"), ("job-other", "story-unlinked"),
++    ])
++    db.commit()
++
++    violations = pr_governs_linkage_violations(db, 1990)
++    assert {item["job_id"] for item in violations} == {"job-pr"}
++
++
+ def _seed_cross_harness_review_case(project_dir, monkeypatch, *, review_harness, review_model):
+     import json
+     import synlynk

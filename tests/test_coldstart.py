@@ -221,6 +221,22 @@ def test_cmd_start_rerun_declined_leaves_project_untouched(tmp_path, monkeypatch
     assert "unchanged" in captured.out.lower() or "skipped" in captured.out.lower()
 
 
+def test_cmd_start_detects_init_via_workspace_json(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk")
+    with open(".synlynk/workspace.json", "w") as f:
+        f.write("{}")
+    captured_prompts = []
+
+    def fake_input(prompt):
+        captured_prompts.append(prompt)
+        return "N"
+
+    monkeypatch.setattr("builtins.input", fake_input)
+    cmd_start()
+    assert any("workspace.json" in p for p in captured_prompts)
+
+
 def test_run_existing_project_flow_invokes_canon_baseline(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     fake_scan = {

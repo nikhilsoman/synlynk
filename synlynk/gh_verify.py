@@ -11,7 +11,6 @@ from typing import Optional
 _TARGET_RE = re.compile(r"^(issue|pr):(\d+)$")
 _EXPECT_FIELD = {
     "closed": ("state", "CLOSED"),
-    "merged": ("state", "MERGED"),
     "pr_open": ("state", "OPEN"),
 }
 _LIST_EXPECT_FIELD = {
@@ -20,6 +19,7 @@ _LIST_EXPECT_FIELD = {
 }
 _LIST_VERIFY_ATTEMPTS = 3
 _LIST_VERIFY_BACKOFF_SECONDS = (0.1, 0.25)
+_READ_QUORUM = 1
 
 
 def local_commits_pushed(worktree_path: Optional[str], branch: Optional[str], base_sha: Optional[str] = None) -> bool:
@@ -57,6 +57,60 @@ def local_commits_pushed(worktree_path: Optional[str], branch: Optional[str], ba
         return (head.stdout or "").strip() == remote.stdout.split()[0]
     except (OSError, ValueError, subprocess.TimeoutExpired):
         return False
+
+
+def github_branch_effect_verified(
+    branch: Optional[str],
+    *,
+    since: Optional[str] = None,
+    timeout: int = 10,
+    accepted_states: Optional[set[str]] = None,
+    evidence: Optional[dict] = None,
+) -> Optional[bool]:
+    """Check GitHub ground truth when the source branch is no longer local.
+
+    A merged PR normally deletes its head branch.  In that case
+    ``local_commits_pushed`` must return false even though the work landed.
+    Only accept a PR whose head ref matches the job branch and whose creation
+    time is after the dispatch (when a start time is available).
+    """
+    if not branch:
+        return None
+    cmd = [
+        "gh", "pr", "list", "--state", "all", "--head", branch,
+        "--limit", "20", "--json", "state,createdAt,headRefName,mergedAt",
+    ]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        if evidence is not None:
+            evidence["github_branch_check"] = {"matched": None, "error": type(exc).__name__}
+        return None
+    if result.returncode != 0:
+        if evidence is not None:
+            evidence["github_branch_check"] = {"matched": None, "raw": result.stderr or result.stdout}
+        return None
+    try:
+        rows = json.loads(result.stdout or "[]")
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(rows, list):
+        return None
+    since_dt = _parse_iso8601(since, naive_as="local") if since else None
+    states = accepted_states or {"OPEN", "MERGED"}
+    matched = False
+    for row in rows:
+        if not isinstance(row, dict) or row.get("headRefName") not in (None, branch):
+            continue
+        created = _parse_iso8601(row.get("createdAt"), naive_as="utc")
+        if since_dt is not None and (created is None or _compare_dt_lt(created, since_dt)):
+            continue
+        if str(row.get("state") or "").upper() in states:
+            matched = True
+            break
+    if evidence is not None:
+        evidence["github_branch_check"] = {"matched": matched, "raw": result.stdout}
+    return matched
 
 
 def _naive_local_tz():
@@ -190,6 +244,8 @@ def gh_write_verified(
     since: Optional[str] = None,
     expect_author: Optional[str] = None,
     expect_review_state: Optional[str] = None,
+    expected_sha: Optional[str] = None,
+    expected_target: Optional[str] = None,
     evidence: Optional[dict] = None,
 ) -> Optional[bool]:
     """Return whether a declared GitHub target reached the expected state, or None if unknown.
@@ -207,6 +263,11 @@ def gh_write_verified(
     """
     if not target:
         return None
+    if expected_target is not None and expected_target != target:
+        if evidence is not None:
+            evidence.update({"target": target, "expected_target": expected_target,
+                             "matched": False, "reason": "target_mismatch"})
+        return False
     match = _TARGET_RE.match(target)
     if not match:
         return None
@@ -216,6 +277,10 @@ def gh_write_verified(
     if expect == "created":
         field = "state"
         cmd = ["gh", subcommand, "view", number, "--json", field]
+    elif expect == "merged":
+        field = "state"
+        expected_value = "MERGED"
+        cmd = ["gh", subcommand, "view", number, "--json", "state,mergedBy,mergeCommit"]
     elif expect in _EXPECT_FIELD:
         field, expected_value = _EXPECT_FIELD[expect]
         cmd = ["gh", subcommand, "view", number, "--json", field]
@@ -228,10 +293,21 @@ def gh_write_verified(
         return None
 
     is_list_expect = expect in _LIST_EXPECT_FIELD
-    is_scalar_expect = expect in _EXPECT_FIELD
+    is_scalar_expect = expect in _EXPECT_FIELD or expect == "merged"
     attempts = _LIST_VERIFY_ATTEMPTS if (is_list_expect or is_scalar_expect) else 1
     if evidence is not None:
-        evidence.update({"target": target, "expect": expect, "field": field, "attempts": []})
+        evidence.update({
+            "target": target,
+            "expected_target": expected_target or target,
+            "expect": expect,
+            "field": field,
+            "expected_actor": expect_author,
+            "expected_sha": expected_sha,
+            "attempts": [],
+            "retry": {"max_attempts": attempts, "backoff_seconds": list(_LIST_VERIFY_BACKOFF_SECONDS),
+                      "read_after_write": attempts > 1},
+            "quorum": {"required": _READ_QUORUM, "observed": 0},
+        })
 
     for attempt in range(attempts):
         try:
@@ -268,15 +344,52 @@ def gh_write_verified(
         if expect == "created":
             return payload.get("state") is not None
 
-        if expect in _EXPECT_FIELD:
+        if expect in _EXPECT_FIELD or expect == "merged":
             actual = payload.get(field)
-            matched = None if actual is None else actual == expected_value
+            state_match = None if actual is None else actual == expected_value
+            actor_match = True
+            sha_match = True
+            if expect == "merged":
+                actor_match = _gh_logins_match(
+                    _author_login({"author": payload.get("mergedBy")}), expect_author
+                )
+                sha_match = (
+                    True
+                    if not expected_sha
+                    else _entry_matches_sha(payload.get("mergeCommit") or {}, expected_sha)
+                )
+                matched = (
+                    None
+                    if state_match is None or actor_match is None
+                    else bool(state_match and actor_match and sha_match)
+                )
+                if evidence is not None:
+                    evidence.update({
+                        "target_match": True,
+                        "actor_match": actor_match,
+                        "sha_match": sha_match,
+                        "state": actual,
+                        "mergedBy": payload.get("mergedBy"),
+                        "mergeCommit": payload.get("mergeCommit"),
+                        "merge_state": actual,
+                        "merged_by": payload.get("mergedBy"),
+                        "merge_commit": payload.get("mergeCommit"),
+                    })
+                    evidence["attempts"][-1].update({
+                        "target_match": True,
+                        "actor_match": actor_match,
+                        "sha_match": sha_match,
+                        "merge_state": actual,
+                    })
+            else:
+                matched = state_match
             if evidence is not None:
                 evidence["attempts"][-1]["matched"] = matched
             if matched is True:
                 if evidence is not None:
                     evidence["matched"] = True
                     evidence["attempt_count"] = attempt + 1
+                    evidence["quorum"]["observed"] = 1
                 return True
             if attempt + 1 < attempts:
                 time.sleep(_LIST_VERIFY_BACKOFF_SECONDS[min(attempt, len(_LIST_VERIFY_BACKOFF_SECONDS) - 1)])
@@ -302,6 +415,8 @@ def gh_write_verified(
                         continue
                     if expect_review_state and entry.get("state") != expect_review_state:
                         continue
+                    if expected_sha and not _entry_matches_sha(entry, expected_sha):
+                        continue
                     matched = True
                     break
         if evidence is not None:
@@ -310,6 +425,7 @@ def gh_write_verified(
             if evidence is not None:
                 evidence["matched"] = True
                 evidence["attempt_count"] = attempt + 1
+                evidence["quorum"]["observed"] = 1
             return True
         if matched is None:
             if attempt + 1 < attempts:
@@ -323,3 +439,114 @@ def gh_write_verified(
             evidence["matched"] = False
             evidence["attempt_count"] = attempt + 1
         return False
+
+
+def cross_branch_pr_effect_verified(
+    target: Optional[str],
+    *,
+    since: Optional[str] = None,
+    worktree_branch: Optional[str] = None,
+    expect_author: Optional[str] = None,
+    accept_reviews: bool = True,
+    accept_commits: bool = True,
+    timeout: int = 10,
+    evidence: Optional[dict] = None,
+) -> Optional[bool]:
+    """Primary evidence when a job's effect is a PR other than its own branch.
+
+    Queries ``gh pr view <N> --json reviews,commits,headRefName`` and accepts a
+    review or commit at or after ``since``. ``headRefName`` is included so a PR
+    whose head is this job's own branch stays on the local-diff path.
+
+    Returns True when a fresh event is present, False when the PR is a different
+    branch and no fresh event is present, and None when the target is not a
+    cross-branch PR (missing target, same branch, or GitHub could not be read).
+    """
+    if not target or not since or not (accept_reviews or accept_commits):
+        return None
+    match = _TARGET_RE.match(target)
+    if not match or match.group(1) != "pr":
+        return None
+    number = match.group(2)
+    cmd = ["gh", "pr", "view", number, "--json", "reviews,commits,headRefName"]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        if evidence is not None:
+            evidence.update({
+                "target": target,
+                "github_unknown": True,
+                "error": type(exc).__name__,
+            })
+        return None
+    if evidence is not None:
+        evidence.update({"target": target, "raw": result.stdout, "command": cmd})
+    if result.returncode != 0:
+        if evidence is not None:
+            evidence["github_unknown"] = True
+            evidence["raw"] = result.stderr or result.stdout
+        return None
+    try:
+        payload = json.loads(result.stdout or "{}")
+    except (TypeError, ValueError):
+        if evidence is not None:
+            evidence["github_unknown"] = True
+        return None
+    if not isinstance(payload, dict):
+        if evidence is not None:
+            evidence["github_unknown"] = True
+        return None
+    head = payload.get("headRefName")
+    if worktree_branch and head and head == worktree_branch:
+        if evidence is not None:
+            evidence.update({"same_branch": True, "cross_branch": False, "head_ref": head})
+        return None
+    since_dt = _parse_iso8601(since, naive_as="local")
+    if since_dt is None:
+        if evidence is not None:
+            evidence["github_unknown"] = True
+        return None
+    if evidence is not None:
+        evidence.update({"cross_branch": True, "head_ref": head, "target_match": True})
+
+    def _is_fresh(entry: dict, *fields: str) -> bool:
+        entry_dt = _parse_iso8601(next((entry.get(field) for field in fields if entry.get(field)), None))
+        return entry_dt is not None and not _compare_dt_lt(entry_dt, since_dt)
+
+    matched = False
+    actor_match = expect_author is None
+    if accept_reviews:
+        for entry in payload.get("reviews") or []:
+            if not isinstance(entry, dict) or not _is_fresh(entry, "submittedAt", "createdAt"):
+                continue
+            if expect_author and not _gh_logins_match(_author_login(entry), expect_author):
+                continue
+            matched = True
+            actor_match = True
+            if evidence is not None:
+                evidence["matched_event"] = "review"
+            break
+    if not matched and accept_commits:
+        for entry in payload.get("commits") or []:
+            if not isinstance(entry, dict) or not _is_fresh(entry, "committedDate", "authoredDate"):
+                continue
+            matched = True
+            if evidence is not None:
+                evidence["matched_event"] = "commit"
+            break
+    if evidence is not None:
+        evidence["matched"] = matched
+        evidence["actor_match"] = actor_match
+    return matched
+
+
+def _entry_matches_sha(entry: dict, expected_sha: str) -> bool:
+    """Return whether a review/comment carries the causal commit identity."""
+    candidates = [
+        entry.get("oid"), entry.get("commitOid"), entry.get("commit_oid"),
+        entry.get("sha"), entry.get("headSha"),
+    ]
+    commit = entry.get("commit")
+    if isinstance(commit, dict):
+        candidates.extend((commit.get("oid"), commit.get("sha")))
+    return any(value and str(value).startswith(str(expected_sha)) for value in candidates)

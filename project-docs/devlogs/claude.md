@@ -165,3 +165,113 @@
   documented in #1886 for `djob-commit-0` — confirmed as a known harmless
   artifact, not new work, before discarding.
 [@claude]
+
+## 2026-10-02 — Five-POV deep review (developer / architect / founder / VC / influencer)
+
+- Wrote `docs/strategy/2026-10-02-five-pov-review.md`. Every metric was measured on 2026-10-02
+  (repo, git, CI, GitHub) rather than copied from docs: ~80.7K LOC, 155 commands, 3,667 tests,
+  831 merged PRs, 21 LIVE incidents, 1 star / 0 forks, `~/.synlynk` 8.3 GB.
+- Since the 2026-07-12 Fable review: the daemon queue path now delegates to `dispatch_agent()`
+  (fixed). Unchanged: Claude still defaults to skip-permissions, token accounting is still
+  regex-scraped, and distribution is still the bottleneck.
+- Architect recommendations, in priority order:
+  1. `HarnessAdapter` protocol to replace the `if agent ==` branches
+  2. Split `dispatch_agent` (27 kwargs) into a pipeline with a typed request object
+  3. Structured telemetry + verified-effects job state machine
+  4. Consolidate state behind one DAO; markdown becomes an export; add GC and a size budget
+  5. Safe-by-default permission profiles
+  6. Split core (~15 commands) from optional packs
+  7. Break up `viz.py`
+  8. Make `release --check-docs` a required CI check, with one version source
+  9. Cold-start performance budget
+- Found version drift: `VERSION`=0.23.0-dev, README badge 0.22.0, CHANGELOG at v0.25.0
+  (no v0.23/v0.24 entries), v0.21.0 listed twice. No ticket filed yet.
+[@claude]
+
+## 2026-10-02 — Blog index fix (#1914) + lifted stale Blog Post Protocol hold
+
+- Added missing `docs/blog/README.md` index row for post 236 (flagged by qa's PR #1913
+  review); folded into #1914 rather than a third ticket, per Nikhil's instruction.
+- Lifted the 2026-07-12 "Blog Post Protocol paused" Active Hold: it predates ~165 posts
+  (71→236) written since, and was never actually enforced in the committed
+  `project-docs/memory.md` — it existed only in this machine's local `state.db`
+  (`~/.synlynk/workspaces/synlynk/state.db`, `memory_entries` id=21) and the generated
+  `.synlynk/context.md`, so there was nothing to commit to the repo. Updated that row
+  in place (struck through + LIFTED note) rather than deleting it, so the history of
+  why it existed and why it's lifted stays visible.
+- New finding, not yet ticketed: `_write_memory_md()` regenerating the tracked
+  `project-docs/memory.md` from this machine's registered state.db produces a 249
+  insertion / 49 deletion diff against `origin/main` — i.e. local DB state has drifted
+  well beyond what's committed. Did not commit that regeneration (same risk class as
+  #1915's costs.md finding); flagging for Nikhil rather than filing a third ticket
+  unprompted.
+[@claude]
+
+## 2026-10-02 — Decide-panel roadmap from the five-POV review
+
+- Ran three real `synlynk decide --panel claude,codex --record` panel convenings against
+  `docs/strategy/2026-10-02-five-pov-review.md`: architecture roadmap (§2), surface
+  simplification (§1+§2 CLI commentary), and broader non-architecture issues (§1,§3,§4,§5).
+  Each invoked the actual `claude`/`codex` CLIs headlessly — real subprocess calls, real cost.
+- Found a new bug while running it: all three topics shared the same first-40-character
+  prefix, so `cmd_decide`'s slug-based filename (`<date>-<40-char-slug>.md`, no collision
+  check) caused run 2 and run 3 to silently overwrite run 1's and run 2's decision records
+  in `project-docs/decisions/`. Recovered run 1's and run 2's content from this session's
+  captured stdout rather than losing it; only run 3's record survived on disk (renamed to
+  `2026-10-02-decide-panel-broader-issues.{md,json}` so the filename matches its actual
+  content instead of the collided topic-1 slug). Filing as its own issue — same
+  write-through blind-overwrite bug class as #1915/#1917, third occurrence.
+- Synthesized the three panel outputs into `docs/strategy/2026-10-02-decide-panel-roadmap.md`:
+  a fastest-practical-execution architecture roadmap (state/worktree GC + regen-bug guard
+  first, then telemetry, then `viz.py` split in parallel, then `dispatch_agent` decomposition,
+  then `state.db` consolidation and CLI core/packs split last), a capability-preserving
+  surface-simplification plan (tiered help, `quickstart`, inferred dispatch defaults, 6
+  adoption metrics + a power-user guardrail), and a broader-issues remediation plan (one
+  positioning sentence, skip-permissions opt-in, a routing-proof report + benchmark kit,
+  a 90-day design-partner program).
+[@claude]
+
+- Follow-up fidelity patch to `docs/strategy/2026-10-02-decide-panel-roadmap.md` (PR #1919's
+  roadmap doc): Nikhil pasted the original 9-item architect recommendation list from the
+  five-POV review and asked whether it was all taken care of. Direct comparison against the
+  actually-merged doc (re-read from `origin/main`, not assumed) found 3 items fully covered,
+  4 partially covered with specifics dropped, and 2 (a CI release-version gate, an explicit
+  cold-start performance budget) missing entirely — the synthesis pass had compressed the
+  panel's raw per-harness responses more aggressively than it should have.
+- Restored the missing/lost detail from this session's own already-captured per-harness panel
+  output rather than re-running `synlynk decide` (cheaper, source text still available):
+  roadmap table grew from 7 rows to 10 — row 5 now names the actual `dispatch_agent` pipeline
+  shape (`resolve → authorize → prepare_worktree → spawn → observe → finalize`) and the full
+  `HarnessAdapter` method set with a plugin registry for third-party harnesses; new row 6
+  separates the permission-default flag flip from containerized execution for untrusted
+  harnesses; row 8 names the actual ~15 core commands and 15–20K LOC target; new rows 9 and
+  10 restore the CI release gate and the lazy-import performance budget. Sequencing decision
+  and cross-cutting note updated to match.
+- Also fixed a stale `pr: "TBD"` in blog post 237's frontmatter and its README index row —
+  PR #1919 had already merged by the time this follow-up started.
+- Lesson for future `decide` synthesis passes: a short table compressing multiple detailed
+  per-harness responses is exactly where information silently drops; worth a direct check
+  against raw inputs before treating a synthesis as final, not just before publishing it.
+[@claude]
+
+## 2026-10-04 — gh:#1925 part 1 shipped (PR #2002), session close before deep cleanup pass
+
+Completed the Grok fail-closed permission enforcement plan (6 tasks, implementation dispatched
+to Codex per role split, reviewed cross-harness per the new Hardened PR Review Policy). PR #2002
+merged (`0a1ed3df`). Full detail already in [[project-synlynk]] memory and PR body; not re-derived
+here.
+
+Session-close note: ending this session cleanly here — no implementation mid-flight, gh:#1925
+part 1 fully merged/verified/worktree-cleaned. Flagged to Nikhil, and carrying into the next
+session, two housekeeping items neither touched nor caused by this session's own work:
+1. Main repo checkout (not a worktree) has pre-existing dirty/staged state: `docs/blog/243-pr1967-claude-local-adapter-port.md`
+   staged, `docs/blog/README.md`/`project-docs/todo.md` modified, two untracked
+   `project-docs/decisions/2026-10-03-review-pr-1949-...` files.
+2. `git worktree list` shows 40+ accumulated worktrees across `/private/tmp/synlynk-*`,
+   `worktrees/*`, `.claude/worktrees/*` spanning many unrelated branches/jobs — needs the full
+   Worktree Hygiene Protocol audit (cross-ref every branch against `gh pr list --state all` +
+   `git merge-base --is-ancestor`, safe/unsafe/needs-review breakdown) before any bulk delete.
+
+Next session: run that cleanup pass first, then resume roadmap work (gh:#1925 part 2 —
+containerized execution — is the next queued item per the blog post's stated goalpost).
+[@claude]

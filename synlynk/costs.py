@@ -12,13 +12,14 @@ from synlynk._lazy import pkg as _pkg
 
 
 class _TokenCounts(object):
-    __slots__ = ("input_tokens", "output_tokens", "cache_read_tokens", "basis")
+    __slots__ = ("input_tokens", "output_tokens", "cache_read_tokens", "basis", "turns")
 
-    def __init__(self, input_tokens, output_tokens, cache_read_tokens, basis="none"):
+    def __init__(self, input_tokens, output_tokens, cache_read_tokens, basis="none", turns=None):
         self.input_tokens = input_tokens
         self.output_tokens = output_tokens
         self.cache_read_tokens = cache_read_tokens
         self.basis = basis
+        self.turns = list(turns or [])
 
     def __iter__(self):
         yield self.input_tokens
@@ -26,6 +27,140 @@ class _TokenCounts(object):
 
     def __len__(self):
         return 2
+
+
+@dataclass
+class DispatchTelemetry:
+    """Completion and usage facts emitted by a structured harness stream.
+
+    ``available`` is deliberately separate from ``completed``: an invalid or
+    unsupported stream must go through the legacy stdout fallback, while a
+    valid terminal event is authoritative even when the human-readable output
+    contains words such as "failed".
+    """
+
+    available: bool = False
+    completed: Optional[bool] = None
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cache_read_tokens: int = 0
+    model: Optional[str] = None
+    error: Optional[str] = None
+    turns: list = None
+
+
+def parse_dispatch_turns(output_text: str, agent: str = "") -> list:
+    """Return per-turn usage deltas from a structured harness stream.
+
+    Codex emits ``turn.completed`` usage cumulatively.  The previous parser
+    retained only the final event, which made a repeated full-context retry
+    indistinguishable from an ordinary multi-turn task.  Store both the
+    cumulative counters and the delta charged by each turn so the cost ledger
+    can show where an inflated invocation spent its tokens.
+    """
+    if agent != "codex":
+        return []
+    turns = []
+    previous = {"input_tokens": 0, "output_tokens": 0, "cache_read_tokens": 0}
+    for line in (output_text or "").splitlines():
+        try:
+            event = json.loads(line.strip())
+        except (TypeError, ValueError):
+            continue
+        if not isinstance(event, dict) or event.get("type") != "turn.completed":
+            continue
+        usage = event.get("usage")
+        if not isinstance(usage, dict):
+            continue
+        try:
+            cumulative = {
+                "input_tokens": int(usage["input_tokens"]),
+                "output_tokens": int(usage["output_tokens"]) + int(usage.get("reasoning_output_tokens", 0)),
+                "cache_read_tokens": int(usage.get("cached_input_tokens", 0)),
+            }
+        except (KeyError, TypeError, ValueError):
+            continue
+        delta = {
+            key: value - previous[key] if value >= previous[key] else value
+            for key, value in cumulative.items()
+        }
+        turns.append({
+            "turn": len(turns) + 1,
+            **delta,
+            "cumulative_input_tokens": cumulative["input_tokens"],
+            "cumulative_output_tokens": cumulative["output_tokens"],
+            "cumulative_cache_read_tokens": cumulative["cache_read_tokens"],
+        })
+        previous = cumulative
+    return turns
+
+
+def parse_dispatch_telemetry(output_text: str, agent: str = "") -> Optional[DispatchTelemetry]:
+    """Parse Claude/Codex structured completion events.
+
+    Claude's JSON mode emits one result object; Codex emits JSONL events.  A
+    structured stream is considered available only after a recognized
+    terminal event is seen, which keeps Grok/Agy and malformed output on the
+    existing stdout-regex path.
+    """
+    if agent not in {"claude", "codex"}:
+        return None
+    events = []
+    text = (output_text or "").strip()
+    if not text:
+        return None
+    try:
+        whole = json.loads(text)
+    except (TypeError, ValueError):
+        whole = None
+    if isinstance(whole, dict):
+        events = [whole]
+    else:
+        for line in text.splitlines():
+            try:
+                event = json.loads(line.strip())
+            except (TypeError, ValueError):
+                continue
+            if isinstance(event, dict):
+                events.append(event)
+
+    telemetry = DispatchTelemetry()
+    terminal = None
+    usage = None
+    for event in events:
+        event_type = event.get("type")
+        if agent == "codex" and event_type == "turn.completed":
+            terminal = event
+        elif agent == "claude" and event_type == "result":
+            terminal = event
+        elif event_type in {"error", "turn.failed"} or event.get("is_error") is True:
+            terminal = event
+    if terminal is None:
+        return None
+
+    telemetry.available = True
+    failed = terminal.get("is_error") is True or terminal.get("type") in {"error", "turn.failed"}
+    if agent == "claude" and terminal.get("subtype") not in (None, "success"):
+        failed = True
+    telemetry.completed = not failed
+    if failed:
+        telemetry.error = str(terminal.get("error") or terminal.get("subtype") or "structured harness error")
+    usage = terminal.get("usage")
+    if isinstance(usage, dict):
+        try:
+            telemetry.input_tokens = int(usage.get("input_tokens", 0))
+            telemetry.output_tokens = int(usage.get("output_tokens", 0))
+            if agent == "codex":
+                telemetry.output_tokens += int(usage.get("reasoning_output_tokens", 0))
+                telemetry.cache_read_tokens = int(usage.get("cached_input_tokens", 0))
+            else:
+                telemetry.input_tokens += int(usage.get("cache_creation_input_tokens", 0))
+                telemetry.cache_read_tokens = int(usage.get("cache_read_input_tokens", 0))
+        except (TypeError, ValueError):
+            pass
+    telemetry.model = terminal.get("model") or terminal.get("model_version")
+    telemetry.turns = parse_dispatch_turns(output_text, agent=agent)
+    return telemetry
 
 
 def _extract_codex_structured(output_text: str) -> Optional[_TokenCounts]:
@@ -54,7 +189,10 @@ def _extract_codex_structured(output_text: str) -> Optional[_TokenCounts]:
         cache_read_tokens = int(usage.get("cached_input_tokens", 0))
     except (KeyError, TypeError, ValueError):
         return None
-    return _TokenCounts(in_tokens, out_tokens, cache_read_tokens, "structured_output")
+    return _TokenCounts(
+        in_tokens, out_tokens, cache_read_tokens, "structured_output",
+        turns=parse_dispatch_turns(output_text, agent="codex"),
+    )
 
 
 def _extract_claude_structured(output_text: str) -> Optional[_TokenCounts]:
@@ -500,33 +638,45 @@ def _subscription_actual_usd(
     track = track or resolve_harness_track(agent, model)
     get_db = _pkg("_get_db")
     conn = get_db()
+    row_in = None
+    row_out = None
     try:
-        cols = {row[1] for row in conn.execute("PRAGMA table_info(harness_quotas)")}
+        res = conn.execute("PRAGMA table_info(harness_quotas)")
+        cols = {row[1] for row in res} if hasattr(res, "__iter__") and not isinstance(res, (str, bytes)) else set()
         has_track = "track" in cols
         if has_track:
-            row_in = conn.execute(
+            cur_in = conn.execute(
                 "SELECT used_tokens FROM harness_quotas WHERE harness=? AND track=? "
                 "AND quota_type='monthly' AND unit='tokens' AND model='unknown'",
                 (agent, track),
-            ).fetchone()
-            row_out = conn.execute(
+            )
+            row_in = cur_in.fetchone() if hasattr(cur_in, "fetchone") else None
+            cur_out = conn.execute(
                 "SELECT used_tokens FROM harness_quotas WHERE harness=? AND track=? "
                 "AND quota_type='monthly' AND unit='tokens' AND model='out'",
                 (agent, track),
-            ).fetchone()
+            )
+            row_out = cur_out.fetchone() if hasattr(cur_out, "fetchone") else None
         else:
-            row_in = conn.execute(
+            cur_in = conn.execute(
                 "SELECT used_tokens FROM harness_quotas WHERE harness=? "
                 "AND quota_type='monthly' AND unit='tokens' AND model='unknown'",
                 (agent,),
-            ).fetchone()
-            row_out = conn.execute(
+            )
+            row_in = cur_in.fetchone() if hasattr(cur_in, "fetchone") else None
+            cur_out = conn.execute(
                 "SELECT used_tokens FROM harness_quotas WHERE harness=? "
                 "AND quota_type='monthly' AND unit='tokens' AND model='out'",
                 (agent,),
-            ).fetchone()
+            )
+            row_out = cur_out.fetchone() if hasattr(cur_out, "fetchone") else None
+    except Exception:
+        pass
     finally:
-        conn.close()
+        try:
+            conn.close()
+        except Exception:
+            pass
 
     prior_used_in = int(row_in[0]) if row_in else 0
     prior_used_out = int(row_out[0]) if row_out else 0
@@ -537,15 +687,25 @@ def _subscription_actual_usd(
     prior_year = now.tm_year if now.tm_mon > 1 else now.tm_year - 1
     prior_prefix = f"{prior_year:04d}-{prior_month:02d}%"
     conn = get_db()
+    prior_total = 0
     try:
-        prior_total = conn.execute(
+        cur = conn.execute(
             "SELECT COALESCE(SUM(input_tokens + output_tokens), 0) FROM cost_entries "
             "WHERE (harness=? OR agent=?) AND session_date LIKE ? "
             "AND cost_source != 'true_up_reconciliation'",
             (agent, agent, prior_prefix),
-        ).fetchone()[0]
+        )
+        if hasattr(cur, "fetchone"):
+            row = cur.fetchone()
+            if row:
+                prior_total = row[0]
+    except Exception:
+        pass
     finally:
-        conn.close()
+        try:
+            conn.close()
+        except Exception:
+            pass
     projected = max(1, int(prior_total or 0) or projected)
     amortized_rate = float(pm_config.get("monthly_base_fee_usd") or 0.0) / (projected / 1000.0)
     tier_quota_in = int(pm_config.get("tier_quota_tokens_in") or projected)
@@ -606,8 +766,13 @@ def _subscription_actual_usd(
             conn=conn,
         )
         conn.commit()
+    except Exception:
+        pass
     finally:
-        conn.close()
+        try:
+            conn.close()
+        except Exception:
+            pass
 
     return actual_usd, quota_pct_used
 
@@ -826,7 +991,8 @@ def update_costs(command: str, in_tokens: int, out_tokens: int, duration: float,
                  cache_read_tokens=None, model_version=None, story_id=None,
                  epic_id=None, phase_id=None, agent=None, basis="none",
                  job_id=None, discipline=None, phase=None,
-                 dispatch_context=None, harness=None, agent_role=None) -> None:
+                 dispatch_context=None, harness=None, agent_role=None,
+                 turn_breakdown=None) -> None:
     """Resolves a provenance tier and writes exactly one cost_entries row via
     the _insert_cost_row chokepoint.
 
@@ -899,6 +1065,7 @@ def update_costs(command: str, in_tokens: int, out_tokens: int, duration: float,
             dispatch_context=dispatch_context,
             harness=harness or agent_name,
             agent_role=agent_role,
+            turn_breakdown=turn_breakdown,
         )
         _pkg("_generate_costs_md")()
         _pkg("_dr_sync")("costs.md")
@@ -1070,3 +1237,26 @@ def parse_costs_md() -> tuple:
             except ValueError:
                 continue
     return total_usd, total_requests
+
+def cmd_cost_billing(args=None) -> None:
+    """Show harness subscription billing and amortization configuration."""
+    from synlynk import load_config
+    config = load_config()
+    billing = config.get("harness_billing", {})
+    
+    print("Harness Billing & Subscription Status")
+    print("=====================================")
+    
+    total_fee = 0.0
+    for agent, settings in billing.items():
+        if not isinstance(settings, dict):
+            continue
+        mode = settings.get("payment_mode", "pay_as_you_go")
+        if mode == "subscription":
+            fee = settings.get("monthly_base_fee_usd", settings.get("subscription_fee_usd", 0.0))
+            total_fee += fee
+            print(f"- {agent}: {mode} (${fee:.2f}/mo)")
+        else:
+            print(f"- {agent}: {mode}")
+            
+    print(f"\nTotal Monthly Subscription Fees: ${total_fee:.2f}")

@@ -1,6 +1,21 @@
 """Shared constants used across synlynk modules."""
 
-VERSION = "0.23.0-dev"
+from importlib.metadata import PackageNotFoundError, version as _package_version
+from pathlib import Path
+
+
+def _load_version() -> str:
+    """Read the version from the repository source, or installed metadata."""
+    version_file = Path(__file__).resolve().parents[1] / "VERSION"
+    if version_file.is_file():
+        return version_file.read_text(encoding="utf-8").strip()
+    try:
+        return _package_version("synlynk")
+    except PackageNotFoundError:
+        raise RuntimeError("synlynk version source VERSION is missing")
+
+
+VERSION = _load_version()
 __version__ = VERSION
 
 
@@ -55,7 +70,9 @@ HARNESS_CAPABILITY_BASELINES = {
         "dispatch_flags": {
             "valid_flags": ["--dangerously-skip-permissions", "--model", "--output-format"],
             "invalid_flags": ["--always-approve", "--non-interactive"],
-            "required_flags": ["--dangerously-skip-permissions"],
+            # Permission bypass is an explicit per-dispatch opt-in. The
+            # default path uses the scoped --allowedTools profile.
+            "required_flags": [],
         },
         "headless_contract": {
             "requires_pty": False,
@@ -176,7 +193,9 @@ HARNESS_CAPABILITY_BASELINES = {
     },
     "grok": {
         "cli": "grok",
-        "can_gh_write": False,
+        # Live TC-9 retest passed on 2026-10-04 (gh:#2034) after LIVE-13
+        # permission-bypass fixes in PRs #1734/#1735.
+        "can_gh_write": True,
         "non_interactive_flags": [],
         "prompt_flag": "--single",  # placed last: grok --single "$PROMPT"
         "prompt_via_arg": True,
@@ -189,7 +208,11 @@ HARNESS_CAPABILITY_BASELINES = {
                 "--single",
             ],
             "invalid_flags": ["--yes", "--dangerously-skip-permissions", "--print", "--non-interactive"],
-            "required_flags": ["--always-approve"],
+            # Not unconditionally required (gh:#1925 part 1) — added explicitly
+            # by _dispatch_flags_for_agent(skip_permissions=True) instead, which
+            # dispatch_agent() auto-sets for Grok (see LIVE-13 and
+            # docs/superpowers/specs/2026-10-04-grok-failclosed-permission-enforcement-design.md).
+            "required_flags": [],
         },
         "headless_contract": {
             "requires_pty": False,

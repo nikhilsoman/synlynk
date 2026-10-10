@@ -44,7 +44,7 @@ jobs:
         run: python -m py_compile bin/synlynk.py
 
       - name: Run tests
-        run: pytest tests/ -v -m "not local_hardware" -n 4 --dist loadfile --durations=25
+        run: pytest tests/ -v -m "not local_hardware and not performance" -n 4 --dist loadfile --durations=25
 
       # Dry fleet matrix (no model spend). Only on one Python version — gate is
       # about repo hygiene/baselines, not interpreter variance.
@@ -53,6 +53,9 @@ jobs:
         run: |
           python -m pip install -e . 2>/dev/null || true
           PYTHONPATH=. python -m synlynk selftest --matrix
+
+      # Timing-sensitive cold-start checks run in the dedicated performance
+      # workflow so shared-runner CPU variance cannot block unrelated changes.
 
   # Same-workflow needs: is required — separate workflow files run in
   # parallel with no cross-file ordering, so a standalone qa-gate.yml
@@ -76,26 +79,23 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  epubcheck:
-    name: EPUBCheck 5.3.0
+  release-docs:
+    name: release-docs
+    needs: test
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Java 17
-        uses: actions/setup-java@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          distribution: temurin
-          java-version: '17'
+          python-version: '3.12'
 
-      - name: Download EPUBCheck 5.3.0
-        run: |
-          curl --fail --location --retry 3 \
-            --output /tmp/epubcheck.zip \
-            https://github.com/w3c/epubcheck/releases/download/v5.3.0/epubcheck-5.3.0.zip
-          unzip -q /tmp/epubcheck.zip -d /tmp/epubcheck
+      - name: Install pytest for README collection count
+        run: python -m pip install pytest
 
-      - name: Validate EPUB package
-        run: |
-          java -jar /tmp/epubcheck/epubcheck-5.3.0/epubcheck.jar \
-            docs/book/the-supervised-machine-v0.5-DRAFT.epub
+      - name: Enforce named-release README and version gate
+        run: python3 bin/synlynk.py release --check-docs

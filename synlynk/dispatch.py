@@ -19,6 +19,8 @@ from typing import List, Optional, Sequence, Tuple
 
 from synlynk._constants import HARNESS_CAPABILITY_BASELINES, _CODEX_NETWORK_PERMISSION
 from synlynk._lazy import pkg as _pkg
+from synlynk.harness_adapters.base import PermissionEnforcementError
+from synlynk.container_exec import ContainerExecError, resolve_container_image, wrap as wrap_container
 
 _ORG_ROLE_TO_BASELINE_ROLE = {
     "dev": "builder",
@@ -31,7 +33,10 @@ _ORG_ROLE_TO_BASELINE_ROLE = {
     "synlynk-bot": "builder",
 }
 
-_GH_WRITE_HARNESS_PRIORITY = ("claude", "agy")
+# grok added 2026-10-04 (gh:#2034): live TC-9 probe confirms gh-write
+# capability post-LIVE-13 fix; listed last pending >=5 empirical
+# gh-write-task samples per the Empirical Capability Assessment Policy.
+_GH_WRITE_HARNESS_PRIORITY = ("claude", "agy", "grok")
 _STARTUP_FAILOVER_ORDER = ("codex", "agy", "claude")
 _CODEX_REVIEW_WRITABLE_ROOTS = "sandbox_workspace_write.writable_roots=[]"
 
@@ -41,6 +46,20 @@ MODEL_TIER_FAST = "fast"
 MODEL_TIER_PRO = "pro"
 MODEL_TIER_REASONING = "reasoning"
 MODEL_TIERS = (MODEL_TIER_FAST, MODEL_TIER_PRO, MODEL_TIER_REASONING)
+
+
+def _job_purpose(role: str | None, task_type: str | None, *, explicit: bool = True) -> str:
+    """Classify provenance from dispatch's explicit role and task type."""
+    if not explicit:
+        return "other"
+    if role == "qa" and task_type == "review":
+        return "review"
+    if role == "dev" and task_type in {
+        "implement", "test", "css", "templates", "content", "subpages",
+        "canvas", "js", "infra", "refactor", "cli-plumbing",
+    }:
+        return "implementation"
+    return "other"
 
 _DEFAULT_MODELS_BY_TIER = {
     MODEL_TIER_FAST: {
@@ -65,6 +84,148 @@ _DEFAULT_MODELS_BY_TIER = {
         "local": "deepseek-r1",
     },
 }
+
+
+def _preflight_local_silent(config_path=None) -> bool:
+    """Return whether the local oMLX endpoint is reachable without printing."""
+    try:
+        from synlynk.local_agent import _health_check, _load_local_config
+
+        config = _load_local_config(config_path)
+        health = _health_check(
+            config["endpoint"],
+            timeout=3,
+            api_key=os.environ.get("OPENAI_API_KEY"),
+        )
+        return bool(health.get("reachable", False))
+    except Exception:
+        return False
+
+
+def _get_local_capability_score(task_type: str, db) -> float:
+    """Return the latest local capability score, or zero when unavailable."""
+    try:
+        row = db.execute(
+            "SELECT weighted_score FROM capability_scores "
+            "WHERE agent='local' AND (discipline=? OR stage=?) "
+            "ORDER BY last_seen DESC LIMIT 1",
+            (task_type, task_type),
+        ).fetchone()
+        return float(row[0]) if row and row[0] is not None else 0.0
+    except Exception:
+        # Older/private ledgers may expose the task_type/score shape described
+        # by the routing design instead of the current capability view.
+        try:
+            row = db.execute(
+                "SELECT score FROM capability_scores "
+                "WHERE agent='local' AND task_type=? "
+                "ORDER BY recorded_at DESC LIMIT 1",
+                (task_type,),
+            ).fetchone()
+            return float(row[0]) if row and row[0] is not None else 0.0
+        except Exception:
+            return 0.0
+
+
+def _read_local_fallback(config_path=".synlynk/workspace.json") -> str:
+    """Read the configured auto-routing fallback, defaulting to ``agy``."""
+    try:
+        with open(config_path) as handle:
+            fallback = json.load(handle).get("local_fallback", "agy")
+        return fallback if isinstance(fallback, str) and fallback else "agy"
+    except Exception:
+        return "agy"
+
+
+def _read_local_threshold(config_path=".synlynk/workspace.json") -> float:
+    """Read the local auto-routing threshold, defaulting to ``0.5``."""
+    try:
+        with open(config_path) as handle:
+            threshold = float(json.load(handle).get("local_auto_threshold", 0.5))
+        return min(1.0, max(0.0, threshold))
+    except Exception:
+        return 0.5
+
+
+# Last auto-routing fallback, consumed by the CLI when it records the job.
+# Overwritten on the next fallback. Never changes the harness that was chosen.
+_pending_routing_fallback: Optional[dict] = None
+
+
+def _log_routing_fallback(message: str, *, requested: str, actual: str) -> None:
+    """Record a routing fallback in sentinel.md and for the upcoming job row.
+
+    Stdout already prints ``message``. This only adds the durable copy.
+    A sentinel write failure must not change the harness that was chosen.
+    """
+    global _pending_routing_fallback
+    _pending_routing_fallback = {
+        "requested_harness": requested,
+        "actual_harness": actual,
+        "fallback_reason": message,
+    }
+    try:
+        write_alert = _pkg("_write_sentinel_alert", _write_sentinel_alert)
+        write_alert(
+            "WARN",
+            "DISPATCH_ROUTING_FALLBACK",
+            (
+                f"{message} (requested_harness={requested}, "
+                f"actual_harness={actual})"
+            ),
+            os.path.join(".synlynk", "sentinel.md"),
+        )
+    except Exception:
+        return
+
+
+def take_routing_fallback(actual_harness: Optional[str] = None) -> Optional[dict]:
+    """Return the pending fallback when it matches ``actual_harness``, and always clear it.
+
+    Pass ``actual_harness=None`` to discard a decision that will not be
+    stored on a job (dry-run). A mismatch also discards the decision: an
+    abandoned or unrelated dispatch must not keep the record pending for a
+    later job that happens to use the same harness.
+    """
+    global _pending_routing_fallback
+    pending = _pending_routing_fallback
+    _pending_routing_fallback = None
+    if pending is None:
+        return None
+    if actual_harness is not None and pending.get("actual_harness") != actual_harness:
+        return None
+    return pending
+
+
+def _resolve_dispatch_agent(
+    requested_agent,
+    task_type: str,
+    db,
+    config_path: str = ".synlynk/workspace.json",
+) -> str:
+    """Resolve ``auto`` to local when healthy and sufficiently capable."""
+    if requested_agent is not None and requested_agent != "auto":
+        return requested_agent
+
+    fallback = _read_local_fallback(config_path)
+    threshold = _read_local_threshold(config_path)
+    if not _preflight_local_silent():
+        message = f"Routing to: {fallback} (local oMLX unreachable)"
+        print(message)
+        _log_routing_fallback(message, requested="local", actual=fallback)
+        return fallback
+
+    score = _get_local_capability_score(task_type, db)
+    if score >= threshold:
+        print(f"Routing to: local (tier-0, capability score: {score:.2f})")
+        return "local"
+    message = (
+        f"Routing to: {fallback} (local capability score {score:.2f} "
+        f"< threshold {threshold:.2f})"
+    )
+    print(message)
+    _log_routing_fallback(message, requested="local", actual=fallback)
+    return fallback
 
 
 def ast_blast_radius_score(report: Optional[dict]) -> int:
@@ -334,7 +495,7 @@ def _print_pending_nudges() -> None:
         pass
 
 
-def _dispatch_flags_for_agent(agent: str) -> list:
+def _dispatch_flags_for_agent(agent: str, skip_permissions: bool = False) -> list:
     """Return the executable dispatch flags for an agent baseline."""
     baselines_map = _pkg("HARNESS_CAPABILITY_BASELINES", HARNESS_CAPABILITY_BASELINES)
     baselines = baselines_map.get(agent, {})
@@ -350,6 +511,10 @@ def _dispatch_flags_for_agent(agent: str) -> list:
         from synlynk.local_agent import _local_dispatch_model_flags
 
         flags = flags + _local_dispatch_model_flags()
+    if skip_permissions and agent in {"claude", "agy"}:
+        flags.append("--dangerously-skip-permissions")
+    if skip_permissions and agent == "grok" and "--always-approve" not in flags:
+        flags.append("--always-approve")
     return flags
 
 
@@ -514,6 +679,150 @@ def _role_for_story(story_id: str) -> Optional[str]:
     return row[0] if row else None
 
 
+def _infer_dispatch_defaults(
+    task: str,
+    *,
+    story_id: str = None,
+    agent: str = None,
+    role: str = None,
+    task_type: str = None,
+    requires_gh_write: bool = False,
+    base: str = None,
+    grants: Optional[list] = None,
+    revokes: Optional[list] = None,
+) -> dict:
+    """Infer the human-facing dispatch defaults without starting a job.
+
+    Story metadata wins over task wording, and explicit CLI values win over
+    both.  The policy is deliberately consulted here rather than duplicating
+    the routing table in the CLI, so previews and real dispatches describe the
+    same contract.
+    """
+    from synlynk.policy import load_policy
+
+    policy = load_policy(os.getcwd())
+    allocation = ((policy.get("dev_authority") or {}).get("task_allocation") or {})
+    story_role = _role_for_story(story_id)
+    text = (task or "").lower()
+    inferred_task_type = task_type
+    if inferred_task_type is None:
+        if _infer_task_type(task) == "review":
+            inferred_task_type = "review"
+        else:
+            patterns = (
+                ("brainstorm", ("brainstorm", "design proposal", "write a spec")),
+                ("architecture-review", ("architecture review", "architectural review")),
+                ("pm", ("roadmap", "triage backlog", "project management")),
+                ("test", ("run tests", "test suite", "add tests", "pytest")),
+                ("refactor", ("refactor", "restructure")),
+                ("css", ("css", "stylesheet", "styling")),
+                ("templates", ("template", "email template")),
+                ("content", ("copywriting", "blog post", "content")),
+                ("js", ("javascript", "typescript", "frontend")),
+                ("infra", ("infrastructure", "deploy", "ci/cd")),
+                ("implement", ("implement", "build", "add", "fix", "change")),
+            )
+            inferred_task_type = next(
+                (kind for kind, terms in patterns if any(term in text for term in terms)),
+                "implement",
+            )
+
+    inferred_role = role or story_role
+    if inferred_role is None:
+        inferred_role = {
+            "review": "qa",
+            "brainstorm": "architect",
+            "architecture-review": "architect",
+            "pm": "pm",
+        }.get(inferred_task_type, "dev")
+
+    role_entry = (policy.get("agent_roles") or {}).get(inferred_role) or {}
+    from synlynk.capability import ranked_harness_for_task
+
+    entry = allocation.get(inferred_task_type, {}) if inferred_task_type else {}
+    if not entry.get("harness"):
+        # Preserve the previous implement-table fallback for an unknown type.
+        entry = allocation.get("implement") or {}
+    default_harness = entry.get("harness")
+    fallback_list = entry.get("fallback") or []
+    promoted = None
+    if default_harness:
+        promoted = ranked_harness_for_task(
+            inferred_task_type, [default_harness] + list(fallback_list)
+        )
+        if promoted:
+            default_harness = promoted
+    inferred_agent = agent
+    if inferred_agent is None:
+        # Explicit CLI agent (handled above), an explicit --role, and story
+        # metadata keep their harness. Empirical promotion replaces only the
+        # table default on the unbound path.
+        explicit_binding = role is not None or story_role is not None
+        if promoted and not explicit_binding:
+            inferred_agent = promoted
+        else:
+            inferred_agent = role_entry.get("default_harness") or default_harness
+    if inferred_agent is None:
+        inferred_agent = "codex"
+
+    if agent is None and inferred_agent:
+        pool = []
+        for name in [default_harness, *list(fallback_list), inferred_agent]:
+            if name and name not in pool:
+                pool.append(name)
+        try:
+            from synlynk.quota_capture import prefer_harness_by_weekly_headroom
+            get_db = _pkg("_get_db")
+            qconn = get_db() if get_db else None
+            try:
+                if qconn is not None:
+                    inferred_agent = prefer_harness_by_weekly_headroom(
+                        inferred_agent,
+                        [name for name in pool if name != inferred_agent],
+                        conn=qconn,
+                    )
+            finally:
+                if qconn is not None:
+                    qconn.close()
+        except Exception:
+            pass
+
+    config = _pkg("load_config")
+    config = config() if config else {}
+    worktree = (config.get("worktree") or {}).get("mode", "full")
+    if base:
+        worktree = f"{worktree} (base: {base})"
+    explicit_permissions = bool(grants or revokes)
+    if task_type == "review" or inferred_task_type == "review":
+        permission_profile = "read-only"
+    elif explicit_permissions:
+        permission_profile = "explicit"
+    elif requires_gh_write or _task_requires_gh_write(task, inferred_task_type):
+        permission_profile = "scoped + gh-write"
+    else:
+        permission_profile = "scoped"
+
+    return {
+        "role": inferred_role,
+        "harness": inferred_agent,
+        "task_type": inferred_task_type,
+        "worktree": worktree,
+        "permission_profile": permission_profile,
+        "story_role": story_role,
+    }
+
+
+def compose_dispatch_preview(task: str, **kwargs) -> dict:
+    """Human-facing dispatch default. Alias of ``_infer_dispatch_defaults``.
+
+    The empirical-routing design names this entry point
+    ``compose_dispatch_preview``; the implementation has always lived in
+    ``_infer_dispatch_defaults`` (dispatch.py's policy ``task_allocation``
+    read). Keep both names so previews and real dispatches share one contract.
+    """
+    return _infer_dispatch_defaults(task, **kwargs)
+
+
 def _local_concurrency_exceeded(conn, max_concurrent: int = 1) -> bool:
     """True if the 'local' agent already has max_concurrent running jobs."""
     try:
@@ -607,21 +916,35 @@ _GROK_PERMISSION_RULES = {
 }
 
 
-def _grok_permission_flags(permissions: list) -> list:
+def _grok_permission_flags(permissions: list, skip_permissions: bool = False) -> list:
     """Translate resolved permission strings into Grok CLI permission flags.
 
-    For headless execution (#1732, #1734), passes `--always-approve` and
-    `--permission-mode bypassPermissions` to prevent tool cancellations.
+    Grok's CLI has no working non-bypass headless mode (LIVE-13:
+    docs/rca/2026-09-22-LIVE-13-grok-headless-dispatch-permission-bypass.md) —
+    under --permission-mode dontAsk it silently cancels tool calls while
+    reporting success. For headless execution (#1732, #1734), passing
+    `--always-approve` and `--permission-mode bypassPermissions` avoids that.
+
+    This is now gated behind `skip_permissions` (gh:#1925 part 1) rather than
+    unconditional: when permissions are requested and the caller has not
+    opted into the bypass, raise instead of silently granting it.
+    dispatch_agent() auto-opts-in for Grok specifically so existing callers
+    are unaffected — see
+    docs/superpowers/specs/2026-10-04-grok-failclosed-permission-enforcement-design.md.
     """
     permission_set = {perm for perm in (permissions or []) if perm}
     if not permission_set:
         return []
 
+    if not skip_permissions:
+        raise PermissionEnforcementError(
+            f"grok has no scoped-permission headless mode for requested permissions "
+            f"{sorted(permission_set)} (LIVE-13: Grok's --permission-mode dontAsk silently "
+            "cancels tool calls). Pass skip_permissions=True to proceed with "
+            "--always-approve --permission-mode bypassPermissions instead."
+        )
+
     return ["--always-approve", "--permission-mode", "bypassPermissions"]
-
-
-class PermissionEnforcementError(RuntimeError):
-    """Raised when an agent has no real mechanism to enforce requested permissions."""
 
 
 def _merge_codex_permission_flags(flags: list, permission_flags: list) -> list:
@@ -647,7 +970,12 @@ def _merge_codex_permission_flags(flags: list, permission_flags: list) -> list:
     return merged + permission_flags
 
 
-def _permissions_to_flags(agent: str, permissions: list, read_only: bool = False) -> list:
+def _permissions_to_flags(
+    agent: str,
+    permissions: list,
+    read_only: bool = False,
+    skip_permissions: bool = False,
+) -> list:
     """Translate permission strings into harness-specific CLI flags."""
     from synlynk._constants import _PERMISSION_TO_TOOL_MAP
 
@@ -660,7 +988,7 @@ def _permissions_to_flags(agent: str, permissions: list, read_only: bool = False
             return []
         if set(permissions) <= {"read:*"}:
             return ["--mode", "plan"]
-        return ["--dangerously-skip-permissions"]
+        return ["--dangerously-skip-permissions"] if skip_permissions else ["--sandbox"]
     if agent == "claude":
         tools = []
         for perm in permissions or []:
@@ -688,7 +1016,7 @@ def _permissions_to_flags(agent: str, permissions: list, read_only: bool = False
             flags += _codex_network_flags(read_only=read_only and not has_write)
         return flags
     if agent == "grok":
-        return _grok_permission_flags(permissions)
+        return _grok_permission_flags(permissions, skip_permissions=skip_permissions)
     if agent == "local":
         if permissions:
             raise PermissionEnforcementError(
@@ -1301,9 +1629,118 @@ _PR_OPEN_TASK_RE = re.compile(
     re.IGNORECASE,
 )
 
+# A pull request the task names directly. ``--issue`` is a separate GOVERNS
+# link and must not be substituted for one of these (#2056).
+_EXPLICIT_PR_RE = re.compile(
+    r"\b(?:pull\s+request|pr)\s*#?\s*(\d+)\b|\bpull/(\d+)\b",
+    re.IGNORECASE,
+)
+
 
 def _task_opens_pr(task: str) -> bool:
     return bool(_PR_OPEN_TASK_RE.search(task or ""))
+
+
+_GOVERNS_LINKAGE_WARNING = (
+    "GOVERNS linkage missing — dispatch proceeding, but this will hard-fail once #1990 ships"
+)
+_UNSUPPLIED = object()
+
+
+def _governs_linkage_resolvable(
+    *,
+    story_id: Optional[str] = None,
+    issue: Optional[int] = None,
+    pr: Optional[int] = None,
+    task: str = "",
+) -> bool:
+    """True when --story, --issue, or --pr can be resolved for this dispatch.
+
+    ``--issue`` is resolvable from the flag or from a ``#N`` mention in the
+    task (the CLI auto-detect). ``--pr`` is resolvable from an explicit
+    number or from a pull-request number named in the task. An ad-hoc
+    ``story-adhoc-*`` id synthesized later does not count.
+    """
+    if story_id:
+        return True
+    if issue is not None or pr is not None:
+        return True
+    if _explicit_pr_numbers(task):
+        return True
+    from synlynk.story_provisioning import _detect_issue_number
+
+    return _detect_issue_number(task or "", issue=None) is not None
+
+
+def _emit_missing_governs_linkage_warning(sentinel_path: Optional[str] = None) -> None:
+    """Loud, non-blocking notice that #1990's hard-fail is not in force yet."""
+    print(f"  ⚠ {_GOVERNS_LINKAGE_WARNING}")
+    write_alert = _pkg("_write_sentinel_alert", _write_sentinel_alert)
+    path = sentinel_path or os.path.join(".synlynk", "sentinel.md")
+    write_alert("WARNING", "GOVERNS_LINKAGE_MISSING", _GOVERNS_LINKAGE_WARNING, path)
+
+
+def _explicit_pr_numbers(task: str) -> list[int]:
+    """Return PR numbers named in *task*, in first-seen order."""
+    found: list[int] = []
+    for match in _EXPLICIT_PR_RE.finditer(task or ""):
+        raw = match.group(1) or match.group(2)
+        number = int(raw)
+        if number not in found:
+            found.append(number)
+    return found
+
+
+def _resolve_gh_write_target(
+    task: str,
+    issue: Optional[int],
+    kind: Optional[str],
+    requires_gh_write: bool,
+) -> tuple[Optional[str], str, Optional[str]]:
+    """Resolve ``(gh_write_target, kind, cross_branch_pr)``.
+
+    ``--issue`` associates the dispatch (GOVERNS). When the task names a
+    different pull request, that PR is the verification target. ``cross_branch_pr``
+    is set when the named PR is an existing PR rather than a PR this job's own
+    branch is about to open, so the completion oracle can read that PR instead
+    of the local worktree diff.
+    """
+    resolved_kind = kind or "issue"
+    if not requires_gh_write:
+        return None, resolved_kind, None
+
+    pr_numbers = _explicit_pr_numbers(task)
+    issue_number = int(issue) if issue is not None else None
+    distinct = [number for number in pr_numbers if issue_number is None or number != issue_number]
+    number: Optional[int] = None
+    if distinct:
+        number = distinct[0]
+        resolved_kind = "pr"
+    elif issue_number is not None:
+        number = issue_number
+    else:
+        issue_match = re.search(r"\bissues?\s*#?\s*(\d+)\b", task or "", re.IGNORECASE)
+        if pr_numbers:
+            number = pr_numbers[0]
+            resolved_kind = "pr"
+        elif issue_match:
+            number = int(issue_match.group(1))
+            resolved_kind = "issue"
+        else:
+            print(
+                "  ⚠ --requires-gh-write task has no numbered PR/issue target; "
+                "falling back to worktree activity verification",
+                file=sys.stderr,
+            )
+            return None, resolved_kind, None
+
+    prefix = "pr" if resolved_kind == "pr" else "issue"
+    target = f"{prefix}:{number}"
+    # Only a PR number that is not the --issue link is cross-branch. Jobs that
+    # name the same number (or no PR) keep the existing local-diff / gh-write
+    # evidence path, including "open a PR" for the linked issue.
+    cross_branch = f"pr:{number}" if issue_number is not None and distinct else None
+    return target, resolved_kind, cross_branch
 
 
 _COMMENT_TASK_RE = re.compile(
@@ -2179,6 +2616,7 @@ def _create_job_worktree(
                     scoped_paths=scoped_paths,
                 )
             if sparse_ok:
+                _provision_job_github_apps(worktree_path)
                 _assert_dispatch_worktree_base_is_fresh(worktree_path, base_ref)
                 try:
                     from synlynk.worktree_lease import acquire_worktree_lease
@@ -2233,6 +2671,7 @@ def _create_job_worktree(
             f"on branch {worktree_branch} after 3 attempts."
             + (f" {details}" if details else "")
         )
+    _provision_job_github_apps(worktree_path)
     _assert_dispatch_worktree_base_is_fresh(worktree_path, base_ref)
     try:
         from synlynk.worktree_lease import acquire_worktree_lease
@@ -2245,6 +2684,29 @@ def _create_job_worktree(
         "base_branch": base_ref,
         "base_sha": base_sha,
     }
+
+
+def _provision_job_github_apps(worktree_path: str) -> None:
+    """Expose the main checkout's role-token directory inside a job worktree."""
+    try:
+        common = subprocess.run(
+            ["git", "-C", os.getcwd(), "rev-parse", "--path-format=absolute", "--git-common-dir"],
+            capture_output=True, text=True, check=False,
+        )
+        if common.returncode != 0 or not common.stdout.strip():
+            return
+        git_dir = os.path.realpath(common.stdout.strip())
+        main_repo = os.path.dirname(git_dir) if os.path.basename(git_dir) == ".git" else os.path.dirname(git_dir)
+        source = os.path.join(main_repo, ".synlynk", "github_apps")
+        target = os.path.join(worktree_path, ".synlynk", "github_apps")
+        if os.path.lexists(target):
+            return
+        if not os.path.isdir(source):
+            return
+        os.makedirs(os.path.dirname(target), mode=0o700, exist_ok=True)
+        os.symlink(source, target, target_is_directory=True)
+    except (OSError, ValueError):
+        logger.debug("GitHub App directory provisioning advisory failure", exc_info=True)
 
 
 def _probe_results_trustworthy() -> bool:
@@ -2281,6 +2743,43 @@ def _capability_block_remediation(agent: str, declared_requires: list) -> str:
         declared = ", ".join(f"`{cap}`" for cap in declared_requires)
         return f"Remove {declared} from `--requires` if the job does not truly need it, or rerun after a fresh probe."
     return f"Run `synlynk probe {agent}` and rerun dispatch."
+
+
+def _probe_record_names(harness_name: str) -> tuple:
+    """Return probe row names, including legacy aliases."""
+    if harness_name == "claude":
+        return ("claude", "claude-cli")
+    return (harness_name,)
+
+
+def _read_harness_probe_row(db_conn, harness_name: str):
+    if db_conn is None:
+        return None
+    for record_name in _probe_record_names(harness_name):
+        try:
+            row = db_conn.execute(
+                "SELECT compliance_status, active_flags FROM harness_records WHERE harness_name=?",
+                (record_name,),
+            ).fetchone()
+        except Exception:
+            return None
+        if row:
+            return row
+    return None
+
+
+def _inline_probe_harness(harness_name: str, db_conn) -> dict:
+    """Run the first-use probe without spawning a second synlynk process."""
+    try:
+        from synlynk.probe import _probe_agent
+
+        result = _probe_agent(
+            harness_name, db_conn, fast_path_ok=False, write_fence=False
+        )
+        db_conn.commit()
+        return result
+    except Exception as exc:
+        return {"status": "unavailable", "error": str(exc)}
 
 
 def _reprobe_harness_sync(agent: str, timeout_s: int = 120) -> dict:
@@ -2485,6 +2984,10 @@ def _preflight_dispatch(
     force_agent: bool = False,
     root: Optional[str] = None,
     declared_requires: Optional[list] = None,
+    story_id: Optional[str] = None,
+    issue: Optional[int] = None,
+    pr: Optional[int] = None,
+    governs_story_id=_UNSUPPLIED,
 ) -> dict:
     import socket as _socket
     from synlynk._constants import CORE_FLEET as _CORE_FLEET, CORE_INSTRUCTION_FILES as _CORE_INSTRUCTION_FILES
@@ -2496,7 +2999,11 @@ def _preflight_dispatch(
         # Aider can exit zero after doing no work when its configured oMLX
         # backend is unavailable.  Verify the actual local capability before
         # spawning it so the job cannot be recorded as a successful no-op.
-        from synlynk.local_agent import _health_check, _load_local_config
+        from synlynk.local_agent import (
+            _health_check,
+            _load_local_config,
+            _orbstack_health_check,
+        )
 
         try:
             local_config = _load_local_config()
@@ -2539,6 +3046,34 @@ def _preflight_dispatch(
                     "Run `synlynk local doctor` or install aider-chat before retrying."
                 ),
             }
+        container = local_config.get("container")
+        container_runtime = (
+            container.get("runtime") if isinstance(container, dict) else None
+        )
+        requires_orbstack = local_config.get("requires_orbstack")
+        if requires_orbstack is None:
+            requires_orbstack = local_config.get("container_required")
+        if requires_orbstack is None:
+            runtime = local_config.get("container_runtime") or container_runtime
+            if runtime is not None:
+                requires_orbstack = str(runtime).lower() == "orbstack"
+            else:
+                # The sovereign image reaches host-served oMLX through
+                # OrbStack's bridge hostname. Treat that endpoint as an
+                # implicit containerized setup for older configs.
+                requires_orbstack = "host.docker.internal" in str(endpoint).lower()
+        if requires_orbstack:
+            orb_health = _orbstack_health_check()
+            if not orb_health.get("reachable"):
+                return {
+                    "passed": False,
+                    "sentinel": "LOCAL_ORBSTACK_UNAVAILABLE",
+                    "reason": (
+                        "Local harness requires OrbStack for its containerized setup, "
+                        f"but OrbStack is unavailable: {orb_health.get('error', 'health check failed')}. "
+                        "Install OrbStack and run `orbctl start` before retrying."
+                    ),
+                }
 
     if harness_name in _CORE_FLEET and repo_has_any_core_instruction_file(check_root):
         expected_file = _CORE_INSTRUCTION_FILES.get(harness_name)
@@ -2615,21 +3150,17 @@ def _preflight_dispatch(
     else:
         valid_flags, required_flags = [], []
     if valid_flags or required_flags:
-        probe_row = None
-        if db_conn:
-            try:
-                probe_row = db_conn.execute(
-                    "SELECT compliance_status, active_flags FROM harness_records WHERE harness_name=?",
-                    (harness_name,),
-                ).fetchone()
-            except Exception:
-                probe_row = None
+        probe_row = _read_harness_probe_row(db_conn, harness_name)
         if not probe_row:
-            return {
-                "passed": False,
-                "sentinel": "HARNESS_PREFLIGHT_FAIL",
-                "reason": f"no probe data for agent; run synlynk probe {harness_name}",
-            }
+            if db_conn is not None:
+                _inline_probe_harness(harness_name, db_conn)
+                probe_row = _read_harness_probe_row(db_conn, harness_name)
+            if not probe_row:
+                return {
+                    "passed": False,
+                    "sentinel": "HARNESS_PREFLIGHT_FAIL",
+                    "reason": f"no probe data for agent; run synlynk probe {harness_name}",
+                }
         compliance_status, _active_flags_json = probe_row
         if compliance_status != "ok":
             return {
@@ -2729,6 +3260,27 @@ def _preflight_dispatch(
                 )
         except Exception:
             pass
+
+    # A real dispatch carries a task hint. When the caller supplied no
+    # --issue/--pr/--story (and none can be read from the task), warn and
+    # continue. #1990's hard-fail is still unbuilt. An explicitly supplied
+    # story/issue/PR keeps the existing fail-closed goal check. Harness-only
+    # preflight calls without a task hint stay backward compatible.
+    caller_story_id = story_id if governs_story_id is _UNSUPPLIED else governs_story_id
+    linkage_resolvable = _governs_linkage_resolvable(
+        story_id=caller_story_id,
+        issue=issue,
+        pr=pr,
+        task=_task_hint or "",
+    )
+    if _task_hint and not linkage_resolvable:
+        _emit_missing_governs_linkage_warning()
+    elif story_id is not None or _task_hint or harness_name not in HARNESS_CAPABILITY_BASELINES:
+        from synlynk.governs_gate import dispatch_governs_linkage
+
+        governs_gate = dispatch_governs_linkage(db_conn, story_id)
+        if not governs_gate["passed"]:
+            return governs_gate
 
     return {"passed": True, "sentinel": None, "reason": None}
 
@@ -2835,11 +3387,13 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                    requires_gh_write: bool = False,
                    static_baseline: bool = False,
                    task_type: str = None,
+                   task_type_explicit: bool = None,
                    requires: list = None,
                    grants: list = None,
                    revokes: list = None,
                    job_id: str = None,
                    issue: int = None,
+                   pr: int = None,
                    base: str = None,
                    scope_paths: list = None,
                    session_id: str = None,
@@ -2853,15 +3407,23 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                    criticality: float = 1.0,
                    lambda_: float = 1.0,
                    db_conn=None,
-                   _startup_failover: bool = True) -> dict:
+                   _startup_failover: bool = True,
+                   skip_permissions: bool = False,
+                   container_image: str | None = None,
+                   routing_fallback: Optional[dict] = None) -> dict:
     if not task or not task.strip():
         raise ValueError(
             "--task is empty or whitespace-only; refusing to dispatch (see #720)"
         )
+    if routing_fallback is None:
+        routing_fallback = take_routing_fallback(agent)
     if task_type:
         try:
             authority = check_authority(
-                f"task_dispatch:{task_type}", role=role or "dev", repo_path=os.getcwd(),
+                f"task_dispatch:{task_type}",
+                role=role or "dev",
+                repo_path=os.getcwd(),
+                enforce_role_compat=role is not None,
             )
         except ValueError:
             authority = None  # unknown task_type action shape — not a policy-covered task_type, skip gate
@@ -2875,14 +3437,30 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     requires_gh_write = bool(
         requires_gh_write or _task_requires_gh_write(task, task_type=task_type)
     )
-    initial_agent = agent
-    agent = resolve_dispatch_harness(
-        agent, agent_id=agent_id, story_id=story_id,
-        force_agent=force_agent, requires_gh_write=requires_gh_write,
-        static_baseline=static_baseline,
-        task_domain=task_domain, criticality=criticality, lambda_=lambda_,
-        task=task, task_type=task_type, requires=requires, grants=grants, revokes=revokes,
+    # Keep the public dispatch_agent() contract stable while threading the
+    # request through the adapter pipeline.  The remaining body deliberately
+    # stays in place until each stage can preserve its existing bookkeeping
+    # contract exactly.
+    from synlynk.harness_adapters.request import DispatchRequest
+    from synlynk.harness_adapters.registry import get_adapter
+    from synlynk import dispatch_pipeline as pipeline
+
+    request = DispatchRequest(
+        agent=agent, task=task, story_id=story_id, agent_id=agent_id,
+        force_agent=force_agent, context_mode=context_mode, cycle=cycle,
+        skip_preflight=skip_preflight, requires_gh_write=requires_gh_write,
+        static_baseline=static_baseline, task_type=task_type,
+        requires=requires or [], grants=grants or [], revokes=revokes or [],
+        job_id=job_id, issue=issue, base=base, scope_paths=scope_paths or [],
+        session_id=session_id, gh_write_target_kind=gh_write_target_kind,
+        gh_write_expect=gh_write_expect, model=model, effort=effort,
+        model_tier=model_tier, role=role, task_domain=task_domain,
+        criticality=criticality, lambda_=lambda_,
     )
+    request = pipeline.resolve(request)
+    pipeline.authorize(request)
+    initial_agent = agent
+    agent = request.agent
     if agent != initial_agent and not force_agent:
         print(
             f"  ↪ rerouted '{initial_agent}' -> '{agent}' "
@@ -3012,6 +3590,27 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
 
     if agent not in baselines_map:
         raise ValueError(f"Unknown agent: '{agent}'. Known: {list(baselines_map)}")
+
+    # Adapter coverage is the source of truth for dispatchable harnesses.
+    # Check after capability-driven reroutes, but before opening the DB or
+    # creating any job state/worktree.
+    try:
+        adapter = get_adapter(agent)
+    except KeyError as exc:
+        raise ValueError(
+            f"Harness '{agent}' has no registered dispatch adapter. "
+            "Register an adapter before dispatching it."
+        ) from exc
+
+    if agent == "grok" and not skip_permissions:
+        # Grok's CLI has no working non-bypass headless mode (LIVE-13:
+        # docs/rca/2026-09-22-LIVE-13-grok-headless-dispatch-permission-bypass.md).
+        # Auto-opt-in here (rather than requiring every caller to pass
+        # --dangerously-skip-permissions) so existing Grok dispatch workflows
+        # keep working unchanged after gh:#1925 part 1 made the bypass gated
+        # instead of unconditional. See
+        # docs/superpowers/specs/2026-10-04-grok-failclosed-permission-enforcement-design.md.
+        skip_permissions = True
 
     # A capability gate may reroute the harness (for example, Grok write
     # denial or GitHub-write routing). Re-resolve against the final harness so
@@ -3146,6 +3745,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                     job_id=job_id,
                 )
 
+    # Captured before ad-hoc story synthesis. story-adhoc-* is not GOVERNS linkage.
+    caller_story_id = story_id
     resolve_or_create_story_id = _pkg("resolve_or_create_story_id")
     if resolve_or_create_story_id:
         if story_id:
@@ -3157,7 +3758,12 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
 
     baselines = baselines_map[agent]
     cli = baselines["cli"]
-    flags = baselines["non_interactive_flags"] + _dispatch_flags_for_agent(agent)
+    dispatch_flags = (
+        _dispatch_flags_for_agent(agent, skip_permissions=True)
+        if skip_permissions
+        else _dispatch_flags_for_agent(agent)
+    )
+    flags = baselines["non_interactive_flags"] + dispatch_flags
     overrides = _load_harness_overrides(agent)
     for key, value in overrides.get("dispatch_flags", {}).items():
         flags = flags + [f"--{key}"] if value in (None, "") else flags + [f"--{key}", str(value)]
@@ -3168,6 +3774,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     load_config = _pkg("load_config")
     cfg = load_config() if load_config else {}
     role_list = (cfg.get("roles", {}) or {}).get(agent, [])
+    import inspect as _inspect
     if task_type == "review":
         role_list = ["review"]
     effective_grants = list(grants or [])
@@ -3187,13 +3794,24 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         # Keep compatibility with test/integration adapters that implement the
         # historical two-argument translator while using the hardened native
         # translator when available.
-        import inspect as _inspect
-        if "read_only" in _inspect.signature(_permissions_to_flags).parameters:
-            permission_flags = _permissions_to_flags(agent, permissions, read_only=True)
+        permission_params = _inspect.signature(_permissions_to_flags).parameters
+        if "read_only" in permission_params or "skip_permissions" in permission_params:
+            permission_kwargs = {}
+            if "read_only" in permission_params:
+                permission_kwargs["read_only"] = True
+            if "skip_permissions" in permission_params:
+                permission_kwargs["skip_permissions"] = skip_permissions
+            permission_flags = _permissions_to_flags(agent, permissions, **permission_kwargs)
         else:
             permission_flags = _permissions_to_flags(agent, permissions)
     else:
-        permission_flags = _permissions_to_flags(agent, permissions)
+        permission_params = _inspect.signature(_permissions_to_flags).parameters
+        if "skip_permissions" in permission_params:
+            permission_flags = _permissions_to_flags(
+                agent, permissions, skip_permissions=skip_permissions
+            )
+        else:
+            permission_flags = _permissions_to_flags(agent, permissions)
     if agent == "codex":
         flags = _merge_codex_permission_flags(flags, permission_flags)
     else:
@@ -3253,6 +3871,10 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 permissions=permissions,
                 force_agent=force_agent,
                 declared_requires=declared_requires,
+                story_id=story_id,
+                issue=issue,
+                pr=pr,
+                governs_story_id=caller_story_id,
             )
         except TypeError:
             try:
@@ -3291,7 +3913,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     if agent == "grok":
         flags = flags + ["--output-format", "json"]
     if agent == "claude":
-        flags = flags + ["--output-format", "stream-json", "--verbose"]
+        flags = flags + ["--output-format", "json"]
     if agent == "agy":
         flags = flags + ["--output-format", "json"]
         if "--print-timeout" not in flags:
@@ -3333,7 +3955,23 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         print(f"    {hint}")
 
     _unused_path, worktree_branch = _job_worktree_details(job_id, agent)
-    worktree_info = _create_job_worktree(job_id, agent, base=base)
+    request = request.__class__(
+        **{
+            **request.__dict__,
+            "agent": agent,
+            "job_id": job_id,
+            "base": base,
+            "scope_paths": scope_paths or [],
+        }
+    )
+    try:
+        worktree_info = pipeline.prepare_worktree(request)
+    except TypeError as exc:
+        # Keep compatibility with test/integration doubles that implement the
+        # historical three-argument worktree helper.
+        if "scoped_paths" not in str(exc):
+            raise
+        worktree_info = _create_job_worktree(job_id, agent, base=base)
     worktree_path = worktree_info["path"]
     base_branch = worktree_info["base_branch"]
     base_sha = worktree_info["base_sha"]
@@ -3539,34 +4177,11 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     gh_write_target_value = None
     gh_write_author_value = None
     gh_write_expect_value = None
-    gh_write_target_number = issue
-    resolved_gh_write_target_kind = gh_write_target_kind
-    if requires_gh_write and gh_write_target_number is None:
-        task_target_match = re.search(
-            r"\b(?:pr|pull\s+request)\s*#?\s*(\d+)\b",
-            task or "",
-            re.IGNORECASE,
-        )
-        issue_target_match = re.search(
-            r"\bissues?\s*#?\s*(\d+)\b",
-            task or "",
-            re.IGNORECASE,
-        )
-        if task_target_match:
-            resolved_gh_write_target_kind = "pr"
-            gh_write_target_number = int(task_target_match.group(1))
-        elif issue_target_match:
-            resolved_gh_write_target_kind = "issue"
-            gh_write_target_number = int(issue_target_match.group(1))
-        else:
-            print(
-                "  ⚠ --requires-gh-write task has no numbered PR/issue target; "
-                "falling back to worktree activity verification",
-                file=sys.stderr,
-            )
-    if requires_gh_write and gh_write_target_number is not None:
-        target_prefix = "pr" if resolved_gh_write_target_kind == "pr" else "issue"
-        gh_write_target_value = f"{target_prefix}:{gh_write_target_number}"
+    cross_branch_pr_value = None
+    gh_write_target_value, _resolved_kind, cross_branch_pr_value = _resolve_gh_write_target(
+        task, issue, gh_write_target_kind, requires_gh_write,
+    )
+    if requires_gh_write and gh_write_target_value is not None:
         gh_write_role = resolved_agent_role or _role_for_story(story_id)
         gh_write_author_value = _resolve_dispatch_gh_bot_login(gh_write_role)
         gh_write_expect_value = gh_write_expect or _gh_write_expectation(task, task_type, target=gh_write_target_value)
@@ -3598,10 +4213,12 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         _ensure_daemon_job_columns(dconn, {
             "requires_gh_write": "INTEGER NOT NULL DEFAULT 0",
             "gh_write_target": "TEXT",
+            "cross_branch_pr": "TEXT",
             "gh_write_verified": "TEXT",
             "gh_write_author": "TEXT",
             "gh_write_expect": "TEXT DEFAULT 'closed'",
             "gh_write_evidence": "TEXT",
+            "gh_write_verification_attempts": "INTEGER NOT NULL DEFAULT 0",
         })
         _ensure_daemon_job_columns(dconn, {
             "harness": "TEXT",
@@ -3624,19 +4241,43 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         )
         local_slot_claimed = True
 
+    container_image = resolve_container_image(container_image, baselines)
+    spawn_cmd = ["sh", "-c", shell_cmd]
+    spawn_env = proc_env
+    spawn_cwd = worktree_path
+    stderr_target = subprocess.DEVNULL
+    stderr_handle = None
+    if container_image is not None:
+        docker_bin = shutil.which("docker")
+        if not docker_bin:
+            raise ContainerExecError(
+                "docker is not on PATH; refusing to fall back to a host subprocess"
+            )
+        spawn_cmd, spawn_env, spawn_cwd = wrap_container(
+            spawn_cmd,
+            proc_env,
+            worktree_path,
+            container_image,
+            docker_bin=docker_bin,
+        )
+        stderr_handle = open(log_file, "a", encoding="utf-8")
+        stderr_target = stderr_handle
     try:
         proc = subprocess.Popen(
-            ["sh", "-c", shell_cmd],
+            spawn_cmd,
             stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stderr=stderr_target,
             start_new_session=True,
-            cwd=worktree_path,
-            env=proc_env,
+            cwd=spawn_cwd,
+            env=spawn_env,
         )
     except Exception:
         if local_slot_claimed:
             dconn.rollback()
         raise
+    finally:
+        if stderr_handle is not None:
+            stderr_handle.close()
 
     # A process that has already exited failed during CLI startup (bad flag,
     # missing binary, or sandbox setup). Give the task one deterministic
@@ -3646,13 +4287,28 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         startup_exit = proc.poll()
     except (AttributeError, OSError):
         startup_exit = None
-    if _startup_failover and startup_exit not in (None, 0):
+    if container_image is not None and startup_exit is None:
+        try:
+            startup_exit = proc.wait(timeout=1.0)
+        except (AttributeError, OSError, subprocess.TimeoutExpired):
+            startup_exit = None
+    container_failed = container_image is not None and startup_exit not in (None, 0)
+    if container_failed:
+        exit_path = log_file + ".exit"
+        if not os.path.exists(exit_path):
+            with open(exit_path, "w", encoding="utf-8") as exit_handle:
+                exit_handle.write(f"{startup_exit}\n")
+    elif _startup_failover and startup_exit not in (None, 0):
         secondary = _secondary_harness(agent, baselines_map)
         touched = _worktree_files_touched(worktree_path) if worktree_path else []
         if secondary and not touched:
             if local_slot_claimed:
                 dconn.rollback()
             print(f"  ↪ startup failure on '{agent}' (exit {startup_exit}); failing over to '{secondary}'")
+            failover_route = None
+            if routing_fallback:
+                failover_route = dict(routing_fallback)
+                failover_route["actual_harness"] = secondary
             return dispatch_agent(
                 secondary, task, story_id=story_id, agent_id=agent_id,
                 force_agent=force_agent, context_mode=context_mode, cycle=cycle,
@@ -3663,6 +4319,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 gh_write_target_kind=gh_write_target_kind, model=model, role=role,
                 model_tier=model_tier,
                 db_conn=db_conn, _startup_failover=False,
+                container_image=container_image,
+                skip_permissions=skip_permissions,
+                routing_fallback=failover_route,
             )
 
     job = {
@@ -3687,9 +4346,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         "base_sha": base_sha,
         "suite_result": None,
         "started_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
-        "ended_at": None,
-        "status": "running",
-        "exit_code": None,
+        "ended_at": time.strftime("%Y-%m-%dT%H:%M:%S") if container_failed else None,
+        "status": "failed" if container_failed else "running",
+        "exit_code": startup_exit if container_failed else None,
         "dispatch_mode": dispatch_mode,
         "dispatch_rework": _pkg("_count_dispatch_rework")(story_id or "") if _pkg("_count_dispatch_rework") else 0,
         "micro_rework": 0,
@@ -3703,9 +4362,15 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         "scope_paths": scope_paths or [],
         "requires_gh_write": requires_gh_write,
         "gh_write_target": gh_write_target_value,
+        "cross_branch_pr": cross_branch_pr_value,
         "gh_write_author": gh_write_author_value,
         "gh_write_expect": gh_write_expect_for_job,
         "task_type": task_type or "",
+        "task_type_explicit": int(bool(task_type if task_type_explicit is None else task_type_explicit)),
+        "purpose": _job_purpose(
+            resolved_agent_role, task_type,
+            explicit=bool(task_type if task_type_explicit is None else task_type_explicit),
+        ),
         "agent_id": agent_id or "",
         "resolved_agent_role": resolved_agent_role or "",
         "instruction_file": instruction_file or "",
@@ -3714,6 +4379,10 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         "charter_role": resolved_agent_role or "",
         "charter_revision": _pkg("resolve_role_charter")(role=resolved_agent_role)[2] if (_pkg("resolve_role_charter") and resolved_agent_role) else None,
     }
+    if routing_fallback:
+        job["requested_harness"] = routing_fallback.get("requested_harness")
+        job["actual_harness"] = agent
+        job["fallback_reason"] = routing_fallback.get("fallback_reason")
 
     load_jobs = _pkg("_load_jobs")
     save_jobs = _pkg("_save_jobs")
@@ -3743,10 +4412,12 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             _ensure_daemon_job_columns(dconn, {
                 "requires_gh_write": "INTEGER NOT NULL DEFAULT 0",
                 "gh_write_target": "TEXT",
+                "cross_branch_pr": "TEXT",
                 "gh_write_verified": "TEXT",
                 "gh_write_author": "TEXT",
                 "gh_write_expect": "TEXT DEFAULT 'closed'",
                 "gh_write_evidence": "TEXT",
+                "gh_write_verification_attempts": "INTEGER NOT NULL DEFAULT 0",
             })
             _ensure_daemon_job_columns(dconn, {
                 "harness": "TEXT",
@@ -3755,6 +4426,12 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 "impact_score": "INTEGER DEFAULT 0",
                 "requested_model": "TEXT",
                 "resolved_model": "TEXT",
+                "requested_harness": "TEXT",
+                "actual_harness": "TEXT",
+                "fallback_reason": "TEXT",
+                "task_type": "TEXT",
+                "task_type_explicit": "INTEGER",
+                "purpose": "TEXT",
             })
             _ensure_daemon_job_columns(dconn, {
                 "worktree_path": "TEXT",
@@ -3775,8 +4452,12 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                     "context_mode=?, context_bytes=?, "
                     "session_id=COALESCE(session_id, ?), "
                     "agent_id=COALESCE(agent_id, ?), "
+                    "gh_write_target=COALESCE(?, gh_write_target), "
+                    "cross_branch_pr=COALESCE(?, cross_branch_pr), "
                     "gh_write_author=COALESCE(gh_write_author, ?), "
-                    "gh_write_expect=COALESCE(gh_write_expect, ?) WHERE job_id=?",
+                    "gh_write_expect=COALESCE(gh_write_expect, ?), "
+                    "requested_harness=?, actual_harness=?, fallback_reason=?, task_type=?, task_type_explicit=?, purpose=? "
+                    "WHERE job_id=?",
                     (
                         proc.pid,
                         job["started_at"],
@@ -3798,8 +4479,16 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                         context_bytes,
                         session_id,
                         agent_id,
+                        gh_write_target_value,
+                        cross_branch_pr_value,
                         gh_write_author_value,
                         gh_write_expect_for_job,
+                        job.get("requested_harness"),
+                        job.get("actual_harness"),
+                        job.get("fallback_reason"),
+                        job.get("task_type"),
+                        job.get("task_type_explicit"),
+                        job.get("purpose"),
                         job_id,
                     ),
                 )
@@ -3810,8 +4499,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                     "(job_id, agent, harness, role, task, story_id, status, priority, depends_on, pid, pid_identity, "
                     "enqueued_at, started_at, log_path, worktree_path, worktree_branch, dispatch_context, context_mode, context_bytes, session_id, "
                     "agent_id, requires_gh_write, gh_write_target, gh_write_author, gh_write_expect, "
-                    "model_tier, impact_score, requested_model, resolved_model) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "model_tier, impact_score, requested_model, resolved_model, "
+                    "requested_harness, actual_harness, fallback_reason, task_type, task_type_explicit, purpose) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         job_id,
                         agent,
@@ -3842,9 +4532,36 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                         model_routing["impact_score"],
                         model_routing["requested_model"],
                         model_routing["resolved_model"],
+                        job.get("requested_harness"),
+                        job.get("actual_harness"),
+                        job.get("fallback_reason"),
+                        job.get("task_type"),
+                        job.get("task_type_explicit"),
+                        job.get("purpose"),
                     ),
                 )
+                if cross_branch_pr_value:
+                    dconn.execute(
+                        "UPDATE daemon_jobs SET cross_branch_pr=? WHERE job_id=?",
+                        (cross_branch_pr_value, job_id),
+                    )
+            if container_failed:
+                dconn.execute(
+                    "UPDATE daemon_jobs SET status=?, exit_code=?, completed_at=? WHERE job_id=?",
+                    ("failed", startup_exit, job["ended_at"], job_id),
+                )
             dconn.commit()
+            # PR1: every dispatched daemon job gets an immutable effect
+            # contract.  Legacy/test ledgers without the new tables remain
+            # compatible; normal state DBs are migrated before this point.
+            try:
+                from synlynk.job_truth import ensure_effect_contract
+                ensure_effect_contract(dconn, job)
+                dconn.commit()
+            except (sqlite3.OperationalError, ValueError):
+                # Contract backfill is retried by the migration/reconciler;
+                # it must not turn a launch failure into a false terminal job.
+                dconn.rollback()
     finally:
         if owns_dconn and dconn is not None:
             try:
@@ -4039,4 +4756,5 @@ def exec_command(cmd_args: list, force: bool = False) -> int:
             if set_state:
                 set_state("watching" if daemon._is_running() else "stopped")
 
-    return exit_code
+    from synlynk.quota_capture import note_exec_return
+    return note_exec_return(cmd_args, exit_code)

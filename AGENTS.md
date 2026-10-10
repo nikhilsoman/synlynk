@@ -14,7 +14,9 @@
 ## Domain Ownership
 | Domain | Owned by this agent | Notes |
 |:---|:---|:---|
-| TODO: fill domains for this agent | | |
+| CLI Plumbing & Core Subsystems | synlynk/cli.py, synlynk/dispatch.py, core engine | |
+| Refactoring & Architecture | typing, modular packaging, optimizations | |
+| Testing & Verification Contracts | Pytest suite, Invariant 1 verifications, test fixtures | |
 
 ## Shared synlynk Protocol
 
@@ -22,7 +24,7 @@ Load `AI_INSTRUCTIONS.md` for the full shared synlynk protocol, including the se
 
 <!-- synlynk:end -->
 
-<!-- synlynk:harness v2.1.275 verified:2026-09-23T18:58:15Z -->
+<!-- synlynk:harness v0.155.1 verified:2026-10-02T02:52:46Z -->
 # Harness Instructions (synlynk-managed — do not edit)
 
 ## PR Review Discipline
@@ -92,7 +94,6 @@ This table is generated from `.synlynk/config.json` so it tracks the repo's own 
 - Invalid (do not use): --dangerously-bypass-approvals-and-sandbox --dangerously-skip-permissions --print --approval-policy
 ## Network Dependencies
 - None required
-
 ## Cost Visibility
 1. Log estimated_cost in the job context header before dispatch.
 2. Check `synlynk status` for current burn rate.
@@ -105,5 +106,4 @@ This table is generated from `.synlynk/config.json` so it tracks the repo's own 
 3. Co-Authored-By trailer is required: Claude (`Co-Authored-By: Claude Sonnet <noreply@anthropic.com>`), Agy (`Co-Authored-By: Agy (Gemini) <noreply@antigravity.dev>`), Codex (`Co-Authored-By: Codex <noreply@openai.com>`), Grok (`Co-Authored-By: Grok <noreply@x.ai>`).
 4. Use worktree per feature with `git worktree add`.
 5. Run `git branch --show-current` before committing to verify branch.
-
 <!-- /synlynk:harness -->

@@ -1,22 +1,24 @@
 <p align="center">
-  <img src="docs/img/logo/lockup.svg" alt="synlynk — keep your AI tools in sync" height="80">
+  <img src="docs/img/logo/lockup.svg" alt="synlynk — neutral control plane for coding tasks" height="80">
 </p>
 
-<p align="center"><strong>Keep your AI tools in sync with your project.</strong></p>
+<p align="center"><strong>Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result.</strong></p>
 <p align="center"><a href="https://synlynk.com">synlynk.com</a></p>
 
 <p align="center">
-  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/tests-3213%20collected-brightgreen" alt="Tests"></a>
-  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/version-0.22.0-blue" alt="Version"></a>
+  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/tests-4006%20collected-brightgreen" alt="Tests"></a>
+  <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/version-0.25.0-blue" alt="Version"></a>
   <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/license-MIT-green" alt="License"></a>
   <a href="https://github.com/nikhilsoman/synlynk"><img src="https://img.shields.io/badge/python-3.9%2B-blue" alt="Python"></a>
 </p>
 
-synlynk is a Python CLI that turns your terminal into a hybrid workgroup — one human, multiple AI harnesses, shared project state. It injects scoped project context into every dispatch, routes tasks to the best available harness using a live capability ledger, and tracks costs and hallucination loops. A shared `project-docs/` directory keeps every tool in sync: Claude Code, Codex, and AGY all read the same context, decisions, and progress.
+Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result. The Python CLI injects scoped project context into every dispatch, uses empirical harness allocation only after a harness has at least five completed, merged jobs for the relevant task type, and follows the documented interim policy until then. See the [empirical capability policy](docs/blog/244-chore-empirical-capability-policy.md) and [routing policy](.synlynk/policy.json). Synlynk also tracks costs and hallucination loops. A shared `project-docs/` directory keeps every tool in sync: Claude Code, Codex, and AGY all read the same context, decisions, and progress.
 
-**v0.22.0:** Frontier QA acceptance and multi-node soak testbed, cross-workspace Vizor background daemon, defensive worktree sandbox migration resilience, and concurrent schema state isolation, with 3213 tests collected.
+**v0.25.0:** Frontier QA acceptance and multi-node soak testbed, cross-workspace Vizor background daemon, defensive worktree sandbox migration resilience, and concurrent schema state isolation, with 4006 tests collected.
 
 ## Documentation
+
+Start with the [documentation hub](docs/README.md), the [10-minute quickstart](docs/quickstart.md), or a [task-oriented how-to](docs/how-to/README.md). The complete [command reference](docs/reference/commands.md) is generated from `COMMAND_TAXONOMY`.
 
 | | | |
 |:---:|:---:|:---:|
@@ -119,6 +121,9 @@ Commands are grouped by where you'll reach for them in a typical project lifecyc
 - `synlynk home`
 - `synlynk init`
 - `synlynk start`
+- `synlynk quickstart`
+- `synlynk brainstorm`
+- `synlynk brief`
 - `synlynk scan`
 - `synlynk join`
 - `synlynk governs`
@@ -128,5 +133,4 @@ Commands are grouped by where you'll reach for them in a typical project lifecyc
 
 Full command reference: [docs/reference/commands.md](docs/reference/commands.md)
 
-<!-- commands:end -->
 <!-- commands:end -->

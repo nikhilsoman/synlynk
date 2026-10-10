@@ -230,19 +230,9 @@ def cmd_launch_ftue(dry_run: bool = False, list_mode: bool = False) -> None:
             print(f"\n  {_YELLOW}⚠ Dispatch failed: {exc}{_RESET}\n")
         return
 
-_WIZ_SYNAPTIC_BLURB = (
-    "In the brain, a synaptic link is the tiny gap where one neuron passes\n"
-    "  its signal to the next. Alone, neurons are just cells. Connected, they\n"
-    "  produce thought. Your AI tools are the same — powerful in isolation,\n"
-    "  transformative when they share a signal. synlynk is the gap that makes\n"
-    "  them think together."
-)
-
 _WIZ_PRODUCT_BLURB = (
-    "You already have great AI tools. The problem is they don't know about\n"
-    "  each other — or your project. synlynk fixes that: it injects shared\n"
-    "  context before every dispatch, routes tasks to the right agent, and\n"
-    "  keeps score on what's working. Your fleet, finally coordinated."
+    "Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result.\n"
+    "  It injects shared context before every dispatch and keeps evidence on what's working."
 )
 
 def _wiz_clear() -> None:
@@ -583,13 +573,12 @@ def _wiz_prompt(hint: str, color: str = None) -> None:
     print(f"\n  {c}›{_RESET} {_DIM}{hint}{_RESET}")
 
 def _wiz_screen_landing() -> None:
-    """Landing screen — brand intro + synaptic link explainer. Waits for Enter."""
+    """Landing screen — product introduction. Waits for Enter."""
     _wiz_clear()
     print(f"\n  {_BOLD}{_CYAN}syn{_RESET}{_CYAN}l{_RESET}{_DIM}y{_RESET}"
-          f"{_CYAN}n{_RESET}k  {_DIM}·  synaptic link for AI development{_RESET}\n")
+          f"{_CYAN}n{_RESET}k  {_DIM}·  neutral control plane for coding tasks{_RESET}\n")
     print(f"  {_DIM}{'─' * 52}{_RESET}")
-    print(f"\n  {_BOLD}What is a synaptic link?{_RESET}")
-    print(f"  {_DIM}{_WIZ_SYNAPTIC_BLURB}{_RESET}\n")
+    print(f"\n  {_BOLD}What is Synlynk?{_RESET}")
     print(f"  {_WIZ_PRODUCT_BLURB}\n")
     print(f"  {_DIM}{'─' * 52}{_RESET}")
     print(f"\n  {_GREEN}✦ One brain{_RESET}  {_DIM}Every agent works from the same project memory.{_RESET}")

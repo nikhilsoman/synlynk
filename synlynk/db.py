@@ -6,10 +6,12 @@ import re
 import shutil
 import sqlite3
 import subprocess
+import sys
 import time
 from datetime import datetime, timezone
 
 from synlynk.hud import CYCLES
+from synlynk.migrations.runner import run_pending_migrations
 from synlynk.taxonomy_standards import _taxonomy_label
 from synlynk.merge_class import is_docs_only_change
 
@@ -61,6 +63,363 @@ def _apply_review_cycle_multiplier(conn, pr_number, changes_requested_count):
 
     return apply_multiplier(conn, pr_number, changes_requested_count)
 
+
+def _cross_harness_review_required() -> bool:
+    """Return the repository merge-policy setting for cross-harness review."""
+    try:
+        with open(os.path.join(os.getcwd(), ".synlynk", "policy.json"), encoding="utf-8") as fh:
+            policy = json.load(fh)
+        return bool(policy.get("overrides", {}).get("merge_authority", {}).get(
+            "cross_harness_review_required", False
+        ))
+    except (OSError, TypeError, ValueError):
+        return False
+
+
+def _job_execution_identity(conn, job_id: str) -> tuple[str | None, str | None]:
+    """Read the effective harness/model, preferring the cost ledger evidence."""
+    row = conn.execute(
+        """SELECT COALESCE(NULLIF(ce.harness, ''), NULLIF(dj.harness, ''), NULLIF(ce.agent, ''), NULLIF(dj.agent, '')),
+                  COALESCE(NULLIF(ce.model, ''), NULLIF(dj.resolved_model, ''), NULLIF(dj.requested_model, ''))
+             FROM cost_entries ce
+             LEFT JOIN daemon_jobs dj ON dj.job_id = ce.job_id
+            WHERE ce.job_id=?
+            ORDER BY ce.id DESC LIMIT 1""",
+        (job_id,),
+    ).fetchone()
+    if row:
+        return row[0], row[1]
+
+    # A job can have completed successfully while its cost ledger row was lost
+    # (for example, when terminal status was a false negative).  daemon_jobs is
+    # still authoritative for the execution identity in that case.
+    row = conn.execute(
+        """SELECT COALESCE(NULLIF(harness, ''), NULLIF(agent, '')),
+                         COALESCE(NULLIF(resolved_model, ''), NULLIF(requested_model, ''))
+             FROM daemon_jobs WHERE job_id=?""",
+        (job_id,),
+    ).fetchone()
+    return (row[0], row[1]) if row else (None, None)
+
+
+def _job_has_implementation_purpose(conn, job_id: str | None) -> bool:
+    """Accept typed dispatch purpose or one compatible legacy attestation."""
+    if not job_id:
+        return False
+    row = conn.execute(
+        "SELECT purpose FROM daemon_jobs WHERE job_id=?", (job_id,)
+    ).fetchone()
+    if not row:
+        return False
+    attestation_exists = conn.execute(
+        "SELECT 1 FROM job_provenance_attestations WHERE job_id=? LIMIT 1", (job_id,)
+    ).fetchone() is not None
+    if row[0] == "implementation":
+        return not attestation_exists
+    if row[0] is not None:
+        return False
+    from synlynk.provenance import get_valid_job_provenance_attestation
+    attestation = get_valid_job_provenance_attestation(conn, job_id)
+    return bool(attestation and attestation["purpose"] == "implementation")
+
+
+def _job_provenance_source(conn, job_id: str) -> str:
+    from synlynk.provenance import get_valid_job_provenance_attestation
+    return "human attestation" if get_valid_job_provenance_attestation(conn, job_id) else "dispatch metadata"
+
+
+def _pr_head_branch(pr_number: int) -> str | None:
+    """Read a PR head branch without making the gate depend on GitHub success."""
+    try:
+        result = subprocess.run(
+            ["gh", "pr", "view", str(int(pr_number)), "--json", "headRefName", "--jq", ".headRefName"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except (OSError, ValueError):
+        return None
+    if result.returncode != 0:
+        return None
+    branch = (result.stdout or "").strip()
+    return branch or None
+
+
+def _implementation_job_from_branch(conn, pr_number: int) -> str | None:
+    """Resolve dispatch provenance encoded by a PR head branch.
+
+    Dispatch worktrees use ``dispatch/<harness>/job-<id>`` branches.  Require
+    both the encoded harness and an existing daemon_jobs row so this fallback
+    cannot turn an arbitrary branch name into implementation provenance.
+    """
+    branch = _pr_head_branch(pr_number)
+    if not branch:
+        return None
+    match = re.fullmatch(r"dispatch/([^/]+)/((?:job-)[^/]+)", branch)
+    if not match:
+        return None
+    harness, job_id = match.groups()
+    row = conn.execute(
+        """SELECT job_id, lower(COALESCE(NULLIF(harness, ''), agent, ''))
+             FROM daemon_jobs WHERE job_id=? LIMIT 1""",
+        (job_id,),
+    ).fetchone()
+    if row and row[1] == harness.lower() and _job_has_implementation_purpose(conn, row[0]):
+        return row[0]
+    return None
+
+
+# Native reviewer cost_entries must be tagged with a review role so a
+# reviewer stub cannot be mistaken for implementer identity (gh:#2095).
+_NATIVE_REVIEW_ROLES = frozenset({"qa"})
+
+
+def _native_cost_entry_identity(
+    conn, pr_number: int, *, reviewer: bool
+) -> tuple[str | None, str | None]:
+    """Resolve native-session harness/model from role-tagged cost_entries.
+
+    Reviewer rows require ``agent_role`` in ``_NATIVE_REVIEW_ROLES``. Implementer
+    rows are every other native PR cost entry, including untagged historical
+    implementer records. Ambiguous (2+) matches fail closed.
+    """
+    roles = tuple(sorted(_NATIVE_REVIEW_ROLES))
+    placeholders = ",".join("?" for _ in roles)
+    if reviewer:
+        role_sql = f"AND lower(COALESCE(agent_role, '')) IN ({placeholders})"
+    else:
+        role_sql = f"AND lower(COALESCE(agent_role, '')) NOT IN ({placeholders})"
+    rows = conn.execute(
+        f"""SELECT COALESCE(NULLIF(harness, ''), NULLIF(agent, '')),
+                         NULLIF(model, '')
+             FROM cost_entries
+            WHERE pr_number=?
+              AND job_id IS NULL
+              {role_sql}
+            ORDER BY id DESC LIMIT 2""",
+        (pr_number, *roles),
+    ).fetchall()
+    return (rows[0][0], rows[0][1]) if len(rows) == 1 else (None, None)
+
+
+def _implementation_identity_from_native_cost_entry(
+    conn, pr_number: int
+) -> tuple[str | None, str | None]:
+    """Resolve implementation identity recorded by a native session."""
+    return _native_cost_entry_identity(conn, pr_number, reviewer=False)
+
+
+def _review_identity_from_native_cost_entry(
+    conn, pr_number: int
+) -> tuple[str | None, str | None]:
+    """Resolve reviewer identity recorded by a native session."""
+    return _native_cost_entry_identity(conn, pr_number, reviewer=True)
+
+
+def _review_job_for_pr(conn, pr_number: int):
+    """Return the unique typed review job whose exact effect target is this PR."""
+    target = f"pr:{int(pr_number)}"
+    rows = conn.execute(
+        """SELECT job_id, gh_write_author, started_at, completed_at
+             FROM daemon_jobs
+            WHERE purpose='review' AND gh_write_target=?
+              AND gh_write_expect='review_posted'
+            ORDER BY job_id""", (target,)
+    ).fetchall()
+    if not rows:
+        return None
+    try:
+        result = subprocess.run(
+            ["gh", "pr", "view", str(int(pr_number)), "--json", "reviews"],
+            capture_output=True, text=True, check=False,
+        )
+        reviews = json.loads(result.stdout).get("reviews", []) if result.returncode == 0 else []
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return None
+    from synlynk.gh_verify import _gh_logins_match, _parse_iso8601
+    matching_jobs = []
+    for job_id, expected_actor, started_at, completed_at in rows:
+        if not expected_actor or not started_at:
+            continue
+        started = _parse_iso8601(started_at, naive_as="local")
+        completed = _parse_iso8601(completed_at, naive_as="local") if completed_at else None
+        if not started:
+            continue
+        for review in reviews:
+            if not isinstance(review, dict):
+                continue
+            submitted_at = review.get("submittedAt")
+            submitted = _parse_iso8601(submitted_at) if submitted_at else None
+            if (
+                _gh_logins_match((review.get("author") or {}).get("login"), expected_actor)
+                and submitted
+                and submitted >= started
+                and (completed is None or submitted <= completed)
+            ):
+                matching_jobs.append((job_id, expected_actor))
+                break
+    return matching_jobs[0] if len(matching_jobs) == 1 else None
+
+
+def _emit_missing_provenance_hint(pr_number: int) -> None:
+    """Nudge interactive callers to record the cost/job link before retrying."""
+    print(
+        "Hint: interactive/native sessions should record provenance with "
+        "synlynk cost log --pr <pr-number> --harness <harness> before re-running "
+        f"pr check for PR #{pr_number}.",
+        file=sys.stderr,
+    )
+
+
+def _emit_missing_review_provenance_hint(pr_number: int) -> None:
+    """Nudge native reviewers to record a role-tagged cost row before retrying."""
+    print(
+        "Hint: native/interactive reviewers should record provenance with "
+        "synlynk cost log --pr <pr-number> --harness <harness> --role qa "
+        "--model <model> before re-running "
+        f"pr check for PR #{pr_number}.",
+        file=sys.stderr,
+    )
+
+
+def _pr_closing_issue_numbers(pr_number: int) -> list[int]:
+    """Read GitHub's closing-issue references for a PR, or return none on failure."""
+    try:
+        result = subprocess.run(
+            [
+                "gh", "pr", "view", str(int(pr_number)),
+                "--json", "closingIssuesReferences",
+                "--jq", "[.closingIssuesReferences[].number]",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except (OSError, ValueError):
+        return []
+    if result.returncode != 0:
+        return []
+    try:
+        numbers = json.loads(result.stdout or "[]")
+    except (TypeError, ValueError):
+        return []
+    if not isinstance(numbers, list):
+        return []
+    return sorted({int(number) for number in numbers if str(number).isdigit()})
+
+
+def _implementation_job_from_linked_issues(conn, pr_number: int) -> tuple[str | None, str | None]:
+    """Find implementation provenance through a PR's linked story issue.
+
+    Jobs created from a story can predate the PR number, leaving the optional
+    capability-rating PR association unset. GitHub's closing-issue relation is
+    the durable link between that PR and its story. Ambiguous stories fail
+    closed; harness/model identity still comes from the job cost ledger.
+    """
+    issue_numbers = _pr_closing_issue_numbers(pr_number)
+    if not issue_numbers:
+        return None, None
+
+    clauses = []
+    params = []
+    for number in issue_numbers:
+        clauses.append("gh_issue IN (?, ?) OR story_id=?")
+        params.extend((str(number), f"#{number}", f"story-issue-{number}"))
+    stories = conn.execute(
+        "SELECT DISTINCT story_id FROM stories WHERE " + " OR ".join(f"({c})" for c in clauses),
+        params,
+    ).fetchall()
+    story_ids = [row[0] for row in stories]
+    if len(story_ids) != 1:
+        return None, None
+
+    rows = conn.execute(
+        """SELECT DISTINCT ce.job_id, ce.story_id
+            FROM cost_entries ce
+             JOIN daemon_jobs dj ON dj.job_id=ce.job_id
+            WHERE ce.story_id=?
+            ORDER BY ce.id DESC""",
+        (story_ids[0],),
+    ).fetchall()
+    rows = [row for row in rows if _job_has_implementation_purpose(conn, row[0])]
+    return (rows[0][0], rows[0][1]) if len(rows) == 1 else (None, None)
+
+
+def _cross_harness_review_verdict(conn, pr_number: int) -> tuple[bool, str]:
+    """Verify that the implementation and review jobs use different harness+models."""
+    if not _cross_harness_review_required():
+        return True, "cross-harness review policy disabled"
+
+    implementation = conn.execute(
+        """SELECT DISTINCT ce.job_id
+             FROM capability_ratings cr
+             JOIN cost_entries ce ON ce.story_id=cr.story_id
+            LEFT JOIN daemon_jobs dj ON dj.job_id=ce.job_id
+            WHERE cr.pr_number=?
+            ORDER BY ce.id DESC""",
+        (pr_number,),
+    ).fetchall()
+    implementation = [row for row in implementation if _job_has_implementation_purpose(conn, row[0])]
+    implementation_job_id = implementation[0][0] if len(implementation) == 1 else None
+    if len(implementation) > 1:
+        return False, f"ambiguous implementation job provenance for PR #{pr_number}"
+    if not implementation_job_id:
+        exact = conn.execute(
+            """SELECT DISTINCT ce.job_id FROM cost_entries ce JOIN daemon_jobs dj ON dj.job_id=ce.job_id
+                WHERE ce.pr_number=? ORDER BY ce.id""",
+            (pr_number,),
+        ).fetchall()
+        exact = [row for row in exact if _job_has_implementation_purpose(conn, row[0])]
+        if len(exact) == 1:
+            implementation_job_id = exact[0][0]
+        elif len(exact) > 1:
+            return False, f"ambiguous implementation job provenance for PR #{pr_number}"
+    if not implementation_job_id:
+        implementation_job_id, _ = _implementation_job_from_linked_issues(conn, pr_number)
+    if not implementation_job_id:
+        implementation_job_id = _implementation_job_from_branch(conn, pr_number)
+
+    implementing_identity = (
+        _job_execution_identity(conn, implementation_job_id)
+        if implementation_job_id
+        else _implementation_identity_from_native_cost_entry(conn, pr_number)
+    )
+
+    review = _review_job_for_pr(conn, pr_number)
+    reviewing_identity = (
+        _job_execution_identity(conn, review[0])
+        if review
+        else _review_identity_from_native_cost_entry(conn, pr_number)
+    )
+
+    if not implementation_job_id and not any(implementing_identity):
+        _emit_missing_provenance_hint(pr_number)
+        return False, f"no implementing job provenance found for PR #{pr_number}"
+    if not review and not any(reviewing_identity):
+        _emit_missing_review_provenance_hint(pr_number)
+        return False, f"no reviewing job provenance found for PR #{pr_number}"
+
+    reviewing_label = review[0] if review else "native cost record"
+    if not all(implementing_identity + reviewing_identity):
+        return False, (
+            f"incomplete harness/model provenance (implementing={implementation_job_id}, "
+            f"reviewing={reviewing_label})"
+        )
+    if implementing_identity == reviewing_identity:
+        return False, (
+            f"implementing and reviewing jobs use the same harness+model "
+            f"({implementing_identity[0]} / {implementing_identity[1]})"
+        )
+    source = (
+        _job_provenance_source(conn, implementation_job_id)
+        if implementation_job_id else "native cost record"
+    )
+    review_source = "dispatch metadata" if review else "native cost record"
+    return True, (
+        f"implementation {implementing_identity[0]} / {implementing_identity[1]} ({source}) "
+        f"reviewed by {reviewing_identity[0]} / {reviewing_identity[1]} ({review_source})"
+    )
+
 _ORG_DOMAINS = (
     "personalization",
     "monetization",
@@ -92,13 +451,31 @@ _ORG_DOMAIN_DRIFT_MAP = {
     "marketing": "growth",
 }
 
-_PROJECT_DOC_KEEP_N = 50
+# gh:#1995 root cause: at 50, _PROJECT_DOC_KEEP_N was far smaller than the
+# rate cost_entries grows, so nearly every regen truncated the git-tracked
+# costs.md to its last 50 rows -- the live window slid on almost every PR
+# touching cost logging, indistinguishable in a PR diff from data loss.
+# state.db never actually loses rows; _rotate_project_doc()'s archive file
+# (written to the shared, persistent .synlynk/project-docs/archive/ -- NOT
+# worktree-scoped, since _synlynk_project_docs_dir() resolves through
+# _project_root()'s `git rev-parse --git-common-dir`, identical across every
+# linked worktree) is gitignored by this repo's own .gitignore, by design,
+# not by accident. Raised from 50 to 500 to make window-slide churn rare in
+# practice (see _rotate_project_doc below, which also best-effort `git add`s
+# freshly created archive and cursor files -- a no-op here since the paths are
+# gitignored, but it closes the real worktree-loss case for a non-migrated
+# synlynk-managed repo where the archive path is the tracked, worktree-local
+# one). The archive high-water mark below also prevents repeated regens from
+# appending the full overflow slice again.
+_PROJECT_DOC_KEEP_N = 500
 
 # Bump when a new schema migration is added.  This is deliberately kept in
 # SQLite's small built-in metadata slot so checking it does not touch the DB
 # file or create a backup on already-migrated connections.
-# Version 12 adds workspace tenancy and alias/resolution metadata for GOVERNS.
-_DB_MIGRATION_VERSION = 12
+# Version 13 adds the append-only job truth ledger and immutable effect contracts.
+# Version 14 adds structured lifecycle telemetry ingestion; version 15 adds
+# the legacy-vs-oracle shadow projection used by the status-truth pilot.
+_DB_MIGRATION_VERSION = 15
 
 _GENERATORS_BY_FILENAME = {
     "todo.md": "_generate_todo_md",
@@ -622,8 +999,9 @@ def _migrate_governs_tenancy(conn: sqlite3.Connection) -> None:
     )
 
 
-def _migrate_db(conn: sqlite3.Connection) -> None:
-    """Idempotent schema migrations. Adds tables/views if absent."""
+def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
+    """Idempotent schema migrations for versions 1-15. Adds tables/views if
+    absent. Frozen in place — see synlynk/migrations/ for version 16+."""
     migration_version = conn.execute("PRAGMA user_version").fetchone()[0]
     if migration_version < _DB_MIGRATION_VERSION:
         _snapshot_before_migration(conn)
@@ -631,6 +1009,19 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
         from synlynk import HARNESS_CAPABILITY_BASELINES, _seed_verb_map
         from synlynk.db_schema import _DB_SCHEMA, _DB_SCORES_VIEW
         conn.executescript(_DB_SCHEMA)
+        # Existing daemon rows deliberately receive an explicit unknown contract.
+        # Migration must never infer a successful effect from legacy status text.
+        daemon_job_columns = {
+            row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)").fetchall()
+        }
+        legacy_started_at = "started_at" if "started_at" in daemon_job_columns else "NULL"
+        conn.execute(f"""INSERT OR IGNORE INTO job_effect_contract
+            (contract_id, job_id, kind, target, expect, local_change_policy,
+             receipt_policy, verification_deadline_at, contract_version, started_at,
+             expected_actor, required_predicates_json)
+            SELECT 'legacy-' || job_id, job_id, 'unknown_contract', NULL, 'unknown',
+                   'optional', 'optional', NULL, 1, {legacy_started_at}, NULL, '{{}}'
+            FROM daemon_jobs""")
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS relay_events (
                 event_id TEXT PRIMARY KEY,
@@ -883,6 +1274,11 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
                 conn.execute("ALTER TABLE daemon_jobs ADD COLUMN gh_write_target TEXT")
             except sqlite3.OperationalError:
                 pass
+        if "cross_branch_pr" not in daemon_job_cols:
+            try:
+                conn.execute("ALTER TABLE daemon_jobs ADD COLUMN cross_branch_pr TEXT")
+            except sqlite3.OperationalError:
+                pass
         if "gh_write_verified" not in daemon_job_cols:
             try:
                 conn.execute("ALTER TABLE daemon_jobs ADD COLUMN gh_write_verified TEXT")
@@ -901,6 +1297,22 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
         if "gh_write_evidence" not in daemon_job_cols:
             try:
                 conn.execute("ALTER TABLE daemon_jobs ADD COLUMN gh_write_evidence TEXT")
+            except sqlite3.OperationalError:
+                pass
+        if "gh_write_verification_attempts" not in daemon_job_cols:
+            try:
+                conn.execute(
+                    "ALTER TABLE daemon_jobs ADD COLUMN "
+                    "gh_write_verification_attempts INTEGER NOT NULL DEFAULT 0"
+                )
+            except sqlite3.OperationalError:
+                pass
+        if "unpushed_branch_check_attempts" not in daemon_job_cols:
+            try:
+                conn.execute(
+                    "ALTER TABLE daemon_jobs ADD COLUMN "
+                    "unpushed_branch_check_attempts INTEGER NOT NULL DEFAULT 0"
+                )
             except sqlite3.OperationalError:
                 pass
         if "harness" not in daemon_job_cols:
@@ -948,6 +1360,12 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
                 conn.execute("ALTER TABLE daemon_jobs ADD COLUMN cost_missing_reason TEXT")
             except sqlite3.OperationalError:
                 pass
+        for _routing_col in ("requested_harness", "actual_harness", "fallback_reason"):
+            if _routing_col not in daemon_job_cols:
+                try:
+                    conn.execute(f"ALTER TABLE daemon_jobs ADD COLUMN {_routing_col} TEXT")
+                except sqlite3.OperationalError:
+                    pass
         try:
             conn.execute("UPDATE daemon_jobs SET harness = agent WHERE (harness IS NULL OR harness = '') AND agent IS NOT NULL")
         except sqlite3.OperationalError:
@@ -1057,9 +1475,15 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
                 cost_usd REAL NOT NULL,
                 verified_by TEXT NOT NULL,
                 run_at TEXT NOT NULL,
-                FOREIGN KEY (task_id) REFERENCES capability_calibration_tasks(task_id)
+            FOREIGN KEY (task_id) REFERENCES capability_calibration_tasks(task_id)
             );
         """)
+        calib_result_cols = {row[1] for row in conn.execute("PRAGMA table_info(capability_calibration_results)")}
+        if "quality_verified" not in calib_result_cols:
+            try:
+                conn.execute("ALTER TABLE capability_calibration_results ADD COLUMN quality_verified INTEGER")
+            except sqlite3.OperationalError:
+                pass
         from synlynk.capability_sweep import _seed_calibration_tasks
         _seed_calibration_tasks(conn)
         conn.executescript("""
@@ -1234,10 +1658,13 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
                 cost_source       TEXT NOT NULL,
                 estimate_basis    TEXT,
                 job_id            TEXT,
+                decision_revision INTEGER,
                 recorded_at       TEXT DEFAULT (datetime('now')),
                 dispatch_context  TEXT,
                 context_mode      TEXT,
-                session_id        TEXT REFERENCES sessions(session_id)
+                turn_usage_json   TEXT,
+                session_id        TEXT REFERENCES sessions(session_id),
+                pr_number         INTEGER
             );
             CREATE TABLE IF NOT EXISTS remediation_actions (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1334,6 +1761,11 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
                 conn.execute("ALTER TABLE capability_ratings ADD COLUMN pr_number INTEGER")
             except sqlite3.OperationalError:
                 pass
+        if "quality_verified" not in rating_cols:
+            try:
+                conn.execute("ALTER TABLE capability_ratings ADD COLUMN quality_verified INTEGER")
+            except sqlite3.OperationalError:
+                pass
         cost_cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}
         for col, typedef in [
             ("story_id", "TEXT REFERENCES stories(story_id)"),
@@ -1406,9 +1838,19 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
                 conn.execute("ALTER TABLE cost_entries ADD COLUMN job_id TEXT")
             except sqlite3.OperationalError:
                 pass
+        if "decision_revision" not in cost_cols:
+            try:
+                conn.execute("ALTER TABLE cost_entries ADD COLUMN decision_revision INTEGER")
+            except sqlite3.OperationalError:
+                pass
         if "dispatch_context" not in cost_cols:
             try:
                 conn.execute("ALTER TABLE cost_entries ADD COLUMN dispatch_context TEXT")
+            except sqlite3.OperationalError:
+                pass
+        if "pr_number" not in cost_cols:
+            try:
+                conn.execute("ALTER TABLE cost_entries ADD COLUMN pr_number INTEGER")
             except sqlite3.OperationalError:
                 pass
         if "context_mode" not in cost_cols:
@@ -1671,8 +2113,25 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
         _normalize_org_domain_drift(conn)
         conn.commit()
 
+    # Keep this repair outside the schema-version gate.  A database can have
+    # already reached the current version while a prior migration stopped
+    # before adding this column (or while the schema was bootstrapped by an
+    # older build).  In that state, the version-gated migration above is a
+    # no-op and _get_db() must still repair the missing column.
+    cost_cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}
+    if "turn_usage_json" not in cost_cols:
+        conn.execute("ALTER TABLE cost_entries ADD COLUMN turn_usage_json TEXT")
+        conn.commit()
+
     _migrate_onboarding_sessions(conn)
     conn.commit()
+
+
+def _migrate_db(conn: sqlite3.Connection) -> None:
+    """Thin entry point: legacy versions 1-15, then the versioned runner
+    for version 16+. See synlynk/migrations/runner.py."""
+    _run_legacy_migration_and_repairs(conn)
+    run_pending_migrations(conn)
 
 
 _VALID_COST_SOURCES = {
@@ -1706,8 +2165,11 @@ def _insert_cost_row(
     dispatch_context: str = None,
     context_mode: str = None,
     session_id: str = None,
+    pr_number: int = None,
     harness: str = None,
     agent_role: str = None,
+    decision_revision: int = None,
+    turn_breakdown=None,
 ) -> None:
     """Insert or update a cost_entries row through the single sanctioned path."""
     from synlynk import _get_db
@@ -1725,6 +2187,15 @@ def _insert_cost_row(
     try:
         harness_val = harness or agent
         agent_val = agent or harness
+        if decision_revision is None and job_id:
+            try:
+                row = conn.execute(
+                    "SELECT MAX(revision) FROM job_terminal_decision WHERE job_id=?",
+                    (job_id,),
+                ).fetchone()
+                decision_revision = row[0] if row else None
+            except sqlite3.Error:
+                pass
         role_val = agent_role
         if role_val is None and story_id:
             try:
@@ -1791,7 +2262,10 @@ def _insert_cost_row(
                         phase_id=?,
                         dispatch_context=COALESCE(?, dispatch_context),
                         context_mode=COALESCE(?, context_mode),
-                        session_id=COALESCE(?, session_id)
+                        session_id=COALESCE(?, session_id),
+                        pr_number=COALESCE(?, pr_number)
+                        ,decision_revision=COALESCE(?, decision_revision)
+                        ,turn_usage_json=COALESCE(?, turn_usage_json)
                     WHERE job_id=?""",
                     (
                         session_date,
@@ -1815,6 +2289,9 @@ def _insert_cost_row(
                         dispatch_context,
                         context_mode,
                         session_id,
+                        pr_number,
+                        decision_revision,
+                        json.dumps(turn_breakdown, separators=(",", ":")) if turn_breakdown else None,
                         job_id,
                     ),
                 )
@@ -1823,8 +2300,8 @@ def _insert_cost_row(
         conn.execute(
             """INSERT INTO cost_entries
                 (session_date, agent, harness, agent_role, model, input_tokens, output_tokens, cache_read_tokens,
-                 cost_source, estimate_basis, total_cost_usd, api_equivalent_usd, actual_usd, payment_mode, notes, story_id, epic_id, phase_id, job_id, dispatch_context, context_mode, session_id)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                 cost_source, estimate_basis, total_cost_usd, api_equivalent_usd, actual_usd, payment_mode, notes, story_id, epic_id, phase_id, job_id, dispatch_context, context_mode, session_id, pr_number, decision_revision, turn_usage_json)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 session_date,
                 agent_val,
@@ -1848,6 +2325,9 @@ def _insert_cost_row(
                 dispatch_context,
                 context_mode,
                 session_id,
+                pr_number,
+                decision_revision,
+                json.dumps(turn_breakdown, separators=(",", ":")) if turn_breakdown else None,
             ),
         )
         conn.commit()
@@ -2174,7 +2654,9 @@ def _migrate_dr_mirror(backup_dir: str) -> None:
     import shutil as _shutil
 
     try:
-        cfg_path = os.path.join(".synlynk", "config.json")
+        workspace_path = os.path.join(".synlynk", "workspace.json")
+        legacy_path = os.path.join(".synlynk", "config.json")
+        cfg_path = workspace_path if os.path.exists(workspace_path) else legacy_path
         if not os.path.exists(cfg_path):
             return
         with open(cfg_path) as f:
@@ -2210,7 +2692,9 @@ def cmd_migrate(dry_run: bool = False, recover: bool = False, setup_dr: bool = F
         if not os.path.isdir(path):
             print(f"  ✗ Path not found: {path}")
             return
-        cfg_path = os.path.join(project_root, ".synlynk", "config.json")
+        workspace_path = os.path.join(project_root, ".synlynk", "workspace.json")
+        legacy_path = os.path.join(project_root, ".synlynk", "config.json")
+        cfg_path = workspace_path if os.path.exists(workspace_path) else legacy_path
         cfg = {}
         if os.path.exists(cfg_path):
             with open(cfg_path) as f:
@@ -2334,7 +2818,128 @@ def cmd_migrate(dry_run: bool = False, recover: bool = False, setup_dr: bool = F
 
 def _write_generated_project_doc(filename: str, content: str) -> None:
     """Write a generated 4-doc to the migrated cache and the git-tracked docs dir."""
-    from synlynk import _docs_dir, _dr_sync, _is_migrated, _synlynk_project_docs_dir
+    from synlynk import (
+        DB_PATH,
+        _docs_dir,
+        _dr_sync,
+        _is_migrated,
+        _project_root,
+        _synlynk_project_docs_dir,
+    )
+
+    def _is_tracked(path: str) -> bool:
+        try:
+            relative = os.path.relpath(path, _project_root())
+            result = subprocess.run(
+                ["git", "ls-files", "--error-unmatch", "--", relative],
+                cwd=_project_root(),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
+            return bool(result and getattr(result, "returncode", None) == 0)
+        except Exception:
+            # Tracking is advisory; mocked or unavailable subprocess runners
+            # must not prevent generated docs from being written.
+            return False
+
+    def _split_table_row(line: str) -> list:
+        cells = []
+        current = []
+        escaped = False
+        for char in line.strip().strip("|"):
+            if char == "|" and not escaped:
+                cells.append("".join(current).strip())
+                current = []
+            else:
+                current.append(char)
+            escaped = char == "\\" and not escaped
+            if char != "\\":
+                escaped = False
+        cells.append("".join(current).strip())
+        return cells
+
+    def _reconcile_costs(existing: str, generated: str) -> str:
+        if "| Date | Agent |" not in generated:
+            return generated
+
+        def rows(text: str) -> list:
+            return [
+                line
+                for line in text.splitlines(keepends=True)
+                if line.lstrip().startswith("|")
+                and len(_split_table_row(line)) >= 9
+                and not set(_split_table_row(line)[0]) <= {"-", ":"}
+                and not line.lstrip().startswith("| Date | Agent |")
+            ]
+
+        def key(line: str):
+            cells = _split_table_row(line)
+            # Cost entries are immutable ledger rows.  Date + agent is not a
+            # unique identity: concurrent jobs can emit several rows for the
+            # same agent in the same minute.  Union the complete rendered row
+            # so none of those rows can overwrite another during regeneration.
+            return tuple(cells) if len(cells) >= 9 else None
+
+        local_rows = rows(generated)
+        disk_rows = rows(existing)
+        merged = {}
+        order = []
+        for line in disk_rows + local_rows:
+            row_key = key(line)
+            if row_key is None:
+                continue
+            if row_key not in merged:
+                order.append(row_key)
+            merged[row_key] = line
+        merged_rows = [merged[row_key] for row_key in order]
+
+        generated_lines = generated.splitlines(keepends=True)
+        header_index = next(
+            (index for index, line in enumerate(generated_lines)
+             if line.lstrip().startswith("| Date | Agent |")),
+            None,
+        )
+        if header_index is None:
+            return generated
+        start = header_index + 2
+        end = start
+        while end < len(generated_lines) and generated_lines[end].lstrip().startswith("|"):
+            end += 1
+        return "".join(generated_lines[:start] + merged_rows + generated_lines[end:])
+
+    def _reconcile_memory(existing: str, generated: str) -> str:
+        disk_sections = _parse_memory_md(existing)
+        local_sections = _parse_memory_md(generated)
+        merged = {}
+        order = []
+        for row in disk_sections + local_sections:
+            section = row["section"]
+            if section not in merged:
+                order.append(section)
+            merged[section] = row
+        header = generated.split("## ", 1)[0]
+        if not header and existing:
+            header = existing.split("## ", 1)[0]
+        body = "".join(
+            f"## {merged[section]['section']}\n\n{merged[section]['body']}\n\n"
+            for section in order
+        )
+        return header + body
+
+    def _reconcile(path: str, generated: str) -> str:
+        if filename not in {"costs.md", "memory.md"}:
+            return generated
+        if not os.path.exists(path):
+            return generated
+        try:
+            with open(path) as fh:
+                existing = fh.read()
+        except OSError:
+            return generated
+        if filename == "costs.md":
+            return _reconcile_costs(existing, generated)
+        return _reconcile_memory(existing, generated)
 
     paths = []
     if _is_migrated():
@@ -2359,8 +2964,11 @@ def _write_generated_project_doc(filename: str, content: str) -> None:
         if parent:
             os.makedirs(parent, exist_ok=True)
         try:
+            reconciled_content = _reconcile(path, content)
+            from synlynk.regen_guard import check_regen_write_guard
+            check_regen_write_guard(path, reconciled_content, source_path=DB_PATH)
             with open(path, "w") as fh:
-                fh.write(content)
+                fh.write(reconciled_content)
         except (OSError, PermissionError):
             continue
     if _is_migrated():
@@ -2402,7 +3010,19 @@ def _generate_todo_md() -> None:
 
 
 def _rotate_project_doc(file_stem: str, all_rows: list, keep_n: int = None) -> list:
-    """Rotate older generated project-doc rows into archive files."""
+    """Rotate older generated project-doc rows into archive files.
+
+    gh:#1995/#1999: the archive file this writes lives in whatever working directory
+    the caller is running from. When that's a dispatched job's ephemeral git
+    worktree, the archive is lost the moment the worktree is removed unless
+    something commits it first. We can't guarantee the calling job will do
+    that, so we best-effort `git add` the archive path(s) ourselves the moment
+    they're written -- if the calling process does go on to `git commit`
+    (even with no pathspec, which commits the full index), the archive rides
+    along. This does not fully close the gap (a job that never commits
+    anything still loses it), but it closes the common case and is strictly
+    additive: failures here never block doc generation.
+    """
     from synlynk import _docs_dir, _is_migrated, _synlynk_project_docs_dir
 
     n = keep_n if keep_n is not None else _PROJECT_DOC_KEEP_N
@@ -2419,9 +3039,32 @@ def _rotate_project_doc(file_stem: str, all_rows: list, keep_n: int = None) -> l
     period = time.strftime("%Y-H%m")
     archive_filename = f"{file_stem}-{period}.md"
     archive_path = os.path.join(archive_dir, archive_filename)
-    with open(archive_path, "a") as f:
-        for row in archived_rows:
-            f.write(str(row) + "\n")
+    cursor_path = os.path.join(archive_dir, f".{file_stem}-archive.cursor")
+
+    def row_key(row) -> str:
+        return json.dumps(row, ensure_ascii=True, default=str, separators=(",", ":"))
+
+    last_archived = None
+    if os.path.exists(cursor_path):
+        try:
+            with open(cursor_path) as f:
+                last_archived = json.load(f).get("last_archived")
+        except (OSError, ValueError, AttributeError):
+            last_archived = None
+
+    append_from = 0
+    if last_archived is not None:
+        for index, row in enumerate(archived_rows):
+            if row_key(row) == last_archived:
+                append_from = index + 1
+                break
+    rows_to_append = archived_rows[append_from:]
+    if rows_to_append:
+        with open(archive_path, "a") as f:
+            for row in rows_to_append:
+                f.write(str(row) + "\n")
+        with open(cursor_path, "w") as f:
+            json.dump({"last_archived": row_key(rows_to_append[-1])}, f)
 
     index_path = os.path.join(archive_dir, "INDEX.md")
     existing_index = ""
@@ -2433,8 +3076,19 @@ def _rotate_project_doc(file_stem: str, all_rows: list, keep_n: int = None) -> l
             if not existing_index:
                 f.write("# Archive Index\n\n")
             f.write(
-                f"- [{archive_filename}]({archive_filename}) — {file_stem} entries older than the live window\n"
+                f"- [{archive_filename}]({archive_filename}) \u2014 {file_stem} entries older than the live window\n"
             )
+
+    try:
+        subprocess.run(
+            ["git", "add", "--", archive_path, index_path, cursor_path],
+            cwd=base_dir,
+            check=False,
+            capture_output=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError):
+        pass
 
     return live_rows
 
@@ -2569,7 +3223,7 @@ def _generate_costs_md() -> None:
     """Writes costs.md as a generated view of cost_entries.
     Post-migration: writes to .synlynk/project-docs/costs.md.
     Pre-migration: writes to project-docs/costs.md."""
-    from synlynk import _docs_dir, _get_db, _is_migrated
+    from synlynk import _docs_dir, _get_db, _is_migrated, load_config
     if not _is_migrated():
         docs_dir = _docs_dir()
         if not os.path.exists(docs_dir):
@@ -2578,7 +3232,7 @@ def _generate_costs_md() -> None:
     conn = _get_db()
     cursor = conn.execute(
         "SELECT session_date, agent, model, input_tokens, output_tokens, "
-        "total_cost_usd, cost_source, story_id, notes FROM cost_entries ORDER BY id ASC"
+        "total_cost_usd, cost_source, story_id, notes, api_equivalent_usd, actual_usd, payment_mode FROM cost_entries ORDER BY id ASC"
     )
     rows = cursor.fetchall() if hasattr(cursor, "fetchall") else []
     conn.close()
@@ -2597,14 +3251,53 @@ def _generate_costs_md() -> None:
             return ""
         return str(value).replace("\r", " ").replace("\n", " ").replace("|", r"\|")
 
-    for session_date, agent, model, input_tokens, output_tokens, total_cost_usd, cost_source, story_id, notes in rows:
-        cost_str = f"${total_cost_usd:.4f}" if total_cost_usd is not None else "-"
+    for session_date, agent, model, input_tokens, output_tokens, total_cost_usd, cost_source, story_id, notes, api_equivalent_usd, actual_usd, payment_mode in rows:
+        if payment_mode == 'subscription' and actual_usd is not None:
+            api_eq = api_equivalent_usd if api_equivalent_usd is not None else 0.0
+            cost_str = f"${actual_usd:.4f} [sub] (API: ${api_eq:.4f})"
+        else:
+            cost_str = f"${total_cost_usd:.4f}" if total_cost_usd is not None else "-"
         lines.append(
             f"| {_markdown_cell(session_date)} | {_markdown_cell(agent)} | "
             f"{_markdown_cell(model) or '-'} | {input_tokens} | {output_tokens} | "
             f"{cost_str} | {_markdown_cell(cost_source)} | {_markdown_cell(story_id) or '-'} | "
             f"{_markdown_cell(notes)} |\n"
         )
+        
+    config = load_config()
+    billing = config.get("harness_billing", {})
+    conn2 = _get_db()
+    c2 = conn2.execute("SELECT agent, SUM(actual_usd), SUM(api_equivalent_usd) FROM cost_entries WHERE payment_mode='subscription' GROUP BY agent")
+    sub_data = {r[0]: {"actual": r[1] or 0.0, "api": r[2] or 0.0} for r in c2.fetchall()} if hasattr(c2, "fetchall") else {}
+    conn2.close()
+
+    sub_agents = [
+        (agent, settings)
+        for agent, settings in billing.items()
+        if isinstance(settings, dict) and settings.get("payment_mode") == "subscription"
+    ]
+    if sub_agents or sub_data:
+        lines.append("\n## Subscription Amortization & Dual-Ledger Summary\n\n")
+        total_fee = 0.0
+        total_api = 0.0
+        total_actual = 0.0
+        
+        lines.append("| Harness | Base Fee | Actual Amortized Spend | API Equivalent Value | Net Savings |\n")
+        lines.append("|---|---|---|---|---|\n")
+        
+        for agent, settings in billing.items():
+            if isinstance(settings, dict) and settings.get("payment_mode") == "subscription":
+                fee = settings.get("monthly_base_fee_usd", settings.get("subscription_fee_usd", 0.0))
+                actual = sub_data.get(agent, {}).get("actual", 0.0)
+                api = sub_data.get(agent, {}).get("api", 0.0)
+                savings = api - actual
+                total_fee += fee
+                total_actual += actual
+                total_api += api
+                lines.append(f"| {agent} | ${fee:.2f} | ${actual:.4f} | ${api:.4f} | ${savings:.4f} |\n")
+                
+        total_savings = total_api - total_actual
+        lines.append(f"| **Total** | **${total_fee:.2f}** | **${total_actual:.4f}** | **${total_api:.4f}** | **${total_savings:.4f}** |\n")
 
     _write_generated_project_doc("costs.md", "".join(lines))
 
@@ -2706,10 +3399,10 @@ def cmd_devlog_append(author: str, entry_date: str, body: str,
         _dr_sync(f"devlogs/{author}.md")
 
 
-def _write_decision_record_md(decision_id: str) -> None:
+def _write_decision_record_md(decision_id: str) -> str:
     """Regenerate the .md + .json sidecar for a decision from the decisions table.
     Writes to project-docs/decisions/ (git-tracked)."""
-    from synlynk import _docs_dir, _get_db
+    from synlynk import DB_PATH, _docs_dir, _get_db
 
     conn = _get_db()
     row = conn.execute(
@@ -2727,7 +3420,15 @@ def _write_decision_record_md(decision_id: str) -> None:
     os.makedirs(decisions_dir, exist_ok=True)
 
     slug = re.sub(r'[^a-z0-9]+', '-', topic.lower())[:40].strip('-')
-    base = os.path.join(decisions_dir, f"{date}-{slug}")
+    candidate = slug
+    suffix = 1
+    while any(
+        os.path.exists(os.path.join(decisions_dir, f"{date}-{candidate}{extension}"))
+        for extension in (".md", ".json")
+    ):
+        suffix += 1
+        candidate = f"{slug}-{suffix}"
+    base = os.path.join(decisions_dir, f"{date}-{candidate}")
 
     record = {
         "decision_id": decision_id,
@@ -2762,15 +3463,18 @@ def _write_decision_record_md(decision_id: str) -> None:
         f"## Panel Inputs\n{panel_inputs_md}\n"
         f"## Synthesis\n{synthesis}\n\n"
         f"## Decision\n{decision_text}\n\n"
-        f"> Signatures: see {date}-{slug}.json\n"
+        f"> Signatures: see {date}-{candidate}.json\n"
     )
+    from synlynk.regen_guard import check_regen_write_guard
+    check_regen_write_guard(f"{base}.md", md_content, source_path=DB_PATH)
     with open(f"{base}.md", "w") as f:
         f.write(md_content)
+    return candidate
 
 
 def cmd_decision_record(decision_id: str, topic: str, date: str, panel: list,
                          inputs: dict, synthesis: str, decision_text: str,
-                         goal_id: str = None, story_id: str = None) -> None:
+                         goal_id: str = None, story_id: str = None) -> str:
     """Insert a decision row into state.db, then write through to the flat file pair."""
     from synlynk import _dr_sync, _get_db, _is_migrated
     from synlynk.team import _sign_capability_rating
@@ -2843,11 +3547,11 @@ def cmd_decision_record(decision_id: str, topic: str, date: str, panel: list,
     except Exception:
         pass
 
-    _write_decision_record_md(decision_id)
+    record_slug = _write_decision_record_md(decision_id)
     if _is_migrated():
-        slug = re.sub(r'[^a-z0-9]+', '-', topic.lower())[:40].strip('-')
-        _dr_sync(f"decisions/{date}-{slug}.md")
-        _dr_sync(f"decisions/{date}-{slug}.json")
+        _dr_sync(f"decisions/{date}-{record_slug}.md")
+        _dr_sync(f"decisions/{date}-{record_slug}.json")
+    return record_slug
 
 def _import_todo_to_stories(docs_dir: str = None, conn=None) -> int:
     """Reads checkbox lines from todo.md and inserts missing story rows."""
@@ -3317,6 +4021,113 @@ def cmd_goal_list(kind: str = None) -> None:
         print(f"  {r[0]:<12} {g_kind:<10} {(r[1] or '')[:35]:<36} {deadline:<12}")
 
 
+def cmd_goal_update(goal_id: str, status: str = None, deadline: str = None,
+                    supersede_with: str = None) -> None:
+    """Update a goal and optionally move its open stories to another goal."""
+    from synlynk import _GREEN, _RESET, _get_db
+
+    valid_statuses = {"active", "done", "superseded"}
+    if status is not None and status not in valid_statuses:
+        raise ValueError(
+            f"Invalid goal status: {status!r}; must be one of active, done, superseded"
+        )
+    if deadline is not None:
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", deadline):
+            raise ValueError(f"Invalid deadline {deadline!r}; expected YYYY-MM-DD")
+        try:
+            datetime.strptime(deadline, "%Y-%m-%d")
+        except ValueError as exc:
+            raise ValueError(f"Invalid deadline {deadline!r}; expected YYYY-MM-DD") from exc
+    if status is None and deadline is None and supersede_with is None:
+        raise ValueError("goal update requires --status, --deadline, or --supersede-with")
+
+    conn = _get_db()
+    try:
+        if not conn.execute("SELECT 1 FROM goals WHERE goal_id=?", (goal_id,)).fetchone():
+            raise ValueError(f"Goal '{goal_id}' not found.")
+        if supersede_with is not None and not conn.execute(
+            "SELECT 1 FROM goals WHERE goal_id=?", (supersede_with,)
+        ).fetchone():
+            raise ValueError(f"Goal '{supersede_with}' not found.")
+        if supersede_with == goal_id:
+            raise ValueError("--supersede-with must name a different goal")
+
+        updates = []
+        values = []
+        if status is not None:
+            updates.append("status=?")
+            values.append(status)
+        if deadline is not None:
+            updates.append("deadline=?")
+            values.append(deadline)
+        if supersede_with is not None:
+            updates.append("status=?")
+            values.append("superseded")
+        conn.execute(
+            f"UPDATE goals SET {', '.join(updates)} WHERE goal_id=?",
+            (*values, goal_id),
+        )
+
+        relinked = 0
+        if supersede_with is not None:
+            story_ids = {
+                row[0] for row in conn.execute(
+                    "SELECT story_id FROM stories WHERE goal_id=? "
+                    "AND (status IS NULL OR status != 'done')",
+                    (goal_id,),
+                )
+            }
+            story_ids.update(
+                row[0] for row in conn.execute(
+                    "SELECT gc.story_id FROM goal_contributions gc "
+                    "JOIN stories s ON s.story_id=gc.story_id "
+                    "WHERE gc.goal_id=? AND gc.link_status='linked' "
+                    "AND (s.status IS NULL OR s.status != 'done')",
+                    (goal_id,),
+                )
+            )
+            for story_id in story_ids:
+                conn.execute(
+                    "UPDATE stories SET goal_id=? WHERE story_id=? "
+                    "AND goal_id=? AND (status IS NULL OR status != 'done')",
+                    (supersede_with, story_id, goal_id),
+                )
+                if conn.execute(
+                    "SELECT 1 FROM goal_contributions WHERE goal_id=? AND story_id=?",
+                    (goal_id, story_id),
+                ).fetchone():
+                    if conn.execute(
+                        "SELECT 1 FROM goal_contributions WHERE goal_id=? AND story_id=?",
+                        (supersede_with, story_id),
+                    ).fetchone():
+                        conn.execute(
+                            "DELETE FROM goal_contributions WHERE goal_id=? AND story_id=?",
+                            (goal_id, story_id),
+                        )
+                    else:
+                        conn.execute(
+                            "UPDATE goal_contributions SET goal_id=? "
+                            "WHERE goal_id=? AND story_id=?",
+                            (supersede_with, goal_id, story_id),
+                        )
+                relinked += 1
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+    changes = []
+    if status is not None or supersede_with is not None:
+        changes.append(f"status={'superseded' if supersede_with is not None else status}")
+    if deadline is not None:
+        changes.append(f"deadline={deadline}")
+    if supersede_with is not None:
+        changes.append(f"relinked={relinked}")
+    print(f"  {_GREEN}✓{_RESET} Goal updated: {goal_id} ({', '.join(changes)})")
+
+
 _VALID_SESSION_DISPOSITIONS = {
     "goal_progress", "maintenance", "exploration", "parked", "needs_attribution"
 }
@@ -3592,7 +4403,11 @@ def cmd_cost_log(
     tokens_in: int,
     tokens_out: int,
     story_id: str = None,
+    job_id: str = None,
+    pr: int = None,
     note: str = None,
+    model: str = None,
+    role: str = None,
 ) -> None:
     """Log a manually reported cost row for native/unwrapped sessions."""
     from synlynk import (
@@ -3621,10 +4436,13 @@ def cmd_cost_log(
             _, phase = row
     conn.close()
 
-    model_version = extract_model_version("", agent=agent)
-    payment_value = resolve_payment_value(agent, tokens_in, tokens_out)
+    model_version = model or extract_model_version("", agent=agent)
+    payment_value = resolve_payment_value(agent, tokens_in, tokens_out, model=model_version)
     est_cost = payment_value.api_equivalent_usd
     ts = time.strftime("%Y-%m-%d %H:%M")
+    role_val = str(role).strip() if role else None
+    if role_val:
+        role_val = _validate_enum_value("role", role_val, _ROLES)
 
     _insert_cost_row(
         session_date=ts,
@@ -3641,6 +4459,9 @@ def cmd_cost_log(
         api_equivalent_usd=payment_value.api_equivalent_usd,
         actual_usd=payment_value.actual_usd,
         payment_mode=payment_value.mode,
+        job_id=job_id,
+        pr_number=pr,
+        agent_role=role_val,
     )
     _generate_costs_md()
     if _is_migrated():
@@ -3852,6 +4673,25 @@ def cmd_pr_check(pr_number=None, impact_attested: bool = False) -> None:
             changes_requested_count = _extract_pr_review_cycles() or 0
             _apply_review_cycle_multiplier(conn, pr_number, changes_requested_count)
 
+    from synlynk.governs_gate import pr_governs_linkage_violations
+    from synlynk.policy_gates import _evaluate_gate, classify_governs_violations
+    governs_violations = pr_governs_linkage_violations(conn, pr_number)
+    governs_eval = _evaluate_gate(
+        conn, pr_number=pr_number, gate="governs_authority",
+        mode_key="require_linked_goal_mode",
+        verdict=classify_governs_violations(governs_violations),
+    )
+    if governs_eval.verdict != "pass":
+        label = "🚫 [PR CHECK BLOCKED]" if governs_eval.should_block else "⚠ [PR CHECK]"
+        print(f"\n  {label} dispatched jobs missing linked GOVERNS story/goal: {governs_eval.message}")
+        print("  Link with: synlynk goal link <story-id> --goal <goal-id>\n")
+        if governs_eval.should_block:
+            conn.close()
+            raise SystemExit(1)
+    else:
+        print(f"  {_GREEN}✓{_RESET} GOVERNS linkage passed — {governs_eval.message}")
+
+    if _is_github_remote():
         owner, repo = detect_remote_owner_repo()
         if owner and repo:
             gate = qa_gate_verdict(owner, repo, pr_number=pr_number)
@@ -3888,6 +4728,24 @@ def cmd_pr_check(pr_number=None, impact_attested: bool = False) -> None:
                         ["gh", "pr", "merge", str(pr_number), "--squash"],
                         check=False,
                     )
+
+    if pr_number is not None:
+        from synlynk.policy_gates import classify_cross_harness_verdict
+        cross_harness_ok, cross_harness_message = _cross_harness_review_verdict(conn, pr_number)
+        cross_harness_eval = _evaluate_gate(
+            conn, pr_number=pr_number, gate="cross_harness_review",
+            mode_key="cross_harness_review_required_mode",
+            policy_section="merge_authority",
+            verdict=classify_cross_harness_verdict(cross_harness_ok, cross_harness_message),
+        )
+        if cross_harness_eval.verdict != "pass":
+            label = "🚫 [PR CHECK BLOCKED]" if cross_harness_eval.should_block else "⚠ [PR CHECK]"
+            print(f"\n  {label} Cross-harness review required: {cross_harness_eval.message}\n")
+            if cross_harness_eval.should_block:
+                conn.close()
+                raise SystemExit(1)
+        else:
+            print(f"  {_GREEN}✓{_RESET} Cross-harness review passed — {cross_harness_eval.message}")
 
     rows = conn.execute(
         "SELECT DISTINCT story_id, agent FROM capability_ratings WHERE model_version='unknown'"

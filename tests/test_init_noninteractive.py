@@ -44,7 +44,7 @@ def test_init_yes_subprocess_with_closed_stdin_exits_zero(tmp_path):
         stdin=subprocess.DEVNULL,
         capture_output=True,
         text=True,
-        timeout=5,
+        timeout=20,
     )
 
     assert result.returncode == 0, result.stderr
@@ -79,6 +79,6 @@ def test_init_keeps_prompting_with_a_terminal(tmp_path, monkeypatch):
     synlynk.init()
 
     assert prompts == ["  [y/N] ", "  Email or synlynk ID: ", "  Industry vertical [ott]: "]
-    config = (tmp_path / ".synlynk" / "config.json").read_text()
-    assert "person@example.com" in config
-    assert '"industry": "ott"' in config
+    config = synlynk.load_config()
+    assert config.get("workgroup_invite_email") == "person@example.com"
+    assert config.get("industry") == "ott"

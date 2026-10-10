@@ -1,4 +1,5 @@
 import json
+import importlib.util
 import os
 import tempfile
 import unittest
@@ -13,9 +14,112 @@ class TestLocalAgentConfigEditFormat(unittest.TestCase):
         repo_root = Path(__file__).resolve().parents[1]
         with open(repo_root / ".agents" / "local.json") as f:
             config = json.load(f)
-        pinned = next(m for m in config["models"] if m.get("pinned"))
-        self.assertEqual(pinned["id"], "Ornith-1.0-9B-4bit")
-        self.assertEqual(pinned["edit_format"], "diff")
+        self.assertEqual(config["pinned_model"], "Ternary-Bonsai-2-27B-mlx-2bit")
+        ornith = next(m for m in config["models"] if m["id"] == "Ornith-1.0-9B-4bit")
+        self.assertEqual(ornith["edit_format"], "diff")
+
+
+class TestPrismMlCheck(unittest.TestCase):
+    def test_returns_true_when_prism_ml_importable(self):
+        with patch("importlib.util.find_spec", return_value=object()):
+            self.assertTrue(local_agent._check_prism_ml_available())
+
+    def test_returns_false_when_prism_ml_missing(self):
+        with patch("importlib.util.find_spec", return_value=None):
+            self.assertFalse(local_agent._check_prism_ml_available())
+
+
+class TestDetectHardwareTier(unittest.TestCase):
+    def _run_with_ram(self, ram_bytes):
+        with patch("subprocess.check_output", return_value=str(ram_bytes).encode()):
+            with patch("sys.platform", "darwin"):
+                return local_agent._detect_hardware_tier()
+
+    def test_under_12gb_returns_8gb_light(self):
+        self.assertEqual(self._run_with_ram(8 * 1024**3), "8gb-light")
+
+    def test_16gb_returns_16gb_default(self):
+        self.assertEqual(self._run_with_ram(16 * 1024**3), "16gb-default")
+
+    def test_24gb_returns_32gb_pro(self):
+        self.assertEqual(self._run_with_ram(24 * 1024**3), "32gb-pro")
+
+    def test_64gb_returns_64gb_fleet(self):
+        self.assertEqual(self._run_with_ram(64 * 1024**3), "64gb-fleet")
+
+    def test_linux_reads_meminfo(self):
+        meminfo = "MemTotal:       25165824 kB\nMemFree: 1000 kB\n"
+        with patch("builtins.open", unittest.mock.mock_open(read_data=meminfo)):
+            with patch("sys.platform", "linux"):
+                result = local_agent._detect_hardware_tier()
+        self.assertEqual(result, "32gb-pro")
+
+
+class TestSelectModelForTier(unittest.TestCase):
+    CONFIG = {
+        "models": [
+            {
+                "id": "Ornith-1.0-9B-4bit",
+                "edit_format": "diff",
+                "tier": ["8gb-light", "16gb-default"],
+            },
+            {
+                "id": "Qwen3.6-27B-4bit",
+                "edit_format": "whole",
+                "tier": ["64gb-fleet"],
+            },
+            {
+                "id": "Ternary-Bonsai-2-27B-mlx-2bit",
+                "edit_format": "diff",
+                "loader": "prism-ml",
+                "tier": ["32gb-pro", "64gb-fleet"],
+            },
+        ]
+    }
+
+    def test_32gb_pro_returns_bonsai_when_loader_present(self):
+        with patch("importlib.util.find_spec", return_value=object()):
+            result = local_agent._select_model_for_tier("32gb-pro", self.CONFIG)
+        self.assertEqual(result, "Ternary-Bonsai-2-27B-mlx-2bit")
+
+    def test_32gb_pro_falls_back_to_ornith_when_loader_absent(self):
+        with patch("importlib.util.find_spec", return_value=None):
+            result = local_agent._select_model_for_tier("32gb-pro", self.CONFIG)
+        self.assertEqual(result, "Ornith-1.0-9B-4bit")
+
+    def test_8gb_light_returns_ornith(self):
+        result = local_agent._select_model_for_tier("8gb-light", self.CONFIG)
+        self.assertEqual(result, "Ornith-1.0-9B-4bit")
+
+
+class TestNewRosterSchema(unittest.TestCase):
+    def test_pinned_model_top_level_key_used_when_present(self):
+        config = {"models": [{"id": "a", "pinned": False}], "pinned_model": "a"}
+        self.assertEqual(local_agent._pinned_model(config), "a")
+
+    def test_falls_back_to_model_pinned_field_when_top_level_absent(self):
+        config = {"models": [{"id": "a", "pinned": True}]}
+        self.assertEqual(local_agent._pinned_model(config), "a")
+
+    def test_bonsai_excluded_when_prism_ml_absent(self):
+        config = {
+            "endpoint": "http://127.0.0.1:8000",
+            "pinned_model": "Ternary-Bonsai-2-27B-mlx-2bit",
+            "models": [
+                {"id": "Ornith-1.0-9B-4bit", "edit_format": "diff"},
+                {"id": "Ternary-Bonsai-2-27B-mlx-2bit", "edit_format": "diff", "loader": "prism-ml"},
+            ],
+        }
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump(config, f)
+            path = f.name
+        try:
+            with patch("importlib.util.find_spec", return_value=None):
+                flags = local_agent._local_dispatch_model_flags(config_path=path)
+        finally:
+            os.unlink(path)
+        self.assertIn("openai/Ornith-1.0-9B-4bit", flags)
+        self.assertNotIn("openai/Ternary-Bonsai-2-27B-mlx-2bit", flags)
 
 
 class TestLoadLocalConfig(unittest.TestCase):

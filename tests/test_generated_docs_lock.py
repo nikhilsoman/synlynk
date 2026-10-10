@@ -1,10 +1,7 @@
 """goal-6733bbf1: generated 4-doc lock, worktree identity, generator write-through."""
 import json
-import os
 import subprocess
 from pathlib import Path
-
-import pytest
 
 import synlynk
 from synlynk import instructions as instructions_mod

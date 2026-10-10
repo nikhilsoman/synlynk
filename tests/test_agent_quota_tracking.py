@@ -1029,7 +1029,7 @@ def test_phase_2_of_docssuperpowersplans20260730h_grok_role_permission_flags(rol
     from synlynk.dispatch import _permissions_to_flags, _resolve_dispatch_permissions
 
     permissions = _resolve_dispatch_permissions("grok", role_list=[role_name])
-    flags = _permissions_to_flags("grok", permissions)
+    flags = _permissions_to_flags("grok", permissions, skip_permissions=True)
 
     assert flags == ["--always-approve", "--permission-mode", "bypassPermissions"]
     assert "dontAsk" not in flags
@@ -1038,7 +1038,7 @@ def test_phase_2_of_docssuperpowersplans20260730h_grok_role_permission_flags(rol
 def test_phase_2_of_docssuperpowersplans20260730h_grok_regression_no_empty_fallthrough():
     from synlynk.dispatch import _permissions_to_flags
 
-    flags = _permissions_to_flags("grok", ["read:*"])
+    flags = _permissions_to_flags("grok", ["read:*"], skip_permissions=True)
     assert flags == ["--always-approve", "--permission-mode", "bypassPermissions"]
     assert "dontAsk" not in flags
 

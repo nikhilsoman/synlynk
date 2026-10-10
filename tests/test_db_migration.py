@@ -93,6 +93,7 @@ def test_v10_reconciles_databases_stamped_at_v9(tmp_path):
     """A v9 ledger may predate columns added inside the v9 migration block."""
     import sqlite3
     from synlynk import db
+    from synlynk.migrations import runner
 
     conn = sqlite3.connect(tmp_path / "state.db")
     conn.execute("PRAGMA user_version = 9")
@@ -100,8 +101,9 @@ def test_v10_reconciles_databases_stamped_at_v9(tmp_path):
 
     watch_cols = {row[1] for row in conn.execute("PRAGMA table_info(capability_watch)")}
     daemon_cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)")}
+    final_version = max(m.version for m in runner.MIGRATIONS)
     assert {"last_sweep_at", "sweep_job_count"} <= watch_cols
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == db._DB_MIGRATION_VERSION
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == final_version
     assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     conn.close()
 
@@ -122,3 +124,34 @@ def test_registry_v2_tables_exist(tmp_path, monkeypatch):
             "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (tbl,)
         ).fetchone()
         assert row is not None, f"{tbl} not created"
+
+
+def test_migrate_db_delegates_to_legacy_function_and_runner(tmp_path, monkeypatch):
+    """Regression guard for the Component 1 rename: _migrate_db must still
+    bring a fresh DB to the current version AND leave a migration_history
+    table behind (proof run_pending_migrations actually ran)."""
+    from synlynk import db
+    from synlynk.migrations import runner
+
+    db_path = tmp_path / "state.db"
+    monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(db_path))
+    conn = db._get_db()
+
+    final_version = max(m.version for m in runner.MIGRATIONS)
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == final_version
+    history_row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='migration_history'"
+    ).fetchone()
+    assert history_row is not None
+    assert hasattr(db, "_run_legacy_migration_and_repairs")
+
+
+def test_fresh_db_has_unpushed_branch_check_attempts_column(tmp_path, monkeypatch):
+    from synlynk import db
+
+    monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(tmp_path / "state.db"))
+    conn = db._get_db()
+
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)")}
+
+    assert "unpushed_branch_check_attempts" in cols
