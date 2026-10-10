@@ -1,0 +1,45 @@
+{
+  "decision_id": "dec-20261002-round-1-architecture-re-review",
+  "topic": "Round 1 Re-Review: Deep Architectural & Performance Audit for v1.0.0 Dev Preview Release",
+  "date": "2026-10-02",
+  "panel": [
+    "claude",
+    "codex",
+    "agy",
+    "grok"
+  ],
+  "status": "approved",
+  "primary_goal": "goal-d3333441",
+  "governing_loop": "goal-eacab0dc",
+  "target_milestone": "2026-10-02 (v1.0.0 Dev Preview Re-Review)",
+  "prior_decision": "dec-20260927-round-1-architecture-review",
+  "invariants_scorecard": {
+    "invariant_1_effect_verified_completion": {
+      "status": "passed",
+      "implementation": "synlynk/verify_effects.py, synlynk/gh_verify.py (PR #1807, commit d5d6c876)",
+      "evidence": "Gated success on git diff > 0 and passing verification suite. Zero-diff mutating jobs classified as completed_without_changes."
+    },
+    "invariant_2_hard_in_flight_token_circuit_breakers": {
+      "status": "passed",
+      "implementation": "synlynk/circuit_breaker.py, synlynk/sentinel.py (PR #1808, commit aedbc565; PR #1905, commit 524624e5)",
+      "evidence": "Active in-flight watchdog terminates runaway processes ($15/5M default; $2/500k fast). LIVE-19 clean exit observer effect eliminated."
+    },
+    "invariant_3_fail_closed_capability_probing": {
+      "status": "passed",
+      "implementation": "synlynk/probe.py, synlynk/dispatch.py (PR #1810, commit 1e793702; PR #1903, commit 4574cb6c)",
+      "evidence": "Automatic preflight capability probing during init and dispatch. Eliminates Grok sandbox denial and Codex DNS drops at routing time."
+    },
+    "invariant_4_single_writer_sqlite_wal_ledger": {
+      "status": "passed",
+      "implementation": "synlynk/db.py, synlynk/worktree.py (PR #1812, commit 48827bf1)",
+      "evidence": "SQLite WAL mode with 10s busy timeout, leased worktree locks with TTL reap-before-create. Eliminates database locking and stale worktrees."
+    },
+    "invariant_5_compressed_default_surface": {
+      "status": "passed",
+      "implementation": "synlynk/taxonomy.py, synlynk/cli.py (PR #1814, commit c35a42e2; PR #1843, commit 914ee3d5)",
+      "evidence": "2-tier Role + Harness user model. Deduplicated 71% of instruction redundancy into AI_INSTRUCTIONS.md (R9). Fast-track 3-5 stage GOVERNS."
+    }
+  },
+  "verdict": "ARCHITECTURALLY CLEARED FOR RELEASE",
+  "decision_text": "Decision: Synlynk v1.0.0 Developer Preview is ARCHITECTURALLY CLEARED FOR RELEASE. All Five Mandatory Architectural Invariants are operational in code, performance bottlenecks from the 2026-09-28 audit have been remediated, and Autonomous Repo Intelligence provides a verified 15-minute Time-to-Wow first-run experience."
+}

@@ -60,9 +60,10 @@ def test_tc9_grok_sandbox_denied(monkeypatch):
     with patch("synlynk.probe._run_tc6", return_value={"passed": True, "error": "", "output": "ok"}):
         # Dry mode
         res_dry = _run_tc9("grok", live=False)
-        assert res_dry["passed"] is False
-        assert res_dry["can_gh_write"] is False
-        assert res_dry["mechanism"] == "sandbox_denied"
+        assert res_dry["passed"] is True
+        assert res_dry["can_gh_write"] is True
+        assert res_dry["mechanism"] == "not_live_tested"
+        assert "last live retest" in res_dry["note"]
 
         # Live mode
         mock_proc = MagicMock(returncode=1, stdout="Error: execution denied in headless sandbox", stderr="")
@@ -116,7 +117,12 @@ def test_tc9_db_persistence(monkeypatch):
         assert row[2] == "direct_cli"
 
 
-def test_doctor_prints_tc9_output(monkeypatch, capsys):
+def test_doctor_prints_tc9_output(tmp_path, monkeypatch, capsys):
+    # Isolate from the host repo. Doctor health checks (_hc_todo_drift) call
+    # _detect_hand_edit → _generate_todo_md, which closes whatever _get_db()
+    # returns. Sharing the host migrated ledger would close this in-memory
+    # connection before TC-4.
+    monkeypatch.chdir(tmp_path)
     monkeypatch.setattr("shutil.which", lambda bin_name: "/usr/local/bin/claude")
     with patch("synlynk.probe._run_tc6", return_value={"passed": True, "error": "", "output": "ok"}):
         db = sqlite3.connect(":memory:")
@@ -179,7 +185,7 @@ def test_get_harness_gh_write_capability():
     assert cap_claude["source"] == "baseline"
 
     cap_grok = _get_harness_gh_write_capability("grok")
-    assert cap_grok["can_gh_write"] is False
+    assert cap_grok["can_gh_write"] is True
 
     # Dynamic from probe history in db
     db = sqlite3.connect(":memory:")

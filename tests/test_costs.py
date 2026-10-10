@@ -8,6 +8,34 @@ from synlynk.costs import (
 )
 
 
+def test_parse_dispatch_telemetry_uses_codex_terminal_event_over_stdout_text():
+    from synlynk.costs import parse_dispatch_telemetry
+
+    telemetry = parse_dispatch_telemetry(
+        'warning: failed earlier\n'
+        '{"type":"turn.completed","usage":{"input_tokens":12,"output_tokens":7,"reasoning_output_tokens":3}}\n',
+        agent="codex",
+    )
+    assert telemetry.available is True
+    assert telemetry.completed is True
+    assert telemetry.input_tokens == 12
+    assert telemetry.output_tokens == 10
+
+
+def test_parse_dispatch_telemetry_uses_claude_result_event():
+    from synlynk.costs import parse_dispatch_telemetry
+
+    telemetry = parse_dispatch_telemetry(
+        '{"type":"result","subtype":"success","is_error":false,'
+        '"usage":{"input_tokens":20,"output_tokens":5},"result":"failed-looking prose"}',
+        agent="claude",
+    )
+    assert telemetry.available is True
+    assert telemetry.completed is True
+    assert telemetry.input_tokens == 20
+    assert telemetry.output_tokens == 5
+
+
 def test_extract_agy_structured_captures_cache_read_tokens():
     output = json.dumps({
         "conversation_id": "c3203df0",

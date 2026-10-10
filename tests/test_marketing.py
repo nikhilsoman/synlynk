@@ -141,6 +141,26 @@ tags: ["growth", "marketing"]
     assert saved[0]["title"] == draft["title"]
 
 
+def test_extract_social_changelog_snippets_preserves_mid_string_pr_number(tmp_path):
+    post_file = tmp_path / "1741-pr1741-regression.md"
+    post_file.write_text("""---
+title: Regression test
+author: synlynk team
+date: "2026-09-29"
+pr: "#1741"
+version: "0.20.0"
+tags: [testing]
+---
+
+## What This PR Shipped
+- Merged improvements and fixes for PR #1741.
+""", encoding="utf-8")
+
+    draft = extract_social_changelog_snippets(post_file, output_path=tmp_path / "drafts.json")
+
+    assert draft["highlights"] == ["Merged improvements and fixes for PR #1741."]
+
+
 def test_update_blog_index(tmp_path):
     blog_dir = tmp_path / "docs" / "blog"
     blog_dir.mkdir(parents=True, exist_ok=True)
@@ -255,4 +275,3 @@ def test_cmd_marketing_sync_pr_cli(tmp_path, monkeypatch):
     cmd_marketing_sync_pr(pr_number=1558, dry_run=False)
     created_posts = list(blog_dir.glob("*pr1558*.md"))
     assert len(created_posts) == 1
-

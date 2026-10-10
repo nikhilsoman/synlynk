@@ -1,0 +1,23 @@
+#!/bin/sh
+# Keep the shared main checkout available for integration only.
+
+main_worktree=$(git worktree list --porcelain | sed -n 's/^worktree //p' | sed -n '1p') || exit 1
+current_worktree=$(git rev-parse --show-toplevel) || exit 1
+
+# Linked worktrees are the supported isolation boundary for feature work.
+if [ "$current_worktree" != "$main_worktree" ]; then
+    exit 0
+fi
+
+branch=$(git symbolic-ref --short HEAD 2>/dev/null || true)
+if [ -z "$branch" ]; then
+    echo "Commit blocked: detached HEAD in the shared main checkout." >&2
+    echo "Create a worktree first: git worktree add worktrees/<name> -b <branch>" >&2
+    echo "See CLAUDE.md's Git Workflow worktree policy." >&2
+    exit 1
+fi
+
+echo "Commit blocked: the shared main checkout cannot be used for commits." >&2
+echo "Create a worktree first: git worktree add worktrees/<name> -b <branch>" >&2
+echo "See CLAUDE.md's Git Workflow worktree policy." >&2
+exit 1

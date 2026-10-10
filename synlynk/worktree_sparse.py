@@ -1,4 +1,4 @@
-"""Adaptive Scope-Bounded Sparse Worktree Engine (#1389, #1390, #1391).
+"""Adaptive Scope-Bounded Sparse Worktree Engine (#1389, #1390, #1391, #1787).
 
 Provides high-performance cone-mode sparse worktrees for multi-agent dispatches,
 preventing storage amplification and reducing checkout latency by only materializing
@@ -7,9 +7,12 @@ mandatory configuration and task-scoped paths.
 
 from __future__ import annotations
 
+import json
 import os
+import re
 import subprocess
-from typing import List, Optional, Sequence
+from pathlib import Path
+from typing import List, Optional, Sequence, Set
 
 MANDATORY_SPARSE_CONE_DIRS = (".synlynk", "project-docs", "tests", "synlynk")
 
@@ -28,6 +31,106 @@ def is_sparse_worktree(worktree_path: str) -> bool:
         return res.returncode == 0 and res.stdout.strip().lower() in ("true", "1")
     except OSError:
         return False
+
+
+def derive_sparse_cone_paths_from_graph(
+    repo_root: str,
+    task_text: str = "",
+    story_id: Optional[str] = None,
+    max_dirs: int = 8,
+) -> List[str]:
+    """Derive minimal required directory cones from the AST knowledge graph."""
+    cone_set: Set[str] = set(MANDATORY_SPARSE_CONE_DIRS)
+    graph_path = Path(repo_root) / ".synlynk" / "graphify-out" / "graph.json"
+
+    if not graph_path.is_file():
+        return sorted(cone_set)
+
+    try:
+        data = json.loads(graph_path.read_text(errors="ignore"))
+    except Exception:
+        return sorted(cone_set)
+
+    nodes = [n for n in (data.get("nodes") or []) if isinstance(n, dict)]
+    edges = [e for e in (data.get("edges") or data.get("links") or []) if isinstance(e, dict)]
+
+    if not nodes:
+        return sorted(cone_set)
+
+    query_text = task_text or ""
+    if story_id:
+        query_text += f" {story_id}"
+        try:
+            from synlynk import _get_db
+            conn = _get_db()
+            row = conn.execute(
+                "SELECT title, description, criteria FROM stories WHERE story_id = ?",
+                (story_id,),
+            ).fetchone()
+            if row:
+                query_text += f" {row[0] or ''} {row[1] or ''} {row[2] or ''}"
+            conn.close()
+        except Exception:
+            pass
+
+    stopwords = {
+        "the", "and", "for", "with", "from", "that", "this", "when",
+        "during", "after", "before", "error", "issue", "fix", "add",
+        "update", "test", "into", "does", "what", "where", "which"
+    }
+    keywords = {w for w in re.findall(r"[a-zA-Z0-9_]{3,}", query_text.lower()) if w not in stopwords}
+
+    if not keywords:
+        return sorted(cone_set)
+
+    scored_nodes = []
+    for node in nodes:
+        label = str(node.get("label") or "").lower()
+        node_id = str(node.get("id") or "").lower()
+        file_path = str(node.get("file") or "").lower()
+
+        score = 0
+        for kw in keywords:
+            if kw in label:
+                score += 3
+            elif kw in node_id:
+                score += 2
+            elif kw in file_path:
+                score += 1
+        if score > 0:
+            scored_nodes.append((score, node))
+
+    scored_nodes.sort(key=lambda x: x[0], reverse=True)
+    top_nodes = [n for _, n in scored_nodes[:10]]
+
+    node_by_id = {str(n.get("id")): n for n in nodes}
+    inbound: dict[str, list[dict]] = {}
+    outbound: dict[str, list[dict]] = {}
+
+    for edge in edges:
+        src = str(edge.get("source"))
+        tgt = str(edge.get("target"))
+        if tgt in node_by_id:
+            inbound.setdefault(tgt, []).append(node_by_id.get(src, {}))
+        if src in node_by_id:
+            outbound.setdefault(src, []).append(node_by_id.get(tgt, {}))
+
+    for node in top_nodes:
+        f = node.get("file") or ""
+        if f:
+            first_segment = f.strip().lstrip("./").split("/", 1)[0]
+            if first_segment:
+                cone_set.add(first_segment)
+
+        nid = str(node.get("id"))
+        for neighbor in (inbound.get(nid, []) + outbound.get(nid, []))[:5]:
+            nf = neighbor.get("file") or ""
+            if nf:
+                n_segment = nf.strip().lstrip("./").split("/", 1)[0]
+                if n_segment:
+                    cone_set.add(n_segment)
+
+    return sorted(cone_set)[:max_dirs]
 
 
 def create_sparse_cone_worktree(

@@ -69,6 +69,36 @@ def _seed_probe_row(project_dir: Path, agent_name: str) -> None:
     conn.close()
 
 
+def _seed_governs_story(project_dir: Path, story_id: str) -> None:
+    """Create the linked goal/story required by dispatch preflight."""
+    import synlynk
+
+    cwd = Path.cwd()
+    home = os.environ.get("HOME")
+    try:
+        os.environ["HOME"] = str(project_dir)
+        os.chdir(project_dir)
+        db_path = Path(synlynk._resolve_db_path())
+    finally:
+        if home is None:
+            os.environ.pop("HOME", None)
+        else:
+            os.environ["HOME"] = home
+        os.chdir(cwd)
+    conn = sqlite3.connect(str(db_path))
+    synlynk._migrate_db(conn)
+    conn.execute(
+        "INSERT INTO goals (goal_id, outcome, criterion) VALUES (?, ?, ?)",
+        ("goal-dispatch-e2e", "Exercise dispatch", "Dispatch creates a job"),
+    )
+    conn.execute(
+        "INSERT INTO stories (story_id, title, goal_id) VALUES (?, ?, ?)",
+        (story_id, "Dispatch creates a job", "goal-dispatch-e2e"),
+    )
+    conn.commit()
+    conn.close()
+
+
 # ---------------------------------------------------------------------------
 # Fixture
 # ---------------------------------------------------------------------------
@@ -78,7 +108,11 @@ class Cli:
 
     def __init__(self, project_dir: Path):
         self.dir = project_dir
-        self.env = {**os.environ, "HOME": str(project_dir)}
+        self.env = {
+            **os.environ,
+            "HOME": str(project_dir),
+            "SYNLYNK_SKIP_GRAPHIFY_EXTRACT": "1",
+        }
 
     @classmethod
     def from_dir(cls, directory: Path) -> "Cli":
@@ -323,7 +357,12 @@ def test_dispatch_creates_job(cli):
     fake_claude.chmod(0o755)
     env = {**_os.environ, "PATH": str(fake_bin) + ":" + _os.environ["PATH"]}
     _seed_probe_row(cli.dir, "claude")
-    r = cli.run("dispatch", "claude", "--task", "test task", env=env)
+    story_id = "story-dispatch-e2e"
+    _seed_governs_story(cli.dir, story_id)
+    r = cli.run(
+        "dispatch", "claude", "--task", "test task", "--story", story_id,
+        "--force-agent", env=env,
+    )
     assert r.returncode == 0, r.stderr
     jobs_file = cli.dir / ".synlynk" / "jobs.json"
     assert jobs_file.exists()

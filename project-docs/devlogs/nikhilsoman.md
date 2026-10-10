@@ -1,3 +1,60 @@
+## 2026-09-27 — Align Dispatch Default Model Tiers with 2026 SOTA Catalog (#1803, `story-e8343134`, `goal-5be4eb8b`)
+
+### Shipped & Verified
+- **Model Tier Static Fallback Modernization (`synlynk/dispatch.py`):** Replaced legacy v0.12 model mappings in `_DEFAULT_MODELS_BY_TIER` (`gemini-1.5-flash`, `gemini-1.5-pro`, `claude-3-5-sonnet-latest`, `grok-3`) with canonical 2026 SOTA tier mappings matching `.synlynk/models.json` (`gemini-3.7-flash-medium` for fast, `gemini-3.1-pro-low`/`gemini-3.7-flash-high` for pro, `gemini-3.1-pro-high` for reasoning; `claude-haiku-4-5-20251001`, `claude-sonnet-5`, `claude-opus-5-5`; `grok-4.6`, `grok-4.7`).
+- **Zero Legacy Model Assertions (TDD):** Created `tests/test_dispatch_model_defaults.py` enforcing zero deprecated `gemini-1.5` references across all tiers, strict catalog parity, and verified tier resolution for `agy`, `claude`, `codex`, and `grok`.
+- **Full Test Matrix Green:** All 168 model/dispatch unit tests passing cleanly.
+[@agy, @nikhilsoman]
+
+## 2026-09-27 — 3-Round Multi-Harness Strategic & Architectural Review (Claude, Codex, Agy, Grok) (`goal-d3333441`, `goal-eacab0dc`)
+
+### Completed & Synthesized
+- **Round 1 (Deep Architectural & Performance Review):** Convened full 4-harness decide panel. Established 5 mandatory architectural invariants for v1.0.0 Dev Preview: (1) Effect-verified completion (non-empty diff / PR check required); (2) Hard in-flight token circuit breakers; (3) Fail-closed capability-probed routing; (4) One ledger, one writer (`state.db` SQLite WAL); (5) Compressed default surface (Role + Harness; 3-5 stage default GOVERNS). Authored `project-docs/decisions/2026-09-27-round-1-deep-architectural-review.md` (53KB).
+- **Round 2 (Strategic Business & Market Positioning Review):** Established Synlynk's structural market position as the Host-Local Multi-Agent Fleet Operating Substrate. Defined competitive differentiators vs IDE Copilots, Single Agents, and in-memory DAGs. Structured 3 commercial tiers (Free Personal Apache-2.0, Teams $29/seat/mo, Enterprise Air-Gapped) and day-1 solo-founder wedge. Authored `project-docs/decisions/2026-09-27-round-2-strategic-business-review.md` (94KB).
+- **Round 3 (Firm Roadmap Articulation & The Case For/Against Tokq):** Defined 3-horizon platform progression (Horizon 1 Dev Preview Oct 1; Horizon 2 Connected Teams Q1 2027; Horizon 3 Enterprise Mesh Q2-Q3 2027) gated on concrete quantitative adoption signals (3K stars, 350 WAW, 85% completion rate, 15 non-maintainer PRs). Evaluated Tokq and reached unanimous consensus to DEFER commercial memory marketplace in favor of open Git-based skill taps and real-time AST extraction. Authored `project-docs/decisions/2026-09-27-round-3-roadmap-and-tokq-articulation.md` (83KB).
+[@agy, @nikhilsoman]
+
+## 2026-09-27 — Generalized Vizor BS-6 Architectural Views, Dynamic Centrality LOD & Deep Interactive UX (`goal-e3840370`, PR #1800)
+
+### Shipped & Verified
+- **Dynamic Percentile Top-K Centrality LOD Engine (`synlynk/viz.py`):** Replaced static degree caps with dynamic percentile rank formula (`top 10%` / `top 25%` / `top 50%` / `100%`) alongside a default-off test suite filter (`data-include-tests`), enabling clean L0 module uncluttering across repositories of any size.
+- **Logical Architecture View Separation (`logical.html`):** Distinct from physical AST tube map, delivers a 5-tier Layered HLD Stack (`Interface & Ingress` → `Orchestration & Governance` → `Domain & Execution Core` → `Infrastructure & Bridges` → `Storage & Persistence`), an LLD Component Model with interface contracts, and an Interactive 5-Flow Animated Sequence Player (`Story Lifecycle`, `Dispatch Loop`, `GOVERNS Reconciliation`, `State WAL Isolation`, `Agent Handoff`).
+- **Product Journeys & Multi-Harness Persona Catalog (`product.html`):** Added interactive visual user journey flows (FTUE, Story Execution, Fleet Sovereignty), complete 8-screen/catalog gallery (Master HUD, Architect Canvas, GOVERNS Lifecycle, Gantt, Effort & Cost, Roles & Permissions, Activity Stream, World Ecosystem Radar), and 4 Home Harness terminal personas (`Claude`, `Codex`, `Agy`, `Grok`).
+- **Dual-Zone Infrastructure View (`infra.html`):** Clearly partitioned host-local Zero-SaaS runtime execution (ports `:8721`, `:27472`, `state.db` SQLite WAL, OS keystores, git worktrees) from outbound cloud AI inference egress (`Anthropic`, `Google Generative AI`, `OpenAI`, `xAI`, `GitHub`), reinforced with 4 Trust & Security Badges.
+- **Ecosystem Radar (`world.html`):** 3-ring concentric ecosystem radar (`Core Host Runtime` → `Fleet Partners & Agents` → `Federated Multi-Repo Mesh`) with pulsating SVG status blips, filtering chips, and always-populated fallback extraction.
+- **Universal Multi-Language Scanner Generalization:** Verified dynamic AST generation, view extraction, and fallback rendering across Node/TS, Go, and Rust project workspaces.
+- **Full Test Suite Verification & Clean CI Merge:** 179/179 `tests/test_viz*.py` passing, all 3,311 matrix tests green on Python 3.10 and 3.12, merged into `main` via PR #1800.
+[@agy, @nikhilsoman]
+
+## 2026-09-26 — Universal GOVERNS Lifecycle Auto-Association, State Machine & Reconciliation (`goal-eacab0dc`, PR #1798)
+
+### Shipped & Verified
+- **Goal Kinds & Schema Migration:** Extended `goals` table in `state.db` with `kind` (`feature` vs `loop`), allowing persistent continuous workflows (like GOVERNS loop) to be tracked alongside feature goals without premature completion.
+- **Deterministic GovernsResolver:** Implemented 5-tier waterfall resolution resolving parent `goal_id` from explicit input, active branch/story context, spec/plan headers, domain heuristics, and fallback loop goals.
+- **7-Stage Event-Driven FSM (`governs_fsm.py`):** Added event-driven FSM advancing stories across all 7 lifecycle stages (`goal` → `open` → `visualize` → `execute` → `release` → `notify` → `sustain`).
+- **In-Session Artifact Harvesting:** Automatically indexed decisions and specs/plans into `state.db` on creation.
+- **Reconciliation Command (`synlynk governs sweep`):** Implemented workspace reconciliation command, achieving 100% GOVERNS coverage (1,067 stories scanned, 906 linked, 148 advanced, 434 artifacts indexed).
+- **Full Test Suite Verification:** 3,287 / 3,287 tests passing cleanly across the repository.
+- **PR #1798 Merged:** Approved by QA bot and merged into `main`.
+[@agy, @nikhilsoman]
+
+## 2026-09-25 — Goal/arc triage and roadmap.md restore from state.db
+
+### Applied
+- Wrote `project-docs/decisions/2026-09-25-goal-and-roadmap-arc-triage.md`.
+- Canonical `state.db`: 6 goals `done`, 2 Vizor shells `superseded`, 4 duplicate brownfield arcs deleted, v0.19–v0.23 + job-truth epic marked shipped, v0.9.5/v0.9.6 superseded, v0.8.1–v0.8.4 deferred.
+- Regenerated git-tracked `project-docs/roadmap.md` from `_generate_roadmap_md()` (no longer the brownfield skeleton).
+- Backup: `~/.synlynk/workspaces/backups/state-20260925T111303Z.db`.
+- `synlynk goal list` now shows 27 active goals (was 35).
+## 2026-09-25 — Generated 4-doc lock, worktree identity, generator write-through (`goal-6733bbf1`)
+
+### Shipped
+- A: `_generated_docs_locked()` — migrated product (including worktrees of it) will not raw-write roadmap/todo/memory/costs; `--force` is not enough; `--replace-generated-docs` is the explicit bypass.
+- D: `resolve_product_display_name()` — scan and brownfield use identity slug / git-common-dir root name, never `feat+…` worktree folder names.
+- B: `_write_generated_project_doc()` — generators dual-write `.synlynk/project-docs/` and git-tracked `project-docs/`.
+- Tests: `tests/test_generated_docs_lock.py` (5) plus updated migrate write-through assertion.
+[@grok, @nikhilsoman]
+
 ## 2026-09-24 — Sub-project 1 Shipped: Vizor Navigation & Information Architecture Restructure (PR #1765)
 
 ### Shipped & Verified
@@ -1630,11 +1687,239 @@ implementation plan.
 - Live selftest exposed a scratch-ledger bug: probe metadata provisioning changed `DB_PATH` without changing cwd, causing a canonical-path mismatch. Fixed in PR #1693 (`bd5e9133`) by redirecting both cwd and DB path; focused verification is 155 passed, 1 skipped.
 - Live selftest reaches the full scenario suite. Remaining failures are environment gaps: Grok probe degraded, local harness configuration absent, and Muse probe degraded. A completed Agy child job with a dead PID was reconciled via `synlynk jobs reap --apply`.
 
+## 2026-09-26 — Universal GOVERNS loop goal + every-merge closeout story
+
+- Checked out `main` (`aeb311f7`) before this ledger work so housekeeping is not running inside a merged feature branch.
+- Restated `goal-eacab0dc` as the master persistent GOVERNS goal (`deadline=ongoing`, loop criterion). Minted Issue #1792 / `story-adb0f757` (sustain, tpm): `goals.kind` feature vs loop, required loop story, every-`pr_merged` synlynk-bot closeout from primary `main`. Deferred `story-620ca244` as absorbed.
+- Did not implement closeout yet.
+
+## 2026-09-26 — Vizor KG usability story + #1789 housekeeping
+
+- Merged PR #1789 (`7619e8d9`) via Codex QA `job-0868ddb2` (approve + gh-write verified). Zoom bar lives outside vis-network `#graph`; migrate commits `--no-verify`. Closed `story-issue-1789` and linked it to `goal-e3840370`.
+- Minted Issue #1790 / `story-503a76f2` for the seven Knowledge Graph usability items and the recommended inspect-mask / kind-based L0 / File Tree deep-link approach. Linked to `goal-e3840370`. Implementation parked until remaining open Vizor items are reviewed.
+- Removed QA worktrees `job-0868ddb2` and `job-0c51370f`. Left `build/` and `graphify-out/` untracked.
+
 ## 2026-09-23 — Named Release v0.21.0 Ceremony & Daily Release Cadence
 
-- Executed full named release ceremony for `v0.21.0` (The Autonomous Multi-Home & Teams Relay Release) after verifying 3,195 passing tests (100% Green).
-- Synchronized collateral: README.md badges (3,198 collected), 4 HTML/PDF doc bundles, website release bundle, CHANGELOG.md, and published GitHub Release `v0.21.0`.
-- Established daily release cadence leading into `v1.0.0-rc1` (Oct 01): point releases will incrementally advance robust onboarding, autonomous execution loop, Vizor strengthening, and remote tunnels.
-- Bumped active trunk to `0.22.0-dev`.
+## 2026-09-26 — AST Knowledge Graph Lifecycle, Rich Context Pack, Sparse Cones & Deep KG UX (PR #1799)
+
+- Implemented combined Phase 1 stories `story-3cddd9d2` (Issue #1787) and `story-503a76f2` (Issue #1790) under master goal `goal-e3840370` (*Consolidated Vizor Master Control Plane*).
+- **AST Lifecycle Automation:** Added `check_and_refresh_ast_on_drift` in `synlynk/watch.py` for automatic AST re-extraction on Git `HEAD` drift and wired 1-click on-demand refresh via `POST /api/graph/refresh`.
+- **Rich Context Packaging:** Injected AST signatures, docstrings, and reverse test mapping in `synlynk/pack.py` (`extract_symbol_signatures_and_tests`, `_get_ast_signature`, `synthesize_context_pack`) strictly bounded to 1,500 tokens.
+- **Topological Features & Minimal Cone Worktrees:** Implemented `export_topological_features` in `synlynk/impact.py` for TypeSafe.ai Jev System 1 routing and `derive_sparse_cone_paths_from_graph` in `synlynk/worktree_sparse.py` for shallow worktree derivation.
+- **Secure Source Inspection:** Added `_get_source_slice` in `synlynk/viz.py` with strict path traversal security checks and exposed `GET /api/source`.
+- **Deep Vizor KG Interactive UX:** Implemented 1-hop ego mask and multi-click cluster growth (`grow-ego-network`), sliding syntax-highlighted code drawer (`.kg-source-drawer`) in `tube.html` and `logical.html`, Level 0 kind filter chips (Services, Modules, Handlers, Tests), and ESC / empty-canvas exit ergonomics.
+- **Verification:** All 14 plan tests passed (100%), full suite passed with 3,301 green tests. PR #1799 created, verified by QA gate, approved, and merged to `main`.
 
 
+
+
+## 2026-09-28 — Deep architectural review, LIVE-17, remediation goal
+
+Three-lens architectural review (Developer-Engagement Architect / adversarial GM of Product /
+performance audit) written up at `docs/reviews/2026-09-28-deep-architectural-review.md`.
+
+**Sev1 incident found in the process.** A full serial suite run on `main` at `c35a42e2` gave
+`2 failed, 3385 passed in 488.48s` while CI was green on the same commit. Root-caused to a
+nested-writer self-deadlock: `probe.py` holds an open write connection and reaches
+`dispatch_agent()` via `capability_sweep`, which opens a second connection and `INSERT`s at
+`quota.py:555`. `busy_timeout` provably cannot fix a cycle — both failing tests are among the
+slowest in the suite because each burns the full window before raising. Six hypotheses falsified
+(isolation, stranded lock, pragmas, PATH harnesses, xdist, Python version). The CI/local
+divergence is deliberately *unresolved* — two untested variables (macOS vs ubuntu, populated vs
+empty `~/.synlynk/`) tracked as story `[R3]` rather than guessed at.
+
+Filed `[LIVE-17]` #1816 (sev1, priority:p0) with RCA at
+`docs/rca/2026-09-28-LIVE-17-nested-writer-self-deadlock.md`. Created goal `goal-079e2f37` with
+14 linked remediation stories across four tiers, and a stack-ranked plan. Also filed #1817
+(tech-debt): the story ledger has no `update`/`delete`, so two stories mis-created during this
+session could only be retired by marking them `done`.
+
+Headline measured wins waiting in Tier 1, all small: worktree status fork parallelization **8.3×**
+(2.01s → 0.24s, and it fixes a backwards `clean == stale` heuristic), `state.db` `VACUUM` **8.4×**
+on read connect (287 MB → 28.8 MB, 89.7% freelist), lazy argparse registration ~0.25s off every
+invocation including `--version`.
+
+Cost logged via `synlynk cost log` (~$2.54, native PM work). PR #1818 opened (docs-only).
+
+[@nikhilsoman]
+
+## 2026-09-29 — R9 instruction dedup shipped, wave housekeeping, #1844 filed
+
+Shipped `[R9]` (`story-025c857c`, PERF-P5) as PR #1843: deduplicated the 5 generated instruction
+files (CLAUDE.md/GEMINI.md/AGENTS.md/GROK.md) down to identity header + pointer, with
+`AI_INSTRUCTIONS.md` now the single canonical home for the shared protocol text. Per-file sizes
+dropped ~70-85% (CLAUDE.md 44.4KB → 22.1KB; GEMINI/AGENTS/GROK ~29.5-29.8KB → ~7.3-7.5KB each).
+Marker-fence parsing (`extract_instruction_version()`) unaffected — confirmed by qa review.
+
+First dispatch (job-076a48b9) hit the recurring silent-no-op pattern: reported `done`/`0 files
+touched` while the worktree held complete real work uncommitted — pushed and opened the PR myself
+after direct inspection. Separately, the same worktree had `project-docs/todo.md` truncated
+1408→3 lines despite the task explicitly saying not to touch project-docs — caught via
+`git status --short` before staging, reverted, never committed. qa review (job found via
+`synlynk pr check`) came back CHANGES_REQUESTED: Branch Naming section dropped from all four
+tool files with no replacement, plus a doubled-backtick rendering bug in the branch-prefix line.
+Fix dispatch (job-3f326187) onto the same branch pushed its own commit correctly (no no-op this
+time — confirms the no-op pattern is intermittent per-job, not per-branch). Re-review APPROVED,
+merged as `914ee3d5`.
+
+Also discovered (not R9-caused) and filed **#1844** (sev2): `workspace-lifecycle-nudge` has been
+failing on every run for 5+ days — `completion_tracker.py::compute_completion_verdict` shells out
+to a `claude` binary unconditionally with no availability check, `FileNotFoundError` on every
+GH Actions runner. Not yet dispatched for a fix.
+
+Housekeeping: swept all newly-SAFE worktrees from this + prior batch (`synlynk worktree clean
+--apply`), archived 2 duplicate stale LIVE-17 stories via `synlynk checkpoint`, marked
+`story-025c857c` done, cost logged (~$0.27 est, 50k in / 8k out).
+
+**Budget flag:** `synlynk checkpoint` reports **$36.48 / $10.00 (365%) · 50 requests** for this
+workspace's budget window — over limit, surfaced to Nikhil, no action taken yet pending his call
+on whether to raise the limit or investigate the burn.
+
+Remaining wave stories: R11 (blocked — needs Nikhil's call on roadmap.md version renumbering),
+R6 (blocked on #1831 triage), R12 (needs approved spec first), R14 (not started). Open dispatch-
+infra issues from earlier waves (#1825-1828, #1831) still untouched. #1745 (marketing docs PR)
+still open.
+
+[@nikhilsoman]
+
+## 2026-09-30 — R12 god-module decomposition shipped, wave cleanup, #1867/#1870 filed
+
+Shipped `[R12]` (`story-54515ca1`, PERF-P3) as PR #1868: consolidated 15 duplicate `_pkg()`
+definitions into a single `synlynk._lazy.pkg()` helper, deleted the dead wizard-TUI scaffold,
+and extracted `LAUNCH_TASK_TEMPLATES` + `_DB_SCHEMA`/`_DB_SCORES_VIEW` out of `__init__.py` into
+`launch_templates.py` and `db_schema.py`. `__init__.py`: 3937 → 3129 lines. Executed via
+`superpowers:subagent-driven-development`, task-by-task (7 tasks), each with implementer →
+spec-compliance reviewer → code-quality reviewer.
+
+qa's non-authoring review on PR #1868 caught a **real regression** my own split-half test runs
+missed: `tests/test_lazy.py`'s tests 1/2 deleted (rather than restored) the real
+`sys.modules["synlynk"]` entry, poisoning cross-file test-collection order — invisible in a
+split-half run if the poisoning test and its victims land in different halves, but red on a
+whole-suite run and on all 4 CI matrix jobs. Fix dispatched to Codex with qa's own validated
+patch; verified myself via a mandatory whole-suite `pytest -q` (3422 passed, 3 skipped, 0
+failed) before merging. This is the split-half technique's known blind spot, now demonstrated
+concretely — worth remembering next time a "split-half all green" claim is the only evidence.
+
+Two more docs-only follow-up PRs (per CLAUDE.md's separate-branch-for-docs rule): #1869 filled
+in the blog post's `pr:`/`status:` frontmatter once #1868's number was known; #1871 ran
+`synlynk checkpoint` to mark `story-54515ca1` done and regenerate `todo.md`/`costs.md`. Both
+qa-reviewed and merged clean.
+
+Job-status false-negative pattern (#1377 lineage) recurred **four more times** this wave —
+`job-650202aa` (Task 6 impl), `job-085b9e18` (test fix), `job-73eafc90`, `job-ee925533`, and
+`job-271b7c73` (three separate qa review/merge jobs) all reported `circuit_breaker_tripped` or
+`timed_out` (exit -9) despite having completed their real work correctly underneath — verified
+directly via `gh pr view --json state,mergedAt,reviews` each time rather than trusting the label.
+
+Filed **#1867** (tech-debt, non-blocking): `synlynk/db.py` still imports `_DB_SCHEMA`/
+`_DB_SCORES_VIEW` via the `synlynk` package re-export rather than directly from the new
+`db_schema.py` module — spec Part B item 3 called for both to import from it directly; PR
+description explicitly notes this as a conscious deviation, not an oversight. Filed **#1870**
+(bug): `synlynk dispatch --dry-run --role qa ...` (agent arg omitted, relying on `--role` to
+resolve it) crashes with `NameError: name 'dispatch_parser' is not defined` instead of a usage
+error — `synlynk/cli.py:1950` references a stale variable name. Also logged the **6th
+recurrence** of the `project-docs/todo.md`/`costs.md` corruption pattern (#1865) — this time in
+job-085b9e18's worktree, another full-content deletion (1477 lines) rather than field reordering;
+discarded via `git checkout --` before it could be committed.
+
+Worktree Hygiene Protocol applied throughout: 3 job worktrees + 2 chore-branch worktrees removed
+and their branches deleted (local + remote confirmed via `git ls-remote --heads`), immediately
+after each PR's merge was independently confirmed rather than deferred to a batch sweep.
+
+R12 was the last item blocking the 2026-09-30 arch-review remediation wave
+(`goal-079e2f37`)'s "review recommended fixes" gate — the deferred FTUE/onboarding brainstorm
+(`story-cf24a4ab`, issue #1866) is now unblocked to start whenever picked up next. Dispatching
+investigation for #1867 and #1870 next; #1865's root cause is still unstarted (6 recurrences
+now, no fix attempted).
+
+[@nikhilsoman]
+
+## 2026-09-30 — #1864 deep investigation, worktree audit close-out (18/18), PR #1878 caught a real costs.md data-loss bug
+
+Deep-dived **#1864** (suspected pytest full-suite hang, from the same review-remediation wave as
+#1862/#1865): a genuine reproduction attempt rather than another static audit — full 3,426-test
+single-process run (340.90s, 1 unrelated failure only), ordered late-suite prefix probing, and a
+static monkeypatch-scope check. Did not reproduce. Posted honest non-reproduction findings as a
+comment rather than closing outright — worth watching for recurrence, possibly incidentally
+resolved by #1875/#1876's fixes to the same test file.
+
+Completed the deep worktree audit's remaining 18 newly-discovered worktrees (on top of the
+periodic-audit bucket): 15 confirmed superseded-by-already-merged-PR, deleted across two cleanup
+rounds (11 hit a detached-HEAD branch-delete false-alarm — `git worktree remove` had already
+succeeded, only the empty-branch-name `git branch -D ""` step errored). 2 confirmed
+active-open-PR, left untouched. 1 (`job-97ae3b14`, Graphify/Vizor mesh work) needed a
+commit-message-grep check against `origin/main` to confirm supersession by #1777 rather than
+being genuinely distinct unmerged work. The 3 that needed individual triage this session
+(`job-ee42c9eb` → #1836, `job-1ac39856` → #1823, `job-97ae3b14` → #1777) all confirmed
+already-merged via the same grep technique; cleanup command handed to Nikhil (destructive git
+ops blocked from my own Bash tool in this environment), still pending on his end due to an
+unrelated `git: command not found` PATH issue in his shim shell.
+
+Archived 46 never-committed lines of stray `tests/test_synlynk.py` work found dirty in the
+`chore/discord-herdr-bridge-spec` parent worktree (`docs/archive/chore-discord-herdr-bridge-
+uncommitted/`) per the standing archive-before-branch-removal policy — parent worktree itself
+left un-deleted, still needs Nikhil's call on whether to finish or discard that work.
+
+Filed **#1877** (tech-debt): a dispatch job (`job-2571fb9d`, #1864 investigation) silently
+produced a full uncommitted 1,525-line deletion of `project-docs/todo.md` in its own worktree —
+same-shape bug as the #1865 lineage (6 prior recurrences), caught before it could be committed.
+
+Wrote blog posts 234/235 for #1862 (PR #1875) and #1865 (PR #1876), logged a `synlynk cost log`
+entry for native PM-session work (~$1.68), and opened docs-only PR #1878 — all per the Blog
+Post and Cost Capture Protocols.
+
+**PR #1878's qa review caught a real bug of my own making**: the branch's `project-docs/
+costs.md` was captured from a stale local snapshot and silently deleted 19 pre-existing
+historical cost rows (2026-09-29 14:04-20:20) while adding the new entry — not a job-status
+false negative, a genuine content defect the non-authoring review was supposed to catch, and
+did. Root cause, now suspected rather than fully confirmed: the local `synlynk exec`/dispatch
+wrapper appears to auto-append a cost-log row to `project-docs/costs.md` in whatever branch is
+currently checked out at the repo root, uncommitted — plausible mechanism for how a branch cut
+mid-session could carry a stale snapshot forward. Worth its own issue if it recurs. Fixed by
+rebuilding `costs.md` from `origin/main`'s current content plus only the branch's genuinely new
+rows (verified via `git diff origin/main -- project-docs/costs.md` showing zero deletions),
+which required a second detour through a diverged-remote-tip reconciliation (force-pushed the
+verified-correct content over a duplicate/broken remote commit — not a discard of independent
+work). PR merged clean on the second review pass at the corrected head. Also newly confirmed:
+`gh pr merge` reporting a local error (blocked by an uncommitted-changes checkout conflict) can
+still mean the merge already succeeded server-side — verify via `gh pr view --json state,
+mergedAt` before assuming a retry is needed, not just for the worktree-conflict case already
+known from earlier in the wave.
+
+Two job-status false negatives this session: `job-6d688fbb` (first PR #1878 review dispatch)
+hit `circuit_breaker_tripped` and posted zero reviews — confirmed via `reviews: []` on the PR,
+not trusted from the label; re-dispatched clean as `job-902c56d1`.
+
+Remaining open: the ~74-entry original periodic-audit bucket still needs Nikhil's disposition
+call (individual triage vs. bulk archive-then-discard); the `chore/discord-herdr-bridge-spec`
+parent worktree's stray test work is still undecided; #1877 not yet dispatched.
+
+**Issue #1929 / PR (pending):** Extended the `_FAST_CLI` path for ordinary `synlynk jobs`
+and `synlynk status` invocations. The fast status path avoids the legacy compatibility graph
+and expensive worktree hint during cold start; the fast jobs path renders the read-only ledger
+table without importing dispatch/reconciliation modules. Added a subprocess median budget test
+(`tests/test_cli_cold_start.py`) enforcing <150 ms for `jobs --all` and `status --json`.
+Focused verification: 174 passed; cold-start budget test: 2 passed.
+
+2026-10-04 — Issue #1979 verification: confirmed #1922's `job-status-truth.v1`
+projection was user-visible only through `synlynk jobs --json`; the normal
+`synlynk jobs --all` table omitted oracle verification and evidence details.
+Added compact verification state, reason code, and evidence count to that table,
+with regression coverage. Confirmed #1921 GC is invocation-driven and limited
+to `~/.synlynk/projects/*/state.db`; filed follow-up issue #2025 for the
+remaining local-state bound and coverage gaps. Verification: `tests/test_agent_cli.py -v`
+125 passed, 1 skipped; focused jobs tests 2 passed.
+2026-10-03 — Implemented issue #1928: made root `VERSION` the single release source, removed
+runtime/release duplication, updated README metadata, added the required `release-docs` CI gate,
+and added synchronization coverage. Focused tests: 530 passed; `release --check-docs` passes.
+
+2026-10-03 — Implemented issue #1951 after approval of the independent cost-audit design and plan.
+Added a transactional terminal-decision outbox, append-only cost source/event tables, structured
+usage and legacy-ledger import, provider JSONL/JSON/CSV import, versioned model-rate estimates,
+idempotent reconciliation/reporting, and dry-run-by-default source corrections. Cost audit only
+reads terminal decisions and cannot write status. Targeted suites: 320 passed, 1 skipped; the
+existing loopback callback test passes when run with local socket permission. CLI help and
+`git diff --check` pass.
+
+[@nikhilsoman]

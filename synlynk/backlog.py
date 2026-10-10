@@ -668,11 +668,21 @@ def auto_promote_backlog(
                         goal_id,
                     ),
                 )
-                if goal_id:
-                    conn.execute(
-                        "INSERT OR IGNORE INTO goal_contributions (goal_id, story_id) VALUES (?, ?)",
-                        (goal_id, story_id),
+                try:
+                    from synlynk.governs_engine import associate_story
+                    associate_story(
+                        conn,
+                        story_id,
+                        title=title,
+                        explicit_goal=goal_id,
+                        issue_number=num,
+                        text_content=body,
+                        emit=False,
                     )
+                except sqlite3.OperationalError:
+                    # Keep compatibility with callers that provide a minimal
+                    # legacy stories table; migrated ledgers are fully wired.
+                    pass
                 conn.commit()
             except Exception:
                 pass
@@ -856,6 +866,11 @@ def stage_discovered_work(
                     str(gh_issue_num) if gh_issue_num else None,
                 ),
             )
+            try:
+                from synlynk.governs_engine import associate_story
+                associate_story(conn, story_id, title=title, text_content=description, emit=False)
+            except sqlite3.OperationalError:
+                pass
             conn.commit()
         except Exception as exc:
             return {"staged": False, "reason": str(exc), "fingerprint": fp}

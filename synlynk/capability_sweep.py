@@ -161,7 +161,7 @@ def cmd_capability_sweep_for_harness_model(harness_name: str, model_id: str, con
     for task_id, role, skill, difficulty, template in tasks:
         prompt = template.format(context=f"a {skill} scenario at {difficulty} difficulty")
         executor_result = _dispatch_calibration_task(
-            harness_name, prompt, model=model_id
+            harness_name, prompt, model=model_id, db_conn=conn
         )
         cost_usd = _extract_task_cost_usd(executor_result)
         total_cost += cost_usd
@@ -175,8 +175,8 @@ def cmd_capability_sweep_for_harness_model(harness_name: str, model_id: str, con
         verdict = _verify_calibration_result(verifier_agent, harness_name, model_id, skill, executor_result)
         conn.execute(
             "INSERT INTO capability_calibration_results "
-            "(result_id, harness_name, model_id, task_id, score, cost_usd, verified_by, run_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            "(result_id, harness_name, model_id, task_id, score, cost_usd, verified_by, run_at, quality_verified) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 str(uuid.uuid4()),
                 harness_name,
@@ -186,6 +186,7 @@ def cmd_capability_sweep_for_harness_model(harness_name: str, model_id: str, con
                 cost_usd,
                 verifier_agent,
                 now,
+                1 if verdict["quality_verified"] else 0,
             ),
         )
     conn.commit()
@@ -221,7 +222,11 @@ def _verify_calibration_result(
     skill: str,
     executor_output: dict,
 ) -> dict:
-    """Ask a different harness to score the executor output and parse its verdict."""
+    """Ask a different harness to score the executor output and parse its verdict.
+
+    ``quality_verified`` distinguishes a real parsed verdict from the 5.0/True
+    fallback (gh:#2170) so callers do not treat a fallback as a real score.
+    """
     label = SFIA_CODES.get(skill, {}).get("label", skill)
     verify_task = (
         f"Review this {label} calibration task output from another harness and score it "
@@ -236,10 +241,25 @@ def _verify_calibration_result(
     result = _dispatch_calibration_task(verifier_harness, verify_task)
     from synlynk.costs import extract_verifier_meta
 
-    meta = extract_verifier_meta(result.get("output", "")) or {}
+    raw_output = result.get("output", "")
+    meta = extract_verifier_meta(raw_output) or {}
+    quality_verified = "quality" in meta
+
+    if not quality_verified:
+        print(
+            f"  [sweep] WARNING: verifier {verifier_harness} output for "
+            f"{executor_harness}/{model} ({skill}) had no parseable "
+            "'# synlynk-meta' quality block — falling back, marking unverified.\n"
+            "  --- raw verifier output (first 2000 chars) ---\n"
+            f"{raw_output[:2000]}\n"
+            "  --- end raw verifier output ---",
+            file=sys.stderr,
+        )
+
     return {
         "quality": float(meta.get("quality", 5.0)),
         "correct": bool(meta.get("correct", True)),
+        "quality_verified": quality_verified,
     }
 
 
@@ -287,8 +307,8 @@ def _run_sweep(discovered: dict, skills: list) -> None:
                     conn.execute(
                         """INSERT INTO capability_ratings
                            (story_id, agent, model_version, discipline, org_domain, industry, phase,
-                            signal_source, quality, quality_auto, verifier_agent, correct)
-                           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+                            signal_source, quality, quality_auto, verifier_agent, correct, quality_verified)
+                           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                         (
                             "__baseline_seed__",
                             harness,
@@ -302,6 +322,7 @@ def _run_sweep(discovered: dict, skills: list) -> None:
                             verdict["quality"],
                             verifier_harness,
                             1 if verdict.get("correct", True) else 0,
+                            1 if verdict.get("quality_verified", True) else 0,
                         ),
                     )
                 conn.commit()

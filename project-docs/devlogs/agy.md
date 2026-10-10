@@ -1,5 +1,294 @@
 # Agy Devlog
 
+## 2026-10-02 — 15-Minute Time-to-Wow Field Trials Across Target Repositories
+
+### Executed & Verified Across Target Repositories
+- **Trial 1 (rxcc — Monorepo / Full-Stack):**
+  - Executed `synlynk brainstorm` and `synlynk brief` against `/Users/nikhilsoman/dev/rxcc`.
+  - Discovered 53,186 source files, 19,909 test files, and `package.json`.
+  - Calculated healthy test ratio of 0.42 (>= 0.25 safety threshold), appropriately assigning Goal 2 to `[P1] Regression Suite Hardening & CI Acceleration`.
+  - Executive Brief written to `rxcc/project-docs/brief.md` in ~10 seconds.
+- **Trial 2 (cc-videoreframing — Python Backend / Media Processing):**
+  - Executed `synlynk brainstorm` and `synlynk brief` against `/Users/nikhilsoman/dev/cc-videoreframing`.
+  - Discovered 32,339 source files, 10,649 test files, and `package.json`.
+  - Calculated healthy test ratio of 0.45 (>= 0.25 safety threshold), assigning Goal 2 to `[P1] Regression Suite Hardening & CI Acceleration`.
+  - Executive Brief written to `cc-videoreframing/project-docs/brief.md` in ~4 seconds.
+- **Trial 3 (playblazer-ng — Frontend / Angular Web Application):**
+  - Executed `synlynk brainstorm` and `synlynk brief` against `/Users/nikhilsoman/dev/playblazer-ng`.
+  - Discovered 571 source files, 36 test files, and `setup.py`.
+  - Detected low test ratio of 0.06 (< 0.25 safety threshold), dynamically elevating Goal 2 to `[P0] High-Risk Test Coverage Remediation` to guard untested code paths before autonomous feature execution.
+  - Executive Brief written to `playblazer-ng/project-docs/brief.md` in ~4 seconds.
+- **Trial 4 (Greenfield Blueprint Sandboxes):**
+  - Executed `synlynk brainstorm` across `personal_assistant` (with multi-charter options: bills, email, calendar) and `dotfiles`.
+  - Generated durable milestone goals (OAuth hub, agent charters, drift CLI, secret hygiene gate) in <1 second.
+- **Milestone Outcome:** Verified that all 4 criteria for `v1.0.0-rc1` (Zero-Risk Packaging, Autonomous Goal Brainstorm, 15-Minute Field Trials, and Test Suite Runtime Remediation) are fully met.
+[@agy, @nikhilsoman]
+
+## 2026-10-02 — Circuit Breaker Clean-Exit Preservation (LIVE-19) & Quad-Harness Subscription Dual-Ledger Cost Reporting (LIVE-20)
+
+### Shipped & Verified Across Fleet
+- **Spec & Implementation Plan Committed:**
+  - `docs/superpowers/specs/2026-10-02-live-19-live-20-circuit-breaker-and-dual-ledger-remediation-design.md` (`d6315fc5`).
+  - Implementation plan `docs/superpowers/plans/2026-10-02-live-19-live-20-circuit-breaker-and-dual-ledger-remediation.md` (`29544f2e`).
+  - Task briefs 1–5 in `.superpowers/sdd/2026-10-02-live-19-live-20-remediation/` (`e7c5ea8f`).
+- **Fleet Execution:**
+  - **Task 1 (Circuit Breaker Clean-Exit Preservation & Ceiling Calibration):** Updated `synlynk/circuit_breaker.py` to evaluate process liveness and only trip when actively killed (`killed=True`), logging telemetry on post-exit limit breaches. Calibrated limits ($15/5M default; $2/500k fast, $10/3M pro, $15/5M reasoning), verified in `tests/test_circuit_breaker_live19.py` (`01ce1dc1`).
+  - **Task 2 (Jobs Reconciliation Observer-Effect Elimination):** Updated `synlynk/jobs.py` (`_reconcile_jobs_unlocked` and `_reconcile_daemon_jobs`) to gate circuit breaker transitions on `cb_res.tripped and cb_res.process_killed`, preserving clean 0 exit codes on completed jobs, verified in `tests/test_jobs_reconcile_live19.py` (`d2d5dd46`).
+  - **Task 3 (Quad-Harness Subscription Configuration & harness_billing Seed):** Configured `.synlynk/config.json` with user's confirmed monthly billing ($20 Claude, $20 Codex, $20 Agy, $30 Grok = $90/mo base). Updated `_default_harness_billing()` and `load_config()`, verified in `tests/test_harness_billing_config.py` (`cc5e5db5`).
+  - **Task 4 (Dual-Ledger Markdown Generation & Monthly Amortization Rollup):** Updated `synlynk/db.py::_generate_costs_md()` with `$actual [sub] (API: $api)` formatting and appended Subscription Amortization & Dual-Ledger Summary section. Added `synlynk cost billing` in `synlynk/costs.py` and `synlynk/cli.py`, updated taxonomy and regenerated command docs, verified in `tests/test_costs_dual_ledger_live20.py` (`d8638a79`).
+  - **Task 5 (End-to-End Integration, True-Up & Regression Verification):** Created `tests/test_live19_live20_e2e.py` verifying full lifecycle worker clean exit under token pressure, true-up reconciliation against $90.00 base, and cost billing output. Full 47-test regression suite green (`fc8d46e9`).
+[@agy, @nikhilsoman]
+
+## 2026-10-02 — Autonomous Repo Intelligence & Goal-Forming Engine (Shipped & Merged in PR #1903)
+
+### Shipped & Verified Across Fleet
+- **Spec & Implementation Plan Committed:**
+  - `docs/superpowers/specs/2026-10-02-autonomous-repo-intelligence-and-goal-forming-design.md` (`52df20a1`).
+  - Implementation plan `docs/superpowers/plans/2026-10-02-autonomous-repo-intelligence-and-goal-forming.md` (`c49be315`).
+- **Fleet Execution via `synlynk dispatch`:**
+  - **Task 1 (Repo Classifier & Welcome Fork Engine):** Dispatched to `agy` (`job-e68f4af8`, `db2668c7`). Created `synlynk/repo_classifier.py` and `tests/test_repo_classifier.py` (5/5 passing).
+  - **Task 2 (Curated Greenfield Blueprints Engine):** Dispatched to `codex` (`job-da7839e6`, `b93c8b00`). Created `synlynk/greenfield_blueprints.py` with Dotfiles and Personal Assistant blueprints + 6 digital native agent charters (Bills, Reimbursements, Docs, Shopping, Fitness, Nutrition), verified in `tests/test_greenfield_blueprints.py` (3/3 passing).
+  - **Task 3 (Brownfield Evidence & Goal Synthesizer):** Dispatched to `claude` (`job-4539e21d`, `abee70d4`). Created `synlynk/goal_synthesizer.py` with AST evidence mapping, 3–5 durable goals synthesis, and ambient fleet 1-shot refinement with offline fail-safe, verified in `tests/test_brownfield_synthesizer.py` (19/19 passing).
+  - **Task 4 (Executive Brief Generator & TUI Review):** Dispatched to `agy` (`job-ab91bc88`, `d6acc0c1`). Created `synlynk/brief.py` with `project-docs/brief.md` generation and interactive terminal TUI review, verified in `tests/test_brief_and_tui.py` (2/2 passing).
+  - **Task 5 (Memorable Vizor Port Hunting Ladder):** Dispatched to `codex` (`job-14490a9c`, `559d1cdb`). Added `MEMORABLE_VIZOR_PORTS = [33333, 44444, 55555, 22222, 11111]` with sequential hunting and legacy fallback in `synlynk/viz.py`, verified in `tests/test_vizor_memorable_ports.py` (5/5 passing) and `tests/test_viz.py` (44/44 passing).
+  - **Task 6 (LIVE-21 Remediation — Auto-Probe in Onboarding & Defensive Dispatch Gate):** Dispatched to `codex` (`job-c80288da`, `350f7be4`). Auto-probes configured harnesses in `init()` and added defensive inline auto-probe in `_preflight_dispatch()`, verified in `tests/test_onboarding_autoprobe.py` (2/2 passing) and `tests/test_dispatch.py` (158/158 passing). Resolves issue #1901.
+  - **Task 7 (CLI Integration & End-to-End Verification):** Dispatched to `claude` (`job-5eea7466`, `9b13c52f`). Added `synlynk brainstorm` and `synlynk brief` CLI subcommands in `synlynk/cli.py`, added `tests/test_autonomous_goal_forming_e2e.py` (6/6 passing).
+- **Taxonomy & Docs Parity:** Registered `brainstorm` and `brief` in `synlynk/taxonomy.py` (`daa149a0`) and regenerated documentation via `generate_command_docs.py` (`af2dcb64`).
+- **PR Review & Merge:** PR #1903 approved by QA reviewer (`job-c7c39464`) and squash-merged into `main` (`4574cb6c`).
+- **Verification:** 49/49 feature tests passing; 6/6 GitHub Actions CI matrix checks green.
+- **Hygiene:** All worktrees cleaned up, branch pruned, costs logged in `project-docs/costs.md`.
+[@agy, @nikhilsoman]
+
+## 2026-10-01 — Zero-Risk Packaging & Standalone Distribution Engine (Tasks 1–7 Complete)
+
+
+### Shipped & Verified Across Fleet
+- **Spec, Decisions & Implementation Plan Committed:**
+  - `docs/superpowers/specs/2026-10-01-zero-risk-packaging-and-standalone-distribution-design.md` (`46e317cc`).
+  - DECIDE panel record `project-docs/decisions/2026-10-01-zero-risk-packaging-standalone-distribut.md` (`dec-f77e216e`).
+  - Implementation plan `docs/superpowers/plans/2026-10-01-zero-risk-packaging-and-standalone-distribution.md` (`63271874`).
+- **Fleet Execution via `synlynk dispatch`:**
+  - **Task 1 (Package Standards & PEP 561):** Dispatched to `codex` (`job-90b340cb`, `37b183bb`). Set `requires-python = ">=3.10"`, added Python 3.10–3.13 classifiers, created `synlynk/py.typed` marker, verified 2/2 tests in `tests/test_packaging_metadata.py`.
+  - **Task 2 (Install Manifest & Provenance):** Dispatched to `agy` (`job-21172605`, `6d87370c`). Created `synlynk/install_manifest.py` (`get_install_manifest`, `write_install_manifest`, `record_install`, `update_ecosystem_status`), verified 4/4 tests in `tests/test_install_manifest.py`.
+  - **Task 3 (Standalone Venv & Atomic Release Directory Engine):** Dispatched to `claude` (`job-d9744a33`, `f0626ebd`). Created `synlynk/standalone_venv.py` (`create_standalone_release`, `activate_release_symlink`, `rollback_standalone_release`), verified in `tests/test_standalone_venv.py`.
+  - **Task 4 (Multi-Tier Upgrade & Rollback Parity):** Dispatched to `codex` (`job-280879fc`, `5462a805`). Updated `_detect_install_type()` in `synlynk/upgrade.py` for manifest-first detection and multi-tier parity, connected `rollback_standalone_release()` in `synlynk/rollback.py`, verified 3/3 tests in `tests/test_tier_upgrade_rollback.py` and 54/54 regression tests.
+  - **Task 5 (Resilient 4-Tier Installer Ladder):** Dispatched to `grok` (`job-5fbd441a`, `5d518687`). Rewrote `install.sh` with Python >=3.10 check, 4-tier fallback (`uv` → `pipx` → consent-gated bootstrap → standalone stdlib `venv`), and PATH remediation hint, verified in `tests/test_install_sh_matrix.py`.
+  - **Task 6 (Decoupled Ecosystem Provisioner):** Dispatched to `agy` (`job-e7dca3d9`, `37dc2ee4`). Created `provision_ecosystem_tools()`, registered `superpowers` in `RECOMMENDED_TOOLS`, wired `synlynk doctor --provision`, verified 2/2 tests in `tests/test_tool_installer_provision.py`.
+  - **Task 7 (Hermetic Packaging & Zero-Risk CI Verification):** Dispatched to `claude` (`job-bc4e273a`, `c0570dea` & `59f0b533`). Created `tests/test_zero_risk_packaging.py` building pure wheel into sandbox venv outside repo, verifying clean standalone execution.
+- **Verification:** Full 14-test epic suite passing (14/14 green) and full 65-test packaging regression suite passing (65/65 green).
+- **Hygiene:** All job worktrees cleanly pruned, costs captured in `project-docs/costs.md`, branch `feat/agy/zero-risk-packaging-distribution` pushed to origin.
+[@agy, @nikhilsoman]
+
+## 2026-10-01 — Unified Onboarding Journeys & Self-Updating Lifecycle Engine (Tasks 1–9 Complete)
+## 2026-10-01 — Unified Onboarding Journeys & Self-Updating Lifecycle Engine (Tasks 1–9 Complete, PR #1894 Merged)
+
+### Shipped & Verified Across Fleet
+- **Spec, Decisions & Implementation Plan Committed:**
+  - `docs/superpowers/specs/2026-10-01-unified-onboarding-journeys-and-lifecycle-design.md` (`31bece57`).
+  - DECIDE panel records `project-docs/decisions/2026-10-01-unified-onboarding-journeys-self-updatin.md` (`dec-00b401f2`) and `project-docs/decisions/2026-10-01-phase-2-topology-discovery-workspace-mod.md`.
+  - Implementation plan `docs/superpowers/plans/2026-10-01-unified-onboarding-journeys-and-lifecycle.md` (`68f26ec6`).
+- **Fleet Execution via `synlynk dispatch`:**
+  - **Task 1 (DB Schema & Migration):** Dispatched to `codex` (`job-38de1722`, `b10f5d7d`). Added `ONBOARDING_SESSIONS_SCHEMA` and `_migrate_onboarding_sessions` in `synlynk/db_schema.py` and `synlynk/db.py`.
+  - **Task 2 (Topology Discovery Engine):** Dispatched to `agy` (`job-55cee61c`, `a5fc3c8d`). Created `synlynk/topology_discovery.py` covering 4 archetypes (Container Directory, Monorepo, Polyrepo App Group, Standalone Repo) with candidate split/merge mutations.
+  - **Task 3 (Headless State Machine):** Dispatched to `claude` (`job-62daddab`, `bb901205`). Created `synlynk/onboarding_state.py` covering 10 lifecycle stages with resume and confirmation helpers.
+  - **Task 4 (Probe-Verified Binding):** Dispatched to `grok` (`job-550979c8`, `1a8c7fcd`). Created `synlynk/probe_binding.py` with multi-harness auth probing and system dependency validation.
+  - **Task 5 (Fleet Templates & Version Policy):** Dispatched to `codex` (`job-52ec8b1b`, `aaf96f86`). Created `synlynk/fleet_templates.py` and `synlynk/version_policy.py`.
+  - **Task 6 (First-Win Loop):** Dispatched to `claude` (`job-32ed806c`, `60aef926`). Created `synlynk/first_win_loop.py` with non-empty git diff effect verification.
+  - **Task 7 (Vizor REST/SSE APIs & HUD):** Dispatched to `agy` (`job-856a4c93`, `c0425649`). Updated `synlynk/viz.py` with 10-stage HUD stepper, `/w/<slug>/api/onboarding/state`, and `/w/<slug>/api/onboarding/topology/confirm`.
+  - **Task 8 (TUI Surface Integration):** Dispatched to `grok` (`job-1d8124f4`, `b56e1a67`). Connected `cmd_wizard_init` in `synlynk/wizard.py` to the state machine with headless non-interactive mode.
+  - **Task 9 (End-to-End Matrix):** Dispatched to `claude` (`job-754f3d79`, `232192e4`). Created `tests/test_unified_onboarding_e2e.py` verifying full container and monorepo matrix paths.
+- **Verification & PR Merge:**
+  - Full 25-test onboarding verification suite passing (25/25 green).
+  - Resolved backward-compatibility in `synlynk/viz.py` for legacy 3-view cards alongside 10 lifecycle stages (`2c5d261f`).
+  - All 6 GitHub Actions CI matrix checks green (Python 3.10, 3.12, macOS, EPUBCheck, QA-gate).
+  - PR #1894 reviewed and approved by `qa` role (`synlynk-synlynk-qa[bot]`) and squash-merged into `main` (`1f5a4bab`).
+- **Hygiene:** All job worktrees cleanly pruned, costs captured in `project-docs/costs.md`, `main` branch synchronized.
+[@agy, @nikhilsoman]
+
+## 2026-09-30 — Vizor Repo-Truth Purge & Native View HUD Shells (Spec 2, Story story-6a18ed23)
+
+### Shipped & Verified
+- **Spec 2 Brainstorm & Plan Committed (`37b8868a`, `3d9eaeac`):**
+  - Authored and committed `docs/superpowers/specs/2026-09-30-vizor-repo-truth-purge-and-native-hud-shells-design.md` and `docs/superpowers/plans/2026-09-30-vizor-repo-truth-purge-and-native-hud-shells.md`.
+  - Registered and linked `story-6a18ed23` to `goal-e3840370`.
+- **Task 1: TDD Verification Suite (`tests/test_vizor_repo_truth.py`, commit `c09a630e`):**
+  - Added failing assertions verifying that external repositories never leak Synlynk daemons, never leak Synlynk onboarding journeys, and discover local UI mockups and monorepo packages.
+- **Task 2: Dynamic Infrastructure Discovery & Daemon Purge (`synlynk/viz_views.py`):**
+  - Refactored `extract_infra_nodes()` with `_discover_infra_components()`:
+    - Scans `docker-compose*.yml`, `Dockerfile*`, and `prisma/schema.prisma` for real container services, exposed ports, and database models.
+    - Scans `.env.example` / `.env` for outbound external service endpoints (payments, cloud storage, AI providers).
+    - Hardcodes Synlynk's internal daemons (:8721, :27472, StateDB, LLM egress) ONLY when `is_synlynk_core` is True; external repositories receive clean, dynamic components or a "Serverless / Pure Codebase" card.
+- **Task 3: Dynamic Monorepo, Screen & UI Prototype Discovery (`synlynk/viz_views.py`):**
+  - Refactored `extract_product_nodes()`:
+    - Discovers monorepo apps and packages in `apps/*` and `packages/*` from `package.json`.
+    - Crawls `.superpowers/brainstorm/*/content/*.html` and `.superpowers/brainstorm/ux-screenshots/` for HTML UI prototypes, registering them as interactive preview screens with extracted `<title>` tags.
+    - Purged hardcoded `synlynk/cli.py` and restricted Synlynk canonical journeys to `is_synlynk_core`.
+- **Task 4: Native Glassmorphic Empty HUD Shell for Architect Map (`synlynk/viz.py`):**
+  - Replaced the broken 404 iframe fallback in `generate_architect_map_html()` (`tube.html`) with an obsidian glassmorphic HUD:
+    - Status badge `AWAITING AST INDEXING` with pulsing lattice background.
+    - Explanatory copy and 1-click trigger button (`triggerAmKgRefresh`) with terminal command `synlynk scan --deep`.
+  - In `_write_cache()`: dynamically writes fallback `graphify.html` and `graph.html` into `VIZ_CACHE_DIR`, eliminating raw browser 404 errors even on direct or iframe URL loads.
+  - Added `tests/test_vizor_architect_hud.py` verifying HUD rendering and zero-404 guarantee (2/2 passed).
+- **Task 5: True Ecosystem Radar & World Purge (`synlynk/viz_views.py`):**
+  - Guarded `extract_world_nodes()` so external repositories default to `.git` and `runtime` rather than leaking `synlynk/gh.py`, `synlynk/dispatch.py`, and `synlynk/media.py`.
+- **Task 6: Live Validation Against `rxcc` & Multi-Workspace Regression (`tests/test_vizor_rxcc_truth.py`):**
+  - Verified against live `/Users/nikhilsoman/dev/rxcc`: discovers all apps (`web`, `api`, `admin`, etc.), extracts brainstorm mockups, discovers Prisma schemas, confirms 0 Synlynk daemons/journeys leak, and renders Architect Map HUD cleanly.
+  - Optimized directory walk skip lists (`worktrees`, `.worktrees`, `.pnpm-store`, `.turbo`) reducing full monorepo scan time from 15.38s to 0.41s.
+  - Full Vizor regression suite passing: 27/27 tests in 2.38s.
+[@agy, @nikhilsoman]
+
+## 2026-09-30 — Vizor Workspace-Scoped Slug Routing: Tasks 1 & 2 Shipped (Spec 1)
+
+### Shipped & Verified
+- **Spec 1 Implementation Plan Committed (`e59d1430`):**
+  - Authored and committed `docs/superpowers/plans/2026-09-30-vizor-workspace-scoped-routing.md` defining 5 bite-sized TDD tasks with strict isolation invariants.
+- **Task 1: `WorkspaceContext` & Registry Resolver (`synlynk/vizor_daemon.py`, commit `ab7b18e2`):**
+  - Created frozen `WorkspaceContext` dataclass with `slug`, `repo_path`, `db_path`.
+  - Implemented `resolve_workspace_context(slug: str)` querying `synlynk.state_registry.registry_path()`. Rejects invalid regex, traversal attempts (`../../`), and missing disk paths.
+  - Verified with `tests/test_vizor_workspace_context.py` (2/2 passed).
+- **Task 2: Context-Aware Board Data & Mutations (`synlynk/board.py`, commit `4c0a3fd7`):**
+  - Implemented `board_data_for_context(ctx, ...)`, `update_stage_for_context(ctx, ...)`, and `update_status_for_context(ctx, ...)`.
+  - Scoped database operations strictly to `ctx.db_path` and `ctx.slug` without coupling to process working directory or `repo_path="."`.
+  - Verified with `tests/test_board_context_scoping.py` (7/7 passed) and full board suite (13/13 passed).
+- **Task 3: Scoped Routing Dispatcher in `WorkspaceRoutingHandler` (`synlynk/vizor_daemon.py`, commit `063a5061`):**
+  - Dispatched to Codex via `synlynk dispatch codex` (`job-233d436b`) with story `story-b24ec68c`.
+  - Handled dynamic routes `/w/<slug>/api/board` (GET with query filters), `/w/<slug>/api/board/stage` (POST), and `/w/<slug>/api/board/status` (POST).
+  - Added `do_POST()` handler to `WorkspaceRoutingHandler`.
+  - Added `tests/test_vizor_scoped_routing.py` testing two-workspace isolation and rejection of unknown slugs.
+  - Automated cost capture logged $2.06 to `project-docs/costs.md`.
+  - Fast-forward merged commit `063a5061` into `feat/agy/vizor-workspace-scoped-routing`. All 11/11 tests passing.
+- **Task 4: Template Fetch Relative Path Conversion (`synlynk/viz.py`, commit `b8f81d19`):**
+  - Dispatched to Codex via `synlynk dispatch codex` (`job-8814a9e5`) with story `story-b24ec68c`.
+  - Converted board HTML client fetch calls in `generate_board_html()` from absolute `/api/board...` to relative `api/board...` (preserving `api/board?`, `api/board/status`, `api/board/stage`).
+  - Added `tests/test_vizor_html_relative_routes.py` verifying presence of relative paths and absence of absolute root paths.
+  - Automated cost capture logged $0.93 to `project-docs/costs.md`.
+  - Fast-forward merged commit `b8f81d19` into `feat/agy/vizor-workspace-scoped-routing`. All 12/12 tests passing.
+- **Task 5: Multi-Workspace Concurrent Regression Suite (`tests/test_vizor_multi_workspace_e2e.py`, commit `0d8c2a12`):**
+  - Dispatched to Codex via `synlynk dispatch codex` (`job-b2b476a9`) with story `story-b24ec68c`.
+  - Added `tests/test_vizor_multi_workspace_e2e.py` testing concurrent thread pool requests across `alpha` and `beta` workspaces with `CWD = /` simulation.
+  - Verified cross-workspace mutation isolation (updating `alpha` to `execute` leaves `beta` untouched in `open`).
+  - Updated legacy assertion in `tests/test_board.py` (`ef96b8fb`) for relative route assertions.
+  - Automated cost capture logged $0.05 to `project-docs/costs.md`.
+  - Fast-forward merged commit `0d8c2a12` into `feat/agy/vizor-workspace-scoped-routing`. Full test suites (57/57 passed).
+- **Spec 1 Complete:**
+  - All 5 tasks of `docs/superpowers/plans/2026-09-30-vizor-workspace-scoped-routing.md` implemented, verified, and committed.
+[@agy, @nikhilsoman]
+
+## 2026-09-25 — AST Knowledge Graph Lifecycle, Context Packager, Sparse Worktrees & Jev Decisioning Synergy (Issues #1787, #1712)
+
+### Scoped & Minted
+- **Phase 1: Knowledge Graph Lifecycle, Rich Packager & Sparse Worktree Scoping (`story-3cddd9d2`, Issue #1787, Goal `goal-e3840370`):**
+  - Minted story in `state.db` and created GitHub Issue [#1787](https://github.com/nikhilsoman/synlynk/issues/1787).
+  - Designed topbar manual refresh action button for `logical.html` & `tube.html`.
+  - Designed automated background extraction on `HEAD` commit drift in `synlynk watch` and pre-dispatch JIT cache validator in `synlynk/dispatch.py`.
+  - Upgraded context packager architecture (`synlynk/pack.py`) with canonical community clustering, AST signature & docstring inlining, and reverse test suite discovery.
+  - Linked AST dependency closures to `synlynk/worktree_sparse.py` to auto-derive minimal `scoped_paths` for cone-mode worktrees.
+- **Phase 2: Jev (TypeSafe.ai System 1 Decision Model) Synergy (`story-0f7043d7`, Issue #1712, Goal `goal-c7113f58`):**
+  - Analyzed zero-token, sub-10ms feature extraction from local AST Knowledge Graph (`impact_score`, `blast_radius`, `inbound_degree`, `community_span`, `component_kind`).
+  - Formalized how structured graph features ground Jev for sub-20ms typed model/harness routing, speculative fan-out arbitration, and merge-gate policy checks (`synlynk policy check-merge`).
+  - Updated issue [#1712](https://github.com/nikhilsoman/synlynk/issues/1712) with architectural findings.
+- **Implementation Status:** Stories minted and linked; implementation held per user request.
+## 2026-09-25 — AST Knowledge Graph Lifecycle Triggers, Rich Context Packager & AST-Scoped Sparse Worktrees (PR #1788, Closes #1787, Goal goal-e3840370)
+
+### Shipped & Verified
+- **Rich AST Context Packager (`synlynk/pack.py`):**
+  - Upgraded `synthesize_context_pack()` to group target symbols by canonical community subsystem (e.g. `synlynk/viz.py · VizorHandler`).
+  - Inlined concise function signatures and AST docstrings directly into Turn-1 dispatch prompt context packs.
+  - Added automated reverse test suite discovery: follows inbound caller edges to discover test files (e.g. `pytest tests/test_*.py`) exercising the target symbols and renders `### Suggested Verification Test Targets`.
+- **AST-Guided Sparse Worktrees (`synlynk/worktree_sparse.py`):**
+  - Implemented `derive_sparse_cone_paths_from_graph(repo_root, task_text, story_id)` to automatically extract minimal directory cones (`scoped_paths`) from target AST symbols and 1-hop caller/callee dependencies.
+- **Automated Lifecycle Triggers (`synlynk/daemon.py`, `synlynk/dispatch.py`):**
+  - Added `_check_graph_staleness_and_refresh()` to `WatchDaemon`: detects git `HEAD` commit drift in the background with 30s debounce cooldown and triggers non-blocking AST extraction.
+  - Added JIT cache validator in `_format_prompt_for_agent()`: auto-extracts AST graph if missing before packaging context.
+- **Topbar Manual Refresh Action & Dynamic Feedback (`synlynk/viz.py`):**
+  - Added `#am-kg-refresh-btn` and `#bs6-kg-refresh-btn` to the floating topbar dropdown toolbar in Architect Map (`tube.html`) and Logical View (`logical.html`).
+  - Added `triggerAmKgRefresh()` and `triggerBs6KgRefresh()` JS handlers: disables button, shows spinner/progress text, executes `POST /w/<slug>/api/graph/refresh`, reloads iframe on completion, updates status chips, and shows toast feedback.
+- **Testing & Verification:**
+  - Added unit test suites `tests/test_pack_rich.py`, `tests/test_worktree_sparse_ast.py`, `tests/test_watch_graph_drift.py`, `tests/test_viz_refresh_button.py`.
+  - 36/36 focused unit tests and 361/361 full test suite passing cleanly.
+[@agy, @nikhilsoman]
+
+## 2026-09-25 — Knowledge Graph LOD Zoom, Connection Filtering & Rich Node Detail Sidebar (PR #1785, Closes #1783, Goal goal-e3840370)
+
+### Shipped & Verified
+- **Level-of-Detail (LOD) Zoom Degree Filtering (`synlynk/viz.py`):**
+  - Integrated dynamic LOD connection thresholding:
+    - **Level 0 (Macro Overview, scale < 0.45, default):** Displays only nodes with $\ge 3$ connections, removing macro clutter and label overlap.
+    - **Level 1 (Subsystem, scale 0.45–0.85):** Displays nodes with $\ge 2$ connections.
+    - **Level 2 (Component Detail, scale 0.85–1.40):** Displays nodes with $\ge 1$ connection.
+    - **Level 3 (Micro Inspection, scale $\ge 1.40$):** Displays all symbols ($\ge 0$ connections).
+  - Inspection & search override: selected/searched nodes and their direct neighbors always remain visible.
+- **Google Maps-Style Floating Zoom Bar (`synlynk/viz.py`):**
+  - Embedded glassmorphic floating zoom bar on the canvas (`.vis-map-zoom-bar`) with `+` (zoom in step), `−` (zoom out step), `⊙` (reset/fit overview), and interactive stepped level pills (`L0`–`L3`) bound to mousewheel and pinch zoom events.
+- **Rich Canonical Node Metadata & Descriptions (`synlynk/viz_views.py`, `synlynk/viz.py`):**
+  - Added `derive_canonical_community_metadata()` extracting primary source files, functional descriptions (from docstrings and member symbols), member AST symbol lists, and semantic kind labels (`Service Class`, `Module Cluster`, `Test Suite`, `Data Model`, `CLI Tool`).
+  - Redesigned the node inspection sidebar (`showInfo`) with canonical name, semantic type pills, functional description cards, source file links, community ID, connectivity count, contained symbols list, and connected neighbor links.
+  - Enriched canvas hover tooltips with multi-line canonical name + description + connection stats.
+  - Linked parent topbar chips via `postMessage` (`lod-status-update`) displaying real-time visible cluster ratios.
+- **Testing & Verification:**
+  - Added unit test regressions across `tests/test_viz_unified_canvas.py`, `tests/test_viz_views.py`, `tests/test_tool_installer.py`.
+  - 30/30 focused unit tests passing; 100% matrix CI checks green.
+  - Shipped in PR #1785 merged into `main` (`c3916550`) under `goal-e3840370` / Issue #1783.
+  - Live daemon cache refreshed (200 OK).
+[@agy, @nikhilsoman]
+
+## 2026-09-25 — Knowledge Graph UX Improvements: Canonical Labels, Topbar Multi-Select Dropdown & Monorepo Tab Streamlining (PR #1782)
+
+### Shipped & Verified
+- **Canonical Human-Readable Community Labels (`synlynk/viz_views.py`, `synlynk/viz.py`):**
+  - Implemented `derive_canonical_community_names(raw_nodes)` analyzing node distributions per community.
+  - Prioritizes dominant file ($ \ge 35\% $) + dominant class (e.g. `synlynk/viz.py · VizorHandler`), directory namespace span ($ \ge 50\% $), or high-degree/centrality symbol name, completely replacing opaque `Community N` numbers.
+  - Attached `community_name` to state projection node metadata and injected into Graphify `RAW_NODES` inside `graphify.html`/`graph.html`.
+- **Topbar Multi-Select Dropdown Toolbar & 100% Full-Width Canvas (`synlynk/viz.py`):**
+  - Replaced the 260px left `.am-communities-sidebar` with a compact `.am-kg-topbar` floating dropdown menu (`.am-dropdown`) in both Architect Map (`tube.html`) and Logical View (`logical.html`).
+  - Added multi-select checkboxes with real-time selection summary badges (`N of Total selected`), batch actions (*Select All*, *Deselect All*), symbol search input, and direct iframe postMessage routing (`filter-communities-batch`, `filter-community`, `search`).
+  - Expanded graph container (`.am-kg-canvas-full`) to take 100% horizontal width.
+- **Monorepo Topology Tab Streamlining (`synlynk/viz.py`):**
+  - Streamlined single-repo workspace tab navigation in `tube.html` (`len(repos) <= 1`) to show **Knowledge Graph** and **File Tree**, removing the redundant isolated 1-box **Topology** tab button while preserving multi-repo federated topologies when `len(repos) > 1`.
+- **Testing & Verification:**
+  - Added unit test coverage in `tests/test_viz_unified_canvas.py` and `tests/test_viz_views.py` (`test_derive_canonical_community_names`, `test_logical_view_embeds_graphify_and_communities_dropdown`, `test_architect_map_monorepo_tabs_and_topbar_dropdown`, `test_enrich_graphify_html_canonical_labels_and_batch_listeners`).
+  - Verified 16/16 focused tests and all CI checks green.
+  - Merged to `main` (`a4b95a38`) in PR #1782 via QA approval.
+  - Verified live refresh endpoint `POST /w/synlynk/api/graph/refresh` (200 OK) and confirmed updated UI assets in daemon cache.
+[@agy, @nikhilsoman]
+
+## 2026-09-25 — Graphify Auto-Extraction & Vizor Unified Clustered Canvas (PR #1777)
+
+### Shipped & Verified
+- **Auto-Provisioning & Extraction Hook (`synlynk/scan.py`, `synlynk/upgrade.py`):**
+  - Added `_run_graphify_extract(repo_root)` in `synlynk/scan.py` running deterministic `--code-only` AST extraction into `.synlynk/graphify-out/` ($0.00 token cost, <15s).
+  - Wired tool auto-installer `install_tool("graphify")` with graceful fallback for air-gapped environments.
+  - Bound auto-extraction hook into `synlynk scan --deep` and `execute_upgrade(repo_root)`.
+- **Multi-Repo Federated Mesh (`synlynk/mesh.py`):**
+  - Implemented `build_federated_mesh(repos)` to aggregate AST graphs from multiple workspaces into a single graph with namespaced node IDs, repo tags, and cross-repo API links with HTTP route verb sanitization (`GET /api/v1/jobs` -> `/api/v1/jobs`).
+- **Vizor Caching & Route Serving (`synlynk/viz.py`, `synlynk/vizor_daemon.py`):**
+  - Added cache management copying `graphify.html` and `graph.html` into `VIZ_CACHE_DIR`.
+  - Added route handling in `synlynk/vizor_daemon.py` serving interactive Graphify HTML at `/w/<slug>/graphify.html` and `/w/<slug>/graph.html`.
+- **Unified Clustered Canvas (`tube.html`, `logical.html`):**
+  - Architect Map (`tube.html`):
+    - **Monorepo (`len(repos) <= 1`)**: Directly embeds interactive Graphify Knowledge Graph with Communities sidebar, node centrality, symbol search, and commit staleness banner.
+    - **Multi-Repo (`len(repos) > 1`)**: Renders compound clustered repo containers with animated cross-repo API bridges and semantic LOD zoom.
+  - Logical View (`logical.html`): Embeds full Graphify interactive vis-network view with communities sidebar and theme synchronization.
+- **Testing & Verification:**
+  - Added 19 comprehensive unit tests across `tests/test_scan_graphify_auto.py`, `tests/test_mesh_federation.py`, `tests/test_viz_graphify_routes.py`, `tests/test_viz_unified_canvas.py`.
+  - 100% test pass rate across 3,241 CI tests on Python 3.10 and 3.12 (Matrix CI green).
+  - Shipped in PR #1777 merged into `main` (`f4073fcd`) via QA review.
+[@agy, @nikhilsoman]
+
+## 2026-09-24 — Vizor View Generation, File Tree Rendering & Readonly DB Projections (PR #1772, #1773)
+
+### Shipped & Verified
+- **Scan & View Bloat Guard (PR #1772):**
+  - Excluded `worktrees`, `.worktrees`, `.claude`, `.pytest_cache`, `.ruff_cache`, `dist`, `build`, `test_archive`, `test_context_output` from `_SCAN_SKIP_DIRS` in `synlynk/scan.py` and `skip` set in `synlynk/viz_views.py`.
+  - Reduced deep scan runtime from choked 80,000+ files / 42MB source map down to 0.8s, 412 canonical files, and 3,272 symbols.
+- **Readonly DB Resilience & Fast Worktree Audit (PR #1773):**
+  - Wrapped `_save_projection` in `synlynk/viz_views.py` in `try...except (sqlite3.OperationalError, sqlite3.DatabaseError): pass`, preventing read-only state.db connections during daemon renders from throwing errors and returning empty node sets.
+  - Updated `_query_repo_file_tree` in `synlynk/scan.py` to accept optional `conn`, and threaded `views_conn` from `synlynk/viz.py:_base_data()`, guaranteeing `window.ARCHITECT_FILE_TREE` is populated.
+  - Added optional `gh_available: Optional[bool] = None` override in `synlynk/worktree.py:_collect_verdicts` and passed `gh_available=False` in `synlynk/viz.py:_collect_worktrees()`, eliminating >120 blocking sequential GitHub CLI network calls during HTML generation (dropping render time from 134s to <1s).
+  - Added regression unit tests in `tests/test_viz_views.py` (`test_build_workspace_views_snapshot_with_readonly_db`, `test_query_repo_file_tree_with_explicit_conn`).
+- Reinstalled synlynk, restarted Vizor launchd daemon, and confirmed `tube.html` (544 KB) and `logical.html` (302 KB) are live and rendering with 200 OK on `http://localhost:8721/w/synlynk/`.
+[@agy, @nikhilsoman]
+
 ## 2026-09-24 — Sprint 3 Sandbox State Migration & Vizor Concurrency Lock (PR #1757)
 
 ### Shipped & Verified
@@ -668,8 +957,224 @@
 ### Shipped
 - **Permission Bypass Integration (`synlynk/dispatch.py`):** Updated `_grok_permission_flags()` to always supply `--always-approve` and `--permission-mode bypassPermissions` whenever permissions are present, completely removing `--permission-mode dontAsk` from headless Grok dispatch paths. Guarded against duplicate flags in dispatch assembly.
 - **Test Suite Updates (`tests/test_dispatch.py`, `tests/test_agent_quota_tracking.py`):** Updated unit tests and role permission assertions across all 12 standard role bundles.
-- **Merge & Verification:** PR #1735 approved and squashed-merged to `main`. All 3,160+ unit and integration tests passing green on CI.
+## 2026-09-24 — Vizor Gantt View Nested Sidebar & Tabs Removal (PR #1768)
+
+### Context & Root Cause
+- When navigating to `gantt.html` in the Vizor HUD (`http://localhost:8721/w/synlynk/`), an unwanted second column appeared inside the canvas containing a duplicate sidebar (`.sidenav`) and horizontal tab bar (`.view-tabs`).
+- Root cause: `generate_gantt_html()` in `synlynk/viz.py` historically retained prototype mockup scaffolding and read `<style>` from `docs/brainstorm/bs21-vizor/viz-gantt-v5.html`. When loaded inside the master shell's `<iframe>`, this rendered a nested redundant navigation column.
+
+### Shipped & Landed (PR #1768)
+- **Nested Scaffolding Elimination (`synlynk/viz.py`):** Removed vestigial `.shell`, `.sidenav`, and `.view-tabs` markup and CSS from `generate_gantt_html()`.
+- **Self-Contained Style Constant (`synlynk/viz.py`):** Embedded `_GANTT_STYLE` directly in `synlynk/viz.py` with responsive full-width canvas padding (`20px 24px 48px`), eliminating runtime file IO dependencies on brainstorm directories.
+- **Test Suite Updates (`tests/test_viz.py`):** Added assertions guaranteeing `gantt.html` contains `<div class="content">` and strictly no `.sidenav`, `.view-tabs`, or `.shell` containers.
+- **Service Reload & Verification:** Reinstalled in editable mode (`pip install -e .`), restarted launchd daemon (`synlynk viz --uninstall && synlynk viz --install`), verified clean HTTP output from `http://localhost:8721/w/synlynk/gantt.html` with zero duplicate columns.
+- **Merge:** PR #1768 approved and squash-merged to `main` with 4/4 CI checks passing.
 [@agy]
 
+## 2026-09-24 — Vizor GOVERNS Board, Gantt IA Dual-Pivot & Registry Isolation
 
+### Context & Requirements
+- **Transient Workspace Pollution:** Temporary pytest and selftest directories (e.g., `test_run_brownfield_init_e2e0`) appeared in the host Vizor hub due to unisolated registry writes during test runs.
+- **GOVERNS Board Alignment:** The Board view (`board.html`) needed to align with the 7 GOVERNS lifecycle stages (`Goal`, `Open`, `Visualize`, `Execute`, `Release`, `Notify`, `Sustain`) as primary columns, using execution status badges (`open`, `ready`, `in_progress`, `blocked`, `done`) with color coding.
+- **Gantt IA & Terminology:** Purge legacy "Dreams" terminology in favor of "Releases" / "Milestones" while maintaining backward compatibility; implement Option C (Dual-Pivot: Releases > Epics > Stories vs Goals > Objectives > Stories) with chronological ordering (most recent first) and collapsible section separators (Active & In-Progress, Planned & Upcoming, Completed & Shipped).
 
+### Shipped & Implemented
+- **Vizor Daemon Registry Defense (`synlynk/vizor_daemon.py`):** Added `_is_transient_test_path()` filtering out non-existent and transient test directories (`/pytest-`, `test_run_`, `synlynk-selftest-`, etc.) when running against the host registry. Pruned stale test artifacts from `~/.synlynk/registry.json`.
+- **GOVERNS Board Operations & UI (`synlynk/board.py`, `synlynk/viz.py`):**
+  - Added `GOVERNS_STAGES = ("goal", "open", "visualize", "execute", "release", "notify", "sustain")`.
+  - Added `update_stage()` in `synlynk/board.py` and wired route `/api/board/stage` in `VizorHandler`.
+  - Restructured `generate_board_html()` with 7 GOVERNS columns, distinct color-coded status badges, stage changer dropdowns, and quick status actions.
+- **Dual-Pivot Gantt Timeline & Collapsible Sections (`synlynk/uxcore.py`, `synlynk/viz.py`):**
+  - Updated `get_gantt_data()` to query releases in descending order (`ORDER BY id DESC`), attach linked `goal_id` / `goal_outcome`, and populate `target_date`.
+  - Added `data["releases"]` alongside legacy `data["dreams"]` in `generate_viz_data()`.
+  - Implemented collapsible section separators (`Active & In-Progress`, `Planned & Upcoming`, `Completed & Shipped`) with count badges and `localStorage` persistence.
+  - Added Dual-Pivot toggle buttons (`By Release` vs `By Goal`).
+- **Test Suite Updates (`tests/test_board.py`, `tests/test_viz.py`):**
+  - Added test cases for `update_stage()`, invalid stage fail-closed validation, and `/api/board/stage` endpoint assertions.
+  - Updated empty-state assertion in `tests/test_viz.py`.
+  - Verified full test suite passes: 3,217 passed, 3 skipped (100% green).
+[@agy]
+
+## 2026-09-25 — Graphify Auto-Extraction, Federated Multi-Repo Mesh & Vizor Unified Canvas
+
+### Context & Objectives
+- Enable automatic AST & semantic code extraction on deep scan and upgrade via Graphify so AI fleet context maps and architectural views are rich and deterministic.
+- Build federated multi-repo knowledge graphs linking registered workspace repositories with namespaced nodes (`repo::node`) and cross-repo dependency bridges.
+- Unify Graphify knowledge graph visualization directly inside Vizor: serve `.graphify/graph.html` at `/w/<slug>/graphify.html`, register nav drawer badge chips, and embed interactive knowledge graphs with multi-repo clustered layout and live CSS theme synchronization across Architect Map (`tube.html`) and Logical View (`logical.html`).
+
+### Shipped & Verified
+- **Automated Graphify Extraction on Deep Scan & Upgrade (`synlynk/scan.py`, `synlynk/upgrade.py`):**
+  - Added `_run_graphify_extract(repo_root)` executing deterministic fast code extraction (`graphify extract <repo> --code-only --out <repo>/.synlynk/graphify-out`) with automated on-demand tool installation via `install_tool("graphify")`.
+  - Wired into `synlynk scan --deep` and `synlynk upgrade`, handling missing tools or execution failures gracefully without breaking the core scan pipeline.
+  - Added 6 unit tests in `tests/test_scan_graphify_auto.py` covering tool discovery, auto-install, failure fallbacks, and command integration.
+- **Federated Multi-Repo Mesh Federation (`synlynk/mesh.py`, `synlynk/cli.py`):**
+  - Added `build_federated_mesh(repos, workspace_root)` scanning registered repositories, ingesting individual `.graphify/graph.json` files, prefixing node IDs with repo namespaces (`repo::node`), and detecting cross-repo dependency bridges.
+  - Calculated federated graph metrics (node count, edge count, cross-repo bridges, community clusters, and degree centrality), persisting output to `.synlynk/federated_mesh.json`.
+  - Added CLI command `synlynk mesh` registered in command taxonomy.
+  - Added 3 unit tests in `tests/test_mesh_federation.py` testing multi-repo federation, bridge detection, and missing/corrupted file fallbacks.
+- **Vizor Interactive Graphify Route & Navigation (`synlynk/viz.py`, `synlynk/vizor_daemon.py`):**
+  - Updated `write_cache()` in `synlynk/viz.py` to copy `.graphify/graph.html` to `graphify.html` in the Vizor workspace cache when available.
+  - Added `/w/<slug>/graphify.html` routing support and automatic redirect handling in `VizorHandler`.
+  - Rendered `Graphify KG` navigation badge chips in workspace index cards when Graphify graph artifacts are present.
+  - Added 5 unit tests in `tests/test_viz_graphify_routes.py`.
+- **Architect Map & Logical View Unified Canvas (`synlynk/viz.py`, `synlynk/viz_views.py`):**
+  - Updated `generate_architect_map_html()`:
+    - Multi-repo workspaces embed federated clustered layout with cross-repo dependency bridges rendered as dashed amber chords.
+    - Single-repo workspaces embed the local Graphify knowledge graph canvas with fallback to Tube Map if absent.
+    - Added theme synchronization listener reacting to parent Vizor theme events and synchronizing CSS variables (`--theme-bg`, `--theme-text`).
+  - Updated `generate_logical_html()`:
+    - Integrated interactive Graphify knowledge graph canvas with communities sidebar, centrality metrics, and amber staleness warning banner if HEAD has moved past extraction SHA.
+  - Added 5 unit tests in `tests/test_viz_unified_canvas.py` and 6 unit tests in `tests/test_viz_graphify.py`.
+- **Verification:**
+  - Ran full test suites: 25 targeted unit tests and all 163 regression tests across `tests/test_scan*.py`, `tests/test_viz*.py`, and `tests/test_mesh*.py` passed (100% green).
+  - Executed `synlynk scan --deep`: confirmed successful AST extraction, 412 files, 3292 symbols scanned, updated `project-docs/source-map.md`.
+  - Verified live daemon endpoints: HTTP 200 on `http://localhost:8721/w/synlynk/tube.html` and `logical.html`.
+## 2026-09-25 — Graph Staleness Evaluation Fix & Interactive Refresh API
+
+### Context & Root Cause Analysis
+- Investigated screenshot report where Architect Map and Logical views were showing "Graph Stale" and the `[Refresh]` link did nothing.
+- **Root Causes:**
+  1. *Stale Daemon Binary in Memory:* OS-supervised launchd service was running previous binary in memory prior to PR #1777 merge.
+  2. *False-Positive Staleness Check:* In `synlynk/discovery.py`, `stale = (head_commit != built_at) if head_commit else False` evaluated to `True` whenever `built_at_commit` was not yet populated in Graphify's default `manifest.json`.
+  3. *Client-Side Refresh Link:* The `[Refresh]` UI link only executed `javascript:location.reload()` without triggering backend extraction or cache invalidation.
+  4. *Missing HTTP API Endpoint:* `VizorHandler` lacked a `POST /api/graph/refresh` endpoint to trigger Graphify AST extraction on demand.
+
+### Shipped & Verified
+- **Staleness Evaluation (`synlynk/discovery.py`):**
+  - Updated staleness check to `bool(head_commit and built_at and head_commit != built_at)`.
+- **Manifest Head Commit Stamping (`synlynk/scan.py`):**
+  - Updated `_run_graphify_extract(repo_root)` to auto-stamp the current Git HEAD commit SHA into `.synlynk/graphify-out/manifest.json`.
+- **Interactive Graph Refresh Endpoint (`synlynk/viz.py`, `synlynk/vizor_daemon.py`):**
+  - Added `POST /api/graph/refresh` (and `/w/<slug>/api/graph/refresh`) to `VizorHandler` with authentication and workspace scoping.
+  - Triggers on-demand AST extraction, synchronizes SQLite DB view projection metadata, and regenerates the Vizor cache.
+  - Enhanced UI `triggerGraphRefresh(el)` in `tube.html` and `logical.html` with responsive loading states (`[Refreshing...]`, `[Refreshed ✓]`) and auto-reload.
+- **Daemon Binary PATH Resolution (`synlynk/tool_installer.py`, `synlynk/vizor_daemon.py`):**
+  - Augments search paths with standard user binary directories (`~/.local/bin`, `~/.pyenv/shims`, `/opt/homebrew/bin`, `/usr/local/bin`) so launchd background processes locate `graphify` and tools without PATH issues.
+- **Verification:**
+  - Added unit and integration tests in `tests/test_graph_refresh_api.py` (5/5 passed).
+  - Merged PR #1780 and PR #1781 with 100% green CI test suites.
+  - Tested live endpoint: `POST /w/synlynk/api/graph/refresh` returned 200 OK, refreshed the 17MB interactive knowledge graph in `tube.html` and `logical.html`, and cleared staleness warning.
+[@agy]
+
+## 2026-09-27 — Shipped: Invariant 1 (Effect-Verified Completion Contract) (Issue #1806, PR #1807)
+
+### Context & Problem
+- Addressed Invariant 1 from the 4-harness Deep Architecture Review: eliminate false-positive agent "success" where a mutating job exits code 0 with zero git diff and zero files touched, or where a review/gh-write job exits 0 without remote effect delivery.
+- Enforced the mathematical invariant: Succeeded <=> (rc == 0) and EffectVerified(Job) and VerificationPassed(Job).
+
+### Shipped & Landed (PR #1807)
+1. **Job Status Taxonomy (`synlynk/jobs.py`):** Added `STATUS_COMPLETED_WITHOUT_CHANGES`, `STATUS_FAILED_NOOP_DENIED`, `STATUS_FAILED_VERIFICATION`, along with status helper predicates `is_successful_status()`, `is_terminal_status()`, and `is_noop_status()`.
+2. **Pure Effect Verification Engine (`synlynk/verify_effects.py`):** Built pure-Python verification engine `verify_job_effects()` inspecting worktree git diffs (uncommitted & committed since `base_sha`), remote GitHub effect timestamps via `gh_write_verified()`, analysis receipts, and optional `verification_cmd` test execution.
+3. **Dispatch & Reconcile Finalizer Integration (`synlynk/jobs.py`, `synlynk/dispatch.py`):** Integrated `_enforce_job_effect_verification()` into `_reconcile_jobs_unlocked()` across both waitpid and external process reaping loops, mapping zero-diff mutating completions to `completed_without_changes` and triggering `TASK_NOOP_DENIED` Sentinel alerts.
+4. **Sentinel Alerting & Status Badging (`synlynk/sentinel.py`, `synlynk/viz.py`):** Added `_read_active_sentinel_alerts()`, updated Vizor HUD with amber `.status-chip.noop` (`⚠ NOOP`) badges and CSS styling.
+5. **Autonomous Milestone DAG Failover (`synlynk/launch_dag.py`):** Added `LaunchDAG.handle_job_outcome()`, tracking `retry_count`, `max_retries`, and `failed_harnesses` to autonomously failover across the core harness chain (`codex` -> `agy` -> `claude` -> `grok`) on noop completions.
+6. **Verification:** Added 22 unit tests across 5 new test files. 100% full regression pass rate (3,336 passed tests). Opened PR #1807.
+[@agy]
+
+## 2026-09-27 — Shipped: Invariant 2 (Hard In-Flight Token Circuit Breakers & Runaway Worker Killer) (Issue #1808, PR #1809)
+
+### Context & Problem
+- Addressed Invariant 2 from the 4-harness Deep Architecture Review: eliminate catastrophic runaway token burns ($32+ on jobs producing zero changes).
+- Enforced real-time in-flight circuit breakers that continuously monitor running jobs and terminate runaway worker process trees before costs spiral.
+
+### Shipped & Landed (PR #1809)
+1. **Job Status Taxonomy (`synlynk/jobs.py`):** Added `STATUS_CIRCUIT_BREAKER_TRIPPED = "circuit_breaker_tripped"`, wired into classification sets and predicates.
+2. **Circuit Breaker Engine (`synlynk/circuit_breaker.py`):** Built `evaluate_job_circuit_breaker()` with tier-aware limit resolution ($T_{\max}$, $C_{\max}$, zero-file threshold), worktree lazy diff checks, and recursive process tree termination (`_kill_process_tree` using `SIGTERM` escalated to `SIGKILL`).
+3. **Reconciliation Integration (`synlynk/jobs.py`):** Wired circuit breaker evaluations into `_reconcile_jobs_unlocked()` across running jobs, updating status and triggering `[CRITICAL]` Sentinel alert `TOKEN_CIRCUIT_BREAKER_TRIPPED`.
+4. **Autonomous Milestone DAG Failover (`synlynk/launch_dag.py`):** Extended `LaunchDAG.handle_job_outcome()` to autonomously reroute to secondary harnesses when a circuit breaker trips.
+5. **Vizor Status Badging & Styling (`synlynk/viz.py`):** Added `⚡ BREAKER` badge and `.status-chip.circuit-breaker` CSS.
+6. **Verification & Merge:** Added 18 unit tests across 5 test suites. Full 3,345-test local and CI matrix pass (100% green). Codex reviewed under `qa` role and squash merged into `main`.
+[@agy]
+
+## 2026-09-27 — Shipped: Invariant 4 (Single-Writer SQLite WAL Ledger with Leased Worktree Locks) (Issue #1812, PR #1813)
+
+### Context & Problem
+- Addressed Invariant 4 from the 4-harness Deep Architecture Review: eliminate unhandled `sqlite3.OperationalError: database is locked` exceptions under heavy multi-agent concurrency and eradicate zombie worktree lock contention.
+- Enforced single-writer SQLite WAL transactions and leased worktree locking with PID tracking, TTL expiration, and dead-PID autonomous recovery.
+
+### Shipped & Landed (PR #1813)
+1. **Single-Writer SQLite WAL Ledger (`synlynk/wal_ledger.py`):**
+   - Implemented `ensure_wal_pragmas()` configuring `journal_mode=WAL`, `synchronous=NORMAL`, `busy_timeout=30000` (30s), and `foreign_keys=ON`.
+   - Built `write_transaction(conn)` context manager enforcing `BEGIN IMMEDIATE` for all mutations with exponential backoff retry jitter on transient locks.
+   - Built `check_wal_health()` for monitoring WAL size and checkpoint status.
+2. **Leased Worktree Locks & Dead-PID Recovery (`synlynk/worktree_lease.py`):**
+   - Implemented `worktree_leases` table schema in `state.db` and synchronized on-disk `.synlynk/lease.json` metadata.
+   - Implemented `acquire_worktree_lease()`, `renew_worktree_lease()`, `release_worktree_lease()`, `get_active_worktree_lease()`, and `audit_and_reclaim_stale_worktree_leases()`.
+   - Auto-reclaims locks when holding process dies (`os.kill(pid, 0)` lookup) or TTL expires (default 15m).
+3. **Core Lifecycle Integration (`synlynk/__init__.py`, `synlynk/dispatch.py`, `synlynk/jobs.py`, `synlynk/worktree.py`):**
+   - Initialized WAL pragmas on all DB connections in `_connect()`.
+   - Wired lease acquisition into `_create_job_worktree()` and lease release into `_reap_zombie_worktree()`.
+   - Wired stale lease auditing into `cmd_jobs_reap()`, `cmd_worktree_audit()`, and `cmd_worktree_clean()`.
+4. **Verification & Regression Isolation:**
+   - Isolated `.synlynk/lease.json` inside gitignored `.synlynk/` directory to prevent false-positive dirty worktree activity during stall checks.
+   - 100% full regression pass rate across 3,382 tests locally. Opened PR #1813.
+[@agy]
+
+## 2026-09-27 — Shipped: Invariant 5 (Compressed Default Surface, Role+Harness Vocabulary & Doc Sync) (Issue #1814, PR #1815)
+
+### Context & Problem
+- Addressed Invariant 5 from the 4-harness Deep Architecture Review: eliminate user-facing semantic overload around Agent/Harness/Role, compress the 7-stage GOVERNS FSM into an intuitive 5-stage default view (`Plan → Build → Verify → Ship → Sustain`), and synchronize stale architecture documentation.
+
+### Shipped & Landed (PR #1815)
+1. **5-Stage Compressed GOVERNS Surface (`synlynk/governs_compressed.py`):**
+   - Implemented `compress_governs_stage()`, `get_compressed_stage_progress()`, and `format_compressed_governs_summary()`.
+   - Maps internal 7 stages (Dream, Plan, Work, Review, Ship, Maint, Engag) to 5 intuitive stages (Plan, Build, Verify, Ship, Sustain).
+2. **CLI Integration (`synlynk/cli.py`, `synlynk/governs_cli.py`):**
+   - `synlynk governs` renders the compressed 5-stage workflow table by default.
+   - Added `--full` flag to inspect the underlying 7-stage FSM on demand.
+3. **Documentation Realignment (`CLAUDE.md`, `GEMINI.md`, `AGENTS.md`):**
+   - Standardized Role (Persona/Intent) and Harness (Execution Engine) definitions.
+   - Updated codebase descriptions from legacy single-file references to the modular ~138-module operating substrate.
+4. **Verification:**
+   - Added unit test coverage in `tests/test_governs_compressed.py` and `tests/test_cli_compressed_surface.py`.
+   - Full regression suite verified.
+[@agy]
+
+## 2026-10-01 — Shipped: Spec 3 — Living GOVERNS Goal Resolution & Alignment Engine (PR #1892)
+
+### Context & Problem
+- Resolved Defect 2 across multi-workspace installs (`synlynk` and `rxcc`): foreign and phantom goals appearing in target workspaces, unmapped stories, and 0-task Gantt releases.
+- Replaced the hardcoded fleet `_DOMAIN_GOAL_MAP` and universal `DEFAULT_MASTER_GOAL` fallback with a deterministic 7-tier workspace-scoped resolution waterfall and continuous write-time association.
+
+### Shipped & Landed (PR #1892, commit `74aa962a`)
+1. **Schema & Tenancy Isolation (`synlynk/db_schema.py`, `synlynk/db.py`):**
+   - Added `goals.product_id` and created `goal_aliases` table (`goal_id`, `pattern`, `product_id`).
+   - Added `resolution_reason` and `resolved_at` columns to `goal_contributions`.
+   - Migration `_migrate_governs_tenancy()` backfills `product_id` from `state_identity`, quarantines phantom auto-reconciled goals, and seeds retired aliases for existing ledger goals only (0 in `rxcc`).
+2. **Living GOVERNS Waterfall Engine (`synlynk/governs_engine.py`):**
+   - Implemented 7-tier waterfall: explicit argument $\rightarrow$ in-band header $\rightarrow$ parent inheritance $\rightarrow$ workspace alias $\rightarrow$ derived keyword $\rightarrow$ workspace default master $\rightarrow$ unresolved.
+   - Deleted hardcoded `_DOMAIN_GOAL_MAP` and `DEFAULT_MASTER_GOAL` from `synlynk/governs_resolver.py`.
+   - Built `scoped_goals()` filtering by workspace `product_id`.
+3. **Continuous Write-Time Association & Audit Sweep:**
+   - Integrated `associate_story()` across all story write paths (`synlynk/backlog.py`, `synlynk/db.py`, `synlynk/story_provisioning.py`, `synlynk/heal_cycles.py`).
+   - Converted `synlynk governs sweep` to an audit-only reconciliation reporter without state mutations.
+4. **Edge-First Dual-Pivot Gantt Projection (`synlynk/uxcore.py`):**
+   - Ranked edge hierarchy: `roadmap_phases.story_id` $\rightarrow$ `goal_contributions` $\rightarrow$ case-folded phase titles.
+   - Built first-class Goal pivot with synthetic lanes for arc-less goals and an Unmapped lane for unresolved stories.
+5. **Scoped Goal Reads & HTTP APIs (`synlynk/viz.py`, `synlynk/vizor_daemon.py`):**
+   - Replaced bare `_get_db()` calls with `_open_state_db(db_path=...)` using `WorkspaceContext.db_path`.
+   - Added `/w/<slug>/api/goals` endpoint scoped to workspace context.
+6. **SSE Governance Relay Events (`synlynk/events.py`, `synlynk/governs_engine.py`):**
+   - Registered `goal_realigned` and `governs_stage_advanced` in `RELAY_EVENT_TYPES`.
+   - Emitted relay events on realigned goals and added consumer-side product filtering in `gantt.html`.
+7. **Verification & CI Gate:**
+   - 8 multi-workspace matrix test scenarios (`M1`–`M8`), 52 targeted suite tests, and all 6 GitHub Actions CI jobs passed green (run `36782886904`).
+   - Dispatched QA review to Codex under role `qa`, passed merge authority check, approved, and squash-merged to `main`.
+## 2026-10-01 — Brainstorm & Design: Unified Onboarding Journeys & Self-Updating Lifecycle Engine
+
+### Context & Objective
+- Addressed `story-cf24a4ab`: Brainstorm + design synlynk's end-to-end FTUE/onboarding across CLI/TUI and Vizor.
+- Solved key architectural tensions:
+  1. Dual-surface parity between CLI/TUI (`wizard.py`) and Vizor (`/w/<slug>/onboarding`) via headless canonical state engine (`onboarding_state.py`).
+  2. Multi-repo topology discovery distinguishing Container Folders (`~/dev`), Monorepos, Polyrepo Application Groups (frontend + backend + api in 1 workspace), and Standalone Repos.
+  3. Probe-verified harness & dependency binding (`synlynk probe` testing auth, sandbox egress, and token rates).
+  4. First-Win Build Loop replacing conceptual lectures with effect-verified live cycle (Goal -> Arc -> Plan -> Dispatch -> Test -> Non-Author Review -> Merge -> Experience in Vizor).
+  5. Opt-in Dev Preview upgrade safety (`synlynk upgrade --all` with dry-run diffs, rollback checkpoints, no ambient daemon mutations).
+
+### Artifacts & Milestones
+- Convened & signed two DECIDE consensus panels:
+  - `dec-00b401f2`: Unified Onboarding Journeys & Self-Updating Lifecycle Architecture (unanimous Claude, Codex, Agy, Grok).
+  - Phase 2 Topology Discovery & Workspace Clustering Validation (unanimous Claude, Codex, Agy, Grok).
+- Authored full design specification: `docs/superpowers/specs/2026-10-01-unified-onboarding-journeys-and-lifecycle-design.md`.
+- Ready for implementation plan generation per Brainstorm-First policy.
+[@agy]

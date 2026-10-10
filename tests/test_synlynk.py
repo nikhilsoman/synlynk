@@ -10,6 +10,37 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 import synlynk
 
 
+def test_cmd_config_set_routes_workspace_key(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    synlynk.cmd_config_set("local_fallback", "codex")
+    with open(".synlynk/workspace.json") as f:
+        data = json.load(f)
+    assert data["local_fallback"] == "codex"
+    if os.path.exists(".synlynk/billing.json"):
+        with open(".synlynk/billing.json") as f:
+            assert "local_fallback" not in json.load(f)
+
+
+def test_cmd_config_set_routes_billing_key(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    synlynk.cmd_config_set("budget", {"limit_usd": 5.0, "limit_requests": 10})
+    with open(".synlynk/billing.json") as f:
+        data = json.load(f)
+    assert data["budget"] == {"limit_usd": 5.0, "limit_requests": 10}
+
+
+def test_cmd_config_set_routes_policy_key_preserving_other_policy_content(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk")
+    with open(".synlynk/policy.json", "w") as f:
+        json.dump({"schema_version": 1, "repo_id": "synlynk"}, f)
+    synlynk.cmd_config_set("qa_gate_mode", "merge-restricted-classes")
+    with open(".synlynk/policy.json") as f:
+        data = json.load(f)
+    assert data["qa_gate_mode"] == "merge-restricted-classes"
+    assert data["repo_id"] == "synlynk"
+
+
 def test_agent_capability_baselines_exist():
     assert "claude" in synlynk.HARNESS_CAPABILITY_BASELINES
     assert "agy" in synlynk.HARNESS_CAPABILITY_BASELINES
@@ -24,7 +55,7 @@ def test_agent_capability_baselines_exist():
         assert isinstance(caps.get("headless_contract"), dict)
         assert isinstance(caps.get("network_deps"), dict)
     assert synlynk.HARNESS_CAPABILITY_BASELINES["claude"]["non_interactive_flags"] == ["--print"]
-    assert synlynk.HARNESS_CAPABILITY_BASELINES["claude"]["dispatch_flags"]["required_flags"] == ["--dangerously-skip-permissions"]
+    assert synlynk.HARNESS_CAPABILITY_BASELINES["claude"]["dispatch_flags"]["required_flags"] == []
     assert synlynk.HARNESS_CAPABILITY_BASELINES["claude"]["headless_contract"]["non_interactive_flag"] == "--print"
     # Sandbox is enforced via non_interactive_flags (-s workspace-write), not required_flags
     # (required_flags are bare flags with no values; bare --sandbox breaks codex CLI).
@@ -40,7 +71,7 @@ def test_can_gh_write_baselines_match_live_verified_reality():
 
     assert HARNESS_CAPABILITY_BASELINES["claude"]["can_gh_write"] is True
     assert HARNESS_CAPABILITY_BASELINES["agy"]["can_gh_write"] is True
-    assert HARNESS_CAPABILITY_BASELINES["grok"]["can_gh_write"] is False
+    assert HARNESS_CAPABILITY_BASELINES["grok"]["can_gh_write"] is True
     assert HARNESS_CAPABILITY_BASELINES["codex"]["can_gh_write"] is True
     assert HARNESS_CAPABILITY_BASELINES["local"]["can_gh_write"] is False
 
@@ -129,7 +160,7 @@ def test_directive_templates_contain_sop_headers(tmp_path, isolated_db, monkeypa
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr("builtins.input", lambda *args, **kwargs: "n")
     synlynk.init(force=True, agents=["claude"], org="test-org", repo="test/repo", mode="solo")
-    content = (tmp_path / "CLAUDE.md").read_text()
+    content = (tmp_path / "AI_INSTRUCTIONS.md").read_text()
     assert "## PR Review Discipline" in content
     assert "## Repo Hygiene" in content
     assert "## Herdr Workspace Protocol" in content
@@ -968,18 +999,21 @@ def test_permissions_to_flags_agy_returns_empty_for_no_permissions():
     assert result == []
 
 
-def test_permissions_to_flags_agy_returns_skip_permissions_for_shell():
+def test_permissions_to_flags_agy_defaults_to_sandbox_for_shell():
     from synlynk.dispatch import _permissions_to_flags
 
     result = _permissions_to_flags("agy", ["read:*", "run:shell"])
-    assert result == ["--dangerously-skip-permissions"]
+    assert result == ["--sandbox"]
 
 
-def test_permissions_to_flags_agy_returns_skip_permissions_for_write():
+def test_permissions_to_flags_agy_skip_permissions_requires_explicit_opt_in():
     from synlynk.dispatch import _permissions_to_flags
 
     result = _permissions_to_flags("agy", ["read:*", "write:src/"])
-    assert result == ["--dangerously-skip-permissions"]
+    assert result == ["--sandbox"]
+    assert _permissions_to_flags(
+        "agy", ["read:*", "write:src/"], skip_permissions=True
+    ) == ["--dangerously-skip-permissions"]
 
 
 def test_preflight_allows_agy_dangerously_skip_permissions_flag(tmp_path, monkeypatch):
@@ -1670,9 +1704,7 @@ def test_init_claude_md_contains_session_protocol(tmp_path, monkeypatch):
     monkeypatch.setattr(synlynk, "_llm_enrich", lambda *a, **kw: False)
     synlynk.init(force=False)
     content = (tmp_path / "CLAUDE.md").read_text()
-    assert "synlynk watch status" in content
-    assert "synlynk checkpoint" in content
-    assert "context.md" in content
+    assert "Load `AI_INSTRUCTIONS.md` for the full shared synlynk protocol" in content
 
 
 def test_init_appends_to_existing_without_force(tmp_path, monkeypatch):
@@ -1696,7 +1728,7 @@ def test_init_force_overwrites_existing(tmp_path, monkeypatch):
     (tmp_path / "CLAUDE.md").write_text("MY CUSTOM CONTENT")
     synlynk.init(force=True)
     assert (tmp_path / "CLAUDE.md").read_text() != "MY CUSTOM CONTENT"
-    assert "synlynk checkpoint" in (tmp_path / "CLAUDE.md").read_text()
+    assert "AI_INSTRUCTIONS.md" in (tmp_path / "CLAUDE.md").read_text()
 
 
 def test_init_config_schema_version(tmp_path, monkeypatch):
@@ -2125,15 +2157,8 @@ def test_claude_template_enriched_content(tmp_path, monkeypatch):
     content = synlynk._build_templates()["CLAUDE.md"]
     assert "Co-Authored-By: Claude Sonnet" in content
     assert "feat/claude/" in content
-    assert "Git Worktree-First Policy" in content
-    assert "Live Issues SOP" in content
-    assert "Mid-Session Anti-Amnesia" in content
-    assert "Mandatory 4-Doc Discipline" in content
-    assert "GitHub Projects v2 Integration" in content
-    assert "TODO: PROJECT_ID" in content
-    assert "synlynk start" in content
-    assert "synlynk watch status" in content
-    assert "synlynk checkpoint" in content
+    assert "Load `AI_INSTRUCTIONS.md` for the full shared synlynk protocol" in content
+    assert "Git Worktree-First Policy" not in content
 
 
 def test_gemini_template_enriched_content(tmp_path, monkeypatch):
@@ -2142,8 +2167,8 @@ def test_gemini_template_enriched_content(tmp_path, monkeypatch):
     assert "Co-Authored-By: AGY" in content
     assert "agy-2.x" in content
     assert "feat/agy/" in content
-    assert "Git Worktree-First Policy" in content
-    assert "Live Issues SOP" in content
+    assert "Load `AI_INSTRUCTIONS.md` for the full shared synlynk protocol" in content
+    assert "Git Worktree-First Policy" not in content
     assert "2026-06-18" not in content
 
 
@@ -2152,10 +2177,8 @@ def test_agents_template_enriched_content(tmp_path, monkeypatch):
     content = synlynk._build_templates()["AGENTS.md"]
     assert "feat/codex/" in content
     assert "Co-Authored-By: Codex" in content
-    assert "Git Worktree-First Policy" in content
-    assert "Live Issues SOP" in content
-    assert "GitHub Projects v2 Integration" in content
-    assert "TODO: PROJECT_ID" in content
+    assert "Load `AI_INSTRUCTIONS.md` for the full shared synlynk protocol" in content
+    assert "Git Worktree-First Policy" not in content
 
 
 def test_init_creates_agents_md_by_default(tmp_path, monkeypatch):
@@ -2264,16 +2287,15 @@ def test_init_overwrites_synlynk_config_with_force(project_dir, monkeypatch):
 def test_build_templates_with_project_id_fills_placeholder(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     t = synlynk._build_templates(project_id="PJ_abc123")
-    assert "PJ_abc123" in t["CLAUDE.md"]
-    assert "TODO: PROJECT_ID" not in t["CLAUDE.md"]
-    assert "PJ_abc123" in t["GEMINI.md"]
-    assert "PJ_abc123" in t["AGENTS.md"]
+    assert "PJ_abc123" in t["AI_INSTRUCTIONS.md"]
+    assert "TODO: PROJECT_ID" not in t["AI_INSTRUCTIONS.md"]
+    assert "PJ_abc123" not in t["CLAUDE.md"]
 
 
 def test_build_templates_without_project_id_keeps_todo_placeholder(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     t = synlynk._build_templates()
-    assert "TODO: PROJECT_ID" in t["CLAUDE.md"]
+    assert "TODO: PROJECT_ID" in t["AI_INSTRUCTIONS.md"]
 
 
 def test_init_with_project_id_writes_filled_template(tmp_path, monkeypatch):
@@ -2282,7 +2304,7 @@ def test_init_with_project_id_writes_filled_template(tmp_path, monkeypatch):
     monkeypatch.setattr(synlynk, "discover_agents", lambda **kw: [])
     monkeypatch.setattr(synlynk, "_llm_enrich", lambda *a, **kw: False)
     synlynk.init(project_id="PJ_xyz789")
-    content = (tmp_path / "CLAUDE.md").read_text()
+    content = (tmp_path / "AI_INSTRUCTIONS.md").read_text()
     assert "PJ_xyz789" in content
     assert "TODO: PROJECT_ID" not in content
 
@@ -2897,7 +2919,7 @@ def test_version_matches_module(project_dir):
 
 
 def test_pyproject_version_matches_module(project_dir):
-    """pyproject.toml should source version dynamically from synlynk.VERSION."""
+    """pyproject.toml should source version dynamically from VERSION."""
     import re
 
     repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -2906,12 +2928,23 @@ def test_pyproject_version_matches_module(project_dir):
         pytest.skip("pyproject.toml not present")
     text = open(toml_path).read()
     assert re.search(r'^\s*dynamic\s*=\s*\["version"\]', text, re.MULTILINE)
-    assert re.search(
-        r'^\s*version\s*=\s*\{\s*attr\s*=\s*"synlynk\.VERSION"\s*\}',
-        text,
-        re.MULTILINE,
-    )
+    assert re.search(r'^\s*version\s*=\s*\{\s*file\s*=\s*\["VERSION"\]\s*\}', text, re.MULTILINE)
     assert not re.search(r'^\s*version\s*=\s*"[^"]+"\s*$', text, re.MULTILINE)
+
+
+def test_version_source_drives_runtime_and_release_files():
+    """All release-facing version files must derive from root VERSION."""
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    source_version = (root / "VERSION").read_text(encoding="utf-8").strip()
+    assert synlynk.VERSION == source_version
+    assert synlynk.__version__ == source_version
+    readme = (root / "README.md").read_text(encoding="utf-8")
+    assert f"badge/version-{source_version}-blue" in readme
+    assert f"**v{source_version}:**" in readme
+    assert "VERSION = \"" not in (root / "synlynk" / "_constants.py").read_text(encoding="utf-8")
+    assert "VERSION = \"" not in (root / "synlynk" / "__init__.py").read_text(encoding="utf-8")
 
 
 def test_main_entrypoint_importable():
@@ -3576,6 +3609,18 @@ def test_reconcile_auto_finalizes_clean_worktree_with_local_commits(project_dir,
         if cmd[:4] == prefix + ["status"]:
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         if cmd[:6] == prefix + ["diff", "--cached", "--quiet"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        if cmd == prefix + ["rev-parse", "HEAD"]:
+            return subprocess.CompletedProcess(
+                cmd, 0, stdout="a" * 40 + "\n", stderr=""
+            )
+        if cmd[:6] == prefix + ["ls-remote", "--heads", "origin"]:
+            return subprocess.CompletedProcess(
+                cmd, 0, stdout=("a" * 40) + "\trefs/heads/dispatch/codex/job-finalize-clean\n", stderr=""
+            )
+        if cmd[:6] == prefix + ["fetch", "--quiet", "origin"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        if cmd[:5] == prefix + ["merge-base", "--is-ancestor"]:
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         if cmd[:5] == prefix + ["rev-list", "--count"]:
             return subprocess.CompletedProcess(cmd, 0, stdout="2\n", stderr="")
@@ -4307,16 +4352,16 @@ def test_init_wizard_skips_existing_synlynk_without_force(project_dir, monkeypat
 
 def test_init_writes_workgroup_nudge_to_config(tmp_path, monkeypatch):
     import synlynk as sl
-    import json as _json
     monkeypatch.chdir(tmp_path)
     subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
+    monkeypatch.setattr(sys, "stdin", type("TerminalStdin", (), {"isatty": lambda self: True})())
     # Simulate user providing email at the cloud nudge step
     inputs = iter(["nikhil@example.com"])
     monkeypatch.setattr("builtins.input", lambda _: next(inputs, ""))
     monkeypatch.setattr(sl, "discover_agents", lambda **kw: [])
     monkeypatch.setattr(sl, "_llm_enrich", lambda *a, **kw: False)
     sl.init()
-    config = _json.loads(open(".synlynk/config.json").read())
+    config = sl.load_config()
     assert config.get("workgroup_invite_email") == "nikhil@example.com"
 
 
@@ -4340,7 +4385,7 @@ def test_dispatch_agent_creates_job_entry(project_dir, monkeypatch):
     assert any(j["id"] == job["id"] for j in jobs)
 
 
-def test_dispatch_agent_claude_includes_dangerously_skip_permissions(project_dir, monkeypatch):
+def test_dispatch_agent_claude_uses_scoped_permissions_by_default(project_dir, monkeypatch):
     import synlynk as sl
     captured = {}
 
@@ -4358,7 +4403,30 @@ def test_dispatch_agent_claude_includes_dangerously_skip_permissions(project_dir
 
     sl.dispatch_agent("claude", "implement auth fix", story_id="14")
     shell_cmd = captured["cmd"][2]
-    assert "--dangerously-skip-permissions" in shell_cmd
+    assert "--allowedTools" in shell_cmd
+    assert "--dangerously-skip-permissions" not in shell_cmd
+
+
+def test_dispatch_agent_claude_skip_permissions_is_explicit_opt_in(project_dir, monkeypatch):
+    import synlynk as sl
+    captured = {}
+
+    class FakeProc:
+        pid = 12345
+
+    def fake_popen(cmd, **kw):
+        captured["cmd"] = cmd
+        return FakeProc()
+
+    monkeypatch.setattr(sl.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(sl, "_preflight_dispatch", lambda agent_name, dispatch_flags, db_conn=None: {"passed": True, "sentinel": None, "reason": None})
+    monkeypatch.setattr(sl, "_probe_model_version", lambda *a, **kw: "unknown")
+    monkeypatch.setattr(sl, "generate_context", lambda scope="full", out_path=None: "")
+
+    sl.dispatch_agent(
+        "claude", "implement auth fix", story_id="14", skip_permissions=True
+    )
+    assert "--dangerously-skip-permissions" in captured["cmd"][2]
 
 
 def test_grok_dispatch_uses_always_approve(project_dir, monkeypatch):
@@ -4475,8 +4543,8 @@ def test_grok_dispatch_single_flag_placed_before_prompt(project_dir, monkeypatch
     assert "--permission-mode dontAsk" not in shell_cmd
     assert "--single" in shell_cmd
     single_pos = shell_cmd.index("--single")
-    prompt_pos = shell_cmd.index('"$PROMPT"')
-    assert single_pos < prompt_pos, "--single must come before $PROMPT"
+    prompt_pos = shell_cmd.index('"$synlynk_prompt"')
+    assert single_pos < prompt_pos, "--single must come before $synlynk_prompt"
     approve_pos = shell_cmd.index("--always-approve")
     assert approve_pos < single_pos, "--always-approve must come before --single"
 
@@ -4539,9 +4607,9 @@ def test_agy_dispatch_prompt_flag_after_other_flags(project_dir, monkeypatch):
     assert "-p" in shell_cmd
     some_flag_pos = shell_cmd.index("--some-flag")
     p_pos = shell_cmd.index(" -p ")
-    prompt_pos = shell_cmd.index('"$PROMPT"')
+    prompt_pos = shell_cmd.index('"$synlynk_prompt"')
     assert some_flag_pos < p_pos, "--some-flag must come before -p"
-    assert p_pos < prompt_pos, "-p must come before $PROMPT"
+    assert p_pos < prompt_pos, "-p must come before $synlynk_prompt"
 
 
 def test_exec_agent_task_claude_does_not_include_dangerously_skip_permissions(project_dir, monkeypatch):
@@ -5443,6 +5511,48 @@ def test_cmd_jobs_all_shows_completed(project_dir, capsys):
     sl.cmd_jobs(all_jobs=True)
     out = capsys.readouterr().out
     assert "job-done1" in out
+
+
+def test_cmd_jobs_all_surfaces_oracle_evidence(project_dir, capsys):
+    """Human jobs output must expose verified evidence, not only legacy status."""
+    import synlynk as sl
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, depends_on, "
+        "enqueued_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("job-evidence", "codex", "open PR", "done", 5, "[]", "2026-06-24T07:00:00")
+    )
+    conn.execute(
+        "INSERT INTO job_effect_contract "
+        "(job_id, contract_id, kind, target, expect, local_change_policy, "
+        "receipt_policy, verification_deadline_at, contract_version, "
+        "required_predicates_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        ("job-evidence", "contract-1", "github_pr_open", "issue:1", "effect_verified",
+         "optional", "required", "2026-06-24T07:05:00Z", 1, "{}")
+    )
+    conn.execute(
+        "INSERT INTO job_evidence "
+        "(evidence_id, job_id, kind, result, observed_at, source, confidence, attempt, event_id, payload_json) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        ("evidence-1", "job-evidence", "github_effect", "true", "2026-06-24T07:01:00Z",
+         "gh", "high", 1, "event-1", '{}')
+    )
+    conn.execute(
+        "INSERT INTO job_terminal_decision "
+        "(job_id, revision, status, verification_state, primary_evidence_id, "
+        "evidence_snapshot_json, decision_reason, decided_at, decided_by, "
+        "contract_version, follow_up) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        ("job-evidence", 1, "completed", "verified", "evidence-1", "[]",
+         "contract_effect_verified", "2026-06-24T07:01:01Z", "job_truth.v1", 1, "none")
+    )
+    conn.commit()
+    conn.close()
+
+    sl.cmd_jobs(all_jobs=True)
+    out = capsys.readouterr().out
+    assert "VERIFY" in out
+    assert "verified" in out
+    assert "1 (contract_effect_verified)" in out
 
 
 def test_cmd_jobs_default_hides_completed(project_dir, capsys):
@@ -6449,6 +6559,29 @@ def test_decide_record_writes_md_and_json(project_dir, monkeypatch):
     assert "agy" in record["inputs"]
     assert record["status"] == "approved"
 
+
+def test_decide_record_uses_unique_stem_for_slug_collision(project_dir, monkeypatch):
+    """Repeated records with the same 40-character slug prefix do not overwrite."""
+    import synlynk, json as _json
+
+    monkeypatch.setattr(
+        synlynk, "_run_agent_sync",
+        lambda agent, prompt, timeout=120: f"Analysis from {agent}. Decision: keep both.",
+    )
+    prefix = "Review docs/strategy/2026-10-02-five-pov-review.md section"
+    synlynk.cmd_decide(f"{prefix} 1", panel=["claude"], record=True)
+    synlynk.cmd_decide(f"{prefix} 2", panel=["claude"], record=True)
+
+    decisions_dir = project_dir / "project-docs" / "decisions"
+    md_files = sorted(decisions_dir.glob("*.md"))
+    json_files = sorted(decisions_dir.glob("*.json"))
+    assert len(md_files) == 2
+    assert len(json_files) == 2
+    assert md_files[0].stem != md_files[1].stem
+    assert {record["topic"] for record in map(_json.loads, (path.read_text() for path in json_files))} == {
+        f"{prefix} 1", f"{prefix} 2"
+    }
+
 def test_decide_json_has_decision_id(project_dir, monkeypatch):
     import synlynk, json as _json
     monkeypatch.setattr(synlynk, "_run_agent_sync",
@@ -6716,6 +6849,97 @@ def test_reconcile_daemon_jobs_ignores_denial_shape_when_gh_write_verified(
     assert row[2] == "true"
 
 
+def test_reconcile_daemon_jobs_does_not_relabel_settled_done_when_gh_verification_unknown(
+    project_dir, monkeypatch,
+):
+    """Unknown GH read-back is inconclusive, not evidence of permission denial."""
+    import synlynk.jobs as jobs_mod
+
+    log_path = str(project_dir / ".synlynk" / "logs" / "djob-ghw-unknown.log")
+    os.makedirs(os.path.dirname(log_path), exist_ok=True)
+    with open(log_path, "w") as f:
+        f.write(
+            "jetski: no output produced - a tool required the \"command\" permission that "
+            "headless mode cannot prompt for, so it was auto-denied\n"
+        )
+    with open(log_path + ".exit", "w") as f:
+        f.write("0")
+
+    monkeypatch.setattr(jobs_mod, "gh_write_verified", lambda *a, **kw: None)
+
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, "
+        "depends_on, pid, enqueued_at, started_at, log_path, requires_gh_write, "
+        "gh_write_target, gh_write_expect) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        ("djob-ghw-unknown", "codex", "open a pull request", "running", 5, "[]",
+         99999999, "2026-09-04T22:05:38", "2026-09-04T22:05:38", log_path,
+         1, "pr:1416", "pr_open"),
+    )
+    conn.commit()
+    conn.close()
+
+    # The bounded-retry fix (gh:#2136) defers terminal settlement on an
+    # "unknown" GH-write read-back until the retry cap is exhausted, so
+    # drive enough reconcile passes to reach the cap before asserting the
+    # final (settled) outcome.
+    for _ in range(jobs_mod._GH_WRITE_VERIFICATION_RETRY_CAP):
+        synlynk._reconcile_daemon_jobs()
+
+    conn2 = synlynk._get_db()
+    row = conn2.execute(
+        "SELECT status, exit_code, gh_write_verified FROM daemon_jobs WHERE job_id=?",
+        ("djob-ghw-unknown",),
+    ).fetchone()
+    conn2.close()
+    assert row[0] == "done"
+    assert row[1] == 0
+    assert row[2] == "unknown"
+
+
+def test_reconcile_daemon_jobs_reports_explicit_gh_verification_failure(
+    project_dir, monkeypatch,
+):
+    """Explicitly absent GH effects remain a GH-write failure, not a log denial."""
+    import synlynk.jobs as jobs_mod
+
+    log_path = str(project_dir / ".synlynk" / "logs" / "djob-ghw-false.log")
+    os.makedirs(os.path.dirname(log_path), exist_ok=True)
+    with open(log_path, "w") as f:
+        f.write(
+            "jetski: no output produced - a tool required the \"command\" permission that "
+            "headless mode cannot prompt for, so it was auto-denied\n"
+        )
+    with open(log_path + ".exit", "w") as f:
+        f.write("0")
+
+    monkeypatch.setattr(jobs_mod, "gh_write_verified", lambda *a, **kw: False)
+
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, "
+        "depends_on, pid, enqueued_at, started_at, log_path, requires_gh_write, "
+        "gh_write_target, gh_write_expect) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        ("djob-ghw-false", "codex", "open a pull request", "running", 5, "[]",
+         99999999, "2026-09-04T22:05:38", "2026-09-04T22:05:38", log_path,
+         1, "pr:1417", "pr_open"),
+    )
+    conn.commit()
+    conn.close()
+
+    synlynk._reconcile_daemon_jobs()
+
+    conn2 = synlynk._get_db()
+    row = conn2.execute(
+        "SELECT status, exit_code, gh_write_verified FROM daemon_jobs WHERE job_id=?",
+        ("djob-ghw-false",),
+    ).fetchone()
+    conn2.close()
+    assert row[0] == "succeeded_gh_write_failed"
+    assert row[1] == 0
+    assert row[2] == "false"
+
+
 def test_reconcile_daemon_jobs_still_marks_permission_denied_without_corroboration(project_dir):
     """Genuine headless auto-denial with no git/GitHub corroboration stays denied."""
     log_path = str(project_dir / ".synlynk" / "logs" / "djob-denied.log")
@@ -6848,9 +7072,17 @@ def test_dispatch_ready_jobs_launches_queued_job(project_dir, monkeypatch):
         ),
     )
     conn.execute(
+        "INSERT INTO goals (goal_id, outcome, criterion) VALUES (?, ?, ?)",
+        ("goal-dispatch-queued", "Launch queued dispatch jobs", "Queued jobs launch"),
+    )
+    conn.execute(
+        "INSERT INTO stories (story_id, title, goal_id) VALUES (?, ?, ?)",
+        ("story-dispatch-queued", "Launch queued dispatch job", "goal-dispatch-queued"),
+    )
+    conn.execute(
         "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, "
-        "depends_on, enqueued_at) VALUES (?,?,?,?,?,?,?)",
-        ("djob-q1", "claude", "do the thing", "queued", 5, "[]", "2026-06-23T10:00:00")
+        "depends_on, enqueued_at, story_id) VALUES (?,?,?,?,?,?,?,?)",
+        ("djob-q1", "claude", "do the thing", "queued", 5, "[]", "2026-06-23T10:00:00", "story-dispatch-queued")
     )
     conn.commit()
     conn.close()
@@ -7028,12 +7260,21 @@ def test_dispatch_ready_jobs_commits_per_job(project_dir, monkeypatch):
             time.strftime("%Y-%m-%dT%H:%M:%SZ", time.localtime()),
         ),
     )
+    conn.execute(
+        "INSERT INTO goals (goal_id, outcome, criterion) VALUES (?, ?, ?)",
+        ("goal-dispatch-commits", "Commit queued dispatch jobs", "Jobs commit"),
+    )
+    for i in range(2):
+        conn.execute(
+            "INSERT INTO stories (story_id, title, goal_id) VALUES (?, ?, ?)",
+            (f"story-dispatch-commit-{i}", "Commit queued dispatch job", "goal-dispatch-commits"),
+        )
     for i in range(2):
         conn.execute(
             "INSERT INTO daemon_jobs (job_id, agent, task, status, priority, "
-            "depends_on, enqueued_at) VALUES (?,?,?,?,?,?,?)",
+            "depends_on, enqueued_at, story_id) VALUES (?,?,?,?,?,?,?,?)",
             (f"djob-commit-{i}", "claude", "do it", "queued", 5, "[]",
-             f"2026-06-23T10:00:0{i}")
+             f"2026-06-23T10:00:0{i}", f"story-dispatch-commit-{i}")
         )
     conn.commit()
     conn.close()
@@ -7131,7 +7372,8 @@ def test_dispatch_ready_jobs_creates_worktree_and_applies_dispatch_flags(
     shell = [c for c in captured if c["cmd"] and c["cmd"][0] == "sh"]
     assert len(shell) == 1
     shell_cmd = shell[0]["cmd"][2]
-    assert "--dangerously-skip-permissions" in shell_cmd
+    assert "--dangerously-skip-permissions" not in shell_cmd
+    assert "--allowedTools" in shell_cmd
     assert "--print" in shell_cmd
     assert shell[0]["kwargs"].get("cwd") == expected_wt
 
@@ -7511,10 +7753,14 @@ def test_daemon_cli_uninstall_service_dispatch(project_dir, monkeypatch):
 
 def test_install_service_macos(project_dir, monkeypatch):
     import plistlib
+    import synlynk.daemon as daemon_mod
 
     monkeypatch.setenv("HOME", str(project_dir))
+    monkeypatch.setattr(daemon_mod, "_repo_common_dir", lambda: str(project_dir))
+    monkeypatch.setattr(daemon_mod, "_daemon_package_path", lambda: "/usr/local/lib/synlynk/daemon.py")
+    monkeypatch.setattr(daemon_mod, "_daemon_caller_path", lambda: str(project_dir))
     monkeypatch.setattr(synlynk.sys, "platform", "darwin")
-    monkeypatch.setattr(synlynk.shutil, "which", lambda name: "/usr/local/bin/synlynk" if name == "synlynk" else None)
+    monkeypatch.setattr(synlynk.sys, "executable", "/usr/local/bin/python3")
     monkeypatch.setattr(synlynk.os, "makedirs", lambda *a, **kw: None)
 
     calls = []
@@ -7535,22 +7781,29 @@ def test_install_service_macos(project_dir, monkeypatch):
     plist_path = launchagents_dir / "com.synlynk.daemon.plist"
     assert plist_path.exists()
     plist = plist_path.read_text()
-    assert "<string>/usr/local/bin/synlynk</string>" in plist
+    assert "<string>/usr/local/bin/python3</string>" in plist
     assert "<string>com.synlynk.daemon</string>" in plist
+    assert "<string>run</string>" in plist
     assert ".synlynk/launchd.log" in plist
-    assert plistlib.loads(plist.encode())["KeepAlive"] == {"SuccessfulExit": False}
-    assert "<key>KeepAlive</key>\n    <false/>" not in plist
+    assert plistlib.loads(plist.encode())["KeepAlive"] is True
+    assert plistlib.loads(plist.encode())["ThrottleInterval"] == 30
     assert calls[0][0] == ["launchctl", "load", "-w", str(plist_path)]
 
 
 def test_install_service_linux(project_dir, monkeypatch):
+    import synlynk.daemon as daemon_mod
+
     monkeypatch.setenv("HOME", str(project_dir))
+    monkeypatch.setattr(daemon_mod, "_repo_common_dir", lambda: str(project_dir))
+    monkeypatch.setattr(daemon_mod, "_daemon_package_path", lambda: "/usr/local/lib/synlynk/daemon.py")
+    monkeypatch.setattr(daemon_mod, "_daemon_caller_path", lambda: str(project_dir))
     monkeypatch.setattr(synlynk.sys, "platform", "linux")
     monkeypatch.setattr(
         synlynk.shutil,
         "which",
-        lambda name: "/usr/bin/systemctl" if name == "systemctl" else "/usr/bin/synlynk",
+        lambda name: "/usr/bin/systemctl" if name == "systemctl" else None,
     )
+    monkeypatch.setattr(synlynk.sys, "executable", "/usr/bin/python3")
     monkeypatch.setattr(synlynk.os, "makedirs", lambda *a, **kw: None)
 
     calls = []
@@ -7571,16 +7824,22 @@ def test_install_service_linux(project_dir, monkeypatch):
     unit_path = unit_dir / "synlynk-daemon.service"
     assert unit_path.exists()
     unit = unit_path.read_text()
-    assert "Type=forking" in unit
+    assert "Type=simple" in unit
     assert "After=default.target" in unit
-    assert "ExecStart=/usr/bin/synlynk daemon start" in unit
-    assert "PIDFile=%h/.synlynk/daemon.pid" in unit
+    assert "ExecStart=/usr/bin/python3 -m synlynk daemon run" in unit
+    assert "SYNLYNK_DAEMON_WORKSPACE_ROOT=" in unit
     assert "Restart=on-failure" in unit
+    assert "RestartSec=30" in unit
     assert calls[0][0] == ["systemctl", "--user", "enable", "--now", "synlynk-daemon"]
 
 
 def test_install_service_crontab(project_dir, monkeypatch):
+    import synlynk.daemon as daemon_mod
+
     monkeypatch.setenv("HOME", str(project_dir))
+    monkeypatch.setattr(daemon_mod, "_repo_common_dir", lambda: str(project_dir))
+    monkeypatch.setattr(daemon_mod, "_daemon_package_path", lambda: "/usr/local/lib/synlynk/daemon.py")
+    monkeypatch.setattr(daemon_mod, "_daemon_caller_path", lambda: str(project_dir))
     monkeypatch.setattr(synlynk.sys, "platform", "linux")
     monkeypatch.setattr(synlynk.shutil, "which", lambda name: None)
     monkeypatch.setattr(synlynk.os, "makedirs", lambda *a, **kw: None)
@@ -7606,6 +7865,19 @@ def test_install_service_crontab(project_dir, monkeypatch):
     assert crontab_contents[0].count("daemon start") == 1
     assert calls[0][0] == ["crontab", "-l"]
     assert calls[1][0] == ["crontab", "-"]
+
+
+def test_install_service_rejects_disposable_worktree(project_dir, monkeypatch):
+    import synlynk.daemon as daemon_mod
+
+    monkeypatch.setattr(
+        daemon_mod,
+        "_daemon_package_path",
+        lambda: str(project_dir / "worktrees" / "job-123" / "synlynk" / "daemon.py"),
+    )
+
+    with pytest.raises(RuntimeError, match="disposable worktree"):
+        daemon_mod._daemon_install_service(object())
 
 
 def test_uninstall_service_macos(project_dir, monkeypatch):
@@ -7676,10 +7948,12 @@ def test_agent_capability_baselines_includes_grok():
     assert grok["cli"] == "grok"
     assert grok.get("prompt_flag") == "--single"
     assert "-p" not in grok.get("non_interactive_flags", [])
-    # Headless Grok requires --always-approve to avoid dontAsk auto-cancel (#1277).
+    # --always-approve is no longer an unconditional baseline requirement —
+    # it's added explicitly via _dispatch_flags_for_agent(skip_permissions=True)
+    # and dispatch_agent()'s Grok auto-opt-in instead (gh:#1925 part 1).
     assert "--always-approve" in grok["dispatch_flags"]["valid_flags"]
     assert "--permission-mode" in grok["dispatch_flags"]["valid_flags"]
-    assert grok["dispatch_flags"]["required_flags"] == ["--always-approve"]
+    assert grok["dispatch_flags"]["required_flags"] == []
     assert "--yes" in grok["dispatch_flags"]["invalid_flags"]
     assert "cli-chat-proxy.grok.com:443" in grok["network_deps"]["required_endpoints"]
     assert "builder" in grok["roles"]
@@ -7687,7 +7961,11 @@ def test_agent_capability_baselines_includes_grok():
 
 
 def test_grok_baseline_requires_always_approve():
-    # Headless Grok requires --always-approve so compound shell is not auto-cancelled (#1277).
+    # --always-approve/--permission-mode stay valid Grok CLI flags, but are no
+    # longer an unconditional baseline requirement (gh:#1925 part 1) — the
+    # bypass is now added explicitly and only when skip_permissions=True
+    # (dispatch_agent() auto-sets this for Grok; see
+    # docs/superpowers/specs/2026-10-04-grok-failclosed-permission-enforcement-design.md).
     from synlynk import HARNESS_CAPABILITY_BASELINES
     grok = HARNESS_CAPABILITY_BASELINES.get("grok", {})
     flags = grok.get("dispatch_flags", {})
@@ -7695,8 +7973,8 @@ def test_grok_baseline_requires_always_approve():
         "--always-approve must be valid for Grok (--yes was dropped)"
     assert "--permission-mode" in flags.get("valid_flags", []), \
         "--permission-mode must remain valid for bypassPermissions fallback"
-    assert flags.get("required_flags", []) == ["--always-approve"], \
-        "Grok must require --always-approve for headless dispatch"
+    assert flags.get("required_flags", []) == [], \
+        "Grok's baseline must not unconditionally require --always-approve"
     assert "--yes" in flags.get("invalid_flags", []), \
         "--yes must be invalid for Grok (it was dropped by Grok CLI)"
 

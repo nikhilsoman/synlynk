@@ -8,7 +8,10 @@ machine-scoped and must not anchor to whichever repo happened to start it.
 from __future__ import annotations
 
 import contextlib
+import dataclasses
+import json
 import os
+import re
 import threading
 from pathlib import Path
 from typing import Optional
@@ -21,6 +24,51 @@ CACHE_ROOT = Path(os.path.expanduser("~/.synlynk/vizor-cache"))
 DEFAULT_POLL_INTERVAL = 15
 
 _RENDER_LOCK = threading.Lock()
+
+
+@dataclasses.dataclass(frozen=True)
+class WorkspaceContext:
+    slug: str
+    repo_path: Path
+    db_path: Path
+
+
+def resolve_workspace_context(slug: str) -> Optional[WorkspaceContext]:
+    """Look up slug in machine state_registry and return verified WorkspaceContext.
+
+    Rejects unregistered slugs or missing filesystem targets.
+    Never accepts client-provided filesystem paths.
+    """
+    from synlynk.state_registry import _read_unlocked, registry_path
+
+    if not slug or not re.match(r"^[a-zA-Z0-9_-]+$", slug):
+        return None
+
+    p = registry_path()
+    if not p.exists():
+        return None
+
+    try:
+        data = _read_unlocked(p)
+    except Exception:
+        return None
+
+    products = data.get("products", {}) if isinstance(data, dict) else {}
+    entry = products.get(slug)
+    if not isinstance(entry, dict):
+        return None
+
+    repo_path = entry.get("repo_path")
+    db_path = entry.get("canonical_path")
+    if not repo_path or not db_path:
+        return None
+
+    repo_p = Path(repo_path)
+    db_p = Path(db_path)
+    if not repo_p.is_dir() or not db_p.is_file():
+        return None
+
+    return WorkspaceContext(slug=slug, repo_path=repo_p, db_path=db_p)
 
 
 def poll_interval() -> int:
@@ -63,6 +111,61 @@ def workspace_render_context(repo_path: Path, db_path: Path, cache_dir: Path):
             os.chdir(old_cwd)
 
 
+@contextlib.contextmanager
+def _workspace_cwd(repo_path: Path):
+    """Chdir to a workspace repo for the duration of a board_governance/autonomy call.
+
+    Those modules resolve their state (`.synlynk/proposals`, `.synlynk/config.json`)
+    relative to os.getcwd(), same CWD-coupling rationale as workspace_render_context above.
+    """
+    with _RENDER_LOCK:
+        old_cwd = os.getcwd()
+        try:
+            os.chdir(repo_path)
+            yield
+        finally:
+            os.chdir(old_cwd)
+
+
+def _list_proposals_for_context(ctx: "WorkspaceContext") -> list:
+    from synlynk.board_governance import _proposals_dir
+
+    with _workspace_cwd(ctx.repo_path):
+        proposals_dir = _proposals_dir()
+        results = []
+        for name in sorted(os.listdir(proposals_dir)):
+            if not name.endswith(".json"):
+                continue
+            with open(os.path.join(proposals_dir, name), "r", encoding="utf-8") as f:
+                results.append(json.load(f))
+        return results
+
+
+def _sign_proposal_for_context(ctx: "WorkspaceContext", proposal_id: str, key_path: Optional[str]) -> dict:
+    from synlynk.board_governance import sign_proposal
+
+    if not proposal_id:
+        raise ValueError("proposal_id is required")
+
+    with _workspace_cwd(ctx.repo_path):
+        signed = sign_proposal(proposal_id, key_path=key_path)
+        return signed.to_dict()
+
+
+def _is_transient_test_path(path_str: str) -> bool:
+    test_markers = (
+        "/pytest-",
+        "test_run_",
+        "synlynk-selftest",
+        "test-instructions-",
+        "test_featonboarding",
+        "test_cmd_wizard",
+        "test-doctor-",
+        "test-synlynk-",
+    )
+    return any(marker in path_str for marker in test_markers)
+
+
 def _registered_workspaces() -> dict:
     """Return {slug: entry} for every registered product, or {} if no registry yet."""
     from synlynk.state_registry import _read_unlocked, registry_path
@@ -70,8 +173,31 @@ def _registered_workspaces() -> dict:
     path = registry_path()
     if not path.exists():
         return {}
-    payload = _read_unlocked(path)
-    return payload.get("products", {})
+    try:
+        payload = _read_unlocked(path)
+    except Exception:
+        return {}
+    products = payload.get("products", {})
+    if not isinstance(products, dict):
+        return {}
+
+    is_custom_registry = bool(os.environ.get("SYNLYNK_REGISTRY_PATH"))
+    valid_workspaces = {}
+    for slug, entry in products.items():
+        if not isinstance(entry, dict):
+            continue
+        repo_path = entry.get("repo_path")
+        db_path = entry.get("canonical_path")
+        if not repo_path or not db_path:
+            continue
+        repo_p = Path(repo_path)
+        db_p = Path(db_path)
+        if not repo_p.is_dir() or not db_p.is_file():
+            continue
+        if not is_custom_registry and (_is_transient_test_path(str(repo_path)) or _is_transient_test_path(str(slug))):
+            continue
+        valid_workspaces[slug] = entry
+    return valid_workspaces
 
 
 def refresh_workspace(slug: str, entry: dict, port: int) -> None:
@@ -136,6 +262,8 @@ def parse_workspace_path(path: str):
     rest = remainder[len(slug):]
     if not rest or rest == "/":
         rest = "/index.html"
+    elif rest in ("/graphify", "/graph"):
+        rest = "/graphify.html"
     return slug, "/" + slug + rest
 
 
@@ -172,12 +300,15 @@ def _workspace_index_html() -> str:
             status_badge = '<span class="badge" style="background:rgba(13,158,135,0.15);color:#14b8a6;">● Rendered</span>' if is_rendered else '<span class="badge" style="background:rgba(234,179,8,0.15);color:#eab308;">○ Registering</span>'
 
             if is_rendered:
+                graphify_chip = ""
+                if (cache_dir / "graphify.html").is_file() or (cache_dir / "graph.html").is_file():
+                    graphify_chip = f'\n                  <a href="/w/{s}/graphify.html" class="view-chip">Graphify</a>'
                 views_html = f"""
                 <div class="view-links">
                   <a href="/w/{s}/index.html" class="view-chip primary">Overview</a>
                   <a href="/w/{s}/effort.html" class="view-chip">Effort & Cost</a>
                   <a href="/w/{s}/roles.html" class="view-chip">Roles</a>
-                  <a href="/w/{s}/tube.html" class="view-chip">Architect</a>
+                  <a href="/w/{s}/tube.html" class="view-chip">Architect</a>{graphify_chip}
                   <a href="/w/{s}/efficiency.html" class="view-chip">Efficiency</a>
                   <a href="/w/{s}/observatory.html" class="view-chip">Observatory</a>
                 </div>
@@ -485,9 +616,10 @@ def build_workspace_routing_handler():
             )
 
         def _route_path(self) -> bool:
-            from urllib.parse import urlparse
+            from urllib.parse import parse_qs, urlparse
 
-            path = urlparse(self.path).path
+            parsed = urlparse(self.path)
+            path = parsed.path
             if path == "/" or path == "":
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -496,15 +628,129 @@ def build_workspace_routing_handler():
                     self.wfile.write(_workspace_index_html().encode("utf-8"))
                 return False
             if path.startswith("/w/"):
+                remainder = path[len("/w/"):]
+                slug, separator, subpath = remainder.partition("/")
+                if not separator or not slug:
+                    self.send_error(404, "Invalid workspace path")
+                    return False
+
+                ctx = resolve_workspace_context(slug)
+                if ctx is None:
+                    self.send_error(404, f"Unknown workspace: {slug}")
+                    return False
+
+                if subpath == "board":
+                    from synlynk.autonomy import get_autonomy_mode
+                    from synlynk.viz import generate_boardroom_html
+
+                    with _workspace_cwd(ctx.repo_path):
+                        mode = get_autonomy_mode()
+                    html_body = generate_boardroom_html(
+                        workspace_slug=slug, autonomy_mode=mode.value
+                    ).encode("utf-8")
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/html; charset=utf-8")
+                    self.send_header("Content-Length", str(len(html_body)))
+                    self.end_headers()
+                    if self.command == "GET":
+                        self.wfile.write(html_body)
+                    return False
+
+                if subpath.startswith("api/"):
+                    api_route = subpath[len("api/"):]
+                    if api_route == "board/proposals" and self.command == "GET":
+                        proposals = _list_proposals_for_context(ctx)
+                        body = json.dumps({"proposals": proposals}).encode("utf-8")
+                        self.send_response(200)
+                        self.send_header("Content-Type", "application/json; charset=utf-8")
+                        self.send_header("Content-Length", str(len(body)))
+                        self.end_headers()
+                        self.wfile.write(body)
+                        return False
+
+                    if api_route == "board/proposals/sign" and self.command == "POST":
+                        length = int(self.headers.get("Content-Length", 0))
+                        payload = json.loads(self.rfile.read(length)) if length else {}
+                        proposal_id = payload.get("proposal_id")
+                        key_path = payload.get("key_path")
+                        try:
+                            signed = _sign_proposal_for_context(ctx, proposal_id, key_path)
+                            res = json.dumps({"ok": True, "proposal": signed}).encode("utf-8")
+                            self.send_response(200)
+                        except Exception as exc:
+                            res = json.dumps({"ok": False, "error": str(exc)}).encode("utf-8")
+                            self.send_response(400)
+                        self.send_header("Content-Type", "application/json")
+                        self.end_headers()
+                        self.wfile.write(res)
+                        return False
+
+                    if api_route == "board":
+                        from synlynk.board import board_data_for_context
+
+                        filters = parse_qs(parsed.query)
+                        data = board_data_for_context(
+                            ctx,
+                            repo_id=(filters.get("repo_id") or [None])[0],
+                            type_id=(filters.get("type_id") or [None])[0],
+                            goal_id=(filters.get("goal_id") or [None])[0],
+                        )
+                        body = json.dumps(data).encode("utf-8")
+                        self.send_response(200)
+                        self.send_header("Content-Type", "application/json; charset=utf-8")
+                        self.send_header("Content-Length", str(len(body)))
+                        self.end_headers()
+                        if self.command == "GET":
+                            self.wfile.write(body)
+                        return False
+
+                    if api_route == "goals" and self.command == "GET":
+                        from synlynk.viz import collect_data
+
+                        payload = collect_data(db_path=str(ctx.db_path))
+                        body = json.dumps(payload).encode("utf-8")
+                        self.send_response(200)
+                        self.send_header("Content-Type", "application/json; charset=utf-8")
+                        self.send_header("Content-Length", str(len(body)))
+                        self.end_headers()
+                        self.wfile.write(body)
+                        return False
+
+                    if api_route == "board/stage" and self.command == "POST":
+                        from synlynk.board import update_stage_for_context
+
+                        length = int(self.headers.get("Content-Length", 0))
+                        payload = json.loads(self.rfile.read(length))
+                        ok = update_stage_for_context(ctx, payload["story_id"], payload["stage"])
+                        res = json.dumps({"ok": ok}).encode("utf-8")
+                        self.send_response(200 if ok else 400)
+                        self.send_header("Content-Type", "application/json")
+                        self.end_headers()
+                        self.wfile.write(res)
+                        return False
+
+                    if api_route == "board/status" and self.command == "POST":
+                        from synlynk.board import update_status_for_context
+
+                        length = int(self.headers.get("Content-Length", 0))
+                        payload = json.loads(self.rfile.read(length))
+                        ok = update_status_for_context(ctx, payload["story_id"], payload["status"])
+                        res = json.dumps({"ok": ok}).encode("utf-8")
+                        self.send_response(200 if ok else 400)
+                        self.send_header("Content-Type", "application/json")
+                        self.end_headers()
+                        self.wfile.write(res)
+                        return False
+
                 app_route = _rewrite_workspace_app_route(path)
                 if app_route is not None:
-                    self.path = app_route + (("?" + urlparse(self.path).query) if urlparse(self.path).query else "")
+                    self.path = app_route + (("?" + parsed.query) if parsed.query else "")
                     return True
                 slug, rewritten = parse_workspace_path(path)
                 if slug is None:
                     self.send_error(404, "Unknown workspace")
                     return False
-                self.path = rewritten + (("?" + urlparse(self.path).query) if urlparse(self.path).query else "")
+                self.path = rewritten + (("?" + parsed.query) if parsed.query else "")
                 return True
             return True
 
@@ -515,6 +761,10 @@ def build_workspace_routing_handler():
         def do_HEAD(self):
             if self._route_path():
                 super().do_HEAD()
+
+        def do_POST(self):
+            if self._route_path():
+                super().do_POST()
 
     return WorkspaceRoutingHandler
 
@@ -558,6 +808,18 @@ def run_forever(port: Optional[int] = None) -> None:
     import threading
 
     from synlynk.viz import DEFAULT_PORT
+
+    extra_paths = [
+        os.path.expanduser("~/.local/bin"),
+        os.path.expanduser("~/.pyenv/shims"),
+        "/opt/homebrew/bin",
+        "/usr/local/bin",
+    ]
+    for p in extra_paths:
+        if p not in os.environ.get("PATH", ""):
+            os.environ["PATH"] = p + ":" + os.environ.get("PATH", "")
+
+    probe_health()
 
     resolved_port = port or DEFAULT_PORT
     CACHE_ROOT.mkdir(parents=True, exist_ok=True)
@@ -608,7 +870,24 @@ _LAUNCHD_LABEL = "com.synlynk.vizor-daemon"
 _SYSTEMD_UNIT_NAME = "synlynk-vizor-daemon.service"
 
 
+def _synlynk_import_root() -> str:
+    """Directory that must be on PYTHONPATH for `python -m synlynk.vizor_daemon`.
+
+    Launchd/systemd start with cwd `/` or `$HOME`. An editable install that
+    points at a deleted worktree is invisible from those cwds, which is the
+    LIVE-16 crash-loop.
+    """
+    import synlynk
+
+    return str(Path(synlynk.__file__).resolve().parent.parent)
+
+
 def _launchd_plist_contents(python_exe: str) -> str:
+    local_bin = os.path.expanduser("~/.local/bin")
+    pyenv_shims = os.path.expanduser("~/.pyenv/shims")
+    default_path = f"/opt/homebrew/bin:/usr/local/bin:{local_bin}:{pyenv_shims}:/usr/bin:/bin:/usr/sbin:/sbin"
+    pythonpath = _synlynk_import_root()
+    working = str(DAEMON_HOME)
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
   "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -622,10 +901,21 @@ def _launchd_plist_contents(python_exe: str) -> str:
         <string>-m</string>
         <string>synlynk.vizor_daemon</string>
     </array>
+    <key>WorkingDirectory</key>
+    <string>{working}</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>{default_path}</string>
+        <key>PYTHONPATH</key>
+        <string>{pythonpath}</string>
+    </dict>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
     <true/>
+    <key>ThrottleInterval</key>
+    <integer>30</integer>
     <key>StandardOutPath</key>
     <string>{LOGFILE}</string>
     <key>StandardErrorPath</key>
@@ -636,16 +926,58 @@ def _launchd_plist_contents(python_exe: str) -> str:
 
 
 def _systemd_unit_contents(python_exe: str) -> str:
+    pythonpath = _synlynk_import_root()
     return f"""[Unit]
 Description=synlynk Vizor cross-workspace daemon
 
 [Service]
+WorkingDirectory={DAEMON_HOME}
+Environment=PYTHONPATH={pythonpath}
 ExecStart={python_exe} -m synlynk.vizor_daemon
 Restart=on-failure
+RestartSec=30
 
 [Install]
 WantedBy=default.target
 """
+
+
+def probe_health() -> dict:
+    """Detect launchd/systemd import crash-loop or a registered-but-dead service.
+
+    Writes a CRITICAL sentinel. Does not inspect exec/dispatch stdout — that
+    is why LIVE-16 was silent for thousands of KeepAlive failures.
+    """
+    from synlynk.sentinel import _write_sentinel_alert
+
+    running = is_running()
+    registered = False
+    try:
+        registered = bool(status().get("service_registered"))
+    except Exception:
+        registered = False
+
+    crashloop = False
+    try:
+        if LOGFILE.exists():
+            tail = LOGFILE.read_text(errors="replace")[-8000:]
+            crashloop = "ModuleNotFoundError: No module named 'synlynk'" in tail
+    except OSError:
+        tail = ""
+
+    if (crashloop and not running) or (registered and not running):
+        code = "VIZOR_DAEMON_CRASHLOOP" if crashloop else "VIZOR_DAEMON_DOWN"
+        message = (
+            "OS-supervised Vizor daemon cannot import synlynk (launchd KeepAlive "
+            "crash-loop). HUD may be served by a session workaround; GitHub App "
+            "token refresh in vizor_daemon is not running."
+            if crashloop
+            else "Vizor daemon is registered but not running."
+        )
+        _write_sentinel_alert("CRITICAL", code, message)
+        return {"ok": False, "code": code, "running": running, "registered": registered}
+
+    return {"ok": True, "code": "ok", "running": running, "registered": registered}
 
 
 def install() -> dict:

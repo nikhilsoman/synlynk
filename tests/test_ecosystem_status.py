@@ -97,7 +97,7 @@ def test_config_set_dispatch_mode(tmp_path, monkeypatch):
     from synlynk import cmd_config_set
 
     cmd_config_set("dispatch_mode", "eco")
-    config = json.loads((tmp_path / ".synlynk" / "config.json").read_text())
+    config = json.loads((tmp_path / ".synlynk" / "workspace.json").read_text())
     assert config["dispatch_mode"] == "eco"
 
 
@@ -120,6 +120,21 @@ def test_estimate_dispatch_tokens():
     big_context = "word " * 400_000
     large = estimate_dispatch_tokens("implement feature", big_context, "claude")
     assert large["input"] > 400_000
+
+
+def test_review_estimate_includes_expected_repository_reads():
+    from synlynk.status import estimate_dispatch_tokens
+
+    prompt_only = estimate_dispatch_tokens("review this small function", "", "codex")
+    two_file = estimate_dispatch_tokens(
+        "review PR #1818", "", "codex", task_type="review", target_diff_size=2
+    )
+
+    assert two_file["task_type"] == "review"
+    assert two_file["target_diff_size"] == 2
+    assert two_file["read_allowance"] > 0
+    assert two_file["input"] > prompt_only["input"]
+    assert two_file["input"] >= two_file["read_allowance"]
 
 
 def test_get_avg_tool_calls_default():
@@ -199,6 +214,23 @@ def test_format_status_terminal_shows_rates_never_updated_warning():
     cycle_map = {"claude": {c: "full" for c in ["goal", "open", "visualize", "execute", "release", "notify", "sustain"]}}
     output = _format_status_terminal(rows, cycle_map, 4.2, "daily-grind", 0)
     assert "RATES   never updated ⚠ (hardcoded defaults)" in output
+
+
+def test_format_status_terminal_shows_host_auth_audit_summary():
+    from synlynk.status import _format_status_terminal
+
+    events = [{
+        "type": "gh_host_auth",
+        "recorded_at": "2026-10-06T01:02:03Z",
+        "actor": "operator",
+        "repo": "nikhilsoman/synlynk",
+    }]
+    output = _format_status_terminal(
+        [], {}, 1.0, "daily-grind", 0, host_auth_events=events
+    )
+
+    assert "GH HOST AUTH  1 call(s); latest 2026-10-06T01:02:03Z" in output
+    assert "by operator on nikhilsoman/synlynk" in output
 
 
 def test_format_status_json_valid():

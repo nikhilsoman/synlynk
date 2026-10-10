@@ -1,6 +1,7 @@
 import os
 import sys
 import sqlite3
+import subprocess
 import threading
 import time
 import pytest
@@ -40,6 +41,65 @@ def test_check_scope_compliance_empty_scope_paths_is_always_compliant():
 
     assert _check_scope_compliance(["synlynk/jobs.py"], []) is True
     assert _check_scope_compliance(["synlynk/jobs.py"], None) is True
+
+
+def test_reconcile_jobs_continues_when_reconciliation_lock_is_unavailable(monkeypatch, capsys):
+    import synlynk.jobs as jobs_mod
+
+    lock_path = ".synlynk/jobs.json.reconcile.lock"
+    calls = []
+    real_open = open
+
+    def deny_lock(path, mode="r", *args, **kwargs):
+        if path == lock_path:
+            raise PermissionError("read-only sandbox")
+        return real_open(path, mode, *args, **kwargs)
+
+    monkeypatch.setattr(
+        jobs_mod,
+        "_pkg",
+        lambda name, default=None: ".synlynk/jobs.json" if name == "JOBS_FILE" else default,
+    )
+    monkeypatch.setattr("builtins.open", deny_lock)
+    monkeypatch.setattr(jobs_mod, "_reconcile_jobs_unlocked", lambda: calls.append("reconciled"))
+
+    jobs_mod._reconcile_jobs()
+
+    assert calls == ["reconciled"]
+    assert "continuing without the lock" in capsys.readouterr().err
+
+
+def test_sentinel_cotrip_forces_scope_review_regardless_of_job_status(monkeypatch):
+    import synlynk.jobs as jobs_mod
+
+    calls = []
+
+    def fake_check_token_bloat(**kwargs):
+        calls.append(kwargs)
+        return [
+            {"code": "TOKEN_BLOAT", "severity": "CRITICAL"},
+            {"code": "COST_INFLATION", "severity": "CRITICAL", "actionable": True},
+        ]
+
+    monkeypatch.setattr(
+        jobs_mod,
+        "_pkg",
+        lambda name, default=None: fake_check_token_bloat if name == "check_token_bloat" else default,
+    )
+    job = {"id": "job-sentinel-cotrip", "agent": "codex", "status": "completed"}
+
+    assert jobs_mod._force_scope_review_for_sentinel_cotrip(
+        job,
+        in_tokens=7_000_000,
+        out_tokens=231_830,
+        cost_usd=21.93,
+        files_touched=14,
+        sentinel_path=".synlynk/sentinel.md",
+    ) is True
+    assert job["status"] == "SCOPE_REVIEW_REQUIRED"
+    assert job["scope_review_required"] is True
+    assert job["scope_review_reason"] == "TOKEN_BLOAT+COST_INFLATION"
+    assert calls[0]["job_id"] == "job-sentinel-cotrip"
 
 
 def test_check_task_receipt_ok_when_marker_is_first_line():
@@ -154,6 +214,40 @@ def test_classify_task_delivery_clean_when_receipt_status_none():
 
     result = jobs_mod._classify_task_delivery(None, has_corroborating_activity=False)
     assert result == {"hard_fail": False, "warn": False}
+
+
+def test_task_delivery_accepts_verified_gh_write_without_local_activity(monkeypatch):
+    import synlynk.jobs as jobs_mod
+
+    monkeypatch.setattr(
+        jobs_mod,
+        "_job_has_verified_gh_write_evidence",
+        lambda job: bool(job.get("requires_gh_write") and job.get("gh_write_verified")),
+    )
+    job = {"id": "job-gh-write", "requires_gh_write": True, "gh_write_verified": True}
+
+    assert jobs_mod._task_delivery_has_corroborating_activity(job, {
+        "has_activity": False,
+        "remote_has_activity": False,
+    }) is True
+    assert jobs_mod._classify_task_delivery("absent", True) == {
+        "hard_fail": False,
+        "warn": True,
+    }
+
+
+def test_task_delivery_still_hard_fails_without_gh_write_or_git_activity():
+    import synlynk.jobs as jobs_mod
+
+    job = {"id": "job-no-activity", "requires_gh_write": False}
+    assert jobs_mod._task_delivery_has_corroborating_activity(job, {
+        "has_activity": False,
+        "remote_has_activity": False,
+    }) is False
+    assert jobs_mod._classify_task_delivery("absent", False) == {
+        "hard_fail": True,
+        "warn": False,
+    }
 
 
 def test_task_sha256_and_preview_returns_none_for_falsy_task():
@@ -758,7 +852,7 @@ def test_reconcile_jobs_waitpid_ignores_denial_shape_when_git_state_shows_activi
     reconciled = next(job for job in jobs if job["id"] == "job-waitpid-git-corroborated")
 
     assert reconciled["status"] != "permission_denied"
-    assert reconciled["status"] == "completed"
+    assert reconciled["status"] == "unpushed_branch"
 
 
 def test_reconcile_jobs_dead_pid_ignores_denial_shape_when_git_state_shows_activity(tmp_path, monkeypatch, capsys):
@@ -902,7 +996,7 @@ def test_reconcile_jobs_dead_pid_warns_but_does_not_fail_when_activity_present(t
     reconciled = next(job for job in jobs if job["id"] == "job-deadpid-warn")
 
     assert reconciled["status"] != "task_delivery_failed"
-    assert "task-receipt" in out
+    assert reconciled["status"] == "unpushed_branch"
 
 
 def test_apply_dispatch_gate_downgrades_status_on_suite_failure(project_dir, monkeypatch):
@@ -1558,6 +1652,24 @@ def test_mark_daemon_job_terminal_only_running(project_dir):
     conn.close()
 
 
+def test_mark_daemon_job_terminal_routes_through_canonical_settlement(project_dir, monkeypatch):
+    from synlynk import _get_db
+    import synlynk.jobs as jobs_mod
+
+    conn = _get_db()
+    _seed_daemon_job(conn, "job-canonical", agent="codex")
+    calls = []
+    monkeypatch.setattr(
+        jobs_mod,
+        "_settle_daemon_job_terminal",
+        lambda *args, **kwargs: calls.append((args, kwargs)) or True,
+    )
+
+    assert jobs_mod.mark_daemon_job_terminal(conn, "job-canonical") is True
+    assert calls and calls[0][0][1:3] == ("job-canonical", "timed_out")
+    conn.close()
+
+
 def test_mark_daemon_job_terminal_preserves_explicit_completion_time(project_dir):
     from synlynk import _get_db
     from synlynk.jobs import mark_daemon_job_terminal
@@ -1956,6 +2068,158 @@ def test_gtv_status_no_exit_no_git_is_timed_out():
     assert exit_code == -9
 
 
+def test_gtv_status_structured_completion_is_authoritative():
+    from synlynk.jobs import _gtv_status_for_daemon_exit
+
+    status, exit_code, label, note = _gtv_status_for_daemon_exit(
+        17, None, {"available": True, "completed": True}
+    )
+    assert (status, exit_code) == ("done", 0)
+    assert "structured" in note
+
+
+def test_unpushed_guard_accepts_pr_delivery_after_head_branch_deletion(monkeypatch):
+    import synlynk.jobs as jobs_mod
+
+    monkeypatch.setattr(jobs_mod, "local_commits_pushed", lambda *args: False)
+    monkeypatch.setattr(jobs_mod, "github_branch_effect_verified", lambda *args, **kwargs: True)
+
+    conn = type("Conn", (), {"execute": lambda self, *args: (_ for _ in ()).throw(AssertionError("must not mark false"))})()
+    state = {"commits_ahead": 1, "base_commit": "base-sha"}
+
+    assert jobs_mod._guard_unpushed_branch(
+        conn, "job-merged", "done", "/tmp/missing-worktree", "fix/job-merged", state,
+        "2026-10-04T09:00:00",
+    ) == "done"
+
+
+def test_unpushed_guard_retries_on_inconclusive_check_instead_of_settling(monkeypatch):
+    import sqlite3
+    import synlynk.jobs as jobs_mod
+
+    monkeypatch.setattr(jobs_mod, "local_commits_pushed", lambda *args: False)
+    monkeypatch.setattr(jobs_mod, "github_branch_effect_verified", lambda *args, **kwargs: None)
+
+    conn = sqlite3.connect(":memory:")
+    conn.execute(
+        "CREATE TABLE daemon_jobs (job_id TEXT PRIMARY KEY, status TEXT, "
+        "gh_write_verified TEXT, unpushed_branch_check_attempts INTEGER NOT NULL DEFAULT 0)"
+    )
+    conn.execute("INSERT INTO daemon_jobs (job_id, status) VALUES ('job-retry', 'done')")
+    conn.commit()
+
+    state = {"commits_ahead": 1, "base_commit": "base-sha"}
+
+    for expected_attempts in (1, 2, 3):
+        result = jobs_mod._guard_unpushed_branch(
+            conn, "job-retry", "done", "/tmp/missing-worktree", "fix/job-retry", state,
+            "2026-10-04T09:00:00",
+        )
+        assert result == "done"
+        attempts = conn.execute(
+            "SELECT unpushed_branch_check_attempts FROM daemon_jobs WHERE job_id='job-retry'"
+        ).fetchone()[0]
+        assert attempts == expected_attempts
+
+    conn.close()
+
+
+def test_unpushed_guard_settles_unpushed_after_retry_cap_exhausted(monkeypatch):
+    import sqlite3
+    import synlynk.jobs as jobs_mod
+
+    monkeypatch.setattr(jobs_mod, "local_commits_pushed", lambda *args: False)
+    monkeypatch.setattr(jobs_mod, "github_branch_effect_verified", lambda *args, **kwargs: None)
+
+    conn = sqlite3.connect(":memory:")
+    conn.execute(
+        "CREATE TABLE daemon_jobs (job_id TEXT PRIMARY KEY, status TEXT, "
+        "gh_write_verified TEXT, unpushed_branch_check_attempts INTEGER NOT NULL DEFAULT 0)"
+    )
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, status, unpushed_branch_check_attempts) "
+        "VALUES ('job-cap', 'done', 3)"
+    )
+    conn.commit()
+
+    state = {"commits_ahead": 1, "base_commit": "base-sha"}
+
+    result = jobs_mod._guard_unpushed_branch(
+        conn, "job-cap", "done", "/tmp/missing-worktree", "fix/job-cap", state,
+        "2026-10-04T09:00:00",
+    )
+
+    assert result == jobs_mod.STATUS_UNPUSHED_BRANCH
+    row = conn.execute(
+        "SELECT gh_write_verified, unpushed_branch_check_attempts FROM daemon_jobs WHERE job_id='job-cap'"
+    ).fetchone()
+    assert row == ("false", 3)
+    conn.close()
+
+
+def test_unpushed_guard_confirmed_push_short_circuits_regardless_of_attempts(monkeypatch):
+    import sqlite3
+    import synlynk.jobs as jobs_mod
+
+    monkeypatch.setattr(jobs_mod, "local_commits_pushed", lambda *args: False)
+    monkeypatch.setattr(jobs_mod, "github_branch_effect_verified", lambda *args, **kwargs: True)
+
+    conn = sqlite3.connect(":memory:")
+    conn.execute(
+        "CREATE TABLE daemon_jobs (job_id TEXT PRIMARY KEY, status TEXT, "
+        "gh_write_verified TEXT, unpushed_branch_check_attempts INTEGER NOT NULL DEFAULT 0)"
+    )
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, status, unpushed_branch_check_attempts) "
+        "VALUES ('job-confirmed', 'done', 2)"
+    )
+    conn.commit()
+
+    state = {"commits_ahead": 1, "base_commit": "base-sha"}
+
+    result = jobs_mod._guard_unpushed_branch(
+        conn, "job-confirmed", "done", "/tmp/missing-worktree", "fix/job-confirmed", state,
+        "2026-10-04T09:00:00",
+    )
+
+    assert result == "done"
+    row = conn.execute(
+        "SELECT gh_write_verified, unpushed_branch_check_attempts FROM daemon_jobs WHERE job_id='job-confirmed'"
+    ).fetchone()
+    assert row == (None, 2)
+    conn.close()
+
+
+def test_unpushed_branch_retry_pending_true_only_while_retrying_below_cap():
+    import sqlite3
+    import synlynk.jobs as jobs_mod
+
+    conn = sqlite3.connect(":memory:")
+    conn.execute(
+        "CREATE TABLE daemon_jobs (job_id TEXT PRIMARY KEY, "
+        "unpushed_branch_check_attempts INTEGER NOT NULL DEFAULT 0)"
+    )
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, unpushed_branch_check_attempts) VALUES ('job-a', 1)"
+    )
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, unpushed_branch_check_attempts) VALUES ('job-b', 0)"
+    )
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, unpushed_branch_check_attempts) VALUES ('job-c', 3)"
+    )
+    conn.commit()
+
+    assert jobs_mod._unpushed_branch_retry_pending(conn, "job-a", "done", "done") is True
+    assert jobs_mod._unpushed_branch_retry_pending(conn, "job-b", "done", "done") is False
+    assert jobs_mod._unpushed_branch_retry_pending(conn, "job-c", "done", "done") is False
+    assert jobs_mod._unpushed_branch_retry_pending(
+        conn, "job-a", "done", jobs_mod.STATUS_UNPUSHED_BRANCH
+    ) is False
+
+    conn.close()
+
+
 def test_terminal_reconciliation_does_not_overwrite_settled_row(tmp_path):
     """A stale reconciler pass must lose the terminal-state CAS race."""
     import sqlite3
@@ -2203,6 +2467,7 @@ def test_reconcile_daemon_jobs_gtv_uses_files_not_empty_summary(project_dir, mon
     conn.close()
 
     monkeypatch.setattr(jobs_mod, "_pid_is_alive", lambda pid: False)
+    monkeypatch.setattr(jobs_mod, "github_branch_effect_verified", lambda *a, **k: False)
     monkeypatch.setattr(
         jobs_mod,
         "_inspect_worktree_git_state",
@@ -2273,8 +2538,8 @@ def test_reconcile_daemon_jobs_gtv_uses_files_not_empty_summary(project_dir, mon
         "SELECT status, exit_code FROM daemon_jobs WHERE job_id=?", (job_id,)
     ).fetchone()
     conn.close()
-    assert row[0] == "failed_unverified"
-    assert row[1] is None
+    assert row[0] == "unpushed_branch"
+    assert row[1] == 1
 
     summary = (project_dir / ".synlynk" / "logs" / f"{job_id}.summary").read_text()
     assert "FAILED_UNVERIFIED" in summary or "failed_unverified" in summary.lower() or "exit unknown" in summary
@@ -2505,6 +2770,167 @@ def test_reconcile_daemon_jobs_sets_succeeded_gh_write_failed_when_verified_fals
     conn.close()
     assert row[0] == "succeeded_gh_write_failed"
     assert row[1] == "false"
+
+
+def test_reconcile_daemon_jobs_retries_unknown_gh_write_before_settling(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, pid, enqueued_at, started_at, "
+        "requires_gh_write, gh_write_target) VALUES "
+        "('job-ghw-retry', 'codex', 'close issue 701', 'running', 999999, "
+        "'2026-08-15T00:00:00', '2026-08-15T00:00:00', 1, 'issue:701')"
+    )
+    conn.commit()
+    conn.close()
+    monkeypatch.setattr(jobs_mod, "_pid_is_alive", lambda pid: False)
+    monkeypatch.setattr(jobs_mod, "_existing_terminal_summary_truth", lambda job_id: ("done", 0))
+    results = iter((RuntimeError("transient network failure"), True))
+
+    def fake_verified(target, expect, **kw):
+        result = next(results)
+        if isinstance(result, Exception):
+            raise result
+        return result
+
+    monkeypatch.setattr(jobs_mod, "gh_write_verified", fake_verified)
+
+    jobs_mod._reconcile_daemon_jobs()
+    conn = sl._get_db()
+    assert conn.execute(
+        "SELECT status, gh_write_verified, gh_write_verification_attempts "
+        "FROM daemon_jobs WHERE job_id='job-ghw-retry'"
+    ).fetchone() == ("running", "unknown", 1)
+    conn.close()
+
+    jobs_mod._reconcile_daemon_jobs()
+    conn = sl._get_db()
+    assert conn.execute(
+        "SELECT status, gh_write_verified, gh_write_verification_attempts "
+        "FROM daemon_jobs WHERE job_id='job-ghw-retry'"
+    ).fetchone() == ("done", "true", 1)
+    conn.close()
+
+
+def test_reconcile_daemon_jobs_settles_after_gh_write_unknown_retry_cap(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, pid, enqueued_at, started_at, "
+        "requires_gh_write, gh_write_target) VALUES "
+        "('job-ghw-cap', 'codex', 'close issue 701', 'running', 999999, "
+        "'2026-08-15T00:00:00', '2026-08-15T00:00:00', 1, 'issue:701')"
+    )
+    conn.commit()
+    conn.close()
+    monkeypatch.setattr(jobs_mod, "_pid_is_alive", lambda pid: False)
+    monkeypatch.setattr(jobs_mod, "_existing_terminal_summary_truth", lambda job_id: ("done", 0))
+    calls = []
+    monkeypatch.setattr(
+        jobs_mod, "gh_write_verified",
+        lambda target, expect, **kw: calls.append(target) or None,
+    )
+
+    for _ in range(3):
+        jobs_mod._reconcile_daemon_jobs()
+
+    conn = sl._get_db()
+    assert conn.execute(
+        "SELECT status, gh_write_verified, gh_write_verification_attempts "
+        "FROM daemon_jobs WHERE job_id='job-ghw-cap'"
+    ).fetchone() == ("done", "unknown", 3)
+    conn.close()
+    assert len(calls) == 3
+
+
+def test_reconcile_daemon_jobs_defers_on_inconclusive_unpushed_branch_check(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    job_id = "job-unpushed-defer"
+    wt = project_dir / "worktrees" / job_id
+    log = wt / ".synlynk" / "logs" / f"{job_id}.log"
+    log.parent.mkdir(parents=True)
+    log.write_text("agent did work\n")
+
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, pid, enqueued_at, "
+        "started_at, log_path, worktree_path) VALUES "
+        "(?, 'codex', 'implement thing', 'running', 999999, "
+        "'2026-10-04T09:00:00', '2026-10-04T09:00:00', ?, ?)",
+        (job_id, str(log), str(wt)),
+    )
+    conn.commit()
+    conn.close()
+
+    monkeypatch.setattr(jobs_mod, "_pid_is_alive", lambda pid: False)
+    monkeypatch.setattr(jobs_mod, "_existing_terminal_summary_truth", lambda job_id: ("done", 0))
+    monkeypatch.setattr(
+        jobs_mod, "_worktree_git_state_inspector",
+        lambda: lambda path, branch=None, started_at=None: {
+            "has_activity": True, "commits_ahead": 1, "base_commit": "base-sha", "dirty": False,
+        },
+    )
+    monkeypatch.setattr(jobs_mod, "local_commits_pushed", lambda *a, **k: False)
+    monkeypatch.setattr(jobs_mod, "github_branch_effect_verified", lambda *a, **k: None)
+
+    jobs_mod._reconcile_daemon_jobs()
+
+    conn = sl._get_db()
+    row = conn.execute(
+        "SELECT status, unpushed_branch_check_attempts FROM daemon_jobs WHERE job_id=?",
+        (job_id,),
+    ).fetchone()
+    conn.close()
+    assert row == ("running", 1)
+
+
+def test_reconcile_daemon_jobs_settles_unpushed_branch_after_retry_cap(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    job_id = "job-unpushed-cap"
+    wt = project_dir / "worktrees" / job_id
+    log = wt / ".synlynk" / "logs" / f"{job_id}.log"
+    log.parent.mkdir(parents=True)
+    log.write_text("agent did work\n")
+
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, pid, enqueued_at, "
+        "started_at, log_path, worktree_path, unpushed_branch_check_attempts) VALUES "
+        "(?, 'codex', 'implement thing', 'running', 999999, "
+        "'2026-10-04T09:00:00', '2026-10-04T09:00:00', ?, ?, 3)",
+        (job_id, str(log), str(wt)),
+    )
+    conn.commit()
+    conn.close()
+
+    monkeypatch.setattr(jobs_mod, "_pid_is_alive", lambda pid: False)
+    monkeypatch.setattr(jobs_mod, "_existing_terminal_summary_truth", lambda job_id: ("done", 0))
+    monkeypatch.setattr(
+        jobs_mod, "_worktree_git_state_inspector",
+        lambda: lambda path, branch=None, started_at=None: {
+            "has_activity": True, "commits_ahead": 1, "base_commit": "base-sha", "dirty": False,
+        },
+    )
+    monkeypatch.setattr(jobs_mod, "local_commits_pushed", lambda *a, **k: False)
+    monkeypatch.setattr(jobs_mod, "github_branch_effect_verified", lambda *a, **k: None)
+
+    jobs_mod._reconcile_daemon_jobs()
+
+    conn = sl._get_db()
+    row = conn.execute(
+        "SELECT status, gh_write_verified, unpushed_branch_check_attempts FROM daemon_jobs WHERE job_id=?",
+        (job_id,),
+    ).fetchone()
+    conn.close()
+    assert row == (jobs_mod.STATUS_UNPUSHED_BRANCH, "false", 3)
 
 
 def test_apply_gh_write_verification_persists_evidence(project_dir, monkeypatch):
@@ -3230,3 +3656,72 @@ def test_verified_gh_write_zombie_is_completed_without_reaping_worktree(
     assert row == ("done", 0, "true")
     assert wt.exists(), "verified GitHub work must prevent zombie worktree reaping"
     assert (wt / "review-notes.md").read_text() == "review submitted"
+
+
+def test_unpushed_commit_blocks_verified_gh_write_zombie_completion(
+    tmp_path, project_dir, monkeypatch
+):
+    """A dead/null-PID job with stranded commits cannot settle as verified done."""
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    # The default test fixture stubs this package-level hook for unrelated
+    # dispatch tests; this regression must exercise the real Git inspector.
+    monkeypatch.setattr(sl, "_inspect_worktree_git_state", jobs_mod._inspect_worktree_git_state)
+    monkeypatch.setattr(jobs_mod, "github_branch_effect_verified", lambda *a, **k: False)
+
+    wt = tmp_path / "worktrees" / "job-gh-zombie-unpushed"
+    wt.mkdir(parents=True)
+    subprocess.run(["git", "init", "-b", "main"], cwd=wt, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "config", "user.email", "test@synlynk.dev"],
+        cwd=wt,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Synlynk Test"],
+        cwd=wt,
+        check=True,
+        capture_output=True,
+    )
+    (wt / "README.md").write_text("# base\n")
+    subprocess.run(["git", "add", "README.md"], cwd=wt, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "base"], cwd=wt, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "switch", "-c", "dispatch/codex/job-gh-zombie-unpushed"],
+        cwd=wt,
+        check=True,
+        capture_output=True,
+    )
+    (wt / "review-notes.md").write_text("review attempted locally\n")
+    subprocess.run(["git", "add", "review-notes.md"], cwd=wt, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "stranded local review"],
+        cwd=wt,
+        check=True,
+        capture_output=True,
+    )
+
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, story_id, task, status, pid, enqueued_at, "
+        "started_at, requires_gh_write, gh_write_target, worktree_path, worktree_branch) "
+        "VALUES ('job-gh-zombie-unpushed', 'codex', 's-gh-unpushed', 'review PR 1038', "
+        "'running', NULL, '2026-09-08T00:00:00', '2026-09-08T00:00:00', 1, 'pr:1038', ?, ?)",
+        (str(wt), "dispatch/codex/job-gh-zombie-unpushed"),
+    )
+    conn.commit()
+    conn.close()
+
+    jobs_mod._reconcile_daemon_jobs()
+
+    conn = sl._get_db()
+    row = conn.execute(
+        "SELECT status, exit_code, gh_write_verified FROM daemon_jobs "
+        "WHERE job_id='job-gh-zombie-unpushed'"
+    ).fetchone()
+    conn.close()
+
+    assert row == ("unpushed_branch", 1, "false")
+    assert wt.exists(), "stranded local commits must not be reaped"

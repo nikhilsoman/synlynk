@@ -8,7 +8,7 @@ dynamic = ["version"]
 description = "The coordination OS for multi-agent development — context injection, dispatch, telemetry, and sentinel for Claude, Agy, Codex, and Grok."
 readme = "README.md"
 license = { text = "MIT" }
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 keywords = ["ai", "agents", "claude", "codex", "gemini", "grok", "multi-agent", "developer-tools"]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -16,10 +16,10 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: Utilities",
 ]
@@ -45,7 +45,7 @@ where = ["."]
 include = ["synlynk*"]
 
 [tool.setuptools.dynamic]
-version = { attr = "synlynk.VERSION" }
+version = { file = ["VERSION"] }
 
 [tool.setuptools.package-data]
-synlynk = ["py.typed", "capability_baseline.json"]
+synlynk = ["py.typed", "capability_baseline.json", "packs/*.yaml"]

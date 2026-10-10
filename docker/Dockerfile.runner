@@ -1,0 +1,11 @@
+FROM debian:bookworm-slim
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY docker/stub-harness /usr/local/bin/stub-harness
+RUN chmod 755 /usr/local/bin/stub-harness
+
+# Runtime identity is `docker run --user <host uid>:<host gid>`.
+# The image intentionally has no matching account.

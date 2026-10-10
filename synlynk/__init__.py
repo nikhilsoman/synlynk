@@ -1,17 +1,7 @@
 #!/usr/bin/env python3
-import argparse
 import sys
 import os
-import subprocess
-import tempfile
-import shutil
-import time
-import json
 import re
-import threading
-import tempfile
-import urllib.request
-from pathlib import Path
 from typing import Optional, Tuple, Union
 import sqlite3 as _sqlite3
 import importlib as _importlib
@@ -31,16 +21,35 @@ __version__ = VERSION
 _IS_TESTING = "pytest" in sys.modules or any("pytest" in str(arg) for arg in sys.argv)
 _FAST_CLI = not _IS_TESTING and (
     os.environ.get("SYNLYNK_CLI_ENTRYPOINT") == "1" or (
-        Path(sys.argv[0]).name in {"synlynk", "synlynk.py"}
-        or (Path(sys.argv[0]).name == "__main__.py" and "synlynk" in str(sys.argv[0]))
+        os.path.basename(sys.argv[0]) in {"synlynk", "synlynk.py"}
+        or (os.path.basename(sys.argv[0]) == "__main__.py" and "synlynk" in str(sys.argv[0]))
     ) or any(flag in sys.argv[1:] for flag in ("-h", "--help", "--version"))
 )
+
+if not _FAST_CLI:
+    import argparse
+    from pathlib import Path
+
+# The compatibility surface below historically relied on these names being
+# available from the package module.  Keep that behavior for imports/tests,
+# but do not pay for the modules on the subprocess CLI fast path.
+if not _FAST_CLI:
+    import json
+    import shutil
+    import subprocess
+    import tempfile
+    import threading
+    import time
+    import urllib.request
+
+
 _LEGACY_MODULES = (
     "upgrade", "sentinel", "probe", "fencing", "dispatch", "quota", "costs",
     "capability_roles", "taxonomy", "doctor", "team", "heal", "support_engineer",
     "backlog", "backlog_extractor", "charter_injection", "context", "jobs",
     "story_provisioning", "daemon", "instructions", "scan", "hud", "platform_status",
-    "logs", "wizard", "launch",
+    "logs", "wizard", "launch", "circuit_breaker", "capability_probe", "wal_ledger",
+    "worktree_lease", "governs_compressed",
 )
 
 
@@ -51,6 +60,19 @@ def _load_legacy_imports():
     Keep that API, but avoid importing the entire command graph while argparse
     is only constructing or displaying the parser.
     """
+    # Restore module globals used by the older package-level helpers when a
+    # non-observability command leaves the fast CLI path.
+    for module_name in ("json", "shutil", "subprocess", "tempfile", "threading", "time"):
+        module = _importlib.import_module(module_name)
+        globals()[module_name] = module
+    globals()["urllib"] = _importlib.import_module("urllib")
+    _importlib.import_module("urllib.request")
+    launch_templates = _importlib.import_module("synlynk.launch_templates")
+    db_schema = _importlib.import_module("synlynk.db_schema")
+    globals()["LAUNCH_TASK_TEMPLATES"] = launch_templates.LAUNCH_TASK_TEMPLATES
+    globals()["_DB_SCHEMA"] = db_schema._DB_SCHEMA
+    globals()["_DB_SCORES_VIEW"] = db_schema._DB_SCORES_VIEW
+
     for module_name in _LEGACY_MODULES:
         module = _importlib.import_module(f"synlynk.{module_name}")
         globals().update({
@@ -78,7 +100,23 @@ def _load_legacy_imports():
 
 def main(argv=None):
     """Lazy compatibility entry point for installed console scripts."""
+    cli_tokens = list(argv) if argv is not None else sys.argv[1:]
+    if _FAST_CLI and cli_tokens and cli_tokens[0] in {"jobs", "status"}:
+        from synlynk._fast_cli import run_fast_command
+
+        if run_fast_command(cli_tokens) is True:
+            return None
     return _importlib.import_module("synlynk.cli").main(argv)
+
+
+def __getattr__(name):
+    """Lazily preserve compatibility exports removed from the fast path."""
+    if name in {"LAUNCH_TASK_TEMPLATES", "_DB_SCHEMA", "_DB_SCORES_VIEW"}:
+        module_name = "synlynk.launch_templates" if name == "LAUNCH_TASK_TEMPLATES" else "synlynk.db_schema"
+        value = getattr(_importlib.import_module(module_name), name)
+        globals()[name] = value
+        return value
+    raise AttributeError(name)
 
 CYCLE_COLORS = {
     "dream":   "#a78bfa",
@@ -122,359 +160,10 @@ def _launch_visible_template_ids() -> set:
 
 
 def _launch_visible_templates() -> list:
+    from synlynk.launch_templates import LAUNCH_TASK_TEMPLATES
+
     visible_ids = _launch_visible_template_ids()
     return [template for template in LAUNCH_TASK_TEMPLATES if template["id"] in visible_ids]
-
-
-LAUNCH_TASK_TEMPLATES = [
-    # ── Core templates (always shown) ───────────────────────────────────────
-    {
-        "id": "arch-review",
-        "title": "Workspace architecture review",
-        "description": "Analyse structure, patterns, tech debt. Claude writes findings to memory.md.",
-        "cycle": "visualize",
-        "agent": "claude",
-        "context_mode": "full",
-        "prompt_template": (
-            "Review the architecture of {workspace} ({stack}, {topology} repo). "
-            "Identify: structural patterns in use, top 5 tech debt hotspots (name files "
-            "and functions), component coupling risks, and 3 concrete improvement "
-            "opportunities with effort estimates. Write your findings as a new section "
-            'in .synlynk/project-docs/memory.md under "## Architecture Review {date}". '
-            "Be specific — no generic advice."
-        ),
-        "est_hours": 2,
-        "r_tokens": 80000,
-        "w_tokens": 8000,
-        "tool_calls": 12,
-        "trigger_condition": None,
-    },
-    {
-        "id": "product-assessment",
-        "title": "Product + opportunity assessment",
-        "description": "Scope, features, market fit, growth levers. 1-page brief to memory.md.",
-        "cycle": "goal",
-        "agent": "claude",
-        "context_mode": "full",
-        "prompt_template": (
-            "Assess the product potential of {workspace}. Cover: what problem it solves, "
-            "current feature set vs. gaps, market positioning, top 3 growth levers, and "
-            "1 concrete opportunity to pursue in the next sprint. Write a 1-page brief to "
-            '.synlynk/project-docs/memory.md under "## Product Assessment {date}".'
-        ),
-        "est_hours": 1,
-        "r_tokens": 40000,
-        "w_tokens": 6000,
-        "tool_calls": 8,
-        "trigger_condition": None,
-    },
-    {
-        "id": "lifecycle-setup",
-        "title": "Set up 7-stage GOVERNS workflow for this repo",
-        "description": "Initialise GOVERNS lifecycle tracking in state.db. Label open stories by stage.",
-        "cycle": "open",
-        "agent": "claude",
-        "context_mode": "task",
-        "prompt_template": (
-            "Set up the 7-stage GOVERNS workflow for {workspace}. "
-            "Run `synlynk story list` to see existing stories. "
-            "For each story, assign a cycle phase (goal/open/visualize/execute/release/notify/sustain) "
-            "based on its title and update it with `synlynk story update`. "
-            "Then write a short SDLC setup note in "
-            '.synlynk/project-docs/memory.md under "## Lifecycle Setup {date}" '
-            "explaining which stories belong to which cycle and why."
-        ),
-        "est_hours": 0.5,
-        "r_tokens": 15000,
-        "w_tokens": 3000,
-        "tool_calls": 6,
-        "trigger_condition": None,
-    },
-    # ── Scan-triggered templates ─────────────────────────────────────────────
-    {
-        "id": "add-tests",
-        "title": "Add test coverage",
-        "description": "Bootstrap a test suite for the most critical untested modules.",
-        "cycle": "execute",
-        "agent": "agy",
-        "context_mode": "full",
-        "prompt_template": (
-            "Add pytest tests for {workspace}. "
-            "Target the following untested public functions in {repo_name}: "
-            "{gap_functions}. "
-            "For each function: write a test file if one doesn't exist, add at minimum "
-            "one happy-path test and one edge-case test. Use the existing test patterns "
-            "in tests/. Do not mock internal functions or the filesystem unless unavoidable. "
-            "Commit each test file with 'test: add coverage for <function>'."
-        ),
-        "est_hours": 3,
-        "r_tokens": 60000,
-        "w_tokens": 20000,
-        "tool_calls": 30,
-        "trigger_condition": lambda scan: (
-            (scan.get("tests") or {}).get("gap_count", 0) > 5
-            or scan.get("test_ratio", 1.0) < 0.1
-        ),
-    },
-    {
-        "id": "setup-ci",
-        "title": "Set up CI/CD pipeline",
-        "description": "Create a GitHub Actions workflow for tests and linting.",
-        "cycle": "execute",
-        "agent": "codex",
-        "context_mode": "task",
-        "prompt_template": (
-            "Set up CI/CD for {workspace} ({stack}). "
-            "Create .github/workflows/ci.yml that: runs tests on every push to main "
-            "and on PRs, runs a linter if one is configured, and fails fast on error. "
-            "Use the appropriate test runner for the stack ({stack}). "
-            "Commit the workflow file with a message: 'ci: add GitHub Actions workflow'."
-        ),
-        "est_hours": 1,
-        "r_tokens": 20000,
-        "w_tokens": 5000,
-        "tool_calls": 10,
-        "trigger_condition": lambda scan: not scan.get("has_ci", False),
-    },
-    {
-        "id": "docs-audit",
-        "title": "Documentation audit + gap fill",
-        "description": "Audit docs coverage and write missing sections.",
-        "cycle": "notify",
-        "agent": "agy",
-        "context_mode": "full",
-        "prompt_template": (
-            "Audit the documentation for {workspace}. "
-            "Check: README completeness, API/function docstrings, architecture docs, "
-            "contributing guide, and changelog. "
-            "For each gap: write the missing content inline (do not use placeholders). "
-            "Commit each doc file separately with a message like 'docs: add <section>'."
-        ),
-        "est_hours": 2,
-        "r_tokens": 50000,
-        "w_tokens": 15000,
-        "tool_calls": 20,
-        "trigger_condition": lambda scan: (
-            not scan.get("has_docs", False) or scan.get("readme_word_count", 999) < 200
-        ),
-    },
-    {
-        "id": "security-scan",
-        "title": "Dependency security scan",
-        "description": "Check for known CVEs and outdated dependencies.",
-        "cycle": "sustain",
-        "agent": "claude",
-        "context_mode": "task",
-        "prompt_template": (
-            "Run a dependency security audit for {workspace} ({stack}). "
-            "Use `pip-audit` (Python), `npm audit` (Node), or `bundle audit` (Ruby) "
-            "depending on the stack. List all HIGH and CRITICAL vulnerabilities found. "
-            "For each: state the package, CVE, severity, and recommended fix. "
-            'Write findings to .synlynk/project-docs/memory.md under "## Security Audit {date}". '
-            "If no vulnerabilities: confirm that explicitly."
-        ),
-        "est_hours": 1,
-        "r_tokens": 25000,
-        "w_tokens": 4000,
-        "tool_calls": 8,
-        "trigger_condition": lambda scan: any(
-            lbl in scan.get("repos", [{}])[0].get("stack_labels", [])
-            for lbl in ["python", "node", "ruby"]
-        ),
-    },
-    {
-        "id": "perf-baseline",
-        "title": "Performance baseline + profiling plan",
-        "description": "Identify hot paths and draft a performance improvement plan.",
-        "cycle": "sustain",
-        "agent": "claude",
-        "context_mode": "full",
-        "prompt_template": (
-            "Profile the performance of {workspace} ({stack}). "
-            "Identify: the 3 slowest request paths or CLI operations, any N+1 query patterns, "
-            "memory allocation hot spots, and opportunities for caching. "
-            "Write a performance improvement plan to "
-            '.synlynk/project-docs/memory.md under "## Performance Baseline {date}" '
-            "with specific file + line references."
-        ),
-        "est_hours": 2,
-        "r_tokens": 70000,
-        "w_tokens": 8000,
-        "tool_calls": 15,
-        "trigger_condition": lambda scan: any(
-            lbl in scan.get("repos", [{}])[0].get("stack_labels", [])
-            for lbl in ["next", "fastapi", "django", "express", "flask"]
-        ),
-    },
-    {
-        "id": "cross-repo-map",
-        "title": "Cross-repo dependency map",
-        "description": "Map inter-repo dependencies for the multi-repo workspace.",
-        "cycle": "visualize",
-        "agent": "claude",
-        "context_mode": "full",
-        "prompt_template": (
-            "Map the inter-repo dependencies of {workspace} ({topology} workspace). "
-            "For each repo pair: identify shared interfaces, shared types/schemas, "
-            "shared infra, and any circular dependencies. "
-            "Write a dependency map to "
-            '.synlynk/project-docs/memory.md under "## Cross-Repo Map {date}" '
-            "using a table: Repo A → Repo B → Dependency type → Notes."
-        ),
-        "est_hours": 1,
-        "r_tokens": 40000,
-        "w_tokens": 6000,
-        "tool_calls": 10,
-        "trigger_condition": lambda scan: scan.get("topology") in ("mono", "multi", "monorepo"),
-    },
-    {
-        "id": "type-safety",
-        "title": "Add type annotations to public API",
-        "description": "Annotate public functions and classes to improve tooling and safety.",
-        "cycle": "execute",
-        "agent": "codex",
-        "context_mode": "full",
-        "prompt_template": (
-            "Add type annotations to the public API of {workspace} ({stack}). "
-            "The codebase is currently {typed_pct}% typed. "
-            "Target all functions and methods exported or called from tests. "
-            "Use Python type hints (PEP 484). Do not annotate private (_-prefixed) helpers "
-            "unless they are called by public functions. "
-            "Commit each annotated file separately with 'refactor: add type hints to <module>'."
-        ),
-        "est_hours": 3,
-        "r_tokens": 120000,
-        "w_tokens": 30000,
-        "tool_calls": 45,
-        "trigger_condition": lambda scan: (
-            any(lbl == "python" for lbl in scan.get("repos", [{}])[0].get("stack_labels", []))
-            and (
-                (
-                    scan.get("source") is not None
-                    and sum(f.get("typed_pct", 0) for f in scan["source"]) / max(len(scan["source"]), 1) < 40
-                )
-                or not scan.get("has_type_hints", True)
-            )
-        ),
-    },
-    {
-        "id": "a11y-audit",
-        "title": "Accessibility audit",
-        "description": "Audit the frontend for WCAG 2.1 AA compliance gaps.",
-        "cycle": "release",
-        "agent": "agy",
-        "context_mode": "full",
-        "prompt_template": (
-            "Audit {workspace} ({stack}) for accessibility issues (WCAG 2.1 AA). "
-            "Check: missing alt text, keyboard navigation, ARIA roles, colour contrast, "
-            "and form labels. List each issue with: component file, line number, "
-            "WCAG criterion, and fix. "
-            'Write findings to .synlynk/project-docs/memory.md under "## A11y Audit {date}". '
-            "Fix the top 5 most critical issues and commit each fix separately."
-        ),
-        "est_hours": 2,
-        "r_tokens": 60000,
-        "w_tokens": 15000,
-        "tool_calls": 25,
-        "trigger_condition": lambda scan: any(
-            lbl in scan.get("repos", [{}])[0].get("stack_labels", [])
-            for lbl in ["react", "next", "vue", "svelte", "angular"]
-        ),
-    },
-    {
-        "id": "db-schema-review",
-        "title": "Database schema review",
-        "description": "Review schema design for correctness, indexes, and N+1 risks.",
-        "cycle": "visualize",
-        "agent": "claude",
-        "context_mode": "full",
-        "prompt_template": (
-            "Review the database schema for {workspace} ({stack}). "
-            "Identify: missing indexes, nullable columns that should be NOT NULL, "
-            "foreign keys without cascades, N+1 query risks, and migration gaps. "
-            "Write a schema review to "
-            '.synlynk/project-docs/memory.md under "## Schema Review {date}" '
-            "with a table: Issue → Table/Column → Severity → Fix."
-        ),
-        "est_hours": 1,
-        "r_tokens": 40000,
-        "w_tokens": 6000,
-        "tool_calls": 10,
-        "trigger_condition": lambda scan: scan.get("has_orm", False),
-    },
-    {
-        "id": "refactor-module",
-        "title": "Refactor large module",
-        "description": "Split monolithic source file into focused modules.",
-        "cycle": "execute",
-        "agent": "codex",
-        "context_mode": "full",
-        "prompt_template": (
-            "The file {largest_file} in {workspace} has grown to {largest_file_lines} lines "
-            "with {largest_file_fns} functions. Refactor it: "
-            "identify 3-5 logical groupings of functions, extract each group into a new "
-            "module under the same package directory, update all imports, and ensure the "
-            "test suite still passes. The largest function is {largest_fn} at {largest_fn_lines} lines - "
-            "break it down if it has multiple responsibilities. "
-            "Commit each extracted module separately."
-        ),
-        "est_hours": 4,
-        "r_tokens": 200000,
-        "w_tokens": 50000,
-        "tool_calls": 60,
-        "trigger_condition": lambda scan: (
-            bool(scan.get("source"))
-            and any(f.get("lines", 0) > 5000 for f in (scan.get("source") or []))
-        ),
-    },
-    {
-        "id": "reduce-complexity",
-        "title": "Reduce complexity hotspots",
-        "description": "Break down functions >50 lines into focused helpers.",
-        "cycle": "execute",
-        "agent": "codex",
-        "context_mode": "full",
-        "prompt_template": (
-            "Reduce complexity in {workspace}. The top hotspot is {top_hotspot} "
-            "({top_hotspot_lines} lines). For each of the top 3 complexity hotspots: "
-            "extract sub-responsibilities into named helper functions, add a docstring "
-            "explaining what each piece does, and ensure tests still pass. "
-            "Do not change observable behaviour. "
-            "Commit each refactored function separately."
-        ),
-        "est_hours": 3,
-        "r_tokens": 120000,
-        "w_tokens": 40000,
-        "tool_calls": 40,
-        "trigger_condition": lambda scan: (
-            len((scan.get("complexity") or {}).get("hotspots", [])) > 2
-        ),
-    },
-    {
-        "id": "fix-churn-debt",
-        "title": "Address hot file tech debt",
-        "description": "Stabilise the most-changed file with tests + docstrings.",
-        "cycle": "sustain",
-        "agent": "agy",
-        "context_mode": "full",
-        "prompt_template": (
-            "The file {hot_file} in {workspace} has been modified {commit_count} times "
-            "in the last 30 commits - it is the highest-churn file in the repo. "
-            "Stabilise it by: adding docstrings to all public functions that lack them, "
-            "writing tests for any public function with no test (check test_ratio first), "
-            "and adding a module-level docstring explaining the file's responsibility. "
-            "Commit each category of change separately."
-        ),
-        "est_hours": 2,
-        "r_tokens": 80000,
-        "w_tokens": 20000,
-        "tool_calls": 25,
-        "trigger_condition": lambda scan: (
-            bool((scan.get("git") or {}).get("churn"))
-            and (scan.get("git") or {}).get("churn", [{}])[0].get("commits", 0) > 30
-        ),
-    },
-]
 
 
 def _template_matches(template: dict, scan: dict) -> bool:
@@ -574,7 +263,15 @@ TASK_STATUSES = {
 
 
 def _project_root() -> str:
-    """Return the shared repo root for the current git worktree, or CWD fallback."""
+    """Return the shared repo root for the current git worktree.
+
+    Raises RuntimeError if git-common-dir resolution fails, unless
+    SYNLYNK_ALLOW_CWD_FALLBACK=1 is set (see gh:#1831 — a silent CWD
+    fallback here previously minted duplicate per-directory legacy
+    state.db shards for the same project).
+    """
+    import subprocess
+
     try:
         common = subprocess.check_output(
             ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
@@ -582,8 +279,15 @@ def _project_root() -> str:
         ).decode().strip()
         if common:
             return os.path.abspath(os.path.join(common, ".."))
-    except Exception:
-        pass
+    except Exception as exc:
+        if os.environ.get("SYNLYNK_ALLOW_CWD_FALLBACK") == "1":
+            return os.getcwd()
+        raise RuntimeError(
+            "could not resolve git-common-dir; refusing to silently fall back "
+            "to the current working directory (this previously minted stray "
+            "per-directory state shards — see gh:#1831). Set "
+            "SYNLYNK_ALLOW_CWD_FALLBACK=1 to override."
+        ) from exc
     return os.getcwd()
 
 
@@ -624,6 +328,8 @@ def _resolve_db_path() -> str:
 
 def _is_git_worktree() -> bool:
     """Return whether the current directory is a linked git worktree."""
+    import subprocess
+
     try:
         git_dir_output = subprocess.check_output(
             ["git", "rev-parse", "--path-format=absolute", "--git-dir"],
@@ -644,12 +350,16 @@ def _is_git_worktree() -> bool:
 
 # Resolve once at import time so ordinary test doubles for subprocess calls do
 # not accidentally change DB-path safety decisions mid-test.
-_INITIAL_GIT_WORKTREE = _is_git_worktree()
+# The linked-worktree guard only protects pytest from accidentally touching the
+# shared product ledger.  The CLI fast path has no pytest state to isolate and
+# must not pay for two git subprocesses before a read-only command starts.
+_INITIAL_GIT_WORKTREE = False if _FAST_CLI else _is_git_worktree()
 
 
 def _test_isolation_db_path() -> str:
     """Return a process-local DB path for pytest worktree execution."""
     import hashlib
+    import tempfile
 
     key = hashlib.md5(os.path.abspath(os.getcwd()).encode()).hexdigest()[:12]
     return os.path.join(tempfile.gettempdir(), "synlynk-test-db", f"{key}-{os.getpid()}.db")
@@ -668,370 +378,11 @@ def _should_isolate_worktree_db(db_path: str) -> bool:
     return os.path.abspath(db_path).startswith(canonical_root + os.sep)
 
 
-DB_PATH = _resolve_db_path()
+DB_PATH = os.environ.get("SYNLYNK_STATE_DB_PATH") if _FAST_CLI else _resolve_db_path()
 # The configured path is intentionally distinct from the path selected by the
 # last successful connection.  Away sandboxes may need the local fallback.
 ACTIVE_DB_PATH = None
 
-_DB_SCHEMA = """
-CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
-
-CREATE TABLE IF NOT EXISTS stories (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    story_id      TEXT NOT NULL UNIQUE,
-    title         TEXT,
-    estimated_tokens INTEGER,
-    actual_tokens INTEGER,
-    engg_domain   TEXT NOT NULL DEFAULT 'backend',
-    discipline    TEXT NOT NULL DEFAULT 'backend',
-    org_domain    TEXT NOT NULL DEFAULT 'platform',
-    role          TEXT NOT NULL DEFAULT 'dev',
-    stage         TEXT NOT NULL DEFAULT 'open',
-    org_domain_tags TEXT DEFAULT '[]',
-    stack_tags    TEXT DEFAULT '[]',
-    industry      TEXT DEFAULT 'unknown',
-    phase         TEXT DEFAULT 'build',
-    legacy_unmapped INTEGER NOT NULL DEFAULT 0,
-    priority      INTEGER NOT NULL DEFAULT 5,
-    readiness     TEXT NOT NULL DEFAULT 'draft',
-    fingerprint   TEXT UNIQUE,
-    source_type   TEXT,
-    source_ref    TEXT,
-    governs_stage TEXT DEFAULT 'open',
-    gh_issue      TEXT,
-    archived_at   TIMESTAMP,
-    superseded_by TEXT DEFAULT NULL,
-    repo_id       TEXT,
-    type_id       TEXT,
-    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS backlog_items (
-    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
-    item_id             TEXT UNIQUE,
-    title               TEXT NOT NULL,
-    body                TEXT,
-    issue_number        INTEGER,
-    gh_issue            TEXT,
-    author              TEXT,
-    labels              TEXT DEFAULT '[]',
-    fingerprint         TEXT UNIQUE,
-    role                TEXT NOT NULL DEFAULT 'dev',
-    stage               TEXT NOT NULL DEFAULT 'open',
-    governs_stage       TEXT NOT NULL DEFAULT 'open',
-    complexity_tier     INTEGER DEFAULT 2,
-    goal_id             TEXT,
-    acceptance_criteria TEXT DEFAULT '[]',
-    status              TEXT NOT NULL DEFAULT 'staged',
-    story_id            TEXT,
-    created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS model_families (
-    family_id TEXT PRIMARY KEY,
-    provider TEXT NOT NULL,
-    context_geometry TEXT NOT NULL DEFAULT '{}',
-    native_features TEXT NOT NULL DEFAULT '[]',
-    prompt_adapter TEXT NOT NULL DEFAULT '{}',
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS models (
-    model_id TEXT PRIMARY KEY,
-    family_id TEXT NOT NULL REFERENCES model_families(family_id),
-    harness_binding TEXT NOT NULL,
-    locality TEXT NOT NULL DEFAULT 'remote_api',
-    quantization TEXT,
-    rates TEXT NOT NULL DEFAULT '{}',
-    entitlement_tier TEXT NOT NULL,
-    context_geometry TEXT,
-    native_features TEXT NOT NULL DEFAULT '[]',
-    discovered INTEGER NOT NULL DEFAULT 0,
-    discovery_source TEXT,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-CREATE INDEX IF NOT EXISTS idx_models_family ON models(family_id);
-CREATE INDEX IF NOT EXISTS idx_models_harness ON models(harness_binding);
-
-CREATE TABLE IF NOT EXISTS capability_ratings (
-    id                    INTEGER PRIMARY KEY AUTOINCREMENT,
-    story_id              TEXT NOT NULL REFERENCES stories(story_id),
-    agent                 TEXT NOT NULL,
-    model_version         TEXT NOT NULL DEFAULT 'unknown',
-    model_at_dispatch     TEXT,
-    model_at_completion   TEXT,
-    split_model           INTEGER DEFAULT 0,
-    engg_domain           TEXT NOT NULL DEFAULT 'backend',
-    discipline            TEXT NOT NULL DEFAULT 'backend',
-    org_domain            TEXT NOT NULL DEFAULT 'platform',
-    role                  TEXT NOT NULL DEFAULT 'dev',
-    stage                 TEXT NOT NULL DEFAULT 'open',
-    org_domain_tags       TEXT DEFAULT '[]',
-    stack_tags            TEXT DEFAULT '[]',
-    industry              TEXT NOT NULL DEFAULT 'unknown',
-    phase                 TEXT NOT NULL DEFAULT 'build',
-    legacy_unmapped       INTEGER NOT NULL DEFAULT 0,
-    signal_source         TEXT NOT NULL DEFAULT 'auto',
-    quality               REAL NOT NULL DEFAULT 0.0,
-    quality_auto          REAL,
-    verifier_agent        TEXT,
-    verifier_model        TEXT,
-    test_pass_rate        REAL,
-    build_success         INTEGER,
-    dispatch_rework       INTEGER DEFAULT 0,
-    micro_rework          INTEGER DEFAULT 0,
-    pr_review_cycles      INTEGER DEFAULT 0,
-    duration_vs_estimate  REAL,
-    verified_by_ci        INTEGER,
-    correct               INTEGER DEFAULT 1,
-    note                  TEXT,
-    pr_number             INTEGER,
-    ed25519_sig           TEXT,
-    ts                    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS pr_multiplier_applied (
-    pr_number  INTEGER PRIMARY KEY,
-    applied_at TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS source_symbols (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    head_sha    TEXT NOT NULL,
-    file        TEXT NOT NULL,
-    language    TEXT NOT NULL,
-    symbol      TEXT NOT NULL,
-    symbol_type TEXT NOT NULL,
-    line        INTEGER,
-    scanned_at  TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_source_symbols_head ON source_symbols(head_sha);
-CREATE INDEX IF NOT EXISTS idx_source_symbols_file ON source_symbols(file);
-
-CREATE TABLE IF NOT EXISTS autopilot_runs (
-    id            TEXT PRIMARY KEY,
-    harness_name    TEXT NOT NULL,
-    signal_type   TEXT NOT NULL,
-    signal_hash   TEXT NOT NULL,
-    severity      TEXT NOT NULL,
-    summary       TEXT NOT NULL,
-    status        TEXT NOT NULL,
-    gh_issue_url  TEXT,
-    pr_url        TEXT,
-    story_id      TEXT,
-    ts            TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_autopilot_runs_hash ON autopilot_runs(signal_hash, ts);
-
-CREATE TABLE IF NOT EXISTS daemon_jobs (
-    job_id       TEXT PRIMARY KEY,
-    agent        TEXT NOT NULL,
-    harness      TEXT,
-    role         TEXT,
-    task         TEXT NOT NULL,
-    story_id     TEXT,
-    type_id      TEXT,
-    status       TEXT NOT NULL DEFAULT 'queued',
-    priority     INTEGER NOT NULL DEFAULT 5,
-    depends_on   TEXT NOT NULL DEFAULT '[]',
-    pid          INTEGER,
-    enqueued_at  TEXT NOT NULL,
-    started_at   TEXT,
-    completed_at TEXT,
-    exit_code    INTEGER,
-    log_path     TEXT,
-    worktree_path TEXT,
-    worktree_branch TEXT,
-    terminal_claim_token TEXT,
-    handoff_count INTEGER NOT NULL DEFAULT 0,
-    previous_agents TEXT,
-    dispatch_context TEXT,
-    blocked_reason TEXT,
-    context_mode TEXT,
-    context_bytes INTEGER,
-    model_tier TEXT,
-    impact_score INTEGER DEFAULT 0,
-    requested_model TEXT,
-    resolved_model TEXT,
-    session_id TEXT REFERENCES sessions(session_id),
-    superseded_by TEXT DEFAULT NULL,
-    lineage_root TEXT DEFAULT NULL,
-    gh_write_evidence TEXT,
-    cost_missing_reason TEXT
-);
-CREATE INDEX IF NOT EXISTS idx_daemon_jobs_status ON daemon_jobs(status);
-
-CREATE TABLE IF NOT EXISTS goals (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    goal_id     TEXT NOT NULL UNIQUE,
-    outcome     TEXT NOT NULL,
-    criterion   TEXT NOT NULL,
-    deadline    TEXT,
-    status      TEXT NOT NULL DEFAULT 'active',
-    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS goal_contributions (
-    id       INTEGER PRIMARY KEY AUTOINCREMENT,
-    goal_id  TEXT NOT NULL REFERENCES goals(goal_id),
-    story_id TEXT NOT NULL REFERENCES stories(story_id),
-    UNIQUE(goal_id, story_id)
-);
-
-CREATE TABLE IF NOT EXISTS sessions (
-    id               INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id       TEXT NOT NULL UNIQUE,
-    title            TEXT NOT NULL,
-    goal_id          TEXT REFERENCES goals(goal_id),
-    status           TEXT NOT NULL DEFAULT 'open',
-    disposition      TEXT,
-    opened_at        TEXT NOT NULL,
-    closed_at        TEXT,
-    last_checkpoint_at TEXT,
-    closing_summary  TEXT
-);
-CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
-
-CREATE TABLE IF NOT EXISTS events (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    event_type      TEXT NOT NULL,
-    payload_json    TEXT NOT NULL,
-    created_at      TEXT NOT NULL,
-    emitted_by      TEXT NOT NULL,
-    parent_event_id INTEGER,
-    authority_scope TEXT
-);
-CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type, id);
-
-CREATE TABLE IF NOT EXISTS approval_tickets (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    story_id      TEXT NOT NULL,
-    action        TEXT NOT NULL,
-    issue_url     TEXT NOT NULL UNIQUE,
-    status        TEXT NOT NULL DEFAULT 'open',
-    opened_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    resolved_at   TIMESTAMP,
-    consumed_at   TIMESTAMP
-);
-CREATE INDEX IF NOT EXISTS idx_approval_tickets_story_action ON approval_tickets(story_id, action, status);
-
-CREATE TABLE IF NOT EXISTS subscriptions (
-    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
-    harness_name         TEXT NOT NULL,
-    event_type         TEXT NOT NULL,
-    last_seen_event_id INTEGER NOT NULL DEFAULT 0,
-    UNIQUE(harness_name, event_type)
-);
-
--- Per-harness plan quotas (tokens or requests). quota_type is plan-driven:
--- different harnesses reset on different windows (5h Claude plan, hourly,
--- daily, weekly, monthly). headroom is computed as limit_tokens - used_tokens
--- (columns named *_tokens historically; unit column disambiguates).
-CREATE TABLE IF NOT EXISTS harness_quotas (
-    id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    harness      TEXT NOT NULL,
-    track        TEXT NOT NULL DEFAULT 'default',
-    model        TEXT NOT NULL DEFAULT 'unknown',
-    quota_type   TEXT NOT NULL,
-    unit         TEXT NOT NULL DEFAULT 'tokens',
-    limit_tokens INTEGER NOT NULL,
-    used_tokens  INTEGER NOT NULL DEFAULT 0,
-    reset_at     TIMESTAMP,
-    updated_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(harness, track, model, quota_type, unit)
-);
-CREATE INDEX IF NOT EXISTS idx_harness_quotas_harness ON harness_quotas(harness);
-
--- Reservation ledger: an open row represents tokens committed against a
--- harness before real usage lands in harness_quotas via telemetry (#XXX
--- quota-aware dispatch reservation). Released once the matching daemon_jobs
--- row settles (done/failed/timed_out) and real usage has been recorded.
--- Reservations older than 24h are treated as expired at READ time (lazy
--- expiry, see _open_reservations_sum) rather than physically deleted.
-CREATE TABLE IF NOT EXISTS harness_reservations (
-    id             INTEGER PRIMARY KEY AUTOINCREMENT,
-    harness        TEXT NOT NULL,
-    tokens         INTEGER NOT NULL,
-    scope          TEXT NOT NULL,
-    scope_id       TEXT,
-    job_id         TEXT,
-    status         TEXT NOT NULL DEFAULT 'open',
-    created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    released_at    TIMESTAMP
-);
-CREATE INDEX IF NOT EXISTS idx_harness_reservations_harness ON harness_reservations(harness, status);
-
-CREATE TABLE IF NOT EXISTS credit_grants (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    agent           TEXT NOT NULL,
-    face_value_usd  REAL NOT NULL,
-    remaining_usd   REAL NOT NULL,
-    granted_at      TEXT NOT NULL,
-    expires_at      TEXT,
-    note            TEXT
-);
-
-CREATE TABLE IF NOT EXISTS remediation_actions (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    timestamp   TEXT NOT NULL,
-    agent       TEXT NOT NULL,
-    target_file TEXT NOT NULL,
-    exact_diff  TEXT NOT NULL,
-    operator    TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_remediation_actions_timestamp
-    ON remediation_actions(timestamp);
-
-CREATE TABLE IF NOT EXISTS fleet_matrix_runs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    run_id TEXT NOT NULL,
-    tier INTEGER NOT NULL,
-    home TEXT NOT NULL,
-    cell TEXT NOT NULL,
-    status TEXT NOT NULL,
-    detail TEXT,
-    cost_usd REAL NOT NULL DEFAULT 0,
-    ts TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_fleet_matrix_runs_lookup
-    ON fleet_matrix_runs(home, cell, tier, ts);
-
-CREATE TABLE IF NOT EXISTS task_leases (
-    lease_id           TEXT PRIMARY KEY,
-    story_id           TEXT NOT NULL,
-    leased_by          TEXT NOT NULL,
-    acquired_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    heartbeat_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    expires_at         TIMESTAMP NOT NULL,
-    status             TEXT NOT NULL DEFAULT 'active'
-);
-CREATE INDEX IF NOT EXISTS idx_task_leases_story ON task_leases(story_id, status);
-"""
-
-_DB_SCORES_VIEW = """
-CREATE VIEW IF NOT EXISTS capability_scores AS
-SELECT
-    agent,
-    model_version,
-    discipline,
-    engg_domain,
-    org_domain,
-    role,
-    stage,
-    industry,
-    phase,
-    SUM(quality * pow(0.85, CAST((julianday('now') - julianday(ts)) / 7 AS INTEGER))) /
-      SUM(pow(0.85, CAST((julianday('now') - julianday(ts)) / 7 AS INTEGER)))
-      AS weighted_score,
-    COUNT(*) AS sample_count,
-    MAX(ts) AS last_seen
-FROM capability_ratings
-WHERE split_model = 0
-GROUP BY agent, model_version, discipline, engg_domain, org_domain, role, stage, industry, phase;
-"""
 
 def _get_db(
     db_path: str = None,
@@ -1076,11 +427,16 @@ def _get_db(
     SYNLYNK_ALLOW_SHARED_STATE_DB=1 only for tests that explicitly exercise
     shared-DB behavior.
     """
-    global ACTIVE_DB_PATH
+    global ACTIVE_DB_PATH, DB_PATH
     ACTIVE_DB_PATH = None
+
+    if DB_PATH is None:
+        DB_PATH = _resolve_db_path()
 
     def _check_write_capability(path: str) -> None:
         """Check access to *path* without opening SQLite or changing it."""
+        import tempfile
+
         parent = os.path.dirname(path) or "."
         if os.path.exists(path):
             fd = os.open(path, os.O_RDWR)
@@ -1141,10 +497,8 @@ def _get_db(
             # candidate database and its sidecars byte-identical on failure.
             conn.execute("BEGIN IMMEDIATE")
             conn.execute("ROLLBACK")
-            conn.execute("PRAGMA journal_mode=WAL")
-            conn.execute("PRAGMA busy_timeout=30000")
-            conn.execute("PRAGMA synchronous=NORMAL")
-            conn.execute("PRAGMA foreign_keys=ON")
+            from synlynk.wal_ledger import ensure_wal_pragmas
+            ensure_wal_pragmas(conn)
             if migrate:
                 _migrate_db(conn)
             if migrate and not _IS_TESTING and os.path.abspath(path) == os.path.abspath(DB_PATH):
@@ -1274,13 +628,53 @@ def _is_migrated() -> bool:
     return os.path.exists(os.path.join(_project_root(), ".synlynk", ".synlynk_migrated"))
 
 
+_GENERATED_DOC_FILES = ("roadmap.md", "todo.md", "memory.md", "costs.md")
+
+
+def _generated_docs_locked(replace_generated_docs: bool = False, root: str = None) -> bool:
+    """True when init/brownfield must not raw-write the generated 4-docs.
+
+    Checks the given root and its git-common-dir parent so a linked worktree
+    of a migrated product is locked even if the worktree has no local marker.
+    """
+    if replace_generated_docs:
+        return False
+    check_roots = []
+    if root:
+        check_roots.append(os.path.abspath(root))
+        try:
+            common = subprocess.check_output(
+                ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+                cwd=root,
+                stderr=subprocess.DEVNULL,
+            ).decode().strip()
+            if common:
+                check_roots.append(os.path.abspath(os.path.join(common, "..")))
+        except Exception:
+            pass
+    else:
+        check_roots.append(_project_root())
+        check_roots.append(os.getcwd())
+    seen = set()
+    for r in check_roots:
+        real = os.path.realpath(r)
+        if real in seen:
+            continue
+        seen.add(real)
+        if os.path.exists(os.path.join(real, ".synlynk", ".synlynk_migrated")):
+            return True
+    return False
+
+
 def _synlynk_project_docs_dir() -> str:
     return os.path.join(_project_root(), ".synlynk", "project-docs")
 
 
 def _dr_sync(relative_path: str) -> None:
     try:
-        cfg_path = os.path.join('.synlynk', 'config.json')
+        workspace_path = os.path.join('.synlynk', 'workspace.json')
+        legacy_path = os.path.join('.synlynk', 'config.json')
+        cfg_path = workspace_path if os.path.exists(workspace_path) else legacy_path
         if not os.path.exists(cfg_path):
             return
         with open(cfg_path) as f:
@@ -1481,7 +875,7 @@ PROMPTS_DIR = ".synlynk/prompts"
 
 _VERB_MAP_SEED = [
     # (synlynk_verb, category, agent, harness_command, supported, partial_notes)
-    ("dispatch.task",     "dispatch",      "claude", "claude --print {task} --dangerously-skip-permissions", "full", None),
+    ("dispatch.task",     "dispatch",      "claude", "claude --print {task}", "full", None),
     ("dispatch.task",     "dispatch",      "agy",    "agy -p {task}", "full", None),
     ("dispatch.task",     "dispatch",      "grok",   "grok --single {task}", "full", None),
     ("dispatch.task",     "dispatch",      "codex",  "codex exec - -s workspace-write", "full", None),
@@ -1637,6 +1031,244 @@ def _write_json_atomic(path: str, payload: dict) -> None:
             except OSError:
                 pass
 
+
+_WORKSPACE_KEYS = [
+    "org", "owner", "repo", "project_id", "identity_slug", "project_docs_dir",
+    "workspace_id", "agent_slots", "workgroup_agents", "agents", "team",
+    "sync_endpoint", "dispatch", "local_auto_threshold", "local_fallback",
+    "watch_interval_seconds", "auto_smoke_test", "auto_launch_after_wizard",
+    "dispatch_mode", "fenced_commands", "nudges", "exec_timeout_minutes",
+    "stall_timeout_minutes", "review_stall_timeout_minutes", "swarm_runners",
+    "last_housekeeping_date", "features", "repo_id", "dr_sync_path", "mode",
+]
+_BILLING_KEYS = ["budget", "harness_billing", "payment_models", "capability_sweep"]
+_POLICY_MIGRATED_KEYS = ["qa_gate_mode", "roles", "story_classification", "sentinel"]
+
+
+def _apply_workspace_defaults(config: dict) -> dict:
+    """Fill in schema-v1 defaults for a workspace config dict, in place and returned."""
+    defaults = {
+        "schema_version": 1,
+        "dispatch": {"stacking": "auto", "gate_suite_cmd": ""},
+        "local_auto_threshold": 0.5,
+        "local_fallback": "agy",
+        "watch_interval_seconds": 30,
+        "auto_smoke_test": False,
+        "auto_launch_after_wizard": True,
+        "dispatch_mode": "daily-grind",
+        "fenced_commands": ["dispatch", "jobs", "exec", "schedule"],
+        "nudges": {"enabled": True, "dismissed_ids": [], "last_shown": {}},
+        "org": None,
+        "owner": None,
+        "repo": None,
+        "project_id": None,
+        "identity_slug": None,
+        "project_docs_dir": "project-docs",
+        "agent_slots": {"claude": "claude", "agy": "agy", "codex": "codex", "grok": "grok"},
+        "workgroup_agents": [],
+        "last_housekeeping_date": None,
+        "team": None,
+        "sync_endpoint": None,
+        "exec_timeout_minutes": 30,
+        "stall_timeout_minutes": 30,
+        "swarm_runners": {"default": "local", "enabled": ["local"], "timeout_seconds": 900},
+        "review_stall_timeout_minutes": 90,
+        "agents": {},
+        "features": {},
+        "repo_id": None,
+        "dr_sync_path": None,
+        "mode": "solo",
+    }
+    if not isinstance(config, dict):
+        config = {}
+    for key, val in defaults.items():
+        if key not in config:
+            config[key] = val
+    for key, val in defaults["dispatch"].items():
+        if key not in config.get("dispatch", {}):
+            config.setdefault("dispatch", {})[key] = val
+    for key, val in defaults["nudges"].items():
+        if key not in config.get("nudges", {}):
+            config.setdefault("nudges", {})[key] = val
+    return config
+
+
+def load_workspace() -> dict:
+    """Load .synlynk/workspace.json with schema-v1 defaults."""
+    config_file = ".synlynk/workspace.json"
+    if not os.path.exists(config_file):
+        return _apply_workspace_defaults({})
+    try:
+        with open(config_file) as f:
+            config = json.load(f)
+        if not isinstance(config, dict):
+            return _apply_workspace_defaults({})
+        return _apply_workspace_defaults(config)
+    except (json.JSONDecodeError, IOError):
+        return _apply_workspace_defaults({})
+
+
+def _apply_billing_defaults(config: dict) -> dict:
+    """Fill in schema-v1 defaults for a billing config dict, in place and returned."""
+    defaults = {
+        "schema_version": 1,
+        "budget": {"limit_usd": 10.0, "limit_requests": 100},
+        "payment_models": {},
+        "harness_billing": _default_harness_billing(),
+        "capability_sweep": {"cost_cap_usd": 10.0},
+    }
+    if not isinstance(config, dict):
+        config = {}
+    has_harness_billing = "harness_billing" in config
+    for key, val in defaults.items():
+        if key not in config:
+            config[key] = {} if key == "harness_billing" else val
+    for key, val in defaults["budget"].items():
+        if key not in config.get("budget", {}):
+            config.setdefault("budget", {})[key] = val
+    if not isinstance(config.get("harness_billing"), dict):
+        config["harness_billing"] = _default_harness_billing()
+    elif not config["harness_billing"] and has_harness_billing:
+        config["harness_billing"] = _default_harness_billing()
+    for billing in config["harness_billing"].values():
+        if isinstance(billing, dict):
+            billing.setdefault("payment_mode", "pay_as_you_go")
+            billing.setdefault("monthly_base_fee_usd", billing.get("subscription_fee_usd", 0.0))
+            billing.setdefault("projected_monthly_tokens", 10_000_000)
+            billing.setdefault("allow_extra_usage", False)
+            billing.setdefault("extra_usage_cap_usd", None)
+    return config
+
+
+def load_billing() -> dict:
+    """Load .synlynk/billing.json with schema-v1 defaults."""
+    config_file = ".synlynk/billing.json"
+    if not os.path.exists(config_file):
+        return {
+            "schema_version": 1,
+            "budget": {"limit_usd": 10.0, "limit_requests": 100},
+            "payment_models": {},
+            "harness_billing": _default_harness_billing(),
+            "capability_sweep": {"cost_cap_usd": 10.0},
+        }
+    try:
+        with open(config_file) as f:
+            config = json.load(f)
+        if not isinstance(config, dict):
+            return {
+                "schema_version": 1,
+                "budget": {"limit_usd": 10.0, "limit_requests": 100},
+                "payment_models": {},
+                "harness_billing": _default_harness_billing(),
+                "capability_sweep": {"cost_cap_usd": 10.0},
+            }
+        return _apply_billing_defaults(config)
+    except (json.JSONDecodeError, IOError):
+        return {
+            "schema_version": 1,
+            "budget": {"limit_usd": 10.0, "limit_requests": 100},
+            "payment_models": {},
+            "harness_billing": _default_harness_billing(),
+            "capability_sweep": {"cost_cap_usd": 10.0},
+        }
+
+
+def _read_raw_policy() -> dict:
+    """Read .synlynk/policy.json without defaults, or return {} if absent/corrupt."""
+    try:
+        with open(".synlynk/policy.json") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _read_policy_migrated_fields(policy: dict | None = None) -> dict:
+    """Read the legacy fields that are migrated into policy.json."""
+    try:
+        from synlynk.capability_roles import _load_capability_roles
+        capability_roles = _load_capability_roles()
+    except ImportError:
+        capability_roles = None
+    if policy is None:
+        policy = _read_raw_policy()
+    result = {
+        "roles": capability_roles if capability_roles is not None else _default_roles_map(),
+        "story_classification": {"method": "heuristic"},
+        "qa_gate_mode": "block-only",
+        "sentinel": {
+            "dedup_window_seconds": 86400,
+            "active_ttl_seconds": {"CRITICAL": 180 * 86400, "WARN": 180 * 86400, "INFO": 180 * 86400},
+        },
+    }
+    if capability_roles is None and "roles" in policy:
+        result["roles"] = policy["roles"]
+    for key in ("story_classification", "qa_gate_mode", "sentinel"):
+        if key in policy:
+            result[key] = policy[key]
+    return result
+
+
+def _split_legacy_config(legacy: dict, existing_policy: dict) -> tuple[dict, dict, dict]:
+    """Partition a legacy config.json dict into workspace/billing/policy payloads.
+
+    Pure, no I/O. Workspace is the catch-all so unclaimed legacy keys are preserved.
+    """
+    claimed = set(_BILLING_KEYS) | set(_POLICY_MIGRATED_KEYS)
+    workspace_payload = {"schema_version": 1}
+    workspace_payload.update({k: v for k, v in legacy.items() if k not in claimed})
+
+    billing_payload = {"schema_version": 1}
+    billing_payload.update({k: legacy[k] for k in _BILLING_KEYS if k in legacy})
+
+    policy_payload = dict(existing_policy)
+    policy_payload.update({k: legacy[k] for k in _POLICY_MIGRATED_KEYS if k in legacy})
+    policy_payload.setdefault("schema_version", 1)
+
+    return workspace_payload, billing_payload, policy_payload
+
+
+def migrate_legacy_config_if_needed() -> bool:
+    """Explicitly split .synlynk/config.json into workspace, billing, and policy files once."""
+    legacy_path = ".synlynk/config.json"
+    workspace_path = ".synlynk/workspace.json"
+    billing_path = ".synlynk/billing.json"
+    policy_path = ".synlynk/policy.json"
+
+    if not os.path.exists(legacy_path):
+        return False
+    if os.path.exists(workspace_path) or os.path.exists(billing_path):
+        return False
+
+    try:
+        with open(legacy_path) as f:
+            legacy = json.load(f)
+    except (json.JSONDecodeError, IOError):
+        return False
+    if not isinstance(legacy, dict):
+        return False
+
+    # A present but corrupt policy file aborts the whole migration. A missing
+    # policy file is valid and uses an empty policy as its base.
+    if os.path.exists(policy_path):
+        try:
+            with open(policy_path) as f:
+                existing_policy = json.load(f)
+            if not isinstance(existing_policy, dict):
+                return False
+        except (json.JSONDecodeError, IOError):
+            return False
+    else:
+        existing_policy = {}
+
+    workspace_payload, billing_payload, policy_payload = _split_legacy_config(legacy, existing_policy)
+
+    _write_json_atomic(workspace_path, workspace_payload)
+    _write_json_atomic(billing_path, billing_payload)
+    _write_json_atomic(policy_path, policy_payload)
+    os.replace(legacy_path, legacy_path + ".bak")
+    return True
+
 # ANSI helpers used by the wizard.
 _BOLD = "\033[1m"
 _GREEN = "\033[32m"
@@ -1651,11 +1283,14 @@ _MAGENTA = "\033[35m"
 def _docs_dir() -> str:
     """Returns the configured project docs directory (defaults to 'project-docs').
 
-    Reads project_docs_dir from .synlynk/config.json. Pass --docs-dir to
-    synlynk init to set a custom location (e.g. '.' for repos that keep docs
-    at the root).
+    Reads project_docs_dir from .synlynk/workspace.json (falls back to the
+    legacy .synlynk/config.json for projects not yet migrated). Pass
+    --docs-dir to synlynk init to set a custom location (e.g. '.' for repos
+    that keep docs at the root).
     """
-    config_file = ".synlynk/config.json"
+    workspace_file = ".synlynk/workspace.json"
+    legacy_file = ".synlynk/config.json"
+    config_file = workspace_file if os.path.exists(workspace_file) else legacy_file
     if os.path.exists(config_file):
         try:
             with open(config_file) as f:
@@ -1665,89 +1300,84 @@ def _docs_dir() -> str:
     return "project-docs"
 
 
+_DEFAULT_HARNESS_BILLING = {
+    "claude": {
+        "payment_mode": "subscription",
+        "monthly_base_fee_usd": 20.0,
+        "projected_monthly_tokens": 10_000_000,
+        "allow_extra_usage": False,
+    },
+    "codex": {
+        "payment_mode": "subscription",
+        "monthly_base_fee_usd": 20.0,
+        "projected_monthly_tokens": 10_000_000,
+        "allow_extra_usage": False,
+    },
+    "agy": {
+        "payment_mode": "subscription",
+        "monthly_base_fee_usd": 20.0,
+        "projected_monthly_tokens": 10_000_000,
+        "allow_extra_usage": False,
+    },
+    "grok": {
+        "payment_mode": "subscription",
+        "monthly_base_fee_usd": 30.0,
+        "projected_monthly_tokens": 10_000_000,
+        "allow_extra_usage": False,
+    },
+}
+
+
+def _default_harness_billing() -> dict:
+    """Return an independent copy of the standard quad-harness billing seed."""
+    return {agent: dict(config) for agent, config in _DEFAULT_HARNESS_BILLING.items()}
+
+
 def load_config() -> dict:
-    """Loads .synlynk/config.json with schema-v1 defaults."""
-    capability_roles = _load_capability_roles()
-    defaults = {
-        "schema_version": 1,
-        "budget": {"limit_usd": 10.0, "limit_requests": 100},
-        "dispatch": {"stacking": "auto", "gate_suite_cmd": ""},
-        "watch_interval_seconds": 30,
-        "auto_smoke_test": False,
-        "auto_launch_after_wizard": True,
-        "dispatch_mode": "daily-grind",
-        "fenced_commands": ["dispatch", "jobs", "exec", "schedule"],
-        "nudges": {"enabled": True, "dismissed_ids": [], "last_shown": {}},
-        "org": None,
-        "owner": None,
-        "repo": None,
-        "project_id": None,
-        "identity_slug": None,
-        "project_docs_dir": "project-docs",
-        "agent_slots": {"claude": "claude", "agy": "agy", "codex": "codex", "grok": "grok"},  # AGY CLI binary is named 'agy' — update when binary is renamed
-        "workgroup_agents": [],
-        "last_housekeeping_date": None,
-        "team": None,
-        "sync_endpoint": None,
-        "exec_timeout_minutes": 30,
-        "stall_timeout_minutes": 30,
-        "swarm_runners": {"default": "local", "enabled": ["local"], "timeout_seconds": 900},
-        "review_stall_timeout_minutes": 90,
-        "agents": {},
-        "payment_models": {},
-        "harness_billing": {},
-        "capability_sweep": {"cost_cap_usd": 10.0},
-        "roles": capability_roles if capability_roles is not None else _default_roles_map(),
-        "story_classification": {"method": "heuristic"},
-        "qa_gate_mode": "block-only",
-        "sentinel": {
-            "dedup_window_seconds": 86400,
-            "active_ttl_seconds": {"CRITICAL": 180 * 86400, "WARN": 180 * 86400, "INFO": 180 * 86400},
-        },
-    }
-    config_file = ".synlynk/config.json"
-    if not os.path.exists(config_file):
-        return defaults
-    try:
-        with open(config_file) as f:
-            config = json.load(f)
-        for key, val in defaults.items():
-            if key not in config:
-                config[key] = val
-        if capability_roles is not None:
-            config["roles"] = capability_roles
-        elif "roles" not in config:
-            config["roles"] = _default_roles_map()
-        for key, val in defaults["budget"].items():
-            if key not in config.get("budget", {}):
-                config.setdefault("budget", {})[key] = val
-        for key, val in defaults["dispatch"].items():
-            if key not in config.get("dispatch", {}):
-                config.setdefault("dispatch", {})[key] = val
-        for key, val in defaults["nudges"].items():
-            if key not in config.get("nudges", {}):
-                config.setdefault("nudges", {})[key] = val
-        if not isinstance(config.get("harness_billing"), dict):
-            config["harness_billing"] = {}
-        for billing in config["harness_billing"].values():
-            if isinstance(billing, dict):
-                billing.setdefault("payment_mode", "pay_as_you_go")
-                billing.setdefault("monthly_base_fee_usd", 0.0)
-                billing.setdefault("projected_monthly_tokens", 10_000_000)
-                billing.setdefault("allow_extra_usage", False)
-                billing.setdefault("extra_usage_cap_usd", None)
-        return config
-    except (json.JSONDecodeError, IOError):
-        return defaults
+    """Read the composed config without writing, renaming, or deleting files."""
+    workspace_path = ".synlynk/workspace.json"
+    billing_path = ".synlynk/billing.json"
+    legacy_path = ".synlynk/config.json"
+
+    config = {"schema_version": 1}
+
+    if not os.path.exists(workspace_path) and not os.path.exists(billing_path) and os.path.exists(legacy_path):
+        legacy = None
+        try:
+            with open(legacy_path) as f:
+                legacy = json.load(f)
+        except (json.JSONDecodeError, IOError):
+            legacy = None
+        if isinstance(legacy, dict):
+            existing_policy = _read_raw_policy()
+            workspace_payload, billing_payload, policy_payload = _split_legacy_config(legacy, existing_policy)
+            config.update(_apply_workspace_defaults(workspace_payload))
+            config.update(_apply_billing_defaults(billing_payload))
+            config.update(_read_policy_migrated_fields(policy_payload))
+            return config
+
+    config.update(load_workspace())
+    config.update(load_billing())
+    config.update(_read_policy_migrated_fields())
+    return config
 
 
-def cmd_config_set(key: str, value: str) -> None:
-    """Set a top-level config key in .synlynk/config.json."""
-    config_path = ".synlynk/config.json"
-    config = load_config()
-    config[key] = value
-    _write_json_atomic(config_path, config)
-    print(f"  ✓ {key} = {value!r} saved to .synlynk/config.json")
+def cmd_config_set(key: str, value) -> None:
+    """Set a top-level config key, routed to its owning split config file."""
+    migrate_legacy_config_if_needed()
+    if key in _BILLING_KEYS:
+        path = ".synlynk/billing.json"
+        data = load_billing()
+    elif key in _POLICY_MIGRATED_KEYS:
+        path = ".synlynk/policy.json"
+        data = _read_raw_policy()
+        data.setdefault("schema_version", 1)
+    else:
+        path = ".synlynk/workspace.json"
+        data = load_workspace()
+    data[key] = value
+    _write_json_atomic(path, data)
+    print(f"  ✓ {key} = {value!r} saved to {path}")
 
 
 
@@ -1819,9 +1449,10 @@ def cmd_exit(dry_run: bool = True, remove_docs: bool = False) -> int:
         pass
 
     cfg = {}
-    if os.path.exists(".synlynk/config.json"):
+    _cfg_path = ".synlynk/workspace.json" if os.path.exists(".synlynk/workspace.json") else ".synlynk/config.json"
+    if os.path.exists(_cfg_path):
         try:
-            cfg = json.load(open(".synlynk/config.json"))
+            cfg = json.load(open(_cfg_path))
         except Exception:
             pass
 
@@ -1936,9 +1567,10 @@ def cmd_repair(dry_run: bool = True) -> int:
     Dry-run by default — pass --confirm to execute.
     """
     cfg = {}
-    if os.path.exists(".synlynk/config.json"):
+    _cfg_path = ".synlynk/workspace.json" if os.path.exists(".synlynk/workspace.json") else ".synlynk/config.json"
+    if os.path.exists(_cfg_path):
         try:
-            cfg = json.load(open(".synlynk/config.json"))
+            cfg = json.load(open(_cfg_path))
         except Exception:
             pass
 
@@ -2126,6 +1758,42 @@ def discover_agents(config: dict = None) -> list:
             "discovery_path": path or "",
         })
     return found
+
+
+def probe_all_configured_harnesses(agents: list = None) -> dict:
+    """Populate probe metadata for the harnesses selected for this workspace."""
+    configured = list(agents) if agents is not None else []
+    if agents is None:
+        config = load_config()
+        configured = list(config.get("workgroup_agents") or [])
+    if agents is None and not configured:
+        configured = [entry["name"] for entry in discover_agents() if entry.get("functional")]
+    configured = list(dict.fromkeys(
+        name for name in configured if name in HARNESS_CAPABILITY_BASELINES
+    ))
+    results = {}
+    if not configured:
+        return results
+
+    from synlynk.probe import _probe_agent
+
+    db_conn = _get_db()
+    try:
+        for harness_name in configured:
+            try:
+                results[harness_name] = _probe_agent(
+                    harness_name, db_conn, fast_path_ok=False, write_fence=False
+                )
+            except Exception as exc:
+                results[harness_name] = {
+                    "status": "unavailable",
+                    "version": "unavailable",
+                    "error": str(exc),
+                }
+        db_conn.commit()
+    finally:
+        db_conn.close()
+    return results
 
 
 
@@ -2353,8 +2021,9 @@ cmd_harness_configure = cmd_agent_configure
 
 def _run_daily_housekeeping() -> None:
     """Run the once-per-day drift check triggered by exec flow."""
-    config_path = ".synlynk/config.json"
-    if not os.path.exists(config_path):
+    workspace_path = ".synlynk/workspace.json"
+    legacy_path = ".synlynk/config.json"
+    if not os.path.exists(workspace_path) and not os.path.exists(legacy_path):
         return
 
     config = load_config()
@@ -2418,7 +2087,12 @@ def _run_daily_housekeeping() -> None:
             db_conn.close()
 
     config["last_housekeeping_date"] = today
-    _write_json_atomic(config_path, config)
+    if os.path.exists(workspace_path):
+        workspace_data = load_workspace()
+        workspace_data["last_housekeeping_date"] = today
+        _write_json_atomic(workspace_path, workspace_data)
+    else:
+        _write_json_atomic(legacy_path, config)
 
     if not printed:
         return
@@ -2576,7 +2250,7 @@ def cmd_run_trio(task: str, story_id: str = None) -> None:
     """
     agents = [a for a in discover_agents() if a["functional"]]
     if not agents:
-        print("No functional agents found. Run `synlynk init` to set up your Hybrid Workgroup.")
+        print("No functional agents found. Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result. Run `synlynk init` to configure an agent.")
         return
     if len(agents) < 3:
         print(f"  {_YELLOW}Only {len(agents)} agent(s) available "
@@ -2636,18 +2310,41 @@ def detect_remote_owner_repo() -> tuple:
 
 
 def _update_config(updates: dict) -> None:
-    """Merges updates into .synlynk/config.json in-place."""
-    config_file = ".synlynk/config.json"
+    """Merges updates into the owning split config file(s) (workspace.json / billing.json / policy.json)."""
     if not os.path.exists(".synlynk"):
         return
-    config = load_config()
-    config.update(updates)
-    _write_json_atomic(config_file, config)
+
+    workspace_updates = {}
+    billing_updates = {}
+    policy_updates = {}
+    for key, value in updates.items():
+        if key in _BILLING_KEYS:
+            billing_updates[key] = value
+        elif key in _POLICY_MIGRATED_KEYS:
+            policy_updates[key] = value
+        else:
+            workspace_updates[key] = value
+
+    if workspace_updates:
+        workspace_data = load_workspace()
+        workspace_data.update(workspace_updates)
+        _write_json_atomic(".synlynk/workspace.json", workspace_data)
+
+    if billing_updates:
+        billing_data = load_billing()
+        billing_data.update(billing_updates)
+        _write_json_atomic(".synlynk/billing.json", billing_data)
+
+    if policy_updates:
+        policy_data = _read_raw_policy()
+        policy_data.setdefault("schema_version", 1)
+        policy_data.update(policy_updates)
+        _write_json_atomic(".synlynk/policy.json", policy_data)
 
 
 # Task 3-5: Repo scanning, maturity detection, section signals, semantic matching, GH ID extraction
 _PROJECT_DOC_NAMES = {"roadmap.md", "todo.md", "memory.md", "costs.md", "devlog.md"}
-_AGENT_FILE_NAMES = {"CLAUDE.md", "GEMINI.md", "AGENTS.md", "AI_INSTRUCTIONS.md"}
+_AGENT_FILE_NAMES = {"CLAUDE.md", "GEMINI.md", "AGENTS.md", "GROK.md", "AI_INSTRUCTIONS.md"}
 _SCAN_SKIP_DIRS = {
     ".git", "node_modules", ".synlynk", "project-docs",
     "__pycache__", ".venv", "venv", "env", ".next", "dist", "build",
@@ -3288,24 +2985,9 @@ merged: YYYY-MM-DD (or status: open)
         print(stub_content.strip())
         print("\n--------------------------------")
     else:
-        # Write VERSION file
+        # Write the single canonical VERSION source.
         with open(version_path, "w") as f:
             f.write(next_version + "\n")
-            
-        # Write to synlynk/__init__.py and synlynk/_constants.py VERSION if they exist
-        for target_module in ("__init__.py", "_constants.py"):
-            target_path = os.path.join(root, "synlynk", target_module)
-            if os.path.exists(target_path):
-                with open(target_path, "r") as f:
-                    content = f.read()
-                new_content = re.sub(
-                    r'^VERSION\s*=\s*".*"',
-                    f'VERSION = "{next_version}"',
-                    content,
-                    flags=re.MULTILINE
-                )
-                with open(target_path, "w") as f:
-                    f.write(new_content)
 
         # Prepend to CHANGELOG.md (create if missing)
         if os.path.exists(changelog_path):
@@ -3545,98 +3227,18 @@ def cmd_status(json_output: bool = False, platform: bool = False) -> None:
     print(sep)
     sys.exit(1 if has_alert else 0)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# ── Wizard TUI primitives (BS-17 Plan B Tasks B-1 / B-2) ────────────────────
-# Inserted before init() per plan. Pure stdlib TUI for FTUE.
-
-_WIZ_SYNAPTIC_BLURB = (
-    "In the brain, a synaptic link is the tiny gap where one neuron passes\n"
-    "  its signal to the next. Alone, neurons are just cells. Connected, they\n"
-    "  produce thought. Your AI tools are the same — powerful in isolation,\n"
-    "  transformative when they share a signal. synlynk is the gap that makes\n"
-    "  them think together."
-)
-
-_WIZ_PRODUCT_BLURB = (
-    "You already have great AI tools. The problem is they don't know about\n"
-    "  each other — or your project. synlynk fixes that: it injects shared\n"
-    "  context before every dispatch, routes tasks to the right agent, and\n"
-    "  keeps score on what's working. Your fleet, finally coordinated."
-)
-
-
-
-
-
-
-
-
-_STAGE_LABELS = ["STACK", "SOURCE", "COMPLEXITY", "TESTS", "GIT CHURN", "ARCHITECTURE"]
-_STAGE_COLORS = [_GREEN, _CYAN, _YELLOW, _GREEN, _RED, _MAGENTA]
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-_ROBOT_ASCII = "[~]"  # ASCII robot stand-in for terminal (no emoji)
-
-
-
-
-
-
-
-
-
-
-        # any other key — redraw
-
-
-        # invalid key — redraw
-
-
-
-
 def init(force: bool = False, agents: list = None,
          org: str = None, repo: str = None, project_id: str = None,
-         mode: str = "solo", dry_run: bool = False, quiet: bool = False) -> None:
+         mode: str = "solo", dry_run: bool = False, quiet: bool = False,
+         replace_generated_docs: bool = False,
+         non_interactive: bool = False) -> None:
     """Progressive wizard: semantic scan → harness discovery → doc bootstrap → nudge."""
+
+    # An explicit non-interactive flag always uses defaults.  Otherwise keep
+    # prompting even when stdin is not a TTY: callers and tests may provide a
+    # working input function.  Closed/exhausted stdin is handled below via
+    # EOFError, which preserves the headless subprocess fallback.
+    auto_defaults = bool(non_interactive)
 
     def _print_step(n: int, label: str) -> None:
         print(f"\n{_BOLD}{_CYAN}Step {n}/{_TOTAL_STEPS} — {label}{_RESET}")
@@ -3682,13 +3284,13 @@ def init(force: bool = False, agents: list = None,
     non_functional = [a for a in discovered if not a["functional"]]
 
     if functional:
-        print(f"\n  {_BOLD}{_GREEN}✨ Your Hybrid Workgroup is ready:{_RESET}")
+        print(f"\n  {_BOLD}{_GREEN}✨ Synlynk is ready to route coding tasks:{_RESET}")
         for ag in functional:
             roles = ", ".join(ag["roles"])
             print(f"    {_GREEN}✓ {ag['name']:10}{_RESET} {ag['version']}  "
                   f"roles: {roles}")
     else:
-        print(f"  {_YELLOW}No agents detected. Install Claude, Gemini, or Codex to form your Hybrid Workgroup.{_RESET}")
+        print(f"  {_YELLOW}No agents detected. Install Claude, Gemini, or Codex to route coding tasks.{_RESET}")
 
     if non_functional:
         print(f"\n  {_DIM}Found but not configured (run --version failed):{_RESET}")
@@ -3725,7 +3327,9 @@ def init(force: bool = False, agents: list = None,
             if not os.path.exists(d):
                 os.makedirs(d)
 
-        written = _write_informed_skeleton(scan, skip_existing=not force)
+        written = _write_informed_skeleton(
+            scan, skip_existing=not force, replace_generated_docs=replace_generated_docs
+        )
         if written:
             for p, label in written:
                 print(f"  {_GREEN}✓{_RESET} {p}  {_DIM}({label}){_RESET}")
@@ -3782,6 +3386,14 @@ def init(force: bool = False, agents: list = None,
         config_json_content = templates.get("config.json", "")
         if config_json_content:
             if not os.path.exists(config_path) or force:
+                try:
+                    config_payload = json.loads(config_json_content)
+                except (TypeError, json.JSONDecodeError):
+                    config_payload = None
+                if isinstance(config_payload, dict):
+                    config_payload.setdefault("local_auto_threshold", 0.5)
+                    config_payload.setdefault("local_fallback", "agy")
+                    config_json_content = json.dumps(config_payload, indent=2) + "\n"
                 with open(config_path, "w") as f:
                     f.write(config_json_content)
 
@@ -3801,10 +3413,12 @@ def init(force: bool = False, agents: list = None,
             print(f"  I found {scan['commit_count']} commits and {len(scan['recent_topics'])} "
                   f"recent topics.\n  Want me to ask {enricher['name']} to synthesise a roadmap "
                   f"from this? (costs tokens)")
-            try:
-                answer = input("  [y/N] ").strip().lower()
-            except EOFError:
-                answer = ""
+            answer = ""
+            if not auto_defaults:
+                try:
+                    answer = input("  [y/N] ").strip().lower()
+                except EOFError:
+                    auto_defaults = True
             if answer == "y":
                 print(f"  {_DIM}Calling {enricher['cli']} --print...{_RESET}", end=" ", flush=True)
                 ok = _llm_enrich(enricher["name"], enricher["cli"], scan)
@@ -3821,14 +3435,17 @@ def init(force: bool = False, agents: list = None,
         _print_step(5, "Team & cloud setup (optional)")
         print("  Add a collaborator or share this workspace with your team.")
         print("  Leave blank to skip.")
-        try:
-            email = input("  Email or synlynk ID: ").strip()
-        except EOFError:
+        if auto_defaults:
             email = ""
-        try:
-            industry = input(f"  Industry vertical [{inferred}]: ").strip() or inferred
-        except EOFError:
             industry = inferred
+        else:
+            try:
+                email = input("  Email or synlynk ID: ").strip()
+                industry = input(f"  Industry vertical [{inferred}]: ").strip() or inferred
+            except EOFError:
+                auto_defaults = True
+                email = ""
+                industry = inferred
         if industry not in list(_INDUSTRY_KEYWORDS.keys()) + ["unknown"]:
             industry = "unknown"
 
@@ -3852,7 +3469,23 @@ def init(force: bool = False, agents: list = None,
 
     _seed_capability_ledger_from_baseline(_get_db())
 
-    print(f"\n{_BOLD}{_GREEN}✓ synlynk initialised — your Hybrid Workgroup is ready.{_RESET}")
+    # LIVE-21: make probe metadata available before the first dispatch.  Do
+    # not probe fallback names when no harness is installed: some harness
+    # probes perform network checks and init must retain its fast headless
+    # path.  Explicit ``agents=`` remains authoritative.
+    if agents is not None:
+        probe_targets = sorted(set(agents))
+    else:
+        # Keep the legacy no-argument init path bounded.  Explicitly selected
+        # harnesses are probed here; otherwise first dispatch performs the
+        # defensive inline probe for the discovered harness.
+        probe_targets = []
+    probe_all_configured_harnesses(probe_targets)
+
+    if auto_defaults:
+        print(f"  Auto-selected defaults: enrichment=no, email=empty, industry={industry}")
+
+    print(f"\n{_BOLD}{_GREEN}✓ synlynk initialised — Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result.{_RESET}")
     if functional:
         agent_names = " + ".join(a["name"] for a in functional)
         print(f"\n  {_BOLD}✨ Magic Moment 2 — dispatch agents now:{_RESET}")
@@ -3860,6 +3493,8 @@ def init(force: bool = False, agents: list = None,
         if len(functional) >= 3:
             print(f"    {_CYAN}synlynk run --trio --task \"your task\"{_RESET}  "
                   f"← runs {agent_names} in parallel")
+    print(f"\n  Background Supervision:")
+    print(f"    {_CYAN}synlynk daemon --install-service{_RESET}  ← supervise daemon across reboots (launchd/systemd)")
     print(f"\n  Next: {_DIM}synlynk status  ·  synlynk jobs  ·  synlynk dispatch --help{_RESET}\n")
 
 # --- module extractions (backwards compat) ---

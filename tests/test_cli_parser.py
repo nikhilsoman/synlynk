@@ -20,6 +20,27 @@ def test_build_parser_exposes_dispatch_tree_without_running_main():
         parser.parse_args(["dispatch", "not-a-real-agent", "--task", "build"])
 
 
+def test_cost_log_parser_accepts_role_and_pr():
+    from synlynk.cli import build_parser
+
+    parser = build_parser()
+    args = parser.parse_args([
+        "cost", "log",
+        "--harness", "claude",
+        "--tokens-in", "10",
+        "--tokens-out", "5",
+        "--pr", "2113",
+        "--role", "qa",
+        "--model", "claude-sonnet-4-6",
+    ])
+
+    assert args.command == "cost"
+    assert args.cost_action == "log"
+    assert args.pr == 2113
+    assert args.role == "qa"
+    assert args.model == "claude-sonnet-4-6"
+
+
 def test_dispatch_parser_accepts_issue_flag():
     from synlynk.cli import build_parser
 
@@ -36,6 +57,17 @@ def test_dispatch_parser_issue_defaults_to_none():
     args = parser.parse_args(["dispatch", "claude", "--task", "fix it"])
 
     assert args.issue is None
+
+
+def test_dispatch_parser_effort_defaults_to_none_and_accepts_low_or_high():
+    parser = cli_mod.build_parser()
+
+    assert parser.parse_args(["dispatch", "agy", "--task", "fix it"]).effort is None
+    assert parser.parse_args(["dispatch", "agy", "--task", "fix it", "--effort", "low"]).effort == "low"
+    assert parser.parse_args(["dispatch", "agy", "--task", "fix it", "--effort", "high"]).effort == "high"
+
+    with pytest.raises(SystemExit):
+        parser.parse_args(["dispatch", "agy", "--task", "fix it", "--effort", "medium"])
 
 
 def test_backfill_capability_ratings_parser_registered():
@@ -182,6 +214,39 @@ def test_fast_cli_preserves_help_and_invalid_command_paths():
     assert "sentinel" in help_result.stdout
     assert invalid_result.returncode == 2
     assert "invalid choice" in invalid_result.stderr
+
+
+def test_tiered_help_command_supports_core_and_all_views(capsys):
+    cli_mod.main(["help"])
+    core = capsys.readouterr().out
+    assert "Core commands" in core
+    assert "dispatch" in core
+    assert "goal create" not in core
+
+    cli_mod.main(["help", "--all"])
+    all_help = capsys.readouterr().out
+    assert "All commands" in all_help
+    assert "goal create" in all_help
+
+
+def test_lazy_parser_registers_only_the_selected_top_level_command():
+    parser = cli_mod.build_parser(selected_command="dispatch")
+    subparser_action = parser._subparsers._group_actions[0]
+
+    assert subparser_action.choices["dispatch"].__class__.__name__ == "ArgumentParser"
+    assert subparser_action.choices["status"].__class__.__name__ == "_LazyParserStub"
+    args = parser.parse_args(["dispatch", "codex", "--task", "build"])
+    assert (args.command, args.agent, args.task) == ("dispatch", "codex", "build")
+
+
+def test_lazy_parser_unknown_command_keeps_the_complete_choice_list():
+    parser = cli_mod.build_parser(selected_command="not-a-real-command")
+
+    with pytest.raises(SystemExit):
+        parser.parse_args(["not-a-real-command"])
+    choices = parser._subparsers._group_actions[0].choices
+    assert "dispatch" in choices
+    assert "sentinel" in choices
 
 
 def test_state_restore_cli_prints_json_result(tmp_path, monkeypatch, capsys):

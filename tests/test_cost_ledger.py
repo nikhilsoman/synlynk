@@ -2,6 +2,7 @@ import json
 import os
 import sqlite3
 import subprocess
+import sys
 
 import pytest
 
@@ -26,6 +27,40 @@ def test_cost_entries_has_provenance_columns(project_dir, monkeypatch):
     assert "actual_usd" in cols
     assert "payment_mode" in cols
     assert "dispatch_context" in cols
+    assert "turn_usage_json" in cols
+
+
+def test_parse_dispatch_turns_exposes_cumulative_and_incremental_usage():
+    from synlynk.costs import parse_dispatch_turns
+
+    output = (
+        '{"type":"turn.completed","usage":{"input_tokens":100,"output_tokens":10,'
+        '"cached_input_tokens":80}}\n'
+        '{"type":"turn.completed","usage":{"input_tokens":260,"output_tokens":25,'
+        '"cached_input_tokens":200,"reasoning_output_tokens":5}}\n'
+    )
+    turns = parse_dispatch_turns(output, agent="codex")
+
+    assert turns == [
+        {
+            "turn": 1,
+            "input_tokens": 100,
+            "output_tokens": 10,
+            "cache_read_tokens": 80,
+            "cumulative_input_tokens": 100,
+            "cumulative_output_tokens": 10,
+            "cumulative_cache_read_tokens": 80,
+        },
+        {
+            "turn": 2,
+            "input_tokens": 160,
+            "output_tokens": 20,
+            "cache_read_tokens": 120,
+            "cumulative_input_tokens": 260,
+            "cumulative_output_tokens": 30,
+            "cumulative_cache_read_tokens": 200,
+        },
+    ]
 
 
 def test_cost_source_not_null_no_default(project_dir, monkeypatch):
@@ -121,6 +156,30 @@ def test_insert_cost_row_writes_a_row(project_dir, monkeypatch):
     row = conn.execute("SELECT agent, cost_source FROM cost_entries").fetchone()
     conn.close()
     assert row == ("claude", "actual")
+
+
+def test_insert_cost_row_persists_turn_breakdown(project_dir, monkeypatch):
+    import synlynk
+    from synlynk.db import _insert_cost_row
+
+    monkeypatch.setattr(synlynk, "DB_PATH", os.path.join(project_dir, "state.db"))
+    turns = [{"turn": 1, "input_tokens": 100, "output_tokens": 10}]
+    _insert_cost_row(
+        session_date="2026-10-04",
+        agent="codex",
+        model="gpt-5-codex",
+        input_tokens=100,
+        output_tokens=10,
+        cost_source="actual",
+        job_id="job-turns",
+        turn_breakdown=turns,
+    )
+    conn = synlynk._get_db()
+    value = conn.execute(
+        "SELECT turn_usage_json FROM cost_entries WHERE job_id='job-turns'"
+    ).fetchone()[0]
+    conn.close()
+    assert json.loads(value) == turns
 
 
 def test_insert_cost_row_idempotent_on_job_id(project_dir, monkeypatch):
@@ -280,7 +339,7 @@ def test_dispatch_agent_codex_flags_include_json(project_dir, monkeypatch):
     assert "--json" in captured_flags["shell_cmd"]
 
 
-def test_dispatch_agent_claude_flags_include_stream_json_verbose(project_dir, monkeypatch):
+def test_dispatch_agent_claude_flags_include_structured_json(project_dir, monkeypatch):
     import synlynk
     from synlynk import dispatch as dispatch_mod
 
@@ -309,8 +368,8 @@ def test_dispatch_agent_claude_flags_include_stream_json_verbose(project_dir, mo
     dispatch_mod.dispatch_agent("claude", "do a thing", skip_preflight=True, job_id="job-test456")
 
     assert "--output-format" in captured_flags["shell_cmd"]
-    assert "stream-json" in captured_flags["shell_cmd"]
-    assert "--verbose" in captured_flags["shell_cmd"]
+    assert "json" in captured_flags["shell_cmd"]
+    assert "stream-json" not in captured_flags["shell_cmd"]
 
 
 def test_dispatch_agent_agy_flags_include_output_format_json(project_dir, monkeypatch):
@@ -1189,16 +1248,65 @@ def test_cmd_cost_log_writes_estimated_manual_row(project_dir, monkeypatch):
     monkeypatch.setattr(synlynk, "DB_PATH", os.path.join(project_dir, "state.db"))
     monkeypatch.setattr(synlynk, "_is_migrated", lambda: True)
     monkeypatch.setattr(synlynk, "get_username", lambda: "nikhil")
-    cmd_cost_log(agent="claude", tokens_in=2000, tokens_out=800, story_id=None, note="brainstorm session")
+    cmd_cost_log(
+        agent="claude", tokens_in=2000, tokens_out=800, story_id=None,
+        pr=2051, note="brainstorm session",
+    )
     conn = synlynk._get_db()
     row = conn.execute(
-        "SELECT cost_source, estimate_basis, input_tokens, output_tokens, phase_id, notes FROM cost_entries"
+        "SELECT cost_source, estimate_basis, input_tokens, output_tokens, phase_id, notes, pr_number FROM cost_entries"
     ).fetchone()
     conn.close()
     assert row[0] == "estimated_manual"
     assert row[1] == "cli_manual_entry"
     assert (row[2], row[3]) == (2000, 800)
     assert row[5] == "brainstorm session"
+    assert row[6] == 2051
+
+
+def test_cmd_cost_log_records_native_reviewer_role(project_dir, monkeypatch):
+    import synlynk
+
+    monkeypatch.setattr(synlynk, "DB_PATH", os.path.join(project_dir, "state.db"))
+    monkeypatch.setattr(synlynk, "_is_migrated", lambda: True)
+    monkeypatch.setattr(synlynk, "get_username", lambda: "nikhil")
+    cmd_cost_log(
+        agent="claude", tokens_in=10, tokens_out=5, pr=2113,
+        model="claude-sonnet-4-6", role="qa", note="native reviewer provenance",
+    )
+    conn = synlynk._get_db()
+    row = conn.execute(
+        "SELECT harness, model, pr_number, agent_role, job_id FROM cost_entries"
+    ).fetchone()
+    conn.close()
+    assert row == ("claude", "claude-sonnet-4-6", 2113, "qa", None)
+
+
+def test_cmd_cost_log_rejects_invalid_role(project_dir, monkeypatch):
+    import synlynk
+
+    monkeypatch.setattr(synlynk, "DB_PATH", os.path.join(project_dir, "state.db"))
+    monkeypatch.setattr(synlynk, "_is_migrated", lambda: True)
+    with pytest.raises(ValueError, match="Invalid role"):
+        cmd_cost_log(
+            agent="claude", tokens_in=1, tokens_out=1, pr=2113, role="reviewer",
+        )
+
+
+def test_cmd_cost_log_accepts_exact_model_for_pr_provenance(project_dir, monkeypatch):
+    import synlynk
+
+    monkeypatch.setattr(synlynk, "DB_PATH", os.path.join(project_dir, "state.db"))
+    monkeypatch.setattr(synlynk, "_is_migrated", lambda: True)
+    monkeypatch.setattr(synlynk, "get_username", lambda: "nikhil")
+    cmd_cost_log(
+        agent="codex", tokens_in=10, tokens_out=5, pr=2115,
+        model="gpt-6.1-sol", note="explicit model identity",
+    )
+    conn = synlynk._get_db()
+    row = conn.execute("SELECT model, pr_number FROM cost_entries").fetchone()
+    conn.close()
+    assert row == ("gpt-6.1-sol", 2115)
 
 
 def test_cmd_cost_log_populates_payment_columns(project_dir, monkeypatch):
@@ -1368,6 +1476,73 @@ def test_reconcile_daemon_jobs_writes_cost_row(project_dir, monkeypatch):
     conn.close()
     assert row is not None
     assert row[1] == 500
+
+
+def test_reconcile_daemon_jobs_trips_inflight_circuit_breaker(project_dir, monkeypatch):
+    """Daemon polling kills and stamps an over-limit running job immediately."""
+    import synlynk
+    import synlynk.circuit_breaker as circuit_breaker
+    import synlynk.jobs as jobs_mod
+
+    monkeypatch.setattr(synlynk, "DB_PATH", os.path.join(project_dir, "state.db"))
+    monkeypatch.setattr(synlynk, "_is_migrated", lambda: True)
+    monkeypatch.setattr(
+        synlynk,
+        "load_config",
+        lambda: {"circuit_breaker": {"max_job_tokens": 1000, "max_job_cost_usd": 100.0}},
+    )
+    # The sandbox does not expose `ps`, so validate the real termination path
+    # while treating this fixture identity as already verified.
+    monkeypatch.setattr(circuit_breaker, "process_identity_check", lambda pid, expected: "safe to kill")
+    kill_calls = []
+    real_kill_process_tree = circuit_breaker._kill_process_tree
+
+    def record_kill(pid, pid_identity, **kwargs):
+        kill_calls.append((pid, pid_identity))
+        return real_kill_process_tree(pid, pid_identity, **kwargs)
+
+    monkeypatch.setattr(circuit_breaker, "_kill_process_tree", record_kill)
+    log_path = os.path.join(project_dir, "job-circuit-breaker.log")
+    with open(log_path, "w") as handle:
+        handle.write("Input tokens: 4000\nOutput tokens: 2000\n")
+
+    worker = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
+    try:
+        pid_identity = {"start_time": "test-worker"}
+
+        conn = synlynk._get_db()
+        conn.execute(
+            "INSERT INTO daemon_jobs (job_id, agent, task, story_id, pid, pid_identity, status, started_at, enqueued_at, log_path) "
+            "VALUES ('job-circuit-breaker', 'claude', 'runaway', NULL, ?, ?, 'running', "
+            "'2026-07-13T00:00:00', '2026-07-13T00:00:00', ?)",
+            (worker.pid, json.dumps(pid_identity), log_path),
+        )
+        conn.commit()
+        conn.close()
+
+        jobs_mod._reconcile_daemon_jobs()
+        assert worker.poll() is not None, "circuit breaker must terminate the runaway worker"
+        assert kill_calls == [(worker.pid, pid_identity)]
+        sentinel = os.path.join(project_dir, ".synlynk", "sentinel.md")
+        with open(sentinel) as handle:
+            sentinel_text = handle.read()
+        assert "TOKEN_CIRCUIT_BREAKER_TRIPPED" in sentinel_text
+        assert "job-circuit-breaker" in sentinel_text
+    finally:
+        if worker.poll() is None:
+            worker.kill()
+        worker.wait()
+
+    conn = synlynk._get_db()
+    status = conn.execute(
+        "SELECT status, exit_code FROM daemon_jobs WHERE job_id='job-circuit-breaker'"
+    ).fetchone()
+    cost = conn.execute(
+        "SELECT input_tokens, output_tokens FROM cost_entries WHERE job_id='job-circuit-breaker'"
+    ).fetchone()
+    conn.close()
+    assert tuple(status) == ("circuit_breaker_tripped", -9)
+    assert tuple(cost) == (5000, 2000)
 
 
 def test_dispatch_writes_cost_row_even_on_zero_token_extraction(project_dir, monkeypatch):

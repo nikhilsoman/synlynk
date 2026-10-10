@@ -30,13 +30,19 @@ _SENTINEL_VERSION_DRIFT_AGENT_RE = re.compile(
 )
 
 DEFAULT_SENTINEL_DEDUP_WINDOW_SECONDS = 24 * 60 * 60
+# Thirty days keeps an alert useful long enough to diagnose recurring health
+# problems without allowing stale incidents to dominate the active view.
+DEFAULT_SENTINEL_ALERT_TTL_SECONDS = 30 * 24 * 60 * 60
 DEFAULT_SENTINEL_ACTIVE_TTL_SECONDS = {
-    # Long enough to preserve existing workspaces during rollout; operators
-    # can tighten this through sentinel.active_ttl_seconds in config.
-    "CRITICAL": 180 * 24 * 60 * 60,
-    "WARN": 180 * 24 * 60 * 60,
-    "INFO": 180 * 24 * 60 * 60,
+    "CRITICAL": DEFAULT_SENTINEL_ALERT_TTL_SECONDS,
+    "WARN": DEFAULT_SENTINEL_ALERT_TTL_SECONDS,
+    "INFO": DEFAULT_SENTINEL_ALERT_TTL_SECONDS,
 }
+
+_ALERT_METADATA_RE = re.compile(
+    r"\s+\[occurrences: (?P<count>\d+); first seen: (?P<first>[^;]+); "
+    r"last seen: (?P<last>[^\]]+)\]$"
+)
 
 
 def _sentinel_policy() -> dict:
@@ -80,7 +86,10 @@ def _normalize_sentinel_severity(severity: str) -> str:
 
 
 def _parse_sentinel_timestamp(value: str):
-    value = str(value or "").strip().replace("Z", "+00:00")
+    value = str(value or "").strip()
+    if value.upper().endswith(" UTC"):
+        value = value[:-4].rstrip() + "+00:00"
+    value = value.replace("Z", "+00:00")
     for fmt in (None, "%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
         try:
             parsed = datetime.fromisoformat(value) if fmt is None else datetime.strptime(value, fmt)
@@ -107,6 +116,16 @@ def _parse_sentinel_alert(line: str) -> Optional[dict]:
         return None
     groups = match.groupdict()
     severity = _normalize_sentinel_severity(groups.get("severity") or "INFO")
+    message = groups["message"]
+    metadata = _ALERT_METADATA_RE.search(message)
+    count = 1
+    first_seen = groups.get("timestamp")
+    last_seen = groups.get("timestamp")
+    if metadata:
+        message = message[:metadata.start()].rstrip()
+        count = int(metadata.group("count"))
+        first_seen = metadata.group("first").strip()
+        last_seen = metadata.group("last").strip()
     return {
         "raw_line": raw,
         "line": raw,
@@ -114,9 +133,14 @@ def _parse_sentinel_alert(line: str) -> Optional[dict]:
         "normalized_severity": severity,
         "original_severity": groups.get("severity") or None,
         "timestamp": groups.get("timestamp"),
-        "timestamp_dt": _parse_sentinel_timestamp(groups.get("timestamp")),
+        "timestamp_dt": _parse_sentinel_timestamp(last_seen),
+        "first_seen": first_seen,
+        "last_seen": last_seen,
+        "first_seen_dt": _parse_sentinel_timestamp(first_seen),
+        "last_seen_dt": _parse_sentinel_timestamp(last_seen),
+        "occurrences": count,
         "code": groups["code"],
-        "message": groups["message"],
+        "message": message,
         "legacy": legacy,
     }
 
@@ -137,7 +161,7 @@ def _alert_is_active(alert: dict, now=None, expiry_seconds=None) -> bool:
     # and to avoid turning unknown state into a fail-open condition.
     if alert.get("legacy"):
         return True
-    timestamp = alert.get("timestamp_dt")
+    timestamp = alert.get("last_seen_dt") or alert.get("timestamp_dt")
     if timestamp is None:
         return True
     if now is None:
@@ -222,17 +246,18 @@ def log_telemetry_event(event: dict) -> None:
     telemetry_file = ".synlynk/telemetry.json"
     if not os.path.exists(".synlynk"):
         return
-    data = []
-    if os.path.exists(telemetry_file):
-        try:
-            with open(telemetry_file) as f:
-                data = json.load(f)
-        except (json.JSONDecodeError, IOError):
-            pass
-    data.append(event)
-    data = data[-100:]
-    with open(telemetry_file, "w") as f:
-        json.dump(data, f, indent=2)
+    with _sentinel_file_lock(telemetry_file):
+        data = []
+        if os.path.exists(telemetry_file):
+            try:
+                with open(telemetry_file) as f:
+                    data = json.load(f)
+            except (json.JSONDecodeError, IOError):
+                pass
+        data.append(event)
+        data = data[-100:]
+        with open(telemetry_file, "w") as f:
+            json.dump(data, f, indent=2)
 
 
 def _check_costs_freshness() -> None:
@@ -247,7 +272,7 @@ def _check_costs_freshness() -> None:
 
 
 def _write_sentinel_alert(severity: str, code: str, message: str, sentinel_path: Optional[str] = None) -> dict:
-    """Append a structured alert atomically, suppressing identical recent occurrences."""
+    """Record an alert, collapsing identical subjects into one counted entry."""
     sentinel_file = sentinel_path or ".synlynk/sentinel.md"
     if not sentinel_path and not os.path.exists(".synlynk"):
         return {"status": "skipped", "reason": "workspace sentinel directory missing"}
@@ -262,25 +287,29 @@ def _write_sentinel_alert(severity: str, code: str, message: str, sentinel_path:
         if os.path.exists(sentinel_file):
             with open(sentinel_file) as f:
                 existing = f.read()
-        for prior in _iter_sentinel_alerts(sentinel_file):
-            if _alert_identity(prior) != identity or prior.get("timestamp_dt") is None:
-                continue
-            elapsed = (now - prior["timestamp_dt"]).total_seconds()
-            # Canonical timestamps have minute precision, so tolerate the
-            # current minute's small apparent clock skew while rejecting
-            # genuinely future-dated history.
-            if -60 <= elapsed <= float(_sentinel_policy()["dedup_window_seconds"]):
-                return {"status": "deduplicated", "identity": identity}
-        if "# Sentinel Alerts" not in existing:
-            existing = "# Sentinel Alerts\n" + existing
-        # Store UTC consistently; parsed naive legacy timestamps are treated
-        # as UTC, avoiding local-time skew during immediate deduplication.
-        ts = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')
-        line = f"- [{severity}] [{ts}] {code}: {message}\n"
+        existing = _migrate_sentinel_content(existing, now)
+        alerts = _iter_sentinel_alerts(sentinel_file, active_only=False)
+        matching = [alert for alert in alerts if _alert_identity(alert) == identity]
+        if matching:
+            first = min(
+                (a.get("first_seen_dt") or a.get("timestamp_dt") for a in matching if a.get("timestamp_dt")),
+                default=now,
+            )
+            occurrences = sum(int(a.get("occurrences", 1)) for a in matching) + 1
+            replacement = _format_sentinel_alert(
+                severity, code, message, occurrences, first, now,
+            )
+            output = _rewrite_sentinel_alerts(existing, alerts, identity, replacement)
+        else:
+            ts = now.strftime('%Y-%m-%d %H:%M:%S UTC')
+            output = existing
+            if "# Sentinel Alerts" not in output:
+                output = "# Sentinel Alerts\n" + output
+            output += _format_sentinel_alert(severity, code, message, 1, now, now)
         fd, tmp_file = tempfile.mkstemp(prefix=".sentinel-", dir=parent, text=True)
         try:
             with os.fdopen(fd, "w") as f:
-                f.write(existing + line)
+                f.write(output)
                 f.flush()
                 os.fsync(f.fileno())
             os.replace(tmp_file, sentinel_file)
@@ -298,7 +327,85 @@ def _write_sentinel_alert(severity: str, code: str, message: str, sentinel_path:
             auto_reap_job_from_sentinel(code, message)
         except Exception:
             pass
-    return {"status": "written", "identity": identity}
+    return {"status": "deduplicated" if matching else "written", "identity": identity,
+            "occurrences": occurrences if matching else 1}
+
+
+def _format_sentinel_alert(severity, code, message, occurrences, first_seen, last_seen):
+    """Render the durable counted representation used for new and migrated rows."""
+    def stamp(value):
+        return value.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    metadata = f"[occurrences: {occurrences}; first seen: {stamp(first_seen)}; last seen: {stamp(last_seen)}]"
+    return f"- [{severity}] [{stamp(last_seen)}] {code}: {message} {metadata}\n"
+
+
+def _rewrite_sentinel_alerts(existing, alerts, identity, replacement):
+    """Replace all matching legacy/canonical rows, retaining unrelated history."""
+    lines = existing.splitlines(keepends=True)
+    inserted = False
+    output = []
+    for line in lines:
+        parsed = _parse_sentinel_alert(line.strip())
+        if parsed is not None and _alert_identity(parsed) == identity:
+            if not inserted:
+                output.append(replacement)
+                inserted = True
+            continue
+        output.append(line)
+    if not inserted:
+        output.append(replacement)
+    if not any(line.strip() == "# Sentinel Alerts" for line in output):
+        output.insert(0, "# Sentinel Alerts\n")
+    return "".join(output)
+
+
+def _migrate_sentinel_content(existing, now):
+    """Collapse pre-count and duplicate rows when the writer first touches a file."""
+    if not existing:
+        return "# Sentinel Alerts\n"
+    lines = existing.splitlines(keepends=True)
+    grouped = {}
+    positions = {}
+    for index, line in enumerate(lines):
+        parsed = _parse_sentinel_alert(line.strip())
+        if parsed is None:
+            continue
+        key = _alert_identity(parsed)
+        positions.setdefault(key, index)
+        bucket = grouped.setdefault(key, {
+            "severity": parsed["severity"], "code": parsed["code"],
+            "message": parsed["message"], "occurrences": 0,
+            "first": now, "last": now,
+        })
+        bucket["occurrences"] += int(parsed.get("occurrences", 1))
+        first = parsed.get("first_seen_dt") or parsed.get("timestamp_dt")
+        last = parsed.get("last_seen_dt") or parsed.get("timestamp_dt")
+        if first is not None and first < bucket["first"]:
+            bucket["first"] = first
+        if last is not None and last > bucket["last"]:
+            bucket["last"] = last
+
+    if not grouped:
+        return existing if "# Sentinel Alerts" in existing else "# Sentinel Alerts\n" + existing
+    output = []
+    emitted = set()
+    for index, line in enumerate(lines):
+        parsed = _parse_sentinel_alert(line.strip())
+        if parsed is None:
+            output.append(line)
+            continue
+        key = _alert_identity(parsed)
+        if key in emitted:
+            continue
+        emitted.add(key)
+        bucket = grouped[key]
+        output.append(_format_sentinel_alert(
+            bucket["severity"], bucket["code"], bucket["message"],
+            bucket["occurrences"], bucket["first"], bucket["last"],
+        ))
+    if not any(line.strip() == "# Sentinel Alerts" for line in output):
+        output.insert(0, "# Sentinel Alerts\n")
+    return "".join(output)
 
 
 def capture_process_identity(pid: int, process=None) -> Optional[dict]:
@@ -364,62 +471,50 @@ def _read_sentinel_alerts(severity: Optional[str] = None, sentinel_path: str = "
     return alerts
 
 
-def _summarize_sentinel_alerts(alert_lines: list, max_alert_types: int = 20) -> list:
-    """Collapses repeated alerts by message content and keeps the latest alert per group."""
-    grouped = {}
-    passthrough = []
+def _read_active_sentinel_alerts(sentinel_path: str = ".synlynk/sentinel.md") -> list:
+    """Return parsed active alerts from *sentinel_path*."""
+    return _iter_sentinel_alerts(sentinel_path, active_only=True)
 
+
+def _summarize_sentinel_alerts(alert_lines: list, max_alert_types: int = 20) -> list:
+    """Roll up active rows by pattern/code and severity for a compact view."""
+    by_pattern = {}
+    passthrough = []
     for raw_line in alert_lines:
         line = (raw_line or "").strip()
         if not line:
             continue
-        match = _SENTINEL_ALERT_RE.match(line)
-        legacy = False
-        if not match:
-            match = _SENTINEL_ALERT_LEGACY_RE.match(line)
-            legacy = bool(match)
-        if not match:
+        alert = _parse_sentinel_alert(line)
+        if alert is None:
             passthrough.append(line)
             continue
-
-        code = match.group("code")
-        message = match.group("message")
-        timestamp = match.group("timestamp")
-        severity = match.groupdict().get("severity") or "INFO"
-        key = (code, message)
-
-        bucket = grouped.get(key)
-        if bucket is None:
-            grouped[key] = {
-                "line": line,
-                "count": 1,
-                "timestamp": timestamp,
-                "severity": severity,
-                "legacy": legacy,
-            }
-            continue
-
-        bucket["count"] += 1
-        if timestamp >= bucket["timestamp"]:
-            bucket.update({
-                "line": line,
-                "timestamp": timestamp,
-                "severity": severity,
-                "legacy": legacy,
-            })
+        pattern = (alert["code"], alert["severity"])
+        bucket = by_pattern.setdefault(pattern, {
+            "severity": alert["severity"], "count": 0, "subjects": set(),
+            "latest": alert.get("last_seen_dt") or alert.get("timestamp_dt"),
+            "line": line,
+        })
+        bucket["count"] += int(alert.get("occurrences", 1))
+        bucket["subjects"].add(_alert_identity(alert))
+        latest = alert.get("last_seen_dt") or alert.get("timestamp_dt")
+        if latest and (bucket["latest"] is None or latest > bucket["latest"]):
+            bucket["latest"] = latest
+            bucket["line"] = line
 
     summarized = []
-    for bucket in grouped.values():
-        line = bucket["line"]
-        count = bucket["count"]
-        if count > 1:
-            line = f"{line} ({count} occurrences, most recent {bucket['timestamp']})"
-        summarized.append((bucket["timestamp"], line))
-
+    for (code, _severity), bucket in by_pattern.items():
+        if len(bucket["subjects"]) == 1:
+            line = bucket["line"]
+            if bucket["count"] > 1 and "[occurrences:" not in line:
+                latest = bucket["latest"].strftime("%Y-%m-%d %H:%M:%S UTC") if bucket["latest"] else "unknown"
+                line = f"{line} ({bucket['count']} occurrences, most recent {latest})"
+        else:
+            latest = bucket["latest"].strftime("%Y-%m-%d %H:%M:%S UTC") if bucket["latest"] else "unknown"
+            line = (f"- [{bucket['severity']}] {code}: {bucket['count']} active occurrence(s) "
+                    f"across {len(bucket['subjects'])} subject(s); latest {latest}")
+        summarized.append((bucket["latest"] or datetime.min.replace(tzinfo=timezone.utc), line))
     summarized.sort(key=lambda item: item[0], reverse=True)
-    deduped = [line for _, line in summarized[:max_alert_types]]
-    deduped.extend(passthrough)
-    return deduped
+    return [line for _, line in summarized[:max_alert_types]] + passthrough
 
 
 def _extract_sentinel_agent(line: str) -> Optional[str]:
@@ -720,6 +815,7 @@ def check_model_rates_freshness() -> None:
 
 DEFAULT_TOKEN_BLOAT_ZERO_FILE_THRESHOLD = 500_000
 DEFAULT_TOKEN_PER_FILE_RATIO_THRESHOLD = 500_000
+DEFAULT_REVIEW_TOKEN_BLOAT_THRESHOLD = 500_000
 DEFAULT_COST_INFLATION_WARN_THRESHOLD = 3.00
 DEFAULT_COST_INFLATION_CRITICAL_THRESHOLD = 5.00
 
@@ -789,9 +885,11 @@ def check_token_bloat(
     files_touched: int = 0,
     job_id: str = "",
     agent: str = "",
+    task_type: str = "",
     sentinel_path: Optional[str] = None,
     zero_file_token_threshold: int = DEFAULT_TOKEN_BLOAT_ZERO_FILE_THRESHOLD,
     token_per_file_threshold: int = DEFAULT_TOKEN_PER_FILE_RATIO_THRESHOLD,
+    review_token_threshold: int = DEFAULT_REVIEW_TOKEN_BLOAT_THRESHOLD,
     cost_warn_threshold: float = DEFAULT_COST_INFLATION_WARN_THRESHOLD,
     cost_crit_threshold: float = DEFAULT_COST_INFLATION_CRITICAL_THRESHOLD,
 ) -> list:
@@ -830,6 +928,7 @@ def check_token_bloat(
                         files_touched=e_files,
                         job_id=e_job,
                         agent=e_agent,
+                        task_type=event.get("task_type") or event.get("task_kind") or "",
                         sentinel_path=sentinel_path,
                         zero_file_token_threshold=zero_file_token_threshold,
                         token_per_file_threshold=token_per_file_threshold,
@@ -845,8 +944,20 @@ def check_token_bloat(
     job_label = f"Job {job_id}" if job_id else "Dispatched job"
     agent_label = f" on agent '{agent}'" if agent else ""
 
-    # 1. Zero-files touched with high token consumption
-    if files_count == 0 and total_tokens >= zero_file_token_threshold:
+    # Reviews intentionally leave the worktree untouched; use token volume.
+    if task_type == "review" and total_tokens >= review_token_threshold:
+        severity = "CRITICAL" if total_tokens >= 2_000_000 else "WARN"
+        msg = (
+            f"{job_label}{agent_label} review consumed {total_tokens:,} tokens "
+            f"({in_tokens:,} in / {out_tokens:,} out) — exceeds the review token "
+            f"baseline of {review_token_threshold:,}; anomalous token bloat detected."
+        )
+        _write_sentinel_alert(severity, "TOKEN_BLOAT", msg, sentinel_path=sentinel_path)
+        print(f"\n  ⚠ [TOKEN_BLOAT] {msg}")
+        alerts_generated.append({"severity": severity, "code": "TOKEN_BLOAT", "message": msg})
+
+    # 1. Zero-files touched with high token consumption for non-review jobs
+    elif task_type != "review" and files_count == 0 and total_tokens >= zero_file_token_threshold:
         severity = "CRITICAL" if total_tokens >= 2_000_000 else "WARN"
         msg = (
             f"{job_label}{agent_label} consumed {total_tokens:,} tokens "
@@ -858,7 +969,7 @@ def check_token_bloat(
         alerts_generated.append({"severity": severity, "code": "TOKEN_BLOAT", "message": msg})
 
     # 2. High token-per-file-touched ratio
-    elif files_count > 0:
+    elif task_type != "review" and files_count > 0:
         ratio = total_tokens / files_count
         if ratio >= token_per_file_threshold:
             severity = "CRITICAL" if (ratio >= 1_000_000 or total_tokens >= 2_000_000) else "WARN"
@@ -976,7 +1087,7 @@ def check_sentinel_patterns(output_text: str = "", exit_code: int = 0,
 
 def sentinel_list() -> None:
     """Prints all active sentinel alerts."""
-    alerts = _read_sentinel_alerts()
+    alerts = _summarize_sentinel_alerts(_read_sentinel_alerts())
     if not alerts:
         print("  No active sentinel alerts.")
         return

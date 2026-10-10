@@ -594,6 +594,57 @@ def test_migrate_force_adds_sentinel_inside_ignored_synlynk_dir(tmp_path, monkey
     assert ".synlynk/.synlynk_migrated" in commit_files
 
 
+def test_migrate_commit_survives_failing_pre_commit_hook(tmp_path, monkeypatch):
+    """Machine migrate commits must not be blocked by a repo pre-commit hook.
+
+    Live selftest runs init then migrate in one workspace. init installs a
+    drift hook; CI has no installed synlynk on PATH and the hook can exit 1,
+    which previously aborted `git commit` and failed the bespoke selftest.
+    """
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _init_git_repo(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    _make_project_docs(tmp_path)
+    _seed_stories("story-bs12a-roles")
+    subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "commit", "-m", "seed", "-q"], cwd=tmp_path, check=True)
+
+    hook = tmp_path / ".git" / "hooks" / "pre-commit"
+    hook.write_text("#!/bin/sh\necho hook-blocked >&2\nexit 1\n")
+    hook.chmod(0o755)
+
+    synlynk.cmd_migrate()
+
+    assert (tmp_path / ".synlynk" / ".synlynk_migrated").exists()
+    subject = subprocess.check_output(
+        ["git", "log", "-1", "--pretty=%s"], cwd=tmp_path, text=True
+    ).strip()
+    assert subject.startswith("chore: synlynk migrate")
+
+
+def test_migrate_gitignore_appends_rule_despite_substring_match(tmp_path, monkeypatch):
+    """A gitignore line like project-docs/handoff-note.md is not the dir rule."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _init_git_repo(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / ".gitignore").write_text("project-docs/handoff-note.md\n")
+    _make_project_docs(tmp_path)
+    _seed_stories("story-bs12a-roles")
+    subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "commit", "-m", "seed", "-q"], cwd=tmp_path, check=True)
+
+    synlynk.cmd_migrate()
+
+    rules = [
+        line.strip()
+        for line in (tmp_path / ".gitignore").read_text().splitlines()
+        if line.strip()
+    ]
+    assert "project-docs/" in rules
+
+
 def _setup_migrated(tmp_path, monkeypatch):
     """Helper: set up a migrated environment."""
     monkeypatch.chdir(tmp_path)
@@ -610,8 +661,9 @@ def test_write_through_todo_goes_to_synlynk_path(tmp_path, monkeypatch):
     backup = _setup_migrated(tmp_path, monkeypatch)
     synlynk._generate_todo_md()
     assert (backup / "todo.md").exists()
-    # old path must NOT be written
-    assert not (tmp_path / "project-docs" / "todo.md").exists()
+    tracked = tmp_path / "project-docs" / "todo.md"
+    assert tracked.exists()
+    assert "source of truth is state.db" in tracked.read_text()
 
 
 def test_write_through_noop_before_migration(tmp_path, monkeypatch):
@@ -804,6 +856,7 @@ def test_decisions_table_created_idempotently(tmp_path, monkeypatch):
     assert cols == {
         "decision_id", "topic", "date", "panel", "status", "inputs",
         "synthesis", "decision_text", "signature", "created_at",
+        "goal_id", "story_id",
     }
 
 
@@ -960,3 +1013,35 @@ def test_migrate_v3_adds_harness_and_role_columns_and_backfills(tmp_path):
     assert cost_row == ("claude", "claude")
     conn.close()
 
+
+def test_migrate_repairs_turn_usage_json_on_bootstrapped_schema(tmp_path):
+    """A current-version DB missing the column is repaired on the next open."""
+    import sqlite3
+    from synlynk.db import _DB_MIGRATION_VERSION, _migrate_db
+
+    conn = sqlite3.connect(str(tmp_path / "state.db"))
+    _migrate_db(conn)
+
+    # Rebuild only cost_entries from the bootstrapped schema, simulating an
+    # older snapshot that predates turn_usage_json while retaining every other
+    # table and the current user_version.
+    columns = [
+        row[1]
+        for row in conn.execute("PRAGMA table_info(cost_entries)")
+        if row[1] != "turn_usage_json"
+    ]
+    quoted_columns = ", ".join('"' + column.replace('"', '""') + '"' for column in columns)
+    conn.execute(
+        "CREATE TABLE cost_entries_legacy AS "
+        f"SELECT {quoted_columns} FROM cost_entries"
+    )
+    conn.execute("DROP TABLE cost_entries")
+    conn.execute("ALTER TABLE cost_entries_legacy RENAME TO cost_entries")
+    conn.execute(f"PRAGMA user_version = {_DB_MIGRATION_VERSION}")
+    conn.commit()
+
+    _migrate_db(conn)
+
+    cost_cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}
+    assert "turn_usage_json" in cost_cols
+    conn.close()

@@ -4,14 +4,19 @@ Statements of Record. See docs/superpowers/specs/2026-08-15-workspace-agent-arti
 import hashlib
 import json
 import os
+import re
 import uuid
 from datetime import datetime, timezone
+from typing import Optional
 
 from synlynk import _write_json_atomic
 from synlynk import charter_schema
 
 _CONFIG_PATH = os.path.join(".synlynk", "config.json")
 _FALLBACK_WORKSPACE_ROOTS = {}
+_WORKSPACE_UUID_RE = re.compile(
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+)
 
 
 def _now_iso() -> str:
@@ -28,14 +33,69 @@ def _load_raw_config() -> dict:
         return {}
 
 
+def _is_workspace_uuid(value: str) -> bool:
+    return bool(value and _WORKSPACE_UUID_RE.match(str(value).strip()))
+
+
+def _recover_workspace_id_from_projections() -> Optional[str]:
+    """Read UUID workspace_id from generated `.synlynk/agents/*.yaml` pointers.
+
+    identity_slug and workspace_id share `~/.synlynk/workspaces/<id>/`. If
+    config.workspace_id was overwritten with the slug, the agent registry is
+    still keyed by the UUID in those projections (LIVE-16 follow-up / #1796).
+    """
+    agents_dir = os.path.join(".synlynk", "agents")
+    if not os.path.isdir(agents_dir):
+        return None
+    found = []
+    try:
+        names = os.listdir(agents_dir)
+    except OSError:
+        return None
+    for name in names:
+        if not name.endswith(".yaml"):
+            continue
+        path = os.path.join(agents_dir, name)
+        try:
+            with open(path) as fh:
+                for line in fh:
+                    if line.startswith("workspace_id:"):
+                        val = line.split(":", 1)[1].strip().strip("\"'")
+                        if _is_workspace_uuid(val):
+                            found.append(val)
+                        break
+        except OSError:
+            continue
+    if not found:
+        return None
+    counts = {}
+    for wid in found:
+        counts[wid] = counts.get(wid, 0) + 1
+    ordered = sorted(counts, key=lambda w: (-counts[w], w))
+    for wid in ordered:
+        registry = os.path.join(_workspace_root(wid), "agents", "registry.json")
+        if os.path.isfile(registry):
+            return wid
+    return ordered[0]
+
+
 def get_workspace_id() -> str:
     """Return this repo's workspace_id, minting and persisting one on first call.
 
     Each repo currently gets its own workspace_id (no cross-repo sharing yet —
-    see design spec Conflict B). Never overwrites an existing value.
+    see design spec Conflict B). A UUID value is never overwritten. A non-UUID
+    slug (often identity_slug) is recovered from agent projections when present.
     """
     config = _load_raw_config()
     existing = config.get("workspace_id")
+    if existing and _is_workspace_uuid(str(existing)):
+        return str(existing)
+    recovered = _recover_workspace_id_from_projections()
+    if recovered:
+        if existing != recovered:
+            config["workspace_id"] = recovered
+            _write_json_atomic(_CONFIG_PATH, config)
+        return recovered
     if existing:
         return existing
     workspace_id = str(uuid.uuid4())

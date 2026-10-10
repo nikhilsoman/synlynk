@@ -329,6 +329,54 @@ def test_generate_costs_md_creates_file_pre_migration(project_dir):
     assert "Do NOT hand-edit" in content
 
 
+def test_generate_costs_md_escapes_newlines_and_pipes_in_text_cells(project_dir):
+    from synlynk import _insert_cost_row
+
+    _insert_cost_row(
+        session_date="2026-07-25 10:00",
+        agent="codex",
+        model="unknown\n`synlynk/db.py:3772:` | corrupted",
+        input_tokens=100,
+        output_tokens=20,
+        cache_read_tokens=0,
+        cost_source="estimated_manual",
+        estimate_basis="cli_manual_entry",
+        total_cost_usd=0.001,
+        notes="note line one\nnote line two | with pipe",
+        story_id=None,
+        api_equivalent_usd=0.001,
+        actual_usd=None,
+        payment_mode=None,
+    )
+
+    _insert_cost_row(
+        session_date="2026-07-25 10:01",
+        agent="codex",
+        model="second-row-model",
+        input_tokens=200,
+        output_tokens=40,
+        cache_read_tokens=0,
+        cost_source="estimated_manual",
+        estimate_basis="cli_manual_entry",
+        total_cost_usd=0.002,
+        notes="second row",
+        story_id=None,
+        api_equivalent_usd=0.002,
+        actual_usd=None,
+        payment_mode=None,
+    )
+
+    _generate_costs_md()
+
+    content = open(os.path.join(str(project_dir), "project-docs", "costs.md")).read()
+    data_rows = [line for line in content.splitlines() if line.startswith("| 2026-")]
+    assert len(data_rows) == 2
+    assert all(line.replace(r"\|", "").count("|") == 10 for line in data_rows)
+    assert "unknown `synlynk/db.py:3772:` \\| corrupted" in data_rows[0]
+    assert "note line one note line two \\| with pipe" in data_rows[0]
+    assert "second-row-model" in data_rows[1]
+
+
 def test_cmd_cost_log_regenerates_costs_md(project_dir):
     cmd_cost_log(agent="codex", tokens_in=500, tokens_out=100, note="from cmd_cost_log")
 
@@ -441,6 +489,197 @@ def test_rotate_moves_old_cost_entries_to_archive(tmp_path, monkeypatch):
     index_path = os.path.join(archive_dir, "INDEX.md")
     assert os.path.exists(index_path)
     assert "costs-" in open(index_path).read()
+
+
+def test_regeneration_preserves_tracked_cost_row_missing_from_local_db(tmp_path, monkeypatch):
+    from tests.test_migrate import _setup_migrated
+    from synlynk import _get_db, _insert_cost_row
+    from synlynk.db import _generate_costs_md
+
+    backup = _setup_migrated(tmp_path, monkeypatch)
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=tmp_path, check=True)
+
+    for date, note in [("2026-01-01 10:00", "main-only-row"), ("2026-01-02 10:00", "local-row")]:
+        _insert_cost_row(
+            session_date=date,
+            agent="claude",
+            model="claude-sonnet-5",
+            input_tokens=1,
+            output_tokens=1,
+            cache_read_tokens=0,
+            cost_source="estimated_manual",
+            estimate_basis="cli_manual_entry",
+            total_cost_usd=1.0,
+            notes=note,
+            story_id=None,
+            api_equivalent_usd=1.0,
+            actual_usd=None,
+            payment_mode=None,
+        )
+    _generate_costs_md()
+    costs_path = backup / "costs.md"
+    subprocess.run(["git", "add", str(costs_path)], cwd=tmp_path, check=True)
+    subprocess.run(
+        ["git", "-c", "user.email=test@example.com", "-c", "user.name=Test", "commit", "-q", "-m", "seed"],
+        cwd=tmp_path,
+        check=True,
+    )
+
+    conn = _get_db()
+    conn.execute("DELETE FROM cost_entries WHERE session_date=?", ("2026-01-01 10:00",))
+    conn.commit()
+    conn.close()
+    _generate_costs_md()
+
+    regenerated = costs_path.read_text()
+    assert "main-only-row" in regenerated
+    assert "local-row" in regenerated
+
+
+def test_regeneration_unions_concurrent_cost_rows_with_same_date_and_agent(tmp_path, monkeypatch):
+    from tests.test_migrate import _setup_migrated
+    from synlynk import _insert_cost_row
+    from synlynk.db import _generate_costs_md
+
+    backup = _setup_migrated(tmp_path, monkeypatch)
+    costs_path = backup / "costs.md"
+    costs_path.write_text(
+        "# Costs\n\n"
+        "| Date | Agent | Model | Tokens In | Tokens Out | Cost | Source | Story | Notes |\n"
+        "|---|---|---|---|---|---|---|---|---|\n"
+        "| 2026-10-08 10:00 | codex | model-a | 1 | 2 | $1.0000 | test | - | concurrent-main |\n"
+        "| 2026-10-08 10:00 | codex | model-b | 3 | 4 | $2.0000 | test | - | concurrent-branch |\n"
+    )
+    _insert_cost_row(
+        session_date="2026-10-08 10:00",
+        agent="codex",
+        model="model-a",
+        input_tokens=1,
+        output_tokens=2,
+        cache_read_tokens=0,
+        cost_source="estimated_manual",
+        estimate_basis="test",
+        total_cost_usd=1.0,
+        notes="concurrent-local",
+        story_id=None,
+        api_equivalent_usd=1.0,
+        actual_usd=None,
+        payment_mode=None,
+    )
+
+    _generate_costs_md()
+
+    regenerated = costs_path.read_text()
+    assert "concurrent-main" in regenerated
+    assert "concurrent-branch" in regenerated
+    assert "concurrent-local" in regenerated
+
+
+def test_memory_regeneration_preserves_concurrent_section_missing_from_local_db(tmp_path, monkeypatch):
+    from tests.test_migrate import _setup_migrated
+    from synlynk import cmd_memory_add
+
+    backup = _setup_migrated(tmp_path, monkeypatch)
+    memory_path = backup / "memory.md"
+    memory_path.write_text(
+        "# synlynk Memory\n\n"
+        "## Main-only context\n\nWritten concurrently on main.\n\n"
+    )
+
+    cmd_memory_add("Local context", "Written by the local state.db.")
+
+    regenerated = memory_path.read_text()
+    assert "## Main-only context" in regenerated
+    assert "Written concurrently on main." in regenerated
+    assert "## Local context" in regenerated
+    assert "Written by the local state.db." in regenerated
+
+
+def test_regeneration_does_not_duplicate_archive_rows(tmp_path, monkeypatch):
+    from tests.test_migrate import _setup_migrated
+    from synlynk import _insert_cost_row
+    from synlynk.db import _generate_costs_md
+
+    backup = _setup_migrated(tmp_path, monkeypatch)
+    monkeypatch.setattr("synlynk.db._PROJECT_DOC_KEEP_N", 1)
+    for i in range(3):
+        _insert_cost_row(
+            session_date=f"2026-01-0{i+1} 10:00",
+            agent="claude",
+            model="claude-sonnet-5",
+            input_tokens=1,
+            output_tokens=1,
+            cache_read_tokens=0,
+            cost_source="estimated_manual",
+            estimate_basis="cli_manual_entry",
+            total_cost_usd=1.0,
+            notes=f"row{i}",
+            story_id=None,
+            api_equivalent_usd=1.0,
+            actual_usd=None,
+            payment_mode=None,
+        )
+
+    _generate_costs_md()
+    archive_path = next((backup / "archive").glob("costs-*.md"))
+    first = archive_path.read_text()
+    _generate_costs_md()
+    assert archive_path.read_text() == first
+
+
+def test_rotate_auto_stages_archive_file_for_git_commit(tmp_path, monkeypatch):
+    """gh:#1995: a dispatched job's ephemeral worktree silently drops the
+    archive file _rotate_project_doc() writes, because nothing commits it.
+    The fix best-effort `git add`s the archive path the moment it's created,
+    so it's already staged if the calling job goes on to `git commit`."""
+    import subprocess
+
+    from tests.test_migrate import _setup_migrated
+    from synlynk import _insert_cost_row
+    from synlynk.db import _generate_costs_md
+
+    backup = _setup_migrated(tmp_path, monkeypatch)
+    monkeypatch.setattr("synlynk.db._PROJECT_DOC_KEEP_N", 1)
+
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=tmp_path, check=True)
+
+    for i in range(4):
+        _insert_cost_row(
+            session_date=f"2026-01-0{i+1} 10:00",
+            agent="claude",
+            model="claude-sonnet-5",
+            input_tokens=1,
+            output_tokens=1,
+            cache_read_tokens=0,
+            cost_source="estimated_manual",
+            estimate_basis="cli_manual_entry",
+            total_cost_usd=1.0,
+            notes=f"row{i}",
+            story_id=None,
+            api_equivalent_usd=1.0,
+            actual_usd=None,
+            payment_mode=None,
+        )
+
+    _generate_costs_md()
+
+    staged = subprocess.run(
+        ["git", "diff", "--cached", "--name-only"],
+        cwd=tmp_path, check=True, capture_output=True, text=True,
+    ).stdout
+
+    archive_dir = backup / "archive"
+    archive_files = [f for f in os.listdir(archive_dir) if f.startswith("costs-")]
+    assert archive_files, "rotation did not create an archive file"
+    archive_rel = os.path.relpath(archive_dir / archive_files[0], tmp_path)
+    index_rel = os.path.relpath(archive_dir / "INDEX.md", tmp_path)
+
+    assert archive_rel in staged
+    assert index_rel in staged
 
 
 def test_detect_hand_edit_no_warning_when_content_matches_regeneration(tmp_path, monkeypatch):
@@ -584,3 +823,19 @@ def test_mark_ticket_consumed_updates_status_and_timestamp(project_dir):
     _mark_ticket_consumed(ticket["id"])
     assert _find_ticket("story-x", "task_dispatch:implement", "open") is None
     assert _find_ticket("story-x", "task_dispatch:implement", "consumed") is not None
+
+
+def test_quality_verified_column_added_idempotently(tmp_path, monkeypatch):
+    monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(tmp_path / "state.db"))
+    from synlynk import db
+
+    conn1 = db._get_db()
+    conn1.close()
+
+    conn2 = db._get_db()
+    rating_cols = {row[1] for row in conn2.execute("PRAGMA table_info(capability_ratings)")}
+    result_cols = {row[1] for row in conn2.execute("PRAGMA table_info(capability_calibration_results)")}
+    conn2.close()
+
+    assert "quality_verified" in rating_cols
+    assert "quality_verified" in result_cols

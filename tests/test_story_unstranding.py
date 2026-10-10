@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 import pytest
 
+import synlynk.jobs as jobs_mod
 from synlynk.jobs import reclaim_stranded_stories
 
 
@@ -93,3 +94,22 @@ def test_reclaim_stranded_stories_execution(test_db):
         row2 = conn.execute("SELECT status, readiness FROM stories WHERE story_id='s2'").fetchone()
         assert row2[0] == "in_progress"
         assert row2[1] == "in_progress"
+
+
+def test_reclaim_stranded_stories_routes_failed_jobs_through_canonical_writer(test_db, monkeypatch):
+    conn, _ = test_db
+    conn.execute("INSERT INTO stories (story_id, title, status, readiness) VALUES ('s1', 'Task 1', 'in_progress', 'in_progress')")
+    conn.execute("INSERT INTO daemon_jobs (job_id, agent, task, story_id, status, pid, started_at) VALUES ('j1', 'codex', 't1', 's1', 'running', 99999999, '2026-09-11T00:00:00')")
+    conn.commit()
+    calls = []
+
+    def settle(*args, **kwargs):
+        calls.append((args, kwargs))
+        return True
+
+    monkeypatch.setattr(jobs_mod, "_settle_daemon_job_terminal", settle)
+    with patch("synlynk.jobs._pid_is_alive", return_value=False):
+        reclaimed = reclaim_stranded_stories(conn=conn, dry_run=False)
+
+    assert reclaimed == [{"story_id": "s1", "title": "Task 1", "reclaimed": True}]
+    assert calls and calls[0][0][1:3] == ("j1", "failed")

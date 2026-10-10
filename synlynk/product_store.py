@@ -23,7 +23,7 @@ def _slugify(value: str) -> str:
 
 def identity_slug_from_config(repo_path: PathLike = ".") -> str:
     repo = Path(repo_path).resolve()
-    candidates = [repo / ".synlynk" / "config.json"]
+    candidates = [repo / ".synlynk" / "workspace.json", repo / ".synlynk" / "config.json"]
     root_repo = repo
     try:
         if (repo / ".git").exists() or (repo.parent / ".git").exists():
@@ -44,6 +44,7 @@ def identity_slug_from_config(repo_path: PathLike = ".") -> str:
                         common = common.resolve()
                     root = common.parent if common.name == ".git" else common.parent
                     root_repo = root
+                    candidates.append(root / ".synlynk" / "workspace.json")
                     candidates.append(root / ".synlynk" / "config.json")
     except (OSError, ValueError):
         pass
@@ -58,15 +59,54 @@ def identity_slug_from_config(repo_path: PathLike = ".") -> str:
     return _slugify(root_repo.name)
 
 
+def resolve_product_display_name(repo_path: PathLike = ".") -> str:
+    """Product name for init/scan/brownfield: configured slug or git root name.
+
+    Never uses a linked worktree folder name. Does not slugify the last-resort
+    directory name so unconfigured scans keep the real folder spelling.
+    """
+    repo = Path(repo_path).resolve()
+    candidates = [repo / ".synlynk" / "workspace.json", repo / ".synlynk" / "config.json"]
+    root_repo = repo
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+            cwd=repo,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            raw_common = Path(result.stdout.strip())
+            common = (repo / raw_common).resolve() if not raw_common.is_absolute() else raw_common.resolve()
+            root_repo = common.parent if common.name == ".git" else common.parent
+            candidates.append(root_repo / ".synlynk" / "workspace.json")
+            candidates.append(root_repo / ".synlynk" / "config.json")
+    except (OSError, ValueError):
+        pass
+    for cfg_path in candidates:
+        try:
+            data = json.loads(cfg_path.read_text())
+        except (OSError, json.JSONDecodeError):
+            continue
+        raw = data.get("identity_slug")
+        if isinstance(raw, str) and raw.strip():
+            return _slugify(raw.strip())
+    return root_repo.name
+
+
 def configured_identity_slug(repo_path: PathLike = ".") -> Optional[str]:
     """Return the explicitly configured product identity, or ``None``."""
     repo = Path(repo_path).resolve()
-    try:
-        data = json.loads((repo / ".synlynk" / "config.json").read_text())
-    except (OSError, json.JSONDecodeError):
-        return None
-    raw = data.get("identity_slug")
-    return _slugify(raw.strip()) if isinstance(raw, str) and raw.strip() else None
+    for cfg_path in (repo / ".synlynk" / "workspace.json", repo / ".synlynk" / "config.json"):
+        try:
+            data = json.loads(cfg_path.read_text())
+        except (OSError, json.JSONDecodeError):
+            continue
+        raw = data.get("identity_slug")
+        if isinstance(raw, str) and raw.strip():
+            return _slugify(raw.strip())
+    return None
 
 
 def product_root(slug: str) -> Path:
@@ -261,8 +301,8 @@ def migrate_repo_apps_if_needed(repo_path: PathLike = ".") -> Path:
     repo = Path(repo_path).resolve()
     source = repo / ".synlynk" / "github_apps"
     # Repositories predating identity_slug keep their legacy behavior until
-    # the operator opts into product identity via config.json.
-    if not (repo / ".synlynk" / "config.json").is_file():
+    # the operator opts into product identity via workspace.json or legacy config.json.
+    if not (repo / ".synlynk" / "workspace.json").is_file() and not (repo / ".synlynk" / "config.json").is_file():
         return source
     dest = write_apps_dir_for_init(repo_path)
     if source.is_dir() and source != dest:

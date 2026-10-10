@@ -1,5 +1,6 @@
 import json
 import stat
+import subprocess
 
 import pytest
 
@@ -48,6 +49,54 @@ def test_install_pre_commit_hook_rejects_non_shebang_hook(tmp_path, monkeypatch)
 
     with pytest.raises(RuntimeError, match="unexpected pre-commit hook content"):
         install_pre_commit_hook(repo_root=tmp_path)
+
+
+def test_install_pre_commit_hook_configures_versioned_hooks_path(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True)
+    (tmp_path / ".git" / "hooks").mkdir(exist_ok=True)
+    (tmp_path / "githooks").mkdir()
+    (tmp_path / "githooks" / "pre-commit").write_text("#!/bin/sh\nexit 0\n")
+
+    from synlynk.instructions import install_pre_commit_hook
+
+    install_pre_commit_hook(repo_root=tmp_path)
+
+    configured = subprocess.run(
+        ["git", "config", "--get", "core.hooksPath"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert configured.stdout.strip() == "githooks"
+
+
+def test_install_pre_commit_hook_preserves_existing_hooks_path(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "config", "core.hooksPath", "custom-hooks"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+    )
+    (tmp_path / "githooks").mkdir()
+    (tmp_path / "githooks" / "pre-commit").write_text("#!/bin/sh\nexit 0\n")
+
+    from synlynk.instructions import install_pre_commit_hook
+
+    install_pre_commit_hook(repo_root=tmp_path)
+
+    configured = subprocess.run(
+        ["git", "config", "--get", "core.hooksPath"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert configured.stdout.strip() == "custom-hooks"
+    assert "leaving it unchanged" in capsys.readouterr().out
 
 
 def test_tier0_fixture_only_gets_tier0_and_gateway_phrases():
@@ -257,16 +306,57 @@ def test_instruction_templates_prohibit_direct_todo_edits():
             assert "synlynk story done" in tmpl or "synlynk checkpoint" in tmpl
 
 
-def test_instruction_templates_have_symmetric_dual_mode_protocol():
+def test_tool_templates_point_to_canonical_shared_protocol():
     from synlynk.instructions import _build_templates
 
     templates = _build_templates()
     for name in ("CLAUDE.md", "GEMINI.md", "AGENTS.md", "GROK.md"):
         tmpl = templates[name]
-        assert "## Operating Mode: Home vs. Away" in tmpl
-        assert "Mode A: Interactive Session (Home Conductor)" in tmpl
-        assert "Mode B: Dispatched Task (Away Worker)" in tmpl
-        assert "Constitutional Precedence" in tmpl
-        assert "What you hand back to Claude" not in tmpl
-        assert "without explicit Claude approval" not in tmpl
+        assert "## Identity & Attribution" in tmpl
+        assert "## Shared synlynk Protocol" in tmpl
+        assert "Load `AI_INSTRUCTIONS.md` for the full shared synlynk protocol" in tmpl
+        assert "## Operating Mode: Home vs. Away" not in tmpl
+        assert "## Live Issues SOP" not in tmpl
 
+
+def test_tool_templates_preserve_harness_branch_naming_and_format_prefixes():
+    from synlynk.instructions import _build_templates
+
+    templates = _build_templates()
+    expected = {
+        "CLAUDE.md": "claude",
+        "GEMINI.md": "agy",
+        "AGENTS.md": "codex",
+        "GROK.md": "grok",
+    }
+
+    for name, harness in expected.items():
+        tmpl = templates[name]
+        assert (
+            f"## Branch Naming\n"
+            f"- `feat/{harness}/<description>` — new functionality\n"
+            f"- `fix/{harness}/<description>` — bug fixes\n"
+            "- `chore/<description>` — deps, docs, config\n"
+        ) in tmpl
+        assert f"- **Branch prefix:** `feat/{harness}/` or `fix/{harness}/`\n" in tmpl
+        assert f"- **Branch prefix:** ``feat/{harness}/` or `fix/{harness}/``" not in tmpl
+
+
+def test_tool_templates_are_substantially_smaller_than_canonical_protocol():
+    from synlynk.instructions import _build_templates
+
+    templates = _build_templates()
+    tool_sizes = [len(templates[name].encode()) for name in ("CLAUDE.md", "GEMINI.md", "AGENTS.md", "GROK.md")]
+    canonical = templates["AI_INSTRUCTIONS.md"]
+    assert max(tool_sizes) < 5000
+    assert len(canonical.encode()) > sum(tool_sizes)
+    for section in (
+        "## Operating Mode: Home vs. Away",
+        "## Git Worktree-First Policy",
+        "## Live Issues SOP",
+        "## Mid-Session Anti-Amnesia Protocol",
+        "## Mandatory 4-Doc Discipline",
+        "## GitHub Projects v2 Integration",
+        "## PR Review Discipline",
+    ):
+        assert section in canonical

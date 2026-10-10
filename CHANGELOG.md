@@ -8,7 +8,23 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ---
 
 ## [Unreleased]
+- Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result.
 - Ongoing Wave 3: Hosted Teams Server Hub, Cloudflare Tunnel full-duplex daemon, and Dynamic Quota Advisory service.
+
+## [v0.25.0] - 2026-10-02
+### Added
+- feat(local): three-model roster schema supporting `Ornith-1.0-9B-4bit`, `Qwen3.6-27B-4bit`, and `Ternary-Bonsai-2-27B-mlx-2bit`
+- feat(local): custom `prism-ml` loader availability detection and graceful fallback in `synlynk local doctor` and dispatch flag builder
+- feat(local): platform RAM prober (`_detect_hardware_tier()`) and `synlynk local doctor --init` tier detection and model recommendation
+- feat(dispatch): tier-0 zero-trust auto-routing via `synlynk dispatch auto` with health and capability score thresholding
+- feat(gateway): OpenRouter universal gateway configuration preview in `.synlynk/registry.json` and `synlynk gateway probe` CLI command
+- feat(docker): local model Orb Stack container image (`docker/Dockerfile.sovereign`, `docker/entrypoint.sh`, `.github/workflows/sovereign-build.yml`)
+### Fixed
+- fix(dispatch): isolated local model argument construction to prevent bare model names from overriding oMLX provider configuration
+- fix(cli): graceful rendering of deferred dispatch job responses
+- fix(local): live end-to-end dispatch validation on Apple Silicon M3 (116s execution, 0 cost, clean diff)
+
+> *Historical Note (v0.23.0 / v0.24.0 version arc gap):* Changes planned across the v0.23.0 and v0.24.0 arcs (Graphify auto-extraction, unified canvas, boardroom governance, and local oMLX fleet) were consolidated directly into v0.25.0. Per this repo's documented Named-Release version gap policy (CLAUDE.md: "Gaps in the version arc... are acceptable — users see public history, not internal planning slots"), gaps in public release history represent internal planning slots and are preserved without retrofitting synthetic entries.
 
 ## [v0.22.0] - 2026-09-24
 ### Added
@@ -69,33 +85,6 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - chore(release): bump development version to 0.21.0-dev and stamp v0.20.0 in CHANGELOG.md
 
 ---
-
-## [v0.21.0] - 2026-09-23
-
-### Highlights
-- **Tripartite Model Routing & Sovereign Multi-Home Handover:** Dynamic intelligence tiering (`fast`, `pro`, `reasoning`) with AST blast-radius cost routing and proactive drain-to-boundary pipeline handover.
-- **Deep Brownfield & Magic PR Healing Engines:** Zero-touch repository reverse-engineering (`synlynk init --brownfield`) and automated AST parity gap discovery and repair (`synlynk heal --magic`).
-- **Teams Relay Mesh Substrate:** Ephemeral peer-to-peer WebSocket RFC 6455 / NATS event routing (`synlynk relay`), 30-min distributed SQLite story leases (`synlynk jobs`), AST sibling worktree collision preemption (`synlynk mesh --conflicts`), and 3-tier identity attribution (`synlynk whoami`).
-- **Vizor Cross-Workspace Daemon:** Persistent background daemon (`synlynk/vizor_daemon.py`) serving multi-workspace dashboards on `/w/<slug>/...` with systemd/launchd lifecycle (`synlynk viz install/status`).
-- **Declarative Model Catalog & Rolling Quota Calibrator:** Full 2026 SOTA model catalog (`.synlynk/models.json`), multi-track Google AI Pro / Claude / Codex / Grok quota isolation, and empirical `/usage` delta rolling calibration (`synlynk quota calibrate`).
-- **Frontier QA Testbed Engine:** Multi-node automated acceptance and soak testbed engine (`synlynk/testbed/`) running on isolated OrbStack VMs and Docker with Ed25519 attestation receipts.
-
-### Added
-- **Vizor cross-workspace daemon:** a persistent, workspace-registry-driven background daemon
-  (`synlynk/vizor_daemon.py`) that polls every registered product, isolates per-workspace refresh
-  failures, and serves the Vizor dashboard for any workspace via `/w/<slug>/...` routing. Adds
-  launchd/systemd lifecycle commands (`synlynk viz install/uninstall/status`).
-- **Living Trigger Registry & Autonomous Backlog Triage:** Living trigger registry (`synlynk/charters.py`) for automated TPM sweeps and self-healing charter updates.
-- **LIVE-13 Grok Permission Bypass:** Explicit permission mode resolution (`--always-approve`, `--permission-mode bypassPermissions`) for trusted headless Grok jobs.
-
-### Fixed
-- **\[LIVE-14\] GitHub App token cache path drift (#1746):** `WatchDaemon._refresh_github_tokens`
-  and two `viz.py` OAuth/App-conversion refresh call sites now resolve the token cache directory
-  via `product_store.resolve_github_apps_dir()`, the same resolver `dispatch.py`/`synlynk gh` use
-  to read tokens. Previously they hardcoded a repo-local path, so a role's token in the global
-  workspace directory (the one dispatch/`synlynk gh` actually reads) never got refreshed once it
-  existed — every provisioned role's global token went silently stale while the daemon reported
-  itself healthy.
 
 ## [v0.20.0] - 2026-09-19
 

@@ -18,6 +18,7 @@ from dataclasses import dataclass as _dataclass
 from typing import List as _List
 
 from synlynk._constants import HARNESS_CAPABILITY_BASELINES, CORE_FLEET, CORE_INSTRUCTION_FILES, VERSION
+from synlynk._lazy import pkg as _pkg
 from synlynk.db import cmd_remediation_log
 from synlynk.dispatch import dispatch_agent
 from synlynk.fleet import (
@@ -37,13 +38,6 @@ from synlynk.probe import (
     _run_tc6,
     _run_tc9,
 )
-
-
-def _pkg(name: str, default=None):
-    package = sys.modules.get("synlynk")
-    if package is None:
-        return default
-    return getattr(package, name, default)
 
 
 _BOLD = "\033[1m"
@@ -88,29 +82,83 @@ def _hc_python_version() -> HealthCheck:
 
 
 def _hc_project_init() -> HealthCheck:
-    if os.path.exists(".synlynk/config.json"):
-        return HealthCheck("project_init", "ok", ".synlynk/config.json present")
+    if os.path.exists(".synlynk/workspace.json") or os.path.exists(".synlynk/config.json"):
+        return HealthCheck("project_init", "ok", ".synlynk/workspace.json present")
     return HealthCheck(
         "project_init",
         "fail",
-        "Project not initialized — .synlynk/config.json missing",
+        "Project not initialized — .synlynk/workspace.json missing",
         fix="Run: synlynk init",
     )
 
 
 def _hc_identity_slug() -> HealthCheck:
-    path = os.path.join(".synlynk", "config.json")
+    workspace_path = os.path.join(".synlynk", "workspace.json")
+    legacy_path = os.path.join(".synlynk", "config.json")
+    path = workspace_path if os.path.exists(workspace_path) else legacy_path
     if not os.path.exists(path):
-        return HealthCheck("identity_slug", "warn", "No .synlynk/config.json; product identity checks skipped")
+        return HealthCheck("identity_slug", "warn", "No .synlynk/workspace.json; product identity checks skipped")
     try:
         with open(path) as config_file:
             data = json.load(config_file)
     except (OSError, json.JSONDecodeError):
-        return HealthCheck("identity_slug", "fail", "Cannot read .synlynk/config.json")
+        return HealthCheck("identity_slug", "fail", f"Cannot read {path}")
     if not isinstance(data.get("identity_slug"), str) or not data["identity_slug"].strip():
         return HealthCheck("identity_slug", "warn", "identity_slug is required for workspace add-repo; dispatch will use the repository fallback",
-                           fix="Set identity_slug in .synlynk/config.json")
+                           fix="Set identity_slug in .synlynk/workspace.json")
     return HealthCheck("identity_slug", "ok", f"product identity configured: {data['identity_slug']}")
+
+
+def _hc_config_schema() -> HealthCheck:
+    """Validates .synlynk/workspace.json and .synlynk/billing.json against their schemas."""
+    from synlynk.config_schema import validate, WORKSPACE_SCHEMA, BILLING_SCHEMA
+
+    legacy_path = os.path.join(".synlynk", "config.json")
+    workspace_path = os.path.join(".synlynk", "workspace.json")
+    billing_path = os.path.join(".synlynk", "billing.json")
+
+    if not os.path.exists(workspace_path) and not os.path.exists(legacy_path):
+        return HealthCheck("config_schema", "warn", "No .synlynk/workspace.json; schema check skipped")
+
+    errors: list = []
+    for path, schema in (
+        (workspace_path if os.path.exists(workspace_path) else legacy_path, WORKSPACE_SCHEMA),
+        (billing_path if os.path.exists(billing_path) else legacy_path, BILLING_SCHEMA),
+    ):
+        try:
+            with open(path) as f:
+                data = json.load(f)
+        except (OSError, json.JSONDecodeError) as exc:
+            return HealthCheck("config_schema", "fail", f"Cannot parse {path}: {exc}")
+        errors.extend(validate(data, schema))
+
+    if not errors:
+        return HealthCheck("config_schema", "ok", ".synlynk/workspace.json and .synlynk/billing.json match expected schema")
+    return HealthCheck(
+        "config_schema", "fail", "; ".join(errors),
+        fix="Fix the listed field(s) in .synlynk/workspace.json or .synlynk/billing.json",
+    )
+
+
+def _hc_policy_schema() -> HealthCheck:
+    """Validates .synlynk/policy.json against the known field schema."""
+    from synlynk.config_schema import validate, POLICY_SCHEMA
+
+    path = os.path.join(".synlynk", "policy.json")
+    if not os.path.exists(path):
+        return HealthCheck("policy_schema", "warn", "No .synlynk/policy.json; schema check skipped")
+    try:
+        with open(path) as policy_file:
+            data = json.load(policy_file)
+    except (OSError, json.JSONDecodeError) as exc:
+        return HealthCheck("policy_schema", "fail", f"Cannot parse .synlynk/policy.json: {exc}")
+    errors = validate(data, POLICY_SCHEMA)
+    if not errors:
+        return HealthCheck("policy_schema", "ok", ".synlynk/policy.json matches expected schema")
+    return HealthCheck(
+        "policy_schema", "fail", "; ".join(errors),
+        fix="Fix the listed field(s) in .synlynk/policy.json",
+    )
 
 
 def _hc_model_registry() -> HealthCheck:
@@ -930,12 +978,36 @@ def _hc_capability_reassessment() -> HealthCheck:
         return HealthCheck("capability_reassessment", "warn", f"cadence check unavailable: {exc}")
 
 
+def _hc_gh_host_auth_audit() -> HealthCheck:
+    """Surface explicit host GitHub-auth calls recorded by the gh guard."""
+    telemetry_file = os.path.join(".synlynk", "telemetry.json")
+    try:
+        with open(telemetry_file) as handle:
+            events = json.load(handle)
+        events = [event for event in events if event.get("type") == "gh_host_auth"]
+    except (OSError, json.JSONDecodeError) as exc:
+        return HealthCheck("gh_host_auth_audit", "warn", f"audit unavailable: {exc}")
+    if not events:
+        return HealthCheck("gh_host_auth_audit", "ok", "No host-auth GitHub calls recorded")
+    latest = events[-1]
+    return HealthCheck(
+        "gh_host_auth_audit",
+        "warn",
+        f"{len(events)} host-auth GitHub call(s); latest {latest.get('recorded_at', 'unknown')} "
+        f"by {latest.get('actor', 'unknown')} on {latest.get('repo', 'unknown')}: "
+        f"{latest.get('gh_call', 'unknown')}",
+        fix="Review .synlynk/telemetry.json and provision a role App token when possible",
+    )
+
+
 def _hc_spof_audit() -> HealthCheck:
     """Audit workspace for single points of failure across harness redundancy and roles."""
     try:
-        config_path = os.path.join(".synlynk", "config.json")
+        workspace_path = os.path.join(".synlynk", "workspace.json")
+        legacy_path = os.path.join(".synlynk", "config.json")
+        config_path = workspace_path if os.path.exists(workspace_path) else legacy_path
         if not os.path.exists(config_path):
-            return HealthCheck("spof_audit", "warn", "No .synlynk/config.json; SPOF audit skipped")
+            return HealthCheck("spof_audit", "warn", "No .synlynk/workspace.json; SPOF audit skipped")
 
         with open(config_path) as f:
             data = json.load(f)
@@ -984,10 +1056,39 @@ def _hc_memory_leak() -> HealthCheck:
         return HealthCheck("memory_leak", "warn", f"Memory leak check unavailable: {exc}")
 
 
+def _hc_daemon_service() -> HealthCheck:
+    """Checks whether synlynk daemon is installed under OS process supervision (launchd/systemd)."""
+    home = os.path.expanduser("~")
+    if sys.platform == "darwin":
+        plist_path = os.path.join(home, "Library", "LaunchAgents", "com.synlynk.daemon.plist")
+        if os.path.exists(plist_path):
+            return HealthCheck("daemon_service", "ok", f"Daemon launchd service installed: {plist_path}")
+        return HealthCheck(
+            "daemon_service",
+            "warn",
+            "Synlynk daemon is not registered as a background system service (launchd)",
+            fix="Run 'synlynk daemon --install-service' to supervise daemon across crashes/reboots",
+        )
+    elif shutil.which("systemctl") or os.path.exists("/run/systemd/system"):
+        unit_path = os.path.join(home, ".config", "systemd", "user", "synlynk-daemon.service")
+        if os.path.exists(unit_path):
+            return HealthCheck("daemon_service", "ok", f"Daemon systemd service installed: {unit_path}")
+        return HealthCheck(
+            "daemon_service",
+            "warn",
+            "Synlynk daemon is not registered as a background system service (systemd)",
+            fix="Run 'synlynk daemon --install-service' to supervise daemon across crashes/reboots",
+        )
+    else:
+        return HealthCheck("daemon_service", "ok", "Daemon supervision check not applicable for this environment")
+
+
 HEALTH_CHECKS = [
     _hc_python_version,
     _hc_project_init,
     _hc_identity_slug,
+    _hc_config_schema,
+    _hc_policy_schema,
     _hc_model_registry,
     _hc_codex_model_catalog,
     _hc_docs_dir,
@@ -1006,8 +1107,10 @@ HEALTH_CHECKS = [
     _hc_product_specialist_apps,
     _hc_fleet_parity,
     _hc_capability_reassessment,
+    _hc_gh_host_auth_audit,
     _hc_spof_audit,
     _hc_memory_leak,
+    _hc_daemon_service,
 ]
 
 
@@ -1046,6 +1149,17 @@ def cmd_doctor(args=None, checks: _List = None) -> int:
     if args is not None and getattr(args, "readiness", False) is True:
         from synlynk.readiness import cmd_doctor_readiness
         return cmd_doctor_readiness(args=args)
+    if args is not None and getattr(args, "provision", False) is True:
+        from synlynk.tool_installer import provision_ecosystem_tools
+        results = provision_ecosystem_tools()
+        any_failed = False
+        print("Provisioning ecosystem tools:")
+        for tool, passed in results.items():
+            status = "✓" if passed else "✗"
+            if not passed:
+                any_failed = True
+            print(f"  {status} {tool}")
+        return 1 if any_failed else 0
     if checks is not None:
         return 1 if _print_health_check_report(checks) else 0
 

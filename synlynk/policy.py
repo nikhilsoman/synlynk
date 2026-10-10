@@ -9,12 +9,26 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
+
+# Derived from CLAUDE.md's Capability-Based Task Allocation table (#2068).
+# Task types that exist in task_allocation but not here (for example gh_write)
+# stay on the allocation-only gate.
+ROLE_TASK_TYPE_COMPAT: Dict[str, List[str]] = {
+    "dev": [
+        "implement", "test", "css", "templates", "content", "subpages",
+        "canvas", "js", "infra", "refactor", "cli-plumbing",
+    ],
+    "qa": ["review", "test"],
+    "pm": ["pm", "brainstorm", "architecture-review", "deploy"],
+}
+
 
 DEFAULT_WORKSPACE_POLICY: Dict[str, Any] = {
     "schema_version": 1,
     "org": {"org_id": None, "teams": [], "sso_provider": None, "seat_limits": None},
     "defaults": {
+        "role_task_type_compat": ROLE_TASK_TYPE_COMPAT,
         "roadmap_authority": {
             "can_edit_roadmap": ["pm"],
             "can_create_goals": ["pm", "architect"],
@@ -118,9 +132,6 @@ def get_human_authority_role(repo_path: str, workspace_name: str = None) -> str:
 
 import fnmatch
 from dataclasses import dataclass, field
-from typing import List
-
-
 @dataclass
 class AuthorityResult:
     allowed: bool
@@ -142,7 +153,48 @@ def _matches_approval_rule(action: str, policy: Dict[str, Any]) -> Optional[str]
     return None
 
 
-def check_authority(action: str, role: str, repo_path: str, workspace_name: str = None) -> AuthorityResult:
+def _correct_roles_for_task_type(compat: Dict[str, Any], task_type: str) -> List[str]:
+    """Roles whose compatibility list contains task_type, in table order."""
+    return [name for name, types in compat.items() if task_type in (types or [])]
+
+
+def _reject_incompatible_role_task(
+    policy: Dict[str, Any], role: str, task_type: str, *, enforce: bool,
+) -> None:
+    """Hard-fail when an explicit role is not allowed to dispatch task_type.
+
+    Unknown task types stay on the allocation-table deny path (allowed=False,
+    RuntimeError raised by dispatch). A mismatch against role_task_type_compat
+    raises here, naming the role that owns the task type (#2068).
+    Omitted roles are not checked: dispatch's historical stand-in of "dev"
+    is only for the allocation gate, not an explicit --role.
+    """
+    if not enforce or not role:
+        return
+    compat = policy.get("role_task_type_compat") or {}
+    if not compat:
+        return
+    allowed_types = compat.get(role) or []
+    if task_type in allowed_types:
+        return
+    correct = _correct_roles_for_task_type(compat, task_type)
+    if not correct:
+        return
+    named = " or ".join(correct)
+    raise RuntimeError(
+        f"Dispatch refused: task_type {task_type!r} is not an authorized task_type "
+        f"for role {role!r} per policy.json (role_task_type_compat). "
+        f"The correct role for task_type {task_type!r} is {named}."
+    )
+
+
+def check_authority(
+    action: str,
+    role: str,
+    repo_path: str,
+    workspace_name: str = None,
+    enforce_role_compat: bool = True,
+) -> AuthorityResult:
     if not any(action == p or action.startswith(p) for p in _ACTION_PREFIXES):
         raise ValueError(f"check_authority: unknown action {action!r}")
 
@@ -159,7 +211,13 @@ def check_authority(action: str, role: str, repo_path: str, workspace_name: str 
     elif action.startswith("task_dispatch:"):
         task_type = action.split(":", 1)[1]
         table = policy["dev_authority"]["task_allocation"]
-        allowed = task_type in table  # presence in the table = an authorized task type
+        if task_type not in table:
+            allowed = False
+        else:
+            _reject_incompatible_role_task(
+                policy, role, task_type, enforce=enforce_role_compat,
+            )
+            allowed = True
     else:  # pragma: no cover - guarded by the ValueError check above
         allowed = False
 

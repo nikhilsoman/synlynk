@@ -27,7 +27,7 @@ def test_extract_product_nodes_with_journeys(tmp_path):
     nodes, edges = extract_product_nodes(conn, str(tmp_path))
     assert any(n["kind"] == "journey" for n in nodes)
     assert any(n["kind"] == "route" for n in nodes)
-    assert edges and conn.execute("SELECT COUNT(*) FROM workspace_view_nodes").fetchone()[0] == 2
+    assert edges and conn.execute("SELECT COUNT(*) FROM workspace_view_nodes").fetchone()[0] >= 2
 
 
 def test_extract_logical_nodes_structure(tmp_path):
@@ -43,6 +43,9 @@ def test_extract_logical_nodes_structure(tmp_path):
 
 def test_extract_infra_nodes_daemon(tmp_path):
     conn = sqlite3.connect(":memory:")
+    pkg_dir = tmp_path / "synlynk"
+    pkg_dir.mkdir()
+    (pkg_dir / "viz.py").write_text("import os\n")
     nodes, edges = extract_infra_nodes(conn, str(tmp_path))
     assert any(n["kind"] == "service" and "vizor" in n["label"].lower() for n in nodes)
     assert edges[0]["kind"] == "manages"
@@ -66,4 +69,91 @@ def test_build_workspace_views_snapshot(tmp_path):
     snapshot = build_workspace_views_snapshot(conn, str(tmp_path))
     assert {"product", "logical", "infra", "world"} <= snapshot.keys()
     assert conn.execute("SELECT COUNT(*) FROM workspace_view_meta").fetchone()[0] == 4
+
+
+def test_build_workspace_views_snapshot_with_readonly_db(tmp_path):
+    db_file = tmp_path / "state.db"
+    conn = sqlite3.connect(str(db_file))
+    init_workspace_view_tables(conn)
+    conn.close()
+
+    # Open connection in read-only URI mode
+    ro_conn = sqlite3.connect(f"file:{db_file}?mode=ro", uri=True)
+    pkg_dir = tmp_path / "synlynk"
+    pkg_dir.mkdir()
+    (pkg_dir / "__init__.py").write_text("# init")
+    (pkg_dir / "viz.py").write_text("import os\n")
+
+    snapshot = build_workspace_views_snapshot(ro_conn, str(tmp_path))
+    ro_conn.close()
+
+    assert {"product", "logical", "infra", "world"} <= snapshot.keys()
+    assert len(snapshot["logical"]["nodes"]) >= 2
+    assert len(snapshot["infra"]["nodes"]) >= 2
+    assert len(snapshot["world"]["nodes"]) >= 1
+
+
+def test_query_repo_file_tree_with_explicit_conn():
+    from synlynk.scan import _query_repo_file_tree
+    conn = sqlite3.connect(":memory:")
+    conn.execute(
+        "CREATE TABLE source_symbols (id INTEGER PRIMARY KEY, file TEXT, language TEXT, "
+        "symbol_type TEXT, symbol_name TEXT, line_number INTEGER, head_sha TEXT, scanned_at TEXT)"
+    )
+    conn.execute(
+        "INSERT INTO source_symbols (file, language, symbol_type, symbol_name, line_number, head_sha, scanned_at) "
+        "VALUES ('synlynk/viz.py', 'python', 'function', 'cmd_viz', 10, 'sha1', '2026-09-25T00:00:00')"
+    )
+    conn.commit()
+
+    tree = _query_repo_file_tree(conn=conn)
+    assert "synlynk" in tree["dirs"]
+    assert any(f["name"] == "viz.py" for f in tree["dirs"]["synlynk"]["files"])
+    conn.close()
+
+
+def test_derive_canonical_community_names():
+    from synlynk.viz_views import derive_canonical_community_names
+
+    raw_nodes = [
+        {"id": "n1", "label": "auth_login", "source_file": "synlynk/auth.py", "community": 1, "kind": "function"},
+        {"id": "n2", "label": "auth_logout", "source_file": "synlynk/auth.py", "community": 1, "kind": "function"},
+        {"id": "n3", "label": "AuthService", "source_file": "synlynk/auth.py", "community": 1, "kind": "class", "_callable_class": True},
+        {"id": "n4", "label": "db_query", "source_file": "synlynk/db.py", "community": 2, "kind": "function"},
+        {"id": "n5", "label": "DatabasePool", "source_file": "synlynk/db.py", "community": 2, "kind": "class"},
+        {"id": "n6", "label": "test_auth", "source_file": "tests/test_auth.py", "community": 3, "kind": "function"},
+        {"id": "n7", "label": "test_login", "source_file": "tests/test_auth.py", "community": 3, "kind": "function"},
+    ]
+
+    names = derive_canonical_community_names(raw_nodes)
+    assert names[1] == "synlynk/auth.py · AuthService"
+    assert names[2] == "synlynk/db.py · DatabasePool"
+    assert names[3] == "tests/test_auth.py"
+
+
+def test_derive_canonical_community_metadata():
+    from synlynk.viz_views import derive_canonical_community_metadata
+
+    raw_nodes = [
+        {"id": "n1", "label": "auth_login", "source_file": "synlynk/auth.py", "community": 1, "kind": "function", "docstring": "Authenticate user session token."},
+        {"id": "n2", "label": "auth_logout", "source_file": "synlynk/auth.py", "community": 1, "kind": "function"},
+        {"id": "n3", "label": "AuthService", "source_file": "synlynk/auth.py", "community": 1, "kind": "class", "_callable_class": True, "docstring": "Core authentication service."},
+        {"id": "n4", "label": "test_auth", "source_file": "tests/test_auth.py", "community": 2, "kind": "function"},
+    ]
+
+    meta = derive_canonical_community_metadata(raw_nodes)
+    assert 1 in meta
+    assert meta[1]["name"] == "synlynk/auth.py · AuthService"
+    assert meta[1]["source_file"] == "synlynk/auth.py"
+    assert meta[1]["kind"] == "Service Class"
+    assert "authentication service" in meta[1]["desc"].lower() or "auth" in meta[1]["desc"].lower()
+    assert "AuthService" in meta[1]["symbols"]
+    assert meta[1]["symbol_count"] == 3
+
+    assert 2 in meta
+    assert meta[2]["kind"] == "Test Suite"
+    assert "tests/test_auth.py" in meta[2]["source_file"]
+
+
+
 

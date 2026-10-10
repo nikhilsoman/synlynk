@@ -3,22 +3,16 @@
 import json
 import os
 import re
-import sys
 import time
 from datetime import datetime, timezone
 from typing import Any, Optional
+
+from synlynk._lazy import pkg as _pkg
 
 try:
     from datetime import UTC  # Python 3.11+
 except ImportError:  # pragma: no cover
     UTC = timezone.utc  # type: ignore[misc,assignment]
-
-
-def _pkg(name: str, default=None):
-    package = sys.modules.get("synlynk")
-    if package is None:
-        return default
-    return getattr(package, name, default)
 
 
 # Plan-driven quota windows. Harnesses reset on different cadences — not a
@@ -540,25 +534,39 @@ _RESERVATION_EXPIRY_SECONDS = 24 * 3600  # comfortably > longest QUOTA_TYPES win
 
 
 def _open_reservation(
-    conn,
-    harness: str,
-    tokens: int,
-    scope: str,
+    conn=None,
+    harness: str = None,
+    tokens: int = 0,
+    scope: str = None,
     scope_id: Optional[str] = None,
     job_id: Optional[str] = None,
 ) -> int:
     """Opens an harness_reservations row. Returns the new reservation id.
 
-    scope is one of 'plan' | 'session' | 'adhoc' (not validated here -- callers
-    are internal and already constrained by the design's dispatch-time flow).
+    scope is one of 'plan' | 'session' | 'adhoc'; callers are internal and
+    already constrained by the design's dispatch-time flow.
     """
-    cur = conn.execute(
-        "INSERT INTO harness_reservations (harness, tokens, scope, scope_id, job_id, status) "
-        "VALUES (?, ?, ?, ?, ?, 'open')",
-        (harness, int(tokens), scope, scope_id, job_id),
-    )
-    conn.commit()
-    return cur.lastrowid
+    if not harness:
+        raise ValueError("harness is required")
+    if not isinstance(tokens, int) or tokens <= 0:
+        raise ValueError("tokens must be a positive integer")
+    if not scope:
+        raise ValueError("scope is required")
+
+    own_conn = conn is None
+    if own_conn:
+        conn = _pkg("_get_db")()
+    try:
+        cur = conn.execute(
+            "INSERT INTO harness_reservations (harness, tokens, scope, scope_id, job_id, status) "
+            "VALUES (?, ?, ?, ?, ?, 'open')",
+            (harness, int(tokens), scope, scope_id, job_id),
+        )
+        conn.commit()
+        return cur.lastrowid
+    finally:
+        if own_conn and conn is not None:
+            conn.close()
 
 
 def _release_reservation(conn, reservation_id: int) -> None:

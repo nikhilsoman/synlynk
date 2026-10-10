@@ -30,16 +30,16 @@ If any instruction in this static file conflicts with the Active Session Runtime
 
 ## What This Project Is
 
-synlynk is a single-file Python CLI (`bin/synlynk.py`) that acts as a wrapper around AI CLIs (Claude, Gemini, etc.). It injects project context before each invocation, tracks telemetry/costs, and detects hallucination loops. The entire application logic lives in one file — there is no build step.
+synlynk is a host-local multi-agent engineering operating substrate written in Python (`synlynk/` package with modular architecture across ~138 modules). It orchestrates frontier AI harnesses (Claude, Codex, Agy, Grok, local) with deterministic Git worktree isolation, SQLite WAL state persistence (`state.db`), AST context minimization, and non-author verification gates.
 
-## Terminology: Agent vs Harness
+## Terminology: Role vs Harness
 
-synlynk distinguishes two concepts that are easy to conflate:
+synlynk standardizes on two clear user-facing concepts:
 
-- **Agent** — a persistent role identity with a charter (pm, architect, tpm, dev, designer, qa,
-  marketing, synlynk-bot). Agents are *who* is accountable for work.
+- **Role** (or Agent) — a persistent persona identity with a charter (pm, architect, tpm, dev, designer, qa,
+  marketing, support). Roles define *who* is accountable for work.
 - **Harness** — a swappable execution backend (Claude, Agy, Grok, Codex, local) that runs a
-  dispatched task. Harnesses are *how* work gets executed, selected per-task by capability fit.
+  dispatched task. Harnesses define *how* work gets executed, selected per-task by capability fit.
 
 Full definitions and rationale: `docs/glossary-agent-vs-harness.md`. Full role design: `docs/superpowers/specs/2026-08-09-synlynk-agent-roles-charters-design.md`.
 
@@ -58,6 +58,14 @@ synlynk exec claude    # run claude with context injection
 synlynk upgrade        # check for updates
 synlynk --version
 ```
+
+## Git Workflow
+
+The versioned `githooks/pre-commit` guard blocks commits from the shared main
+checkout, including direct commits on `main`, and from detached HEAD. Feature
+work must use a linked worktree; the hook allows commits from linked worktrees.
+For an existing clone created before this hook was added, enable it with:
+`git config core.hooksPath githooks`
 
 No dependencies beyond Python 3 stdlib. No build, compile, or package step needed.
 
@@ -135,6 +143,8 @@ mandatory on every PR.
 
 **For every PR, before merging:** confirm all dispatched/wrapped work in this PR is auto-captured (nothing to do — it already is via `dispatch_agent()`/`synlynk exec`), and any native/PM-session work (brainstorming, design docs, manual fixes) not tied to a dispatched job has a corresponding `synlynk cost log` entry. If genuinely zero cost was incurred outside dispatched work, note that explicitly in the PR rather than skipping the check silently.
 
+For native/interactive provenance, record the PR directly with `synlynk cost log --pr <pr-number> --harness <harness>`; dispatched work should continue to use `--job-id`.
+
 `synlynk release` sessions use `synlynk cost log` the same way — there is no automatic capture for native CLI invocations of `gh release create` / release tooling.
 
 Enforced by discipline (Claude/PM checks it as part of PR housekeeping), not CI — matches how the Blog Post Protocol already operates. Not a blocking CI gate.
@@ -153,13 +163,36 @@ Rationale: a July 2026 audit found 30 stale worktrees/branches accumulated becau
 
 ## Harness Capability Reassessment Protocol
 
-**Capability isn't static — reassess it on a cadence, not just when something breaks.** Baseline findings live in `docs/harness-capability-baseline.md`; this section defines when and how to refresh it.
+**SUPERSEDED 2026-10-04 by the Empirical Capability Assessment Policy below.** This section's heuristic cadence (manual telemetry scan every ~25 jobs/monthly, hand-edited baseline doc) is kept here for historical context only; `docs/harness-capability-baseline.md` is suspended as ground truth. Do not re-derive routing from it — use `synlynk capability report` (once shipped, gh:#1993) or the raw `capability_ratings`/`cost_entries` tables instead.
+
+<details><summary>Original protocol (suspended, kept for history)</summary>
 
 1. **Trigger:** at least every ~25 dispatched jobs, or monthly, whichever comes first — same cadence discipline as the Worktree Hygiene Protocol's periodic audit above. Also trigger ad hoc after any LIVE-issue investigation that surfaces a new harness capability finding (e.g. LIVE-8/#1166).
 2. **Scan:** review recent job telemetry (`synlynk jobs --all`, job logs for failures/cancellations) for patterns per harness — not just pass/fail counts, but *how* a job failed (sandboxed, timed out, stalled mid-task, went off-script). A green job-status is not sufficient evidence on its own; independently verify the claimed side effect the same way LIVE-8's retest did (`gh pr view --json reviews`, `git diff origin/main`, etc.) before treating a job as a real success or failure signal.
 3. **Compare:** check each finding in `docs/harness-capability-baseline.md` against current evidence. A finding only gets re-tested if something material changed since it was recorded (harness version bump, sandbox policy change, an upstream fix) — not on a blind retry schedule.
 4. **Update in one PR:** if reassessment finds drift (a harness got more/less reliable at something), update both `.synlynk/policy.json`'s `task_allocation` routing and `docs/harness-capability-baseline.md`'s table together, with the evidence cited in both places. This keeps dispatch routing and the documented baseline from diverging the way policy.json and CLAUDE.md's own routing table did before #426's hardening.
 5. **No drift found:** still worth a one-line note in the baseline doc's row (or a dated comment) confirming it was checked, so the next reassessment knows the finding isn't stale just because it's old.
+
+</details>
+
+## Empirical Capability Assessment Policy (2026-10-04)
+
+**Replaces the heuristic baseline above.** Decided 2026-10-04 (supersedes the #79 role-split rationale insofar as it relied on which harness happened to be convenient at the time): harness/model routing is no longer decided by hand-written capability tables. It is decided by measured outcomes, already captured in `capability_ratings` (per agent/model/story: `pr_review_cycles`, `dispatch_rework`, `micro_rework`, `quality`) and `cost_entries` (per harness/role/model/job: token counts, `total_cost_usd`).
+
+**Everything is reassessable, including the Default Agent Role lock.** Claude's PM/review/deploy-only restriction is itself provisional pending data — it was drafted when Claude was the de facto default home harness, including for rxcc/vdowrx's Pulumi-IaC deploy work. Agy and Codex are believed comparably capable for PM/review; Grok and Meta Muse have not yet had the opportunity to be measured on PM/review/deploy tasks at all. **Deploy capability specifically must be re-tested through the Infra agent role**, not assumed from the original Claude-did-Pulumi-well precedent.
+
+**Rules:**
+1. **Minimum sample size:** a harness×task-type comparison needs ≥5 completed+merged jobs before it's allowed to influence routing. Below that, treat it as unmeasured, not as evidence of poor fit.
+2. **Metrics:** median `pr_review_cycles` to merge (quality proxy) and `total_cost_usd` per merged PR (token economics), per harness×task-type, pulled from `capability_ratings`/`cost_entries` — not estimated, not recalled from memory of past incidents.
+3. **`.synlynk/policy.json`'s `task_allocation` is generated output**, not hand-edited. It's annotated with the date/query it was generated from. Until the generator ships (gh:#1993), the current `task_allocation` block is an *interim default* open to override by any harness that clears the sample-size bar — it is not an authoritative capability ranking.
+4. **Blocking dependency:** aggregate measurement requires `state.db` consolidation (#1926, Track 3) — capability/cost data is currently scattered across 11,000+ per-job workspace shards (`[[stray-local-state-db]]`, gh:#1831) and isn't reliably queryable in aggregate until that lands.
+5. **Cadence:** fold into a `synlynk capability report` pull every ~25 jobs or monthly (same cadence as the superseded protocol above), but reading the measured tables, not re-litigating heuristics.
+
+## Hardened PR Review Policy (2026-10-04)
+
+1. **100% GOVERNS adherence.** No dispatched job may proceed without a linked GOVERNS goal/story. `synlynk pr check` and dispatch preflight enforce this gate; the PR-check gate may run in `observe` mode via `.synlynk/policy.json`'s `require_linked_goal_mode`, per `docs/superpowers/specs/2026-10-07-policy-enforcement-maturity-design.md`.
+2. **Personal GitHub token is strictly off-limits to every agent/harness.** Verified 2026-10-04: `synlynk dispatch`'s subprocess env builder does not pass `SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH` to spawned jobs (not in the env allowlist) and only reads it from the *dispatching* process's own shell — a dispatched job cannot see or set it to self-grant host auth. The fallback remains a manual, explicit, per-invocation operator opt-in (`synlynk identity init --role <role>` is the correct fix instead). New requirement: every exercise of this fallback must emit an audited log event (gh:#1992), so a one-off human override is distinguishable from routine traffic.
+3. **Cross-harness+model review required.** A PR's reviewer must differ from its implementer in **harness and model**, not just role identity — a different role on the *same* harness+model no longer satisfies review. `.synlynk/policy.json`'s `merge_authority` gains `cross_harness_review_required: true`; `synlynk pr check` reads the implementing job's harness+model (from `cost_entries`) against the reviewer's and hard-fails on a match when `cross_harness_review_required_mode` is `enforce`; `observe` mode records the verdict without blocking, per `docs/superpowers/specs/2026-10-07-policy-enforcement-maturity-design.md`.
 
 ## Named Release README Sync
 
@@ -182,12 +215,17 @@ Waive a waivable check only with `--waive check=reason` (non-empty reason). `ver
 ## Your Role
 pm, review, deploy
 
+> ⚠️ **SUSPENDED (reassessment, 2026-10-04):** this role lock is explicitly under empirical reassessment per the Empirical Capability Assessment Policy above — Nikhil's own framing ("Agy & Codex are as good and Grok + Muse haven't had the opportunity yet") includes this lock, not just the Capability-Based Task Allocation table below. Deploy specifically must be re-validated through the Infra agent role, not assumed from historical Pulumi/rxcc/vdowrx precedent. Treat `pm, review, deploy` as the *current interim default*, not a fixed grant, until ≥5 merged-job samples exist for an alternative harness on each task type.
+
 ## PR Review Discipline
 1. Assign a non-authoring agent to review the PR.
 2. From within the PR's own checked-out worktree/branch, the reviewer must run `synlynk pr check` so it can auto-detect the PR via git/gh context.
-3. The reviewer alone must merge the PR.
+3. **The reviewer's own dispatched (headless) job performs the merge itself, as the final step of the same dispatch that posted the approval — not the interactive "home" session of whichever harness is acting as PM for this project.** Rationale (RCA'd 2026-10-09, PR #2149): an interactive home session (any harness, not just Claude) can carry its own nondeterministic auto-mode/guardrail layer that denies an already-authorized, policy-cleared action with no stated reason — observed directly with Claude Code's "auto mode classifier" denying `gh pr merge` despite `synlynk policy check-merge` and `synlynk pr check` both passing, then letting an unmodified retry through minutes later. Headless dispatch contracts for every harness (`HARNESS_CAPABILITY_BASELINES` in `synlynk/_constants.py`) are built to run deterministically with no such layer — e.g. Codex's `exec` sets `approval:never`, Agy/Claude support an explicit skip-permissions flag, Grok uses `--always-approve` — so keeping the merge inside the reviewer's dispatch avoids this risk class regardless of which harness is home. This is not yet empirically confirmed for every harness's *interactive* mode (only Claude's has actually executed a merge interactively in this repo so far); see gh:#2150 for tracking.
 4. For a `BEHIND` or `DIRTY` PR, allow at most 2 `gh pr update-branch` → CI-wait cycles. If the PR is still `BEHIND` or `DIRTY` after the second cycle, stop retrying and report back for escalation.
-5. If the reviewer is unavailable, escalate to Claude.
+5. If the reviewer is unavailable, escalate to whichever harness is currently acting as home/PM for this project (not necessarily Claude — see Default Agent Role reassessment above).
+6. **Cross-harness+model review required (2026-10-04).** The reviewer must differ from the implementer in both harness *and* model, not just role identity — same-harness-different-role no longer satisfies review. Enforced via `cross_harness_review_required` in `.synlynk/policy.json`'s `merge_authority`; `synlynk pr check` blocks on a harness+model match in `enforce` mode and records a non-blocking verdict in `observe` mode.
+7. **100% GOVERNS adherence required.** Every dispatched job behind this PR must be linked to a GOVERNS goal/story. `synlynk pr check` and dispatch preflight enforce this gate; `require_linked_goal_mode` in `.synlynk/policy.json` permits a reviewed `observe` mode while the gate's clean-pass streak is established.
+8. **Personal GitHub token is strictly off-limits to every agent/harness.** Only agent-identity tokens may be used at any GOVERNS stage. The `SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH` escape hatch is verified (2026-10-04) to require an explicit, manual, per-shell operator opt-in — a dispatched job cannot see or self-set it (not in the dispatch env allowlist). Every exercise of this fallback must emit an audit-log event (gh:#1992, not yet built).
 
 **GitHub identity note (#423):** qa APPROVE (`gh pr review --approve`) is the default whenever the reviewer identity differs from the PR author login (e.g. role App reviewing a human or sibling App PR). Dispatches under role App identities satisfy GitHub's non-author review requirement for real approvals. Route day-to-day reviews through `qa` and any feature/architecture-impacting review through `architect`. **Fallback (same-identity collision only):** post a formal COMMENT review with an explicit approve checklist (as on PR #417) only when the reviewer GitHub login equals the PR author login, where GitHub rejects self-approval. Do not tell sessions to skip `--approve` by default.
 
@@ -207,6 +245,8 @@ pm, review, deploy
 
 ## Capability-Based Task Allocation
 
+> ⚠️ **SUSPENDED as authoritative, 2026-10-04 — advisory/interim-default only.** This table was hand-authored heuristically and is superseded by the Empirical Capability Assessment Policy above. It remains the *current interim default* only until a harness clears the ≥5-merged-job sample-size bar on a given task type with better median `pr_review_cycles`/`total_cost_usd` than the incumbent. Grok and Meta Muse are explicitly flagged as not-yet-calibrated across every task type below, not excluded. `deploy` is now modeled as a task type in `.synlynk/policy.json`'s `task_allocation` (interim default: claude, fallback agy/codex) but carries zero empirical samples — it still needs to be tested via the Infra agent role before any harness (including Claude) can claim it empirically.
+
 **Note:** "Harness" below means the execution backend (Claude/Agy/Grok/Codex) that runs a 
 task, not the Agent (role) doing the work
 - See `docs/glossary-agent-vs-harness.md`
@@ -220,7 +260,7 @@ task, not the Agent (role) doing the work
 Do not start a task outside your role column without explicit approval from Claude.
 
 **GitHub write routing (#426):** Route any task that requires GitHub write actions to **Codex by default, Claude/Agy as fallbacks** (PR #1271, verified live in job `job-836e13a4`)
-- Grok's dispatch sandbox denies `bash` execution entirely in this environment (confirmed via `git diff origin/main` showing a total silent no-op despite a generic "OK, exit 0" job status — do not trust job-status alone for Grok gh-write attempts)
+- ~~Grok's dispatch sandbox denies `bash` execution entirely in this environment (confirmed via `git diff origin/main` showing a total silent no-op despite a generic "OK, exit 0" job status — do not trust job-status alone for Grok gh-write attempts)~~ **SUPERSEDED 2026-10-04:** LIVE-13's underlying bug was fixed 2026-09-22 (PRs #1734/#1735) and reconfirmed by live retest (gh:#2034). `capability_probe.py` now flips `CAP_GH_WRITE` to true, and `dispatch.py` includes Grok last in `_GH_WRITE_HARNESS_PRIORITY`, pending >=5 empirical gh-write samples per the Empirical Capability Assessment Policy.
 - Codex receives network access only for explicit `--requires-gh-write` dispatches
 - Pass `--requires-gh-write` on synlynk dispatch to enforce the routing hint automatically; it now also auto-implies the `run:shell` permission grant and fails closed with a `RuntimeError` if no role is resolvable via `--as-agent`, `--story`, or `--role` (#569)
 
@@ -231,6 +271,11 @@ This table is generated from `.synlynk/config.json` so it tracks the repo's own 
 2. Check `synlynk status` for current burn rate.
 3. Confirm all work is captured via telemetry and manual/PM work is logged via `synlynk cost log`.
 4. Append actual cost to `project-docs/costs.md`.
+5. **Reviewer-logged cost provenance backfill (gh:#2071, 2026-10-06).** If a reviewer sees the missing-provenance stderr hint (from `_emit_missing_provenance_hint`) or `synlynk pr check` reports "no implementing job provenance found for PR #N", backfill a `cost_entries` row before re-running `pr check`. `--tokens-in`/`--tokens-out` are required by the CLI — pull the implementing job's actual token counts from its dispatch estimate/actual line (`synlynk logs --job <job-id> | grep "dispatch estimate" -A2`, or the job's own completion summary) rather than guessing:
+   ```
+   synlynk cost log --pr <N> --harness <implementer-harness> --tokens-in <in> --tokens-out <out> --job-id <job-id> --note "logged by reviewer, see design spec 2026-10-06"
+   ```
+   Re-run `synlynk pr check` after logging. Only escalate to a manual `--admin` override if the backfill itself fails or the implementer harness/model genuinely cannot be determined (e.g. no `dispatch/<harness>/job-<id>` branch naming and no native-session record) — do not jump to `--admin` as the first response to a missing-provenance hint.
 
 ## Repo Hygiene
 1. Do not commit directly to main or master.
@@ -265,7 +310,7 @@ This table is generated from `.synlynk/config.json` so it tracks the repo's own 
 
 <!-- /synlynk:harness -->
 
-<!-- synlynk:start version="0.21.0-dev" tool="claude" -->
+<!-- synlynk:start version="0.23.0-dev" tool="claude" -->
 # synlynk Claude Instructions
 
 ## Identity & Attribution
@@ -273,255 +318,18 @@ This table is generated from `.synlynk/config.json` so it tracks the repo's own 
 - **Commit trailer:** `Co-Authored-By: Claude Sonnet <noreply@anthropic.com>`
 - **Branch prefix:** `feat/claude/` or `fix/claude/`
 
-## Domain Ownership
-| Domain | Owned by this agent | Notes |
-|:---|:---|:---|
-| TODO: fill domains for this agent | | |
-
-## Operating Mode: Home vs. Away
-
-### Mode A: Interactive Session (Home Conductor)
-When you are launched interactively by the human operator (direct chat / TUI / IDE):
-- **YOU are the primary Home Harness and Project Conductor.**
-- You assume the **PM, TPM, and Lead Architect charters** for this session.
-- You own `state.db`, `project-docs/todo.md`, and `project-docs/roadmap.md`.
-- You drive the **Unattended Milestone Execution Loop**: advance through consecutive independent tasks in an approved plan (implement -> test -> PR -> review dispatch -> merge -> clean) without pausing for turn-taking approvals.
-- You pause ONLY at designated **Reserved Approval Gates** (spec approval, irreversible release, breaking architectural changes, or unresolvable test failures).
-- Delegate specialized tasks across the fleet using `synlynk dispatch <harness>` per the Capability Matrix, without waiting for manual confirmation.
-
-### Mode B: Dispatched Task (Away Worker)
-When you are invoked headlessly via `synlynk dispatch <harness> --task "..."`:
-- **YOU are an Away Worker executing a scoped task in an isolated worktree.**
-- Focus strictly on implementing the requested task, writing verification tests, and pushing your branch.
-- Do not touch global roadmap, triage, or unassigned stories. Hand back completed work to the Home Harness via PR.
-
-### Constitutional Precedence
-If any instruction in this static file conflicts with the Active Session Runtime State in `.synlynk/context.md`, the runtime context in `.synlynk/context.md` SHALL GOVERN.
-
-## Git Worktree-First Policy
-Never commit directly to `main`/`master`. Create a dedicated worktree for every feature or fix:
-```
-git worktree add ../feat+<name> feat/<agent-prefix>/<name>
-git branch --show-current   # confirm before every commit
-```
-Delete the worktree only after its branch is merged.
-
 ## Branch Naming
 - `feat/claude/<description>` — new functionality
 - `fix/claude/<description>` — bug fixes
 - `chore/<description>` — deps, docs, config
 
-## Live Issues SOP
-Production defects use `[LIVE-N]` issues. N increments per project per incident.
-
-| Severity | Trigger | RCA |
+## Domain Ownership
+| Domain | Owned by this agent | Notes |
 |:---|:---|:---|
-| Sev1 | Core broken / data loss / correctness bug | `docs/rca/YYYY-MM-DD-LIVE-N-<slug>.md` |
-| Sev2 | Major feature degraded, workaround exists | Comment-level RCA on ticket |
-| Sev3 | Minor UX / edge case | None required |
+| TODO: fill domains for this agent | | |
 
-Process: Declare → Investigate (no fixes before root cause confirmed) → Post findings as issue comment → Sev1: write RCA doc → Action tickets (`live-issue sev<N> priority:p0`) → Resolution comment → Close.
+## Shared synlynk Protocol
 
-## Mid-Session Anti-Amnesia Protocol
-**Phase 1 (context ≤ 75%):** Every ~25,000 tokens — write devlog entry + memory update.
-Commit: `docs: mid-session checkpoint [N] — <topic>`
+Load `AI_INSTRUCTIONS.md` for the full shared synlynk protocol, including the session lifecycle, worktree policy, live-issues SOP, document discipline, GitHub Projects workflow, and harness SOPs.
 
-**Phase 2 (context > 75%):** Every ~5,000 tokens — same + add `⚠️ Compaction imminent:` rescue bullet listing open threads and "about to do X" states.
-
-Any numbered list of fixes, options, or recommendations: write to devlog in the same response — never wait.
-
-## Mandatory 4-Doc Discipline
-Update all four during the session, not only at session end:
-- `project-docs/roadmap.md` — status on in-progress items
-- `project-docs/devlogs/<username>.md` — append at each task boundary
-- `project-docs/costs.md` — log each significant AI operation
-- `project-docs/memory.md` — decisions with `[@username]` attribution
-
-## GitHub Projects v2 Integration
-Move board items via GraphQL. Replace TODO values with your project's IDs.
-
-```graphql
-mutation MoveItem {
-  updateProjectV2ItemFieldValue(input: {
-    projectId: "TODO: PROJECT_ID"
-    itemId: "<item-node-id>"
-    fieldId: "TODO: STATUS_FIELD_ID"
-    value: { singleSelectOptionId: "TODO: IN_PROGRESS_OPTION_ID" }
-  }) { projectV2Item { id } }
-}
-```
-
-Look up field/option IDs:
-```bash
-gh api graphql -f query='{ node(id: "TODO: PROJECT_ID") { ... on ProjectV2 { fields(first: 20) { nodes { ... on ProjectV2SingleSelectField { id name options { id name } } } } } } } }'
-```
-
-## TPM(bot) GitHub State Synchronization SOP
-1. **Pre-Execution Minting:** Every goal, epic, and story planned or recorded in `state.db` / `project-docs/roadmap.md` must be proactively minted as a GitHub Epic or Issue prior to starting implementation work.
-2. **Real-Time Visibility:** GitHub Issues and GitHub Projects v2 are the canonical real-time progress surfaces for the autonomous engineering fleet prior to hosted Vizor GA.
-3. **State Mirroring:**
-   - On Story Creation: TPM(bot) creates the GitHub issue with title, description, role/harness assignment, and labels.
-   - On State Transitions: When a story moves to `ready`, `in_progress`, or `done`, TPM(bot) updates the GitHub issue status and posts resolution comments with commit SHAs/PR links.
-   - On Milestone Sweeps: `synlynk tpm sweep` and `synlynk backlog sync` ensure zero untracked state drift between local `state.db` and GitHub.
-
-## synlynk Start
-```bash
-synlynk start <issue-id>    # claims board item, injects context, launches agent session
-```
-
-## Session Start (every session, no exceptions)
-1. Run: `git config user.name` — this is your @username for all attribution
-2. Run: `synlynk watch status` — if stopped, run `synlynk watch start`
-3. Read: `.synlynk/context.md` — your full project state snapshot
-4. Check `.synlynk/sentinel.md` for any active alerts
-5. Greet with 3 rows:
-   - Row 1: Last task YOU completed [by @username] — from your devlog entry
-   - Row 2: Your next active task — from project-docs/todo.md
-   - Row 3 (team mode only): Last 1 entry per teammate from project-docs/devlogs/
-
-## During the session
-- Do NOT hand-edit `todo.md` directly — it is an auto-generated view projected from `state.db`.
-- Update task status in `state.db` via `synlynk story done <id>` (or `synlynk story create/update`).
-- Append decisions to project-docs/memory.md with [@username] attribution
-- Run `synlynk checkpoint` at every task boundary to archive completed tasks and refresh context
-- In team mode: always `git pull` before editing any project-docs file
-- Log costs in project-docs/costs.md after each significant AI operation
-
-## At session end
-- Append a summary entry to project-docs/devlogs/<username>.md
-- Run `synlynk checkpoint` one final time
-- Run `synlynk status` and include the output in your closing message
-
-
-## Trigger registry
-
-- "fan out swarm work", "run ephemeral workers" -> `synlynk swarm dispatch`
-- "show swarm runners" -> `synlynk swarm status`
-- "tear down swarm runners" -> `synlynk swarm destroy`
-- "generate media assets", "render svg diagrams and og cards" -> `synlynk media generate`
-- "list registered models" -> `synlynk models list`
-- "show model details" -> `synlynk models show`
-- "discover installed models" -> `synlynk models discover`
-- "switch home harness", "set home harness", "what is our home harness" -> `synlynk home`
-- "set up synlynk here", "get started with synlynk" -> `synlynk init`
-- "start a new project", "is this a new or existing project" -> `synlynk start`
-- "install tool", "install recommended tool", "install graphify" -> `synlynk tool install`
-- "synthesize context pack", "generate task pack", "pack context" -> `synlynk pack`
-- "calculate blast radius", "impact analysis", "symbol callers and callees", "check impact" -> `synlynk impact`
-- "merge fleet graphs", "aggregate multi-repo mesh", "federated knowledge graph", "cross-repo edges" -> `synlynk mesh`
-- "run spike evaluation", "evaluate spike", "benchmark candidate", "spike receipt" -> `synlynk spike eval`
-- "scan this repo", "inventory this codebase" -> `synlynk scan`
-- "fix repository gaps automatically", "run autonomous remediation", "run parity remediation", "remediate adoption parity", "heal parity", "detect circular dependencies", "heal import cycles", "circular import detector" -> `synlynk heal`
-- "add me to this project", "onboard me" -> `synlynk join`
-- "migrate the old config", "upgrade project-docs layout" -> `synlynk migrate`
-- "create a state database backup", "snapshot state for disaster recovery" -> `synlynk backup create`
-- "verify a state database backup", "check a recovery snapshot" -> `synlynk backup verify`
-- "encrypt state backup", "export encrypted state backup" -> `synlynk backup encrypt`
-- "package state for disaster recovery", "create an encrypted DR package" -> `synlynk backup package`
-- "verify encrypted state backup", "test encrypted state restore" -> `synlynk backup verify-encrypted`
-- "inventory state databases", "audit state DB artifacts" -> `synlynk state inventory`
-- "promote a state database", "repair canonical state" -> `synlynk state promote`
-- "quarantine a legacy state database", "isolate a state DB copy" -> `synlynk state quarantine`
-- "restore state from DR snapshot", "recover canonical state DB" -> `synlynk state restore`
-- "register an existing state database", "repair a missing registry entry" -> `synlynk state register`
-- "configure the codex harness", "override dispatch flags for grok" -> `synlynk configure agent`
-- "add this agent binary", "retrofit an agent onto this project" -> `synlynk harness add`
-- "write this agent's context profile" -> `synlynk harness configure`
-- "what agents are configured", "list our agents" -> `synlynk harness list`
-- "set this config key" -> `synlynk config set`
-- "control workspace-agent nudges" -> `synlynk config nudges`
-- "let's decide on X", "record this decision" -> `synlynk decide`
-- "create a new goal", "start a business goal for X" -> `synlynk goal create`
-- "what goals are active", "list our goals" -> `synlynk goal list`
-- "open a work session", "start a work session" -> `synlynk session open`
-- "what session am I in", "show the active session" -> `synlynk session status`
-- "checkpoint this session", "save a session checkpoint" -> `synlynk session checkpoint`
-- "close out this session", "finish this work session" -> `synlynk session close`
-- "link this story to the goal", "attach this to goal X" -> `synlynk goal link`
-- "how close is this goal", "goal completion rollup" -> `synlynk goal status`
-- "create a story for X", "write up this piece of work" -> `synlynk story create`
-- "what stories do we have", "list open stories" -> `synlynk story list`
-- "mark this story ready" -> `synlynk story ready`
-- "revert this story to draft" -> `synlynk story draft`
-- "mark this story done" -> `synlynk story done`
-- "reclaim stranded stories", "unstrand abandoned stories" -> `synlynk story reclaim`
-- "capture discovered work", "stage a task into backlog" -> `synlynk backlog capture`
-- "list staged backlog", "show discovered tasks" -> `synlynk backlog list`
-- "sync backlog to github", "create issues for discovered tasks" -> `synlynk backlog sync`
-- "ingest github issues", "fetch backlog issues" -> `synlynk backlog ingest`
-- "triage open backlog", "synthesize backlog stories" -> `synlynk backlog triage`
-- "auto-promote backlog items", "promote triaged stories to ready" -> `synlynk backlog auto-promote`
-- "add a roadmap arc", "add a roadmap phase" -> `synlynk roadmap add`
-- "open the workspace", "open this project" -> `synlynk open`
-- "what should I do next", "give me a task to launch" -> `synlynk launch`
-- "who has what role on this project" -> `synlynk roles`
-- "create a product type" -> `synlynk type create`
-- "seed canonical product types", "seed an industry pack" -> `synlynk type seed`
-- "rename an organigram label", "relabel a product type" -> `synlynk type relabel`
-- "add a connector", "catalog an outbound connector" -> `synlynk connector add`
-- "let's build X", "can you implement...", "hand this to codex" -> `synlynk dispatch`
-- "backfill capability ratings", "repair missing story ids" -> `synlynk backfill-capability-ratings`
-- "adapt living charters", "detect charter drift" -> `synlynk charters adapt`
-- "what's still running", "check on that job" -> `synlynk jobs`
-- "hand this stalled job to another agent" -> `synlynk jobs handoff`
-- "reap zombie jobs", "clear dead running jobs", "jobs stuck running with dead pid" -> `synlynk jobs reap`
-- "batch these up", "run this fleet-wide" -> `synlynk schedule`
-- "run the TPM sweep", "sweep ready stories" -> `synlynk tpm sweep`
-- "run the competitive sweep", "check for competitor gaps" -> `synlynk pm sweep`
-- "cut a release", "ship v0.x.0" -> `synlynk release`
-- "run marketing release ceremony", "synchronize release collateral" -> `synlynk marketing ceremony`
-- "sync pr blog post", "generate pr blog post", "marketing sync pr" -> `synlynk marketing sync-pr`
-- "is this PR's model version attested" -> `synlynk pr check`
-- "run gh as a role app", "gh as qa bot", "don't use host gh" -> `synlynk gh`
-- "qa merge gate status", "is the qa-gate green" -> `synlynk pr gate-status`
-- "am I authorized to merge this", "check merge authority" -> `synlynk policy check-merge`
-- "show current policy", "what is the current policy" -> `synlynk policy show`
-- "sync branch protection", "enforce policy on github" -> `synlynk policy sync-branch-protection`
-- "platform ops report", "how is the multi-agent fleet across all repos", "cross-repo jobs and costs last day", "nightly ops rollup" -> `synlynk ops report`
-- "run a health check", "is synlynk set up correctly" -> `synlynk doctor`
-- "probe this endpoint" -> `synlynk probe`
-- "audit stale worktrees", "classify worktree safety" -> `synlynk worktree audit`
-- "clean up stale worktrees", "remove safe worktrees" -> `synlynk worktree clean`
-- "audit docs", "audit devlog identity drift", "audit documentation" -> `synlynk audit-docs`
-- "run claude directly with context" -> `synlynk exec`
-- "launch the terminal ui", "open the curses dashboard" -> `synlynk tui`
-- "tail that job's logs" -> `synlynk logs`
-- "drop me into that job's shell" -> `synlynk shell`
-- "what sentinel alerts are active" -> `synlynk sentinel list`
-- "clear that sentinel alert" -> `synlynk sentinel clear`
-- "log this manual session's cost" -> `synlynk cost log`
-- "reconcile subscription costs", "true up monthly subscription spend" -> `synlynk cost true-up`
-- "grant a credit balance", "record a credit grant" -> `synlynk credit grant`
-- "show agent quota headroom" -> `synlynk quota`
-- "fleet utilization advisory", "show quota advisory", "dynamic capacity advisory" -> `synlynk quota advisory`
-- "calibrate quota", "calibrate harness usage" -> `synlynk quota calibrate`
-- "run acceptance testbed", "testbed soak", "testbed receipt" -> `synlynk testbed`
-- "who am I", "show active caller identity" -> `synlynk whoami`
-- "run a capability sweep", "seed capability baselines" -> `synlynk capability sweep`
-- "run milestone dag", "execute milestone unattended", "launch milestone dag" -> `synlynk run`
-- "run the trio protocol" -> `synlynk run --trio`
-- "is the local oMLX agent reachable" -> `synlynk local doctor`
-- "upgrade synlynk" -> `synlynk upgrade`
-- "roll back the last change" -> `synlynk rollback`
-- "uninstall synlynk", "clean teardown of synlynk" -> `synlynk uninstall`
-- "where are we", "what's the state of things" -> `synlynk status`
-- "show me the live HUD", "watch the workspace" -> `synlynk watch`
-- "open the dashboard", "show me the browser view" -> `synlynk viz`
-- "check relay health" -> `synlynk relay status`
-- "message another agent" -> `synlynk relay send`
-- "tail relay events" -> `synlynk relay tail`
-
-## Lifecycle checkpoint directives
-
-- When a brainstorming session (per the brainstorming skill) concludes with
-  an approved, written spec, and no active GOVERNS goal is linked to the
-  work: suggest `synlynk goal create --outcome <spec's one-line thesis>
-  --criterion <spec's stated success condition>` before transitioning to
-  implementation planning. This is a suggestion, not a gate — proceed if
-  the user declines or the work is explicitly one-shot/maintenance.
-- When an implementation plan (per the writing-plans skill) is approved
-  and about to enter execution, and the plan's spec has no linked goal:
-  same suggestion, offered once.
-- Do not suggest goal creation at any other point in a session (not on
-  ordinary command usage, not on phrase matches, not mid-brainstorm).
 <!-- synlynk:end -->

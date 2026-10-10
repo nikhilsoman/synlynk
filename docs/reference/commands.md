@@ -2,10 +2,13 @@
 
 Generated from `synlynk/taxonomy.py`. Do not edit by hand — run `python3 scripts/generate_command_docs.py`.
 
+Start with the [documentation hub](../README.md), the [10-minute quickstart](../quickstart.md), or a [task-oriented how-to](../how-to/README.md).
+
 See [safe-caller-construction.md](safe-caller-construction.md) for guidance on building dispatch task text programmatically.
 
 ## Orientation gateway (always available)
 
+- `governs` — visualize
 - `status` — visualize
 - `watch` — visualize
 - `viz` — visualize
@@ -15,6 +18,9 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `home` (primary) — open
 - `init` (primary) — open
 - `start` (primary) — open
+- `quickstart` (primary) — open
+- `brainstorm` (primary) — goal
+- `brief` (primary) — visualize
 - `tool install` (secondary) — open
 - `scan` (primary) — open
 - `join` (primary) — open
@@ -89,18 +95,23 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `jobs` (primary) — execute
 - `jobs handoff` (secondary) — execute
 - `jobs reap` (secondary) — execute
+- `jobs reconcile` (secondary) — execute
+- `gc` (secondary) — sustain
 - `schedule` (primary) — execute
 - `tpm sweep` (primary) — execute
 - `pm sweep` (primary) — execute
+- `governs sweep` (primary) — sustain
 - `release` (primary) — release
 - `marketing ceremony` (secondary) — release
 - `marketing sync-pr` (secondary) — release
 - `pr check` (primary) — release
+- `provenance attest` (secondary) — sustain
 - `gh` (primary) — execute
 - `pr gate-status` (secondary) — release
 - `policy check-merge` (secondary) — release
 - `policy show` (secondary) — sustain
 - `policy sync-branch-protection` (secondary) — sustain
+- `policy gate-status` (secondary) — sustain
 - `ops report` (primary) — sustain
 - `doctor` (secondary) — sustain
 - `probe` (secondary) — sustain
@@ -115,10 +126,16 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `sentinel clear` (secondary) — execute
 - `cost log` (secondary) — sustain
 - `cost true-up` (secondary) — sustain
+- `cost billing` (secondary) — sustain
+- `cost audit reconcile` (secondary) — sustain
+- `cost audit import` (secondary) — sustain
+- `cost audit report` (secondary) — sustain
+- `cost audit correct` (secondary) — sustain
 - `credit grant` (secondary) — sustain
 - `quota` (secondary) — sustain
 - `quota advisory` (secondary) — sustain
 - `quota calibrate` (secondary) — sustain
+- `quota federated` (secondary) — sustain
 - `testbed` (secondary) — execute
 - `capability sweep` (secondary) — sustain
 - `run` (primary) — execute
@@ -130,6 +147,13 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `relay status` (secondary) — visualize
 - `relay send` (secondary) — execute
 - `relay tail` (secondary) — visualize
+- `autonomy show` (primary) — sustain
+- `autonomy set` (primary) — sustain
+- `concierge synthesize` (primary) — goal
+- `addon list` (secondary) — sustain
+- `addon install` (primary) — sustain
+- `gateway probe` (primary) — sustain
+- `gateway dispatch` (primary) — execute
 
 ## Tier 3 — Team / Enterprise
 
@@ -139,6 +163,9 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `score add` (secondary) — sustain
 - `score list` (secondary) — sustain
 - `score attest` (secondary) — sustain
+- `board propose` (primary) — goal
+- `board sign` (primary) — goal
+- `board show` (secondary) — visualize
 
 ## Latent — Autopilot & Hooks Only
 

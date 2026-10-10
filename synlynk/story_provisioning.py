@@ -4,8 +4,9 @@ import json
 import os
 import re
 import subprocess
-import sys
 import time
+
+from synlynk._lazy import pkg as _pkg
 
 _ISSUE_NUMBER_RE = re.compile(r"#(\d+)")
 
@@ -24,13 +25,6 @@ _DISCIPLINE_KEYWORDS = {
 _ORG_DOMAIN_LABEL_MAP = {
     "documentation": "content",
 }
-
-
-def _pkg(name: str, default=None):
-    package = sys.modules.get("synlynk")
-    if package is None:
-        return default
-    return getattr(package, name, default)
 
 
 def _detect_issue_number(task_text: str, issue=None):
@@ -173,6 +167,15 @@ def resolve_or_create_story_id(task_text: str, issue=None, timestamp: float = No
                 industry,
                 "build",
             ),
+        )
+        from synlynk.governs_engine import associate_story
+        associate_story(
+            conn,
+            story_id,
+            title=classification["title"],
+            issue_number=issue_number,
+            text_content=task_text,
+            emit=False,
         )
         conn.commit()
     except Exception:

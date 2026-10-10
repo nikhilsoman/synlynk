@@ -93,9 +93,13 @@ def infer_cross_repo_edges(merged_graph: Dict[str, Any]) -> List[Dict[str, Any]]
             if crepo and rrepo and crepo == rrepo:
                 continue  # only cross-repo edges
 
-            # Extract path token from route label e.g. "/users"
+            # Extract path token from route label e.g. "/users" or "POST /api/jobs"
             route_path = rlabel.strip()
-            if route_path and route_path in clabel:
+            for prefix in ("GET ", "POST ", "PUT ", "DELETE ", "PATCH ", "HEAD ", "OPTIONS "):
+                if route_path.upper().startswith(prefix):
+                    route_path = route_path[len(prefix):].strip()
+                    break
+            if route_path and (route_path in clabel or rlabel in clabel):
                 inferred_edges.append({
                     "source": cid,
                     "target": rid,
@@ -119,6 +123,42 @@ def write_global_graph(
     target_path.parent.mkdir(parents=True, exist_ok=True)
     target_path.write_text(json.dumps(merged_graph, indent=2))
     return str(target_path)
+
+
+def build_federated_mesh(repo_paths: List[str], output_path: str) -> Dict[str, Any]:
+    """Combine graphify graph.json from multiple repos with namespaced IDs and cross-repo bridges."""
+    nodes: List[Dict[str, Any]] = []
+    edges: List[Dict[str, Any]] = []
+    for rpath in repo_paths:
+        rname = Path(rpath).name
+        gfile = Path(rpath) / ".synlynk" / "graphify-out" / "graph.json"
+        if not gfile.is_file():
+            continue
+        try:
+            data = json.loads(gfile.read_text(errors="ignore"))
+        except Exception:
+            continue
+        for n in data.get("nodes", []):
+            node_copy = dict(n)
+            node_copy["repo"] = rname
+            node_copy["original_id"] = n.get("id")
+            node_copy["id"] = f"{rname}::{n.get('id')}"
+            nodes.append(node_copy)
+        for e in data.get("edges", []):
+            edge_copy = dict(e)
+            edge_copy["repo"] = rname
+            edge_copy["source"] = f"{rname}::{e.get('source')}"
+            edge_copy["target"] = f"{rname}::{e.get('target')}"
+            edges.append(edge_copy)
+
+    inferred = infer_cross_repo_edges({"nodes": nodes, "edges": edges})
+    edges.extend(inferred)
+
+    result = {"nodes": nodes, "edges": edges, "repos": [Path(p).name for p in repo_paths]}
+    out = Path(output_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(result, indent=2))
+    return result
 
 
 # ============================================================================

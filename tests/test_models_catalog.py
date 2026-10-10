@@ -21,17 +21,17 @@ def test_load_model_catalog_default(tmp_path):
         "tiers": {
             "fast": {
                 "claude": "claude-haiku-4.5",
-                "agy": "gemini-3.7-flash",
+                "agy": "gemini-3.7-flash-medium",
                 "codex": "gpt-5-mini",
             },
             "pro": {
                 "claude": "claude-sonnet-5",
-                "agy": "gemini-3.0-pro",
+                "agy": "gemini-3.1-pro-low",
                 "codex": "gpt-5",
             },
             "reasoning": {
                 "claude": "claude-opus-5",
-                "agy": "gemini-3.5-pro",
+                "agy": "gemini-3.1-pro-low",
                 "codex": "gpt-5.6-luna",
             },
         },
@@ -45,7 +45,7 @@ def test_load_model_catalog_default(tmp_path):
                 "rates": {"input_per_1k": 0.003, "output_per_1k": 0.015},
             },
             {
-                "model_id": "gemini-3.7-flash",
+                "model_id": "gemini-3.7-flash-medium",
                 "family": "gemini-3",
                 "harness": "agy",
                 "context_window": 1000000,
@@ -58,10 +58,10 @@ def test_load_model_catalog_default(tmp_path):
 
     catalog = load_model_catalog(repo_path=str(tmp_path))
     assert catalog["schema_version"] == 1
-    assert catalog["tiers"]["fast"]["agy"] == "gemini-3.7-flash"
+    assert catalog["tiers"]["fast"]["agy"] == "gemini-3.7-flash-medium"
 
     # Test tier resolution
-    assert resolve_tier_model("fast", "agy", repo_path=str(tmp_path)) == "gemini-3.7-flash"
+    assert resolve_tier_model("fast", "agy", repo_path=str(tmp_path)) == "gemini-3.7-flash-medium"
     assert resolve_tier_model("pro", "claude", repo_path=str(tmp_path)) == "claude-sonnet-5"
     assert resolve_tier_model("reasoning", "codex", repo_path=str(tmp_path)) == "gpt-5.6-luna"
 
@@ -72,6 +72,12 @@ def test_load_model_catalog_fallback_on_missing(tmp_path):
     assert "tiers" in catalog
     assert "models" in catalog
     assert resolve_tier_model("fast", "agy", repo_path=str(tmp_path)) is not None
+
+
+def test_hermes_catalog_tier_resolves_for_local_harness(tmp_path):
+    catalog = load_model_catalog(repo_path=str(tmp_path))
+    assert catalog["tiers"]["hermes"]["local"] == "Hermes-3-Llama-3.1-8B"
+    assert resolve_tier_model("hermes", "local", repo_path=str(tmp_path)) == "Hermes-3-Llama-3.1-8B"
 
 
 def test_builtin_codex_catalog_matches_current_account_model(tmp_path):
@@ -85,10 +91,10 @@ def test_get_models_from_catalog(tmp_path):
     catalog_path.parent.mkdir(parents=True)
     catalog_data = {
         "schema_version": 1,
-        "tiers": {"fast": {"agy": "gemini-3.7-flash"}},
+        "tiers": {"fast": {"agy": "gemini-3.7-flash-medium"}},
         "models": [
             {
-                "model_id": "gemini-3.7-flash",
+                "model_id": "gemini-3.7-flash-medium",
                 "family": "gemini-3",
                 "harness": "agy",
                 "context_window": 1000000,
@@ -100,6 +106,6 @@ def test_get_models_from_catalog(tmp_path):
 
     models = get_models_from_catalog(repo_path=str(tmp_path))
     assert len(models) >= 1
-    m = next(x for x in models if x.model_id == "gemini-3.7-flash")
+    m = next(x for x in models if x.model_id == "gemini-3.7-flash-medium")
     assert m.harness_binding == "agy"
     assert m.rates.input_per_1k == 0.0001

@@ -149,6 +149,132 @@ def calculate_impact(
     }
 
 
+
+def export_topological_features(
+    repo_root: str,
+    task_text: str = "",
+    story_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Export normalized topological features for fast System 1 routing and merge gating."""
+    import re
+    default_features = {
+        "task_id": story_id or "adhoc",
+        "impact_score": 0.0,
+        "blast_radius_files": 0,
+        "blast_radius_symbols": 0,
+        "community_span": 0,
+        "is_core_system": False,
+        "primary_language": "python",
+        "has_test_coverage": False,
+        "suggested_harness": "codex",
+        "risk_level": "low",
+    }
+
+    graph_path = Path(repo_root) / ".synlynk" / "graphify-out" / "graph.json"
+    if not graph_path.is_file():
+        return default_features
+
+    try:
+        data = json.loads(graph_path.read_text(errors="ignore"))
+    except Exception:
+        return default_features
+
+    nodes = [n for n in (data.get("nodes") or []) if isinstance(n, dict)]
+    edges = [e for e in (data.get("edges") or data.get("links") or []) if isinstance(e, dict)]
+    if not nodes:
+        return default_features
+
+    query = task_text or ""
+    if story_id:
+        try:
+            from synlynk import _get_db
+            conn = _get_db()
+            row = conn.execute("SELECT title, description FROM stories WHERE story_id = ?", (story_id,)).fetchone()
+            if row:
+                query += f" {row[0] or ''} {row[1] or ''}"
+            conn.close()
+        except Exception:
+            pass
+
+    words = re.findall(r"[a-zA-Z0-9_]{3,}", query.lower())
+    matched_nodes = []
+    for n in nodes:
+        label = str(n.get("label") or "").lower()
+        node_id = str(n.get("id") or "").lower()
+        file_p = str(n.get("file") or "").lower()
+        if words and any(w in label or w in node_id or w in file_p for w in words):
+            matched_nodes.append(n)
+
+    if not matched_nodes:
+        matched_nodes = nodes[:1]
+
+    node_by_id = {str(n.get("id")): n for n in nodes}
+    inbound: Dict[str, List[dict]] = {}
+    outbound: Dict[str, List[dict]] = {}
+    for edge in edges:
+        src = str(edge.get("source"))
+        tgt = str(edge.get("target"))
+        if tgt in node_by_id:
+            inbound.setdefault(tgt, []).append(node_by_id.get(src, {}))
+        if src in node_by_id:
+            outbound.setdefault(src, []).append(node_by_id.get(tgt, {}))
+
+    affected_nodes: Set[str] = set()
+    affected_files: Set[str] = set()
+    communities: Set[Any] = set()
+    has_tests = False
+    is_core = False
+
+    for mn in matched_nodes[:5]:
+        nid = str(mn.get("id"))
+        affected_nodes.add(nid)
+        f = mn.get("file") or ""
+        if f:
+            affected_files.add(f)
+            if any(core in f for core in ("db.py", "cli.py", "context.py", "events.py", "policy")):
+                is_core = True
+        comm = mn.get("community")
+        if comm is not None:
+            communities.add(comm)
+
+        for neighbor in (inbound.get(nid, []) + outbound.get(nid, [])):
+            nnid = str(neighbor.get("id"))
+            affected_nodes.add(nnid)
+            nf = neighbor.get("file") or ""
+            if nf:
+                affected_files.add(nf)
+                if _is_test_node(neighbor):
+                    has_tests = True
+                if any(core in nf for core in ("db.py", "cli.py", "context.py", "events.py", "policy")):
+                    is_core = True
+            ncomm = neighbor.get("community")
+            if ncomm is not None:
+                communities.add(ncomm)
+
+    total_nodes = len(nodes)
+    impact_score = round(min(1.0, len(affected_nodes) / max(1, total_nodes * 0.1)), 2)
+    risk_level = "high" if is_core or impact_score > 0.5 else ("medium" if impact_score > 0.2 else "low")
+
+    suggested_harness = "codex"
+    if any("html" in f or "css" in f or "docs" in f for f in affected_files):
+        suggested_harness = "agy"
+    elif any("canvas" in f or "infra" in f for f in affected_files):
+        suggested_harness = "grok"
+
+    return {
+        "task_id": story_id or "adhoc",
+        "impact_score": impact_score,
+        "blast_radius_files": len(affected_files),
+        "blast_radius_symbols": len(affected_nodes),
+        "community_span": len(communities),
+        "is_core_system": is_core,
+        "primary_language": "python",
+        "has_test_coverage": has_tests,
+        "suggested_harness": suggested_harness,
+        "risk_level": risk_level,
+    }
+
+
 def cmd_impact(args) -> int:
     """CLI handler for `synlynk impact <symbol|file>`."""
     target = getattr(args, "target", None)

@@ -4,17 +4,11 @@ import json
 import os
 import re
 import subprocess
-import sys
 import time
 from typing import Optional
+
 from synlynk._constants import HARNESS_CAPABILITY_BASELINES
-
-
-def _pkg(name: str, default=None):
-    package = sys.modules.get("synlynk")
-    if package is None:
-        return default
-    return getattr(package, name, default)
+from synlynk._lazy import pkg as _pkg
 
 
 def cmd_agent_run(name: str, dry_run: bool = False, install_cron: bool = False) -> None:
@@ -439,8 +433,8 @@ def _run_investigation(finding: dict, agent_cfg: dict) -> dict:
 
     if prompt_via_arg:
         shell_cmd = (
-            f"PROMPT=$(cat {_shlex.quote(prompt_file)}); "
-            f"{cmd_str} \"$PROMPT\" > {_shlex.quote(log_file)} 2>&1; "
+            f"synlynk_prompt=$(cat {_shlex.quote(prompt_file)}); "
+            f"{cmd_str} \"$synlynk_prompt\" > {_shlex.quote(log_file)} 2>&1; "
             f"echo $? > {_shlex.quote(log_file)}.exit"
         )
     else:

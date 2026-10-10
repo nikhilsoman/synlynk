@@ -11,14 +11,9 @@ import threading
 import time
 from typing import Optional
 
+from synlynk._lazy import pkg as _pkg
+from synlynk.tool_installer import is_tool_available, install_tool
 from synlynk.wizard import _run_scan_tui
-
-def _pkg(name: str, default=None):
-    package = sys.modules.get("synlynk")
-    if package is None:
-        return default
-    return getattr(package, name, default)
-
 
 _HARNESS_PATH_NAMES = ("claude", "agy", "codex", "grok", "gemini", "aider")
 
@@ -52,6 +47,60 @@ def _detect_harnesses_on_path(names: tuple = None) -> list:
             "path": cli_path,
         })
     return harnesses
+
+
+def _run_graphify_extract(repo_root: str) -> bool:
+    """Ensure Graphify is installed and execute deterministic AST extraction."""
+    if os.environ.get("SYNLYNK_SKIP_GRAPHIFY_EXTRACT") == "1":
+        return True
+
+    extra_paths = [
+        os.path.expanduser("~/.local/bin"),
+        os.path.expanduser("~/.pyenv/shims"),
+        "/opt/homebrew/bin",
+        "/usr/local/bin",
+    ]
+    for p in extra_paths:
+        if p not in os.environ.get("PATH", ""):
+            os.environ["PATH"] = p + ":" + os.environ.get("PATH", "")
+
+    if not is_tool_available("graphify"):
+        try:
+            installed = install_tool("graphify")
+            if not installed:
+                return False
+        except Exception:
+            return False
+
+    out_dir = os.path.join(repo_root, ".synlynk", "graphify-out")
+    os.makedirs(out_dir, exist_ok=True)
+    try:
+        res = subprocess.run(
+            ["graphify", "extract", repo_root, "--code-only", "--out", out_dir],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        if res.returncode == 0:
+            manifest_file = os.path.join(out_dir, "manifest.json")
+            if os.path.isfile(manifest_file):
+                try:
+                    from synlynk.discovery import _get_head_commit
+                    head_sha = _get_head_commit(repo_root)
+                    if head_sha:
+                        with open(manifest_file, "r", encoding="utf-8") as f:
+                            mdata = json.load(f)
+                        if isinstance(mdata, dict):
+                            mdata["built_at_commit"] = head_sha
+                            with open(manifest_file, "w", encoding="utf-8") as f:
+                                json.dump(mdata, f, indent=2)
+                except Exception:
+                    pass
+            return True
+        return False
+    except Exception:
+        return False
+
 
 def cmd_scan(deep: bool = False, status: bool = False,
              refresh: bool = False, add_path: str = None,
@@ -97,6 +146,7 @@ def cmd_scan(deep: bool = False, status: bool = False,
         print(f"  {_GREEN}▶{_RESET} Deep scanning source tree...")
         skeleton, total_files, total_syms = _pkg("_scan_full_repo")()
         sha_short = (_pkg("_git_head_sha")() or "unknown")[:7]
+        _run_graphify_extract(os.getcwd())
         print(f"  {_GREEN}✓{_RESET} Scanned {total_files} files · {total_syms} symbols · HEAD {sha_short}")
         print(f"  {_CYAN}→{_RESET} project-docs/source-map.md updated")
         return
@@ -257,8 +307,10 @@ def _static_scan(root: str = ".") -> dict:
     Returns dict with keys: project_name, description, commit_count,
     has_structured_commits, recent_topics, top_dirs, languages, readme_summary.
     """
+    from synlynk.product_store import resolve_product_display_name
+
     result = {
-        "project_name": os.path.basename(os.path.abspath(root)),
+        "project_name": resolve_product_display_name(root),
         "description": "",
         "commit_count": 0,
         "has_structured_commits": False,
@@ -1445,12 +1497,14 @@ def generate_structured_context(scan_result: dict,
 
 _PROJECT_DOC_NAMES = {"roadmap.md", "todo.md", "memory.md", "costs.md", "devlog.md"}
 
-_AGENT_FILE_NAMES = {"CLAUDE.md", "GEMINI.md", "AGENTS.md", "AI_INSTRUCTIONS.md"}
+_AGENT_FILE_NAMES = {"CLAUDE.md", "GEMINI.md", "AGENTS.md", "GROK.md", "AI_INSTRUCTIONS.md"}
 
 _SCAN_SKIP_DIRS = {
     ".git", "node_modules", ".synlynk", "project-docs",
     "__pycache__", ".venv", "venv", "env", ".next", "dist", "build",
-    "vendor", ".worktrees", "coverage", ".nyc_output", "target", "out", "tmp",
+    "vendor", ".worktrees", "worktrees", ".claude", ".pytest_cache",
+    ".ruff_cache", "test_archive", "test_context_output",
+    "coverage", ".nyc_output", "target", "out", "tmp",
 }
 
 _SOURCE_EXTENSIONS = {
@@ -1667,9 +1721,13 @@ def _scan_source_skeleton(root: str = ".") -> list:
         skeleton.append({"file": rel_path, "language": lang, "symbols": display_syms})
     return skeleton
 
-def _query_repo_file_tree() -> dict:
+def _query_repo_file_tree(conn: Optional[sqlite3.Connection] = None) -> dict:
     """Build a nested directory tree from source_symbols for the current HEAD."""
-    conn = _pkg("_get_db")()
+    if conn is None:
+        get_db = _pkg("_get_db")
+        if get_db is None:
+            from synlynk.db import _get_db as get_db
+        conn = get_db()
     cur = conn.cursor()
     try:
         cur.execute("SELECT MAX(scanned_at) FROM source_symbols")
@@ -1682,7 +1740,7 @@ def _query_repo_file_tree() -> dict:
             "GROUP BY file"
         )
         file_counts = cur.fetchall()
-    except sqlite3.OperationalError:
+    except (sqlite3.OperationalError, sqlite3.DatabaseError):
         return {"name": ".", "dirs": {}, "files": []}
 
     root = {"name": ".", "dirs": {}, "files": []}

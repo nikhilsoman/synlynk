@@ -337,7 +337,7 @@ def test_dispatch_perjob_git_worktree_isolation_uses_distinct_worktrees(git_work
         spawned.append(kwargs["cwd"])
         return FakeProc(1000 + len(spawned))
 
-    times = iter([1_725_000_000.111, 1_725_000_000.222])
+    times = (1_725_000_000.111 + i * 0.111 for i in range(1000))
     monkeypatch.setattr(sl.time, "time", lambda: next(times))
     monkeypatch.setattr(sl.subprocess, "run", fake_run)
     monkeypatch.setattr(sl.subprocess, "Popen", fake_popen)
@@ -753,7 +753,7 @@ def test_dispatch_gitstateverified_job_reconciliation_rechecks_failed_job_with_l
 
     inspect_calls = {"count": 0}
 
-    def fake_inspect(worktree_path, worktree_branch=None, started_at=None):
+    def fake_inspect(worktree_path, worktree_branch=None, started_at=None, task=None):
         inspect_calls["count"] += 1
         if inspect_calls["count"] == 1:
             return {
@@ -829,9 +829,16 @@ def test_dispatch_gitstateverified_job_reconciliation_uses_waitpid_without_exit_
 
     job = _dispatch_git_worktree_job(monkeypatch)
 
-    monkeypatch.setattr(jobs_mod.os, "waitpid", lambda pid, opts: (job["pid"], 0))
-    monkeypatch.setattr(sl, "_inspect_worktree_git_state", lambda *a, **kw: {"has_activity": False, "remote_has_activity": False})
-    monkeypatch.setattr(sl, "_worktree_files_touched", lambda *a, **kw: [])
+    real_waitpid = os.waitpid
+
+    def _mock_waitpid(pid, opts):
+        if pid == job["pid"]:
+            return (job["pid"], 0)
+        return real_waitpid(pid, opts)
+
+    monkeypatch.setattr(jobs_mod.os, "waitpid", _mock_waitpid)
+    monkeypatch.setattr(sl, "_inspect_worktree_git_state", lambda *a, **kw: {"has_activity": True, "remote_has_activity": False, "dirty": True})
+    monkeypatch.setattr(sl, "_worktree_files_touched", lambda *a, **kw: ["file.py"])
     monkeypatch.setattr(jobs_mod, "_finalize_completed_worktree_job", lambda *a, **kw: None)
 
     sl._reconcile_jobs()

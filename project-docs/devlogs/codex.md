@@ -7,6 +7,33 @@
 - Verification: 143 tests passed, 1 skipped across the modified test files.
 [@codex]
 
+## 2026-10-03 — Job status truth pilot PR3 (#1933)
+
+- Added the `job-status-truth.v1` machine-readable boundary projection with
+  canonical status, legacy alias visibility, evidence summary, contract
+  predicates, verification confidence, decision revision, and correction history.
+- Added persisted legacy-vs-oracle shadow comparisons with explicit false
+  failure/success and disagreement reason codes, low-cardinality metrics,
+  promotion gates, and `SYNLYNK_JOB_TRUTH_MODE` rollout control.
+- Added `synlynk jobs --json` and `synlynk jobs reconcile <job-id>`; manual
+  reconciliation appends evidence through the canonical oracle.
+- Verification: focused projection/CLI/oracle suite 32 passed; affected
+  jobs/DB/dispatch integration suite 302 passed.
+[@codex]
+
+## 2026-09-28 — Rollback stash race hardening (#1834)
+
+- Updated rollback dirty-path collection to ignore transient `.sentinel-*`
+  files and status entries that disappeared before stash.
+- Added a one-time surviving-path retry for the stash race, while preserving
+  failures when real dirty paths still cannot be stashed.
+- Added regression coverage; focused rollback/init tests passed (27), and the
+  force-init end-to-end test passed 20 consecutive runs.
+- Full suite: 3396 passed, 4 skipped, 1 unrelated environment failure in
+  `test_poll_once_isolates_failures` because the default daemon log path was
+  not writable; the test passed with a writable HOME.
+[@codex]
+
 ## 2026-09-09 - PR #1518 QA follow-up
 
 - Serialized local capability-envelope seeding and the final local dispatch
@@ -101,4 +128,53 @@
   encrypted retention, key custody, second-machine restore, and acceptance
   evidence.
 - Focused backup verification: 5 passed, 2 skipped.
+[@codex]
+
+## 2026-10-03 — Job status truth pilot PR1 (#1933)
+
+- Added immutable versioned effect contracts, append-only evidence, and
+  revisioned terminal decisions in the canonical SQLite schema.
+- Added the pure tri-state completion oracle with closed statuses, aliases,
+  precedence rules, remote-only review regression coverage, duplicate/correction
+  tests, and compatibility routing from both reconciliation paths.
+- Verification: focused truth/oracle/reconciliation tests passed; migration,
+  cost-ledger, and dispatch suites passed; `git diff --check` passed.
+[@codex]
+
+## 2026-10-03 — Job status truth pilot PR2 (#1933)
+
+- Added versioned `lifecycle.v1` queued/running/observing/verifying/terminal/correction
+  events with contract/job identity, sequence, process results, and evidence refs.
+- Added append-only, idempotent lifecycle ingestion that records out-of-order events
+  as rejected observations; adapter and jobs reconciliation paths retain legacy text
+  only as compatibility evidence.
+- Extended GitHub effect verification evidence with actor/target/SHA attribution and
+  bounded read-after-write retry/quorum metadata. The canonical job-truth ledger
+  remains the only terminal decision writer.
+- Verification: focused telemetry/GitHub/effect suites 75 passed; broader jobs,
+  dispatch, DB, and GitHub guard suites 304 passed; `git diff --check` passed.
+[@codex]
+
+## 2026-10-03 — Job status truth pilot PR3 QA remediation (#1962)
+
+- Made persisted contract predicates authoritative: target, actor, and SHA
+  mismatches cannot produce a completed decision; unresolved predicates remain
+  verifying or fail closed after the verification budget.
+- Hardened promotion gates with explicit verification-age, retry, unknown-state,
+  and harness/effect-agreement thresholds plus reason-coded exclusions.
+- Verification: focused job-truth/projection tests passed; integration suite
+  verification is recorded with the PR update.
+[@codex]
+
+## 2026-10-03 — Job status truth pilot PR3 remaining QA blockers (#1962)
+
+- Promotion gates now require every safety metric to be present and known,
+  returning explicit missing/unknown reason codes; `samples: 100` alone is
+  ineligible.
+- Routed daemon timeout and stranded-story failed transitions through the PR1
+  canonical settlement writer and registered the reclaim path in the terminal
+  writer manifest.
+- Verification: focused suites 152 passed; CI-equivalent matrix 3,740 passed,
+  2 skipped, with one unrelated sandbox-only vizor daemon log permission
+  failure; the isolated test passed with normal user-level log access.
 [@codex]

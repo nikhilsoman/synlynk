@@ -8,6 +8,7 @@ import json
 import os
 import subprocess
 import time
+from contextlib import contextmanager
 from typing import Any, Dict, List, Optional, Tuple
 
 _MANIFEST_FILES = (
@@ -15,6 +16,17 @@ _MANIFEST_FILES = (
     "Cargo.toml", "go.mod", "pom.xml", "build.gradle", "Gemfile",
 )
 _README_FILES = ("README.md", "README.rst", "README.txt", "README")
+
+
+@contextmanager
+def _working_directory(path: str):
+    """Temporarily run cwd-relative setup code from ``path``."""
+    original_cwd = os.getcwd()
+    os.chdir(path)
+    try:
+        yield
+    finally:
+        os.chdir(original_cwd)
 
 
 def _commit_count(root: str) -> int:
@@ -134,17 +146,18 @@ def _run_new_project_flow(answers: dict) -> None:
     from synlynk.db import cmd_roadmap_add
 
     mode = "team" if answers["team_mode"].startswith("team") else "solo"
-    init(mode=mode, quiet=True)
+    with _working_directory(os.path.abspath(os.curdir)):
+        init(mode=mode, quiet=True)
 
-    version = "v0.1.0"
-    cmd_roadmap_add(
-        version=version,
-        title=answers["goal"],
-        status="planned",
-        notes=f"Deliverable shape: {answers['deliverable_shape']}."
-        + (f" Preferred implementer: {answers['preferred_implementer']}."
-           if answers["preferred_implementer"] else ""),
-    )
+        version = "v0.1.0"
+        cmd_roadmap_add(
+            version=version,
+            title=answers["goal"],
+            status="planned",
+            notes=f"Deliverable shape: {answers['deliverable_shape']}."
+            + (f" Preferred implementer: {answers['preferred_implementer']}."
+               if answers["preferred_implementer"] else ""),
+        )
 
     print(f"\nSetup complete. Next: run `synlynk dispatch {answers['preferred_implementer'] or '<agent>'} "
           f"--task \"{answers['goal']}\"` to start building against {version}.")
@@ -190,11 +203,17 @@ def _run_existing_project_flow(root: str = ".") -> None:
 
 def cmd_start() -> None:
     """Entry point for `synlynk start` -- see spec's "synlynk start EXACT FLOW"."""
+    workspace_exists = os.path.exists(".synlynk/workspace.json")
     config_exists = os.path.exists(".synlynk/config.json")
     dir_exists = os.path.isdir(".synlynk")
-    already_initialized = config_exists or dir_exists
+    already_initialized = workspace_exists or config_exists or dir_exists
     if already_initialized:
-        what_exists = ".synlynk/config.json" if config_exists else ".synlynk/"
+        if workspace_exists:
+            what_exists = ".synlynk/workspace.json"
+        elif config_exists:
+            what_exists = ".synlynk/config.json"
+        else:
+            what_exists = ".synlynk/"
         answer = input(
             f"{what_exists} already exists -- refresh cold-start detection "
             "and re-run the relevant flow? [y/N] "
@@ -209,6 +228,62 @@ def cmd_start() -> None:
         _run_new_project_flow(answers)
     else:
         _run_existing_project_flow(".")
+
+
+def _quickstart_dispatch_verified(job: Any) -> bool:
+    """Verify that dispatch returned a durable-looking first-job receipt."""
+    if not isinstance(job, dict) or not job.get("id"):
+        return False
+    if job.get("status") in {"blocked", "failed", "failed_unverified"}:
+        return False
+    # A PID is present for newly spawned jobs.  Tests and alternate dispatch
+    # backends may return a terminal status instead, which is also a valid
+    # receipt as long as the dispatch supplied an id.
+    return bool(job.get("pid") or job.get("status") or job.get("worktree_path"))
+
+
+def cmd_quickstart() -> dict:
+    """Run the one-question onboarding path and verify its first dispatch.
+
+    Harness discovery and init are deliberately non-interactive.  The only
+    prompt is the task to dispatch, so a new user reaches a useful result
+    without navigating the legacy cold-start questionnaire.
+    """
+    from synlynk import discover_agents, dispatch_agent, init
+    from synlynk.instructions import _load_instruction_manifest
+
+    installed = [agent for agent in discover_agents() if agent.get("functional")]
+    names = [agent["name"] for agent in installed]
+    if installed:
+        print("Installed harnesses: " + ", ".join(names))
+    else:
+        print("No installed harnesses detected. Install Claude, Codex, Agy, or Grok, then run `synlynk quickstart` again.")
+        return {"status": "blocked", "reason": "no installed harnesses", "harnesses": []}
+
+    # init() owns generation and tracking of CLAUDE.md, GEMINI.md, AGENTS.md,
+    # GROK.md, and any detected extended instruction targets.
+    init(agents=names, non_interactive=True, quiet=True)
+    task = input("What should your first dispatch work on? ").strip()
+    task = task or "Inspect this repository and suggest the smallest useful first change."
+
+    harness = installed[0]["name"]
+    job = dispatch_agent(harness, task, context_mode="task", role="dev")
+    manifest = _load_instruction_manifest()
+    manifest_paths = sorted(manifest)
+    verified = _quickstart_dispatch_verified(job)
+    if verified:
+        print(f"First dispatch verified: {job['id']} via {harness}")
+    else:
+        print("First dispatch could not be verified; run `synlynk jobs` for details.")
+    if manifest_paths:
+        print("Instruction manifest: .synlynk/instructions.json (" + ", ".join(manifest_paths) + ")")
+    return {
+        "status": "verified" if verified else "unverified",
+        "harness": harness,
+        "task": task,
+        "job": job,
+        "manifest": manifest_paths,
+    }
 
 
 def run_ftue_journey(repo_root: str = ".", interactive: bool = True, dry_run: bool = False) -> dict:
@@ -493,18 +568,23 @@ def _bootstrap_4docs(
     build_cmd: str,
     hotspots: List[str],
     user_name: str,
-    force: bool = False
+    force: bool = False,
+    replace_generated_docs: bool = False,
 ) -> List[str]:
     """Generate or update the mandatory 4-doc structure in project-docs/."""
+    from synlynk import _generated_docs_locked
+
     docs_dir = os.path.join(root, "project-docs")
     os.makedirs(docs_dir, exist_ok=True)
     os.makedirs(os.path.join(docs_dir, "devlogs"), exist_ok=True)
     today = time.strftime("%Y-%m-%d", time.gmtime())
     created = []
 
+    locked = _generated_docs_locked(replace_generated_docs, root=root)
+
     # 1. roadmap.md
     roadmap_path = os.path.join(docs_dir, "roadmap.md")
-    if not os.path.exists(roadmap_path) or force:
+    if not locked and (not os.path.exists(roadmap_path) or force):
         roadmap_content = f"""# Project Roadmap
 
 > **Repository Baseline:** Brownfield Ingestion ({today})  
@@ -526,7 +606,7 @@ def _bootstrap_4docs(
 
     # 2. memory.md
     memory_path = os.path.join(docs_dir, "memory.md")
-    if not os.path.exists(memory_path) or force:
+    if not locked and (not os.path.exists(memory_path) or force):
         hotspot_str = ", ".join(hotspots[:3]) if hotspots else "core workspace modules"
         memory_content = f"""# Project Memory & Architectural Decisions
 
@@ -542,7 +622,7 @@ def _bootstrap_4docs(
 
     # 3. todo.md
     todo_path = os.path.join(docs_dir, "todo.md")
-    if not os.path.exists(todo_path) or force:
+    if not locked and (not os.path.exists(todo_path) or force):
         todo_content = f"""# Tasks (TODO)
 
 <!-- Auto-projected from state.db — updated via synlynk story -->
@@ -558,7 +638,7 @@ def _bootstrap_4docs(
 
     # 4. costs.md
     costs_path = os.path.join(docs_dir, "costs.md")
-    if not os.path.exists(costs_path) or force:
+    if not locked and (not os.path.exists(costs_path) or force):
         costs_content = f"""# Project AI Costs & Token Ledger
 
 | Date | Agent / Harness | Operation | Input Tokens | Output Tokens | Cost (USD) | Notes |
@@ -594,6 +674,7 @@ def run_brownfield_init(
     interactive: bool = True,
     dry_run: bool = False,
     force: bool = False,
+    replace_generated_docs: bool = False,
 ) -> Dict[str, Any]:
     """Deep Brownfield Ingestion Engine for existing codebases.
 
@@ -601,7 +682,8 @@ def run_brownfield_init(
     presents 1-click confirmation chips, and bootstraps the mandatory 4-doc standard.
     """
     repo_path = os.path.abspath(repo_root)
-    project_name = os.path.basename(repo_path) or "workspace"
+    from synlynk.product_store import resolve_product_display_name
+    project_name = resolve_product_display_name(repo_path) or os.path.basename(repo_path) or "workspace"
 
     # 1. Reverse-engineer tech stack & commands
     stack_info = _detect_brownfield_stack(repo_path)
@@ -651,41 +733,46 @@ def run_brownfield_init(
             "docs_created": ["roadmap.md", "memory.md", "todo.md", "costs.md", f"devlogs/{user_name}.md"],
         }
 
-    # 3. Initialize synlynk base structure
+    # init() and the follow-up helpers are cwd-relative. Keep the whole
+    # repository write sequence in repo_path and always restore the caller's cwd.
     from synlynk import init, _update_config
-    init(force=force, mode="solo", quiet=True)
+    with _working_directory(repo_path):
+        # 3. Initialize synlynk base structure
+        init(force=force, mode="solo", quiet=True,
+             replace_generated_docs=replace_generated_docs)
 
-    # 4. Save brownfield configs
-    os.makedirs(os.path.join(repo_path, ".synlynk"), exist_ok=True)
-    _update_config({
-        "project_name": project_name,
-        "stack": stack_info["label"],
-        "test_command": test_cmd,
-        "lint_command": lint_cmd,
-        "build_command": build_cmd,
-        "hotspots": hotspots,
-        "primary_author": user_name,
-        "brownfield": True,
-        "initialized_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-    })
+        # 4. Save brownfield configs
+        os.makedirs(os.path.join(repo_path, ".synlynk"), exist_ok=True)
+        _update_config({
+            "project_name": project_name,
+            "stack": stack_info["label"],
+            "test_command": test_cmd,
+            "lint_command": lint_cmd,
+            "build_command": build_cmd,
+            "hotspots": hotspots,
+            "primary_author": user_name,
+            "brownfield": True,
+            "initialized_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        })
 
-    # 5. Bootstrap 4-doc structure
-    created_docs = _bootstrap_4docs(
-        repo_path, stack_info["label"], test_cmd, lint_cmd, build_cmd, hotspots, user_name, force=force
-    )
-
-    # 6. Seed state.db with initial brownfield goals & stories
-    try:
-        from synlynk.db import cmd_goal_create, cmd_story_create
-        cmd_goal_create(
-            outcome=f"Stabilize brownfield {stack_info['label']} codebase and establish verification gates",
-            criterion=f"{test_cmd} passes cleanly with 0 regressions",
-            role="pm"
+        # 5. Bootstrap 4-doc structure
+        created_docs = _bootstrap_4docs(
+            repo_path, stack_info["label"], test_cmd, lint_cmd, build_cmd, hotspots, user_name,
+            force=force, replace_generated_docs=replace_generated_docs,
         )
-        cmd_story_create(title=f"Verify automated test harness ({test_cmd}) against top churn files")
-        cmd_story_create(title=f"Establish CI lint and type verification gate ({lint_cmd})")
-    except Exception:
-        pass
+
+        # 6. Seed state.db with initial brownfield goals & stories
+        try:
+            from synlynk.db import cmd_goal_create, cmd_story_create
+            cmd_goal_create(
+                outcome=f"Stabilize brownfield {stack_info['label']} codebase and establish verification gates",
+                criterion=f"{test_cmd} passes cleanly with 0 regressions",
+                role="pm"
+            )
+            cmd_story_create(title=f"Verify automated test harness ({test_cmd}) against top churn files")
+            cmd_story_create(title=f"Establish CI lint and type verification gate ({lint_cmd})")
+        except Exception:
+            pass
 
     return {
         "success": True,
@@ -699,4 +786,3 @@ def run_brownfield_init(
         "contributors": contributors,
         "docs_created": created_docs,
     }
-

@@ -46,7 +46,7 @@ def test_ftue_prompts_non_tty_uses_defaults_without_input(tmp_path, monkeypatch)
         "second_view": "tube",
         "notify_on_refresh": False,
         "refresh_interval_minutes": 0,
-        "port": 8721,
+            "port": 33333,
         "theme": "system",
         "timeline_weeks": 10,
         "ftue_done": True,
@@ -383,10 +383,16 @@ def test_generate_effort_html_renders_svg_charts(tmp_path, monkeypatch):
 
     assert "window.VIZOR_DATA =" in html
     assert "Total Spend" in html
-    assert "Dreams In Flight" in html
+    assert "ACTIVE GOALS" in html
     assert "Over Budget" in html
     assert "Top Agent" in html
-    assert "<svg viewBox=\"0 0 500" in html
+    assert '<div class="effort-row">' in html
+    assert '<div class="effort-label">Dream One</div>' in html
+    assert '<div class="effort-bar-track"' in html
+    assert '<div class="effort-cost">$120.00 / est $100.00</div>' in html
+    assert "By Goal / Milestone" in html
+    assert "Dreams In Flight" not in html
+    assert "By Dream" not in html
     assert "Dream One" in html
     assert "$120.00 / est $100.00" in html
     assert "claude" in html
@@ -447,7 +453,7 @@ def test_generate_effort_html_flags_estimated_rows(tmp_path, monkeypatch):
     assert "~Estimated" in html
     assert "$20.00 (17%)" in html
     assert "(est: $20.00)" in html
-    assert 'fill-opacity="0.4"' in html
+    assert ".effort-bar-estimated" in html
 
 
 def test_generate_effort_html_no_estimate_suffix_when_fully_actual(tmp_path, monkeypatch):
@@ -713,7 +719,7 @@ def test_generate_gantt_html_empty_state():
 
     html = generate_gantt_html(data, port=8721)
 
-    assert "No Dreams found in state db" in html
+    assert "No Releases found in state db" in html
     assert "<p class='empty-state'>" in html
 
 

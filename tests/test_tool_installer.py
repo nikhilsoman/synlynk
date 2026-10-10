@@ -13,7 +13,9 @@ def test_recommended_tools_registry():
 
 def test_is_tool_available_false_when_missing(monkeypatch):
     monkeypatch.setattr("shutil.which", lambda name: None)
+    monkeypatch.setattr("os.path.isfile", lambda path: False)
     assert is_tool_available("graphify") is False
+
 
 
 def test_is_tool_available_true_when_present(monkeypatch):

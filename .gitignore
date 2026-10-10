@@ -1,6 +1,8 @@
 .superpowers/
 .synlynk/*
 .synlynk/config.json
+!.synlynk/workspace.json
+!.synlynk/billing.json
 .synlynk/viz-cache/
 .synlynk/viz-meta.json
 !.synlynk/roles.yaml
@@ -8,6 +10,7 @@
 !.synlynk/skills/
 !.synlynk/social_drafts.json
 !.synlynk/models.json
+!.synlynk/charters/
 __pycache__/
 *.pyc
 .DS_Store
@@ -23,4 +26,7 @@ bin/statusline.py
 project-docs/handoff-note.md
 .aider*
 node_modules/
-state.db
+state.db*
+/build/
+/dist/
+graphify-out/

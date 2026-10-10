@@ -51,6 +51,102 @@ def _warn_stale_repo_version(installed_version, cwd=None):
         file=sys.stderr,
     )
 
+def _collect_brownfield_evidence(repo_path: str) -> dict:
+    """Walk ``repo_path`` into the list-shaped evidence dict expected by
+    ``synlynk.goal_synthesizer.synthesize_brownfield_goals``."""
+    from synlynk.repo_classifier import _CODE_EXTENSIONS, _EXCLUDED_DIRS, _KNOWN_MANIFESTS
+
+    code_files, test_files, manifests, languages = [], [], [], []
+    for root, dirs, files in os.walk(repo_path):
+        dirs[:] = [d for d in dirs if d not in _EXCLUDED_DIRS]
+        for f in files:
+            rel = os.path.relpath(os.path.join(root, f), repo_path)
+            if f in _KNOWN_MANIFESTS and f not in manifests:
+                manifests.append(f)
+            ext = os.path.splitext(f)[1].lower()
+            if ext not in _CODE_EXTENSIONS:
+                continue
+            if "test" in f.lower() or "spec" in f.lower():
+                test_files.append(rel)
+            else:
+                code_files.append(rel)
+            if ext not in languages:
+                languages.append(ext)
+
+    return {
+        "code_files": code_files,
+        "test_files": test_files,
+        "manifests": manifests,
+        "languages": languages,
+        "open_issues": [],
+        "uncommitted_diffs": [],
+    }
+
+
+def _synthesize_goals_for_repo(repo_path: str, non_interactive: bool, blueprint=None, charters=None):
+    """Shared Welcome Fork + goal synthesis flow used by both
+    ``synlynk brainstorm`` and ``synlynk brief``. Returns (mode, goals, classification)."""
+    from synlynk.repo_classifier import classify_repository, RepoType, prompt_welcome_fork
+    from synlynk.greenfield_blueprints import synthesize_greenfield_goals
+    from synlynk.goal_synthesizer import synthesize_brownfield_goals, enrich_goals_ambient
+
+    classification = classify_repository(repo_path)
+
+    if blueprint:
+        fork = "spin_greenfield"
+    else:
+        fork = prompt_welcome_fork(classification, interactive=not non_interactive)
+
+    if fork == "spin_greenfield":
+        blueprint_id = blueprint or "personal_assistant"
+        selected_charters = [c.strip() for c in (charters or "").split(",") if c.strip()] or None
+        goals = synthesize_greenfield_goals(blueprint_id, selected_charters)
+        return "Greenfield", goals, classification
+
+    evidence = _collect_brownfield_evidence(repo_path)
+    goals = synthesize_brownfield_goals(evidence)
+    goals = enrich_goals_ambient(goals, evidence)
+    return "Brownfield", goals, classification
+
+
+def cmd_brainstorm(args) -> None:
+    """Classify the repo (Welcome Fork), synthesize strategic goals, and
+    offer them for review/approval."""
+    from synlynk.brief import review_and_approve_goals_tui
+
+    repo_path = getattr(args, "path", None) or "."
+    non_interactive = getattr(args, "non_interactive", False)
+    mode, goals, _classification = _synthesize_goals_for_repo(
+        repo_path, non_interactive, getattr(args, "blueprint", None), getattr(args, "charters", None))
+
+    approved = review_and_approve_goals_tui(goals, interactive=not non_interactive)
+
+    print(f"\n✦ {mode} goal synthesis complete — {len(approved)} goal(s) approved.")
+    for g in approved:
+        print(f"  [{g.get('priority')}] {g.get('id')}: {g.get('title')}")
+    print("\nRun `synlynk brief` to generate an Executive Project Brief from these signals.")
+
+
+def cmd_brief(args) -> None:
+    """Generate and save an Executive Project Brief summarizing discovered
+    signals and synthesized strategic goals."""
+    from synlynk.brief import generate_executive_brief, save_executive_brief
+
+    repo_path = getattr(args, "path", None) or "."
+    mode, goals, classification = _synthesize_goals_for_repo(
+        repo_path, non_interactive=True, blueprint=getattr(args, "blueprint", None),
+        charters=getattr(args, "charters", None))
+
+    evidence = {
+        "code_files": classification.code_file_count,
+        "manifests": classification.manifests,
+        "test_files": classification.test_file_count,
+    }
+    content = generate_executive_brief(repo_path, goals, evidence, mode=mode)
+    brief_path = save_executive_brief(repo_path, content)
+    print(f"\n✦ Executive Project Brief saved to {brief_path}")
+
+
 def cmd_watch(args) -> None:
     """Terminal HUD for live workspace state."""
     import select
@@ -181,18 +277,89 @@ def cmd_watch(args) -> None:
         sys.stdout.write("\033[?1049l")
         sys.stdout.flush()
 
-def build_parser() -> argparse.ArgumentParser:
+_TOP_LEVEL_COMMANDS = (
+    "help", "init", "quickstart", "upgrade", "uninstall", "join", "start", "home", "testbed", "tool",
+    "pack", "connector", "impact", "mesh", "spike", "team", "decide", "heal",
+    "audit-docs", "goal", "governs", "local", "models", "media", "scan", "workspace",
+    "migrate", "rollback", "probe", "doctor", "worktree", "tui", "notify", "exit",
+    "repair", "sync", "configure", "identity", "type", "whoami", "events", "session",
+    "harness", "agent", "exec", "gh", "watch", "swarm", "daemon", "checkpoint", "status",
+    "backup", "state", "ops", "selftest", "config", "sentinel", "dispatch", "jobs", "relay",
+    "logs", "shell", "open", "launch", "run", "story", "pm", "tpm", "score", "charters", "cost",
+    "roadmap", "policy", "credit", "backlog", "quota", "schedule", "pr", "capability",
+    "instructions", "marketing", "roles", "release", "viz", "provenance",
+    "backfill-capability-ratings",
+    "board", "concierge", "addon", "autonomy",
+    "gateway",
+)
+
+
+class _LazyParserStub:
+    """No-op parser returned while registering a non-selected command."""
+
+    def add_argument(self, *args, **kwargs):
+        return self
+
+    def add_subparsers(self, *args, **kwargs):
+        return self
+
+    def add_parser(self, *args, **kwargs):
+        return self
+
+    def add_mutually_exclusive_group(self, *args, **kwargs):
+        return self
+
+    def set_defaults(self, **kwargs):
+        return self
+
+
+class _LazySubparsers:
+    """Register only one top-level parser while retaining argparse choices."""
+
+    def __init__(self, action, selected_command):
+        self._action = action
+        self._selected_command = selected_command
+        stub = _LazyParserStub()
+        for command in _TOP_LEVEL_COMMANDS:
+            action.choices[command] = stub
+            action._name_parser_map[command] = stub
+
+    def add_parser(self, name, **kwargs):
+        if self._selected_command is None or name != self._selected_command:
+            return _LazyParserStub()
+        self._action._name_parser_map.pop(name, None)
+        parser = self._action.add_parser(name, **kwargs)
+        return parser
+
+
+def build_parser(selected_command=None) -> argparse.ArgumentParser:
     from synlynk._constants import CORE_FLEET
 
     parser = argparse.ArgumentParser(
-        description="synlynk: The Universal Context Switchboard for AI Devs"
+        description="synlynk: The Universal Context Switchboard for AI Devs",
+        epilog=(
+            "Core commands: init, dispatch, status, jobs, decide, pr check, exec, doctor.\n"
+            "Use `synlynk help --all` or `synlynk help <group>` for taxonomy-backed help."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     from synlynk._constants import VERSION, HARNESS_CAPABILITY_BASELINES
 
     parser.add_argument("--version", action="version", version=f"synlynk {VERSION}")
     subparsers = parser.add_subparsers(dest="command")
+    if selected_command is not None:
+        subparsers = _LazySubparsers(subparsers, selected_command)
+
+    help_parser = subparsers.add_parser("help", help="Show tiered command help from the command taxonomy")
+    help_parser._synlynk_skip_taxonomy = True
+    from synlynk.taxonomy import HELP_GROUPS
+    help_parser.add_argument("group", nargs="?", choices=HELP_GROUPS)
+    help_parser.add_argument("--all", action="store_true", help="Show every taxonomy command")
 
     init_parser = subparsers.add_parser("init", help="Initialize synlynk in a repository")
+    init_parser.add_argument("--yes", "--non-interactive", action="store_true",
+                             dest="non_interactive",
+                             help="Use safe defaults without prompting (also used when stdin is not a terminal)")
     init_parser.add_argument("--force", action="store_true",
                              help="Overwrite existing template files")
     init_parser.add_argument("--agents", default="claude,agy,codex,grok",
@@ -214,8 +381,32 @@ def build_parser() -> argparse.ArgumentParser:
                              help="Run the 5-stage automated FTUE onboarding journey")
     init_parser.add_argument("--brownfield", action="store_true",
                              help="Run Deep Brownfield Ingestion Engine to reverse-engineer tests, linters, churn, and bootstrap 4-doc structure")
+    init_parser.add_argument("--replace-generated-docs", action="store_true",
+                             dest="replace_generated_docs",
+                             help="Allow init/brownfield to replace generated 4-docs on a migrated ledger (off by default)")
     init_parser.add_argument("--dry-run", action="store_true", dest="dry_run",
                              help="Preview what init would write without writing anything")
+
+    brainstorm_parser = subparsers.add_parser(
+        "brainstorm", help="Classify this repo (Welcome Fork) and synthesize strategic goals")
+    brainstorm_parser.add_argument("--path", default=".",
+                                    help="Repository path to analyze (default: current directory)")
+    brainstorm_parser.add_argument("--yes", "--non-interactive", action="store_true",
+                                    dest="non_interactive",
+                                    help="Use safe defaults without prompting")
+    brainstorm_parser.add_argument("--blueprint", default=None,
+                                    help="Force a Greenfield blueprint id (personal_assistant, dotfiles)")
+    brainstorm_parser.add_argument("--charters", default=None,
+                                    help="Comma-separated charter ids for the personal_assistant blueprint")
+
+    brief_parser = subparsers.add_parser(
+        "brief", help="Generate and save an Executive Project Brief (project-docs/brief.md)")
+    brief_parser.add_argument("--path", default=".",
+                               help="Repository path to analyze (default: current directory)")
+    brief_parser.add_argument("--blueprint", default=None,
+                               help="Force a Greenfield blueprint id (personal_assistant, dotfiles)")
+    brief_parser.add_argument("--charters", default=None,
+                               help="Comma-separated charter ids for the personal_assistant blueprint")
 
     upgrade_parser = subparsers.add_parser("upgrade", help="Check for and apply updates")
     upgrade_parser.add_argument("--dry-run", action="store_true", dest="dry_run",
@@ -229,6 +420,9 @@ def build_parser() -> argparse.ArgumentParser:
                              help="Opaque membership invite verified by the project minter")
     subparsers.add_parser(
         "start", help="Cold-start entry point: detect new vs existing project and guide setup"
+    )
+    subparsers.add_parser(
+        "quickstart", help="Detect harnesses, initialize the workspace, and dispatch a first task"
     )
     home_parser = subparsers.add_parser("home", help="Display or switch the active home harness")
     home_parser.add_argument("harness", nargs="?", choices=["claude", "agy", "codex", "grok", "local", "muse"], help="Harness to set as home")
@@ -297,6 +491,11 @@ def build_parser() -> argparse.ArgumentParser:
     team_sub = team_parser.add_subparsers(dest="team_action")
     team_sub.add_parser("status", help="Show team digest: members, stories, budget")
 
+    gc_parser = subparsers.add_parser("gc", help="Garbage collect merged worktrees and orphaned state.db shards")
+    gc_parser.add_argument("--yes", action="store_true", help="Apply deletions (default is dry-run)")
+    gc_parser.add_argument("--retention-days", type=int, default=14, help="Days to keep inactive shards")
+    gc_parser.add_argument("--size-budget-mb", type=int, default=1024, help="Max size in MB for state.db shards before aggressive pruning")
+
     decide_parser = subparsers.add_parser(
         "decide", help="Convene a multi-agent panel and optionally record a Decision"
     )
@@ -343,16 +542,55 @@ def build_parser() -> argparse.ArgumentParser:
     goal_create_parser.add_argument("--criterion", required=True)
     goal_create_parser.add_argument("--deadline", default=None)
     goal_create_parser.add_argument("--role", default="pm")
-    goal_sub.add_parser("list", help="List active goals")
+    goal_create_parser.add_argument("--kind", choices=["feature", "loop"], default="feature", help="Goal kind: feature (default) or persistent loop")
+    goal_list_parser = goal_sub.add_parser("list", help="List active goals")
+    goal_list_parser.add_argument("--kind", choices=["feature", "loop"], default=None, help="Filter by goal kind")
     goal_link_parser = goal_sub.add_parser("link", help="Link a story to a goal")
     goal_link_parser.add_argument("story_id")
     goal_link_parser.add_argument("--goal", required=True, dest="goal_id")
     goal_link_parser.add_argument("--secondary", action="store_true")
     goal_sub.add_parser("status", help="Show goal completion rollup")
 
+    governs_parser = subparsers.add_parser("governs", help="Manage GOVERNS lifecycle and reconciliation")
+    governs_parser.add_argument("--full", action="store_true", help="Show full 7-stage internal GOVERNS FSM breakdown")
+    governs_sub = governs_parser.add_subparsers(dest="governs_action")
+    governs_sweep_parser = governs_sub.add_parser("sweep", help="Reconcile and backfill 100%% GOVERNS goal linkages and stages across workspace")
+    governs_sweep_parser.add_argument("--dry-run", action="store_true", help="Calculate linkages and stage transitions without writing to state.db")
+    governs_sweep_parser.add_argument("--strict", action="store_true", help="Fail with non-zero exit if any unlinked stories remain")
+    governs_sweep_parser.add_argument("--verbose", action="store_true", help="Print per-story resolution details")
+
     local_parser = subparsers.add_parser("local", help="Manage the local (oMLX) harness")
     local_sub = local_parser.add_subparsers(dest="local_action")
-    local_sub.add_parser("doctor", help="Check oMLX endpoint reachability and model roster")
+    local_doctor_parser = local_sub.add_parser(
+        "doctor", help="Check oMLX endpoint reachability and model roster"
+    )
+    local_doctor_parser.add_argument(
+        "--init",
+        action="store_true",
+        default=False,
+        help="Detect hardware tier and write pinned_model to .agents/local.json",
+    )
+
+    gateway_parser = subparsers.add_parser("gateway", help="Manage external model gateways")
+    gateway_sub = gateway_parser.add_subparsers(dest="gateway_cmd")
+    probe_gateway_parser = gateway_sub.add_parser("probe", help="Test gateway connectivity")
+    probe_gateway_parser.add_argument(
+        "--gateway", default=None,
+        help="Name of gateway to probe (default: all enabled)",
+    )
+    probe_gateway_parser.add_argument(
+        "--config", default=".synlynk/registry.json",
+        help="Path to registry.json",
+    )
+    dispatch_gateway_parser = gateway_sub.add_parser(
+        "dispatch", help="Send a prompt through OpenRouter"
+    )
+    dispatch_gateway_parser.add_argument("--model", required=True, help="Primary OpenRouter model ID")
+    dispatch_gateway_parser.add_argument("--prompt", required=True, help="User prompt to send")
+    dispatch_gateway_parser.add_argument(
+        "--config", default=".synlynk/registry.json",
+        help="Path to registry.json",
+    )
 
     models_parser = subparsers.add_parser("models", help="Inspect and discover the model registry")
     models_sub = models_parser.add_subparsers(dest="models_action")
@@ -439,6 +677,8 @@ def build_parser() -> argparse.ArgumentParser:
                                help="Execute live in-sandbox gh-write probe during health checks")
     doctor_parser.add_argument("--readiness", action="store_true",
                                help="Evaluate and display the consolidated 4-point fleet readiness matrix")
+    doctor_parser.add_argument("--provision", action="store_true",
+                               help="Provision recommended ecosystem tools if missing")
 
     worktree_parser = subparsers.add_parser(
         "worktree", help="Audit and clean up stale git worktrees/branches"
@@ -690,7 +930,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     daemon_parser = subparsers.add_parser("daemon", help="Manage the always-on context daemon")
     daemon_parser.add_argument(
-        "action", nargs="?", choices=["start", "stop", "status", "restart"],
+        "action", nargs="?", choices=["start", "stop", "status", "restart", "run"],
         help="Daemon action"
     )
     daemon_parser.add_argument(
@@ -761,6 +1001,22 @@ def build_parser() -> argparse.ArgumentParser:
     state_inventory.add_argument(
         "--all", action="store_true", dest="all_artifacts",
         help="Include the full ~/.synlynk legacy/quarantine/backup tree",
+    )
+    state_inventory.add_argument(
+        "--reconcile", default=None, dest="reconcile_slug", metavar="SLUG",
+        help="Plan (default) or apply merging matched legacy shards into workspace SLUG's state.db",
+    )
+    state_inventory.add_argument(
+        "--apply", action="store_true",
+        help="Actually write the reconcile merge (default is dry-run plan only)",
+    )
+    state_inventory.add_argument(
+        "--ignore-conflicts", action="store_true", dest="ignore_conflicts",
+        help="Skip conflicting story rows instead of refusing to apply",
+    )
+    state_inventory.add_argument(
+        "--cutoff-days", type=int, default=None, dest="cutoff_days", metavar="N",
+        help="With --reconcile, skip matched shards whose staleness exceeds N days",
     )
     state_promote = state_sub.add_parser("promote", help="Promote a verified DB without overwriting canonical state")
     state_promote.add_argument("source")
@@ -852,8 +1108,8 @@ def build_parser() -> argparse.ArgumentParser:
     known_agents = sorted(HARNESS_CAPABILITY_BASELINES)
     dispatch_parser.add_argument("agent",
         nargs="?", default=None,
-        choices=known_agents,
-        help=f"Harness name: {', '.join(known_agents)}. Optional when --as-agent triggers auto-selection.")
+        choices=known_agents + ["auto"],
+        help=f"Harness name: {', '.join(known_agents + ['auto'])}. Optional when --as-agent triggers auto-selection.")
     dispatch_parser.add_argument("--task", required=True,
         help="Task description for the harness")
     dispatch_parser.add_argument("--story", default=None, dest="story_id",
@@ -881,6 +1137,10 @@ def build_parser() -> argparse.ArgumentParser:
     dispatch_parser.add_argument(
         "--model", default=None,
         help="Explicit model identifier; overrides automatic model selection",
+    )
+    dispatch_parser.add_argument(
+        "--effort", choices=["low", "high"], default=None,
+        help="Reasoning effort for the selected model",
     )
     dispatch_parser.add_argument("--task-domain", default=None, dest="task_domain",
                                  help="Capability domain used by adaptive EV routing")
@@ -914,6 +1174,19 @@ def build_parser() -> argparse.ArgumentParser:
     dispatch_parser.add_argument(
         "--skip-preflight", action="store_true", dest="skip_preflight",
         help="Bypass harness preflight checks"
+    )
+    dispatch_parser.add_argument(
+        "--dangerously-skip-permissions", action="store_true", dest="skip_permissions",
+        help="Explicitly bypass harness permission prompts (unsafe; opt-in only)",
+    )
+    dispatch_parser.add_argument(
+        "--container-image",
+        default=None,
+        dest="container_image",
+        help=(
+            "Run this dispatch inside a container of this image. "
+            "Absent means the host subprocess. There is no default image."
+        ),
     )
     dispatch_parser.add_argument(
         "--base", default=None,
@@ -964,11 +1237,17 @@ def build_parser() -> argparse.ArgumentParser:
     jobs_parser.add_argument("--all", action="store_true", dest="all_jobs",
         help="Include completed and failed jobs")
     jobs_parser.add_argument("--summary", metavar="JOB_ID")
+    jobs_parser.add_argument("--json", action="store_true", dest="json_output",
+        help="Output canonical job-truth projections and evidence summaries")
     jobs_parser.add_argument("--watch", action="store_true",
         help="Refresh table every 2 seconds until Ctrl-C")
     jobs_parser.add_argument("--stalled", action="store_true",
         help="List jobs awaiting handoff")
     jobs_sub = jobs_parser.add_subparsers(dest="jobs_cmd")
+    reconcile_p = jobs_sub.add_parser("reconcile", help="Append evidence and reconcile one job through the canonical oracle")
+    reconcile_p.add_argument("job_id")
+    reconcile_p.add_argument("--evidence-json", default=None,
+        help="JSON object describing an evidence observation; omitted requests verification")
     handoff_p = jobs_sub.add_parser("handoff", help="Transfer a stalled job to another harness")
     handoff_p.add_argument("job_id")
     handoff_p.add_argument("--to-harness", "--to-agent", "--to", dest="to_agent", default=None,
@@ -1175,11 +1454,39 @@ def build_parser() -> argparse.ArgumentParser:
     cost_log_parser.add_argument("--harness", "--agent", required=True, dest="harness")
     cost_log_parser.add_argument("--tokens-in", type=int, required=True, dest="tokens_in")
     cost_log_parser.add_argument("--tokens-out", type=int, required=True, dest="tokens_out")
-    cost_log_parser.add_argument("--story-id", default=None, dest="story_id")
+    cost_log_parser.add_argument("--story-id", "--story", default=None, dest="story_id")
+    cost_log_parser.add_argument("--job-id", default=None, dest="job_id")
+    cost_log_parser.add_argument(
+        "--pr", type=int, default=None,
+        help="PR number for native/interactive implementation or review provenance",
+    )
+    cost_log_parser.add_argument("--model", default=None,
+        help="Exact model identifier for this native/interactive session")
+    cost_log_parser.add_argument(
+        "--role",
+        default=None,
+        help="Workspace role for this native session (qa tags reviewer provenance)",
+    )
     cost_log_parser.add_argument("--note", default=None)
     cost_true_up_parser = cost_sub.add_parser("true-up", help="Reconcile subscription costs for a month")
     cost_true_up_parser.add_argument("--month", default=None, help="Billing month in YYYY-MM format")
     cost_true_up_parser.add_argument("--harness", default=None)
+    cost_sub.add_parser("billing", help="Show harness subscription billing and amortization configuration")
+    cost_audit_parser = cost_sub.add_parser("audit", help="Reconcile and report cost evidence by job decision revision")
+    cost_audit_sub = cost_audit_parser.add_subparsers(dest="cost_audit_action")
+    cost_audit_sub.add_parser("reconcile", help="Consume terminal decisions and snapshot legacy cost rows")
+    cost_audit_import_parser = cost_audit_sub.add_parser("import", help="Import a provider billing JSONL/JSON/CSV export")
+    cost_audit_import_parser.add_argument("--path", required=True, help="Provider export file")
+    cost_audit_import_parser.add_argument("--provider", required=True, help="Provider name recorded with source facts")
+    cost_audit_import_parser.add_argument("--account", default="", help="Provider account or billing workspace identifier")
+    cost_audit_correct_parser = cost_audit_sub.add_parser("correct", help="Preview or append a source correction")
+    cost_audit_correct_parser.add_argument("--source-kind", required=True)
+    cost_audit_correct_parser.add_argument("--account", default="")
+    cost_audit_correct_parser.add_argument("--record-id", required=True)
+    cost_audit_correct_parser.add_argument("--replacement", required=True, help="JSON file containing replacement source fields")
+    cost_audit_correct_parser.add_argument("--reason", required=True)
+    cost_audit_correct_parser.add_argument("--apply", action="store_true", help="Append the correction; omit to preview")
+    cost_audit_sub.add_parser("report", help="Print the read-only cost audit report as JSON")
 
     roadmap_parser = subparsers.add_parser("roadmap", help="Manage the roadmap")
     roadmap_sub = roadmap_parser.add_subparsers(dest="roadmap_action")
@@ -1205,6 +1512,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     policy_sync_bp_parser = policy_subparsers.add_parser("sync-branch-protection", help="Configure GitHub branch protection from policy.json")
     policy_sync_bp_parser.add_argument("--dry-run", action="store_true")
+    policy_subparsers.add_parser("gate-status", help="Show observe-mode gate streaks and the re-harden threshold")
 
     credit_parser = subparsers.add_parser("credit", help="Credit grant ledger commands")
     credit_sub = credit_parser.add_subparsers(dest="credit_action")
@@ -1330,6 +1638,16 @@ def build_parser() -> argparse.ArgumentParser:
         dest="json_output",
         help="Emit machine-readable JSON",
     )
+    federated_parser = quota_sub.add_parser(
+        "federated",
+        help="Show the latest subscription-quota percent per harness and window, plus 7-day dollar burn",
+    )
+    federated_parser.add_argument(
+        "--json",
+        action="store_true",
+        dest="json_output",
+        help="Emit machine-readable JSON",
+    )
 
     schedule_parser = subparsers.add_parser(
         "schedule", help="Batch-assign ready stories to agents (dry-run by default)"
@@ -1357,6 +1675,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="Verify all modified symbols in PR have associated test coverage via knowledge graph",
     )
     pr_sub.add_parser("gate-status", help="qa block-only merge gate (CI matrix + sentinel health)")
+
+    provenance_parser = subparsers.add_parser("provenance", help="Attest legacy job provenance")
+    provenance_sub = provenance_parser.add_subparsers(dest="provenance_action")
+    provenance_attest = provenance_sub.add_parser(
+        "attest", help="Record a human attestation for incomplete legacy job provenance"
+    )
+    provenance_attest.add_argument("job_id")
+    provenance_attest.add_argument("--role", required=True)
+    provenance_attest.add_argument("--task-type", required=True, dest="task_type")
+    provenance_attest.add_argument("--reason", required=True)
+    provenance_attest.add_argument(
+        "--confirm", required=True,
+        help="Exact confirmation in the form JOB_ID:ROLE:TASK_TYPE after reviewing the displayed job",
+    )
 
     capability_parser = subparsers.add_parser("capability", help="Capability ledger commands")
     capability_sub = capability_parser.add_subparsers(dest="capability_action")
@@ -1473,6 +1805,49 @@ def build_parser() -> argparse.ArgumentParser:
     viz_parser.add_argument("--hosted", action="store_true",
                             help="Show the fail-closed hosted Vizor placeholder")
 
+    autonomy_parser = subparsers.add_parser(
+        "autonomy", help="View or set the workspace autonomy dial (manual/supervised/autonomous)")
+    autonomy_sub = autonomy_parser.add_subparsers(dest="autonomy_action")
+    autonomy_sub.add_parser("show", help="Show the current autonomy mode")
+    autonomy_set_parser = autonomy_sub.add_parser("set", help="Set the autonomy mode")
+    autonomy_set_parser.add_argument(
+        "mode", choices=["manual", "supervised", "autonomous"])
+
+    board_parser = subparsers.add_parser(
+        "board", help="Sovereign Board governance: Ed25519-signed proposal ledger")
+    board_sub = board_parser.add_subparsers(dest="board_action")
+    board_propose_parser = board_sub.add_parser("propose", help="Create a new board proposal")
+    board_propose_parser.add_argument(
+        "--gate", required=True,
+        choices=["master_goal", "spec_ratification", "release_tag", "budget_topup", "board_admission"])
+    board_propose_parser.add_argument("--title", required=True)
+    board_propose_parser.add_argument("--description", default="")
+    board_propose_parser.add_argument("--budget", type=float, default=0.0, dest="budget")
+    board_sign_parser = board_sub.add_parser("sign", help="Sign a pending proposal as the Genesis Chair")
+    board_sign_parser.add_argument("proposal_id")
+    board_sign_parser.add_argument("--key-path", default=None, dest="key_path")
+    board_show_parser = board_sub.add_parser("show", help="Show a proposal's current state")
+    board_show_parser.add_argument("proposal_id")
+
+    concierge_parser = subparsers.add_parser(
+        "concierge", help="Concierge Agent: synthesize structured feature proposals from answers")
+    concierge_sub = concierge_parser.add_subparsers(dest="concierge_action")
+    concierge_synth_parser = concierge_sub.add_parser(
+        "synthesize", help="Synthesize a GitHub-issue-ready feature proposal")
+    concierge_synth_parser.add_argument("--title", required=True)
+    concierge_synth_parser.add_argument("--problem", default="")
+    concierge_synth_parser.add_argument("--scope", default="")
+    concierge_synth_parser.add_argument("--criteria", default="")
+    concierge_synth_parser.add_argument("--out", default=None, help="Write output to this file instead of stdout")
+
+    from synlynk.addon import list_available_addons as _list_available_addons
+    addon_parser = subparsers.add_parser(
+        "addon", help="Turnkey plug-and-play add-on bundles (quality, security, observability)")
+    addon_sub = addon_parser.add_subparsers(dest="addon_action")
+    addon_sub.add_parser("list", help="List available add-on bundles")
+    addon_install_parser = addon_sub.add_parser("install", help="Install an add-on bundle")
+    addon_install_parser.add_argument("bundle", choices=_list_available_addons())
+
     return parser
 
 
@@ -1517,22 +1892,130 @@ def _warn_deprecated_harness_flag(argv) -> None:
         print("  warning: --to-agent is deprecated, use --to-harness instead", file=sys.stderr)
 
 
+def _command_from_argv(argv):
+    """Return the first positional token, which is the top-level command."""
+    for token in argv:
+        if token == "--":
+            return None
+        if not token.startswith("-"):
+            return token
+    return None
+
+
+def _run_fast_observability_command(cli_tokens, selected_command):
+    """Run the two read-only observability commands without legacy imports.
+
+    ``synlynk`` historically populated :mod:`synlynk` with every command
+    implementation before dispatching.  Keep that compatibility path for the
+    full command surface, but let the common jobs/status probes stop after
+    importing only their own implementation modules.
+    """
+    if selected_command not in {"jobs", "status"}:
+        return False
+
+    parser = build_parser(selected_command=selected_command)
+    args = parser.parse_args(cli_tokens)
+
+    if selected_command == "status":
+        if getattr(args, "platform", False) or not getattr(args, "json_output", False):
+            return False
+        import json  # load_config keeps its historical package-level dependency
+
+        sys.modules["synlynk"].json = json
+        from synlynk import _get_db
+        from synlynk.capability_roles import _load_capability_roles
+        from synlynk.sentinel import _read_sentinel_alerts
+        from synlynk.status import cmd_status
+
+        # ``status`` keeps these names late-bound for compatibility with the
+        # package facade; seed only the one helper it needs in fast mode.
+        _package = sys.modules["synlynk"]
+        _package._read_sentinel_alerts = _read_sentinel_alerts
+        _package._load_capability_roles = _load_capability_roles
+        conn = _get_db(read_only=True)
+        try:
+            cmd_status(
+                db_conn=conn,
+                json_output=args.json_output,
+                include_worktree_hint=False,
+            )
+        finally:
+            conn.close()
+        return True
+
+    # Handoff/reap/summary/stalled have side effects or legacy file-backed
+    # behavior; leave those forms on the established compatibility path.
+    if (
+        getattr(args, "jobs_cmd", None) is not None
+        or getattr(args, "summary", None)
+        or getattr(args, "stalled", False)
+        or getattr(args, "watch", False)
+    ):
+        return False
+
+    # The established jobs command reconciles the legacy jobs.json ledger as
+    # well as daemon_jobs.  Keep that path whenever either source contains
+    # data; the fast renderer is only safe for an entirely empty workspace.
+    if os.path.exists(os.path.join(".synlynk", "jobs.json")):
+        return False
+
+    from synlynk import _get_db
+
+    conn = _get_db(migrate=False)
+    try:
+        try:
+            rows = conn.execute(
+                "SELECT job_id, agent, story_id, status, enqueued_at, exit_code, "
+                "context_mode, requires_gh_write, gh_write_verified "
+                "FROM daemon_jobs ORDER BY enqueued_at DESC LIMIT 50"
+            ).fetchall()
+        except Exception:
+            rows = []
+    finally:
+        conn.close()
+
+    if not rows:
+        print("No jobs found. Use `synlynk dispatch <agent> --task <task>` to start one.")
+        return True
+
+    # Non-empty daemon ledgers still need the established reconciliation and
+    # rendering path so stale PIDs and terminal states are refreshed before
+    # being displayed.
+    return False
+
+
+
 def main(argv=None) -> None:
     import synlynk as _package
 
+    cli_tokens = list(argv) if argv is not None else sys.argv[1:]
+    fast_entrypoint = _package._FAST_CLI
+    selected_command = _command_from_argv(cli_tokens)
+    if cli_tokens and cli_tokens[0] == "help":
+        parser = build_parser(selected_command="help" if fast_entrypoint else None)
+        args = parser.parse_args(cli_tokens)
+        from synlynk.taxonomy import format_tiered_help
+        print(format_tiered_help(args.group, include_all=args.all))
+        return
     if _package._FAST_CLI:
-        # Parse first so --help, --version, and invalid-command paths do not
-        # import the full compatibility export graph. Real commands load it
-        # only after argparse has accepted the command line.
-        parser = build_parser()
-        parser.parse_args(argv)
+        # Keep the common metadata/error paths free of the legacy import graph.
+        # A real command is parsed lazily after those imports, using only its
+        # own registration block.
+        if "--version" in cli_tokens:
+            from synlynk._constants import VERSION
+            print(f"synlynk {VERSION}")
+            raise SystemExit(0)
+        if "--help" in cli_tokens or selected_command not in _TOP_LEVEL_COMMANDS:
+            parser = build_parser(selected_command=selected_command)
+            parser.parse_args(cli_tokens)
+        if _run_fast_observability_command(cli_tokens, selected_command):
+            return
         _package._load_legacy_imports()
         _package._FAST_CLI = False
-        return main(argv)
 
     from synlynk.capability_sweep import cmd_capability_sweep
     from synlynk.db import cmd_story_done
-    from synlynk.policy_cli import cmd_policy_check_merge, cmd_policy_show, cmd_policy_sync_branch_protection
+    from synlynk.policy_cli import cmd_policy_check_merge, cmd_policy_gate_status, cmd_policy_show, cmd_policy_sync_branch_protection
     from synlynk.charters import cmd_charters_adapt
 
     from synlynk import (
@@ -1627,9 +2110,8 @@ def main(argv=None) -> None:
         spawn_staleness_check_thread(_watch_conn, load_config())
     except Exception:
         pass  # staleness checks are best-effort; never block a real command on this
-    parser = build_parser()
-    args = parser.parse_args(argv)
-    cli_tokens = argv if argv is not None else sys.argv[1:]
+    parser = build_parser(selected_command=selected_command if fast_entrypoint else None)
+    args = parser.parse_args(cli_tokens)
     help_parsers = getattr(parser, "_synlynk_help_parsers", {})
     _warn_stale_repo_version(VERSION)
 
@@ -1640,7 +2122,8 @@ def main(argv=None) -> None:
                 repo_root=".",
                 interactive=not getattr(args, "force", False),
                 dry_run=getattr(args, "dry_run", False),
-                force=getattr(args, "force", False)
+                force=getattr(args, "force", False),
+                replace_generated_docs=getattr(args, "replace_generated_docs", False),
             )
             if res.get("success"):
                 print(f"\n✦ Brownfield Ingestion complete. Stack: {res.get('stack')}, Tests: {res.get('test_command')}, Hotspots: {len(res.get('hotspots', []))} files.")
@@ -1652,7 +2135,7 @@ def main(argv=None) -> None:
                 print(f"\n✦ FTUE Onboarding complete. First win prepared on {res['first_win_task'].get('branch')}.")
             return
         elif getattr(args, "wizard", False):
-            wizard_init()
+            wizard_init(dry_run=getattr(args, "dry_run", False))
         else:
             agents = [a.strip() for a in args.agents.split(",") if a.strip()]
             if getattr(args, "docs_dir", None):
@@ -1661,7 +2144,13 @@ def main(argv=None) -> None:
                 _update_config({"project_docs_dir": args.docs_dir})
             init(force=args.force, agents=agents, mode=args.mode,
                  org=args.org, repo=args.repo, project_id=args.project_id,
-                 dry_run=getattr(args, "dry_run", False))
+                 non_interactive=getattr(args, "non_interactive", False),
+                 dry_run=getattr(args, "dry_run", False),
+                 replace_generated_docs=getattr(args, "replace_generated_docs", False))
+    elif args.command == "brainstorm":
+        cmd_brainstorm(args)
+    elif args.command == "brief":
+        cmd_brief(args)
     elif args.command == "exec":
         force = getattr(args, 'force', False)
         sys.exit(exec_command(args.cmd, force=force))
@@ -1725,6 +2214,9 @@ def main(argv=None) -> None:
             elif action == "restart":
                 d.stop()
                 d.start()
+            elif action == "run":
+                from synlynk.daemon import _synlynk_daemon_foreground_main
+                _synlynk_daemon_foreground_main()
             else:
                 daemon_parser.print_help()
     elif args.command == "checkpoint":
@@ -1771,6 +2263,10 @@ def main(argv=None) -> None:
             sys.exit(cmd_state_inventory(
                 json_output=args.json_output,
                 all_artifacts=getattr(args, "all_artifacts", False),
+                reconcile_slug=getattr(args, "reconcile_slug", None),
+                apply=getattr(args, "apply", False),
+                ignore_conflicts=getattr(args, "ignore_conflicts", False),
+                cutoff_days=getattr(args, "cutoff_days", None),
             ))
         elif args.state_action == "promote":
             from synlynk.state_repair import promote_state_db
@@ -1853,10 +2349,28 @@ def main(argv=None) -> None:
             if getattr(args, "as_agent", None):
                 from synlynk import agent_cli
                 resolved_agent_id = agent_cli._resolve_or_exit(args.as_agent)
+            from synlynk.dispatch import (
+                _infer_dispatch_defaults,
+                _infer_task_type,
+                _task_opens_pr,
+                _task_requires_gh_write,
+            )
+            defaults = _infer_dispatch_defaults(
+                args.task,
+                story_id=getattr(args, "story_id", None),
+                agent=args.agent,
+                role=getattr(args, "role", None),
+                task_type=getattr(args, "task_type", None),
+                requires_gh_write=getattr(args, "requires_gh_write", False),
+                base=getattr(args, "base", None),
+                grants=getattr(args, "grant", []),
+                revokes=getattr(args, "revoke", []),
+            )
             if not args.agent and not resolved_agent_id:
-                dispatch_parser.error("the following arguments are required: agent (unless --as-agent is given)")
+                args.agent = defaults["harness"]
+            if not getattr(args, "role", None) and not resolved_agent_id:
+                args.role = defaults["role"]
 
-            from synlynk.dispatch import _infer_task_type, _task_opens_pr, _task_requires_gh_write
             _effective_requires_gh_write = bool(
                 getattr(args, "requires_gh_write", False)
                 or _task_requires_gh_write(args.task, getattr(args, "task_type", None))
@@ -1864,6 +2378,19 @@ def main(argv=None) -> None:
             _effective_task_type = getattr(args, "task_type", None) or (
                 _infer_task_type(args.task) if _effective_requires_gh_write else None
             )
+            if args.agent == "auto":
+                from synlynk import _get_db
+                from synlynk.dispatch import _resolve_dispatch_agent
+
+                db = _get_db(read_only=True)
+                try:
+                    args.agent = _resolve_dispatch_agent(
+                        args.agent,
+                        _effective_task_type or "testing",
+                        db,
+                    )
+                finally:
+                    db.close()
             if _effective_task_type == "review" and not getattr(args, "task_type", None):
                 print(
                     "  info: inferred task_type=review from task text "
@@ -1874,7 +2401,14 @@ def main(argv=None) -> None:
                 "pr" if _effective_task_type == "review" or _task_opens_pr(args.task) else "issue"
             )
 
+            print(
+                f"→ {args.role}/{args.agent}, worktree {defaults['worktree']}, "
+                f"permissions {defaults['permission_profile']}"
+            )
+
             if getattr(args, "dry_run", False):
+                from synlynk.dispatch import take_routing_fallback
+                take_routing_fallback(None)
                 if not args.task or not args.task.strip():
                     raise ValueError(
                         "--task is empty or whitespace-only; refusing to dispatch (see #720)"
@@ -1916,8 +2450,10 @@ def main(argv=None) -> None:
                                  static_baseline=getattr(args, "static_baseline", False),
                                  requires_gh_write=_effective_requires_gh_write,
                                  task_type=_effective_task_type,
+                                 task_type_explicit=bool(getattr(args, "task_type", None)),
                                  model_tier=getattr(args, "model_tier", None),
                                  model=getattr(args, "model", None),
+                                 effort=getattr(args, "effort", None),
                                  task_domain=getattr(args, "task_domain", None),
                                  criticality=getattr(args, "criticality", 1.0),
                                  gh_write_target_kind=_resolved_gh_write_target_kind,
@@ -1925,6 +2461,8 @@ def main(argv=None) -> None:
                                  requires=getattr(args, "requires", []),
                                  context_mode=getattr(args, "context_mode", "task"),
                                  skip_preflight=getattr(args, "skip_preflight", False),
+                                 skip_permissions=getattr(args, "skip_permissions", False),
+                                 container_image=getattr(args, "container_image", None),
                                  base=getattr(args, "base", None),
                                  grants=getattr(args, "grant", []),
                                  revokes=getattr(args, "revoke", []),
@@ -1938,6 +2476,15 @@ def main(argv=None) -> None:
                 if remediation:
                     print(f"  {remediation}")
                 sys.exit(1)
+            # Keep caller-supplied flags separate from harness-generated flags.
+            # This is the baseline metric needed before the surface changes.
+            from synlynk.baseline import dispatch_invocation_event
+            from synlynk.sentinel import log_telemetry_event
+            log_telemetry_event(dispatch_invocation_event(
+                cli_tokens,
+                args.agent or known_agents[0],
+                job.get("id") if isinstance(job, dict) else None,
+            ))
             print(f"  {_GREEN}▶{_RESET} [{job['id']}] {job.get('agent', args.agent or known_agents[0])} dispatched  PID {job['pid']}")
             print(f"  Log:  {_CYAN}synlynk logs --job {job['id']}{_RESET}")
             if job.get("fence"):
@@ -1981,11 +2528,15 @@ def main(argv=None) -> None:
                     all_projects=getattr(args, "all_projects", False),
                 )
             )
+        elif getattr(args, "jobs_cmd", None) == "reconcile":
+            from synlynk.jobs import cmd_jobs_reconcile_truth
+            raise SystemExit(cmd_jobs_reconcile_truth(args.job_id, getattr(args, "evidence_json", None)))
         else:
             cmd_jobs(all_jobs=getattr(args, "all_jobs", False),
                      watch=getattr(args, "watch", False),
                      summary=getattr(args, "summary", None),
-                     stalled=getattr(args, "stalled", False))
+                     stalled=getattr(args, "stalled", False),
+                     json_output=getattr(args, "json_output", False))
     elif args.command == "relay":
         action = getattr(args, "relay_action", None)
         if action == "start":
@@ -2113,11 +2664,36 @@ def main(argv=None) -> None:
                 args.tokens_in,
                 args.tokens_out,
                 story_id=args.story_id,
+                job_id=args.job_id,
+                pr=args.pr,
                 note=args.note,
+                model=args.model,
+                role=args.role,
             )
         elif args.cost_action == "true-up":
             from synlynk.costs import cmd_cost_true_up
             cmd_cost_true_up(month=args.month, harness=args.harness)
+        elif args.cost_action == "billing":
+            from synlynk.costs import cmd_cost_billing
+            cmd_cost_billing(args)
+        elif args.cost_action == "audit":
+            from synlynk.cost_audit import (
+                cmd_cost_audit_correct, cmd_cost_audit_import,
+                cmd_cost_audit_reconcile, cmd_cost_audit_report,
+            )
+            if args.cost_audit_action == "reconcile":
+                print(json.dumps(cmd_cost_audit_reconcile(), indent=2, sort_keys=True))
+            elif args.cost_audit_action == "import":
+                result = cmd_cost_audit_import(args.path, args.provider, args.account)
+                print(json.dumps(result, indent=2, sort_keys=True))
+            elif args.cost_audit_action == "report":
+                cmd_cost_audit_report()
+            elif args.cost_audit_action == "correct":
+                result = cmd_cost_audit_correct(
+                    args.source_kind, args.account, args.record_id,
+                    args.replacement, args.reason, apply=args.apply,
+                )
+                print(json.dumps(result, indent=2, sort_keys=True))
     elif args.command == "roadmap":
         if args.roadmap_action == "add":
             try:
@@ -2213,6 +2789,8 @@ def main(argv=None) -> None:
         sys.exit(cmd_policy_check_merge(role=args.role))
     elif args.command == "policy" and args.policy_command == "sync-branch-protection":
         sys.exit(cmd_policy_sync_branch_protection(dry_run=args.dry_run))
+    elif args.command == "policy" and args.policy_command == "gate-status":
+        sys.exit(cmd_policy_gate_status())
     elif args.command == "credit":
         if args.credit_action == "grant":
             _warn_deprecated_harness_flag(cli_tokens)
@@ -2235,6 +2813,9 @@ def main(argv=None) -> None:
                 print(export_advisory_json(adv))
             else:
                 print(format_advisory_text(adv))
+        elif action == "federated":
+            from synlynk.quota_capture import cmd_quota_federated
+            cmd_quota_federated(json_output=getattr(args, "json_output", False))
         elif action == "calibrate":
             from synlynk.quota import calibrate_and_update_quota
             cal = calibrate_and_update_quota(
@@ -2257,9 +2838,11 @@ def main(argv=None) -> None:
                 else:
                     print(f"✗ Calibration failed: {cal.get('reason', 'invalid delta')}")
         elif getattr(args, "tpm_view", False):
+            from synlynk.quota import cmd_quota_tpm_view
             cmd_quota_tpm_view()
         else:
             _warn_deprecated_harness_flag(cli_tokens)
+            from synlynk.quota import cmd_quota
             cmd_quota(
                 agent=getattr(args, "harness", None),
                 json_output=getattr(args, "json_output", False),
@@ -2275,6 +2858,12 @@ def main(argv=None) -> None:
         elif args.pr_action == "gate-status":
             from synlynk.qa_gate import cmd_pr_gate_status
             cmd_pr_gate_status()
+    elif args.command == "provenance":
+        if getattr(args, "provenance_action", None) == "attest":
+            from synlynk.provenance import cmd_provenance_attest
+            raise SystemExit(cmd_provenance_attest(
+                args.job_id, args.role, args.task_type, args.reason, args.confirm,
+            ))
     elif args.command == "capability":
         if args.capability_action == "sweep":
             cmd_capability_sweep(cost_cap_override=getattr(args, "cost_cap", None))
@@ -2320,9 +2909,9 @@ def main(argv=None) -> None:
             sys.exit(code)
         else:
             help_parsers.get("ops", parser).print_help()
-    elif args.command == "start":
-        from synlynk.coldstart import cmd_start
-        cmd_start()
+    elif args.command in {"quickstart", "start"}:
+        from synlynk.coldstart import cmd_quickstart
+        cmd_quickstart()
     elif args.command == "join":
         cmd_join(getattr(args, "invite", None))
     elif args.command == "team":
@@ -2340,6 +2929,9 @@ def main(argv=None) -> None:
             audit=args.audit,
             model=args.model,
         )
+    elif args.command == "gc":
+        from synlynk.gc_cmd import cmd_gc
+        cmd_gc(dry_run=not getattr(args, "yes", False), yes=getattr(args, "yes", False), retention_days=getattr(args, "retention_days", 14), size_budget_mb=getattr(args, "size_budget_mb", 1024))
     elif args.command == "heal":
         if getattr(args, "cycles", False):
             from synlynk.heal_cycles import cmd_heal_cycles
@@ -2355,21 +2947,37 @@ def main(argv=None) -> None:
         from synlynk.db import cmd_goal_create, cmd_goal_list, cmd_goal_link, cmd_goal_status
         action = getattr(args, "goal_action", None)
         if action == "create":
-            cmd_goal_create(args.outcome, args.criterion, deadline=args.deadline, role=args.role)
+            cmd_goal_create(args.outcome, args.criterion, deadline=args.deadline, role=args.role, kind=getattr(args, "kind", "feature"))
         elif action == "list":
-            cmd_goal_list()
+            cmd_goal_list(kind=getattr(args, "kind", None))
         elif action == "link":
             cmd_goal_link(args.story_id, args.goal_id, secondary=args.secondary)
         elif action == "status" or action is None:
             cmd_goal_status()
         else:
             help_parsers.get("goal", parser).print_help()
+    elif args.command == "governs":
+        from synlynk.governs_cli import cmd_governs_sweep, cmd_governs
+        action = getattr(args, "governs_action", None)
+        if action == "sweep":
+            cmd_governs_sweep(dry_run=getattr(args, "dry_run", False), strict=getattr(args, "strict", False), verbose=getattr(args, "verbose", False))
+        else:
+            cmd_governs(full=getattr(args, "full", False))
     elif args.command == "local":
         from synlynk.local_agent import cmd_local_doctor
         if args.local_action == "doctor":
-            sys.exit(cmd_local_doctor())
+            sys.exit(cmd_local_doctor(init=args.init))
         else:
             help_parsers.get("local", parser).print_help()
+    elif args.command == "gateway":
+        if args.gateway_cmd == "probe":
+            from synlynk.gateway import cmd_gateway_probe
+            sys.exit(cmd_gateway_probe(gateway=args.gateway, config_path=args.config))
+        elif args.gateway_cmd == "dispatch":
+            from synlynk.gateway import cmd_gateway_dispatch
+            sys.exit(cmd_gateway_dispatch(args.model, args.prompt, config_path=args.config))
+        else:
+            help_parsers.get("gateway", parser).print_help()
     elif args.command == "models":
         from synlynk.models import cmd_models_discover, cmd_models_list, cmd_models_show
         action = getattr(args, "models_action", None)
@@ -2622,6 +3230,60 @@ def main(argv=None) -> None:
             cmd_session_close(disposition=args.disposition, summary=args.summary)
         else:
             help_parsers.get("session", parser).print_help()
+    elif args.command == "autonomy":
+        from synlynk.autonomy import get_autonomy_mode, set_autonomy_mode
+        action = getattr(args, "autonomy_action", None)
+        if action == "set":
+            mode = set_autonomy_mode(args.mode)
+            print(f"  ✓ autonomy_mode = {mode.value}")
+        else:
+            mode = get_autonomy_mode()
+            print(f"  Autonomy mode: {mode.value}")
+    elif args.command == "board":
+        from synlynk.board_governance import ProposalGate, create_proposal, load_proposal, sign_proposal
+        action = getattr(args, "board_action", None)
+        if action == "propose":
+            prop = create_proposal(
+                ProposalGate(args.gate), args.title,
+                description=args.description, budget_usd=args.budget)
+            print(f"  ✓ Proposal created: {prop.proposal_id} (status={prop.status.value})")
+        elif action == "sign":
+            prop = sign_proposal(args.proposal_id, key_path=args.key_path)
+            print(f"  ✓ Proposal {prop.proposal_id} signed by {prop.signer_identity} (status={prop.status.value})")
+        elif action == "show":
+            prop = load_proposal(args.proposal_id)
+            if prop is None:
+                print(f"  ✗ Proposal {args.proposal_id} not found")
+            else:
+                print(json.dumps(prop.to_dict(), indent=2))
+        else:
+            help_parsers.get("board", parser).print_help()
+    elif args.command == "concierge":
+        from synlynk.concierge import synthesize_github_issue
+        action = getattr(args, "concierge_action", None)
+        if action == "synthesize":
+            answers = {
+                "title": args.title, "problem": args.problem,
+                "scope": args.scope, "criteria": args.criteria,
+            }
+            body = synthesize_github_issue(answers)
+            if args.out:
+                with open(args.out, "w", encoding="utf-8") as f:
+                    f.write(body)
+                print(f"  ✓ Synthesized proposal written to {args.out}")
+            else:
+                print(body)
+        else:
+            help_parsers.get("concierge", parser).print_help()
+    elif args.command == "addon":
+        from synlynk.addon import install_addon_bundle, list_available_addons
+        action = getattr(args, "addon_action", None)
+        if action == "install":
+            install_addon_bundle(args.bundle)
+            print(f"  ✓ Add-on bundle installed: {args.bundle}")
+        else:
+            for name in list_available_addons():
+                print(f"  - {name}")
     else:
         parser.print_help()
 

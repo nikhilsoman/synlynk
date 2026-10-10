@@ -140,3 +140,20 @@ def test_run_brownfield_init_e2e(tmp_path):
     assert (docs_dir / "todo.md").exists()
     assert (docs_dir / "costs.md").exists()
     assert (docs_dir / "devlogs" / "testbot.md").exists()
+
+
+def test_run_brownfield_init_writes_only_to_repo_path(tmp_path, monkeypatch):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    outside_cwd = tmp_path.parent / f"brownfield-init-cwd-{tmp_path.name}"
+    outside_cwd.mkdir()
+    monkeypatch.chdir(outside_cwd)
+
+    (repo_path / "pyproject.toml").write_text("[project]\nname = 'sample-repo'\n")
+    res = run_brownfield_init(str(repo_path), interactive=False, dry_run=False, force=True)
+
+    assert res["success"] is True
+    assert (repo_path / ".synlynk" / "config.json").exists()
+    assert (repo_path / "project-docs" / "roadmap.md").exists()
+    assert not (outside_cwd / ".synlynk").exists()
+    assert not (outside_cwd / "project-docs").exists()

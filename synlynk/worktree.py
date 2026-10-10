@@ -4,6 +4,7 @@ import json
 import os
 import re
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Optional
 
@@ -345,6 +346,19 @@ def _list_worktrees(main_repo_path: str, cwd_worktree_path: str) -> list:
     return _build_worktree_entries(raw, main_repo_path, cwd_worktree_path)
 
 
+def _worktree_status_hint_entry(entry: WorktreeEntry):
+    """Return whether one worktree is stale, or None when it cannot be checked."""
+    if not os.path.isdir(entry.path):
+        return True
+    try:
+        is_dirty, _ = _git_status_dirty(entry.path)
+        if is_dirty:
+            return False
+        return _git_is_ancestor(entry.branch, entry.path)
+    except (subprocess.SubprocessError, OSError):
+        return None
+
+
 def _worktree_status_hint():
     """Cheap local-only pre-pass for ``synlynk status``.
 
@@ -359,24 +373,17 @@ def _worktree_status_hint():
     if not entries:
         return None
 
-    stale = 0
-    for entry in entries:
-        if not os.path.isdir(entry.path):
-            stale += 1
-            continue
-        try:
-            is_dirty, _ = _git_status_dirty(entry.path)
-        except (subprocess.SubprocessError, OSError):
-            continue
-        if not is_dirty:
-            stale += 1
+    with ThreadPoolExecutor(max_workers=min(16, len(entries))) as executor:
+        results = executor.map(_worktree_status_hint_entry, entries)
+        stale = sum(result is True for result in results)
 
     return {"local": len(entries), "stale_hint": stale}
 
 
-def _collect_verdicts(main_repo_path: str, cwd_worktree_path: str) -> list:
+def _collect_verdicts(main_repo_path: str, cwd_worktree_path: str, gh_available: Optional[bool] = None) -> list:
     entries = _list_worktrees(main_repo_path, cwd_worktree_path)
-    gh_available = _gh_auth_available()
+    if gh_available is None:
+        gh_available = _gh_auth_available()
     verdicts = []
     for entry in entries:
         signals = _gather_worktree_signals(entry, gh_available)
@@ -433,6 +440,11 @@ def _format_audit_report(verdicts: list, json_output: bool = False) -> str:
 def cmd_worktree_audit(json_output: bool = False) -> str:
     main_repo_path = _get_repo_root()
     cwd_worktree_path = os.getcwd()
+    try:
+        from synlynk.worktree_lease import audit_and_reclaim_stale_worktree_leases
+        audit_and_reclaim_stale_worktree_leases()
+    except Exception:
+        pass
     verdicts = _collect_verdicts(main_repo_path, cwd_worktree_path)
     output = _format_audit_report(verdicts, json_output)
     print(output)
@@ -512,6 +524,12 @@ def cmd_worktree_clean(
                 )
                 if result.returncode != 0:
                     wt_status = f"FAILED({result.stderr.strip()[:80]})"
+                else:
+                    try:
+                        from synlynk.worktree_lease import release_worktree_lease
+                        release_worktree_lease(v.path)
+                    except Exception:
+                        pass
             except (subprocess.SubprocessError, OSError) as exc:
                 wt_status = f"FAILED({exc})"
 

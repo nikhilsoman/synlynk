@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 from typing import Optional
 
+from synlynk import _split_legacy_config
 from synlynk.product_store import configured_identity_slug, github_apps_dir, repos_path
 from synlynk.types_registry import load_types
 
@@ -28,14 +29,27 @@ def add_repo(nwo: Optional[str] = None, repo_path: str = ".") -> dict:
     slug = configured_identity_slug(repo)
     if not slug:
         raise RuntimeError(
-            "workspace add-repo requires .synlynk/config.json with identity_slug; refusing to guess the product"
+            "workspace add-repo requires a configured identity_slug "
+            "(.synlynk/workspace.json or legacy .synlynk/config.json); refusing to guess the product"
         )
-    config_path = repo / ".synlynk" / "config.json"
-    config = _read_json(config_path)
+    workspace_path = repo / ".synlynk" / "workspace.json"
+    legacy_path = repo / ".synlynk" / "config.json"
+    if not workspace_path.exists() and legacy_path.exists():
+        legacy_config = _read_json(legacy_path)
+        existing_policy = _read_json(repo / ".synlynk" / "policy.json")
+        workspace_config, billing_payload, policy_payload = _split_legacy_config(
+            legacy_config, existing_policy
+        )
+        _write_json(repo / ".synlynk" / "billing.json", billing_payload)
+        _write_json(repo / ".synlynk" / "policy.json", policy_payload)
+        legacy_path.rename(legacy_path.with_name("config.json.bak"))
+    else:
+        workspace_config = _read_json(workspace_path)
+        legacy_config = _read_json(legacy_path)
     nwo = (nwo or "").strip() or repo.name
-    repo_id = config.get("repo_id") or nwo or repo.name
-    config["repo_id"] = repo_id
-    _write_json(config_path, config)
+    repo_id = workspace_config.get("repo_id") or legacy_config.get("repo_id") or nwo or repo.name
+    workspace_config["repo_id"] = repo_id
+    _write_json(workspace_path, workspace_config)
 
     types = load_types(slug)
     changed_apps = []

@@ -8,6 +8,35 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 @pytest.fixture(autouse=True)
+def _reset_routing_fallback():
+    """Drop a routing decision left behind by an earlier test."""
+    from synlynk import dispatch
+
+    dispatch._pending_routing_fallback = None
+    yield
+    dispatch._pending_routing_fallback = None
+
+
+@pytest.fixture(autouse=True)
+def allow_cwd_fallback_in_tests(monkeypatch):
+    """Default tests to the explicit CWD-fallback override for gh:#1831's
+    hardened _project_root().
+
+    Full-suite audit (2026-10-09) found hundreds of pre-existing
+    `monkeypatch.chdir(tmp_path)` call sites across 29+ test files (not just
+    a couple of legacy files) that chdir into a bare, non-git tmp_path and
+    rely on the old silent-getcwd()-fallback behavior. Rewriting every call
+    site to git-init its tmp_path is out of scope for this hardening task.
+
+    This default does NOT mask the hardening itself: the dedicated negative
+    tests in tests/test_project_root_hardening.py mock subprocess directly
+    and explicitly delenv/setenv this var themselves, so they exercise the
+    strict-raise path regardless of this fixture's default.
+    """
+    monkeypatch.setenv("SYNLYNK_ALLOW_CWD_FALLBACK", "1")
+
+
+@pytest.fixture(autouse=True)
 def isolated_db(tmp_path, monkeypatch):
     """Redirect DB_PATH to a per-test temp file so tests never share state.db."""
     import synlynk
@@ -45,6 +74,27 @@ def stub_staleness_check_thread(monkeypatch):
     import synlynk.capability_watch as capability_watch_mod
 
     monkeypatch.setattr(capability_watch_mod, "spawn_staleness_check_thread", lambda *a, **k: None)
+
+
+@pytest.fixture
+def no_stub_graphify_extract():
+    """Marker fixture to disable stub_graphify_extract for a test."""
+    pass
+
+
+@pytest.fixture(autouse=True)
+def stub_graphify_extract(monkeypatch, request):
+    """Prevent slow graphify extract subprocesses from spawning across tests.
+
+    Tests that specifically exercise _run_graphify_extract or need to test the
+    extract-on-missing-graph path with a mock subprocess can opt out by requesting
+    the no_stub_graphify_extract fixture.
+    """
+    if "no_stub_graphify_extract" in request.fixturenames:
+        return
+    import synlynk.scan as scan_mod
+
+    monkeypatch.setattr(scan_mod, "_run_graphify_extract", lambda repo_root: True)
 
 
 @pytest.fixture(autouse=True)

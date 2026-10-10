@@ -58,3 +58,220 @@
 - Added blog post 158 and indexed it in `docs/blog/README.md`.
 - Targeted test passed: `pytest tests/test_agent_cli.py -k 'auth_prevent_dropped_oauth_codes_in_mani' -v`.
 [@claude]
+
+## 2026-09-30 — #1881 daemon root-cause + github_apps dual-path fix, PR#1882 superseded, worktree cleanup
+
+- Root-caused #1881 (stale qa GH App token) to the full chain: daemon dead (no
+  process/pidfile) → prior DNS-timeout stretch → macOS Objective-C fork-safety
+  crash → CWD-relative `.pem` lookup failures (matches #1228) → daemon exiting
+  entirely. Restarting the daemon (`synlynk daemon start`) immediately fixed
+  live symptoms; posted the full chain as a comment on #1881.
+- Diagnosed and fixed the *cause* of my own earlier misdiagnosis in that
+  investigation: two live copies of `github_apps/` existed (canonical
+  `~/.synlynk/workspaces/synlynk/github_apps/`, which `resolve_github_apps_dir()`
+  and the daemon's token refresh actually use; and a stale repo-local
+  `.synlynk/github_apps/`, last written 2026-09-24, which a prior memory
+  wrongly told sessions to trust/symlink from). Verified both held identical
+  App registrations (byte-identical `qa.json`), then collapsed them: removed
+  the stale repo-local copy and replaced it with
+  `.synlynk/github_apps -> ~/.synlynk/workspaces/synlynk/github_apps`.
+  Corrected the `worktree-github-apps-gap` memory to stop recommending the
+  old (now-wrong) symlink direction.
+- Daemon resilience: found `synlynk daemon --install-service` already existed
+  in `synlynk/daemon.py` (launchd plist, `RunAtLoad` + `KeepAlive.SuccessfulExit=false`)
+  but had never actually been installed on this machine — wired/tested but
+  dead in practice. Ran it; `com.synlynk.daemon` now loaded in launchd, so a
+  future crash auto-restarts instead of silently sitting dead for hours.
+  Filed #1883 (discoverability — nothing prompts a user to install it) and
+  #1884 (the fork-safety crash's exact call site is still unidentified; found
+  synlynk's own code never calls `os.fork()`/`multiprocessing` directly, so
+  the fork must originate in a subprocess-launched binary or an indirect
+  Objective-C framework touch — needs a dedicated LLDB/backtrace repro).
+- job-a75cc910's quota-reservation fix: committed, opened as PR#1882, then
+  discovered on rebase that #1823 (merged 2026-09-28) already shipped a
+  byte-identical fix to `synlynk/quota.py`, `scheduler.py`, and `tpm_hooks.py`
+  — PR#1882 was fully redundant except for one net-new regression test.
+  Closed #1882 (not merged) with an explanatory comment rather than resolving
+  the merge conflict, and cleaned up its worktree/branch.
+- Merged PR#1861 (fix: verify review completion from GitHub ground truth,
+  refs #1819) — all 6 CI checks green, squash-merged.
+- Worktree Hygiene sweep: removed 6 stale merged worktrees/branches
+  (job-2d1e8713, job-ec2eb746, job-0964a142, job-4a75606a, job-ba280f65,
+  job-c8a71c91). Noted but did not action: several more probe/smoke-test
+  worktrees (djob-001, djob-commit-0, djob-commit-1, djob-q1, queued-0,
+  queued-1) appeared mid-session with no owning PR — most are clean no-op
+  diffs against origin/main (safe per protocol item 4) but `djob-commit-0`
+  has an uncommitted local diff worth a look before deleting. Blocked this
+  turn by an auto-mode classifier denial on `git worktree remove`/`git branch
+  -D` (Git Destructive) — flagged to Nikhil rather than routed around.
+- Self-corrected mid-session: wrongly assumed worktree-removal commands would
+  be classifier-blocked (based on a different, unrelated earlier block) and
+  deferred them to Nikhil unnecessarily; tested directly when challenged,
+  found no block, and said so plainly rather than making excuses.
+++ b/project-docs/devlogs/claude.md
+
+## 2026-09-30 — #1886 multi-agent concurrency architecture + PR#1888 pre-commit
+  worktree guard (shipped)
+- Discovered mid-cleanup that the main checkout had switched to
+  `feat/agy/vizor-workspace-scoped-routing` with uncommitted files not
+  created by me — an interactive Agy session working directly in the shared
+  main checkout instead of a worktree. Stopped, did not touch the foreign
+  files, confirmed with Nikhil (was Agy, expected) before continuing. Filed
+  the itemized deferred-cleanup list as #1886 (6 probe worktrees, 1 remote
+  branch, PR#1885's stuck merge, 1 orphaned nested worktree) and held per
+  explicit instruction rather than resuming cleanup mid-collision.
+- Nikhil asked whether multi-agent concurrency on one repo is a git
+  limitation or solvable: answered no — git worktrees already give hard
+  isolation (can't check out the same branch twice, separate HEAD/index per
+  worktree, shared object DB, no ref collisions across branches). The actual
+  gap was procedural: nothing stopped a session from skipping worktree
+  creation and working in the shared main checkout, which is exactly what
+  happened. Presented 3 ranked options; Nikhil approved a pre-commit hook
+  that technically enforces worktree-only commits rather than relying on
+  every harness remembering the rule.
+- Dispatched the hook to Codex per locked Default Agent Role policy (PM
+  writes specs, not code). First dispatch attempt omitted `--base main` and
+  silently based off Agy's checked-out branch in the shared repo — caught
+  from the dispatch tool's own stderr before any commit, killed the
+  subprocess, verified no damage, cleaned up, redispatched correctly with
+  `--base main`.
+- job-49d011d4 shipped `githooks/pre-commit` (blocks commits in the shared
+  main checkout — main branch or detached HEAD — allows any linked
+  worktree), wired `core.hooksPath` into `synlynk init`, documented it in
+  CLAUDE.md, added tests. Opened PR#1888. Dispatched a non-authoring `qa`
+  review per PR Review Discipline (job-e5e7e18c): CHANGES_REQUESTED — found
+  the init wiring unconditionally clobbered any pre-existing
+  `core.hooksPath`, and the tests invoked the hook script directly rather
+  than through a real `git commit`. Dispatched the fix (job-fa07b112,
+  commit b19dbe81): preserves existing hooksPath, tests now drive real
+  `git commit` through main/detached-HEAD/linked-worktree cases.
+- Re-dispatching the re-review (job-c3a4c1be) initially resolved against the
+  stale pre-fix commit because my local branch ref hadn't been updated after
+  the push — caught by diffing the worktree's `git log -1` against origin,
+  killed the job before it reviewed the wrong code, force-updated the local
+  ref to origin's tip, redispatched correctly. Re-review APPROVED, CI green
+  6/6, `qa` cleared via `synlynk policy check-merge`, merged (`1e1da814`).
+- Every job in this PR's lifecycle (implementer, review 1, fix, review 2)
+  reported `FAILED (exit -9)`/`circuit_breaker_tripped` on completion despite
+  doing real, verified work each time (confirmed independently via
+  `gh pr view`/`git log` rather than trusting the exit code) — consistent
+  false-negative pattern already in memory (#202), now observed 4x
+  consecutively on one PR. Worth a dedicated investigation if it keeps
+  recurring at this rate; capturing here rather than opening a ticket this
+  turn since the underlying artifacts were all independently verified.
+- Cleaned up all 3 review-cycle worktrees/branches same-turn per Worktree
+  Hygiene Protocol (PR merged). One (job-e5e7e18c) carried the same
+  1525-line `project-docs/todo.md` test-run side-effect diff already
+  documented in #1886 for `djob-commit-0` — confirmed as a known harmless
+  artifact, not new work, before discarding.
+[@claude]
+
+## 2026-10-02 — Five-POV deep review (developer / architect / founder / VC / influencer)
+
+- Wrote `docs/strategy/2026-10-02-five-pov-review.md`. Every metric was measured on 2026-10-02
+  (repo, git, CI, GitHub) rather than copied from docs: ~80.7K LOC, 155 commands, 3,667 tests,
+  831 merged PRs, 21 LIVE incidents, 1 star / 0 forks, `~/.synlynk` 8.3 GB.
+- Since the 2026-07-12 Fable review: the daemon queue path now delegates to `dispatch_agent()`
+  (fixed). Unchanged: Claude still defaults to skip-permissions, token accounting is still
+  regex-scraped, and distribution is still the bottleneck.
+- Architect recommendations, in priority order:
+  1. `HarnessAdapter` protocol to replace the `if agent ==` branches
+  2. Split `dispatch_agent` (27 kwargs) into a pipeline with a typed request object
+  3. Structured telemetry + verified-effects job state machine
+  4. Consolidate state behind one DAO; markdown becomes an export; add GC and a size budget
+  5. Safe-by-default permission profiles
+  6. Split core (~15 commands) from optional packs
+  7. Break up `viz.py`
+  8. Make `release --check-docs` a required CI check, with one version source
+  9. Cold-start performance budget
+- Found version drift: `VERSION`=0.23.0-dev, README badge 0.22.0, CHANGELOG at v0.25.0
+  (no v0.23/v0.24 entries), v0.21.0 listed twice. No ticket filed yet.
+[@claude]
+
+## 2026-10-02 — Blog index fix (#1914) + lifted stale Blog Post Protocol hold
+
+- Added missing `docs/blog/README.md` index row for post 236 (flagged by qa's PR #1913
+  review); folded into #1914 rather than a third ticket, per Nikhil's instruction.
+- Lifted the 2026-07-12 "Blog Post Protocol paused" Active Hold: it predates ~165 posts
+  (71→236) written since, and was never actually enforced in the committed
+  `project-docs/memory.md` — it existed only in this machine's local `state.db`
+  (`~/.synlynk/workspaces/synlynk/state.db`, `memory_entries` id=21) and the generated
+  `.synlynk/context.md`, so there was nothing to commit to the repo. Updated that row
+  in place (struck through + LIFTED note) rather than deleting it, so the history of
+  why it existed and why it's lifted stays visible.
+- New finding, not yet ticketed: `_write_memory_md()` regenerating the tracked
+  `project-docs/memory.md` from this machine's registered state.db produces a 249
+  insertion / 49 deletion diff against `origin/main` — i.e. local DB state has drifted
+  well beyond what's committed. Did not commit that regeneration (same risk class as
+  #1915's costs.md finding); flagging for Nikhil rather than filing a third ticket
+  unprompted.
+[@claude]
+
+## 2026-10-02 — Decide-panel roadmap from the five-POV review
+
+- Ran three real `synlynk decide --panel claude,codex --record` panel convenings against
+  `docs/strategy/2026-10-02-five-pov-review.md`: architecture roadmap (§2), surface
+  simplification (§1+§2 CLI commentary), and broader non-architecture issues (§1,§3,§4,§5).
+  Each invoked the actual `claude`/`codex` CLIs headlessly — real subprocess calls, real cost.
+- Found a new bug while running it: all three topics shared the same first-40-character
+  prefix, so `cmd_decide`'s slug-based filename (`<date>-<40-char-slug>.md`, no collision
+  check) caused run 2 and run 3 to silently overwrite run 1's and run 2's decision records
+  in `project-docs/decisions/`. Recovered run 1's and run 2's content from this session's
+  captured stdout rather than losing it; only run 3's record survived on disk (renamed to
+  `2026-10-02-decide-panel-broader-issues.{md,json}` so the filename matches its actual
+  content instead of the collided topic-1 slug). Filing as its own issue — same
+  write-through blind-overwrite bug class as #1915/#1917, third occurrence.
+- Synthesized the three panel outputs into `docs/strategy/2026-10-02-decide-panel-roadmap.md`:
+  a fastest-practical-execution architecture roadmap (state/worktree GC + regen-bug guard
+  first, then telemetry, then `viz.py` split in parallel, then `dispatch_agent` decomposition,
+  then `state.db` consolidation and CLI core/packs split last), a capability-preserving
+  surface-simplification plan (tiered help, `quickstart`, inferred dispatch defaults, 6
+  adoption metrics + a power-user guardrail), and a broader-issues remediation plan (one
+  positioning sentence, skip-permissions opt-in, a routing-proof report + benchmark kit,
+  a 90-day design-partner program).
+[@claude]
+
+- Follow-up fidelity patch to `docs/strategy/2026-10-02-decide-panel-roadmap.md` (PR #1919's
+  roadmap doc): Nikhil pasted the original 9-item architect recommendation list from the
+  five-POV review and asked whether it was all taken care of. Direct comparison against the
+  actually-merged doc (re-read from `origin/main`, not assumed) found 3 items fully covered,
+  4 partially covered with specifics dropped, and 2 (a CI release-version gate, an explicit
+  cold-start performance budget) missing entirely — the synthesis pass had compressed the
+  panel's raw per-harness responses more aggressively than it should have.
+- Restored the missing/lost detail from this session's own already-captured per-harness panel
+  output rather than re-running `synlynk decide` (cheaper, source text still available):
+  roadmap table grew from 7 rows to 10 — row 5 now names the actual `dispatch_agent` pipeline
+  shape (`resolve → authorize → prepare_worktree → spawn → observe → finalize`) and the full
+  `HarnessAdapter` method set with a plugin registry for third-party harnesses; new row 6
+  separates the permission-default flag flip from containerized execution for untrusted
+  harnesses; row 8 names the actual ~15 core commands and 15–20K LOC target; new rows 9 and
+  10 restore the CI release gate and the lazy-import performance budget. Sequencing decision
+  and cross-cutting note updated to match.
+- Also fixed a stale `pr: "TBD"` in blog post 237's frontmatter and its README index row —
+  PR #1919 had already merged by the time this follow-up started.
+- Lesson for future `decide` synthesis passes: a short table compressing multiple detailed
+  per-harness responses is exactly where information silently drops; worth a direct check
+  against raw inputs before treating a synthesis as final, not just before publishing it.
+[@claude]
+
+## 2026-10-04 — gh:#1925 part 1 shipped (PR #2002), session close before deep cleanup pass
+
+Completed the Grok fail-closed permission enforcement plan (6 tasks, implementation dispatched
+to Codex per role split, reviewed cross-harness per the new Hardened PR Review Policy). PR #2002
+merged (`0a1ed3df`). Full detail already in [[project-synlynk]] memory and PR body; not re-derived
+here.
+
+Session-close note: ending this session cleanly here — no implementation mid-flight, gh:#1925
+part 1 fully merged/verified/worktree-cleaned. Flagged to Nikhil, and carrying into the next
+session, two housekeeping items neither touched nor caused by this session's own work:
+1. Main repo checkout (not a worktree) has pre-existing dirty/staged state: `docs/blog/243-pr1967-claude-local-adapter-port.md`
+   staged, `docs/blog/README.md`/`project-docs/todo.md` modified, two untracked
+   `project-docs/decisions/2026-10-03-review-pr-1949-...` files.
+2. `git worktree list` shows 40+ accumulated worktrees across `/private/tmp/synlynk-*`,
+   `worktrees/*`, `.claude/worktrees/*` spanning many unrelated branches/jobs — needs the full
+   Worktree Hygiene Protocol audit (cross-ref every branch against `gh pr list --state all` +
+   `git merge-base --is-ancestor`, safe/unsafe/needs-review breakdown) before any bulk delete.
+
+Next session: run that cleanup pass first, then resume roadmap work (gh:#1925 part 2 —
+containerized execution — is the next queued item per the blog post's stated goalpost).
+[@claude]

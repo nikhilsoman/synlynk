@@ -26,7 +26,7 @@
 
   <!-- Wordmark -->
   <text x="318" y="190" class="wm">syn<tspan fill="#5B8DEF">l</tspan><tspan fill="#A259F7">y</tspan><tspan fill="#2EC4A0">n</tspan><tspan fill="#1a1a1a">k</tspan></text>
-  <text x="321" y="216" class="tag">synaptic link for ai dev</text>
+  <text x="321" y="216" class="tag">neutral control plane for coding tasks</text>
   <line x1="318" y1="228" x2="610" y2="228" stroke="#eee" stroke-width="0.5"/>
 
   <!-- Scale previews -->
@@ -79,5 +79,5 @@
     <circle cx="3" cy="11" r="2" fill="#2EC4A0"/>
   </g>
   <text x="378" y="333" font-family="'Courier New', monospace" font-size="20" font-weight="500" fill="#1a1a1a" letter-spacing="-0.5">syn<tspan fill="#5B8DEF">l</tspan><tspan fill="#A259F7">y</tspan><tspan fill="#2EC4A0">n</tspan><tspan fill="#1a1a1a">k</tspan></text>
-  <text x="378" y="352" font-family="Arial, sans-serif" font-size="9" fill="#aaa" letter-spacing="1.5">synaptic link for ai dev</text>
+  <text x="378" y="352" font-family="Arial, sans-serif" font-size="9" fill="#aaa" letter-spacing="1.5">neutral control plane for coding tasks</text>
 </svg>

@@ -1,5 +1,44 @@
 # synlynk Blog Series: Building the OS for Multi-Agent Development
 
+| [266](./266-pr2166-federated-quota-capture.md) | Federated subscription-quota capture | TBD | 2026-10-10 |
+| [265](./265-prTBD-state-shard-reconciliation.md) | gh:#1831 — Reconciling Orphaned State Shards Before Any Deletion | TBD | 2026-10-09 |
+| [264](./264-prTBD-config-decomposition.md) | gh:#2101 — Splitting config.json Into Workspace, Billing, and Policy Files | TBD | 2026-10-09 |
+| [263](./263-prTBD-state-db-wal-soak.md) | gh:#2102 — Soak-testing state.db with 20–50 concurrent WAL writers | TBD | 2026-10-08 |
+| [262](./262-prTBD-native-reviewer-provenance.md) | Native Reviewers Can Record Cross-Harness Provenance | TBD | 2026-10-08 |
+| [261](./261-pr2118-reconciliation-lock-best-effort.md) | PR #TBD - Reconciliation Should Survive Read-Only Sandboxes | TBD | 2026-10-08 |
+
+| [259](./259-pr2117-legacy-provenance-attestation.md) | A human confirmation can classify a legacy job without rewriting its dispatch record | [#2117](https://github.com/nikhilsoman/synlynk/pull/2117) | 2026-10-07 |
+| [260](./260-pr2081-adapter-conformance-suite.md) | Adapter conformance suite names receipt/signature/cost drift in pytest | [#2081](https://github.com/nikhilsoman/synlynk/pull/2081) | 2026-10-06 |
+| [258](./258-pr2112-readme-capability-evidence.md) | README now states the evidence threshold for empirical routing | [#2112](https://github.com/nikhilsoman/synlynk/pull/2112) | 2026-10-07 |
+| [257](./257-pr2083-dispatch-fallback-logging.md) | Routing fallbacks are written down, not only printed | [#2083](https://github.com/nikhilsoman/synlynk/pull/2083) | 2026-10-06 |
+| [256](./256-pr2080-config-schema-doctor.md) | Doctor checks config.json and policy.json without a JSON Schema library | [#2080](https://github.com/nikhilsoman/synlynk/pull/2080) | 2026-10-06 |
+| [255](./255-pr2082-empirical-routing-fallback.md) | Empirical routing promotes a harness only after five measured samples | [#2082](https://github.com/nikhilsoman/synlynk/pull/2082) | 2026-10-06 |
+| [254](./254-prTBD-state-db-migrations-and-shard-cleanup.md) | gh:#1926 — A migrations framework, and burying 11,384 dead shards | [#2085](https://github.com/nikhilsoman/synlynk/pull/2085) | 2026-10-06 |
+| [253](./253-pr2074-governs-linkage-preflight-warning.md) | Dispatch names a missing GOVERNS link before #1990 can block on it | [#2074](https://github.com/nikhilsoman/synlynk/pull/2074) | 2026-10-06 |
+| [252](./252-pr2070-cross-branch-completion-oracle.md) | Completion oracle reads the PR the task actually named | TBD | 2026-10-06 |
+| [251](./251-pr2051-native-session-provenance.md) | PR #TBD — Native Sessions Can Prove Cross-Harness Review Provenance | TBD | 2026-10-06 |
+
+| [250](./250-pr2051-cross-harness-provenance-recovery.md) | PR #TBD — Cross-Harness Review Provenance Survives a Missing Cost Row | TBD | 2026-10-06 |
+| [249](./249-pr2036-live13-action3.md) | LIVE-13 — Recording the Grok capability retest accurately | [#2036](https://github.com/nikhilsoman/synlynk/pull/2036) | 2026-10-05 |
+| [248](./248-pr2013-containerized-dispatch.md) | gh:#1925 Part 2 — An opt-in container for an untrusted harness | [#2013](https://github.com/nikhilsoman/synlynk/pull/2013) | 2026-10-04 |
+| [247](./247-pr2020-tiered-help.md) | gh:#1974 — Tiered Help from the Command Taxonomy | [#2020](https://github.com/nikhilsoman/synlynk/pull/2020) | 2026-10-04 |
+| [246](./246-prTBD-grok-failclosed-permission-enforcement.md) | gh:#1925 Part 1 — Making Grok's Permission Bypass Explicit, Not Implicit | [#2002](https://github.com/nikhilsoman/synlynk/pull/2002) | 2026-10-04 |
+| [245](./245-pr1998-costs-regen-root-cause.md) | gh:#1995 — The Archive Was Never Lost, It Was Gitignored | [#1998](https://github.com/nikhilsoman/synlynk/pull/1998) | 2026-10-04 |
+| [244](./244-chore-empirical-capability-policy.md) | Suspending the Policy We Wrote for Our Own Convenience | [#1994](https://github.com/nikhilsoman/synlynk/pull/1994) | 2026-10-04 |
+| [242](./242-pr1965-agy-adapter-port.md) | gh:#1924 PR4 — Porting Agy to the HarnessAdapter Protocol | [#1965](https://github.com/nikhilsoman/synlynk/pull/1965) | 2026-10-03 |
+| [241](./241-pr1964-live22-gh-identity-zone-boundary.md) | LIVE-22 — Closing the GitHub-Identity Zone-Boundary Gap | [#1964](https://github.com/nikhilsoman/synlynk/pull/1964) | 2026-10-03 |
+| [240](./240-pr1959-grok-shell-capability-fix.md) | gh:#1924 — Grok's Shell Capability Was Still Living in the Pre-#1277 World | [#1959](https://github.com/nikhilsoman/synlynk/pull/1959) | 2026-10-03 |
+| [239](./239-pr1957-grok-adapter-port.md) | gh:#1924 PR3 — Porting Grok to the HarnessAdapter Protocol | [#1957](https://github.com/nikhilsoman/synlynk/pull/1957) | 2026-10-03 |
+
+| [230](./230-pr1846-cost-table-hardening.md) | Issue #1846 — Keeping the Cost Ledger a Valid Markdown Table | TBD | 2026-09-29 |
+
+| [229](./229-prTBD-instruction-file-deduplication.md) | R9 — One Canonical Instruction Protocol | [#1843](https://github.com/nikhilsoman/synlynk/pull/1843) | 2026-09-29 |
+
+| [228](./228-pr1841-init-noninteractive.md) | R8 — Making `synlynk init` safe for CI | [#1841](https://github.com/nikhilsoman/synlynk/pull/1841) | 2026-09-28 |
+| [227](./227-pr1837-harness-workflow-rename.md) | Issue #1837 - Scheduled Workflows Follow the Harness CLI | [#1842](https://github.com/nikhilsoman/synlynk/pull/1842) | 2026-09-28 |
+| [226](./226-prTBD-probe-model-discovery-no-inline-calibration.md) | Probe model discovery without inline calibration | [#1838](https://github.com/nikhilsoman/synlynk/pull/1838) | 2026-09-28 |
+| [223](./223-pr1833-graphify-e2e-opt-out.md) | Issue #1833 — Keeping Dispatch E2E Tests Focused | TBD | 2026-09-28 |
+
 | [221](./221-pr1726-w10-grok-bot-remote-mcp.md) | W10 - Grok Bot remote MCP surface, blocked on W9 | [#1726](https://github.com/nikhilsoman/synlynk/pull/1726) | 2026-09-20 |
 | [222](./222-pr1729-w11-cloudflare-tunnel-remote-access.md) | W11 - Cloudflare Tunnel full-duplex remote access, unblocked from W9 | [#1729](https://github.com/nikhilsoman/synlynk/pull/1729) | 2026-09-21 |
 | [186](./186-pr1179-capability-reassessment-cadence.md) | PR #1179 - Durable harness capability reassessment cadence | TBD | 2026-09-16 |
@@ -8,6 +47,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 
 ## Series Index
 
+| [231](./231-prTBD-1194-daemon-job-schema.md) | R14 — One Migration Helper for Daemon Job Schemas | TBD | 2026-09-29 |
 | [203](./203-prTBD-914-w0-vocabulary.md) | #914 workspace identity specs W0–W9 + wave-1 plan | [#1647](https://github.com/nikhilsoman/synlynk/pull/1647) | 2026-09-16 |
 | [204](./204-prN-914-wave1-product-store.md) | Wave 1 — Product-scoped GitHub Apps and types | #TBD | 2026-09-17 |
 | [205](./205-prTBD-914-wave2-work-graph-policy.md) | Wave 2 — Product work graph and policy authority | #TBD | 2026-09-18 |
@@ -258,25 +298,17 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [219](./219-pr1692-complete-w8-packs-and-connector-catalog.md) | PR #1692 — complete W8 packs and connector catalog | [#1692](https://github.com/nikhilsoman/synlynk/pull/1692) | 2026-09-18 |
 | [220](./220-pr1693-isolate-scratch-registry-path.md) | PR #1693 — isolate scratch registry path | [#1693](https://github.com/nikhilsoman/synlynk/pull/1693) | 2026-09-19 |
 | [223](./223-pr1731-w12-discord-herdr-bridge.md) | W12 - Discord/Herdr full-duplex remote-access bridge | [#1731](https://github.com/nikhilsoman/synlynk/pull/1731) | 2026-09-22 |
-| [224](./224-pr1741-cap-behind-dirty-pr-review-retry-churn-a.md) | PR #1741 — cap BEHIND/DIRTY PR-review retry churn and block retries on critical cost inflation | [#1741](https://github.com/nikhilsoman/synlynk/pull/1741) | 2026-09-23 |
-| [225](./225-pr1744-vizor-cross-workspace-daemon.md) | PR #1744 — Vizor cross-workspace daemon | [#1744](https://github.com/nikhilsoman/synlynk/pull/1744) | 2026-09-23 |
-| [226](./226-pr1747-align-github-app-token-refresh-cache-pat.md) | PR #1747 — align GitHub App token refresh cache paths [LIVE-14] (#1746) | [#1747](https://github.com/nikhilsoman/synlynk/pull/1747) | 2026-09-23 |
 | [224](./224-prTBD-v0.21.0.md) | PR #TBD — v0.21.0 Release | [#TBD](https://github.com/nikhilsoman/synlynk/pull/TBD) | 2026-09-23 |
-| [227](./227-pr1751-devlog-checkpoint-for-live-14-session.md) | PR #1751 — devlog checkpoint for LIVE-14 session | [#1751](https://github.com/nikhilsoman/synlynk/pull/1751) | 2026-09-23 |
-| [228](./228-pr1755-resolve-codex-config-model-and-git-workt.md) | PR #1755 — resolve codex config model and git worktree identity slug (#1748, #1742) | [#1755](https://github.com/nikhilsoman/synlynk/pull/1755) | 2026-09-23 |
-| [229](./229-pr1756-backfill-registry-repo-path-and-inspect-.md) | PR #1756 — backfill registry repo_path and inspect daemon install returncode (#1743, #1749) | [#1756](https://github.com/nikhilsoman/synlynk/pull/1756) | 2026-09-23 |
-| [230](./230-pr1754-deduplicate-harness-sop-sections.md) | PR #1754 — deduplicate harness SOP sections | [#1754](https://github.com/nikhilsoman/synlynk/pull/1754) | 2026-09-23 |
-| [231](./231-pr1757-guard-sandbox-state-migration-and-mutex-.md) | PR #1757 — guard sandbox state migration and mutex-lock vizor render context (#1733, #1750) | [#1757](https://github.com/nikhilsoman/synlynk/pull/1757) | 2026-09-23 |
-| [232](./232-pr1753-fail-dispatch-early-without-role-github-.md) | PR #1753 — fail dispatch early without role GitHub token | [#1753](https://github.com/nikhilsoman/synlynk/pull/1753) | 2026-09-23 |
-| [233](./233-pr1758-modern-multi-workspace-hub-ui-and-index-.md) | PR #1758 — modern multi-workspace hub UI and /index.html routing fallback | [#1758](https://github.com/nikhilsoman/synlynk/pull/1758) | 2026-09-23 |
-| [234](./234-pr1759-guard-db-path-resolution-and-daemon-poll.md) | PR #1759 — guard DB_PATH resolution and daemon polling outside project roots | [#1759](https://github.com/nikhilsoman/synlynk/pull/1759) | 2026-09-23 |
-| [235](./235-pr1760-support-head-requests-in-workspaceroutin.md) | PR #1760 — support HEAD requests in WorkspaceRoutingHandler | [#1760](https://github.com/nikhilsoman/synlynk/pull/1760) | 2026-09-24 |
 | [225](./225-prTBD-v0.22.0.md) | PR #TBD — v0.22.0 Release | [#TBD](https://github.com/nikhilsoman/synlynk/pull/TBD) | 2026-09-24 |
-| [236](./236-pr1761-cut-named-release-v0-22-0.md) | PR #1761 — cut named release v0.22.0 | [#1761](https://github.com/nikhilsoman/synlynk/pull/1761) | 2026-09-24 |
-| [237](./237-pr1762-bump-development-version-to-0-23-0-dev.md) | PR #1762 — bump development version to 0.23.0-dev | [#1762](https://github.com/nikhilsoman/synlynk/pull/1762) | 2026-09-24 |
-| [238](./238-pr1764-correct-stale-model-catalog-entries-in-m.md) | PR #1764 — correct stale model catalog entries in models.py and models.json | [#1764](https://github.com/nikhilsoman/synlynk/pull/1764) | 2026-09-24 |
-| [239](./239-pr1765-implement-two-tier-accordion-navigation-.md) | PR #1765 — implement two-tier accordion navigation, overview canvas, and activity stream | [#1765](https://github.com/nikhilsoman/synlynk/pull/1765) | 2026-09-24 |
-| [240](./240-pr1768-remove-legacy-embedded-sidebar-and-tab-b.md) | PR #1768 — remove legacy embedded sidebar and tab bar from gantt view | [#1768](https://github.com/nikhilsoman/synlynk/pull/1768) | 2026-09-24 |
+| [229](./229-pr1846-completion-tracker-optional-claude.md) | Completion Tracking Without an Installed Claude CLI | TBD | 2026-09-29 |
+| [232](./232-pr1741-cap-behind-dirty-pr-review-retry-churn-a.md) | PR #1741 — cap BEHIND/DIRTY PR-review retry churn and block retries on critical cost inflation | [#1741](https://github.com/nikhilsoman/synlynk/pull/1741) | 2026-09-23 |
+| [233](./233-pr1868-r12-init-god-module-decomposition.md) | R12 — Breaking Up the __init__.py God Module | 1868 | 2026-09-30 |
+| [234](./234-pr1875-wizard-clear-pipe-safe.md) | Fixing #1862 — The Wizard's Clear Screen Was Spawning a Pipe-Inheriting Child | [#1875](https://github.com/nikhilsoman/synlynk/pull/1875) | 2026-09-30 |
+| [235](./235-pr1876-wizard-dry-run-state-isolation.md) | Fixing #1865 — The Wizard's Dry-Run Flag Never Reached the Wizard | [#1876](https://github.com/nikhilsoman/synlynk/pull/1876) | 2026-09-30 |
+| [236](./236-five-pov-review.md) | Five Lenses on synlynk — A Measured Deep Review | [#1913](https://github.com/nikhilsoman/synlynk/pull/1913) | 2026-10-02 |
+| [237](./237-decide-panel-roadmap.md) | Convening the Panel on Our Own Review | [#1919](https://github.com/nikhilsoman/synlynk/pull/1919) | 2026-10-02 |
+| [238](./238-decide-panel-roadmap-fidelity-fix.md) | The Synthesis Lost Detail the Panel Actually Gave Us | [#1920](https://github.com/nikhilsoman/synlynk/pull/1920) | 2026-10-03 |
+| [239](./239-pr1934-version-single-source.md) | PR #1934 — CI release gate and version single source | 1934 | 2026-10-03 |
 
 ## Per-PR Post Template
 

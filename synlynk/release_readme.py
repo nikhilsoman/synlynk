@@ -92,6 +92,8 @@ def collect_pytest_test_count(root: str) -> Optional[int]:
         ["pytest", tests_dir, "--collect-only", "-q", "--noconftest"],
         ["python3", "-m", "pytest", tests_dir, "--collect-only", "-q", "--noconftest"],
     ]
+    collection_env = os.environ.copy()
+    collection_env["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] = "1"
     result = None
     for cmd in candidate_cmds:
         try:
@@ -100,6 +102,7 @@ def collect_pytest_test_count(root: str) -> Optional[int]:
                 cwd=root,
                 capture_output=True,
                 text=True,
+                env=collection_env,
                 timeout=180,
             )
             if res.returncode == 0:
@@ -129,6 +132,16 @@ def _generated_command_section() -> str:
     from scripts.generate_command_docs import render_readme_section
 
     return render_readme_section()
+
+
+def _generated_command_reference() -> str:
+    """Render the committed command reference from the taxonomy source."""
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if repo_root not in sys.path:
+        sys.path.insert(0, repo_root)
+    from scripts.generate_command_docs import render_reference_doc
+
+    return render_reference_doc()
 
 
 def _relative_link_target(target: str) -> Optional[str]:
@@ -416,6 +429,36 @@ def validate_readme_for_release(
                 )
             )
         body_for_mentions = text[:start] + text[end + len(COMMANDS_END):]
+
+    reference_path = os.path.join(root, "docs", "reference", "commands.md")
+    if not os.path.isfile(reference_path):
+        findings.append(
+            ReadmeFinding(
+                "commands",
+                "generated command reference is missing: "
+                "docs/reference/commands.md",
+            )
+        )
+    else:
+        try:
+            reference = open(reference_path, encoding="utf-8").read()
+            generated_reference = _generated_command_reference()
+        except Exception as exc:
+            findings.append(
+                ReadmeFinding(
+                    "commands",
+                    f"could not render command reference: {exc}",
+                )
+            )
+        else:
+            if reference != generated_reference:
+                findings.append(
+                    ReadmeFinding(
+                        "commands",
+                        "docs/reference/commands.md is stale — run "
+                        "`python3 scripts/generate_command_docs.py`",
+                    )
+                )
 
     shipped = _taxonomy_commands()
     for _line, cmd in _extract_command_candidates(body_for_mentions):

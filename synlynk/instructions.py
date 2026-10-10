@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Optional
 
 from synlynk._constants import CORE_INSTRUCTION_FILES, HARNESS_CAPABILITY_BASELINES, VERSION, _INSTALL_SCRIPT_URL
+from synlynk._lazy import pkg as _pkg
 from synlynk.probe import SOP_BLOCKS
 from synlynk.sentinel import _write_sentinel_alert
 from synlynk.taxonomy import entries_up_to_tier
@@ -39,13 +40,6 @@ def extract_instruction_version(content: str) -> Optional[str]:
 def get_instruction_file_for_agent(agent: str) -> Optional[str]:
     """Returns the canonical instruction file name for a core harness."""
     return CORE_INSTRUCTION_FILES.get(agent)
-
-
-def _pkg(name: str, default=None):
-    package = sys.modules.get("synlynk")
-    if package is None:
-        return default
-    return getattr(package, name, default)
 
 
 def _current_trigger_registry_tier() -> int:
@@ -243,7 +237,8 @@ def _find_existing_doc(basename: str, target_dir: str, project_name: str) -> Opt
                 pass
     return None
 
-def _write_informed_skeleton(scan: dict, skip_existing: bool = True) -> list:
+def _write_informed_skeleton(scan: dict, skip_existing: bool = True,
+                             replace_generated_docs: bool = False) -> list:
     """Writes project-docs skeleton, seeding from existing docs when available.
 
     Priority order for each file:
@@ -320,8 +315,20 @@ Each arc below can be tagged `<!-- goal:goal-xxxxxxxx -->` to link it to a goal.
         (os.path.join(dd, "todo.md"),    fallback_todo),
     ]
 
+    locked = False
+    try:
+        locked = bool(_pkg("_generated_docs_locked")(replace_generated_docs))
+    except Exception:
+        is_migrated = _pkg("_is_migrated")
+        locked = bool(is_migrated()) if callable(is_migrated) else False
+    generated_names = _pkg("_GENERATED_DOC_FILES") or (
+        "roadmap.md", "todo.md", "memory.md", "costs.md"
+    )
+
     written = []
     for path, fallback in targets:
+        if locked and os.path.basename(path) in generated_names:
+            continue
         if skip_existing and os.path.exists(path):
             continue
 
@@ -395,6 +402,11 @@ Keep it short. Infer from the evidence. Do not invent features not supported by 
         if result.returncode != 0 or not result.stdout.strip():
             return False
         enriched = result.stdout.strip()
+        try:
+            if _pkg("_generated_docs_locked")():
+                return False
+        except Exception:
+            pass
         with open("project-docs/roadmap.md", "w") as f:
             f.write(enriched + "\n")
         return True
@@ -577,122 +589,74 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
 
     _sop_section = "\n".join(SOP_BLOCKS) + "\n"
 
+    _shared_protocol_pointer = (
+        "## Shared synlynk Protocol\n\n"
+        "Load `AI_INSTRUCTIONS.md` for the full shared synlynk protocol, including "
+        "the session lifecycle, worktree policy, live-issues SOP, document discipline, "
+        "GitHub Projects workflow, and harness SOPs.\n"
+    )
+
+    def _tool_header(name: str, engine: str, trailer: str, harness: str) -> str:
+        return (
+            f"# {name}\n\n"
+            "## Identity & Attribution\n"
+            f"- **Engine:** {engine}\n"
+            f"- **Commit trailer:** `{trailer}`\n"
+            f"- **Branch prefix:** `feat/{harness}/` or `fix/{harness}/`\n\n"
+            "## Branch Naming\n"
+            f"- `feat/{harness}/<description>` — new functionality\n"
+            f"- `fix/{harness}/<description>` — bug fixes\n"
+            "- `chore/<description>` — deps, docs, config\n\n"
+            "## Domain Ownership\n"
+            "| Domain | Owned by this agent | Notes |\n"
+            "|:---|:---|:---|\n"
+            "| TODO: fill domains for this agent | | |\n\n"
+            + _shared_protocol_pointer
+        )
+
     _claude_md = (
-        "# synlynk Claude Instructions\n\n"
-        "## Identity & Attribution\n"
-        "- **Engine:** claude-sonnet-4-6\n"
-        "- **Commit trailer:** `Co-Authored-By: Claude Sonnet <noreply@anthropic.com>`\n"
-        "- **Branch prefix:** `feat/claude/` or `fix/claude/`\n\n"
-        "## Domain Ownership\n"
-        "| Domain | Owned by this agent | Notes |\n"
-        "|:---|:---|:---|\n"
-        "| TODO: fill domains for this agent | | |\n\n"
-        + _dual_mode_protocol + "\n"
-        + _worktree_policy + "\n"
-        "## Branch Naming\n"
-        "- `feat/claude/<description>` — new functionality\n"
-        "- `fix/claude/<description>` — bug fixes\n"
-        "- `chore/<description>` — deps, docs, config\n\n"
-        + _live_issues_sop + "\n"
-        + _anti_amnesia + "\n"
-        + _four_doc + "\n"
-        + _ghp_block + "\n"
-        + _sop_section
-        + _synlynk_start + "\n"
-        + _session_protocol + "\n\n"
-        + _trigger_registry_section + "\n\n"
-        + _lifecycle_checkpoint_section
+        _tool_header(
+            "synlynk Claude Instructions", "claude-sonnet-4-6",
+            "Co-Authored-By: Claude Sonnet <noreply@anthropic.com>",
+            "claude",
+        )
     )
 
     _gemini_md = (
-        "# synlynk AGY (AntiGravity) Instructions\n\n"
-        "## Identity & Attribution\n"
-        "- **Engine:** agy-2.x\n"
-        "- **Commit trailer:** `Co-Authored-By: AGY <noreply@antigravity.dev>`\n"
-        "- **Branch prefix:** `feat/agy/` or `fix/agy/`\n\n"
-        "## Domain Ownership\n"
-        "| Domain | Owned by this agent | Notes |\n"
-        "|:---|:---|:---|\n"
-        "| TODO: fill domains for this agent | | |\n\n"
-        + _dual_mode_protocol + "\n"
-        + _worktree_policy + "\n"
-        "## Branch Naming\n"
-        "- `feat/agy/<description>` — new functionality\n"
-        "- `fix/agy/<description>` — bug fixes\n"
-        "- `chore/<description>` — deps, docs, config\n\n"
-        + _live_issues_sop + "\n"
-        + _anti_amnesia + "\n"
-        + _four_doc + "\n"
-        + _ghp_block + "\n"
-        + _sop_section
-        + _synlynk_start + "\n"
-        + _session_protocol + "\n\n"
-        + _trigger_registry_section + "\n\n"
-        + _lifecycle_checkpoint_section
+        _tool_header(
+            "synlynk AGY (AntiGravity) Instructions", "agy-2.x",
+            "Co-Authored-By: AGY <noreply@antigravity.dev>",
+            "agy",
+        )
     )
 
     _agents_md = (
-        "# synlynk Codex Instructions\n\n"
-        "## Identity & Attribution\n"
-        "- **Engine:** openai-codex\n"
-        "- **Commit trailer:** `Co-Authored-By: Codex <noreply@openai.com>`\n"
-        "- **Branch prefix:** `feat/codex/` or `fix/codex/`\n\n"
-        "## Domain Ownership\n"
-        "| Domain | Owned by this agent | Notes |\n"
-        "|:---|:---|:---|\n"
-        "| TODO: fill domains for this agent | | |\n\n"
-        + _dual_mode_protocol + "\n"
-        + _worktree_policy + "\n"
-        "## Branch Naming\n"
-        "- `feat/codex/<description>` — new functionality\n"
-        "- `fix/codex/<description>` — bug fixes\n"
-        "- `chore/<description>` — deps, docs, config\n\n"
-        + _live_issues_sop + "\n"
-        + _anti_amnesia + "\n"
-        + _four_doc + "\n"
-        + _ghp_block + "\n"
-        + _sop_section
-        + _synlynk_start + "\n"
-        + _session_protocol + "\n\n"
-        + _trigger_registry_section + "\n\n"
-        + _lifecycle_checkpoint_section
+        _tool_header(
+            "synlynk Codex Instructions", "openai-codex",
+            "Co-Authored-By: Codex <noreply@openai.com>",
+            "codex",
+        )
     )
 
     _grok_md = (
-        "# synlynk Grok Instructions\n\n"
-        "## Identity & Attribution\n"
-        "- **Engine:** grok-composer-2.5-fast\n"
-        "- **Commit trailer:** `Co-Authored-By: Grok <noreply@x.ai>`\n"
-        "- **Branch prefix:** `feat/grok/` or `fix/grok/`\n\n"
-        "## Domain Ownership\n"
-        "| Domain | Owned by this agent | Notes |\n"
-        "|:---|:---|:---|\n"
-        "| TODO: fill domains for this agent | | |\n\n"
-        + _dual_mode_protocol + "\n"
-        + _worktree_policy + "\n"
-        "## Branch Naming\n"
-        "- `feat/grok/<description>` — new functionality\n"
-        "- `fix/grok/<description>` — bug fixes\n"
-        "- `chore/<description>` — deps, docs, config\n\n"
-        + _live_issues_sop + "\n"
-        + _anti_amnesia + "\n"
-        + _four_doc + "\n"
-        + _ghp_block + "\n"
-        + _sop_section
-        + _synlynk_start + "\n"
-        + _session_protocol + "\n\n"
-        + _trigger_registry_section + "\n\n"
-        + _lifecycle_checkpoint_section
+        _tool_header(
+            "synlynk Grok Instructions", "grok-composer-2.5-fast",
+            "Co-Authored-By: Grok <noreply@x.ai>",
+            "grok",
+        )
     )
 
     _ai_instructions_md = (
         "# synlynk Universal AI Instructions\n\n"
         "Apply the following as your system prompt or custom instructions "
         "before starting any session in this repository.\n\n"
+        + _dual_mode_protocol + "\n"
+        + _worktree_policy + "\n"
         + _live_issues_sop + "\n"
         + _anti_amnesia + "\n"
         + _four_doc + "\n"
         + _ghp_block + "\n"
+        + _sop_section
         + _synlynk_start + "\n"
         + _session_protocol + "\n\n"
         + _trigger_registry_section + "\n\n"
@@ -984,6 +948,31 @@ def install_pre_commit_hook(repo_root: Path) -> None:
 
     hook_path.write_text(content)
     hook_path.chmod(hook_path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+
+    versioned_hook = Path(repo_root) / "githooks" / "pre-commit"
+    if versioned_hook.is_file():
+        configured_hooks_path = subprocess.run(
+            ["git", "config", "--get", "core.hooksPath"],
+            cwd=repo_root,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if configured_hooks_path.returncode == 0 and configured_hooks_path.stdout.strip():
+            print(
+                f"  core.hooksPath already set to "
+                f"{configured_hooks_path.stdout.strip()!r}; leaving it unchanged"
+            )
+        else:
+            if configured_hooks_path.returncode not in (0, 1):
+                configured_hooks_path.check_returncode()
+            subprocess.run(
+                ["git", "config", "core.hooksPath", "githooks"],
+                cwd=repo_root,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
 
 def _check_instruction_drift() -> list:
     """Check tracked instruction files for external modifications to the synlynk section.

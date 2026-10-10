@@ -12,18 +12,13 @@ import tarfile
 import uuid
 from typing import Optional, Tuple
 
-from synlynk.taxonomy import entries_for_tier
+from synlynk._lazy import pkg as _pkg
 from synlynk.launch import (
     find_top_scan_finding,
     prompt_first_win_remediation,
     dispatch_first_win_remediation,
 )
-
-def _pkg(name: str, default=None):
-    package = sys.modules.get("synlynk")
-    if package is None:
-        return default
-    return getattr(package, name, default)
+from synlynk.taxonomy import entries_for_tier
 
 _BOLD = "\033[1m"
 
@@ -235,24 +230,17 @@ def cmd_launch_ftue(dry_run: bool = False, list_mode: bool = False) -> None:
             print(f"\n  {_YELLOW}⚠ Dispatch failed: {exc}{_RESET}\n")
         return
 
-_WIZ_SYNAPTIC_BLURB = (
-    "In the brain, a synaptic link is the tiny gap where one neuron passes\n"
-    "  its signal to the next. Alone, neurons are just cells. Connected, they\n"
-    "  produce thought. Your AI tools are the same — powerful in isolation,\n"
-    "  transformative when they share a signal. synlynk is the gap that makes\n"
-    "  them think together."
-)
-
 _WIZ_PRODUCT_BLURB = (
-    "You already have great AI tools. The problem is they don't know about\n"
-    "  each other — or your project. synlynk fixes that: it injects shared\n"
-    "  context before every dispatch, routes tasks to the right agent, and\n"
-    "  keeps score on what's working. Your fleet, finally coordinated."
+    "Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result.\n"
+    "  It injects shared context before every dispatch and keeps evidence on what's working."
 )
 
 def _wiz_clear() -> None:
-    """Clear the terminal screen."""
-    os.system("clear" if os.name != "nt" else "cls")
+    """Clear the terminal screen without spawning a pipe-inheriting child."""
+    if os.name == "nt":
+        os.system("cls")
+    elif sys.stdout.isatty():
+        print("\033[H\033[2J", end="", flush=True)
 
 def _wiz_read_key() -> str:
     """Read a single keypress without requiring Enter.
@@ -585,13 +573,12 @@ def _wiz_prompt(hint: str, color: str = None) -> None:
     print(f"\n  {c}›{_RESET} {_DIM}{hint}{_RESET}")
 
 def _wiz_screen_landing() -> None:
-    """Landing screen — brand intro + synaptic link explainer. Waits for Enter."""
+    """Landing screen — product introduction. Waits for Enter."""
     _wiz_clear()
     print(f"\n  {_BOLD}{_CYAN}syn{_RESET}{_CYAN}l{_RESET}{_DIM}y{_RESET}"
-          f"{_CYAN}n{_RESET}k  {_DIM}·  synaptic link for AI development{_RESET}\n")
+          f"{_CYAN}n{_RESET}k  {_DIM}·  neutral control plane for coding tasks{_RESET}\n")
     print(f"  {_DIM}{'─' * 52}{_RESET}")
-    print(f"\n  {_BOLD}What is a synaptic link?{_RESET}")
-    print(f"  {_DIM}{_WIZ_SYNAPTIC_BLURB}{_RESET}\n")
+    print(f"\n  {_BOLD}What is Synlynk?{_RESET}")
     print(f"  {_WIZ_PRODUCT_BLURB}\n")
     print(f"  {_DIM}{'─' * 52}{_RESET}")
     print(f"\n  {_GREEN}✦ One brain{_RESET}  {_DIM}Every agent works from the same project memory.{_RESET}")
@@ -1158,6 +1145,37 @@ def wizard_init(scan: dict = None, dry_run: bool = False) -> None:
                     pass
 
 
+def _advance_wizard_onboarding_state(repo_dir: str, product_id: str) -> str:
+    """Open ``repo_dir/.synlynk/state.db`` (creating it if needed) and move the
+    headless onboarding session through the stages this init actually covers:
+    orientation is created, then dependency detection and harness binding.
+    Returns the resulting ``current_stage``.
+    """
+    import sqlite3
+
+    from synlynk.db import _migrate_onboarding_sessions
+    from synlynk.onboarding_state import (
+        STAGES,
+        STAGE_S2_DEPENDENCIES,
+        STAGE_S3_HARNESS_BINDING,
+        advance_stage,
+        get_or_create_session,
+    )
+
+    db_path = os.path.join(repo_dir, ".synlynk", "state.db")
+    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+    conn = sqlite3.connect(db_path)
+    try:
+        _migrate_onboarding_sessions(conn)
+        session = get_or_create_session(conn, product_id)
+        for stage in (STAGE_S2_DEPENDENCIES, STAGE_S3_HARNESS_BINDING):
+            if STAGES.index(session["current_stage"]) < STAGES.index(stage):
+                session = advance_stage(conn, session["session_id"], stage)
+        return session["current_stage"]
+    finally:
+        conn.close()
+
+
 def cmd_wizard_init(
     scan: dict = None,
     dry_run: bool = False,
@@ -1166,7 +1184,8 @@ def cmd_wizard_init(
     repo_dir: str = ".",
     workspace_name: str = None,
     prompt_remediation: bool = False,
-) -> dict:
+    non_interactive: bool = False,
+):
     """Streamlined zero-config onboarding: auto-probes installed harnesses,
     detects codebase stack, guards dirty worktree, provisions standard agent charters
     in <5s, auto-invokes synlynk backlog ingest --sync-github, and prompts first-win remediation.
@@ -1284,7 +1303,8 @@ def cmd_wizard_init(
     elapsed = time.time() - start_time
     print(f"\n  {_GREEN}✓{_RESET} Zero-risk onboarding completed in {elapsed:.2f}s\n")
 
-    return {
+    current_stage = _advance_wizard_onboarding_state(repo_dir, ws_name)
+    result = {
         "workspace_name": ws_name,
         "harnesses": harnesses,
         "stack": stack,
@@ -1293,5 +1313,8 @@ def cmd_wizard_init(
         "backup": backup_result,
         "first_win": first_win_result,
         "elapsed_seconds": elapsed,
+        "current_stage": current_stage,
     }
-
+    if non_interactive:
+        return 0
+    return result

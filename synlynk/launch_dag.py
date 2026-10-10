@@ -66,6 +66,44 @@ def raise_escalation_ticket(
     return ""
 
 
+from synlynk.jobs import (
+    STATUS_CIRCUIT_BREAKER_TRIPPED,
+    STATUS_COMPLETED_WITHOUT_CHANGES,
+    STATUS_FAILED_NOOP_DENIED,
+    STATUS_FAILED_VERIFICATION,
+    is_noop_status,
+    is_successful_status,
+)
+from synlynk.capability_probe import (
+    CAP_GH_WRITE,
+    CAP_SHELL,
+    CAP_WORKSPACE_WRITE,
+    evaluate_harness_capabilities,
+    infer_task_required_capabilities,
+    resolve_capable_dispatch_harness,
+)
+
+_HARNESS_FAILOVER_CHAIN = ["codex", "agy", "claude", "grok"]
+
+
+def _next_failover_harness(current: str, failed_list: List[str], required_capabilities: Optional[Set[str]] = None) -> str:
+    for h in _HARNESS_FAILOVER_CHAIN:
+        if h != current and h not in failed_list:
+            if required_capabilities:
+                eval_res = evaluate_harness_capabilities(h, required_capabilities)
+                if not eval_res.allowed:
+                    continue
+            return h
+    for h in _HARNESS_FAILOVER_CHAIN:
+        if h != current:
+            if required_capabilities:
+                eval_res = evaluate_harness_capabilities(h, required_capabilities)
+                if not eval_res.allowed:
+                    continue
+            return h
+    return current
+
+
 @dataclass
 class DAGNode:
     node_id: str
@@ -75,6 +113,7 @@ class DAGNode:
     status: str = "pending"  # pending, ready, running, done, failed, blocked, awaiting_approval
     owner_role: str = "builder"
     harness: str = "codex"
+    required_capabilities: Optional[Set[str]] = None
     lease_token: Optional[str] = None
     lease_expires: Optional[float] = None
     pr_number: Optional[int] = None
@@ -82,6 +121,9 @@ class DAGNode:
     worktree_path: Optional[str] = None
     job_id: Optional[str] = None
     error: Optional[str] = None
+    retry_count: int = 0
+    max_retries: int = 2
+    failed_harnesses: List[str] = field(default_factory=list)
     updated_at: str = field(default_factory=lambda: time.strftime("%Y-%m-%dT%H:%M:%S"))
 
 
@@ -98,8 +140,18 @@ class LaunchDAG:
             if not s_id:
                 continue
             role = story.get("role") or "builder"
+            title = story.get("title") or ""
+            requires_gh_write = bool(story.get("requires_gh_write", False))
+
             # Harness specialization matrix
-            harness = "codex" if role in ("builder", "dev", "tester") else ("agy" if role in ("marketing", "docs") else "claude")
+            base_harness = "codex" if role in ("builder", "dev", "tester") else ("agy" if role in ("marketing", "docs") else "claude")
+            impl_caps = infer_task_required_capabilities(title, task_type="implement", requires_gh_write=requires_gh_write)
+            impl_harness = resolve_capable_dispatch_harness(
+                candidate_harness=base_harness,
+                task=title,
+                required_capabilities=impl_caps,
+                requires_gh_write=requires_gh_write,
+            )
 
             impl_id = f"impl:{s_id}"
             rev_id = f"review:{s_id}"
@@ -121,8 +173,11 @@ class LaunchDAG:
                 dependencies=impl_deps,
                 status="ready" if not impl_deps else "pending",
                 owner_role=role,
-                harness=harness,
+                harness=impl_harness,
+                required_capabilities=impl_caps,
             )
+
+            gh_write_caps = {CAP_GH_WRITE, CAP_SHELL, CAP_WORKSPACE_WRITE}
 
             # Review node depends on implementation completing
             self.nodes[rev_id] = DAGNode(
@@ -133,6 +188,7 @@ class LaunchDAG:
                 status="pending",
                 owner_role="qa",
                 harness="codex",
+                required_capabilities=gh_write_caps,
             )
 
             # Merge node depends on review completing
@@ -144,6 +200,7 @@ class LaunchDAG:
                 status="pending",
                 owner_role="qa",
                 harness="codex",
+                required_capabilities=gh_write_caps,
             )
 
     def get_node(self, node_id: str) -> Optional[DAGNode]:
@@ -250,6 +307,102 @@ class LaunchDAG:
         node.error = f"Escalated to {issue_url}" if issue_url else "Escalation requested"
         node.updated_at = time.strftime("%Y-%m-%dT%H:%M:%S")
         return issue_url
+
+    def handle_job_outcome(
+        self,
+        node_id: str,
+        status: str,
+        job_id: Optional[str] = None,
+        pr_number: Optional[int] = None,
+        branch: Optional[str] = None,
+        worktree_path: Optional[str] = None,
+        error: Optional[str] = None,
+    ) -> bool:
+        """Handle a completed job result. On noop/verification failure, automatically failover to secondary harness.
+        
+        Returns True if the node was failed over for re-dispatch, False if terminal state.
+        """
+        node = self.nodes.get(node_id)
+        if not node:
+            return False
+
+        if is_successful_status(status) or status in ("succeeded", "done", "completed"):
+            self.advance_node(
+                node_id,
+                "done",
+                pr_number=pr_number,
+                branch=branch,
+                worktree_path=worktree_path,
+                error=error,
+            )
+            return False
+
+        # Noop or verification failure -> trigger autonomous harness failover
+        if is_noop_status(status) or status in (
+            STATUS_COMPLETED_WITHOUT_CHANGES,
+            STATUS_FAILED_NOOP_DENIED,
+            STATUS_FAILED_VERIFICATION,
+        ):
+            if node.retry_count < node.max_retries:
+                if node.harness not in node.failed_harnesses:
+                    node.failed_harnesses.append(node.harness)
+                node.retry_count += 1
+                next_harness = _next_failover_harness(node.harness, node.failed_harnesses, node.required_capabilities)
+                prev_harness = node.harness
+                node.harness = next_harness
+                node.status = "ready"
+                node.lease_token = None
+                node.lease_expires = None
+                node.error = f"Auto-failover: {prev_harness} produced {status}; retrying with {next_harness}"
+                node.updated_at = time.strftime("%Y-%m-%dT%H:%M:%S")
+                return True
+            else:
+                self.advance_node(
+                    node_id,
+                    "failed",
+                    error=f"Retries exhausted ({node.retry_count}/{node.max_retries}) on {status}",
+                )
+                return False
+
+        # Circuit breaker trip -> trigger autonomous harness failover
+        if status == STATUS_CIRCUIT_BREAKER_TRIPPED:
+            if node.retry_count < node.max_retries:
+                if node.harness not in node.failed_harnesses:
+                    node.failed_harnesses.append(node.harness)
+                node.retry_count += 1
+                next_harness = _next_failover_harness(node.harness, node.failed_harnesses, node.required_capabilities)
+                prev_harness = node.harness
+                node.harness = next_harness
+                node.status = "ready"
+                node.lease_token = None
+                node.lease_expires = None
+                node.error = f"Auto-failover: {prev_harness} tripped circuit breaker ({error or status}); retrying with {next_harness}"
+                node.updated_at = time.strftime("%Y-%m-%dT%H:%M:%S")
+                return True
+            else:
+                self.advance_node(
+                    node_id,
+                    "failed",
+                    error=f"Retries exhausted ({node.retry_count}/{node.max_retries}) on circuit breaker trip: {error or status}",
+                )
+                return False
+
+        # Other failures
+        if node.retry_count < node.max_retries:
+            if node.harness not in node.failed_harnesses:
+                node.failed_harnesses.append(node.harness)
+            node.retry_count += 1
+            next_harness = _next_failover_harness(node.harness, node.failed_harnesses, node.required_capabilities)
+            node.harness = next_harness
+            node.status = "ready"
+            node.lease_token = None
+            node.lease_expires = None
+            node.error = f"Retry {node.retry_count}/{node.max_retries} with {next_harness}"
+            node.updated_at = time.strftime("%Y-%m-%dT%H:%M:%S")
+            return True
+
+        self.advance_node(node_id, "failed", error=error or f"Job {status}")
+        return False
 
     def render_report(self) -> str:
         """Generate human-readable execution DAG table."""

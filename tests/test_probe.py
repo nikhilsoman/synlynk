@@ -178,22 +178,103 @@ def test_probe_clears_all_drift_alerts_for_same_agent(tmp_path, monkeypatch):
 
 def test_probe_extracts_claude_version_from_descriptive_output(tmp_path, monkeypatch):
     import socket
+    import subprocess
     import synlynk
+    from synlynk import probe as probe_mod
     from synlynk.probe import cmd_probe
 
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".synlynk").mkdir()
+    home = tmp_path / "home"
+    (home / ".claude").mkdir(parents=True)
+    (home / ".claude" / "settings.json").write_text(
+        '{"model": "claude-sonnet-4-6"}\n'
+    )
+    monkeypatch.setenv("HOME", str(home))
+    real_expanduser = os.path.expanduser
+    monkeypatch.setattr(
+        os.path,
+        "expanduser",
+        lambda path: (
+            str(home / path[2:]) if path.startswith("~/")
+            else str(home) if path == "~"
+            else real_expanduser(path)
+        ),
+    )
 
     db_path = tmp_path / ".synlynk" / "state.db"
     _seed_probe_db(db_path, harness_name="claude", installed_version="2.0.0")
     _make_stub_agent(tmp_path, "claude", "2.1.208", version_output="2.1.208 (Claude Code)")
     monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
     monkeypatch.setattr(socket, "create_connection", lambda *args, **kwargs: _DummySocket())
-    monkeypatch.setattr(synlynk, "_get_db", lambda: sqlite3.connect(str(db_path)))
 
-    cmd_probe(agent="claude")
+    probe_conn = None
 
-    assert _read_installed_version(db_path, "claude") == "2.1.208"
+    class _ProbeConnection:
+        def __init__(self, connection):
+            self._connection = connection
+
+        def __setattr__(self, name, value):
+            if name == "_connection":
+                object.__setattr__(self, name, value)
+            else:
+                setattr(self._connection, name, value)
+
+        def __getattr__(self, name):
+            return getattr(self._connection, name)
+
+        def close(self):
+            # Keep the underlying connection available for the post-probe
+            # transaction assertion; the test closes it in the finally block.
+            pass
+
+    observed_conn = None
+
+    def patched_get_db():
+        nonlocal observed_conn, probe_conn
+        probe_conn = sqlite3.connect(str(db_path))
+        observed_conn = _ProbeConnection(probe_conn)
+        return observed_conn
+
+    monkeypatch.setattr(synlynk, "_get_db", patched_get_db)
+
+    environmental_probes = []
+    real_run = probe_mod.subprocess.run
+
+    def fake_run(command, *args, **kwargs):
+        if command == ["npm", "info", "@anthropic-ai/claude-code", "version"]:
+            environmental_probes.append(tuple(command))
+            return subprocess.CompletedProcess(command, 0, stdout="2.1.209\n", stderr="")
+        if command == ["gh", "auth", "status"]:
+            environmental_probes.append(tuple(command))
+            return subprocess.CompletedProcess(command, 0, stdout="Logged in\n", stderr="")
+        return real_run(command, *args, **kwargs)
+
+    monkeypatch.setattr(probe_mod.subprocess, "run", fake_run)
+
+    try:
+        cmd_probe(agent="claude")
+
+        assert _read_installed_version(db_path, "claude") == "2.1.208"
+        assert environmental_probes == [
+            ("npm", "info", "@anthropic-ai/claude-code", "version"),
+            ("gh", "auth", "status"),
+        ]
+        assert tuple(
+            observed_conn.execute(
+                "SELECT status, discovery_source FROM harness_models "
+                "WHERE harness_name='claude' AND model_id='claude-sonnet-4-6'"
+            ).fetchone()
+        ) == ("active", "self_report")
+        assert observed_conn.execute(
+            "SELECT COUNT(*) FROM harness_reservations WHERE harness='claude'"
+        ).fetchone()[0] == 0
+        # Probe records the model and releases its write transaction without
+        # opening a calibration reservation; calibration is an explicit sweep.
+        assert observed_conn.in_transaction is False
+    finally:
+        if probe_conn is not None:
+            probe_conn.close()
 
 
 # --- #287: Tier-2 model probe reads agent config files, not CLI version text ---
@@ -370,7 +451,10 @@ def test_scan_repo_requirements_detects_artifact_presence(tmp_path, requirements
     assert _scan_repo_requirements(str(repo)) == expected
 
 
-def test_probe_queues_sweep_for_new_model(tmp_path, monkeypatch):
+def test_probe_records_new_model_without_importing_or_dispatching_calibration(tmp_path, monkeypatch, capsys):
+    import builtins
+    import sys
+
     from synlynk import db, probe
     monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(tmp_path / "state.db"))
     conn = db._get_db()
@@ -380,13 +464,54 @@ def test_probe_queues_sweep_for_new_model(tmp_path, monkeypatch):
     )
     conn.commit()
 
-    queued = []
-    monkeypatch.setattr(
-        probe, "_queue_calibration_sweep",
-        lambda harness_name, model_id, conn: queued.append((harness_name, model_id)),
-    )
+    dispatched = []
+    monkeypatch.setattr("synlynk.dispatch.dispatch_agent", lambda *args, **kwargs: dispatched.append(args))
+    imported = []
+    real_import = builtins.__import__
+
+    def guarded_import(name, *args, **kwargs):
+        if name == "synlynk.capability_sweep" or name.startswith("synlynk.capability_sweep."):
+            imported.append(name)
+            raise AssertionError("probe must not import capability_sweep")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", guarded_import)
+    sys.modules.pop("synlynk.capability_sweep", None)
+
     probe._diff_and_queue_new_models("codex", ["gpt-5", "gpt-5.5"], conn)
-    assert queued == [("codex", "gpt-5.5")]
+    assert imported == []
+    assert dispatched == []
+    row = conn.execute(
+        "SELECT status, discovery_source FROM harness_models WHERE harness_name=? AND model_id=?",
+        ("codex", "gpt-5.5"),
+    ).fetchone()
+    assert row == ("active", "self_report")
+    assert "run `synlynk capability sweep` to calibrate" in capsys.readouterr().out
+    assert conn.in_transaction is False
+    conn.close()
+
+
+def test_probe_model_discovery_releases_write_transaction_promptly(tmp_path, monkeypatch):
+    import time
+
+    from synlynk import db, probe
+
+    db_path = tmp_path / "state.db"
+    monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(db_path))
+    conn = db._get_db()
+    conn.execute("BEGIN IMMEDIATE")
+    started = time.monotonic()
+    probe._diff_and_queue_new_models("codex", ["gpt-5.5"], conn)
+    assert time.monotonic() - started < 1.0
+    assert conn.in_transaction is False
+
+    second_conn = db._get_db()
+    try:
+        second_conn.execute("BEGIN IMMEDIATE")
+        second_conn.rollback()
+    finally:
+        second_conn.close()
+        conn.close()
 
 
 def test_sop_blocks_no_hardcoded_claude_authority():
@@ -432,5 +557,3 @@ def test_repair_sops_detects_legacy_claude_references(tmp_path, monkeypatch):
     assert "Run the brainstorm using Claude" not in updated
     assert "without explicit Claude approval" not in updated
     assert "without explicit Home Harness approval" in updated
-
-
