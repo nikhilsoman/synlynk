@@ -75,6 +75,18 @@ Per "address ALL recommendations," every Cross-Lens Opportunity and P2 item gets
 - It does not build a new capability-matrix format — #1993 already has a design; this roadmap sequences its implementation, it doesn't redesign it.
 - It does not attempt "general competency" in 4 weeks — pillar 6 ships one domain pack as a proof of pathway, explicitly not full generality, matching the user's own "pathway to" framing rather than "ship general competency."
 
-## 5. Next step
+## 5. Arch council verdict (2026-10-10) and the two gates it added
 
-Re-run the arch council: `synlynk decide` with this roadmap's 7 pillars and phase structure as the topic, panel across the harnesses with live PM/review standing (Claude, Agy, Codex at minimum; Grok/Muse if session auth allows), `--record` so the decision lands in `project-docs/decisions/` and is linked back to `goal-9ef9a965`/`goal-85656c82`.
+`synlynk decide` panel (claude, agy, codex, grok) — decision recorded at `project-docs/decisions/2026-10-10-revised-dev-preview-roadmap-docs-strateg*`. All four panelists converged: the dependency topology (foundation → measurement → claims → swarm/release) is correct and approved as drafted. The approval is conditional on the date, not the sequence — the panel's own words: **"ship the narrower, honestly-labeled preview over a seven-pillar claim the evidence can't yet support by 10/31."** Two specific risks drove this:
+
+- `#1926` (state.db consolidation) is a **single point of failure with zero float** in the 21-day window — every downstream pillar-3/4 measurement claim depends on it.
+- The Empirical Capability Assessment Policy's own **≥5-merged-job sample bar** means "measured 20% Hermes contributor," Muse calibration, and exiting GOVERNS `observe` mode all require wall-clock time that proof-by-merged-sample consumes regardless of how well-ordered the plan is.
+
+**Two gates added to this roadmap as a result (not a re-sequence — same phases, same order, now with explicit checkpoints):**
+
+1. **End of Week 1 — hard checkpoint.** If `#1926` is not queryable *and* `#2136` is not merged by the end of Week 1, invoke the re-park trigger immediately (push the affected Week 2-4 items out of the dev-preview scope and say so in the roadmap row) rather than letting the slip cascade silently through Weeks 2-4.
+2. **End of Week 2 — go/no-go on pillars 3 and 4 specifically.** If merged-job sample counts aren't trending toward the ≥5 bar by then, descope the local-model and capability-matrix pillars in the release claims from "measured" to "integrated, unmeasured" — and explicitly decide, and state in the release notes, whether GOVERNS ships in `observe` mode rather than let that become an undisclosed scope cut.
+
+## 6. Next step
+
+Both gates are now load-bearing parts of this roadmap, not optional follow-up. Week 1 execution starts with the stale-goal reconciliation and the `#1926`/`#2136` work in Section 2 above, with the Week 1 checkpoint gate tracked against it from day one.
