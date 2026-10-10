@@ -4021,6 +4021,113 @@ def cmd_goal_list(kind: str = None) -> None:
         print(f"  {r[0]:<12} {g_kind:<10} {(r[1] or '')[:35]:<36} {deadline:<12}")
 
 
+def cmd_goal_update(goal_id: str, status: str = None, deadline: str = None,
+                    supersede_with: str = None) -> None:
+    """Update a goal and optionally move its open stories to another goal."""
+    from synlynk import _GREEN, _RESET, _get_db
+
+    valid_statuses = {"active", "done", "superseded"}
+    if status is not None and status not in valid_statuses:
+        raise ValueError(
+            f"Invalid goal status: {status!r}; must be one of active, done, superseded"
+        )
+    if deadline is not None:
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", deadline):
+            raise ValueError(f"Invalid deadline {deadline!r}; expected YYYY-MM-DD")
+        try:
+            datetime.strptime(deadline, "%Y-%m-%d")
+        except ValueError as exc:
+            raise ValueError(f"Invalid deadline {deadline!r}; expected YYYY-MM-DD") from exc
+    if status is None and deadline is None and supersede_with is None:
+        raise ValueError("goal update requires --status, --deadline, or --supersede-with")
+
+    conn = _get_db()
+    try:
+        if not conn.execute("SELECT 1 FROM goals WHERE goal_id=?", (goal_id,)).fetchone():
+            raise ValueError(f"Goal '{goal_id}' not found.")
+        if supersede_with is not None and not conn.execute(
+            "SELECT 1 FROM goals WHERE goal_id=?", (supersede_with,)
+        ).fetchone():
+            raise ValueError(f"Goal '{supersede_with}' not found.")
+        if supersede_with == goal_id:
+            raise ValueError("--supersede-with must name a different goal")
+
+        updates = []
+        values = []
+        if status is not None:
+            updates.append("status=?")
+            values.append(status)
+        if deadline is not None:
+            updates.append("deadline=?")
+            values.append(deadline)
+        if supersede_with is not None:
+            updates.append("status=?")
+            values.append("superseded")
+        conn.execute(
+            f"UPDATE goals SET {', '.join(updates)} WHERE goal_id=?",
+            (*values, goal_id),
+        )
+
+        relinked = 0
+        if supersede_with is not None:
+            story_ids = {
+                row[0] for row in conn.execute(
+                    "SELECT story_id FROM stories WHERE goal_id=? "
+                    "AND (status IS NULL OR status != 'done')",
+                    (goal_id,),
+                )
+            }
+            story_ids.update(
+                row[0] for row in conn.execute(
+                    "SELECT gc.story_id FROM goal_contributions gc "
+                    "JOIN stories s ON s.story_id=gc.story_id "
+                    "WHERE gc.goal_id=? AND gc.link_status='linked' "
+                    "AND (s.status IS NULL OR s.status != 'done')",
+                    (goal_id,),
+                )
+            )
+            for story_id in story_ids:
+                conn.execute(
+                    "UPDATE stories SET goal_id=? WHERE story_id=? "
+                    "AND goal_id=? AND (status IS NULL OR status != 'done')",
+                    (supersede_with, story_id, goal_id),
+                )
+                if conn.execute(
+                    "SELECT 1 FROM goal_contributions WHERE goal_id=? AND story_id=?",
+                    (goal_id, story_id),
+                ).fetchone():
+                    if conn.execute(
+                        "SELECT 1 FROM goal_contributions WHERE goal_id=? AND story_id=?",
+                        (supersede_with, story_id),
+                    ).fetchone():
+                        conn.execute(
+                            "DELETE FROM goal_contributions WHERE goal_id=? AND story_id=?",
+                            (goal_id, story_id),
+                        )
+                    else:
+                        conn.execute(
+                            "UPDATE goal_contributions SET goal_id=? "
+                            "WHERE goal_id=? AND story_id=?",
+                            (supersede_with, goal_id, story_id),
+                        )
+                relinked += 1
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+    changes = []
+    if status is not None or supersede_with is not None:
+        changes.append(f"status={'superseded' if supersede_with is not None else status}")
+    if deadline is not None:
+        changes.append(f"deadline={deadline}")
+    if supersede_with is not None:
+        changes.append(f"relinked={relinked}")
+    print(f"  {_GREEN}✓{_RESET} Goal updated: {goal_id} ({', '.join(changes)})")
+
+
 _VALID_SESSION_DISPOSITIONS = {
     "goal_progress", "maintenance", "exploration", "parked", "needs_attribution"
 }
