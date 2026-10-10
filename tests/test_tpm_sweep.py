@@ -164,3 +164,36 @@ def test_ready_stories_includes_story_with_failed_job(project_dir):
     story_id = _story_with_job(project_dir, "failed")
 
     assert story_id in {story["story_id"] for story in _ready_stories()}
+
+
+def test_story_done_clears_readiness_and_sweep_does_not_resweep(isolated_db, project_dir):
+    from synlynk.db import cmd_story_done
+
+    story_id = cmd_story_create(title="finish me", story_id="story-done-1")
+    cmd_story_ready(story_id)
+
+    with patch("synlynk.tpm_sweep.check_authority") as mock_auth, \
+            patch("synlynk.tpm_sweep.dispatch_agent") as mock_dispatch:
+        mock_auth.return_value = MagicMock(allowed=True, requires_approval=False)
+        mock_dispatch.return_value = {"id": "job-done-1", "agent": "codex"}
+        run_sweep_pass()
+
+    cmd_story_done(story_id)
+
+    conn = synlynk._get_db()
+    row = conn.execute(
+        "SELECT status, readiness FROM stories WHERE story_id=?", (story_id,)
+    ).fetchone()
+    conn.close()
+    assert row == ("done", "done")
+
+    assert _ready_stories() == []
+
+    with patch("synlynk.tpm_sweep.check_authority") as mock_auth, \
+            patch("synlynk.tpm_sweep.dispatch_agent") as mock_dispatch:
+        mock_auth.return_value = MagicMock(allowed=True, requires_approval=False)
+        mock_dispatch.return_value = {"id": "job-done-2", "agent": "codex"}
+        summary = run_sweep_pass()
+
+    assert summary == {"advanced": 0, "parked": 0, "failed": 0}
+    mock_dispatch.assert_not_called()

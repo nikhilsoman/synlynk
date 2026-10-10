@@ -7787,6 +7787,7 @@ def test_install_service_macos(project_dir, monkeypatch):
     assert ".synlynk/launchd.log" in plist
     assert plistlib.loads(plist.encode())["KeepAlive"] is True
     assert plistlib.loads(plist.encode())["ThrottleInterval"] == 30
+    assert plistlib.loads(plist.encode())["EnvironmentVariables"]["SYNLYNK_AUTONOMOUS"] == "1"
     assert calls[0][0] == ["launchctl", "load", "-w", str(plist_path)]
 
 
@@ -7828,6 +7829,7 @@ def test_install_service_linux(project_dir, monkeypatch):
     assert "After=default.target" in unit
     assert "ExecStart=/usr/bin/python3 -m synlynk daemon run" in unit
     assert "SYNLYNK_DAEMON_WORKSPACE_ROOT=" in unit
+    assert "Environment=SYNLYNK_AUTONOMOUS=1" in unit
     assert "Restart=on-failure" in unit
     assert "RestartSec=30" in unit
     assert calls[0][0] == ["systemctl", "--user", "enable", "--now", "synlynk-daemon"]
@@ -7862,6 +7864,7 @@ def test_install_service_crontab(project_dir, monkeypatch):
     synlynk._daemon_install_service(object())
 
     assert "@reboot" in crontab_contents[0]
+    assert "SYNLYNK_AUTONOMOUS=1" in crontab_contents[0]
     assert crontab_contents[0].count("daemon start") == 1
     assert calls[0][0] == ["crontab", "-l"]
     assert calls[1][0] == ["crontab", "-"]
