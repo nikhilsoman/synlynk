@@ -121,7 +121,7 @@ def test_run_sweep_writes_baseline_seed_rows_with_independent_verifier(tmp_path,
 
     def fake_verify(verifier_agent, executor_agent, model, skill, executor_output):
         assert verifier_agent != executor_agent
-        return {"quality": 8.0, "correct": True}
+        return {"quality": 8.0, "correct": True, "quality_verified": True}
 
     monkeypatch.setattr("synlynk.capability_sweep._dispatch_calibration_task", fake_dispatch)
     monkeypatch.setattr("synlynk.capability_sweep._verify_calibration_result", fake_verify)
@@ -214,7 +214,9 @@ def test_sweep_for_harness_model_writes_calibration_result(tmp_path, monkeypatch
     )
     monkeypatch.setattr(
         capability_sweep, "_verify_calibration_result",
-        lambda verifier_agent, executor_agent, model, skill, executor_output: {"quality": 8.0, "correct": True},
+        lambda verifier_agent, executor_agent, model, skill, executor_output: {
+            "quality": 8.0, "correct": True, "quality_verified": True,
+        },
     )
     monkeypatch.setattr(capability_sweep, "_pick_verifier_agent", lambda executor, available: "codex")
 
@@ -243,7 +245,7 @@ def test_sweep_for_harness_model_dispatches_selected_model(tmp_path, monkeypatch
     monkeypatch.setattr(
         capability_sweep,
         "_verify_calibration_result",
-        lambda *args: {"quality": 8.0, "correct": True},
+        lambda *args: {"quality": 8.0, "correct": True, "quality_verified": True},
     )
     monkeypatch.setattr(capability_sweep, "_pick_verifier_agent", lambda *args: "codex")
 
