@@ -2093,6 +2093,133 @@ def test_unpushed_guard_accepts_pr_delivery_after_head_branch_deletion(monkeypat
     ) == "done"
 
 
+def test_unpushed_guard_retries_on_inconclusive_check_instead_of_settling(monkeypatch):
+    import sqlite3
+    import synlynk.jobs as jobs_mod
+
+    monkeypatch.setattr(jobs_mod, "local_commits_pushed", lambda *args: False)
+    monkeypatch.setattr(jobs_mod, "github_branch_effect_verified", lambda *args, **kwargs: None)
+
+    conn = sqlite3.connect(":memory:")
+    conn.execute(
+        "CREATE TABLE daemon_jobs (job_id TEXT PRIMARY KEY, status TEXT, "
+        "gh_write_verified TEXT, unpushed_branch_check_attempts INTEGER NOT NULL DEFAULT 0)"
+    )
+    conn.execute("INSERT INTO daemon_jobs (job_id, status) VALUES ('job-retry', 'done')")
+    conn.commit()
+
+    state = {"commits_ahead": 1, "base_commit": "base-sha"}
+
+    for expected_attempts in (1, 2, 3):
+        result = jobs_mod._guard_unpushed_branch(
+            conn, "job-retry", "done", "/tmp/missing-worktree", "fix/job-retry", state,
+            "2026-10-04T09:00:00",
+        )
+        assert result == "done"
+        attempts = conn.execute(
+            "SELECT unpushed_branch_check_attempts FROM daemon_jobs WHERE job_id='job-retry'"
+        ).fetchone()[0]
+        assert attempts == expected_attempts
+
+    conn.close()
+
+
+def test_unpushed_guard_settles_unpushed_after_retry_cap_exhausted(monkeypatch):
+    import sqlite3
+    import synlynk.jobs as jobs_mod
+
+    monkeypatch.setattr(jobs_mod, "local_commits_pushed", lambda *args: False)
+    monkeypatch.setattr(jobs_mod, "github_branch_effect_verified", lambda *args, **kwargs: None)
+
+    conn = sqlite3.connect(":memory:")
+    conn.execute(
+        "CREATE TABLE daemon_jobs (job_id TEXT PRIMARY KEY, status TEXT, "
+        "gh_write_verified TEXT, unpushed_branch_check_attempts INTEGER NOT NULL DEFAULT 0)"
+    )
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, status, unpushed_branch_check_attempts) "
+        "VALUES ('job-cap', 'done', 3)"
+    )
+    conn.commit()
+
+    state = {"commits_ahead": 1, "base_commit": "base-sha"}
+
+    result = jobs_mod._guard_unpushed_branch(
+        conn, "job-cap", "done", "/tmp/missing-worktree", "fix/job-cap", state,
+        "2026-10-04T09:00:00",
+    )
+
+    assert result == jobs_mod.STATUS_UNPUSHED_BRANCH
+    row = conn.execute(
+        "SELECT gh_write_verified, unpushed_branch_check_attempts FROM daemon_jobs WHERE job_id='job-cap'"
+    ).fetchone()
+    assert row == ("false", 3)
+    conn.close()
+
+
+def test_unpushed_guard_confirmed_push_short_circuits_regardless_of_attempts(monkeypatch):
+    import sqlite3
+    import synlynk.jobs as jobs_mod
+
+    monkeypatch.setattr(jobs_mod, "local_commits_pushed", lambda *args: False)
+    monkeypatch.setattr(jobs_mod, "github_branch_effect_verified", lambda *args, **kwargs: True)
+
+    conn = sqlite3.connect(":memory:")
+    conn.execute(
+        "CREATE TABLE daemon_jobs (job_id TEXT PRIMARY KEY, status TEXT, "
+        "gh_write_verified TEXT, unpushed_branch_check_attempts INTEGER NOT NULL DEFAULT 0)"
+    )
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, status, unpushed_branch_check_attempts) "
+        "VALUES ('job-confirmed', 'done', 2)"
+    )
+    conn.commit()
+
+    state = {"commits_ahead": 1, "base_commit": "base-sha"}
+
+    result = jobs_mod._guard_unpushed_branch(
+        conn, "job-confirmed", "done", "/tmp/missing-worktree", "fix/job-confirmed", state,
+        "2026-10-04T09:00:00",
+    )
+
+    assert result == "done"
+    row = conn.execute(
+        "SELECT gh_write_verified, unpushed_branch_check_attempts FROM daemon_jobs WHERE job_id='job-confirmed'"
+    ).fetchone()
+    assert row == (None, 2)
+    conn.close()
+
+
+def test_unpushed_branch_retry_pending_true_only_while_retrying_below_cap():
+    import sqlite3
+    import synlynk.jobs as jobs_mod
+
+    conn = sqlite3.connect(":memory:")
+    conn.execute(
+        "CREATE TABLE daemon_jobs (job_id TEXT PRIMARY KEY, "
+        "unpushed_branch_check_attempts INTEGER NOT NULL DEFAULT 0)"
+    )
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, unpushed_branch_check_attempts) VALUES ('job-a', 1)"
+    )
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, unpushed_branch_check_attempts) VALUES ('job-b', 0)"
+    )
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, unpushed_branch_check_attempts) VALUES ('job-c', 3)"
+    )
+    conn.commit()
+
+    assert jobs_mod._unpushed_branch_retry_pending(conn, "job-a", "done", "done") is True
+    assert jobs_mod._unpushed_branch_retry_pending(conn, "job-b", "done", "done") is False
+    assert jobs_mod._unpushed_branch_retry_pending(conn, "job-c", "done", "done") is False
+    assert jobs_mod._unpushed_branch_retry_pending(
+        conn, "job-a", "done", jobs_mod.STATUS_UNPUSHED_BRANCH
+    ) is False
+
+    conn.close()
+
+
 def test_terminal_reconciliation_does_not_overwrite_settled_row(tmp_path):
     """A stale reconciler pass must lose the terminal-state CAS race."""
     import sqlite3
