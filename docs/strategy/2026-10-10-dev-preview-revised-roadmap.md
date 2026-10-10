@@ -121,3 +121,13 @@ Nikhil's own words, verbatim framing: *"Local is definitely a nice-to-have capab
 ## 9. Next step
 
 File the new issue (public-model-quota-aware swarm dispatch, under `goal-abecd18c`) and the personal-use-hosted-relay spec issue (own goal, outside the dev-preview GOVERNS tree, per the panel's constraint above) this week, then begin Week 1 execution per Section 2/5. Both R2-elevated pillars (1 and 7) wait behind the Week 1 gate exactly as the panel specified — no dispatch slots against provider/BYOK, interface, swarm, or relay work until `#1926` is queryable and `#2136` is merged.
+
+## 10. Herdr bundling + UX-layer decision — parked, new pillar candidate [NEW]
+
+Raised 2026-10-10 during the federated-quota-capture brainstorm: should Herdr become a bundled core install-time dependency (alongside Graphify and Superpowers), and should synlynk adopt Herdr more broadly as its standard UX/UI layer for synlynk-powered workflows generally? This is explicitly **not yet decided** — Nikhil's instruction is to route it through a `synlynk decide` arch-council round, the same mechanism used for the R1/R2 verdicts in Sections 5 and 8 above, and only then fold the verdict into this roadmap as a pillar.
+
+**Tracking (created, not yet actioned):**
+- `goal-cbeaa152` — "Decide whether Herdr becomes a bundled core dependency... and the standard UX/UI layer for synlynk-powered workflows." New goal, same pattern as the hosted-relay spec track in Section 8(b): **outside** the dev-preview GOVERNS tree, zero implementation or dispatch slots against it.
+- `story-272f0252` — "Brainstorm + arch-council design session: Herdr as bundled dependency and standard UX/UI layer." Linked primary to `goal-cbeaa152`. Stage `open` — brainstorm/design session not yet run.
+
+**Disposition, following the panel's own precedent for the hosted relay (Section 8(b)):** this is a spec/decision track only until a verdict exists. No code, no install-mechanism change, no `synlynk decide` dispatch before the Week 1 gate (Section 5) is green — same standing instruction the panel gave for pillar 7/relay work: if Week 1 slips, this re-parks behind it too. Once a verdict exists, it either becomes an explicit pillar 8 in Section 1's map (if adopted) or gets closed out with the panel's reasoning recorded (if declined) — not left ambiguous.
