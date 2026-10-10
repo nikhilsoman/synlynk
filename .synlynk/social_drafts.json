@@ -286,5 +286,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2180 \u2014 align xdist evaluation with shipped CI policy (PR #2180, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2180.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-10) - PR #2180\n- Merged improvements and fixes for PR #2180."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/272-pr2171-capability-sweep-quality-signal-design-s.md",
+    "title": "PR #2171 \u2014 capability sweep quality signal \u2014 design spec + implementation plan",
+    "author": "nikhilsoman",
+    "date": "2026-10-10",
+    "pr": "#2171",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2171."
+    ],
+    "tweet": "\ud83d\ude80 PR #2171 \u2014 capability sweep quality signal \u2014 design spec + implementation plan (PR #2171, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2171.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-10) - PR #2171\n- Merged improvements and fixes for PR #2171."
   }
 ]
