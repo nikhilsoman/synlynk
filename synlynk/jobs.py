@@ -846,6 +846,112 @@ def _worktree_has_no_diff_against_base_branch(job: dict, worktree_path: str) -> 
     return getattr(diff_result, "returncode", None) == 0
 
 
+def _cleanup_noop_worktree(job: Optional[dict]) -> bool:
+    """Remove a clean dispatch worktree whose branch has no diff from origin/main."""
+    if not job:
+        return False
+    worktree_path = job.get("worktree_path")
+    if not _worktree_path_is_available(worktree_path, "clean up no-op job"):
+        return False
+
+    try:
+        status = subprocess.run(
+            ["git", "-C", worktree_path, "status", "--short", "--untracked-files=all"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except Exception:
+        return False
+    if status.returncode != 0 or status.stdout.strip():
+        return False
+
+    try:
+        diff = subprocess.run(
+            ["git", "-C", worktree_path, "diff", "--quiet", "origin/main", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except Exception:
+        return False
+    if diff.returncode != 0:
+        return False
+
+    branch = _resolve_finalize_worktree_branch(job, worktree_path)
+    if not branch or (job.get("worktree_branch") and branch != job["worktree_branch"]):
+        return False
+
+    try:
+        common_dir = subprocess.run(
+            ["git", "-C", worktree_path, "rev-parse", "--path-format=absolute", "--git-common-dir"],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+        repo_root = os.path.dirname(common_dir)
+    except Exception:
+        return False
+
+    # Keep completion diagnostics accessible after deleting their containing worktree.
+    log_path = job.get("log_file") or job.get("log_path")
+    if log_path and os.path.isfile(log_path):
+        try:
+            from synlynk.daemon import _daemon_state_path
+
+            central_log = _daemon_state_path("logs", os.path.basename(log_path))
+            os.makedirs(os.path.dirname(central_log), exist_ok=True)
+            if os.path.abspath(log_path) != os.path.abspath(central_log):
+                shutil.copy2(log_path, central_log)
+                if os.path.isfile(log_path + ".exit"):
+                    shutil.copy2(log_path + ".exit", central_log + ".exit")
+            job["log_file"] = central_log
+            if job.get("log_path"):
+                job["log_path"] = central_log
+            get_db = _pkg("_get_db")
+            if get_db:
+                conn = get_db()
+                try:
+                    conn.execute(
+                        "UPDATE daemon_jobs SET log_path=? WHERE job_id=?",
+                        (central_log, job.get("id", "")),
+                    )
+                    conn.commit()
+                finally:
+                    conn.close()
+        except Exception as exc:
+            print(f"  ⚠ no-op worktree kept because its job log could not be preserved: {exc}")
+            return False
+
+    removed = subprocess.run(
+        ["git", "-C", repo_root, "worktree", "remove", worktree_path],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if removed.returncode != 0:
+        print(f"  ⚠ no-op worktree cleanup failed for {worktree_path}: {(removed.stderr or '').strip()}")
+        return False
+
+    deleted = subprocess.run(
+        ["git", "-C", repo_root, "branch", "-d", branch],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if deleted.returncode != 0:
+        print(f"  ⚠ no-op branch cleanup failed for {branch}: {(deleted.stderr or '').strip()}")
+        return False
+    try:
+        from synlynk.worktree_lease import release_worktree_lease
+
+        release_worktree_lease(worktree_path)
+    except Exception:
+        pass
+    print(f"  🧹 removed no-op worktree and branch {branch}")
+    return True
+
+
 def _role_gh_env_for_job(job: dict) -> dict:
     """Env for parent-process `gh` so auto-PR uses the role App, not host keyring (#1436)."""
     env = os.environ.copy()
@@ -1120,7 +1226,11 @@ def _finalize_completed_worktree_job(job: dict, git_state: Optional[dict]) -> No
         except Exception:
             pass
 
-    if not job or not git_state or not _job_has_real_work_landed(git_state):
+    if not job or not git_state:
+        return
+
+    if not _job_has_real_work_landed(git_state):
+        _cleanup_noop_worktree(job)
         return
 
     worktree_path = job.get("worktree_path")
