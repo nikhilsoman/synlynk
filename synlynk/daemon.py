@@ -784,6 +784,8 @@ def _daemon_install_service(daemon_instance) -> None:
                     <dict>
                       <key>SYNLYNK_DAEMON_WORKSPACE_ROOT</key>
                       <string>{workspace_root}</string>
+                      <key>SYNLYNK_AUTONOMOUS</key>
+                      <string>1</string>
                     </dict>
                     <key>RunAtLoad</key>
                     <true/>

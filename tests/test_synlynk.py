@@ -7787,6 +7787,7 @@ def test_install_service_macos(project_dir, monkeypatch):
     assert ".synlynk/launchd.log" in plist
     assert plistlib.loads(plist.encode())["KeepAlive"] is True
     assert plistlib.loads(plist.encode())["ThrottleInterval"] == 30
+    assert plistlib.loads(plist.encode())["EnvironmentVariables"]["SYNLYNK_AUTONOMOUS"] == "1"
     assert calls[0][0] == ["launchctl", "load", "-w", str(plist_path)]
 
 
