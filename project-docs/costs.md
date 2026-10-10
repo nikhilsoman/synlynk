@@ -566,13 +566,35 @@
 | 2026-10-09 13:23 | codex | o4-mini | 1087603 | 5147 | $0.0522 [sub] (API: $3.3400) | estimated_token_rate | story-b04fdd2c | exec: codex job job-87c3d6... |
 | 2026-10-09 13:53 | codex | o4-mini | 1062206 | 5228 | $3.2650 | estimated_token_rate | story-b04fdd2c | exec: codex job job-2b7777... |
 | 2026-10-09 14:25 | agy | unknown | 140853 | 13004 | $0.1244 [sub] (API: $0.6176) | estimated_token_rate | story-b04fdd2c | exec: agy job job-8bde97ef |
+| 2026-10-09 14:43 | claude | claude-sonnet-4-6 | 40983 | 3428 | $0.1102 [sub] (API: $0.1744) | estimated_token_rate | story-issue-2101 | exec: claude job job-21a61... |
+| 2026-10-09 14:44 | codex | o4-mini | 356217 | 4372 | $0.0172 [sub] (API: $1.1342) | estimated_token_rate | story-issue-2101 | exec: codex job job-93bc9d... |
+| 2026-10-09 15:44 | codex | o4-mini | 669272 | 4389 | $2.0737 | estimated_token_rate | story-issue-2101 | exec: codex job job-6316ab... |
+| 2026-10-10 01:09 | codex | o4-mini | 604704 | 4091 | $0.0291 [sub] (API: $1.8755) | estimated_token_rate | story-issue-2101 | exec: codex job job-3f9bb7... |
+| 2026-10-10 01:09 | codex | o4-mini | 5000 | 2000 | $0.0003 [sub] (API: $0.0450) | estimated_tshirt | story-a266b194 | exec: codex job job-1fddce... |
+| 2026-10-10 01:09 | codex | o4-mini | 396233 | 3738 | $0.0191 [sub] (API: $1.2448) | estimated_token_rate | story-a266b194 | exec: codex job job-28c59a... |
+| 2026-10-10 01:09 | codex | o4-mini | 465204 | 6082 | $0.0225 [sub] (API: $1.4868) | estimated_token_rate | story-a266b194 | exec: codex job job-871e82... |
+| 2026-10-10 01:09 | codex | o4-mini | 455593 | 5501 | $0.0220 [sub] (API: $1.4493) | estimated_token_rate | story-a266b194 | exec: codex job job-5b36ee... |
+| 2026-10-10 01:09 | codex | o4-mini | 5000 | 2000 | $0.0003 [sub] (API: $0.0450) | estimated_tshirt | story-issue-1831 | exec: codex job job-02c4df... |
+| 2026-10-10 01:14 | codex | o4-mini | 2529262 | 15314 | $0.1216 [sub] (API: $7.8175) | estimated_manual | - | implementation of gh:#1993 capability report, see cost-inflation issue gh:#2159 |
+| 2026-10-10 01:15 | codex | o4-mini | 5000 | 2000 | $0.0003 [sub] (API: $0.0450) | estimated_tshirt | story-249e34af | exec: codex job job-60e012... |
+| 2026-10-10 01:19 | grok | grok-3 | 78978 | 32306 | $0.7297 [sub] (API: $0.7215) | estimated_token_rate | story-249e34af | exec: grok job job-26b6196... |
+| 2026-10-10 09:18 | codex | o4-mini | 2422055 | 13732 | $0.1164 [sub] (API: $7.4721) | estimated_token_rate | story-issue-2136 | exec: codex job job-cd62e1... |
+| 2026-10-10 09:35 | agy | unknown | 114548 | 14195 | $0.1041 [sub] (API: $0.5566) | estimated_token_rate | story-issue-2136 | exec: agy job job-54a21d5d |
+| 2026-10-10 09:41 | codex | o4-mini | 2422055 | 13732 | $0.1164 [sub] (API: $7.4721) | estimated_manual | - | backfill for PR #2160 (gh:#2136/#2137/#2130 fix); flagged TOKEN_BLOAT+COST_INFLATION, see gh:#1937-style anomaly |
+| 2026-10-10 09:56 | agy | unknown | 252991 | 12844 | $0.2150 [sub] (API: $0.9516) | estimated_token_rate | story-issue-2136 | exec: agy job job-2fe76b53 |
+| 2026-10-10 14:11 | codex | o4-mini | 652620 | 5198 | $0.0314 [sub] (API: $2.0358) | estimated_token_rate | story-d84372cd | exec: codex job job-92e716... |
+| 2026-10-10 14:11 | codex | o4-mini | 868026 | 6549 | $0.0418 [sub] (API: $2.7023) | estimated_token_rate | story-d84372cd | exec: codex job job-814542... |
+| 2026-10-10 14:20 | codex | o4-mini | 342914 | 3160 | $0.0165 [sub] (API: $1.0761) | estimated_token_rate | story-d84372cd | exec: codex job job-f77ebb... |
+| 2026-10-10 14:24 | claude | claude-sonnet-4-6 | 69227 | 14122 | $0.2069 [sub] (API: $0.4195) | estimated_token_rate | story-272f0252 | exec: claude job job-3bf18... |
+| 2026-10-10 15:22 | claude | claude-sonnet-5 | 42000 | 7000 | $0.1216 [sub] (API: $0.2310) | estimated_manual | - | native PM session: diagnosed canonical-state-db EPERM blocking pr check, merged origin updates, fixed blog-frontmatter gate, polled CI, ran policy check-merge --role qa, executed gh pr merge --squash, worktree cleanup. Token counts estimated per global CLAUDE.md methodology, not instrumented. |
+| 2026-10-10 15:22 | claude | claude-sonnet-5 | 9000 | 2500 | $0.0285 [sub] (API: $0.0645) | estimated_manual | - | native PM session: edited roadmap Section 7/9 merge-confirmation status, added Section 12 draft harness-mode allocation table, opened docs-only PR. Token counts estimated per global CLAUDE.md methodology, not instrumented. |
 
 ## Subscription Amortization & Dual-Ledger Summary
 
 | Harness | Base Fee | Actual Amortized Spend | API Equivalent Value | Net Savings |
 |---|---|---|---|---|
-| claude | $20.00 | $22.3256 | $32.6578 | $10.3321 |
-| codex | $20.00 | $17.2346 | $1102.2098 | $1084.9752 |
-| agy | $20.00 | $2.0299 | $9.6645 | $7.6346 |
-| grok | $30.00 | $28.5780 | $22.1012 | $-6.4768 |
-| **Total** | **$90.00** | **$70.1681** | **$1166.6333** | **$1096.4652** |
+| claude | $20.00 | $22.7929 | $33.5471 | $10.7543 |
+| codex | $20.00 | $17.6733 | $1130.6393 | $1112.9660 |
+| agy | $20.00 | $2.3490 | $11.1727 | $8.8237 |
+| grok | $30.00 | $29.3078 | $22.8227 | $-6.4850 |
+| **Total** | **$90.00** | **$72.1229** | **$1198.1819** | **$1126.0590** |

@@ -765,6 +765,28 @@ def _infer_dispatch_defaults(
     if inferred_agent is None:
         inferred_agent = "codex"
 
+    if agent is None and inferred_agent:
+        pool = []
+        for name in [default_harness, *list(fallback_list), inferred_agent]:
+            if name and name not in pool:
+                pool.append(name)
+        try:
+            from synlynk.quota_capture import prefer_harness_by_weekly_headroom
+            get_db = _pkg("_get_db")
+            qconn = get_db() if get_db else None
+            try:
+                if qconn is not None:
+                    inferred_agent = prefer_harness_by_weekly_headroom(
+                        inferred_agent,
+                        [name for name in pool if name != inferred_agent],
+                        conn=qconn,
+                    )
+            finally:
+                if qconn is not None:
+                    qconn.close()
+        except Exception:
+            pass
+
     config = _pkg("load_config")
     config = config() if config else {}
     worktree = (config.get("worktree") or {}).get("mode", "full")
@@ -4734,4 +4756,5 @@ def exec_command(cmd_args: list, force: bool = False) -> int:
             if set_state:
                 set_state("watching" if daemon._is_running() else "stopped")
 
-    return exit_code
+    from synlynk.quota_capture import note_exec_return
+    return note_exec_return(cmd_args, exit_code)

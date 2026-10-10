@@ -35,6 +35,7 @@ _DIM = "[2m"
 _RESET = "[0m"
 _HARNESS_INTERNAL_TIMEOUT_RETRY_CAP = 2
 _GH_WRITE_VERIFICATION_RETRY_CAP = 3
+_UNPUSHED_BRANCH_VERIFICATION_RETRY_CAP = 3
 _AUTOCOMMIT_EXCLUDED_PATHS = (
     "GEMINI.md",
     "CLAUDE.md",
@@ -2851,6 +2852,17 @@ def _settle_daemon_job_terminal(
             conn.rollback()
     if settled and release_reservation:
         _release_daemon_job_reservation(conn, job_id)
+    if settled:
+        try:
+            agent_row = conn.execute(
+                "SELECT agent FROM daemon_jobs WHERE job_id=?",
+                (job_id,),
+            ).fetchone()
+            agent_name = agent_row[0] if agent_row else None
+        except Exception:
+            agent_name = None
+        from synlynk.quota_capture import note_job_settled
+        note_job_settled(settled=True, harness=agent_name, job_id=job_id, status=status)
     return settled
 
 
@@ -3885,6 +3897,20 @@ def _gh_write_verification_retry_pending(
     return int(attempts) < _GH_WRITE_VERIFICATION_RETRY_CAP
 
 
+def _unpushed_branch_retry_pending(conn, job_id: str, pre_guard_status: str, post_guard_status: str) -> bool:
+    """Return whether an inconclusive unpushed-branch check should defer terminal settlement."""
+    if post_guard_status != pre_guard_status:
+        return False
+    try:
+        attempts = conn.execute(
+            "SELECT COALESCE(unpushed_branch_check_attempts, 0) FROM daemon_jobs WHERE job_id=?",
+            (job_id,),
+        ).fetchone()[0]
+    except (sqlite3.OperationalError, TypeError, ValueError):
+        return False
+    return 0 < int(attempts) < _UNPUSHED_BRANCH_VERIFICATION_RETRY_CAP
+
+
 def _load_cross_branch_pr(conn, job_id: str) -> Optional[str]:
     """Return the dispatch-time cross-branch PR marker, if the column exists."""
     try:
@@ -4028,8 +4054,26 @@ def _guard_unpushed_branch(
         return status
     if local_commits_pushed(worktree_path, worktree_branch, git_state.get("base_commit")):
         return status
-    if github_branch_effect_verified(worktree_branch, since=started_at) is True:
+    verified = github_branch_effect_verified(worktree_branch, since=started_at)
+    if verified is True:
         return status
+    if verified is None:
+        try:
+            attempts = int(conn.execute(
+                "SELECT COALESCE(unpushed_branch_check_attempts, 0) FROM daemon_jobs WHERE job_id=?",
+                (job_id,),
+            ).fetchone()[0])
+        except (sqlite3.OperationalError, TypeError, ValueError):
+            attempts = 0
+        if attempts < _UNPUSHED_BRANCH_VERIFICATION_RETRY_CAP:
+            try:
+                conn.execute(
+                    "UPDATE daemon_jobs SET unpushed_branch_check_attempts=? WHERE job_id=?",
+                    (attempts + 1, job_id),
+                )
+            except sqlite3.OperationalError:
+                pass
+            return status
     try:
         conn.execute(
             "UPDATE daemon_jobs SET gh_write_verified='false' WHERE job_id=?",
@@ -4280,10 +4324,14 @@ def _reconcile_daemon_jobs() -> None:
                             preferred_state = _worktree_git_state_inspector()(preferred_path, preferred_branch, started_at)
                         except Exception:
                             preferred_state = None
+                    pre_guard_status = status
                     status = _guard_unpushed_branch(
                         conn, job_id, status, preferred_path, preferred_branch, preferred_state,
                         started_at,
                     )
+                    if _unpushed_branch_retry_pending(conn, job_id, pre_guard_status, status):
+                        conn.commit()
+                        continue
                     status, exit_code, _merged_note = _promote_merged_pr_result(
                         status, exit_code, preferred_branch, started_at
                     )
@@ -4383,10 +4431,18 @@ def _reconcile_daemon_jobs() -> None:
                         zombie_status, zombie_exit_code, _, _ = _gtv_status_for_daemon_exit(
                             None, git_state
                         )
+                        pre_guard_zombie_status = zombie_status
                         zombie_status = _guard_unpushed_branch(
                             conn, job_id, zombie_status, worktree_path, worktree_branch, git_state,
                             started_at,
                         )
+                        if _unpushed_branch_retry_pending(
+                            conn, job_id, pre_guard_zombie_status, zombie_status
+                        ):
+                            _release_daemon_job_terminal_claim_and_commit(
+                                conn, job_id, terminal_claim_token
+                            )
+                            continue
                         zombie_status, zombie_exit_code, _merged_note = _promote_merged_pr_result(
                             zombie_status, zombie_exit_code, worktree_branch, started_at
                         )
@@ -4451,9 +4507,13 @@ def _reconcile_daemon_jobs() -> None:
                     status, exit_code, summary_status, summary_note = _gtv_status_for_daemon_exit(
                         exit_code, git_state, structured
                     )
+                pre_guard_status = status
                 status = _guard_unpushed_branch(
                     conn, job_id, status, worktree_path, worktree_branch, git_state, started_at
                 )
+                if _unpushed_branch_retry_pending(conn, job_id, pre_guard_status, status):
+                    conn.commit()
+                    continue
                 status, exit_code, merged_note = _promote_merged_pr_result(
                     status, exit_code, worktree_branch, started_at
                 )
