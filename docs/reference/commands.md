@@ -58,6 +58,7 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `session close` (secondary) — sustain
 - `goal link` (primary) — goal
 - `goal status` (primary) — goal
+- `goal update` (primary) — goal
 - `story create` (primary) — goal
 - `story list` (primary) — goal
 - `story ready` (secondary) — goal
