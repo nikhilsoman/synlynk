@@ -270,5 +270,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2181 \u2014 enable autonomous ticks in installed services (PR #2181, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2181.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-10) - PR #2181\n- Merged improvements and fixes for PR #2181."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/271-pr2180-align-xdist-evaluation-with-shipped-ci-p.md",
+    "title": "PR #2180 \u2014 align xdist evaluation with shipped CI policy",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-10",
+    "pr": "#2180",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2180."
+    ],
+    "tweet": "\ud83d\ude80 PR #2180 \u2014 align xdist evaluation with shipped CI policy (PR #2180, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2180.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-10) - PR #2180\n- Merged improvements and fixes for PR #2180."
   }
 ]
