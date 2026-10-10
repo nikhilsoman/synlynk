@@ -329,6 +329,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [267](./267-pr2173-make-post-merge-marketing-sync-idempoten.md) | PR #2173 — make post-merge marketing sync idempotent | [#2173](https://github.com/nikhilsoman/synlynk/pull/2173) | 2026-10-10 |
 | [268](./268-pr2184-record-job-status-false-negative-fix-str.md) | PR #2184 — record job-status false-negative fix-strategy decision | [#2184](https://github.com/nikhilsoman/synlynk/pull/2184) | 2026-10-10 |
 | [269](./269-pr2183-add-synlynk-goal-update-subcommand-gh-21.md) | PR #2183 — add 'synlynk goal update' subcommand (gh:#2182) | [#2183](https://github.com/nikhilsoman/synlynk/pull/2183) | 2026-10-10 |
+| [270](./270-pr2181-enable-autonomous-ticks-in-installed-ser.md) | PR #2181 — enable autonomous ticks in installed services | [#2181](https://github.com/nikhilsoman/synlynk/pull/2181) | 2026-10-10 |
 
 ## Per-PR Post Template
 
