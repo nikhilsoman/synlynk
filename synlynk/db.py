@@ -1307,6 +1307,14 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
                 )
             except sqlite3.OperationalError:
                 pass
+        if "unpushed_branch_check_attempts" not in daemon_job_cols:
+            try:
+                conn.execute(
+                    "ALTER TABLE daemon_jobs ADD COLUMN "
+                    "unpushed_branch_check_attempts INTEGER NOT NULL DEFAULT 0"
+                )
+            except sqlite3.OperationalError:
+                pass
         if "harness" not in daemon_job_cols:
             try:
                 conn.execute("ALTER TABLE daemon_jobs ADD COLUMN harness TEXT")
