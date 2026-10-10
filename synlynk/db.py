@@ -1475,9 +1475,15 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
                 cost_usd REAL NOT NULL,
                 verified_by TEXT NOT NULL,
                 run_at TEXT NOT NULL,
-                FOREIGN KEY (task_id) REFERENCES capability_calibration_tasks(task_id)
+            FOREIGN KEY (task_id) REFERENCES capability_calibration_tasks(task_id)
             );
         """)
+        calib_result_cols = {row[1] for row in conn.execute("PRAGMA table_info(capability_calibration_results)")}
+        if "quality_verified" not in calib_result_cols:
+            try:
+                conn.execute("ALTER TABLE capability_calibration_results ADD COLUMN quality_verified INTEGER")
+            except sqlite3.OperationalError:
+                pass
         from synlynk.capability_sweep import _seed_calibration_tasks
         _seed_calibration_tasks(conn)
         conn.executescript("""
@@ -1753,6 +1759,11 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
         if "pr_number" not in rating_cols:
             try:
                 conn.execute("ALTER TABLE capability_ratings ADD COLUMN pr_number INTEGER")
+            except sqlite3.OperationalError:
+                pass
+        if "quality_verified" not in rating_cols:
+            try:
+                conn.execute("ALTER TABLE capability_ratings ADD COLUMN quality_verified INTEGER")
             except sqlite3.OperationalError:
                 pass
         cost_cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}
