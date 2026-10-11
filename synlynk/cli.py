@@ -1718,7 +1718,11 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     )
     report_parser = capability_sub.add_parser(
         "report",
-        help="Generate a task_allocation routing proposal from capability_ratings/cost_entries",
+        help=(
+            "Generate a task_allocation routing proposal from capability_ratings/cost_entries. "
+            "pr_review_cycles is a review-round count and is not filtered by quality_verified; "
+            "quality_verified filtering applies only to quality-score metrics."
+        ),
     )
     report_parser.add_argument(
         "--json",
