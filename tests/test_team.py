@@ -1,8 +1,11 @@
 import html
 import json
+import os
 import re
 from pathlib import Path
 from urllib.parse import unquote, urlparse
+
+import pytest
 
 import synlynk.team as team_mod
 
@@ -36,3 +39,27 @@ def test_implement_1436_leftover_charter_patch_so_merge_roles_request_actions_wr
     assert qa_manifest["default_permissions"]["actions"] == "write"
     assert "administration" not in dev_manifest["default_permissions"]
     assert "actions" not in dev_manifest["default_permissions"]
+
+
+def test_write_role_app_paths_uses_product_store_after_migration(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk")
+    with open(".synlynk/workspace.json", "w", encoding="utf-8") as f:
+        json.dump({"identity_slug": "test-product"}, f)
+    from synlynk.team import _write_role_app_paths
+    app_dir, app_json, app_pem = _write_role_app_paths("dev")
+    # Must not silently fall back to the bare legacy dir once the repo is configured.
+    assert str(app_dir) != os.path.join(".synlynk", "github_apps")
+
+
+def test_ensure_type_for_identity_init_does_not_skip_after_migration(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk")
+    with open(".synlynk/workspace.json", "w", encoding="utf-8") as f:
+        json.dump({"identity_slug": "test-product"}, f)
+    from synlynk.team import ensure_type_for_identity_init, UnknownType
+    # Must reach the type-lookup logic (and raise UnknownType for a bogus
+    # type) instead of returning silently because it thinks the repo is
+    # unconfigured.
+    with pytest.raises(UnknownType):
+        ensure_type_for_identity_init("definitely-not-a-real-type")
