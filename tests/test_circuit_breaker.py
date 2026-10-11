@@ -12,6 +12,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from synlynk.jobs import STATUS_CIRCUIT_BREAKER_TRIPPED
 from synlynk.circuit_breaker import (
     CircuitBreakerResult,
+    _resolve_circuit_breaker_limits,
     evaluate_job_circuit_breaker,
 )
 from synlynk.sentinel import _read_active_sentinel_alerts
@@ -241,3 +242,32 @@ def test_circuit_breaker_respects_tier_overrides(tmp_path, monkeypatch):
     # Fast tier max is 50,000, job has 65,000 -> must trip
     assert res.tripped is True
     assert job["status"] == STATUS_CIRCUIT_BREAKER_TRIPPED
+
+
+def test_circuit_breaker_resolves_log_size_tier_override():
+    from synlynk.circuit_breaker import _resolve_circuit_breaker_limits
+
+    job = {"id": "job-tier-log-size", "agent": "codex", "model_tier": "fast"}
+    config = {
+        "circuit_breaker": {
+            "max_job_tokens": 5_000_000,
+            "max_job_cost_usd": 15.00,
+            "zero_file_token_threshold": 500_000,
+            "tier_overrides": {
+                "fast": {
+                    "max_job_tokens": 500_000,
+                    "max_job_cost_usd": 2.00,
+                    "max_log_size_bytes": 10 * 1024 * 1024,
+                },
+            },
+        }
+    }
+    max_tokens, max_cost, zero_file_threshold, max_log_size_bytes = (
+        _resolve_circuit_breaker_limits(job, config)
+    )
+    assert max_log_size_bytes == 10 * 1024 * 1024
+
+    # No tier override set for this job's tier -> falls back to top-level default
+    job_no_override = {"id": "job-default-log-size", "agent": "codex", "model_tier": "pro"}
+    _, _, _, default_log_size = _resolve_circuit_breaker_limits(job_no_override, config)
+    assert default_log_size == 50 * 1024 * 1024
