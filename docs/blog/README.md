@@ -357,6 +357,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [294](./294-pr2213-add-circuit-breaker-log-size-runaway-net.md) | PR #2213 — add circuit-breaker log-size runaway net | [#2213](https://github.com/nikhilsoman/synlynk/pull/2213) | 2026-10-11 |
 | [295](./295-pr2186-record-pillar-1-blocker-review-backlog-t.md) | PR #2186 — record Pillar 1 blocker review + backlog triage pause | [#2186](https://github.com/nikhilsoman/synlynk/pull/2186) | 2026-10-11 |
 | [296](./296-pr2153-backfill-3-cost-entries-dropped-by-regen.md) | PR #2153 — backfill 3 cost entries dropped by regeneration bug | [#2153](https://github.com/nikhilsoman/synlynk/pull/2153) | 2026-10-11 |
+| [297](./297-pr2217-add-log-size-runaway-circuit-breaker-net.md) | PR #2217 — add log-size runaway circuit breaker net (gh:#1937) | [#2217](https://github.com/nikhilsoman/synlynk/pull/2217) | 2026-10-11 |
 
 ## Per-PR Post Template
 
