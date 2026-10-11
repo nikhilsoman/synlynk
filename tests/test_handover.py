@@ -1,6 +1,7 @@
 """Tests for Sovereign Multi-Home Dynamic Handover and Drain-to-Boundary Protocol."""
 
 import json
+import os
 import sqlite3
 from pathlib import Path
 
@@ -92,6 +93,20 @@ def test_execute_home_handover_drain_flow(tmp_path, monkeypatch):
     # Complete drain
     complete_harness_drain("claude", repo_path=tmp_path)
     assert is_harness_draining("claude", repo_path=tmp_path) is False
+
+
+def test_execute_home_handover_prefers_load_config_over_stale_legacy_file(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk")
+    # Authoritative split file says "codex" is home.
+    with open(".synlynk/workspace.json", "w", encoding="utf-8") as f:
+        json.dump({"home_harness": "codex"}, f)
+    # Stale legacy file (e.g. leftover from before migration) says "claude".
+    with open(".synlynk/config.json", "w", encoding="utf-8") as f:
+        json.dump({"home_harness": "claude"}, f)
+    from synlynk.handover import execute_home_handover
+    result = execute_home_handover("codex", repo_path=str(tmp_path), force=True)
+    assert result["outgoing_harness"] == "codex"
 
 
 def test_worktree_identity_slug_resolution(tmp_path):
