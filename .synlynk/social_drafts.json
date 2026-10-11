@@ -350,5 +350,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2189 \u2014 align dispatch flags with exec CLI contract (PR #2189, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2189.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-11) - PR #2189\n- Merged improvements and fixes for PR #2189."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/276-pr2174-correct-post-265-frontmatter.md",
+    "title": "PR #2174 \u2014 correct post 265 frontmatter",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-11",
+    "pr": "#2174",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2174."
+    ],
+    "tweet": "\ud83d\ude80 PR #2174 \u2014 correct post 265 frontmatter (PR #2174, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2174.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-11) - PR #2174\n- Merged improvements and fixes for PR #2174."
   }
 ]
