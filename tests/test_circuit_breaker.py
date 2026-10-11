@@ -309,3 +309,38 @@ def test_log_size_runaway_trips_with_zero_extracted_tokens(tmp_path, monkeypatch
     assert "log size runaway" in res.reason.lower()
     assert "extracted tokens" in res.reason.lower()
     assert len(killed_pids) >= 1
+
+
+def test_log_size_below_threshold_does_not_trip(tmp_path, monkeypatch):
+    log_file = tmp_path / "small_log.log"
+    log_file.write_text("tool call output\n" * 100)
+    assert log_file.stat().st_size < 10 * 1024 * 1024
+
+    monkeypatch.setattr(os, "kill", lambda pid, sig: None)
+
+    job = {
+        "id": "job-small-log",
+        "agent": "codex",
+        "pid": 99002,
+        "log_file": str(log_file),
+        "worktree_path": str(tmp_path),
+        "status": "running",
+    }
+    config = {
+        "circuit_breaker": {
+            "max_job_tokens": 5_000_000,
+            "max_job_cost_usd": 15.00,
+            "zero_file_token_threshold": 500_000,
+            "max_log_size_bytes": 10 * 1024 * 1024,
+        }
+    }
+
+    res = evaluate_job_circuit_breaker(
+        job,
+        config=config,
+        sentinel_path=str(tmp_path / "sentinel.md"),
+        skip_identity_check_for_test=True,
+    )
+
+    assert res.tripped is False
+    assert job["status"] == "running"
