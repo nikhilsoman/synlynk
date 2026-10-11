@@ -1,3 +1,5 @@
+import json
+import os
 import sqlite3
 
 from synlynk.db import _migrate_db
@@ -62,3 +64,21 @@ def test_migration_backfills_product_and_quarantines_phantom_goals(tmp_path):
         "SELECT product_id, status FROM goals WHERE goal_id=?", ("goal-phantom",)
     ).fetchone()
     assert goal == ("prod-local", "quarantined")
+
+
+def test_config_aliases_reads_from_workspace_json(tmp_path):
+    os.makedirs(tmp_path / ".synlynk")
+    with open(tmp_path / ".synlynk" / "workspace.json", "w", encoding="utf-8") as f:
+        json.dump({"goal_aliases": {"goal-1": ["alias-a", "alias-b"]}}, f)
+    from synlynk.governs_engine import _config_aliases
+    result = _config_aliases(repo_root=str(tmp_path))
+    assert result == {"goal-1": ["alias-a", "alias-b"]}
+
+
+def test_config_aliases_falls_back_to_legacy_config_json(tmp_path):
+    os.makedirs(tmp_path / ".synlynk")
+    with open(tmp_path / ".synlynk" / "config.json", "w", encoding="utf-8") as f:
+        json.dump({"goal_aliases": {"goal-2": ["alias-c"]}}, f)
+    from synlynk.governs_engine import _config_aliases
+    result = _config_aliases(repo_root=str(tmp_path))
+    assert result == {"goal-2": ["alias-c"]}
