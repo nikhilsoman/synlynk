@@ -1,0 +1,79 @@
+"""Generate a task_allocation routing proposal from capability data.
+
+Read-only: never writes to .synlynk/policy.json or state.db. See
+docs/superpowers/specs/2026-10-11-synlynk-capability-report-design.md (gh:#1993).
+"""
+from __future__ import annotations
+
+from collections import defaultdict
+
+DISCIPLINE_TO_TASK_TYPE = {
+    "testing": "test",
+    "backend": "implement",
+    "frontend": "implement",
+    "cli": "cli-plumbing",
+    "devops": "infra",
+    "architecture": "review",
+    "docs": None,
+    "security": None,
+    "ml": None,
+    "PROG": None,
+}
+
+
+def _column_exists(conn, table: str, column: str) -> bool:
+    cols = [row[1] for row in conn.execute(f"PRAGMA table_info({table})")]
+    return column in cols
+
+
+def _fetch_rows(conn):
+    """Return rows and whether capability_ratings has quality_verified."""
+    has_quality_verified = _column_exists(
+        conn, "capability_ratings", "quality_verified"
+    )
+    qv_select = "cr.quality_verified" if has_quality_verified else "NULL"
+    query = (
+        "SELECT cr.story_id, cr.agent, cr.discipline, cr.pr_review_cycles, "
+        f"{qv_select}, ce.total_cost_usd, ce.pr_number, ce.job_id "
+        "FROM capability_ratings cr JOIN cost_entries ce ON cr.story_id = ce.story_id"
+    )
+    rows = conn.execute(query).fetchall()
+    return [tuple(row) for row in rows], has_quality_verified
+
+
+def _dedupe_cost_rows(rows):
+    """Keep one cost contribution per story and PR, or story and job."""
+    seen = set()
+    deduped = []
+    for row in rows:
+        story_id, _harness, _discipline, _cycles, _qv, _cost, pr_number, job_id = row
+        key = (
+            (story_id, "pr", pr_number)
+            if pr_number is not None
+            else (story_id, "job", job_id)
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(row)
+    return deduped
+
+
+def build_buckets(conn):
+    """Return ``(buckets, skipped_no_mapping)`` grouped by harness and task type."""
+    rows, _has_quality_verified = _fetch_rows(conn)
+    rows = _dedupe_cost_rows(rows)
+    buckets = defaultdict(lambda: {"cycles": [], "costs": [], "story_ids": set()})
+    skipped_no_mapping = 0
+    for story_id, harness, discipline, cycles, _qv, cost, _pr_number, _job_id in rows:
+        task_type = DISCIPLINE_TO_TASK_TYPE.get(discipline)
+        if task_type is None:
+            skipped_no_mapping += 1
+            continue
+        bucket = buckets[(harness, task_type)]
+        if cycles is not None:
+            bucket["cycles"].append(cycles)
+        if cost is not None:
+            bucket["costs"].append(cost)
+        bucket["story_ids"].add(story_id)
+    return dict(buckets), skipped_no_mapping
