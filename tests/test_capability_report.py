@@ -1,5 +1,8 @@
 import json as _json
+import os
 import sqlite3
+import subprocess
+import sys
 
 import pytest
 
@@ -266,3 +269,43 @@ def test_format_text_report_with_proposal_matches_example_shape():
         "codex (n=18, cycles=1.5, cost=$1.80)"
     ) in text
     assert "3 rows skipped" in text
+
+
+def test_cli_capability_report_runs_without_error(tmp_path, monkeypatch):
+    policy_dir = tmp_path / ".synlynk"
+    policy_dir.mkdir()
+    (policy_dir / "policy.json").write_text(
+        _json.dumps(
+            {
+                "capability_policy": {"min_sample_size": 5},
+                "overrides": {"dev_authority": {"task_allocation": {}}},
+            }
+        )
+    )
+    db_path = tmp_path / "state.db"
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        "CREATE TABLE capability_ratings (story_id TEXT, agent TEXT, discipline TEXT, pr_review_cycles INTEGER, quality REAL)"
+    )
+    conn.execute(
+        "CREATE TABLE cost_entries (story_id TEXT, total_cost_usd REAL, pr_number INTEGER, job_id TEXT)"
+    )
+    conn.commit()
+    conn.close()
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(db_path))
+    env = os.environ.copy()
+    repo_root = str(__file__).rsplit("/tests/", 1)[0]
+    env["PYTHONPATH"] = os.pathsep.join(
+        [repo_root, env.get("PYTHONPATH", "")]
+    ).rstrip(os.pathsep)
+    result = subprocess.run(
+        [sys.executable, "-m", "synlynk", "capability", "report"],
+        capture_output=True,
+        text=True,
+        cwd=str(tmp_path),
+        env=env,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "rows skipped" in result.stdout
