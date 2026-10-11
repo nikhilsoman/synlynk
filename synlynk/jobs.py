@@ -3785,13 +3785,14 @@ def _reconcile_terminal_jobs_json(conn) -> int:
     repaired = 0
     for job_id, (job, status) in terminal_jobs.items():
         row = conn.execute(
-            "SELECT status, requires_gh_write, gh_write_target, gh_write_author, gh_write_expect "
+            "SELECT status, requires_gh_write, gh_write_target, gh_write_author, gh_write_expect, "
+            "worktree_path, worktree_branch "
             "FROM daemon_jobs WHERE job_id=?",
             (job_id,),
         ).fetchone()
         if not row:
             continue
-        old_status, requires_gh_write, target, author, expect = row
+        old_status, requires_gh_write, target, author, expect, worktree_path, worktree_branch = row
         evidence_strength = "local"
         if requires_gh_write:
             status, verified = _verify_daemon_terminal_status(
