@@ -550,6 +550,19 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     goal_link_parser.add_argument("--goal", required=True, dest="goal_id")
     goal_link_parser.add_argument("--secondary", action="store_true")
     goal_sub.add_parser("status", help="Show goal completion rollup")
+    goal_update_parser = goal_sub.add_parser("update", help="Update an existing goal")
+    goal_update_parser.add_argument("goal_id")
+    goal_update_parser.add_argument(
+        "--status", choices=["active", "done", "superseded"], default=None,
+        help="Set goal status",
+    )
+    goal_update_parser.add_argument(
+        "--deadline", default=None, help="Set deadline in YYYY-MM-DD format",
+    )
+    goal_update_parser.add_argument(
+        "--supersede-with", dest="supersede_with", default=None,
+        help="Mark this goal superseded and relink its open stories to GOAL_ID",
+    )
 
     governs_parser = subparsers.add_parser("governs", help="Manage GOVERNS lifecycle and reconciliation")
     governs_parser.add_argument("--full", action="store_true", help="Show full 7-stage internal GOVERNS FSM breakdown")
@@ -1001,6 +1014,22 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     state_inventory.add_argument(
         "--all", action="store_true", dest="all_artifacts",
         help="Include the full ~/.synlynk legacy/quarantine/backup tree",
+    )
+    state_inventory.add_argument(
+        "--reconcile", default=None, dest="reconcile_slug", metavar="SLUG",
+        help="Plan (default) or apply merging matched legacy shards into workspace SLUG's state.db",
+    )
+    state_inventory.add_argument(
+        "--apply", action="store_true",
+        help="Actually write the reconcile merge (default is dry-run plan only)",
+    )
+    state_inventory.add_argument(
+        "--ignore-conflicts", action="store_true", dest="ignore_conflicts",
+        help="Skip conflicting story rows instead of refusing to apply",
+    )
+    state_inventory.add_argument(
+        "--cutoff-days", type=int, default=None, dest="cutoff_days", metavar="N",
+        help="With --reconcile, skip matched shards whose staleness exceeds N days",
     )
     state_promote = state_sub.add_parser("promote", help="Promote a verified DB without overwriting canonical state")
     state_promote.add_argument("source")
@@ -1622,6 +1651,16 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
         dest="json_output",
         help="Emit machine-readable JSON",
     )
+    federated_parser = quota_sub.add_parser(
+        "federated",
+        help="Show the latest subscription-quota percent per harness and window, plus 7-day dollar burn",
+    )
+    federated_parser.add_argument(
+        "--json",
+        action="store_true",
+        dest="json_output",
+        help="Emit machine-readable JSON",
+    )
 
     schedule_parser = subparsers.add_parser(
         "schedule", help="Batch-assign ready stories to agents (dry-run by default)"
@@ -1676,6 +1715,20 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
         default=None,
         dest="cost_cap",
         help="Override the configured cost cap (USD) for this sweep run",
+    )
+    report_parser = capability_sub.add_parser(
+        "report",
+        help=(
+            "Generate a task_allocation routing proposal from capability_ratings/cost_entries. "
+            "pr_review_cycles is a review-round count and is not filtered by quality_verified; "
+            "quality_verified filtering applies only to quality-score metrics."
+        ),
+    )
+    report_parser.add_argument(
+        "--json",
+        action="store_true",
+        dest="as_json",
+        help="Output the proposal as JSON instead of text",
     )
 
     instructions_parser = subparsers.add_parser(
@@ -2237,6 +2290,10 @@ def main(argv=None) -> None:
             sys.exit(cmd_state_inventory(
                 json_output=args.json_output,
                 all_artifacts=getattr(args, "all_artifacts", False),
+                reconcile_slug=getattr(args, "reconcile_slug", None),
+                apply=getattr(args, "apply", False),
+                ignore_conflicts=getattr(args, "ignore_conflicts", False),
+                cutoff_days=getattr(args, "cutoff_days", None),
             ))
         elif args.state_action == "promote":
             from synlynk.state_repair import promote_state_db
@@ -2783,6 +2840,9 @@ def main(argv=None) -> None:
                 print(export_advisory_json(adv))
             else:
                 print(format_advisory_text(adv))
+        elif action == "federated":
+            from synlynk.quota_capture import cmd_quota_federated
+            cmd_quota_federated(json_output=getattr(args, "json_output", False))
         elif action == "calibrate":
             from synlynk.quota import calibrate_and_update_quota
             cal = calibrate_and_update_quota(
@@ -2834,6 +2894,9 @@ def main(argv=None) -> None:
     elif args.command == "capability":
         if args.capability_action == "sweep":
             cmd_capability_sweep(cost_cap_override=getattr(args, "cost_cap", None))
+        elif args.capability_action == "report":
+            from synlynk.capability_report import cmd_capability_report
+            cmd_capability_report(as_json=getattr(args, "as_json", False))
     elif args.command == "instructions":
         action = getattr(args, "instructions_action", None)
         if action == "status" or action is None:
@@ -2911,7 +2974,10 @@ def main(argv=None) -> None:
         if findings and not args.fix:
             sys.exit(1)
     elif args.command == "goal":
-        from synlynk.db import cmd_goal_create, cmd_goal_list, cmd_goal_link, cmd_goal_status
+        from synlynk.db import (
+            cmd_goal_create, cmd_goal_list, cmd_goal_link, cmd_goal_status,
+            cmd_goal_update,
+        )
         action = getattr(args, "goal_action", None)
         if action == "create":
             cmd_goal_create(args.outcome, args.criterion, deadline=args.deadline, role=args.role, kind=getattr(args, "kind", "feature"))
@@ -2921,6 +2987,13 @@ def main(argv=None) -> None:
             cmd_goal_link(args.story_id, args.goal_id, secondary=args.secondary)
         elif action == "status" or action is None:
             cmd_goal_status()
+        elif action == "update":
+            cmd_goal_update(
+                args.goal_id,
+                status=args.status,
+                deadline=args.deadline,
+                supersede_with=args.supersede_with,
+            )
         else:
             help_parsers.get("goal", parser).print_help()
     elif args.command == "governs":

@@ -823,3 +823,19 @@ def test_mark_ticket_consumed_updates_status_and_timestamp(project_dir):
     _mark_ticket_consumed(ticket["id"])
     assert _find_ticket("story-x", "task_dispatch:implement", "open") is None
     assert _find_ticket("story-x", "task_dispatch:implement", "consumed") is not None
+
+
+def test_quality_verified_column_added_idempotently(tmp_path, monkeypatch):
+    monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(tmp_path / "state.db"))
+    from synlynk import db
+
+    conn1 = db._get_db()
+    conn1.close()
+
+    conn2 = db._get_db()
+    rating_cols = {row[1] for row in conn2.execute("PRAGMA table_info(capability_ratings)")}
+    result_cols = {row[1] for row in conn2.execute("PRAGMA table_info(capability_calibration_results)")}
+    conn2.close()
+
+    assert "quality_verified" in rating_cols
+    assert "quality_verified" in result_cols

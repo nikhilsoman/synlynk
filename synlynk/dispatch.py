@@ -765,6 +765,28 @@ def _infer_dispatch_defaults(
     if inferred_agent is None:
         inferred_agent = "codex"
 
+    if agent is None and inferred_agent:
+        pool = []
+        for name in [default_harness, *list(fallback_list), inferred_agent]:
+            if name and name not in pool:
+                pool.append(name)
+        try:
+            from synlynk.quota_capture import prefer_harness_by_weekly_headroom
+            get_db = _pkg("_get_db")
+            qconn = get_db() if get_db else None
+            try:
+                if qconn is not None:
+                    inferred_agent = prefer_harness_by_weekly_headroom(
+                        inferred_agent,
+                        [name for name in pool if name != inferred_agent],
+                        conn=qconn,
+                    )
+            finally:
+                if qconn is not None:
+                    qconn.close()
+        except Exception:
+            pass
+
     config = _pkg("load_config")
     config = config() if config else {}
     worktree = (config.get("worktree") or {}).get("mode", "full")
@@ -2002,6 +2024,111 @@ _PR_REVIEW_RETRY_GUARD = (
     "second cycle, stop retrying and report back for escalation.\n\n"
 )
 
+# A present graph is stale once HEAD has moved more than this many commits
+# past the commit recorded at extract time (#2140). Missing graphs still
+# refresh immediately. When that distance cannot be measured, file age is
+# the fallback so a graph with no built_at_commit cannot stay silent forever.
+_GRAPH_STALE_COMMIT_THRESHOLD = 25
+_GRAPH_STALE_MTIME_SECONDS = 7 * 24 * 60 * 60
+_CONTEXT_BUILD_SENTINEL_CODE = "CONTEXT_BUILD_DEGRADED"
+
+
+def _read_graph_built_at_commit(repo_root: str) -> str:
+    """Return the commit the on-disk graph was built at, or ""."""
+    out_dir = os.path.join(repo_root, ".synlynk", "graphify-out")
+    # manifest.json is the stamp written by _run_graphify_extract. graph.json
+    # can be multi-megabyte, so only a prefix is scanned for the same key.
+    candidates = (
+        (os.path.join(out_dir, "manifest.json"), None),
+        (os.path.join(out_dir, "graph.json"), 65536),
+    )
+    for path, limit in candidates:
+        if not os.path.isfile(path):
+            continue
+        try:
+            with open(path, encoding="utf-8") as fh:
+                raw = fh.read() if limit is None else fh.read(limit)
+        except OSError:
+            continue
+        for key in ("built_at_commit", "head_commit"):
+            match = re.search(rf'"{key}"\s*:\s*"([^"]+)"', raw)
+            if match and match.group(1).strip():
+                return match.group(1).strip()
+    return ""
+
+
+def _commits_since_graph_build(repo_root: str, built_at_commit: str) -> Optional[int]:
+    """Commits reachable from HEAD but not from built_at_commit.
+
+    Returns None when git cannot measure the distance (missing repo, unknown
+    commit, timeout) so the caller can fall back to mtime.
+    """
+    built = (built_at_commit or "").strip()
+    if not built:
+        return None
+    try:
+        result = subprocess.run(
+            ["git", "-C", repo_root, "rev-list", "--count", f"{built}..HEAD"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.TimeoutExpired, ValueError):
+        return None
+    if result.returncode != 0:
+        return None
+    raw = (result.stdout or "").strip()
+    try:
+        return int(raw)
+    except ValueError:
+        return None
+
+
+def _graph_mtime_is_stale(graph_file: str, *, now: Optional[float] = None) -> bool:
+    try:
+        age = (time.time() if now is None else now) - os.path.getmtime(graph_file)
+    except OSError:
+        return True
+    return age > _GRAPH_STALE_MTIME_SECONDS
+
+
+def _graph_needs_refresh(repo_root: str, graph_file: str) -> bool:
+    """True when the graph is missing or stale relative to HEAD (#2140)."""
+    if not os.path.exists(graph_file):
+        return True
+    built_at = _read_graph_built_at_commit(repo_root)
+    distance = _commits_since_graph_build(repo_root, built_at)
+    if distance is None:
+        return _graph_mtime_is_stale(graph_file)
+    return distance > _GRAPH_STALE_COMMIT_THRESHOLD
+
+
+def _warn_context_build_failure(step: str, reason: str, repo_root: str) -> None:
+    """Log a context-build failure and record a sentinel alert (#2141).
+
+    Graph extraction and pack synthesis used to swallow every exception.
+    A degraded prompt must stay visible to the job log and to `synlynk sentinel`.
+    """
+    message = f"{step} failed: {reason}"
+    print(f"  ⚠ context build: {message}", file=sys.stderr)
+    sentinel_path = os.path.join(repo_root, ".synlynk", "sentinel.md")
+    try:
+        from synlynk.sentinel import _write_sentinel_alert
+
+        _write_sentinel_alert(
+            "WARN",
+            _CONTEXT_BUILD_SENTINEL_CODE,
+            message,
+            sentinel_path=sentinel_path,
+        )
+    except Exception as exc:
+        print(
+            f"  ⚠ context build: could not record sentinel alert "
+            f"({type(exc).__name__}: {exc})",
+            file=sys.stderr,
+        )
+
 
 def _format_prompt_for_agent(agent: str, context_text: str, story_id: str,
                               task: str, file_section: str, verify_section: str,
@@ -2020,19 +2147,33 @@ def _format_prompt_for_agent(agent: str, context_text: str, story_id: str,
 
     repo_root = cwd_hint or os.getcwd()
     graph_file = os.path.join(repo_root, ".synlynk", "graphify-out", "graph.json")
-    if not os.path.exists(graph_file):
+    if _graph_needs_refresh(repo_root, graph_file):
         try:
             from synlynk.scan import _run_graphify_extract
-            _run_graphify_extract(repo_root)
-        except Exception:
-            pass
+            refreshed = _run_graphify_extract(repo_root)
+            if refreshed is False:
+                _warn_context_build_failure(
+                    "graph extraction",
+                    "graphify extract returned failure",
+                    repo_root,
+                )
+        except Exception as exc:
+            _warn_context_build_failure(
+                "graph extraction",
+                f"{type(exc).__name__}: {exc}",
+                repo_root,
+            )
     try:
         from synlynk.pack import synthesize_context_pack
         pack_text = synthesize_context_pack(repo_root, task_text=task, story_id=story_id)
         if pack_text:
             context_text = f"{context_text}\n\n{pack_text}" if context_text else pack_text
-    except Exception:
-        pass
+    except Exception as exc:
+        _warn_context_build_failure(
+            "pack synthesis",
+            f"{type(exc).__name__}: {exc}",
+            repo_root,
+        )
     if role:
         try:
             from synlynk.charter_injection import render_charter_section
@@ -3917,8 +4058,17 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         except Exception:
             pass
     if agent == "muse":
-        if "--output-format" not in flags:
-            flags = flags + ["--output-format", "json"]
+        if "--json" not in flags:
+            flags = flags + ["--json"]
+        if "--approval-mode" not in flags:
+            flags = flags + ["--approval-mode", "never"]
+        else:
+            approval_mode_index = flags.index("--approval-mode")
+            if (
+                approval_mode_index + 1 == len(flags)
+                or flags[approval_mode_index + 1].startswith("--")
+            ):
+                flags.insert(approval_mode_index + 1, "never")
 
     # Baseline, override, permission, and harness-specific sources can each
     # contribute the same boolean flag (notably Grok's --always-approve).
@@ -3957,8 +4107,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         flags = flags + ["--cwd", worktree_path]
     if agent == "codex" and worktree_path and "-C" not in flags and "--cd" not in flags:
         flags = flags + ["-C", worktree_path]
-    if agent == "muse" and worktree_path and "-C" not in flags:
-        flags = flags + ["-C", worktree_path]
+    if agent == "muse" and worktree_path and "--workspace" not in flags:
+        flags = flags + ["--workspace", worktree_path]
     worktree_synlynk_dir = os.path.join(worktree_path, ".synlynk")
     logs_dir = os.path.join(worktree_synlynk_dir, "logs")
     prompts_dir = os.path.join(worktree_synlynk_dir, "prompts")
@@ -4657,15 +4807,10 @@ def exec_command(cmd_args: list, force: bool = False) -> int:
                     basis=basis,
                 )
             if in_tokens > 0 or out_tokens > 0:
-                rates = model_rate_for_version(model_version, agent=cmd_args[0]) if model_rate_for_version else {
-                    "input": 0.003,
-                    "output": 0.015,
-                    "cache_read": 0.0000003,
-                }
-                est_cost = (
-                    (in_tokens / 1000 * rates["input"]) +
-                    (out_tokens / 1000 * rates["output"]) +
-                    (cache_read_tokens / 1000 * rates["cache_read"])
+                from synlynk.costs import api_equivalent_usd
+                est_cost = api_equivalent_usd(
+                    cmd_args[0], in_tokens, out_tokens, cache_read_tokens,
+                    model=model_version,
                 )
                 load_config_fn = _pkg("load_config")
                 fence_config = load_config_fn() if load_config_fn else {}
@@ -4734,4 +4879,5 @@ def exec_command(cmd_args: list, force: bool = False) -> int:
             if set_state:
                 set_state("watching" if daemon._is_running() else "stopped")
 
-    return exit_code
+    from synlynk.quota_capture import note_exec_return
+    return note_exec_return(cmd_args, exit_code)

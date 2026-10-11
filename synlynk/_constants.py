@@ -269,28 +269,27 @@ HARNESS_CAPABILITY_BASELINES = {
     "muse": {
         "cli": "muse",
         "can_gh_write": True,
-        "non_interactive_flags": ["run", "--non-interactive"],
-        "prompt_flag": "--prompt",
+        "non_interactive_flags": ["exec"],
         "prompt_via_arg": True,
         "dispatch_flags": {
             "valid_flags": [
-                "--prompt",
+                "--json",
+                "--provider",
                 "--model",
-                "--non-interactive",
-                "-C",
-                "--output-format",
+                "--approval-mode",
+                "--workspace",
             ],
             "invalid_flags": ["--dangerously-skip-permissions", "--always-approve"],
-            "required_flags": ["--non-interactive"],
+            "required_flags": ["--json", "--approval-mode"],
         },
         "headless_contract": {
             "requires_pty": False,
             "stdout_flush_method": "native",
             "env_vars_required": [],
-            "non_interactive_flag": "--non-interactive",
+            "non_interactive_flag": "exec",
         },
         "network_deps": {
-            "required_endpoints": ["api.muse.meta.com:443"],
+            "required_endpoints": [],
             "optional_endpoints": [],
         },
         "auth_check": {
@@ -302,7 +301,7 @@ HARNESS_CAPABILITY_BASELINES = {
             ],
         },
         "roles": ["builder", "verifier", "architect"],
-        "env_passthrough": ["MUSE_API_KEY", "META_API_KEY"],
+        "env_passthrough": [],
         "strengths": ["surgical refactoring", "algorithmic synthesis", "automated unit testing", "high throughput"],
     },
 }

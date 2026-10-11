@@ -287,6 +287,7 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
 - "show agent quota headroom" -> `synlynk quota`
 - "fleet utilization advisory", "show quota advisory", "dynamic capacity advisory" -> `synlynk quota advisory`
 - "calibrate quota", "calibrate harness usage" -> `synlynk quota calibrate`
+- "show federated quota", "which harness has quota headroom" -> `synlynk quota federated`
 - "run acceptance testbed", "testbed soak", "testbed receipt" -> `synlynk testbed`
 - "who am I", "show active caller identity" -> `synlynk whoami`
 - "run a capability sweep", "seed capability baselines" -> `synlynk capability sweep`

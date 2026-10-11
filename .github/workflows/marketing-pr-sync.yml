@@ -47,7 +47,10 @@ jobs:
           if git ls-remote --exit-code --heads origin "$MARKETING_BRANCH" >/dev/null 2>&1; then
             git fetch origin "$MARKETING_BRANCH"
             git checkout -B "$MARKETING_BRANCH" "origin/$MARKETING_BRANCH"
-            git merge --no-edit origin/main
+            # The automation branch contains only generated marketing outputs.
+            # Prefer main for conflicting generated hunks so the sync step below
+            # can regenerate the current PR from the merged source of truth.
+            git merge --no-edit -X theirs origin/main
           else
             git checkout -B "$MARKETING_BRANCH" origin/main
           fi

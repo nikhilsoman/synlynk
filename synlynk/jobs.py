@@ -35,6 +35,8 @@ _DIM = "[2m"
 _RESET = "[0m"
 _HARNESS_INTERNAL_TIMEOUT_RETRY_CAP = 2
 _GH_WRITE_VERIFICATION_RETRY_CAP = 3
+_UNPUSHED_BRANCH_VERIFICATION_RETRY_CAP = 3
+_TERMINAL_EVIDENCE_RANK = {"unknown": 0, "local": 1, "github": 2}
 _AUTOCOMMIT_EXCLUDED_PATHS = (
     "GEMINI.md",
     "CLAUDE.md",
@@ -294,14 +296,17 @@ def _cost_inflation_is_critical(job: dict, log_text: str, sentinel_path: str) ->
     check_token_bloat = _pkg("check_token_bloat")
     if not check_token_bloat:
         return False
-    in_tokens, out_tokens = _pkg("extract_tokens")(
+    token_counts = _pkg("extract_tokens")(
         log_text, agent=job.get("agent", "")
     )
+    in_tokens, out_tokens = token_counts
+    cache_read_tokens = int(getattr(token_counts, "cache_read_tokens", 0) or 0)
     cost_usd = _job_cost_usd(
         job.get("agent", ""),
         in_tokens,
         out_tokens,
         job.get("model_version") or job.get("model_at_dispatch"),
+        cache_read_tokens=cache_read_tokens,
     )
     alerts = check_token_bloat(
         in_tokens=in_tokens,
@@ -312,6 +317,7 @@ def _cost_inflation_is_critical(job: dict, log_text: str, sentinel_path: str) ->
         agent=job.get("agent", ""),
         task_type=job.get("task_type", ""),
         sentinel_path=sentinel_path,
+        cache_read_tokens=cache_read_tokens,
     )
     blocked = any(
         alert.get("code") == "COST_INFLATION"
@@ -391,6 +397,7 @@ def _force_scope_review_for_sentinel_cotrip(
     cost_usd: float,
     files_touched,
     sentinel_path: str,
+    cache_read_tokens: int = 0,
 ) -> bool:
     """Block finalization when token and cost sentinels trip for one job.
 
@@ -411,6 +418,7 @@ def _force_scope_review_for_sentinel_cotrip(
         agent=job.get("agent", ""),
         task_type=job.get("task_type", ""),
         sentinel_path=sentinel_path,
+        cache_read_tokens=cache_read_tokens,
     ) or []
     codes = {alert.get("code") for alert in alerts if isinstance(alert, dict)}
     if not {"TOKEN_BLOAT", "COST_INFLATION"}.issubset(codes):
@@ -845,6 +853,112 @@ def _worktree_has_no_diff_against_base_branch(job: dict, worktree_path: str) -> 
     return getattr(diff_result, "returncode", None) == 0
 
 
+def _cleanup_noop_worktree(job: Optional[dict]) -> bool:
+    """Remove a clean dispatch worktree whose branch has no diff from origin/main."""
+    if not job:
+        return False
+    worktree_path = job.get("worktree_path")
+    if not _worktree_path_is_available(worktree_path, "clean up no-op job"):
+        return False
+
+    try:
+        status = subprocess.run(
+            ["git", "-C", worktree_path, "status", "--short", "--untracked-files=all"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except Exception:
+        return False
+    if status.returncode != 0 or status.stdout.strip():
+        return False
+
+    try:
+        diff = subprocess.run(
+            ["git", "-C", worktree_path, "diff", "--quiet", "origin/main", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except Exception:
+        return False
+    if diff.returncode != 0:
+        return False
+
+    branch = _resolve_finalize_worktree_branch(job, worktree_path)
+    if not branch or (job.get("worktree_branch") and branch != job["worktree_branch"]):
+        return False
+
+    try:
+        common_dir = subprocess.run(
+            ["git", "-C", worktree_path, "rev-parse", "--path-format=absolute", "--git-common-dir"],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+        repo_root = os.path.dirname(common_dir)
+    except Exception:
+        return False
+
+    # Keep completion diagnostics accessible after deleting their containing worktree.
+    log_path = job.get("log_file") or job.get("log_path")
+    if log_path and os.path.isfile(log_path):
+        try:
+            from synlynk.daemon import _daemon_state_path
+
+            central_log = _daemon_state_path("logs", os.path.basename(log_path))
+            os.makedirs(os.path.dirname(central_log), exist_ok=True)
+            if os.path.abspath(log_path) != os.path.abspath(central_log):
+                shutil.copy2(log_path, central_log)
+                if os.path.isfile(log_path + ".exit"):
+                    shutil.copy2(log_path + ".exit", central_log + ".exit")
+            job["log_file"] = central_log
+            if job.get("log_path"):
+                job["log_path"] = central_log
+            get_db = _pkg("_get_db")
+            if get_db:
+                conn = get_db()
+                try:
+                    conn.execute(
+                        "UPDATE daemon_jobs SET log_path=? WHERE job_id=?",
+                        (central_log, job.get("id", "")),
+                    )
+                    conn.commit()
+                finally:
+                    conn.close()
+        except Exception as exc:
+            print(f"  ⚠ no-op worktree kept because its job log could not be preserved: {exc}")
+            return False
+
+    removed = subprocess.run(
+        ["git", "-C", repo_root, "worktree", "remove", worktree_path],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if removed.returncode != 0:
+        print(f"  ⚠ no-op worktree cleanup failed for {worktree_path}: {(removed.stderr or '').strip()}")
+        return False
+
+    deleted = subprocess.run(
+        ["git", "-C", repo_root, "branch", "-d", branch],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if deleted.returncode != 0:
+        print(f"  ⚠ no-op branch cleanup failed for {branch}: {(deleted.stderr or '').strip()}")
+        return False
+    try:
+        from synlynk.worktree_lease import release_worktree_lease
+
+        release_worktree_lease(worktree_path)
+    except Exception:
+        pass
+    print(f"  🧹 removed no-op worktree and branch {branch}")
+    return True
+
+
 def _role_gh_env_for_job(job: dict) -> dict:
     """Env for parent-process `gh` so auto-PR uses the role App, not host keyring (#1436)."""
     env = os.environ.copy()
@@ -1119,7 +1233,11 @@ def _finalize_completed_worktree_job(job: dict, git_state: Optional[dict]) -> No
         except Exception:
             pass
 
-    if not job or not git_state or not _job_has_real_work_landed(git_state):
+    if not job or not git_state:
+        return
+
+    if not _job_has_real_work_landed(git_state):
+        _cleanup_noop_worktree(job)
         return
 
     worktree_path = job.get("worktree_path")
@@ -1290,11 +1408,16 @@ def _apply_dispatch_gate(job: dict) -> None:
             )
 
 
-def _job_cost_usd(agent: str, in_tokens: int, out_tokens: int, model_version: Optional[str] = None) -> float:
-    rates = _pkg("_model_rate_for_version")(model_version or "unknown", agent=agent)
-    return (
-        (in_tokens / 1000 * rates["input"]) +
-        (out_tokens / 1000 * rates["output"])
+def _job_cost_usd(
+    agent: str,
+    in_tokens: int,
+    out_tokens: int,
+    model_version: Optional[str] = None,
+    cache_read_tokens: int = 0,
+) -> float:
+    from synlynk.costs import api_equivalent_usd
+    return api_equivalent_usd(
+        agent, in_tokens, out_tokens, cache_read_tokens, model=model_version or "unknown",
     )
 
 
@@ -2195,6 +2318,7 @@ def _reconcile_jobs_unlocked() -> None:
                     log_text = ""
             token_counts = _pkg("extract_tokens")(log_text, agent=job.get("agent", ""))
             in_tokens, out_tokens = token_counts
+            cache_read_tokens = int(getattr(token_counts, "cache_read_tokens", 0) or 0)
             basis = getattr(token_counts, "basis", "none")
             model_version = job.get("model_version") or job.get("model_at_dispatch")
             try:
@@ -2203,6 +2327,7 @@ def _reconcile_jobs_unlocked() -> None:
                     in_tokens,
                     out_tokens,
                     duration_s or 0,
+                    cache_read_tokens=cache_read_tokens,
                     model_version=model_version,
                     story_id=job.get("story_id"),
                     agent=job.get("agent", ""),
@@ -2230,6 +2355,7 @@ def _reconcile_jobs_unlocked() -> None:
                 in_tokens,
                 out_tokens,
                 model_version,
+                cache_read_tokens=cache_read_tokens,
             )
             check_token_bloat = _pkg("check_token_bloat")
             if check_token_bloat:
@@ -2243,6 +2369,7 @@ def _reconcile_jobs_unlocked() -> None:
                     agent=job.get("agent", ""),
                     task_type=job.get("task_type", ""),
                     sentinel_path=sentinel_path,
+                    cache_read_tokens=cache_read_tokens,
                 )
             task_sha256, task_preview = _task_sha256_and_preview(job.get("task"))
             summary = _pkg("_write_job_summary")(
@@ -2366,12 +2493,15 @@ def _reconcile_jobs_unlocked() -> None:
             if log_text:
                 job["micro_rework"] = _extract_micro_rework(log_text)
                 _try_write_capability_rating(job, log_text, sentinel_path)
-            in_tokens, out_tokens = _pkg("extract_tokens")(log_text, agent=job.get("agent", ""))
+            token_counts = _pkg("extract_tokens")(log_text, agent=job.get("agent", ""))
+            in_tokens, out_tokens = token_counts
+            cache_read_tokens = int(getattr(token_counts, "cache_read_tokens", 0) or 0)
             cost_usd = _job_cost_usd(
                 job.get("agent", ""),
                 in_tokens,
                 out_tokens,
                 job.get("model_version") or job.get("model_at_dispatch"),
+                cache_read_tokens=cache_read_tokens,
             )
             duration_s = None
             try:
@@ -2389,6 +2519,7 @@ def _reconcile_jobs_unlocked() -> None:
                 cost_usd=cost_usd,
                 files_touched=len(_git_state_files_touched(git_state)),
                 sentinel_path=sentinel_path,
+                cache_read_tokens=cache_read_tokens,
             )
             if sentinel_scope_review:
                 summary_status = STATUS_SCOPE_REVIEW_REQUIRED
@@ -2602,12 +2733,15 @@ def _reconcile_jobs_unlocked() -> None:
             else:
                 log_text = ""
 
-            in_tokens, out_tokens = _pkg("extract_tokens")(log_text, agent=job.get("agent", ""))
+            token_counts = _pkg("extract_tokens")(log_text, agent=job.get("agent", ""))
+            in_tokens, out_tokens = token_counts
+            cache_read_tokens = int(getattr(token_counts, "cache_read_tokens", 0) or 0)
             cost_usd = _job_cost_usd(
                 job.get("agent", ""),
                 in_tokens,
                 out_tokens,
                 job.get("model_version") or job.get("model_at_dispatch"),
+                cache_read_tokens=cache_read_tokens,
             )
             duration_s = None
             try:
@@ -2773,8 +2907,14 @@ _UNSET_TERMINAL_CLAIM = object()
 def _persist_daemon_job_terminal(
     conn, job_id: str, status: str, exit_code: Optional[int], completed_at: str,
     *, only_running: bool = False, terminal_claim_token=_UNSET_TERMINAL_CLAIM,
+    evidence_strength: str = "local",
 ) -> bool:
-    """Persist a daemon job's terminal state with the requested row scope."""
+    """Persist a terminal state, allowing stronger evidence to revise a verdict.
+
+    Legacy callers retain their running-row-only behavior through ``only_running``.
+    Reconciliation callers may pass ``only_running=False`` so a later GitHub
+    observation can replace a weaker terminal heuristic, but never the reverse.
+    """
     predicates = ["job_id=?"]
     params = [job_id]
     if only_running:
@@ -2789,10 +2929,43 @@ def _persist_daemon_job_terminal(
             predicates.append("terminal_claim_token=?")
             params.append(terminal_claim_token)
     where_clause = "WHERE " + " AND ".join(predicates)
-    cursor = conn.execute(
-        "UPDATE daemon_jobs SET status=?, exit_code=?, completed_at=? " + where_clause,
-        (status, exit_code, completed_at, *params),
-    )
+    try:
+        row = conn.execute(
+            "SELECT status, COALESCE(terminal_evidence_strength, 'unknown') "
+            "FROM daemon_jobs WHERE job_id=?", (job_id,)
+        ).fetchone()
+    except sqlite3.OperationalError:
+        row = conn.execute("SELECT status FROM daemon_jobs WHERE job_id=?", (job_id,)).fetchone()
+        row = (row[0], "unknown") if row else None
+    if not row:
+        return False
+    old_status, old_strength = row
+    if not only_running and old_status not in ("running", "queued", STATUS_PENDING_VERIFICATION):
+        old_rank = _TERMINAL_EVIDENCE_RANK.get(old_strength, 0)
+        new_rank = _TERMINAL_EVIDENCE_RANK.get(evidence_strength, 0)
+        if old_status == status:
+            return False
+        # ``failed_verification`` is the explicit outcome of exhausting an
+        # unknown window. It may replace an older unlabelled unknown verdict,
+        # but never a local or GitHub-backed verdict.
+        if new_rank <= old_rank and not (
+            status == STATUS_FAILED_VERIFICATION and old_rank == 0
+        ):
+            return False
+    try:
+        update_sql = (
+            "UPDATE daemon_jobs SET status=?, exit_code=?, completed_at=?, "
+            "terminal_evidence_strength=? " + where_clause
+        )
+        cursor = conn.execute(
+            update_sql,
+            (status, exit_code, completed_at, evidence_strength, *params),
+        )
+    except sqlite3.OperationalError:
+        cursor = conn.execute(
+            "UPDATE daemon_jobs SET status=?, exit_code=?, completed_at=? " + where_clause,
+            (status, exit_code, completed_at, *params),
+        )
     return (cursor.rowcount or 0) > 0
 
 
@@ -2806,6 +2979,7 @@ def _settle_daemon_job_terminal(
     only_running: bool = True,
     terminal_claim_token=_UNSET_TERMINAL_CLAIM,
     release_reservation: bool = False,
+    evidence_strength: str = "local",
 ) -> bool:
     """Persist and commit a daemon terminal transition atomically for callers."""
     # PR1 shared decision entry point.  The compatibility status projection is
@@ -2839,6 +3013,7 @@ def _settle_daemon_job_terminal(
         completed_at,
         only_running=only_running,
         terminal_claim_token=terminal_claim_token,
+        evidence_strength=evidence_strength,
     )
     conn.commit()
     if settled:
@@ -2851,6 +3026,17 @@ def _settle_daemon_job_terminal(
             conn.rollback()
     if settled and release_reservation:
         _release_daemon_job_reservation(conn, job_id)
+    if settled:
+        try:
+            agent_row = conn.execute(
+                "SELECT agent FROM daemon_jobs WHERE job_id=?",
+                (job_id,),
+            ).fetchone()
+            agent_name = agent_row[0] if agent_row else None
+        except Exception:
+            agent_name = None
+        from synlynk.quota_capture import note_job_settled
+        note_job_settled(settled=True, harness=agent_name, job_id=job_id, status=status)
     return settled
 
 
@@ -3567,15 +3753,17 @@ def _daemon_job_worktree_path(job_id: str, log_path: Optional[str] = None) -> Op
 
 
 def _reconcile_terminal_jobs_json(conn) -> int:
-    """Apply terminal flat-file events to still-running daemon rows.
+    """Apply terminal flat-file events with monotonic evidence strength.
 
     ``jobs.json`` is a legacy event/projection store, while ``daemon_jobs`` is
     the store used by ``synlynk jobs``.  A process can finish after writing the
     flat-file record but before the daemon updates SQLite, leaving the latter
     permanently running because normal daemon reconciliation only scans running
     processes.  Treat terminal flat-file records as idempotent terminal events:
-    update only rows still marked running, and never overwrite an already
-    terminal SQLite result.
+    Older versions only updated running rows. That absorbed a weak local
+    verdict forever when a later GitHub verification became available. A
+    terminal event is now revisable when its evidence is stronger, while a
+    same-strength or weaker verdict remains untouched.
     """
     terminal_statuses = {
         "completed": "done",
@@ -3597,13 +3785,48 @@ def _reconcile_terminal_jobs_json(conn) -> int:
     repaired = 0
     for job_id, (job, status) in terminal_jobs.items():
         row = conn.execute(
-            "SELECT requires_gh_write, gh_write_target, gh_write_author, gh_write_expect "
-            "FROM daemon_jobs WHERE job_id=? AND status='running'",
+            "SELECT status, requires_gh_write, gh_write_target, gh_write_author, gh_write_expect, "
+            "worktree_path, worktree_branch "
+            "FROM daemon_jobs WHERE job_id=?",
             (job_id,),
         ).fetchone()
         if not row:
             continue
-        requires_gh_write, target, author, expect = row
+        old_status, requires_gh_write, target, author, expect, worktree_path, worktree_branch = row
+        evidence_strength = "local"
+        preferred_path = worktree_path or _daemon_job_worktree_path(job_id, job.get("log_path"))
+        preferred_branch = worktree_branch or job.get("worktree_branch")
+        if old_status in (STATUS_RUNNING, "queued", STATUS_PENDING_VERIFICATION):
+            preferred_state = None
+            if preferred_path:
+                try:
+                    preferred_state = _worktree_git_state_inspector()(
+                        preferred_path, preferred_branch, job.get("started_at")
+                    )
+                except Exception:
+                    preferred_state = None
+            pre_guard_status = status
+            status = _guard_unpushed_branch(
+                conn, job_id, status, preferred_path, preferred_branch, preferred_state,
+                job.get("started_at"),
+            )
+            if _unpushed_branch_retry_pending(conn, job_id, pre_guard_status, status):
+                confirmed = False
+                if preferred_branch:
+                    confirmed = github_branch_effect_verified(
+                        preferred_branch, since=job.get("started_at")
+                    ) is True
+                if confirmed:
+                    try:
+                        conn.execute(
+                            "UPDATE daemon_jobs SET unpushed_branch_check_attempts=0 WHERE job_id=?",
+                            (job_id,),
+                        )
+                    except sqlite3.OperationalError:
+                        pass
+                else:
+                    conn.commit()
+                    continue
         if requires_gh_write:
             status, verified = _verify_daemon_terminal_status(
                 conn,
@@ -3614,14 +3837,26 @@ def _reconcile_terminal_jobs_json(conn) -> int:
                 job.get("started_at"),
                 author or job.get("gh_write_author"),
                 expect or job.get("gh_write_expect"),
-                worktree_branch=job.get("worktree_branch"),
+                worktree_branch=preferred_branch,
             )
+            if verified == "true" or verified == "false":
+                evidence_strength = "github"
+            elif verified == "unknown":
+                evidence_strength = "unknown"
+                if _gh_write_verification_retry_pending(conn, job_id, True, verified):
+                    conn.commit()
+                    continue
+                status = STATUS_FAILED_VERIFICATION
         else:
             verified = None
         exit_code = job.get("exit_code")
+        status, exit_code = _terminal_status_after_verification(
+            status, exit_code, verified, bool(requires_gh_write)
+        )
         completed_at = job.get("ended_at") or time.strftime("%Y-%m-%dT%H:%M:%S")
         if _settle_daemon_job_terminal(
-            conn, job_id, status, exit_code, completed_at, only_running=True
+            conn, job_id, status, exit_code, completed_at, only_running=False,
+            evidence_strength=evidence_strength,
         ):
             repaired += 1
             emit_event(
@@ -3675,16 +3910,19 @@ def _ensure_daemon_job_cost_entry(
             return False
         extract = _pkg("extract_tokens")
         in_tokens, out_tokens = 0, 0
+        cache_read_tokens = 0
         basis = "none"
         turn_breakdown = None
         if extract and log_text:
             try:
                 token_counts = extract(log_text, agent=agent or "")
-                in_tokens, out_tokens = token_counts[0], token_counts[1]
+                in_tokens, out_tokens = token_counts
+                cache_read_tokens = int(getattr(token_counts, "cache_read_tokens", 0) or 0)
                 basis = getattr(token_counts, "basis", "none")
                 turn_breakdown = getattr(token_counts, "turns", None) or None
             except Exception:
                 in_tokens, out_tokens = 0, 0
+                cache_read_tokens = 0
         model_version = None
         extract_mv = _pkg("extract_model_version")
         if extract_mv and log_text:
@@ -3698,6 +3936,7 @@ def _ensure_daemon_job_cost_entry(
                 in_tokens,
                 out_tokens,
                 0,
+                cache_read_tokens=cache_read_tokens,
                 model_version=model_version,
                 story_id=story_id,
                 agent=agent or "",
@@ -3885,6 +4124,30 @@ def _gh_write_verification_retry_pending(
     return int(attempts) < _GH_WRITE_VERIFICATION_RETRY_CAP
 
 
+def _terminal_status_after_verification(
+    status: str, exit_code: Optional[int], verified_str: Optional[str],
+    requires_gh_write: bool = True,
+) -> tuple:
+    """Use an explicit terminal label after the bounded unknown window."""
+    if requires_gh_write and verified_str == "unknown":
+        return STATUS_FAILED_VERIFICATION, exit_code if exit_code not in (None, 0) else 1
+    return status, exit_code
+
+
+def _unpushed_branch_retry_pending(conn, job_id: str, pre_guard_status: str, post_guard_status: str) -> bool:
+    """Return whether an inconclusive unpushed-branch check should defer terminal settlement."""
+    if post_guard_status != pre_guard_status:
+        return False
+    try:
+        attempts = conn.execute(
+            "SELECT COALESCE(unpushed_branch_check_attempts, 0) FROM daemon_jobs WHERE job_id=?",
+            (job_id,),
+        ).fetchone()[0]
+    except (sqlite3.OperationalError, TypeError, ValueError):
+        return False
+    return 0 < int(attempts) < _UNPUSHED_BRANCH_VERIFICATION_RETRY_CAP
+
+
 def _load_cross_branch_pr(conn, job_id: str) -> Optional[str]:
     """Return the dispatch-time cross-branch PR marker, if the column exists."""
     try:
@@ -3995,6 +4258,22 @@ def _verify_daemon_terminal_status(
             if status in ("done", "failed_unverified"):
                 status = "succeeded_gh_write_failed"
             return status, verified_str
+    if status == STATUS_UNPUSHED_BRANCH and worktree_branch:
+        branch_evidence = {}
+        branch_verified = github_branch_effect_verified(
+            worktree_branch, since=started_at, evidence=branch_evidence
+        )
+        if branch_verified is True:
+            try:
+                conn.execute(
+                    "UPDATE daemon_jobs SET gh_write_verified='true', gh_write_evidence=? WHERE job_id=?",
+                    (json.dumps(branch_evidence) if branch_evidence else None, job_id),
+                )
+            except sqlite3.OperationalError:
+                pass
+            return "done", "true"
+        if branch_verified is None:
+            return status, "unknown"
     if status == STATUS_UNPUSHED_BRANCH:
         try:
             conn.execute(
@@ -4028,8 +4307,26 @@ def _guard_unpushed_branch(
         return status
     if local_commits_pushed(worktree_path, worktree_branch, git_state.get("base_commit")):
         return status
-    if github_branch_effect_verified(worktree_branch, since=started_at) is True:
+    verified = github_branch_effect_verified(worktree_branch, since=started_at)
+    if verified is True:
         return status
+    if verified is None:
+        try:
+            attempts = int(conn.execute(
+                "SELECT COALESCE(unpushed_branch_check_attempts, 0) FROM daemon_jobs WHERE job_id=?",
+                (job_id,),
+            ).fetchone()[0])
+        except (sqlite3.OperationalError, TypeError, ValueError):
+            attempts = 0
+        if attempts < _UNPUSHED_BRANCH_VERIFICATION_RETRY_CAP:
+            try:
+                conn.execute(
+                    "UPDATE daemon_jobs SET unpushed_branch_check_attempts=? WHERE job_id=?",
+                    (attempts + 1, job_id),
+                )
+            except sqlite3.OperationalError:
+                pass
+            return status
     try:
         conn.execute(
             "UPDATE daemon_jobs SET gh_write_verified='false' WHERE job_id=?",
@@ -4139,6 +4436,7 @@ def _reconcile_daemon_jobs() -> None:
         "worktree_branch": "TEXT",
         "pid_identity": "TEXT",
         "gh_write_verification_attempts": "INTEGER NOT NULL DEFAULT 0",
+        "terminal_evidence_strength": "TEXT NOT NULL DEFAULT 'unknown'",
     })
     # Repair the split-brain window before selecting running rows.  This is
     # deliberately conditional/idempotent so a late daemon update cannot be
@@ -4280,10 +4578,14 @@ def _reconcile_daemon_jobs() -> None:
                             preferred_state = _worktree_git_state_inspector()(preferred_path, preferred_branch, started_at)
                         except Exception:
                             preferred_state = None
+                    pre_guard_status = status
                     status = _guard_unpushed_branch(
                         conn, job_id, status, preferred_path, preferred_branch, preferred_state,
                         started_at,
                     )
+                    if _unpushed_branch_retry_pending(conn, job_id, pre_guard_status, status):
+                        conn.commit()
+                        continue
                     status, exit_code, _merged_note = _promote_merged_pr_result(
                         status, exit_code, preferred_branch, started_at
                     )
@@ -4299,8 +4601,12 @@ def _reconcile_daemon_jobs() -> None:
                     ):
                         conn.commit()
                         continue
+                    status, exit_code = _terminal_status_after_verification(
+                        status, exit_code, gh_write_verified_str, bool(requires_gh_write)
+                    )
                     settled = _settle_daemon_job_terminal(
-                        conn, job_id, status, exit_code, now, release_reservation=True
+                        conn, job_id, status, exit_code, now, release_reservation=True,
+                        evidence_strength=("github" if gh_write_verified_str in ("true", "false") else "unknown"),
                     )
                     if not settled:
                         # Another actor already committed a terminal status.
@@ -4383,10 +4689,18 @@ def _reconcile_daemon_jobs() -> None:
                         zombie_status, zombie_exit_code, _, _ = _gtv_status_for_daemon_exit(
                             None, git_state
                         )
+                        pre_guard_zombie_status = zombie_status
                         zombie_status = _guard_unpushed_branch(
                             conn, job_id, zombie_status, worktree_path, worktree_branch, git_state,
                             started_at,
                         )
+                        if _unpushed_branch_retry_pending(
+                            conn, job_id, pre_guard_zombie_status, zombie_status
+                        ):
+                            _release_daemon_job_terminal_claim_and_commit(
+                                conn, job_id, terminal_claim_token
+                            )
+                            continue
                         zombie_status, zombie_exit_code, _merged_note = _promote_merged_pr_result(
                             zombie_status, zombie_exit_code, worktree_branch, started_at
                         )
@@ -4404,6 +4718,9 @@ def _reconcile_daemon_jobs() -> None:
                                 conn, job_id, terminal_claim_token
                             )
                             continue
+                        zombie_status, zombie_exit_code = _terminal_status_after_verification(
+                            zombie_status, zombie_exit_code, gh_write_verified_str, bool(requires_gh_write)
+                        )
                         if (
                             requires_gh_write and gh_write_verified_str == "true"
                             and zombie_status == "timed_out"
@@ -4420,6 +4737,7 @@ def _reconcile_daemon_jobs() -> None:
                         settled = _settle_daemon_job_terminal(
                             conn, job_id, zombie_status, zombie_exit_code, now,
                             only_running=True, terminal_claim_token=terminal_claim_token,
+                            evidence_strength=("github" if gh_write_verified_str in ("true", "false") else "unknown"),
                         )
                         if settled and zombie_status == "killed_zombie":
                             _reap_zombie_worktree(job_id, log_path, conn=conn)
@@ -4451,9 +4769,13 @@ def _reconcile_daemon_jobs() -> None:
                     status, exit_code, summary_status, summary_note = _gtv_status_for_daemon_exit(
                         exit_code, git_state, structured
                     )
+                pre_guard_status = status
                 status = _guard_unpushed_branch(
                     conn, job_id, status, worktree_path, worktree_branch, git_state, started_at
                 )
+                if _unpushed_branch_retry_pending(conn, job_id, pre_guard_status, status):
+                    conn.commit()
+                    continue
                 status, exit_code, merged_note = _promote_merged_pr_result(
                     status, exit_code, worktree_branch, started_at
                 )
@@ -4471,6 +4793,9 @@ def _reconcile_daemon_jobs() -> None:
                 ):
                     conn.commit()
                     continue
+                status, exit_code = _terminal_status_after_verification(
+                    status, exit_code, gh_write_verified_str, bool(requires_gh_write)
+                )
                 if (
                     requires_gh_write and gh_write_verified_str == "true"
                     and status == "timed_out" and not exit_marker_present
@@ -4497,8 +4822,12 @@ def _reconcile_daemon_jobs() -> None:
 
                 pre_token_counts = _pkg("extract_tokens")(log_text, agent=agent)
                 pre_in_tokens, pre_out_tokens = pre_token_counts
+                pre_cache_read = int(getattr(pre_token_counts, "cache_read_tokens", 0) or 0)
                 pre_model_version = _pkg("extract_model_version")(log_text, agent=agent)
-                pre_cost_usd = _job_cost_usd(agent, pre_in_tokens, pre_out_tokens, pre_model_version)
+                pre_cost_usd = _job_cost_usd(
+                    agent, pre_in_tokens, pre_out_tokens, pre_model_version,
+                    cache_read_tokens=pre_cache_read,
+                )
                 scope_review_job = {
                     "id": job_id,
                     "agent": agent,
@@ -4513,6 +4842,7 @@ def _reconcile_daemon_jobs() -> None:
                     sentinel_path=os.path.join(
                         persisted_worktree_path or worktree_path or os.getcwd(),
                         ".synlynk", "sentinel.md"),
+                    cache_read_tokens=pre_cache_read,
                 ):
                     status = STATUS_SCOPE_REVIEW_REQUIRED
                     summary_status = STATUS_SCOPE_REVIEW_REQUIRED
@@ -4525,7 +4855,8 @@ def _reconcile_daemon_jobs() -> None:
                 # second daemon pass.  Do not let a stale inspection overwrite
                 # a terminal state that another actor already committed.
                 settled = _settle_daemon_job_terminal(
-                    conn, job_id, status, exit_code, now, release_reservation=True
+                    conn, job_id, status, exit_code, now, release_reservation=True,
+                    evidence_strength=("github" if gh_write_verified_str in ("true", "false") else "local"),
                 )
                 if not settled:
                     # Another reconciler/sentinel won the terminal-state
@@ -4547,6 +4878,7 @@ def _reconcile_daemon_jobs() -> None:
                     )
                 token_counts = _pkg("extract_tokens")(log_text, agent=agent)
                 in_tokens, out_tokens = token_counts
+                cache_read_tokens = int(getattr(token_counts, "cache_read_tokens", 0) or 0)
                 basis = getattr(token_counts, "basis", "none")
                 turn_breakdown = getattr(token_counts, "turns", None) or None
                 model_version = _pkg("extract_model_version")(log_text, agent=agent)
@@ -4556,6 +4888,7 @@ def _reconcile_daemon_jobs() -> None:
                         in_tokens,
                         out_tokens,
                         duration_s or 0,
+                        cache_read_tokens=cache_read_tokens,
                         model_version=model_version,
                         story_id=story_id,
                         agent=agent,
@@ -4589,7 +4922,10 @@ def _reconcile_daemon_jobs() -> None:
                     },
                     emitted_by="_reconcile_daemon_jobs",
                 )
-                cost_usd = _job_cost_usd(agent, in_tokens, out_tokens, model_version)
+                cost_usd = _job_cost_usd(
+                    agent, in_tokens, out_tokens, model_version,
+                    cache_read_tokens=cache_read_tokens,
+                )
                 if status == "failed_unverified" and not summary_status:
                     summary_status = terminal_status_for_unknown_exit()
                 task_sha256, task_preview = _task_sha256_and_preview(task)

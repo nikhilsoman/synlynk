@@ -144,3 +144,14 @@ def test_migrate_db_delegates_to_legacy_function_and_runner(tmp_path, monkeypatc
     ).fetchone()
     assert history_row is not None
     assert hasattr(db, "_run_legacy_migration_and_repairs")
+
+
+def test_fresh_db_has_unpushed_branch_check_attempts_column(tmp_path, monkeypatch):
+    from synlynk import db
+
+    monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(tmp_path / "state.db"))
+    conn = db._get_db()
+
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(daemon_jobs)")}
+
+    assert "unpushed_branch_check_attempts" in cols
