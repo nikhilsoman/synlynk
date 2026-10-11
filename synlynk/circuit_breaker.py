@@ -23,6 +23,7 @@ from synlynk.sentinel import (
 DEFAULT_MAX_JOB_TOKENS = 5_000_000
 DEFAULT_MAX_JOB_COST_USD = 15.00
 DEFAULT_ZERO_FILE_TOKEN_THRESHOLD = 500_000
+DEFAULT_MAX_LOG_SIZE_BYTES = 50 * 1024 * 1024  # 50MB
 
 DEFAULT_TIER_OVERRIDES: Dict[str, Dict[str, Any]] = {
     "fast": {"max_job_tokens": 500_000, "max_job_cost_usd": 2.00},
@@ -46,8 +47,8 @@ class CircuitBreakerResult:
 def _resolve_circuit_breaker_limits(
     job: dict,
     config: Optional[dict] = None,
-) -> Tuple[int, float, int]:
-    """Resolve max_tokens, max_cost, and zero_file_threshold from config and tier overrides."""
+) -> Tuple[int, float, int, int]:
+    """Resolve breaker limits from config and tier overrides."""
     cb_config = {}
     if config and isinstance(config, dict):
         cb_config = config.get("circuit_breaker", {})
@@ -58,6 +59,9 @@ def _resolve_circuit_breaker_limits(
     max_cost = float(cb_config.get("max_job_cost_usd", DEFAULT_MAX_JOB_COST_USD))
     zero_file_threshold = int(
         cb_config.get("zero_file_token_threshold", DEFAULT_ZERO_FILE_TOKEN_THRESHOLD)
+    )
+    max_log_size_bytes = int(
+        cb_config.get("max_log_size_bytes", DEFAULT_MAX_LOG_SIZE_BYTES)
     )
 
     tier_overrides = cb_config.get("tier_overrides", DEFAULT_TIER_OVERRIDES)
@@ -72,8 +76,10 @@ def _resolve_circuit_breaker_limits(
                 max_cost = float(tier_cfg["max_job_cost_usd"])
             if "zero_file_token_threshold" in tier_cfg:
                 zero_file_threshold = int(tier_cfg["zero_file_token_threshold"])
+            if "max_log_size_bytes" in tier_cfg:
+                max_log_size_bytes = int(tier_cfg["max_log_size_bytes"])
 
-    return max_tokens, max_cost, zero_file_threshold
+    return max_tokens, max_cost, zero_file_threshold, max_log_size_bytes
 
 
 def _kill_process_tree(
@@ -176,7 +182,7 @@ def evaluate_job_circuit_breaker(
     files_touched = 0
 
     # 4. Resolve limits
-    max_tokens, max_cost, zero_file_threshold = _resolve_circuit_breaker_limits(job, config)
+    max_tokens, max_cost, zero_file_threshold, max_log_size_bytes = _resolve_circuit_breaker_limits(job, config)
 
     # 5. Check triggers
     reason = None
