@@ -138,6 +138,7 @@ def load_model_catalog(repo_path: Optional[str] = None) -> dict[str, Any]:
                 "codex": "gpt-5.6-luna",
                 "grok": "grok-4.6",
                 "local": "qwen2.5",
+                "muse": "muse-spark-1.3",
             },
             "pro": {
                 "claude": "claude-sonnet-5",
@@ -145,6 +146,7 @@ def load_model_catalog(repo_path: Optional[str] = None) -> dict[str, Any]:
                 "codex": "gpt-5.6-luna",
                 "grok": "grok-4.7",
                 "local": "qwen2.5",
+                "muse": "muse-spark-1.3",
             },
             "reasoning": {
                 "claude": "claude-opus-5-5",
