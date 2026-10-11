@@ -1825,3 +1825,120 @@ Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'corre [backe
 - [ ] gh #2098: audit README capability-routing claims against live evidence [docs] <!-- id:story-f7e03fdb -->
 - [ ] Support native reviewer provenance in cross-harness PR checks [backend] <!-- id:story-issue-2113 -->
 - [ ] feat: persist typed PR provenance [testing] <!-- id:story-issue-2115 -->
+- [ ] feat(provenance): attest legacy job classification [backend] <!-- id:story-issue-2117 -->
+- [ ] Policy enforcement maturity: observe-mode gates for GOVERNS/cross-harness review [backend] <!-- id:story-7117bb01 -->
+- [ ] test(adapters): add cross-harness conformance suite (#2062) [testing] <!-- id:story-issue-2081 -->
+- [ ] review-type dispatches crash on any synlynk CLI command: _reconcile_jobs() writes under read-only sandbox [testing] <!-- id:story-issue-2118 -->
+- [ ] dispatch: capability-probe reroutes codex/agy review tasks to 'local', which hard-crashes on permission enforcement [testing] <!-- id:story-issue-2124 -->
+- [ ] [P1] Make local harness preflight fail closed on missing MLX or OrbStack setup [testing] <!-- id:story-issue-2099 -->
+- [ ] [P0] Authorized role-scoped GitHub actions blocked by interactive harness classifier [backend] <!-- id:story-issue-2097 -->
+- [ ] [P1] Soak-test SQLite WAL with 20–50 concurrent state writers [backend] <!-- id:story-issue-2102 -->
+- [ ] Dispatch jobs run with stale Graphify graph + full (non-sparse) worktrees — plausible driver of repeated cost-inflation pattern [testing] <!-- id:story-issue-2133 -->
+- [ ] Job-status false-negative recurrence: 6/6 jobs this session reported failed/degraded despite confirmed real success [backend] <!-- id:story-issue-2130 -->
+- [ ] Bounded retry on unknown GH-write verification instead of permanent terminal settle [testing] <!-- id:story-issue-2136 -->
+- [ ] Close the race between per-CLI jobs.json classification and daemon-poll GH verification [testing] <!-- id:story-issue-2137 -->
+- [ ] ci: move cold-start and EPUB validation out of required CI [backend] <!-- id:story-issue-1943 -->
+- [ ] Version drift (VERSION/README/CHANGELOG) + blog index gap found during qa review [testing] <!-- id:story-issue-1914 -->
+- [ ] gh:#2101 Config decomposition: split config.json into workspace.json/billing.json/policy.json [backend] <!-- id:story-b04fdd2c -->
+- [ ] docs(plans): refresh five-track status against live gh issue state [testing] <!-- id:story-issue-2084 -->
+- [ ] [P1] Decompose workspace configuration into workspace, billing, and policy files [docs] <!-- id:story-issue-2101 -->
+- [ ] gh#1831: state shard reconciliation (project_root hardening, inventory, reconcile CLI) [backend] <!-- id:story-a266b194 -->
+- [ ] Cleanup: 11,384 legacy state.db shards under ~/.synlynk/projects/ (6.1GB, no active writes since 2026-09-15) [backend] <!-- id:story-issue-1831 -->
+- [ ] Brainstorm + arch-council design session: Herdr as bundled dependency and standard UX/UI layer [architecture] <!-- id:story-272f0252 -->
+- [ ] Federated subscription-quota capture [backend] <!-- id:story-d84372cd -->
+- [ ] SuperAgents Post-training/Distillation phase: Kaggle Gemma 4 Developer Agent Competition as near-term vehicle [ml] <!-- id:story-9442caf8 -->
+- [ ] Write a minimal example demonstrating Programming/Software Development for a small Python function. [backend] <!-- id:story-adhoc-1791627240 -->
+- [ ] Review this Programming/Software Development calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<tr [backend] <!-- id:story-adhoc-1791627258 -->
+- [ ] Write a minimal example demonstrating Testing for a small Python function. [testing] <!-- id:story-adhoc-1791627275 -->
+- [ ] Review this Testing calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<true|false>'.
+
+Executor har [testing] <!-- id:story-adhoc-1791627293 -->
+- [ ] Write a minimal example demonstrating Requirements Definition and Management for a small Python function. [backend] <!-- id:story-adhoc-1791627310 -->
+- [ ] Review this Requirements Definition and Management calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'corre [backend] <!-- id:story-adhoc-1791627326 -->
+- [ ] Write a minimal example demonstrating Programming/Software Development for a small Python function. [backend] <!-- id:story-adhoc-1791627344 -->
+- [ ] Review this Programming/Software Development calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<tr [backend] <!-- id:story-adhoc-1791627360 -->
+- [ ] Write a minimal example demonstrating Testing for a small Python function. [testing] <!-- id:story-adhoc-1791627379 -->
+- [ ] Review this Testing calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<true|false>'.
+
+Executor har [testing] <!-- id:story-adhoc-1791627396 -->
+- [ ] Write a minimal example demonstrating Requirements Definition and Management for a small Python function. [backend] <!-- id:story-adhoc-1791627415 -->
+- [ ] Review this Requirements Definition and Management calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'corre [backend] <!-- id:story-adhoc-1791627432 -->
+- [ ] Write a minimal example demonstrating Programming/Software Development for a small Python function. [backend] <!-- id:story-adhoc-1791627450 -->
+- [ ] Review this Programming/Software Development calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<tr [backend] <!-- id:story-adhoc-1791627469 -->
+- [ ] Write a minimal example demonstrating Testing for a small Python function. [testing] <!-- id:story-adhoc-1791627486 -->
+- [ ] Review this Testing calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<true|false>'.
+
+Executor har [testing] <!-- id:story-adhoc-1791627505 -->
+- [ ] Write a minimal example demonstrating Requirements Definition and Management for a small Python function. [backend] <!-- id:story-adhoc-1791627522 -->
+- [ ] Review this Requirements Definition and Management calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'corre [backend] <!-- id:story-adhoc-1791627540 -->
+- [ ] Write a minimal example demonstrating Programming/Software Development for a small Python function. [backend] <!-- id:story-adhoc-1791627558 -->
+- [ ] Review this Programming/Software Development calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<tr [backend] <!-- id:story-adhoc-1791627577 -->
+- [ ] Write a minimal example demonstrating Testing for a small Python function. [testing] <!-- id:story-adhoc-1791627595 -->
+- [ ] Review this Testing calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<true|false>'.
+
+Executor har [testing] <!-- id:story-adhoc-1791627614 -->
+- [ ] Write a minimal example demonstrating Requirements Definition and Management for a small Python function. [backend] <!-- id:story-adhoc-1791627633 -->
+- [ ] Review this Requirements Definition and Management calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'corre [backend] <!-- id:story-adhoc-1791627651 -->
+- [ ] Write a minimal example demonstrating Programming/Software Development for a small Python function. [backend] <!-- id:story-adhoc-1791627670 -->
+- [ ] Review this Programming/Software Development calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<tr [backend] <!-- id:story-adhoc-1791627688 -->
+- [ ] Write a minimal example demonstrating Testing for a small Python function. [testing] <!-- id:story-adhoc-1791627706 -->
+- [ ] Review this Testing calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<true|false>'.
+
+Executor har [testing] <!-- id:story-adhoc-1791627724 -->
+- [ ] Write a minimal example demonstrating Requirements Definition and Management for a small Python function. [backend] <!-- id:story-adhoc-1791627741 -->
+- [ ] Review this Requirements Definition and Management calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'corre [backend] <!-- id:story-adhoc-1791627761 -->
+- [ ] Write a minimal example demonstrating Programming/Software Development for a small Python function. [backend] <!-- id:story-adhoc-1791627778 -->
+- [ ] Review this Programming/Software Development calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<tr [backend] <!-- id:story-adhoc-1791627797 -->
+- [ ] Write a minimal example demonstrating Testing for a small Python function. [testing] <!-- id:story-adhoc-1791627815 -->
+- [ ] Review this Testing calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<true|false>'.
+
+Executor har [testing] <!-- id:story-adhoc-1791627834 -->
+- [ ] Write a minimal example demonstrating Requirements Definition and Management for a small Python function. [backend] <!-- id:story-adhoc-1791627855 -->
+- [ ] Review this Requirements Definition and Management calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'corre [backend] <!-- id:story-adhoc-1791627877 -->
+- [ ] Write a minimal example demonstrating Programming/Software Development for a small Python function. [backend] <!-- id:story-adhoc-1791627898 -->
+- [ ] Review this Programming/Software Development calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<tr [backend] <!-- id:story-adhoc-1791627916 -->
+- [ ] Write a minimal example demonstrating Testing for a small Python function. [testing] <!-- id:story-adhoc-1791627934 -->
+- [ ] Review this Testing calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<true|false>'.
+
+Executor har [testing] <!-- id:story-adhoc-1791627952 -->
+- [ ] Write a minimal example demonstrating Requirements Definition and Management for a small Python function. [backend] <!-- id:story-adhoc-1791627969 -->
+- [ ] Review this Requirements Definition and Management calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'corre [backend] <!-- id:story-adhoc-1791627987 -->
+- [ ] Fix capability sweep quality_verified signal (gh:#2170) [backend] <!-- id:story-7270b57f -->
+- [ ] Fix missing YAML frontmatter blocking pr check repo-wide (gh:#2161) [backend] <!-- id:story-e4566473 -->
+- [ ] Investigate marketing-sync merge conflicts on generated files (gh:#2146) [backend] <!-- id:story-7348371d -->
+- [ ] Stop pricing Codex cache-replay input as fresh tokens [backend] <!-- id:story-f336c1c5 -->
+- [ ] TPM daemon autonomy fix: wire SYNLYNK_AUTONOMOUS into installers + gh:1133 regression test [devops] <!-- id:story-71c4ed60 -->
+- [ ] feat(cli): add 'synlynk goal update' subcommand (gh:#2182) [backend] <!-- id:story-574f68cb -->
+- [ ] feat(cli): add 'synlynk goal update' subcommand (gh:#2182) [testing] <!-- id:story-issue-2183 -->
+- [ ] fix(daemon): enable autonomous ticks in installed services [testing] <!-- id:story-issue-2181 -->
+- [ ] docs(blog): synchronize marketing collateral [security] <!-- id:story-issue-2175 -->
+- [ ] docs: align xdist evaluation with shipped CI policy [testing] <!-- id:story-issue-2180 -->
+- [ ] fix(dispatch): clean up no-op job worktrees [testing] <!-- id:story-issue-2179 -->
+- [ ] docs(blog): correct post 265 frontmatter [testing] <!-- id:story-issue-2174 -->
+- [ ] fix: price Codex cache-replay input separately from fresh tokens [testing] <!-- id:story-issue-2177 -->
+- [ ] docs: capability sweep quality signal — design spec + implementation plan [testing] <!-- id:story-issue-2171 -->
+- [ ] docs(archive): archive superseded regen write-through reconciliation spec [testing] <!-- id:story-issue-2156 -->
+- [ ] chore(deps-dev): bump liquidjs from 10.27.1 to 10.30.0 in /website [frontend] <!-- id:story-issue-2176 -->
+- [ ] chore(deps-dev): bump markdown-it from 14.2.0 to 14.3.2 in /website [frontend] <!-- id:story-issue-1900 -->
+- [ ] Backfill Blog Post Protocol posts for #2180/#2171/#2181/#2179/#2183 [docs] <!-- id:story-156924d6 -->

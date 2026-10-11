@@ -1,5 +1,37 @@
 # Claude Devlog
 
+## 2026-10-10 — Pillar 1 blocker review + backlog triage finds session's own merge velocity is the bottleneck, paused
+
+- **Pillar 1 ("Usable from Claude/Codex/Grok/Agy/Muse CLIs", goal-005ea87d) headway review:** the
+  Week-1 gate (#1926 + #2136) is technically closed, but 5 sibling job-status-reliability tickets
+  in the exact same bug cluster remain OPEN (#2137/#2138/#2139/#2130/#2163 — sev1/p0), so the gate's
+  "closed" status is a narrow proxy, not evidence the underlying reliability problem is fixed.
+  Separately, confirmed via `grep -ic muse project-docs/costs.md` → `0` and 3 unclaimed todo.md
+  stories that the actual Week-2 deliverable (Muse calibration batch) has not been started at all —
+  two independent reasons for zero headway, not one. Posed options to Nikhil; not yet actioned.
+- **Backlog triage session, continued from a prior (compacted) segment:** confirmed 3 more genuine
+  merges this segment (#2181, #2179, #2183) despite misleading job-status labels on 2 of their
+  implementer jobs (`unpushed_branch`, `SCOPE_REVIEW_REQUIRED`/`unknown_contract`) — same
+  false-negative pattern as #202/#1377/#2130, now well past a dozen confirmed instances across
+  this project. Always verified via direct `gh pr view`, never trusted the label.
+- **New structural finding:** #2175 (bot-authored `automation/marketing-sync` PR) and 4 other PRs
+  (#2177, #2156, #1900, #2174) are stuck in a race against this same triage session's own merge
+  throughput — #2175's `release-docs` test-count gate and the other 4's `mergeStateStatus: BEHIND`
+  both keep re-triggering every time another PR in this session merges, faster than update-branch/
+  CI cycles can catch up. This is distinct from a simple stale-badge or merge-conflict bug: it's the
+  triage work itself destabilizing the remainder of the queue. Per CLAUDE.md's 2-cycle update-branch
+  cap (already spent once on #2177/#2156/#1900 earlier in this session), recommended escalation
+  over a 3rd retry round; Nikhil confirmed **pause merging, let the queue settle** rather than push
+  through the 4 conflicting PRs (#2153, #2042, #1970, #1887 — still flagged, #1887 touches
+  CLAUDE.md/githooks/instructions.py, handle carefully) or dispatch further cross-harness
+  review+merge jobs this session.
+- Cleaned up 3 stale background poll loops (`bpstmp0hx`/`bpdrvzppf`/`bay6z15p1`) that were waiting
+  on status strings (`completed|failed|error|cancelled`) that don't match this project's actual
+  label vocabulary (`done`, `SCOPE_REVIEW_REQUIRED`, or dropped from `jobs --all` entirely) — would
+  have spun indefinitely. Verified their jobs' real outcomes directly via `gh pr list --search
+  head:dispatch/<harness>/<job-id>` instead, which is how #2183 and job-a9a156a6→#2181 were found.
+[@claude]
+
 ## 2026-09-23 — [LIVE-14] Token-Path Drift Fix, Merge-Authority Chicken-and-Egg Finding, PR #1744 Audit, 3 New Tickets
 
 - **[LIVE-14] (#1746, Sev2) resolved end-to-end:** `WatchDaemon._refresh_github_tokens` and two
