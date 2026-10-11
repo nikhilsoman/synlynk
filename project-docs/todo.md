@@ -1644,7 +1644,6 @@ If reviewer identity allows approval, submit a [testing] <!-- id:story-issue-189
 - [ ] PR #2006 (fix: verify GitHub pull request merges, gh:#2005) is APPROVED by qa review, all required checks pass (test matrix x4, qa-gate, release-docs all SUCCESS; only an unrelated marketing-sync chec [testing] <!-- id:story-issue-2006 -->
 - [ ] Fix gh:#2008. The task-delivery receipt check (_check_task_receipt / _classify_task_delivery in synlynk/jobs.py, around lines 2040-2189 and the duplicate block ~2280-2345) hard-fails a job as TASK_DEL [testing] <!-- id:story-issue-2008 -->
 - [ ] From within PR #2009's own worktree/branch (dispatch/codex/job-f9a82968), fix the failing CI. All 4 test-matrix jobs fail with: TypeError: test_dispatch_gitstateverified_job_reconciliation_rechecks_fa [testing] <!-- id:story-issue-2009 -->
-- [x] feat(gateway): wire OpenRouter dispatch [backend] <!-- id:story-issue-2010 -->
 - [ ] chore(costs): log gh:#1711 interactive Codex session cost [testing] <!-- id:story-issue-2011 -->
 - [ ] You are implementing Task 1 only of the containerized-dispatch plan.
 
@@ -1832,7 +1831,6 @@ Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'corre [backe
 - [ ] dispatch: capability-probe reroutes codex/agy review tasks to 'local', which hard-crashes on permission enforcement [testing] <!-- id:story-issue-2124 -->
 - [ ] [P1] Make local harness preflight fail closed on missing MLX or OrbStack setup [testing] <!-- id:story-issue-2099 -->
 - [ ] [P0] Authorized role-scoped GitHub actions blocked by interactive harness classifier [backend] <!-- id:story-issue-2097 -->
-- [x] [P1] Soak-test SQLite WAL with 20–50 concurrent state writers [backend] <!-- id:story-issue-2102 -->
 - [ ] Dispatch jobs run with stale Graphify graph + full (non-sparse) worktrees — plausible driver of repeated cost-inflation pattern [testing] <!-- id:story-issue-2133 -->
 - [ ] Job-status false-negative recurrence: 6/6 jobs this session reported failed/degraded despite confirmed real success [backend] <!-- id:story-issue-2130 -->
 - [ ] Bounded retry on unknown GH-write verification instead of permanent terminal settle [testing] <!-- id:story-issue-2136 -->
@@ -1962,9 +1960,8 @@ Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'corre [backe
 - [ ] Blog policy overhaul: PR-durable articulation, marketing-only blog surface, 294-post migration [backend] <!-- id:story-0ab760c5 -->
 - [ ] Job-status split-brain cluster: make terminal verdicts revisable (#2130/#2137/#2138/#2139/#2163) [backend] <!-- id:story-25872226 -->
 - [ ] feat(dispatch): Invariant 1 - Effect-verified completion contract (#1806) [backend] <!-- id:story-9b981c53 -->
-- [x] fix: dispatch cost inflation #1937 — fresh investigation, prior mitigations closed [backend] <!-- id:story-84912225 -->
 - [ ] feat(dispatch): wire openrouter harness baseline + cost parser (gh:#2076) [backend] <!-- id:story-fa106e5a -->
 - [ ] Wire Hermes local-model tier into dispatch measurement (gh:#2211 spec) [backend] <!-- id:story-d4075e76 -->
 - [ ] docs(devlog): record Pillar 1 blocker review + backlog triage pause [testing] <!-- id:story-issue-2186 -->
 - [ ] docs(costs): backfill 3 cost entries dropped by regeneration bug [testing] <!-- id:story-issue-2153 -->
-- [ ] fix: migrate 8 remaining config.json direct-readers to workspace.json (gh:#2147) [devops] <!-- id:story-6c659435 -->
+- [ ] docs: Muse harness config fix design + implementation plan (gh:#2187) [testing] <!-- id:story-issue-2226 -->
