@@ -622,5 +622,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2211 \u2014 Hermes local-model measurement wiring design spec (roadmap Week 3 pillar 4) (PR #2211, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2211.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-11) - PR #2211\n- Merged improvements and fixes for PR #2211."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/292-pr2212-sqlite-wal-soak-test-design-spec-plan-gh.md",
+    "title": "PR #2212 \u2014 SQLite WAL soak test design spec + plan (gh:#2102)",
+    "author": "nikhilsoman",
+    "date": "2026-10-11",
+    "pr": "#2212",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2212."
+    ],
+    "tweet": "\ud83d\ude80 PR #2212 \u2014 SQLite WAL soak test design spec + plan (gh:#2102) (PR #2212, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2212.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-11) - PR #2212\n- Merged improvements and fixes for PR #2212."
   }
 ]
