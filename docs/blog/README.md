@@ -342,6 +342,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [279](./279-pr2190-add-real-muse-spark-1-3-model-catalog-en.md) | PR #2190 — add real muse-spark-1.3 model catalog entry | [#2190](https://github.com/nikhilsoman/synlynk/pull/2190) | 2026-10-11 |
 | [280](./280-pr2156-archive-superseded-regen-write-through-r.md) | PR #2156 — archive superseded regen write-through reconciliation spec | [#2156](https://github.com/nikhilsoman/synlynk/pull/2156) | 2026-10-11 |
 | [281](./281-pr2191-pass-prompt-positionally-for-prompt-via-.md) | PR #2191 — pass prompt positionally for prompt_via_arg agents with no prompt_flag | [#2191](https://github.com/nikhilsoman/synlynk/pull/2191) | 2026-10-11 |
+| [282](./282-pr2193-muse-harness-has-no-real-network-depende.md) | PR #2193 — muse harness has no real network dependency, baseline required_endpoints was a fabricated host | [#2193](https://github.com/nikhilsoman/synlynk/pull/2193) | 2026-10-11 |
 
 ## Per-PR Post Template
 

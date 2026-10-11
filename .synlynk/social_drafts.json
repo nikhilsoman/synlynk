@@ -462,5 +462,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2191 \u2014 pass prompt positionally for prompt_via_arg agents with no prompt_flag (PR #2191, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2191.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-11) - PR #2191\n- Merged improvements and fixes for PR #2191."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/282-pr2193-muse-harness-has-no-real-network-depende.md",
+    "title": "PR #2193 \u2014 muse harness has no real network dependency, baseline required_endpoints was a fabricated host",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-11",
+    "pr": "#2193",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2193."
+    ],
+    "tweet": "\ud83d\ude80 PR #2193 \u2014 muse harness has no real network dependency, baseline required_endpoints was a fabricated host (PR #2193, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2193.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-11) - PR #2193\n- Merged improvements and fixes for PR #2193."
   }
 ]
