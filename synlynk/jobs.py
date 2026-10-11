@@ -3811,8 +3811,22 @@ def _reconcile_terminal_jobs_json(conn) -> int:
                 job.get("started_at"),
             )
             if _unpushed_branch_retry_pending(conn, job_id, pre_guard_status, status):
-                conn.commit()
-                continue
+                confirmed = False
+                if preferred_branch:
+                    confirmed = github_branch_effect_verified(
+                        preferred_branch, since=job.get("started_at")
+                    ) is True
+                if confirmed:
+                    try:
+                        conn.execute(
+                            "UPDATE daemon_jobs SET unpushed_branch_check_attempts=0 WHERE job_id=?",
+                            (job_id,),
+                        )
+                    except sqlite3.OperationalError:
+                        pass
+                else:
+                    conn.commit()
+                    continue
         if requires_gh_write:
             status, verified = _verify_daemon_terminal_status(
                 conn,
@@ -4292,23 +4306,9 @@ def _guard_unpushed_branch(
     if not git_state or not git_state.get("commits_ahead"):
         return status
     if local_commits_pushed(worktree_path, worktree_branch, git_state.get("base_commit")):
-        try:
-            conn.execute(
-                "UPDATE daemon_jobs SET unpushed_branch_check_attempts=0 WHERE job_id=?",
-                (job_id,),
-            )
-        except sqlite3.OperationalError:
-            pass
         return status
     verified = github_branch_effect_verified(worktree_branch, since=started_at)
     if verified is True:
-        try:
-            conn.execute(
-                "UPDATE daemon_jobs SET unpushed_branch_check_attempts=0 WHERE job_id=?",
-                (job_id,),
-            )
-        except sqlite3.OperationalError:
-            pass
         return status
     if verified is None:
         try:
