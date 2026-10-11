@@ -542,5 +542,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2196 \u2014 prioritize verified remote evidence over unknown_contract (PR #2196, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2196.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-11) - PR #2196\n- Merged improvements and fixes for PR #2196."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/287-pr2198-refresh-stale-graphify-graph-surface-con.md",
+    "title": "PR #2198 \u2014 refresh stale Graphify graph, surface context-build failures",
+    "author": "synlynk-pm agent",
+    "date": "2026-10-11",
+    "pr": "#2198",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2198."
+    ],
+    "tweet": "\ud83d\ude80 PR #2198 \u2014 refresh stale Graphify graph, surface context-build failures (PR #2198, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2198.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-11) - PR #2198\n- Merged improvements and fixes for PR #2198."
   }
 ]

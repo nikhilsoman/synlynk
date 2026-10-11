@@ -347,6 +347,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [284](./284-pr2197-revisable-terminal-job-status-verdicts-b.md) | PR #2197 — revisable terminal job-status verdicts by evidence strength | [#2197](https://github.com/nikhilsoman/synlynk/pull/2197) | 2026-10-11 |
 | [285](./285-pr2199-add-missing-frontmatter-fields-to-blog-p.md) | PR #2199 — add missing frontmatter fields to blog post 267 | [#2199](https://github.com/nikhilsoman/synlynk/pull/2199) | 2026-10-11 |
 | [286](./286-pr2196-prioritize-verified-remote-evidence-over.md) | PR #2196 — prioritize verified remote evidence over unknown_contract | [#2196](https://github.com/nikhilsoman/synlynk/pull/2196) | 2026-10-11 |
+| [287](./287-pr2198-refresh-stale-graphify-graph-surface-con.md) | PR #2198 — refresh stale Graphify graph, surface context-build failures | [#2198](https://github.com/nikhilsoman/synlynk/pull/2198) | 2026-10-11 |
 
 ## Per-PR Post Template
 
