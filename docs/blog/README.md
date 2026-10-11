@@ -343,6 +343,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [280](./280-pr2156-archive-superseded-regen-write-through-r.md) | PR #2156 — archive superseded regen write-through reconciliation spec | [#2156](https://github.com/nikhilsoman/synlynk/pull/2156) | 2026-10-11 |
 | [281](./281-pr2191-pass-prompt-positionally-for-prompt-via-.md) | PR #2191 — pass prompt positionally for prompt_via_arg agents with no prompt_flag | [#2191](https://github.com/nikhilsoman/synlynk/pull/2191) | 2026-10-11 |
 | [282](./282-pr2193-muse-harness-has-no-real-network-depende.md) | PR #2193 — muse harness has no real network dependency, baseline required_endpoints was a fabricated host | [#2193](https://github.com/nikhilsoman/synlynk/pull/2193) | 2026-10-11 |
+| [283](./283-pr2195-capture-nested-muse-exec-usage.md) | PR #2195 — capture nested Muse exec usage | [#2195](https://github.com/nikhilsoman/synlynk/pull/2195) | 2026-10-11 |
 
 ## Per-PR Post Template
 
