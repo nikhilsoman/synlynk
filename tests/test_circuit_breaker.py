@@ -5,6 +5,7 @@ import signal
 import sys
 import tempfile
 import time
+import subprocess
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -27,6 +28,30 @@ def _codex_turn_log(input_tokens, cached_input_tokens, output_tokens, reasoning=
         f'"reasoning_output_tokens":{reasoning}'
         "}}\n"
     )
+
+
+def test_zero_file_checkout_states_use_real_git(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    worktree = tmp_path / "worktree"
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    subprocess.run(["git", "-C", str(repo), "config", "user.email", "test@example.com"], check=True)
+    subprocess.run(["git", "-C", str(repo), "config", "user.name", "Test"], check=True)
+    (repo / "tracked.txt").write_text("base\n")
+    subprocess.run(["git", "-C", str(repo), "add", "tracked.txt"], check=True)
+    subprocess.run(["git", "-C", str(repo), "commit", "-qm", "base"], check=True)
+    subprocess.run(["git", "-C", str(repo), "branch", "dispatch"], check=True)
+    subprocess.run(["git", "-C", str(repo), "worktree", "add", "-q", str(worktree), "dispatch"], check=True)
+
+    from synlynk.circuit_breaker import _worktree_branch_is_stable
+
+    assert _worktree_branch_is_stable(str(worktree), "dispatch") is True
+    subprocess.run(["git", "-C", str(worktree), "switch", "-q", "-c", "feature"], check=True)
+    assert _worktree_branch_is_stable(str(worktree), "dispatch") is False
+    branch_switch_time = time.time()
+    monkeypatch.setattr("synlynk.circuit_breaker.time.time", lambda: branch_switch_time + 61)
+    assert _worktree_branch_is_stable(str(worktree), "dispatch") is True
+    subprocess.run(["git", "-C", str(worktree), "switch", "-q", "--detach"], check=True)
+    assert _worktree_branch_is_stable(str(worktree), "dispatch") is False
 
 
 def test_codex_tool_loop_cache_sum_does_not_trip_fast_tier_or_zero_file(tmp_path, monkeypatch):
