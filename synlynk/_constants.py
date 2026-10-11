@@ -289,7 +289,7 @@ HARNESS_CAPABILITY_BASELINES = {
             "non_interactive_flag": "exec",
         },
         "network_deps": {
-            "required_endpoints": ["api.muse.meta.com:443"],
+            "required_endpoints": [],
             "optional_endpoints": [],
         },
         "auth_check": {
