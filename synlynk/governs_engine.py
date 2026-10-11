@@ -34,7 +34,9 @@ def _workspace_root(repo_root: Optional[str] = None) -> str:
 
 
 def _config_aliases(repo_root: Optional[str] = None) -> dict[str, list[str]]:
-    path = os.path.join(_workspace_root(repo_root), ".synlynk", "config.json")
+    root = _workspace_root(repo_root)
+    workspace_path = os.path.join(root, ".synlynk", "workspace.json")
+    path = workspace_path if os.path.isfile(workspace_path) else os.path.join(root, ".synlynk", "config.json")
     try:
         with open(path, encoding="utf-8") as fh:
             config = json.load(fh)
