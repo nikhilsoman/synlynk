@@ -30,3 +30,4 @@ state.db*
 /build/
 /dist/
 graphify-out/
+tests/soak/reports/
