@@ -5,6 +5,10 @@ series: "Building the OS for Multi-Agent Development"
 post: 267
 pr: "#2177"
 status: open
+author: "synlynk team"
+version: "0.25.0"
+tags: [posts]
+type: pr
 ---
 
 ## The Broader Goal at the End of the Previous PR
