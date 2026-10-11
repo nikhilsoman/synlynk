@@ -1,3 +1,4 @@
+import json as _json
 import sqlite3
 
 import pytest
@@ -8,6 +9,7 @@ from synlynk.capability_report import (
     _dedupe_cost_rows,
     _fetch_rows,
     build_buckets,
+    format_text_report,
     propose_diff,
     summarize_buckets,
 )
@@ -233,3 +235,34 @@ def test_propose_diff_skips_unmeasured_current():
     }
     proposals = propose_diff(summary, CURRENT_TASK_ALLOCATION, min_sample_size=5)
     assert proposals == []
+
+
+def test_format_text_report_no_proposals():
+    text = format_text_report([], {}, skipped_no_mapping=0)
+    assert "No routing changes proposed" in text
+
+
+def test_format_text_report_with_proposal_matches_example_shape():
+    proposals = [
+        {
+            "task_type": "implement",
+            "current_harness": "claude",
+            "current": {
+                "n": 12,
+                "median_pr_review_cycles": 2.5,
+                "median_total_cost_usd": 3.10,
+            },
+            "proposed_harness": "codex",
+            "proposed": {
+                "n": 18,
+                "median_pr_review_cycles": 1.5,
+                "median_total_cost_usd": 1.80,
+            },
+        }
+    ]
+    text = format_text_report(proposals, {}, skipped_no_mapping=3)
+    assert (
+        "implement: claude (current, n=12, cycles=2.5, cost=$3.10) -> "
+        "codex (n=18, cycles=1.5, cost=$1.80)"
+    ) in text
+    assert "3 rows skipped" in text

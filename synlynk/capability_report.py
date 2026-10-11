@@ -6,6 +6,7 @@ docs/superpowers/specs/2026-10-11-synlynk-capability-report-design.md (gh:#1993)
 from __future__ import annotations
 
 from collections import defaultdict
+import json
 import statistics
 
 DISCIPLINE_TO_TASK_TYPE = {
@@ -136,3 +137,59 @@ def propose_diff(summary: dict, current_task_allocation: dict, min_sample_size: 
                     }
                 )
     return proposals
+
+
+def format_text_report(proposals: list, summary: dict, skipped_no_mapping: int) -> str:
+    lines = []
+    if not proposals:
+        lines.append(
+            "No routing changes proposed (no harness clears min_sample_size "
+            "with a strictly better median on both metrics)."
+        )
+    for proposal in proposals:
+        current, proposed = proposal["current"], proposal["proposed"]
+        lines.append(
+            f"{proposal['task_type']}: {proposal['current_harness']} "
+            f"(current, n={current['n']}, "
+            f"cycles={current['median_pr_review_cycles']}, "
+            f"cost=${current['median_total_cost_usd']:.2f}) -> "
+            f"{proposal['proposed_harness']} (n={proposed['n']}, "
+            f"cycles={proposed['median_pr_review_cycles']}, "
+            f"cost=${proposed['median_total_cost_usd']:.2f})"
+        )
+    lines.append(f"\n{skipped_no_mapping} rows skipped (discipline has no task_type mapping).")
+    return "\n".join(lines)
+
+
+def _load_policy(path: str = ".synlynk/policy.json") -> dict:
+    with open(path) as policy_file:
+        return json.load(policy_file)
+
+
+def cmd_capability_report(as_json: bool = False) -> None:
+    """Print a read-only task allocation proposal from the canonical state DB."""
+    from synlynk import _get_db
+
+    policy = _load_policy()
+    min_sample_size = policy["capability_policy"]["min_sample_size"]
+    current_task_allocation = policy["overrides"]["dev_authority"]["task_allocation"]
+
+    conn = _get_db(read_only=True)
+    try:
+        buckets, skipped_no_mapping = build_buckets(conn)
+    finally:
+        conn.close()
+
+    summary = summarize_buckets(buckets, min_sample_size)
+    proposals = propose_diff(summary, current_task_allocation, min_sample_size)
+
+    if as_json:
+        print(
+            json.dumps(
+                {"proposals": proposals, "skipped_no_mapping": skipped_no_mapping},
+                indent=2,
+                default=str,
+            )
+        )
+    else:
+        print(format_text_report(proposals, summary, skipped_no_mapping))
