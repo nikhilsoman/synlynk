@@ -17,6 +17,86 @@ from synlynk.circuit_breaker import (
 from synlynk.sentinel import _read_active_sentinel_alerts
 
 
+def _codex_turn_log(input_tokens, cached_input_tokens, output_tokens, reasoning=0):
+    return (
+        '{"type":"turn.completed","usage":{'
+        f'"input_tokens":{input_tokens},'
+        f'"cached_input_tokens":{cached_input_tokens},'
+        f'"output_tokens":{output_tokens},'
+        f'"reasoning_output_tokens":{reasoning}'
+        "}}\n"
+    )
+
+
+def test_codex_tool_loop_cache_sum_does_not_trip_fast_tier_or_zero_file(tmp_path, monkeypatch):
+    """job-fccc76c4 / job-fda2e4ef: one Codex turn summed ~1.2M input tokens,
+    of which ~1.18M were cache reads of a ~50k prompt. The live prompt never
+    approached the 500k zero-file or fast-tier limits. Those jobs were killed
+    anyway because the sum was priced and compared as fresh input.
+    """
+    log_file = tmp_path / "job.log"
+    log_file.write_text(_codex_turn_log(1_248_424, 1_181_440, 6_645, 2_141))
+    killed = []
+    monkeypatch.setattr(os, "kill", lambda pid, sig: killed.append((pid, sig)))
+
+    job = {
+        "id": "job-fccc76c4",
+        "agent": "codex",
+        "model_tier": "fast",
+        "pid": 4242,
+        "log_file": str(log_file),
+        "worktree_path": str(tmp_path),
+        "status": "running",
+    }
+    config = {
+        "circuit_breaker": {
+            "max_job_tokens": 5_000_000,
+            "max_job_cost_usd": 15.00,
+            "zero_file_token_threshold": 500_000,
+            "tier_overrides": {
+                "fast": {"max_job_tokens": 500_000, "max_job_cost_usd": 2.00},
+            },
+        }
+    }
+    res = evaluate_job_circuit_breaker(
+        job,
+        config=config,
+        sentinel_path=str(tmp_path / "sentinel.md"),
+        skip_identity_check_for_test=True,
+    )
+    assert res.tripped is False
+    assert killed == []
+    assert job["status"] == "running"
+    assert res.total_tokens < 500_000
+    assert res.cost_usd < 2.00
+
+
+def test_codex_uncached_cumulative_input_still_trips_zero_file(tmp_path, monkeypatch):
+    log_file = tmp_path / "job.log"
+    log_file.write_text(_codex_turn_log(600_000, 0, 100))
+    monkeypatch.setattr(os, "kill", lambda pid, sig: None)
+    job = {
+        "id": "job-real-bloat",
+        "agent": "codex",
+        "pid": 4243,
+        "log_file": str(log_file),
+        "worktree_path": str(tmp_path),
+        "status": "running",
+    }
+    res = evaluate_job_circuit_breaker(
+        job,
+        config={"circuit_breaker": {
+            "max_job_tokens": 5_000_000,
+            "max_job_cost_usd": 100.0,
+            "zero_file_token_threshold": 500_000,
+        }},
+        sentinel_path=str(tmp_path / "sentinel.md"),
+        skip_identity_check_for_test=True,
+    )
+    assert res.tripped is True
+    assert job["status"] == STATUS_CIRCUIT_BREAKER_TRIPPED
+
+
 def test_circuit_breaker_not_tripped_under_limits(tmp_path):
     log_file = tmp_path / "normal_job.log"
     log_file.write_text("Input tokens: 500\nOutput tokens: 100\nDone work.\n")

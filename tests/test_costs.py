@@ -83,6 +83,57 @@ def test_extract_tokens_captures_agy_cache_read_tokens():
     assert out_tok == 640
 
 
+def test_codex_cached_input_subset_is_not_priced_as_fresh_input(monkeypatch):
+    """job-54fa8a6a: Codex input_tokens includes cached_input_tokens.
+
+    Pricing the cumulative sum at the fresh-input rate billed this job at
+    $5.03 and tripped COST_INFLATION. Cache reads stay on the cache rate.
+    """
+    from synlynk import costs
+
+    monkeypatch.setattr(costs, "_payment_model_config_for_agent", lambda agent: {"mode": "pay_as_you_go"})
+    monkeypatch.setattr(
+        costs,
+        "_model_rate_for_version",
+        lambda model, agent=None: {"input": 0.003, "output": 0.015, "cache_read": 0.0000003},
+    )
+    value = costs.resolve_payment_value(
+        "codex",
+        1_631_802,
+        9_154,
+        cache_read_tokens=1_560_832,
+        model="gpt-5.6-luna",
+    )
+    fresh = 1_631_802 - 1_560_832
+    expected = (
+        (fresh / 1000) * 0.003
+        + (9_154 / 1000) * 0.015
+        + (1_560_832 / 1000) * 0.0000003
+    )
+    assert value.api_equivalent_usd == pytest.approx(expected)
+    assert value.api_equivalent_usd < 1.0
+
+
+def test_non_codex_cache_read_stays_an_additive_pool(monkeypatch):
+    from synlynk import costs
+
+    monkeypatch.setattr(costs, "_payment_model_config_for_agent", lambda agent: {"mode": "pay_as_you_go"})
+    monkeypatch.setattr(
+        costs,
+        "_model_rate_for_version",
+        lambda model, agent=None: {"input": 0.003, "output": 0.015, "cache_read": 0.0000003},
+    )
+    value = costs.resolve_payment_value(
+        "claude",
+        1_000,
+        100,
+        cache_read_tokens=5_000,
+        model="claude-sonnet-4-6",
+    )
+    expected = (1_000 / 1000) * 0.003 + (100 / 1000) * 0.015 + (5_000 / 1000) * 0.0000003
+    assert value.api_equivalent_usd == pytest.approx(expected)
+
+
 def test_zero_cost_harness_has_api_value_but_no_cash_outlay(monkeypatch):
     import synlynk
     monkeypatch.setattr(synlynk, "load_config", lambda: {
