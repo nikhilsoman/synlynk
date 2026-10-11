@@ -590,5 +590,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2208 \u2014 bridge OpenRouter through generic gateway dispatch (PR #2208, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2208.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-11) - PR #2208\n- Merged improvements and fixes for PR #2208."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/290-pr2209-add-capability-routing-report-1993.md",
+    "title": "PR #2209 \u2014 add capability routing report (#1993)",
+    "author": "nikhilsoman",
+    "date": "2026-10-11",
+    "pr": "#2209",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2209."
+    ],
+    "tweet": "\ud83d\ude80 PR #2209 \u2014 add capability routing report (#1993) (PR #2209, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2209.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-11) - PR #2209\n- Merged improvements and fixes for PR #2209."
   }
 ]
