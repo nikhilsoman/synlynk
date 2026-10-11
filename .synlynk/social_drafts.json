@@ -558,5 +558,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2198 \u2014 refresh stale Graphify graph, surface context-build failures (PR #2198, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2198.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-11) - PR #2198\n- Merged improvements and fixes for PR #2198."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/288-pr2200-wire-retry-gates-into-terminal-json-reco.md",
+    "title": "PR #2200 \u2014 wire retry gates into terminal JSON reconciliation",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-11",
+    "pr": "#2200",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2200."
+    ],
+    "tweet": "\ud83d\ude80 PR #2200 \u2014 wire retry gates into terminal JSON reconciliation (PR #2200, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2200.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-11) - PR #2200\n- Merged improvements and fixes for PR #2200."
   }
 ]
