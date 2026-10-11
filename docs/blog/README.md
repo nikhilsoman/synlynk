@@ -363,6 +363,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [300](./300-pr2223-migrate-state-registry-team-version-poli.md) | PR #2223 — migrate state_registry/team/version_policy config readers to workspace.json (gh:#2147) | [#2223](https://github.com/nikhilsoman/synlynk/pull/2223) | 2026-10-11 |
 | [301](./301-pr2225-migrate-autonomy-agent-store-handover-co.md) | PR #2225 — migrate autonomy/agent_store/handover config readers to workspace.json (gh:#2147) | [#2225](https://github.com/nikhilsoman/synlynk/pull/2225) | 2026-10-11 |
 | [302](./302-pr2226-muse-harness-config-fix-design-implement.md) | PR #2226 — Muse harness config fix design + implementation plan (gh:#2187) | [#2226](https://github.com/nikhilsoman/synlynk/pull/2226) | 2026-10-11 |
+| [303](./303-pr2228-cover-muse-adapter-permission-flag-trans.md) | PR #2228 — cover Muse adapter permission flag translation (gh:#2187) | [#2228](https://github.com/nikhilsoman/synlynk/pull/2228) | 2026-10-11 |
 
 ## Per-PR Post Template
 

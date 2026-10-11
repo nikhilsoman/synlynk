@@ -798,5 +798,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2226 \u2014 Muse harness config fix design + implementation plan (gh:#2187) (PR #2226, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2226.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-11) - PR #2226\n- Merged improvements and fixes for PR #2226."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/303-pr2228-cover-muse-adapter-permission-flag-trans.md",
+    "title": "PR #2228 \u2014 cover Muse adapter permission flag translation (gh:#2187)",
+    "author": "synlynk-pm agent",
+    "date": "2026-10-11",
+    "pr": "#2228",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2228."
+    ],
+    "tweet": "\ud83d\ude80 PR #2228 \u2014 cover Muse adapter permission flag translation (gh:#2187) (PR #2228, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2228.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-11) - PR #2228\n- Merged improvements and fixes for PR #2228."
   }
 ]
