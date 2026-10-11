@@ -405,3 +405,75 @@ def test_purge_nested_product_state_under(tmp_path):
     assert n >= 1
     assert not db.exists()
     assert (tmp_path / "other.db").exists()
+
+
+def test_live_agent_smoke_positional_prompt_when_no_prompt_flag(monkeypatch):
+    import synlynk.fleet as fleet_mod
+
+    captured = {}
+
+    class FakeProc:
+        returncode = 0
+        stdout = "pong\n"
+        stderr = ""
+
+    def fake_run(cmd, **kwargs):
+        captured["cmd"] = cmd
+        captured["kwargs"] = kwargs
+        return FakeProc()
+
+    monkeypatch.setattr(fleet_mod.shutil, "which", lambda cli: "/usr/bin/muse")
+    monkeypatch.setattr(fleet_mod.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        fleet_mod,
+        "HARNESS_CAPABILITY_BASELINES",
+        {
+            "muse": {
+                "cli": "muse",
+                "non_interactive_flags": ["exec"],
+                "prompt_via_arg": True,
+            }
+        },
+    )
+
+    result = fleet_mod.live_agent_smoke("muse")
+
+    assert result.status == "green"
+    assert captured["cmd"][-1] == fleet_mod._LIVE_SMOKE_PROMPT
+    assert "input" not in captured["kwargs"]
+
+
+def test_live_agent_receipt_check_positional_prompt_when_no_prompt_flag(monkeypatch):
+    import synlynk.fleet as fleet_mod
+
+    captured = {}
+
+    class FakeProc:
+        returncode = 0
+        stdout = "SYNLYNK_TASK_RECEIVED: abc123\nok done\n"
+        stderr = ""
+
+    def fake_run(cmd, **kwargs):
+        captured["cmd"] = cmd
+        captured["kwargs"] = kwargs
+        return FakeProc()
+
+    monkeypatch.setattr(fleet_mod.shutil, "which", lambda cli: "/usr/bin/muse")
+    monkeypatch.setattr(fleet_mod.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        fleet_mod,
+        "HARNESS_CAPABILITY_BASELINES",
+        {
+            "muse": {
+                "cli": "muse",
+                "non_interactive_flags": ["exec"],
+                "prompt_via_arg": True,
+            }
+        },
+    )
+
+    result = fleet_mod.live_agent_receipt_check("muse", task_sha256="abc123")
+
+    assert result.status == "green"
+    assert captured["cmd"][-1].endswith(fleet_mod._LIVE_SMOKE_PROMPT)
+    assert "input" not in captured["kwargs"]

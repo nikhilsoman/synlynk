@@ -139,6 +139,7 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `quota federated` (secondary) — sustain
 - `testbed` (secondary) — execute
 - `capability sweep` (secondary) — sustain
+- `capability report` (secondary) — sustain
 - `run` (primary) — execute
 - `run --trio` (secondary) — execute
 - `local doctor` (secondary) — sustain

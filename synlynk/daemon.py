@@ -784,6 +784,8 @@ def _daemon_install_service(daemon_instance) -> None:
                     <dict>
                       <key>SYNLYNK_DAEMON_WORKSPACE_ROOT</key>
                       <string>{workspace_root}</string>
+                      <key>SYNLYNK_AUTONOMOUS</key>
+                      <string>1</string>
                     </dict>
                     <key>RunAtLoad</key>
                     <true/>
@@ -820,6 +822,7 @@ def _daemon_install_service(daemon_instance) -> None:
                 WorkingDirectory={workspace_root}
                 ExecStart={python_path} -m synlynk daemon run
                 Environment=SYNLYNK_DAEMON_WORKSPACE_ROOT={workspace_root}
+                Environment=SYNLYNK_AUTONOMOUS=1
                 Restart=on-failure
                 RestartSec=30
 
@@ -834,7 +837,7 @@ def _daemon_install_service(daemon_instance) -> None:
 
         synlynk_dir = os.path.join(home, ".synlynk")
         os.makedirs(synlynk_dir, exist_ok=True)
-        entry = f"@reboot {python_path} -m synlynk daemon start"
+        entry = f"@reboot SYNLYNK_AUTONOMOUS=1 {python_path} -m synlynk daemon start"
         result = subprocess.run(["crontab", "-l"], capture_output=True, text=True)
         current = result.stdout if result.returncode == 0 else ""
         if entry not in current:
