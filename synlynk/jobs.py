@@ -36,6 +36,7 @@ _RESET = "[0m"
 _HARNESS_INTERNAL_TIMEOUT_RETRY_CAP = 2
 _GH_WRITE_VERIFICATION_RETRY_CAP = 3
 _UNPUSHED_BRANCH_VERIFICATION_RETRY_CAP = 3
+_TERMINAL_EVIDENCE_RANK = {"unknown": 0, "local": 1, "github": 2}
 _AUTOCOMMIT_EXCLUDED_PATHS = (
     "GEMINI.md",
     "CLAUDE.md",
@@ -2906,8 +2907,14 @@ _UNSET_TERMINAL_CLAIM = object()
 def _persist_daemon_job_terminal(
     conn, job_id: str, status: str, exit_code: Optional[int], completed_at: str,
     *, only_running: bool = False, terminal_claim_token=_UNSET_TERMINAL_CLAIM,
+    evidence_strength: str = "local",
 ) -> bool:
-    """Persist a daemon job's terminal state with the requested row scope."""
+    """Persist a terminal state, allowing stronger evidence to revise a verdict.
+
+    Legacy callers retain their running-row-only behavior through ``only_running``.
+    Reconciliation callers may pass ``only_running=False`` so a later GitHub
+    observation can replace a weaker terminal heuristic, but never the reverse.
+    """
     predicates = ["job_id=?"]
     params = [job_id]
     if only_running:
@@ -2922,10 +2929,43 @@ def _persist_daemon_job_terminal(
             predicates.append("terminal_claim_token=?")
             params.append(terminal_claim_token)
     where_clause = "WHERE " + " AND ".join(predicates)
-    cursor = conn.execute(
-        "UPDATE daemon_jobs SET status=?, exit_code=?, completed_at=? " + where_clause,
-        (status, exit_code, completed_at, *params),
-    )
+    try:
+        row = conn.execute(
+            "SELECT status, COALESCE(terminal_evidence_strength, 'unknown') "
+            "FROM daemon_jobs WHERE job_id=?", (job_id,)
+        ).fetchone()
+    except sqlite3.OperationalError:
+        row = conn.execute("SELECT status FROM daemon_jobs WHERE job_id=?", (job_id,)).fetchone()
+        row = (row[0], "unknown") if row else None
+    if not row:
+        return False
+    old_status, old_strength = row
+    if not only_running and old_status not in ("running", "queued", STATUS_PENDING_VERIFICATION):
+        old_rank = _TERMINAL_EVIDENCE_RANK.get(old_strength, 0)
+        new_rank = _TERMINAL_EVIDENCE_RANK.get(evidence_strength, 0)
+        if old_status == status:
+            return False
+        # ``failed_verification`` is the explicit outcome of exhausting an
+        # unknown window. It may replace an older unlabelled unknown verdict,
+        # but never a local or GitHub-backed verdict.
+        if new_rank <= old_rank and not (
+            status == STATUS_FAILED_VERIFICATION and old_rank == 0
+        ):
+            return False
+    try:
+        update_sql = (
+            "UPDATE daemon_jobs SET status=?, exit_code=?, completed_at=?, "
+            "terminal_evidence_strength=? " + where_clause
+        )
+        cursor = conn.execute(
+            update_sql,
+            (status, exit_code, completed_at, evidence_strength, *params),
+        )
+    except sqlite3.OperationalError:
+        cursor = conn.execute(
+            "UPDATE daemon_jobs SET status=?, exit_code=?, completed_at=? " + where_clause,
+            (status, exit_code, completed_at, *params),
+        )
     return (cursor.rowcount or 0) > 0
 
 
@@ -2939,6 +2979,7 @@ def _settle_daemon_job_terminal(
     only_running: bool = True,
     terminal_claim_token=_UNSET_TERMINAL_CLAIM,
     release_reservation: bool = False,
+    evidence_strength: str = "local",
 ) -> bool:
     """Persist and commit a daemon terminal transition atomically for callers."""
     # PR1 shared decision entry point.  The compatibility status projection is
@@ -2972,6 +3013,7 @@ def _settle_daemon_job_terminal(
         completed_at,
         only_running=only_running,
         terminal_claim_token=terminal_claim_token,
+        evidence_strength=evidence_strength,
     )
     conn.commit()
     if settled:
@@ -3711,15 +3753,17 @@ def _daemon_job_worktree_path(job_id: str, log_path: Optional[str] = None) -> Op
 
 
 def _reconcile_terminal_jobs_json(conn) -> int:
-    """Apply terminal flat-file events to still-running daemon rows.
+    """Apply terminal flat-file events with monotonic evidence strength.
 
     ``jobs.json`` is a legacy event/projection store, while ``daemon_jobs`` is
     the store used by ``synlynk jobs``.  A process can finish after writing the
     flat-file record but before the daemon updates SQLite, leaving the latter
     permanently running because normal daemon reconciliation only scans running
     processes.  Treat terminal flat-file records as idempotent terminal events:
-    update only rows still marked running, and never overwrite an already
-    terminal SQLite result.
+    Older versions only updated running rows. That absorbed a weak local
+    verdict forever when a later GitHub verification became available. A
+    terminal event is now revisable when its evidence is stronger, while a
+    same-strength or weaker verdict remains untouched.
     """
     terminal_statuses = {
         "completed": "done",
@@ -3741,13 +3785,14 @@ def _reconcile_terminal_jobs_json(conn) -> int:
     repaired = 0
     for job_id, (job, status) in terminal_jobs.items():
         row = conn.execute(
-            "SELECT requires_gh_write, gh_write_target, gh_write_author, gh_write_expect "
-            "FROM daemon_jobs WHERE job_id=? AND status='running'",
+            "SELECT status, requires_gh_write, gh_write_target, gh_write_author, gh_write_expect "
+            "FROM daemon_jobs WHERE job_id=?",
             (job_id,),
         ).fetchone()
         if not row:
             continue
-        requires_gh_write, target, author, expect = row
+        old_status, requires_gh_write, target, author, expect = row
+        evidence_strength = "local"
         if requires_gh_write:
             status, verified = _verify_daemon_terminal_status(
                 conn,
@@ -3760,12 +3805,29 @@ def _reconcile_terminal_jobs_json(conn) -> int:
                 expect or job.get("gh_write_expect"),
                 worktree_branch=job.get("worktree_branch"),
             )
+            if verified == "true" or verified == "false":
+                evidence_strength = "github"
+            elif verified == "unknown":
+                evidence_strength = "unknown"
+                if _gh_write_verification_retry_pending(conn, job_id, True, verified):
+                    if old_status in (STATUS_RUNNING, "queued", STATUS_PENDING_VERIFICATION):
+                        try:
+                            conn.execute(
+                                "UPDATE daemon_jobs SET status=?, completed_at=? WHERE job_id=?",
+                                (STATUS_PENDING_VERIFICATION, job.get("ended_at") or time.strftime("%Y-%m-%dT%H:%M:%S"), job_id),
+                            )
+                            conn.commit()
+                        except sqlite3.OperationalError:
+                            pass
+                    continue
+                status = STATUS_FAILED_VERIFICATION
         else:
             verified = None
         exit_code = job.get("exit_code")
         completed_at = job.get("ended_at") or time.strftime("%Y-%m-%dT%H:%M:%S")
         if _settle_daemon_job_terminal(
-            conn, job_id, status, exit_code, completed_at, only_running=True
+            conn, job_id, status, exit_code, completed_at, only_running=False,
+            evidence_strength=evidence_strength,
         ):
             repaired += 1
             emit_event(
@@ -4033,6 +4095,16 @@ def _gh_write_verification_retry_pending(
     return int(attempts) < _GH_WRITE_VERIFICATION_RETRY_CAP
 
 
+def _terminal_status_after_verification(
+    status: str, exit_code: Optional[int], verified_str: Optional[str],
+    requires_gh_write: bool = True,
+) -> tuple:
+    """Use an explicit terminal label after the bounded unknown window."""
+    if requires_gh_write and verified_str == "unknown":
+        return STATUS_FAILED_VERIFICATION, exit_code if exit_code not in (None, 0) else 1
+    return status, exit_code
+
+
 def _unpushed_branch_retry_pending(conn, job_id: str, pre_guard_status: str, post_guard_status: str) -> bool:
     """Return whether an inconclusive unpushed-branch check should defer terminal settlement."""
     if post_guard_status != pre_guard_status:
@@ -4157,6 +4229,22 @@ def _verify_daemon_terminal_status(
             if status in ("done", "failed_unverified"):
                 status = "succeeded_gh_write_failed"
             return status, verified_str
+    if status == STATUS_UNPUSHED_BRANCH and worktree_branch:
+        branch_evidence = {}
+        branch_verified = github_branch_effect_verified(
+            worktree_branch, since=started_at, evidence=branch_evidence
+        )
+        if branch_verified is True:
+            try:
+                conn.execute(
+                    "UPDATE daemon_jobs SET gh_write_verified='true', gh_write_evidence=? WHERE job_id=?",
+                    (json.dumps(branch_evidence) if branch_evidence else None, job_id),
+                )
+            except sqlite3.OperationalError:
+                pass
+            return "done", "true"
+        if branch_verified is None:
+            return status, "unknown"
     if status == STATUS_UNPUSHED_BRANCH:
         try:
             conn.execute(
@@ -4319,6 +4407,7 @@ def _reconcile_daemon_jobs() -> None:
         "worktree_branch": "TEXT",
         "pid_identity": "TEXT",
         "gh_write_verification_attempts": "INTEGER NOT NULL DEFAULT 0",
+        "terminal_evidence_strength": "TEXT NOT NULL DEFAULT 'unknown'",
     })
     # Repair the split-brain window before selecting running rows.  This is
     # deliberately conditional/idempotent so a late daemon update cannot be
@@ -4483,8 +4572,12 @@ def _reconcile_daemon_jobs() -> None:
                     ):
                         conn.commit()
                         continue
+                    status, exit_code = _terminal_status_after_verification(
+                        status, exit_code, gh_write_verified_str, bool(requires_gh_write)
+                    )
                     settled = _settle_daemon_job_terminal(
-                        conn, job_id, status, exit_code, now, release_reservation=True
+                        conn, job_id, status, exit_code, now, release_reservation=True,
+                        evidence_strength=("github" if gh_write_verified_str in ("true", "false") else "unknown"),
                     )
                     if not settled:
                         # Another actor already committed a terminal status.
@@ -4596,6 +4689,9 @@ def _reconcile_daemon_jobs() -> None:
                                 conn, job_id, terminal_claim_token
                             )
                             continue
+                        zombie_status, zombie_exit_code = _terminal_status_after_verification(
+                            zombie_status, zombie_exit_code, gh_write_verified_str, bool(requires_gh_write)
+                        )
                         if (
                             requires_gh_write and gh_write_verified_str == "true"
                             and zombie_status == "timed_out"
@@ -4612,6 +4708,7 @@ def _reconcile_daemon_jobs() -> None:
                         settled = _settle_daemon_job_terminal(
                             conn, job_id, zombie_status, zombie_exit_code, now,
                             only_running=True, terminal_claim_token=terminal_claim_token,
+                            evidence_strength=("github" if gh_write_verified_str in ("true", "false") else "unknown"),
                         )
                         if settled and zombie_status == "killed_zombie":
                             _reap_zombie_worktree(job_id, log_path, conn=conn)
@@ -4667,6 +4764,9 @@ def _reconcile_daemon_jobs() -> None:
                 ):
                     conn.commit()
                     continue
+                status, exit_code = _terminal_status_after_verification(
+                    status, exit_code, gh_write_verified_str, bool(requires_gh_write)
+                )
                 if (
                     requires_gh_write and gh_write_verified_str == "true"
                     and status == "timed_out" and not exit_marker_present
@@ -4726,7 +4826,8 @@ def _reconcile_daemon_jobs() -> None:
                 # second daemon pass.  Do not let a stale inspection overwrite
                 # a terminal state that another actor already committed.
                 settled = _settle_daemon_job_terminal(
-                    conn, job_id, status, exit_code, now, release_reservation=True
+                    conn, job_id, status, exit_code, now, release_reservation=True,
+                    evidence_strength=("github" if gh_write_verified_str in ("true", "false") else "local"),
                 )
                 if not settled:
                     # Another reconciler/sentinel won the terminal-state
