@@ -3794,6 +3794,25 @@ def _reconcile_terminal_jobs_json(conn) -> int:
             continue
         old_status, requires_gh_write, target, author, expect, worktree_path, worktree_branch = row
         evidence_strength = "local"
+        preferred_path = worktree_path or _daemon_job_worktree_path(job_id, job.get("log_path"))
+        preferred_branch = worktree_branch or job.get("worktree_branch")
+        if old_status in (STATUS_RUNNING, "queued", STATUS_PENDING_VERIFICATION):
+            preferred_state = None
+            if preferred_path:
+                try:
+                    preferred_state = _worktree_git_state_inspector()(
+                        preferred_path, preferred_branch, job.get("started_at")
+                    )
+                except Exception:
+                    preferred_state = None
+            pre_guard_status = status
+            status = _guard_unpushed_branch(
+                conn, job_id, status, preferred_path, preferred_branch, preferred_state,
+                job.get("started_at"),
+            )
+            if _unpushed_branch_retry_pending(conn, job_id, pre_guard_status, status):
+                conn.commit()
+                continue
         if requires_gh_write:
             status, verified = _verify_daemon_terminal_status(
                 conn,
