@@ -266,6 +266,35 @@ HARNESS_CAPABILITY_BASELINES = {
         "env_passthrough": ["OPENAI_API_KEY"],
         "strengths": ["zero-cost inference", "on-device", "granular tasks"],
     },
+    "openrouter": {
+        "cli": "synlynk",
+        "can_gh_write": False,
+        # "gateway dispatch" is the real subcommand (synlynk/cli.py:598-603).
+        # --model is appended generically by dispatch_agent() when a model
+        # is passed; --prompt is appended by the prompt_flag/prompt_via_arg
+        # mechanism below (dispatch.py:4280-4289), carrying the task text.
+        "non_interactive_flags": ["gateway", "dispatch"],
+        "prompt_flag": "--prompt",
+        "prompt_via_arg": True,
+        "dispatch_flags": {
+            "valid_flags": ["--model", "--config"],
+            "invalid_flags": ["--dangerously-skip-permissions", "--always-approve", "--non-interactive"],
+            "required_flags": [],
+        },
+        "headless_contract": {
+            "requires_pty": False,
+            "stdout_flush_method": "native",
+            "env_vars_required": [],
+            "non_interactive_flag": "--prompt",
+        },
+        "network_deps": {
+            "required_endpoints": ["openrouter.ai:443"],
+            "optional_endpoints": [],
+        },
+        "roles": ["builder"],
+        "env_passthrough": ["OPENROUTER_API_KEY"],
+        "strengths": ["model-agnostic HTTP dispatch", "BYOK provider aggregation", "no vendor CLI required"],
+    },
     "muse": {
         "cli": "muse",
         "can_gh_write": True,
