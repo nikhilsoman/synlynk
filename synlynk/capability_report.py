@@ -6,6 +6,7 @@ docs/superpowers/specs/2026-10-11-synlynk-capability-report-design.md (gh:#1993)
 from __future__ import annotations
 
 from collections import defaultdict
+import statistics
 
 DISCIPLINE_TO_TASK_TYPE = {
     "testing": "test",
@@ -77,3 +78,21 @@ def build_buckets(conn):
             bucket["costs"].append(cost)
         bucket["story_ids"].add(story_id)
     return dict(buckets), skipped_no_mapping
+
+
+def summarize_buckets(buckets: dict, min_sample_size: int) -> dict:
+    """Return sample counts, gate status, and metric medians per bucket."""
+    summary = {}
+    for key, data in buckets.items():
+        n = len(data["story_ids"])
+        summary[key] = {
+            "n": n,
+            "measured": n >= min_sample_size,
+            "median_pr_review_cycles": (
+                statistics.median(data["cycles"]) if data["cycles"] else None
+            ),
+            "median_total_cost_usd": (
+                statistics.median(data["costs"]) if data["costs"] else None
+            ),
+        }
+    return summary
