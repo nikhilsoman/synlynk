@@ -261,11 +261,35 @@ def _extract_agy_structured(output_text: str) -> Optional[_TokenCounts]:
 
 
 def _extract_muse_structured(output_text: str) -> Optional[_TokenCounts]:
-    """Parses muse run --output-format json output (single JSON or event stream).
+    """Parse Muse ``exec --json`` JSONL output (single JSON or event stream).
 
-    Extracts usage object with input_tokens, output_tokens, and cached_tokens.
+    Muse wraps model events in an envelope whose usage object lives below
+    ``payload`` (for example, ``payload_type == "model.completed"``).  Keep
+    walking each decoded event so this parser follows the raw CLI stream
+    rather than synlynk's internal session-event wrapper.  The direct usage
+    and legacy event shapes remain supported for older Muse builds.
     """
     usage = None
+
+    def _usage_candidates(value):
+        if isinstance(value, dict):
+            candidate = value.get("usage")
+            if isinstance(candidate, dict):
+                yield candidate
+            # Some Muse terminal records call this field completed_usage.
+            candidate = value.get("completed_usage")
+            if isinstance(candidate, dict):
+                yield candidate
+            for child in value.values():
+                yield from _usage_candidates(child)
+        elif isinstance(value, list):
+            for child in value:
+                yield from _usage_candidates(child)
+
+    usage_keys = {
+        "input_tokens", "output_tokens", "prompt_tokens", "completion_tokens",
+        "cached_tokens", "cache_read_tokens", "cached_input_tokens",
+    }
     for line in output_text.splitlines():
         line = line.strip()
         if not line:
@@ -275,12 +299,9 @@ def _extract_muse_structured(output_text: str) -> Optional[_TokenCounts]:
         except (ValueError, TypeError):
             continue
         if isinstance(event, dict):
-            if "usage" in event and isinstance(event["usage"], dict):
-                usage = event["usage"]
-            elif event.get("type") in ("result", "turn.completed", "response.done", "turn_complete"):
-                cand = event.get("usage")
-                if isinstance(cand, dict):
-                    usage = cand
+            for candidate in _usage_candidates(event):
+                if usage_keys.intersection(candidate):
+                    usage = candidate
     if usage is None:
         return None
     try:
