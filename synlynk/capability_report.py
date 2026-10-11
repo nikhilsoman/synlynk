@@ -96,3 +96,43 @@ def summarize_buckets(buckets: dict, min_sample_size: int) -> dict:
             ),
         }
     return summary
+
+
+def propose_diff(summary: dict, current_task_allocation: dict, min_sample_size: int) -> list:
+    """Return harness swaps where a measured candidate beats both metrics."""
+    by_task_type = defaultdict(dict)
+    for (harness, task_type), entry in summary.items():
+        by_task_type[task_type][harness] = entry
+
+    proposals = []
+    for task_type, current in current_task_allocation.items():
+        current_harness = current.get("harness")
+        candidates = by_task_type.get(task_type, {})
+        current_entry = candidates.get(current_harness)
+        if current_entry is None or not current_entry["measured"]:
+            continue
+        for harness, entry in candidates.items():
+            if harness == current_harness or not entry["measured"]:
+                continue
+            cycles_ok = (
+                entry["median_pr_review_cycles"] is not None
+                and current_entry["median_pr_review_cycles"] is not None
+                and entry["median_pr_review_cycles"]
+                < current_entry["median_pr_review_cycles"]
+            )
+            cost_ok = (
+                entry["median_total_cost_usd"] is not None
+                and current_entry["median_total_cost_usd"] is not None
+                and entry["median_total_cost_usd"] < current_entry["median_total_cost_usd"]
+            )
+            if cycles_ok and cost_ok:
+                proposals.append(
+                    {
+                        "task_type": task_type,
+                        "current_harness": current_harness,
+                        "current": current_entry,
+                        "proposed_harness": harness,
+                        "proposed": entry,
+                    }
+                )
+    return proposals

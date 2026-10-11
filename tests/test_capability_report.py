@@ -8,8 +8,13 @@ from synlynk.capability_report import (
     _dedupe_cost_rows,
     _fetch_rows,
     build_buckets,
+    propose_diff,
     summarize_buckets,
 )
+
+CURRENT_TASK_ALLOCATION = {
+    "implement": {"harness": "claude", "fallback": []},
+}
 
 
 def _make_conn():
@@ -150,3 +155,81 @@ def test_summarize_buckets_empty_metric_lists_yield_none_median():
     entry = summary[("codex", "implement")]
     assert entry["median_pr_review_cycles"] is None
     assert entry["median_total_cost_usd"] is None
+
+
+def test_propose_diff_promotes_strictly_better_harness():
+    summary = {
+        ("claude", "implement"): {
+            "n": 12,
+            "measured": True,
+            "median_pr_review_cycles": 2.5,
+            "median_total_cost_usd": 3.10,
+        },
+        ("codex", "implement"): {
+            "n": 18,
+            "measured": True,
+            "median_pr_review_cycles": 1.5,
+            "median_total_cost_usd": 1.80,
+        },
+    }
+    proposals = propose_diff(summary, CURRENT_TASK_ALLOCATION, min_sample_size=5)
+    assert len(proposals) == 1
+    assert proposals[0]["proposed_harness"] == "codex"
+    assert proposals[0]["current_harness"] == "claude"
+
+
+def test_propose_diff_no_change_on_split_result():
+    summary = {
+        ("claude", "implement"): {
+            "n": 12,
+            "measured": True,
+            "median_pr_review_cycles": 1.0,
+            "median_total_cost_usd": 5.00,
+        },
+        ("codex", "implement"): {
+            "n": 18,
+            "measured": True,
+            "median_pr_review_cycles": 2.0,
+            "median_total_cost_usd": 1.00,
+        },
+    }
+    proposals = propose_diff(summary, CURRENT_TASK_ALLOCATION, min_sample_size=5)
+    assert proposals == []
+
+
+def test_propose_diff_skips_unmeasured_candidate():
+    summary = {
+        ("claude", "implement"): {
+            "n": 12,
+            "measured": True,
+            "median_pr_review_cycles": 2.5,
+            "median_total_cost_usd": 3.10,
+        },
+        ("grok", "implement"): {
+            "n": 2,
+            "measured": False,
+            "median_pr_review_cycles": 0.5,
+            "median_total_cost_usd": 0.50,
+        },
+    }
+    proposals = propose_diff(summary, CURRENT_TASK_ALLOCATION, min_sample_size=5)
+    assert proposals == []
+
+
+def test_propose_diff_skips_unmeasured_current():
+    summary = {
+        ("claude", "implement"): {
+            "n": 2,
+            "measured": False,
+            "median_pr_review_cycles": 2.5,
+            "median_total_cost_usd": 3.10,
+        },
+        ("codex", "implement"): {
+            "n": 18,
+            "measured": True,
+            "median_pr_review_cycles": 1.5,
+            "median_total_cost_usd": 1.80,
+        },
+    }
+    proposals = propose_diff(summary, CURRENT_TASK_ALLOCATION, min_sample_size=5)
+    assert proposals == []
