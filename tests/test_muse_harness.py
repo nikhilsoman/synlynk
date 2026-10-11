@@ -7,7 +7,12 @@ from unittest.mock import MagicMock, patch
 import pytest
 from synlynk._constants import HARNESS_CAPABILITY_BASELINES, NEXT_GEN_FLEET, EXTENDED_FLEET
 from synlynk.costs import _extract_muse_structured, extract_tokens
-from synlynk.dispatch import _format_prompt_for_agent, dispatch_agent
+from synlynk.dispatch import (
+    _dispatch_flags_for_agent,
+    _format_prompt_for_agent,
+    _permissions_to_flags,
+    dispatch_agent,
+)
 from synlynk.probe import _probe_agent, _run_tc0
 
 
@@ -50,6 +55,14 @@ def test_muse_baseline_schema_tc0():
 
     assert "muse" in NEXT_GEN_FLEET
     assert "muse" in EXTENDED_FLEET
+
+
+def test_muse_adapter_permission_translation_does_not_invent_unsupported_flags():
+    """Muse permissions must not add flags outside its real CLI contract."""
+    assert _dispatch_flags_for_agent("muse") == ["--json", "--approval-mode"]
+    assert _permissions_to_flags(
+        "muse", ["read:*", "write:src/"], read_only=False
+    ) == []
 
 
 def test_muse_dispatch_flags_and_command_construction(tmp_path, monkeypatch):
