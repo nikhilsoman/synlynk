@@ -130,6 +130,24 @@ def test_unknown_contract_is_explicit_and_never_green():
     assert result.reason_code == "unknown_contract"
 
 
+def test_job_2158_verified_remote_effect_overrides_unknown_contract():
+    """Replay job-d7090bf8: confirmed GitHub work must not be shadowed by the legacy contract."""
+    result = decide_job_outcome(
+        legacy_unknown_contract("job-d7090bf8"),
+        [{
+            "evidence_id": "gh-2158-merge",
+            "kind": "remote_effect",
+            "result": "true",
+            "causal_match": True,
+        }],
+    )
+
+    assert result == CompletionDecision(
+        "completed", "verified", "contract_effect_verified", "none",
+        evidence_ids=("gh-2158-merge",),
+    )
+
+
 def test_duplicate_evidence_is_idempotent_and_correction_is_revision():
     conn = db()
     contract = review_contract()
