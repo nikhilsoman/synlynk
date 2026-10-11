@@ -392,3 +392,42 @@ def test_cost_check_wins_over_log_size_when_both_trigger(tmp_path, monkeypatch):
     assert res.tripped is True
     assert "cost" in res.reason.lower()
     assert "log size" not in res.reason.lower()
+
+
+def test_zero_file_check_still_fires_below_log_size_threshold(tmp_path, monkeypatch):
+    """Regression guard: inserting the log-size elif between the token check
+    and the zero-file check must not break the existing zero-file path when
+    the log itself is small but token count crosses zero_file_threshold."""
+    log_file = tmp_path / "zero_file_small_log.log"
+    log_file.write_text("Input tokens: 600000\nOutput tokens: 100\n")
+    assert log_file.stat().st_size < 10 * 1024 * 1024
+
+    monkeypatch.setattr(os, "kill", lambda pid, sig: None)
+
+    job = {
+        "id": "job-zero-file-small-log",
+        "agent": "codex",
+        "pid": 99004,
+        "log_file": str(log_file),
+        "worktree_path": str(tmp_path),
+        "status": "running",
+    }
+    config = {
+        "circuit_breaker": {
+            "max_job_tokens": 5_000_000,
+            "max_job_cost_usd": 100.0,
+            "zero_file_token_threshold": 500_000,
+            "max_log_size_bytes": 10 * 1024 * 1024,
+        }
+    }
+
+    res = evaluate_job_circuit_breaker(
+        job,
+        config=config,
+        sentinel_path=str(tmp_path / "sentinel.md"),
+        skip_identity_check_for_test=True,
+    )
+
+    assert res.tripped is True
+    assert job["status"] == STATUS_CIRCUIT_BREAKER_TRIPPED
+    assert "zero-file" in res.reason.lower()
