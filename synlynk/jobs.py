@@ -3785,14 +3785,48 @@ def _reconcile_terminal_jobs_json(conn) -> int:
     repaired = 0
     for job_id, (job, status) in terminal_jobs.items():
         row = conn.execute(
-            "SELECT status, requires_gh_write, gh_write_target, gh_write_author, gh_write_expect "
+            "SELECT status, requires_gh_write, gh_write_target, gh_write_author, gh_write_expect, "
+            "worktree_path, worktree_branch "
             "FROM daemon_jobs WHERE job_id=?",
             (job_id,),
         ).fetchone()
         if not row:
             continue
-        old_status, requires_gh_write, target, author, expect = row
+        old_status, requires_gh_write, target, author, expect, worktree_path, worktree_branch = row
         evidence_strength = "local"
+        preferred_path = worktree_path or _daemon_job_worktree_path(job_id, job.get("log_path"))
+        preferred_branch = worktree_branch or job.get("worktree_branch")
+        if old_status in (STATUS_RUNNING, "queued", STATUS_PENDING_VERIFICATION):
+            preferred_state = None
+            if preferred_path:
+                try:
+                    preferred_state = _worktree_git_state_inspector()(
+                        preferred_path, preferred_branch, job.get("started_at")
+                    )
+                except Exception:
+                    preferred_state = None
+            pre_guard_status = status
+            status = _guard_unpushed_branch(
+                conn, job_id, status, preferred_path, preferred_branch, preferred_state,
+                job.get("started_at"),
+            )
+            if _unpushed_branch_retry_pending(conn, job_id, pre_guard_status, status):
+                confirmed = False
+                if preferred_branch:
+                    confirmed = github_branch_effect_verified(
+                        preferred_branch, since=job.get("started_at")
+                    ) is True
+                if confirmed:
+                    try:
+                        conn.execute(
+                            "UPDATE daemon_jobs SET unpushed_branch_check_attempts=0 WHERE job_id=?",
+                            (job_id,),
+                        )
+                    except sqlite3.OperationalError:
+                        pass
+                else:
+                    conn.commit()
+                    continue
         if requires_gh_write:
             status, verified = _verify_daemon_terminal_status(
                 conn,
@@ -3803,27 +3837,22 @@ def _reconcile_terminal_jobs_json(conn) -> int:
                 job.get("started_at"),
                 author or job.get("gh_write_author"),
                 expect or job.get("gh_write_expect"),
-                worktree_branch=job.get("worktree_branch"),
+                worktree_branch=preferred_branch,
             )
             if verified == "true" or verified == "false":
                 evidence_strength = "github"
             elif verified == "unknown":
                 evidence_strength = "unknown"
                 if _gh_write_verification_retry_pending(conn, job_id, True, verified):
-                    if old_status in (STATUS_RUNNING, "queued", STATUS_PENDING_VERIFICATION):
-                        try:
-                            conn.execute(
-                                "UPDATE daemon_jobs SET status=?, completed_at=? WHERE job_id=?",
-                                (STATUS_PENDING_VERIFICATION, job.get("ended_at") or time.strftime("%Y-%m-%dT%H:%M:%S"), job_id),
-                            )
-                            conn.commit()
-                        except sqlite3.OperationalError:
-                            pass
+                    conn.commit()
                     continue
                 status = STATUS_FAILED_VERIFICATION
         else:
             verified = None
         exit_code = job.get("exit_code")
+        status, exit_code = _terminal_status_after_verification(
+            status, exit_code, verified, bool(requires_gh_write)
+        )
         completed_at = job.get("ended_at") or time.strftime("%Y-%m-%dT%H:%M:%S")
         if _settle_daemon_job_terminal(
             conn, job_id, status, exit_code, completed_at, only_running=False,
