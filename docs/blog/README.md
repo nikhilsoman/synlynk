@@ -359,6 +359,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [296](./296-pr2153-backfill-3-cost-entries-dropped-by-regen.md) | PR #2153 — backfill 3 cost entries dropped by regeneration bug | [#2153](https://github.com/nikhilsoman/synlynk/pull/2153) | 2026-10-11 |
 | [297](./297-pr2217-add-log-size-runaway-circuit-breaker-net.md) | PR #2217 — add log-size runaway circuit breaker net (gh:#1937) | [#2217](https://github.com/nikhilsoman/synlynk/pull/2217) | 2026-10-11 |
 | [298](./298-pr2215-avoid-zero-file-kill-during-branch-trans.md) | PR #2215 — avoid zero-file kill during branch transition | [#2215](https://github.com/nikhilsoman/synlynk/pull/2215) | 2026-10-11 |
+| [299](./299-pr2222-migrate-github-app-auth-governs-engine-c.md) | PR #2222 — migrate github_app_auth/governs_engine config readers to workspace.json (gh:#2147) | [#2222](https://github.com/nikhilsoman/synlynk/pull/2222) | 2026-10-11 |
 
 ## Per-PR Post Template
 
