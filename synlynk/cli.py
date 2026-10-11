@@ -1716,6 +1716,20 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
         dest="cost_cap",
         help="Override the configured cost cap (USD) for this sweep run",
     )
+    report_parser = capability_sub.add_parser(
+        "report",
+        help=(
+            "Generate a task_allocation routing proposal from capability_ratings/cost_entries. "
+            "pr_review_cycles is a review-round count and is not filtered by quality_verified; "
+            "quality_verified filtering applies only to quality-score metrics."
+        ),
+    )
+    report_parser.add_argument(
+        "--json",
+        action="store_true",
+        dest="as_json",
+        help="Output the proposal as JSON instead of text",
+    )
 
     instructions_parser = subparsers.add_parser(
         "instructions", help="Manage synlynk instruction files across AI tools"
@@ -2880,6 +2894,9 @@ def main(argv=None) -> None:
     elif args.command == "capability":
         if args.capability_action == "sweep":
             cmd_capability_sweep(cost_cap_override=getattr(args, "cost_cap", None))
+        elif args.capability_action == "report":
+            from synlynk.capability_report import cmd_capability_report
+            cmd_capability_report(as_json=getattr(args, "as_json", False))
     elif args.command == "instructions":
         action = getattr(args, "instructions_action", None)
         if action == "status" or action is None:
