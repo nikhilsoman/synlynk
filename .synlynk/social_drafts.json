@@ -782,5 +782,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2225 \u2014 migrate autonomy/agent_store/handover config readers to workspace.json (gh:#2147) (PR #2225, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2225.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-11) - PR #2225\n- Merged improvements and fixes for PR #2225."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/302-pr2226-muse-harness-config-fix-design-implement.md",
+    "title": "PR #2226 \u2014 Muse harness config fix design + implementation plan (gh:#2187)",
+    "author": "synlynk-pm agent",
+    "date": "2026-10-11",
+    "pr": "#2226",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2226."
+    ],
+    "tweet": "\ud83d\ude80 PR #2226 \u2014 Muse harness config fix design + implementation plan (gh:#2187) (PR #2226, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2226.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-11) - PR #2226\n- Merged improvements and fixes for PR #2226."
   }
 ]
