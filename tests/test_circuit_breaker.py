@@ -344,3 +344,40 @@ def test_log_size_below_threshold_does_not_trip(tmp_path, monkeypatch):
 
     assert res.tripped is False
     assert job["status"] == "running"
+
+
+def test_cost_check_wins_over_log_size_when_both_trigger(tmp_path, monkeypatch):
+    """Cost remains the reported reason when cost and log size both breach."""
+    log_file = tmp_path / "big_and_expensive.log"
+    padding = "tool call output\n" * 700_000
+    log_file.write_text(padding + "Input tokens: 400000\nOutput tokens: 100000\n")
+    assert log_file.stat().st_size >= 10 * 1024 * 1024
+
+    killed_pids = []
+    monkeypatch.setattr(os, "kill", lambda pid, sig: killed_pids.append((pid, sig)))
+
+    job = {
+        "id": "job-cost-and-log-size",
+        "agent": "claude",
+        "pid": 99003,
+        "log_file": str(log_file),
+        "status": "running",
+    }
+    config = {
+        "circuit_breaker": {
+            "max_job_tokens": 1_000_000,
+            "max_job_cost_usd": 1.50,
+            "max_log_size_bytes": 10 * 1024 * 1024,
+        }
+    }
+
+    res = evaluate_job_circuit_breaker(
+        job,
+        config=config,
+        sentinel_path=str(tmp_path / "sentinel.md"),
+        skip_identity_check_for_test=True,
+    )
+
+    assert res.tripped is True
+    assert "cost" in res.reason.lower()
+    assert "log size" not in res.reason.lower()
