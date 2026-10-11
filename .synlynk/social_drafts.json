@@ -414,5 +414,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2190 \u2014 add real muse-spark-1.3 model catalog entry (PR #2190, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2190.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-11) - PR #2190\n- Merged improvements and fixes for PR #2190."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/280-pr2156-archive-superseded-regen-write-through-r.md",
+    "title": "PR #2156 \u2014 archive superseded regen write-through reconciliation spec",
+    "author": "nikhilsoman",
+    "date": "2026-10-11",
+    "pr": "#2156",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2156."
+    ],
+    "tweet": "\ud83d\ude80 PR #2156 \u2014 archive superseded regen write-through reconciliation spec (PR #2156, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2156.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-11) - PR #2156\n- Merged improvements and fixes for PR #2156."
   }
 ]

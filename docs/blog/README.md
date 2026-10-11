@@ -339,6 +339,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [277](./277-pr1900-bump-markdown-it-from-14-2-0-to-14-3-2-i.md) | PR #1900 — bump markdown-it from 14.2.0 to 14.3.2 in /website | [#1900](https://github.com/nikhilsoman/synlynk/pull/1900) | 2026-10-11 |
 | [278](./278-pr2176-bump-liquidjs-from-10-27-1-to-10-30-0-in.md) | PR #2176 — bump liquidjs from 10.27.1 to 10.30.0 in /website | [#2176](https://github.com/nikhilsoman/synlynk/pull/2176) | 2026-10-11 |
 | [279](./279-pr2190-add-real-muse-spark-1-3-model-catalog-en.md) | PR #2190 — add real muse-spark-1.3 model catalog entry | [#2190](https://github.com/nikhilsoman/synlynk/pull/2190) | 2026-10-11 |
+| [280](./280-pr2156-archive-superseded-regen-write-through-r.md) | PR #2156 — archive superseded regen write-through reconciliation spec | [#2156](https://github.com/nikhilsoman/synlynk/pull/2156) | 2026-10-11 |
 
 ## Per-PR Post Template
 
