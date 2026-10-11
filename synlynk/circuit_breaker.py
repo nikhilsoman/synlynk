@@ -186,11 +186,23 @@ def evaluate_job_circuit_breaker(
     max_tokens, max_cost, zero_file_threshold, max_log_size_bytes = _resolve_circuit_breaker_limits(job, config)
 
     # 5. Check triggers
+    log_size_bytes = 0
+    if log_file and os.path.exists(log_file):
+        try:
+            log_size_bytes = os.path.getsize(log_file)
+        except OSError:
+            log_size_bytes = 0
+
     reason = None
     if cost_usd >= max_cost:
         reason = f"Cost limit breached: ${cost_usd:.2f} >= ${max_cost:.2f}"
     elif total_tokens >= max_tokens:
         reason = f"Token limit breached: {total_tokens:,} >= {max_tokens:,} tokens"
+    elif log_size_bytes >= max_log_size_bytes:
+        reason = (
+            f"Log size runaway: {log_size_bytes:,} bytes >= {max_log_size_bytes:,} bytes "
+            f"(extracted tokens: {total_tokens:,} — likely mid-turn token-extraction blind spot)"
+        )
     elif total_tokens >= zero_file_threshold:
         files_touched_list = _worktree_files_touched(worktree_path) if worktree_path else []
         files_touched = len(files_touched_list)
