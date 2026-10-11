@@ -1,0 +1,351 @@
+import json as _json
+import hashlib
+import os
+import sqlite3
+import shutil
+import subprocess
+import sys
+
+import pytest
+
+from synlynk.capability_report import (
+    DISCIPLINE_TO_TASK_TYPE,
+    _column_exists,
+    _dedupe_cost_rows,
+    _fetch_rows,
+    build_buckets,
+    format_text_report,
+    propose_diff,
+    summarize_buckets,
+)
+
+CURRENT_TASK_ALLOCATION = {
+    "implement": {"harness": "claude", "fallback": []},
+}
+
+CANONICAL_STATE_DB = os.path.expanduser("~/.synlynk/workspaces/synlynk/state.db")
+
+
+def _make_conn():
+    conn = sqlite3.connect(":memory:")
+    conn.execute(
+        """
+        CREATE TABLE capability_ratings (
+            story_id TEXT, agent TEXT, discipline TEXT,
+            pr_review_cycles INTEGER, quality REAL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE cost_entries (
+            story_id TEXT, total_cost_usd REAL, pr_number INTEGER, job_id TEXT
+        )
+        """
+    )
+    return conn
+
+
+def test_column_exists_true_and_false():
+    conn = _make_conn()
+    assert _column_exists(conn, "capability_ratings", "discipline") is True
+    assert _column_exists(conn, "capability_ratings", "quality_verified") is False
+
+
+def test_fetch_rows_without_quality_verified_column():
+    conn = _make_conn()
+    conn.execute(
+        "INSERT INTO capability_ratings VALUES ('s1', 'codex', 'backend', 2, 4.5)"
+    )
+    conn.execute("INSERT INTO cost_entries VALUES ('s1', 1.23, 100, 'job-1')")
+    rows, has_qv = _fetch_rows(conn)
+    assert has_qv is False
+    assert rows == [("s1", "codex", "backend", 2, None, 1.23, 100, "job-1")]
+
+
+def test_fetch_rows_with_quality_verified_column():
+    conn = _make_conn()
+    conn.execute("ALTER TABLE capability_ratings ADD COLUMN quality_verified INTEGER")
+    conn.execute(
+        "INSERT INTO capability_ratings VALUES ('s1', 'codex', 'backend', 2, 4.5, 1)"
+    )
+    conn.execute("INSERT INTO cost_entries VALUES ('s1', 1.23, 100, 'job-1')")
+    rows, has_qv = _fetch_rows(conn)
+    assert has_qv is True
+    assert rows == [("s1", "codex", "backend", 2, 1, 1.23, 100, "job-1")]
+
+
+def test_dedupe_cost_rows_same_pr_number_counted_once():
+    rows = [
+        ("s1", "codex", "backend", 2, None, 1.00, 100, "job-1"),
+        ("s1", "codex", "backend", 2, None, 2.00, 100, "job-2"),
+    ]
+    deduped = _dedupe_cost_rows(rows)
+    assert len(deduped) == 1
+
+
+def test_dedupe_cost_rows_null_pr_number_falls_back_to_job_id():
+    rows = [
+        ("s1", "codex", "backend", 2, None, 1.00, None, "job-1"),
+        ("s1", "codex", "backend", 2, None, 2.00, None, "job-2"),
+    ]
+    deduped = _dedupe_cost_rows(rows)
+    assert len(deduped) == 2
+
+
+def test_build_buckets_excludes_unmapped_discipline():
+    conn = _make_conn()
+    conn.execute(
+        "INSERT INTO capability_ratings VALUES ('s1', 'codex', 'docs', 2, 4.5)"
+    )
+    conn.execute("INSERT INTO cost_entries VALUES ('s1', 1.23, 100, 'job-1')")
+    buckets, skipped = build_buckets(conn)
+    assert buckets == {}
+    assert skipped == 1
+
+
+def test_build_buckets_groups_by_harness_and_task_type():
+    conn = _make_conn()
+    conn.execute(
+        "INSERT INTO capability_ratings VALUES ('s1', 'codex', 'backend', 2, 4.5)"
+    )
+    conn.execute("INSERT INTO cost_entries VALUES ('s1', 1.50, 100, 'job-1')")
+    conn.execute(
+        "INSERT INTO capability_ratings VALUES ('s2', 'codex', 'backend', 4, 4.5)"
+    )
+    conn.execute("INSERT INTO cost_entries VALUES ('s2', 3.00, 101, 'job-2')")
+    buckets, skipped = build_buckets(conn)
+    assert skipped == 0
+    key = ("codex", "implement")
+    assert buckets[key]["cycles"] == [2, 4]
+    assert buckets[key]["costs"] == [1.50, 3.00]
+    assert buckets[key]["story_ids"] == {"s1", "s2"}
+
+
+def test_summarize_buckets_below_min_sample_size_is_unmeasured():
+    buckets = {
+        ("agy", "test"): {
+            "cycles": [1, 2],
+            "costs": [1.0, 2.0],
+            "story_ids": {"s1", "s2"},
+        },
+    }
+    summary = summarize_buckets(buckets, min_sample_size=5)
+    entry = summary[("agy", "test")]
+    assert entry["n"] == 2
+    assert entry["measured"] is False
+
+
+def test_summarize_buckets_meets_min_sample_size_computes_medians():
+    buckets = {
+        ("codex", "implement"): {
+            "cycles": [1, 2, 3, 4, 5],
+            "costs": [1.0, 2.0, 3.0, 4.0, 5.0],
+            "story_ids": {"s1", "s2", "s3", "s4", "s5"},
+        },
+    }
+    summary = summarize_buckets(buckets, min_sample_size=5)
+    entry = summary[("codex", "implement")]
+    assert entry["n"] == 5
+    assert entry["measured"] is True
+    assert entry["median_pr_review_cycles"] == 3
+    assert entry["median_total_cost_usd"] == 3.0
+
+
+def test_summarize_buckets_empty_metric_lists_yield_none_median():
+    buckets = {
+        ("codex", "implement"): {
+            "cycles": [],
+            "costs": [],
+            "story_ids": {"s1", "s2", "s3", "s4", "s5"},
+        },
+    }
+    summary = summarize_buckets(buckets, min_sample_size=5)
+    entry = summary[("codex", "implement")]
+    assert entry["median_pr_review_cycles"] is None
+    assert entry["median_total_cost_usd"] is None
+
+
+def test_propose_diff_promotes_strictly_better_harness():
+    summary = {
+        ("claude", "implement"): {
+            "n": 12,
+            "measured": True,
+            "median_pr_review_cycles": 2.5,
+            "median_total_cost_usd": 3.10,
+        },
+        ("codex", "implement"): {
+            "n": 18,
+            "measured": True,
+            "median_pr_review_cycles": 1.5,
+            "median_total_cost_usd": 1.80,
+        },
+    }
+    proposals = propose_diff(summary, CURRENT_TASK_ALLOCATION, min_sample_size=5)
+    assert len(proposals) == 1
+    assert proposals[0]["proposed_harness"] == "codex"
+    assert proposals[0]["current_harness"] == "claude"
+
+
+def test_propose_diff_no_change_on_split_result():
+    summary = {
+        ("claude", "implement"): {
+            "n": 12,
+            "measured": True,
+            "median_pr_review_cycles": 1.0,
+            "median_total_cost_usd": 5.00,
+        },
+        ("codex", "implement"): {
+            "n": 18,
+            "measured": True,
+            "median_pr_review_cycles": 2.0,
+            "median_total_cost_usd": 1.00,
+        },
+    }
+    proposals = propose_diff(summary, CURRENT_TASK_ALLOCATION, min_sample_size=5)
+    assert proposals == []
+
+
+def test_propose_diff_skips_unmeasured_candidate():
+    summary = {
+        ("claude", "implement"): {
+            "n": 12,
+            "measured": True,
+            "median_pr_review_cycles": 2.5,
+            "median_total_cost_usd": 3.10,
+        },
+        ("grok", "implement"): {
+            "n": 2,
+            "measured": False,
+            "median_pr_review_cycles": 0.5,
+            "median_total_cost_usd": 0.50,
+        },
+    }
+    proposals = propose_diff(summary, CURRENT_TASK_ALLOCATION, min_sample_size=5)
+    assert proposals == []
+
+
+def test_propose_diff_skips_unmeasured_current():
+    summary = {
+        ("claude", "implement"): {
+            "n": 2,
+            "measured": False,
+            "median_pr_review_cycles": 2.5,
+            "median_total_cost_usd": 3.10,
+        },
+        ("codex", "implement"): {
+            "n": 18,
+            "measured": True,
+            "median_pr_review_cycles": 1.5,
+            "median_total_cost_usd": 1.80,
+        },
+    }
+    proposals = propose_diff(summary, CURRENT_TASK_ALLOCATION, min_sample_size=5)
+    assert proposals == []
+
+
+def test_format_text_report_no_proposals():
+    text = format_text_report([], {}, skipped_no_mapping=0)
+    assert "No routing changes proposed" in text
+
+
+def test_format_text_report_with_proposal_matches_example_shape():
+    proposals = [
+        {
+            "task_type": "implement",
+            "current_harness": "claude",
+            "current": {
+                "n": 12,
+                "median_pr_review_cycles": 2.5,
+                "median_total_cost_usd": 3.10,
+            },
+            "proposed_harness": "codex",
+            "proposed": {
+                "n": 18,
+                "median_pr_review_cycles": 1.5,
+                "median_total_cost_usd": 1.80,
+            },
+        }
+    ]
+    text = format_text_report(proposals, {}, skipped_no_mapping=3)
+    assert (
+        "implement: claude (current, n=12, cycles=2.5, cost=$3.10) -> "
+        "codex (n=18, cycles=1.5, cost=$1.80)"
+    ) in text
+    assert "3 rows skipped" in text
+
+
+def test_cli_capability_report_runs_without_error(tmp_path, monkeypatch):
+    policy_dir = tmp_path / ".synlynk"
+    policy_dir.mkdir()
+    (policy_dir / "policy.json").write_text(
+        _json.dumps(
+            {
+                "capability_policy": {"min_sample_size": 5},
+                "overrides": {"dev_authority": {"task_allocation": {}}},
+            }
+        )
+    )
+    db_path = tmp_path / "state.db"
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        "CREATE TABLE capability_ratings (story_id TEXT, agent TEXT, discipline TEXT, pr_review_cycles INTEGER, quality REAL)"
+    )
+    conn.execute(
+        "CREATE TABLE cost_entries (story_id TEXT, total_cost_usd REAL, pr_number INTEGER, job_id TEXT)"
+    )
+    conn.commit()
+    conn.close()
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(db_path))
+    env = os.environ.copy()
+    repo_root = str(__file__).rsplit("/tests/", 1)[0]
+    env["PYTHONPATH"] = os.pathsep.join(
+        [repo_root, env.get("PYTHONPATH", "")]
+    ).rstrip(os.pathsep)
+    result = subprocess.run(
+        [sys.executable, "-m", "synlynk", "capability", "report"],
+        capture_output=True,
+        text=True,
+        cwd=str(tmp_path),
+        env=env,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "rows skipped" in result.stdout
+
+
+@pytest.mark.skipif(
+    not os.path.exists(CANONICAL_STATE_DB),
+    reason="canonical state.db not present in this environment",
+)
+def test_capability_report_against_real_db_copy_does_not_mutate_source(tmp_path, monkeypatch):
+    copy_path = tmp_path / "state.db"
+    shutil.copy2(CANONICAL_STATE_DB, copy_path)
+    before = hashlib.md5(copy_path.read_bytes()).hexdigest()
+
+    policy_dir = tmp_path / ".synlynk"
+    policy_dir.mkdir()
+    policy_dir.joinpath("policy.json").write_text(
+        _json.dumps(
+            {
+                "capability_policy": {"min_sample_size": 5},
+                "overrides": {
+                    "dev_authority": {
+                        "task_allocation": {
+                            "implement": {"harness": "codex", "fallback": []}
+                        }
+                    }
+                },
+            }
+        )
+    )
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(copy_path))
+    from synlynk.capability_report import cmd_capability_report
+
+    cmd_capability_report(as_json=True)
+
+    after = hashlib.md5(copy_path.read_bytes()).hexdigest()
+    assert before == after, "capability report must not mutate the state.db it reads"
