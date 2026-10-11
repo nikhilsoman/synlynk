@@ -318,5 +318,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2179 \u2014 clean up no-op job worktrees (PR #2179, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2179.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-10) - PR #2179\n- Merged improvements and fixes for PR #2179."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/274-pr2188-wire-synlynk-autonomous-into-all-three-s.md",
+    "title": "PR #2188 \u2014 wire SYNLYNK_AUTONOMOUS into all three service installers",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-11",
+    "pr": "#2188",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2188."
+    ],
+    "tweet": "\ud83d\ude80 PR #2188 \u2014 wire SYNLYNK_AUTONOMOUS into all three service installers (PR #2188, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2188.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-11) - PR #2188\n- Merged improvements and fixes for PR #2188."
   }
 ]
