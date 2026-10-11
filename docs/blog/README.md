@@ -336,6 +336,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [274](./274-pr2188-wire-synlynk-autonomous-into-all-three-s.md) | PR #2188 — wire SYNLYNK_AUTONOMOUS into all three service installers | [#2188](https://github.com/nikhilsoman/synlynk/pull/2188) | 2026-10-11 |
 | [275](./275-pr2189-align-dispatch-flags-with-exec-cli-contr.md) | PR #2189 — align dispatch flags with exec CLI contract | [#2189](https://github.com/nikhilsoman/synlynk/pull/2189) | 2026-10-11 |
 | [276](./276-pr2174-correct-post-265-frontmatter.md) | PR #2174 — correct post 265 frontmatter | [#2174](https://github.com/nikhilsoman/synlynk/pull/2174) | 2026-10-11 |
+| [277](./277-pr1900-bump-markdown-it-from-14-2-0-to-14-3-2-i.md) | PR #1900 — bump markdown-it from 14.2.0 to 14.3.2 in /website | [#1900](https://github.com/nikhilsoman/synlynk/pull/1900) | 2026-10-11 |
 
 ## Per-PR Post Template
 

@@ -366,5 +366,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2174 \u2014 correct post 265 frontmatter (PR #2174, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2174.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-11) - PR #2174\n- Merged improvements and fixes for PR #2174."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/277-pr1900-bump-markdown-it-from-14-2-0-to-14-3-2-i.md",
+    "title": "PR #1900 \u2014 bump markdown-it from 14.2.0 to 14.3.2 in /website",
+    "author": "dependabot agent",
+    "date": "2026-10-11",
+    "pr": "#1900",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #1900."
+    ],
+    "tweet": "\ud83d\ude80 PR #1900 \u2014 bump markdown-it from 14.2.0 to 14.3.2 in /website (PR #1900, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #1900.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-11) - PR #1900\n- Merged improvements and fixes for PR #1900."
   }
 ]
