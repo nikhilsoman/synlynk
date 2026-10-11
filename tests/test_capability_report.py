@@ -1,6 +1,8 @@
 import json as _json
+import hashlib
 import os
 import sqlite3
+import shutil
 import subprocess
 import sys
 
@@ -20,6 +22,8 @@ from synlynk.capability_report import (
 CURRENT_TASK_ALLOCATION = {
     "implement": {"harness": "claude", "fallback": []},
 }
+
+CANONICAL_STATE_DB = os.path.expanduser("~/.synlynk/workspaces/synlynk/state.db")
 
 
 def _make_conn():
@@ -309,3 +313,39 @@ def test_cli_capability_report_runs_without_error(tmp_path, monkeypatch):
     )
     assert result.returncode == 0, result.stderr
     assert "rows skipped" in result.stdout
+
+
+@pytest.mark.skipif(
+    not os.path.exists(CANONICAL_STATE_DB),
+    reason="canonical state.db not present in this environment",
+)
+def test_capability_report_against_real_db_copy_does_not_mutate_source(tmp_path, monkeypatch):
+    copy_path = tmp_path / "state.db"
+    shutil.copy2(CANONICAL_STATE_DB, copy_path)
+    before = hashlib.md5(copy_path.read_bytes()).hexdigest()
+
+    policy_dir = tmp_path / ".synlynk"
+    policy_dir.mkdir()
+    policy_dir.joinpath("policy.json").write_text(
+        _json.dumps(
+            {
+                "capability_policy": {"min_sample_size": 5},
+                "overrides": {
+                    "dev_authority": {
+                        "task_allocation": {
+                            "implement": {"harness": "codex", "fallback": []}
+                        }
+                    }
+                },
+            }
+        )
+    )
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(copy_path))
+    from synlynk.capability_report import cmd_capability_report
+
+    cmd_capability_report(as_json=True)
+
+    after = hashlib.md5(copy_path.read_bytes()).hexdigest()
+    assert before == after, "capability report must not mutate the state.db it reads"
