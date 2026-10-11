@@ -147,20 +147,29 @@ def evaluate_job_circuit_breaker(
         except Exception:
             log_text = ""
 
-    # 2. Extract in-flight token metrics
-    from synlynk.costs import extract_tokens
+    # 2. Extract in-flight token metrics.
+    # Codex turn.completed input_tokens sums every tool-loop request, and
+    # cached_input_tokens is already inside that sum. Limits compare the
+    # uncached remainder so a ~50k prompt replayed from cache is not treated
+    # as a million-token prompt.
+    from synlynk.costs import extract_tokens, split_billed_tokens
     from synlynk.jobs import _job_cost_usd
     from synlynk.dispatch import _worktree_files_touched
 
-    in_tokens, out_tokens = extract_tokens(log_text, agent=job.get("agent", ""))
+    agent = job.get("agent", "")
+    token_counts = extract_tokens(log_text, agent=agent)
+    raw_in, out_tokens = token_counts
+    cache_read_tokens = int(getattr(token_counts, "cache_read_tokens", 0) or 0)
+    in_tokens, _cache = split_billed_tokens(agent, raw_in, cache_read_tokens)
     total_tokens = in_tokens + out_tokens
 
     model_version = job.get("model_version") or job.get("model_at_dispatch")
     cost_usd = _job_cost_usd(
-        job.get("agent", ""),
-        in_tokens,
+        agent,
+        raw_in,
         out_tokens,
         model_version,
+        cache_read_tokens=cache_read_tokens,
     )
 
     worktree_path = job.get("worktree_path")

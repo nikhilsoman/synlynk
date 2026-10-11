@@ -816,46 +816,82 @@ def _credit_grant_actual_usd(agent: str, api_equivalent_usd: float) -> tuple:
         conn.close()
 
 
+def split_billed_tokens(agent: str, tokens_in: int, cache_read_tokens: int = 0) -> tuple:
+    """Return (fresh_input, cache_read) for pricing and limit checks.
+
+    Codex ``cached_input_tokens`` is a subset of ``input_tokens``, and
+    ``turn.completed`` reports the sum of every tool-loop request. Claude,
+    Grok, and Agy report cache reads as a separate pool that is not already
+    inside ``input_tokens``.
+    """
+    fresh = max(0, int(tokens_in or 0))
+    cache = max(0, int(cache_read_tokens or 0))
+    if os.path.basename(agent or "") == "codex":
+        cache = min(cache, fresh)
+        fresh -= cache
+    return fresh, cache
+
+
+def api_equivalent_usd(
+    agent: str,
+    tokens_in: int,
+    tokens_out: int,
+    cache_read_tokens: int = 0,
+    model: Optional[str] = None,
+) -> float:
+    """Price fresh input, cache reads, and output on the model rate table."""
+    model_version = model or extract_model_version("", agent=agent)
+    rates = _model_rate_for_version(model_version, agent=agent)
+    fresh, cache = split_billed_tokens(agent, tokens_in, cache_read_tokens)
+    return (
+        (fresh / 1000 * float(rates["input"]))
+        + (max(0, int(tokens_out or 0)) / 1000 * float(rates["output"]))
+        + (cache / 1000 * float(rates.get("cache_read") or 0.0))
+    )
+
+
 def resolve_payment_value(
     agent: str,
     tokens_in: int,
     tokens_out: int,
     model: Optional[str] = None,
+    cache_read_tokens: int = 0,
 ) -> PaymentValue:
     """Resolve API-equivalent and actual payment values for a harness call."""
     pm_config = _payment_model_config_for_agent(agent)
     mode = pm_config.get("mode", "pay_as_you_go")
 
-    model_version = model or extract_model_version("", agent=agent)
-    rates = _model_rate_for_version(model_version, agent=agent)
-    api_equivalent_usd = (tokens_in / 1000 * rates["input"]) + (tokens_out / 1000 * rates["output"])
+    fresh_in, _cache = split_billed_tokens(agent, tokens_in, cache_read_tokens)
+    api_equivalent_usd_value = api_equivalent_usd(
+        agent, tokens_in, tokens_out, cache_read_tokens, model=model,
+    )
 
     if mode == "subscription":
         actual_usd, quota_pct_used = _subscription_actual_usd(
-            agent, tokens_in, tokens_out, pm_config, model=model
+            agent, fresh_in, tokens_out, pm_config, model=model
         )
         return PaymentValue(
-            api_equivalent_usd=api_equivalent_usd,
+            api_equivalent_usd=api_equivalent_usd_value,
             actual_usd=actual_usd,
             mode=mode,
             quota_pct_used=quota_pct_used,
         )
 
     if mode == "credit_grant":
-        actual_usd, credit_remaining_usd = _credit_grant_actual_usd(agent, api_equivalent_usd)
+        actual_usd, credit_remaining_usd = _credit_grant_actual_usd(agent, api_equivalent_usd_value)
         return PaymentValue(
-            api_equivalent_usd=api_equivalent_usd,
+            api_equivalent_usd=api_equivalent_usd_value,
             actual_usd=actual_usd,
             mode=mode,
             credit_remaining_usd=credit_remaining_usd,
         )
 
     if mode == "zero_cost":
-        return PaymentValue(api_equivalent_usd=api_equivalent_usd, actual_usd=0.0, mode=mode)
+        return PaymentValue(api_equivalent_usd=api_equivalent_usd_value, actual_usd=0.0, mode=mode)
 
     return PaymentValue(
-        api_equivalent_usd=api_equivalent_usd,
-        actual_usd=api_equivalent_usd,
+        api_equivalent_usd=api_equivalent_usd_value,
+        actual_usd=api_equivalent_usd_value,
         mode="pay_as_you_go",
     )
 
@@ -1025,15 +1061,13 @@ def update_costs(command: str, in_tokens: int, out_tokens: int, duration: float,
             cost_source = "estimated_token_rate"
             estimate_basis = basis if basis != "none" else "suspicious_token_ceiling"
 
-    rates = _model_rate_for_version(model_version, agent=agent_name)
     cache_read_tokens = 0 if cache_read_tokens is None else cache_read_tokens
-    payment_value = resolve_payment_value(agent_name, in_tokens, out_tokens)
-    est_cost = payment_value.api_equivalent_usd + (cache_read_tokens / 1000 * rates["cache_read"])
-    actual_usd = payment_value.actual_usd + (
-        cache_read_tokens / 1000 * rates["cache_read"]
-        if payment_value.mode == "pay_as_you_go"
-        else 0.0
+    payment_value = resolve_payment_value(
+        agent_name, in_tokens, out_tokens,
+        model=model_version, cache_read_tokens=cache_read_tokens,
     )
+    est_cost = payment_value.api_equivalent_usd
+    actual_usd = payment_value.actual_usd
     short_cmd = (command[:20] + '...') if len(command) > 20 else command
     ts = time.strftime('%Y-%m-%d %H:%M')
     if suspicious_token_count:
