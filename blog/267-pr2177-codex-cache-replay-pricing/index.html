@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #2177 — Codex cache-replay was priced as fresh input | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-3">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Oct 10, 2026</span>
+        
+          <span class="blog-post-pr">PR #2177</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #2177 — Codex cache-replay was priced as fresh input</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>PR #2166 landed federated subscription-quota capture. The next cost question was already live: parallel dispatches were recording 1.2–1.6M input tokens and the in-flight breaker was killing two of three of them.</p>
+<h2>Strategic Shifts in This PR (if any)</h2>
+<p>The suspected cause was Graphify auto-refresh and pack synthesis (gh:#2140, gh:#2141). Measurement rejected that. The assembled task context was 3,641 bytes and the prompt file was about 7KB. The million-token figure is Codex's tool-loop sum, not a prompt we built.</p>
+<h2>What This PR Shipped</h2>
+<p>Codex <code>turn.completed.usage.input_tokens</code> is the sum of every model call inside one turn. <code>cached_input_tokens</code> is a subset of that sum. On <code>job-54fa8a6a</code> the rollout showed 35 calls. The first call was 21,096 input tokens (5,888 cached). The last call's prompt was 55,388. The turn total was 1,631,802 input / 1,560,832 cached.</p>
+<p><code>_job_cost_usd</code> and <code>resolve_payment_value</code> priced the whole sum at the fresh-input rate, and daemon cost capture dropped <code>cache_read_tokens</code>, so the ledger stored cache as 0. That produced the sentinel lines:</p>
+<ul>
+<li><code>job-fccc76c4</code> (fast tier): <code>Cost limit breached: $3.88 &gt;= $2.00</code>, exit -9</li>
+<li><code>job-fda2e4ef</code>: <code>Zero-file runaway: 1,232,564 tokens</code>, exit -9</li>
+<li><code>job-54fa8a6a</code>: TOKEN_BLOAT plus COST_INFLATION at $5.03, then <code>SCOPE_REVIEW_REQUIRED</code></li>
+</ul>
+<p>Codex fresh input is now <code>input_tokens - cached_input_tokens</code>. Cache reads use the cache rate. Claude, Grok, and Agy cache reads stay a separate pool. The circuit breaker and TOKEN_BLOAT check use the fresh remainder. An uncached 600k input still trips the zero-file limit. <code>_TokenCounts</code> is unpacked instead of subscripted, so daemon cost rows keep the log's real counts instead of falling through to the t-shirt estimate.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>None. The evidence is the job logs, the Codex rollout <code>token_usage_record</code>s, and the sentinel lines above.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>A normal tool loop no longer looks like a runaway and no longer gets killed after the tokens are already spent. The ledger can tell fresh input from cache replay.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>gh:#2140 and gh:#2141 stay open. They are real gaps (refresh a stale graph, stop swallowing pack errors) and they did not produce this bill. The remaining spend is the cache re-read on each Codex tool call. Shrinking that prefix is a separate change from pricing it honestly.</p>
+<h2>Related Docs</h2>
+<ul>
+<li><code>docs/rca/2026-09-09-ISSUE-1531-dispatch-token-inflation.md</code></li>
+<li><code>docs/rca/2026-10-08-ISSUE-2133-stale-graph-and-cost-inflation.md</code></li>
+<li>GOVERNS story-f336c1c5, goal-8f64eff5</li>
+</ul>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
