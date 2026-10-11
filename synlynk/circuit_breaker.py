@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import signal
+import subprocess
 import time
 import traceback
 from dataclasses import dataclass, field
@@ -132,6 +133,39 @@ def _kill_process_tree(
         return False, f"kill_failed: {exc}"
 
 
+def _worktree_branch_is_stable(worktree_path: Optional[str], expected_branch: Optional[str]) -> bool:
+    """Return whether a zero-file observation is safe to act on.
+
+    Detached HEAD is an in-progress checkout state. A named branch mismatch
+    is deferred only while its HEAD reflog entry is recent; an old feature
+    branch checkout must not permanently disable the circuit breaker.
+    """
+    if not worktree_path or not expected_branch:
+        return True
+    try:
+        result = subprocess.run(
+            ["git", "-C", worktree_path, "symbolic-ref", "--short", "HEAD"],
+            capture_output=True, text=True, check=False,
+        )
+    except Exception:
+        return True
+    if result.returncode != 0:
+        return False
+    if (result.stdout or "").strip() == expected_branch:
+        return True
+    try:
+        reflog = subprocess.run(
+            ["git", "-C", worktree_path, "reflog", "-1", "--format=%ct", "HEAD"],
+            capture_output=True, text=True, check=False,
+        )
+        if reflog.returncode != 0:
+            return True
+        changed_at = float((reflog.stdout or "").strip())
+    except (ValueError, OSError, TypeError):
+        return True
+    return time.time() - changed_at > 60
+
+
 def evaluate_job_circuit_breaker(
     job: dict,
     config: Optional[dict] = None,
@@ -206,7 +240,9 @@ def evaluate_job_circuit_breaker(
     elif total_tokens >= zero_file_threshold:
         files_touched_list = _worktree_files_touched(worktree_path) if worktree_path else []
         files_touched = len(files_touched_list)
-        if files_touched == 0:
+        if files_touched == 0 and _worktree_branch_is_stable(
+            worktree_path, job.get("worktree_branch")
+        ):
             reason = f"Zero-file runaway: {total_tokens:,} tokens with 0 files touched (limit: {zero_file_threshold:,})"
 
     if not reason:
