@@ -1,0 +1,16 @@
+{
+  "supabase": {"enabled": true, "auth_type": "byok", "vault_key": "SUPABASE_ACCESS_TOKEN"},
+  "vercel": {"enabled": true, "auth_type": "byok", "vault_key": "VERCEL_TOKEN"},
+  "openrouter": {"enabled": true, "auth_type": "byok", "vault_key": "OPENROUTER_API_KEY"},
+  "fal_ai": {"enabled": false, "auth_type": "byok", "vault_key": "FAL_KEY"},
+  "gateways": {
+    "openrouter": {
+      "enabled": true,
+      "dispatch_active": true,
+      "base_url": "https://openrouter.ai/api/v1",
+      "api_key_env": "OPENROUTER_API_KEY",
+      "models": ["anthropic/claude-sonnet-5"],
+      "note": "Dispatch active. models provides fallback model IDs in attempt order."
+    }
+  }
+}
