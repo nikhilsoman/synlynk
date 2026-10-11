@@ -355,6 +355,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [292](./292-pr2212-sqlite-wal-soak-test-design-spec-plan-gh.md) | PR #2212 — SQLite WAL soak test design spec + plan (gh:#2102) | [#2212](https://github.com/nikhilsoman/synlynk/pull/2212) | 2026-10-11 |
 | [293](./293-pr2207-sqlite-wal-concurrent-writer-soak-test-g.md) | PR #2207 — SQLite WAL concurrent-writer soak test (gh:#2102) | [#2207](https://github.com/nikhilsoman/synlynk/pull/2207) | 2026-10-11 |
 | [294](./294-pr2213-add-circuit-breaker-log-size-runaway-net.md) | PR #2213 — add circuit-breaker log-size runaway net | [#2213](https://github.com/nikhilsoman/synlynk/pull/2213) | 2026-10-11 |
+| [295](./295-pr2186-record-pillar-1-blocker-review-backlog-t.md) | PR #2186 — record Pillar 1 blocker review + backlog triage pause | [#2186](https://github.com/nikhilsoman/synlynk/pull/2186) | 2026-10-11 |
 
 ## Per-PR Post Template
 

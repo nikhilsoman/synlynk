@@ -670,5 +670,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2213 \u2014 add circuit-breaker log-size runaway net (PR #2213, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2213.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-11) - PR #2213\n- Merged improvements and fixes for PR #2213."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/295-pr2186-record-pillar-1-blocker-review-backlog-t.md",
+    "title": "PR #2186 \u2014 record Pillar 1 blocker review + backlog triage pause",
+    "author": "nikhilsoman",
+    "date": "2026-10-11",
+    "pr": "#2186",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2186."
+    ],
+    "tweet": "\ud83d\ude80 PR #2186 \u2014 record Pillar 1 blocker review + backlog triage pause (PR #2186, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2186.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-11) - PR #2186\n- Merged improvements and fixes for PR #2186."
   }
 ]
