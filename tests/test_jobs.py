@@ -3156,6 +3156,78 @@ def test_reconcile_terminal_jobs_json_uses_worktree_path_fallback(project_dir, m
     assert inspected == [str(wt)]
 
 
+def test_reconcile_terminal_jobs_json_defers_on_unknown_gh_write_verification(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    job_id = "job-bridge-ghwrite-defer"
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, pid, enqueued_at, "
+        "started_at, requires_gh_write, gh_write_target, gh_write_author, gh_write_expect, "
+        "gh_write_verification_attempts) VALUES "
+        "(?, 'codex', 'review pr', 'running', 999999, "
+        "'2026-10-04T09:00:00', '2026-10-04T09:00:00', 1, 'pr:123', 'codex', 'review_posted', 0)",
+        (job_id,),
+    )
+    conn.commit()
+    conn.close()
+    sl._save_jobs([{
+        "id": job_id, "agent": "codex", "status": "completed", "task": "review pr",
+        "started_at": "2026-10-04T09:00:00", "ended_at": "2026-10-04T09:05:00",
+        "exit_code": 0, "requires_gh_write": True, "gh_write_target": "pr:123",
+        "gh_write_author": "codex", "gh_write_expect": "review_posted",
+    }])
+    monkeypatch.setattr(
+        jobs_mod, "_verify_daemon_terminal_status",
+        lambda *a, **k: (a[4], "unknown"),
+    )
+
+    conn = sl._get_db()
+    repaired = jobs_mod._reconcile_terminal_jobs_json(conn)
+    row = conn.execute("SELECT status FROM daemon_jobs WHERE job_id=?", (job_id,)).fetchone()
+    conn.close()
+
+    assert repaired == 0
+    assert row == ("running",)
+
+
+def test_reconcile_terminal_jobs_json_settles_once_gh_write_verification_resolves(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    job_id = "job-bridge-ghwrite-resolved"
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, pid, enqueued_at, "
+        "started_at, requires_gh_write, gh_write_target, gh_write_author, gh_write_expect, "
+        "gh_write_verification_attempts) VALUES "
+        "(?, 'codex', 'review pr', 'running', 999999, "
+        "'2026-10-04T09:00:00', '2026-10-04T09:00:00', 1, 'pr:123', 'codex', 'review_posted', 3)",
+        (job_id,),
+    )
+    conn.commit()
+    conn.close()
+    sl._save_jobs([{
+        "id": job_id, "agent": "codex", "status": "completed", "task": "review pr",
+        "started_at": "2026-10-04T09:00:00", "ended_at": "2026-10-04T09:05:00",
+        "exit_code": 0, "requires_gh_write": True, "gh_write_target": "pr:123",
+        "gh_write_author": "codex", "gh_write_expect": "review_posted",
+    }])
+    monkeypatch.setattr(
+        jobs_mod, "_verify_daemon_terminal_status",
+        lambda *a, **k: (a[4], "true"),
+    )
+
+    conn = sl._get_db()
+    repaired = jobs_mod._reconcile_terminal_jobs_json(conn)
+    row = conn.execute("SELECT status FROM daemon_jobs WHERE job_id=?", (job_id,)).fetchone()
+    conn.close()
+
+    assert repaired == 1
+    assert row == ("done",)
+
+
 def test_apply_gh_write_verification_persists_evidence(project_dir, monkeypatch):
     import json
     import synlynk as sl

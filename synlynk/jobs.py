@@ -3823,27 +3823,22 @@ def _reconcile_terminal_jobs_json(conn) -> int:
                 job.get("started_at"),
                 author or job.get("gh_write_author"),
                 expect or job.get("gh_write_expect"),
-                worktree_branch=job.get("worktree_branch"),
+                worktree_branch=preferred_branch,
             )
             if verified == "true" or verified == "false":
                 evidence_strength = "github"
             elif verified == "unknown":
                 evidence_strength = "unknown"
                 if _gh_write_verification_retry_pending(conn, job_id, True, verified):
-                    if old_status in (STATUS_RUNNING, "queued", STATUS_PENDING_VERIFICATION):
-                        try:
-                            conn.execute(
-                                "UPDATE daemon_jobs SET status=?, completed_at=? WHERE job_id=?",
-                                (STATUS_PENDING_VERIFICATION, job.get("ended_at") or time.strftime("%Y-%m-%dT%H:%M:%S"), job_id),
-                            )
-                            conn.commit()
-                        except sqlite3.OperationalError:
-                            pass
+                    conn.commit()
                     continue
                 status = STATUS_FAILED_VERIFICATION
         else:
             verified = None
         exit_code = job.get("exit_code")
+        status, exit_code = _terminal_status_after_verification(
+            status, exit_code, verified, bool(requires_gh_write)
+        )
         completed_at = job.get("ended_at") or time.strftime("%Y-%m-%dT%H:%M:%S")
         if _settle_daemon_job_terminal(
             conn, job_id, status, exit_code, completed_at, only_running=False,
