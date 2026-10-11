@@ -766,5 +766,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2223 \u2014 migrate state_registry/team/version_policy config readers to workspace.json (gh:#2147) (PR #2223, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2223.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-11) - PR #2223\n- Merged improvements and fixes for PR #2223."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/301-pr2225-migrate-autonomy-agent-store-handover-co.md",
+    "title": "PR #2225 \u2014 migrate autonomy/agent_store/handover config readers to workspace.json (gh:#2147)",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-11",
+    "pr": "#2225",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2225."
+    ],
+    "tweet": "\ud83d\ude80 PR #2225 \u2014 migrate autonomy/agent_store/handover config readers to workspace.json (gh:#2147) (PR #2225, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2225.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-11) - PR #2225\n- Merged improvements and fixes for PR #2225."
   }
 ]
