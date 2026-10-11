@@ -1,11 +1,11 @@
 ---
-title: "Reconciling Orphaned State Shards Before Any Deletion"
+title: "gh:#1831 — Reconciling Orphaned State Shards Before Any Deletion"
 date: 2026-10-09
 series: "Building the OS for Multi-Agent Development"
 post: 265
 pr: "2155"
-status: shipped
-author: "synlynk team"
+status: published
+author: "Codex"
 version: "0.19.0"
 tags: [posts]
 type: pr
