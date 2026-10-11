@@ -441,6 +441,148 @@ def test_format_prompt_for_agent_extracts_graph_when_missing(tmp_path, no_stub_g
         assert str(tmp_path) in args
 
 
+def _init_repo_with_graph(repo, built_at_commit: str) -> None:
+    import json
+    import subprocess
+
+    subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(
+        ["git", "config", "user.email", "graph@example.com"],
+        cwd=repo, check=True, capture_output=True, text=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Graph Test"],
+        cwd=repo, check=True, capture_output=True, text=True,
+    )
+    subprocess.run(
+        ["git", "commit", "--allow-empty", "-m", "init"],
+        cwd=repo, check=True, capture_output=True, text=True,
+    )
+    out = repo / ".synlynk" / "graphify-out"
+    out.mkdir(parents=True)
+    (out / "graph.json").write_text("{}\n")
+    (out / "manifest.json").write_text(json.dumps({"built_at_commit": built_at_commit}))
+
+
+def _head_sha(repo) -> str:
+    import subprocess
+
+    result = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repo, check=True, capture_output=True, text=True,
+    )
+    return result.stdout.strip()
+
+
+def _empty_commit(repo, message: str) -> None:
+    import subprocess
+
+    subprocess.run(
+        ["git", "commit", "--allow-empty", "-m", message],
+        cwd=repo, check=True, capture_output=True, text=True,
+    )
+
+
+def test_format_prompt_refreshes_graph_when_commit_distance_exceeds_threshold(tmp_path, monkeypatch):
+    """A graph file that still exists refreshes once HEAD moves past the threshold (#2140)."""
+    import synlynk.dispatch as dispatch_mod
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _init_repo_with_graph(repo, built_at_commit="placeholder")
+    built = _head_sha(repo)
+    manifest = repo / ".synlynk" / "graphify-out" / "manifest.json"
+    graph = repo / ".synlynk" / "graphify-out" / "graph.json"
+    manifest.write_text('{"built_at_commit": "%s"}\n' % built)
+    graph_bytes = graph.read_bytes()
+
+    calls = []
+    monkeypatch.setattr(
+        "synlynk.scan._run_graphify_extract",
+        lambda root: calls.append(root) or True,
+    )
+    monkeypatch.setattr("synlynk.pack.synthesize_context_pack", lambda *a, **k: "")
+
+    for i in range(dispatch_mod._GRAPH_STALE_COMMIT_THRESHOLD):
+        _empty_commit(repo, f"advance {i}")
+    assert graph.read_bytes() == graph_bytes
+    dispatch_mod._format_prompt_for_agent(
+        "grok", "context", "story-1", "do the thing", "", "",
+        cwd_hint=str(repo),
+    )
+    assert calls == []
+
+    _empty_commit(repo, "past threshold")
+    assert graph.read_bytes() == graph_bytes
+    dispatch_mod._format_prompt_for_agent(
+        "grok", "context", "story-1", "do the thing", "", "",
+        cwd_hint=str(repo),
+    )
+    assert calls == [str(repo)]
+    assert graph.read_bytes() == graph_bytes
+
+
+def test_format_prompt_refreshes_graph_on_mtime_when_commit_distance_unknown(tmp_path, monkeypatch):
+    """No recorded commit and an old graph.json still forces regeneration."""
+    import os
+    import time
+    import synlynk.dispatch as dispatch_mod
+
+    out = tmp_path / ".synlynk" / "graphify-out"
+    out.mkdir(parents=True)
+    graph = out / "graph.json"
+    graph.write_text("{}\n")
+    old = time.time() - dispatch_mod._GRAPH_STALE_MTIME_SECONDS - 5
+    os.utime(graph, (old, old))
+
+    calls = []
+    monkeypatch.setattr(
+        "synlynk.scan._run_graphify_extract",
+        lambda root: calls.append(root) or True,
+    )
+    monkeypatch.setattr("synlynk.pack.synthesize_context_pack", lambda *a, **k: "")
+    dispatch_mod._format_prompt_for_agent(
+        "claude", "context", "", "task", "", "",
+        cwd_hint=str(tmp_path),
+    )
+    assert calls == [str(tmp_path)]
+
+
+@pytest.mark.parametrize(
+    ("step", "explode_target", "reason"),
+    [
+        ("graph extraction", "synlynk.scan._run_graphify_extract", "graphify exploded"),
+        ("pack synthesis", "synlynk.pack.synthesize_context_pack", "pack exploded"),
+    ],
+)
+def test_format_prompt_logs_context_build_failure(tmp_path, monkeypatch, capsys, step, explode_target, reason):
+    """A forced failure in either context step is warned and sentinel-visible (#2141)."""
+    import synlynk.dispatch as dispatch_mod
+
+    def _boom(*_args, **_kwargs):
+        raise RuntimeError(reason)
+
+    if step == "pack synthesis":
+        out = tmp_path / ".synlynk" / "graphify-out"
+        out.mkdir(parents=True)
+        (out / "graph.json").write_text("{}\n")
+        monkeypatch.setattr("synlynk.scan._run_graphify_extract", lambda root: True)
+    monkeypatch.setattr(explode_target, _boom)
+    if step == "graph extraction":
+        monkeypatch.setattr("synlynk.pack.synthesize_context_pack", lambda *a, **k: "")
+
+    prompt = dispatch_mod._format_prompt_for_agent(
+        "grok", "context", "story-1", "do the thing", "", "",
+        cwd_hint=str(tmp_path),
+    )
+    assert "do the thing" in prompt
+    err = capsys.readouterr().err
+    assert f"context build: {step} failed: RuntimeError: {reason}" in err
+    sentinel = (tmp_path / ".synlynk" / "sentinel.md").read_text()
+    assert "CONTEXT_BUILD_DEGRADED" in sentinel
+    assert f"{step} failed: RuntimeError: {reason}" in sentinel
+
+
 def test_format_prompt_for_agent_adds_codex_gh_write_guardrail():
     import synlynk.dispatch as dispatch_mod
 
