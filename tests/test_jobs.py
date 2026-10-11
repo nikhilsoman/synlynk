@@ -2842,9 +2842,91 @@ def test_reconcile_daemon_jobs_settles_after_gh_write_unknown_retry_cap(project_
     assert conn.execute(
         "SELECT status, gh_write_verified, gh_write_verification_attempts "
         "FROM daemon_jobs WHERE job_id='job-ghw-cap'"
-    ).fetchone() == ("done", "unknown", 3)
+    ).fetchone() == ("failed_verification", "unknown", 3)
     conn.close()
     assert len(calls) == 3
+
+
+@pytest.mark.parametrize(
+    "job_id, old_status, target",
+    [
+        ("job-2137", "failed", "pr:2137"),
+        ("job-2138", "failed_unverified", "pr:2138"),
+        ("job-2139", "permission_denied", "pr:2139"),
+        ("job-2163", "failed", "pr:2163"),
+        ("job-ff128051", "failed", "pr:2193"),
+        ("job-7e404db7", "unpushed_branch", "pr:2193"),
+    ],
+)
+def test_terminal_false_negative_replay_accepts_later_stronger_evidence(
+    project_dir, monkeypatch, job_id, old_status, target
+):
+    """Historical false negatives must be revisable by verified GitHub evidence."""
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, pid, enqueued_at, "
+        "started_at, requires_gh_write, gh_write_target, worktree_branch, "
+        "terminal_evidence_strength) VALUES (?, 'codex', 'review PR', ?, NULL, "
+        "'2026-10-10T10:00:00', '2026-10-10T10:00:00', 1, ?, ?, 'local')",
+        (job_id, old_status, target, f"dispatch/codex/{job_id}"),
+    )
+    conn.commit()
+    sl._save_jobs([{
+        "id": job_id,
+        "status": "done",
+        "exit_code": 0,
+        "started_at": "2026-10-10T10:00:00",
+        "ended_at": "2026-10-10T10:01:00",
+        "requires_gh_write": True,
+        "gh_write_target": target,
+        "worktree_branch": f"dispatch/codex/{job_id}",
+    }])
+    monkeypatch.setattr(jobs_mod, "gh_write_verified", lambda *args, **kwargs: True)
+    monkeypatch.setattr(jobs_mod, "github_branch_effect_verified", lambda *args, **kwargs: True)
+
+    assert jobs_mod._reconcile_terminal_jobs_json(conn) == 1
+    row = conn.execute(
+        "SELECT status, gh_write_verified, terminal_evidence_strength "
+        "FROM daemon_jobs WHERE job_id=?", (job_id,)
+    ).fetchone()
+    conn.close()
+    assert row == ("done", "true", "github")
+
+
+def test_unknown_terminal_verification_exhaustion_is_labeled_failure(project_dir, monkeypatch):
+    """A bounded unknown window must not become a permanent local success."""
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    job_id = "job-unknown-verification-window"
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, enqueued_at, "
+        "started_at, requires_gh_write, gh_write_target, gh_write_verification_attempts) "
+        "VALUES (?, 'codex', 'review PR', 'running', '2026-10-10T10:00:00', "
+        "'2026-10-10T10:00:00', 1, 'pr:2193', 3)", (job_id,)
+    )
+    conn.commit()
+    sl._save_jobs([{
+        "id": job_id,
+        "status": "done",
+        "exit_code": 0,
+        "started_at": "2026-10-10T10:00:00",
+        "ended_at": "2026-10-10T10:01:00",
+        "requires_gh_write": True,
+        "gh_write_target": "pr:2193",
+    }])
+    monkeypatch.setattr(jobs_mod, "gh_write_verified", lambda *args, **kwargs: None)
+
+    assert jobs_mod._reconcile_terminal_jobs_json(conn) == 1
+    assert conn.execute(
+        "SELECT status, terminal_evidence_strength FROM daemon_jobs WHERE job_id=?",
+        (job_id,),
+    ).fetchone() == ("failed_verification", "unknown")
+    conn.close()
 
 
 def test_reconcile_daemon_jobs_defers_on_inconclusive_unpushed_branch_check(project_dir, monkeypatch):
