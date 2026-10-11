@@ -1307,6 +1307,14 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
                 )
             except sqlite3.OperationalError:
                 pass
+        if "terminal_evidence_strength" not in daemon_job_cols:
+            try:
+                conn.execute(
+                    "ALTER TABLE daemon_jobs ADD COLUMN "
+                    "terminal_evidence_strength TEXT NOT NULL DEFAULT 'unknown'"
+                )
+            except sqlite3.OperationalError:
+                pass
         if "unpushed_branch_check_attempts" not in daemon_job_cols:
             try:
                 conn.execute(

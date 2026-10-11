@@ -6892,8 +6892,8 @@ def test_reconcile_daemon_jobs_does_not_relabel_settled_done_when_gh_verificatio
         ("djob-ghw-unknown",),
     ).fetchone()
     conn2.close()
-    assert row[0] == "done"
-    assert row[1] == 0
+    assert row[0] == "failed_verification"
+    assert row[1] == 1
     assert row[2] == "unknown"
 
 
