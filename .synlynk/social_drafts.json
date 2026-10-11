@@ -382,5 +382,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #1900 \u2014 bump markdown-it from 14.2.0 to 14.3.2 in /website (PR #1900, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #1900.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-11) - PR #1900\n- Merged improvements and fixes for PR #1900."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/278-pr2176-bump-liquidjs-from-10-27-1-to-10-30-0-in.md",
+    "title": "PR #2176 \u2014 bump liquidjs from 10.27.1 to 10.30.0 in /website",
+    "author": "dependabot agent",
+    "date": "2026-10-11",
+    "pr": "#2176",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2176."
+    ],
+    "tweet": "\ud83d\ude80 PR #2176 \u2014 bump liquidjs from 10.27.1 to 10.30.0 in /website (PR #2176, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2176.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-11) - PR #2176\n- Merged improvements and fixes for PR #2176."
   }
 ]

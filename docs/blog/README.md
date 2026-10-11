@@ -337,6 +337,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [275](./275-pr2189-align-dispatch-flags-with-exec-cli-contr.md) | PR #2189 — align dispatch flags with exec CLI contract | [#2189](https://github.com/nikhilsoman/synlynk/pull/2189) | 2026-10-11 |
 | [276](./276-pr2174-correct-post-265-frontmatter.md) | PR #2174 — correct post 265 frontmatter | [#2174](https://github.com/nikhilsoman/synlynk/pull/2174) | 2026-10-11 |
 | [277](./277-pr1900-bump-markdown-it-from-14-2-0-to-14-3-2-i.md) | PR #1900 — bump markdown-it from 14.2.0 to 14.3.2 in /website | [#1900](https://github.com/nikhilsoman/synlynk/pull/1900) | 2026-10-11 |
+| [278](./278-pr2176-bump-liquidjs-from-10-27-1-to-10-30-0-in.md) | PR #2176 — bump liquidjs from 10.27.1 to 10.30.0 in /website | [#2176](https://github.com/nikhilsoman/synlynk/pull/2176) | 2026-10-11 |
 
 ## Per-PR Post Template
 
