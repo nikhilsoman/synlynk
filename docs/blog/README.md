@@ -345,6 +345,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [282](./282-pr2193-muse-harness-has-no-real-network-depende.md) | PR #2193 — muse harness has no real network dependency, baseline required_endpoints was a fabricated host | [#2193](https://github.com/nikhilsoman/synlynk/pull/2193) | 2026-10-11 |
 | [283](./283-pr2195-capture-nested-muse-exec-usage.md) | PR #2195 — capture nested Muse exec usage | [#2195](https://github.com/nikhilsoman/synlynk/pull/2195) | 2026-10-11 |
 | [284](./284-pr2197-revisable-terminal-job-status-verdicts-b.md) | PR #2197 — revisable terminal job-status verdicts by evidence strength | [#2197](https://github.com/nikhilsoman/synlynk/pull/2197) | 2026-10-11 |
+| [285](./285-pr2199-add-missing-frontmatter-fields-to-blog-p.md) | PR #2199 — add missing frontmatter fields to blog post 267 | [#2199](https://github.com/nikhilsoman/synlynk/pull/2199) | 2026-10-11 |
 
 ## Per-PR Post Template
 
