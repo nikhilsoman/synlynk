@@ -1542,7 +1542,10 @@ def test_reconcile_daemon_jobs_trips_inflight_circuit_breaker(project_dir, monke
     ).fetchone()
     conn.close()
     assert tuple(status) == ("circuit_breaker_tripped", -9)
-    assert tuple(cost) == (5000, 2000)
+    # The log says 4000/2000. Recording that requires unpacking _TokenCounts;
+    # subscripting it used to swallow extraction and fall through to the
+    # 5000/2000 t-shirt estimate.
+    assert tuple(cost) == (4000, 2000)
 
 
 def test_dispatch_writes_cost_row_even_on_zero_token_extraction(project_dir, monkeypatch):

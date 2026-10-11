@@ -124,6 +124,27 @@ def test_check_token_bloat_triggers_on_zero_files_with_high_tokens(tmp_path):
     assert "job-cf837848" in content
 
 
+def test_codex_cache_subset_does_not_trip_token_bloat(tmp_path):
+    """job-54fa8a6a reported 1.6M input tokens, 1.56M of them cache reads.
+
+    The uncached remainder is under the zero-file threshold, so this is not
+    TOKEN_BLOAT. Callers that do not pass cache_read_tokens still alert.
+    """
+    from synlynk.sentinel import check_token_bloat
+
+    alerts = check_token_bloat(
+        in_tokens=1_631_802,
+        out_tokens=9_154,
+        cost_usd=0.35,
+        files_touched=0,
+        job_id="job-54fa8a6a",
+        agent="codex",
+        cache_read_tokens=1_560_832,
+        sentinel_path=str(tmp_path / "sentinel.md"),
+    )
+    assert alerts == []
+
+
 def test_issue_1531_cached_input_inflation_is_actionable(tmp_path):
     """The observed multi-million-token shape must raise a critical signal."""
     from synlynk.sentinel import check_token_bloat
