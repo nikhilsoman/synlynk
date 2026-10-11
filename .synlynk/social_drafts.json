@@ -654,5 +654,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2207 \u2014 SQLite WAL concurrent-writer soak test (gh:#2102) (PR #2207, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2207.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-11) - PR #2207\n- Merged improvements and fixes for PR #2207."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/294-pr2213-add-circuit-breaker-log-size-runaway-net.md",
+    "title": "PR #2213 \u2014 add circuit-breaker log-size runaway net",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-11",
+    "pr": "#2213",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2213."
+    ],
+    "tweet": "\ud83d\ude80 PR #2213 \u2014 add circuit-breaker log-size runaway net (PR #2213, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2213.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-11) - PR #2213\n- Merged improvements and fixes for PR #2213."
   }
 ]
