@@ -4292,9 +4292,23 @@ def _guard_unpushed_branch(
     if not git_state or not git_state.get("commits_ahead"):
         return status
     if local_commits_pushed(worktree_path, worktree_branch, git_state.get("base_commit")):
+        try:
+            conn.execute(
+                "UPDATE daemon_jobs SET unpushed_branch_check_attempts=0 WHERE job_id=?",
+                (job_id,),
+            )
+        except sqlite3.OperationalError:
+            pass
         return status
     verified = github_branch_effect_verified(worktree_branch, since=started_at)
     if verified is True:
+        try:
+            conn.execute(
+                "UPDATE daemon_jobs SET unpushed_branch_check_attempts=0 WHERE job_id=?",
+                (job_id,),
+            )
+        except sqlite3.OperationalError:
+            pass
         return status
     if verified is None:
         try:

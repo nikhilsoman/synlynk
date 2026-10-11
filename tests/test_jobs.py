@@ -3228,6 +3228,116 @@ def test_reconcile_terminal_jobs_json_settles_once_gh_write_verification_resolve
     assert row == ("done",)
 
 
+def test_reconcile_terminal_jobs_json_recovers_from_inconclusive_check_once_push_confirmed(project_dir, monkeypatch):
+    """The bridge must not lock in unpushed_branch during a transient GitHub gap."""
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    job_id = "job-bridge-recovers"
+    wt = project_dir / "worktrees" / job_id
+    log = wt / ".synlynk" / "logs" / f"{job_id}.log"
+    log.parent.mkdir(parents=True)
+    log.write_text("agent did work\n")
+
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, pid, enqueued_at, "
+        "started_at, log_path, worktree_path, worktree_branch) VALUES "
+        "(?, 'codex', 'implement thing', 'running', 999999, "
+        "'2026-10-04T09:00:00', '2026-10-04T09:00:00', ?, ?, ?)",
+        (job_id, str(log), str(wt), f"fix/{job_id}"),
+    )
+    conn.commit()
+    conn.close()
+    sl._save_jobs([{
+        "id": job_id, "agent": "codex", "status": "completed", "task": "implement thing",
+        "started_at": "2026-10-04T09:00:00", "ended_at": "2026-10-04T09:05:00",
+        "exit_code": 0, "requires_gh_write": False,
+    }])
+    monkeypatch.setattr(
+        jobs_mod, "_worktree_git_state_inspector",
+        lambda: lambda path, branch=None, started_at=None: {
+            "has_activity": True, "commits_ahead": 1,
+            "base_commit": "base-sha", "dirty": False,
+        },
+    )
+    monkeypatch.setattr(jobs_mod, "local_commits_pushed", lambda *a, **k: False)
+    monkeypatch.setattr(jobs_mod, "github_branch_effect_verified", lambda *a, **k: None)
+
+    conn = sl._get_db()
+    assert jobs_mod._reconcile_terminal_jobs_json(conn) == 0
+    assert conn.execute("SELECT status FROM daemon_jobs WHERE job_id=?", (job_id,)).fetchone() == ("running",)
+    conn.close()
+
+    monkeypatch.setattr(jobs_mod, "github_branch_effect_verified", lambda *a, **k: True)
+    conn = sl._get_db()
+    assert jobs_mod._reconcile_terminal_jobs_json(conn) == 1
+    assert conn.execute("SELECT status FROM daemon_jobs WHERE job_id=?", (job_id,)).fetchone() == ("done",)
+    conn.close()
+
+
+def test_reconcile_terminal_jobs_json_matches_reconcile_daemon_jobs_defer_decision(project_dir, monkeypatch):
+    """Bridge and daemon poll-loop call sites must agree on inconclusive state."""
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    def make_job(job_id):
+        wt = project_dir / "worktrees" / job_id
+        log = wt / ".synlynk" / "logs" / f"{job_id}.log"
+        log.parent.mkdir(parents=True)
+        log.write_text("agent did work\n")
+        conn = sl._get_db()
+        conn.execute(
+            "INSERT INTO daemon_jobs (job_id, agent, task, status, pid, enqueued_at, "
+            "started_at, log_path, worktree_path, worktree_branch) VALUES "
+            "(?, 'codex', 'implement thing', 'running', 999999, "
+            "'2026-10-04T09:00:00', '2026-10-04T09:00:00', ?, ?, ?)",
+            (job_id, str(log), str(wt), f"fix/{job_id}"),
+        )
+        conn.commit()
+        conn.close()
+
+    monkeypatch.setattr(
+        jobs_mod, "_worktree_git_state_inspector",
+        lambda: lambda path, branch=None, started_at=None: {
+            "has_activity": True, "commits_ahead": 1,
+            "base_commit": "base-sha", "dirty": False,
+        },
+    )
+    monkeypatch.setattr(jobs_mod, "local_commits_pushed", lambda *a, **k: False)
+    monkeypatch.setattr(jobs_mod, "github_branch_effect_verified", lambda *a, **k: None)
+    monkeypatch.setattr(jobs_mod, "_pid_is_alive", lambda pid: False)
+    monkeypatch.setattr(jobs_mod, "_existing_terminal_summary_truth", lambda job_id: ("done", 0))
+
+    bridge_job_id = "job-parity-bridge"
+    make_job(bridge_job_id)
+    sl._save_jobs([{
+        "id": bridge_job_id, "agent": "codex", "status": "completed",
+        "task": "implement thing", "started_at": "2026-10-04T09:00:00",
+        "ended_at": "2026-10-04T09:05:00", "exit_code": 0,
+    }])
+    conn = sl._get_db()
+    bridge_repaired = jobs_mod._reconcile_terminal_jobs_json(conn)
+    bridge_row = conn.execute("SELECT status FROM daemon_jobs WHERE job_id=?", (bridge_job_id,)).fetchone()
+    conn.close()
+
+    daemon_job_id = "job-parity-daemon"
+    conn = sl._get_db()
+    conn.execute("DELETE FROM daemon_jobs WHERE job_id=?", (bridge_job_id,))
+    conn.commit()
+    conn.close()
+    make_job(daemon_job_id)
+    jobs_mod._reconcile_daemon_jobs()
+
+    conn = sl._get_db()
+    daemon_row = conn.execute("SELECT status FROM daemon_jobs WHERE job_id=?", (daemon_job_id,)).fetchone()
+    conn.close()
+
+    assert bridge_repaired == 0
+    assert bridge_row == ("running",)
+    assert daemon_row == bridge_row
+
+
 def test_apply_gh_write_verification_persists_evidence(project_dir, monkeypatch):
     import json
     import synlynk as sl
