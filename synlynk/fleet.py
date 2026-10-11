@@ -392,8 +392,8 @@ def live_agent_smoke(
                 text=True,
                 timeout=timeout_s,
             )
-        elif prompt_via_arg and prompt_flag:
-            cmd = [cli] + ni + [prompt_flag, prompt]
+        elif prompt_via_arg:
+            cmd = [cli] + ni + ([prompt_flag, prompt] if prompt_flag else [prompt])
             proc = subprocess.run(
                 cmd, capture_output=True, text=True, timeout=timeout_s
             )
@@ -483,8 +483,8 @@ def live_agent_receipt_check(
             if _CODEX_NETWORK_PERMISSION in (permissions or []):
                 cmd += ["-c", "sandbox_workspace_write.network_access=true"]
             proc = subprocess.run(cmd, input=prompt, capture_output=True, text=True, timeout=timeout_s)
-        elif prompt_via_arg and prompt_flag:
-            cmd = [cli] + ni + [prompt_flag, prompt]
+        elif prompt_via_arg:
+            cmd = [cli] + ni + ([prompt_flag, prompt] if prompt_flag else [prompt])
             proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_s)
         else:
             cmd = [cli] + ni
