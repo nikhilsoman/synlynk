@@ -334,6 +334,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [272](./272-pr2171-capability-sweep-quality-signal-design-s.md) | PR #2171 — capability sweep quality signal — design spec + implementation plan | [#2171](https://github.com/nikhilsoman/synlynk/pull/2171) | 2026-10-10 |
 | [273](./273-pr2179-clean-up-no-op-job-worktrees.md) | PR #2179 — clean up no-op job worktrees | [#2179](https://github.com/nikhilsoman/synlynk/pull/2179) | 2026-10-10 |
 | [274](./274-pr2188-wire-synlynk-autonomous-into-all-three-s.md) | PR #2188 — wire SYNLYNK_AUTONOMOUS into all three service installers | [#2188](https://github.com/nikhilsoman/synlynk/pull/2188) | 2026-10-11 |
+| [275](./275-pr2189-align-dispatch-flags-with-exec-cli-contr.md) | PR #2189 — align dispatch flags with exec CLI contract | [#2189](https://github.com/nikhilsoman/synlynk/pull/2189) | 2026-10-11 |
 
 ## Per-PR Post Template
 

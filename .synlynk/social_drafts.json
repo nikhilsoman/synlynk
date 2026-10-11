@@ -334,5 +334,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2188 \u2014 wire SYNLYNK_AUTONOMOUS into all three service installers (PR #2188, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2188.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-11) - PR #2188\n- Merged improvements and fixes for PR #2188."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/275-pr2189-align-dispatch-flags-with-exec-cli-contr.md",
+    "title": "PR #2189 \u2014 align dispatch flags with exec CLI contract",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-11",
+    "pr": "#2189",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2189."
+    ],
+    "tweet": "\ud83d\ude80 PR #2189 \u2014 align dispatch flags with exec CLI contract (PR #2189, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2189.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-11) - PR #2189\n- Merged improvements and fixes for PR #2189."
   }
 ]
