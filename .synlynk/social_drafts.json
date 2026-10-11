@@ -446,5 +446,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2177 \u2014 price Codex cache-replay input separately from fresh tokens (PR #2177, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2177.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-11) - PR #2177\n- Merged improvements and fixes for PR #2177."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/281-pr2191-pass-prompt-positionally-for-prompt-via-.md",
+    "title": "PR #2191 \u2014 pass prompt positionally for prompt_via_arg agents with no prompt_flag",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-11",
+    "pr": "#2191",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2191."
+    ],
+    "tweet": "\ud83d\ude80 PR #2191 \u2014 pass prompt positionally for prompt_via_arg agents with no prompt_flag (PR #2191, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2191.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-11) - PR #2191\n- Merged improvements and fixes for PR #2191."
   }
 ]
