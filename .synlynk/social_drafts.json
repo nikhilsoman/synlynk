@@ -494,5 +494,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2195 \u2014 capture nested Muse exec usage (PR #2195, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2195.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-11) - PR #2195\n- Merged improvements and fixes for PR #2195."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/284-pr2197-revisable-terminal-job-status-verdicts-b.md",
+    "title": "PR #2197 \u2014 revisable terminal job-status verdicts by evidence strength",
+    "author": "synlynk-pm agent",
+    "date": "2026-10-11",
+    "pr": "#2197",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2197."
+    ],
+    "tweet": "\ud83d\ude80 PR #2197 \u2014 revisable terminal job-status verdicts by evidence strength (PR #2197, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2197.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-11) - PR #2197\n- Merged improvements and fixes for PR #2197."
   }
 ]
