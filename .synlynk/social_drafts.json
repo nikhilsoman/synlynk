@@ -606,5 +606,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2209 \u2014 add capability routing report (#1993) (PR #2209, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2209.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-11) - PR #2209\n- Merged improvements and fixes for PR #2209."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/291-pr2211-hermes-local-model-measurement-wiring-de.md",
+    "title": "PR #2211 \u2014 Hermes local-model measurement wiring design spec (roadmap Week 3 pillar 4)",
+    "author": "nikhilsoman",
+    "date": "2026-10-11",
+    "pr": "#2211",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2211."
+    ],
+    "tweet": "\ud83d\ude80 PR #2211 \u2014 Hermes local-model measurement wiring design spec (roadmap Week 3 pillar 4) (PR #2211, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2211.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-11) - PR #2211\n- Merged improvements and fixes for PR #2211."
   }
 ]

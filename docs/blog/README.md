@@ -351,6 +351,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [288](./288-pr2200-wire-retry-gates-into-terminal-json-reco.md) | PR #2200 — wire retry gates into terminal JSON reconciliation | [#2200](https://github.com/nikhilsoman/synlynk/pull/2200) | 2026-10-11 |
 | [289](./289-pr2208-bridge-openrouter-through-generic-gatewa.md) | PR #2208 — bridge OpenRouter through generic gateway dispatch | [#2208](https://github.com/nikhilsoman/synlynk/pull/2208) | 2026-10-11 |
 | [290](./290-pr2209-add-capability-routing-report-1993.md) | PR #2209 — add capability routing report (#1993) | [#2209](https://github.com/nikhilsoman/synlynk/pull/2209) | 2026-10-11 |
+| [291](./291-pr2211-hermes-local-model-measurement-wiring-de.md) | PR #2211 — Hermes local-model measurement wiring design spec (roadmap Week 3 pillar 4) | [#2211](https://github.com/nikhilsoman/synlynk/pull/2211) | 2026-10-11 |
 
 ## Per-PR Post Template
 
