@@ -11,6 +11,15 @@ from synlynk.dispatch import _format_prompt_for_agent, dispatch_agent
 from synlynk.probe import _probe_agent, _run_tc0
 
 
+def test_muse_model_resolves_to_real_catalog_id():
+    """resolve_tier_model must not fall through to the 'muse-default' placeholder."""
+    from synlynk.models import resolve_tier_model
+
+    assert resolve_tier_model("pro", "muse") == "muse-spark-1.3"
+    assert resolve_tier_model("fast", "muse") == "muse-spark-1.3"
+    assert resolve_tier_model("unknown-tier", "muse") == "muse-spark-1.3"
+
+
 def test_muse_baseline_schema_tc0():
     """Verify Meta Muse baseline passes TC-0 schema validation with zero issues."""
     assert "muse" in HARNESS_CAPABILITY_BASELINES
