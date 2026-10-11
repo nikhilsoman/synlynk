@@ -349,6 +349,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [286](./286-pr2196-prioritize-verified-remote-evidence-over.md) | PR #2196 — prioritize verified remote evidence over unknown_contract | [#2196](https://github.com/nikhilsoman/synlynk/pull/2196) | 2026-10-11 |
 | [287](./287-pr2198-refresh-stale-graphify-graph-surface-con.md) | PR #2198 — refresh stale Graphify graph, surface context-build failures | [#2198](https://github.com/nikhilsoman/synlynk/pull/2198) | 2026-10-11 |
 | [288](./288-pr2200-wire-retry-gates-into-terminal-json-reco.md) | PR #2200 — wire retry gates into terminal JSON reconciliation | [#2200](https://github.com/nikhilsoman/synlynk/pull/2200) | 2026-10-11 |
+| [289](./289-pr2208-bridge-openrouter-through-generic-gatewa.md) | PR #2208 — bridge OpenRouter through generic gateway dispatch | [#2208](https://github.com/nikhilsoman/synlynk/pull/2208) | 2026-10-11 |
 
 ## Per-PR Post Template
 
