@@ -722,13 +722,31 @@
 | 2026-10-12 00:26 | grok | grok-3 | 126643 | 30029 | $1.0274 [sub] (API: $0.8304) | estimated_token_rate | story-84912225 | exec: grok job job-0633e60... |
 | 2026-10-12 00:26 | codex | o4-mini | 3560420 | 21293 | $0.1712 [sub] (API: $11.0007) | estimated_token_rate | story-84912225 | exec: codex job job-8a7252... |
 | 2026-10-12 00:26 | grok | grok-3 | 82270 | 20303 | $0.6726 [sub] (API: $0.5514) | estimated_token_rate | story-84912225 | exec: grok job job-ec7a5c9... |
+| 2026-10-12 00:58 | codex | o4-mini | 3436575 | 15658 | $0.0060 [sub] (API: $0.5685) | estimated_token_rate | story-84912225 | exec: codex job job-2d572a... |
+| 2026-10-12 00:58 | grok | grok-3 | 173078 | 37953 | $1.3838 [sub] (API: $1.0891) | estimated_token_rate | story-84912225 | exec: grok job job-32d5cc1... |
+| 2026-10-12 01:19 | codex | o4-mini | 4045358 | 15228 | $0.0079 [sub] (API: $0.6821) | estimated_token_rate | story-84912225 | exec: codex job job-ad0030... |
+| 2026-10-12 01:19 | codex | o4-mini | 3014810 | 17957 | $0.0056 [sub] (API: $0.5664) | estimated_token_rate | story-84912225 | exec: codex job job-a6eb19... |
+| 2026-10-12 01:19 | claude | claude-sonnet-4-6 | 93955 | 4137 | $0.2435 [sub] (API: $0.3442) | estimated_token_rate | story-6c659435 | exec: claude job job-282ea... |
+| 2026-10-12 01:19 | claude | claude-sonnet-4-6 | 86589 | 10753 | $0.2416 [sub] (API: $0.4221) | estimated_token_rate | story-6c659435 | exec: claude job job-23c15... |
+| 2026-10-12 01:19 | claude | claude-sonnet-4-6 | 8183 | 5077 | $0.0329 [sub] (API: $0.1010) | estimated_token_rate | story-6c659435 | exec: claude job job-aa8da... |
+| 2026-10-12 01:30 | claude | unknown | 69883 | 3456 | $0.1820 [sub] (API: $0.2615) | estimated_token_rate | story-6c659435 | exec: claude job job-e1efc... |
+| 2026-10-12 01:54 | claude | claude-sonnet-4-6 | 82481 | 15454 | $0.2431 [sub] (API: $0.4798) | estimated_token_rate | story-6c659435 | exec: claude job job-8998c... |
+| 2026-10-12 01:54 | grok | grok-3 | 112410 | 20328 | $0.8704 [sub] (API: $0.6424) | estimated_token_rate | story-6c659435 | exec: grok job job-6cacef3... |
+| 2026-10-12 04:20 | claude | claude-sonnet-4-6 | 1458 | 140 | $0.0040 [sub] (API: $0.0065) | estimated_token_rate | story-6c659435 | exec: claude job job-fa6c2... |
+| 2026-10-12 04:22 | claude | claude-sonnet-4-6 | 58410 | 10938 | $0.1721 [sub] (API: $0.3393) | estimated_token_rate | story-6c659435 | exec: claude job job-965e5... |
+| 2026-10-12 04:22 | codex | o4-mini | 2515624 | 11909 | $0.1208 [sub] (API: $7.7255) | estimated_token_rate | story-6c659435 | exec: codex job job-6baa20... |
+| 2026-10-12 04:36 | grok | grok-3 | 117028 | 16470 | $0.8754 [sub] (API: $0.5981) | estimated_token_rate | story-6c659435 | exec: grok job job-7e19ebf... |
+| 2026-10-12 04:36 | codex | o4-mini | 589672 | 9236 | $0.0286 [sub] (API: $1.9076) | estimated_token_rate | story-6c659435 | exec: codex job job-ff4616... |
+| 2026-10-12 04:41 | grok | grok-3 | 168841 | 27121 | $1.2850 [sub] (API: $0.9133) | estimated_token_rate | story-6c659435 | exec: grok job job-2bfca91... |
+| 2026-10-12 04:42 | grok | grok-3 | 51115 | 3691 | $0.3594 [sub] (API: $0.2087) | estimated_token_rate | story-6c659435 | exec: grok job job-e14937b... |
+| 2026-10-12 04:51 | grok | grok-3 | 76474 | 14652 | $0.5976 [sub] (API: $0.4492) | estimated_token_rate | story-6c659435 | exec: grok job job-792fd65... |
 
 ## Subscription Amortization & Dual-Ledger Summary
 
 | Harness | Base Fee | Actual Amortized Spend | API Equivalent Value | Net Savings |
 |---|---|---|---|---|
-| claude | $20.00 | $23.9694 | $35.8447 | $11.8753 |
-| codex | $20.00 | $21.0783 | $1351.1048 | $1330.0264 |
+| claude | $20.00 | $25.0885 | $37.7991 | $12.7106 |
+| codex | $20.00 | $21.2473 | $1362.5548 | $1341.3075 |
 | agy | $20.00 | $3.9405 | $18.6773 | $14.7368 |
-| grok | $30.00 | $70.2910 | $51.1951 | $-19.0959 |
-| **Total** | **$90.00** | **$119.2792** | **$1456.8218** | **$1337.5427** |
+| grok | $30.00 | $75.6626 | $55.0959 | $-20.5666 |
+| **Total** | **$90.00** | **$125.9388** | **$1474.1271** | **$1348.1882** |
