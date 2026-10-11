@@ -638,5 +638,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2212 \u2014 SQLite WAL soak test design spec + plan (gh:#2102) (PR #2212, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2212.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-11) - PR #2212\n- Merged improvements and fixes for PR #2212."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/293-pr2207-sqlite-wal-concurrent-writer-soak-test-g.md",
+    "title": "PR #2207 \u2014 SQLite WAL concurrent-writer soak test (gh:#2102)",
+    "author": "nikhilsoman",
+    "date": "2026-10-11",
+    "pr": "#2207",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2207."
+    ],
+    "tweet": "\ud83d\ude80 PR #2207 \u2014 SQLite WAL concurrent-writer soak test (gh:#2102) (PR #2207, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2207.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-11) - PR #2207\n- Merged improvements and fixes for PR #2207."
   }
 ]

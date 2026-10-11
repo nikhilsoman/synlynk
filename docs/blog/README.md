@@ -353,6 +353,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [290](./290-pr2209-add-capability-routing-report-1993.md) | PR #2209 — add capability routing report (#1993) | [#2209](https://github.com/nikhilsoman/synlynk/pull/2209) | 2026-10-11 |
 | [291](./291-pr2211-hermes-local-model-measurement-wiring-de.md) | PR #2211 — Hermes local-model measurement wiring design spec (roadmap Week 3 pillar 4) | [#2211](https://github.com/nikhilsoman/synlynk/pull/2211) | 2026-10-11 |
 | [292](./292-pr2212-sqlite-wal-soak-test-design-spec-plan-gh.md) | PR #2212 — SQLite WAL soak test design spec + plan (gh:#2102) | [#2212](https://github.com/nikhilsoman/synlynk/pull/2212) | 2026-10-11 |
+| [293](./293-pr2207-sqlite-wal-concurrent-writer-soak-test-g.md) | PR #2207 — SQLite WAL concurrent-writer soak test (gh:#2102) | [#2207](https://github.com/nikhilsoman/synlynk/pull/2207) | 2026-10-11 |
 
 ## Per-PR Post Template
 
