@@ -718,5 +718,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2217 \u2014 add log-size runaway circuit breaker net (gh:#1937) (PR #2217, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2217.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-11) - PR #2217\n- Merged improvements and fixes for PR #2217."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/298-pr2215-avoid-zero-file-kill-during-branch-trans.md",
+    "title": "PR #2215 \u2014 avoid zero-file kill during branch transition",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-11",
+    "pr": "#2215",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2215."
+    ],
+    "tweet": "\ud83d\ude80 PR #2215 \u2014 avoid zero-file kill during branch transition (PR #2215, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2215.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-11) - PR #2215\n- Merged improvements and fixes for PR #2215."
   }
 ]
