@@ -4,8 +4,8 @@ date: 2026-10-11
 series: "Building the OS for Multi-Agent Development"
 post: 267
 pr: "#2177"
-status: merged
-author: "nikhilsoman"
+status: open
+author: "synlynk team"
 version: "0.25.0"
 tags: [posts]
 type: pr
