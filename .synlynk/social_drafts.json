@@ -526,5 +526,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2199 \u2014 add missing frontmatter fields to blog post 267 (PR #2199, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2199.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-11) - PR #2199\n- Merged improvements and fixes for PR #2199."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/286-pr2196-prioritize-verified-remote-evidence-over.md",
+    "title": "PR #2196 \u2014 prioritize verified remote evidence over unknown_contract",
+    "author": "synlynk-pm agent",
+    "date": "2026-10-11",
+    "pr": "#2196",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2196."
+    ],
+    "tweet": "\ud83d\ude80 PR #2196 \u2014 prioritize verified remote evidence over unknown_contract (PR #2196, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2196.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-11) - PR #2196\n- Merged improvements and fixes for PR #2196."
   }
 ]
