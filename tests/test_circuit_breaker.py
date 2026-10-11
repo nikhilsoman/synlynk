@@ -30,7 +30,7 @@ def _codex_turn_log(input_tokens, cached_input_tokens, output_tokens, reasoning=
     )
 
 
-def test_zero_file_checkout_states_use_real_git(tmp_path):
+def test_zero_file_checkout_states_use_real_git(tmp_path, monkeypatch):
     repo = tmp_path / "repo"
     worktree = tmp_path / "worktree"
     subprocess.run(["git", "init", "-q", str(repo)], check=True)
@@ -46,6 +46,9 @@ def test_zero_file_checkout_states_use_real_git(tmp_path):
 
     assert _worktree_branch_is_stable(str(worktree), "dispatch") is True
     subprocess.run(["git", "-C", str(worktree), "switch", "-q", "-c", "feature"], check=True)
+    assert _worktree_branch_is_stable(str(worktree), "dispatch") is False
+    branch_switch_time = time.time()
+    monkeypatch.setattr("synlynk.circuit_breaker.time.time", lambda: branch_switch_time + 61)
     assert _worktree_branch_is_stable(str(worktree), "dispatch") is True
     subprocess.run(["git", "-C", str(worktree), "switch", "-q", "--detach"], check=True)
     assert _worktree_branch_is_stable(str(worktree), "dispatch") is False

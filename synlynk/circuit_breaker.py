@@ -158,10 +158,12 @@ def _worktree_branch_is_stable(worktree_path: Optional[str], expected_branch: Op
             ["git", "-C", worktree_path, "reflog", "-1", "--format=%ct", "HEAD"],
             capture_output=True, text=True, check=False,
         )
+        if reflog.returncode != 0:
+            return True
         changed_at = float((reflog.stdout or "").strip())
     except (ValueError, OSError, TypeError):
         return True
-    return time.time() - changed_at <= 60
+    return time.time() - changed_at > 60
 
 
 def evaluate_job_circuit_breaker(
