@@ -1,4 +1,5 @@
 import json
+import os
 import sqlite3
 
 import pytest
@@ -8,6 +9,7 @@ from synlynk.state_registry import (
     canonical_path,
     ensure_registered_product,
     identity_metadata,
+    product_identity,
 )
 
 
@@ -126,3 +128,17 @@ def test_typed_open_requires_explicit_noncanonical_modes(tmp_path):
         assert conn.execute("PRAGMA quick_check").fetchone()[0] == "ok"
     finally:
         conn.close()
+
+
+def test_product_identity_reads_configured_id_from_workspace_json(tmp_path):
+    os.makedirs(tmp_path / ".synlynk")
+    with open(tmp_path / ".synlynk" / "workspace.json", "w", encoding="utf-8") as f:
+        json.dump({"product_id": "configured-product-xyz"}, f)
+    assert product_identity("some-slug", repo_path=str(tmp_path)) == "configured-product-xyz"
+
+
+def test_product_identity_falls_back_to_legacy_config_json(tmp_path):
+    os.makedirs(tmp_path / ".synlynk")
+    with open(tmp_path / ".synlynk" / "config.json", "w", encoding="utf-8") as f:
+        json.dump({"product_id": "legacy-product-abc"}, f)
+    assert product_identity("some-slug", repo_path=str(tmp_path)) == "legacy-product-abc"
