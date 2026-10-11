@@ -360,6 +360,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [297](./297-pr2217-add-log-size-runaway-circuit-breaker-net.md) | PR #2217 — add log-size runaway circuit breaker net (gh:#1937) | [#2217](https://github.com/nikhilsoman/synlynk/pull/2217) | 2026-10-11 |
 | [298](./298-pr2215-avoid-zero-file-kill-during-branch-trans.md) | PR #2215 — avoid zero-file kill during branch transition | [#2215](https://github.com/nikhilsoman/synlynk/pull/2215) | 2026-10-11 |
 | [299](./299-pr2222-migrate-github-app-auth-governs-engine-c.md) | PR #2222 — migrate github_app_auth/governs_engine config readers to workspace.json (gh:#2147) | [#2222](https://github.com/nikhilsoman/synlynk/pull/2222) | 2026-10-11 |
+| [300](./300-pr2223-migrate-state-registry-team-version-poli.md) | PR #2223 — migrate state_registry/team/version_policy config readers to workspace.json (gh:#2147) | [#2223](https://github.com/nikhilsoman/synlynk/pull/2223) | 2026-10-11 |
 
 ## Per-PR Post Template
 

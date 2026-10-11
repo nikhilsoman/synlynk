@@ -750,5 +750,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2222 \u2014 migrate github_app_auth/governs_engine config readers to workspace.json (gh:#2147) (PR #2222, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2222.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-11) - PR #2222\n- Merged improvements and fixes for PR #2222."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/300-pr2223-migrate-state-registry-team-version-poli.md",
+    "title": "PR #2223 \u2014 migrate state_registry/team/version_policy config readers to workspace.json (gh:#2147)",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-11",
+    "pr": "#2223",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2223."
+    ],
+    "tweet": "\ud83d\ude80 PR #2223 \u2014 migrate state_registry/team/version_policy config readers to workspace.json (gh:#2147) (PR #2223, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2223.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-11) - PR #2223\n- Merged improvements and fixes for PR #2223."
   }
 ]
