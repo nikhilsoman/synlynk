@@ -358,16 +358,22 @@ def gh_write_verified(
                     if not expected_sha
                     else _entry_matches_sha(payload.get("mergeCommit") or {}, expected_sha)
                 )
+                # Squash and rebase merges mint a new mergeCommit oid with no
+                # ancestry link to the dispatch-time branch tip (gh_write_sha).
+                # sha_match stays a confidence signal for methods that can be
+                # checked (fast-forward / exact oid). It must not fail expect=merged
+                # when state is MERGED and mergedBy is the expected actor (gh:#2163).
                 matched = (
                     None
                     if state_match is None or actor_match is None
-                    else bool(state_match and actor_match and sha_match)
+                    else bool(state_match and actor_match)
                 )
                 if evidence is not None:
                     evidence.update({
                         "target_match": True,
                         "actor_match": actor_match,
                         "sha_match": sha_match,
+                        "sha_match_required": False,
                         "state": actual,
                         "mergedBy": payload.get("mergedBy"),
                         "mergeCommit": payload.get("mergeCommit"),

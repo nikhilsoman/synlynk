@@ -43,6 +43,92 @@ def test_gh_write_verified_true_when_pr_merged(monkeypatch):
     assert evidence["target_match"] is True
     assert evidence["actor_match"] is True
     assert evidence["sha_match"] is True
+    assert evidence["sha_match_required"] is False
+    assert evidence["matched"] is True
+
+
+def test_gh_write_verified_squash_merge_ignores_unrelated_merge_commit_sha(monkeypatch):
+    """A squash merge's mergeCommit is a new oid, not the branch tip captured at dispatch."""
+    def fake_run(cmd, **kwargs):
+        return subprocess.CompletedProcess(
+            cmd, 0,
+            stdout='{"state":"MERGED","mergedBy":{"login":"qa"},'
+                   '"mergeCommit":{"oid":"squashcommitsha999"}}',
+            stderr="",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    evidence = {}
+    assert gh_write_verified(
+        "pr:2238", expect="merged", expect_author="qa",
+        expected_sha="branchtiptip111", evidence=evidence,
+    ) is True
+    assert evidence["matched"] is True
+    assert evidence["actor_match"] is True
+    assert evidence["sha_match"] is False
+    assert evidence["sha_match_required"] is False
+    assert evidence["state"] == "MERGED"
+
+
+def test_gh_write_verified_merged_sha_prefix_still_records_match(monkeypatch):
+    def fake_run(cmd, **kwargs):
+        return subprocess.CompletedProcess(
+            cmd, 0,
+            stdout='{"state":"MERGED","mergedBy":{"login":"qa"},'
+                   '"mergeCommit":{"oid":"deadbeefcafe"}}',
+            stderr="",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    evidence = {}
+    assert gh_write_verified(
+        "pr:964", expect="merged", expect_author="qa",
+        expected_sha="deadbee", evidence=evidence,
+    ) is True
+    assert evidence["sha_match"] is True
+
+
+def test_gh_write_verified_merged_rejects_wrong_actor(monkeypatch):
+    def fake_run(cmd, **kwargs):
+        return subprocess.CompletedProcess(
+            cmd, 0,
+            stdout='{"state":"MERGED","mergedBy":{"login":"someone-else"},'
+                   '"mergeCommit":{"oid":"deadbeef"}}',
+            stderr="",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr("synlynk.gh_verify.time.sleep", lambda seconds: None)
+    evidence = {}
+    assert gh_write_verified(
+        "pr:964", expect="merged", expect_author="qa",
+        expected_sha="deadbeef", evidence=evidence,
+    ) is False
+    assert evidence["matched"] is False
+    assert evidence["actor_match"] is False
+    assert evidence["sha_match"] is True
+    assert evidence["state"] == "MERGED"
+
+
+def test_gh_write_verified_merged_rejects_non_merged_state(monkeypatch):
+    def fake_run(cmd, **kwargs):
+        return subprocess.CompletedProcess(
+            cmd, 0,
+            stdout='{"state":"OPEN","mergedBy":{"login":"qa"},'
+                   '"mergeCommit":{"oid":"deadbeef"}}',
+            stderr="",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr("synlynk.gh_verify.time.sleep", lambda seconds: None)
+    evidence = {}
+    assert gh_write_verified(
+        "pr:964", expect="merged", expect_author="qa",
+        expected_sha="deadbeef", evidence=evidence,
+    ) is False
+    assert evidence["matched"] is False
+    assert evidence["state"] == "OPEN"
+    assert evidence["attempt_count"] == 3
 
 
 def test_gh_write_verified_merged_retries_delayed_state(monkeypatch):
