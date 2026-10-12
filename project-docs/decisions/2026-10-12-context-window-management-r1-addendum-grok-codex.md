@@ -61,7 +61,7 @@ records. But the one probe that would have settled per-turn-reload-vs-per-sessio
 because this dispatch's own task text prohibited file edits. No transcript/log evidence
 exposed instruction-payload reload events directly either way.
 
-**Verdict: Codex remains `unconfirmed`** — the R2 decision's "default to Agy-style
+**Verdict at the time: Codex remains `unconfirmed`** — the R2 decision's "default to Agy-style
 worst-case treatment for unconfirmed harnesses" stands for Codex as-is. A real probe
 (deliberately editing `AGENTS.md` mid-session in a dispatch explicitly scoped to allow
 that edit) is still open work, consistent with R2's stated empirical-probe plan.
@@ -71,15 +71,48 @@ relative to its output and worth flagging against the project's existing cost-in
 pattern tracking (gh:#1937/#2219 lineage) — not investigated further here, out of scope
 for this addendum.
 
-## Updated harness reload-confidence table (supersedes R1/R2's provisional one)
+## Codex — job-3cad6bd5, mid-session AGENTS.md mutation probe (`$3.28`, 1,059,968 in / 6,920 out, 149s)
+
+The follow-up probe this addendum called for. Dispatched with explicit permission to edit
+`AGENTS.md` as the diagnostic mechanism: append a one-line sentinel mid-session, continue
+with 4+ substantive tool actions without deliberately re-reading the file, then check
+whether the sentinel surfaced in active instruction/system context on a later turn.
+Restored `AGENTS.md` afterward; worktree confirmed clean.
+
+**Result: the sentinel never appeared in active instruction/system context on any later
+turn.** This is evidence *against* a verbatim full-file per-turn resend of `AGENTS.md` —
+if Codex re-inlined the file's current on-disk content every turn the way Agy does, the
+appended sentinel should have shown up in a subsequent turn's context. It did not.
+
+This is weaker than Grok's confirmation, though, for two reasons the job itself flagged:
+(1) the only instruction payload exposed in `~/.codex/sessions/.../rollout-*.jsonl` is the
+turn-1 `session_meta.base_instructions` — later turns' usage records (entries 121, 125)
+prove continued activity but not their prompt *contents*, so a reload that uses a cached/
+reconstructed copy rather than a literal re-read of the file wouldn't necessarily show up
+as a fresh sentinel-bearing payload either; (2) `history.jsonl`, `session_index.jsonl`,
+and `transcription-history.jsonl` were also searched with no direct reload-event evidence
+either way.
+
+**Verdict: Codex moves from `unconfirmed` to `probed_no_evidence_of_per_turn_reload`** —
+distinct from Claude's `confirmed_per_session` (which has direct transcript proof of a
+one-time load) because this is an absence-of-evidence result, not a positive confirmation
+of session-level caching. Practically: the R2 instruction-writer's worst-case default no
+longer needs to treat Codex identically to Agy's *confirmed* per-turn case, but Codex
+still isn't promoted to Claude's confirmed tier either. Treat as session-level for cost-model
+purposes (no evidence of per-turn resend cost), while keeping the `reload_confidence` enum
+value distinct so a future stronger probe (full later-turn prompt payload capture) can
+still close the gap cleanly.
+
+## Updated harness reload-confidence table (supersedes R1/R2's provisional one and this addendum's own earlier revision)
 
 | Harness | Reload confidence | Evidence |
 |---|---|---|
 | Claude | `confirmed_per_session` | R1: CLAUDE.md/MEMORY.md loaded once at session start, not resent (direct transcript observation) |
 | Agy | `confirmed_per_turn` | R1: full system-instruction block re-inlined every `generateContent` call (payload inspection) |
-| Grok | `confirmed_per_turn` | **This addendum**: `prompt_tokens` growth across tool-loop rounds in `~/.grok/logs/unified.jsonl`, confirmed by direct session-log evidence |
-| Codex | `unconfirmed` | **This addendum**: persistent session identity confirmed, but the one probe that disambiguates reload timing (mid-session AGENTS.md mutation) was not run; no log/transcript evidence either way |
+| Grok | `confirmed_per_turn` | This addendum: `prompt_tokens` growth across tool-loop rounds in `~/.grok/logs/unified.jsonl`, confirmed by direct session-log evidence |
+| Codex | `probed_no_evidence_of_per_turn_reload` | **This addendum, job-3cad6bd5**: mid-session `AGENTS.md` sentinel mutation never resurfaced in later-turn context across 4+ tool actions — absence-of-evidence against per-turn resend, not a positive session-level confirmation; later-turn prompt payloads remain unexposed in available logs |
 
-This changes R2's framing from "Codex and Grok are both open gaps" to "Grok is now
-confirmed (treat as per-turn, same as Agy); Codex remains the sole open gap, with a
-specific next probe identified above."
+This changes R2's framing from "Codex and Grok are both open gaps" to: Grok confirmed
+per-turn (treat as Agy-tier for cost-model purposes); Codex probed with a negative result
+for per-turn resend (treat as session-tier for cost-model purposes, pending a stronger
+confirmation), closing the sole remaining fully-open gap from the original R1 synthesis.
