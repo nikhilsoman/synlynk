@@ -24,7 +24,11 @@ def _redaction_cache_path() -> str:
 def _default_apps_dir() -> str:
     """Return the shared GitHub App directory for the current repository."""
     try:
-        if not os.path.isfile(os.path.join(".synlynk", "config.json")):
+        configured = (
+            os.path.isfile(os.path.join(".synlynk", "workspace.json"))
+            or os.path.isfile(os.path.join(".synlynk", "config.json"))
+        )
+        if not configured:
             return os.path.join(".synlynk", "github_apps")
         from synlynk.product_store import resolve_github_apps_dir
         return str(resolve_github_apps_dir("."))

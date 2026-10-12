@@ -3,6 +3,7 @@
 import json
 import os
 import re
+import shlex
 import sqlite3
 import subprocess
 import time
@@ -535,25 +536,35 @@ def _test_files_for_verify_contract() -> list:
     return found
 
 
-def _verify_contract_for_story(story_id: str, task: str) -> str:
+def _verify_contract_for_story(story_id: str, task: str, job_id: str = None) -> str:
     """Returns a ## How to Verify section with a pytest invocation. Empty string if no tests/ dir."""
     if not os.path.exists("tests"):
         return ""
 
+    from synlynk.dispatch import verify_step_shell
+
+    label = job_id or story_id or "verify"
     changed = _test_files_for_verify_contract()
     if changed:
-        cmd = "pytest " + " ".join(changed) + " -v"
+        pytest_cmd = "pytest " + " ".join(shlex.quote(path) for path in changed) + " -v"
+        cmd = verify_step_shell(pytest_cmd, label, 1)
         return (
             "\n\n## How to Verify\n"
             f"Run: `{cmd}`\n"
             "Expected: all matched tests pass, no new failures.\n"
             "Do not pass a guessed pytest -k selector derived from the task title.\n"
+            "Do not re-run pytest with inline verbose output. The command above "
+            "writes oversized output to `.synlynk/logs/` and prints only the "
+            "exit code plus a short tail.\n"
         )
     return (
         "\n\n## How to Verify\n"
         "Run pytest on the test files this change adds or modifies.\n"
         "Do not pass a guessed pytest -k selector derived from the task title "
         "(that matches 0 tests and exits 5).\n"
+        "If the captured output exceeds 4000 characters, write the full output "
+        f"to `.synlynk/logs/{label}-verify-1.log` and keep only the exit code "
+        "and the last 30 lines in the transcript.\n"
         "Expected: all matched tests pass, no new failures.\n"
     )
 

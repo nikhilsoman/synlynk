@@ -1519,7 +1519,7 @@ def _resolve_worktree_base_commit(worktree_path: Optional[str]) -> Optional[dict
 
 
 def _worktree_files_touched(worktree_path: Optional[str]) -> list:
-    """Return sorted file paths committed in a worktree since the resolved merge-base."""
+    """Return files committed or currently changed since the resolved merge-base."""
     if not _worktree_path_is_available(worktree_path, "collect touched files"):
         return []
 
@@ -1548,6 +1548,25 @@ def _worktree_files_touched(worktree_path: Optional[str]) -> list:
             path = path.strip()
             if path:
                 touched.add(path)
+
+    try:
+        working_tree_result = subprocess.run(
+            ["git", "-C", worktree_path, "diff", "--name-only", "HEAD"],
+            capture_output=True, text=True, check=False,
+        )
+        untracked_result = subprocess.run(
+            ["git", "-C", worktree_path, "ls-files", "--others", "--exclude-standard"],
+            capture_output=True, text=True, check=False,
+        )
+    except Exception:
+        working_tree_result = untracked_result = None
+
+    for result in (working_tree_result, untracked_result):
+        if result and result.returncode == 0:
+            for path in (result.stdout or "").splitlines():
+                path = path.strip()
+                if path:
+                    touched.add(path)
 
     return sorted(touched)
 
@@ -2196,6 +2215,128 @@ def _warn_context_build_failure(step: str, reason: str, repo_root: str) -> None:
             f"({type(exc).__name__}: {exc})",
             file=sys.stderr,
         )
+
+
+# Verbose pytest output is resent as cache-hit input on every later tool
+# round. Keep at most this many characters of a verify step in the transcript.
+VERIFY_OUTPUT_INLINE_LIMIT = 4000
+VERIFY_OUTPUT_TAIL_LINES = 30
+_VERIFY_INLINE_HEADROOM = 32
+
+
+def _verify_job_label(job_id: str) -> str:
+    label = (job_id or "verify").replace("/", "-").replace("\\", "-").strip()
+    return label or "verify"
+
+
+def verify_log_relpath(job_id: str, index: int = 1) -> str:
+    """Relative path of a spilled verify log inside the job worktree."""
+    return f".synlynk/logs/{_verify_job_label(job_id)}-verify-{int(index)}.log"
+
+
+def _verify_output_tail(text: str, lines: int = VERIFY_OUTPUT_TAIL_LINES) -> str:
+    return "\n".join((text or "").splitlines()[-lines:])
+
+
+def summarize_verify_output(
+    output: str,
+    exit_code: int,
+    *,
+    job_id: str,
+    worktree: str,
+    index: int = 1,
+    threshold: int = VERIFY_OUTPUT_INLINE_LIMIT,
+) -> str:
+    """Return a transcript-safe verify summary.
+
+    When the captured output is too large to keep inline, the full text is
+    written to ``.synlynk/logs/<job_id>-verify-<n>.log`` under ``worktree``.
+    The returned string always includes the exit code and stays within
+    ``threshold`` characters.
+    """
+    output = output or ""
+    prefix = f"exit_code={exit_code}\n"
+    if len(output) <= threshold and len(prefix) + len(output) <= threshold:
+        return prefix + output
+
+    root = worktree or os.getcwd()
+    logs_dir = os.path.join(root, ".synlynk", "logs")
+    os.makedirs(logs_dir, exist_ok=True)
+    rel = verify_log_relpath(job_id, index)
+    log_path = os.path.join(root, rel)
+    with open(log_path, "w", encoding="utf-8") as handle:
+        handle.write(output)
+
+    header = f"{prefix}full_log={rel}\n"
+    budget = threshold - len(header)
+    tail = _verify_output_tail(output)
+    if budget < 0:
+        header = prefix
+        budget = threshold - len(header)
+    if len(tail) > budget:
+        tail = tail[-budget:] if budget > 0 else ""
+    summary = header + tail
+    if len(summary) > threshold:
+        summary = summary[:threshold]
+    return summary
+
+
+def run_verify_step(
+    command: str,
+    *,
+    job_id: str,
+    worktree: str = None,
+    index: int = 1,
+) -> str:
+    """Run a verify command and return only a transcript-safe summary."""
+    root = worktree or os.getcwd()
+    completed = subprocess.run(
+        command,
+        shell=True,
+        cwd=root,
+        capture_output=True,
+        text=True,
+    )
+    output = f"{completed.stdout or ''}{completed.stderr or ''}"
+    return summarize_verify_output(
+        output,
+        completed.returncode,
+        job_id=job_id,
+        worktree=root,
+        index=index,
+    )
+
+
+def verify_step_shell(command: str, job_id: str, index: int = 1) -> str:
+    """Shell form of ``run_verify_step`` for the How to Verify contract.
+
+    The harness tool result is this command's stdout, so the full pytest
+    stream is redirected to a log once it passes the inline limit.
+    """
+    import shlex
+
+    log_rel = verify_log_relpath(job_id, index)
+    quoted_log = shlex.quote(log_rel)
+    inline_limit = VERIFY_OUTPUT_INLINE_LIMIT - _VERIFY_INLINE_HEADROOM
+    tail_budget = VERIFY_OUTPUT_INLINE_LIMIT - _VERIFY_INLINE_HEADROOM
+    return (
+        "mkdir -p .synlynk/logs && "
+        "_synlynk_verify_out=$(mktemp) && "
+        f"{{ {command}; }} > \"$_synlynk_verify_out\" 2>&1; "
+        "ec=$?; "
+        "_synlynk_verify_bytes=$(wc -c < \"$_synlynk_verify_out\" | tr -d ' '); "
+        f"if [ \"$_synlynk_verify_bytes\" -gt {inline_limit} ]; then "
+        f"mv \"$_synlynk_verify_out\" {quoted_log}; "
+        "echo exit_code=$ec; "
+        f"echo full_log={log_rel}; "
+        f"tail -n {VERIFY_OUTPUT_TAIL_LINES} {quoted_log} | head -c {tail_budget}; "
+        "else "
+        "echo exit_code=$ec; "
+        "cat \"$_synlynk_verify_out\"; "
+        "rm -f \"$_synlynk_verify_out\"; "
+        "fi; "
+        "exit $ec"
+    )
 
 
 def _format_prompt_for_agent(agent: str, context_text: str, story_id: str,
@@ -4230,7 +4371,12 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         file_section = "\n\n## Relevant Files\n" + "\n".join(f"- `{f}`" for f in file_list)
 
     verify_contract = _pkg("_verify_contract_for_story")
-    verify_section = verify_contract(story_id, task) if (story_id and verify_contract) else ""
+    verify_section = ""
+    if story_id and verify_contract:
+        try:
+            verify_section = verify_contract(story_id, task, job_id=job_id)
+        except TypeError:
+            verify_section = verify_contract(story_id, task)
 
     task_sha256_for_receipt = hashlib.sha256(task.encode("utf-8")).hexdigest()
     from synlynk.instructions import extract_instruction_version, get_instruction_file_for_agent

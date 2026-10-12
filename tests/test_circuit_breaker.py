@@ -6,6 +6,7 @@ import signal
 import sys
 import tempfile
 import time
+import subprocess
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -13,6 +14,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from synlynk.jobs import STATUS_CIRCUIT_BREAKER_TRIPPED
 from synlynk.circuit_breaker import (
     CircuitBreakerResult,
+    _resolve_circuit_breaker_limits,
     evaluate_job_circuit_breaker,
 )
 from synlynk.dispatch import _start_dispatch_circuit_breaker_watchdog
@@ -28,6 +30,30 @@ def _codex_turn_log(input_tokens, cached_input_tokens, output_tokens, reasoning=
         f'"reasoning_output_tokens":{reasoning}'
         "}}\n"
     )
+
+
+def test_zero_file_checkout_states_use_real_git(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    worktree = tmp_path / "worktree"
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    subprocess.run(["git", "-C", str(repo), "config", "user.email", "test@example.com"], check=True)
+    subprocess.run(["git", "-C", str(repo), "config", "user.name", "Test"], check=True)
+    (repo / "tracked.txt").write_text("base\n")
+    subprocess.run(["git", "-C", str(repo), "add", "tracked.txt"], check=True)
+    subprocess.run(["git", "-C", str(repo), "commit", "-qm", "base"], check=True)
+    subprocess.run(["git", "-C", str(repo), "branch", "dispatch"], check=True)
+    subprocess.run(["git", "-C", str(repo), "worktree", "add", "-q", str(worktree), "dispatch"], check=True)
+
+    from synlynk.circuit_breaker import _worktree_branch_is_stable
+
+    assert _worktree_branch_is_stable(str(worktree), "dispatch") is True
+    subprocess.run(["git", "-C", str(worktree), "switch", "-q", "-c", "feature"], check=True)
+    assert _worktree_branch_is_stable(str(worktree), "dispatch") is False
+    branch_switch_time = time.time()
+    monkeypatch.setattr("synlynk.circuit_breaker.time.time", lambda: branch_switch_time + 61)
+    assert _worktree_branch_is_stable(str(worktree), "dispatch") is True
+    subprocess.run(["git", "-C", str(worktree), "switch", "-q", "--detach"], check=True)
+    assert _worktree_branch_is_stable(str(worktree), "dispatch") is False
 
 
 def test_codex_tool_loop_cache_sum_does_not_trip_fast_tier_or_zero_file(tmp_path, monkeypatch):
@@ -316,14 +342,19 @@ def test_circuit_breaker_resolves_log_size_tier_override():
     )
     assert max_log_size_bytes == 10 * 1024 * 1024
 
+    # No tier override set for this job's tier -> falls back to top-level default
     job_no_override = {"id": "job-default-log-size", "agent": "codex", "model_tier": "pro"}
     _, _, _, default_log_size = _resolve_circuit_breaker_limits(job_no_override, config)
     assert default_log_size == 50 * 1024 * 1024
 
 
 def test_log_size_runaway_trips_with_zero_extracted_tokens(tmp_path, monkeypatch):
-    """A mid-turn transcript can grow before structured usage is emitted."""
+    """Simulates gh:#1937: a long open Codex turn with no turn.completed line
+    yet, so extract_tokens() returns 0/0, but the transcript itself has grown
+    past the log-size ceiling from repeated tool-loop round trips."""
     log_file = tmp_path / "runaway_no_usage.log"
+    # Plain-text padding with no turn.completed JSON line anywhere - simulates
+    # the mid-turn blind spot where extract_tokens() can't attribute any usage.
     log_file.write_text("tool call output\n" * 2_000_000)
     assert log_file.stat().st_size >= 10 * 1024 * 1024
 
@@ -397,8 +428,13 @@ def test_log_size_below_threshold_does_not_trip(tmp_path, monkeypatch):
 
 
 def test_cost_check_wins_over_log_size_when_both_trigger(tmp_path, monkeypatch):
-    """Cost remains the reported reason when cost and log size both breach."""
+    """Order-of-checks regression guard: a log large enough to cross
+    max_log_size_bytes AND containing a turn.completed whose usage crosses
+    max_job_cost_usd must report the cost reason, not the log-size reason."""
     log_file = tmp_path / "big_and_expensive.log"
+    # Pad past the 10MB log-size ceiling, then append a turn.completed whose
+    # cost crosses the $1.50 ceiling (400k in + 100k out, same shape as the
+    # existing test_circuit_breaker_trips_on_cost_limit_breach fixture).
     padding = "tool call output\n" * 700_000
     log_file.write_text(padding + "Input tokens: 400000\nOutput tokens: 100000\n")
     assert log_file.stat().st_size >= 10 * 1024 * 1024
@@ -434,7 +470,9 @@ def test_cost_check_wins_over_log_size_when_both_trigger(tmp_path, monkeypatch):
 
 
 def test_zero_file_check_still_fires_below_log_size_threshold(tmp_path, monkeypatch):
-    """The zero-file path remains active for a small log with high tokens."""
+    """Regression guard: inserting the log-size elif between the token check
+    and the zero-file check must not break the existing zero-file path when
+    the log itself is small but token count crosses zero_file_threshold."""
     log_file = tmp_path / "zero_file_small_log.log"
     log_file.write_text("Input tokens: 600000\nOutput tokens: 100\n")
     assert log_file.stat().st_size < 10 * 1024 * 1024

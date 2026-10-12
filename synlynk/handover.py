@@ -156,16 +156,7 @@ def execute_home_handover(
     from synlynk.context import detect_active_home_harness, generate_context
 
     repo = Path(repo_path).resolve()
-    cfg_file = repo / ".synlynk" / "config.json"
-    cfg = {}
-    if cfg_file.exists():
-        try:
-            with open(cfg_file, "r", encoding="utf-8") as f:
-                cfg = json.load(f)
-        except Exception:
-            pass
-    if not cfg:
-        cfg = load_config() if callable(load_config) else {}
+    cfg = load_config() if callable(load_config) else {}
     
     current_home = cfg.get("home_harness") or detect_active_home_harness(cfg)
 
