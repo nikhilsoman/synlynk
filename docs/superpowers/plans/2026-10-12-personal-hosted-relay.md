@@ -10,7 +10,7 @@
 
 **Source spec:** `docs/superpowers/specs/2026-10-12-personal-hosted-relay-design.md` (gh:#2201)
 
-**GOVERNS note:** No dedicated goal/story currently exists for gh:#2201 (confirmed via `synlynk story list` — the only relay-related story found, `story-e5cc49f0` "T4: Relay wire protocol", is unrelated prior work on the existing local relay, not this hosted-hub design). Per gh:#2201's own filing note, a new goal/story must be created **outside** the dev-preview GOVERNS tree before any task in this plan is dispatched — see Execution Handoff.
+**GOVERNS note:** `goal-f4ce526a` ("Personal-use hosted relay: opt-in NATS hub bridging local relay brokers across a user's devices (gh:#2201)") created outside the dev-preview GOVERNS tree, with 10 stories linked (primary) and marked ready, one per task below — `story-52549f07` (Task 1), `story-085360d0` (Task 2), `story-76b7162d` (Task 3), `story-0c7ecea4` (Task 4), `story-2263ec9a` (Task 5), `story-29cc4aad` (Task 6), `story-43a01b32` (Task 7), `story-f4824a3e` (Task 8), `story-dbf68f01` (Task 9), `story-f1639150` (Task 10). None of these reuse `story-e5cc49f0` ("T4: Relay wire protocol"), which remains unrelated prior work on the existing local relay.
 
 ---
 
@@ -1276,12 +1276,6 @@ git commit -m "fix(relay): address full-suite regression from hosted relay chang
 
 ## Execution Handoff
 
-**Before dispatching any task:** create a dedicated GOVERNS goal/story for gh:#2201, filed outside the dev-preview GOVERNS tree per the issue's own filing note (`synlynk goal add` / `synlynk story add` — check current CLI syntax via `synlynk goal --help`). Do not attach these tasks to `story-e5cc49f0` (unrelated existing relay story) or to any dev-preview-tree story.
+**GOVERNS linkage complete:** `goal-f4ce526a` created outside the dev-preview GOVERNS tree, with 10 stories linked and marked ready — see the GOVERNS note at the top of this plan for the full goal/story-ID mapping. Dispatch may proceed.
 
-Plan complete and saved to `docs/superpowers/plans/2026-10-12-personal-hosted-relay.md`. Two execution options:
-
-**1. Subagent-Driven (recommended)** - I dispatch a fresh subagent per task, review between tasks, fast iteration
-
-**2. Inline Execution** - Execute tasks in this session using executing-plans, batch execution with checkpoints
-
-Which approach?
+**Execution approach: Subagent-Driven via `synlynk dispatch`** (chosen 2026-10-12, per standing project memory `feedback_subagent_driven_via_synlynk_dispatch.md`): the implementer stage for each task is dispatched via `synlynk dispatch` to Codex/Grok/Agy — never a generic Claude subagent — while the two-stage review (spec-compliance, then code-quality) is performed directly by Claude (PM/review role), not dispatched. Tasks proceed in order 1→10, each linked to its respective story ID, continuing autonomously per the subagent-driven-development skill's "Continuous execution" principle.
