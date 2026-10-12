@@ -862,5 +862,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2239 \u2014 enforce circuit breaker during bare dispatch (PR #2239, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2239.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-12) - PR #2239\n- Merged improvements and fixes for PR #2239."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/307-pr2238-prevent-generated-docs-leaking-into-disp.md",
+    "title": "PR #2238 \u2014 prevent generated docs leaking into dispatch worktrees",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-12",
+    "pr": "#2238",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2238."
+    ],
+    "tweet": "\ud83d\ude80 PR #2238 \u2014 prevent generated docs leaking into dispatch worktrees (PR #2238, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2238.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-12) - PR #2238\n- Merged improvements and fixes for PR #2238."
   }
 ]
