@@ -3029,6 +3029,26 @@ def test_dispatch_logs_isolated_and_preserved_on_reap(tmp_path, monkeypatch):
     assert open(preserved_log).read() == "dispatched worker output"
 
 
+def test_verify_step_spills_output_over_inline_limit(tmp_path):
+    """Oversized verify output is logged in full and the transcript stays small."""
+    from synlynk.dispatch import VERIFY_OUTPUT_INLINE_LIMIT, run_verify_step
+
+    worktree = tmp_path / "job-worktree"
+    worktree.mkdir()
+    command = (
+        "python3 -c 'import sys; sys.stdout.write(\"L\\n\" * 3000); sys.exit(7)'"
+    )
+    returned = run_verify_step(command, job_id="job-abc", worktree=str(worktree))
+
+    log_path = worktree / ".synlynk" / "logs" / "job-abc-verify-1.log"
+    full = log_path.read_text(encoding="utf-8")
+    assert len(full) > VERIFY_OUTPUT_INLINE_LIMIT
+    assert full == "L\n" * 3000
+    assert len(returned) <= VERIFY_OUTPUT_INLINE_LIMIT
+    assert "exit_code=7" in returned
+    assert returned.count("L") < full.count("L")
+
+
 def test_job_purpose_is_fixed_and_requires_explicit_task_type():
     from synlynk.dispatch import _job_purpose
 
