@@ -364,6 +364,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [301](./301-pr2225-migrate-autonomy-agent-store-handover-co.md) | PR #2225 — migrate autonomy/agent_store/handover config readers to workspace.json (gh:#2147) | [#2225](https://github.com/nikhilsoman/synlynk/pull/2225) | 2026-10-11 |
 | [302](./302-pr2226-muse-harness-config-fix-design-implement.md) | PR #2226 — Muse harness config fix design + implementation plan (gh:#2187) | [#2226](https://github.com/nikhilsoman/synlynk/pull/2226) | 2026-10-11 |
 | [303](./303-pr2228-cover-muse-adapter-permission-flag-trans.md) | PR #2228 — cover Muse adapter permission flag translation (gh:#2187) | [#2228](https://github.com/nikhilsoman/synlynk/pull/2228) | 2026-10-11 |
+| [304](./304-pr2234-scope-review-task-type-uses-persisted-va.md) | PR #2234 — scope-review task_type uses persisted value before prompt substring fallback (gh:#2232) | [#2234](https://github.com/nikhilsoman/synlynk/pull/2234) | 2026-10-12 |
 
 ## Per-PR Post Template
 
