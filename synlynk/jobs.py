@@ -4828,10 +4828,18 @@ def _reconcile_daemon_jobs() -> None:
                     agent, pre_in_tokens, pre_out_tokens, pre_model_version,
                     cache_read_tokens=pre_cache_read,
                 )
+                persisted_task_type_row = conn.execute(
+                    "SELECT task_type FROM daemon_jobs WHERE job_id=?", (job_id,)
+                ).fetchone()
+                persisted_task_type = (
+                    persisted_task_type_row[0] if persisted_task_type_row else None
+                )
                 scope_review_job = {
                     "id": job_id,
                     "agent": agent,
-                    "task_type": "review" if "review" in (task or "").lower() else "",
+                    "task_type": persisted_task_type or (
+                        "review" if "review" in (task or "").lower() else ""
+                    ),
                 }
                 if _force_scope_review_for_sentinel_cotrip(
                     scope_review_job,

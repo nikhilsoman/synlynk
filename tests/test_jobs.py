@@ -1750,6 +1750,61 @@ def test_reconcile_releases_reservation_on_settlement(project_dir, monkeypatch):
     assert status == "released"
 
 
+def test_reconcile_scope_review_uses_persisted_task_type_before_prompt_fallback(
+    project_dir, monkeypatch
+):
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+
+    captured_task_types = {}
+
+    def capture_scope_review_job(job, **kwargs):
+        captured_task_types[job["id"]] = job["task_type"]
+        return False
+
+    conn = sl._get_db()
+    conn.executemany(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, pid, enqueued_at, started_at, task_type) "
+        "VALUES (?, ?, ?, 'running', ?, ?, ?, ?)",
+        [
+            (
+                "job-persisted-task-type",
+                "codex",
+                "implement the feature and review the code",
+                999991,
+                "2026-10-12T00:00:00",
+                "2026-10-12T00:00:00",
+                "implement",
+            ),
+            (
+                "job-legacy-task-type",
+                "codex",
+                "implement the feature and review the code",
+                999992,
+                "2026-10-12T00:00:00",
+                "2026-10-12T00:00:00",
+                None,
+            ),
+        ],
+    )
+    conn.commit()
+    conn.close()
+
+    monkeypatch.setattr(jobs_mod, "_pid_is_alive", lambda pid: False)
+    monkeypatch.setattr(jobs_mod, "_force_scope_review_for_sentinel_cotrip", capture_scope_review_job)
+    monkeypatch.setattr(sl, "extract_tokens", lambda log_text, agent=None: (0, 0))
+    monkeypatch.setattr(sl, "extract_model_version", lambda log_text, agent=None: "unknown")
+    monkeypatch.setattr(sl, "update_costs", lambda *args, **kwargs: None)
+    monkeypatch.setattr(sl, "_write_job_summary", lambda *args, **kwargs: None)
+
+    jobs_mod._reconcile_daemon_jobs()
+
+    assert captured_task_types == {
+        "job-persisted-task-type": "implement",
+        "job-legacy-task-type": "review",
+    }
+
+
 def test_scan_and_apply_reap_zombies(tmp_path, monkeypatch):
     from synlynk.jobs import scan_zombie_running_jobs, apply_reap_zombies
     import sqlite3
