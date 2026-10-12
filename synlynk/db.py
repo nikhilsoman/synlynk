@@ -2955,6 +2955,12 @@ def _write_generated_project_doc(filename: str, content: str) -> None:
         os.makedirs(syn_dir, exist_ok=True)
         paths.append(os.path.join(syn_dir, filename))
     docs_dir = _docs_dir()
+    # ``_docs_dir()`` returns the configured path as entered in workspace.json
+    # (normally the relative ``project-docs``).  Generated docs belong to the
+    # shared project root, not whichever isolated dispatch worktree happens to
+    # be the caller's cwd.
+    if docs_dir and not os.path.isabs(docs_dir):
+        docs_dir = os.path.join(_project_root(), docs_dir)
     if docs_dir:
         if _is_migrated() or os.path.exists(docs_dir):
             os.makedirs(docs_dir, exist_ok=True)
