@@ -1,6 +1,7 @@
 """Unit tests for Invariant 2: Hard in-flight token circuit breakers & runaway worker killer."""
 
 import os
+import time
 import signal
 import sys
 import tempfile
@@ -14,6 +15,7 @@ from synlynk.circuit_breaker import (
     CircuitBreakerResult,
     evaluate_job_circuit_breaker,
 )
+from synlynk.dispatch import _start_dispatch_circuit_breaker_watchdog
 from synlynk.sentinel import _read_active_sentinel_alerts
 
 
@@ -202,6 +204,54 @@ def test_circuit_breaker_trips_on_cost_limit_breach(tmp_path, monkeypatch):
     assert res.process_killed is True
     assert job["status"] == STATUS_CIRCUIT_BREAKER_TRIPPED
     assert "cost" in res.reason.lower()
+
+
+def test_dispatch_watchdog_kills_inflight_cost_runaway_without_daemon(tmp_path, monkeypatch):
+    """A bare dispatch enforces the breaker while its child is still running."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    log_file = tmp_path / "inflight.log"
+    log_file.write_text("Input tokens: 1000\nOutput tokens: 100\n")
+
+    class FakeProcess:
+        pid = 24680
+
+        def __init__(self):
+            self.terminated = False
+
+        def poll(self):
+            return -9 if self.terminated else None
+
+        def terminate(self):
+            self.terminated = True
+
+        def kill(self):
+            self.terminated = True
+
+    process = FakeProcess()
+    job = {
+        "id": "job-watchdog-cost",
+        "agent": "claude",
+        "pid": process.pid,
+        "log_file": str(log_file),
+        "status": "running",
+    }
+    config = {
+        "watch_interval_seconds": 0.1,
+        "circuit_breaker": {"max_job_tokens": 1_000_000, "max_job_cost_usd": 1.50},
+    }
+
+    _start_dispatch_circuit_breaker_watchdog(process, job, config)
+    time.sleep(0.02)
+    log_file.write_text("Input tokens: 400000\nOutput tokens: 100000\n")
+
+    deadline = time.time() + 1.0
+    while time.time() < deadline and job["status"] != STATUS_CIRCUIT_BREAKER_TRIPPED:
+        time.sleep(0.01)
+
+    assert process.terminated is True
+    assert job["status"] == STATUS_CIRCUIT_BREAKER_TRIPPED
+    assert job["exit_code"] == -9
 
 
 def test_circuit_breaker_respects_tier_overrides(tmp_path, monkeypatch):
