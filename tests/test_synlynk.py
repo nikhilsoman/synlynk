@@ -5070,6 +5070,23 @@ def test_cmd_story_create_generates_todo_md(project_dir):
     assert "Auto-sync check" in todo
 
 
+def test_generate_todo_md_does_not_write_to_dispatch_worktree(project_dir, tmp_path, monkeypatch):
+    """Generated docs resolve to the shared project root, not the caller cwd."""
+    import synlynk as sl
+
+    job_worktree = tmp_path / "job-worktree"
+    (job_worktree / "project-docs").mkdir(parents=True)
+    job_todo = job_worktree / "project-docs" / "todo.md"
+    job_todo.write_text("job worktree content\n")
+    monkeypatch.setattr(sl, "_project_root", lambda: str(project_dir))
+    monkeypatch.chdir(job_worktree)
+
+    sl.cmd_story_create("Shared-root generated doc")
+
+    assert job_todo.read_text() == "job worktree content\n"
+    assert "Shared-root generated doc" in (project_dir / "project-docs" / "todo.md").read_text()
+
+
 def test_import_todo_to_stories_imports_unchecked_lines(project_dir):
     """_import_todo_to_stories creates story rows for all supported checkbox states."""
     import synlynk as sl
