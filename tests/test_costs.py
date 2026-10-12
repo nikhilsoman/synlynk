@@ -83,6 +83,20 @@ def test_extract_tokens_captures_agy_cache_read_tokens():
     assert out_tok == 640
 
 
+def test_extract_tokens_recognizes_openrouter_format():
+    output = json.dumps({
+        "id": "gen-abc123",
+        "model": "anthropic/claude-sonnet-5",
+        "choices": [{"message": {"role": "assistant", "content": "ok"}}],
+        "usage": {"prompt_tokens": 120, "completion_tokens": 45, "total_tokens": 165},
+    }, indent=2)
+    result = extract_tokens(output, agent="openrouter")
+    assert result.basis == "structured_output"
+    assert result.input_tokens == 120
+    assert result.output_tokens == 45
+    assert result.cache_read_tokens == 0
+
+
 def test_codex_cached_input_subset_is_not_priced_as_fresh_input(monkeypatch):
     """job-54fa8a6a: Codex input_tokens includes cached_input_tokens.
 

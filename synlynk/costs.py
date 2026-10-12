@@ -431,6 +431,29 @@ def _extract_grok_structured(output_text: str) -> Optional[_TokenCounts]:
     return _TokenCounts(in_tokens, out_tokens, cache_read_tokens, "structured_output")
 
 
+def _extract_openrouter_structured(output_text: str) -> Optional[_TokenCounts]:
+    """Parse an OpenRouter/OpenAI-compatible chat-completion response.
+
+    ``synlynk gateway dispatch`` prints the response as one JSON object with
+    token usage in the standard ``usage`` mapping.
+    """
+    try:
+        event = json.loads(output_text.strip())
+    except (ValueError, TypeError):
+        return None
+    if not isinstance(event, dict):
+        return None
+    usage = event.get("usage")
+    if not isinstance(usage, dict):
+        return None
+    try:
+        in_tokens = int(usage["prompt_tokens"])
+        out_tokens = int(usage["completion_tokens"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    return _TokenCounts(in_tokens, out_tokens, 0, "structured_output")
+
+
 def extract_tokens(output_text: str, agent: str = None) -> tuple:
     """Regex-scrapes token counts from AI CLI stdout, or delegates to a
     per-agent structured-output adapter when one exists.
@@ -451,6 +474,10 @@ def extract_tokens(output_text: str, agent: str = None) -> tuple:
             return structured
     if agent == "grok":
         structured = _extract_grok_structured(output_text)
+        if structured is not None:
+            return structured
+    if agent == "openrouter":
+        structured = _extract_openrouter_structured(output_text)
         if structured is not None:
             return structured
     if agent == "muse":
