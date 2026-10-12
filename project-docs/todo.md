@@ -1965,3 +1965,17 @@ Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'corre [backe
 - [ ] docs(devlog): record Pillar 1 blocker review + backlog triage pause [testing] <!-- id:story-issue-2186 -->
 - [ ] docs(costs): backfill 3 cost entries dropped by regeneration bug [testing] <!-- id:story-issue-2153 -->
 - [ ] docs: Muse harness config fix design + implementation plan (gh:#2187) [testing] <!-- id:story-issue-2226 -->
+- [ ] Relay hub: optional-dependency scaffolding + lazy nats-py import guard [backend] <!-- id:story-52549f07 -->
+- [ ] Relay hub: extend RELAY_EVENT_TYPES whitelist for hub event types [backend] <!-- id:story-085360d0 -->
+- [ ] Relay hub: subject-routing layer (event type to NATS subject) [backend] <!-- id:story-76b7162d -->
+- [ ] Relay hub: per-device bearer-token credential store with revocation [backend] <!-- id:story-0c7ecea4 -->
+- [ ] Relay hub: HubAdapter bridge, local broker to NATS, fake-client tests [backend] <!-- id:story-2263ec9a -->
+- [ ] Relay hub: JetStream durable replay plus sync-gap detection (ReplayTracker) [backend] <!-- id:story-29cc4aad -->
+- [ ] Relay hub: CLI wiring for hub init/connect, device add/revoke, subscribe/unsubscribe [backend] <!-- id:story-43a01b32 -->
+- [ ] Relay hub: integration test against real embedded nats-server [testing] <!-- id:story-f4824a3e -->
+- [ ] Relay hub: doc/artifact preview channel, payload builder and preview writer [backend] <!-- id:story-dbf68f01 -->
+- [ ] Relay hub: full-suite regression check [testing] <!-- id:story-f1639150 -->
+- [ ] Investigate cost anomaly on job-2a16259d / PR #2232 (TOKEN_BLOAT+COST_INFLATION) [backend] <!-- id:story-e8936675 -->
+- [ ] Investigate cost anomaly on job-2a16259d / PR #2232 (TOKEN_BLOAT+COST_INFLATION) [backend] <!-- id:story-b81f2806 -->
+- [ ] jobs.py: scope-review task_type derived from substring match, not persisted explicit value [backend] <!-- id:story-dd84b873 -->
+- [ ] dispatch.py verify contract: pytest -v full output captured into transcript instead of file+summary [backend] <!-- id:story-e7a340f9 -->

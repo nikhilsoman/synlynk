@@ -744,13 +744,21 @@
 | 2026-10-12 05:06 | codex | o4-mini | 255812 | 2220 | $0.0123 [sub] (API: $0.8007) | estimated_token_rate | story-issue-2226 | exec: codex job job-95187a... |
 | 2026-10-12 05:12 | codex | o4-mini | 2025114 | 13042 | $0.0974 [sub] (API: $6.2710) | estimated_token_rate | story-issue-2187 | exec: codex job job-91e53e... |
 | 2026-10-12 05:30 | codex | o4-mini | 1185325 | 9367 | $0.0571 [sub] (API: $3.6965) | estimated_manual | - | review+merge dispatch for PR #2228, gh:#2187; FAILED_NOOP_DENIED self-report but gh pr view confirms MERGED; worktree-base contamination gh:#2229 |
+| 2026-10-12 07:11 | codex | o4-mini | 5000 | 2000 | $0.0003 [sub] (API: $0.0450) | estimated_tshirt | story-issue-2187 | exec: codex job job-093008... |
+| 2026-10-12 07:11 | codex | o4-mini | 6169874 | 25478 | $0.2961 [sub] (API: $18.8918) | estimated_token_rate | story-issue-2010 | exec: codex job job-2a1625... |
+| 2026-10-12 16:26 | codex | o4-mini | 2354663 | 8986 | $0.1130 [sub] (API: $7.1988) | estimated_token_rate | story-52549f07 | exec: codex job job-631d67... |
+| 2026-10-12 16:26 | grok | grok-3 | 222180 | 57083 | $1.8312 [sub] (API: $1.5228) | estimated_token_rate | story-b81f2806 | exec: grok job job-a187211... |
+| 2026-10-12 16:26 | codex | o4-mini | 2439894 | 11379 | $0.1171 [sub] (API: $7.4904) | estimated_token_rate | story-dd84b873 | exec: codex job job-a00e89... |
+| 2026-10-12 16:28 | grok | grok-3 | 258279 | 55151 | $2.0553 [sub] (API: $1.6021) | estimated_token_rate | story-e7a340f9 | exec: grok job job-7abf2d6... |
+| 2026-10-12 16:36 | grok | grok-3 | 79715 | 12608 | $0.6054 [sub] (API: $0.4283) | estimated_token_rate | story-dd84b873 | exec: grok job job-ebd3388... |
+| 2026-10-12 16:36 | codex | o4-mini | 2054526 | 9973 | $0.0987 [sub] (API: $6.3132) | estimated_token_rate | story-e7a340f9 | exec: codex job job-b71a9e... |
 
 ## Subscription Amortization & Dual-Ledger Summary
 
 | Harness | Base Fee | Actual Amortized Spend | API Equivalent Value | Net Savings |
 |---|---|---|---|---|
 | claude | $20.00 | $25.0885 | $37.7991 | $12.7106 |
-| codex | $20.00 | $21.4141 | $1373.3230 | $1351.9088 |
+| codex | $20.00 | $21.9822 | $1409.5656 | $1387.5834 |
 | agy | $20.00 | $3.9405 | $18.6773 | $14.7368 |
-| grok | $30.00 | $76.1545 | $55.4853 | $-20.6693 |
-| **Total** | **$90.00** | **$126.5976** | **$1485.2846** | **$1358.6869** |
+| grok | $30.00 | $80.6465 | $59.0384 | $-21.6081 |
+| **Total** | **$90.00** | **$131.6577** | **$1525.0804** | **$1393.4227** |
