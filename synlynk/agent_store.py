@@ -12,7 +12,6 @@ from typing import Optional
 from synlynk import _write_json_atomic
 from synlynk import charter_schema
 
-_CONFIG_PATH = os.path.join(".synlynk", "config.json")
 _FALLBACK_WORKSPACE_ROOTS = {}
 _WORKSPACE_UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
@@ -23,11 +22,19 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _config_path() -> str:
+    workspace_path = os.path.join(".synlynk", "workspace.json")
+    if os.path.exists(workspace_path):
+        return workspace_path
+    return os.path.join(".synlynk", "config.json")
+
+
 def _load_raw_config() -> dict:
-    if not os.path.exists(_CONFIG_PATH):
+    path = _config_path()
+    if not os.path.exists(path):
         return {}
     try:
-        with open(_CONFIG_PATH) as f:
+        with open(path) as f:
             return json.load(f)
     except (json.JSONDecodeError, IOError):
         return {}
@@ -94,13 +101,13 @@ def get_workspace_id() -> str:
     if recovered:
         if existing != recovered:
             config["workspace_id"] = recovered
-            _write_json_atomic(_CONFIG_PATH, config)
+            _write_json_atomic(_config_path(), config)
         return recovered
     if existing:
         return existing
     workspace_id = str(uuid.uuid4())
     config["workspace_id"] = workspace_id
-    _write_json_atomic(_CONFIG_PATH, config)
+    _write_json_atomic(_config_path(), config)
     return workspace_id
 
 

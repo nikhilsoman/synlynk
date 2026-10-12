@@ -110,8 +110,11 @@ def _legacy_product_id(slug: str) -> str:
 
 def product_identity(slug: str, repo_path: str = ".") -> str:
     """Return configured or registered product identity without mutating state."""
+    repo = Path(repo_path)
+    workspace_file = repo / ".synlynk" / "workspace.json"
+    config_file = workspace_file if workspace_file.is_file() else repo / ".synlynk" / "config.json"
     try:
-        config = json.loads((Path(repo_path) / ".synlynk" / "config.json").read_text())
+        config = json.loads(config_file.read_text())
     except (OSError, json.JSONDecodeError):
         config = {}
     configured = config.get("product_id")

@@ -10,6 +10,9 @@ class AutonomyMode(str, Enum):
 
 
 def _get_config_path() -> str:
+    workspace_path = os.path.join(os.getcwd(), ".synlynk", "workspace.json")
+    if os.path.exists(workspace_path):
+        return workspace_path
     return os.path.join(os.getcwd(), ".synlynk", "config.json")
 
 

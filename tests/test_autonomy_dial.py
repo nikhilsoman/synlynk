@@ -1,3 +1,6 @@
+import json
+import os
+
 import pytest
 from synlynk.autonomy import (
     AutonomyMode,
@@ -13,6 +16,24 @@ def test_autonomy_mode_default_is_supervised(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
 
     assert get_autonomy_mode() == AutonomyMode.SUPERVISED
+
+
+def test_autonomy_mode_reads_from_workspace_json(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk")
+    with open(".synlynk/workspace.json", "w", encoding="utf-8") as f:
+        json.dump({"autonomy_mode": "autonomous"}, f)
+    from synlynk.autonomy import get_autonomy_mode, AutonomyMode
+    assert get_autonomy_mode() == AutonomyMode.AUTONOMOUS
+
+
+def test_autonomy_mode_falls_back_to_legacy_config_json(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk")
+    with open(".synlynk/config.json", "w", encoding="utf-8") as f:
+        json.dump({"autonomy_mode": "manual"}, f)
+    from synlynk.autonomy import get_autonomy_mode, AutonomyMode
+    assert get_autonomy_mode() == AutonomyMode.MANUAL
 
 def test_autonomy_mode_mutation_persists(tmp_path, monkeypatch):
     config_file = tmp_path / ".synlynk" / "config.json"

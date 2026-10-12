@@ -20,7 +20,9 @@ def _parse_version(v_str: str) -> Tuple[int, ...]:
 def check_version_policy(repo_dir: str, current_version: str) -> Tuple[bool, str]:
     """Check whether ``current_version`` meets a repository's minimum version."""
 
-    config_path = Path(repo_dir) / ".synlynk" / "config.json"
+    repo = Path(repo_dir)
+    workspace_path = repo / ".synlynk" / "workspace.json"
+    config_path = workspace_path if workspace_path.is_file() else repo / ".synlynk" / "config.json"
     if not config_path.is_file():
         return True, "No version policy defined"
 

@@ -268,7 +268,11 @@ def _role_app_dir() -> Path:
 
 def _write_role_app_paths(role: str) -> tuple[Path, Path, Path]:
     from synlynk.product_store import write_apps_dir_for_init
-    if (Path(".synlynk") / "config.json").is_file():
+    configured = (
+        (Path(".synlynk") / "workspace.json").is_file()
+        or (Path(".synlynk") / "config.json").is_file()
+    )
+    if configured:
         app_dir = write_apps_dir_for_init(".")
     else:
         app_dir = Path(".synlynk") / "github_apps"
@@ -1136,7 +1140,11 @@ def ensure_type_for_identity_init(type_id: str, pack_id: str = "software-product
     from synlynk.product_store import identity_slug_from_config, types_yaml_path
     from synlynk.types_registry import load_types, seed_canonical_types
     slug = identity_slug_from_config(".")
-    if not (Path(".synlynk") / "config.json").is_file():
+    configured = (
+        (Path(".synlynk") / "workspace.json").is_file()
+        or (Path(".synlynk") / "config.json").is_file()
+    )
+    if not configured:
         return
     types = load_types(slug)
     if not types and not types_yaml_path(slug).exists():
