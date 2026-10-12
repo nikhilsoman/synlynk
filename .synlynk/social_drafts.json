@@ -830,5 +830,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2234 \u2014 scope-review task_type uses persisted value before prompt substring fallback (gh:#2232) (PR #2234, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2234.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-12) - PR #2234\n- Merged improvements and fixes for PR #2234."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/305-pr2235-spill-oversized-dispatch-verify-step-out.md",
+    "title": "PR #2235 \u2014 spill oversized dispatch verify-step output to a log file (gh:#2232)",
+    "author": "synlynk-pm agent",
+    "date": "2026-10-12",
+    "pr": "#2235",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2235."
+    ],
+    "tweet": "\ud83d\ude80 PR #2235 \u2014 spill oversized dispatch verify-step output to a log file (gh:#2232) (PR #2235, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2235.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-12) - PR #2235\n- Merged improvements and fixes for PR #2235."
   }
 ]
