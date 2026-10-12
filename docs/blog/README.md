@@ -366,6 +366,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [303](./303-pr2228-cover-muse-adapter-permission-flag-trans.md) | PR #2228 — cover Muse adapter permission flag translation (gh:#2187) | [#2228](https://github.com/nikhilsoman/synlynk/pull/2228) | 2026-10-11 |
 | [304](./304-pr2234-scope-review-task-type-uses-persisted-va.md) | PR #2234 — scope-review task_type uses persisted value before prompt substring fallback (gh:#2232) | [#2234](https://github.com/nikhilsoman/synlynk/pull/2234) | 2026-10-12 |
 | [305](./305-pr2235-spill-oversized-dispatch-verify-step-out.md) | PR #2235 — spill oversized dispatch verify-step output to a log file (gh:#2232) | [#2235](https://github.com/nikhilsoman/synlynk/pull/2235) | 2026-10-12 |
+| [306](./306-pr2239-enforce-circuit-breaker-during-bare-disp.md) | PR #2239 — enforce circuit breaker during bare dispatch | [#2239](https://github.com/nikhilsoman/synlynk/pull/2239) | 2026-10-12 |
 
 ## Per-PR Post Template
 
