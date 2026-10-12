@@ -48,6 +48,74 @@ MODEL_TIER_REASONING = "reasoning"
 MODEL_TIERS = (MODEL_TIER_FAST, MODEL_TIER_PRO, MODEL_TIER_REASONING)
 
 
+def _start_dispatch_circuit_breaker_watchdog(proc, job: dict, config: Optional[dict] = None) -> threading.Event:
+    """Watch one dispatched process for in-flight circuit-breaker breaches.
+
+    Bare dispatches cannot rely on the watch daemon (or another CLI command)
+    to reconcile their running job.  Keep this watchdog tied to the process so
+    Invariant 2 is enforced for the lifetime of every dispatch.
+    """
+    config = config or {}
+    interval = float(config.get("watch_interval_seconds", 30) or 30)
+    interval = max(0.1, interval)
+    stop_event = threading.Event()
+
+    def watch() -> None:
+        try:
+            from synlynk.circuit_breaker import evaluate_job_circuit_breaker
+
+            while not stop_event.wait(interval):
+                try:
+                    if proc.poll() is not None:
+                        return
+                except (AttributeError, OSError):
+                    # Test doubles and unusual process wrappers may not expose
+                    # poll(); let the evaluator make the authoritative check.
+                    pass
+
+                try:
+                    result = evaluate_job_circuit_breaker(
+                        job,
+                        config=config,
+                        process=proc,
+                    )
+                except Exception as exc:
+                    # A watchdog must never turn a completed dispatch into a
+                    # false failure; the daemon reconciliation path remains a
+                    # fallback for malformed/temporarily unreadable state.
+                    continue
+                if result.tripped:
+                    # The evaluator normally stamps these fields itself. Keep
+                    # the watchdog's terminal marker explicit so persistence
+                    # cannot race with a reconciliation pass.
+                    job["status"] = "circuit_breaker_tripped"
+                    job["circuit_breaker_result"] = asdict(result)
+                    load_jobs = _pkg("_load_jobs")
+                    save_jobs = _pkg("_save_jobs")
+                    if load_jobs and save_jobs:
+                        try:
+                            jobs = load_jobs()
+                            for index, saved_job in enumerate(jobs):
+                                if saved_job.get("id") == job.get("id"):
+                                    jobs[index] = dict(job)
+                                    break
+                            save_jobs(jobs)
+                        except Exception:
+                            # The critical in-memory state and process kill
+                            # must not depend on optional flat-file persistence.
+                            pass
+                    return
+        finally:
+            stop_event.set()
+
+    threading.Thread(
+        target=watch,
+        name=f"synlynk-circuit-breaker-{job.get('id', 'unknown')}",
+        daemon=True,
+    ).start()
+    return stop_event
+
+
 def _job_purpose(role: str | None, task_type: str | None, *, explicit: bool = True) -> str:
     """Classify provenance from dispatch's explicit role and task type."""
     if not explicit:
@@ -4670,6 +4738,11 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 saved_job["fence"] = asdict(saved_job["fence"])
             jobs_to_save.append(saved_job)
         save_jobs(jobs_to_save)
+
+    # Invariant 2 must be enforced while a bare dispatch is still running;
+    # neither daemon polling nor opportunistic CLI reconciliation is required.
+    if not container_failed:
+        _start_dispatch_circuit_breaker_watchdog(proc, job, cfg)
 
     try:
         if dconn is not None:
