@@ -1,8 +1,9 @@
 # Context Window Tracking & Optimization — Design Spec
 
 **GOVERNS:** `goal-e79062e8` (filed as its own goal, not nested under the dev-preview roadmap tree — this is a cross-cutting process/tooling improvement, not a dev-preview feature)
+**Tracking issue:** [gh:#2243](https://github.com/nikhilsoman/synlynk/issues/2243) — consolidates the original ask and the decided outcome; links all four decision records below.
 
-**Status:** Draft — pending decide-panel R1/R2 synthesis before an implementation plan is written.
+**Status:** Draft — decide-panel R1/R2 synthesis complete (see [gh:#2243](https://github.com/nikhilsoman/synlynk/issues/2243)); pending implementation plan.
 
 ## Problem
 
