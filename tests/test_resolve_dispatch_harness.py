@@ -114,3 +114,13 @@ def test_static_baseline_forces_static_pick_even_with_real_story_id_score(tmp_pa
         "codex", agent_id="dev-agent-4", story_id="story-real-1", static_baseline=True
     )
     assert result == "claude"
+def test_review_dispatch_excludes_implementer_from_capability_probe(monkeypatch):
+    import synlynk.dispatch as dispatch
+
+    monkeypatch.setattr(dispatch, "_review_implementer_harness", lambda task: "codex")
+    assert dispatch.resolve_dispatch_harness(
+        "codex",
+        task="review PR #2269",
+        task_type="review",
+        requires_gh_write=True,
+    ) == "agy"

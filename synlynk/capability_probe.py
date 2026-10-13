@@ -259,6 +259,7 @@ def resolve_capable_dispatch_harness(
     revokes: Optional[Iterable[str]] = None,
     task_type: Optional[str] = None,
     requires_gh_write: bool = False,
+    excluded_harnesses: Optional[Iterable[str]] = None,
 ) -> str:
     """Resolve a capable harness prior to dispatch, enforcing fail-closed semantics."""
     if required_capabilities is None:
@@ -269,12 +270,16 @@ def resolve_capable_dispatch_harness(
             requires_gh_write=requires_gh_write,
         )
 
-    eval_result = evaluate_harness_capabilities(
-        candidate_harness,
-        required_capabilities,
-        grants=grants,
-        revokes=revokes,
-    )
+    excluded = {str(name).strip().lower() for name in (excluded_harnesses or ()) if name}
+    if candidate_harness.strip().lower() in excluded:
+        eval_result = CapabilityEvaluationResult(
+            allowed=False,
+            reason=f"Harness '{candidate_harness}' is excluded for this review",
+        )
+    else:
+        eval_result = evaluate_harness_capabilities(
+            candidate_harness, required_capabilities, grants=grants, revokes=revokes,
+        )
 
     if eval_result.allowed:
         return candidate_harness
@@ -283,8 +288,9 @@ def resolve_capable_dispatch_harness(
     if force_agent:
         missing_str = ", ".join(eval_result.missing_capabilities)
         raise IncompatibleHarnessCapabilityError(
-            f"Dispatch refused: forced harness '{candidate_harness}' lacks required capabilities: {missing_str}. "
-            f"Set explicit grants or choose a capable harness."
+            f"Dispatch refused: forced harness '{candidate_harness}' "
+            f"{eval_result.reason or f'lacks required capabilities: {missing_str}'}. "
+            f"Set explicit grants or choose a different harness."
         )
 
     # Autonomous rerouting through fallback chain
@@ -293,7 +299,7 @@ def resolve_capable_dispatch_harness(
         fallback_chain = ["codex", "agy", "claude", "grok", "local"]
 
     for alt_harness in fallback_chain:
-        if alt_harness == candidate_harness:
+        if alt_harness == candidate_harness or alt_harness.strip().lower() in excluded:
             continue
         alt_eval = evaluate_harness_capabilities(
             alt_harness,

@@ -67,3 +67,41 @@ def test_review_routing_never_falls_back_to_local_permission_crash():
         "-s",
         "read-only",
     ]
+
+
+@pytest.mark.parametrize("harness", ["codex", "agy", "claude"])
+def test_review_gh_write_capability_is_declared_for_all_supported_harnesses(harness):
+    resolved = resolve_capable_dispatch_harness(
+        candidate_harness=harness,
+        task="review PR #2271 and post findings",
+        task_type="review",
+        requires_gh_write=True,
+        fallback_chain=["codex", "agy", "claude", "grok"],
+    )
+    assert resolved == harness
+
+
+def test_review_routing_excludes_known_implementer_harness():
+    resolved = resolve_capable_dispatch_harness(
+        candidate_harness="codex",
+        task="review PR #2269",
+        task_type="review",
+        requires_gh_write=True,
+        excluded_harnesses=["codex"],
+        fallback_chain=["codex", "agy", "claude", "grok"],
+    )
+    assert resolved == "agy"
+
+
+def test_forced_review_routing_rejects_known_implementer_harness():
+    from synlynk.capability_probe import IncompatibleHarnessCapabilityError
+
+    with pytest.raises(IncompatibleHarnessCapabilityError, match="excluded"):
+        resolve_capable_dispatch_harness(
+            candidate_harness="codex",
+            task="review PR #2269",
+            task_type="review",
+            requires_gh_write=True,
+            force_agent=True,
+            excluded_harnesses=["codex"],
+        )

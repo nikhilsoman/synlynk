@@ -236,7 +236,13 @@ def _seed_cross_harness_review_case(project_dir, monkeypatch, *, review_harness,
     policy_path = project_dir / ".synlynk" / "policy.json"
     policy_path.parent.mkdir(parents=True, exist_ok=True)
     policy_path.write_text(json.dumps({
-        "overrides": {"merge_authority": {"cross_harness_review_required": True}}
+        "overrides": {
+            "governs_authority": {"require_linked_goal_mode": "observe"},
+            "merge_authority": {
+                "cross_harness_review_required": True,
+                "cross_harness_review_required_mode": "enforce",
+            },
+        }
     }))
     monkeypatch.chdir(project_dir)
     conn = synlynk._get_db()
@@ -277,6 +283,17 @@ def test_pr_check_cross_harness_review_rejects_same_harness_and_model(project_di
     )
     assert not ok
     assert "same harness+model" in message
+
+
+def test_pr_check_blocks_same_harness_review_in_enforce_mode(project_dir, monkeypatch):
+    from synlynk.db import cmd_pr_check
+
+    monkeypatch.setattr("synlynk.db._is_github_remote", lambda: False)
+    _seed_cross_harness_review_case(
+        project_dir, monkeypatch, review_harness="codex", review_model="gpt-5.3-codex"
+    )
+    with pytest.raises(SystemExit):
+        cmd_pr_check(pr_number=1991)
 
 
 def test_pr_check_cross_harness_review_accepts_different_harness(project_dir, monkeypatch):

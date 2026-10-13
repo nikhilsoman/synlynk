@@ -1691,6 +1691,55 @@ def _explicit_pr_numbers(task: str) -> list[int]:
     return found
 
 
+def _review_implementer_harness(task: str) -> Optional[str]:
+    """Return the known implementation harness for a PR-review task."""
+    if not task or not re.search(r"\b(?:review|check|inspect)\b", task, re.IGNORECASE):
+        return None
+    numbers = _explicit_pr_numbers(task)
+    if not numbers:
+        return None
+    try:
+        from synlynk import _get_db
+        conn = _get_db()
+        try:
+            for pr_number in numbers:
+                rows = conn.execute(
+                    """
+                    SELECT COALESCE(NULLIF(ce.harness, ''), NULLIF(dj.harness, ''),
+                                    NULLIF(ce.agent, ''), NULLIF(dj.agent, ''))
+                      FROM cost_entries ce
+                      LEFT JOIN daemon_jobs dj ON dj.job_id = ce.job_id
+                     WHERE ce.pr_number=?
+                       AND COALESCE(dj.purpose, '') = 'implementation'
+                     ORDER BY ce.id ASC
+                    """,
+                    (pr_number,),
+                ).fetchall()
+                for (harness,) in rows:
+                    if harness:
+                        return harness.strip().lower()
+                rows = conn.execute(
+                    """
+                    SELECT COALESCE(NULLIF(ce.harness, ''), NULLIF(dj.harness, ''),
+                                    NULLIF(ce.agent, ''), NULLIF(dj.agent, ''))
+                      FROM capability_ratings cr
+                      JOIN cost_entries ce ON ce.story_id = cr.story_id
+                      LEFT JOIN daemon_jobs dj ON dj.job_id = ce.job_id
+                     WHERE cr.pr_number=? AND COALESCE(dj.purpose, '') = 'implementation'
+                     ORDER BY ce.id ASC
+                    """,
+                    (pr_number,),
+                ).fetchall()
+                for (harness,) in rows:
+                    if harness:
+                        return harness.strip().lower()
+        finally:
+            conn.close()
+    except Exception:
+        return None
+    return None
+
+
 def _resolve_gh_write_target(
     task: str,
     issue: Optional[int],
@@ -3482,6 +3531,11 @@ def resolve_dispatch_harness(agent: str, agent_id: str = None, story_id: str = N
     # calculate a preferred harness for non-forced dispatches, but it must
     # never replace the user's requested harness when force_agent is set.
     candidate = agent if force_agent else (picked or agent)
+    excluded_harnesses = set()
+    if task_type in {"review", "pr_review"}:
+        implementer = _review_implementer_harness(task)
+        if implementer:
+            excluded_harnesses.add(implementer)
     if task or task_type or requires or requires_gh_write:
         from synlynk.capability_probe import resolve_capable_dispatch_harness
         return resolve_capable_dispatch_harness(
@@ -3493,6 +3547,7 @@ def resolve_dispatch_harness(agent: str, agent_id: str = None, story_id: str = N
             revokes=revokes,
             task_type=task_type,
             requires_gh_write=requires_gh_write,
+            excluded_harnesses=excluded_harnesses,
         )
     return candidate
 
@@ -3625,6 +3680,11 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         raise RuntimeError(
             f"Dispatch refused for connector role {resolved_agent_role!r}: explicit connector grant required"
         )
+    review_excluded_harnesses = set()
+    if task_type in {"review", "pr_review"}:
+        implementer = _review_implementer_harness(task)
+        if implementer:
+            review_excluded_harnesses.add(implementer)
     if requires_gh_write and not resolved_agent_role:
         resolved_agent_role = _role_for_story(story_id)
     if requires_gh_write and not resolved_agent_role:
@@ -3648,6 +3708,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             capable_agents = [
                 name for name, baseline in baselines_map.items()
                 if baseline.get("can_gh_write", False)
+                and name not in review_excluded_harnesses
             ]
             if not capable_agents:
                 raise ValueError(
