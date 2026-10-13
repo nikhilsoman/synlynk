@@ -1070,6 +1070,7 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
                 stage               TEXT NOT NULL DEFAULT 'open',
                 governs_stage       TEXT NOT NULL DEFAULT 'open',
                 complexity_tier     INTEGER DEFAULT 2,
+                priority            INTEGER DEFAULT 5,
                 goal_id             TEXT,
                 acceptance_criteria TEXT DEFAULT '[]',
                 status              TEXT NOT NULL DEFAULT 'staged',
@@ -1096,6 +1097,16 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
             CREATE INDEX IF NOT EXISTS idx_backlog_items_issue_number ON backlog_items(issue_number);
             CREATE INDEX IF NOT EXISTS idx_backlog_items_fingerprint ON backlog_items(fingerprint);
         """)
+        backlog_cols = set()
+        for _row in conn.execute("PRAGMA table_info(backlog_items)"):
+            backlog_cols.add(_row[1])
+        if backlog_cols and "priority" not in backlog_cols:
+            try:
+                conn.execute(
+                    "ALTER TABLE backlog_items ADD COLUMN priority INTEGER DEFAULT 5"
+                )
+            except sqlite3.OperationalError:
+                pass
         story_cols = {row[1] for row in conn.execute("PRAGMA table_info(stories)")}
         if "discipline" not in story_cols:
             try:

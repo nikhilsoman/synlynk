@@ -1,0 +1,5 @@
+{
+  "name": "tpm",
+  "description": "Durable TPM wake cycle — raw GitHub-issue intake, triage, ambiguity routing, dispatch tracking.",
+  "wake_cycle": "tpm_wake"
+}

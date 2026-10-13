@@ -1459,6 +1459,7 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
         "--radar", action="store_true",
         help="Plot Ring 3 opportunities to .synlynk/radar.json and docs/pm/opportunities-radar.md"
     )
+    pm_subparsers.add_parser("wake", help="Approve/reprioritize TPM's drafted intake queue (durable wake cycle)")
 
     tpm_parser = subparsers.add_parser("tpm", help="TPM sweep commands")
     tpm_subparsers = tpm_parser.add_subparsers(dest="tpm_command")
@@ -1466,6 +1467,7 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
         "sweep", help="Run one autonomous sweep pass over ready stories"
     )
     sweep_parser.add_argument("--assignee", default="nikhilsoman")
+    tpm_subparsers.add_parser("wake", help="Raw GitHub-issue intake, triage, ambiguity routing (durable wake cycle)")
 
     score_parser = subparsers.add_parser("score", help="Manage capability scores")
     score_sub = score_parser.add_subparsers(dest="score_action")
@@ -2713,6 +2715,10 @@ def main(argv=None) -> None:
         from synlynk.pm_agent import cmd_pm_sweep
 
         cmd_pm_sweep(dry_run=args.dry_run, radar=getattr(args, "radar", False))
+    elif args.command == "pm" and args.pm_command == "wake":
+        from synlynk.pm_agent import cmd_pm_wake
+
+        cmd_pm_wake()
     elif args.command == "tpm" and args.tpm_command == "sweep":
         from synlynk.tpm_sweep import run_sweep_pass
 
@@ -2721,6 +2727,10 @@ def main(argv=None) -> None:
             f"sweep pass: {summary['advanced']} advanced, "
             f"{summary['parked']} parked, {summary['failed']} failed"
         )
+    elif args.command == "tpm" and args.tpm_command == "wake":
+        from synlynk.tpm_sweep import run_tpm_wake_cycle
+
+        run_tpm_wake_cycle()
     elif args.command == "score":
         if args.score_action == "add":
             cmd_score_add(args.story_id, args.rating, note=args.note, rework=args.rework)

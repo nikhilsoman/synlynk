@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from synlynk.capability import capability_score
 
@@ -19,6 +19,8 @@ class AgentCharter:
     autonomous_authorities: List[str]
     escalation_triggers: List[str]
     behavioral_weights: Dict[str, str]
+    durability: Optional[str] = None
+    wake_cycle_sop: List[str] = field(default_factory=list)
 
 
 def _charters_dir() -> str:
@@ -28,7 +30,7 @@ def _charters_dir() -> str:
 def validate_charter(charter: AgentCharter) -> bool:
     if not charter.role or not charter.mandate:
         return False
-    if not charter.harness_bindings or not isinstance(charter.harness_bindings, list):
+    if not isinstance(charter.harness_bindings, list):
         return False
     return True
 
@@ -49,11 +51,13 @@ def load_charter(role: str) -> AgentCharter:
         data = json.load(f)
     return AgentCharter(
         role=data["role"],
-        harness_bindings=data["harness_bindings"],
+        harness_bindings=data.get("harness_bindings", []),
         mandate=data["mandate"],
         autonomous_authorities=data.get("autonomous_authorities", []),
         escalation_triggers=data.get("escalation_triggers", []),
         behavioral_weights=data.get("behavioral_weights", {}),
+        durability=data.get("durability"),
+        wake_cycle_sop=data.get("wake_cycle_sop", []),
     )
 
 
