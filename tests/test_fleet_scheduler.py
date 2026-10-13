@@ -606,3 +606,76 @@ def test_end_to_end_ready_story_flows_to_queued_daemon_job(scheduler_db, monkeyp
     ).fetchone()
     conn.close()
     assert row == ("grok", "queued")
+
+
+def test_autonomy_pass_interval_default_is_1800(scheduler_db):
+    from synlynk.scheduler import _autonomy_pass_interval_seconds
+    assert _autonomy_pass_interval_seconds() == 1800
+
+
+def test_autonomy_pass_interval_reads_config_override(scheduler_db, tmp_path):
+    import json
+    from synlynk.scheduler import _autonomy_pass_interval_seconds
+
+    with open(".synlynk/config.json", "w") as f:
+        json.dump({"autonomy_pass_interval_seconds": 60}, f)
+
+    assert _autonomy_pass_interval_seconds() == 60
+
+
+def test_autonomy_pass_manual_mode_skips_scheduling(scheduler_db, monkeypatch):
+    import json
+    from synlynk import scheduler as scheduler_mod
+
+    with open(".synlynk/config.json", "w") as f:
+        json.dump({"autonomy_mode": "manual"}, f)
+
+    calls = {"ingest": 0, "triage": 0, "promote": 0, "schedule": 0}
+    monkeypatch.setattr(scheduler_mod, "ingest_backlog", lambda *a, **kw: calls.__setitem__("ingest", calls["ingest"] + 1))
+    monkeypatch.setattr(scheduler_mod, "triage_backlog", lambda *a, **kw: calls.__setitem__("triage", calls["triage"] + 1))
+    monkeypatch.setattr(scheduler_mod, "auto_promote_backlog", lambda *a, **kw: calls.__setitem__("promote", calls["promote"] + 1))
+    monkeypatch.setattr(scheduler_mod, "cmd_schedule", lambda *a, **kw: calls.__setitem__("schedule", calls["schedule"] + 1))
+
+    scheduler_mod._autonomy_pass()
+
+    assert calls == {"ingest": 1, "triage": 1, "promote": 1, "schedule": 0}
+
+
+def test_autonomy_pass_supervised_mode_runs_scheduling(scheduler_db, monkeypatch):
+    import json
+    from synlynk import scheduler as scheduler_mod
+
+    with open(".synlynk/config.json", "w") as f:
+        json.dump({"autonomy_mode": "supervised"}, f)
+
+    calls = {"schedule": 0}
+    monkeypatch.setattr(scheduler_mod, "ingest_backlog", lambda *a, **kw: None)
+    monkeypatch.setattr(scheduler_mod, "triage_backlog", lambda *a, **kw: None)
+    monkeypatch.setattr(scheduler_mod, "auto_promote_backlog", lambda *a, **kw: [])
+    monkeypatch.setattr(scheduler_mod, "cmd_schedule", lambda *a, **kw: calls.__setitem__("schedule", calls["schedule"] + 1))
+
+    scheduler_mod._autonomy_pass()
+
+    assert calls["schedule"] == 1
+
+
+def test_autonomy_pass_stage_failure_does_not_abort_remaining_stages(scheduler_db, monkeypatch, capsys):
+    import json
+    from synlynk import scheduler as scheduler_mod
+
+    with open(".synlynk/config.json", "w") as f:
+        json.dump({"autonomy_mode": "autonomous"}, f)
+
+    calls = {"schedule": 0}
+
+    def boom(*a, **kw):
+        raise RuntimeError("ingest exploded")
+
+    monkeypatch.setattr(scheduler_mod, "ingest_backlog", boom)
+    monkeypatch.setattr(scheduler_mod, "triage_backlog", lambda *a, **kw: None)
+    monkeypatch.setattr(scheduler_mod, "auto_promote_backlog", lambda *a, **kw: [])
+    monkeypatch.setattr(scheduler_mod, "cmd_schedule", lambda *a, **kw: calls.__setitem__("schedule", calls["schedule"] + 1))
+
+    scheduler_mod._autonomy_pass()  # must not raise
+
+    assert calls["schedule"] == 1
