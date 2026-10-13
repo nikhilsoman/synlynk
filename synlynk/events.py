@@ -18,12 +18,17 @@ import uuid
 RELAY_EVENT_TYPES = (
     "agent_started",
     "task_progress",
+    "runner_progress",
     "artifact_published",
     "review_requested",
     "steering_injected",
     "agent_completed",
     "goal_realigned",
     "governs_stage_advanced",
+    "hub_disconnected",
+    "sync_gap_detected",
+    "doc_drafted",
+    "doc_updated",
 )
 
 

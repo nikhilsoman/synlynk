@@ -1046,6 +1046,16 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
             );
             CREATE INDEX IF NOT EXISTS idx_relay_mailbox_recipient
                 ON relay_mailbox(recipient_key, delivered_at);
+            CREATE TABLE IF NOT EXISTS relay_hub_devices (
+                device_id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                workspace_id TEXT NOT NULL,
+                revoked INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                revoked_at TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_relay_hub_devices_workspace
+                ON relay_hub_devices(workspace_id);
             CREATE TABLE IF NOT EXISTS backlog_items (
                 id                  INTEGER PRIMARY KEY AUTOINCREMENT,
                 item_id             TEXT UNIQUE,

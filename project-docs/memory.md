@@ -57,3 +57,17 @@
 - **2026-10-03 [PR #1962 remaining QA blockers]:** Promotion gates also fail closed when any required metric is absent or unknown, with explicit reason codes. Daemon timeout and stranded-story failed transitions are routed through `_settle_daemon_job_terminal`, and reclaim is enforced by the terminal-writer manifest. [@codex]
 - **2026-10-03 [Issue #1951 independent cost audit]:** Cost auditing consumes only versioned terminal-decision outbox entries keyed by `(job_id, decision_revision)`. Missing cost remains an explicit audit state; provider billing, estimates, paid amounts, pricing basis, source corrections, and duplicate/conflict evidence live in a separate ledger. Cost-audit failures cannot write job status. [@codex]
 - **Vizor Web HUD Architecture:** Modular client/server architecture with OS-supervised persistent daemon (`synlynk.vizor_daemon`), multi-workspace hub (`/`), 7-stage GOVERNS board (`board.html`), Option C dual-pivot timeline (`gantt.html`), 4 BS-6 architectural views (Product, Logical, Infra, World), unified Graphify knowledge graph canvas with theme synchronization, and token-authenticated local API.
+- **2026-10-13 Personal Hosted Relay:** Nikhil authorized Codex conductor ownership
+  of goal-f4ce526a through all ten tasks and approved gpt-6-astra after the account
+  rejected gpt-5.3-codex. Keep per-task TDD/commits and CLI story transitions;
+  five-minute updates active. Bearer device secrets remain the settled mechanism;
+  real NATS requires authorization.users user/password fields, not token entries.
+  Test real replay/revocation and preview-path containment before claiming end-to-end
+  operation. [@nikhilsoman]
+- **2026-10-13 Relay Task 10 QA corrections:** Trusted preview bases resolve
+  symlinks; remote components remain descriptor-relative/no-follow. Local storage
+  errors retry, invalid remote payloads terminate. Bounded bridge overflow emits
+  a local loss marker and resubscribes without durable outbound retries. Inbound
+  local work is off the NATS loop; detach finishes persistence and disposition.
+  Workspace credentials trust all devices and do not attest origin labels.
+  Evidence: `project-docs/devlogs/personal-relay-task10-evidence.md`. [@nikhilsoman]

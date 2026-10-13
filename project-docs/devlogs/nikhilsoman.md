@@ -1,3 +1,20 @@
+## 2026-10-13 Personal Hosted Relay final integration [@nikhilsoman]
+
+- Task 10 worker 468b3cb8 completed full regression: 4419 passed, one known
+  sandbox home-log failure, four skips and five expected failures. The failed
+  Vizor test passes with required permissions. Generated command reference fixed.
+- Integrated worker review fixes with main 6aaab228. Added four red/green
+  cancellation regressions and shield-and-drain cleanup; independent review
+  approved. Final targeted set: 260 passed, including all ten real NATS cases.
+- Corrected optional nats-py minimum to tested 2.16.0 after 2.6.0 API/auth failures.
+  Stdlib-only CLI and hub imports verified without importing NATS.
+- Final combined full suite: 4436 passed, 3 skipped, 5 xfailed in 273.59s,
+  no exclusions, real NATS available. PR #2257 proceeds to non-author final QA. Only the reviewer
+  may merge after pr-check, merge policy and CI pass. No deployment authorized.
+- Worker usage reported 6,177,615 input tokens (6,079,104 cached), 21,109 output;
+  provider billing remains unavailable. Full evidence and task commit mapping live
+  in personal-relay-task10-evidence.md and personal-hosted-relay-progress.md.
+
 ## 2026-09-27 — Align Dispatch Default Model Tiers with 2026 SOTA Catalog (#1803, `story-e8343134`, `goal-5be4eb8b`)
 
 ### Shipped & Verified
@@ -1744,6 +1761,27 @@ Cost logged via `synlynk cost log` (~$2.54, native PM work). PR #1818 opened (do
 
 [@nikhilsoman]
 
+## 2026-10-13 Personal Hosted Relay conductor
+
+User authorized goal-f4ce526a end-to-end execution and five-minute task updates.
+Session session-0fe91cb1, feature worktree feat-codex-personal-hosted-relay.
+Task 1 preserved from 2375ec24 as d7ed8c7c; 10 relay tests pass. Task 2 TDD
+completed, reviewed and integrated as 96aa05d7; four red tests then 14 green
+relay tests, broad suite 1381 passed/1 skipped. Stories marked done via CLI.
+Tasks 3-6 reviewed and integrated as d2dd8fa5, 45b54927, 36bcbb42, and
+31683d36. Task 6 verified authenticated durable replay with 166 targeted and
+1527 broad tests passing (1 skipped). Independent Task 5/6 reviews approved.
+All six stories marked done via CLI; checkpoint refreshed the generated views.
+Task 7 source 814151bf and reviewed onboarding corrections integrated as
+84d730ab, with 191 targeted tests passing. Remote devices use only their own
+exported credential. Task 8 dispatched as job-02ef4311 after zero-token routing
+failure job-20b0e6e2 (tracked gh:#2255). Task 10 full regression remains required.
+Pre-existing job-status reconciliation crash tracked separately in gh:#2254.
+The default gpt-5.3-codex was unsupported; user explicitly approved gpt-6-astra.
+Real NATS audit proved authorization.users token entries invalid; preserve random
+device secrets using supported user/password fields. Replay/echo/revocation and
+preview containment require real integration checks, recorded in the execution ledger.
+
 ## 2026-09-29 — R9 instruction dedup shipped, wave housekeeping, #1844 filed
 
 Shipped `[R9]` (`story-025c857c`, PERF-P5) as PR #1843: deduplicated the 5 generated instruction
@@ -1923,6 +1961,58 @@ existing loopback callback test passes when run with local socket permission. CL
 `git diff --check` pass.
 
 [@nikhilsoman]
+## 2026-10-13 - Personal Hosted Relay Task 8 (#2201)
+
+Added real authenticated JetStream integration using two isolated CLI device
+processes, their own exported credentials, databases and subscriber observers.
+Covers exactly-once delivery, restart replay, independent category cursors,
+retention gaps, filters and actual auth reload/revocation. Moved earlier real-NATS
+smoke/config tests into the integration module and replaced machine-specific
+binary paths with PATH discovery. No production behavior changes were needed.
+
+Verification: initial run was 2 passed/1 failed because nats-py returns a generic
+Error containing Authorization Violation; corrected the precise error assertion.
+A temporary persistent-dedupe regression probe produced the expected duplicate
+delivery assertion failure and was fully restored. Targeted hub/onboarding/relay
+coverage passed 194 tests; final integration coverage passed all 9 real-NATS cases.
+Logs: .synlynk/logs/task8-{initial,dedupe-red,green,final-integration}.log.
+Broader requested regression: 1569 passed, 1 skipped (exit 0), recorded in
+.synlynk/logs/job-02ef4311-verify-1.log. All 9 NATS integration cases executed.
+No full suite, managed service, PR, story completion or global configuration change.
+Conductor owns review/integration. Estimated cost $1.00; actual billing unavailable
+to the worker, with dispatch telemetry authoritative. [@nikhilsoman, @codex]
+
+Conductor review added server-side connected-user revocation evidence and live
+wrong-workspace subject/envelope rejection. Final integration: 10 passed in 4.64s.
+
+## 2026-10-13 - Personal Hosted Relay Task 9 (#2201)
+
+Implemented doc preview payload construction and accepted-envelope reception in
+relay_hub.py. Outbound doc envelopes carry the local device ID and enforce the
+1,000,000-byte serialized JSON limit, including escaping and actor metadata;
+oversized content is omitted, while oversized metadata fails observably.
+Preview writes are confined to the three approved document roots, reject unsafe
+paths/device IDs and symlinks, and atomically replace labeled 0444 copies under
+.synlynk/relay/previews/<origin_device_id>/<path>. Storage errors remain retryable.
+No watcher, authoritative document edits, merge, deployment, or schema migration.
+
+TDD red: expected missing builder ImportError, exit 2 (task9-red.log).
+Initial targeted green: 230 passed, exit 0 (task9-green.log).
+Requested regression plus existing relay tests: 1611 passed, 1 skipped, exit 0
+(job-ceb33e8b-verify-1.log). Final targeted run after cleanup refinements:
+236 passed, exit 0 (task9-final-targeted.log), including all 10 real-NATS tests.
+Logs live in .synlynk/logs/. Used the supplied temporary Python environment and
+NATS binary PATH. No full-suite run. git diff --check passed.
+
+Origin identity is declared in the envelope; the existing workspace-scoped NATS
+authorization does not independently attest individual message authors. Preview
+ordering follows accepted delivery order; this is not a document merge protocol.
+The writer requires POSIX directory-descriptor/O_NOFOLLOW support, matching the
+existing hub's POSIX requirements. Conductor owns review and integration.
+No PR, subtasks, story completion, generated todo or global configuration edits.
+Estimated cost $1.00; actual billing unavailable to the worker, dispatch telemetry
+authoritative. synlynk status exited 0; no active sentinels, existing overdue
+capability/smoke checks. [@nikhilsoman, @codex]
 
 2026-10-13 — Mid-session checkpoint: executing plan docs/superpowers/plans/2026-10-13-finalize-workspace-agent-charters.md
 (story-0ad6c02b, GOVERNS goal-a222b393/goal-06758149) via Subagent-Driven Development on branch
