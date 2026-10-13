@@ -242,3 +242,47 @@ def cmd_pm_sweep(dry_run: bool = False, radar: bool = False):
         f"{summary.get('segments_updated', 0)} segments_updated"
     )
     return summary
+
+
+def cmd_pm_wake() -> dict:
+    """Run the PM wake-cycle SOP: approve or reprioritise the TPM-drafted queue.
+
+    Items the TPM wake cycle routed to tpm_drafted or needs_pm_priority_input
+    are approved to triaged with a deterministic tier-based priority (the same
+    formula auto_promote_backlog applies). Items awaiting the architect are
+    left untouched and only reported, since PM is not the authority that
+    resolves a missing goal link.
+    """
+    from synlynk.db import _get_db
+
+    conn = _get_db()
+    rows = conn.execute(
+        "SELECT id, complexity_tier FROM backlog_items "
+        "WHERE status IN ('tpm_drafted', 'needs_pm_priority_input')"
+    ).fetchall()
+
+    approved = 0
+    for row_id, tier in rows:
+        priority = 2 if tier == 3 else (3 if tier == 2 else 4)
+        conn.execute(
+            "UPDATE backlog_items SET status = 'triaged', priority = ? WHERE id = ?",
+            (priority, row_id),
+        )
+        approved += 1
+    conn.commit()
+
+    escalated = 0
+    pending_architect = conn.execute(
+        "SELECT COUNT(*) FROM backlog_items WHERE status = 'needs_architect_input'"
+    ).fetchone()[0]
+    if pending_architect:
+        escalated = pending_architect
+        print(
+            f"  [pm:wake] {escalated} item(s) await architect input "
+            "-- not auto-approved"
+        )
+
+    print(
+        f"  [pm:wake] approved {approved} item(s), {escalated} escalated to architect"
+    )
+    return dict(approved=approved, escalated=escalated)
