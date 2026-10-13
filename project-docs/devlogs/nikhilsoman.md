@@ -1923,3 +1923,28 @@ existing loopback callback test passes when run with local socket permission. CL
 `git diff --check` pass.
 
 [@nikhilsoman]
+
+2026-10-13 — Mid-session checkpoint: executing plan docs/superpowers/plans/2026-10-13-finalize-workspace-agent-charters.md
+(story-0ad6c02b, GOVERNS goal-a222b393/goal-06758149) via Subagent-Driven Development on branch
+`dispatch/codex/job-85f9e9d1`. Tasks 1-2 done and committed (a6fdf7b7, e39296e7, de97200d, b9de8638):
+charters.py now supports `durability`/`wake_cycle_sop` fields and tolerates missing `harness_bindings`;
+pm.json durable charter written (took 3 dispatch attempts — shell text-processing corrupted the JSON
+string content twice; base64-decode-via-python3 is the write method that finally worked cleanly).
+Resolved an apparent test anomaly before starting Task 3: `test_load_tpm_charter` currently fails
+(`harness_bindings == ['claude','codex']` vs expected `[]`) even though `.synlynk/charters/tpm.json`
+doesn't exist yet — root cause is `load_charter()`'s pre-existing missing-file fallback at
+`synlynk/charters.py:43`, which hardcodes `["claude","codex"]` for role in `("architect","tpm")`.
+This is expected and resolves itself once tpm.json is created (file-exists branch at line 54 takes
+over) — not a bug needing a separate fix.
+⚠️ Next: dispatch Task 3 to Codex via `synlynk dispatch --base dispatch/codex/job-85f9e9d1`, writing
+`.synlynk/charters/tpm.json` with the 7-step wake_cycle_sop spec (durability: durable, autonomous
+authorities triage_issue/draft_plan/dispatch_track, escalation_triggers technical_ambiguity/
+priority_ambiguity/dispatch_blocked_twice) — use the file-write tool directly or base64-decode
+technique, not shell heredoc/sed. Then Task 4 (maintainer.json durability promotion), Tasks 5-9
+(run_tpm_wake_cycle, cmd_pm_wake, .agents/*.json, support_engineer.py wiring, CLI subcommands),
+Task 10 (cron dry-run verification only), Task 11 (final regression, no commit). Each implementer
+task routes through `synlynk dispatch` to Codex/Agy/Grok per standing instruction; reviewer stages
+stay with Claude. After all tasks: final whole-branch review, then finishing-a-development-branch
+targeting `dispatch/codex/job-85f9e9d1`, plus Blog Post Protocol + PR Review Discipline + Cost
+Capture Protocol once a PR opens.
+[@nikhilsoman]
