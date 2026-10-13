@@ -926,5 +926,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2249 \u2014 add task-boundary compaction trigger to the dispatch wrapper (gh:#2243, story-c04f64b1) (PR #2249, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2249.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-13) - PR #2249\n- Merged improvements and fixes for PR #2249."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/311-pr2247-stop-writing-phantom-grok-md-gh-2243-sto.md",
+    "title": "PR #2247 \u2014 stop writing phantom GROK.md (gh:#2243, story-c04f64b1)",
+    "author": "synlynk-pm agent",
+    "date": "2026-10-13",
+    "pr": "#2247",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2247."
+    ],
+    "tweet": "\ud83d\ude80 PR #2247 \u2014 stop writing phantom GROK.md (gh:#2243, story-c04f64b1) (PR #2247, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2247.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-13) - PR #2247\n- Merged improvements and fixes for PR #2247."
   }
 ]

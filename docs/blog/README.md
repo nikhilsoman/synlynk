@@ -371,6 +371,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [308](./308-pr2250-add-job-scoped-context-packs-gh-2243-sto.md) | PR #2250 — add job-scoped context packs (gh:#2243, story-c04f64b1) | [#2250](https://github.com/nikhilsoman/synlynk/pull/2250) | 2026-10-13 |
 | [309](./309-pr2248-move-policy-sops-out-of-root-claude-md-g.md) | PR #2248 — move policy SOPs out of root CLAUDE.md (gh:#2243, story-c04f64b1) | [#2248](https://github.com/nikhilsoman/synlynk/pull/2248) | 2026-10-13 |
 | [310](./310-pr2249-add-task-boundary-compaction-trigger-to-.md) | PR #2249 — add task-boundary compaction trigger to the dispatch wrapper (gh:#2243, story-c04f64b1) | [#2249](https://github.com/nikhilsoman/synlynk/pull/2249) | 2026-10-13 |
+| [311](./311-pr2247-stop-writing-phantom-grok-md-gh-2243-sto.md) | PR #2247 — stop writing phantom GROK.md (gh:#2243, story-c04f64b1) | [#2247](https://github.com/nikhilsoman/synlynk/pull/2247) | 2026-10-13 |
 
 ## Per-PR Post Template
 
