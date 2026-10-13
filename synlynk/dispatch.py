@@ -3690,8 +3690,26 @@ def resolve_dispatch_harness(agent: str, agent_id: str = None, story_id: str = N
     # An explicitly forced harness is binding.  Auto-routing may still
     # calculate a preferred harness for non-forced dispatches, but it must
     # never replace the user's requested harness when force_agent is set.
+    excluded_harnesses = set()
+    if task_type in {"review", "pr_review"} and task:
+        try:
+            from synlynk import _get_db
+            from synlynk.db import _implementation_job_from_branch
+            conn = _get_db()
+            for pr_num in _explicit_pr_numbers(task):
+                job_id = _implementation_job_from_branch(conn, pr_num)
+                if job_id:
+                    row = conn.execute(
+                        "SELECT lower(COALESCE(NULLIF(harness, ''), agent, '')) FROM daemon_jobs WHERE job_id=?",
+                        (job_id,),
+                    ).fetchone()
+                    if row and row[0]:
+                        excluded_harnesses.add(row[0].strip().lower())
+        except Exception:
+            pass
+
     candidate = agent if force_agent else (picked or agent)
-    if task or task_type or requires or requires_gh_write:
+    if task or task_type or requires or requires_gh_write or excluded_harnesses:
         from synlynk.capability_probe import resolve_capable_dispatch_harness
         return resolve_capable_dispatch_harness(
             candidate_harness=candidate,
@@ -3702,8 +3720,10 @@ def resolve_dispatch_harness(agent: str, agent_id: str = None, story_id: str = N
             revokes=revokes,
             task_type=task_type,
             requires_gh_write=requires_gh_write,
+            excluded_harnesses=excluded_harnesses,
         )
     return candidate
+
 
 
 def dispatch_agent(agent: str, task: str, story_id: str = None,
