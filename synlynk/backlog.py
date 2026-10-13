@@ -44,6 +44,11 @@ DEFAULT_ACTIVE_GOALS = [
 
 DEFAULT_BACKLOG_GOAL_ID = "goal-d3333441"
 
+# Minimum keyword-overlap score for synthesize_story_from_issue() to assign a
+# goal automatically. Below this, the story is created with goal_id=None and
+# left for a human (or a later triage pass) to link explicitly.
+MIN_GOAL_MATCH_SCORE = 2
+
 
 def compute_fingerprint(title: str, source_ref: str = "") -> str:
     """Compute a deterministic SHA-256 fingerprint for a discovered item."""
@@ -381,7 +386,7 @@ def synthesize_story_from_issue(
     # Match goal
     goals = _load_active_goals(db_conn=db_conn, active_goals=active_goals)
     tokens = set(re.findall(r"\w+", (title + " " + body + " " + " ".join(labels)).lower()))
-    best_goal_id = "goal-6733bbf1"
+    best_goal_id = None
     best_score = -1
 
     for g in goals:
@@ -393,6 +398,9 @@ def synthesize_story_from_issue(
         if score > best_score:
             best_score = score
             best_goal_id = g_id
+
+    if best_score < MIN_GOAL_MATCH_SCORE:
+        best_goal_id = None
 
     priority = 2 if tier == 3 else (3 if tier == 2 else 4)
     for lbl in labels:
@@ -700,6 +708,7 @@ def auto_promote_backlog(
             item_id,
             goal_id=goal_id,
             db_conn=conn,
+            require_explicit_goal=True,
         )
 
         promoted_stories.append({
@@ -721,6 +730,7 @@ def link_backlog_item_to_goal(
     item_id: str,
     goal_id: Optional[str] = None,
     db_conn=None,
+    require_explicit_goal: bool = False,
 ) -> dict:
     """Associate one captured backlog item (or discovered story) with a goal.
 
@@ -731,6 +741,13 @@ def link_backlog_item_to_goal(
     """
     if not item_id or not str(item_id).strip():
         return {"linked": False, "reason": "empty_item_id"}
+
+    if require_explicit_goal and not (goal_id and str(goal_id).strip()):
+        return {
+            "linked": False,
+            "reason": "no_confident_match",
+            "item_id": str(item_id).strip(),
+        }
 
     selected_goal_id = (goal_id or DEFAULT_BACKLOG_GOAL_ID).strip()
     if not selected_goal_id:
