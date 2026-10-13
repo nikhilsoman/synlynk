@@ -9,6 +9,161 @@ from types import SimpleNamespace
 
 import pytest
 
+
+def test_hub_cli_config_and_credentials(tmp_path, capsys):
+    from synlynk.cli import main, build_parser
+    tmp_path = tmp_path / "credentials"
+    common = ["--workspace-id", "ws1", "--config-dir", str(tmp_path)]
+    args = build_parser().parse_args(["relay", "device", "add", "laptop", *common])
+    assert (args.relay_action, args.relay_device_action, args.name) == ("device", "add", "laptop")
+    main(["relay", "hub", "init", *common])
+    assert "nats-server -c" in capsys.readouterr().out
+    main(["relay", "device", "add", "laptop", *common])
+    cred = DeviceCredentialStore("ws1", tmp_path).list_devices()[0]
+    output = capsys.readouterr().out
+    assert cred.device_id in output and "laptop" in output
+    assert output.count("keep this file secret") == 1
+    assert cred.token not in output
+    config = (tmp_path / "nats.conf").read_text()
+    assert "jetstream" in config and cred.token in config
+    main(["relay", "device", "revoke", cred.device_id, *common])
+    assert "reload" in capsys.readouterr().out.lower()
+    assert cred.token not in (tmp_path / "nats.conf").read_text()
+    main(["relay", "device", "revoke", "dev-unknown", *common])
+    assert "not found" in capsys.readouterr().out.lower()
+    for path in tmp_path.iterdir():
+        if path.is_file():
+            assert path.stat().st_mode & 0o777 == 0o600
+
+
+def test_subscription_cli_before_init(tmp_path, monkeypatch):
+    from synlynk.cli import main
+    monkeypatch.chdir(tmp_path)
+    main(["relay", "unsubscribe", "job.>"])
+    path = tmp_path / ".synlynk/relay-subscriptions.json"
+    assert json.loads(path.read_text()) == []
+    main(["relay", "subscribe", "job.>"])
+    main(["relay", "subscribe", "job.>"])
+    assert json.loads(path.read_text()) == ["job.>"]
+
+
+@pytest.mark.parametrize("patterns,delivered", [(None, True), ([], False), (["job.*"], True), (["doc.>"], False)])
+def test_subscription_filters_delivery(project_dir, patterns, delivered):
+    broker, client = RelayBroker(), FakeNatsClient()
+    adapter = HubAdapter(broker, client, "ws1", subscriptions=patterns)
+    subscriber = broker.subscribe()
+    adapter.attach()
+    try:
+        assert adapter._on_hub_message("synlynk.ws1.job.review_requested", hub_event().to_json()) == "ack"
+        assert (not subscriber.empty()) is delivered
+    finally:
+        adapter.detach()
+
+
+def test_hub_daemon_rejected():
+    from synlynk.cli import main
+    from synlynk.cli import build_parser
+    assert build_parser().parse_args(["relay", "start", "--hub", "--daemon"]).hub
+    with pytest.raises(SystemExit, match="2"):
+        main(["relay", "start", "--hub", "--daemon"])
+
+
+def test_managed_connect_is_private_and_explicit(tmp_path, capsys):
+    from synlynk.cli import main
+    main(["relay", "hub", "connect", "private-token", "--workspace-id", "ws1", "--config-dir", str(tmp_path)])
+    output = capsys.readouterr().out
+    assert "not implemented" in output and "private-token" not in output
+    assert (tmp_path / "hub.json").stat().st_mode & 0o777 == 0o600
+
+
+@pytest.mark.parametrize("fail", [False, True])
+def test_cli_hub_start_uses_server_broker_and_cleans_up(project_dir, tmp_path, monkeypatch, fail):
+    from synlynk.cli import main
+    import synlynk.relay_hub as hub
+    import synlynk.relay as relay
+    common = ["--workspace-id", "ws1", "--config-dir", str(tmp_path / "config")]
+    main(["relay", "hub", "init", *common])
+    main(["relay", "device", "add", "laptop", *common])
+    cred = DeviceCredentialStore("ws1", tmp_path / "config").list_devices()[0]
+    main(["relay", "unsubscribe", "job.>"])
+    observed = {}
+
+    class Server:
+        def __init__(self, port):
+            observed["port"] = port
+            self.broker = object()
+            observed["broker"] = self.broker
+            self.httpd = SimpleNamespace(server_close=lambda: observed.update(closed=True))
+
+        def start(self, background):
+            assert not background and observed["attached"]
+            if fail:
+                raise KeyboardInterrupt
+
+    class Adapter:
+        def __init__(self, broker, client, workspace, **options):
+            assert broker is observed["broker"] and workspace == "ws1"
+            assert options == {"owns_client": True, "subscriptions": []}
+
+        def attach(self):
+            observed["attached"] = True
+
+        def detach(self):
+            observed["detached"] = True
+
+    def transport(servers, **options):
+        assert servers == ["nats://example:4223"]
+        assert options == {"user": cred.device_id, "password": cred.token}
+        return object()
+
+    monkeypatch.setattr(relay, "RelayServer", Server)
+    monkeypatch.setattr(hub, "HubAdapter", Adapter)
+    monkeypatch.setattr(hub, "NatsTransport", transport)
+    argv = ["relay", "start", "--hub", "--device-id", cred.device_id,
+            "--config-dir", str(tmp_path / "config"), "--port", "8001",
+            "--hub-url", "nats://example:4223"]
+    if fail:
+        with pytest.raises(KeyboardInterrupt):
+            main(argv)
+    else:
+        main(argv)
+    assert observed["closed"] and observed["detached"] and observed["port"] == 8001
+
+
+@pytest.mark.parametrize("subcommand", ["hub", "device"])
+def test_nested_relay_help(subcommand, capsys):
+    from synlynk.cli import main
+    main(["relay", subcommand])
+    assert f"relay {subcommand}" in capsys.readouterr().out
+
+
+def test_default_relay_start_stays_local(monkeypatch):
+    from synlynk.cli import main
+    import synlynk.relay as relay
+    import synlynk.relay_hub as hub
+    seen = {}
+
+    class Server:
+        def __init__(self, port):
+            seen["port"] = port
+
+        def start(self, background):
+            seen["background"] = background
+
+    monkeypatch.setattr(relay, "RelayServer", Server)
+    monkeypatch.setattr(hub, "run_hub_relay", lambda args: pytest.fail("Unexpected opt-in"))
+    main(["relay", "start"])
+    assert seen == {"port": 7432, "background": False}
+
+
+@pytest.mark.parametrize("pattern", ["", "job.>.x", "job.x*", "job..x", "job.bad token"])
+def test_invalid_subscription_is_not_written(tmp_path, monkeypatch, pattern):
+    from synlynk.cli import main
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(ValueError):
+        main(["relay", "subscribe", pattern])
+    assert not (tmp_path / ".synlynk/relay-subscriptions.json").exists()
+
 from synlynk.events import ActorIdentifier, EventEnvelope
 from synlynk.relay_hub import DeviceCredentialStore, RETENTION_POLICIES, category_for_subject, subject_for_event
 from synlynk.relay import RelayBroker
@@ -289,7 +444,8 @@ def test_jetstream_permissions_are_device_and_workspace_scoped(tmp_path):
         permissions["publish"] + permissions["subscribe"])
 
 
-def test_authenticated_jetstream_transport_smoke(project_dir, tmp_path):
+@pytest.mark.parametrize("cli_config", [False, True])
+def test_authenticated_jetstream_transport_smoke(project_dir, tmp_path, cli_config):
     """Small real-API check; broader cross-device integration remains Task 8."""
     import socket
     import time
@@ -306,6 +462,16 @@ def test_authenticated_jetstream_transport_smoke(project_dir, tmp_path):
     config.write_text(f"host: 127.0.0.1\nport: {port}\n"
                       + "jetstream { store_dir: " + json.dumps(str(tmp_path / "jetstream")) + " }\n"
                       + store.render_authorization_block())
+    if cli_config:
+        from synlynk.cli import main
+        directory = tmp_path / "cli-credentials"
+        common = ["--workspace-id", "ws1", "--config-dir", str(directory)]
+        main(["relay", "hub", "init", *common, "--listen", f"127.0.0.1:{port}",
+              "--url", f"nats://127.0.0.1:{port}"])
+        main(["relay", "device", "add", "receiver", *common])
+        main(["relay", "device", "add", "sender", *common])
+        receiver, sender = DeviceCredentialStore("ws1", directory).list_devices()
+        config = directory / "nats.conf"
     log = (tmp_path / "server.log").open("w+")
     process = subprocess.Popen([str(binary), "-c", str(config)], stdout=log, stderr=log)
     adapters, transports = [], []

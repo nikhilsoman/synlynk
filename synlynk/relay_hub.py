@@ -28,6 +28,7 @@ from pathlib import Path
 import re
 import queue
 import secrets
+import shlex
 import tempfile
 import threading
 from types import SimpleNamespace
@@ -345,8 +346,12 @@ class HubAdapter:
     """
 
     def __init__(self, broker, client, workspace_id, *, owns_client=False,
-                 max_seen=10_000, shutdown_timeout=10.0):
+                 max_seen=10_000, shutdown_timeout=10.0, subscriptions=None):
         self.workspace_id = _subject_segment(workspace_id, "workspace_id")
+        self.subscriptions = subscriptions
+        if subscriptions is not None:
+            for pattern in subscriptions:
+                _validate_pattern(pattern)
         if max_seen < 512 or shutdown_timeout <= 0:
             raise ValueError("max_seen must be >=512 and shutdown_timeout positive")
         self.broker, self.client = broker, client
@@ -476,6 +481,11 @@ class HubAdapter:
             envelope, expected = self._decode(payload)
             if subject != expected:
                 raise ValueError("Subject does not match envelope routing")
+            suffix = subject[len(f"synlynk.{self.workspace_id}."):]
+            if self.subscriptions is not None and not any(
+                _matches_pattern(pattern, suffix) for pattern in self.subscriptions
+            ):
+                return "ack"
         except Exception as error:
             self._error(error)
             return "term"  # Poison input: observable, no redelivery/feedback loop.
@@ -770,3 +780,216 @@ class DeviceCredentialStore:
         path = self.config_dir / "nats.conf"
         _atomic_secret_write(path, self.render_authorization_block())
         return path
+
+
+def _default_config_dir():
+    return Path.home() / ".synlynk" / "relay"
+
+
+def _config_dir(args):
+    return Path(getattr(args, "config_dir", None) or _default_config_dir()).absolute()
+
+
+def _read_hub(config_dir):
+    path = config_dir / "hub.json"
+    _private_path(path)
+    return json.loads(path.read_text())
+
+
+def _write_server_config(store, config):
+    content = ("listen: " + json.dumps(config["listen"]) + "\njetstream "
+               + json.dumps({"store_dir": str(store.config_dir / "jetstream")}) + "\n"
+               + store.render_authorization_block())
+    path = store.config_dir / "nats.conf"
+    _atomic_secret_write(path, content)
+    return path
+
+
+def _refresh_auth(store):
+    if (store.config_dir / "hub.json").exists():
+        config = _read_hub(store.config_dir)
+        if config["mode"] == "managed":
+            raise ValueError("Managed device registration is not implemented")
+        path = _write_server_config(store, config)
+    else:
+        path = store.write_authorization_config()
+    print(f"Authorization written to {path}. Reload the running nats-server to apply it; "
+          "live revocation is not confirmed. Use nats-server --signal reload=<server-pid>.")
+
+
+def _device_store(args):
+    directory = _config_dir(args)
+    if (directory / "hub.json").exists():
+        config = _read_hub(directory)
+        if config["workspace_id"] != args.workspace_id:
+            raise ValueError("Hub workspace mismatch")
+        if config["mode"] == "managed":
+            raise ValueError("Managed device registration is not implemented")
+    return DeviceCredentialStore(args.workspace_id, directory)
+
+
+def cmd_relay_device_add(args):
+    store = _device_store(args)
+    cred = store.add_device(args.name)
+    _refresh_auth(store)
+    print(f"Added device '{cred.name}' ({cred.device_id})")
+    print(f"Credential written to {store.config_dir / (cred.device_id + '.creds')}; keep this file secret.")
+
+
+def cmd_relay_device_revoke(args):
+    store = _device_store(args)
+    existing = store.get_device(args.device_id)
+    if existing is None:
+        print(f"Device {args.device_id} not found.")
+        return
+    changed = store.revoke_device(args.device_id)
+    _refresh_auth(store)
+    print(f"Device {args.device_id} {'revoked' if changed else 'already revoked'} in local configuration.")
+
+
+def cmd_relay_hub_init(args):
+    store = _device_store(args)
+    config = {"workspace_id": args.workspace_id, "mode": "self_hosted",
+              "url": args.url, "listen": args.listen}
+    _atomic_secret_write(store.config_dir / "hub.json", json.dumps(config, indent=2))
+    path = _write_server_config(store, config)
+    print(f"Start the hub: nats-server -c {shlex.quote(str(path))}")
+    common = f"--workspace-id {shlex.quote(args.workspace_id)} --config-dir {shlex.quote(str(store.config_dir))}"
+    print(f"Mint credentials: synlynk relay device add <name> {common}")
+    print(f"Bridge this device: synlynk relay start --hub --device-id <device-id> "
+          f"--config-dir {shlex.quote(str(store.config_dir))}")
+
+
+def cmd_relay_hub_connect(args):
+    directory = _config_dir(args)
+    # Validate the workspace and reuse the existing private-directory contract.
+    DeviceCredentialStore(args.workspace_id, directory)
+    if (directory / "hub.json").exists():
+        raise ValueError("Hub already configured; use a separate config directory")
+    _atomic_secret_write(directory / "hub.json", json.dumps({
+        "workspace_id": args.workspace_id, "mode": "managed", "token": args.token,
+        "url": args.url,
+    }, indent=2))
+    print("Managed configuration saved locally. Managed service connection and device "
+          "registration are not implemented; no service was contacted.")
+
+
+def _validate_pattern(pattern):
+    if not isinstance(pattern, str) or not pattern:
+        raise ValueError("Subscription must be a relative subject pattern, e.g. job.>")
+    tokens = pattern.split(".")
+    for index, token in enumerate(tokens):
+        if token == "*" or (token == ">" and index == len(tokens) - 1):
+            continue
+        _subject_segment(token, "subscription pattern")
+
+
+def _matches_pattern(pattern, subject):
+    tokens, values = pattern.split("."), subject.split(".")
+    for index, token in enumerate(tokens):
+        if index >= len(values):
+            return False
+        if token == ">":
+            return True
+        if token != "*" and token != values[index]:
+            return False
+    return len(tokens) == len(values)
+
+
+def _subscription_path():
+    return Path.cwd() / ".synlynk" / "relay-subscriptions.json"
+
+
+def _read_subscriptions():
+    path = _subscription_path()
+    if not path.exists():
+        return None
+    patterns = json.loads(path.read_text())
+    if not isinstance(patterns, list):
+        raise ValueError("Subscriptions must be a list")
+    for pattern in patterns:
+        _validate_pattern(pattern)
+    return patterns
+
+
+def _update_subscription(args, add):
+    _validate_pattern(args.pattern)
+    path = _subscription_path()
+    patterns = _read_subscriptions() or []
+    if add and args.pattern not in patterns:
+        patterns.append(args.pattern)
+    if not add and args.pattern in patterns:
+        patterns.remove(args.pattern)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _atomic_secret_write(path, json.dumps(patterns, indent=2))
+    print(f"{'Subscribed to' if add else 'Unsubscribed from'} {args.pattern}. "
+          "Restart the hub bridge to apply; excluded events are acknowledged and skipped.")
+
+
+def cmd_relay_subscribe(args):
+    _update_subscription(args, True)
+
+
+def cmd_relay_unsubscribe(args):
+    _update_subscription(args, False)
+
+
+def load_device_credential(path, workspace_id):
+    """Read one exported secret without loading the hub administrator registry."""
+    workspace_id = _subject_segment(workspace_id, "workspace_id")
+    path = Path(path)
+    _private_path(path)
+    raw = json.loads(path.read_text())
+    scope = [f"synlynk.{workspace_id}.>"]
+    if (not isinstance(raw, dict)
+            or not isinstance(raw.get("device_id"), str)
+            or not re.fullmatch(r"dev-[0-9a-f]{32}", raw["device_id"])
+            or not isinstance(raw.get("token"), str)
+            or not re.fullmatch(r"[0-9a-f]{64}", raw["token"])
+            or raw.get("publish_subjects") != scope
+            or raw.get("subscribe_subjects") != scope
+            or raw.get("revoked") is not False):
+        raise ValueError("Invalid, revoked, or incorrectly scoped device credential")
+    return DeviceCredential(**raw)
+
+
+def run_hub_relay(args):
+    """Attach to the exact HTTP server broker; all resources are owned here."""
+    from synlynk.relay import RelayServer
+    if getattr(args, "credential_file", None):
+        if not args.workspace_id or not args.hub_url:
+            raise ValueError("--credential-file requires --workspace-id and --hub-url")
+        if args.device_id or args.config_dir:
+            raise ValueError("Use --credential-file independently of --device-id and --config-dir")
+        config = {"workspace_id": args.workspace_id, "url": args.hub_url}
+        cred = load_device_credential(args.credential_file, args.workspace_id)
+    else:
+        if getattr(args, "workspace_id", None):
+            raise ValueError("--workspace-id requires --credential-file")
+        directory = _config_dir(args)
+        config = _read_hub(directory)
+        if config["mode"] != "self_hosted":
+            raise ValueError("Managed service connection is not implemented")
+        if not args.device_id:
+            raise ValueError("--device-id is required with --hub")
+        store = DeviceCredentialStore(config["workspace_id"], directory)
+        cred = store.get_device(args.device_id)
+        if cred is None or cred.revoked:
+            raise ValueError("Device credential missing or revoked")
+    subscriptions = _read_subscriptions()
+    server = RelayServer(port=args.port)
+    adapter = None
+    try:
+        client = NatsTransport([args.hub_url or config["url"]], user=cred.device_id,
+                               password=cred.token)
+        adapter = HubAdapter(server.broker, client, config["workspace_id"],
+                             owns_client=True, subscriptions=subscriptions)
+        adapter.attach()
+        server.start(background=False)
+    finally:
+        try:
+            if adapter is not None:
+                adapter.detach()
+        finally:
+            # serve_forever has returned (or never started); shutdown would deadlock.
+            server.httpd.server_close()
