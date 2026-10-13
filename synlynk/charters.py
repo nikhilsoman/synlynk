@@ -379,10 +379,10 @@ def render_trigger_registry_markdown() -> str:
 
 
 def refresh_agent_instruction_triggers(repo_root: str = ".", dry_run: bool = False) -> dict[str, bool]:
-    """Scan and update trigger registry across all instruction files (CLAUDE.md, GEMINI.md, AGENTS.md, GROK.md)."""
+    """Scan and update trigger registry across all instruction files."""
     root = Path(repo_root)
     trigger_md = render_trigger_registry_markdown().strip()
-    target_files = ["CLAUDE.md", "GEMINI.md", "AGENTS.md", "GROK.md"]
+    target_files = ["CLAUDE.md", "GEMINI.md", "AGENTS.md"]
     updated = {}
 
     for fname in target_files:

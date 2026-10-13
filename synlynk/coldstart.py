@@ -261,7 +261,7 @@ def cmd_quickstart() -> dict:
         return {"status": "blocked", "reason": "no installed harnesses", "harnesses": []}
 
     # init() owns generation and tracking of CLAUDE.md, GEMINI.md, AGENTS.md,
-    # GROK.md, and any detected extended instruction targets.
+    # the shared AGENTS.md Grok/Codex target, and any detected extended instruction targets.
     init(agents=names, non_interactive=True, quiet=True)
     task = input("What should your first dispatch work on? ").strip()
     task = task or "Inspect this repository and suggest the smallest useful first change."

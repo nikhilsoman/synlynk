@@ -4941,12 +4941,12 @@ def test_exec_grok_headless_appends_rules_flags(project_dir, monkeypatch):
     monkeypatch.setattr(sl, "check_budgets", lambda: None)
     monkeypatch.setattr(sl, "_check_pre_exec_gate", lambda force=False: True)
 
-    (project_dir / "GROK.md").write_text("grok rules")
+    (project_dir / "AGENTS.md").write_text("shared rules")
     (project_dir / ".synlynk" / "context.md").write_text("synlynk context")
 
     sl.exec_command(["grok", "-p", "do the thing"])
     assert captured["cmd"][0] == "grok"
-    assert captured["cmd"][1:5] == ["--rules", "GROK.md", "--rules", ".synlynk/context.md"]
+    assert captured["cmd"][1:5] == ["--rules", "AGENTS.md", "--rules", ".synlynk/context.md"]
 
 
 def test_exec_grok_interactive_omits_context_md(project_dir, monkeypatch):
@@ -4968,12 +4968,12 @@ def test_exec_grok_interactive_omits_context_md(project_dir, monkeypatch):
     monkeypatch.setattr(sl, "check_budgets", lambda: None)
     monkeypatch.setattr(sl, "_check_pre_exec_gate", lambda force=False: True)
 
-    (project_dir / "GROK.md").write_text("grok rules")
+    (project_dir / "AGENTS.md").write_text("shared rules")
     (project_dir / ".synlynk" / "context.md").write_text("synlynk context")
 
     sl.exec_command(["grok", "do the thing"])
     assert captured["cmd"][0] == "grok"
-    assert captured["cmd"][1:3] == ["--rules", "GROK.md"]
+    assert captured["cmd"][1:3] == ["--rules", "AGENTS.md"]
     assert ".synlynk/context.md" not in captured["cmd"]
 
 
@@ -8030,27 +8030,21 @@ def test_probe_grok_version(tmp_path, monkeypatch):
     assert result == "grok-composer-2.5-fast"
 
 
-def test_grok_md_in_instruction_targets():
+def test_grok_md_is_not_in_instruction_targets():
     import synlynk
     paths = [t[0] for t in synlynk._INSTRUCTION_TARGETS]
-    assert "GROK.md" in paths
-    entry = next(t for t in synlynk._INSTRUCTION_TARGETS if t[0] == "GROK.md")
-    assert entry[1] == "grok"
-    assert entry[2] == "html"
+    assert "GROK.md" not in paths
 
 
-def test_marker_style_for_grok():
+def test_marker_style_has_no_grok_target():
     import synlynk
-    assert synlynk._MARKER_STYLE_FOR_TOOL.get("grok") == "html"
+    assert "grok" not in synlynk._MARKER_STYLE_FOR_TOOL
 
 
-def test_grok_md_template_content():
+def test_grok_md_template_is_not_emitted():
     import synlynk
     templates = synlynk._build_templates()
-    assert "GROK.md" in templates
-    content = templates["GROK.md"]
-    assert "Co-Authored-By: Grok <noreply@x.ai>" in content
-    assert "grok" in content.lower()
+    assert "GROK.md" not in templates
 
 
 def test_init_wizard_adds_grok_to_agent_slots(tmp_path, monkeypatch):
@@ -8061,7 +8055,8 @@ def test_init_wizard_adds_grok_to_agent_slots(tmp_path, monkeypatch):
                  org=None, repo=None, project_id=None, force=False)
     config = json.load(open(".synlynk/config.json"))
     assert config["agent_slots"].get("grok") == "grok"
-    assert os.path.exists("GROK.md")
+    assert os.path.exists("AGENTS.md")
+    assert not os.path.exists("GROK.md")
 
 
 # ---------------------------------------------------------------------------
@@ -8200,7 +8195,7 @@ def test_hc_agent_profiles_warn_missing(tmp_path, monkeypatch):
 def test_hc_instruction_files_ok(tmp_path, monkeypatch):
     import synlynk
     monkeypatch.chdir(tmp_path)
-    for fname in ["CLAUDE.md", "GEMINI.md", "AGENTS.md", "GROK.md"]:
+    for fname in ["CLAUDE.md", "GEMINI.md", "AGENTS.md"]:
         (tmp_path / fname).write_text("")
     result = synlynk._hc_instruction_files()
     assert result.status == "ok"

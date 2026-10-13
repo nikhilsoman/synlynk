@@ -1320,8 +1320,8 @@ def _inject_grok_rules(cmd_args: list) -> list:
         return list(cmd_args)
 
     injected = [cmd_args[0]]
-    if os.path.exists("GROK.md"):
-        injected.extend(["--rules", "GROK.md"])
+    if os.path.exists("AGENTS.md"):
+        injected.extend(["--rules", "AGENTS.md"])
     if "-p" in cmd_args and os.path.exists(os.path.join(".synlynk", "context.md")):
         injected.extend(["--rules", os.path.join(".synlynk", "context.md")])
     injected.extend(cmd_args[1:])

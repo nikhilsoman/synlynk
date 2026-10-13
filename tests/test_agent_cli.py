@@ -1038,7 +1038,6 @@ def test_harden_harness_instructions_to_prohibit_direct_todo_edits():
         templates_dict["CLAUDE.md"],
         templates_dict["GEMINI.md"],
         templates_dict["AGENTS.md"],
-        templates_dict["GROK.md"],
         templates_dict["AI_INSTRUCTIONS.md"],
         _build_cursor_mdc(),
         _build_copilot_instructions(),

@@ -988,7 +988,7 @@ AGENT_DISCOVERY_DEFAULTS = {
 _AGENT_DIRECTIVE_FILES = {
     "claude": "CLAUDE.md",
     "agy": "GEMINI.md",
-    "grok": "GROK.md",
+    "grok": "AGENTS.md",
     "codex": "AGENTS.md",
 }
 
@@ -2344,7 +2344,7 @@ def _update_config(updates: dict) -> None:
 
 # Task 3-5: Repo scanning, maturity detection, section signals, semantic matching, GH ID extraction
 _PROJECT_DOC_NAMES = {"roadmap.md", "todo.md", "memory.md", "costs.md", "devlog.md"}
-_AGENT_FILE_NAMES = {"CLAUDE.md", "GEMINI.md", "AGENTS.md", "GROK.md", "AI_INSTRUCTIONS.md"}
+_AGENT_FILE_NAMES = {"CLAUDE.md", "GEMINI.md", "AGENTS.md", "AI_INSTRUCTIONS.md"}
 _SCAN_SKIP_DIRS = {
     ".git", "node_modules", ".synlynk", "project-docs",
     "__pycache__", ".venv", "venv", "env", ".next", "dist", "build",
@@ -2490,7 +2490,6 @@ _INSTRUCTION_TARGETS = [
     ("CLAUDE.md",                          "claude",    "html", lambda: True),
     ("GEMINI.md",                          "agy",       "html", lambda: True),
     ("AGENTS.md",                          "codex",     "html", lambda: True),
-    ("GROK.md",                            "grok",      "html", lambda: True),
     (".cursor/rules/synlynk.mdc",          "cursor",    "none", lambda: os.path.isdir(".cursor")),
     (".github/copilot-instructions.md",    "copilot",   "html", lambda: os.path.isdir(".github")),
     (".windsurfrules",                     "windsurf",  "hash", lambda: True),
@@ -2505,7 +2504,6 @@ _MARKER_STYLE_FOR_TOOL = {
     "claude":    "html",
     "agy":       "html",
     "codex":     "html",
-    "grok":      "html",
     "cursor":    "none",
     "copilot":   "html",
     "windsurf":  "hash",
@@ -2537,8 +2535,8 @@ def _inject_grok_rules(cmd_args: list) -> list:
         return list(cmd_args)
 
     injected = [cmd_args[0]]
-    if os.path.exists("GROK.md"):
-        injected.extend(["--rules", "GROK.md"])
+    if os.path.exists("AGENTS.md"):
+        injected.extend(["--rules", "AGENTS.md"])
     if "-p" in cmd_args and os.path.exists(os.path.join(".synlynk", "context.md")):
         injected.extend(["--rules", os.path.join(".synlynk", "context.md")])
     injected.extend(cmd_args[1:])
@@ -3313,7 +3311,6 @@ def init(force: bool = False, agents: list = None,
         "CLAUDE.md",
         "GEMINI.md",
         "AGENTS.md",
-        "GROK.md",
         ".cursor/rules/synlynk.mdc",
         ".github/copilot-instructions.md",
         ".windsurfrules",
@@ -3345,14 +3342,14 @@ def init(force: bool = False, agents: list = None,
             "CLAUDE.md":   (templates.get("CLAUDE.md", ""), "html"),
             "GEMINI.md":   (templates.get("GEMINI.md", ""), "html"),
             "AGENTS.md":   (templates.get("AGENTS.md", ""), "html"),
-            "GROK.md":     (templates.get("GROK.md", ""), "html"),
         }
-        _agent_guards = {"CLAUDE.md": "claude", "GEMINI.md": "agy", "AGENTS.md": "codex", "GROK.md": "grok"}
+        _agent_guards = {"CLAUDE.md": ("claude",), "GEMINI.md": ("agy",), "AGENTS.md": ("codex", "grok")}
         for fname, (content, mstyle) in trio_content.items():
             required = _agent_guards[fname]
-            if required not in agent_set:
+            selected = next((agent for agent in required if agent in agent_set), None)
+            if selected is None:
                 continue
-            _write_instruction_file(fname, required, content, mstyle)
+            _write_instruction_file(fname, selected, content, mstyle)
 
         # Extended targets: written based on environment detection.
         # Guards are sourced from _INSTRUCTION_TARGETS[i][3] (detection_fn).

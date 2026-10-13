@@ -89,6 +89,16 @@ def test_preflight_blocks_missing_instruction_file(tmp_path, monkeypatch):
     assert result_forced.get("sentinel") != "INSTRUCTION_FILE_MISSING"
 
 
+def test_grok_preflight_accepts_shared_agents_instruction_file(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "AGENTS.md").write_text("# Shared Codex and Grok instructions")
+    from synlynk.dispatch import _preflight_dispatch
+
+    result = _preflight_dispatch("grok", [], root=str(tmp_path))
+
+    assert result.get("sentinel") != "INSTRUCTION_FILE_MISSING"
+
+
 def test_dispatch_agent_sets_instruction_receipt_fields(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / "AGENTS.md").write_text('<!-- synlynk:start version="0.13.0" tool="codex" -->\n')
