@@ -1948,3 +1948,33 @@ stay with Claude. After all tasks: final whole-branch review, then finishing-a-d
 targeting `dispatch/codex/job-85f9e9d1`, plus Blog Post Protocol + PR Review Discipline + Cost
 Capture Protocol once a PR opens.
 [@nikhilsoman]
+
+2026-10-13 — Mid-session checkpoint 2: Tasks 3-4 of the charters plan done and merged onto
+`dispatch/codex/job-85f9e9d1` (now at a52be3f4). Task 3 (`.synlynk/charters/tpm.json`, dispatched
+to Codex, `--role dev --task-type refactor`) and Task 4 (`maintainer.json` promoted to durable,
+same dispatch pattern) both verified via the actual `tests/test_charters.py` run inside each job's
+own worktree before merge (not job-status labels alone) — all 6 charter tests green, and
+`qa.json`/`designer.json`/`marketing.json` confirmed untouched vs `e41f2510` via `git diff`. Both
+sub-job worktrees/branches (job-bbe899ec, job-50e831fe) cleaned up per Worktree Hygiene Protocol,
+ancestry-verified via `git merge-base --is-ancestor` before force-delete (git's own `-d` safety
+check evaluates against the wrong ref from a nested worktree's perspective, so `-D` after
+independent verification is correct, not a bypass).
+Two dispatch-policy gotchas hit this segment, now known for the remaining tasks: (1) the
+worktree-isolation guard rejects a `cd <dir> && git ...` run from inside a *different* worktree
+than the session's own, and separately rejects chaining `cd <other-dir> && git-cmd` in one Bash
+call even from the correct worktree — split into one Bash call per directory; (2) `--story
+story-0ad6c02b` auto-resolves dispatch role to `pm`, which `.synlynk/policy.json`'s
+`role_task_type_compat` rejects for `--task-type refactor` (refactor requires role `dev`) — pass
+`--role dev` explicitly alongside `--task-type refactor` on every remaining implementer dispatch.
+⚠️ Next: dispatch Task 5 (PM-approval-gate columns on `backlog_items` + `run_tpm_wake_cycle()` in
+new `synlynk/tpm_sweep.py`, with `tests/test_tpm_sweep.py`) using
+`synlynk dispatch --role dev --task-type refactor --base dispatch/codex/job-85f9e9d1 --story
+story-0ad6c02b` to Codex. Grep `DEFAULT_BACKLOG_GOAL_ID` and `_get_db` naming in
+`synlynk/backlog.py` first to confirm the plan's assumed symbol names still hold before writing
+the dispatch task text. Then Tasks 6-9 (cmd_pm_wake, .agents/*.json, support_engineer.py wiring,
+CLI subcommands), Task 10 (cron — verification only), Task 11 (final regression — verification
+only). Full remaining-task detail is in
+`docs/superpowers/plans/2026-10-13-finalize-workspace-agent-charters.md` (read from the sibling
+`docs-context-window-optimization` worktree, not visible here — this worktree is sparse-checked-out
+without `docs/`).
+[@nikhilsoman]
