@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Durable PM/TPM charters get a real wake cycle and CLI surface | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Oct 13, 2026</span>
+        
+          <span class="blog-post-pr">PR #TBD</span>
+        
+      </div>
+      <h1 class="blog-post-title">Durable PM/TPM charters get a real wake cycle and CLI surface</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>The <code>pm</code> and <code>tpm</code> roles existed as charter files but had no durable wake-cycle identity — <code>load_charter()</code>'s missing-file fallback hardcoded <code>harness_bindings</code> for <code>tpm</code>/<code>architect</code> to <code>[&quot;claude&quot;, &quot;codex&quot;]</code>, and neither role had an <code>agent run</code> path, a cron-installable entry, or CLI subcommands of their own. The intake→triage→approval loop (raw GitHub issues → TPM triage → PM approval of the drafted queue) existed conceptually but had no code path a scheduler could actually invoke.</p>
+<h2>Strategic Shifts in This PR (if any)</h2>
+<p>None — this PR is the direct, planned continuation of <code>docs/superpowers/plans/2026-10-13-finalize-workspace-agent-charters.md</code> (story-0ad6c02b, GOVERNS goal-a222b393/goal-06758149). The one adjustment made mid-plan: after two consecutive dispatched jobs (Tasks 7 and 8) silently no-op'd while reporting plausible success and cost, the remaining fully-deterministic, zero-judgment tasks were implemented directly rather than risking a third wasted dispatch cycle — documented in each commit and filed as gh:#2245.</p>
+<h2>What This PR Shipped</h2>
+<p>Eleven tasks, executed via Subagent-Driven Development (implementers dispatched to Codex/Claude per the project's role split, reviewer/verification stages retained):</p>
+<ul>
+<li><strong>Charters (Tasks 1-4):</strong> <code>synlynk/charters.py</code> gained <code>durability</code>/<code>wake_cycle_sop</code> fields and now tolerates missing <code>harness_bindings</code>. <code>.synlynk/charters/pm.json</code> and <code>.synlynk/charters/tpm.json</code> were written as durable charters with 7-step <code>wake_cycle_sop</code> specs — autonomous authorities (<code>triage_issue</code>/<code>draft_plan</code>/<code>dispatch_track</code> for TPM) and explicit escalation triggers (<code>technical_ambiguity</code>/<code>priority_ambiguity</code>/<code>dispatch_blocked_twice</code>). <code>maintainer.json</code> was promoted to the same durability tier.</li>
+<li><strong>Wake-cycle logic (Tasks 5-6):</strong> <code>synlynk/tpm_sweep.py::run_tpm_wake_cycle()</code> and <code>synlynk/pm_agent.py::cmd_pm_wake()</code> implement the actual intake/triage/approval loop against <code>backlog_items</code>, with new PM-approval-gate columns and <code>synlynk/db_schema.py</code> migration support.</li>
+<li><strong>Agent configs and routing (Tasks 7-8):</strong> <code>.agents/pm.json</code> / <code>.agents/tpm.json</code> let <code>_load_agent_config()</code> resolve the two roles; <code>synlynk/support_engineer.py::cmd_agent_run()</code> now special-cases <code>name == &quot;pm&quot;</code>/<code>&quot;tpm&quot;</code> to call the wake-cycle functions directly, ahead of the generic signal-collector path.</li>
+<li><strong>CLI surface (Task 9):</strong> <code>synlynk pm wake</code> and <code>synlynk tpm wake</code> subcommands, wired into both the argparse subparser registration and the dispatch <code>elif</code> chain in <code>synlynk/cli.py</code>. Fixing this surfaced a real regression — <code>COMMAND_TAXONOMY</code> had no entries for either new leaf command — closed by adding two entries in <code>synlynk/taxonomy.py</code> alongside the existing <code>pm sweep</code>/<code>tpm sweep</code> rows.</li>
+<li><strong>Verification-only (Tasks 10-11):</strong> confirmed <code>_install_cron_entry()</code> is name-agnostic and needs no pm/tpm-specific branching (it already generically shells out to <code>agent run {name}</code>, which now hits the new wake-cycle branch); ran the full test suite (4109 passed, 52 failed/18 errors — all independently confirmed pre-existing sparse-checkout/environment artifacts, none caused by this branch) and confirmed <code>.synlynk/policy.json</code> and the <code>qa</code>/<code>designer</code>/<code>marketing</code> agent configs (which don't exist) are untouched vs <code>origin/main</code>.</li>
+</ul>
+<p>A new ticket, gh:#2245, documents a suspected dispatch/logs diff-reporting bug: two dispatched jobs reported real cost and a plausible &quot;files touched&quot; list while making zero actual changes, and both reported lists were byte-for-byte identical to each other despite very different task text — pointing at a stale diff-base in the reporting path rather than a harness failure.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>None — this PR executes an already-approved implementation plan; no new design exploration was needed.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>The PM/TPM roles are no longer charter-only placeholders. A scheduler (cron, or a future daemon wake trigger) can now invoke <code>synlynk agent run pm</code> / <code>synlynk agent run tpm</code> — or a human/agent can call <code>synlynk pm wake</code> / <code>synlynk tpm wake</code> directly — and get the actual triage/approval loop, not a signal-collector pass that doesn't know what &quot;pm&quot; or &quot;tpm&quot; durability means.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>The wake-cycle code paths exist and are tested, but have not yet run against a live GitHub issue backlog outside of unit-test fixtures — that's the natural next step once this PR is reviewed and merged. gh:#2245 (dispatch diff-reporting bug) is filed but not yet investigated; it's worth resolving before relying on dispatch &quot;files touched&quot; output for no-op detection in future plan executions.</p>
+<h2>Related Docs</h2>
+<ul>
+<li><code>docs/superpowers/plans/2026-10-13-finalize-workspace-agent-charters.md</code></li>
+<li>GOVERNS story-0ad6c02b, goal-a222b393, goal-06758149</li>
+<li>gh:#2245</li>
+</ul>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
