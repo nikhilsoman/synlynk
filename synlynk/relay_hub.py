@@ -15,6 +15,16 @@ imported lazily inside functions that need it, so importing this module
 from __future__ import annotations
 
 from collections.abc import Mapping
+from contextlib import contextmanager
+from dataclasses import asdict, dataclass
+import fcntl
+import json
+import os
+from pathlib import Path
+import re
+import secrets
+import tempfile
+import uuid
 
 from synlynk.events import ActorIdentifier
 
@@ -107,3 +117,154 @@ def category_for_subject(subject: str) -> str:
     except ValueError:
         return "custom"
     return parts[2]
+
+
+def _private_path(path: Path) -> None:
+    if path.is_symlink():
+        raise ValueError(f"Secret path must not be a symlink: {path.name}")
+    if path.exists():
+        path.chmod(0o600)
+
+
+def _atomic_secret_write(path: Path, content: str) -> None:
+    """Publish a complete file, private from creation through replacement."""
+    _private_path(path)
+    fd, temporary = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            os.fchmod(stream.fileno(), 0o600)
+            stream.write(content)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
+@dataclass
+class DeviceCredential:
+    device_id: str
+    name: str
+    token: str
+    publish_subjects: list[str]
+    subscribe_subjects: list[str]
+    revoked: bool = False
+
+
+class DeviceCredentialStore:
+    """Workspace-bound registry of random per-device bearer secrets.
+
+    NATS uses device_id as user and token as password, with workspace-level
+    app permissions. JSON .creds files are NOT NATS JWT credentials; clients
+    must use native user/password authentication. Revocation only changes
+    bookkeeping and future config output; applying it requires server reload.
+    The registry is authoritative; relay_hub_devices is reserved bookkeeping.
+    """
+
+    def __init__(self, workspace_id: str, config_dir: str | Path):
+        self.workspace_id = _subject_segment(workspace_id, "workspace_id")
+        self.config_dir = Path(config_dir)
+        if self.config_dir.is_symlink():
+            raise ValueError("Credential directory must not be a symlink")
+        self.config_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+        self.config_dir.chmod(0o700)
+        self._registry_path = self.config_dir / "devices.json"
+        with self._locked():
+            if self._registry_path.exists() or self._registry_path.is_symlink():
+                self._load_registry()
+            else:
+                self._save_registry({})
+
+    @contextmanager
+    def _locked(self):
+        path = self.config_dir / ".devices.lock"
+        _private_path(path)
+        fd = os.open(path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(fd, "r+") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(lock, fcntl.LOCK_UN)
+
+    def _load_registry(self) -> dict:
+        _private_path(self._registry_path)
+        registry = json.loads(self._registry_path.read_text(encoding="utf-8"))
+        if registry.get("workspace_id") != self.workspace_id:
+            raise ValueError("Credential registry workspace mismatch")
+        devices = registry["devices"]
+        scope = [f"synlynk.{self.workspace_id}.>"]
+        for device_id, raw in devices.items():
+            if raw["device_id"] != device_id or not re.fullmatch(r"dev-[0-9a-f]{32}", device_id):
+                raise ValueError("Credential device identity mismatch")
+            if raw["publish_subjects"] != scope or raw["subscribe_subjects"] != scope:
+                raise ValueError("Credential scope does not match workspace")
+            _private_path(self.config_dir / f"{device_id}.creds")
+        return devices
+
+    def _save_registry(self, devices: dict) -> None:
+        _atomic_secret_write(self._registry_path, json.dumps({
+            "workspace_id": self.workspace_id, "devices": devices,
+        }, indent=2))
+
+    def add_device(self, name: str) -> DeviceCredential:
+        with self._locked():
+            registry = self._load_registry()
+            cred = DeviceCredential(
+                device_id=f"dev-{uuid.uuid4().hex}", name=name,
+                token=secrets.token_hex(32),
+                publish_subjects=[f"synlynk.{self.workspace_id}.>"],
+                subscribe_subjects=[f"synlynk.{self.workspace_id}.>"],
+            )
+            path = self.config_dir / f"{cred.device_id}.creds"
+            _atomic_secret_write(path, json.dumps(asdict(cred), indent=2))
+            registry[cred.device_id] = asdict(cred)
+            try:
+                self._save_registry(registry)
+            except BaseException:
+                path.unlink()
+                raise
+            return cred
+
+    def get_device(self, device_id: str) -> DeviceCredential | None:
+        with self._locked():
+            raw = self._load_registry().get(device_id)
+            return DeviceCredential(**raw) if raw else None
+
+    def revoke_device(self, device_id: str) -> bool:
+        with self._locked():
+            registry = self._load_registry()
+            raw = registry.get(device_id)
+            if not raw or raw["revoked"]:
+                return False
+            raw["revoked"] = True
+            # Commit revocation before updating the exported local copy.
+            self._save_registry(registry)
+            _atomic_secret_write(self.config_dir / f"{device_id}.creds", json.dumps(raw, indent=2))
+            return True
+
+    def list_devices(self) -> list[DeviceCredential]:
+        with self._locked():
+            return [DeviceCredential(**raw) for raw in self._load_registry().values()]
+
+    def render_authorization_block(self) -> str:
+        """Render NATS user/password auth; JSON quoting prevents config injection."""
+        users = [
+            {"user": cred.device_id, "password": cred.token, "permissions": {
+                "publish": cred.publish_subjects, "subscribe": cred.subscribe_subjects,
+            }}
+            for cred in self.list_devices() if not cred.revoked
+        ]
+        if not users:
+            # NATS disables auth for users: []. Keep auth enabled with an
+            # unissued random secret and no permissions, even after revoke-all.
+            users = [{"user": "__disabled__", "password": secrets.token_hex(32),
+                      "permissions": {"publish": [], "subscribe": []}}]
+        return "authorization " + json.dumps({"users": users}, indent=2) + "\n"
+
+    def write_authorization_config(self) -> Path:
+        """Write a private config snapshot; does not reload a running server."""
+        path = self.config_dir / "nats.conf"
+        _atomic_secret_write(path, self.render_authorization_block())
+        return path

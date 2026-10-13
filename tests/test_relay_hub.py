@@ -1,10 +1,139 @@
+import json
+import os
+from pathlib import Path
 import subprocess
 import sys
 
 import pytest
 
 from synlynk.events import ActorIdentifier, EventEnvelope
-from synlynk.relay_hub import RETENTION_POLICIES, category_for_subject, subject_for_event
+from synlynk.relay_hub import DeviceCredentialStore, RETENTION_POLICIES, category_for_subject, subject_for_event
+
+
+def test_device_credentials_persist_with_private_files(tmp_path):
+    store = DeviceCredentialStore("ws1", tmp_path)
+    cred = store.add_device("laptop")
+    other = store.add_device("desktop")
+    assert cred.device_id != other.device_id
+    assert len(cred.token) >= 32 and cred.token != other.token
+    assert cred.publish_subjects == cred.subscribe_subjects == ["synlynk.ws1.>"]
+    assert cred.revoked is False
+    reopened = DeviceCredentialStore("ws1", tmp_path)
+    assert reopened.get_device(cred.device_id) == cred
+    assert reopened.list_devices() == [cred, other]
+    assert reopened.get_device("missing") is None
+    path = tmp_path / f"{cred.device_id}.creds"
+    assert json.loads(path.read_text())["token"] == cred.token
+    assert tmp_path.stat().st_mode & 0o777 == 0o700
+    for path in (path, tmp_path / "devices.json", store.write_authorization_config()):
+        assert path.stat().st_mode & 0o777 == 0o600
+
+
+def test_revocation_is_persistent_idempotent_and_excluded(tmp_path):
+    store = DeviceCredentialStore("ws1", tmp_path)
+    active = store.add_device("laptop")
+    revoked = store.add_device("old-vps")
+    assert store.revoke_device(revoked.device_id) is True
+    assert store.revoke_device(revoked.device_id) is False
+    assert store.revoke_device("missing") is False
+    store = DeviceCredentialStore("ws1", tmp_path)
+    assert store.get_device(revoked.device_id).revoked is True
+    block = store.render_authorization_block()
+    assert active.token in block and active.device_id in block
+    assert revoked.token not in block and revoked.device_id not in block
+    assert json.loads((tmp_path / f"{revoked.device_id}.creds").read_text())["revoked"]
+
+
+def test_registry_workspace_binding_even_when_empty(tmp_path):
+    DeviceCredentialStore("ws1", tmp_path)
+    with pytest.raises(ValueError, match="workspace"):
+        DeviceCredentialStore("ws2", tmp_path)
+
+
+def test_empty_registry_still_requires_authentication(tmp_path):
+    store = DeviceCredentialStore("ws1", tmp_path)
+    auth = json.loads(store.render_authorization_block().removeprefix("authorization "))
+    # NATS treats an empty users list as authentication disabled.
+    assert len(auth["users"]) == 1
+    assert auth["users"][0]["permissions"] == {"publish": [], "subscribe": []}
+    assert len(auth["users"][0]["password"]) >= 32
+
+
+def test_registry_rejects_device_path_traversal(tmp_path):
+    store = DeviceCredentialStore("ws1", tmp_path)
+    cred = store.add_device("laptop")
+    path = tmp_path / "devices.json"
+    registry = json.loads(path.read_text())
+    raw = registry["devices"].pop(cred.device_id)
+    raw["device_id"] = "../outside"
+    registry["devices"]["../outside"] = raw
+    path.write_text(json.dumps(registry))
+    with pytest.raises(ValueError, match="identity"):
+        store.revoke_device("../outside")
+
+
+@pytest.mark.parametrize("workspace", ["", "ws.*", ">", "two words", "ws\n"])
+def test_credential_store_rejects_unsafe_workspace(tmp_path, workspace):
+    with pytest.raises(ValueError, match="workspace"):
+        DeviceCredentialStore(workspace, tmp_path)
+
+
+def test_registry_rejects_cross_workspace_permissions(tmp_path):
+    store = DeviceCredentialStore("ws1", tmp_path)
+    cred = store.add_device("laptop")
+    path = tmp_path / "devices.json"
+    registry = json.loads(path.read_text())
+    registry["devices"][cred.device_id]["publish_subjects"] = ["synlynk.ws2.>"]
+    path.write_text(json.dumps(registry))
+    with pytest.raises(ValueError, match="scope"):
+        store.render_authorization_block()
+
+
+def test_atomic_registry_failure_keeps_previous_data(tmp_path, monkeypatch):
+    store = DeviceCredentialStore("ws1", tmp_path)
+    cred = store.add_device("laptop")
+    original = (tmp_path / "devices.json").read_bytes()
+    real_replace = os.replace
+
+    def fail_registry(source, destination):
+        assert Path(source).stat().st_mode & 0o777 == 0o600
+        if Path(destination).name == "devices.json":
+            raise OSError("simulated write failure")
+        return real_replace(source, destination)
+
+    monkeypatch.setattr(os, "replace", fail_registry)
+    with pytest.raises(OSError, match="simulated"):
+        store.add_device("desktop")
+    assert (tmp_path / "devices.json").read_bytes() == original
+    assert store.list_devices() == [cred]
+    assert not list(tmp_path.glob("*.tmp"))
+
+
+def test_secret_symlink_rejected(tmp_path):
+    outside = tmp_path / "outside"
+    outside.write_text("do not touch")
+    directory = tmp_path / "hub"
+    directory.mkdir()
+    (directory / "devices.json").symlink_to(outside)
+    with pytest.raises(ValueError, match="symlink"):
+        DeviceCredentialStore("ws1", directory)
+    assert outside.read_text() == "do not touch"
+
+
+@pytest.mark.parametrize("workspace", ["ws1", 'ws"quoted\\name'])
+@pytest.mark.parametrize("active", [True, False])
+def test_authorization_parses_with_real_nats(tmp_path, workspace, active):
+    binary = Path("/private/tmp/synlynk-relay-bin/nats-server")
+    if not binary.exists():
+        pytest.skip("NATS config validation binary not installed")
+    store = DeviceCredentialStore(workspace, tmp_path)
+    cred = store.add_device("laptop")
+    if not active:
+        store.revoke_device(cred.device_id)
+    config = store.write_authorization_config()
+    result = subprocess.run([str(binary), "-t", "-c", str(config)], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, result.stderr
+    assert "token:" not in config.read_text()
 
 
 @pytest.mark.parametrize("event_type,suffix", [
