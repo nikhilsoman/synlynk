@@ -974,5 +974,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2246 \u2014 finalize PM/TPM durable wake-cycle charters (PR #2246, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2246.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-13) - PR #2246\n- Merged improvements and fixes for PR #2246."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/314-pr2257-add-opt-in-personal-hosted-relay-with-du.md",
+    "title": "PR #2257 \u2014 add opt-in personal hosted relay with durable replay",
+    "author": "nikhilsoman",
+    "date": "2026-10-13",
+    "pr": "#2257",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2257."
+    ],
+    "tweet": "\ud83d\ude80 PR #2257 \u2014 add opt-in personal hosted relay with durable replay (PR #2257, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2257.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-13) - PR #2257\n- Merged improvements and fixes for PR #2257."
   }
 ]
