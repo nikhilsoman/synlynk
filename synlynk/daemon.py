@@ -78,6 +78,33 @@ def _daemon_caller_path() -> str:
     return os.path.abspath(os.getcwd())
 
 
+def _canonical_repo_root_from(cwd: str) -> str:
+    """Resolve the persistent repo root while *cwd* still exists."""
+    result = subprocess.run(
+        ["git", "rev-parse", "--show-toplevel"],
+        cwd=cwd,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    # --show-toplevel is intentionally resolved first so this guard performs
+    # git discovery from the invoking shell's worktree, before detaching.
+    top_level = result.stdout.strip()
+    if not top_level:
+        raise RuntimeError("git returned an empty repository root")
+    common = subprocess.run(
+        ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+        cwd=cwd,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    if not common:
+        raise RuntimeError("git returned an empty common directory")
+    common = os.path.abspath(common)
+    return os.path.dirname(common) if os.path.basename(common) == ".git" else common
+
+
 def _current_repo_revision(repo_dir: Optional[str] = None) -> Optional[str]:
     """Return the current HEAD commit hash of the git repository."""
     try:
@@ -183,7 +210,22 @@ def _find_pid_listening_on_port(port: int) -> Optional[int]:
 
 def _daemonize_via_reexec(entry_point: str, logfile: str, cwd: Optional[str] = None) -> None:
     """Spawn a detached child process running a module-level entry point."""
-    cwd = os.path.abspath(cwd or os.getcwd())
+    invoking_cwd = os.path.abspath(os.getcwd())
+    requested_cwd = os.path.abspath(cwd or invoking_cwd)
+    if _is_disposable_worktree_path(invoking_cwd) or _is_disposable_worktree_path(requested_cwd):
+        try:
+            cwd = _canonical_repo_root_from(invoking_cwd)
+        except (OSError, subprocess.SubprocessError, RuntimeError) as exc:
+            raise RuntimeError(
+                "refusing to daemonize from a disposable worktree whose canonical "
+                f"repo root cannot be resolved: {invoking_cwd}: {exc}"
+            ) from exc
+        if _is_disposable_worktree_path(cwd):
+            raise RuntimeError(
+                f"refusing to daemonize with disposable worktree cwd: {cwd}"
+            )
+    else:
+        cwd = requested_cwd
     logfile = os.path.abspath(logfile)
     os.makedirs(os.path.dirname(logfile), exist_ok=True)
     module_path, func_name = entry_point.rsplit(".", 1)
@@ -223,7 +265,7 @@ class WatchDaemon:
         self.token_refresh_interval_seconds = 50 * 60
         self._lock_fh = None
 
-    def start(self) -> None:
+    def start(self) -> bool:
         lock_path = _daemon_lock_path(self.pidfile)
         lock_fh = _try_acquire_daemon_lock(lock_path, blocking=False)
         if lock_fh is None:
@@ -254,8 +296,10 @@ class WatchDaemon:
             if self._is_running():
                 print(self._started_message)
                 print("    Tip: run 'synlynk daemon --install-service' so this survives a crash/reboot.")
+                return True
             else:
                 print(f"  ⚠ Failed to start daemon (check {os.path.basename(self.logfile)} for errors).", file=sys.stderr)
+                return False
         finally:
             _release_daemon_lock(lock_fh)
 
@@ -1076,6 +1120,43 @@ class SynlynkDaemon(WatchDaemon):
         except Exception as exc:
             log_telemetry_event({"event": "sre_heartbeat", "status": "degraded", "component": "autonomous_loop", "error": str(exc)})
 
+    def _self_health_check(self) -> bool:
+        """Verify the detached child still has a live cwd and Git context."""
+        try:
+            cwd = os.getcwd()
+        except OSError as exc:
+            print(f"  ⚠ daemon exiting cleanly: current working directory is unavailable: {exc}", file=sys.stderr, flush=True)
+            return False
+        try:
+            result = subprocess.run(
+                ["git", "rev-parse", "--git-common-dir"],
+                cwd=cwd,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            print(f"  ⚠ daemon exiting cleanly: Git context check failed: {exc}", file=sys.stderr, flush=True)
+            return False
+        if result.returncode != 0 or not result.stdout.strip():
+            detail = result.stderr.strip() or f"git exited {result.returncode}"
+            print(f"  ⚠ daemon exiting cleanly: Git context is unavailable from {cwd}: {detail}", file=sys.stderr, flush=True)
+            return False
+        return True
+
+    def _cleanup_after_health_failure(self) -> None:
+        """Remove child identity files before returning from a stale cwd."""
+        for path in (self.pidfile, self.pidfile.replace(".pid", ".start")):
+            try:
+                os.remove(path)
+            except FileNotFoundError:
+                pass
+            except OSError:
+                pass
+        if self._lock_fh is not None:
+            _release_daemon_lock(self._lock_fh)
+            self._lock_fh = None
+
     def _run_capability_watch_tick(self, config: dict) -> None:
         """Run due capability checks from the daemon cadence.
 
@@ -1307,6 +1388,9 @@ class SynlynkDaemon(WatchDaemon):
         last_quota_poll = 0.0
         while True:
             time.sleep(interval)
+            if os.environ.get("_SYNLYNK_DAEMON_CHILD") == "1" and not self._self_health_check():
+                self._cleanup_after_health_failure()
+                return
             current_mtimes = self._get_mtimes("project-docs")
             changed = [f for f in current_mtimes
                        if current_mtimes[f] != last_mtimes.get(f)]
