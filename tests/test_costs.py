@@ -198,3 +198,54 @@ def test_true_up_writes_reconciliation_row(tmp_path, monkeypatch):
     row = conn.execute("SELECT cost_source, actual_usd, api_equivalent_usd FROM cost_entries WHERE cost_source='true_up_reconciliation'").fetchone()
     conn.close()
     assert tuple(row) == ("true_up_reconciliation", 18.0, 0.0)
+
+
+def test_check_context_compaction_trigger_fires_above_threshold(tmp_path, monkeypatch):
+    import sqlite3
+    from synlynk.costs import check_context_compaction_trigger
+
+    db_path = tmp_path / "state.db"
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        "CREATE TABLE cost_entries (id INTEGER PRIMARY KEY, job_id TEXT, "
+        "input_tokens INTEGER, output_tokens INTEGER)"
+    )
+    conn.execute(
+        "INSERT INTO cost_entries (job_id, input_tokens, output_tokens) VALUES (?, ?, ?)",
+        ("job-abc", 50_000, 10_000),
+    )
+    conn.commit()
+    conn.close()
+
+    # check_context_compaction_trigger resolves the DB through _pkg("_get_db"),
+    # which reads synlynk._get_db (same seam as check_budgets).
+    monkeypatch.setattr("synlynk._get_db", lambda: sqlite3.connect(str(db_path)))
+
+    signal = check_context_compaction_trigger(job_id="job-abc", threshold_tokens=40_000)
+    assert signal is not None
+    assert signal["should_compact"] is True
+    assert signal["cumulative_tokens"] == 60_000
+
+
+def test_check_context_compaction_trigger_silent_below_threshold(tmp_path, monkeypatch):
+    import sqlite3
+    from synlynk.costs import check_context_compaction_trigger
+
+    db_path = tmp_path / "state.db"
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        "CREATE TABLE cost_entries (id INTEGER PRIMARY KEY, job_id TEXT, "
+        "input_tokens INTEGER, output_tokens INTEGER)"
+    )
+    conn.execute(
+        "INSERT INTO cost_entries (job_id, input_tokens, output_tokens) VALUES (?, ?, ?)",
+        ("job-abc", 1_000, 500),
+    )
+    conn.commit()
+    conn.close()
+
+    monkeypatch.setattr("synlynk._get_db", lambda: sqlite3.connect(str(db_path)))
+
+    signal = check_context_compaction_trigger(job_id="job-abc", threshold_tokens=40_000)
+    assert signal["should_compact"] is False
+    assert signal["cumulative_tokens"] == 1_500
