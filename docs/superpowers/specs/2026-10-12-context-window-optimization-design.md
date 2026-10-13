@@ -52,6 +52,17 @@ Command (topic references the R1 decision file path once known):
 synlynk decide "Context-window management R2: given R1's findings (see project-docs/decisions/<r1-decision-file>), synthesize one cohesive modification to synlynk's instruction-writer for each harness, plus a shared task-boundary compaction-trigger and context-pack design" --panel claude,agy,codex,grok --record
 ```
 
+## Corroborating evidence: the 2026-10-13 session-stall incident (gh:#2219)
+
+A separate incident, investigated independently of this spec, turned out to validate approach C's context-pack mechanism directly. [gh:#2219](https://github.com/nikhilsoman/synlynk/issues/2219) root-caused a multi-hour session stall and a ~65x token-estimate overrun on two Codex `implement` dispatches to two distinct, compounding mechanisms:
+
+- **Mechanism A (orthogonal to this spec):** the circuit breaker (`evaluate_job_circuit_breaker()`) was only evaluated opportunistically — from a concurrent `synlynk` CLI call or the `synlynk watch` daemon — so a real breach wasn't caught until after the offending process had already exited and spent its budget. Fixed by PR #2239 with a per-dispatch watchdog thread. This is a dispatch-lifecycle gap, not a context-size problem, and this spec doesn't need to account for it.
+- **Mechanism B (directly relevant):** `_generate_todo_md()` regenerates a project-wide `project-docs/todo.md` snapshot on every `synlynk story create`/`checkpoint`/lease-reconcile call, and `_docs_dir()` resolved it relative to cwd instead of `_project_root()` — so a 251KB regenerated file landed as an unasked-for dirty file inside the dispatching job's own isolated worktree. The agent then spent multiple turns investigating/dumping this unexpected diff, and because the harness resends the full growing transcript on every subsequent turn, each large dump got re-billed on every later turn. Root cause filed as [gh:#2237](https://github.com/nikhilsoman/synlynk/issues/2237); fixed by PR #2238.
+
+Mechanism B is exactly the failure mode the context-pack mechanism in approach C is meant to structurally prevent: a job-scoped `.synlynk/context-packs/<job-id>.md` bundle, built once at dispatch time from the relevant story/goal/file-list/prior-decisions rather than regenerated project-wide mid-job, would never have surfaced an unrelated 251KB `todo.md` diff inside that job's worktree in the first place. This doesn't change the spec's recommended approach (C) or defer any open R1/R2 question — it's cited here as a concrete, already-occurred cost incident supporting why the context-pack half of approach C is worth building, independent of whatever R1 finds about per-harness resend behavior.
+
+A third, distinct mechanism was also found in the same investigation and filed separately: [gh:#2240](https://github.com/nikhilsoman/synlynk/issues/2240) is a dispatch-prompting gap (verbose `pytest -v` full-suite runs amplifying via the same transcript-resend pattern as Mechanism B), not a code defect — out of scope for this spec's implementation plan, but worth keeping in mind when writing dispatch task text for the plan's own build/verification tasks.
+
 ## Next steps after R2
 
 Once R2's synthesis lands, write an implementation plan (`superpowers:writing-plans`) covering: the instruction-writer template changes, the `generate_context()` size-bounding/summarization change, the compaction-trigger wrapper, and the context-pack format — scoped as a normal dev-preview-track implementation PR (or its own small release), dispatched per the standard role split.
