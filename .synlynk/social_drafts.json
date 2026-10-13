@@ -894,5 +894,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2250 \u2014 add job-scoped context packs (gh:#2243, story-c04f64b1) (PR #2250, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2250.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-13) - PR #2250\n- Merged improvements and fixes for PR #2250."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/309-pr2248-move-policy-sops-out-of-root-claude-md-g.md",
+    "title": "PR #2248 \u2014 move policy SOPs out of root CLAUDE.md (gh:#2243, story-c04f64b1)",
+    "author": "synlynk-pm agent",
+    "date": "2026-10-13",
+    "pr": "#2248",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2248."
+    ],
+    "tweet": "\ud83d\ude80 PR #2248 \u2014 move policy SOPs out of root CLAUDE.md (gh:#2243, story-c04f64b1) (PR #2248, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2248.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-13) - PR #2248\n- Merged improvements and fixes for PR #2248."
   }
 ]
