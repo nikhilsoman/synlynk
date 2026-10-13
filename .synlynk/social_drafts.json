@@ -942,5 +942,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2247 \u2014 stop writing phantom GROK.md (gh:#2243, story-c04f64b1) (PR #2247, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2247.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-13) - PR #2247\n- Merged improvements and fixes for PR #2247."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/312-pr2253-pass-muse-api-key-through-to-dispatched-.md",
+    "title": "PR #2253 \u2014 pass Muse API key through to dispatched jobs",
+    "author": "synlynk-pm agent",
+    "date": "2026-10-13",
+    "pr": "#2253",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2253."
+    ],
+    "tweet": "\ud83d\ude80 PR #2253 \u2014 pass Muse API key through to dispatched jobs (PR #2253, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2253.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-13) - PR #2253\n- Merged improvements and fixes for PR #2253."
   }
 ]
