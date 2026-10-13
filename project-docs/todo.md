@@ -1977,5 +1977,7 @@ Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'corre [backe
 - [ ] Relay hub: full-suite regression check [testing] <!-- id:story-f1639150 -->
 - [ ] Investigate cost anomaly on job-2a16259d / PR #2232 (TOKEN_BLOAT+COST_INFLATION) [backend] <!-- id:story-e8936675 -->
 - [ ] Investigate cost anomaly on job-2a16259d / PR #2232 (TOKEN_BLOAT+COST_INFLATION) [backend] <!-- id:story-b81f2806 -->
-- [ ] jobs.py: scope-review task_type derived from substring match, not persisted explicit value [backend] <!-- id:story-dd84b873 -->
-- [ ] dispatch.py verify contract: pytest -v full output captured into transcript instead of file+summary [backend] <!-- id:story-e7a340f9 -->
+- [x] jobs.py: scope-review task_type derived from substring match, not persisted explicit value [backend] <!-- id:story-dd84b873 -->
+- [x] dispatch.py verify contract: pytest -v full output captured into transcript instead of file+summary [backend] <!-- id:story-e7a340f9 -->
+- [ ] fix: _generate_todo_md() leaks project-wide snapshot into dispatch job worktrees via cwd-relative path [backend] <!-- id:story-a7b5674c -->
+- [ ] gh:#2163 fix sha_match false-negative on squash-merge for expect=merged verification [backend] <!-- id:story-3522e331 -->

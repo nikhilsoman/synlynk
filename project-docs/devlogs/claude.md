@@ -275,3 +275,26 @@ session, two housekeeping items neither touched nor caused by this session's own
 Next session: run that cleanup pass first, then resume roadmap work (gh:#1925 part 2 —
 containerized execution — is the next queued item per the blog post's stated goalpost).
 [@claude]
+
+---
+
+2026-10-13: Context-window-optimization plan (docs/superpowers/plans/2026-10-13-context-window-optimization.md)
+fully landed — all 4 PRs merged and independently verified via `gh pr view --json
+state,reviews,mergedAt,mergeCommit`: #2248 (`6d59cfb2`), #2250 (`d2a0d208`), #2249 (`0e614c36`),
+#2247 (`9a7d7fa6`, after one genuine CHANGES_REQUESTED → rework (job-23ce2ab9) → re-review cycle —
+confirmed as a real bug, not a flaky status, via direct grep/diff before dispatching the fix).
+
+Worktree Hygiene Protocol: remote branches for every job tied to these 4 PRs were already
+auto-deleted by GitHub on merge (`git fetch --prune` showed them gone). Local worktree directory
+removal for job-23ce2ab9, job-35fc0989, job-ba38e099, job-b9fed5cf, job-a3192be7, job-7b04508d,
+job-b140d1c1, job-84c73625, job-40e09de5 (failed Agy attempt, never produced output) could NOT be
+done this session: a worktree-isolated session is sandboxed to its own nested worktree path and
+cannot `cd`/`-C` to the main repo root, which `git worktree remove` requires. This needs to run
+from the home/main session's context — flagging for the next session that has that access.
+
+Two follow-ups filed (not yet dispatched): gh:#2251 (Agy model-catalog version skew —
+`gemini-3.1-pro-high` no longer matches the installed Agy CLI's catalog, caused job-40e09de5 to
+hard-fail outright) and gh:#2252 (recurring cost-inflation pattern — job-b140d1c1 $6.03 and
+job-23ce2ab9 $10.66, both on genuinely-productive review/rework jobs, 6th+ occurrence since the
+#1937 record which closed 5 priors without a hard cap).
+[@claude]
