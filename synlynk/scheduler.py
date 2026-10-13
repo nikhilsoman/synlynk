@@ -61,7 +61,7 @@ def _compute_schedule_plan(max_stories=None) -> dict:
 
         query = (
             "SELECT s.story_id, s.title, s.engg_domain, s.org_domain, s.industry, "
-            "s.phase, s.priority, s.estimated_tokens FROM stories s "
+            "s.phase, s.priority, s.estimated_tokens, s.goal_id FROM stories s "
             "WHERE s.readiness='ready' AND NOT EXISTS ("
             "  SELECT 1 FROM daemon_jobs dj WHERE dj.story_id=s.story_id "
             "  AND dj.status IN ('queued','running')"
@@ -76,7 +76,11 @@ def _compute_schedule_plan(max_stories=None) -> dict:
         headroom_cache = {}  # agent -> int | None (None = degraded/unknown)
 
         for (story_id, title, engg, org, industry, phase, priority,
-             est_tokens) in stories:
+             est_tokens, goal_id) in stories:
+            if not goal_id:
+                blocked.append({"story_id": story_id, "reason": "no_goal_link"})
+                continue
+
             if _story_retry_count(conn, story_id) >= MAX_STORY_RETRIES:
                 blocked.append({"story_id": story_id, "reason": "retry_cap_exceeded"})
                 continue
