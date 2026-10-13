@@ -794,3 +794,6 @@
 - Task 8 retry job-02ef4311, gpt-6-astra: Synlynk reported $0.43,
   1,519,699 input / 13,169 output tokens. Worker broad verification: 1569
   passed, 1 skipped. Conductor review expanded live NATS coverage to 10 passes.
+- Task 9 job-ceb33e8b, gpt-6-astra: Synlynk reported $0.31,
+  750,316 input / 11,489 output tokens. Worker broad verification: 1611 passed,
+  1 skipped. Reviewed correction included; final targeted verification 238 passed.

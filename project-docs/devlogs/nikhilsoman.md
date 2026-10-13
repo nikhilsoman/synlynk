@@ -1967,3 +1967,32 @@ to the worker, with dispatch telemetry authoritative. [@nikhilsoman, @codex]
 
 Conductor review added server-side connected-user revocation evidence and live
 wrong-workspace subject/envelope rejection. Final integration: 10 passed in 4.64s.
+
+## 2026-10-13 - Personal Hosted Relay Task 9 (#2201)
+
+Implemented doc preview payload construction and accepted-envelope reception in
+relay_hub.py. Outbound doc envelopes carry the local device ID and enforce the
+1,000,000-byte serialized JSON limit, including escaping and actor metadata;
+oversized content is omitted, while oversized metadata fails observably.
+Preview writes are confined to the three approved document roots, reject unsafe
+paths/device IDs and symlinks, and atomically replace labeled 0444 copies under
+.synlynk/relay/previews/<origin_device_id>/<path>. Storage errors remain retryable.
+No watcher, authoritative document edits, merge, deployment, or schema migration.
+
+TDD red: expected missing builder ImportError, exit 2 (task9-red.log).
+Initial targeted green: 230 passed, exit 0 (task9-green.log).
+Requested regression plus existing relay tests: 1611 passed, 1 skipped, exit 0
+(job-ceb33e8b-verify-1.log). Final targeted run after cleanup refinements:
+236 passed, exit 0 (task9-final-targeted.log), including all 10 real-NATS tests.
+Logs live in .synlynk/logs/. Used the supplied temporary Python environment and
+NATS binary PATH. No full-suite run. git diff --check passed.
+
+Origin identity is declared in the envelope; the existing workspace-scoped NATS
+authorization does not independently attest individual message authors. Preview
+ordering follows accepted delivery order; this is not a document merge protocol.
+The writer requires POSIX directory-descriptor/O_NOFOLLOW support, matching the
+existing hub's POSIX requirements. Conductor owns review and integration.
+No PR, subtasks, story completion, generated todo or global configuration edits.
+Estimated cost $1.00; actual billing unavailable to the worker, dispatch telemetry
+authoritative. synlynk status exited 0; no active sentinels, existing overdue
+capability/smoke checks. [@nikhilsoman, @codex]

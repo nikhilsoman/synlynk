@@ -15,6 +15,7 @@ imported lazily inside functions that need it, so importing this module
 from __future__ import annotations
 
 import asyncio
+import errno
 from collections import OrderedDict
 from collections.abc import Mapping
 from contextlib import contextmanager
@@ -29,6 +30,7 @@ import re
 import queue
 import secrets
 import shlex
+import stat
 import tempfile
 import threading
 from types import SimpleNamespace
@@ -38,6 +40,120 @@ from synlynk.events import ActorIdentifier, EventEnvelope
 
 
 _LOG = logging.getLogger(__name__)
+
+DOC_PREVIEW_MAX_BYTES = 1_000_000
+_DOC_EVENTS = {"doc_drafted", "doc_updated"}
+
+
+def _doc_path_parts(path):
+    if (not isinstance(path, str) or "\\" in path
+            or any(ord(char) < 32 or ord(char) == 127 for char in path)):
+        raise ValueError("Invalid document path")
+    parts = path.split("/")
+    if any(part in ("", ".", "..") for part in parts) or not any(
+        path.startswith(root + "/") for root in
+        ("docs/superpowers/specs", "docs/superpowers/plans", "docs/brainstorm")
+    ):
+        raise ValueError("Document path outside preview roots")
+    return parts
+
+
+def _doc_device(device_id):
+    if not isinstance(device_id, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}", device_id):
+        raise ValueError("Invalid origin device ID")
+    return device_id
+
+
+def _validate_doc_payload(payload, *, require_origin=True):
+    _doc_path_parts(payload.get("path"))
+    if require_origin or "origin_device_id" in payload:
+        _doc_device(payload.get("origin_device_id"))
+    if (not isinstance(payload.get("branch"), str)
+            or (payload.get("commit_sha") is not None
+                and not isinstance(payload["commit_sha"], str))
+            or ("content" in payload and not isinstance(payload["content"], str))):
+        raise ValueError("Invalid document metadata/content")
+
+
+def _fit_doc_content(value, serialize, payload):
+    """Drop only content; metadata that cannot fit is an observable error."""
+    data = serialize(value).encode("utf-8")
+    if len(data) > DOC_PREVIEW_MAX_BYTES:
+        payload.pop("content", None)
+        data = serialize(value).encode("utf-8")
+    if len(data) > DOC_PREVIEW_MAX_BYTES:
+        raise ValueError("Document metadata exceeds envelope size limit")
+    return data
+
+
+def build_doc_event_payload(path: str, branch: str, commit_sha: str | None,
+                            content: str, *, origin_device_id: str | None = None) -> dict:
+    """Build a preview notification. The bridge adds its local origin identity.
+
+    This preliminary payload limit includes JSON escaping. The outbound bridge
+    applies the same limit to the actual envelope, including all actor metadata.
+    """
+    payload = dict(path=path, branch=branch, commit_sha=commit_sha, content=content)
+    if origin_device_id is not None:
+        payload["origin_device_id"] = origin_device_id
+    _validate_doc_payload(payload, require_origin=False)
+    _fit_doc_content(payload, json.dumps, payload)
+    return payload
+
+
+def write_doc_preview(base_dir: str, device_id: str, path: str, content: str) -> str:
+    """Atomically replace a labeled, read-only copy under a private preview root.
+
+    Walk using directory descriptors and O_NOFOLLOW, including the local base,
+    so remote path components and destination symlinks are never followed.
+    """
+    parts = [_doc_device(device_id), *_doc_path_parts(path)]
+    if not isinstance(content, str):
+        raise ValueError("Invalid document content")
+    base = os.path.abspath(base_dir)
+    directories = [*Path(base).parts[1:], *parts[:-1]]
+    directory = os.open("/", os.O_RDONLY | os.O_DIRECTORY)
+    temporary = None
+    try:
+        for name in directories:
+            try:
+                os.mkdir(name, mode=0o700, dir_fd=directory)
+            except FileExistsError:
+                pass
+            child = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                            dir_fd=directory)
+            os.close(directory)
+            directory = child
+        try:
+            destination = os.stat(parts[-1], dir_fd=directory, follow_symlinks=False)
+        except FileNotFoundError:
+            pass
+        else:
+            if not stat.S_ISREG(destination.st_mode):
+                raise ValueError("Preview destination must be a regular file")
+        name = ".preview-" + secrets.token_hex(16)
+        fd = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                     0o600, dir_fd=directory)
+        temporary = name
+        with os.fdopen(fd, "w", encoding="utf-8") as output:
+            output.write("<!-- PREVIEW ONLY - synced from another device; not merged. Do not edit. -->\n\n")
+            output.write(content)
+            output.flush()
+            os.fchmod(output.fileno(), 0o444)
+            os.fsync(output.fileno())
+        os.replace(temporary, parts[-1], src_dir_fd=directory, dst_dir_fd=directory)
+        temporary = None
+    except OSError as error:
+        if error.errno == errno.ENAMETOOLONG:
+            raise ValueError("Document path exceeds filesystem limits") from error
+        if error.errno in (errno.ELOOP, errno.ENOTDIR):
+            raise ValueError("Symlink or non-directory in preview path") from error
+        raise
+    finally:
+        if temporary is not None:
+            os.unlink(temporary, dir_fd=directory)
+        os.close(directory)
+    return os.path.join(base, *parts)
 
 
 class ReplayTracker:
@@ -346,8 +462,10 @@ class HubAdapter:
     """
 
     def __init__(self, broker, client, workspace_id, *, owns_client=False,
-                 max_seen=10_000, shutdown_timeout=10.0, subscriptions=None):
+                 max_seen=10_000, shutdown_timeout=10.0, subscriptions=None,
+                 preview_dir=None):
         self.workspace_id = _subject_segment(workspace_id, "workspace_id")
+        self.preview_dir = Path(preview_dir or ".synlynk/relay/previews").absolute()
         self.subscriptions = subscriptions
         if subscriptions is not None:
             for pattern in subscriptions:
@@ -467,6 +585,14 @@ class HubAdapter:
                 envelope, subject = self._decode(data)
                 if envelope.event_type == "sync_gap_detected":
                     continue
+                if envelope.event_type in _DOC_EVENTS:
+                    raw = envelope.to_dict()
+                    origin = getattr(self.client, "device_id", None)
+                    if origin is not None:
+                        raw["payload"]["origin_device_id"] = origin
+                    _validate_doc_payload(raw["payload"])
+                    data = _fit_doc_content(raw, lambda value: json.dumps(value, sort_keys=True),
+                                            raw["payload"])
                 with self._lock:
                     if envelope.event_id in self._seen:
                         continue
@@ -481,6 +607,10 @@ class HubAdapter:
             envelope, expected = self._decode(payload)
             if subject != expected:
                 raise ValueError("Subject does not match envelope routing")
+            if envelope.event_type in _DOC_EVENTS:
+                if len(payload.encode("utf-8") if isinstance(payload, str) else payload) > DOC_PREVIEW_MAX_BYTES:
+                    raise ValueError("Document envelope exceeds size limit")
+                _validate_doc_payload(envelope.payload)
             suffix = subject[len(f"synlynk.{self.workspace_id}."):]
             if self.subscriptions is not None and not any(
                 _matches_pattern(pattern, suffix) for pattern in self.subscriptions
@@ -507,6 +637,10 @@ class HubAdapter:
                 if persisted:
                     return "ack"
                 try:
+                    if envelope.event_type in _DOC_EVENTS and "content" in envelope.payload:
+                        doc = envelope.payload
+                        write_doc_preview(str(self.preview_dir), doc["origin_device_id"],
+                                          doc["path"], doc["content"])
                     self.broker.publish(envelope)
                 except Exception:
                     self._seen.pop(envelope.event_id, None)
@@ -514,6 +648,8 @@ class HubAdapter:
                 return "ack"
         except Exception as error:
             self._error(error)
+            if envelope.event_type in _DOC_EVENTS and isinstance(error, ValueError):
+                return "term"
             return "retry"
 
     def _on_sync_gap(self, stream, last_seq, earliest_seq):

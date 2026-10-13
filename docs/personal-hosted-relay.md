@@ -74,6 +74,18 @@ bind loopback on dynamic ports; no managed hub is contacted.
 
 ## Current limits
 
+Document producers can use `build_doc_event_payload()` and publish a
+`doc_drafted` or `doc_updated` envelope through the attached local broker.
+The bridge supplies the sending device identity. Received content is stored as
+a labeled, read-only copy under
+`.synlynk/relay/previews/<origin-device>/<source-path>` in the receiving workspace.
+Only `docs/superpowers/specs/`, `docs/superpowers/plans/`, and `docs/brainstorm/`
+source paths are accepted. Source documents are never overwritten or merged.
+If the serialized envelope would exceed 1,000,000 bytes, content is omitted and
+metadata is retained; metadata alone exceeding the limit is rejected. No
+filesystem watcher is installed, and metadata-only notifications do not create
+a preview file.
+
 JetStream retains independent category streams and resumes durable device cursors.
 Retention gaps emit a local `sync_gap_detected` event. Replayed events are
 deduplicated against local persistence. This does not reconcile independent

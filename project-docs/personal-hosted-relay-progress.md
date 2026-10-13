@@ -15,9 +15,9 @@ Feature branch: feat/codex/personal-hosted-relay
 | 5 Hub bridge | story-2263ec9a | Verified; story done | Source bf60fcaa; 153 targeted,1514 broad passed,1 skipped; independent async/concurrency review approved |
 | 6 Durable replay | story-29cc4aad | Verified; story done | Source 25d397ba integrated as 31683d36; 166 targeted, 1527 broad passed, 1 skipped; real authenticated replay; independent review approved |
 | 7 CLI | story-43a01b32 | Verified; story done | Source 814151bf plus reviewed onboarding corrections integrated as 84d730ab; 191 targeted passed, worker broad 1546 passed/1 skipped; independent review approved |
-| 8 Real NATS integration | story-f4824a3e | In progress | job-02ef4311; failed cross-provider reroute job-20b0e6e2 had zero tokens/no changes, tracked in #2255 |
-| 9 Document preview | story-dbf68f01 | Pending | |
-| 10 Full regression | story-f1639150 | Pending | Baseline: 4173 passed, 10 failed, 5 errors, 7 skipped, 5 xfailed (757s); final run mandatory |
+| 8 Real NATS integration | story-f4824a3e | Verified; story done | Source e71080df plus review assertions integrated as f6cac23c; 10 real NATS tests passed; worker broad 1569 passed/1 skipped; independent review approved |
+| 9 Document preview | story-dbf68f01 | Verified; completing story | Source 00cb94f4 plus reviewed overlong-path correction; 238 targeted passed; worker broad 1611 passed/1 skipped; independent security review approved |
+| 10 Full regression | story-f1639150 | Dispatching | Baseline: 4173 passed, 10 failed, 5 errors, 7 skipped, 5 xfailed (757s); final run mandatory |
 
 ## Decisions and constraints
 
@@ -30,8 +30,8 @@ Feature branch: feat/codex/personal-hosted-relay
 - Verify actual replay, echo prevention, revocation, and safe preview paths against real behavior.
 - Five-minute progress heartbeat active in the user thread.
 - Deferred reconnect/status/managed-service gates tracked in gh:#2256.
-- Main advanced by 2fd63ac6 (Muse API key passthrough); integrate before final
-  regression so Task 10 covers the actual PR base.
+- Main advancement 2fd63ac6 (Muse API key passthrough) integrated before Task 10
+  so final regression covers the current PR base.
 - Job projection/reconciliation tuple-row crash filed as #2254. Session checkpoint
   shows stale running labels despite verified commits/tests/comments. Report task
   status from concrete evidence; do not fabricate oracle success or bypass checks.

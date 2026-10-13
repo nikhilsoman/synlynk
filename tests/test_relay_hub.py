@@ -9,6 +9,192 @@ from types import SimpleNamespace
 
 import pytest
 
+from synlynk.relay_hub import build_doc_event_payload, write_doc_preview, DOC_PREVIEW_MAX_BYTES
+
+
+def test_doc_payload_size_and_metadata():
+    for content in ('# Hello\n', 'x' * (DOC_PREVIEW_MAX_BYTES + 1),
+                    '\x00' * (DOC_PREVIEW_MAX_BYTES // 6),
+                    '\U0001f600' * (DOC_PREVIEW_MAX_BYTES // 12)):
+        payload = build_doc_event_payload('docs/superpowers/specs/x.md', 'b', 'abc', content,
+                                          origin_device_id='dev-1')
+        assert payload['origin_device_id'] == 'dev-1'
+        assert payload['commit_sha'] == 'abc'
+        assert len(json.dumps(payload).encode()) <= DOC_PREVIEW_MAX_BYTES
+        assert ('content' in payload) == (content == '# Hello\n')
+
+
+@pytest.mark.parametrize('path', ['/tmp/x', '../x', 'docs/superpowers/specs/../x',
+    'docs/superpowers/specs', 'docs/superpowers/specs//x', 'docs/brainstorm/./x',
+    'src/x', 'docs/superpowers/specs-evil/x', 'docs/brainstorm/x\\y',
+    'docs/brainstorm/x\n.md', 'docs/brainstorm/x\x00'])
+def test_doc_preview_rejects_bad_paths(tmp_path, path):
+    with pytest.raises(ValueError):
+        write_doc_preview(str(tmp_path), 'dev-1', path, 'content')
+
+
+@pytest.mark.parametrize('device', ['', '.', '..', '../escape', '/tmp', 'x/y', 'x\\y', 'x\n'])
+def test_doc_preview_rejects_bad_devices(tmp_path, device):
+    with pytest.raises(ValueError):
+        write_doc_preview(str(tmp_path), device, 'docs/brainstorm/x.md', 'content')
+
+
+@pytest.mark.parametrize('root', ['docs/superpowers/specs', 'docs/superpowers/plans', 'docs/brainstorm'])
+def test_doc_preview_atomic_readonly_replacement(tmp_path, root):
+    import stat
+    path = root + '/x.md'
+    target = Path(write_doc_preview(str(tmp_path), 'dev-1', path, '# first'))
+    first_inode = target.stat().st_ino
+    assert target == tmp_path / 'dev-1' / path
+    write_doc_preview(str(tmp_path), 'dev-1', path, '# second')
+    assert 'PREVIEW ONLY' in target.read_text()
+    assert '# second' in target.read_text() and '# first' not in target.read_text()
+    assert stat.S_IMODE(target.stat().st_mode) == 0o444
+    assert target.stat().st_ino != first_inode
+
+
+@pytest.mark.parametrize('component', ['dev-1', 'dev-1/docs', 'dev-1/docs/brainstorm',
+                                      'dev-1/docs/brainstorm/x.md'])
+def test_doc_preview_rejects_symlinks(tmp_path, component):
+    outside = tmp_path / 'outside'
+    outside.mkdir()
+    base = tmp_path / 'previews'
+    link = base / component
+    link.parent.mkdir(parents=True)
+    link.symlink_to(outside)
+    with pytest.raises(ValueError):
+        write_doc_preview(str(base), 'dev-1', 'docs/brainstorm/x.md', 'content')
+    assert list(outside.iterdir()) == []
+
+
+@pytest.mark.parametrize('event_type', ['doc_drafted', 'doc_updated'])
+def test_doc_receive_preview_and_dedupe(bridge, tmp_path, event_type):
+    broker, client, adapter = bridge
+    adapter.preview_dir = tmp_path / 'previews'
+    payload = build_doc_event_payload('docs/brainstorm/x.md', 'b', None, '# received',
+                                      origin_device_id='dev-remote')
+    event = hub_event(event_type=event_type, payload=payload)
+    subject = 'synlynk.ws1.doc.' + event_type.removeprefix('doc_')
+    assert adapter._on_hub_message(subject, event.to_json().encode()) == 'ack'
+    target = adapter.preview_dir / 'dev-remote/docs/brainstorm/x.md'
+    assert '# received' in target.read_text()
+    inode = target.stat().st_ino
+    assert adapter._on_hub_message(subject, event.to_json().encode()) == 'ack'
+    assert target.stat().st_ino == inode
+
+
+def test_doc_outbound_limits_whole_envelope(bridge):
+    broker, client, adapter = bridge
+    client.device_id = 'dev-local'
+    payload = build_doc_event_payload('docs/brainstorm/x.md', 'b', None,
+                                      'x' * (DOC_PREVIEW_MAX_BYTES - 250))
+    assert 'content' in payload  # Payload fits; enclosing event does not.
+    broker.publish(hub_event(event_type='doc_updated', payload=payload))
+    subject, data = client.published.get(timeout=2)
+    assert subject == 'synlynk.ws1.doc.updated'
+    assert len(data) <= DOC_PREVIEW_MAX_BYTES
+    assert 'content' not in json.loads(data)['payload']
+    assert json.loads(data)['payload']['origin_device_id'] == 'dev-local'
+
+
+@pytest.mark.parametrize('change', [{'path': '../escape'}, {'origin_device_id': '../escape'},
+    {'content': 42}, {'content': 'x' * DOC_PREVIEW_MAX_BYTES}, {'origin_device_id': None}])
+def test_doc_receive_rejects_poison(bridge, tmp_path, change):
+    broker, client, adapter = bridge
+    adapter.preview_dir = tmp_path / 'previews'
+    payload = build_doc_event_payload('docs/brainstorm/x.md', 'b', None, 'ok',
+                                      origin_device_id='dev-remote')
+    payload.update(change)
+    event = hub_event(event_type='doc_updated', payload=payload)
+    assert adapter._on_hub_message('synlynk.ws1.doc.updated', event.to_json().encode()) == 'term'
+    assert not adapter.preview_dir.exists()
+
+
+@pytest.mark.parametrize('path', ['docs/brainstorm/' + 'x' * 300,
+                                'docs/brainstorm/' + 'x' * 300 + '/valid.md'])
+def test_doc_receive_overlong_path_terminates_without_blocking(bridge, tmp_path, path):
+    _, _, adapter = bridge
+    adapter.preview_dir = tmp_path / 'previews'
+    payload = build_doc_event_payload(path, 'b', None, 'invalid',
+                                      origin_device_id='dev-remote')
+    event = hub_event(event_type='doc_updated', payload=payload)
+    assert adapter._on_hub_message('synlynk.ws1.doc.updated', event.to_json()) == 'term'
+    payload = build_doc_event_payload('docs/brainstorm/valid.md', 'b', None, 'valid',
+                                      origin_device_id='dev-remote')
+    following = hub_event(event_type='doc_updated', payload=payload)
+    assert adapter._on_hub_message('synlynk.ws1.doc.updated', following.to_json()) == 'ack'
+    assert 'valid' in (adapter.preview_dir / 'dev-remote/docs/brainstorm/valid.md').read_text()
+
+
+def test_doc_preview_rejects_base_symlink(tmp_path):
+    (tmp_path / 'real').mkdir()
+    (tmp_path / 'link').symlink_to(tmp_path / 'real')
+    with pytest.raises(ValueError):
+        write_doc_preview(str(tmp_path / 'link'), 'dev-1', 'docs/brainstorm/x.md', 'x')
+    assert list((tmp_path / 'real').iterdir()) == []
+
+
+def test_doc_preview_failed_replace_preserves_previous(tmp_path, monkeypatch):
+    target = Path(write_doc_preview(str(tmp_path), 'dev-1', 'docs/brainstorm/x.md', 'old'))
+    previous = target.read_bytes()
+    def fail_replace(*args, **kwargs):
+        raise OSError('disk error')
+    monkeypatch.setattr(os, 'replace', fail_replace)
+    with pytest.raises(OSError):
+        write_doc_preview(str(tmp_path), 'dev-1', 'docs/brainstorm/x.md', 'new')
+    assert target.read_bytes() == previous
+    assert list(target.parent.iterdir()) == [target]
+
+
+def test_doc_receive_metadata_only(bridge, tmp_path):
+    broker, client, adapter = bridge
+    adapter.preview_dir = tmp_path / 'previews'
+    subscriber = broker.subscribe()
+    payload = build_doc_event_payload('docs/brainstorm/x.md', 'b', 'sha',
+                                      'x' * DOC_PREVIEW_MAX_BYTES, origin_device_id='dev-remote')
+    assert 'content' not in payload
+    event = hub_event(event_type='doc_updated', payload=payload)
+    assert adapter._on_hub_message('synlynk.ws1.doc.updated', event.to_json().encode()) == 'ack'
+    assert json.loads(subscriber.get(timeout=2))['payload'] == payload
+    assert not adapter.preview_dir.exists()
+
+
+def test_doc_receive_storage_failure_is_retryable(bridge, tmp_path, monkeypatch):
+    import synlynk.relay_hub as hub
+    broker, client, adapter = bridge
+    adapter.preview_dir = tmp_path / 'previews'
+    payload = build_doc_event_payload('docs/brainstorm/x.md', 'b', None, 'ok',
+                                      origin_device_id='dev-remote')
+    event = hub_event(event_type='doc_updated', payload=payload)
+    writer = hub.write_doc_preview
+    def fail_write(*args, **kwargs):
+        raise OSError('disk full')
+    monkeypatch.setattr(hub, 'write_doc_preview', fail_write)
+    assert adapter._on_hub_message('synlynk.ws1.doc.updated', event.to_json().encode()) == 'retry'
+    assert event.event_id not in adapter._seen
+    monkeypatch.setattr(hub, 'write_doc_preview', writer)
+    assert adapter._on_hub_message('synlynk.ws1.doc.updated', event.to_json().encode()) == 'ack'
+    assert (adapter.preview_dir / 'dev-remote/docs/brainstorm/x.md').exists()
+
+
+def test_doc_payload_rejects_oversized_metadata():
+    with pytest.raises(ValueError, match='metadata exceeds'):
+        build_doc_event_payload('docs/brainstorm/x.md', 'b' * DOC_PREVIEW_MAX_BYTES, None, 'ok')
+
+
+def test_doc_outbound_counts_actor_metadata_and_escaping(bridge):
+    broker, client, adapter = bridge
+    client.device_id = 'dev-local'
+    payload = build_doc_event_payload('docs/brainstorm/x.md', 'b', None, '\x00' * 100_000)
+    event = hub_event(event_type='doc_drafted', payload=payload,
+                      sender=ActorIdentifier('ws1', 'm' * 500_000, 'dev', 'codex', 'j'))
+    broker.publish(event)
+    _, data = client.published.get(timeout=2)
+    assert len(data) <= DOC_PREVIEW_MAX_BYTES
+    raw = json.loads(data)
+    assert raw['sender']['member_id'] == event.sender.member_id
+    assert 'content' not in raw['payload']
+
 
 def test_hub_cli_config_and_credentials(tmp_path, capsys):
     from synlynk.cli import main, build_parser
