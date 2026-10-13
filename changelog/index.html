@@ -46,6 +46,11 @@ Versioning follows <a href="https://semver.org/spec/v2.0.0.html">Semantic Versio
 <hr>
 <h2><a href="https://github.com/nikhilsoman/synlynk/compare/v0.3.0...HEAD">Unreleased</a></h2>
 <ul>
+<li>Add an opt-in personal NATS relay with scoped device credentials, durable
+JetStream replay, retention-gap events, subscription filters, and safe document
+previews. See <a href="docs/personal-hosted-relay.md">self-hosted setup</a>. The <code>hub</code> extra
+is optional; the core CLI remains stdlib-only. Managed service provisioning,
+entitlement checks, and reconnect/status hardening remain follow-up work.</li>
 <li>Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result.</li>
 <li>Ongoing Wave 3: Hosted Teams Server Hub, Cloudflare Tunnel full-duplex daemon, and Dynamic Quota Advisory service.</li>
 </ul>
