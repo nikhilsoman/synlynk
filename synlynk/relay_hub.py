@@ -20,6 +20,7 @@ from collections.abc import Mapping
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 import fcntl
+import hashlib
 import json
 import logging
 import os
@@ -29,6 +30,7 @@ import queue
 import secrets
 import tempfile
 import threading
+from types import SimpleNamespace
 import uuid
 
 from synlynk.events import ActorIdentifier, EventEnvelope
@@ -37,13 +39,75 @@ from synlynk.events import ActorIdentifier, EventEnvelope
 _LOG = logging.getLogger(__name__)
 
 
+class ReplayTracker:
+    """One stream's confirmed delivery position (never a cross-stream counter)."""
+
+    def __init__(self, device_id, *, stream=None):
+        self.device_id = device_id
+        self.stream = stream
+        self.last_delivered_seq = None
+        if stream is not None:
+            from synlynk.relay import _db
+            conn = _db()
+            try:
+                conn.execute("CREATE TABLE IF NOT EXISTS relay_hub_cursors ("
+                             "device_id TEXT NOT NULL, stream TEXT NOT NULL, seq INTEGER NOT NULL,"
+                             "PRIMARY KEY(device_id, stream))")
+                row = conn.execute("SELECT seq FROM relay_hub_cursors WHERE device_id=? AND stream=?",
+                                   (device_id, stream)).fetchone()
+                conn.commit()
+                if row:
+                    self.last_delivered_seq = row[0]
+            finally:
+                conn.close()
+
+    def record_delivered(self, seq):
+        seq = max(self.last_delivered_seq or 0, seq)
+        if self.stream is not None:
+            from synlynk.relay import _db
+            conn = _db()
+            try:
+                conn.execute("INSERT INTO relay_hub_cursors(device_id,stream,seq) VALUES (?,?,?) "
+                             "ON CONFLICT(device_id,stream) DO UPDATE SET seq=MAX(seq,excluded.seq)",
+                             (self.device_id, self.stream, seq))
+                conn.commit()
+            finally:
+                conn.close()
+        self.last_delivered_seq = seq
+
+    def replay(self, consumer):
+        pending = sorted(consumer.fetch_since(self.last_delivered_seq or 0))
+        if pending:
+            self.record_delivered(pending[-1][0])
+        return pending
+
+    def detect_sync_gap(self, consumer):
+        return (self.last_delivered_seq is not None
+                and self.last_delivered_seq + 1 < consumer.earliest_seq)
+
+
+def _stream_name(workspace_id, category):
+    # Hash literal identities to legal, collision-resistant JetStream names.
+    digest = hashlib.sha256(workspace_id.encode()).hexdigest()
+    return f"synlynk_{digest}_{category}"
+
+
+def _durable_name(device_id):
+    return "device_" + hashlib.sha256(device_id.encode()).hexdigest()
+
+
+def _inbox_prefix(device_id):
+    return "_INBOX." + _durable_name(device_id)
+
+
 class NatsTransport:
     """Synchronous bridge API backed by an owned nats-py loop and connection.
 
     Construct outside an asyncio callback. Operations have bounded waits and
     raise on failure; asynchronous NATS errors are logged and in last_error.
     Pass native user/password for DeviceCredentialStore bearer credentials.
-    Call close() when finished. This is core NATS, not durable JetStream.
+    HubAdapter selects durable JetStream subscriptions. Standalone subscribe()
+    retains the core NATS interface. Call close() when finished.
     """
 
     def __init__(self, servers, *, timeout=5.0, **connect_options):
@@ -57,6 +121,11 @@ class NatsTransport:
         self._thread = threading.Thread(target=self._run, name="relay-nats", daemon=True)
         self._thread.start()
         self._client = None
+        self._js = None
+        self._durable_tasks = set()
+        self.device_id = connect_options.get("user")
+        if isinstance(self.device_id, str):
+            connect_options["inbox_prefix"] = _inbox_prefix(self.device_id).encode()
 
         async def connect():
             self._client = nats.NATS()
@@ -103,7 +172,10 @@ class NatsTransport:
     def publish(self, subject, payload):
         async def publish():
             data = payload.encode("utf-8") if isinstance(payload, str) else payload
-            await self._client.publish(subject, data)
+            if self._js is not None:
+                await self._js.publish(subject, data, timeout=self.timeout)
+            else:
+                await self._client.publish(subject, data)
             await self._client.flush(timeout=self.timeout)
         return self._call(publish())
 
@@ -120,9 +192,123 @@ class NatsTransport:
             return subscription
         return self._call(subscribe())
 
+    def subscribe_durable(self, workspace_id, callback, gap_callback):
+        """Provision category streams and bind this device's persistent cursors.
+
+        Pull one message at a time with one unacked message allowed, so a local
+        write failure cannot be skipped by acknowledging a later delivery.
+        Unsubscribe only releases local subscriptions; durable state survives.
+        """
+        from nats.js.api import AckPolicy, ConsumerConfig, StreamConfig
+        from nats.js.errors import NotFoundError
+
+        workspace_id = _subject_segment(workspace_id, "workspace_id")
+        if not isinstance(self.device_id, str) or not self.device_id:
+            raise ValueError("Durable hub transport requires a stable device user")
+
+        async def setup():
+            self._js = self._client.jetstream(timeout=self.timeout)
+            subscriptions = []
+            tasks = []
+            try:
+                for category, policy in RETENTION_POLICIES.items():
+                    stream = _stream_name(workspace_id, category)
+                    subject = f"synlynk.{workspace_id}.{category}.>"
+                    try:
+                        info = await self._js.stream_info(stream)
+                    except NotFoundError:
+                        info = await self._js.add_stream(config=StreamConfig(
+                            name=stream, subjects=[subject], max_msgs=policy["max_msgs"],
+                            max_age=policy["max_age_seconds"]))
+                    if info.config.subjects != [subject]:
+                        raise ValueError("Unexpected hub stream subjects")
+                    durable = _durable_name(self.device_id)
+                    tracker = ReplayTracker(self.device_id, stream=stream)
+                    try:
+                        consumer = await self._js.consumer_info(stream, durable)
+                        if tracker.last_delivered_seq is None:
+                            tracker.record_delivered(consumer.ack_floor.stream_seq)
+                        if (consumer.config.ack_policy != AckPolicy.EXPLICIT
+                                or consumer.config.max_ack_pending != 1
+                                or consumer.config.filter_subject
+                                or consumer.config.filter_subjects
+                                or consumer.config.deliver_subject):
+                            raise ValueError("Unexpected hub consumer configuration")
+                    except NotFoundError:
+                        await self._js.add_consumer(stream, config=ConsumerConfig(
+                            durable_name=durable, ack_policy=AckPolicy.EXPLICIT,
+                            max_ack_pending=1, ack_wait=30))
+                        # First connect starts at currently retained history.
+                        if tracker.last_delivered_seq is None:
+                            tracker.record_delivered(max(0, info.state.first_seq - 1))
+                    sub = await self._js.pull_subscribe_bind(stream=stream, durable=durable)
+                    subscriptions.append(sub)
+                    tasks.append(asyncio.create_task(self._consume(
+                        sub, stream, tracker, callback, gap_callback)))
+                self._durable_tasks.update(tasks)
+                return subscriptions, tasks
+            except BaseException:
+                for task in tasks:
+                    task.cancel()
+                await asyncio.gather(*tasks, return_exceptions=True)
+                for sub in subscriptions:
+                    await sub.unsubscribe()
+                raise
+
+        return self._call(setup())
+
+    async def _consume(self, sub, stream, tracker, callback, gap_callback):
+        from nats.errors import TimeoutError as NatsTimeout
+
+        reported_earliest = None
+
+        async def check_gap():
+            nonlocal reported_earliest
+            info = await self._js.stream_info(stream)
+            earliest = info.state.first_seq
+            if (tracker.detect_sync_gap(SimpleNamespace(earliest_seq=earliest))
+                    and reported_earliest != earliest):
+                gap_callback(stream, tracker.last_delivered_seq, earliest)
+                reported_earliest = earliest
+
+        while True:
+            try:
+                await check_gap()
+                messages = await sub.fetch(batch=1, timeout=1)
+                for message in messages:
+                    if message.metadata.sequence.stream > (tracker.last_delivered_seq or 0) + 1:
+                        # Retention can advance while a pull request is waiting.
+                        await check_gap()
+                    disposition = callback(message.subject, message.data)
+                    if disposition == "ack":
+                        tracker.record_delivered(message.metadata.sequence.stream)
+                        await message.ack_sync(timeout=self.timeout)
+                    elif disposition == "term":
+                        tracker.record_delivered(message.metadata.sequence.stream)
+                        await message.term()
+                        await self._client.flush(timeout=self.timeout)
+                    else:
+                        await message.nak(delay=1)
+                        continue
+            except NatsTimeout:
+                continue
+            except Exception as error:
+                self.last_error = error
+                _LOG.warning("JetStream delivery error: %s", type(error).__name__)
+                await asyncio.sleep(1)
+
     def unsubscribe(self, subscription):
         async def unsubscribe():
-            await subscription.unsubscribe()
+            if isinstance(subscription, tuple):
+                subscriptions, tasks = subscription
+                for task in tasks:
+                    task.cancel()
+                await asyncio.gather(*tasks, return_exceptions=True)
+                self._durable_tasks.difference_update(tasks)
+                for sub in subscriptions:
+                    await sub.unsubscribe()
+            else:
+                await subscription.unsubscribe()
             await self._client.flush(timeout=self.timeout)
         return self._call(unsubscribe())
 
@@ -133,7 +319,13 @@ class NatsTransport:
             raise RuntimeError("Close NATS transport from outside its loop")
         try:
             if self._client is not None:
-                self._call(self._client.close())
+                async def shutdown():
+                    for task in self._durable_tasks:
+                        task.cancel()
+                    await asyncio.gather(*self._durable_tasks, return_exceptions=True)
+                    self._durable_tasks.clear()
+                    await self._client.close()
+                self._call(shutdown())
         finally:
             self._closed = True
             self._loop.call_soon_threadsafe(self._loop.stop)
@@ -148,7 +340,7 @@ class HubAdapter:
     For production pass NatsTransport, NOT a raw async nats-py Client. Injected
     clients are borrowed unless owns_client=True; an owned client is closed on
     detach, making that adapter terminal. Local queues retain broker semantics.
-    Dedupe is bounded, in-memory only; persistent replay belongs to Task 6.
+    Replay dedupe checks persisted relay events before broker delivery.
     Transport failures are observable via last_error and logging, not retried.
     """
 
@@ -217,8 +409,12 @@ class HubAdapter:
             with self._lock:
                 self._active = True
             try:
-                self._subscription = self.client.subscribe(
-                    f"synlynk.{self.workspace_id}.>", self._on_hub_message)
+                if isinstance(self.client, NatsTransport):
+                    self._subscription = self.client.subscribe_durable(
+                        self.workspace_id, self._on_hub_message, self._on_sync_gap)
+                else:
+                    self._subscription = self.client.subscribe(
+                        f"synlynk.{self.workspace_id}.>", self._on_hub_message)
                 self._bridge_thread = threading.Thread(
                     target=self._pump_local_to_hub, name="relay-hub", daemon=True)
                 self._bridge_thread.start()
@@ -264,6 +460,8 @@ class HubAdapter:
                 continue
             try:
                 envelope, subject = self._decode(data)
+                if envelope.event_type == "sync_gap_detected":
+                    continue
                 with self._lock:
                     if envelope.event_id in self._seen:
                         continue
@@ -278,17 +476,43 @@ class HubAdapter:
             envelope, expected = self._decode(payload)
             if subject != expected:
                 raise ValueError("Subject does not match envelope routing")
+        except Exception as error:
+            self._error(error)
+            return "term"  # Poison input: observable, no redelivery/feedback loop.
+        try:
             with self._lock:
-                if not self._active or envelope.event_id in self._seen:
-                    return
+                if not self._active:
+                    return "retry"
+                if envelope.event_id in self._seen:
+                    return "ack"
+                from synlynk.relay import _db
+                conn = _db()
+                try:
+                    persisted = conn.execute(
+                        "SELECT 1 FROM relay_events WHERE event_id=?", (envelope.event_id,)
+                    ).fetchone()
+                finally:
+                    conn.close()
                 self._remember(envelope.event_id)
+                if persisted:
+                    return "ack"
                 try:
                     self.broker.publish(envelope)
                 except Exception:
                     self._seen.pop(envelope.event_id, None)
                     raise
+                return "ack"
         except Exception as error:
             self._error(error)
+            return "retry"
+
+    def _on_sync_gap(self, stream, last_seq, earliest_seq):
+        event = EventEnvelope.create(
+            ActorIdentifier(self.workspace_id, "local", "relay", "nats", ""),
+            "sync_gap_detected", {"stream": stream, "last_delivered_seq": last_seq,
+                                  "earliest_seq": earliest_seq})
+        # The outbound pump excludes these markers even after its ID cache evicts.
+        self.broker.publish(event)
 
 
 def _import_nats():
@@ -514,7 +738,8 @@ class DeviceCredentialStore:
         """Render NATS user/password auth; JSON quoting prevents config injection."""
         users = [
             {"user": cred.device_id, "password": cred.token, "permissions": {
-                "publish": cred.publish_subjects, "subscribe": cred.subscribe_subjects,
+                "publish": cred.publish_subjects + self._jetstream_permissions(cred.device_id),
+                "subscribe": cred.subscribe_subjects + [_inbox_prefix(cred.device_id) + ".>"],
             }}
             for cred in self.list_devices() if not cred.revoked
         ]
@@ -524,6 +749,21 @@ class DeviceCredentialStore:
             users = [{"user": "__disabled__", "password": secrets.token_hex(32),
                       "permissions": {"publish": [], "subscribe": []}}]
         return "authorization " + json.dumps({"users": users}, indent=2) + "\n"
+
+    def _jetstream_permissions(self, device_id):
+        durable = _durable_name(device_id)
+        subjects = []
+        for category in RETENTION_POLICIES:
+            stream = _stream_name(self.workspace_id, category)
+            subjects.extend([
+                f"$JS.API.STREAM.INFO.{stream}",
+                f"$JS.API.STREAM.CREATE.{stream}",
+                f"$JS.API.CONSUMER.INFO.{stream}.{durable}",
+                f"$JS.API.CONSUMER.DURABLE.CREATE.{stream}.{durable}",
+                f"$JS.API.CONSUMER.MSG.NEXT.{stream}.{durable}",
+                f"$JS.ACK.{stream}.{durable}.>",
+            ])
+        return subjects
 
     def write_authorization_config(self) -> Path:
         """Write a private config snapshot; does not reload a running server."""

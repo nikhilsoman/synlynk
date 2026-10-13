@@ -13,6 +13,355 @@ from synlynk.events import ActorIdentifier, EventEnvelope
 from synlynk.relay_hub import DeviceCredentialStore, RETENTION_POLICIES, category_for_subject, subject_for_event
 from synlynk.relay import RelayBroker
 from synlynk.relay_hub import HubAdapter, NatsTransport
+from synlynk.relay_hub import ReplayTracker
+
+
+class FakeJetStreamConsumer:
+    def __init__(self, messages, earliest_seq=1):
+        self.messages = messages
+        self.earliest_seq = earliest_seq
+
+    def fetch_since(self, last_seq):
+        return [message for message in self.messages if message[0] > last_seq]
+
+
+def test_replay_tracker_resumes():
+    tracker = ReplayTracker("dev-1")
+    tracker.record_delivered(5)
+    pending = tracker.replay(FakeJetStreamConsumer([(6, "subject", "a"), (7, "subject", "b")]))
+    assert [item[0] for item in pending] == [6, 7]
+    assert tracker.last_delivered_seq == 7
+
+
+@pytest.mark.parametrize("last,earliest,gap", [(None, 50, False), (5, 50, True), (5, 6, False), (5, 1, False)])
+def test_replay_gap_boundary(last, earliest, gap):
+    tracker = ReplayTracker("dev-1")
+    if last is not None:
+        tracker.record_delivered(last)
+    assert tracker.detect_sync_gap(FakeJetStreamConsumer([], earliest)) is gap
+
+
+def test_adapter_restart_dedupes_persisted_events(project_dir):
+    broker, client = RelayBroker(), FakeNatsClient()
+    event = hub_event()
+    broker.publish(event)
+    subscriber = broker.subscribe()
+    adapter = HubAdapter(broker, client, "ws1")
+    adapter.attach()
+    try:
+        assert adapter._on_hub_message("synlynk.ws1.job.review_requested", event.to_json()) == "ack"
+        assert subscriber.empty()
+    finally:
+        adapter.detach()
+
+
+def test_adapter_delivery_dispositions(bridge, monkeypatch):
+    broker, client, adapter = bridge
+    event = hub_event()
+    subject = "synlynk.ws1.job.review_requested"
+    assert adapter._on_hub_message(subject, b"bad json") == "term"
+    with monkeypatch.context() as patch:
+        patch.setattr(broker, "publish", lambda event: (_ for _ in ()).throw(OSError("disk full")))
+        assert adapter._on_hub_message(subject, event.to_json()) == "retry"
+    assert adapter._on_hub_message(subject, event.to_json()) == "ack"
+    adapter.detach()
+    assert adapter._on_hub_message(subject, event.to_json()) == "retry"
+
+
+def test_gap_marker_is_local_only(bridge):
+    broker, client, adapter = bridge
+    subscriber = broker.subscribe()
+    adapter._on_sync_gap("job-stream", 5, 50)
+    event = json.loads(subscriber.get(timeout=2))
+    assert event["event_type"] == "sync_gap_detected"
+    assert event["payload"]["earliest_seq"] == 50
+    broker.publish(hub_event())  # Pump barrier.
+    assert json.loads(client.published.get(timeout=2)[1])["event_type"] == "review_requested"
+    adapter.detach()
+    assert client.published.empty()
+
+
+@pytest.fixture
+def fake_jetstream(monkeypatch):
+    import asyncio
+    import synlynk.relay_hub as hub
+    api = pytest.importorskip("nats.js.api")
+    from nats.js.errors import NotFoundError
+    from nats.errors import TimeoutError as NatsTimeout
+
+    class Subscription:
+        def __init__(self, stream, durable):
+            self.stream, self.durable = stream, durable
+            self.closed = False
+
+        async def fetch(self, batch, timeout):
+            assert batch == 1
+            await asyncio.sleep(0.01)
+            consumer = client.consumers[self.stream, self.durable]
+            for message in client.messages.get(self.stream, []):
+                if message.metadata.sequence.stream > consumer.ack_floor.stream_seq:
+                    if self.stream in client.prune_on_fetch:
+                        client.streams[self.stream].state.first_seq = client.prune_on_fetch[self.stream]
+                    return [message]
+            raise NatsTimeout()
+
+        async def unsubscribe(self):
+            self.closed = True
+
+    class Client:
+        def __init__(self):
+            self.streams, self.consumers, self.messages = {}, {}, {}
+            self.subscriptions = []
+            self.published = []
+            self.prune_on_fetch = {}
+            self.closed = False
+
+        async def connect(self, **kwargs):
+            self.options = kwargs
+
+        def jetstream(self, **kwargs):
+            return self
+
+        async def stream_info(self, stream):
+            if stream not in self.streams:
+                raise NotFoundError()
+            return self.streams[stream]
+
+        async def add_stream(self, config):
+            assert isinstance(config, api.StreamConfig)
+            self.streams[config.name] = SimpleNamespace(config=config, state=SimpleNamespace(first_seq=1))
+            return self.streams[config.name]
+
+        async def consumer_info(self, stream, durable):
+            if (stream, durable) not in self.consumers:
+                raise NotFoundError()
+            return self.consumers[stream, durable]
+
+        async def add_consumer(self, stream, config):
+            self.consumers[stream, config.durable_name] = SimpleNamespace(
+                config=config, ack_floor=SimpleNamespace(stream_seq=0))
+
+        async def pull_subscribe_bind(self, *, stream, durable):
+            sub = Subscription(stream, durable)
+            self.subscriptions.append(sub)
+            return sub
+
+        async def publish(self, subject, data, **kwargs):
+            self.published.append((subject, data))
+
+        async def flush(self, **kwargs):
+            pass
+
+        async def close(self):
+            self.closed = True
+
+        def enqueue(self, stream, seq, data, subject="synlynk.ws1.job.review_requested"):
+            message = SimpleNamespace(subject=subject, data=data,
+                                      metadata=SimpleNamespace(sequence=SimpleNamespace(stream=seq)))
+            message.dispositions = queue.Queue()
+
+            async def ack_sync(**kwargs):
+                # Persistence must precede positive acknowledgment.
+                from synlynk.relay import _db
+                conn = _db()
+                try:
+                    assert conn.execute("SELECT 1 FROM relay_events WHERE event_id=?",
+                                        (json.loads(data)["event_id"],)).fetchone()
+                finally:
+                    conn.close()
+                self.consumers[stream, hub._durable_name("dev-1")].ack_floor.stream_seq = seq
+                message.dispositions.put("ack")
+
+            async def term():
+                self.consumers[stream, hub._durable_name("dev-1")].ack_floor.stream_seq = seq
+                message.dispositions.put("term")
+
+            async def nak(**kwargs):
+                message.dispositions.put("retry")
+            message.ack_sync, message.term, message.nak = ack_sync, term, nak
+            self.messages.setdefault(stream, []).append(message)
+            return message
+
+    client = Client()
+    monkeypatch.setattr(hub, "_import_nats", lambda: SimpleNamespace(NATS=lambda: client))
+    return client
+
+
+def test_wired_jetstream_restart_ack_and_independent_streams(project_dir, fake_jetstream):
+    from synlynk.relay_hub import _stream_name, _durable_name, _inbox_prefix
+    client = fake_jetstream
+    broker = RelayBroker()
+    subscriber = broker.subscribe()
+    transport = NatsTransport("nats://fake", user="dev-1", password="secret")
+    adapter = HubAdapter(broker, transport, "ws1", owns_client=True)
+    adapter.attach()
+    try:
+        assert len(client.streams) == len(client.consumers) == 6
+        assert client.options["inbox_prefix"] == _inbox_prefix("dev-1").encode()
+        for category, budget in RETENTION_POLICIES.items():
+            stream = _stream_name("ws1", category)
+            assert client.streams[stream].config.max_msgs == budget["max_msgs"]
+            assert client.streams[stream].config.max_age == budget["max_age_seconds"]
+        event = hub_event()
+        job = _stream_name("ws1", "job")
+        message = client.enqueue(job, 5, event.to_json())
+        assert message.dispositions.get(timeout=2) == "ack"
+        assert json.loads(subscriber.get(timeout=2))["event_id"] == event.event_id
+        assert client.consumers[_stream_name("ws1", "agent"), _durable_name("dev-1")].ack_floor.stream_seq == 0
+    finally:
+        adapter.detach()
+    assert all(sub.closed for sub in client.subscriptions)
+    # A new transport/adapter binds existing consumers and receives offline work.
+    transport = NatsTransport("nats://fake", user="dev-1", password="secret")
+    adapter = HubAdapter(broker, transport, "ws1", owns_client=True)
+    client.streams[job].state.first_seq = 50
+    # The server may advance its floor as retention deletes pending messages.
+    # A local durable cursor must preserve what this device actually received.
+    client.consumers[job, _durable_name("dev-1")].ack_floor.stream_seq = 49
+    pending = client.enqueue(job, 50, hub_event().to_json())
+    adapter.attach()
+    try:
+        gap = json.loads(subscriber.get(timeout=2))
+        assert gap["event_type"] == "sync_gap_detected"
+        assert gap["payload"]["last_delivered_seq"] == 5
+        assert pending.dispositions.get(timeout=2) == "ack"
+        assert message.dispositions.empty()
+        assert not client.published
+    finally:
+        adapter.detach()
+
+
+def test_wired_jetstream_never_acks_failed_persistence(project_dir, fake_jetstream, monkeypatch):
+    import time
+    from synlynk.relay_hub import _stream_name
+    broker = RelayBroker()
+    transport = NatsTransport("nats://fake", user="dev-1")
+    adapter = HubAdapter(broker, transport, "ws1", owns_client=True)
+    adapter.attach()
+    try:
+        with monkeypatch.context() as patch:
+            patch.setattr(broker, "publish", lambda event: (_ for _ in ()).throw(OSError("disk full")))
+            message = fake_jetstream.enqueue(_stream_name("ws1", "job"), 1, hub_event().to_json())
+            assert message.dispositions.get(timeout=2) == "retry"
+            assert isinstance(adapter.last_error, OSError)
+        deadline = time.monotonic() + 2
+        while message.dispositions.get(timeout=2) == "retry":
+            assert time.monotonic() < deadline
+        poison = fake_jetstream.enqueue(_stream_name("ws1", "job"), 2, b"bad json")
+        assert poison.dispositions.get(timeout=2) == "term"
+        assert isinstance(adapter.last_error, ValueError)
+    finally:
+        adapter.detach()
+
+
+def test_retention_race_during_fetch_emits_gap_before_delivery(project_dir, fake_jetstream):
+    from synlynk.relay_hub import _stream_name
+    client = fake_jetstream
+    broker = RelayBroker()
+    subscriber = broker.subscribe()
+    transport = NatsTransport("nats://fake", user="dev-1")
+    adapter = HubAdapter(broker, transport, "ws1", owns_client=True)
+    adapter.attach()
+    try:
+        stream = _stream_name("ws1", "job")
+        client.prune_on_fetch[stream] = 50
+        message = client.enqueue(stream, 50, hub_event().to_json())
+        assert message.dispositions.get(timeout=2) == "ack"
+        assert json.loads(subscriber.get(timeout=2))["event_type"] == "sync_gap_detected"
+        assert json.loads(subscriber.get(timeout=2))["event_type"] == "review_requested"
+    finally:
+        adapter.detach()
+
+
+def test_jetstream_permissions_are_device_and_workspace_scoped(tmp_path):
+    from synlynk.relay_hub import _stream_name, _durable_name, _inbox_prefix
+    store = DeviceCredentialStore("ws1", tmp_path)
+    first, second = store.add_device("first"), store.add_device("second")
+    users = json.loads(store.render_authorization_block().removeprefix("authorization "))["users"]
+    permissions = users[0]["permissions"]
+    assert _inbox_prefix(first.device_id) + ".>" in permissions["subscribe"]
+    assert _inbox_prefix(second.device_id) + ".>" not in permissions["subscribe"]
+    for category in RETENTION_POLICIES:
+        stream, durable = _stream_name("ws1", category), _durable_name(first.device_id)
+        assert f"$JS.API.CONSUMER.MSG.NEXT.{stream}.{durable}" in permissions["publish"]
+        assert f"$JS.ACK.{stream}.{durable}.>" in permissions["publish"]
+    assert not {">", "$JS.>", "$JS.API.>", "$JS.ACK.>", "_INBOX.>"}.intersection(
+        permissions["publish"] + permissions["subscribe"])
+
+
+def test_authenticated_jetstream_transport_smoke(project_dir, tmp_path):
+    """Small real-API check; broader cross-device integration remains Task 8."""
+    import socket
+    import time
+    pytest.importorskip("nats")
+    binary = Path("/private/tmp/synlynk-relay-bin/nats-server")
+    if not binary.exists():
+        pytest.skip("optional local nats-server unavailable")
+    store = DeviceCredentialStore("ws1", tmp_path / "credentials")
+    receiver, sender = store.add_device("receiver"), store.add_device("sender")
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+    config = tmp_path / "server.conf"
+    config.write_text(f"host: 127.0.0.1\nport: {port}\n"
+                      + "jetstream { store_dir: " + json.dumps(str(tmp_path / "jetstream")) + " }\n"
+                      + store.render_authorization_block())
+    log = (tmp_path / "server.log").open("w+")
+    process = subprocess.Popen([str(binary), "-c", str(config)], stdout=log, stderr=log)
+    adapters, transports = [], []
+    try:
+        deadline = time.monotonic() + 5
+        while True:
+            try:
+                with socket.create_connection(("127.0.0.1", port), timeout=0.1):
+                    break
+            except OSError:
+                if process.poll() is not None or time.monotonic() >= deadline:
+                    log.seek(0)
+                    pytest.fail(log.read())
+                time.sleep(0.05)
+        url = f"nats://127.0.0.1:{port}"
+        broker = RelayBroker()
+        subscriber = broker.subscribe()
+
+        def attach():
+            transport = NatsTransport(url, user=receiver.device_id, password=receiver.token)
+            transports.append(transport)
+            adapter = HubAdapter(broker, transport, "ws1", owns_client=True)
+            adapters.append(adapter)
+            adapter.attach()
+            return adapter, transport
+
+        adapter, transport = attach()
+        publisher = NatsTransport(url, user=sender.device_id, password=sender.token)
+        transports.append(publisher)
+        event = hub_event()
+        subject = "synlynk.ws1.job.review_requested"
+        publisher.publish(subject, event.to_json())
+        assert json.loads(subscriber.get(timeout=5))["event_id"] == event.event_id
+        adapter.detach()
+        offline = hub_event()
+        publisher.publish(subject, offline.to_json())
+        # Restart with the same credentials and local DB; replay an old event ID
+        # as a new stream message too, proving persistent local deduplication.
+        publisher.publish(subject, event.to_json())
+        adapter, transport = attach()
+        assert json.loads(subscriber.get(timeout=5))["event_id"] == offline.event_id
+        barrier = hub_event()
+        publisher.publish(subject, barrier.to_json())
+        assert json.loads(subscriber.get(timeout=5))["event_id"] == barrier.event_id
+        adapter.detach()
+        assert subscriber.empty()
+        assert transport.last_error is None
+        assert publisher.last_error is None
+    finally:
+        for adapter in adapters:
+            adapter.detach()
+        for transport in transports:
+            transport.close()
+        process.terminate()
+        process.wait(timeout=5)
+        log.close()
 
 
 class FakeNatsClient:
