@@ -368,6 +368,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [305](./305-pr2235-spill-oversized-dispatch-verify-step-out.md) | PR #2235 — spill oversized dispatch verify-step output to a log file (gh:#2232) | [#2235](https://github.com/nikhilsoman/synlynk/pull/2235) | 2026-10-12 |
 | [306](./306-pr2239-enforce-circuit-breaker-during-bare-disp.md) | PR #2239 — enforce circuit breaker during bare dispatch | [#2239](https://github.com/nikhilsoman/synlynk/pull/2239) | 2026-10-12 |
 | [307](./307-pr2238-prevent-generated-docs-leaking-into-disp.md) | PR #2238 — prevent generated docs leaking into dispatch worktrees | [#2238](https://github.com/nikhilsoman/synlynk/pull/2238) | 2026-10-12 |
+| [308](./308-pr2250-add-job-scoped-context-packs-gh-2243-sto.md) | PR #2250 — add job-scoped context packs (gh:#2243, story-c04f64b1) | [#2250](https://github.com/nikhilsoman/synlynk/pull/2250) | 2026-10-13 |
 
 ## Per-PR Post Template
 

@@ -878,5 +878,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2238 \u2014 prevent generated docs leaking into dispatch worktrees (PR #2238, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2238.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-12) - PR #2238\n- Merged improvements and fixes for PR #2238."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/308-pr2250-add-job-scoped-context-packs-gh-2243-sto.md",
+    "title": "PR #2250 \u2014 add job-scoped context packs (gh:#2243, story-c04f64b1)",
+    "author": "synlynk-pm agent",
+    "date": "2026-10-13",
+    "pr": "#2250",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2250."
+    ],
+    "tweet": "\ud83d\ude80 PR #2250 \u2014 add job-scoped context packs (gh:#2243, story-c04f64b1) (PR #2250, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2250.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-13) - PR #2250\n- Merged improvements and fixes for PR #2250."
   }
 ]
