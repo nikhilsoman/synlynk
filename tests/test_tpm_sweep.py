@@ -4,6 +4,7 @@ import synlynk
 from synlynk.db import cmd_story_create, cmd_story_ready
 from synlynk.tpm_sweep import _ready_stories
 from synlynk.tpm_sweep import run_sweep_pass
+from synlynk.tpm_sweep import run_tpm_wake_cycle
 
 
 def test_cmd_story_create_accepts_marketing_role(isolated_db, project_dir):
@@ -197,3 +198,100 @@ def test_story_done_clears_readiness_and_sweep_does_not_resweep(isolated_db, pro
 
     assert summary == {"advanced": 0, "parked": 0, "failed": 0}
     mock_dispatch.assert_not_called()
+
+
+def _staged_backlog_item(title="raw issue", issue_number=901):
+    """Insert one staged backlog_items row and return its integer id."""
+    conn = synlynk._get_db()
+    cur = conn.execute(
+        "INSERT INTO backlog_items (item_id, title, body, issue_number, "
+        "fingerprint, role, stage, governs_stage, complexity_tier, status) "
+        "VALUES (?, ?, 'body', ?, ?, 'dev', 'open', 'open', 2, 'staged')",
+        (f"backlog-issue-{issue_number}", title, issue_number, f"fp-{issue_number}"),
+    )
+    row_id = cur.lastrowid
+    conn.commit()
+    conn.close()
+    return row_id
+
+
+def _backlog_status(row_id):
+    conn = synlynk._get_db()
+    row = conn.execute(
+        "SELECT status FROM backlog_items WHERE id=?", (row_id,)
+    ).fetchone()
+    conn.close()
+    return row[0]
+
+
+def _triaged(row_id, goal_id="goal-d3333441", complexity_tier=2):
+    return {
+        "id": row_id,
+        "item_id": f"backlog-item-{row_id}",
+        "title": "raw issue",
+        "issue_number": 901,
+        "role": "dev",
+        "stage": "open",
+        "governs_stage": "open",
+        "complexity_tier": complexity_tier,
+        "goal_id": goal_id,
+        "acceptance_criteria": [],
+        "fingerprint": f"fp-{row_id}",
+        "status": "triaged",
+    }
+
+
+def test_tpm_wake_cycle_routes_routine_item_to_tpm_drafted(isolated_db, project_dir):
+    row_id = _staged_backlog_item()
+
+    with patch("synlynk.tpm_sweep.ingest_backlog") as mock_ingest, \
+            patch("synlynk.tpm_sweep.triage_backlog") as mock_triage, \
+            patch("synlynk.tpm_sweep.run_sweep_pass") as mock_sweep:
+        mock_ingest.return_value = {"ingested": 1, "duplicates": 0}
+        mock_triage.return_value = [_triaged(row_id)]
+        mock_sweep.return_value = {"advanced": 0, "parked": 0, "failed": 0}
+
+        result = run_tpm_wake_cycle()
+
+    assert _backlog_status(row_id) == "tpm_drafted"
+    assert result["triaged"] == 1
+    assert result["routed"]["tpm_drafted"] == 1
+    assert result["routed"]["needs_pm_priority_input"] == 0
+    assert result["routed"]["needs_architect_input"] == 0
+    assert result["sweep"] == {"advanced": 0, "parked": 0, "failed": 0}
+    mock_ingest.assert_called_once()
+    mock_sweep.assert_called_once()
+
+
+def test_tpm_wake_cycle_routes_tier3_item_to_needs_pm_priority_input(isolated_db, project_dir):
+    row_id = _staged_backlog_item(title="big ambiguous epic", issue_number=902)
+
+    with patch("synlynk.tpm_sweep.ingest_backlog") as mock_ingest, \
+            patch("synlynk.tpm_sweep.triage_backlog") as mock_triage, \
+            patch("synlynk.tpm_sweep.run_sweep_pass") as mock_sweep:
+        mock_ingest.return_value = {"ingested": 1, "duplicates": 0}
+        mock_triage.return_value = [_triaged(row_id, complexity_tier=3)]
+        mock_sweep.return_value = {"advanced": 0, "parked": 0, "failed": 0}
+
+        result = run_tpm_wake_cycle()
+
+    assert _backlog_status(row_id) == "needs_pm_priority_input"
+    assert result["routed"]["needs_pm_priority_input"] == 1
+    assert result["routed"]["tpm_drafted"] == 0
+
+
+def test_tpm_wake_cycle_routes_missing_goal_to_needs_architect_input(isolated_db, project_dir):
+    row_id = _staged_backlog_item(title="unmoored request", issue_number=903)
+
+    with patch("synlynk.tpm_sweep.ingest_backlog") as mock_ingest, \
+            patch("synlynk.tpm_sweep.triage_backlog") as mock_triage, \
+            patch("synlynk.tpm_sweep.run_sweep_pass") as mock_sweep:
+        mock_ingest.return_value = {"ingested": 1, "duplicates": 0}
+        mock_triage.return_value = [_triaged(row_id, goal_id="")]
+        mock_sweep.return_value = {"advanced": 0, "parked": 0, "failed": 0}
+
+        result = run_tpm_wake_cycle()
+
+    assert _backlog_status(row_id) == "needs_architect_input"
+    assert result["routed"]["needs_architect_input"] == 1
+    assert result["routed"]["tpm_drafted"] == 0

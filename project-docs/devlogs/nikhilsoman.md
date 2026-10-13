@@ -1923,3 +1923,58 @@ existing loopback callback test passes when run with local socket permission. CL
 `git diff --check` pass.
 
 [@nikhilsoman]
+
+2026-10-13 — Mid-session checkpoint: executing plan docs/superpowers/plans/2026-10-13-finalize-workspace-agent-charters.md
+(story-0ad6c02b, GOVERNS goal-a222b393/goal-06758149) via Subagent-Driven Development on branch
+`dispatch/codex/job-85f9e9d1`. Tasks 1-2 done and committed (a6fdf7b7, e39296e7, de97200d, b9de8638):
+charters.py now supports `durability`/`wake_cycle_sop` fields and tolerates missing `harness_bindings`;
+pm.json durable charter written (took 3 dispatch attempts — shell text-processing corrupted the JSON
+string content twice; base64-decode-via-python3 is the write method that finally worked cleanly).
+Resolved an apparent test anomaly before starting Task 3: `test_load_tpm_charter` currently fails
+(`harness_bindings == ['claude','codex']` vs expected `[]`) even though `.synlynk/charters/tpm.json`
+doesn't exist yet — root cause is `load_charter()`'s pre-existing missing-file fallback at
+`synlynk/charters.py:43`, which hardcodes `["claude","codex"]` for role in `("architect","tpm")`.
+This is expected and resolves itself once tpm.json is created (file-exists branch at line 54 takes
+over) — not a bug needing a separate fix.
+⚠️ Next: dispatch Task 3 to Codex via `synlynk dispatch --base dispatch/codex/job-85f9e9d1`, writing
+`.synlynk/charters/tpm.json` with the 7-step wake_cycle_sop spec (durability: durable, autonomous
+authorities triage_issue/draft_plan/dispatch_track, escalation_triggers technical_ambiguity/
+priority_ambiguity/dispatch_blocked_twice) — use the file-write tool directly or base64-decode
+technique, not shell heredoc/sed. Then Task 4 (maintainer.json durability promotion), Tasks 5-9
+(run_tpm_wake_cycle, cmd_pm_wake, .agents/*.json, support_engineer.py wiring, CLI subcommands),
+Task 10 (cron dry-run verification only), Task 11 (final regression, no commit). Each implementer
+task routes through `synlynk dispatch` to Codex/Agy/Grok per standing instruction; reviewer stages
+stay with Claude. After all tasks: final whole-branch review, then finishing-a-development-branch
+targeting `dispatch/codex/job-85f9e9d1`, plus Blog Post Protocol + PR Review Discipline + Cost
+Capture Protocol once a PR opens.
+[@nikhilsoman]
+
+2026-10-13 — Mid-session checkpoint 2: Tasks 3-4 of the charters plan done and merged onto
+`dispatch/codex/job-85f9e9d1` (now at a52be3f4). Task 3 (`.synlynk/charters/tpm.json`, dispatched
+to Codex, `--role dev --task-type refactor`) and Task 4 (`maintainer.json` promoted to durable,
+same dispatch pattern) both verified via the actual `tests/test_charters.py` run inside each job's
+own worktree before merge (not job-status labels alone) — all 6 charter tests green, and
+`qa.json`/`designer.json`/`marketing.json` confirmed untouched vs `e41f2510` via `git diff`. Both
+sub-job worktrees/branches (job-bbe899ec, job-50e831fe) cleaned up per Worktree Hygiene Protocol,
+ancestry-verified via `git merge-base --is-ancestor` before force-delete (git's own `-d` safety
+check evaluates against the wrong ref from a nested worktree's perspective, so `-D` after
+independent verification is correct, not a bypass).
+Two dispatch-policy gotchas hit this segment, now known for the remaining tasks: (1) the
+worktree-isolation guard rejects a `cd <dir> && git ...` run from inside a *different* worktree
+than the session's own, and separately rejects chaining `cd <other-dir> && git-cmd` in one Bash
+call even from the correct worktree — split into one Bash call per directory; (2) `--story
+story-0ad6c02b` auto-resolves dispatch role to `pm`, which `.synlynk/policy.json`'s
+`role_task_type_compat` rejects for `--task-type refactor` (refactor requires role `dev`) — pass
+`--role dev` explicitly alongside `--task-type refactor` on every remaining implementer dispatch.
+⚠️ Next: dispatch Task 5 (PM-approval-gate columns on `backlog_items` + `run_tpm_wake_cycle()` in
+new `synlynk/tpm_sweep.py`, with `tests/test_tpm_sweep.py`) using
+`synlynk dispatch --role dev --task-type refactor --base dispatch/codex/job-85f9e9d1 --story
+story-0ad6c02b` to Codex. Grep `DEFAULT_BACKLOG_GOAL_ID` and `_get_db` naming in
+`synlynk/backlog.py` first to confirm the plan's assumed symbol names still hold before writing
+the dispatch task text. Then Tasks 6-9 (cmd_pm_wake, .agents/*.json, support_engineer.py wiring,
+CLI subcommands), Task 10 (cron — verification only), Task 11 (final regression — verification
+only). Full remaining-task detail is in
+`docs/superpowers/plans/2026-10-13-finalize-workspace-agent-charters.md` (read from the sibling
+`docs-context-window-optimization` worktree, not visible here — this worktree is sparse-checked-out
+without `docs/`).
+[@nikhilsoman]

@@ -20,6 +20,18 @@ def cmd_agent_run(name: str, dry_run: bool = False, install_cron: bool = False) 
         _install_cron_entry(name)
         return
 
+    if name == "pm":
+        from synlynk.pm_agent import cmd_pm_wake
+
+        cmd_pm_wake()
+        return
+
+    if name == "tpm":
+        from synlynk.tpm_sweep import run_tpm_wake_cycle
+
+        run_tpm_wake_cycle()
+        return
+
     if "subscriptions" in cfg:
         from synlynk.workspace_agent import cmd_workspace_agent_run
 
