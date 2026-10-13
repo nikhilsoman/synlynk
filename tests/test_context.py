@@ -1,4 +1,5 @@
 import os
+import sqlite3
 
 from synlynk import agent_store
 from synlynk.context import generate_context
@@ -58,4 +59,41 @@ def test_generate_context_stamps_dynamic_runtime_home_authority(project_dir, tmp
     assert "## Active Session Runtime Authority" in context_text
     assert "**Active Home Harness:** agy" in context_text
     assert "Constitutional Precedence" in context_text
+
+
+def test_write_context_pack_contains_required_sections(tmp_path, monkeypatch):
+    from synlynk import context as context_mod
+
+    db_path = tmp_path / "state.db"
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        "CREATE TABLE stories (story_id TEXT PRIMARY KEY, title TEXT, "
+        "engg_domain TEXT, org_domain TEXT, phase TEXT, role TEXT, status TEXT)"
+    )
+    conn.execute(
+        "INSERT INTO stories VALUES ('story-1', 'Add widget', 'backend', "
+        "'core', 'build', 'dev', 'open')"
+    )
+    conn.commit()
+    conn.close()
+
+    monkeypatch.setattr(
+        context_mod, "_get_db", lambda: sqlite3.connect(str(db_path)), raising=False
+    )
+
+    out_path = tmp_path / "context-packs" / "job-xyz.md"
+    context_mod.write_context_pack(
+        job_id="job-xyz",
+        story_id="story-1",
+        out_path=str(out_path),
+    )
+
+    assert out_path.exists()
+    text = out_path.read_text()
+    assert "## Objective" in text
+    assert "## Findings" in text
+    assert "## Changed Files / Verification State" in text
+    assert "## Unresolved Work" in text
+    assert "## Must-Survive Constraints" in text
+    assert "Add widget" in text
 
