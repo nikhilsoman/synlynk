@@ -13,6 +13,11 @@ from synlynk._lazy import pkg as _pkg
 from synlynk.team import get_mode, get_username
 
 
+def _get_db():
+    """Resolve the package database connection lazily for context helpers."""
+    return _pkg("_get_db")()
+
+
 def detect_active_home_harness(cfg: Optional[dict] = None) -> str:
     """Detects active home harness from environment, process tree, or config."""
     # 1. Direct environment variable indicators
@@ -216,6 +221,68 @@ def _generate_task_context(story_id: Optional[str], out_path: str = None, role: 
 
     print(f"  ✓ Task-scoped context saved to {context_file}")
     return context_text
+
+
+def write_context_pack(job_id: str, story_id: str = None, out_path: str = None,
+                       findings: list = None, changed_files: list = None,
+                       unresolved: list = None, constraints: list = None) -> str:
+    """Writes a job-scoped context-pack bundle (dec-0d7e75e0 R2 synthesis).
+
+    Built once at dispatch time from the relevant story, rather than
+    regenerated project-wide mid-job — this is the structural fix for the
+    failure class gh:#2219/#2237 found (see
+    docs/superpowers/specs/2026-10-12-context-window-optimization-design.md's
+    "Corroborating evidence" section): a project-wide regenerated doc
+    landing as an unasked-for diff inside an isolated job worktree.
+
+    Returns the path written to.
+    """
+    out_path = out_path or os.path.join(".synlynk", "context-packs", f"{job_id}.md")
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+
+    objective_line = f"(no story_id provided for job {job_id})"
+    if story_id:
+        conn = _get_db()
+        try:
+            row = conn.execute(
+                "SELECT title, engg_domain, org_domain, phase, role, status "
+                "FROM stories WHERE story_id = ?",
+                (story_id,),
+            ).fetchone()
+        finally:
+            conn.close()
+        if row:
+            title, engg_domain, org_domain, phase, role, status = row
+            objective_line = (
+                f"{title} (story: {story_id}, domain: {engg_domain or 'unknown'}, "
+                f"phase: {phase or 'unknown'}, role: {role or 'unknown'}, "
+                f"status: {status or 'unknown'})"
+            )
+
+    def _bullet_list(items: list, empty_label: str) -> str:
+        if not items:
+            return f"- {empty_label}\n"
+        return "".join(f"- {item}\n" for item in items)
+
+    content = (
+        f"# Context Pack — job {job_id}\n\n"
+        "## Objective\n"
+        f"{objective_line}\n\n"
+        "## Findings\n"
+        f"{_bullet_list(findings, 'No findings recorded yet.')}"
+        "## Changed Files / Verification State\n"
+        f"{_bullet_list(changed_files, 'No files changed yet.')}"
+        "## Unresolved Work\n"
+        f"{_bullet_list(unresolved, 'Nothing unresolved recorded yet.')}"
+        "## Must-Survive Constraints\n"
+        f"{_bullet_list(constraints, 'No constraints recorded yet.')}"
+    )
+
+    with open(out_path, "w") as f:
+        f.write(content)
+
+    return out_path
+
 
 def _generate_context_from_db(scope: str = "full", out_path: str = None, role: Optional[str] = None) -> str:
     """Build context.md from state.db (post-migration path)."""
