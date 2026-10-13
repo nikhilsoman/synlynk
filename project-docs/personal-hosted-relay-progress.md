@@ -9,15 +9,15 @@ Feature branch: feat/codex/personal-hosted-relay
 | Task | Story | Status | Evidence |
 | --- | --- | --- | --- |
 | 1 Optional dependency and lazy import | story-52549f07 | Verified; story done | Original 2375ec24 preserved as d7ed8c7c; 10 relay tests pass |
-| 2 Event types | story-085360d0 | Verified; story done | Source 3d2a452f; four red cases; 14 relay tests pass; broad verification 1381 passed, 1 skipped; spec/quality review passed |
-| 3 Subject routing | story-76b7162d | Verified; story done | Source c76484b9; 114 targeted passed; 1473 broad passed, 1 skipped; spec/quality review passed |
-| 4 Device credentials | story-0c7ecea4 | Verified; story done | Source ec156673; 131 targeted passed; 1492 broad passed, 1 skipped; real NATS config parse; spec/quality review passed |
-| 5 Hub bridge | story-2263ec9a | Verified; story done | Source bf60fcaa; 153 targeted,1514 broad passed,1 skipped; independent async/concurrency review approved |
+| 2 Event types | story-085360d0 | Verified; story done | Source 3d2a452f integrated as 96aa05d7; four red cases; 14 relay tests pass; broad verification 1381 passed, 1 skipped; spec/quality review passed |
+| 3 Subject routing | story-76b7162d | Verified; story done | Source c76484b9 integrated as d2dd8fa5; 114 targeted passed; 1473 broad passed, 1 skipped; spec/quality review passed |
+| 4 Device credentials | story-0c7ecea4 | Verified; story done | Source ec156673 integrated as 45b54927; 131 targeted passed; 1492 broad passed, 1 skipped; real NATS config parse; spec/quality review passed |
+| 5 Hub bridge | story-2263ec9a | Verified; story done | Source bf60fcaa integrated as 36bcbb42; 153 targeted,1514 broad passed,1 skipped; independent async/concurrency review approved |
 | 6 Durable replay | story-29cc4aad | Verified; story done | Source 25d397ba integrated as 31683d36; 166 targeted, 1527 broad passed, 1 skipped; real authenticated replay; independent review approved |
 | 7 CLI | story-43a01b32 | Verified; story done | Source 814151bf plus reviewed onboarding corrections integrated as 84d730ab; 191 targeted passed, worker broad 1546 passed/1 skipped; independent review approved |
 | 8 Real NATS integration | story-f4824a3e | Verified; story done | Source e71080df plus review assertions integrated as f6cac23c; 10 real NATS tests passed; worker broad 1569 passed/1 skipped; independent review approved |
 | 9 Document preview | story-dbf68f01 | Verified; story done | Source 00cb94f4 plus reviewed overlong-path correction integrated as 468db56c; 238 targeted passed; worker broad 1611 passed/1 skipped; independent security review approved |
-| 10 Full regression | story-f1639150 | In progress | Retry job-6da6bd82; initial job-1b4da51f interrupted by usage limit at 76%, not a completed run; stdlib-only import check passed |
+| 10 Full regression | story-f1639150 | Verified; story done | Source 468b3cb8 plus reviewed cancellation/dependency corrections; final combined full suite 4436 passed, 3 skipped, 5 xfailed; 260 targeted passed; stdlib-only import check passed |
 
 ## Decisions and constraints
 

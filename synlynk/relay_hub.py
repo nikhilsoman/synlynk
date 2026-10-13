@@ -45,6 +45,34 @@ DOC_PREVIEW_MAX_BYTES = 1_000_000
 _DOC_EVENTS = {"doc_drafted", "doc_updated"}
 
 
+async def _finish_before_cancelling(task):
+    """Drain owned work despite repeated cancellation, then preserve cancellation."""
+    try:
+        return await asyncio.shield(task)
+    except asyncio.CancelledError as cancelled:
+        while not task.done():
+            try:
+                await asyncio.shield(task)
+            except asyncio.CancelledError:
+                continue
+            except BaseException:
+                break
+        try:
+            task.result()
+        finally:
+            raise cancelled
+
+
+async def _local_work(function, *args, **kwargs):
+    """Keep local I/O off the loop, and finish in-flight work on cancellation.
+
+    A consumer awaits each call before fetching or acknowledging another event.
+    Cancellation cannot stop a worker thread; join it before releasing its owner.
+    """
+    task = asyncio.create_task(asyncio.to_thread(function, *args, **kwargs))
+    return await _finish_before_cancelling(task)
+
+
 def _doc_path_parts(path):
     if (not isinstance(path, str) or "\\" in path
             or any(ord(char) < 32 or ord(char) == 127 for char in path)):
@@ -104,15 +132,16 @@ def build_doc_event_payload(path: str, branch: str, commit_sha: str | None,
 def write_doc_preview(base_dir: str, device_id: str, path: str, content: str) -> str:
     """Atomically replace a labeled, read-only copy under a private preview root.
 
-    Walk using directory descriptors and O_NOFOLLOW, including the local base,
-    so remote path components and destination symlinks are never followed.
+    Resolve the trusted operator base first. Walk remote components using
+    directory descriptors and O_NOFOLLOW; never follow destination symlinks.
     """
     parts = [_doc_device(device_id), *_doc_path_parts(path)]
     if not isinstance(content, str):
         raise ValueError("Invalid document content")
-    base = os.path.abspath(base_dir)
-    directories = [*Path(base).parts[1:], *parts[:-1]]
-    directory = os.open("/", os.O_RDONLY | os.O_DIRECTORY)
+    base = os.path.realpath(base_dir)
+    os.makedirs(base, mode=0o700, exist_ok=True)
+    directories = parts[:-1]
+    directory = os.open(base, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     temporary = None
     try:
         for name in directories:
@@ -272,6 +301,7 @@ class NatsTransport:
                 task.cancel()
             self._loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
             self._loop.run_until_complete(self._loop.shutdown_asyncgens())
+            self._loop.run_until_complete(self._loop.shutdown_default_executor())
             self._loop.close()
 
     def _call(self, coroutine):
@@ -299,7 +329,7 @@ class NatsTransport:
     def subscribe(self, subject, callback):
         async def subscribe():
             async def receive(message):
-                callback(message.subject, message.data)
+                await _local_work(callback, message.subject, message.data)
             subscription = await self._client.subscribe(subject, cb=receive)
             try:
                 await self._client.flush(timeout=self.timeout)
@@ -340,11 +370,11 @@ class NatsTransport:
                     if info.config.subjects != [subject]:
                         raise ValueError("Unexpected hub stream subjects")
                     durable = _durable_name(self.device_id)
-                    tracker = ReplayTracker(self.device_id, stream=stream)
+                    tracker = await _local_work(ReplayTracker, self.device_id, stream=stream)
                     try:
                         consumer = await self._js.consumer_info(stream, durable)
                         if tracker.last_delivered_seq is None:
-                            tracker.record_delivered(consumer.ack_floor.stream_seq)
+                            await _local_work(tracker.record_delivered, consumer.ack_floor.stream_seq)
                         if (consumer.config.ack_policy != AckPolicy.EXPLICIT
                                 or consumer.config.max_ack_pending != 1
                                 or consumer.config.filter_subject
@@ -357,7 +387,7 @@ class NatsTransport:
                             max_ack_pending=1, ack_wait=30))
                         # First connect starts at currently retained history.
                         if tracker.last_delivered_seq is None:
-                            tracker.record_delivered(max(0, info.state.first_seq - 1))
+                            await _local_work(tracker.record_delivered, max(0, info.state.first_seq - 1))
                     sub = await self._js.pull_subscribe_bind(stream=stream, durable=durable)
                     subscriptions.append(sub)
                     tasks.append(asyncio.create_task(self._consume(
@@ -385,8 +415,20 @@ class NatsTransport:
             earliest = info.state.first_seq
             if (tracker.detect_sync_gap(SimpleNamespace(earliest_seq=earliest))
                     and reported_earliest != earliest):
-                gap_callback(stream, tracker.last_delivered_seq, earliest)
+                await _local_work(gap_callback, stream, tracker.last_delivered_seq, earliest)
                 reported_earliest = earliest
+
+        async def deliver(message):
+            disposition = await _local_work(callback, message.subject, message.data)
+            if disposition in {"ack", "term"}:
+                await _local_work(tracker.record_delivered, message.metadata.sequence.stream)
+                if disposition == "ack":
+                    await message.ack_sync(timeout=self.timeout)
+                else:
+                    await message.term()
+                    await self._client.flush(timeout=self.timeout)
+            else:
+                await message.nak(delay=1)
 
         while True:
             try:
@@ -396,17 +438,11 @@ class NatsTransport:
                     if message.metadata.sequence.stream > (tracker.last_delivered_seq or 0) + 1:
                         # Retention can advance while a pull request is waiting.
                         await check_gap()
-                    disposition = callback(message.subject, message.data)
-                    if disposition == "ack":
-                        tracker.record_delivered(message.metadata.sequence.stream)
-                        await message.ack_sync(timeout=self.timeout)
-                    elif disposition == "term":
-                        tracker.record_delivered(message.metadata.sequence.stream)
-                        await message.term()
-                        await self._client.flush(timeout=self.timeout)
-                    else:
-                        await message.nak(delay=1)
-                        continue
+                    # Detach must finish both persistence and its disposition;
+                    # cancelling between them leaves the durable consumer stuck
+                    # waiting for ack_wait before it can deliver the next event.
+                    delivery = asyncio.create_task(deliver(message))
+                    await _finish_before_cancelling(delivery)
             except NatsTimeout:
                 continue
             except Exception as error:
@@ -577,13 +613,32 @@ class HubAdapter:
 
     def _pump_local_to_hub(self):
         while not self._stop.is_set():
+            # Broker defaults deliberately evict slow subscribers. Recover only
+            # this bridge, reporting loss rather than inventing durable retries.
+            with self.broker._lock:
+                dropped = self._local_subscriber not in self.broker._subscribers
+                if dropped and not self._stop.is_set():
+                    self._local_subscriber = self.broker.subscribe()
+                else:
+                    dropped = False
+            if dropped:
+                self._error(RuntimeError("Local hub queue overflow: events lost; resubscribed"))
+                device = getattr(self.client, "device_id", None) or "local"
+                try:
+                    self.broker.publish(EventEnvelope.create(
+                        ActorIdentifier(self.workspace_id, device, "relay", "nats", ""),
+                        "hub_disconnected", {"origin_device_id": device,
+                                             "reason": "local_queue_overflow",
+                                             "events_lost": True}))
+                except Exception as error:
+                    self._error(error)
             try:
                 data = self._local_subscriber.get(timeout=0.05)
             except queue.Empty:
                 continue
             try:
                 envelope, subject = self._decode(data)
-                if envelope.event_type == "sync_gap_detected":
+                if envelope.event_type in {"sync_gap_detected", "hub_disconnected"}:
                     continue
                 if envelope.event_type in _DOC_EVENTS:
                     raw = envelope.to_dict()
@@ -611,6 +666,9 @@ class HubAdapter:
                 if len(payload.encode("utf-8") if isinstance(payload, str) else payload) > DOC_PREVIEW_MAX_BYTES:
                     raise ValueError("Document envelope exceeds size limit")
                 _validate_doc_payload(envelope.payload)
+                if any(len(os.fsencode(part)) > 255
+                       for part in _doc_path_parts(envelope.payload["path"])):
+                    raise ValueError("Document path exceeds filesystem limits")
             suffix = subject[len(f"synlynk.{self.workspace_id}."):]
             if self.subscriptions is not None and not any(
                 _matches_pattern(pattern, suffix) for pattern in self.subscriptions
@@ -648,8 +706,6 @@ class HubAdapter:
                 return "ack"
         except Exception as error:
             self._error(error)
-            if envelope.event_type in _DOC_EVENTS and isinstance(error, ValueError):
-                return "term"
             return "retry"
 
     def _on_sync_gap(self, stream, last_seq, earliest_seq):
@@ -719,6 +775,9 @@ def subject_for_event(
     workspace_id = _subject_segment(workspace_id, "workspace_id")
     event_type = _subject_segment(event_type, "event_type")
     suffix = _EVENT_SUFFIXES.get(event_type, f"custom.{event_type}")
+    if event_type == "hub_disconnected":
+        device = _subject_segment(payload.get("origin_device_id", "local"), "origin_device_id")
+        suffix = f"device.{device}.hub_disconnected"
     if event_type in {"task_progress", "runner_progress"}:
         metadata = sender.to_dict() if isinstance(sender, ActorIdentifier) else sender
         metadata = metadata if metadata is not None else {}

@@ -828,3 +828,7 @@
   unavailable/incomplete usage evidence, not proof the attempt was free.
 | grok | $30.00 | $84.7382 | $61.6239 | $-23.1144 |
 | **Total** | **$90.00** | **$138.4421** | **$1565.5427** | **$1427.1006** |
+- Task 10 retry job-6da6bd82: estimate $1.00. Actual cost is unavailable to the
+  worker; dispatch telemetry remains authoritative. QA findings 1-4 fixes and
+  5-6 documentation, TDD and full regression evidence are recorded in
+  `project-docs/devlogs/personal-relay-task10-evidence.md`.

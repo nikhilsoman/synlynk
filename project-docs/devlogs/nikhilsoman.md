@@ -1,3 +1,20 @@
+## 2026-10-13 Personal Hosted Relay final integration [@nikhilsoman]
+
+- Task 10 worker 468b3cb8 completed full regression: 4419 passed, one known
+  sandbox home-log failure, four skips and five expected failures. The failed
+  Vizor test passes with required permissions. Generated command reference fixed.
+- Integrated worker review fixes with main 6aaab228. Added four red/green
+  cancellation regressions and shield-and-drain cleanup; independent review
+  approved. Final targeted set: 260 passed, including all ten real NATS cases.
+- Corrected optional nats-py minimum to tested 2.16.0 after 2.6.0 API/auth failures.
+  Stdlib-only CLI and hub imports verified without importing NATS.
+- Final combined full suite: 4436 passed, 3 skipped, 5 xfailed in 273.59s,
+  no exclusions, real NATS available. PR #2257 proceeds to non-author final QA. Only the reviewer
+  may merge after pr-check, merge policy and CI pass. No deployment authorized.
+- Worker usage reported 6,177,615 input tokens (6,079,104 cached), 21,109 output;
+  provider billing remains unavailable. Full evidence and task commit mapping live
+  in personal-relay-task10-evidence.md and personal-hosted-relay-progress.md.
+
 ## 2026-09-27 — Align Dispatch Default Model Tiers with 2026 SOTA Catalog (#1803, `story-e8343134`, `goal-5be4eb8b`)
 
 ### Shipped & Verified

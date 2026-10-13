@@ -64,3 +64,10 @@
   real NATS requires authorization.users user/password fields, not token entries.
   Test real replay/revocation and preview-path containment before claiming end-to-end
   operation. [@nikhilsoman]
+- **2026-10-13 Relay Task 10 QA corrections:** Trusted preview bases resolve
+  symlinks; remote components remain descriptor-relative/no-follow. Local storage
+  errors retry, invalid remote payloads terminate. Bounded bridge overflow emits
+  a local loss marker and resubscribes without durable outbound retries. Inbound
+  local work is off the NATS loop; detach finishes persistence and disposition.
+  Workspace credentials trust all devices and do not attest origin labels.
+  Evidence: `project-docs/devlogs/personal-relay-task10-evidence.md`. [@nikhilsoman]

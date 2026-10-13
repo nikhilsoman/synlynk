@@ -31,7 +31,7 @@ test = [
     "pytest-xdist>=3.0.0",
 ]
 hub = [
-    "nats-py>=2.6.0",
+    "nats-py>=2.16.0",
 ]
 
 [project.urls]

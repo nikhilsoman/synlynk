@@ -126,12 +126,12 @@ def test_doc_receive_overlong_path_terminates_without_blocking(bridge, tmp_path,
     assert 'valid' in (adapter.preview_dir / 'dev-remote/docs/brainstorm/valid.md').read_text()
 
 
-def test_doc_preview_rejects_base_symlink(tmp_path):
+def test_doc_preview_resolves_trusted_base_symlink(tmp_path):
     (tmp_path / 'real').mkdir()
     (tmp_path / 'link').symlink_to(tmp_path / 'real')
-    with pytest.raises(ValueError):
-        write_doc_preview(str(tmp_path / 'link'), 'dev-1', 'docs/brainstorm/x.md', 'x')
-    assert list((tmp_path / 'real').iterdir()) == []
+    target = write_doc_preview(str(tmp_path / 'link'), 'dev-1', 'docs/brainstorm/x.md', 'x')
+    assert Path(target).is_relative_to(tmp_path / 'real')
+    assert Path(target).read_text().endswith('x')
 
 
 def test_doc_preview_failed_replace_preserves_previous(tmp_path, monkeypatch):
@@ -144,6 +144,109 @@ def test_doc_preview_failed_replace_preserves_previous(tmp_path, monkeypatch):
         write_doc_preview(str(tmp_path), 'dev-1', 'docs/brainstorm/x.md', 'new')
     assert target.read_bytes() == previous
     assert list(target.parent.iterdir()) == [target]
+
+
+def test_doc_receive_through_trusted_symlink(bridge, tmp_path):
+    _, _, adapter = bridge
+    (tmp_path / 'real').mkdir()
+    (tmp_path / 'link').symlink_to(tmp_path / 'real')
+    adapter.preview_dir = tmp_path / 'link' / 'previews'
+    payload = build_doc_event_payload('docs/brainstorm/x.md', 'b', None, 'received',
+                                      origin_device_id='dev-remote')
+    event = hub_event(event_type='doc_updated', payload=payload)
+    assert adapter._on_hub_message('synlynk.ws1.doc.updated', event.to_json()) == 'ack'
+    target = tmp_path / 'real/previews/dev-remote/docs/brainstorm/x.md'
+    assert target.read_text().endswith('received')
+    assert target.stat().st_mode & 0o777 == 0o444
+
+
+def test_bridge_recovers_after_real_bounded_queue_overflow(bridge, monkeypatch):
+    broker, client, adapter = bridge
+    client.device_id = 'desktop'
+    entered, release = threading.Event(), threading.Event()
+    publish = client.publish
+    def blocked_publish(subject, data):
+        entered.set()
+        assert release.wait(10)
+        publish(subject, data)
+    monkeypatch.setattr(client, 'publish', blocked_publish)
+    try:
+        broker.publish(hub_event())
+        assert entered.wait(2)
+        old = adapter._local_subscriber
+        assert old.maxsize == 256
+        for _ in range(270):
+            broker.publish(hub_event())
+        assert old not in broker._subscribers
+        observer = broker.subscribe()
+        release.set()
+        marker = json.loads(observer.get(timeout=3))
+        assert marker['event_type'] == 'hub_disconnected'
+        assert marker['payload']['origin_device_id'] == 'desktop'
+        assert marker['sender']['member_id'] == 'desktop'
+        assert 'overflow' in str(adapter.last_error).lower()
+        later = hub_event()
+        broker.publish(later)
+        for _ in range(260):
+            subject, data = client.published.get(timeout=3)
+            forwarded = json.loads(data)
+            assert forwarded['event_type'] != 'hub_disconnected'
+            if forwarded['event_id'] == later.event_id:
+                break
+        else:
+            pytest.fail('Later event did not forward after overflow')
+        assert adapter._local_subscriber in broker._subscribers
+    finally:
+        release.set()
+
+
+@pytest.mark.parametrize('blocked_stage', ['callback', 'cursor'])
+@pytest.mark.parametrize('detach_while_blocked', [False, True])
+def test_inbound_storage_does_not_block_nats_loop(project_dir, fake_jetstream,
+                                                monkeypatch, blocked_stage,
+                                                detach_while_blocked):
+    from synlynk.relay_hub import _stream_name
+    broker = RelayBroker()
+    transport = NatsTransport('nats://fake', user='dev-1')
+    adapter = HubAdapter(broker, transport, 'ws1', owns_client=True)
+    adapter.attach()
+    entered, release, progressed = threading.Event(), threading.Event(), threading.Event()
+    owner = broker if blocked_stage == 'callback' else ReplayTracker
+    name = 'publish' if blocked_stage == 'callback' else 'record_delivered'
+    original = getattr(owner, name)
+    def blocked(*args, **kwargs):
+        entered.set()
+        assert release.wait(5)
+        return original(*args, **kwargs)
+    monkeypatch.setattr(owner, name, blocked)
+    closing = None
+    close_errors = []
+    def detach():
+        try:
+            adapter.detach()
+        except BaseException as error:
+            close_errors.append(error)
+    try:
+        message = fake_jetstream.enqueue(_stream_name('ws1', 'job'), 1, hub_event().to_json())
+        assert entered.wait(2)
+        transport._loop.call_soon_threadsafe(progressed.set)
+        assert progressed.wait(1), 'NATS loop stalled on local storage'
+        assert message.dispositions.empty(), 'Acknowledged before persistence'
+        if detach_while_blocked:
+            closing = threading.Thread(target=detach)
+            closing.start()
+        release.set()
+        assert message.dispositions.get(timeout=2) == 'ack'
+    finally:
+        release.set()
+        if closing is not None:
+            closing.join(5)
+            assert not closing.is_alive()
+        adapter.detach()
+    assert not close_errors
+    assert not transport._thread.is_alive()
+    assert not adapter._bridge_thread.is_alive()
+    assert all(sub.closed for sub in fake_jetstream.subscriptions)
 
 
 def test_doc_receive_metadata_only(bridge, tmp_path):
@@ -159,7 +262,8 @@ def test_doc_receive_metadata_only(bridge, tmp_path):
     assert not adapter.preview_dir.exists()
 
 
-def test_doc_receive_storage_failure_is_retryable(bridge, tmp_path, monkeypatch):
+@pytest.mark.parametrize('error_type', [OSError, ValueError])
+def test_doc_receive_storage_failure_is_retryable(bridge, tmp_path, monkeypatch, error_type):
     import synlynk.relay_hub as hub
     broker, client, adapter = bridge
     adapter.preview_dir = tmp_path / 'previews'
@@ -168,7 +272,7 @@ def test_doc_receive_storage_failure_is_retryable(bridge, tmp_path, monkeypatch)
     event = hub_event(event_type='doc_updated', payload=payload)
     writer = hub.write_doc_preview
     def fail_write(*args, **kwargs):
-        raise OSError('disk full')
+        raise error_type('local storage configuration failure')
     monkeypatch.setattr(hub, 'write_doc_preview', fail_write)
     assert adapter._on_hub_message('synlynk.ws1.doc.updated', event.to_json().encode()) == 'retry'
     assert event.event_id not in adapter._seen
@@ -816,6 +920,7 @@ def test_adapter_owned_client_shutdown_and_attach_failure(project_dir):
 @pytest.mark.parametrize("failure", ["connect", "timeout", "publish", "async_error"])
 def test_nats_transport_failure_cleanup(monkeypatch, failure):
     import asyncio
+    from concurrent.futures import TimeoutError as FutureTimeout
     import synlynk.relay_hub as hub
     closed, cancelled = threading.Event(), threading.Event()
     class AsyncClient:
@@ -839,7 +944,7 @@ def test_nats_transport_failure_cleanup(monkeypatch, failure):
     monkeypatch.setattr(hub, "_import_nats", lambda: SimpleNamespace(NATS=AsyncClient))
     previous = set(threading.enumerate())
     if failure in {"connect", "timeout"}:
-        with pytest.raises((OSError, TimeoutError)):
+        with pytest.raises(OSError if failure == "connect" else FutureTimeout):
             NatsTransport("nats://test", timeout=0.2)
     else:
         transport = NatsTransport("nats://test")
@@ -1126,7 +1231,7 @@ def test_core_cli_import_does_not_require_nats():
     hub features are optional, the base CLI is stdlib-only (CLAUDE.md constraint).
     """
     result = subprocess.run(
-        [sys.executable, "-c", "import synlynk; import synlynk.cli"],
+        [sys.executable, "-S", "-c", "import sys; sys.modules['nats'] = None; import synlynk; import synlynk.cli"],
         capture_output=True, text=True,
     )
     assert result.returncode == 0, result.stderr
@@ -1137,7 +1242,7 @@ def test_relay_hub_module_importable_without_nats_installed():
     only calling HubAdapter.connect() should need it.
     """
     result = subprocess.run(
-        [sys.executable, "-c", "import synlynk.relay_hub"],
+        [sys.executable, "-S", "-c", "import sys; sys.modules['nats'] = None; import synlynk.relay_hub"],
         capture_output=True, text=True,
     )
     assert result.returncode == 0, result.stderr

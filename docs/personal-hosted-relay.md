@@ -3,7 +3,8 @@
 The optional hub bridges local relay events through a self-hosted NATS server.
 The ordinary `synlynk relay start` command remains local-only. Install the
 `synlynk[hub]` extra on each participating device and install `nats-server` on
-the hub host. The core CLI does not require either dependency.
+the hub host. The hub extra requires `nats-py>=2.16.0`, the tested minimum for
+authenticated durable subscriptions. The core CLI does not require either dependency.
 
 ## Set up the hub
 
@@ -19,6 +20,25 @@ and `--url` for your private network, or use an authenticated tunnel to the
 loopback listener. The generated configuration uses bearer secrets as native
 NATS user/password credentials and does not configure TLS automatically.
 Use TLS or a private tunnel when carrying credentials over an untrusted network.
+
+All devices in one workspace must trust each other. Credentials are scoped to
+the workspace, not per-device least privilege: each device can read and publish
+workspace subjects (including another device's targeted messages) and alter
+workspace stream retention. Inbound origin labels are descriptive and are not
+cryptographically bound to the authenticated publisher; a device can attribute
+a preview to another device. Preview containment does not authenticate authorship.
+
+The preview base is trusted operator configuration; symlinks in that base are
+resolved, including macOS `/tmp`. Remote device and document components remain
+descriptor-relative and no-follow. Local storage/configuration failures retry;
+invalid remote payloads are permanently rejected.
+
+If a slow hub overflows the local broker's bounded bridge queue, the bridge
+reports `last_error` and a local `hub_disconnected` marker with its device ID,
+then subscribes again so later events can forward. Lost queued events are not
+replayed by this recovery; there is no durable outbound retry queue. Failure
+markers stay local. Inbound storage runs off the NATS event loop, serially per
+consumer, and acknowledgement follows persistence.
 
 Keep `devices.json` on the administrator host: it contains all device secrets.
 Copy only the intended device's printed `.creds` file through a secure channel
