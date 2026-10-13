@@ -53,6 +53,25 @@ Adding or revoking a device regenerates authorization configuration. Reload the
 running NATS server to apply it. A local revocation message alone does not prove
 that live server access has ended.
 
+## Local verification
+
+Local integration coverage uses isolated device processes and databases, exported
+device credentials, and a real authenticated JetStream server. Install
+`nats-server` (for example, `brew install nats-server`) and put it on `PATH`, then
+run from an environment with the `synlynk[hub]` extra and pytest installed:
+
+```sh
+python -m pytest tests/test_relay_hub_integration.py tests/test_relay_hub.py \
+  tests/test_relay_hub_onboarding.py tests/test_relay.py tests/test_relay_p2p.py \
+  tests/test_governs_relay_events.py -v
+```
+
+The integration module skips when either optional dependency is absent. It
+checks cross-device delivery, durable replay after device restart, persistent
+deduplication, independent category cursors, retention gaps, subscription filters,
+and credential rejection after a real server configuration reload. All servers
+bind loopback on dynamic ports; no managed hub is contacted.
+
 ## Current limits
 
 JetStream retains independent category streams and resumes durable device cursors.

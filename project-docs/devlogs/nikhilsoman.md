@@ -1944,3 +1944,26 @@ existing loopback callback test passes when run with local socket permission. CL
 `git diff --check` pass.
 
 [@nikhilsoman]
+## 2026-10-13 - Personal Hosted Relay Task 8 (#2201)
+
+Added real authenticated JetStream integration using two isolated CLI device
+processes, their own exported credentials, databases and subscriber observers.
+Covers exactly-once delivery, restart replay, independent category cursors,
+retention gaps, filters and actual auth reload/revocation. Moved earlier real-NATS
+smoke/config tests into the integration module and replaced machine-specific
+binary paths with PATH discovery. No production behavior changes were needed.
+
+Verification: initial run was 2 passed/1 failed because nats-py returns a generic
+Error containing Authorization Violation; corrected the precise error assertion.
+A temporary persistent-dedupe regression probe produced the expected duplicate
+delivery assertion failure and was fully restored. Targeted hub/onboarding/relay
+coverage passed 194 tests; final integration coverage passed all 9 real-NATS cases.
+Logs: .synlynk/logs/task8-{initial,dedupe-red,green,final-integration}.log.
+Broader requested regression: 1569 passed, 1 skipped (exit 0), recorded in
+.synlynk/logs/job-02ef4311-verify-1.log. All 9 NATS integration cases executed.
+No full suite, managed service, PR, story completion or global configuration change.
+Conductor owns review/integration. Estimated cost $1.00; actual billing unavailable
+to the worker, with dispatch telemetry authoritative. [@nikhilsoman, @codex]
+
+Conductor review added server-side connected-user revocation evidence and live
+wrong-workspace subject/envelope rejection. Final integration: 10 passed in 4.64s.

@@ -791,3 +791,6 @@
   conductor onboarding corrections integrated as 84d730ab; 191 targeted passed.
 - Task 8 job-20b0e6e2: dispatcher incorrectly rerouted the explicit OpenAI model
   to Claude; reported zero tokens/$0, no code changes. Tracked in gh:#2255.
+- Task 8 retry job-02ef4311, gpt-6-astra: Synlynk reported $0.43,
+  1,519,699 input / 13,169 output tokens. Worker broad verification: 1569
+  passed, 1 skipped. Conductor review expanded live NATS coverage to 10 passes.

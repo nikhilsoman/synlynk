@@ -444,92 +444,6 @@ def test_jetstream_permissions_are_device_and_workspace_scoped(tmp_path):
         permissions["publish"] + permissions["subscribe"])
 
 
-@pytest.mark.parametrize("cli_config", [False, True])
-def test_authenticated_jetstream_transport_smoke(project_dir, tmp_path, cli_config):
-    """Small real-API check; broader cross-device integration remains Task 8."""
-    import socket
-    import time
-    pytest.importorskip("nats")
-    binary = Path("/private/tmp/synlynk-relay-bin/nats-server")
-    if not binary.exists():
-        pytest.skip("optional local nats-server unavailable")
-    store = DeviceCredentialStore("ws1", tmp_path / "credentials")
-    receiver, sender = store.add_device("receiver"), store.add_device("sender")
-    with socket.socket() as sock:
-        sock.bind(("127.0.0.1", 0))
-        port = sock.getsockname()[1]
-    config = tmp_path / "server.conf"
-    config.write_text(f"host: 127.0.0.1\nport: {port}\n"
-                      + "jetstream { store_dir: " + json.dumps(str(tmp_path / "jetstream")) + " }\n"
-                      + store.render_authorization_block())
-    if cli_config:
-        from synlynk.cli import main
-        directory = tmp_path / "cli-credentials"
-        common = ["--workspace-id", "ws1", "--config-dir", str(directory)]
-        main(["relay", "hub", "init", *common, "--listen", f"127.0.0.1:{port}",
-              "--url", f"nats://127.0.0.1:{port}"])
-        main(["relay", "device", "add", "receiver", *common])
-        main(["relay", "device", "add", "sender", *common])
-        receiver, sender = DeviceCredentialStore("ws1", directory).list_devices()
-        config = directory / "nats.conf"
-    log = (tmp_path / "server.log").open("w+")
-    process = subprocess.Popen([str(binary), "-c", str(config)], stdout=log, stderr=log)
-    adapters, transports = [], []
-    try:
-        deadline = time.monotonic() + 5
-        while True:
-            try:
-                with socket.create_connection(("127.0.0.1", port), timeout=0.1):
-                    break
-            except OSError:
-                if process.poll() is not None or time.monotonic() >= deadline:
-                    log.seek(0)
-                    pytest.fail(log.read())
-                time.sleep(0.05)
-        url = f"nats://127.0.0.1:{port}"
-        broker = RelayBroker()
-        subscriber = broker.subscribe()
-
-        def attach():
-            transport = NatsTransport(url, user=receiver.device_id, password=receiver.token)
-            transports.append(transport)
-            adapter = HubAdapter(broker, transport, "ws1", owns_client=True)
-            adapters.append(adapter)
-            adapter.attach()
-            return adapter, transport
-
-        adapter, transport = attach()
-        publisher = NatsTransport(url, user=sender.device_id, password=sender.token)
-        transports.append(publisher)
-        event = hub_event()
-        subject = "synlynk.ws1.job.review_requested"
-        publisher.publish(subject, event.to_json())
-        assert json.loads(subscriber.get(timeout=5))["event_id"] == event.event_id
-        adapter.detach()
-        offline = hub_event()
-        publisher.publish(subject, offline.to_json())
-        # Restart with the same credentials and local DB; replay an old event ID
-        # as a new stream message too, proving persistent local deduplication.
-        publisher.publish(subject, event.to_json())
-        adapter, transport = attach()
-        assert json.loads(subscriber.get(timeout=5))["event_id"] == offline.event_id
-        barrier = hub_event()
-        publisher.publish(subject, barrier.to_json())
-        assert json.loads(subscriber.get(timeout=5))["event_id"] == barrier.event_id
-        adapter.detach()
-        assert subscriber.empty()
-        assert transport.last_error is None
-        assert publisher.last_error is None
-    finally:
-        for adapter in adapters:
-            adapter.detach()
-        for transport in transports:
-            transport.close()
-        process.terminate()
-        process.wait(timeout=5)
-        log.close()
-
-
 class FakeNatsClient:
     def __init__(self):
         self.published = queue.Queue()
@@ -905,22 +819,6 @@ def test_secret_symlink_rejected(tmp_path):
     with pytest.raises(ValueError, match="symlink"):
         DeviceCredentialStore("ws1", directory)
     assert outside.read_text() == "do not touch"
-
-
-@pytest.mark.parametrize("workspace", ["ws1", 'ws"quoted\\name'])
-@pytest.mark.parametrize("active", [True, False])
-def test_authorization_parses_with_real_nats(tmp_path, workspace, active):
-    binary = Path("/private/tmp/synlynk-relay-bin/nats-server")
-    if not binary.exists():
-        pytest.skip("NATS config validation binary not installed")
-    store = DeviceCredentialStore(workspace, tmp_path)
-    cred = store.add_device("laptop")
-    if not active:
-        store.revoke_device(cred.device_id)
-    config = store.write_authorization_config()
-    result = subprocess.run([str(binary), "-t", "-c", str(config)], capture_output=True, text=True, timeout=10)
-    assert result.returncode == 0, result.stderr
-    assert "token:" not in config.read_text()
 
 
 @pytest.mark.parametrize("event_type,suffix", [
