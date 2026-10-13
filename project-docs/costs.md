@@ -797,3 +797,9 @@
 - Task 9 job-ceb33e8b, gpt-6-astra: Synlynk reported $0.31,
   750,316 input / 11,489 output tokens. Worker broad verification: 1611 passed,
   1 skipped. Reviewed correction included; final targeted verification 238 passed.
+- Independent Claude QA review job-956bee7b: Synlynk reported $1.02,
+  134,990 input / 40,754 output tokens; 1600 targeted tests passed and formal
+  review posted on PR #2257. Review requested fixes before merge.
+- Initial Task10 job-1b4da51f hit the account usage limit during execution.
+  Telemetry reports zero tokens/$0 despite a partial test run; treat that as
+  unavailable/incomplete usage evidence, not proof the attempt was free.

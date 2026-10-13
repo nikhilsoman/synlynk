@@ -16,8 +16,8 @@ Feature branch: feat/codex/personal-hosted-relay
 | 6 Durable replay | story-29cc4aad | Verified; story done | Source 25d397ba integrated as 31683d36; 166 targeted, 1527 broad passed, 1 skipped; real authenticated replay; independent review approved |
 | 7 CLI | story-43a01b32 | Verified; story done | Source 814151bf plus reviewed onboarding corrections integrated as 84d730ab; 191 targeted passed, worker broad 1546 passed/1 skipped; independent review approved |
 | 8 Real NATS integration | story-f4824a3e | Verified; story done | Source e71080df plus review assertions integrated as f6cac23c; 10 real NATS tests passed; worker broad 1569 passed/1 skipped; independent review approved |
-| 9 Document preview | story-dbf68f01 | Verified; completing story | Source 00cb94f4 plus reviewed overlong-path correction; 238 targeted passed; worker broad 1611 passed/1 skipped; independent security review approved |
-| 10 Full regression | story-f1639150 | Dispatching | Baseline: 4173 passed, 10 failed, 5 errors, 7 skipped, 5 xfailed (757s); final run mandatory |
+| 9 Document preview | story-dbf68f01 | Verified; story done | Source 00cb94f4 plus reviewed overlong-path correction integrated as 468db56c; 238 targeted passed; worker broad 1611 passed/1 skipped; independent security review approved |
+| 10 Full regression | story-f1639150 | In progress | Retry job-6da6bd82; initial job-1b4da51f interrupted by usage limit at 76%, not a completed run; stdlib-only import check passed |
 
 ## Decisions and constraints
 
@@ -30,6 +30,17 @@ Feature branch: feat/codex/personal-hosted-relay
 - Verify actual replay, echo prevention, revocation, and safe preview paths against real behavior.
 - Five-minute progress heartbeat active in the user thread.
 - Deferred reconnect/status/managed-service gates tracked in gh:#2256.
+- Draft PR: https://github.com/nikhilsoman/synlynk/pull/2257, base main,
+  GOVERNS goal-f4ce526a. Independent Claude QA architecture review job-956bee7b.
+  Required architect routing is denied by role policy; permitted Claude/QA
+  fallback used, mismatch tracked in gh:#2258. No policy bypass or merge.
+- Independent review posted at PR #2257 review 5500071396: 1600 targeted passed,
+  but merge blocked by missing command taxonomy entries and outstanding full run.
+  Task10 retry also addresses queue-overflow subscription loss, trusted-base
+  symlink handling, and blocking callback I/O on the NATS event loop. P2 follow-ups
+  remain separate; no merge while the review findings or CI are unresolved.
+- Account usage interruption paused conductor checks and Task10. On resumption,
+  the usage API reported no active limit; no reset credit was redeemed by Codex.
 - Main advancement 2fd63ac6 (Muse API key passthrough) integrated before Task 10
   so final regression covers the current PR base.
 - Job projection/reconciliation tuple-row crash filed as #2254. Session checkpoint
