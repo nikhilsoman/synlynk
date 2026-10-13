@@ -16,6 +16,7 @@ import urllib.parse
 import urllib.request
 from dataclasses import asdict, dataclass, field
 from enum import Enum
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -96,9 +97,9 @@ BUILTIN_MODEL_CATALOG = (
     _remote("claude-fable-5-1", "claude-5", "claude", EntitlementTier.SUBSCRIPTION_CAPPED),
     _remote("claude-fable-5", "claude-5", "claude", EntitlementTier.SUBSCRIPTION_CAPPED),
     _remote("claude-haiku-4-5-20251001", "claude-5", "claude", EntitlementTier.INCLUDED_IN_BASE),
-    _remote("gemini-3.7-flash-medium", "gemini-3", "agy", EntitlementTier.INCLUDED_IN_BASE),
-    _remote("gemini-3.1-pro-low", "gemini-3", "agy", EntitlementTier.SUBSCRIPTION_CAPPED),
-    _remote("gemini-3.1-pro-high", "gemini-3", "agy", EntitlementTier.SUBSCRIPTION_CAPPED),
+    _remote("gemini-3.8-flash-medium", "gemini-3", "agy", EntitlementTier.INCLUDED_IN_BASE),
+    _remote("claude-sonnet-4.6-thinking", "claude-4", "agy", EntitlementTier.SUBSCRIPTION_CAPPED),
+    _remote("claude-opus-4.6-thinking", "claude-4", "agy", EntitlementTier.SUBSCRIPTION_CAPPED),
     _remote("gpt-5.6-luna", "gpt-5.6", "codex", EntitlementTier.INCLUDED_IN_BASE),
     _remote("grok-4.7", "grok-4", "grok", EntitlementTier.METERED_EXTRA_USAGE_ONLY),
     _remote("grok-4.6", "grok-4", "grok", EntitlementTier.SUBSCRIPTION_CAPPED),
@@ -134,7 +135,7 @@ def load_model_catalog(repo_path: Optional[str] = None) -> dict[str, Any]:
         "tiers": {
             "fast": {
                 "claude": "claude-haiku-4-5-20251001",
-                "agy": "gemini-3.7-flash-medium",
+                "agy": "gemini-3.8-flash-medium",
                 "codex": "gpt-5.6-luna",
                 "grok": "grok-4.6",
                 "local": "qwen2.5",
@@ -142,7 +143,7 @@ def load_model_catalog(repo_path: Optional[str] = None) -> dict[str, Any]:
             },
             "pro": {
                 "claude": "claude-sonnet-5",
-                "agy": "gemini-3.1-pro-low",
+                "agy": "claude-sonnet-4.6-thinking",
                 "codex": "gpt-5.6-luna",
                 "grok": "grok-4.7",
                 "local": "qwen2.5",
@@ -150,7 +151,7 @@ def load_model_catalog(repo_path: Optional[str] = None) -> dict[str, Any]:
             },
             "reasoning": {
                 "claude": "claude-opus-5-5",
-                "agy": "gemini-3.1-pro-high",
+                "agy": "claude-opus-4.6-thinking",
                 "codex": "gpt-5.6-luna",
                 "grok": "grok-4.7",
                 "local": "deepseek-r1",
@@ -168,24 +169,52 @@ def resolve_tier_model(tier: str, harness: str, repo_path: Optional[str] = None)
     catalog = load_model_catalog(repo_path)
     tiers = catalog.get("tiers", {})
     tier_map = tiers.get(tier, {})
-    if harness in tier_map:
-        return tier_map[harness]
+    resolved = tier_map.get(harness)
     # Fallback to pro or fast if tier unknown
-    for t in ("pro", "fast", "reasoning"):
-        if harness in tiers.get(t, {}):
-            return tiers[t][harness]
-    if harness == "codex":
+    if resolved is None:
+        for fallback_tier in ("pro", "fast", "reasoning"):
+            if harness in tiers.get(fallback_tier, {}):
+                resolved = tiers[fallback_tier][harness]
+                break
+    if resolved is None and harness == "codex":
         try:
             from synlynk.probe import _read_toml_string_value
 
             codex_home = Path(os.environ.get("CODEX_HOME", os.path.expanduser("~/.codex")))
             configured = _read_toml_string_value(str(codex_home / "config.toml"), "model")
             if configured:
-                return configured
+                resolved = configured
         except Exception:
             pass
-        return "gpt-5.6-luna"
-    return f"{harness}-default"
+        resolved = resolved or "gpt-5.6-luna"
+    resolved = resolved or f"{harness}-default"
+
+    live_models = [model for model in discover_models() if model.harness_binding == harness]
+    if not live_models or resolved in {model.model_id for model in live_models}:
+        return resolved
+    return _closest_discovered_model(tier, harness, resolved, live_models)
+
+
+def _closest_discovered_model(tier: str, harness: str, configured: str, live_models: list[ModelSpec]) -> str:
+    """Select the closest live model, or explain why no tier match exists."""
+    tier_terms = {
+        "fast": ("haiku", "flash", "fast", "mini", "small", "low"),
+        "pro": ("sonnet", "pro", "medium", "balanced"),
+        "reasoning": ("opus", "thinking", "reason", "high", "max"),
+    }
+    terms = tier_terms.get(tier, ())
+    ranked = sorted(
+        live_models,
+        key=lambda model: (-sum(term in model.model_id.lower() for term in terms), model.model_id),
+    )
+    score = sum(term in ranked[0].model_id.lower() for term in terms)
+    if score:
+        return ranked[0].model_id
+    available = ", ".join(model.model_id for model in ranked)
+    raise ValueError(
+        f"Configured {harness} model {configured!r} is not available for tier {tier!r}; "
+        f"discovered models: {available}"
+    )
 
 
 def get_models_from_catalog(repo_path: Optional[str] = None) -> list[ModelSpec]:
@@ -257,7 +286,7 @@ def probe_cli_harness(harness: str, executable: str | None = None, timeout: floa
         return []
     try:
         result = subprocess.run([executable, *commands[harness]], capture_output=True, text=True, timeout=timeout, check=False)
-    except (OSError, subprocess.TimeoutExpired):
+    except Exception:
         return []
     return [ModelSpec(name, "discovered", harness, discovered=True, discovery_source=f"cli:{executable}") for name in _parse_model_names(result.stdout + "\n" + result.stderr)]
 
@@ -306,7 +335,9 @@ def discover_environment() -> list[ModelSpec]:
     return discover_models()
 
 
+@lru_cache(maxsize=1)
 def discover_models() -> list[ModelSpec]:
+    """Discover installed models once per process for resolution-time validation."""
     discovered: list[ModelSpec] = []
     for harness in ("claude", "codex", "agy", "grok"):
         discovered.extend(probe_cli_harness(harness))
