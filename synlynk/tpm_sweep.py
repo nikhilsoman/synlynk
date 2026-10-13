@@ -5,6 +5,7 @@ import os
 from typing import Dict
 
 from synlynk.approval_gate import raise_approval_ticket
+from synlynk.backlog import ingest_backlog, triage_backlog
 from synlynk.db import _find_ticket, _insert_ticket, _mark_ticket_consumed
 from synlynk.dispatch import dispatch_agent
 from synlynk.events import emit_awaiting_approval
@@ -107,3 +108,50 @@ def run_sweep_pass(assignee: str = "nikhilsoman") -> Dict[str, int]:
             summary["failed"] += 1
 
     return summary
+
+
+def run_tpm_wake_cycle() -> dict:
+    """Run the TPM wake-cycle SOP: intake, triage, ambiguity routing, sweep.
+
+    Raw GitHub issues are ingested and triaged, then each triaged backlog item
+    is routed to a PM-approval-gate status based on its ambiguity signals:
+    a missing goal link needs the architect, a tier-3 item needs PM
+    prioritisation, and everything else is routine TPM-drafted work. The
+    existing sweep pass then runs unchanged for downstream tracking.
+    """
+    from synlynk.db import _get_db
+
+    routed = {
+        "needs_architect_input": 0,
+        "needs_pm_priority_input": 0,
+        "tpm_drafted": 0,
+    }
+
+    conn = _get_db()
+    try:
+        ingest_backlog(db_conn=conn)
+        triaged_items = triage_backlog(auto_promote=False, db_conn=conn)
+
+        for item in triaged_items:
+            if not item.get("goal_id"):
+                new_status = "needs_architect_input"
+            elif item.get("complexity_tier") == 3:
+                new_status = "needs_pm_priority_input"
+            else:
+                new_status = "tpm_drafted"
+            conn.execute(
+                "UPDATE backlog_items SET status = ? WHERE id = ?",
+                (new_status, item["id"]),
+            )
+            routed[new_status] += 1
+        conn.commit()
+    finally:
+        conn.close()
+
+    sweep_result = run_sweep_pass()
+
+    return {
+        "triaged": len(triaged_items),
+        "routed": routed,
+        "sweep": sweep_result,
+    }

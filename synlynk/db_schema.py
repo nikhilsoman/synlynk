@@ -68,6 +68,7 @@ CREATE TABLE IF NOT EXISTS backlog_items (
     stage               TEXT NOT NULL DEFAULT 'open',
     governs_stage       TEXT NOT NULL DEFAULT 'open',
     complexity_tier     INTEGER DEFAULT 2,
+    priority            INTEGER DEFAULT 5,
     goal_id             TEXT,
     acceptance_criteria TEXT DEFAULT '[]',
     status              TEXT NOT NULL DEFAULT 'staged',
