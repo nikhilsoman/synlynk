@@ -990,5 +990,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2257 \u2014 add opt-in personal hosted relay with durable replay (PR #2257, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2257.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-13) - PR #2257\n- Merged improvements and fixes for PR #2257."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/315-pr2267-block-scheduling-of-stories-with-no-goal.md",
+    "title": "PR #2267 \u2014 block scheduling of stories with no goal link (gh:#2262)",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-13",
+    "pr": "#2267",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2267."
+    ],
+    "tweet": "\ud83d\ude80 PR #2267 \u2014 block scheduling of stories with no goal link (gh:#2262) (PR #2267, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2267.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-13) - PR #2267\n- Merged improvements and fixes for PR #2267."
   }
 ]

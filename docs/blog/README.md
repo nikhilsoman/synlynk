@@ -376,6 +376,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [268](./268-prTBD-pm-tpm-durable-wake-cycle-charters.md) | Durable PM/TPM charters get a real wake cycle and CLI surface | [#TBD](https://github.com/nikhilsoman/synlynk/pull/TBD) | 2026-10-13 |
 | [313](./313-pr2246-finalize-pm-tpm-durable-wake-cycle-chart.md) | PR #2246 — finalize PM/TPM durable wake-cycle charters | [#2246](https://github.com/nikhilsoman/synlynk/pull/2246) | 2026-10-13 |
 | [314](./314-pr2257-add-opt-in-personal-hosted-relay-with-du.md) | PR #2257 — add opt-in personal hosted relay with durable replay | [#2257](https://github.com/nikhilsoman/synlynk/pull/2257) | 2026-10-13 |
+| [315](./315-pr2267-block-scheduling-of-stories-with-no-goal.md) | PR #2267 — block scheduling of stories with no goal link (gh:#2262) | [#2267](https://github.com/nikhilsoman/synlynk/pull/2267) | 2026-10-13 |
 
 ## Per-PR Post Template
 
