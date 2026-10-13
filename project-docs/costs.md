@@ -762,3 +762,32 @@
 | agy | $20.00 | $3.9405 | $18.6773 | $14.7368 |
 | grok | $30.00 | $80.6465 | $59.0384 | $-21.6081 |
 | **Total** | **$90.00** | **$131.6577** | **$1525.0804** | **$1393.4227** |
+
+## 2026-10-13 Personal Hosted Relay conductor
+
+- Task 2 job-9f7062ef: unsupported gpt-5.3-codex; reported zero tokens/$0.
+- Task 2 retry job-7926c2ec, gpt-6-astra: Synlynk reported $3.34,
+  1,094,051 input / 3,558 output tokens, versus $0.30 context estimate
+  ($0.16 dispatcher estimate). Telemetry estimate, not provider billing.
+  Result: 3d2a452f, integrated as 96aa05d7; 1381 passed, 1 skipped.
+- User approved the model switch after account rejection. Subsequent dispatches
+  use compact logs and reduced injected context. [@nikhilsoman]
+- Task 3 job-783b02c3, gpt-6-astra: Synlynk reported $2.52,
+  809,310 input / 6,260 output tokens, versus $1.00 context estimate.
+  Result: c76484b9 integrated as d2dd8fa5; 1473 passed, 1 skipped.
+- Task 4 job-ee2b73d3, gpt-6-astra: Synlynk reported $0.26,
+  831,156 input / 8,591 output (including reasoning) tokens. Launched with
+  the newer feature checkout's accounting; historical Task 2/3 values above
+  remain the persisted reports, not independently reconciled provider charges.
+  Result: ec156673 integrated as 45b54927; 1492 passed, 1 skipped.
+- Task 5 job-bc0a34d9, gpt-6-astra: Synlynk reported $0.37,
+  1,206,619 input / 14,054 output tokens. Result: bf60fcaa integrated as
+  36bcbb42; 1514 passed, 1 skipped; independent code review approved.
+- Task 6 job-d5e657cd, gpt-6-astra: Synlynk reported $0.51,
+  1,440,815 input / 19,633 output tokens. Result: 25d397ba integrated as
+  31683d36; 1527 passed, 1 skipped; independent code review approved.
+- Task 7 job-5d51f615, gpt-6-astra: Synlynk reported $0.39,
+  1,258,890 input / 13,419 output tokens. Source 814151bf plus reviewed
+  conductor onboarding corrections integrated as 84d730ab; 191 targeted passed.
+- Task 8 job-20b0e6e2: dispatcher incorrectly rerouted the explicit OpenAI model
+  to Claude; reported zero tokens/$0, no code changes. Tracked in gh:#2255.

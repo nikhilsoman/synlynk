@@ -1744,6 +1744,27 @@ Cost logged via `synlynk cost log` (~$2.54, native PM work). PR #1818 opened (do
 
 [@nikhilsoman]
 
+## 2026-10-13 Personal Hosted Relay conductor
+
+User authorized goal-f4ce526a end-to-end execution and five-minute task updates.
+Session session-0fe91cb1, feature worktree feat-codex-personal-hosted-relay.
+Task 1 preserved from 2375ec24 as d7ed8c7c; 10 relay tests pass. Task 2 TDD
+completed, reviewed and integrated as 96aa05d7; four red tests then 14 green
+relay tests, broad suite 1381 passed/1 skipped. Stories marked done via CLI.
+Tasks 3-6 reviewed and integrated as d2dd8fa5, 45b54927, 36bcbb42, and
+31683d36. Task 6 verified authenticated durable replay with 166 targeted and
+1527 broad tests passing (1 skipped). Independent Task 5/6 reviews approved.
+All six stories marked done via CLI; checkpoint refreshed the generated views.
+Task 7 source 814151bf and reviewed onboarding corrections integrated as
+84d730ab, with 191 targeted tests passing. Remote devices use only their own
+exported credential. Task 8 dispatched as job-02ef4311 after zero-token routing
+failure job-20b0e6e2 (tracked gh:#2255). Task 10 full regression remains required.
+Pre-existing job-status reconciliation crash tracked separately in gh:#2254.
+The default gpt-5.3-codex was unsupported; user explicitly approved gpt-6-astra.
+Real NATS audit proved authorization.users token entries invalid; preserve random
+device secrets using supported user/password fields. Replay/echo/revocation and
+preview containment require real integration checks, recorded in the execution ledger.
+
 ## 2026-09-29 — R9 instruction dedup shipped, wave housekeeping, #1844 filed
 
 Shipped `[R9]` (`story-025c857c`, PERF-P5) as PR #1843: deduplicated the 5 generated instruction
