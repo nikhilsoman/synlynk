@@ -1006,5 +1006,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2267 \u2014 block scheduling of stories with no goal link (gh:#2262) (PR #2267, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2267.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-13) - PR #2267\n- Merged improvements and fixes for PR #2267."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/316-pr2266-add-goal-match-confidence-threshold-gh-2.md",
+    "title": "PR #2266 \u2014 add goal-match confidence threshold (gh:#2262)",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-13",
+    "pr": "#2266",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2266."
+    ],
+    "tweet": "\ud83d\ude80 PR #2266 \u2014 add goal-match confidence threshold (gh:#2262) (PR #2266, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2266.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-13) - PR #2266\n- Merged improvements and fixes for PR #2266."
   }
 ]

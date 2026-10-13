@@ -377,6 +377,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [313](./313-pr2246-finalize-pm-tpm-durable-wake-cycle-chart.md) | PR #2246 — finalize PM/TPM durable wake-cycle charters | [#2246](https://github.com/nikhilsoman/synlynk/pull/2246) | 2026-10-13 |
 | [314](./314-pr2257-add-opt-in-personal-hosted-relay-with-du.md) | PR #2257 — add opt-in personal hosted relay with durable replay | [#2257](https://github.com/nikhilsoman/synlynk/pull/2257) | 2026-10-13 |
 | [315](./315-pr2267-block-scheduling-of-stories-with-no-goal.md) | PR #2267 — block scheduling of stories with no goal link (gh:#2262) | [#2267](https://github.com/nikhilsoman/synlynk/pull/2267) | 2026-10-13 |
+| [316](./316-pr2266-add-goal-match-confidence-threshold-gh-2.md) | PR #2266 — add goal-match confidence threshold (gh:#2262) | [#2266](https://github.com/nikhilsoman/synlynk/pull/2266) | 2026-10-13 |
 
 ## Per-PR Post Template
 
