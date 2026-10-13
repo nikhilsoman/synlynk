@@ -463,6 +463,17 @@ def _extract_gh_ids(content: str) -> dict:
         result["project_id"] = match.group(1)
     return result
 
+# R2 decision dec-0d7e75e0 (2026-10-12): per-harness instruction-reload
+# confirmation tier. The Codex value is provisional pending an independent
+# confirmation method for per-turn reload behavior.
+HARNESS_RELOAD_TIER = {
+    "claude": "confirmed_per_session",
+    "agy": "confirmed_per_turn",
+    "grok": "confirmed_per_turn",
+    "codex": "probed_no_evidence_of_per_turn_reload",
+}
+
+
 def _build_templates(org: str = None, repo: str = None, project_id: str = None,
                      owner: str = None, agent_slots: dict = None) -> dict:
     """Returns TEMPLATES dict with parameterized values filled in."""
@@ -638,14 +649,6 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
         )
     )
 
-    _grok_md = (
-        _tool_header(
-            "synlynk Grok Instructions", "grok-composer-2.5-fast",
-            "Co-Authored-By: Grok <noreply@x.ai>",
-            "grok",
-        )
-    )
-
     _ai_instructions_md = (
         "# synlynk Universal AI Instructions\n\n"
         "Apply the following as your system prompt or custom instructions "
@@ -687,7 +690,6 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
         "CLAUDE.md": _claude_md,
         "GEMINI.md": _gemini_md,
         "AGENTS.md": _agents_md,
-        "GROK.md": _grok_md,
         "AI_INSTRUCTIONS.md": _ai_instructions_md,
         "config.json": json.dumps({
             "schema_version": 1,
@@ -791,7 +793,6 @@ _REGISTERABLE_INSTRUCTION_TARGETS = (
     ("CLAUDE.md", "claude"),
     ("GEMINI.md", "agy"),
     ("AGENTS.md", "codex"),
-    ("GROK.md", "grok"),
     (".cursor/rules/synlynk.mdc", "cursor"),
     (".github/copilot-instructions.md", "copilot"),
     (".windsurfrules", "windsurf"),

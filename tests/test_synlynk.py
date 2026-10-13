@@ -8030,27 +8030,21 @@ def test_probe_grok_version(tmp_path, monkeypatch):
     assert result == "grok-composer-2.5-fast"
 
 
-def test_grok_md_in_instruction_targets():
+def test_grok_md_is_not_in_instruction_targets():
     import synlynk
     paths = [t[0] for t in synlynk._INSTRUCTION_TARGETS]
-    assert "GROK.md" in paths
-    entry = next(t for t in synlynk._INSTRUCTION_TARGETS if t[0] == "GROK.md")
-    assert entry[1] == "grok"
-    assert entry[2] == "html"
+    assert "GROK.md" not in paths
 
 
-def test_marker_style_for_grok():
+def test_marker_style_has_no_grok_target():
     import synlynk
-    assert synlynk._MARKER_STYLE_FOR_TOOL.get("grok") == "html"
+    assert "grok" not in synlynk._MARKER_STYLE_FOR_TOOL
 
 
-def test_grok_md_template_content():
+def test_grok_md_template_is_not_emitted():
     import synlynk
     templates = synlynk._build_templates()
-    assert "GROK.md" in templates
-    content = templates["GROK.md"]
-    assert "Co-Authored-By: Grok <noreply@x.ai>" in content
-    assert "grok" in content.lower()
+    assert "GROK.md" not in templates
 
 
 def test_init_wizard_adds_grok_to_agent_slots(tmp_path, monkeypatch):
@@ -8061,7 +8055,7 @@ def test_init_wizard_adds_grok_to_agent_slots(tmp_path, monkeypatch):
                  org=None, repo=None, project_id=None, force=False)
     config = json.load(open(".synlynk/config.json"))
     assert config["agent_slots"].get("grok") == "grok"
-    assert os.path.exists("GROK.md")
+    assert not os.path.exists("GROK.md")
 
 
 # ---------------------------------------------------------------------------

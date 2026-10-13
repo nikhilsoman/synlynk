@@ -5,6 +5,38 @@ import subprocess
 import pytest
 
 
+def test_build_templates_does_not_emit_grok_md():
+    """Grok falls through to AGENTS.md and must not receive a phantom file."""
+    from synlynk.instructions import _build_templates
+
+    templates = _build_templates()
+    assert "GROK.md" not in templates
+
+
+def test_instruction_targets_has_no_grok_md_entry():
+    from synlynk import _INSTRUCTION_TARGETS
+
+    paths = [target[0] for target in _INSTRUCTION_TARGETS]
+    assert "GROK.md" not in paths
+
+
+def test_agent_file_names_has_no_grok_md():
+    from synlynk import _AGENT_FILE_NAMES
+
+    assert "GROK.md" not in _AGENT_FILE_NAMES
+
+
+def test_harness_reload_tier_matches_r2_decision():
+    from synlynk.instructions import HARNESS_RELOAD_TIER
+
+    assert HARNESS_RELOAD_TIER == {
+        "claude": "confirmed_per_session",
+        "agy": "confirmed_per_turn",
+        "grok": "confirmed_per_turn",
+        "codex": "probed_no_evidence_of_per_turn_reload",
+    }
+
+
 def test_install_pre_commit_hook_writes_executable_hook(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     hook_dir = tmp_path / ".git" / "hooks"
@@ -290,7 +322,6 @@ def test_instruction_templates_prohibit_direct_todo_edits():
         templates_dict["CLAUDE.md"],
         templates_dict["GEMINI.md"],
         templates_dict["AGENTS.md"],
-        templates_dict["GROK.md"],
         templates_dict["AI_INSTRUCTIONS.md"],
         _build_cursor_mdc(),
         _build_copilot_instructions(),
@@ -310,7 +341,7 @@ def test_tool_templates_point_to_canonical_shared_protocol():
     from synlynk.instructions import _build_templates
 
     templates = _build_templates()
-    for name in ("CLAUDE.md", "GEMINI.md", "AGENTS.md", "GROK.md"):
+    for name in ("CLAUDE.md", "GEMINI.md", "AGENTS.md"):
         tmpl = templates[name]
         assert "## Identity & Attribution" in tmpl
         assert "## Shared synlynk Protocol" in tmpl
@@ -327,7 +358,6 @@ def test_tool_templates_preserve_harness_branch_naming_and_format_prefixes():
         "CLAUDE.md": "claude",
         "GEMINI.md": "agy",
         "AGENTS.md": "codex",
-        "GROK.md": "grok",
     }
 
     for name, harness in expected.items():
@@ -346,7 +376,7 @@ def test_tool_templates_are_substantially_smaller_than_canonical_protocol():
     from synlynk.instructions import _build_templates
 
     templates = _build_templates()
-    tool_sizes = [len(templates[name].encode()) for name in ("CLAUDE.md", "GEMINI.md", "AGENTS.md", "GROK.md")]
+    tool_sizes = [len(templates[name].encode()) for name in ("CLAUDE.md", "GEMINI.md", "AGENTS.md")]
     canonical = templates["AI_INSTRUCTIONS.md"]
     assert max(tool_sizes) < 5000
     assert len(canonical.encode()) > sum(tool_sizes)
