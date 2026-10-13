@@ -379,6 +379,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [315](./315-pr2267-block-scheduling-of-stories-with-no-goal.md) | PR #2267 — block scheduling of stories with no goal link (gh:#2262) | [#2267](https://github.com/nikhilsoman/synlynk/pull/2267) | 2026-10-13 |
 | [316](./316-pr2266-add-goal-match-confidence-threshold-gh-2.md) | PR #2266 — add goal-match confidence threshold (gh:#2262) | [#2266](https://github.com/nikhilsoman/synlynk/pull/2266) | 2026-10-13 |
 | [317](./317-pr2269-add-autonomy-pass-chaining-backlog-pipel.md) | PR #2269 — add _autonomy_pass() chaining backlog pipeline + mode-gated scheduling | [#2269](https://github.com/nikhilsoman/synlynk/pull/2269) | 2026-10-13 |
+| [318](./318-pr2272-preserve-cross-harness-pr-review-routing.md) | PR #2272 — preserve cross-harness PR review routing | [#2272](https://github.com/nikhilsoman/synlynk/pull/2272) | 2026-10-13 |
 
 ## Per-PR Post Template
 

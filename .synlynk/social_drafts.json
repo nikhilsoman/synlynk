@@ -1038,5 +1038,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2269 \u2014 add _autonomy_pass() chaining backlog pipeline + mode-gated scheduling (PR #2269, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2269.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-13) - PR #2269\n- Merged improvements and fixes for PR #2269."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/318-pr2272-preserve-cross-harness-pr-review-routing.md",
+    "title": "PR #2272 \u2014 preserve cross-harness PR review routing",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-13",
+    "pr": "#2272",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2272."
+    ],
+    "tweet": "\ud83d\ude80 PR #2272 \u2014 preserve cross-harness PR review routing (PR #2272, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2272.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-13) - PR #2272\n- Merged improvements and fixes for PR #2272."
   }
 ]
