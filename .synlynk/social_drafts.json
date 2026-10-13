@@ -910,5 +910,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2248 \u2014 move policy SOPs out of root CLAUDE.md (gh:#2243, story-c04f64b1) (PR #2248, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2248.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-13) - PR #2248\n- Merged improvements and fixes for PR #2248."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/310-pr2249-add-task-boundary-compaction-trigger-to-.md",
+    "title": "PR #2249 \u2014 add task-boundary compaction trigger to the dispatch wrapper (gh:#2243, story-c04f64b1)",
+    "author": "synlynk-pm agent",
+    "date": "2026-10-13",
+    "pr": "#2249",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2249."
+    ],
+    "tweet": "\ud83d\ude80 PR #2249 \u2014 add task-boundary compaction trigger to the dispatch wrapper (gh:#2243, story-c04f64b1) (PR #2249, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2249.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-13) - PR #2249\n- Merged improvements and fixes for PR #2249."
   }
 ]
