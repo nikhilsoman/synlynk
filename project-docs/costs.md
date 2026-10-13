@@ -773,13 +773,15 @@
 | 2026-10-13 06:35 | claude | claude-sonnet-4-6 | 82843 | 20382 | $0.2562 [sub] (API: $0.5543) | estimated_token_rate | story-0ad6c02b | exec: claude job job-7068a... |
 | 2026-10-13 06:41 | claude | unknown | 47117 | 2287 | $0.1226 [sub] (API: $0.1757) | estimated_token_rate | story-0ad6c02b | exec: claude job job-8dbcc... |
 | 2026-10-13 07:07 | claude | claude-sonnet-4-6 | 120000 | 30000 | $0.3723 [sub] (API: $0.8100) | estimated_manual | story-0ad6c02b | native PM-session work: Tasks 7-9 implemented directly after 2 dispatch no-ops (job-8dbcca65, job-63a77f90), regression triage, gh:#2245 filed, blog post + PR |
+| 2026-10-13 07:27 | claude | claude-sonnet-4-6 | 5000 | 2000 | $0.0174 [sub] (API: $0.0450) | estimated_tshirt | story-0ad6c02b | exec: claude job job-63a77... |
+| 2026-10-13 07:27 | claude | claude-sonnet-4-6 | 78521 | 11289 | $0.2229 [sub] (API: $0.4049) | estimated_token_rate | story-0ad6c02b | exec: claude job job-37a18... |
 
 ## Subscription Amortization & Dual-Ledger Summary
 
 | Harness | Base Fee | Actual Amortized Spend | API Equivalent Value | Net Savings |
 |---|---|---|---|---|
-| claude | $20.00 | $27.0139 | $41.2791 | $14.2652 |
+| claude | $20.00 | $27.2541 | $41.7290 | $14.4749 |
 | codex | $20.00 | $22.5093 | $1443.5126 | $1421.0033 |
 | agy | $20.00 | $3.9405 | $18.6773 | $14.7368 |
 | grok | $30.00 | $84.7382 | $61.6239 | $-23.1144 |
-| **Total** | **$90.00** | **$138.2018** | **$1565.0928** | **$1426.8910** |
+| **Total** | **$90.00** | **$138.4421** | **$1565.5427** | **$1427.1006** |
