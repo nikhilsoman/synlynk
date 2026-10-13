@@ -3,11 +3,283 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import queue
+import threading
+from types import SimpleNamespace
 
 import pytest
 
 from synlynk.events import ActorIdentifier, EventEnvelope
 from synlynk.relay_hub import DeviceCredentialStore, RETENTION_POLICIES, category_for_subject, subject_for_event
+from synlynk.relay import RelayBroker
+from synlynk.relay_hub import HubAdapter, NatsTransport
+
+
+class FakeNatsClient:
+    def __init__(self):
+        self.published = queue.Queue()
+        self.subscriptions = {}
+        self.fail_publish = False
+
+    def publish(self, subject, payload):
+        if self.fail_publish:
+            raise OSError("publish failed")
+        self.published.put((subject, payload))
+        self.deliver(subject, payload)  # Simulate NATS own echo, synchronously.
+
+    def subscribe(self, subject, callback):
+        self.subscriptions[subject] = callback
+        return subject
+
+    def unsubscribe(self, subscription):
+        self.subscriptions.pop(subscription)
+
+    def deliver(self, subject, payload):
+        for pattern, callback in list(self.subscriptions.items()):
+            if subject.startswith(pattern[:-1]):
+                callback(subject, payload)
+
+
+@pytest.fixture
+def bridge(project_dir):
+    broker, client = RelayBroker(), FakeNatsClient()
+    adapter = HubAdapter(broker, client, workspace_id="ws1", max_seen=512)
+    adapter.attach()
+    yield broker, client, adapter
+    adapter.detach()
+
+
+def hub_event(**overrides):
+    values = EventEnvelope.create(
+        ActorIdentifier("ws1", "m", "dev", "codex", "j"),
+        "review_requested", {"pr_url": "https://x"},
+    ).to_dict()
+    values.update(overrides)
+    return EventEnvelope.from_dict(values)
+
+
+def test_adapter_forwards_and_suppresses_own_echo(bridge):
+    broker, client, adapter = bridge
+    subscriber = broker.subscribe()
+    envelope = hub_event()
+    broker.publish(envelope)
+    subject, data = client.published.get(timeout=2)
+    assert subject == "synlynk.ws1.job.review_requested"
+    assert json.loads(data) == envelope.to_dict()
+    assert json.loads(subscriber.get(timeout=2))["event_id"] == envelope.event_id
+    adapter.detach()  # Join the pump before checking absence of duplicates.
+    assert subscriber.empty()
+    assert client.published.empty()
+
+
+def test_adapter_inbound_dedupes_before_broker_delivery(bridge):
+    broker, client, adapter = bridge
+    subscriber = broker.subscribe()
+    envelope = hub_event()
+    for _ in range(3):
+        client.deliver("synlynk.ws1.job.review_requested", envelope.to_json().encode())
+    assert json.loads(subscriber.get(timeout=2)) == envelope.to_dict()
+    # Barrier: the later local event proves the pump processed inbound copies.
+    broker.publish(hub_event())
+    assert client.published.get(timeout=2)
+    adapter.detach()
+    assert subscriber.qsize() == 1
+    assert client.published.empty()
+
+
+@pytest.mark.parametrize("method,suffix,params", [
+    ("runner_progress", "agent.codex.progress", {"payload": {"harness": "wrong"}}),
+    ("inject_steering", "device.dev-42.steering", {"target_device_id": "dev-42"}),
+    ("request_review", "job.review_requested", {"pr_url": "https://x"}),
+])
+def test_adapter_real_broker_rpc_routing(bridge, method, suffix, params):
+    broker, client, _ = bridge
+    result = broker.rpc(method, {"sender": hub_event().sender.to_dict(), **params})
+    subject, data = client.published.get(timeout=2)
+    assert subject == f"synlynk.ws1.{suffix}"
+    assert json.loads(data)["event_id"] == result["event_id"]
+
+
+@pytest.mark.parametrize("mutation", [
+    {"payload": []}, {"sender": None}, {"event_id": []},
+    {"timestamp": None}, {"event_type": "invalid"},
+    {"sender": {"workspace_id": "ws2"}},
+    {"recipient": {"workspace_id": "ws2"}},
+])
+def test_adapter_rejects_bad_inbound_and_recovers(bridge, mutation):
+    broker, client, adapter = bridge
+    subscriber = broker.subscribe()
+    raw = hub_event().to_dict()
+    raw.update(mutation)
+    client.deliver("synlynk.ws1.job.review_requested", json.dumps(raw))
+    client.deliver("synlynk.ws1.job.review_requested", b"\xff")
+    adapter._on_hub_message("synlynk.ws2.job.review_requested", hub_event().to_json())
+    assert subscriber.empty()
+    good = hub_event()
+    client.deliver("synlynk.ws1.job.review_requested", good.to_json())
+    assert json.loads(subscriber.get(timeout=2))["event_id"] == good.event_id
+    assert adapter.last_error is not None
+
+
+def test_adapter_rejects_cross_workspace_outgoing(bridge):
+    broker, client, _ = bridge
+    other = ActorIdentifier("ws2", "m", "dev", "codex", "j")
+    broker.publish(hub_event(sender=other.to_dict()))
+    broker.publish(hub_event(recipient=other.to_dict()))
+    valid = hub_event()
+    broker.publish(valid)
+    assert json.loads(client.published.get(timeout=2)[1])["event_id"] == valid.event_id
+    assert client.published.empty()
+
+
+def test_adapter_lifecycle_and_bounded_ids(bridge):
+    broker, client, adapter = bridge
+    adapter.attach()
+    assert len(client.subscriptions) == 1
+    for index in range(600):
+        event = hub_event(event_id=f"evt-{index}")
+        broker.publish(event)
+        client.published.get(timeout=2)
+    assert len(adapter._seen) <= 512
+    adapter.detach()
+    adapter.detach()
+    assert not adapter._bridge_thread.is_alive()
+    assert not client.subscriptions
+    assert not broker._subscribers
+    adapter.attach()
+    broker.publish(hub_event())
+    assert client.published.get(timeout=2)
+
+
+def test_adapter_publish_failure_observable_and_pump_survives(bridge):
+    broker, client, adapter = bridge
+    failed = threading.Event()
+    def fail(subject, data):
+        failed.set()
+        raise OSError("publish failed")
+    original = client.publish
+    client.publish = fail
+    broker.publish(hub_event())
+    assert failed.wait(2)
+    client.publish = original
+    broker.publish(hub_event())
+    assert client.published.get(timeout=2)
+    assert isinstance(adapter.last_error, OSError)
+
+
+def test_adapter_concurrent_inbound_is_delivered_once(bridge):
+    from concurrent.futures import ThreadPoolExecutor
+    broker, client, _ = bridge
+    subscriber = broker.subscribe()
+    data = hub_event().to_json()
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        list(pool.map(lambda _: client.deliver("synlynk.ws1.job.review_requested", data), range(30)))
+    assert subscriber.qsize() == 1
+
+
+def test_adapter_owned_client_shutdown_and_attach_failure(project_dir):
+    broker, client = RelayBroker(), FakeNatsClient()
+    closed = []
+    client.close = lambda: closed.append(True)
+    adapter = HubAdapter(broker, client, "ws1", owns_client=True)
+    adapter.attach()
+    adapter.stop()
+    adapter.stop()
+    assert closed == [True]
+    with pytest.raises(RuntimeError, match="closed"):
+        adapter.attach()
+    def fail(*args):
+        raise OSError("subscribe failed")
+    client.subscribe = fail
+    adapter = HubAdapter(broker, client, "ws1", owns_client=True)
+    with pytest.raises(OSError, match="subscribe failed"):
+        adapter.attach()
+    assert closed == [True, True]
+    assert not broker._subscribers
+
+
+@pytest.mark.parametrize("failure", ["connect", "timeout", "publish", "async_error"])
+def test_nats_transport_failure_cleanup(monkeypatch, failure):
+    import asyncio
+    import synlynk.relay_hub as hub
+    closed, cancelled = threading.Event(), threading.Event()
+    class AsyncClient:
+        async def connect(self, **kwargs):
+            self.error_cb = kwargs["error_cb"]
+            if failure == "connect":
+                raise OSError("connect failed")
+            if failure == "timeout":
+                try:
+                    await asyncio.Event().wait()
+                finally:
+                    cancelled.set()
+        async def publish(self, subject, payload):
+            if failure == "publish":
+                raise OSError("publish failed")
+            await self.error_cb(OSError("async failure"))
+        async def flush(self, **kwargs):
+            pass
+        async def close(self):
+            closed.set()
+    monkeypatch.setattr(hub, "_import_nats", lambda: SimpleNamespace(NATS=AsyncClient))
+    previous = set(threading.enumerate())
+    if failure in {"connect", "timeout"}:
+        with pytest.raises((OSError, TimeoutError)):
+            NatsTransport("nats://test", timeout=0.2)
+    else:
+        transport = NatsTransport("nats://test")
+        try:
+            if failure == "publish":
+                with pytest.raises(OSError, match="publish failed"):
+                    transport.publish("subject", "data")
+            else:
+                transport.publish("subject", "data")
+            assert isinstance(transport.last_error, OSError)
+        finally:
+            transport.close()
+    assert closed.is_set()
+    if failure == "timeout":
+        assert cancelled.is_set()
+    assert not [t for t in threading.enumerate() if t not in previous and t.name == "relay-nats"]
+
+
+def test_nats_transport_awaits_real_api_and_closes(monkeypatch):
+    import synlynk.relay_hub as hub
+    calls = []
+    class AsyncClient:
+        async def connect(self, **kwargs):
+            calls.append(("connect", kwargs))
+        async def subscribe(self, subject, *, cb):
+            self.callback = cb
+            calls.append(("subscribe", subject))
+            return self
+        async def publish(self, subject, payload):
+            assert isinstance(payload, bytes)
+            calls.append(("publish", payload))
+            await self.callback(SimpleNamespace(subject=subject, data=payload))
+        async def flush(self, **kwargs):
+            calls.append(("flush", None))
+        async def unsubscribe(self):
+            calls.append(("unsubscribe", None))
+        async def close(self):
+            calls.append(("close", None))
+    client = AsyncClient()
+    monkeypatch.setattr(hub, "_import_nats", lambda: SimpleNamespace(NATS=lambda: client))
+    transport = NatsTransport("nats://localhost:4222", user="dev-1", password="secret")
+    received = []
+    try:
+        sub = transport.subscribe("synlynk.ws1.>", lambda s, p: received.append((s, p)))
+        transport.publish("synlynk.ws1.job.review_requested", "hello")
+        transport.unsubscribe(sub)
+    finally:
+        transport.close()
+    transport.close()
+    assert received == [("synlynk.ws1.job.review_requested", b"hello")]
+    assert calls[0][1]["user"] == "dev-1"
+    assert calls[0][1]["password"] == "secret"
+    assert [c[0] for c in calls] == ["connect", "subscribe", "flush", "publish", "flush", "unsubscribe", "flush", "close"]
+    assert not transport._thread.is_alive()
+    assert transport._loop.is_closed()
 
 
 def test_device_credentials_persist_with_private_files(tmp_path):

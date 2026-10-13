@@ -185,6 +185,8 @@ class RelayBroker:
             event_type, payload = "task_progress", {"message": params.get("message", ""), **(params.get("payload") or {})}
         elif method in ("relay.inject_steering", "inject_steering"):
             event_type, payload = "steering_injected", {"job_id": params.get("job_id"), "prompt_delta": params.get("prompt_delta", "")}
+            if "target_device_id" in params:
+                payload["target_device_id"] = params["target_device_id"]
         elif method in ("relay.request_review", "request_review"):
             event_type, payload = "review_requested", {"pr_url": params.get("pr_url"), "diff_summary": params.get("diff_summary", "")}
         elif method in ("relay.peer_add", "peer_add"):

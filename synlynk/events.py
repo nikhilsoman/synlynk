@@ -18,6 +18,7 @@ import uuid
 RELAY_EVENT_TYPES = (
     "agent_started",
     "task_progress",
+    "runner_progress",
     "artifact_published",
     "review_requested",
     "steering_injected",

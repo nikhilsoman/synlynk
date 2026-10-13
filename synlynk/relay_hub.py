@@ -14,19 +14,281 @@ imported lazily inside functions that need it, so importing this module
 
 from __future__ import annotations
 
+import asyncio
+from collections import OrderedDict
 from collections.abc import Mapping
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 import fcntl
 import json
+import logging
 import os
 from pathlib import Path
 import re
+import queue
 import secrets
 import tempfile
+import threading
 import uuid
 
-from synlynk.events import ActorIdentifier
+from synlynk.events import ActorIdentifier, EventEnvelope
+
+
+_LOG = logging.getLogger(__name__)
+
+
+class NatsTransport:
+    """Synchronous bridge API backed by an owned nats-py loop and connection.
+
+    Construct outside an asyncio callback. Operations have bounded waits and
+    raise on failure; asynchronous NATS errors are logged and in last_error.
+    Pass native user/password for DeviceCredentialStore bearer credentials.
+    Call close() when finished. This is core NATS, not durable JetStream.
+    """
+
+    def __init__(self, servers, *, timeout=5.0, **connect_options):
+        if timeout <= 0:
+            raise ValueError("timeout must be positive")
+        nats = _import_nats()
+        self.timeout = timeout
+        self.last_error = None
+        self._closed = False
+        self._loop = asyncio.new_event_loop()
+        self._thread = threading.Thread(target=self._run, name="relay-nats", daemon=True)
+        self._thread.start()
+        self._client = None
+
+        async def connect():
+            self._client = nats.NATS()
+            supplied_error_cb = connect_options.pop("error_cb", None)
+
+            async def error_cb(error):
+                self.last_error = error
+                _LOG.error("NATS transport asynchronous error: %s", type(error).__name__)
+                if supplied_error_cb:
+                    await supplied_error_cb(error)
+
+            await self._client.connect(servers=servers, error_cb=error_cb, **connect_options)
+
+        try:
+            self._call(connect())
+        except BaseException:
+            self.close()
+            raise
+
+    def _run(self):
+        asyncio.set_event_loop(self._loop)
+        try:
+            self._loop.run_forever()
+        finally:
+            pending = asyncio.all_tasks(self._loop)
+            for task in pending:
+                task.cancel()
+            self._loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+            self._loop.run_until_complete(self._loop.shutdown_asyncgens())
+            self._loop.close()
+
+    def _call(self, coroutine):
+        if self._closed or threading.current_thread() is self._thread:
+            coroutine.close()
+            raise RuntimeError("NATS transport is closed or called from its own loop")
+        future = asyncio.run_coroutine_threadsafe(coroutine, self._loop)
+        try:
+            return future.result(timeout=self.timeout)
+        except BaseException as error:
+            future.cancel()
+            self.last_error = error
+            raise
+
+    def publish(self, subject, payload):
+        async def publish():
+            data = payload.encode("utf-8") if isinstance(payload, str) else payload
+            await self._client.publish(subject, data)
+            await self._client.flush(timeout=self.timeout)
+        return self._call(publish())
+
+    def subscribe(self, subject, callback):
+        async def subscribe():
+            async def receive(message):
+                callback(message.subject, message.data)
+            subscription = await self._client.subscribe(subject, cb=receive)
+            try:
+                await self._client.flush(timeout=self.timeout)
+            except BaseException:
+                await subscription.unsubscribe()
+                raise
+            return subscription
+        return self._call(subscribe())
+
+    def unsubscribe(self, subscription):
+        async def unsubscribe():
+            await subscription.unsubscribe()
+            await self._client.flush(timeout=self.timeout)
+        return self._call(unsubscribe())
+
+    def close(self):
+        if self._closed:
+            return
+        if threading.current_thread() is self._thread:
+            raise RuntimeError("Close NATS transport from outside its loop")
+        try:
+            if self._client is not None:
+                self._call(self._client.close())
+        finally:
+            self._closed = True
+            self._loop.call_soon_threadsafe(self._loop.stop)
+            self._thread.join(self.timeout)
+            if self._thread.is_alive():
+                raise TimeoutError("NATS loop did not stop")
+
+
+class HubAdapter:
+    """Bridge broker queues through a synchronous transport (or injected fake).
+
+    For production pass NatsTransport, NOT a raw async nats-py Client. Injected
+    clients are borrowed unless owns_client=True; an owned client is closed on
+    detach, making that adapter terminal. Local queues retain broker semantics.
+    Dedupe is bounded, in-memory only; persistent replay belongs to Task 6.
+    Transport failures are observable via last_error and logging, not retried.
+    """
+
+    def __init__(self, broker, client, workspace_id, *, owns_client=False,
+                 max_seen=10_000, shutdown_timeout=10.0):
+        self.workspace_id = _subject_segment(workspace_id, "workspace_id")
+        if max_seen < 512 or shutdown_timeout <= 0:
+            raise ValueError("max_seen must be >=512 and shutdown_timeout positive")
+        self.broker, self.client = broker, client
+        self.owns_client = owns_client
+        self.max_seen = max_seen
+        self.shutdown_timeout = shutdown_timeout
+        self.last_error = None
+        self._seen = OrderedDict()
+        self._lock = threading.RLock()
+        self._lifecycle_lock = threading.Lock()
+        self._stop = threading.Event()
+        self._active = False
+        self._closed = False
+        self._local_subscriber = None
+        self._subscription = None
+        self._bridge_thread = None
+
+    def _error(self, error):
+        self.last_error = error
+        # Do not log untrusted payloads, connection URLs or credentials.
+        _LOG.warning("Hub bridge error: %s", type(error).__name__)
+
+    def _remember(self, event_id):
+        self._seen[event_id] = None
+        self._seen.move_to_end(event_id)
+        while len(self._seen) > self.max_seen:
+            self._seen.popitem(last=False)
+
+    def _decode(self, data):
+        raw = json.loads(data)
+        if not isinstance(raw, dict) or not isinstance(raw.get("payload"), dict):
+            raise ValueError("Invalid envelope or payload")
+        for field in ("event_id", "timestamp", "event_type"):
+            if not isinstance(raw.get(field), str) or not raw[field]:
+                raise ValueError(f"Invalid {field}")
+        for field in ("sender", "recipient"):
+            actor = raw.get(field)
+            if field == "recipient" and actor is None:
+                continue
+            if not isinstance(actor, dict) or any(
+                not isinstance(actor.get(key), str)
+                for key in ActorIdentifier.__dataclass_fields__
+            ):
+                raise ValueError("Invalid actor")
+            if actor["workspace_id"] != self.workspace_id:
+                raise ValueError("Cross-workspace envelope")
+        envelope = EventEnvelope.from_dict(raw)
+        subject = subject_for_event(self.workspace_id, envelope.event_type,
+                                    envelope.payload, sender=envelope.sender)
+        return envelope, subject
+
+    def attach(self):
+        with self._lifecycle_lock:
+            if self._active:
+                return
+            if self._closed:
+                raise RuntimeError("Owned transport has been closed")
+            self._stop.clear()
+            self._local_subscriber = self.broker.subscribe()
+            with self._lock:
+                self._active = True
+            try:
+                self._subscription = self.client.subscribe(
+                    f"synlynk.{self.workspace_id}.>", self._on_hub_message)
+                self._bridge_thread = threading.Thread(
+                    target=self._pump_local_to_hub, name="relay-hub", daemon=True)
+                self._bridge_thread.start()
+            except BaseException:
+                with self._lock:
+                    self._active = False
+                self.broker.unsubscribe(self._local_subscriber)
+                if self.owns_client:
+                    self._closed = True
+                    self.client.close()
+                raise
+
+    def detach(self):
+        with self._lifecycle_lock:
+            if not self._active:
+                return
+            with self._lock:
+                self._active = False
+            self._stop.set()
+            self.broker.unsubscribe(self._local_subscriber)
+            try:
+                self.client.unsubscribe(self._subscription)
+            except Exception as error:
+                self._error(error)
+                raise
+            finally:
+                try:
+                    self._bridge_thread.join(self.shutdown_timeout)
+                finally:
+                    if self.owns_client:
+                        self._closed = True
+                        self.client.close()
+                if self._bridge_thread.is_alive():
+                    raise TimeoutError("Hub bridge did not stop")
+
+    stop = detach
+
+    def _pump_local_to_hub(self):
+        while not self._stop.is_set():
+            try:
+                data = self._local_subscriber.get(timeout=0.05)
+            except queue.Empty:
+                continue
+            try:
+                envelope, subject = self._decode(data)
+                with self._lock:
+                    if envelope.event_id in self._seen:
+                        continue
+                    self._remember(envelope.event_id)
+                # Never hold the ID lock across client I/O (callbacks may echo).
+                self.client.publish(subject, data)
+            except Exception as error:
+                self._error(error)
+
+    def _on_hub_message(self, subject, payload):
+        try:
+            envelope, expected = self._decode(payload)
+            if subject != expected:
+                raise ValueError("Subject does not match envelope routing")
+            with self._lock:
+                if not self._active or envelope.event_id in self._seen:
+                    return
+                self._remember(envelope.event_id)
+                try:
+                    self.broker.publish(envelope)
+                except Exception:
+                    self._seen.pop(envelope.event_id, None)
+                    raise
+        except Exception as error:
+            self._error(error)
 
 
 def _import_nats():
