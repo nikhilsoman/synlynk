@@ -24,6 +24,10 @@ RELAY_EVENT_TYPES = (
     "agent_completed",
     "goal_realigned",
     "governs_stage_advanced",
+    "hub_disconnected",
+    "sync_gap_detected",
+    "doc_drafted",
+    "doc_updated",
 )
 
 

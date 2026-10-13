@@ -1,6 +1,25 @@
 import subprocess
 import sys
 
+import pytest
+
+from synlynk.events import ActorIdentifier, EventEnvelope
+
+
+@pytest.mark.parametrize("event_type", (
+    "hub_disconnected",
+    "sync_gap_detected",
+    "doc_drafted",
+    "doc_updated",
+))
+def test_hub_event_types_are_accepted_by_envelope(event_type):
+    actor = ActorIdentifier(
+        workspace_id="ws", member_id="m", agent_role="dev",
+        harness="codex", job_id="j1",
+    )
+    envelope = EventEnvelope.create(actor, event_type, {})
+    assert envelope.event_type == event_type
+
 
 def test_core_cli_import_does_not_require_nats():
     """synlynk's core CLI must import cleanly with no nats-py installed --
