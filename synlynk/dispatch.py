@@ -5052,6 +5052,12 @@ def exec_command(cmd_args: list, force: bool = False) -> int:
 
         if check_costs:
             check_costs()
+        compaction_check = _pkg("check_context_compaction_trigger")
+        if compaction_check and not _is_interactive(cmd_args):
+            try:
+                compaction_check(job_id=os.environ.get("SYNLYNK_JOB_ID"))
+            except Exception:
+                pass
         if log_telemetry:
             tool_call_count = _pkg("_count_tool_calls", lambda _text: 0)(output_text)
             output_bytes = 0

@@ -1290,6 +1290,52 @@ def check_budgets() -> None:
                 print(f"    {agent:<8}[pay_as_you_go] ${actual:.2f} this run")
 
 
+def check_context_compaction_trigger(job_id: str = None, threshold_tokens: int = 60_000) -> dict:
+    """Task-boundary compaction signal (dec-0d7e75e0 R2 synthesis).
+
+    Evaluates accumulated tokens for the given job (or, if job_id is None,
+    across the whole cost_entries table for the current process's session)
+    and returns a signal dict the caller can act on. This function never
+    shells out to fire /compact or /clear itself — it only reports whether
+    the threshold was crossed, so the decision to act stays with the
+    dispatch wrapper (exec_command()) rather than being baked in here.
+    Wrapper-layer-only per R2: this signal is never written into any
+    harness instruction file (CLAUDE.md/AGENTS.md/GEMINI.md/AI_INSTRUCTIONS.md).
+    """
+    conn = _pkg("_get_db")()
+    try:
+        if job_id:
+            row = conn.execute(
+                "SELECT COALESCE(SUM(input_tokens + output_tokens), 0) "
+                "FROM cost_entries WHERE job_id = ?",
+                (job_id,),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT COALESCE(SUM(input_tokens + output_tokens), 0) "
+                "FROM cost_entries"
+            ).fetchone()
+    finally:
+        conn.close()
+
+    cumulative_tokens = row[0] or 0
+    should_compact = cumulative_tokens >= threshold_tokens
+
+    if should_compact:
+        print(
+            f"\n  💭 [Compaction Signal] {cumulative_tokens:,} tokens "
+            f">= {threshold_tokens:,} threshold for this task boundary. "
+            "Consider /compact or /clear before the next handoff."
+        )
+
+    return {
+        "should_compact": should_compact,
+        "cumulative_tokens": cumulative_tokens,
+        "threshold_tokens": threshold_tokens,
+        "job_id": job_id,
+    }
+
+
 def parse_costs_md() -> tuple:
     """Returns (total_usd, total_requests) by parsing costs.md's real-dollar column."""
     costs_file = os.path.join(_pkg("_docs_dir")(), "costs.md")

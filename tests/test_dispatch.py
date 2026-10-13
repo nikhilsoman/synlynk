@@ -942,6 +942,28 @@ def test_exec_command_context_includes_charter(project_dir, tmp_path, monkeypatc
     assert "Do PM things." in context_text
 
 
+def test_exec_command_invokes_compaction_trigger(monkeypatch):
+    from synlynk import dispatch
+
+    calls = []
+    monkeypatch.setattr(
+        dispatch, "_pkg",
+        lambda name, default=None: (
+            (lambda **kw: calls.append(kw)) if name == "check_context_compaction_trigger"
+            else default
+        ),
+    )
+    # Minimal stub so exec_command's other _pkg() lookups don't explode;
+    # relies on exec_command's existing tolerance for missing hooks (each
+    # is retrieved via _pkg(name, default) and guarded with `if hook:`).
+    # Bare "echo hi" is interactive (_is_interactive), and the hook only
+    # runs for non-interactive execs. --print matches the existing exec tests.
+    dispatch.exec_command(["echo", "--print", "hi"])
+
+    assert len(calls) == 1
+    assert "job_id" in calls[0]
+
+
 def test_dispatch_agent_auto_provisions_story_id_when_not_given(project_dir, monkeypatch):
     import synlynk as sl
     import synlynk.dispatch as dispatch_mod
