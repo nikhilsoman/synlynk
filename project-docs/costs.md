@@ -752,13 +752,34 @@
 | 2026-10-12 16:28 | grok | grok-3 | 258279 | 55151 | $2.0553 [sub] (API: $1.6021) | estimated_token_rate | story-e7a340f9 | exec: grok job job-7abf2d6... |
 | 2026-10-12 16:36 | grok | grok-3 | 79715 | 12608 | $0.6054 [sub] (API: $0.4283) | estimated_token_rate | story-dd84b873 | exec: grok job job-ebd3388... |
 | 2026-10-12 16:36 | codex | o4-mini | 2054526 | 9973 | $0.0987 [sub] (API: $6.3132) | estimated_token_rate | story-e7a340f9 | exec: codex job job-b71a9e... |
+| 2026-10-12 21:19 | codex | gpt-5.6-luna | 3544592 | 18901 | $0.1703 [sub] (API: $10.9173) | estimated_token_rate | story-84912225 | exec: codex job job-6f0819... |
+| 2026-10-12 21:19 | codex | gpt-5.6-luna | 2536395 | 8559 | $0.1216 [sub] (API: $7.7376) | estimated_token_rate | story-a7b5674c | exec: codex job job-291f55... |
+| 2026-10-12 21:19 | grok | grok-3 | 82670 | 2555 | $0.5589 [sub] (API: $0.2863) | estimated_token_rate | story-dd84b873 | exec: grok job job-70a6a73... |
+| 2026-10-12 21:19 | codex | o4-mini | 1664471 | 6664 | $0.0799 [sub] (API: $5.0934) | estimated_token_rate | story-e7a340f9 | exec: codex job job-67294b... |
+| 2026-10-12 22:58 | claude | claude-sonnet-4-6 | 54285 | 5214 | $0.1477 [sub] (API: $0.2413) | estimated_token_rate | story-84912225 | exec: claude job job-a03c6... |
+| 2026-10-12 22:58 | claude | claude-sonnet-4-6 | 58248 | 11913 | $0.1741 [sub] (API: $0.3541) | estimated_token_rate | story-a7b5674c | exec: claude job job-db36e... |
+| 2026-10-12 22:58 | claude | claude-sonnet-4-6 | 47682 | 5959 | $0.1331 [sub] (API: $0.2327) | estimated_token_rate | story-a7b5674c | exec: claude job job-136ff... |
+| 2026-10-12 22:58 | grok | grok-3 | 367908 | 29728 | $2.6075 [sub] (API: $1.5502) | estimated_token_rate | story-3522e331 | exec: grok job job-0db2123... |
+| 2026-10-12 23:29 | codex | o4-mini | 1297381 | 7822 | $0.0624 [sub] (API: $4.0095) | estimated_token_rate | story-c04f64b1 | exec: codex job job-8544e4... |
+| 2026-10-12 23:32 | grok | grok-3 | 113999 | 27128 | $0.9254 [sub] (API: $0.7489) | estimated_token_rate | story-c04f64b1 | exec: grok job job-2104538... |
+| 2026-10-12 23:39 | codex | o4-mini | 1059968 | 6920 | $0.0510 [sub] (API: $3.2837) | estimated_token_rate | story-c04f64b1 | exec: codex job job-3cad6b... |
+| 2026-10-13 05:08 | claude | claude-sonnet-4-6 | 73897 | 4642 | $0.1949 [sub] (API: $0.2915) | estimated_token_rate | story-0ad6c02b | exec: claude job job-7c952... |
+| 2026-10-13 05:15 | codex | o4-mini | 689119 | 6182 | $0.0021 [sub] (API: $0.2042) | estimated_token_rate | story-0ad6c02b | exec: codex job job-7800e1... |
+| 2026-10-13 05:20 | codex | o4-mini | 610590 | 9168 | $0.0022 [sub] (API: $0.2453) | estimated_token_rate | story-0ad6c02b | exec: codex job job-7339e1... |
+| 2026-10-13 06:03 | codex | o4-mini | 782015 | 7336 | $0.0377 [sub] (API: $2.4561) | estimated_token_rate | story-0ad6c02b | exec: codex job job-85f9e9... |
+| 2026-10-13 06:03 | claude | claude-sonnet-4-6 | 54558 | 2042 | $0.1405 [sub] (API: $0.1943) | estimated_token_rate | story-0ad6c02b | exec: claude job job-bbe89... |
+| 2026-10-13 06:11 | claude | claude-sonnet-4-6 | 61795 | 4924 | $0.1656 [sub] (API: $0.2592) | estimated_token_rate | story-0ad6c02b | exec: claude job job-50e83... |
+| 2026-10-13 06:27 | claude | claude-sonnet-4-6 | 79392 | 8584 | $0.2183 [sub] (API: $0.3669) | estimated_token_rate | story-0ad6c02b | exec: claude job job-19650... |
+| 2026-10-13 06:35 | claude | claude-sonnet-4-6 | 82843 | 20382 | $0.2562 [sub] (API: $0.5543) | estimated_token_rate | story-0ad6c02b | exec: claude job job-7068a... |
+| 2026-10-13 06:41 | claude | unknown | 47117 | 2287 | $0.1226 [sub] (API: $0.1757) | estimated_token_rate | story-0ad6c02b | exec: claude job job-8dbcc... |
+| 2026-10-13 07:07 | claude | claude-sonnet-4-6 | 120000 | 30000 | $0.3723 [sub] (API: $0.8100) | estimated_manual | story-0ad6c02b | native PM-session work: Tasks 7-9 implemented directly after 2 dispatch no-ops (job-8dbcca65, job-63a77f90), regression triage, gh:#2245 filed, blog post + PR |
 
 ## Subscription Amortization & Dual-Ledger Summary
 
 | Harness | Base Fee | Actual Amortized Spend | API Equivalent Value | Net Savings |
 |---|---|---|---|---|
-| claude | $20.00 | $25.0885 | $37.7991 | $12.7106 |
-| codex | $20.00 | $21.9822 | $1409.5656 | $1387.5834 |
+| claude | $20.00 | $27.0139 | $41.2791 | $14.2652 |
+| codex | $20.00 | $22.5093 | $1443.5126 | $1421.0033 |
 | agy | $20.00 | $3.9405 | $18.6773 | $14.7368 |
-| grok | $30.00 | $80.6465 | $59.0384 | $-21.6081 |
-| **Total** | **$90.00** | **$131.6577** | **$1525.0804** | **$1393.4227** |
+| grok | $30.00 | $84.7382 | $61.6239 | $-23.1144 |
+| **Total** | **$90.00** | **$138.2018** | **$1565.0928** | **$1426.8910** |
