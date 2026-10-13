@@ -958,5 +958,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2253 \u2014 pass Muse API key through to dispatched jobs (PR #2253, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2253.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-13) - PR #2253\n- Merged improvements and fixes for PR #2253."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/313-pr2246-finalize-pm-tpm-durable-wake-cycle-chart.md",
+    "title": "PR #2246 \u2014 finalize PM/TPM durable wake-cycle charters",
+    "author": "synlynk-pm agent",
+    "date": "2026-10-13",
+    "pr": "#2246",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2246."
+    ],
+    "tweet": "\ud83d\ude80 PR #2246 \u2014 finalize PM/TPM durable wake-cycle charters (PR #2246, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2246.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-13) - PR #2246\n- Merged improvements and fixes for PR #2246."
   }
 ]

@@ -373,6 +373,8 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [310](./310-pr2249-add-task-boundary-compaction-trigger-to-.md) | PR #2249 — add task-boundary compaction trigger to the dispatch wrapper (gh:#2243, story-c04f64b1) | [#2249](https://github.com/nikhilsoman/synlynk/pull/2249) | 2026-10-13 |
 | [311](./311-pr2247-stop-writing-phantom-grok-md-gh-2243-sto.md) | PR #2247 — stop writing phantom GROK.md (gh:#2243, story-c04f64b1) | [#2247](https://github.com/nikhilsoman/synlynk/pull/2247) | 2026-10-13 |
 | [312](./312-pr2253-pass-muse-api-key-through-to-dispatched-.md) | PR #2253 — pass Muse API key through to dispatched jobs | [#2253](https://github.com/nikhilsoman/synlynk/pull/2253) | 2026-10-13 |
+| [268](./268-prTBD-pm-tpm-durable-wake-cycle-charters.md) | Durable PM/TPM charters get a real wake cycle and CLI surface | [#TBD](https://github.com/nikhilsoman/synlynk/pull/TBD) | 2026-10-13 |
+| [313](./313-pr2246-finalize-pm-tpm-durable-wake-cycle-chart.md) | PR #2246 — finalize PM/TPM durable wake-cycle charters | [#2246](https://github.com/nikhilsoman/synlynk/pull/2246) | 2026-10-13 |
 
 ## Per-PR Post Template
 
