@@ -45,6 +45,17 @@ def test_load_tpm_charter():
     assert validate_charter(charter)
 
 
+def test_maintainer_charter_is_durable():
+    charter = load_charter("maintainer")
+    assert charter.role == "maintainer"
+    assert charter.durability == "durable"
+    assert any(
+        "drift" in step.lower() or "sweep" in step.lower()
+        for step in charter.wake_cycle_sop
+    )
+    assert validate_charter(charter)
+
+
 def test_empty_harness_bindings_is_valid():
     charter = AgentCharter(
         role="pm",
