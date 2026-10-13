@@ -38,7 +38,7 @@ def test_muse_baseline_schema_tc0():
     assert baseline["non_interactive_flags"] == ["exec"]
     assert "prompt_flag" not in baseline
     assert baseline["prompt_via_arg"] is True
-    assert baseline["env_passthrough"] == []
+    assert baseline["env_passthrough"] == ["MUSE_API_KEY", "META_API_KEY"]
     assert baseline["dispatch_flags"]["valid_flags"] == [
         "--json",
         "--provider",
