@@ -398,7 +398,7 @@ def _write_scan_fences(results: dict, root: str = ".") -> list:
 
     # CLAUDE.md is Claude Code's project instructions — probe must not write fences there.
     # Only write to agent directive files that read harness fences for headless dispatch.
-    directive_files = ["GEMINI.md", "AGENTS.md", "GROK.md"]
+    directive_files = ["GEMINI.md", "AGENTS.md"]
     body_lines = []
 
     stack = results.get("stack") or {}
@@ -763,7 +763,7 @@ def _probe_agent(harness_name: str, db_conn, fast_path_ok: bool = True, write_fe
     _INSTRUCTION_FILES = {
         "claude": "CLAUDE.md",
         "agy": "GEMINI.md",
-        "grok": "GROK.md",
+        "grok": "AGENTS.md",
         "codex": "AGENTS.md",
     }
     instr_file = _INSTRUCTION_FILES.get(harness_name)
@@ -1519,7 +1519,7 @@ def _repair_sops_only(
         "claude": "CLAUDE.md",
         "agy": "GEMINI.md",
         "codex": "AGENTS.md",
-        "grok": "GROK.md",
+        "grok": "AGENTS.md",
     }
     cfg_agents = _repair_config_agents(cfg)
     agent_names = [harness_name] if harness_name else cfg_agents

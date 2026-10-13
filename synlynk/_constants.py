@@ -348,7 +348,7 @@ CORE_INSTRUCTION_FILES = {
     "claude": "CLAUDE.md",
     "agy": "GEMINI.md",
     "codex": "AGENTS.md",
-    "grok": "GROK.md",
+    "grok": "AGENTS.md",
 }
 
 AGENT_PANEL_QUERY_TIMEOUT_SECONDS = {

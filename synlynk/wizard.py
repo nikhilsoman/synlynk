@@ -1131,7 +1131,7 @@ def wizard_init(scan: dict = None, dry_run: bool = False) -> None:
         # Write role blocks into agent directive files
         for harness_name, role_desc in roles.items():
             fname_map = {"claude": "CLAUDE.md", "agy": "GEMINI.md",
-                         "grok": "GROK.md", "codex": "AGENTS.md"}
+                         "grok": "AGENTS.md", "codex": "AGENTS.md"}
             fname = fname_map.get(harness_name)
             if fname and os.path.exists(fname):
                 try:

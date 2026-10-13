@@ -31,7 +31,7 @@ def test_build_templates_includes_lifecycle_checkpoint_section(tmp_path, monkeyp
         # Checkpoint section must come after the trigger registry, in the same block
         assert content.index("## Trigger registry") < content.index("## Lifecycle checkpoint directives")
 
-    for key in ("CLAUDE.md", "GEMINI.md", "AGENTS.md", "GROK.md"):
+    for key in ("CLAUDE.md", "GEMINI.md", "AGENTS.md"):
         assert "AI_INSTRUCTIONS.md" in templates[key]
 
 

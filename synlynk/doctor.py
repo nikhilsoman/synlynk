@@ -435,8 +435,8 @@ def _hc_agent_profiles() -> HealthCheck:
 
 def _hc_instruction_files() -> HealthCheck:
     """Checks that per-agent instruction files exist at the repo root."""
-    expected = {"claude": "CLAUDE.md", "agy": "GEMINI.md", "codex": "AGENTS.md", "grok": "GROK.md"}
-    missing = [fname for fname in expected.values() if not os.path.exists(fname)]
+    expected = {"claude": "CLAUDE.md", "agy": "GEMINI.md", "codex": "AGENTS.md", "grok": "AGENTS.md"}
+    missing = [fname for fname in dict.fromkeys(expected.values()) if not os.path.exists(fname)]
     if not missing:
         return HealthCheck("instruction_files", "ok", "Agent instruction files present")
     return HealthCheck(
@@ -1377,7 +1377,7 @@ def cmd_doctor(args=None, checks: _List = None) -> int:
         _DIRECTIVE_MAP = {
             "claude": "CLAUDE.md",
             "agy": "GEMINI.md",
-            "grok": "GROK.md",
+            "grok": "AGENTS.md",
             "codex": "AGENTS.md",
         }
         cfg_roles = _pkg("load_config")().get("roles", {})

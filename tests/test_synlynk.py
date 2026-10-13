@@ -4941,12 +4941,12 @@ def test_exec_grok_headless_appends_rules_flags(project_dir, monkeypatch):
     monkeypatch.setattr(sl, "check_budgets", lambda: None)
     monkeypatch.setattr(sl, "_check_pre_exec_gate", lambda force=False: True)
 
-    (project_dir / "GROK.md").write_text("grok rules")
+    (project_dir / "AGENTS.md").write_text("shared rules")
     (project_dir / ".synlynk" / "context.md").write_text("synlynk context")
 
     sl.exec_command(["grok", "-p", "do the thing"])
     assert captured["cmd"][0] == "grok"
-    assert captured["cmd"][1:5] == ["--rules", "GROK.md", "--rules", ".synlynk/context.md"]
+    assert captured["cmd"][1:5] == ["--rules", "AGENTS.md", "--rules", ".synlynk/context.md"]
 
 
 def test_exec_grok_interactive_omits_context_md(project_dir, monkeypatch):
@@ -4968,12 +4968,12 @@ def test_exec_grok_interactive_omits_context_md(project_dir, monkeypatch):
     monkeypatch.setattr(sl, "check_budgets", lambda: None)
     monkeypatch.setattr(sl, "_check_pre_exec_gate", lambda force=False: True)
 
-    (project_dir / "GROK.md").write_text("grok rules")
+    (project_dir / "AGENTS.md").write_text("shared rules")
     (project_dir / ".synlynk" / "context.md").write_text("synlynk context")
 
     sl.exec_command(["grok", "do the thing"])
     assert captured["cmd"][0] == "grok"
-    assert captured["cmd"][1:3] == ["--rules", "GROK.md"]
+    assert captured["cmd"][1:3] == ["--rules", "AGENTS.md"]
     assert ".synlynk/context.md" not in captured["cmd"]
 
 
@@ -8055,6 +8055,7 @@ def test_init_wizard_adds_grok_to_agent_slots(tmp_path, monkeypatch):
                  org=None, repo=None, project_id=None, force=False)
     config = json.load(open(".synlynk/config.json"))
     assert config["agent_slots"].get("grok") == "grok"
+    assert os.path.exists("AGENTS.md")
     assert not os.path.exists("GROK.md")
 
 
@@ -8194,7 +8195,7 @@ def test_hc_agent_profiles_warn_missing(tmp_path, monkeypatch):
 def test_hc_instruction_files_ok(tmp_path, monkeypatch):
     import synlynk
     monkeypatch.chdir(tmp_path)
-    for fname in ["CLAUDE.md", "GEMINI.md", "AGENTS.md", "GROK.md"]:
+    for fname in ["CLAUDE.md", "GEMINI.md", "AGENTS.md"]:
         (tmp_path / fname).write_text("")
     result = synlynk._hc_instruction_files()
     assert result.status == "ok"

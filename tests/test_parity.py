@@ -192,7 +192,6 @@ def test_run_parity_remediation_dry_run(tmp_path):
     assert "CLAUDE.md" in res["files_to_touch"]
     assert "GEMINI.md" in res["files_to_touch"]
     assert "AGENTS.md" in res["files_to_touch"]
-    assert "GROK.md" in res["files_to_touch"]
     assert ".synlynk/policy.json" in res["files_to_touch"]
 
 
@@ -218,7 +217,6 @@ def test_run_parity_remediation_live(tmp_path):
     assert (wt_path / "CLAUDE.md").exists()
     assert (wt_path / "GEMINI.md").exists()
     assert (wt_path / "AGENTS.md").exists()
-    assert (wt_path / "GROK.md").exists()
     assert (wt_path / ".synlynk" / "policy.json").exists()
 
     # Verify sacred user content preserved in worktree CLAUDE.md

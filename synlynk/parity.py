@@ -293,7 +293,6 @@ def run_parity_remediation(
         "CLAUDE.md": "claude",
         "GEMINI.md": "agy",
         "AGENTS.md": "codex",
-        "GROK.md": "grok",
     }
 
     files_to_touch = list(directive_map.keys()) + [
@@ -478,7 +477,7 @@ def check_fleet_parity(repo_path: str = ".") -> Dict[str, Any]:
     path = Path(repo_path).resolve()
     gaps = []
 
-    directive_files = ["CLAUDE.md", "GEMINI.md", "AGENTS.md", "GROK.md"]
+    directive_files = ["CLAUDE.md", "GEMINI.md", "AGENTS.md"]
     for doc in directive_files:
         fpath = path / doc
         if not fpath.exists():

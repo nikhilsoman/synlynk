@@ -52,7 +52,6 @@ def test_check_core_instruction_files_missing_codex(tmp_path):
 
     (tmp_path / "CLAUDE.md").write_text("x")
     (tmp_path / "GEMINI.md").write_text("x")
-    (tmp_path / "GROK.md").write_text("x")
     # AGENTS.md intentionally absent
     missing = check_core_instruction_files(tmp_path, agents=["codex", "claude"])
     assert "codex" in missing
@@ -146,7 +145,7 @@ def test_fleet_matrix_runs_table(project_dir):
 
 def test_run_matrix_dry_marks_missing_instruction_red(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    for name in ("CLAUDE.md", "GEMINI.md", "GROK.md"):
+    for name in ("CLAUDE.md", "GEMINI.md"):
         (tmp_path / name).write_text("ok")
     # no AGENTS.md
     from synlynk.fleet import run_matrix_dry
@@ -159,7 +158,7 @@ def test_run_matrix_dry_marks_missing_instruction_red(tmp_path, monkeypatch):
 def test_run_matrix_dry_codex_gh_write_na(tmp_path):
     from synlynk.fleet import run_matrix_dry
 
-    for name in ("CLAUDE.md", "GEMINI.md", "GROK.md", "AGENTS.md"):
+    for name in ("CLAUDE.md", "GEMINI.md", "AGENTS.md"):
         (tmp_path / name).write_text("ok")
     results = run_matrix_dry(str(tmp_path))
     codex_gh = [r for r in results if r.home == "codex" and r.cell == "gh_write"]

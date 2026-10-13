@@ -3343,12 +3343,13 @@ def init(force: bool = False, agents: list = None,
             "GEMINI.md":   (templates.get("GEMINI.md", ""), "html"),
             "AGENTS.md":   (templates.get("AGENTS.md", ""), "html"),
         }
-        _agent_guards = {"CLAUDE.md": "claude", "GEMINI.md": "agy", "AGENTS.md": "codex"}
+        _agent_guards = {"CLAUDE.md": ("claude",), "GEMINI.md": ("agy",), "AGENTS.md": ("codex", "grok")}
         for fname, (content, mstyle) in trio_content.items():
             required = _agent_guards[fname]
-            if required not in agent_set:
+            selected = next((agent for agent in required if agent in agent_set), None)
+            if selected is None:
                 continue
-            _write_instruction_file(fname, required, content, mstyle)
+            _write_instruction_file(fname, selected, content, mstyle)
 
         # Extended targets: written based on environment detection.
         # Guards are sourced from _INSTRUCTION_TARGETS[i][3] (detection_fn).
