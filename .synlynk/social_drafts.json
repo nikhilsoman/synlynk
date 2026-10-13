@@ -1022,5 +1022,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2266 \u2014 add goal-match confidence threshold (gh:#2262) (PR #2266, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2266.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-13) - PR #2266\n- Merged improvements and fixes for PR #2266."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/317-pr2269-add-autonomy-pass-chaining-backlog-pipel.md",
+    "title": "PR #2269 \u2014 add _autonomy_pass() chaining backlog pipeline + mode-gated scheduling",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-13",
+    "pr": "#2269",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2269."
+    ],
+    "tweet": "\ud83d\ude80 PR #2269 \u2014 add _autonomy_pass() chaining backlog pipeline + mode-gated scheduling (PR #2269, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2269.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-13) - PR #2269\n- Merged improvements and fixes for PR #2269."
   }
 ]
