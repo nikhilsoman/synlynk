@@ -18,7 +18,7 @@
       "muse"
     ],
     "generator_status": "manual \u2014 synlynk capability report / policy regen not yet shipped (gh:#1993)",
-    "note": "task_allocation below is the current interim default, not an authoritative ranking. Any harness that clears min_sample_size with better metrics on a task_type may be promoted; this requires a reviewed PR updating this file plus docs/harness-capability-baseline.md, not a silent edit. A future suspension must update task_allocation, docs/harness-capability-baseline.md, and README.md:15 together."
+    "note": "task_allocation below is the current interim default, not an authoritative ranking. Any harness that clears min_sample_size with better metrics on a task_type may be promoted; this requires a reviewed PR updating this file plus docs/harness-capability-baseline.md, not a silent edit. A future suspension must update task_allocation, docs/harness-capability-baseline.md, and README.md:15 together. gh_write fallback order measured 2026-10-14 from this workspace state.db capability_ratings (no task_type column; 14-day AVG(quality), n>=5, query 2026-10-14 06:27:32): codex 9.04 n=410, grok 8.55 n=176, claude 8.19 n=170, agy 7.58 n=89. local n=2 and muse n=1 excluded. grok stays in not_yet_calibrated for task types that still lack their own sample."
   },
   "overrides": {
     "role_task_type_compat": {
@@ -108,6 +108,7 @@
         "gh_write": {
           "harness": "codex",
           "fallback": [
+            "grok",
             "claude",
             "agy"
           ]
