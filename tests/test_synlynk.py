@@ -5087,6 +5087,46 @@ def test_generate_todo_md_does_not_write_to_dispatch_worktree(project_dir, tmp_p
     assert "Shared-root generated doc" in (project_dir / "project-docs" / "todo.md").read_text()
 
 
+def test_generate_todo_md_real_worktree_does_not_rewrite_job_copy(git_worktree_repo, tmp_path, monkeypatch):
+    """#2237: a linked dispatch worktree keeps its own project-docs/todo.md."""
+    import subprocess
+    import synlynk as sl
+
+    repo = git_worktree_repo
+    job = tmp_path / "job-worktree"
+    subprocess.run(
+        ["git", "worktree", "add", "--detach", str(job), "HEAD"],
+        cwd=repo, capture_output=True, check=True,
+    )
+    job_todo = job / "project-docs" / "todo.md"
+    original = job_todo.read_text()
+    monkeypatch.chdir(job)
+
+    sl.cmd_story_create("Must not land in the job worktree")
+
+    assert job_todo.read_text() == original
+    assert "Must not land in the job worktree" in (repo / "project-docs" / "todo.md").read_text()
+
+
+def test_rotate_project_doc_does_not_archive_into_job_worktree(git_worktree_repo, tmp_path, monkeypatch):
+    """#2237: roadmap/costs/memory rotation must not write via the cwd-relative docs dir."""
+    import subprocess
+    import synlynk.db as db
+
+    repo = git_worktree_repo
+    job = tmp_path / "job-worktree"
+    subprocess.run(
+        ["git", "worktree", "add", "--detach", str(job), "HEAD"],
+        cwd=repo, capture_output=True, check=True,
+    )
+    monkeypatch.chdir(job)
+
+    db._rotate_project_doc("costs", [{"n": 1}, {"n": 2}], keep_n=1)
+
+    assert not (job / "project-docs" / "archive").exists()
+    assert (repo / "project-docs" / "archive").is_dir()
+
+
 def test_import_todo_to_stories_imports_unchecked_lines(project_dir):
     """_import_todo_to_stories creates story rows for all supported checkbox states."""
     import synlynk as sl
@@ -5307,7 +5347,8 @@ def test_verify_contract_does_not_guess_k_selector_from_title(project_dir):
     story_id = sl.cmd_story_create("Fix Auth Timeout")
     section = sl._verify_contract_for_story(story_id, "fix it")
     assert "## How to Verify" in section
-    assert "pytest" in section
+    assert "pytest -q" in section
+    assert "Do not use `pytest -v`" in section
     assert "-k '" not in section
     assert '-k "' not in section
     assert "fix_auth_timeout" not in section
@@ -5330,6 +5371,8 @@ def test_verify_contract_runs_changed_test_files(project_dir):
     story_id = sl.cmd_story_create("Fix Auth Timeout")
     section = sl._verify_contract_for_story(story_id, "fix skip injected permissions")
     assert "tests/test_new.py" in section
+    assert "-q" in section
+    assert " -v" not in section
     assert "-k '" not in section
     assert '-k "' not in section
 
