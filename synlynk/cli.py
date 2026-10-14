@@ -278,7 +278,7 @@ def cmd_watch(args) -> None:
         sys.stdout.flush()
 
 _TOP_LEVEL_COMMANDS = (
-    "help", "init", "quickstart", "upgrade", "uninstall", "join", "start", "home", "testbed", "tool",
+    "help", "init", "quickstart", "upgrade", "fleet", "uninstall", "join", "start", "home", "testbed", "tool",
     "pack", "connector", "impact", "mesh", "spike", "team", "decide", "heal",
     "audit-docs", "goal", "governs", "local", "models", "media", "scan", "workspace",
     "migrate", "rollback", "probe", "doctor", "worktree", "tui", "notify", "exit",
@@ -679,6 +679,16 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     probe_parser.add_argument(
         "--no-fence", action="store_true", dest="no_fence",
         help="Probe harness capabilities without rewriting capability fences in directive files",
+    )
+
+    fleet_parser = subparsers.add_parser("fleet", help="Manage onboarding fleet templates")
+    fleet_sub = fleet_parser.add_subparsers(dest="fleet_action")
+    fleet_sub.add_parser("list", help="List available fleet templates")
+    fleet_apply_parser = fleet_sub.add_parser("apply", help="Apply a fleet template to this repository")
+    fleet_apply_parser.add_argument("template", help="Fleet template name")
+    fleet_apply_parser.add_argument(
+        "--dry-run", action="store_true", dest="dry_run",
+        help="Print the template role table without writing configuration",
     )
 
     doctor_parser = subparsers.add_parser("doctor", help="Run health checks on your synlynk installation")
@@ -2224,6 +2234,28 @@ def main(argv=None) -> None:
         sys.exit(cmd_gh(args.role, getattr(args, "gh_args", []) or []))
     elif args.command == "upgrade":
         upgrade(dry_run=getattr(args, "dry_run", False))
+    elif args.command == "fleet":
+        from synlynk.fleet_templates import FLEET_TEMPLATES, apply_fleet_template, list_fleet_templates
+
+        action = getattr(args, "fleet_action", None)
+        if action == "list":
+            for template_name in list_fleet_templates():
+                template = FLEET_TEMPLATES[template_name]
+                print(f"{template_name}: {template['name']} — {template['description']}")
+        elif action == "apply":
+            template = FLEET_TEMPLATES.get(args.template)
+            if template is None:
+                raise SystemExit(f"Unknown fleet template: {args.template}")
+            if args.dry_run:
+                print(f"Fleet template: {args.template} ({template['name']})")
+                print(f"{'role':<16} {'harness':<10} tasks")
+                for role_name, role in template["roles"].items():
+                    print(f"{role_name:<16} {role['harness']:<10} {', '.join(role['tasks'])}")
+            else:
+                result = apply_fleet_template(os.getcwd(), args.template)
+                print(f"Applied fleet template '{result['template']}' to .synlynk/config.json")
+        else:
+            fleet_parser.print_help()
     elif args.command == "uninstall":
         from synlynk.uninstall import execute_uninstall
         res = execute_uninstall()
