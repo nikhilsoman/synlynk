@@ -1102,5 +1102,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2283 \u2014 tier the instruction writer by per-harness reload confidence (gh:#2243) (PR #2283, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2283.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-14) - PR #2283\n- Merged improvements and fixes for PR #2283."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/321-pr2279-auto-opt-agy-into-skip-permissions-gh-22.md",
+    "title": "PR #2279 \u2014 auto-opt Agy into skip_permissions (gh:#2216)",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-14",
+    "pr": "#2279",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2279."
+    ],
+    "tweet": "\ud83d\ude80 PR #2279 \u2014 auto-opt Agy into skip_permissions (gh:#2216) (PR #2279, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2279.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-14) - PR #2279\n- Merged improvements and fixes for PR #2279."
   }
 ]
