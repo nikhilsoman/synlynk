@@ -40,10 +40,10 @@ def test_default_models_by_tier_parity_with_catalog():
 def test_resolve_dispatch_model_agy_resolves_to_2026_models():
     """Verify resolve_dispatch_model resolves agy tiers to 2026 models."""
     fast_res = resolve_dispatch_model("agy", "simple syntax validation", model_tier="fast")
-    assert fast_res["resolved_model"] == "gemini-3.7-flash-medium"
+    assert fast_res["resolved_model"] == "gemini-3.8-flash-medium"
 
     pro_res = resolve_dispatch_model("agy", "multi-file refactor", model_tier="pro")
-    assert pro_res["resolved_model"] in ("gemini-3.1-pro-low", "gemini-3.7-flash-high")
+    assert pro_res["resolved_model"] == "gemini-3.8-flash-high"
 
     reasoning_res = resolve_dispatch_model("agy", "architecture design", model_tier="reasoning")
-    assert reasoning_res["resolved_model"] == "gemini-3.1-pro-high"
+    assert reasoning_res["resolved_model"] == "claude-opus-4-6-thinking"

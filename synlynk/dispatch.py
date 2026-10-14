@@ -33,10 +33,15 @@ _ORG_ROLE_TO_BASELINE_ROLE = {
     "synlynk-bot": "builder",
 }
 
-# grok added 2026-10-04 (gh:#2034): live TC-9 probe confirms gh-write
-# capability post-LIVE-13 fix; listed last pending >=5 empirical
-# gh-write-task samples per the Empirical Capability Assessment Policy.
-_GH_WRITE_HARNESS_PRIORITY = ("claude", "agy", "grok")
+# Measured 2026-10-14 from ~/.synlynk/workspaces/synlynk/state.db
+# capability_ratings (no task_type column; 14-day AVG(quality), n>=5).
+# Query datetime('now')=2026-10-14 06:27:32, max(ts)=2026-10-14 06:24:10:
+#   codex 9.04 n=410, grok 8.55 n=176, claude 8.19 n=170, agy 7.58 n=89.
+# local (n=2) and muse (n=1) stay out. Codex is first because that
+# measurement says so. The pre-2026-10-04 tuple ("claude", "agy", "grok")
+# omitted Codex and listed Grok last; that heuristic is retired. Grok's
+# sandbox-deny finding is superseded (gh:#2034). Docs keep "Codex by default".
+_GH_WRITE_HARNESS_PRIORITY = ("codex", "grok", "claude", "agy")
 _STARTUP_FAILOVER_ORDER = ("codex", "agy", "claude")
 _CODEX_REVIEW_WRITABLE_ROOTS = "sandbox_workspace_write.writable_roots=[]"
 
@@ -132,21 +137,21 @@ def _job_purpose(role: str | None, task_type: str | None, *, explicit: bool = Tr
 _DEFAULT_MODELS_BY_TIER = {
     MODEL_TIER_FAST: {
         "claude": "claude-haiku-4-5-20251001",
-        "agy": "gemini-3.7-flash-medium",
+        "agy": "gemini-3.8-flash-medium",
         "codex": "gpt-5.6-luna",
         "grok": "grok-4.6",
         "local": "qwen2.5",
     },
     MODEL_TIER_PRO: {
         "claude": "claude-sonnet-5",
-        "agy": "gemini-3.1-pro-low",
+        "agy": "gemini-3.8-flash-high",
         "codex": "gpt-5.6-luna",
         "grok": "grok-4.7",
         "local": "qwen2.5",
     },
     MODEL_TIER_REASONING: {
         "claude": "claude-opus-5-5",
-        "agy": "gemini-3.1-pro-high",
+        "agy": "claude-opus-4-6-thinking",
         "codex": "gpt-5.6-luna",
         "grok": "grok-4.7",
         "local": "deepseek-r1",
@@ -485,8 +490,9 @@ def _harness_for_org_role(org_role: str, baselines_map: dict, requires_gh_write:
     docs/superpowers/specs/2026-08-16-agent-dispatch-integration-design.md
     §6) includes the mapped tag for this org role. Does not consult the
     story_id-based capability_scores DB table — that stays story_id-only.
-    When requires_gh_write is set, candidates are tried in the fixed
-    priority order claude -> agy first, then any remaining CORE_FLEET members
+    When requires_gh_write is set, candidates are tried in
+    _GH_WRITE_HARNESS_PRIORITY (codex, grok, claude, agy — 2026-10-14
+    capability_ratings), then any remaining CORE_FLEET members
     alphabetically. Non-gh-write selection is untouched: plain alphabetical
     order over CORE_FLEET.
     """
@@ -3966,7 +3972,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             "Register an adapter before dispatching it."
         ) from exc
 
-    if agent == "grok" and not skip_permissions:
+    if agent in {"grok", "agy"} and not skip_permissions:
         # Grok's CLI has no working non-bypass headless mode (LIVE-13:
         # docs/rca/2026-09-22-LIVE-13-grok-headless-dispatch-permission-bypass.md).
         # Auto-opt-in here (rather than requiring every caller to pass
@@ -3974,6 +3980,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         # keep working unchanged after gh:#1925 part 1 made the bypass gated
         # instead of unconditional. See
         # docs/superpowers/specs/2026-10-04-grok-failclosed-permission-enforcement-design.md.
+        # Agy's --sandbox mode denies RunCommand outright and still reports
+        # SUCCESS (gh:#2216, job-0d75bb61). Same auto-opt-in so review and
+        # shell dispatches get --dangerously-skip-permissions instead.
         skip_permissions = True
 
     # A capability gate may reroute the harness (for example, Grok write

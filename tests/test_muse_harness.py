@@ -45,6 +45,7 @@ def test_muse_baseline_schema_tc0():
         "--model",
         "--approval-mode",
         "--workspace",
+        "--yolo",
     ]
     assert baseline["dispatch_flags"]["required_flags"] == ["--json", "--approval-mode"]
     assert baseline["headless_contract"]["non_interactive_flag"] == "exec"
@@ -63,6 +64,32 @@ def test_muse_adapter_permission_translation_does_not_invent_unsupported_flags()
     assert _permissions_to_flags(
         "muse", ["read:*", "write:src/"], read_only=False
     ) == []
+
+
+def test_muse_adapter_build_cmd():
+    """Verify MuseAdapter.build_cmd constructs real exec CLI flags."""
+    from synlynk.harness_adapters.muse import MuseAdapter
+    from synlynk.harness_adapters.request import DispatchRequest
+
+    adapter = MuseAdapter()
+    req = DispatchRequest(agent="muse", task="implement feature")
+    cmd = adapter.build_cmd(req)
+    assert "--json" in cmd
+    assert "--approval-mode" in cmd
+    assert "never" in cmd
+    assert "--dangerously-skip-permissions" not in cmd
+    assert "--always-approve" not in cmd
+    assert "--non-interactive" not in cmd
+    assert "-C" not in cmd
+
+
+def test_muse_dispatch_flags_skip_permissions_never_adds_invalid_flags():
+    """Skip-permissions must never add invalid flags to Muse dispatch flags."""
+    flags = _dispatch_flags_for_agent("muse", skip_permissions=True)
+    assert "--dangerously-skip-permissions" not in flags
+    assert "--always-approve" not in flags
+    assert "--json" in flags
+    assert "--approval-mode" in flags
 
 
 def test_muse_dispatch_flags_and_command_construction(tmp_path, monkeypatch):
@@ -122,6 +149,58 @@ def test_muse_dispatch_flags_and_command_construction(tmp_path, monkeypatch):
     assert "--output-format" not in shell_cmd
     assert "-C " not in shell_cmd
     assert "--prompt" not in shell_cmd
+
+
+def test_muse_dispatch_with_skip_permissions(tmp_path, monkeypatch):
+    """Verify dispatch with skip_permissions constructs valid muse command without invalid flags."""
+    import synlynk.dispatch as dispatch_mod
+
+    worktree_dir = str(tmp_path / "mock_worktree_skip")
+    captured_cmds = []
+
+    class FakeProc:
+        pid = 99998
+        returncode = 0
+        def poll(self):
+            return 0
+
+    def fake_popen(cmd, **kwargs):
+        captured_cmds.append((cmd, kwargs))
+        return FakeProc()
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(dispatch_mod, "_create_job_worktree", lambda *a, **kw: {
+        "path": worktree_dir,
+        "base_branch": "main",
+        "base_sha": "abcdef1",
+    })
+    monkeypatch.setattr(dispatch_mod, "_preflight_dispatch", lambda *a, **kw: {"passed": True})
+    monkeypatch.setattr(dispatch_mod, "_dispatch_capability_preflight", lambda *a, **kw: {"passed": True})
+
+    res = dispatch_mod.dispatch_agent(
+        agent="muse",
+        task="refactor core parser",
+        force_agent=True,
+        skip_preflight=True,
+        context_mode="none",
+        skip_permissions=True,
+    )
+
+    assert res is not None
+    muse_cmds = [
+        c for c in captured_cmds
+        if isinstance(c[0], (list, tuple)) and c[0] and c[0][0] in ("sh", "bash") and "muse" in str(c[0][-1])
+    ]
+    assert len(muse_cmds) == 1
+    shell_cmd = muse_cmds[0][0][2]
+    assert "muse" in shell_cmd
+    assert "exec" in shell_cmd
+    assert "--workspace" in shell_cmd
+    assert "--json" in shell_cmd
+    assert "--approval-mode" in shell_cmd
+    assert "never" in shell_cmd
+    assert "--dangerously-skip-permissions" not in shell_cmd
+    assert "--always-approve" not in shell_cmd
 
 
 def test_muse_prompt_formatting():

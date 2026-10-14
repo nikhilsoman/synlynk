@@ -11,6 +11,7 @@ import os
 import re
 import shutil
 import subprocess
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -96,9 +97,14 @@ BUILTIN_MODEL_CATALOG = (
     _remote("claude-fable-5-1", "claude-5", "claude", EntitlementTier.SUBSCRIPTION_CAPPED),
     _remote("claude-fable-5", "claude-5", "claude", EntitlementTier.SUBSCRIPTION_CAPPED),
     _remote("claude-haiku-4-5-20251001", "claude-5", "claude", EntitlementTier.INCLUDED_IN_BASE),
-    _remote("gemini-3.7-flash-medium", "gemini-3", "agy", EntitlementTier.INCLUDED_IN_BASE),
-    _remote("gemini-3.1-pro-low", "gemini-3", "agy", EntitlementTier.SUBSCRIPTION_CAPPED),
-    _remote("gemini-3.1-pro-high", "gemini-3", "agy", EntitlementTier.SUBSCRIPTION_CAPPED),
+    # Live `agy models` roster as of 2026-10-14 (gh:#2268). The previous
+    # gemini-3.7-flash-medium / gemini-3.1-pro-* ids are rejected by the CLI.
+    _remote("gemini-3.8-flash-low", "gemini-3", "agy", EntitlementTier.INCLUDED_IN_BASE),
+    _remote("gemini-3.8-flash-medium", "gemini-3", "agy", EntitlementTier.INCLUDED_IN_BASE),
+    _remote("gemini-3.8-flash-high", "gemini-3", "agy", EntitlementTier.SUBSCRIPTION_CAPPED),
+    _remote("claude-sonnet-4-6", "claude-5", "agy", EntitlementTier.SUBSCRIPTION_CAPPED),
+    _remote("claude-opus-4-6-thinking", "claude-5", "agy", EntitlementTier.SUBSCRIPTION_CAPPED),
+    _remote("gpt-oss-120b-medium", "gpt-5.6", "agy", EntitlementTier.INCLUDED_IN_BASE),
     _remote("gpt-5.6-luna", "gpt-5.6", "codex", EntitlementTier.INCLUDED_IN_BASE),
     _remote("grok-4.7", "grok-4", "grok", EntitlementTier.METERED_EXTRA_USAGE_ONLY),
     _remote("grok-4.6", "grok-4", "grok", EntitlementTier.SUBSCRIPTION_CAPPED),
@@ -134,7 +140,7 @@ def load_model_catalog(repo_path: Optional[str] = None) -> dict[str, Any]:
         "tiers": {
             "fast": {
                 "claude": "claude-haiku-4-5-20251001",
-                "agy": "gemini-3.7-flash-medium",
+                "agy": "gemini-3.8-flash-medium",
                 "codex": "gpt-5.6-luna",
                 "grok": "grok-4.6",
                 "local": "qwen2.5",
@@ -142,7 +148,7 @@ def load_model_catalog(repo_path: Optional[str] = None) -> dict[str, Any]:
             },
             "pro": {
                 "claude": "claude-sonnet-5",
-                "agy": "gemini-3.1-pro-low",
+                "agy": "gemini-3.8-flash-high",
                 "codex": "gpt-5.6-luna",
                 "grok": "grok-4.7",
                 "local": "qwen2.5",
@@ -150,7 +156,7 @@ def load_model_catalog(repo_path: Optional[str] = None) -> dict[str, Any]:
             },
             "reasoning": {
                 "claude": "claude-opus-5-5",
-                "agy": "gemini-3.1-pro-high",
+                "agy": "claude-opus-4-6-thinking",
                 "codex": "gpt-5.6-luna",
                 "grok": "grok-4.7",
                 "local": "deepseek-r1",
@@ -163,8 +169,21 @@ def load_model_catalog(repo_path: Optional[str] = None) -> dict[str, Any]:
     }
 
 
-def resolve_tier_model(tier: str, harness: str, repo_path: Optional[str] = None) -> str:
-    """Resolve the model ID for a given tier and harness from the catalog."""
+# Preference order when a catalog id is absent from the live Agy roster.
+# Heads match `agy models` on 2026-10-14; the heuristic below covers the
+# next rename without another hardcoded-only failure (gh:#2268).
+_AGY_TIER_DISCOVERY_PREFERENCE = {
+    "fast": ("gemini-3.8-flash-medium", "gemini-3.8-flash-low", "gemini-3.8-flash-high"),
+    "pro": ("gemini-3.8-flash-high", "gemini-3.8-flash-medium", "claude-sonnet-4-6"),
+    "reasoning": ("claude-opus-4-6-thinking", "gemini-3.8-flash-high", "claude-sonnet-4-6"),
+}
+
+_DISCOVERY_CACHE: dict[str, tuple[float, tuple[str, ...]]] = {}
+_DISCOVERY_TTL_SECONDS = 300.0
+
+
+def _static_tier_model(tier: str, harness: str, repo_path: Optional[str] = None) -> str:
+    """Resolve a tier model from the declarative catalog only."""
     catalog = load_model_catalog(repo_path)
     tiers = catalog.get("tiers", {})
     tier_map = tiers.get(tier, {})
@@ -186,6 +205,62 @@ def resolve_tier_model(tier: str, harness: str, repo_path: Optional[str] = None)
             pass
         return "gpt-5.6-luna"
     return f"{harness}-default"
+
+
+def _heuristic_agy_tier_model(tier: str, discovered: list[str]) -> str | None:
+    """Pick a live Agy model id when none of the preferred ids are present."""
+    def first(predicate) -> str | None:
+        for name in discovered:
+            if predicate(name.lower()):
+                return name
+        return None
+
+    if tier == "fast":
+        return (
+            first(lambda name: "flash" in name and "low" in name)
+            or first(lambda name: "flash" in name and "medium" in name)
+            or first(lambda name: "flash" in name)
+        )
+    if tier == "pro":
+        return (
+            first(lambda name: "flash" in name and "high" in name)
+            or first(lambda name: "sonnet" in name)
+            or first(lambda name: "flash" in name)
+        )
+    if tier == "reasoning":
+        return (
+            first(lambda name: "opus" in name or "thinking" in name)
+            or first(lambda name: "flash" in name and "high" in name)
+        )
+    return None
+
+
+def _pick_discovered_tier_model(harness: str, tier: str, configured: str, discovered: list[str]) -> str:
+    """Keep a catalog id that the harness still advertises; otherwise fall back."""
+    if not discovered or configured in discovered:
+        return configured
+    if harness != "agy":
+        return configured
+    for candidate in _AGY_TIER_DISCOVERY_PREFERENCE.get(tier, ()):
+        if candidate in discovered:
+            return candidate
+    heuristic = _heuristic_agy_tier_model(tier, discovered)
+    return heuristic or discovered[0]
+
+
+def resolve_tier_model(tier: str, harness: str, repo_path: Optional[str] = None) -> str:
+    """Resolve the model ID for a given tier and harness from the catalog.
+
+    For Agy, validate the catalog id against ``discover_models()``'s live
+    probe. A stale id is replaced by a tier-matched discovered model. An
+    empty probe (binary missing, tests, timeout) keeps the catalog value.
+    """
+    configured = _static_tier_model(tier, harness, repo_path)
+    if harness == "agy":
+        configured = _pick_discovered_tier_model(
+            harness, tier, configured, discovered_model_ids("agy")
+        )
+    return configured
 
 
 def get_models_from_catalog(repo_path: Optional[str] = None) -> list[ModelSpec]:
@@ -249,17 +324,59 @@ def _parse_model_names(text: str) -> list[str]:
     return list(dict.fromkeys(names))
 
 
+def _parse_agy_models_listing(text: str) -> list[str]:
+    """Parse `agy models` id<TAB>label lines.
+
+    `agy --help` does not list model ids (gh:#2268). Display names such as
+    "Gemini 3.8 Flash (Medium)" are not executable `--model` values.
+    """
+    names: list[str] = []
+    for line in (text or "").splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.lower().startswith(("fetching ", "usage")):
+            continue
+        model_id = stripped.split("\t", 1)[0].strip()
+        if " " in model_id:
+            continue
+        if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_.:/-]{2,}", model_id):
+            continue
+        lowered = model_id.lower()
+        if any(token in lowered for token in ("gpt", "claude", "gemini", "grok", "llama", "qwen", "gemma", "deepseek", "oss")):
+            names.append(model_id)
+    return list(dict.fromkeys(names))
+
+
 def probe_cli_harness(harness: str, executable: str | None = None, timeout: float = 5.0) -> list[ModelSpec]:
     """Probe one installed CLI without failing the caller when it is absent."""
-    commands = {"claude": ["models"], "codex": ["--list-models"], "agy": ["--help"], "grok": ["models"]}
+    commands = {"claude": ["models"], "codex": ["--list-models"], "agy": ["models"], "grok": ["models"]}
     executable = executable or harness
-    if not shutil.which(executable):
+    if harness not in commands or not shutil.which(executable):
         return []
     try:
         result = subprocess.run([executable, *commands[harness]], capture_output=True, text=True, timeout=timeout, check=False)
     except (OSError, subprocess.TimeoutExpired):
         return []
-    return [ModelSpec(name, "discovered", harness, discovered=True, discovery_source=f"cli:{executable}") for name in _parse_model_names(result.stdout + "\n" + result.stderr)]
+    text = result.stdout + "\n" + result.stderr
+    names = _parse_agy_models_listing(text) if harness == "agy" else _parse_model_names(text)
+    return [ModelSpec(name, "discovered", harness, discovered=True, discovery_source=f"cli:{executable}") for name in names]
+
+
+def discovered_model_ids(harness: str) -> list[str]:
+    """Return live model ids from the same probe ``discover_models()`` uses.
+
+    Pytest skips the probe unless ``SYNLYNK_FORCE_MODEL_DISCOVERY=1``, so
+    catalog unit tests stay offline. A successful probe is cached briefly.
+    """
+    forced = os.environ.get("SYNLYNK_FORCE_MODEL_DISCOVERY") == "1"
+    if os.environ.get("PYTEST_CURRENT_TEST") and not forced:
+        return []
+    now = time.time()
+    cached = _DISCOVERY_CACHE.get(harness)
+    if cached and (now - cached[0]) < _DISCOVERY_TTL_SECONDS:
+        return list(cached[1])
+    ids = tuple(spec.model_id for spec in probe_cli_harness(harness))
+    _DISCOVERY_CACHE[harness] = (now, ids)
+    return list(ids)
 
 
 def _probe_http(url: str, timeout: float = 1.5) -> list[str]:
@@ -311,7 +428,9 @@ def discover_models() -> list[ModelSpec]:
     for harness in ("claude", "codex", "agy", "grok"):
         discovered.extend(probe_cli_harness(harness))
     discovered.extend(probe_local_runtimes())
-    return list({m.model_id: m for m in discovered}.values())
+    # Key by harness as well as id. Agy and Claude can both advertise
+    # claude-sonnet-4-6; collapsing on id alone dropped the Agy binding.
+    return list({(m.harness_binding, m.model_id): m for m in discovered}.values())
 
 
 def register_builtin_models(conn) -> None:
