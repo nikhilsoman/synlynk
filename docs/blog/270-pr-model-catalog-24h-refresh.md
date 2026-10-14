@@ -3,7 +3,7 @@ title: "The model catalog refreshes itself every 24 hours"
 date: 2026-10-14
 series: "Building the OS for Multi-Agent Development"
 post: 270
-pr: TBD
+pr: 2297
 status: open
 author: "synlynk team"
 version: "0.25.0"
