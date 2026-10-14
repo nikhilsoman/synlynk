@@ -833,3 +833,5 @@
   worker; dispatch telemetry remains authoritative. QA findings 1-4 fixes and
   5-6 documentation, TDD and full regression evidence are recorded in
   `project-docs/devlogs/personal-relay-task10-evidence.md`.
+- 2026-10-15 gh:#2310 Task 4 Codex implementation/verification: focused tests, syntax/diff
+  checks, and full `pytest -q` run. Dispatch telemetry/cost was not available in this worker.
