@@ -45,7 +45,10 @@ DEFAULT_WORKSPACE_POLICY: Dict[str, Any] = {
                 "refactor": {"harness": "codex", "fallback": []},
                 "cli-plumbing": {"harness": "codex", "fallback": []},
                 "review": {"harness": "codex", "fallback": ["claude", "agy"]},
-                "gh_write": {"harness": "codex", "fallback": ["claude", "agy"]},
+                # 2026-10-14 capability_ratings 14-day AVG(quality), n>=5:
+                # grok 8.55 n=176, claude 8.19 n=170, agy 7.58 n=89.
+                # Primary harness stays codex (9.04, n=410).
+                "gh_write": {"harness": "codex", "fallback": ["grok", "claude", "agy"]},
                 "pm": {"harness": "claude", "fallback": []},
                 "brainstorm": {"harness": "claude", "fallback": []},
                 "architecture-review": {"harness": "claude", "fallback": []},
