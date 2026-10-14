@@ -1454,5 +1454,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2311 \u2014 onboarding-engine wiring design (gh:#2310) (PR #2311, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2311.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-14) - PR #2311\n- Merged improvements and fixes for PR #2311."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/342-pr2312-add-dependency-probing-to-synlynk-probe.md",
+    "title": "PR #2312 \u2014 add dependency probing to synlynk probe",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-14",
+    "pr": "#2312",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2312."
+    ],
+    "tweet": "\ud83d\ude80 PR #2312 \u2014 add dependency probing to synlynk probe (PR #2312, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2312.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-14) - PR #2312\n- Merged improvements and fixes for PR #2312."
   }
 ]
