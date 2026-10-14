@@ -1,4 +1,6 @@
+import os
 import sqlite3
+import subprocess
 
 import pytest
 import synlynk as sl
@@ -1400,7 +1402,7 @@ def test_review_codex_gh_write_keeps_repository_read_only(project_dir, monkeypat
     monkeypatch.setattr(
         dispatch_mod,
         "_build_subprocess_env",
-        lambda *a, **kw: {},
+        lambda *a, **kw: ({}, None),
     )
     monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_gh_token", lambda role: "test-gh-token")
 
@@ -1751,12 +1753,13 @@ def test_build_subprocess_env_allowlists_base_vars_only(monkeypatch):
     monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "leaked-if-present")
     monkeypatch.setenv("SOME_RANDOM_API_TOKEN", "also-leaked-if-present")
 
-    env = _build_subprocess_env("codex", {}, requires_gh_write=False, story_id="story-1")
+    env, shim_dir = _build_subprocess_env("codex", {}, requires_gh_write=False, story_id="story-1")
 
-    assert env.get("PATH") == "/usr/bin"
+    assert env.get("PATH").endswith(os.pathsep + "/usr/bin")
     assert env.get("HOME") == "/home/test"
     assert "AWS_SECRET_ACCESS_KEY" not in env
     assert "SOME_RANDOM_API_TOKEN" not in env
+    shim_dir.cleanup()
 
 
 def test_build_subprocess_env_includes_env_passthrough_vars(monkeypatch):
@@ -1769,9 +1772,10 @@ def test_build_subprocess_env_includes_env_passthrough_vars(monkeypatch):
     }
     monkeypatch.setattr(dispatch_mod, "HARNESS_CAPABILITY_BASELINES", fake_baselines)
 
-    env = _build_subprocess_env("codex", {}, requires_gh_write=False, story_id="story-1")
+    env, shim_dir = _build_subprocess_env("codex", {}, requires_gh_write=False, story_id="story-1")
 
     assert env.get("MY_AGENT_TOKEN") == "should-be-included"
+    shim_dir.cleanup()
 
 
 def test_build_subprocess_env_applies_headless_contract_required_vars():
@@ -1784,8 +1788,9 @@ def test_build_subprocess_env_applies_headless_contract_required_vars():
     dispatch_mod_patch_target = dispatch_mod.HARNESS_CAPABILITY_BASELINES
     dispatch_mod.HARNESS_CAPABILITY_BASELINES = fake_baselines
     try:
-        env = _build_subprocess_env("agy", {}, requires_gh_write=False, story_id="story-1")
+        env, shim_dir = _build_subprocess_env("agy", {}, requires_gh_write=False, story_id="story-1")
         assert env.get("PYTHONUNBUFFERED") == "1"
+        shim_dir.cleanup()
     finally:
         dispatch_mod.HARNESS_CAPABILITY_BASELINES = dispatch_mod_patch_target
 
@@ -1795,9 +1800,43 @@ def test_build_subprocess_env_overrides_win_over_allowlist(monkeypatch):
 
     monkeypatch.setenv("PATH", "/usr/bin")
 
-    env = _build_subprocess_env("codex", {"env": {"PATH": "/custom/bin"}}, requires_gh_write=False, story_id="story-1")
+    env, shim_dir = _build_subprocess_env("codex", {"env": {"PATH": "/custom/bin"}}, requires_gh_write=False, story_id="story-1")
 
-    assert env.get("PATH") == "/custom/bin"
+    assert env.get("PATH").endswith(os.pathsep + "/custom/bin")
+    shim_dir.cleanup()
+
+
+def test_dispatch_env_quiets_pytest_v_without_task_verbosity(tmp_path, monkeypatch):
+    from synlynk.dispatch import _build_subprocess_env
+
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    fake_pytest = fake_bin / "pytest"
+    fake_pytest.write_text(
+        "#!/bin/sh\n"
+        "case \" $* \" in\n"
+        "  *\" -q \"*) printf '1 passed in 0.01s\\n' ;;\n"
+        "  *) printf 'tests/test_one.py::test_one PASSED\\n%.0s' $(seq 1 100) ;;\n"
+        "esac\n"
+    )
+    fake_pytest.chmod(0o700)
+    monkeypatch.setenv("PATH", str(fake_bin) + os.pathsep + os.environ["PATH"])
+
+    env, shim_dir = _build_subprocess_env(
+        "codex", {}, requires_gh_write=False, story_id="story-verbosity"
+    )
+    try:
+        quiet = subprocess.run(
+            ["pytest", "tests/", "-v"], env=env, text=True, capture_output=True, check=True
+        )
+        baseline = subprocess.run(
+            [str(fake_pytest), "tests/", "-q"], text=True, capture_output=True, check=True
+        )
+    finally:
+        shim_dir.cleanup()
+
+    assert "PASSED" not in quiet.stdout
+    assert len(quiet.stdout) <= len(baseline.stdout) * 3
 
 
 def test_dispatch_agent_requires_gh_write_true_capable_agent_unchanged(project_dir, monkeypatch):

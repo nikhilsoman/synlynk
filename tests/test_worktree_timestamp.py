@@ -30,7 +30,7 @@ def test_get_worktree_epoch_reads_commit_timestamp(tmp_path):
 
 def test_source_date_epoch_injected_into_subprocess_env(tmp_path):
     repo_dir = _setup_repo_with_commit(tmp_path)
-    env = _build_subprocess_env(
+    env, shim_dir = _build_subprocess_env(
         agent="codex",
         overrides={},
         requires_gh_write=False,
@@ -39,6 +39,7 @@ def test_source_date_epoch_injected_into_subprocess_env(tmp_path):
     )
     assert "SOURCE_DATE_EPOCH" in env
     assert env["SOURCE_DATE_EPOCH"] == "1700000000"
+    shim_dir.cleanup()
 
 
 def test_get_worktree_epoch_fallback_on_non_git_dir(tmp_path):
