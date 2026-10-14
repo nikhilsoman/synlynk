@@ -1214,5 +1214,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2286 \u2014 stop false job-status denials and stale file lists (PR #2286, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2286.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-14) - PR #2286\n- Merged improvements and fixes for PR #2286."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/328-pr2292-model-catalog-discovery-design-spec-plan.md",
+    "title": "PR #2292 \u2014 model catalog discovery design spec + plan (gh:#2291)",
+    "author": "synlynk-pm agent",
+    "date": "2026-10-14",
+    "pr": "#2292",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2292."
+    ],
+    "tweet": "\ud83d\ude80 PR #2292 \u2014 model catalog discovery design spec + plan (gh:#2291) (PR #2292, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2292.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-14) - PR #2292\n- Merged improvements and fixes for PR #2292."
   }
 ]

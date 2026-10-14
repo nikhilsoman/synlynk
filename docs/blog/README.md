@@ -390,6 +390,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [325](./325-pr2285-resolve-false-permission-denied-and-summ.md) | PR #2285 — resolve false PERMISSION_DENIED and summary status mismatch (gh:#2205) | [#2285](https://github.com/nikhilsoman/synlynk/pull/2285) | 2026-10-14 |
 | [326](./326-pr2280-stop-cold-start-tiebreak-from-selecting-.md) | PR #2280 — stop cold-start tiebreak from selecting local (gh:#2048) | [#2280](https://github.com/nikhilsoman/synlynk/pull/2280) | 2026-10-14 |
 | [327](./327-pr2286-stop-false-job-status-denials-and-stale-.md) | PR #2286 — stop false job-status denials and stale file lists | [#2286](https://github.com/nikhilsoman/synlynk/pull/2286) | 2026-10-14 |
+| [328](./328-pr2292-model-catalog-discovery-design-spec-plan.md) | PR #2292 — model catalog discovery design spec + plan (gh:#2291) | [#2292](https://github.com/nikhilsoman/synlynk/pull/2292) | 2026-10-14 |
 
 ## Per-PR Post Template
 
