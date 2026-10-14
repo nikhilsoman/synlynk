@@ -25,13 +25,23 @@ gh:#2294
 
 ## Task 2 — Wire into dispatch sandbox env construction
 
-- Audit every harness-specific subprocess env builder `dispatch.py` actually
-  uses for Codex/Grok/Agy dispatched jobs (not just `_exec_child_env`, which is
-  the `synlynk exec` path) — per the design doc's open question, confirm
-  whether they share one function or each build env separately.
-- Add a `_create_pytest_shim()` (parallel to `_create_exec_gh_shim`) and prepend
-  its directory to `PATH` in every env builder identified above, the same way
-  the `gh` shim dir is already prepended.
+- Confirmed 2026-10-14: every dispatched harness (Codex/Grok/Agy/local) shares
+  one env builder, `_build_subprocess_env` (dispatch.py:1183), called once at
+  dispatch.py:4637 — not four separate per-harness builders. The existing `gh`
+  PATH-shim (`_create_exec_gh_shim`/`_exec_child_env`) is wired only into
+  `synlynk exec`'s native path (dispatch.py:5104), not into dispatch at all, so
+  there is no existing dispatched-job shim-dir-lifetime pattern to copy verbatim
+  — follow `_exec_child_env`'s *shape* but note it returns a tuple
+  `(dict, TemporaryDirectory)` for a reason: the caller must hold the
+  `TemporaryDirectory` handle until the subprocess exits, then `.cleanup()` it
+  (see dispatch.py:5104 and :5134 for the pattern to mirror).
+- Add `_create_pytest_shim()` (parallel to `_create_exec_gh_shim`). Inside
+  `_build_subprocess_env`, create the shim dir and prepend it to
+  `proc_env["PATH"]`. Change `_build_subprocess_env`'s return type (or add a
+  second return value) so its caller at dispatch.py:4637 can hold the
+  `TemporaryDirectory` and clean it up after the dispatched subprocess
+  completes — check how the `synlynk exec` call site manages this today and
+  follow the same shape so cleanup isn't missed on early-return/exception paths.
 - `local` (aider) is explicitly out of scope per the design doc's non-goals.
 
 ## Task 3 — Integration regression test

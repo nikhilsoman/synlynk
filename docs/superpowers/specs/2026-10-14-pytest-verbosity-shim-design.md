@@ -33,13 +33,22 @@ code-level backstop preventing it.
 - Not touching `local` (aider) — it has no sandboxed PATH injection point today and is
   out of scope here.
 
-## Approach: deterministic `pytest` PATH shim, mirroring the existing `gh` shim
+## Approach: deterministic `pytest` PATH shim, same mechanism as the existing `gh` shim
 
-`synlynk/dispatch.py` already solves an equivalent problem for `gh`:
-`_create_exec_gh_shim`/`_exec_child_env` (dispatch.py:1152-1168) write a short-lived
-wrapper binary into a `tempfile.TemporaryDirectory` and prepend it to the dispatched
-job's `PATH`, so the job's own shell calls into the guard regardless of what the model
-invokes. Apply the identical pattern to `pytest`.
+`synlynk/dispatch.py` already solves an equivalent problem for `gh` via a
+PATH-prepended wrapper binary — but **confirmed during plan-writing (2026-10-14) that
+this mechanism is not actually wired into the dispatch path at all today.**
+`_create_exec_gh_shim`/`_exec_child_env` (dispatch.py:1152-1168) is only called from
+the `synlynk exec` native-session code path (dispatch.py:5104); every *dispatched*
+job (Codex/Grok/Agy/local, all harnesses) goes through the single shared
+`_build_subprocess_env` (dispatch.py:1183, called once at dispatch.py:4637) — which
+guards `gh` by injecting a role-scoped `GH_TOKEN` env var (fail-closed if absent),
+not by PATH-shimming `gh` at all.
+
+So there is no existing dispatched-job PATH shim to mirror — this will be the first
+one. That's good news for scope: `_build_subprocess_env` is the single wiring point
+for every harness (not four separate per-harness builders), so this is a one-call-site
+change, not a four-call-site audit.
 
 ### `synlynk/pytest_shim.py` (new)
 
@@ -58,12 +67,18 @@ invokes. Apply the identical pattern to `pytest`.
 
 ### Wiring
 
-- Extend the existing per-harness dispatch sandbox env construction (wherever
-  `_exec_child_env`-equivalent PATH injection happens for dispatched jobs, not just
-  the `synlynk exec` path used by `_exec_child_env` itself — confirm against the
-  dispatch-worktree subprocess env builder near `dispatch_agent()`, dispatch.py:3812)
-  to also create and prepend the `pytest` shim dir, the same way the `gh` shim dir is
-  created and prepended today.
+- Add `_create_pytest_shim()` (parallel in shape to `_create_exec_gh_shim`,
+  dispatch.py:1152-1159) that writes `synlynk/pytest_shim.py`'s shim via its own
+  `write_shim`.
+- Inside `_build_subprocess_env` (dispatch.py:1183-1206ish, specifically after
+  `proc_env` is populated from the allowlist/overrides), create the shim dir and
+  prepend it to `proc_env["PATH"]` the same way `_exec_child_env` prepends the `gh`
+  shim dir today. `_build_subprocess_env` currently returns only `proc_env` (a
+  `dict`); it will need to also return (or its caller at dispatch.py:4637 will need
+  to separately manage) the `tempfile.TemporaryDirectory` handle so it isn't garbage
+  collected (and the temp dir deleted) before the subprocess runs — mirror how
+  `_exec_child_env`'s caller at dispatch.py:5104 holds `gh_shim_dir` and calls
+  `gh_shim_dir.cleanup()` after the subprocess completes (dispatch.py:5134).
 - Env allowlist (`_ENV_ALLOWLIST_BASE`, dispatch.py:1105) already passes `PATH`
   through; no new allowlist entry needed, only the prepend.
 
@@ -89,9 +104,11 @@ cost driver with no corresponding signal value). Apply to all four harnesses who
 dispatch path constructs a sandboxed subprocess env (Codex, Grok, Agy, local once it
 gains PATH injection — out of scope for this spec per Non-goals).
 
-## Open question for implementer
+## Open question for implementer (resolved 2026-10-14, see Wiring above)
 
-Confirm whether Grok/Agy's dispatch paths already share `_exec_child_env`'s PATH
-injection or have their own separate env-construction function — the shim must be
-wired into every harness-specific env builder dispatch.py actually uses, not just
-the one audited above, or the fix will silently only cover a subset of harnesses.
+~~Confirm whether Grok/Agy's dispatch paths already share `_exec_child_env`'s PATH
+injection or have their own separate env-construction function~~ — confirmed: all
+dispatched harnesses share the single `_build_subprocess_env` call at
+dispatch.py:4637. No per-harness audit needed. The remaining implementer-facing
+detail is the `TemporaryDirectory` lifetime handling noted in Wiring (don't let the
+shim dir get cleaned up before the subprocess exits, and do clean it up after).
