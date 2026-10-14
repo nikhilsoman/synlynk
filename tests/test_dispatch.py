@@ -2582,6 +2582,104 @@ def test_explicit_base_main_uses_origin_tip_when_local_main_stale(
     assert head == new
 
 
+def _push_main_to_local_origin(repo, bare):
+    """Point ``repo`` at a local bare origin and publish its current main tip."""
+    import subprocess
+
+    subprocess.run(["git", "init", "--bare", str(bare)], capture_output=True, check=True)
+    subprocess.run(
+        ["git", "remote", "add", "origin", str(bare)],
+        cwd=repo, capture_output=True, check=True,
+    )
+    subprocess.run(
+        ["git", "push", "-u", "origin", "main"],
+        cwd=repo, capture_output=True, check=True,
+    )
+
+
+def test_auto_base_ignores_long_lived_local_branch(git_worktree_repo, tmp_path, monkeypatch):
+    """#2229: dispatch from a long-lived non-task branch anchors to origin/main.
+
+    The caller's checkout can be a PM workspace branch with commits that are
+    not the task. Auto mode must not inherit that history into the job worktree.
+    """
+    import subprocess
+    from pathlib import Path
+    import synlynk.dispatch as dispatch_mod
+
+    repo = Path(git_worktree_repo)
+    monkeypatch.chdir(repo)
+    subprocess.run(["git", "branch", "-M", "main"], cwd=repo, capture_output=True, check=True)
+    _push_main_to_local_origin(repo, tmp_path / "origin.git")
+    main_tip = subprocess.run(
+        ["git", "rev-parse", "origin/main"], cwd=repo, capture_output=True, text=True, check=True,
+    ).stdout.strip()
+
+    subprocess.run(
+        ["git", "checkout", "-b", "docs/claude/dev-preview-roadmap-execution"],
+        cwd=repo, capture_output=True, check=True,
+    )
+    (repo / "long-lived.txt").write_text("unrelated workspace history\n")
+    subprocess.run(["git", "add", "long-lived.txt"], cwd=repo, capture_output=True, check=True)
+    subprocess.run(
+        ["git", "commit", "-m", "long-lived workspace commit"],
+        cwd=repo, capture_output=True, check=True,
+    )
+
+    base_ref = dispatch_mod._resolve_dispatch_worktree_base_ref(
+        str(repo), stacking_mode="auto"
+    )
+    assert base_ref == "origin/main"
+
+    wt = dispatch_mod._create_job_worktree("job-long-lived-base", "codex")
+    assert wt["base_branch"] == "origin/main"
+    assert wt["base_sha"] == main_tip
+    head = subprocess.run(
+        ["git", "-C", wt["path"], "rev-parse", "HEAD"],
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    assert head == main_tip
+    assert not (Path(wt["path"]) / "long-lived.txt").exists()
+    ahead = subprocess.run(
+        ["git", "-C", wt["path"], "diff", "--name-only", "origin/main", "HEAD"],
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    assert ahead == ""
+
+
+def test_auto_base_still_stacks_on_task_branch(git_worktree_repo, tmp_path, monkeypatch):
+    """Task branches (feat/fix/chore/dispatch/release) still stack in auto mode."""
+    import subprocess
+    from pathlib import Path
+    import synlynk.dispatch as dispatch_mod
+
+    repo = Path(git_worktree_repo)
+    monkeypatch.chdir(repo)
+    subprocess.run(["git", "branch", "-M", "main"], cwd=repo, capture_output=True, check=True)
+    _push_main_to_local_origin(repo, tmp_path / "origin.git")
+    subprocess.run(
+        ["git", "checkout", "-b", "feat/example"],
+        cwd=repo, capture_output=True, check=True,
+    )
+    (repo / "feature.txt").write_text("task commit\n")
+    subprocess.run(["git", "add", "feature.txt"], cwd=repo, capture_output=True, check=True)
+    subprocess.run(
+        ["git", "commit", "-m", "feature work"],
+        cwd=repo, capture_output=True, check=True,
+    )
+    tip = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, check=True,
+    ).stdout.strip()
+
+    base_ref = dispatch_mod._resolve_dispatch_worktree_base_ref(
+        str(repo), stacking_mode="auto"
+    )
+    assert base_ref == "feat/example"
+    assert tip != subprocess.run(
+        ["git", "rev-parse", "origin/main"], cwd=repo, capture_output=True, text=True, check=True,
+    ).stdout.strip()
+
+
 def test_explicit_base_origin_main_still_works(git_worktree_repo, tmp_path, monkeypatch):
     import subprocess
     from pathlib import Path
