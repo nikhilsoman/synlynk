@@ -395,6 +395,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [330](./330-pr2290-parse-aider-token-lines-for-the-local-ha.md) | PR #2290 — parse aider token lines for the local harness | [#2290](https://github.com/nikhilsoman/synlynk/pull/2290) | 2026-10-14 |
 | [269](./269-pr-model-catalog-discovery-pass.md) | PR #2296 — One discovery pass for every harness baseline | 2296 | 2026-10-14 |
 | [331](./331-pr2296-discover-harness-catalogs-from-live-base.md) | PR #2296 — discover harness catalogs from live baselines | [#2296](https://github.com/nikhilsoman/synlynk/pull/2296) | 2026-10-14 |
+| [332](./332-pr2289-bind-root-for-token-refresh.md) | PR #2289 — bind root for token refresh | [#2289](https://github.com/nikhilsoman/synlynk/pull/2289) | 2026-10-14 |
 
 ## Per-PR Post Template
 

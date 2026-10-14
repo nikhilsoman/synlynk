@@ -1278,5 +1278,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2296 \u2014 discover harness catalogs from live baselines (PR #2296, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2296.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-14) - PR #2296\n- Merged improvements and fixes for PR #2296."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/332-pr2289-bind-root-for-token-refresh.md",
+    "title": "PR #2289 \u2014 bind root for token refresh",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-14",
+    "pr": "#2289",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2289."
+    ],
+    "tweet": "\ud83d\ude80 PR #2289 \u2014 bind root for token refresh (PR #2289, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2289.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-14) - PR #2289\n- Merged improvements and fixes for PR #2289."
   }
 ]
