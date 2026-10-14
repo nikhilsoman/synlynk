@@ -1,3 +1,15 @@
+---
+title: "PR #2296 — One discovery pass for every harness baseline"
+date: 2026-10-14
+series: "Building the OS for Multi-Agent Development"
+post: 269
+pr: 2296
+status: open
+author: "synlynk team"
+version: "0.25.0"
+tags: [posts]
+type: pr
+---
 # One discovery pass for every harness baseline
 
 The previous goalpost, after the provider-aware `harness_models` schema landed, was still a static catalog. `BUILTIN_MODEL_CATALOG` and a single Agy live check were what dispatch could trust. Sub-task 1 stored rates, effort, and a `(harness, model, provider)` key. Nothing wrote those columns from a live probe.
