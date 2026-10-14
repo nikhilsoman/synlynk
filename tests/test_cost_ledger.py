@@ -217,7 +217,9 @@ def test_insert_cost_row_idempotent_on_job_id(project_dir, monkeypatch):
     assert rows == [(200, "actual")]
 
 
-def test_exec_command_passes_agent_to_extract_tokens(project_dir, monkeypatch, tmp_path):
+def test_exec_command_passes_agent_to_extract_tokens(
+    project_dir, monkeypatch, tmp_path, daemon_workspace_root
+):
     import synlynk
     from synlynk import dispatch as dispatch_mod
 
@@ -1089,6 +1091,79 @@ def test_extract_tokens_non_grok_agent_never_uses_grok_structured_path():
     assert result.basis != "structured_output"
 
 
+def test_extract_local_structured_plain_integers():
+    from synlynk.costs import extract_tokens
+
+    output = "Tokens: 1200 sent, 184 received. Cost: $0.0037 message, $0.0037 session."
+    result = extract_tokens(output, agent="local")
+    assert result.basis == "structured_output"
+    assert result.input_tokens == 1200
+    assert result.output_tokens == 184
+
+
+def test_extract_local_structured_thousands_separator():
+    from synlynk.costs import _extract_local_structured
+
+    result = _extract_local_structured("Tokens: 7,376 sent, 51 received.")
+    assert result is not None
+    assert result.input_tokens == 7376
+    assert result.output_tokens == 51
+
+
+def test_extract_local_structured_k_suffix():
+    from synlynk.costs import extract_tokens
+
+    output = "Tokens: 2.3k sent, 184 received. Cost: $0.0037 message, $0.0037 session."
+    result = extract_tokens(output, agent="local")
+    assert result.basis == "structured_output"
+    assert result.input_tokens == 2300
+    assert result.output_tokens == 184
+
+
+def test_extract_local_structured_k_suffix_on_both_sides_and_cache_clauses():
+    from synlynk.costs import _extract_local_structured
+
+    # Real aider line shape: optional cache write/hit between sent and received.
+    output = "Tokens: 216k sent, 108k cache write, 1.4k cache hit, 3.4k received."
+    result = _extract_local_structured(output)
+    assert result is not None
+    assert result.input_tokens == 216_000
+    assert result.output_tokens == 3_400
+
+
+def test_extract_local_structured_m_suffix():
+    from synlynk.costs import extract_tokens
+
+    output = "Tokens: 1.2m sent, 0.5m received."
+    result = extract_tokens(output, agent="local")
+    assert result.basis == "structured_output"
+    assert result.input_tokens == 1_200_000
+    assert result.output_tokens == 500_000
+
+
+def test_extract_local_structured_sums_per_message_lines():
+    from synlynk.costs import _extract_local_structured
+
+    output = (
+        "Tokens: 2.3k sent, 184 received. Cost: $0.0037 message, $0.0037 session.\n"
+        "Tokens: 100 sent, 20 received. Cost: $0.0001 message, $0.0038 session.\n"
+    )
+    result = _extract_local_structured(output)
+    assert result is not None
+    assert result.input_tokens == 2400
+    assert result.output_tokens == 204
+
+
+def test_extract_tokens_agent_local_falls_back_to_regex_when_aider_format_absent():
+    from synlynk.costs import extract_tokens
+
+    output = "Input tokens: 10\nOutput tokens: 5\n"
+    result = extract_tokens(output, agent="local")
+    assert result.basis == "regex_pair"
+    assert result.input_tokens == 10
+    assert result.output_tokens == 5
+
+
 def test_extract_tokens_default_agent_none_unchanged_behavior():
     from synlynk.costs import extract_tokens
 
@@ -1548,7 +1623,7 @@ def test_reconcile_daemon_jobs_trips_inflight_circuit_breaker(project_dir, monke
     assert tuple(cost) == (4000, 2000)
 
 
-def test_dispatch_writes_cost_row_even_on_zero_token_extraction(project_dir, monkeypatch):
+def test_dispatch_writes_cost_row_even_on_zero_token_extraction(project_dir, monkeypatch, daemon_workspace_root):
     import synlynk
     import synlynk.dispatch as dispatch_mod
     from synlynk.costs import _TokenCounts
