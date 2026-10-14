@@ -1406,5 +1406,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2303 \u2014 quiet pytest in dispatched jobs (PR #2303, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2303.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-14) - PR #2303\n- Merged improvements and fixes for PR #2303."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/339-pr2306-charter-superpowers-skill-binding-design.md",
+    "title": "PR #2306 \u2014 charter superpowers-skill binding design for gh:#2305",
+    "author": "synlynk-pm agent",
+    "date": "2026-10-14",
+    "pr": "#2306",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2306."
+    ],
+    "tweet": "\ud83d\ude80 PR #2306 \u2014 charter superpowers-skill binding design for gh:#2305 (PR #2306, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2306.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-14) - PR #2306\n- Merged improvements and fixes for PR #2306."
   }
 ]
