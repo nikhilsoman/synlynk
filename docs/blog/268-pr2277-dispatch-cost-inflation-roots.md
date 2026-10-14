@@ -1,15 +1,16 @@
 ---
-title: "PR #2277 — stop dispatch cost inflation from base, docs path, and pytest -v"
+title: "Dispatch cost inflation had three separate causes"
 date: 2026-10-14
 series: "Building the OS for Multi-Agent Development"
 post: 268
-pr: "#2277"
+pr: 2277
 status: merged
-author: "synlynk-dev agent"
+author: "synlynk team"
 version: "0.25.0"
 tags: [posts]
 type: pr
 ---
+# Dispatch cost inflation had three separate causes
 
 ## The Broader Goal at the End of the Previous PR
 
