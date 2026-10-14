@@ -384,6 +384,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [319](./319-pr2274-exclude-implementer-harness-from-review-.md) | PR #2274 — exclude implementer harness from review capability probe (gh:#2271) | [#2274](https://github.com/nikhilsoman/synlynk/pull/2274) | 2026-10-14 |
 | [320](./320-pr2283-tier-the-instruction-writer-by-per-harne.md) | PR #2283 — tier the instruction writer by per-harness reload confidence (gh:#2243) | [#2283](https://github.com/nikhilsoman/synlynk/pull/2283) | 2026-10-14 |
 | [321](./321-pr2279-auto-opt-agy-into-skip-permissions-gh-22.md) | PR #2279 — auto-opt Agy into skip_permissions (gh:#2216) | [#2279](https://github.com/nikhilsoman/synlynk/pull/2279) | 2026-10-14 |
+| [322](./322-pr2282-align-museadapter-command-building-and-c.md) | PR #2282 — align MuseAdapter command building and conformance tests with real CLI contract (gh:#2109) | [#2282](https://github.com/nikhilsoman/synlynk/pull/2282) | 2026-10-14 |
 
 ## Per-PR Post Template
 

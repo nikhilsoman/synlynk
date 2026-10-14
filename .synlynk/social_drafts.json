@@ -1118,5 +1118,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2279 \u2014 auto-opt Agy into skip_permissions (gh:#2216) (PR #2279, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2279.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-14) - PR #2279\n- Merged improvements and fixes for PR #2279."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/322-pr2282-align-museadapter-command-building-and-c.md",
+    "title": "PR #2282 \u2014 align MuseAdapter command building and conformance tests with real CLI contract (gh:#2109)",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-14",
+    "pr": "#2282",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2282."
+    ],
+    "tweet": "\ud83d\ude80 PR #2282 \u2014 align MuseAdapter command building and conformance tests with real CLI contract (gh:#2109) (PR #2282, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2282.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-14) - PR #2282\n- Merged improvements and fixes for PR #2282."
   }
 ]
