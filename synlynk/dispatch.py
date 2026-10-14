@@ -3635,6 +3635,60 @@ def _preflight_dispatch(
     return {"passed": True, "sentinel": None, "reason": None}
 
 
+_probed_dispatch_harness: Optional[str] = None
+
+
+def _set_probed_dispatch_harness(name: Optional[str]) -> None:
+    global _probed_dispatch_harness
+    _probed_dispatch_harness = name
+
+
+def take_probed_dispatch_harness() -> Optional[str]:
+    """Return and clear the harness the capability gate actually checked."""
+    global _probed_dispatch_harness
+    name = _probed_dispatch_harness
+    _probed_dispatch_harness = None
+    return name
+
+
+def _capability_reroute_message(initial_agent: str, resolved_agent: str, probed_agent: Optional[str]) -> str:
+    """Name the harness that failed the capability check, not the CLI argument.
+
+    Cold-start routing can substitute `local` before the gate runs (gh:#2048).
+    The reroute line must blame that substituted candidate.
+    """
+    blamed = probed_agent or initial_agent
+    if blamed == resolved_agent:
+        blamed = initial_agent
+    return (
+        f"  ↪ rerouted '{initial_agent}' -> '{resolved_agent}' "
+        f"(capability-probed: '{blamed}' lacks required capability for task)"
+    )
+
+
+def _story_routing_capabilities(task, task_type, requires, requires_gh_write):
+    if not (task or task_type or requires or requires_gh_write):
+        return None
+    from synlynk.capability_probe import infer_task_required_capabilities
+
+    return infer_task_required_capabilities(
+        task or "",
+        task_type=task_type,
+        requires=requires,
+        requires_gh_write=requires_gh_write,
+    )
+
+
+def _call_best_agent(best_agent, story_id, required_capabilities):
+    """Call the story router, tolerating test doubles that take only story_id."""
+    if required_capabilities:
+        try:
+            return best_agent(story_id, required_capabilities=required_capabilities)
+        except TypeError:
+            return best_agent(story_id)
+    return best_agent(story_id)
+
+
 def resolve_dispatch_harness(agent: str, agent_id: str = None, story_id: str = None,
                               force_agent: bool = False, requires_gh_write: bool = False,
                               static_baseline: bool = False, task_domain: str = None,
@@ -3675,6 +3729,9 @@ def resolve_dispatch_harness(agent: str, agent_id: str = None, story_id: str = N
         return agent
 
     baselines_map = _pkg("HARNESS_CAPABILITY_BASELINES", HARNESS_CAPABILITY_BASELINES)
+    required_capabilities = _story_routing_capabilities(
+        task, task_type, requires, requires_gh_write
+    )
     picked = None
     if task_domain and not static_baseline:
         try:
@@ -3694,7 +3751,7 @@ def resolve_dispatch_harness(agent: str, agent_id: str = None, story_id: str = N
     if story_id and not static_baseline and picked is None:
         best_agent = _pkg("_best_agent_for_story")
         if best_agent:
-            best = best_agent(story_id)
+            best = _call_best_agent(best_agent, story_id, required_capabilities)
             if best and best in baselines_map:
                 picked = best
     if picked is None and resolved_agent_role and not static_baseline:
@@ -3703,7 +3760,7 @@ def resolve_dispatch_harness(agent: str, agent_id: str = None, story_id: str = N
         synthetic_story_id = _role_dispatch_story_id(resolved_agent_role)
         best_agent = _pkg("_best_agent_for_story")
         if best_agent:
-            best = best_agent(synthetic_story_id)
+            best = _call_best_agent(best_agent, synthetic_story_id, required_capabilities)
             if best and best in baselines_map:
                 picked = best
     if picked is None and resolved_agent_role:
@@ -3733,6 +3790,7 @@ def resolve_dispatch_harness(agent: str, agent_id: str = None, story_id: str = N
     candidate = agent if force_agent else (picked or agent)
     if task or task_type or requires or requires_gh_write or excluded_harnesses:
         from synlynk.capability_probe import resolve_capable_dispatch_harness
+        _set_probed_dispatch_harness(candidate)
         return resolve_capable_dispatch_harness(
             candidate_harness=candidate,
             task=task or "",
@@ -3829,13 +3887,11 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     )
     request = pipeline.resolve(request)
     pipeline.authorize(request)
+    probed_agent = take_probed_dispatch_harness()
     initial_agent = agent
     agent = request.agent
     if agent != initial_agent and not force_agent:
-        print(
-            f"  ↪ rerouted '{initial_agent}' -> '{agent}' "
-            f"(capability-probed: '{initial_agent}' lacks required capability for task)"
-        )
+        print(_capability_reroute_message(initial_agent, agent, probed_agent))
     resolved_agent_role = None
     if agent_id:
         from synlynk import agent_store
