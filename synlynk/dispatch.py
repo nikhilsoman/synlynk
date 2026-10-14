@@ -1159,6 +1159,16 @@ def _create_exec_gh_shim() -> Tuple[tempfile.TemporaryDirectory, str]:
     return shim_dir, shim_path
 
 
+def _create_pytest_shim() -> Tuple[tempfile.TemporaryDirectory, str]:
+    """Create the short-lived quiet ``pytest`` guard for dispatched jobs."""
+    from synlynk.pytest_shim import write_shim
+
+    shim_dir = tempfile.TemporaryDirectory(prefix="synlynk-pytest-")
+    shim_path = os.path.join(shim_dir.name, "pytest")
+    write_shim(shim_path)
+    return shim_dir, shim_path
+
+
 def _exec_child_env() -> Tuple[dict, tempfile.TemporaryDirectory]:
     """Return the inherited env with the shared GitHub CLI PATH guard."""
     shim_dir, _shim_path = _create_exec_gh_shim()
@@ -1187,7 +1197,7 @@ def _build_subprocess_env(
     story_id: str,
     agent_role: str = None,
     worktree_path: str = None,
-) -> dict:
+) -> Tuple[dict, tempfile.TemporaryDirectory]:
     """Build a minimal, allowlisted environment for a dispatched subprocess.
 
     Replaces copying the full parent environment: only a fixed base set of
@@ -1253,7 +1263,17 @@ def _build_subprocess_env(
                 "Or set SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH=1 to opt into host `gh` auth "
                 "(uses personal keyring — not recommended; see #569)."
             )
-    return proc_env
+    pytest_shim_dir, _pytest_shim_path = _create_pytest_shim()
+    proc_env["PATH"] = pytest_shim_dir.name + os.pathsep + proc_env.get("PATH", "")
+    return proc_env, pytest_shim_dir
+
+
+def _cleanup_shim_after_process(process, shim_dir: tempfile.TemporaryDirectory) -> None:
+    """Keep a dispatched shim alive until its detached child exits."""
+    try:
+        process.wait()
+    finally:
+        shim_dir.cleanup()
 
 
 def _spawn_with_pty_fallback(cmd, env, cwd):
@@ -4634,7 +4654,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         cmd_str = " ".join(_shlex.quote(c) for c in [cli] + flags)
         shell_cmd = f"{cmd_str} < {_shlex.quote(prompt_file)} > {_shlex.quote(log_file)} 2>&1; echo $? > {_shlex.quote(log_file)}.exit"
 
-    proc_env = _build_subprocess_env(
+    proc_env, pytest_shim_dir = _build_subprocess_env(
         agent,
         overrides,
         requires_gh_write,
@@ -4670,6 +4690,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 dconn, job_id=job_id, agent=agent, task=task, story_id=story_id,
                 reason="local_concurrency",
             )
+            if pytest_shim_dir is not None:
+                pytest_shim_dir.cleanup()
             if owns_dconn:
                 dconn.close()
             return result
@@ -4721,16 +4743,23 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     if container_image is not None:
         docker_bin = shutil.which("docker")
         if not docker_bin:
+            if pytest_shim_dir is not None:
+                pytest_shim_dir.cleanup()
             raise ContainerExecError(
                 "docker is not on PATH; refusing to fall back to a host subprocess"
             )
-        spawn_cmd, spawn_env, spawn_cwd = wrap_container(
-            spawn_cmd,
-            proc_env,
-            worktree_path,
-            container_image,
-            docker_bin=docker_bin,
-        )
+        try:
+            spawn_cmd, spawn_env, spawn_cwd = wrap_container(
+                spawn_cmd,
+                proc_env,
+                worktree_path,
+                container_image,
+                docker_bin=docker_bin,
+            )
+        except Exception:
+            if pytest_shim_dir is not None:
+                pytest_shim_dir.cleanup()
+            raise
         stderr_handle = open(log_file, "a", encoding="utf-8")
         stderr_target = stderr_handle
     try:
@@ -4743,12 +4772,24 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             env=spawn_env,
         )
     except Exception:
+        if pytest_shim_dir is not None:
+            pytest_shim_dir.cleanup()
         if local_slot_claimed:
             dconn.rollback()
         raise
     finally:
         if stderr_handle is not None:
             stderr_handle.close()
+
+    if hasattr(proc, "wait"):
+        threading.Thread(
+            target=_cleanup_shim_after_process,
+            args=(proc, pytest_shim_dir),
+            daemon=True,
+        ).start()
+    else:
+        if pytest_shim_dir is not None:
+            pytest_shim_dir.cleanup()
 
     # A process that has already exited failed during CLI startup (bad flag,
     # missing binary, or sandbox setup). Give the task one deterministic

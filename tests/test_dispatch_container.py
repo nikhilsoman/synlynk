@@ -127,9 +127,9 @@ def test_dead_client_records_failure_without_failover(tmp_path, monkeypatch, git
     real_build_env = dispatch_mod._build_subprocess_env
 
     def build_env(*args, **kwargs):
-        env = real_build_env(*args, **kwargs)
+        env, shim_dir = real_build_env(*args, **kwargs)
         env.update({"FAKE_DOCKER_EXIT": "3", "STUB_EXIT": "3"})
-        return env
+        return env, shim_dir
 
     monkeypatch.setattr(dispatch_mod, "_build_subprocess_env", build_env)
     repo = _repo(tmp_path / "repo")
