@@ -1502,5 +1502,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2316 \u2014 wire topology_discovery into onboarding confirm flow (PR #2316, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2316.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-14) - PR #2316\n- Merged improvements and fixes for PR #2316."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/345-pr2317-wire-first-win-cycle-into-s10.md",
+    "title": "PR #2317 \u2014 wire first-win cycle into S10",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-14",
+    "pr": "#2317",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2317."
+    ],
+    "tweet": "\ud83d\ude80 PR #2317 \u2014 wire first-win cycle into S10 (PR #2317, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2317.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-14) - PR #2317\n- Merged improvements and fixes for PR #2317."
   }
 ]
