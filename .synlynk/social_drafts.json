@@ -1086,5 +1086,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2277 \u2014 stop dispatch cost inflation from base, docs path, and pytest -v (PR #2277, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2277.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-14) - PR #2277\n- Merged improvements and fixes for PR #2277."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/320-pr2283-tier-the-instruction-writer-by-per-harne.md",
+    "title": "PR #2283 \u2014 tier the instruction writer by per-harness reload confidence (gh:#2243)",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-14",
+    "pr": "#2283",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2283."
+    ],
+    "tweet": "\ud83d\ude80 PR #2283 \u2014 tier the instruction writer by per-harness reload confidence (gh:#2243) (PR #2283, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2283.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-14) - PR #2283\n- Merged improvements and fixes for PR #2283."
   }
 ]
