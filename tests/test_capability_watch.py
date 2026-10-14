@@ -1,12 +1,16 @@
 import sqlite3
+import threading
 import time
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 import pytest
 
+import synlynk.capability_watch as _capability_watch_mod
 from synlynk.capability_watch import (
     capability_sweep_status,
     is_capability_sweep_overdue,
+    is_model_catalog_stale,
     is_probe_stale,
     is_smoke_test_stale,
     mark_probe_run,
@@ -14,6 +18,23 @@ from synlynk.capability_watch import (
     maybe_trigger_staleness_checks,
 )
 from synlynk.db import _migrate_db
+
+_REAL_SPAWN_STALENESS_CHECK_THREAD = _capability_watch_mod.spawn_staleness_check_thread
+
+
+def _utc_ago(seconds: float) -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - seconds))
+
+
+def _insert_discovered_model(conn, discovered_at: str) -> None:
+    conn.execute(
+        "INSERT INTO harness_models ("
+        "harness_name, model_id, provider, first_seen_at, last_seen_at, "
+        "status, discovery_source, discovered_at"
+        ") VALUES ('grok', 'grok-4', 'native', ?, ?, 'active', 'cli:grok', ?)",
+        (discovered_at, discovered_at, discovered_at),
+    )
+    conn.commit()
 
 
 @pytest.fixture
@@ -112,27 +133,35 @@ def test_mark_smoke_test_run_updates_timestamp(conn):
 def test_maybe_trigger_staleness_checks_runs_free_probe_when_stale(conn):
     with patch("synlynk.capability_watch._run_free_probe") as mock_probe, patch(
         "synlynk.capability_watch._run_paid_smoke_test"
-    ) as mock_smoke:
+    ) as mock_smoke, patch(
+        "synlynk.capability_watch._run_model_catalog_refresh"
+    ) as mock_catalog:
         maybe_trigger_staleness_checks(conn, config={"auto_smoke_test": False})
     mock_probe.assert_called_once()
     mock_smoke.assert_not_called()
+    mock_catalog.assert_called_once()
 
 
 def test_maybe_trigger_staleness_checks_skips_paid_smoke_when_opted_out(conn):
     mark_probe_run(conn, green=True)
     with patch("synlynk.capability_watch._run_free_probe") as mock_probe, patch(
         "synlynk.capability_watch._run_paid_smoke_test"
-    ) as mock_smoke:
+    ) as mock_smoke, patch(
+        "synlynk.capability_watch._run_model_catalog_refresh"
+    ) as mock_catalog:
         maybe_trigger_staleness_checks(conn, config={"auto_smoke_test": False})
     mock_probe.assert_not_called()
     mock_smoke.assert_not_called()
+    mock_catalog.assert_called_once()
 
 
 def test_maybe_trigger_staleness_checks_runs_paid_smoke_when_opted_in(conn):
     mark_probe_run(conn, green=True)
     with patch("synlynk.capability_watch._run_free_probe") as mock_probe, patch(
         "synlynk.capability_watch._run_paid_smoke_test"
-    ) as mock_smoke:
+    ) as mock_smoke, patch(
+        "synlynk.capability_watch._run_model_catalog_refresh"
+    ):
         maybe_trigger_staleness_checks(conn, config={"auto_smoke_test": True})
     mock_probe.assert_not_called()
     mock_smoke.assert_called_once()
@@ -223,3 +252,129 @@ def test_cli_main_does_not_crash_when_staleness_check_raises(tmp_path, monkeypat
         from synlynk.cli import build_parser
 
         assert build_parser() is not None
+
+
+def test_is_model_catalog_stale_boundary(conn):
+    assert is_model_catalog_stale(conn, threshold_hours=24) is True
+
+    _insert_discovered_model(conn, _utc_ago(23 * 3600 + 59 * 60))
+    assert is_model_catalog_stale(conn, threshold_hours=24) is False
+
+    conn.execute("DELETE FROM harness_models")
+    _insert_discovered_model(conn, _utc_ago(24 * 3600 + 60))
+    assert is_model_catalog_stale(conn, threshold_hours=24) is True
+
+    fresh = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()
+    conn.execute("UPDATE harness_models SET discovered_at = ?", (fresh,))
+    conn.commit()
+    assert is_model_catalog_stale(conn, threshold_hours=24) is False
+
+
+def test_model_catalog_refresh_fires_once_per_due_window(conn):
+    mark_probe_run(conn, green=True)
+    _insert_discovered_model(conn, _utc_ago(24 * 3600 + 60))
+
+    def _discover(connection):
+        now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        connection.execute("UPDATE harness_models SET discovered_at = ?", (now,))
+
+    with patch("synlynk.models.run_model_catalog_discovery", side_effect=_discover) as mock_discover:
+        maybe_trigger_staleness_checks(conn, config={"auto_smoke_test": False})
+        maybe_trigger_staleness_checks(conn, config={"auto_smoke_test": False})
+
+    assert mock_discover.call_count == 1
+    assert is_model_catalog_stale(conn, threshold_hours=24) is False
+
+
+def test_model_catalog_refresh_skips_duplicate_concurrent_spawn(tmp_path):
+    db_path = tmp_path / "state.db"
+    primary = sqlite3.connect(str(db_path), check_same_thread=False)
+    _migrate_db(primary)
+    mark_probe_run(primary, green=True)
+    _insert_discovered_model(primary, _utc_ago(24 * 3600 + 60))
+    secondary = sqlite3.connect(str(db_path), check_same_thread=False)
+
+    started = threading.Event()
+    release = threading.Event()
+    calls = []
+
+    def _discover(_connection):
+        calls.append(threading.get_ident())
+        started.set()
+        assert release.wait(3)
+
+    with patch("synlynk.models.run_model_catalog_discovery", side_effect=_discover):
+        first = threading.Thread(
+            target=maybe_trigger_staleness_checks,
+            args=(primary, {"auto_smoke_test": False}),
+        )
+        second = threading.Thread(
+            target=maybe_trigger_staleness_checks,
+            args=(secondary, {"auto_smoke_test": False}),
+        )
+        first.start()
+        assert started.wait(2)
+        second.start()
+        second.join(2)
+        assert not second.is_alive()
+        release.set()
+        first.join(2)
+
+    assert len(calls) == 1
+    assert not first.is_alive()
+    primary.close()
+    secondary.close()
+
+
+def test_daemon_tick_runs_due_model_catalog_check(tmp_path):
+    import synlynk.daemon as daemon_mod
+    from synlynk.daemon import SynlynkDaemon
+
+    db_path = tmp_path / "state.db"
+    conn = sqlite3.connect(str(db_path))
+    _migrate_db(conn)
+    mark_probe_run(conn, green=True)
+    daemon = SynlynkDaemon()
+    with patch.object(daemon_mod, "_pkg", side_effect=lambda name, default=None: {
+        "_get_db": lambda: conn,
+    }.get(name, default)), patch(
+        "synlynk.capability_watch._run_model_catalog_refresh"
+    ) as mock_catalog, patch(
+        "synlynk.capability_watch._run_free_probe"
+    ) as mock_probe:
+        daemon._run_capability_watch_tick({"auto_smoke_test": False})
+
+    mock_probe.assert_not_called()
+    mock_catalog.assert_called_once_with(conn)
+    conn.close()
+
+
+def test_cli_startup_runs_due_model_catalog_check(tmp_path, monkeypatch):
+    db_path = tmp_path / "state.db"
+    conn = sqlite3.connect(str(db_path))
+    _migrate_db(conn)
+    mark_probe_run(conn, green=True)
+    conn.close()
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(db_path))
+    monkeypatch.setattr("synlynk._reconcile_jobs", lambda: None)
+
+    def _joining_spawn(watch_conn, config):
+        thread = _REAL_SPAWN_STALENESS_CHECK_THREAD(watch_conn, config)
+        thread.join(5)
+        assert not thread.is_alive()
+        return thread
+
+    monkeypatch.setattr(
+        _capability_watch_mod, "spawn_staleness_check_thread", _joining_spawn
+    )
+    with patch("synlynk.capability_watch._run_model_catalog_refresh") as mock_catalog, patch(
+        "synlynk.capability_watch._run_free_probe"
+    ):
+        from synlynk.cli import main
+
+        with pytest.raises(SystemExit):
+            main(["not-a-command"])
+
+    mock_catalog.assert_called_once()
