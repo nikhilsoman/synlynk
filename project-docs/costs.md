@@ -775,6 +775,7 @@
 | 2026-10-13 07:07 | claude | claude-sonnet-4-6 | 120000 | 30000 | $0.3723 [sub] (API: $0.8100) | estimated_manual | story-0ad6c02b | native PM-session work: Tasks 7-9 implemented directly after 2 dispatch no-ops (job-8dbcca65, job-63a77f90), regression triage, gh:#2245 filed, blog post + PR |
 | 2026-10-13 07:27 | claude | claude-sonnet-4-6 | 5000 | 2000 | $0.0174 [sub] (API: $0.0450) | estimated_tshirt | story-0ad6c02b | exec: claude job job-63a77... |
 | 2026-10-13 07:27 | claude | claude-sonnet-4-6 | 78521 | 11289 | $0.2229 [sub] (API: $0.4049) | estimated_token_rate | story-0ad6c02b | exec: claude job job-37a18... |
+| 2026-10-14 18:53 | claude | claude-sonnet-4-6 | 50000 | 8000 | $0.1439 [sub] (API: $0.2700) | estimated_manual | - | native PM session: v0.25.1 release prep (VERSION bump, CHANGELOG, README sync, blog post 271). Token counts estimated per global CLAUDE.md methodology, not instrumented. |
 
 ## Subscription Amortization & Dual-Ledger Summary
 

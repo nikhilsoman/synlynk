@@ -16,6 +16,17 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result.
 - Ongoing Wave 3: Hosted Teams Server Hub, Cloudflare Tunnel full-duplex daemon, and Dynamic Quota Advisory service.
 
+## [v0.25.1] - 2026-10-14
+### Added
+- feat(db): provider-aware `harness_models` catalog — 3-column primary key `(harness_name, model_id, provider)`, rate-card columns (input/output/cache-read/cache-write/tool-use per Mtok), `complexity_tier`, `max_effort_level`, `context_window_tokens`, `discovered_at` (#2293)
+- feat(models): `run_model_catalog_discovery()` generalizes live-CLI probing across all registered harnesses (not just Agy), with config-file and curated fallbacks, stale-marking for previously-seen-now-absent models, and a no-op gateway loop ready for future OpenRouter/LiteLLM wiring (#2296)
+- feat(capability): 24h auto-refresh — `is_model_catalog_stale()` wired into `maybe_trigger_staleness_checks()`'s existing daemon-tick/CLI-startup trigger points, reusing `spawn_staleness_check_thread()` (#2297)
+- feat(models): `resolve_tier_model()` now reads the live `harness_models` catalog first, falling back to the static seed catalog only on a fresh install; `synlynk dispatch --model <id>` validates against the live catalog before launch and fails fast with the current valid ids instead of burning a job (#2295)
+### Fixed
+- fix(daemon): bind root for token refresh, resolving a recurring daemon crash on `_repo_common_dir()` when invoked from a non-root worktree (gh:#2288, #2289)
+
+> This release closes gh:#2291 — two live dispatch failures this cycle (`grok-code-fast-1` and an Agy model id both rejected as unknown) traced back to synlynk's model catalog being a static, hand-maintained list with no periodic refresh and no enforcement that dispatch actually reads a live-validated value. Both failure modes recurred again live during this same release's own PR review dispatches, underscoring the fix.
+
 ## [v0.25.0] - 2026-10-02
 ### Added
 - feat(local): three-model roster schema supporting `Ornith-1.0-9B-4bit`, `Qwen3.6-27B-4bit`, and `Ternary-Bonsai-2-27B-mlx-2bit`
