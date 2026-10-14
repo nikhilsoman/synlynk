@@ -1230,5 +1230,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2292 \u2014 model catalog discovery design spec + plan (gh:#2291) (PR #2292, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2292.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-14) - PR #2292\n- Merged improvements and fixes for PR #2292."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/329-pr2293-add-provider-aware-harness-model-catalog.md",
+    "title": "PR #2293 \u2014 add provider-aware harness model catalog",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-14",
+    "pr": "#2293",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2293."
+    ],
+    "tweet": "\ud83d\ude80 PR #2293 \u2014 add provider-aware harness model catalog (PR #2293, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2293.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-14) - PR #2293\n- Merged improvements and fixes for PR #2293."
   }
 ]
