@@ -4,6 +4,17 @@ import json
 import sqlite3
 
 
+def test_active_harness_models_treats_unavailable_catalog_as_empty():
+    from synlynk.db import get_active_harness_models
+
+    assert get_active_harness_models(None, harness="codex") == []
+
+    conn = sqlite3.connect(":memory:")
+    assert get_active_harness_models(conn, harness="codex") == []
+    conn.close()
+    assert get_active_harness_models(conn, harness="codex") == []
+
+
 def test_builtin_catalog_has_entitlement_and_geometry():
     from synlynk.models import BUILTIN_FAMILIES, BUILTIN_MODEL_CATALOG, EntitlementTier
 
