@@ -137,21 +137,21 @@ def _job_purpose(role: str | None, task_type: str | None, *, explicit: bool = Tr
 _DEFAULT_MODELS_BY_TIER = {
     MODEL_TIER_FAST: {
         "claude": "claude-haiku-4-5-20251001",
-        "agy": "gemini-3.7-flash-medium",
+        "agy": "gemini-3.8-flash-medium",
         "codex": "gpt-5.6-luna",
         "grok": "grok-4.6",
         "local": "qwen2.5",
     },
     MODEL_TIER_PRO: {
         "claude": "claude-sonnet-5",
-        "agy": "gemini-3.1-pro-low",
+        "agy": "gemini-3.8-flash-high",
         "codex": "gpt-5.6-luna",
         "grok": "grok-4.7",
         "local": "qwen2.5",
     },
     MODEL_TIER_REASONING: {
         "claude": "claude-opus-5-5",
-        "agy": "gemini-3.1-pro-high",
+        "agy": "claude-opus-4-6-thinking",
         "codex": "gpt-5.6-luna",
         "grok": "grok-4.7",
         "local": "deepseek-r1",
