@@ -2092,7 +2092,7 @@ def _apply_stage0_explore_bonus(conn, candidates: list, discipline: str, phase: 
     return sorted(result, key=lambda c: c[1], reverse=True)
 
 
-def _best_agent_for_story(story_id: str) -> Optional[str]:
+def _best_agent_for_story(story_id: str, required_capabilities: Optional[set] = None) -> Optional[str]:
     """3-stage routing: capability score → quota headroom → cost.
 
     Stage 1 (capability, #139): rank agents by weighted capability score for
@@ -2153,6 +2153,20 @@ def _best_agent_for_story(story_id: str) -> Optional[str]:
         # Prefer known-headroom (non-degraded) over unknown when both present.
         known = [g for g in gated if not g[3].get("degraded")]
         pool = known if known else gated
+
+        # A cold-start tie used to pick `local` because its metered cost is
+        # $0.00, before the capability gate ran (gh:#2048). Drop harnesses
+        # that cannot satisfy the task so an air-gapped harness cannot win
+        # a capability-blind cost tiebreak.
+        if required_capabilities:
+            from synlynk.capability_probe import evaluate_harness_capabilities
+
+            pool = [
+                item for item in pool
+                if evaluate_harness_capabilities(item[0], set(required_capabilities)).allowed
+            ]
+            if not pool:
+                return None
 
         # Stage 3 — cost among capability-near ties
         top_score = pool[0][1]
@@ -2698,6 +2712,8 @@ def _reconcile_jobs_unlocked() -> None:
                 )
             if job.get("status") == "unknown":
                 summary_status = terminal_status_for_unknown_exit()
+            elif job.get("status") == "succeeded_gh_write_failed" and not summary_status:
+                summary_status = "succeeded_gh_write_failed"
             if job.get("status") == "completed":
                 if job.get("requires_gh_write"):
                     github_effect_consulted = True
@@ -5140,6 +5156,8 @@ def _reconcile_daemon_jobs() -> None:
                 )
                 if status == "failed_unverified" and not summary_status:
                     summary_status = terminal_status_for_unknown_exit()
+                elif status == "succeeded_gh_write_failed" and not summary_status:
+                    summary_status = "succeeded_gh_write_failed"
                 task_sha256, task_preview = _task_sha256_and_preview(task)
                 _pkg("_write_job_summary")(
                     job_id, agent, story_id, exit_code, duration_s, in_tokens,
