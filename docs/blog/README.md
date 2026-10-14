@@ -409,6 +409,8 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [272](./272-prTBD-charter-superpowers-binding.md) | PR #TBD — Charters Learn to Bind Skills, Not Just Roles | 2306 | 2026-10-14 |
 | [339](./339-pr2306-charter-superpowers-skill-binding-design.md) | PR #2306 — charter superpowers-skill binding design for gh:#2305 | [#2306](https://github.com/nikhilsoman/synlynk/pull/2306) | 2026-10-14 |
 | [340](./340-pr2308-bind-superpowers-skills-to-dispatched-ch.md) | PR #2308 — bind superpowers skills to dispatched charters | [#2308](https://github.com/nikhilsoman/synlynk/pull/2308) | 2026-10-14 |
+| [273](./273-prTBD-onboarding-engine-wiring.md) | PR #TBD — Five Modules, Zero Callers: Finding the Other Dead Charter Bug | 2310 | 2026-10-14 |
+| [341](./341-pr2311-onboarding-engine-wiring-design-gh-2310.md) | PR #2311 — onboarding-engine wiring design (gh:#2310) | [#2311](https://github.com/nikhilsoman/synlynk/pull/2311) | 2026-10-14 |
 
 ## Per-PR Post Template
 

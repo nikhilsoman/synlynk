@@ -1438,5 +1438,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2308 \u2014 bind superpowers skills to dispatched charters (PR #2308, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2308.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-14) - PR #2308\n- Merged improvements and fixes for PR #2308."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/341-pr2311-onboarding-engine-wiring-design-gh-2310.md",
+    "title": "PR #2311 \u2014 onboarding-engine wiring design (gh:#2310)",
+    "author": "synlynk-pm agent",
+    "date": "2026-10-14",
+    "pr": "#2311",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2311."
+    ],
+    "tweet": "\ud83d\ude80 PR #2311 \u2014 onboarding-engine wiring design (gh:#2310) (PR #2311, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2311.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-14) - PR #2311\n- Merged improvements and fixes for PR #2311."
   }
 ]
