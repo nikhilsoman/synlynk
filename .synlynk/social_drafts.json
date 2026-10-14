@@ -1182,5 +1182,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2285 \u2014 resolve false PERMISSION_DENIED and summary status mismatch (gh:#2205) (PR #2285, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2285.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-14) - PR #2285\n- Merged improvements and fixes for PR #2285."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/326-pr2280-stop-cold-start-tiebreak-from-selecting-.md",
+    "title": "PR #2280 \u2014 stop cold-start tiebreak from selecting local (gh:#2048)",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-14",
+    "pr": "#2280",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2280."
+    ],
+    "tweet": "\ud83d\ude80 PR #2280 \u2014 stop cold-start tiebreak from selecting local (gh:#2048) (PR #2280, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2280.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-14) - PR #2280\n- Merged improvements and fixes for PR #2280."
   }
 ]

@@ -388,6 +388,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [323](./323-pr2278-validate-agy-tier-models-against-live-di.md) | PR #2278 — validate Agy tier models against live discovery (gh:#2268) | [#2278](https://github.com/nikhilsoman/synlynk/pull/2278) | 2026-10-14 |
 | [324](./324-pr2281-order-gh-write-harnesses-by-measured-qua.md) | PR #2281 — order gh-write harnesses by measured quality | [#2281](https://github.com/nikhilsoman/synlynk/pull/2281) | 2026-10-14 |
 | [325](./325-pr2285-resolve-false-permission-denied-and-summ.md) | PR #2285 — resolve false PERMISSION_DENIED and summary status mismatch (gh:#2205) | [#2285](https://github.com/nikhilsoman/synlynk/pull/2285) | 2026-10-14 |
+| [326](./326-pr2280-stop-cold-start-tiebreak-from-selecting-.md) | PR #2280 — stop cold-start tiebreak from selecting local (gh:#2048) | [#2280](https://github.com/nikhilsoman/synlynk/pull/2280) | 2026-10-14 |
 
 ## Per-PR Post Template
 
