@@ -380,6 +380,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [316](./316-pr2266-add-goal-match-confidence-threshold-gh-2.md) | PR #2266 — add goal-match confidence threshold (gh:#2262) | [#2266](https://github.com/nikhilsoman/synlynk/pull/2266) | 2026-10-13 |
 | [317](./317-pr2269-add-autonomy-pass-chaining-backlog-pipel.md) | PR #2269 — add _autonomy_pass() chaining backlog pipeline + mode-gated scheduling | [#2269](https://github.com/nikhilsoman/synlynk/pull/2269) | 2026-10-13 |
 | [318](./318-pr2272-preserve-cross-harness-pr-review-routing.md) | PR #2272 — preserve cross-harness PR review routing | [#2272](https://github.com/nikhilsoman/synlynk/pull/2272) | 2026-10-13 |
+| [319](./319-pr2274-exclude-implementer-harness-from-review-.md) | PR #2274 — exclude implementer harness from review capability probe (gh:#2271) | [#2274](https://github.com/nikhilsoman/synlynk/pull/2274) | 2026-10-14 |
 
 ## Per-PR Post Template
 

@@ -1054,5 +1054,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2272 \u2014 preserve cross-harness PR review routing (PR #2272, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2272.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-13) - PR #2272\n- Merged improvements and fixes for PR #2272."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/319-pr2274-exclude-implementer-harness-from-review-.md",
+    "title": "PR #2274 \u2014 exclude implementer harness from review capability probe (gh:#2271)",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-14",
+    "pr": "#2274",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2274."
+    ],
+    "tweet": "\ud83d\ude80 PR #2274 \u2014 exclude implementer harness from review capability probe (gh:#2271) (PR #2274, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2274.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-14) - PR #2274\n- Merged improvements and fixes for PR #2274."
   }
 ]
