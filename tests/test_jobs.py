@@ -158,6 +158,57 @@ def test_check_instruction_receipt_none_reported():
     assert jobs_mod._check_instruction_receipt(log_text, "0.13.0") == "none"
 
 
+def test_downgrade_exit_zero_mutating_noop_is_not_ok():
+    import synlynk.jobs as jobs_mod
+
+    status, label, note = jobs_mod._downgrade_exit_zero_mutating_noop(
+        "done", 0, [], requires_gh_write=False, task_type="implement",
+        remote_has_activity=False, gh_verified=None,
+    )
+    assert status == jobs_mod.STATUS_COMPLETED_WITHOUT_CHANGES
+    assert label == "COMPLETED_WITHOUT_CHANGES"
+    assert "dispatch base" in note
+
+    kept, label, _note = jobs_mod._downgrade_exit_zero_mutating_noop(
+        "done", 0, ["job.txt"], requires_gh_write=False, task_type="implement",
+        remote_has_activity=False, gh_verified=None,
+    )
+    assert kept == "done"
+    assert label is None
+
+    kept, label, _note = jobs_mod._downgrade_exit_zero_mutating_noop(
+        "done", 0, [], requires_gh_write=True, task_type="review",
+        remote_has_activity=False, gh_verified="true",
+    )
+    assert kept == "done"
+    assert label is None
+
+
+def test_check_instruction_receipt_ok_when_marker_is_inside_json_log():
+    """gh:#2236: harness logs embed the receipt inside a JSON text field, so it
+    is not the start of a physical line. job-70a6a736 printed the right version
+    and was still labeled absent."""
+    import synlynk.jobs as jobs_mod
+
+    log_text = (
+        '  "text": "SYNLYNK_TASK_RECEIVED: abc\\n'
+        'I will load the instruction file.SYNLYNK_INSTRUCTION_VERSION: 0.23.0-dev\\n'
+        'GROK.md is loaded."\n'
+    )
+    assert jobs_mod._check_instruction_receipt(log_text, "0.23.0-dev") == "ok"
+
+
+def test_check_instruction_receipt_prefers_expected_over_template_echo():
+    import synlynk.jobs as jobs_mod
+
+    log_text = (
+        "SYNLYNK_INSTRUCTION_VERSION: <version>\n"
+        "SYNLYNK_INSTRUCTION_VERSION: none\n"
+        "SYNLYNK_INSTRUCTION_VERSION: 0.23.0-dev\n"
+    )
+    assert jobs_mod._check_instruction_receipt(log_text, "0.23.0-dev") == "ok"
+
+
 def test_check_instruction_receipt_absent():
     import synlynk.jobs as jobs_mod
 
@@ -2548,7 +2599,7 @@ def test_reconcile_daemon_jobs_gtv_uses_files_not_empty_summary(project_dir, mon
             "commits_ahead": 1,
             "dirty": False,
         },
-        "_worktree_files_touched": lambda p: ["src/fixed.py"],
+        "_worktree_files_touched": lambda p, base_sha=None: ["src/fixed.py"],
     }.get(name, getattr(sl, name, default)))
 
     # Simpler: only override what we need via module attributes used by _reconcile
@@ -2580,7 +2631,7 @@ def test_reconcile_daemon_jobs_gtv_uses_files_not_empty_summary(project_dir, mon
                 "dirty": False,
             }
         if name == "_worktree_files_touched":
-            return lambda p: ["src/fixed.py"]
+            return lambda p, base_sha=None: ["src/fixed.py"]
         return getattr(sl, name, default)
 
     monkeypatch.setattr(jobs_mod, "_pkg", fake_pkg)
@@ -3391,6 +3442,34 @@ def test_reconcile_terminal_jobs_json_matches_reconcile_daemon_jobs_defer_decisi
     assert bridge_repaired == 0
     assert bridge_row == ("running",)
     assert daemon_row == bridge_row
+
+
+def test_apply_gh_write_verification_parses_naive_started_at_as_local(project_dir, monkeypatch):
+    """gh:#2163: daemon_jobs.started_at is local wall time. Labeling it UTC on
+    an IST host pushes `since` 5.5h forward and hides a review that just landed."""
+    import synlynk as sl
+    import synlynk.jobs as jobs_mod
+    from synlynk.gh_verify import _parse_iso8601
+
+    conn = sl._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, enqueued_at) "
+        "VALUES ('job-ghw-local-since', 'codex', 'review pr 2160', 'running', '2026-10-10T09:30:00')"
+    )
+    conn.commit()
+    captured = {}
+
+    def fake_verified(target, expect, since=None, expect_author=None, evidence=None, **kwargs):
+        captured["since"] = since
+        return True
+
+    monkeypatch.setattr(jobs_mod, "gh_write_verified", fake_verified)
+    jobs_mod._apply_gh_write_verification(
+        conn, "job-ghw-local-since", True, "pr:2160", "done",
+        since="2026-10-10T09:30:00", expect="review_posted",
+    )
+    conn.close()
+    assert captured["since"] == _parse_iso8601("2026-10-10T09:30:00", naive_as="local").isoformat()
 
 
 def test_apply_gh_write_verification_persists_evidence(project_dir, monkeypatch):

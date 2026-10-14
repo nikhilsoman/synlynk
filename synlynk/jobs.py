@@ -2,6 +2,7 @@
 
 import fnmatch
 import hashlib
+import inspect
 import json
 import os
 import re
@@ -346,6 +347,43 @@ def _job_has_real_work_landed(git_state: Optional[dict]) -> bool:
     return bool(git_state.get("has_activity") or git_state.get("remote_has_activity"))
 
 
+_READONLY_TASK_TYPES = frozenset({
+    "review", "analysis", "read_only", "readonly", "probe", "audit",
+    "gh_write", "github_write",
+})
+
+
+def _downgrade_exit_zero_mutating_noop(
+    status: str,
+    exit_code: Optional[int],
+    files_touched: list,
+    *,
+    requires_gh_write: bool,
+    task_type: Optional[str],
+    remote_has_activity: bool,
+    gh_verified: Optional[str],
+) -> tuple:
+    """A mutating exit-0 job with no diff since its dispatch base is not OK.
+
+    gh:#2245: no-op dispatches were summarized as ``OK (exit 0)`` because the
+    exit code alone was treated as success, and the file list was the parent
+    branch's older commits.
+    """
+    if exit_code != 0 or status not in ("done", "completed", STATUS_COMPLETED):
+        return status, None, None
+    if requires_gh_write or gh_verified == "true":
+        return status, None, None
+    if (task_type or "") in _READONLY_TASK_TYPES:
+        return status, None, None
+    if files_touched or remote_has_activity:
+        return status, None, None
+    return (
+        STATUS_COMPLETED_WITHOUT_CHANGES,
+        "COMPLETED_WITHOUT_CHANGES",
+        "Zero git diff since the dispatch base and zero uncommitted files for a mutating task",
+    )
+
+
 def _git_state_files_touched(git_state: Optional[dict]) -> list:
     """Return local changed files, falling back to files touched remotely."""
     if not git_state:
@@ -480,26 +518,34 @@ def _check_task_receipt(log_text: str, task_sha256: Optional[str]) -> Optional[s
     return "absent"
 
 
+# Harness logs often wrap the receipt inside a JSON text field
+# (`"text": "...SYNLYNK_INSTRUCTION_VERSION: 0.23.0-dev\\n..."`), so the marker
+# is not the start of a physical line (gh:#2236, job-70a6a736).
+_INSTRUCTION_RECEIPT_VALUE_RE = re.compile(
+    r"SYNLYNK_INSTRUCTION_VERSION:\s*([0-9A-Za-z<][0-9A-Za-z._+\-<>]*)"
+)
+
+
 def _check_instruction_receipt(log_text: str, expected_version: Optional[str]) -> Optional[str]:
     """Classifies instruction-receipt marker compliance in a job's log.
 
     Returns one of 'ok', 'mismatch', 'none', 'absent', or None when the
     check does not apply (empty log or no expected version).
+
+    A later exact version wins over an earlier template echo
+    (``<version>`` or ``none``) from the prompt instructions.
     """
     if not log_text or not expected_version:
         return None
-    lines = [ln.strip() for ln in log_text.splitlines() if ln.strip()]
-    if not lines:
+    values = _INSTRUCTION_RECEIPT_VALUE_RE.findall(log_text)
+    if not values:
         return "absent"
-    for line in lines:
-        if line.startswith(_INSTRUCTION_RECEIPT_MARKER_PREFIX):
-            val = line[len(_INSTRUCTION_RECEIPT_MARKER_PREFIX):].strip()
-            if val.lower() == "none":
-                return "none"
-            if val == expected_version:
-                return "ok"
-            return "mismatch"
-    return "absent"
+    if any(val == expected_version for val in values):
+        return "ok"
+    val = values[-1]
+    if val.lower() == "none":
+        return "none"
+    return "mismatch"
 
 
 def _instruction_receipt_is_trusted(
@@ -1461,11 +1507,99 @@ def _retry_internal_timeout_job(job: dict, jobs: list, git_state: Optional[dict]
     jobs.append(retry_job)
     return True
 
+def _git_is_ancestor(worktree_path: str, ancestor: str, descendant: str) -> bool:
+    try:
+        result = subprocess.run(
+            ["git", "-C", worktree_path, "merge-base", "--is-ancestor", ancestor, descendant],
+            capture_output=True, text=True, check=False, timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return result.returncode == 0
+
+
+def _invoke_worktree_git_inspector(
+    inspector,
+    worktree_path,
+    branch,
+    started_at,
+    task=None,
+    base_sha=None,
+):
+    """Call a git inspector with only the positional args it accepts.
+
+    Reconciliation tests stub inspectors at the historical 3- or 4-argument
+    shape. The real inspector also takes the dispatch ``base_sha`` (gh:#2245).
+    """
+    args = [worktree_path, branch, started_at, task, base_sha]
+    try:
+        sig = inspect.signature(inspector)
+    except (TypeError, ValueError):
+        return inspector(worktree_path, branch, started_at)
+    if any(p.kind == inspect.Parameter.VAR_POSITIONAL for p in sig.parameters.values()):
+        return inspector(*args)
+    positional = [
+        p for p in sig.parameters.values()
+        if p.kind in (
+            inspect.Parameter.POSITIONAL_ONLY,
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+        )
+    ]
+    return inspector(*args[:len(positional)])
+
+
+def _resolve_job_diff_base(worktree_path: Optional[str], base_sha: Optional[str] = None) -> Optional[str]:
+    """Return the commit that bounds files changed by this job.
+
+    ``base_sha`` is HEAD at dispatch. Diffing only against merge-base(HEAD,
+    origin/main) counts commits that were already on a stacked parent branch
+    (gh:#2245). When recorded ``base_sha`` is an ancestor of that mainline
+    merge-base, mainline is closer to HEAD and upstream commits must stay out
+    of the job diff (job-09064300).
+    """
+    if not worktree_path:
+        return None
+    resolve_mainline = _pkg("_resolve_worktree_base_commit")
+    mainline = None
+    if resolve_mainline:
+        mainline = (resolve_mainline(worktree_path) or {}).get("base_commit")
+    recorded = (base_sha or "").strip() or None
+    # No recorded dispatch base: keep the historical mainline merge-base.
+    # Ancestor probes here would change command traces and hide a feature
+    # branch's own commits when this checkout *is* main.
+    if not recorded:
+        return mainline
+    if recorded:
+        try:
+            parsed = subprocess.run(
+                ["git", "-C", worktree_path, "rev-parse", "--verify", f"{recorded}^{{commit}}"],
+                capture_output=True, text=True, check=False, timeout=10,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            parsed = None
+        if not parsed or parsed.returncode != 0:
+            recorded = None
+        else:
+            recorded = (parsed.stdout or "").strip() or None
+    if recorded and not _git_is_ancestor(worktree_path, recorded, "HEAD"):
+        recorded = None
+    # merge-base(HEAD, main) is HEAD when this branch *is* main. That is not
+    # a floor: it would hide the job's own commits. Only a mainline commit
+    # strictly behind HEAD can exclude upstream commits that landed after the
+    # recorded dispatch base (job-09064300).
+    if mainline and _git_is_ancestor(worktree_path, "HEAD", mainline):
+        mainline = None
+    if recorded and mainline and _git_is_ancestor(worktree_path, recorded, mainline):
+        return mainline
+    return recorded or mainline
+
+
 def _inspect_worktree_git_state(
     worktree_path: Optional[str],
     worktree_branch: Optional[str] = None,
     started_at: Optional[str] = None,
     task: Optional[str] = None,
+    base_sha: Optional[str] = None,
 ) -> Optional[dict]:
     """Returns git evidence for a worktree, or None when it is unavailable."""
     if not _worktree_path_is_available(worktree_path, "inspect git state"):
@@ -1484,9 +1618,17 @@ def _inspect_worktree_git_state(
     dirty = bool((status_result.stdout or "").strip())
     commits_ahead = 0
     base_ref = None
-    base_info = _pkg("_resolve_worktree_base_commit")(worktree_path)
-    base_commit = (base_info or {}).get("base_commit")
-    base_ref = (base_info or {}).get("base_ref")
+    base_commit = None
+    if base_sha:
+        base_commit = _resolve_job_diff_base(worktree_path, base_sha)
+        if base_commit:
+            base_ref = "dispatch-base"
+    else:
+        resolve_base = _pkg("_resolve_worktree_base_commit")
+        base_info = resolve_base(worktree_path) if resolve_base else None
+        if base_info:
+            base_commit = base_info.get("base_commit")
+            base_ref = base_info.get("base_ref")
     if base_commit:
         try:
             ahead_result = subprocess.run(
@@ -2300,7 +2442,7 @@ def _reconcile_jobs_unlocked() -> None:
                     cb_res.in_tokens,
                     cb_res.out_tokens,
                     cb_res.cost_usd,
-                    _pkg("_worktree_files_touched")(job.get("worktree_path")),
+                    _pkg("_worktree_files_touched")(job.get("worktree_path"), job.get("base_sha")),
                     job.get("worktree_path"),
                     job.get("worktree_branch"),
                     base_branch=job.get("base_branch"),
@@ -2373,7 +2515,7 @@ def _reconcile_jobs_unlocked() -> None:
             )
             check_token_bloat = _pkg("check_token_bloat")
             if check_token_bloat:
-                files_touched_list = _pkg("_worktree_files_touched")(job.get("worktree_path")) or []
+                files_touched_list = _pkg("_worktree_files_touched")(job.get("worktree_path"), job.get("base_sha")) or []
                 check_token_bloat(
                     in_tokens=in_tokens,
                     out_tokens=out_tokens,
@@ -2395,7 +2537,7 @@ def _reconcile_jobs_unlocked() -> None:
                 in_tokens,
                 out_tokens,
                 cost_usd,
-                _pkg("_worktree_files_touched")(job.get("worktree_path")),
+                _pkg("_worktree_files_touched")(job.get("worktree_path"), job.get("base_sha")),
                 job.get("worktree_path"),
                 job.get("worktree_branch"),
                 base_branch=job.get("base_branch"),
@@ -2434,11 +2576,13 @@ def _reconcile_jobs_unlocked() -> None:
                     log_text = ""
             git_state = None
             if job.get("worktree_path"):
-                git_state = _pkg("_inspect_worktree_git_state")(
+                git_state = _invoke_worktree_git_inspector(
+                    _pkg("_inspect_worktree_git_state"),
                     job.get("worktree_path"),
                     job.get("worktree_branch"),
                     job.get("started_at"),
                     job.get("task"),
+                    job.get("base_sha"),
                 )
             permission_denied = False
             if waitpid_exit_code == 0:
@@ -2612,7 +2756,7 @@ def _reconcile_jobs_unlocked() -> None:
                 in_tokens,
                 out_tokens,
                 cost_usd,
-                _pkg("_worktree_files_touched")(job.get("worktree_path")),
+                _pkg("_worktree_files_touched")(job.get("worktree_path"), job.get("base_sha")),
                 job.get("worktree_path"),
                 job.get("worktree_branch"),
                 status_label=summary_status,
@@ -2648,11 +2792,13 @@ def _reconcile_jobs_unlocked() -> None:
                     except Exception:
                         pass
                 elif job.get("worktree_path"):
-                    git_state = _pkg("_inspect_worktree_git_state")(
+                    git_state = _invoke_worktree_git_inspector(
+                        _pkg("_inspect_worktree_git_state"),
                         job.get("worktree_path"),
                         job.get("worktree_branch"),
                         job.get("started_at"),
                         job.get("task"),
+                        job.get("base_sha"),
                     )
                     if git_state and git_state.get("has_activity"):
                         ambiguous_exit = True
@@ -2677,11 +2823,13 @@ def _reconcile_jobs_unlocked() -> None:
                 job["status"] = "failed"
                 job["exit_code"] = exit_code if exit_code is not None else -1
             if job.get("status") in ("failed", "unknown") and not exit_file_found and job.get("worktree_path"):
-                recovered_git_state = _pkg("_inspect_worktree_git_state")(
+                recovered_git_state = _invoke_worktree_git_inspector(
+                    _pkg("_inspect_worktree_git_state"),
                     job.get("worktree_path"),
                     job.get("worktree_branch"),
                     job.get("started_at"),
                     job.get("task"),
+                    job.get("base_sha"),
                 )
                 if recovered_git_state and _job_has_real_work_landed(recovered_git_state):
                     git_state = recovered_git_state
@@ -2689,11 +2837,13 @@ def _reconcile_jobs_unlocked() -> None:
                     job["exit_code"] = None
                     reclassified_failed_unverified = True
             if job.get("status") == "completed" and not git_state and job.get("worktree_path"):
-                git_state = _pkg("_inspect_worktree_git_state")(
+                git_state = _invoke_worktree_git_inspector(
+                    _pkg("_inspect_worktree_git_state"),
                     job.get("worktree_path"),
                     job.get("worktree_branch"),
                     job.get("started_at"),
                     job.get("task"),
+                    job.get("base_sha"),
                 )
             permission_denied = False
             task_delivery = {"hard_fail": False, "warn": False}
@@ -2768,7 +2918,7 @@ def _reconcile_jobs_unlocked() -> None:
             summary_note = None
             summary_status = None
             github_effect_consulted = False
-            summary_files_touched = _pkg("_worktree_files_touched")(job.get("worktree_path"))
+            summary_files_touched = _pkg("_worktree_files_touched")(job.get("worktree_path"), job.get("base_sha"))
             if permission_denied:
                 summary_status = "PERMISSION_DENIED (headless auto-denied)"
                 summary_note = (
@@ -3750,6 +3900,20 @@ def _existing_terminal_summary_truth(job_id: str) -> Optional[tuple]:
     return None
 
 
+def _daemon_job_base_sha(conn, job_id: str) -> Optional[str]:
+    """Return the dispatch-time base commit stored for a daemon job, if any."""
+    try:
+        row = conn.execute(
+            "SELECT base_sha FROM daemon_jobs WHERE job_id=?",
+            (job_id,),
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return None
+    if not row or not row[0]:
+        return None
+    return str(row[0])
+
+
 def _daemon_job_worktree_path(job_id: str, log_path: Optional[str] = None) -> Optional[str]:
     """Best-effort worktree directory for a daemon job (for GTV)."""
     candidates = []
@@ -3816,8 +3980,10 @@ def _reconcile_terminal_jobs_json(conn) -> int:
             preferred_state = None
             if preferred_path:
                 try:
-                    preferred_state = _worktree_git_state_inspector()(
-                        preferred_path, preferred_branch, job.get("started_at")
+                    preferred_state = _invoke_worktree_git_inspector(
+                        _worktree_git_state_inspector(),
+                        preferred_path, preferred_branch, job.get("started_at"),
+                        None, job.get("base_sha"),
                     )
                 except Exception:
                     preferred_state = None
@@ -4081,9 +4247,10 @@ def _apply_gh_write_verification(
         attempts = 0
     if attempts >= _GH_WRITE_VERIFICATION_RETRY_CAP:
         return status, "unknown"
-    # daemon_jobs historically stores started_at without an offset. Normalize
-    # it before handing it to the verifier so all timestamp inputs use UTC.
-    since_dt = _parse_iso8601(since)
+    # daemon_jobs.started_at is local wall time with no offset. Parsing it as
+    # UTC shifts `since` forward by the host offset (5.5h on IST) and hides
+    # reviews that landed during the job (gh:#2163).
+    since_dt = _parse_iso8601(since, naive_as="local")
     normalized_since = since_dt.isoformat() if since_dt is not None else since
     evidence = {}
     verification_kwargs = {
@@ -4453,6 +4620,7 @@ def _reconcile_daemon_jobs() -> None:
         "pid_identity": "TEXT",
         "gh_write_verification_attempts": "INTEGER NOT NULL DEFAULT 0",
         "terminal_evidence_strength": "TEXT NOT NULL DEFAULT 'unknown'",
+        "base_sha": "TEXT",
     })
     # Repair the split-brain window before selecting running rows.  This is
     # deliberately conditional/idempotent so a late daemon update cannot be
@@ -4472,6 +4640,7 @@ def _reconcile_daemon_jobs() -> None:
              dispatch_context, requires_gh_write, gh_write_target, gh_write_author,
              gh_write_expect, persisted_worktree_path, persisted_worktree_branch, pid_identity_json) in rows:
             try:
+                job_base_sha = _daemon_job_base_sha(conn, job_id)
                 # Invariant 2 must be enforced by the daemon's own polling
                 # path.  CLI reconciliation is opportunistic and does not run
                 # while `synlynk dispatch` jobs are active.
@@ -4591,7 +4760,10 @@ def _reconcile_daemon_jobs() -> None:
                     preferred_state = None
                     if preferred_path:
                         try:
-                            preferred_state = _worktree_git_state_inspector()(preferred_path, preferred_branch, started_at)
+                            preferred_state = _invoke_worktree_git_inspector(
+                                _worktree_git_state_inspector(),
+                                preferred_path, preferred_branch, started_at, None, job_base_sha,
+                            )
                         except Exception:
                             preferred_state = None
                     pre_guard_status = status
@@ -4658,7 +4830,10 @@ def _reconcile_daemon_jobs() -> None:
                 if worktree_path:
                     inspect_fn = _worktree_git_state_inspector()
                     try:
-                        git_state = inspect_fn(worktree_path, worktree_branch, started_at)
+                        git_state = _invoke_worktree_git_inspector(
+                            inspect_fn,
+                            worktree_path, worktree_branch, started_at, None, job_base_sha,
+                        )
                     except Exception:
                         git_state = None
                         git_inspection_failed = True
@@ -4832,7 +5007,12 @@ def _reconcile_daemon_jobs() -> None:
                     files_fn = _pkg("_worktree_files_touched")
                     if files_fn:
                         try:
-                            files_touched = list(files_fn(worktree_path) or [])
+                            files_touched = list(files_fn(worktree_path, job_base_sha) or [])
+                        except TypeError:
+                            try:
+                                files_touched = list(files_fn(worktree_path) or [])
+                            except Exception:
+                                files_touched = []
                         except Exception:
                             files_touched = []
 
@@ -4874,6 +5054,30 @@ def _reconcile_daemon_jobs() -> None:
                         "TOKEN_BLOAT and COST_INFLATION tripped for the same job; "
                         "scope review required before finalization"
                     )
+
+                proved_empty_diff = bool(
+                    git_state
+                    and git_state.get("base_commit")
+                    and not git_state.get("has_activity")
+                    and not git_state.get("dirty")
+                    and not git_state.get("changed_files")
+                    and not git_state.get("remote_has_activity")
+                    and int(git_state.get("commits_ahead") or 0) == 0
+                )
+                if status in ("done", "completed") and proved_empty_diff:
+                    noop_status, noop_label, noop_note = _downgrade_exit_zero_mutating_noop(
+                        status,
+                        exit_code,
+                        files_touched,
+                        requires_gh_write=bool(requires_gh_write),
+                        task_type=persisted_task_type,
+                        remote_has_activity=bool((git_state or {}).get("remote_has_activity")),
+                        gh_verified=gh_write_verified_str,
+                    )
+                    if noop_label:
+                        status = noop_status
+                        summary_status = noop_label
+                        summary_note = noop_note
 
                 # Reconciliation can overlap with the sentinel path or a
                 # second daemon pass.  Do not let a stale inspection overwrite
