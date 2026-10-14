@@ -1,0 +1,5 @@
+{
+  "name": "pm",
+  "description": "Durable PM wake cycle — approves/reprioritizes TPM's drafted intake queue, reconciles stale stories/goals when idle.",
+  "wake_cycle": "pm_wake"
+}

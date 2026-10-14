@@ -1,4 +1,5 @@
 import os
+import sqlite3
 import textwrap
 from unittest.mock import MagicMock, patch
 
@@ -10,6 +11,7 @@ from synlynk.pm_agent import (
     _load_config,
     _resolve_decide_panel,
     cmd_pm_sweep,
+    cmd_pm_wake,
 )
 from synlynk.team import HARNESS_CAPABILITY_BASELINES
 
@@ -154,3 +156,71 @@ def test_cmd_pm_sweep_malformed_output_exits_nonzero(tmp_path, monkeypatch, caps
             cmd_pm_sweep(dry_run=False)
     assert exc_info.value.code == 1
     assert "could not parse summary JSON" in capsys.readouterr().err
+
+
+def _pm_wake_db(tmp_path, monkeypatch):
+    """Point cmd_pm_wake at a throwaway db with a minimal backlog_items table."""
+    db_path = str(tmp_path / "state.db")
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        "CREATE TABLE backlog_items (id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "title TEXT, complexity_tier INTEGER, status TEXT, priority INTEGER)"
+    )
+    conn.commit()
+    monkeypatch.setattr(
+        "synlynk.db._get_db", lambda *a, **kw: sqlite3.connect(db_path)
+    )
+    return db_path, conn
+
+
+def _backlog_row(db_path, row_id):
+    conn = sqlite3.connect(db_path)
+    row = conn.execute(
+        "SELECT status, priority FROM backlog_items WHERE id = ?", (row_id,)
+    ).fetchone()
+    conn.close()
+    return row
+
+
+def test_cmd_pm_wake_approves_tpm_drafted_item_with_tier_based_priority(
+    tmp_path, monkeypatch, capsys
+):
+    db_path, conn = _pm_wake_db(tmp_path, monkeypatch)
+    row_id = conn.execute(
+        "INSERT INTO backlog_items (title, complexity_tier, status) "
+        "VALUES ('routine work', 2, 'tpm_drafted')"
+    ).lastrowid
+    conn.commit()
+    conn.close()
+
+    result = cmd_pm_wake()
+
+    status, priority = _backlog_row(db_path, row_id)
+    assert status == "triaged"
+    assert priority == 3
+    assert result["approved"] == 1
+    assert result["escalated"] == 0
+    assert "approved 1 item(s), 0 escalated" in capsys.readouterr().out
+
+
+def test_cmd_pm_wake_leaves_needs_architect_input_untouched(
+    tmp_path, monkeypatch, capsys
+):
+    db_path, conn = _pm_wake_db(tmp_path, monkeypatch)
+    row_id = conn.execute(
+        "INSERT INTO backlog_items (title, complexity_tier, status) "
+        "VALUES ('ambiguous work', 3, 'needs_architect_input')"
+    ).lastrowid
+    conn.commit()
+    conn.close()
+
+    result = cmd_pm_wake()
+
+    status, priority = _backlog_row(db_path, row_id)
+    assert status == "needs_architect_input"
+    assert priority is None
+    assert result["approved"] == 0
+    assert result["escalated"] == 1
+    out = capsys.readouterr().out
+    assert "1 item(s) await architect input" in out
+    assert "approved 0 item(s), 1 escalated" in out

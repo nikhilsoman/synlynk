@@ -10,6 +10,12 @@ because this module is imported into synlynk/cli.py directly, not re-exported
 through synlynk/__init__.py at module-load time -- no import cycle to avoid.
 """
 
+import json
+import os
+import traceback
+
+from synlynk.backlog import auto_promote_backlog, ingest_backlog, triage_backlog
+
 MAX_STORY_RETRIES = 2
 
 
@@ -61,7 +67,7 @@ def _compute_schedule_plan(max_stories=None) -> dict:
 
         query = (
             "SELECT s.story_id, s.title, s.engg_domain, s.org_domain, s.industry, "
-            "s.phase, s.priority, s.estimated_tokens FROM stories s "
+            "s.phase, s.priority, s.estimated_tokens, s.goal_id FROM stories s "
             "WHERE s.readiness='ready' AND NOT EXISTS ("
             "  SELECT 1 FROM daemon_jobs dj WHERE dj.story_id=s.story_id "
             "  AND dj.status IN ('queued','running')"
@@ -76,7 +82,11 @@ def _compute_schedule_plan(max_stories=None) -> dict:
         headroom_cache = {}  # agent -> int | None (None = degraded/unknown)
 
         for (story_id, title, engg, org, industry, phase, priority,
-             est_tokens) in stories:
+             est_tokens, goal_id) in stories:
+            if not goal_id:
+                blocked.append({"story_id": story_id, "reason": "no_goal_link"})
+                continue
+
             if _story_retry_count(conn, story_id) >= MAX_STORY_RETRIES:
                 blocked.append({"story_id": story_id, "reason": "retry_cap_exceeded"})
                 continue
@@ -235,3 +245,62 @@ def cmd_schedule(execute: bool = False, max_stories=None) -> None:
     job_ids = _enqueue_plan(plan)
     launched = _dispatch_ready_jobs()
     print(f"\n  {_GREEN}✓{_RESET} Enqueued {len(job_ids)} job(s), launched {launched}")
+
+
+def _autonomy_pass_interval_seconds() -> int:
+    """Seconds between unforced _autonomy_pass() runs.
+
+    Reads .synlynk/config.json directly (not load_config()) for the same
+    reason synlynk/autonomy.py's get_autonomy_mode() does: this key is a
+    small daemon-loop tuning knob, not part of the workspace/billing split
+    config load_config() composes.
+    """
+    path = os.path.join(os.getcwd(), ".synlynk", "config.json")
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            return int(data.get("autonomy_pass_interval_seconds", 1800))
+        except (json.JSONDecodeError, ValueError, OSError):
+            return 1800
+    return 1800
+
+
+def _autonomy_pass(conn=None) -> None:
+    """Backlog bookkeeping (always) + capability-aware scheduling (mode-gated).
+
+    Each stage runs independently: a failure in one stage is logged and does
+    not prevent the remaining stages from running. Never raises -- callers
+    (the daemon poll loop) must be able to call this every tick without a
+    try/except of their own.
+
+    See docs/superpowers/specs/2026-10-13-autonomous-backlog-scheduling-design.md
+    """
+    from synlynk.autonomy import AutonomyMode, get_autonomy_mode
+
+    for stage_name, stage_fn in (
+        ("ingest_backlog", lambda: ingest_backlog(db_conn=conn)),
+        ("triage_backlog", lambda: triage_backlog(db_conn=conn)),
+        ("auto_promote_backlog", lambda: auto_promote_backlog(db_conn=conn)),
+    ):
+        try:
+            stage_fn()
+        except Exception:
+            print(f"  ⚠ _autonomy_pass: {stage_name} failed:")
+            traceback.print_exc()
+
+    try:
+        mode = get_autonomy_mode()
+    except Exception:
+        print("  ⚠ _autonomy_pass: get_autonomy_mode failed, defaulting to MANUAL (no scheduling this pass):")
+        traceback.print_exc()
+        return
+
+    if mode == AutonomyMode.MANUAL:
+        return
+
+    try:
+        cmd_schedule(execute=True)
+    except Exception:
+        print("  ⚠ _autonomy_pass: cmd_schedule failed:")
+        traceback.print_exc()

@@ -752,13 +752,83 @@
 | 2026-10-12 16:28 | grok | grok-3 | 258279 | 55151 | $2.0553 [sub] (API: $1.6021) | estimated_token_rate | story-e7a340f9 | exec: grok job job-7abf2d6... |
 | 2026-10-12 16:36 | grok | grok-3 | 79715 | 12608 | $0.6054 [sub] (API: $0.4283) | estimated_token_rate | story-dd84b873 | exec: grok job job-ebd3388... |
 | 2026-10-12 16:36 | codex | o4-mini | 2054526 | 9973 | $0.0987 [sub] (API: $6.3132) | estimated_token_rate | story-e7a340f9 | exec: codex job job-b71a9e... |
+| 2026-10-12 21:19 | codex | gpt-5.6-luna | 3544592 | 18901 | $0.1703 [sub] (API: $10.9173) | estimated_token_rate | story-84912225 | exec: codex job job-6f0819... |
+| 2026-10-12 21:19 | codex | gpt-5.6-luna | 2536395 | 8559 | $0.1216 [sub] (API: $7.7376) | estimated_token_rate | story-a7b5674c | exec: codex job job-291f55... |
+| 2026-10-12 21:19 | grok | grok-3 | 82670 | 2555 | $0.5589 [sub] (API: $0.2863) | estimated_token_rate | story-dd84b873 | exec: grok job job-70a6a73... |
+| 2026-10-12 21:19 | codex | o4-mini | 1664471 | 6664 | $0.0799 [sub] (API: $5.0934) | estimated_token_rate | story-e7a340f9 | exec: codex job job-67294b... |
+| 2026-10-12 22:58 | claude | claude-sonnet-4-6 | 54285 | 5214 | $0.1477 [sub] (API: $0.2413) | estimated_token_rate | story-84912225 | exec: claude job job-a03c6... |
+| 2026-10-12 22:58 | claude | claude-sonnet-4-6 | 58248 | 11913 | $0.1741 [sub] (API: $0.3541) | estimated_token_rate | story-a7b5674c | exec: claude job job-db36e... |
+| 2026-10-12 22:58 | claude | claude-sonnet-4-6 | 47682 | 5959 | $0.1331 [sub] (API: $0.2327) | estimated_token_rate | story-a7b5674c | exec: claude job job-136ff... |
+| 2026-10-12 22:58 | grok | grok-3 | 367908 | 29728 | $2.6075 [sub] (API: $1.5502) | estimated_token_rate | story-3522e331 | exec: grok job job-0db2123... |
+| 2026-10-12 23:29 | codex | o4-mini | 1297381 | 7822 | $0.0624 [sub] (API: $4.0095) | estimated_token_rate | story-c04f64b1 | exec: codex job job-8544e4... |
+| 2026-10-12 23:32 | grok | grok-3 | 113999 | 27128 | $0.9254 [sub] (API: $0.7489) | estimated_token_rate | story-c04f64b1 | exec: grok job job-2104538... |
+| 2026-10-12 23:39 | codex | o4-mini | 1059968 | 6920 | $0.0510 [sub] (API: $3.2837) | estimated_token_rate | story-c04f64b1 | exec: codex job job-3cad6b... |
+| 2026-10-13 05:08 | claude | claude-sonnet-4-6 | 73897 | 4642 | $0.1949 [sub] (API: $0.2915) | estimated_token_rate | story-0ad6c02b | exec: claude job job-7c952... |
+| 2026-10-13 05:15 | codex | o4-mini | 689119 | 6182 | $0.0021 [sub] (API: $0.2042) | estimated_token_rate | story-0ad6c02b | exec: codex job job-7800e1... |
+| 2026-10-13 05:20 | codex | o4-mini | 610590 | 9168 | $0.0022 [sub] (API: $0.2453) | estimated_token_rate | story-0ad6c02b | exec: codex job job-7339e1... |
+| 2026-10-13 06:03 | codex | o4-mini | 782015 | 7336 | $0.0377 [sub] (API: $2.4561) | estimated_token_rate | story-0ad6c02b | exec: codex job job-85f9e9... |
+| 2026-10-13 06:03 | claude | claude-sonnet-4-6 | 54558 | 2042 | $0.1405 [sub] (API: $0.1943) | estimated_token_rate | story-0ad6c02b | exec: claude job job-bbe89... |
+| 2026-10-13 06:11 | claude | claude-sonnet-4-6 | 61795 | 4924 | $0.1656 [sub] (API: $0.2592) | estimated_token_rate | story-0ad6c02b | exec: claude job job-50e83... |
+| 2026-10-13 06:27 | claude | claude-sonnet-4-6 | 79392 | 8584 | $0.2183 [sub] (API: $0.3669) | estimated_token_rate | story-0ad6c02b | exec: claude job job-19650... |
+| 2026-10-13 06:35 | claude | claude-sonnet-4-6 | 82843 | 20382 | $0.2562 [sub] (API: $0.5543) | estimated_token_rate | story-0ad6c02b | exec: claude job job-7068a... |
+| 2026-10-13 06:41 | claude | unknown | 47117 | 2287 | $0.1226 [sub] (API: $0.1757) | estimated_token_rate | story-0ad6c02b | exec: claude job job-8dbcc... |
+| 2026-10-13 07:07 | claude | claude-sonnet-4-6 | 120000 | 30000 | $0.3723 [sub] (API: $0.8100) | estimated_manual | story-0ad6c02b | native PM-session work: Tasks 7-9 implemented directly after 2 dispatch no-ops (job-8dbcca65, job-63a77f90), regression triage, gh:#2245 filed, blog post + PR |
+| 2026-10-13 07:27 | claude | claude-sonnet-4-6 | 5000 | 2000 | $0.0174 [sub] (API: $0.0450) | estimated_tshirt | story-0ad6c02b | exec: claude job job-63a77... |
+| 2026-10-13 07:27 | claude | claude-sonnet-4-6 | 78521 | 11289 | $0.2229 [sub] (API: $0.4049) | estimated_token_rate | story-0ad6c02b | exec: claude job job-37a18... |
 
 ## Subscription Amortization & Dual-Ledger Summary
 
 | Harness | Base Fee | Actual Amortized Spend | API Equivalent Value | Net Savings |
 |---|---|---|---|---|
-| claude | $20.00 | $25.0885 | $37.7991 | $12.7106 |
-| codex | $20.00 | $21.9822 | $1409.5656 | $1387.5834 |
+| claude | $20.00 | $27.2541 | $41.7290 | $14.4749 |
+| codex | $20.00 | $22.5093 | $1443.5126 | $1421.0033 |
 | agy | $20.00 | $3.9405 | $18.6773 | $14.7368 |
 | grok | $30.00 | $80.6465 | $59.0384 | $-21.6081 |
 | **Total** | **$90.00** | **$131.6577** | **$1525.0804** | **$1393.4227** |
+
+## 2026-10-13 Personal Hosted Relay conductor
+
+- Task 2 job-9f7062ef: unsupported gpt-5.3-codex; reported zero tokens/$0.
+- Task 2 retry job-7926c2ec, gpt-6-astra: Synlynk reported $3.34,
+  1,094,051 input / 3,558 output tokens, versus $0.30 context estimate
+  ($0.16 dispatcher estimate). Telemetry estimate, not provider billing.
+  Result: 3d2a452f, integrated as 96aa05d7; 1381 passed, 1 skipped.
+- User approved the model switch after account rejection. Subsequent dispatches
+  use compact logs and reduced injected context. [@nikhilsoman]
+- Task 3 job-783b02c3, gpt-6-astra: Synlynk reported $2.52,
+  809,310 input / 6,260 output tokens, versus $1.00 context estimate.
+  Result: c76484b9 integrated as d2dd8fa5; 1473 passed, 1 skipped.
+- Task 4 job-ee2b73d3, gpt-6-astra: Synlynk reported $0.26,
+  831,156 input / 8,591 output (including reasoning) tokens. Launched with
+  the newer feature checkout's accounting; historical Task 2/3 values above
+  remain the persisted reports, not independently reconciled provider charges.
+  Result: ec156673 integrated as 45b54927; 1492 passed, 1 skipped.
+- Task 5 job-bc0a34d9, gpt-6-astra: Synlynk reported $0.37,
+  1,206,619 input / 14,054 output tokens. Result: bf60fcaa integrated as
+  36bcbb42; 1514 passed, 1 skipped; independent code review approved.
+- Task 6 job-d5e657cd, gpt-6-astra: Synlynk reported $0.51,
+  1,440,815 input / 19,633 output tokens. Result: 25d397ba integrated as
+  31683d36; 1527 passed, 1 skipped; independent code review approved.
+- Task 7 job-5d51f615, gpt-6-astra: Synlynk reported $0.39,
+  1,258,890 input / 13,419 output tokens. Source 814151bf plus reviewed
+  conductor onboarding corrections integrated as 84d730ab; 191 targeted passed.
+- Task 8 job-20b0e6e2: dispatcher incorrectly rerouted the explicit OpenAI model
+  to Claude; reported zero tokens/$0, no code changes. Tracked in gh:#2255.
+- Task 8 retry job-02ef4311, gpt-6-astra: Synlynk reported $0.43,
+  1,519,699 input / 13,169 output tokens. Worker broad verification: 1569
+  passed, 1 skipped. Conductor review expanded live NATS coverage to 10 passes.
+- Task 9 job-ceb33e8b, gpt-6-astra: Synlynk reported $0.31,
+  750,316 input / 11,489 output tokens. Worker broad verification: 1611 passed,
+  1 skipped. Reviewed correction included; final targeted verification 238 passed.
+- Independent Claude QA review job-956bee7b: Synlynk reported $1.02,
+  134,990 input / 40,754 output tokens; 1600 targeted tests passed and formal
+  review posted on PR #2257. Review requested fixes before merge.
+- Initial Task10 job-1b4da51f hit the account usage limit during execution.
+  Telemetry reports zero tokens/$0 despite a partial test run; treat that as
+  unavailable/incomplete usage evidence, not proof the attempt was free.
+| grok | $30.00 | $84.7382 | $61.6239 | $-23.1144 |
+| **Total** | **$90.00** | **$138.4421** | **$1565.5427** | **$1427.1006** |
+- Task 10 retry job-6da6bd82: estimate $1.00. Actual cost is unavailable to the
+  worker; dispatch telemetry remains authoritative. QA findings 1-4 fixes and
+  5-6 documentation, TDD and full regression evidence are recorded in
+  `project-docs/devlogs/personal-relay-task10-evidence.md`.

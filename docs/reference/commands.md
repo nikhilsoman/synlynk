@@ -101,6 +101,8 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `schedule` (primary) — execute
 - `tpm sweep` (primary) — execute
 - `pm sweep` (primary) — execute
+- `tpm wake` (primary) — execute
+- `pm wake` (primary) — execute
 - `governs sweep` (primary) — sustain
 - `release` (primary) — release
 - `marketing ceremony` (secondary) — release
@@ -149,6 +151,12 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `relay status` (secondary) — visualize
 - `relay send` (secondary) — execute
 - `relay tail` (secondary) — visualize
+- `relay hub init` (secondary) — sustain
+- `relay hub connect` (secondary) — sustain
+- `relay device add` (secondary) — sustain
+- `relay device revoke` (secondary) — sustain
+- `relay subscribe` (secondary) — sustain
+- `relay unsubscribe` (secondary) — sustain
 - `autonomy show` (primary) — sustain
 - `autonomy set` (primary) — sustain
 - `concierge synthesize` (primary) — goal

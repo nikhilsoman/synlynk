@@ -1288,6 +1288,12 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     relay_start_p.add_argument("--port", type=int, default=7432,
         help="Port to listen on (default: 7432)")
     relay_start_p.add_argument("--daemon", action="store_true", help="Start in the background")
+    relay_start_p.add_argument("--hub", action="store_true", help="Opt in to the configured NATS hub (foreground only)")
+    relay_start_p.add_argument("--device-id", help="Device ID minted by relay device add")
+    relay_start_p.add_argument("--config-dir", help="Hub credential/config directory (default: ~/.synlynk/relay)")
+    relay_start_p.add_argument("--hub-url", help="Override configured NATS URL")
+    relay_start_p.add_argument("--credential-file", help="Exported credential for this device only; no administrator registry required")
+    relay_start_p.add_argument("--workspace-id", help="Workspace scope for --credential-file")
 
     relay_status_p = relay_sub.add_parser("status", help="Show relay health")
     relay_status_p.add_argument("--relay-url", default=None, dest="relay_url")
@@ -1315,6 +1321,27 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     relay_peer_add_p.add_argument("--relay-url", default=None, dest="relay_url")
     relay_peer_list_p = relay_peer_sub.add_parser("list", help="List connected peer relay nodes")
     relay_peer_list_p.add_argument("--relay-url", default=None, dest="relay_url")
+
+    relay_hub_p = relay_sub.add_parser("hub", help="Configure an opt-in hosted hub")
+    relay_hub_sub = relay_hub_p.add_subparsers(dest="relay_hub_action")
+    relay_hub_init_p = relay_hub_sub.add_parser("init", help="Generate private NATS config with JetStream and authentication")
+    relay_hub_init_p.add_argument("--listen", default="127.0.0.1:4222", help="NATS server bind address (default: 127.0.0.1:4222)")
+    relay_hub_init_p.add_argument("--url", default="nats://127.0.0.1:4222", help="NATS URL used by this device")
+    relay_hub_connect_p = relay_hub_sub.add_parser("connect", help="Save managed settings locally; service connection is not implemented")
+    relay_hub_connect_p.add_argument("token", help="Managed workspace token (stored privately; no endpoint contacted)")
+    relay_hub_connect_p.add_argument("--url", default=None, help="Optional future managed service URL")
+    relay_device_p = relay_sub.add_parser("device", help="Manage self-hosted credentials; server reload required after changes")
+    relay_device_sub = relay_device_p.add_subparsers(dest="relay_device_action")
+    relay_device_add_p = relay_device_sub.add_parser("add", help="Mint a device and regenerate server authorization")
+    relay_device_add_p.add_argument("name")
+    relay_device_revoke_p = relay_device_sub.add_parser("revoke", help="Revoke locally; reload NATS to revoke live access")
+    relay_device_revoke_p.add_argument("device_id")
+    for command_parser in (relay_hub_init_p, relay_hub_connect_p, relay_device_add_p, relay_device_revoke_p):
+        command_parser.add_argument("--workspace-id", required=True)
+        command_parser.add_argument("--config-dir", default=None, help="Private config directory (default: ~/.synlynk/relay)")
+    for name in ("subscribe", "unsubscribe"):
+        command_parser = relay_sub.add_parser(name, help="Select inbound hub delivery; restart bridge to apply")
+        command_parser.add_argument("pattern", help="Relative NATS pattern, e.g. 'job.>' or 'sentinel.*'; missing file = all, empty list = none; excluded events are skipped")
 
     logs_parser = subparsers.add_parser("logs", help="Tail the output log of a job")
     logs_parser.add_argument("--job", required=True, dest="job_id",
@@ -1432,6 +1459,7 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
         "--radar", action="store_true",
         help="Plot Ring 3 opportunities to .synlynk/radar.json and docs/pm/opportunities-radar.md"
     )
+    pm_subparsers.add_parser("wake", help="Approve/reprioritize TPM's drafted intake queue (durable wake cycle)")
 
     tpm_parser = subparsers.add_parser("tpm", help="TPM sweep commands")
     tpm_subparsers = tpm_parser.add_subparsers(dest="tpm_command")
@@ -1439,6 +1467,7 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
         "sweep", help="Run one autonomous sweep pass over ready stories"
     )
     sweep_parser.add_argument("--assignee", default="nikhilsoman")
+    tpm_subparsers.add_parser("wake", help="Raw GitHub-issue intake, triage, ambiguity routing (durable wake cycle)")
 
     score_parser = subparsers.add_parser("score", help="Manage capability scores")
     score_sub = score_parser.add_subparsers(dest="score_action")
@@ -1790,6 +1819,8 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
         "media": media_parser,
         "models": models_parser,
         "relay": relay_parser,
+        "relay_hub": relay_hub_p,
+        "relay_device": relay_device_p,
         "run": run_parser,
         "team": team_parser,
         "worktree": worktree_parser,
@@ -2567,6 +2598,14 @@ def main(argv=None) -> None:
     elif args.command == "relay":
         action = getattr(args, "relay_action", None)
         if action == "start":
+            if args.hub and args.daemon:
+                parser.error("--hub does not support --daemon; run the bridge in the foreground")
+            if not args.hub and (args.device_id or args.config_dir or args.hub_url or args.credential_file or args.workspace_id):
+                parser.error("Hub credential and configuration options require --hub")
+            if args.hub:
+                from synlynk.relay_hub import run_hub_relay
+                run_hub_relay(args)
+                return
             if getattr(args, "daemon", False):
                 from synlynk.relay import RelayServer
                 from synlynk.daemon import _daemonize_via_reexec, _daemon_state_path
@@ -2575,6 +2614,14 @@ def main(argv=None) -> None:
             else:
                 from synlynk.relay import RelayServer
                 RelayServer(port=args.port).start(background=False)
+        elif action in ("hub", "device", "subscribe", "unsubscribe"):
+            from synlynk import relay_hub
+            subaction = getattr(args, f"relay_{action}_action", None)
+            if action in ("hub", "device") and subaction is None:
+                help_parsers[f"relay_{action}"].print_help()
+            else:
+                suffix = f"{action}_{subaction}" if subaction else action
+                getattr(relay_hub, f"cmd_relay_{suffix}")(args)
         elif action == "status":
             from synlynk.relay import cmd_relay_status
             cmd_relay_status(args)
@@ -2668,6 +2715,10 @@ def main(argv=None) -> None:
         from synlynk.pm_agent import cmd_pm_sweep
 
         cmd_pm_sweep(dry_run=args.dry_run, radar=getattr(args, "radar", False))
+    elif args.command == "pm" and args.pm_command == "wake":
+        from synlynk.pm_agent import cmd_pm_wake
+
+        cmd_pm_wake()
     elif args.command == "tpm" and args.tpm_command == "sweep":
         from synlynk.tpm_sweep import run_sweep_pass
 
@@ -2676,6 +2727,10 @@ def main(argv=None) -> None:
             f"sweep pass: {summary['advanced']} advanced, "
             f"{summary['parked']} parked, {summary['failed']} failed"
         )
+    elif args.command == "tpm" and args.tpm_command == "wake":
+        from synlynk.tpm_sweep import run_tpm_wake_cycle
+
+        run_tpm_wake_cycle()
     elif args.command == "score":
         if args.score_action == "add":
             cmd_score_add(args.story_id, args.rating, note=args.note, rework=args.rework)

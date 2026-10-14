@@ -8,6 +8,11 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ---
 
 ## [Unreleased]
+- Add an opt-in personal NATS relay with scoped device credentials, durable
+  JetStream replay, retention-gap events, subscription filters, and safe document
+  previews. See [self-hosted setup](docs/personal-hosted-relay.md). The `hub` extra
+  is optional; the core CLI remains stdlib-only. Managed service provisioning,
+  entitlement checks, and reconnect/status hardening remain follow-up work.
 - Synlynk is a neutral control plane that routes coding tasks across AI vendors and local models, then proves the result.
 - Ongoing Wave 3: Hosted Teams Server Hub, Cloudflare Tunnel full-duplex daemon, and Dynamic Quota Advisory service.
 

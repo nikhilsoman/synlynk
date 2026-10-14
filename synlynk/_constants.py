@@ -330,7 +330,7 @@ HARNESS_CAPABILITY_BASELINES = {
             ],
         },
         "roles": ["builder", "verifier", "architect"],
-        "env_passthrough": [],
+        "env_passthrough": ["MUSE_API_KEY", "META_API_KEY"],
         "strengths": ["surgical refactoring", "algorithmic synthesis", "automated unit testing", "high throughput"],
     },
 }
