@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #2296 — One discovery pass for every harness baseline | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-1">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Oct 14, 2026</span>
+        
+          <span class="blog-post-pr">PR 2296</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #2296 — One discovery pass for every harness baseline</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>One discovery pass for every harness baseline</h1>
+<p>The previous goalpost, after the provider-aware <code>harness_models</code> schema landed, was still a static catalog. <code>BUILTIN_MODEL_CATALOG</code> and a single Agy live check were what dispatch could trust. Sub-task 1 stored rates, effort, and a <code>(harness, model, provider)</code> key. Nothing wrote those columns from a live probe.</p>
+<h2>What changed</h2>
+<p><code>run_model_catalog_discovery(conn)</code> walks <code>HARNESS_CAPABILITY_BASELINES</code> instead of a fixed list of four CLIs. Each harness is recorded with <code>provider='native'</code>.</p>
+<p>Claude, Agy, and Grok still use their model-list commands. The probe now keeps rate, context, and explicit tier fields when the listing payload actually contains them. Agy ids that end in <code>-low</code>, <code>-medium</code>, or <code>-high</code> set <code>complexity_tier</code> and <code>max_effort_level</code>. Any other id leaves both columns null. A curated row never receives a tier just because its id looks tiered.</p>
+<p>Codex has no list command. The pass reads <code>model</code> from <code>CODEX_HOME/config.toml</code> and stores <code>discovery_source='config_file'</code>. If that file has no model, the harness falls back to <code>BUILTIN_MODEL_CATALOG</code> with <code>discovery_source='curated_fallback'</code>. The same fallback covers a listing harness whose probe returns nothing. When the probe names a model but does not quote a price, the catalog <code>RateCard</code> is scaled from per-1k to per-million tokens and stored with <code>rate_source='curated_fallback'</code>.</p>
+<p><code>CONFIGURED_GATEWAY_PROVIDERS</code> is empty. The gateway loop runs and queries nothing, so an OpenRouter row is not marked stale and no adapter is called. Previously active native rows that this pass did not see become <code>status='stale'</code>. They are not deleted.</p>
+<p><code>synlynk models discover</code> calls this function. <code>resolve_tier_model</code>, <code>dispatch --model</code>, and the 24h watch are unchanged. Those are the next two sub-tasks.</p>
+<h2>Goalpost</h2>
+<p>The catalog table can now be filled from whatever harnesses are registered, with rates and tiers only where a probe or the curated card actually supports them. The next step is the 24h refresh, then dispatch reading <code>status='active'</code> rows instead of the static catalog.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>

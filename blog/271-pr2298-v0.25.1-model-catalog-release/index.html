@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>v0.25.1 — a model catalog synlynk actually trusts | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-3">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Oct 14, 2026</span>
+        
+          <span class="blog-post-pr">PR 2298</span>
+        
+      </div>
+      <h1 class="blog-post-title">v0.25.1 — a model catalog synlynk actually trusts</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>v0.25.1 — a model catalog synlynk actually trusts</h1>
+<p>The previous goalpost, set across #2293/#2296/#2297/#2295, was to stop synlynk's dispatch layer from trusting a static, hand-maintained model list. That work landed in four independently reviewed PRs this cycle. This release closes the loop: it is the first version where every one of those pieces is live on <code>main</code> together, and where <code>README.md</code>'s own release-doc gate (<code>synlynk release --check-docs</code>) has verified the public-facing claims against the actual code.</p>
+<h2>What changed</h2>
+<p>Four sub-tasks, four PRs, one spec (<code>docs/superpowers/specs/2026-10-14-model-catalog-discovery-design.md</code>):</p>
+<ul>
+<li><strong>Schema (#2293).</strong> <code>harness_models</code> grew a 3-column primary key (<code>harness_name, model_id, provider</code>) and ten new columns — rate-card figures per Mtok, <code>complexity_tier</code>, <code>max_effort_level</code>, context/output token limits, and a <code>discovered_at</code> timestamp distinct from <code>first_seen_at</code>/<code>last_seen_at</code>.</li>
+<li><strong>Discovery pipeline (#2296).</strong> <code>run_model_catalog_discovery()</code> iterates every harness in <code>HARNESS_CAPABILITY_BASELINES</code> — not a hardcoded four — probing live CLI listings where they exist, falling back to a config-file read or a curated default where they don't, and marking previously-seen-now-absent models <code>status='stale'</code> instead of deleting their history.</li>
+<li><strong>24h auto-refresh (#2297).</strong> <code>is_model_catalog_stale()</code> sits next to the existing <code>is_probe_stale</code>/<code>is_smoke_test_stale</code> checks in <code>capability_watch.py</code> and rides the same daemon-tick/CLI-startup trigger path — no new scheduler.</li>
+<li><strong>Dispatch-time resolution (#2295).</strong> <code>resolve_tier_model()</code> now reads the live catalog first, falling back to the static seed only on a model-less fresh install. An explicit <code>--model</code> on <code>synlynk dispatch</code> is validated against the live catalog before the subprocess ever launches, failing fast with the current valid ids instead of burning a job to discover the id was wrong.</li>
+</ul>
+<h2>The goalpost moved itself mid-release</h2>
+<p>This spec existed because two live dispatch failures (<code>grok-code-fast-1</code>, a rejected Agy model id) traced back to the static catalog. While reviewing and merging these same four PRs, the exact failure mode recurred twice more — a dispatch to <code>grok-code-fast-1</code> and a stale Agy model id (<code>gemini-3.1-pro-low</code>) both failed live, independent of this release's own code, simply because <code>synlynk/models.py</code>'s <code>BUILTIN_MODEL_CATALOG</code> was already out of date against the real CLIs. That isn't a coincidence to note in passing; it's the strongest evidence this cycle produced that the fix was overdue, generated by the review process for the fix itself.</p>
+<p>Also fixed in this release, found along the way rather than planned: gh:#2288's recurring daemon crash on <code>_repo_common_dir()</code> when the daemon was started from a non-root worktree (#2289) — unrelated to the catalog work, but it kept interrupting role-token refresh mid-session and was worth clearing before the cut.</p>
+<h2>Goalpost</h2>
+<p>With a live, periodically-refreshed catalog in <code>state.db</code> and dispatch validating against it, the next goalpost is gh:#2076's <code>GenericAPIAdapter</code> — wiring an actual OpenRouter/LiteLLM gateway into the now-ready <code>provider</code> column and no-op gateway loop, so a model's rate card can come from a provider API response instead of a curated guess.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
