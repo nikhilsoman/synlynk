@@ -2625,6 +2625,16 @@ def _resolve_explicit_base_ref(repo_path: Optional[str], explicit_base: str) -> 
     return base
 
 
+# Auto mode stacks only on short-lived task branches. A long-lived workspace
+# branch (for example docs/claude/...) is not a task base: inheriting it makes
+# the job diff and the opened PR contain that branch's unrelated history (#2229).
+_AUTO_STACK_BRANCH_PREFIXES = ("feat/", "fix/", "chore/", "dispatch/", "release/")
+
+
+def _is_auto_stackable_task_branch(branch: str) -> bool:
+    return bool(branch) and branch.startswith(_AUTO_STACK_BRANCH_PREFIXES)
+
+
 def _resolve_dispatch_worktree_base_ref(
     repo_path: Optional[str],
     stacking_mode: str = "auto",
@@ -2632,7 +2642,8 @@ def _resolve_dispatch_worktree_base_ref(
 ) -> str:
     """Resolve the base ref a new dispatch worktree should be anchored to.
 
-    stacking_mode: "auto" (stack on current non-mainline branch, else mainline),
+    stacking_mode: "auto" (stack on a current task branch such as feat/ or
+    fix/, otherwise the fresh mainline — never a long-lived workspace branch),
     "always" (stack on current branch, error on mainline/detached HEAD),
     "never" (always mainline — legacy behavior)
 
@@ -2661,7 +2672,12 @@ def _resolve_dispatch_worktree_base_ref(
             else ""
         )
         if current_branch and current_branch not in ("main", "master"):
-            return current_branch
+            if stacking_mode == "always" or _is_auto_stackable_task_branch(current_branch):
+                return current_branch
+            print(
+                f"  ⚠ worktree base: '{current_branch}' is not a task branch "
+                f"— using fresh mainline instead of this long-lived checkout (#2229)"
+            )
         if stacking_mode == "always":
             raise RuntimeError(
                 f"dispatch stacking is 'always' but current branch is "

@@ -2845,11 +2845,29 @@ def cmd_migrate(dry_run: bool = False, recover: bool = False, setup_dr: bool = F
     except MigrationImportError:
         raise SystemExit(1)
 
+def _resolved_docs_dir() -> str:
+    """Absolute project-docs directory for generated writes.
+
+    ``_docs_dir()`` returns the workspace.json value as configured, normally
+    the relative string ``project-docs``. Joining that with the process cwd
+    writes into whichever dispatch worktree happens to be current (#2237).
+    Generated docs belong to the shared project root.
+    """
+    from synlynk import _docs_dir, _project_root
+
+    docs_dir = _docs_dir()
+    if docs_dir and not os.path.isabs(docs_dir):
+        try:
+            docs_dir = os.path.join(_project_root(), docs_dir)
+        except Exception:
+            return docs_dir
+    return docs_dir
+
+
 def _write_generated_project_doc(filename: str, content: str) -> None:
     """Write a generated 4-doc to the migrated cache and the git-tracked docs dir."""
     from synlynk import (
         DB_PATH,
-        _docs_dir,
         _dr_sync,
         _is_migrated,
         _project_root,
@@ -2975,13 +2993,7 @@ def _write_generated_project_doc(filename: str, content: str) -> None:
         syn_dir = _synlynk_project_docs_dir()
         os.makedirs(syn_dir, exist_ok=True)
         paths.append(os.path.join(syn_dir, filename))
-    docs_dir = _docs_dir()
-    # ``_docs_dir()`` returns the configured path as entered in workspace.json
-    # (normally the relative ``project-docs``).  Generated docs belong to the
-    # shared project root, not whichever isolated dispatch worktree happens to
-    # be the caller's cwd.
-    if docs_dir and not os.path.isabs(docs_dir):
-        docs_dir = os.path.join(_project_root(), docs_dir)
+    docs_dir = _resolved_docs_dir()
     if docs_dir:
         if _is_migrated() or os.path.exists(docs_dir):
             os.makedirs(docs_dir, exist_ok=True)
@@ -3014,10 +3026,10 @@ def _generate_todo_md() -> None:
     """Writes todo.md as a generated view of stories.
     Post-migration: writes to .synlynk/project-docs/todo.md and project-docs/todo.md.
     Pre-migration: writes to project-docs/todo.md."""
-    from synlynk import _get_db, _is_migrated, _docs_dir
+    from synlynk import _get_db, _is_migrated
     if not _is_migrated():
-        docs_dir = _docs_dir()
-        if not os.path.exists(docs_dir):
+        docs_dir = _resolved_docs_dir()
+        if not docs_dir or not os.path.exists(docs_dir):
             return
 
     conn = _get_db()
@@ -3058,7 +3070,7 @@ def _rotate_project_doc(file_stem: str, all_rows: list, keep_n: int = None) -> l
     anything still loses it), but it closes the common case and is strictly
     additive: failures here never block doc generation.
     """
-    from synlynk import _docs_dir, _is_migrated, _synlynk_project_docs_dir
+    from synlynk import _is_migrated, _synlynk_project_docs_dir
 
     n = keep_n if keep_n is not None else _PROJECT_DOC_KEEP_N
     if len(all_rows) <= n:
@@ -3067,7 +3079,7 @@ def _rotate_project_doc(file_stem: str, all_rows: list, keep_n: int = None) -> l
     archived_rows = all_rows[:-n]
     live_rows = all_rows[-n:]
 
-    base_dir = _synlynk_project_docs_dir() if _is_migrated() else _docs_dir()
+    base_dir = _synlynk_project_docs_dir() if _is_migrated() else _resolved_docs_dir()
     archive_dir = os.path.join(base_dir, "archive")
     os.makedirs(archive_dir, exist_ok=True)
 
@@ -3215,10 +3227,10 @@ def _generate_roadmap_md() -> None:
     """Writes roadmap.md as a generated view of roadmap_arcs/roadmap_phases.
     Post-migration: writes to .synlynk/project-docs/roadmap.md and project-docs/roadmap.md.
     Pre-migration: writes to project-docs/roadmap.md."""
-    from synlynk import _docs_dir, _get_db, _is_migrated
+    from synlynk import _get_db, _is_migrated
     if not _is_migrated():
-        docs_dir = _docs_dir()
-        if not os.path.exists(docs_dir):
+        docs_dir = _resolved_docs_dir()
+        if not docs_dir or not os.path.exists(docs_dir):
             return
 
     conn = _get_db()
@@ -3258,10 +3270,10 @@ def _generate_costs_md() -> None:
     """Writes costs.md as a generated view of cost_entries.
     Post-migration: writes to .synlynk/project-docs/costs.md.
     Pre-migration: writes to project-docs/costs.md."""
-    from synlynk import _docs_dir, _get_db, _is_migrated, load_config
+    from synlynk import _get_db, _is_migrated, load_config
     if not _is_migrated():
-        docs_dir = _docs_dir()
-        if not os.path.exists(docs_dir):
+        docs_dir = _resolved_docs_dir()
+        if not docs_dir or not os.path.exists(docs_dir):
             return
 
     conn = _get_db()
@@ -3340,11 +3352,11 @@ def _write_memory_md() -> None:
     """Regenerate memory.md from memory_entries table.
     Post-migration: writes to .synlynk/project-docs/memory.md and project-docs/memory.md.
     Pre-migration: writes to project-docs/memory.md."""
-    from synlynk import _docs_dir, _get_db, _is_migrated
+    from synlynk import _get_db, _is_migrated
 
     if not _is_migrated():
-        docs_dir = _docs_dir()
-        if not os.path.exists(docs_dir):
+        docs_dir = _resolved_docs_dir()
+        if not docs_dir or not os.path.exists(docs_dir):
             return
 
     conn = _get_db()
