@@ -405,6 +405,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [335](./335-pr2299-log-v0-25-1-release-prep-pm-session-cost.md) | PR #2299 — log v0.25.1 release-prep PM session cost | [#2299](https://github.com/nikhilsoman/synlynk/pull/2299) | 2026-10-14 |
 | [336](./336-pr2300-recover-continuous-momentum-design-spec-.md) | PR #2300 — recover continuous-momentum design spec from stashed WIP | [#2300](https://github.com/nikhilsoman/synlynk/pull/2300) | 2026-10-14 |
 | [337](./337-pr2301-pytest-verbosity-shim-design-for-gh-2294.md) | PR #2301 — pytest verbosity shim design for gh:#2294 | [#2301](https://github.com/nikhilsoman/synlynk/pull/2301) | 2026-10-14 |
+| [338](./338-pr2303-quiet-pytest-in-dispatched-jobs.md) | PR #2303 — quiet pytest in dispatched jobs | [#2303](https://github.com/nikhilsoman/synlynk/pull/2303) | 2026-10-14 |
 
 ## Per-PR Post Template
 

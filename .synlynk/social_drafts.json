@@ -1390,5 +1390,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2301 \u2014 pytest verbosity shim design for gh:#2294 (PR #2301, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2301.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-14) - PR #2301\n- Merged improvements and fixes for PR #2301."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/338-pr2303-quiet-pytest-in-dispatched-jobs.md",
+    "title": "PR #2303 \u2014 quiet pytest in dispatched jobs",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-14",
+    "pr": "#2303",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2303."
+    ],
+    "tweet": "\ud83d\ude80 PR #2303 \u2014 quiet pytest in dispatched jobs (PR #2303, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2303.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-14) - PR #2303\n- Merged improvements and fixes for PR #2303."
   }
 ]
