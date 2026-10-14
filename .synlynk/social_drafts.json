@@ -1198,5 +1198,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2280 \u2014 stop cold-start tiebreak from selecting local (gh:#2048) (PR #2280, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2280.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-14) - PR #2280\n- Merged improvements and fixes for PR #2280."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/327-pr2286-stop-false-job-status-denials-and-stale-.md",
+    "title": "PR #2286 \u2014 stop false job-status denials and stale file lists",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-14",
+    "pr": "#2286",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2286."
+    ],
+    "tweet": "\ud83d\ude80 PR #2286 \u2014 stop false job-status denials and stale file lists (PR #2286, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2286.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-14) - PR #2286\n- Merged improvements and fixes for PR #2286."
   }
 ]
