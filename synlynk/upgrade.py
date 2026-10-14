@@ -266,3 +266,97 @@ def execute_upgrade(repo_root: str = ".") -> dict:
         "daemon_restarted": True,
         "message": "Synlynk runtime successfully upgraded with refreshed surface instructions.",
     }
+
+
+def _registered_workspace_repos() -> list:
+    """Return ``[(slug, repo_path), ...]`` from the machine workspace registry.
+
+    Reuses ``vizor_daemon._registered_workspaces()`` — the same
+    ``~/.synlynk/registry.json`` → ``~/.synlynk/workspaces/<slug>/`` path that
+    status / jobs / Vizor already read. Do not invent a second scanner.
+    """
+    from synlynk.vizor_daemon import _registered_workspaces
+
+    workspaces = _registered_workspaces()
+    out = []
+    for slug in sorted(workspaces):
+        entry = workspaces[slug]
+        repo_path = entry.get("repo_path")
+        if repo_path:
+            out.append((slug, str(repo_path)))
+    return out
+
+
+def upgrade_all(*, yes: bool = False, dry_run: bool = False) -> int:
+    """Plan (and optionally apply) upgrades across every registered workspace.
+
+    CLI-only, explicit opt-in. Never call from the daemon or any ambient path.
+
+    Without ``--yes``, this is always a dry-run (``--dry-run`` is redundant but
+    accepted). With ``--yes`` and without ``--dry-run``, each workspace's
+    ``execute_upgrade`` runs inside its own ``rollback_checkpoint_upgrade``.
+    """
+    from synlynk.rollback import rollback_checkpoint_upgrade
+    from synlynk.version_policy import check_version_policy, plan_upgrade
+
+    # Default for --all is dry-run unless --yes is given.
+    apply = bool(yes) and not bool(dry_run)
+    effective_dry_run = not apply
+
+    registered = _registered_workspace_repos()
+    if not registered:
+        print("No registered workspaces found in ~/.synlynk/registry.json")
+        print("  Register a workspace (synlynk init / scan) before upgrade --all")
+        return 0
+
+    repo_dirs = [repo_path for _, repo_path in registered]
+    plan = plan_upgrade(repo_dirs, dry_run=effective_dry_run)
+
+    print(
+        f"Upgrade plan for {len(registered)} registered workspace(s) "
+        f"(current synlynk v{VERSION}, dry_run={plan.get('dry_run')})"
+    )
+    print(f"{'slug':<24} {'policy':<12} path")
+
+    rows = []
+    for slug, repo_path in registered:
+        ok, reason = check_version_policy(repo_path, VERSION)
+        policy = "ok" if ok else "below_min"
+        rows.append({
+            "slug": slug,
+            "path": repo_path,
+            "policy_ok": ok,
+            "policy_reason": reason,
+            "policy": policy,
+        })
+        print(f"{slug:<24} {policy:<12} {repo_path}")
+        if not ok:
+            print(f"  → {reason}")
+
+    print(f"plan targets: {len(plan.get('targets', []))}  safe_to_apply={plan.get('safe_to_apply')}")
+
+    if effective_dry_run:
+        print("DRY RUN — no upgrades applied (pass --yes to apply)")
+        return 0
+
+    install_type = _detect_install_type()
+    failures = 0
+    for row in rows:
+        slug = row["slug"]
+        repo_path = row["path"]
+        print(f"Applying upgrade for {slug} ({repo_path})...")
+        try:
+            # One Leg-2 checkpoint per workspace so a failure in workspace N
+            # does not block rollback of workspaces 1..N-1.
+            with rollback_checkpoint_upgrade(VERSION, install_type):
+                result = execute_upgrade(repo_path)
+            print(f"  ✓ {slug}: {result.get('message', 'upgraded')}")
+        except Exception as exc:
+            failures += 1
+            print(f"  ✗ {slug}: upgrade failed: {exc}")
+
+    if failures:
+        print(f"Completed with {failures} failure(s)")
+        return 1
+    print(f"Completed upgrades for {len(rows)} workspace(s)")
+    return 0
