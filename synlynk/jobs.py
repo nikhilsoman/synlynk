@@ -2554,6 +2554,8 @@ def _reconcile_jobs_unlocked() -> None:
                 )
             if job.get("status") == "unknown":
                 summary_status = terminal_status_for_unknown_exit()
+            elif job.get("status") == "succeeded_gh_write_failed" and not summary_status:
+                summary_status = "succeeded_gh_write_failed"
             if job.get("status") == "completed":
                 if job.get("requires_gh_write"):
                     github_effect_consulted = True
@@ -4936,6 +4938,8 @@ def _reconcile_daemon_jobs() -> None:
                 )
                 if status == "failed_unverified" and not summary_status:
                     summary_status = terminal_status_for_unknown_exit()
+                elif status == "succeeded_gh_write_failed" and not summary_status:
+                    summary_status = "succeeded_gh_write_failed"
                 task_sha256, task_preview = _task_sha256_and_preview(task)
                 _pkg("_write_job_summary")(
                     job_id, agent, story_id, exit_code, duration_s, in_tokens,

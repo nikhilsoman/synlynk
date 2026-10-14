@@ -325,8 +325,30 @@ def _event_shows_real_activity(event) -> bool:
         content = message.get("content", []) if isinstance(message, dict) else []
         if isinstance(content, list):
             for block in content:
-                if isinstance(block, dict) and block.get("type") == "tool_use":
+                if isinstance(block, dict) and (
+                    block.get("type") == "tool_use"
+                    or (block.get("type") == "text" and (block.get("text") or "").strip())
+                ):
                     return True
+    # Codex item events (item.completed, item.started)
+    if event.get("type") in ("item.completed", "item.started"):
+        item = event.get("item") or {}
+        if isinstance(item, dict):
+            item_type = item.get("type")
+            if item_type == "command_execution":
+                return True
+            if item_type == "agent_message" and (item.get("text") or "").strip():
+                return True
+    # Codex / general turn usage
+    if event.get("type") == "turn.completed":
+        usage = event.get("usage") or {}
+        if isinstance(usage, dict) and (usage.get("output_tokens", 0) or 0) > 0:
+            return True
+    # Grok structured / multi-turn output
+    if (event.get("num_turns", 0) or 0) > 1:
+        return True
+    if (event.get("text") or "").strip():
+        return True
     return False
 
 
@@ -366,7 +388,8 @@ def _log_has_permission_denied_signature(output_text: str) -> bool:
         line.lower() for line in signature_window if line == line.lstrip()
     )
     if lowered_window and any(phrase in lowered_window for phrase in signature_phrases):
-        return True
+        if not _log_has_prior_activity_evidence(lines):
+            return True
 
     # Some logs append a short trailer after the structured result. Scan the
     # tail backwards so the signal stays deterministic when the JSON line is
