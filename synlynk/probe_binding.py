@@ -170,3 +170,13 @@ def probe_harness_live(harness_name: str) -> Dict[str, Any]:
 
 def probe_all_harnesses() -> Dict[str, Dict[str, Any]]:
     return {h: probe_harness_live(h) for h in KNOWN_HARNESSES}
+
+
+def probe_binding(harness: str | None = None) -> Dict[str, Dict[str, Dict[str, Any]]]:
+    """Probe required dependencies and harness authentication."""
+    harnesses = (
+        {harness: probe_harness_live(harness)}
+        if harness
+        else probe_all_harnesses()
+    )
+    return {"dependencies": probe_all_dependencies(), "harnesses": harnesses}

@@ -92,6 +92,35 @@ def advance_stage(
     return _row_to_dict(row)
 
 
+def propose_topology(
+    conn: sqlite3.Connection,
+    session_id: str,
+    target_path: str,
+) -> Dict[str, Any]:
+    """Run evidence-scored discovery and persist the result as ``topology_candidate``.
+
+    ``confirm_topology`` remains a pure persist step — callers that need discovery
+    must call this first (or use ``discover_and_confirm_topology``) and feed the
+    candidate (or a user override) into confirm.
+    """
+    from synlynk.topology_discovery import discover_topology
+
+    candidate = discover_topology(target_path)
+    now = time.time()
+    conn.execute(
+        """UPDATE onboarding_sessions
+           SET topology_status = 'proposed',
+               topology_candidate = ?,
+               updated_at = ?
+           WHERE session_id = ?""",
+        (json.dumps(candidate), now, session_id),
+    )
+    conn.commit()
+    conn.row_factory = sqlite3.Row
+    row = conn.execute("SELECT * FROM onboarding_sessions WHERE session_id = ?", (session_id,)).fetchone()
+    return _row_to_dict(row)
+
+
 def confirm_topology(
     conn: sqlite3.Connection,
     session_id: str,
@@ -110,6 +139,18 @@ def confirm_topology(
     conn.row_factory = sqlite3.Row
     row = conn.execute("SELECT * FROM onboarding_sessions WHERE session_id = ?", (session_id,)).fetchone()
     return _row_to_dict(row)
+
+
+def discover_and_confirm_topology(
+    conn: sqlite3.Connection,
+    session_id: str,
+    target_path: str,
+    confirmed_topology: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Discover a topology candidate, then confirm it (or a caller override)."""
+    session = propose_topology(conn, session_id, target_path)
+    topology = confirmed_topology if confirmed_topology is not None else session["topology_candidate"]
+    return confirm_topology(conn, session_id, topology)
 
 
 def record_probe(

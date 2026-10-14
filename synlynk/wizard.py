@@ -1148,7 +1148,8 @@ def wizard_init(scan: dict = None, dry_run: bool = False) -> None:
 def _advance_wizard_onboarding_state(repo_dir: str, product_id: str) -> str:
     """Open ``repo_dir/.synlynk/state.db`` (creating it if needed) and move the
     headless onboarding session through the stages this init actually covers:
-    orientation is created, then dependency detection and harness binding.
+    orientation is created, then dependency detection, harness binding, and
+    evidence-scored topology discovery + confirmation (S4).
     Returns the resulting ``current_stage``.
     """
     import sqlite3
@@ -1158,8 +1159,10 @@ def _advance_wizard_onboarding_state(repo_dir: str, product_id: str) -> str:
         STAGES,
         STAGE_S2_DEPENDENCIES,
         STAGE_S3_HARNESS_BINDING,
+        STAGE_S4_TOPOLOGY,
         advance_stage,
         get_or_create_session,
+        discover_and_confirm_topology,
     )
 
     db_path = os.path.join(repo_dir, ".synlynk", "state.db")
@@ -1168,12 +1171,41 @@ def _advance_wizard_onboarding_state(repo_dir: str, product_id: str) -> str:
     try:
         _migrate_onboarding_sessions(conn)
         session = get_or_create_session(conn, product_id)
-        for stage in (STAGE_S2_DEPENDENCIES, STAGE_S3_HARNESS_BINDING):
+        for stage in (STAGE_S2_DEPENDENCIES, STAGE_S3_HARNESS_BINDING, STAGE_S4_TOPOLOGY):
             if STAGES.index(session["current_stage"]) < STAGES.index(stage):
                 session = advance_stage(conn, session["session_id"], stage)
+                if stage == STAGE_S4_TOPOLOGY:
+                    # Wire topology_discovery before confirm: propose via
+                    # evidence-scored archetypes, then persist as confirmed.
+                    session = discover_and_confirm_topology(
+                        conn, session["session_id"], repo_dir
+                    )
         return session["current_stage"]
     finally:
         conn.close()
+
+
+def _execute_first_win_onboarding_cycle(
+    repo_dir: str, product_id: str, first_win_result: dict, dry_run: bool = False
+) -> dict | None:
+    """Complete S10 only after the wizard's first-win action was accepted."""
+    if dry_run or not isinstance(first_win_result, dict):
+        return None
+    if first_win_result.get("status") in {None, "skipped", "dry_run", "error"}:
+        return None
+
+    from synlynk.first_win_loop import execute_first_win_cycle
+
+    finding = first_win_result.get("finding") or {}
+    prompt = first_win_result.get("prompt") or finding.get("prompt") or finding.get("title")
+    if not prompt:
+        prompt = "Complete the discovered first-win task."
+    return execute_first_win_cycle(
+        os.path.join(repo_dir, ".synlynk", "state.db"),
+        product_id,
+        prompt,
+        repo_dir=repo_dir,
+    )
 
 
 def cmd_wizard_init(
@@ -1304,6 +1336,11 @@ def cmd_wizard_init(
     print(f"\n  {_GREEN}✓{_RESET} Zero-risk onboarding completed in {elapsed:.2f}s\n")
 
     current_stage = _advance_wizard_onboarding_state(repo_dir, ws_name)
+    first_win_cycle = _execute_first_win_onboarding_cycle(
+        repo_dir, ws_name, first_win_result, dry_run=dry_run
+    )
+    if first_win_cycle:
+        current_stage = first_win_cycle["current_stage"]
     result = {
         "workspace_name": ws_name,
         "harnesses": harnesses,
@@ -1312,6 +1349,7 @@ def cmd_wizard_init(
         "backlog_ingest": backlog_result,
         "backup": backup_result,
         "first_win": first_win_result,
+        "first_win_cycle": first_win_cycle,
         "elapsed_seconds": elapsed,
         "current_stage": current_stage,
     }

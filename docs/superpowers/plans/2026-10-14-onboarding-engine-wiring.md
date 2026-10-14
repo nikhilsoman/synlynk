@@ -35,10 +35,15 @@
 - [ ] Either way, PR description states which branch of this decision was taken and why.
 
 ## Task 5 — `topology_discovery.py` → `onboarding_state.py` integration
-- [ ] Read current `confirm_topology()` implementation (called from `viz/server.py:294`) to determine whether it does its own inline discovery or expects a pre-existing topology.
-- [ ] Wire `topology_discovery.py`'s evidence-scored archetype discovery into whichever point in the flow currently lacks it (either replacing inline logic, or feeding `confirm_topology` before it runs).
-- [ ] Integration test exercising the real `wizard.py` or `viz/server.py` entry point, not `topology_discovery.py` in isolation.
-- [ ] `pytest -q tests/test_onboarding_topology.py tests/test_onboarding_state.py` green.
+- [x] Read current `confirm_topology()` implementation (called from `viz/server.py:294`) to determine whether it does its own inline discovery or expects a pre-existing topology.
+- [x] Wire `topology_discovery.py`'s evidence-scored archetype discovery into whichever point in the flow currently lacks it (either replacing inline logic, or feeding `confirm_topology` before it runs).
+- [x] Integration test exercising the real `wizard.py` or `viz/server.py` entry point, not `topology_discovery.py` in isolation.
+- [x] `pytest -q tests/test_onboarding_topology.py tests/test_onboarding_state.py` green.
+
+**Decision (job-3466d7fc):** `confirm_topology()` has no inline discovery — it only persists.
+Wired by calling discovery before confirm (`propose_topology` /
+`discover_and_confirm_topology`) from `viz/server.py` confirm handler and wizard S4 advance.
+Integration test hits `VizorHandler.do_POST`.
 
 ## Sequencing
 Tasks 1-3 are independent of each other and of Tasks 4-5 — dispatch in parallel. Task 4 and Task 5 both touch the `wizard.py`/`viz/server.py` onboarding flow — dispatch sequentially (Task 5 first, since Task 4's S10 decision may depend on whether topology discovery changes anything upstream) to avoid merge conflicts on the same files.

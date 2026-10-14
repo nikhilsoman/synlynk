@@ -147,6 +147,43 @@ def cmd_brief(args) -> None:
     print(f"\n✦ Executive Project Brief saved to {brief_path}")
 
 
+def cmd_probe_deps(harness=None) -> int:
+    """Render dependency and harness binding checks, returning a process code."""
+    from synlynk.probe_binding import probe_binding
+
+    result = probe_binding(harness)
+    rows = []
+    for name, probe in result["dependencies"].items():
+        rows.append((name, probe.get("installed", False), probe.get("version"), "n/a", probe.get("install_hint") or "—"))
+    for name, probe in result["harnesses"].items():
+        rows.append((name, probe.get("installed", False), probe.get("version"), "verified" if probe.get("auth_verified") else "unverified", probe.get("install_hint") or f"Install {name} CLI"))
+
+    headers = ("dependency/harness", "installed", "version", "auth status", "install hint")
+    rendered = []
+    widths = [len(value) for value in headers]
+    for row in rows:
+        values = (row[0], "yes" if row[1] else "no", row[2] or "—", row[3], row[4])
+        rendered.append(values)
+        widths = [max(width, len(value)) for width, value in zip(widths, values)]
+
+    def format_row(values):
+        return "  " + " | ".join(value.ljust(width) for value, width in zip(values, widths))
+
+    print(format_row(headers))
+    print("  " + "-+-".join("-" * width for width in widths))
+    for row in rendered:
+        print(format_row(row))
+
+    healthy = all(
+        probe.get("installed") and probe.get("version")
+        for probe in result["dependencies"].values()
+    ) and all(
+        probe.get("installed") and probe.get("version") and probe.get("auth_verified")
+        for probe in result["harnesses"].values()
+    )
+    return 0 if healthy else 1
+
+
 def cmd_watch(args) -> None:
     """Terminal HUD for live workspace state."""
     import select
@@ -278,7 +315,7 @@ def cmd_watch(args) -> None:
         sys.stdout.flush()
 
 _TOP_LEVEL_COMMANDS = (
-    "help", "init", "quickstart", "upgrade", "uninstall", "join", "start", "home", "testbed", "tool",
+    "help", "init", "quickstart", "upgrade", "fleet", "uninstall", "join", "start", "home", "testbed", "tool",
     "pack", "connector", "impact", "mesh", "spike", "team", "decide", "heal",
     "audit-docs", "goal", "governs", "local", "models", "media", "scan", "workspace",
     "migrate", "rollback", "probe", "doctor", "worktree", "tui", "notify", "exit",
@@ -687,6 +724,20 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     probe_parser.add_argument(
         "--no-fence", action="store_true", dest="no_fence",
         help="Probe harness capabilities without rewriting capability fences in directive files",
+    )
+    probe_parser.add_argument(
+        "--deps", action="store_true",
+        help="Probe required dependencies and harness authentication",
+    )
+
+    fleet_parser = subparsers.add_parser("fleet", help="Manage onboarding fleet templates")
+    fleet_sub = fleet_parser.add_subparsers(dest="fleet_action")
+    fleet_sub.add_parser("list", help="List available fleet templates")
+    fleet_apply_parser = fleet_sub.add_parser("apply", help="Apply a fleet template to this repository")
+    fleet_apply_parser.add_argument("template", help="Fleet template name")
+    fleet_apply_parser.add_argument(
+        "--dry-run", action="store_true", dest="dry_run",
+        help="Print the template role table without writing configuration",
     )
 
     doctor_parser = subparsers.add_parser("doctor", help="Run health checks on your synlynk installation")
@@ -2241,6 +2292,28 @@ def main(argv=None) -> None:
                 )
             )
         upgrade(dry_run=getattr(args, "dry_run", False))
+    elif args.command == "fleet":
+        from synlynk.fleet_templates import FLEET_TEMPLATES, apply_fleet_template, list_fleet_templates
+
+        action = getattr(args, "fleet_action", None)
+        if action == "list":
+            for template_name in list_fleet_templates():
+                template = FLEET_TEMPLATES[template_name]
+                print(f"{template_name}: {template['name']} — {template['description']}")
+        elif action == "apply":
+            template = FLEET_TEMPLATES.get(args.template)
+            if template is None:
+                raise SystemExit(f"Unknown fleet template: {args.template}")
+            if args.dry_run:
+                print(f"Fleet template: {args.template} ({template['name']})")
+                print(f"{'role':<16} {'harness':<10} tasks")
+                for role_name, role in template["roles"].items():
+                    print(f"{role_name:<16} {role['harness']:<10} {', '.join(role['tasks'])}")
+            else:
+                result = apply_fleet_template(os.getcwd(), args.template)
+                print(f"Applied fleet template '{result['template']}' to .synlynk/config.json")
+        else:
+            fleet_parser.print_help()
     elif args.command == "uninstall":
         from synlynk.uninstall import execute_uninstall
         res = execute_uninstall()
@@ -3199,6 +3272,8 @@ def main(argv=None) -> None:
         )
     elif args.command == "probe":
         _warn_deprecated_harness_flag(cli_tokens)
+        if getattr(args, "deps", False):
+            sys.exit(cmd_probe_deps(getattr(args, "harness", None)))
         cmd_probe(
             agent=getattr(args, "harness", None),
             write_fence=not getattr(args, "no_fence", False),
