@@ -249,12 +249,32 @@ def _pick_discovered_tier_model(harness: str, tier: str, configured: str, discov
 
 
 def resolve_tier_model(tier: str, harness: str, repo_path: Optional[str] = None) -> str:
-    """Resolve the model ID for a given tier and harness from the catalog.
+    """Resolve a tier from the persisted discovery catalog, with a fresh-DB seed."""
+    from synlynk import _get_db
+    from synlynk.db import get_active_harness_models
 
-    For Agy, validate the catalog id against ``discover_models()``'s live
-    probe. A stale id is replaced by a tier-matched discovered model. An
-    empty probe (binary missing, tests, timeout) keeps the catalog value.
-    """
+    conn = _get_db()
+    try:
+        active = get_active_harness_models(conn, harness=harness, tier=tier)
+        if active:
+            return active[0]["model_id"]
+
+        # The static catalog is a bootstrap seed only. Once discovery has ever
+        # populated this harness, do not resurrect a retired catalog id.
+        discovered = conn.execute(
+            "SELECT 1 FROM harness_models WHERE harness_name=? LIMIT 1", (harness,)
+        ).fetchone()
+        if discovered:
+            harness_rows = get_active_harness_models(conn, harness=harness)
+            if harness_rows:
+                return harness_rows[0]["model_id"]
+            raise ValueError(f"No active discovered models for harness '{harness}'")
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
     configured = _static_tier_model(tier, harness, repo_path)
     if harness == "agy":
         configured = _pick_discovered_tier_model(

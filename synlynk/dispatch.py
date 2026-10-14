@@ -3895,6 +3895,14 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     agent = request.agent
     if agent != initial_agent and not force_agent:
         print(_capability_reroute_message(initial_agent, agent, probed_agent))
+    # Reject unsupported harnesses before model resolution opens state.db.
+    try:
+        get_adapter(agent)
+    except KeyError as exc:
+        raise ValueError(
+            f"Harness '{agent}' has no registered dispatch adapter. "
+            "Register an adapter before dispatching it."
+        ) from exc
     resolved_agent_role = None
     if agent_id:
         from synlynk import agent_store
@@ -4074,6 +4082,23 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     elif callable(dconn) and not isinstance(dconn, sqlite3.Connection):
         dconn = dconn()
         owns_dconn = True
+
+    if requested_model_input and dconn is not None:
+        from synlynk.db import get_active_harness_models
+
+        active_models = get_active_harness_models(dconn, harness=agent)
+        if active_models:
+            valid_model_ids = list(dict.fromkeys(row["model_id"] for row in active_models))
+            if requested_model_input not in valid_model_ids:
+                if owns_dconn:
+                    try:
+                        dconn.close()
+                    except Exception:
+                        pass
+                raise ValueError(
+                    f"Invalid model '{requested_model_input}' for harness '{agent}'. "
+                    f"Valid model ids: {', '.join(valid_model_ids)}"
+                )
 
     if agent == "local" and dconn is not None:
         # Direct dispatch is a valid first-use path; do not require the
