@@ -393,6 +393,8 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [328](./328-pr2292-model-catalog-discovery-design-spec-plan.md) | PR #2292 — model catalog discovery design spec + plan (gh:#2291) | [#2292](https://github.com/nikhilsoman/synlynk/pull/2292) | 2026-10-14 |
 | [329](./329-pr2293-add-provider-aware-harness-model-catalog.md) | PR #2293 — add provider-aware harness model catalog | [#2293](https://github.com/nikhilsoman/synlynk/pull/2293) | 2026-10-14 |
 | [330](./330-pr2290-parse-aider-token-lines-for-the-local-ha.md) | PR #2290 — parse aider token lines for the local harness | [#2290](https://github.com/nikhilsoman/synlynk/pull/2290) | 2026-10-14 |
+| [269](./269-pr-model-catalog-discovery-pass.md) | PR #2296 — One discovery pass for every harness baseline | 2296 | 2026-10-14 |
+| [331](./331-pr2296-discover-harness-catalogs-from-live-base.md) | PR #2296 — discover harness catalogs from live baselines | [#2296](https://github.com/nikhilsoman/synlynk/pull/2296) | 2026-10-14 |
 
 ## Per-PR Post Template
 

@@ -1262,5 +1262,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2290 \u2014 parse aider token lines for the local harness (PR #2290, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2290.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-14) - PR #2290\n- Merged improvements and fixes for PR #2290."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/331-pr2296-discover-harness-catalogs-from-live-base.md",
+    "title": "PR #2296 \u2014 discover harness catalogs from live baselines",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-14",
+    "pr": "#2296",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2296."
+    ],
+    "tweet": "\ud83d\ude80 PR #2296 \u2014 discover harness catalogs from live baselines (PR #2296, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2296.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-14) - PR #2296\n- Merged improvements and fixes for PR #2296."
   }
 ]
