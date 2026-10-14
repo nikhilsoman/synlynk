@@ -1374,5 +1374,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2300 \u2014 recover continuous-momentum design spec from stashed WIP (PR #2300, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2300.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-14) - PR #2300\n- Merged improvements and fixes for PR #2300."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/337-pr2301-pytest-verbosity-shim-design-for-gh-2294.md",
+    "title": "PR #2301 \u2014 pytest verbosity shim design for gh:#2294",
+    "author": "nikhilsoman",
+    "date": "2026-10-14",
+    "pr": "#2301",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2301."
+    ],
+    "tweet": "\ud83d\ude80 PR #2301 \u2014 pytest verbosity shim design for gh:#2294 (PR #2301, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2301.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-14) - PR #2301\n- Merged improvements and fixes for PR #2301."
   }
 ]
