@@ -23,6 +23,14 @@ def _valid_charter(role, marker):
     )
 
 
+def _charter_with_skills(role, skills):
+    content = _valid_charter(role, "Bound skill test")
+    return content.replace(
+        "credentials: []\n",
+        "credentials: []\n" + "skills:\n" + "".join(f"  - {skill}\n" for skill in skills),
+    )
+
+
 def _register_pm_with_charter(repo_dir, monkeypatch, content="# PM Charter\n\nDo PM things.\n"):
     monkeypatch.chdir(repo_dir)
     fake_home = repo_dir / "fake_home"
@@ -80,3 +88,56 @@ def test_render_charter_section_raises_when_registered_agents_lack_role(
     )
     with pytest.raises(CharterInjectionError, match="no registered agent"):
         render_charter_section(repo_path=str(project_dir))
+
+
+@pytest.mark.parametrize("skills", [["test-driven-development", "systematic-debugging"]])
+def test_render_charter_section_includes_bound_skills_when_present(
+    project_dir, tmp_path, monkeypatch, skills
+):
+    monkeypatch.chdir(project_dir)
+    fake_home = tmp_path / "fake_home"
+    monkeypatch.setattr("os.path.expanduser", lambda path: path.replace("~", str(fake_home)))
+    agent_store.register_agent("dev-primary", [{"kind": "role_slug", "value": "dev"}])
+    agent_store.propose_charter_revision(
+        "dev-primary", _charter_with_skills("dev", skills), actor="test", parent_revision=0
+    )
+
+    section = render_charter_section(repo_path=str(project_dir), role="dev")
+
+    assert "## Bound Skills (required)" in section
+    assert "- test-driven-development" in section
+    assert "- systematic-debugging" in section
+
+
+def test_render_charter_section_omits_bound_skills_when_absent(project_dir, tmp_path, monkeypatch):
+    _register_pm_with_charter(project_dir, monkeypatch)
+
+    section = render_charter_section(repo_path=str(project_dir))
+
+    assert "## Bound Skills" not in section
+
+
+def test_render_charter_section_omits_bound_skills_when_empty_list(project_dir, tmp_path, monkeypatch):
+    monkeypatch.chdir(project_dir)
+    fake_home = tmp_path / "fake_home"
+    monkeypatch.setattr("os.path.expanduser", lambda path: path.replace("~", str(fake_home)))
+    agent_store.register_agent("pm-primary", [{"kind": "role_slug", "value": "pm"}])
+    agent_store.propose_charter_revision(
+        "pm-primary", _charter_with_skills("pm", []), actor="test", parent_revision=0
+    )
+
+    section = render_charter_section(repo_path=str(project_dir))
+
+    assert "## Bound Skills" not in section
+
+
+def test_render_charter_section_unchanged_for_pre_migration_charter(project_dir, tmp_path, monkeypatch):
+    legacy = "# PM Charter\n\nDo PM things.\n"
+    monkeypatch.setattr(
+        "synlynk.charter_injection.resolve_role_charter",
+        lambda **kwargs: ("pm", "pm-primary", 1, legacy),
+    )
+
+    section = render_charter_section(repo_path=str(project_dir))
+
+    assert section == f"## Role Charter (pm, revision 1)\n\n{legacy}\n\n---\n\n"
