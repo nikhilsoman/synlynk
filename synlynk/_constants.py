@@ -307,8 +307,11 @@ HARNESS_CAPABILITY_BASELINES = {
                 "--model",
                 "--approval-mode",
                 "--workspace",
+                "--yolo",
             ],
             "invalid_flags": ["--dangerously-skip-permissions", "--always-approve"],
+            # Skip-permissions equivalent for Muse is '--approval-mode never'
+            # (or '--yolo' to also disable the sandbox).
             "required_flags": ["--json", "--approval-mode"],
         },
         "headless_contract": {
