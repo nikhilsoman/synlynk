@@ -1,6 +1,10 @@
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from synlynk.dispatch import _print_pending_nudges, exec_command
+
+pytestmark = pytest.mark.usefixtures("daemon_workspace_root")
 
 
 def test_print_pending_nudges_reads_config_gate(project_dir, capsys):

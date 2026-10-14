@@ -5,10 +5,72 @@ import os
 import subprocess
 import sys
 import time
+import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ""))
 
 from synlynk.daemon import SynlynkDaemon, WatchDaemon, _repo_common_dir
+import synlynk.daemon as daemon_mod
+
+
+@pytest.fixture(autouse=True)
+def _allow_temp_workspace_roots(monkeypatch, request):
+    # Most tests exercise loop behavior from non-repository tmp_path dirs.
+    # Model the explicit root provided by real daemon launchers there.
+    if request.node.name not in {
+        "test_repo_common_dir_strict_raises_while_default_falls_back",
+        "test_daemon_paths_and_token_refresh_use_main_repo_from_worktree",
+    }:
+        monkeypatch.setattr(
+            daemon_mod,
+            "_repo_common_dir",
+            lambda *, strict=False: os.path.abspath(os.getcwd()),
+        )
+
+
+def test_repo_common_dir_strict_raises_while_default_falls_back(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    import synlynk.daemon as daemon_mod
+    monkeypatch.setattr(
+        daemon_mod.subprocess,
+        "run",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("git unavailable")),
+    )
+    monkeypatch.setattr(daemon_mod.os, "getcwd", lambda: str(tmp_path))
+
+    assert _repo_common_dir() == str(tmp_path)
+    import pytest
+    with pytest.raises(RuntimeError, match="git unavailable"):
+        _repo_common_dir(strict=True)
+
+
+def test_watch_daemon_start_refuses_disposable_workspace_root(tmp_path, monkeypatch):
+    import pytest
+    import synlynk.daemon as daemon_mod
+
+    disposable = tmp_path / "worktrees" / "job-test"
+    disposable.mkdir(parents=True)
+    daemon = WatchDaemon.__new__(WatchDaemon)
+    daemon.workspace_root = str(disposable)
+
+    with pytest.raises(RuntimeError, match="disposable worktree as its workspace root"):
+        daemon.start()
+
+
+def test_refresh_github_tokens_uses_bound_workspace_root(tmp_path, monkeypatch):
+    daemon = WatchDaemon()
+    bound_root = daemon.workspace_root
+    helper_calls = []
+    resolved_roots = []
+    monkeypatch.setattr(daemon_mod, "_repo_common_dir", lambda *args, **kwargs: helper_calls.append("repo"))
+    monkeypatch.setattr(daemon_mod.os, "getcwd", lambda: (_ for _ in ()).throw(AssertionError("cwd re-read")))
+    monkeypatch.setattr(daemon_mod.subprocess, "run", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("git re-run")))
+    monkeypatch.setattr(daemon_mod, "resolve_github_apps_dir", lambda root: resolved_roots.append(root) or tmp_path / "absent")
+
+    daemon._refresh_github_tokens()
+
+    assert helper_calls == []
+    assert resolved_roots == [bound_root]
 
 
 def _git_run(args, cwd):

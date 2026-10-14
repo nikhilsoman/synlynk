@@ -6,6 +6,8 @@ from datetime import datetime, timedelta, timezone
 import pytest
 import subprocess
 
+pytestmark = pytest.mark.usefixtures("daemon_workspace_root")
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 import synlynk
 
@@ -5047,6 +5049,7 @@ def test_exec_grok_skips_missing_rules_files(tmp_path, monkeypatch):
         return FakeProc()
 
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SYNLYNK_DAEMON_WORKSPACE_ROOT", str(tmp_path))
     monkeypatch.setattr(sl.subprocess, "Popen", fake_popen)
     monkeypatch.setattr(sl, "generate_context", lambda scope="full", out_path=None: "")
     monkeypatch.setattr(sl, "check_budgets", lambda: None)
