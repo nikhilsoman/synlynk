@@ -1294,5 +1294,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2289 \u2014 bind root for token refresh (PR #2289, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2289.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-14) - PR #2289\n- Merged improvements and fixes for PR #2289."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/333-pr2295-resolve-dispatch-from-live-catalog.md",
+    "title": "PR #2295 \u2014 resolve dispatch from live catalog",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-14",
+    "pr": "#2295",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2295."
+    ],
+    "tweet": "\ud83d\ude80 PR #2295 \u2014 resolve dispatch from live catalog (PR #2295, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2295.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-14) - PR #2295\n- Merged improvements and fixes for PR #2295."
   }
 ]
