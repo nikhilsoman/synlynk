@@ -1470,5 +1470,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2312 \u2014 add dependency probing to synlynk probe (PR #2312, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2312.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-14) - PR #2312\n- Merged improvements and fixes for PR #2312."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/343-pr2313-wire-fleet-template-commands.md",
+    "title": "PR #2313 \u2014 wire fleet template commands",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-14",
+    "pr": "#2313",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2313."
+    ],
+    "tweet": "\ud83d\ude80 PR #2313 \u2014 wire fleet template commands (PR #2313, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2313.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-14) - PR #2313\n- Merged improvements and fixes for PR #2313."
   }
 ]

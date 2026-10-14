@@ -412,6 +412,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [273](./273-prTBD-onboarding-engine-wiring.md) | PR #TBD — Five Modules, Zero Callers: Finding the Other Dead Charter Bug | 2310 | 2026-10-14 |
 | [341](./341-pr2311-onboarding-engine-wiring-design-gh-2310.md) | PR #2311 — onboarding-engine wiring design (gh:#2310) | [#2311](https://github.com/nikhilsoman/synlynk/pull/2311) | 2026-10-14 |
 | [342](./342-pr2312-add-dependency-probing-to-synlynk-probe.md) | PR #2312 — add dependency probing to synlynk probe | [#2312](https://github.com/nikhilsoman/synlynk/pull/2312) | 2026-10-14 |
+| [343](./343-pr2313-wire-fleet-template-commands.md) | PR #2313 — wire fleet template commands | [#2313](https://github.com/nikhilsoman/synlynk/pull/2313) | 2026-10-14 |
 
 ## Per-PR Post Template
 
