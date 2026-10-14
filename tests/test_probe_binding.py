@@ -5,6 +5,7 @@ from synlynk.probe_binding import (
     probe_all_dependencies,
     probe_harness_live,
     probe_all_harnesses,
+    probe_binding,
 )
 
 
@@ -36,3 +37,16 @@ def test_probe_harness_live_active_mock():
         assert res["installed"] is True
         assert res["auth_verified"] is True
         assert res["status"] == "verified"
+
+
+def test_probe_binding_selects_one_harness(monkeypatch):
+    monkeypatch.setattr("synlynk.probe_binding.probe_all_dependencies", lambda: {"git": {"installed": True}})
+    monkeypatch.setattr(
+        "synlynk.probe_binding.probe_harness_live",
+        lambda name: {"harness": name, "installed": True, "auth_verified": True},
+    )
+
+    result = probe_binding("codex")
+
+    assert result["dependencies"] == {"git": {"installed": True}}
+    assert list(result["harnesses"]) == ["codex"]
