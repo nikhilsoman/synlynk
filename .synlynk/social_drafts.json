@@ -1518,5 +1518,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2317 \u2014 wire first-win cycle into S10 (PR #2317, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2317.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-14) - PR #2317\n- Merged improvements and fixes for PR #2317."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/346-pr2315-wire-synlynk-upgrade-all-to-version-poli.md",
+    "title": "PR #2315 \u2014 wire synlynk upgrade --all to version_policy (gh:#2310 Task 3)",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-14",
+    "pr": "#2315",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2315."
+    ],
+    "tweet": "\ud83d\ude80 PR #2315 \u2014 wire synlynk upgrade --all to version_policy (gh:#2310 Task 3) (PR #2315, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2315.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-14) - PR #2315\n- Merged improvements and fixes for PR #2315."
   }
 ]
