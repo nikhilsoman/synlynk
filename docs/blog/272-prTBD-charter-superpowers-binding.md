@@ -3,8 +3,11 @@ title: "PR #TBD — Charters Learn to Bind Skills, Not Just Roles"
 date: 2026-10-14
 series: "Building the OS for Multi-Agent Development"
 post: 272
-pr: "#TBD"
-merged: status: open
+pr: 2306
+status: open
+author: "synlynk team"
+version: "0.25.1"
+tags: [posts]
 ---
 
 ## The Broader Goal at the End of the Previous PR
