@@ -1422,5 +1422,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2306 \u2014 charter superpowers-skill binding design for gh:#2305 (PR #2306, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2306.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-14) - PR #2306\n- Merged improvements and fixes for PR #2306."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/340-pr2308-bind-superpowers-skills-to-dispatched-ch.md",
+    "title": "PR #2308 \u2014 bind superpowers skills to dispatched charters",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-14",
+    "pr": "#2308",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2308."
+    ],
+    "tweet": "\ud83d\ude80 PR #2308 \u2014 bind superpowers skills to dispatched charters (PR #2308, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2308.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-14) - PR #2308\n- Merged improvements and fixes for PR #2308."
   }
 ]

@@ -408,6 +408,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [338](./338-pr2303-quiet-pytest-in-dispatched-jobs.md) | PR #2303 — quiet pytest in dispatched jobs | [#2303](https://github.com/nikhilsoman/synlynk/pull/2303) | 2026-10-14 |
 | [272](./272-prTBD-charter-superpowers-binding.md) | PR #TBD — Charters Learn to Bind Skills, Not Just Roles | 2306 | 2026-10-14 |
 | [339](./339-pr2306-charter-superpowers-skill-binding-design.md) | PR #2306 — charter superpowers-skill binding design for gh:#2305 | [#2306](https://github.com/nikhilsoman/synlynk/pull/2306) | 2026-10-14 |
+| [340](./340-pr2308-bind-superpowers-skills-to-dispatched-ch.md) | PR #2308 — bind superpowers skills to dispatched charters | [#2308](https://github.com/nikhilsoman/synlynk/pull/2308) | 2026-10-14 |
 
 ## Per-PR Post Template
 
