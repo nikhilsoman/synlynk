@@ -3900,7 +3900,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         get_adapter(agent)
     except KeyError as exc:
         raise ValueError(
-            f"Unknown agent '{agent}': no registered dispatch adapter. "
+            f"Unknown agent '{agent}': Harness '{agent}' has no registered dispatch adapter. "
             "Register an adapter before dispatching it."
         ) from exc
     resolved_agent_role = None
@@ -4035,7 +4035,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         adapter = get_adapter(agent)
     except KeyError as exc:
         raise ValueError(
-            f"Unknown agent '{agent}': no registered dispatch adapter. "
+            f"Unknown agent '{agent}': Harness '{agent}' has no registered dispatch adapter. "
             "Register an adapter before dispatching it."
         ) from exc
 
