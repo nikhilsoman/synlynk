@@ -1486,5 +1486,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2313 \u2014 wire fleet template commands (PR #2313, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2313.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-14) - PR #2313\n- Merged improvements and fixes for PR #2313."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/344-pr2316-wire-topology-discovery-into-onboarding-.md",
+    "title": "PR #2316 \u2014 wire topology_discovery into onboarding confirm flow",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-14",
+    "pr": "#2316",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2316."
+    ],
+    "tweet": "\ud83d\ude80 PR #2316 \u2014 wire topology_discovery into onboarding confirm flow (PR #2316, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2316.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-14) - PR #2316\n- Merged improvements and fixes for PR #2316."
   }
 ]
