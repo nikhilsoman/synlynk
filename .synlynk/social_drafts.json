@@ -1150,5 +1150,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2278 \u2014 validate Agy tier models against live discovery (gh:#2268) (PR #2278, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2278.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-14) - PR #2278\n- Merged improvements and fixes for PR #2278."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/324-pr2281-order-gh-write-harnesses-by-measured-qua.md",
+    "title": "PR #2281 \u2014 order gh-write harnesses by measured quality",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-14",
+    "pr": "#2281",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2281."
+    ],
+    "tweet": "\ud83d\ude80 PR #2281 \u2014 order gh-write harnesses by measured quality (PR #2281, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2281.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-14) - PR #2281\n- Merged improvements and fixes for PR #2281."
   }
 ]

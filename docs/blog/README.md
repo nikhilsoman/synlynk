@@ -386,6 +386,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [321](./321-pr2279-auto-opt-agy-into-skip-permissions-gh-22.md) | PR #2279 — auto-opt Agy into skip_permissions (gh:#2216) | [#2279](https://github.com/nikhilsoman/synlynk/pull/2279) | 2026-10-14 |
 | [322](./322-pr2282-align-museadapter-command-building-and-c.md) | PR #2282 — align MuseAdapter command building and conformance tests with real CLI contract (gh:#2109) | [#2282](https://github.com/nikhilsoman/synlynk/pull/2282) | 2026-10-14 |
 | [323](./323-pr2278-validate-agy-tier-models-against-live-di.md) | PR #2278 — validate Agy tier models against live discovery (gh:#2268) | [#2278](https://github.com/nikhilsoman/synlynk/pull/2278) | 2026-10-14 |
+| [324](./324-pr2281-order-gh-write-harnesses-by-measured-qua.md) | PR #2281 — order gh-write harnesses by measured quality | [#2281](https://github.com/nikhilsoman/synlynk/pull/2281) | 2026-10-14 |
 
 ## Per-PR Post Template
 
