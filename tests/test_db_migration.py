@@ -112,6 +112,63 @@ def _table_exists_test_helper(conn, name: str) -> bool:
     return conn.execute(
         "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)
     ).fetchone() is not None
+
+
+def test_harness_model_catalog_migration_is_idempotent_and_backfills_provider(tmp_path):
+    import sqlite3
+    from synlynk.migrations.m0021_harness_model_catalog import MIGRATION
+
+    conn = sqlite3.connect(tmp_path / "state.db")
+    conn.execute("""CREATE TABLE harness_models (
+        harness_name TEXT NOT NULL, model_id TEXT NOT NULL,
+        first_seen_at TEXT NOT NULL, last_seen_at TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'active', superseded_by TEXT,
+        discovery_source TEXT NOT NULL DEFAULT 'curated',
+        PRIMARY KEY (harness_name, model_id))""")
+    conn.execute("INSERT INTO harness_models VALUES ('codex', 'gpt-test', '2026-01-01', '2026-02-01', 'active', NULL, 'probe')")
+    MIGRATION.up(conn)
+    MIGRATION.up(conn)
+
+    info = conn.execute("PRAGMA table_info(harness_models)").fetchall()
+    pk = tuple(row[1] for row in sorted((r for r in info if r[5]), key=lambda r: r[5]))
+    assert pk == ("harness_name", "model_id", "provider")
+    row = conn.execute("SELECT provider, discovered_at FROM harness_models").fetchone()
+    assert row == ("native", "2026-02-01")
+    assert conn.execute("SELECT COUNT(*) FROM harness_models").fetchone()[0] == 1
+
+
+def test_harness_model_upsert_and_active_read_round_trip(tmp_path, monkeypatch):
+    from synlynk import db
+
+    monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(tmp_path / "state.db"))
+    conn = db._get_db()
+    db.upsert_harness_model(
+        conn, "codex", "gpt-catalog", provider="openai", rate_input_per_mtok=2.5,
+        rate_output_per_mtok=10.0, rate_cache_read_per_mtok=0.25,
+        rate_cache_write_per_mtok=3.0, rate_tool_use_per_mtok=1.5,
+        rate_currency="usd", rate_source="official", complexity_tier="high",
+        max_effort_level="xhigh", context_window_tokens=256000,
+        max_output_tokens=32000, discovered_at="2026-10-14T10:00:00+00:00",
+    )
+    db.upsert_harness_model(
+        conn, "codex", "inactive", status="inactive", complexity_tier="high",
+        discovered_at="2026-10-14T11:00:00+00:00",
+    )
+    row = db.get_active_harness_models(conn, harness="codex", tier="high")[0]
+    assert row["provider"] == "openai"
+    assert row["rate_input_per_mtok"] == 2.5
+    assert row["rate_output_per_mtok"] == 10.0
+    assert row["rate_cache_read_per_mtok"] == 0.25
+    assert row["rate_cache_write_per_mtok"] == 3.0
+    assert row["rate_tool_use_per_mtok"] == 1.5
+    assert row["rate_currency"] == "usd"
+    assert row["rate_source"] == "official"
+    assert row["complexity_tier"] == "high"
+    assert row["max_effort_level"] == "xhigh"
+    assert row["context_window_tokens"] == 256000
+    assert row["max_output_tokens"] == 32000
+    assert row["discovered_at"] == "2026-10-14T10:00:00+00:00"
+    assert db.get_active_harness_models(conn, harness="codex", tier="low") == []
 def test_registry_v2_tables_exist(tmp_path, monkeypatch):
     from synlynk import db
     monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(tmp_path / "state.db"))
