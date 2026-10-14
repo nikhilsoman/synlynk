@@ -473,15 +473,192 @@ HARNESS_RELOAD_TIER = {
     "codex": "probed_no_evidence_of_per_turn_reload",
 }
 
+# Editor rule files (Cursor/Copilot/Windsurf) were never part of the R1 audit,
+# so their reload behavior is unknown. Assume the expensive case, keep them lean.
+UNAUDITED_RELOAD_TIER = "unaudited_assume_per_turn"
 
-def _build_templates(org: str = None, repo: str = None, project_id: str = None,
-                     owner: str = None, agent_slots: dict = None) -> dict:
-    """Returns TEMPLATES dict with parameterized values filled in."""
-    _pid = project_id or "TODO: PROJECT_ID"
-    _agent_slots = agent_slots or {"claude": "claude", "agy": "agy", "codex": "codex", "grok": "grok"}
-    _trigger_registry_section = render_trigger_phrase_section(_current_trigger_registry_tier())
-    _lifecycle_checkpoint_section = render_lifecycle_checkpoint_section()
-    _session_protocol = """\
+# AI_INSTRUCTIONS.md is the on-demand detail document the lean files point at —
+# it is never resident, so it keeps the full prose.
+_TOOL_RELOAD_TIER = {
+    "cursor": UNAUDITED_RELOAD_TIER,
+    "copilot": UNAUDITED_RELOAD_TIER,
+    "windsurf": UNAUDITED_RELOAD_TIER,
+    "universal": "loaded_on_demand",
+}
+
+# Tiers whose files are resent to the model on every turn. Those files pay their
+# own size once per turn instead of once per session, so they get the lean body.
+PER_TURN_RELOAD_TIERS = frozenset({"confirmed_per_turn", UNAUDITED_RELOAD_TIER})
+
+# Verified instruction-filename discovery table (gh:#2243 R1 audit), sourced from
+# CORE_INSTRUCTION_FILES so the writer and the dispatch-side lookup cannot drift:
+#   claude -> CLAUDE.md, agy -> GEMINI.md, codex -> AGENTS.md, grok -> AGENTS.md.
+# Grok shares Codex's AGENTS.md — a Grok-specific instruction filename is not one
+# the Grok CLI recognises, so synlynk must never invent one (gh:#2247).
+HARNESS_INSTRUCTION_FILENAMES = dict(CORE_INSTRUCTION_FILES)
+
+# Title/engine/commit-trailer identity per harness, keyed the same way as the
+# filename table so both stay in step.
+HARNESS_IDENTITY = {
+    "claude": ("synlynk Claude Instructions", "claude-sonnet-4-6",
+               "Co-Authored-By: Claude Sonnet <noreply@anthropic.com>"),
+    "agy": ("synlynk AGY (AntiGravity) Instructions", "agy-2.x",
+            "Co-Authored-By: AGY <noreply@antigravity.dev>"),
+    "codex": ("synlynk Codex Instructions", "openai-codex",
+              "Co-Authored-By: Codex <noreply@openai.com>"),
+    "grok": ("synlynk Grok Instructions", "grok-composer-2.5-fast",
+             "Co-Authored-By: Grok <noreply@x.ai>"),
+}
+
+
+def get_reload_confidence(tool: str) -> str:
+    """Return the instruction-reload confidence tier for a harness or editor tool.
+
+    Core harnesses come from the R2 decide-panel record (HARNESS_RELOAD_TIER);
+    anything else defaults to the unaudited (assume per-turn) tier rather than
+    silently inheriting a cheaper one.
+    """
+    if tool in HARNESS_RELOAD_TIER:
+        return HARNESS_RELOAD_TIER[tool]
+    return _TOOL_RELOAD_TIER.get(tool, UNAUDITED_RELOAD_TIER)
+
+
+def pays_resend_cost_per_turn(tool: str) -> bool:
+    """True when this tool's instruction file is resent on every turn."""
+    return get_reload_confidence(tool) in PER_TURN_RELOAD_TIERS
+
+
+def harnesses_sharing_instruction_file(filename: str) -> list:
+    """Return every harness that loads the given instruction filename."""
+    return [h for h, f in HARNESS_INSTRUCTION_FILENAMES.items() if f == filename]
+
+
+def resolve_file_reload_tier(filename: str) -> str:
+    """Resolve one reload tier for a file several harnesses may share.
+
+    A shared file is only as cheap as its most expensive reader: AGENTS.md is
+    loaded by Codex (session-tier) *and* Grok (per-turn), so it resolves to
+    `confirmed_per_turn` and gets the lean body.
+    """
+    sharers = harnesses_sharing_instruction_file(filename)
+    if not sharers:
+        return UNAUDITED_RELOAD_TIER
+    per_turn = [h for h in sharers if pays_resend_cost_per_turn(h)]
+    if per_turn:
+        return get_reload_confidence(per_turn[0])
+    return get_reload_confidence(sharers[0])
+
+
+_CRITICAL_GUARDRAILS = """\
+## Critical Guardrails (always in effect)
+- Never commit directly to `main`/`master` — use a dedicated worktree or branch.
+- Run `git branch --show-current` before every commit.
+- Do NOT hand-edit `project-docs/todo.md` — it is projected from `state.db`
+  (`synlynk story done <id>`, then `synlynk checkpoint`).
+- Read `.synlynk/context.md` at session start; check `.synlynk/sentinel.md` for alerts.
+"""
+
+_LAZY_SOP_INDEX = """\
+## SOP Index (load on demand — do not inline)
+Read only the topic you actually need, when you need it:
+
+| Topic | Where |
+|:---|:---|
+| Session lifecycle, worktree policy, live-issues SOP, 4-doc discipline, GitHub Projects | `AI_INSTRUCTIONS.md` |
+| Capability-based task allocation, harness routing | `docs/sop/capability-task-allocation.md` |
+| PR review discipline, merge authority | `docs/sop/pr-review-discipline.md` |
+| Worktree hygiene, cost capture, cost visibility | `docs/sop/worktree-and-cost-hygiene.md` |
+
+The `docs/sop/*.md` paths are this repo's convention; in a repo without a
+`docs/sop/` directory, `AI_INSTRUCTIONS.md` alone carries the full protocol.
+"""
+
+_TIER_RATIONALE = {
+    "lean": ("resent to the model on every turn, so it stays a lean core and "
+             "defers SOP detail to the index below"),
+    "full": ("loaded once per session, so inlining the session protocol here "
+             "costs nothing per turn"),
+}
+
+
+def _reload_tier_banner(tool: str, tier: str, body_shape: str,
+                        note: str = "") -> str:
+    """Provenance comment recording why a generated file is lean or full."""
+    provisional = (
+        " (provisional — no independent confirmation method yet)"
+        if tier == "probed_no_evidence_of_per_turn_reload" else ""
+    )
+    extra = f"<!-- {note} -->\n" if note else ""
+    return (
+        f'<!-- synlynk:reload-tier tool="{tool}" tier="{tier}" '
+        f'body="{body_shape}" ref="gh:#2243" -->\n'
+        f"<!-- This file is {_TIER_RATIONALE[body_shape]}{provisional}. -->\n"
+        + extra
+    )
+
+
+def render_harness_instructions(harness: str, tier: Optional[str] = None) -> str:
+    """Render one harness's instruction-file body, tiered by reload confidence.
+
+    Per-turn harnesses (Agy, Grok) get identity, branch naming, the critical
+    guardrails and a pointer index — nothing else. Session-tier harnesses
+    (Claude, and Codex pending confirmation) additionally get the
+    session protocol inline, because they pay for that text once per session
+    rather than once per turn. Policy SOPs (worktree hygiene, PR review, live
+    issues) stay out of every tier — they live in `AI_INSTRUCTIONS.md` and
+    `docs/sop/`, referenced from the index.
+    """
+    if harness not in HARNESS_IDENTITY:
+        raise ValueError(f"unknown harness: {harness!r}")
+    name, engine, trailer = HARNESS_IDENTITY[harness]
+    tier = tier or get_reload_confidence(harness)
+    lean = tier in PER_TURN_RELOAD_TIERS
+    filename = HARNESS_INSTRUCTION_FILENAMES.get(harness, "")
+    co_readers = [h for h in harnesses_sharing_instruction_file(filename) if h != harness]
+    shared_note = (
+        f"- **Shared file:** `{filename}` is also loaded by "
+        f"{', '.join(co_readers)} — keep any edits harness-neutral.\n"
+        if co_readers else ""
+    )
+
+    own_tier = get_reload_confidence(harness)
+    tier_note = (
+        f"tier resolved from co-reader(s) {', '.join(co_readers)} — a shared file "
+        f"is only as cheap as its most expensive reader; {harness}'s own tier is "
+        f"{own_tier}"
+        if tier != own_tier else ""
+    )
+
+    head = (
+        _reload_tier_banner(harness, tier, "lean" if lean else "full", tier_note)
+        + f"\n# {name}\n\n"
+        "## Identity & Attribution\n"
+        f"- **Engine:** {engine}\n"
+        f"- **Commit trailer:** `{trailer}`\n"
+        f"- **Branch prefix:** `feat/{harness}/` or `fix/{harness}/`\n"
+        + shared_note + "\n"
+        "## Branch Naming\n"
+        f"- `feat/{harness}/<description>` — new functionality\n"
+        f"- `fix/{harness}/<description>` — bug fixes\n"
+        "- `chore/<description>` — deps, docs, config\n\n"
+        + _CRITICAL_GUARDRAILS + "\n"
+    )
+
+    if lean:
+        return head + _LAZY_SOP_INDEX
+
+    return (
+        head
+        + "## Domain Ownership\n"
+        "| Domain | Owned by this agent | Notes |\n"
+        "|:---|:---|:---|\n"
+        "| TODO: fill domains for this agent | | |\n\n"
+        + _SESSION_PROTOCOL + "\n"
+        + _LAZY_SOP_INDEX
+    )
+
+
+_SESSION_PROTOCOL = """\
 ## Session Start (every session, no exceptions)
 1. Run: `git config user.name` — this is your @username for all attribution
 2. Run: `synlynk watch status` — if stopped, run `synlynk watch start`
@@ -506,6 +683,24 @@ def _build_templates(org: str = None, repo: str = None, project_id: str = None,
 - Run `synlynk status` and include the output in your closing message
 """
 
+_WORKTREE_POLICY = """\
+## Git Worktree-First Policy
+Never commit directly to `main`/`master`. Create a dedicated worktree for every feature or fix:
+```
+git worktree add ../feat+<name> feat/<agent-prefix>/<name>
+git branch --show-current   # confirm before every commit
+```
+Delete the worktree only after its branch is merged.
+"""
+
+
+def _build_templates(org: str = None, repo: str = None, project_id: str = None,
+                     owner: str = None, agent_slots: dict = None) -> dict:
+    """Returns TEMPLATES dict with parameterized values filled in."""
+    _pid = project_id or "TODO: PROJECT_ID"
+    _agent_slots = agent_slots or {"claude": "claude", "agy": "agy", "codex": "codex", "grok": "grok"}
+    _trigger_registry_section = render_trigger_phrase_section(_current_trigger_registry_tier())
+    _lifecycle_checkpoint_section = render_lifecycle_checkpoint_section()
     _dual_mode_protocol = """\
 ## Operating Mode: Home vs. Away
 
@@ -526,16 +721,6 @@ When you are invoked headlessly via `synlynk dispatch <harness> --task "..."`:
 
 ### Constitutional Precedence
 If any instruction in this static file conflicts with the Active Session Runtime State in `.synlynk/context.md`, the runtime context in `.synlynk/context.md` SHALL GOVERN.
-"""
-
-    _worktree_policy = """\
-## Git Worktree-First Policy
-Never commit directly to `main`/`master`. Create a dedicated worktree for every feature or fix:
-```
-git worktree add ../feat+<name> feat/<agent-prefix>/<name>
-git branch --show-current   # confirm before every commit
-```
-Delete the worktree only after its branch is merged.
 """
 
     _live_issues_sop = """\
@@ -600,68 +785,31 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
 
     _sop_section = "\n".join(SOP_BLOCKS) + "\n"
 
-    _shared_protocol_pointer = (
-        "## Shared synlynk Protocol\n\n"
-        "Load `AI_INSTRUCTIONS.md` for the full shared synlynk protocol, including "
-        "the session lifecycle, worktree policy, live-issues SOP, document discipline, "
-        "GitHub Projects workflow, and harness SOPs.\n"
-    )
-
-    def _tool_header(name: str, engine: str, trailer: str, harness: str) -> str:
-        return (
-            f"# {name}\n\n"
-            "## Identity & Attribution\n"
-            f"- **Engine:** {engine}\n"
-            f"- **Commit trailer:** `{trailer}`\n"
-            f"- **Branch prefix:** `feat/{harness}/` or `fix/{harness}/`\n\n"
-            "## Branch Naming\n"
-            f"- `feat/{harness}/<description>` — new functionality\n"
-            f"- `fix/{harness}/<description>` — bug fixes\n"
-            "- `chore/<description>` — deps, docs, config\n\n"
-            "## Domain Ownership\n"
-            "| Domain | Owned by this agent | Notes |\n"
-            "|:---|:---|:---|\n"
-            "| TODO: fill domains for this agent | | |\n\n"
-            + _shared_protocol_pointer
+    # Per-harness instruction bodies come from the filename-discovery table and
+    # the reload-confidence tier, never from hardcoded filenames. A file shared by
+    # several harnesses (AGENTS.md: codex + grok) resolves to its most expensive
+    # reader's tier, so a per-turn harness is never charged for a full-tier body.
+    _per_harness_files = {}
+    for _harness, _fname in HARNESS_INSTRUCTION_FILENAMES.items():
+        if _fname in _per_harness_files:
+            continue
+        _per_harness_files[_fname] = render_harness_instructions(
+            _harness, tier=resolve_file_reload_tier(_fname)
         )
-
-    _claude_md = (
-        _tool_header(
-            "synlynk Claude Instructions", "claude-sonnet-4-6",
-            "Co-Authored-By: Claude Sonnet <noreply@anthropic.com>",
-            "claude",
-        )
-    )
-
-    _gemini_md = (
-        _tool_header(
-            "synlynk AGY (AntiGravity) Instructions", "agy-2.x",
-            "Co-Authored-By: AGY <noreply@antigravity.dev>",
-            "agy",
-        )
-    )
-
-    _agents_md = (
-        _tool_header(
-            "synlynk Codex Instructions", "openai-codex",
-            "Co-Authored-By: Codex <noreply@openai.com>",
-            "codex",
-        )
-    )
 
     _ai_instructions_md = (
         "# synlynk Universal AI Instructions\n\n"
         "Apply the following as your system prompt or custom instructions "
         "before starting any session in this repository.\n\n"
         + _dual_mode_protocol + "\n"
-        + _worktree_policy + "\n"
+        + _WORKTREE_POLICY + "\n"
         + _live_issues_sop + "\n"
         + _anti_amnesia + "\n"
         + _four_doc + "\n"
         + _ghp_block + "\n"
         + _sop_section
         + _synlynk_start + "\n"
-        + _session_protocol + "\n\n"
+        + _SESSION_PROTOCOL + "\n\n"
         + _trigger_registry_section + "\n\n"
         + _lifecycle_checkpoint_section
     )
@@ -687,9 +835,7 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
             "| Date | Type | Task/Command | Tokens (I/O) | Requests | Cost (USD) | Notes |\n"
             "| :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n"
         ),
-        "CLAUDE.md": _claude_md,
-        "GEMINI.md": _gemini_md,
-        "AGENTS.md": _agents_md,
+        **_per_harness_files,
         "AI_INSTRUCTIONS.md": _ai_instructions_md,
         "config.json": json.dumps({
             "schema_version": 1,
@@ -711,13 +857,18 @@ synlynk start <issue-id>    # claims board item, injects context, launches agent
     }
 
 def _build_cursor_mdc() -> str:
-    """Returns content for .cursor/rules/synlynk.mdc (Cursor MDC format, no markers)."""
-    return """\
+    """Returns content for .cursor/rules/synlynk.mdc (Cursor MDC format, no markers).
+
+    Cursor's reload behavior was never audited (gh:#2243 R1 covered the four
+    dispatch harnesses only), so this file is treated as per-turn resident and
+    kept lean: guardrails inline, SOP detail by reference.
+    """
+    return f"""\
 ---
 description: synlynk project protocol — session start, task tracking, git discipline
 alwaysApply: true
 ---
-
+{_reload_tier_banner("cursor", get_reload_confidence("cursor"), "lean")}
 # synlynk Protocol
 
 ## Session Start
@@ -743,8 +894,13 @@ git branch --show-current   # confirm before every commit
 """
 
 def _build_copilot_instructions() -> str:
-    """Returns content for .github/copilot-instructions.md synlynk block (plain markdown)."""
-    return """\
+    """Returns content for .github/copilot-instructions.md synlynk block (plain markdown).
+
+    Copilot's reload behavior is unaudited (gh:#2243), so this block is kept
+    lean on the same assume-per-turn basis as the Cursor and Windsurf rules.
+    """
+    return f"""\
+{_reload_tier_banner("copilot", get_reload_confidence("copilot"), "lean")}\
 ## synlynk Session Protocol
 
 ### Session Start
@@ -764,8 +920,13 @@ def _build_copilot_instructions() -> str:
 """
 
 def _build_windsurf_rules() -> str:
-    """Returns content for .windsurfrules synlynk block (terse directive format)."""
-    return """\
+    """Returns content for .windsurfrules synlynk block (terse directive format).
+
+    Windsurf's reload behavior is unaudited (gh:#2243), so these directives stay
+    terse on the same assume-per-turn basis as the Cursor and Copilot rules.
+    """
+    return f"""\
+# synlynk reload tier: {get_reload_confidence("windsurf")} (gh:#2243) — keep terse.
 Read .synlynk/context.md at session start.
 Do NOT hand-edit todo.md — update task status in state.db via `synlynk story done <id>` and `synlynk checkpoint`.
 Run `synlynk checkpoint` at task boundaries.

@@ -37,6 +37,159 @@ def test_harness_reload_tier_matches_r2_decision():
     }
 
 
+def test_get_reload_confidence_covers_harnesses_and_editor_tools():
+    from synlynk.instructions import UNAUDITED_RELOAD_TIER, get_reload_confidence
+
+    assert get_reload_confidence("claude") == "confirmed_per_session"
+    assert get_reload_confidence("agy") == "confirmed_per_turn"
+    assert get_reload_confidence("grok") == "confirmed_per_turn"
+    assert get_reload_confidence("codex") == "probed_no_evidence_of_per_turn_reload"
+    # Unaudited editor rule files and anything unknown assume the expensive case.
+    for tool in ("cursor", "copilot", "windsurf", "some-future-harness"):
+        assert get_reload_confidence(tool) == UNAUDITED_RELOAD_TIER
+    # AI_INSTRUCTIONS.md is the on-demand detail doc, never resident.
+    assert get_reload_confidence("universal") == "loaded_on_demand"
+
+
+def test_pays_resend_cost_per_turn_splits_the_two_tiers():
+    from synlynk.instructions import pays_resend_cost_per_turn
+
+    assert pays_resend_cost_per_turn("agy") is True
+    assert pays_resend_cost_per_turn("grok") is True
+    assert pays_resend_cost_per_turn("cursor") is True
+    assert pays_resend_cost_per_turn("claude") is False
+    assert pays_resend_cost_per_turn("codex") is False
+
+
+def test_per_turn_harness_instructions_are_lean():
+    """Agy/Grok pay the resend cost every turn, so SOP prose stays out of file."""
+    from synlynk.instructions import render_harness_instructions
+
+    for harness in ("agy", "grok"):
+        body = render_harness_instructions(harness)
+        assert 'tier="confirmed_per_turn"' in body
+        assert 'body="lean"' in body
+        # Lean core: identity, branch naming, guardrails, pointer index.
+        assert "## Identity & Attribution" in body
+        assert "## Branch Naming" in body
+        assert "## Critical Guardrails (always in effect)" in body
+        assert "## SOP Index (load on demand — do not inline)" in body
+        # Inlined SOP/session prose must be referenced, not pasted.
+        assert "## Session Start (every session, no exceptions)" not in body
+        assert "## Git Worktree-First Policy" not in body
+        assert "## Domain Ownership" not in body
+        assert "docs/sop/pr-review-discipline.md" in body
+        assert "AI_INSTRUCTIONS.md" in body
+        assert len(body.splitlines()) < 40
+
+
+def test_session_tier_harness_instructions_are_richer():
+    """Claude/Codex load their file once per session, so detail can stay inline."""
+    from synlynk.instructions import render_harness_instructions
+
+    lean = render_harness_instructions("agy")
+    for harness, tier in (("claude", "confirmed_per_session"),
+                          ("codex", "probed_no_evidence_of_per_turn_reload")):
+        body = render_harness_instructions(harness)
+        assert f'tier="{tier}"' in body
+        assert 'body="full"' in body
+        assert "## Session Start (every session, no exceptions)" in body
+        assert "## Domain Ownership" in body
+        # Policy SOPs stay out of every tier — they are referenced, not inlined.
+        assert "## Git Worktree-First Policy" not in body
+        assert "## SOP Index (load on demand — do not inline)" in body
+        assert len(body.splitlines()) > len(lean.splitlines())
+
+    # Codex's tier is explicitly provisional, not silently upgraded.
+    assert "provisional" in render_harness_instructions("codex")
+
+
+def test_render_harness_instructions_rejects_unknown_harness():
+    import pytest as _pytest
+    from synlynk.instructions import render_harness_instructions
+
+    with _pytest.raises(ValueError):
+        render_harness_instructions("muse")
+
+
+def test_instruction_filename_table_resolves_every_harness():
+    from synlynk.instructions import (
+        HARNESS_INSTRUCTION_FILENAMES,
+        get_instruction_file_for_agent,
+    )
+
+    assert HARNESS_INSTRUCTION_FILENAMES == {
+        "claude": "CLAUDE.md",
+        "agy": "GEMINI.md",
+        "codex": "AGENTS.md",
+        "grok": "AGENTS.md",
+    }
+    for harness, fname in HARNESS_INSTRUCTION_FILENAMES.items():
+        assert get_instruction_file_for_agent(harness) == fname
+    # A per-harness Grok filename is not recognised by the Grok CLI (gh:#2247).
+    assert "GROK" not in "".join(HARNESS_INSTRUCTION_FILENAMES.values())
+
+
+def test_shared_instruction_file_resolves_to_most_expensive_tier():
+    from synlynk.instructions import (
+        harnesses_sharing_instruction_file,
+        resolve_file_reload_tier,
+    )
+
+    assert sorted(harnesses_sharing_instruction_file("AGENTS.md")) == ["codex", "grok"]
+    assert harnesses_sharing_instruction_file("CLAUDE.md") == ["claude"]
+    # Grok shares Codex's file, so AGENTS.md is charged per turn.
+    assert resolve_file_reload_tier("AGENTS.md") == "confirmed_per_turn"
+    assert resolve_file_reload_tier("CLAUDE.md") == "confirmed_per_session"
+    assert resolve_file_reload_tier("GEMINI.md") == "confirmed_per_turn"
+
+
+def test_build_templates_tiers_files_from_the_filename_table():
+    from synlynk.instructions import _build_templates
+
+    templates = _build_templates()
+    assert 'body="full"' in templates["CLAUDE.md"]
+    assert 'body="lean"' in templates["GEMINI.md"]
+    # AGENTS.md is shared with Grok, so it takes the lean body even though
+    # Codex alone would have qualified for the full one.
+    assert 'body="lean"' in templates["AGENTS.md"]
+    assert "also loaded by grok" in templates["AGENTS.md"]
+    assert len(templates["GEMINI.md"].splitlines()) < len(templates["CLAUDE.md"].splitlines())
+    assert len(templates["AGENTS.md"].splitlines()) < len(templates["CLAUDE.md"].splitlines())
+
+
+def test_no_grok_md_filename_in_any_generated_instruction_output():
+    from synlynk.instructions import (
+        _build_copilot_instructions,
+        _build_cursor_mdc,
+        _build_templates,
+        _build_windsurf_rules,
+        render_harness_instructions,
+    )
+
+    generated = list(_build_templates().values()) + [
+        _build_cursor_mdc(),
+        _build_copilot_instructions(),
+        _build_windsurf_rules(),
+    ] + [render_harness_instructions(h) for h in ("claude", "agy", "codex", "grok")]
+    for content in generated:
+        assert "GROK.md" not in content
+
+
+def test_editor_rule_files_record_their_unaudited_reload_tier():
+    from synlynk.instructions import (
+        UNAUDITED_RELOAD_TIER,
+        _build_copilot_instructions,
+        _build_cursor_mdc,
+        _build_windsurf_rules,
+    )
+
+    for builder in (_build_cursor_mdc, _build_copilot_instructions, _build_windsurf_rules):
+        assert UNAUDITED_RELOAD_TIER in builder()
+    # Cursor's MDC frontmatter must still come first for the file to be valid.
+    assert _build_cursor_mdc().startswith("---\ndescription: synlynk project protocol")
+
+
 def test_install_pre_commit_hook_writes_executable_hook(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     hook_dir = tmp_path / ".git" / "hooks"
@@ -338,14 +491,15 @@ def test_instruction_templates_prohibit_direct_todo_edits():
 
 
 def test_tool_templates_point_to_canonical_shared_protocol():
+    """The pointer is now the tiered SOP index (gh:#2243), not a prose section."""
     from synlynk.instructions import _build_templates
 
     templates = _build_templates()
     for name in ("CLAUDE.md", "GEMINI.md", "AGENTS.md"):
         tmpl = templates[name]
         assert "## Identity & Attribution" in tmpl
-        assert "## Shared synlynk Protocol" in tmpl
-        assert "Load `AI_INSTRUCTIONS.md` for the full shared synlynk protocol" in tmpl
+        assert "## SOP Index (load on demand — do not inline)" in tmpl
+        assert "`AI_INSTRUCTIONS.md`" in tmpl
         assert "## Operating Mode: Home vs. Away" not in tmpl
         assert "## Live Issues SOP" not in tmpl
 

@@ -1704,7 +1704,9 @@ def test_init_claude_md_contains_session_protocol(tmp_path, monkeypatch):
     monkeypatch.setattr(synlynk, "_llm_enrich", lambda *a, **kw: False)
     synlynk.init(force=False)
     content = (tmp_path / "CLAUDE.md").read_text()
-    assert "Load `AI_INSTRUCTIONS.md` for the full shared synlynk protocol" in content
+    # gh:#2243: the prose pointer became the tiered SOP index.
+    assert "## SOP Index (load on demand — do not inline)" in content
+    assert "`AI_INSTRUCTIONS.md`" in content
 
 
 def test_init_appends_to_existing_without_force(tmp_path, monkeypatch):
@@ -2157,7 +2159,9 @@ def test_claude_template_enriched_content(tmp_path, monkeypatch):
     content = synlynk._build_templates()["CLAUDE.md"]
     assert "Co-Authored-By: Claude Sonnet" in content
     assert "feat/claude/" in content
-    assert "Load `AI_INSTRUCTIONS.md` for the full shared synlynk protocol" in content
+    # gh:#2243: the prose pointer became the tiered SOP index.
+    assert "## SOP Index (load on demand — do not inline)" in content
+    assert "`AI_INSTRUCTIONS.md`" in content
     assert "Git Worktree-First Policy" not in content
 
 
@@ -2167,7 +2171,9 @@ def test_gemini_template_enriched_content(tmp_path, monkeypatch):
     assert "Co-Authored-By: AGY" in content
     assert "agy-2.x" in content
     assert "feat/agy/" in content
-    assert "Load `AI_INSTRUCTIONS.md` for the full shared synlynk protocol" in content
+    # gh:#2243: the prose pointer became the tiered SOP index.
+    assert "## SOP Index (load on demand — do not inline)" in content
+    assert "`AI_INSTRUCTIONS.md`" in content
     assert "Git Worktree-First Policy" not in content
     assert "2026-06-18" not in content
 
@@ -2177,7 +2183,9 @@ def test_agents_template_enriched_content(tmp_path, monkeypatch):
     content = synlynk._build_templates()["AGENTS.md"]
     assert "feat/codex/" in content
     assert "Co-Authored-By: Codex" in content
-    assert "Load `AI_INSTRUCTIONS.md` for the full shared synlynk protocol" in content
+    # gh:#2243: the prose pointer became the tiered SOP index.
+    assert "## SOP Index (load on demand — do not inline)" in content
+    assert "`AI_INSTRUCTIONS.md`" in content
     assert "Git Worktree-First Policy" not in content
 
 
