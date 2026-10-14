@@ -170,3 +170,11 @@ def project_dir(tmp_path, monkeypatch):
 
     monkeypatch.chdir(tmp_path)
     return tmp_path
+
+
+@pytest.fixture
+def daemon_workspace_root(request, monkeypatch):
+    """Give daemon tests using project_dir the same explicit root as launchers."""
+    if "project_dir" in request.fixturenames:
+        project_dir = request.getfixturevalue("project_dir")
+        monkeypatch.setenv("SYNLYNK_DAEMON_WORKSPACE_ROOT", str(project_dir))

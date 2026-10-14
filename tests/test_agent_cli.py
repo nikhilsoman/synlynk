@@ -3297,7 +3297,9 @@ def test_featonboarding_implement_zerorisk_dirty_worktree_and_first_win__story_7
     assert kw.get("requires_gh_write") is True
 
 
-def test_vizor_and_daemon_http_servers_have_zero_unauthenticated_access_blocked(project_dir):
+def test_vizor_and_daemon_http_servers_have_zero_unauthenticated_access_blocked(
+    project_dir, daemon_workspace_root
+):
     """gh#355: local HTTP write/read surfaces require X-Synlynk-Token."""
     import inspect
     import json
@@ -3362,7 +3364,7 @@ def test_vizor_and_daemon_http_servers_have_zero_unauthenticated_access_blocked(
 
 
 def test_daemon_child_main_holds_start_lock_and_mints_http_token_before_server(
-    project_dir, monkeypatch
+    project_dir, monkeypatch, daemon_workspace_root
 ):
     """gh:#355 + gh:#349: lifetime lock, auth token, then HTTP bind — no deadlock."""
     import synlynk.daemon as daemon_mod
@@ -3410,7 +3412,7 @@ def test_daemon_child_main_holds_start_lock_and_mints_http_token_before_server(
 # --- gh:#349 daemon orphan reap + start lock ---------------------------------
 
 def test_orphaned_dispatched_child_process_survives_daemon_crash_alive_pid_is_adopted(
-    project_dir, monkeypatch
+    project_dir, monkeypatch, daemon_workspace_root
 ):
     """Startup reconcile must adopt a still-alive orphaned job PID (#349)."""
     import subprocess
@@ -3472,7 +3474,7 @@ def test_orphaned_dispatched_child_process_survives_daemon_crash_alive_pid_is_ad
 
 
 def test_orphaned_dispatched_child_process_survives_daemon_crash_dead_pid_is_reaped(
-    project_dir, monkeypatch
+    project_dir, monkeypatch, daemon_workspace_root
 ):
     """Startup reconcile must reap a dead orphaned job PID via shared logic (#349)."""
     import synlynk as sl
@@ -3519,7 +3521,9 @@ def test_orphaned_dispatched_child_process_survives_daemon_crash_dead_pid_is_rea
     assert row == ("timed_out", -9)
 
 
-def test_daemon_start_lock_rejects_concurrent_second_start(project_dir, monkeypatch, capsys):
+def test_daemon_start_lock_rejects_concurrent_second_start(
+    project_dir, monkeypatch, capsys, daemon_workspace_root
+):
     """Exclusive flock serializes concurrent SynlynkDaemon.start() calls (#349)."""
     import threading
     import time as time_mod
@@ -3568,7 +3572,7 @@ def test_daemon_start_lock_rejects_concurrent_second_start(project_dir, monkeypa
     assert results.count("returned") == 2
 
 
-def test_daemon_start_recovers_stale_lock_owner(project_dir, monkeypatch):
+def test_daemon_start_recovers_stale_lock_owner(project_dir, monkeypatch, daemon_workspace_root):
     import synlynk.daemon as daemon_mod
 
     daemon = daemon_mod.SynlynkDaemon()
@@ -3590,7 +3594,9 @@ def test_daemon_start_recovers_stale_lock_owner(project_dir, monkeypatch):
     assert spawned == [(daemon._child_entry_point, daemon.logfile)]
 
 
-def test_daemon_start_preserves_lock_owned_by_live_process(project_dir, monkeypatch, capsys):
+def test_daemon_start_preserves_lock_owned_by_live_process(
+    project_dir, monkeypatch, capsys, daemon_workspace_root
+):
     import synlynk.daemon as daemon_mod
 
     daemon = daemon_mod.SynlynkDaemon()
