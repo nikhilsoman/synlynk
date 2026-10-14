@@ -2437,6 +2437,56 @@ def test_dispatch_emits_model_and_effort_flags(project_dir, monkeypatch):
     assert "--effort high" in shell_cmd
 
 
+def test_dispatch_accepts_explicit_model_in_active_harness_catalog(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+    from synlynk.db import upsert_harness_model
+
+    conn = sl._get_db()
+    upsert_harness_model(conn, "codex", "catalog-model")
+    conn.commit()
+    spawned = []
+    monkeypatch.setattr(
+        dispatch_mod.subprocess, "Popen",
+        lambda *args, **kwargs: spawned.append(args) or type("DummyProc", (), {"pid": 9999})(),
+    )
+
+    dispatch_mod.dispatch_agent(
+        "codex", "run task", model="catalog-model", db_conn=conn,
+        skip_preflight=True, context_mode="none",
+    )
+
+    assert spawned
+    conn.close()
+
+
+def test_dispatch_rejects_unknown_explicit_model_before_spawning(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+    from synlynk.db import upsert_harness_model
+
+    conn = sl._get_db()
+    upsert_harness_model(conn, "codex", "current-a")
+    upsert_harness_model(conn, "codex", "current-b")
+    conn.commit()
+    monkeypatch.setattr(
+        dispatch_mod.subprocess, "Popen",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("must not spawn")),
+    )
+
+    with pytest.raises(ValueError) as exc_info:
+        dispatch_mod.dispatch_agent(
+            "codex", "run task", model="removed-model", db_conn=conn,
+            skip_preflight=True, context_mode="none",
+        )
+
+    message = str(exc_info.value)
+    assert "Invalid model 'removed-model'" in message
+    assert "harness 'codex'" in message
+    assert "current-a" in message and "current-b" in message
+    conn.close()
+
+
 def test_agy_dispatch_flags_does_not_duplicate_print_timeout_if_already_present(project_dir, monkeypatch):
     import synlynk.dispatch as dispatch_mod
 

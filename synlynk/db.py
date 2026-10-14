@@ -877,9 +877,14 @@ def upsert_harness_model(
 
 
 def get_active_harness_models(
-    conn: sqlite3.Connection, harness: str | None = None, tier: str | None = None,
+    conn: sqlite3.Connection | None, harness: str | None = None, tier: str | None = None,
 ) -> list[dict]:
-    """Return active catalog models, newest discoveries first."""
+    """Return active catalog models, newest discoveries first.
+
+    An unavailable connection or an unmigrated database has no active models.
+    """
+    if conn is None:
+        return []
     clauses = ["status='active'"]
     params: list[object] = []
     if harness is not None:
@@ -888,11 +893,19 @@ def get_active_harness_models(
     if tier is not None:
         clauses.append("complexity_tier=?")
         params.append(tier)
-    cursor = conn.execute(
-        f"SELECT * FROM harness_models WHERE {' AND '.join(clauses)} "
-        "ORDER BY discovered_at DESC",
-        params,
-    )
+    try:
+        cursor = conn.execute(
+            f"SELECT * FROM harness_models WHERE {' AND '.join(clauses)} "
+            "ORDER BY discovered_at DESC",
+            params,
+        )
+    except sqlite3.ProgrammingError:
+        # Dispatch callers may retain a connection that another owner closed.
+        return []
+    except sqlite3.OperationalError as exc:
+        if "no such table: harness_models" in str(exc):
+            return []
+        raise
     return [dict(zip((item[0] for item in cursor.description), row)) for row in cursor.fetchall()]
 
 
