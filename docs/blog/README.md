@@ -402,6 +402,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [333](./333-pr2295-resolve-dispatch-from-live-catalog.md) | PR #2295 — resolve dispatch from live catalog | [#2295](https://github.com/nikhilsoman/synlynk/pull/2295) | 2026-10-14 |
 | [270](./270-pr-model-catalog-24h-refresh.md) | The model catalog refreshes itself every 24 hours | 2297 | 2026-10-14 |
 | [334](./334-pr2297-refresh-the-model-catalog-every-24h.md) | PR #2297 — refresh the model catalog every 24h | [#2297](https://github.com/nikhilsoman/synlynk/pull/2297) | 2026-10-14 |
+| [335](./335-pr2299-log-v0-25-1-release-prep-pm-session-cost.md) | PR #2299 — log v0.25.1 release-prep PM session cost | [#2299](https://github.com/nikhilsoman/synlynk/pull/2299) | 2026-10-14 |
 
 ## Per-PR Post Template
 
