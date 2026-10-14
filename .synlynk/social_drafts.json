@@ -1166,5 +1166,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2281 \u2014 order gh-write harnesses by measured quality (PR #2281, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2281.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-14) - PR #2281\n- Merged improvements and fixes for PR #2281."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/325-pr2285-resolve-false-permission-denied-and-summ.md",
+    "title": "PR #2285 \u2014 resolve false PERMISSION_DENIED and summary status mismatch (gh:#2205)",
+    "author": "AGY, Agy (Gemini)",
+    "date": "2026-10-14",
+    "pr": "#2285",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2285."
+    ],
+    "tweet": "\ud83d\ude80 PR #2285 \u2014 resolve false PERMISSION_DENIED and summary status mismatch (gh:#2205) (PR #2285, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2285.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-14) - PR #2285\n- Merged improvements and fixes for PR #2285."
   }
 ]
