@@ -1148,7 +1148,8 @@ def wizard_init(scan: dict = None, dry_run: bool = False) -> None:
 def _advance_wizard_onboarding_state(repo_dir: str, product_id: str) -> str:
     """Open ``repo_dir/.synlynk/state.db`` (creating it if needed) and move the
     headless onboarding session through the stages this init actually covers:
-    orientation is created, then dependency detection and harness binding.
+    orientation is created, then dependency detection, harness binding, and
+    evidence-scored topology discovery + confirmation (S4).
     Returns the resulting ``current_stage``.
     """
     import sqlite3
@@ -1158,8 +1159,10 @@ def _advance_wizard_onboarding_state(repo_dir: str, product_id: str) -> str:
         STAGES,
         STAGE_S2_DEPENDENCIES,
         STAGE_S3_HARNESS_BINDING,
+        STAGE_S4_TOPOLOGY,
         advance_stage,
         get_or_create_session,
+        discover_and_confirm_topology,
     )
 
     db_path = os.path.join(repo_dir, ".synlynk", "state.db")
@@ -1168,9 +1171,15 @@ def _advance_wizard_onboarding_state(repo_dir: str, product_id: str) -> str:
     try:
         _migrate_onboarding_sessions(conn)
         session = get_or_create_session(conn, product_id)
-        for stage in (STAGE_S2_DEPENDENCIES, STAGE_S3_HARNESS_BINDING):
+        for stage in (STAGE_S2_DEPENDENCIES, STAGE_S3_HARNESS_BINDING, STAGE_S4_TOPOLOGY):
             if STAGES.index(session["current_stage"]) < STAGES.index(stage):
                 session = advance_stage(conn, session["session_id"], stage)
+                if stage == STAGE_S4_TOPOLOGY:
+                    # Wire topology_discovery before confirm: propose via
+                    # evidence-scored archetypes, then persist as confirmed.
+                    session = discover_and_confirm_topology(
+                        conn, session["session_id"], repo_dir
+                    )
         return session["current_stage"]
     finally:
         conn.close()

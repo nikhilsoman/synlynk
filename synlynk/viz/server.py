@@ -284,17 +284,66 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
         except Exception as e:
             self.send_error(500, str(e))
 
+    def _resolve_onboarding_target_path(self, slug: str, body: dict) -> str:
+        """Resolve the filesystem path used for topology discovery."""
+        target = body.get("target_path") or body.get("path")
+        if target:
+            return target
+        try:
+            from synlynk.state_registry import get_registered_product
+            entry = get_registered_product(slug)
+            if entry and entry.get("repo_path"):
+                return entry["repo_path"]
+        except Exception:
+            pass
+        try:
+            from synlynk.vizor_daemon import _registered_workspaces
+            workspaces = _registered_workspaces()
+            if slug in workspaces and workspaces[slug].get("repo_path"):
+                return workspaces[slug]["repo_path"]
+        except Exception:
+            pass
+        return os.getcwd()
+
     def _handle_onboarding_topology_confirm(self, path):
         length = int(self.headers.get("Content-Length", 0))
         body = self.rfile.read(length) if length > 0 else b"{}"
         try:
-            confirmed_topology = json.loads(body.decode("utf-8"))
+            payload = json.loads(body.decode("utf-8") or "{}")
+            if not isinstance(payload, dict):
+                payload = {}
             slug = path.split("/")[2]
             from synlynk import open_state_db
-            from synlynk.onboarding_state import get_or_create_session, confirm_topology
+            from synlynk.onboarding_state import (
+                get_or_create_session,
+                propose_topology,
+                confirm_topology,
+                discover_and_confirm_topology,
+            )
             conn, _ = open_state_db()
             sess = get_or_create_session(conn, slug)
-            new_sess = confirm_topology(conn, sess["session_id"], confirmed_topology)
+
+            # Control keys for discovery; anything else is an explicit topology.
+            control_keys = {"target_path", "path", "discover"}
+            explicit = {k: v for k, v in payload.items() if k not in control_keys}
+            target_path = self._resolve_onboarding_target_path(slug, payload)
+            force_discover = bool(payload.get("discover")) or not explicit
+
+            if force_discover:
+                # Gap closed by Task 5 / gh:#2310: confirm_topology expects a
+                # pre-existing topology; discovery was never called. Run the
+                # evidence-scored engine first, then feed its candidate in.
+                new_sess = discover_and_confirm_topology(
+                    conn, sess["session_id"], target_path
+                )
+            else:
+                # User override: still record the discovered candidate for audit,
+                # then persist the explicit confirmation.
+                try:
+                    propose_topology(conn, sess["session_id"], target_path)
+                except Exception:
+                    pass
+                new_sess = confirm_topology(conn, sess["session_id"], explicit)
             self._send_json_ok(new_sess)
         except Exception as e:
             self.send_error(500, str(e))
