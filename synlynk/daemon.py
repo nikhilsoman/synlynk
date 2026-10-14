@@ -23,7 +23,7 @@ from synlynk import local_http_auth
 from synlynk.product_store import resolve_github_apps_dir
 
 
-def _repo_common_dir() -> str:
+def _repo_common_dir(*, strict: bool = False) -> str:
     """Return the repository root shared by all worktrees.
 
     Git's common directory is ``<repo>/.git`` for a normal repository and is
@@ -50,10 +50,11 @@ def _repo_common_dir() -> str:
             return os.path.dirname(common_dir)
         return common_dir
     except Exception:
-        # Broad by design: this must never crash daemon construction, whether
-        # from a missing git binary, a non-repo cwd, or a test harness that
-        # monkeypatches subprocess.Popen process-wide (subprocess.run() uses
-        # Popen internally, so unrelated tests' fakes can surface here too).
+        if strict:
+            raise
+        # One-shot CLI callers retain the historical cwd fallback. Daemon
+        # constructors pass strict=True so failures surface before the process
+        # starts its long-lived loop.
         return os.getcwd()
 
 
@@ -216,14 +217,19 @@ class WatchDaemon:
     _child_entry_point = "synlynk.daemon._watch_daemon_child_main"
 
     def __init__(self):
-        self.pidfile = _daemon_state_path("watch.pid")
-        self.logfile = _daemon_state_path("watch.log")
-        self.workspace_root = _repo_common_dir()
+        self.workspace_root = _repo_common_dir(strict=True)
+        self.pidfile = os.path.join(self.workspace_root, ".synlynk", "watch.pid")
+        self.logfile = os.path.join(self.workspace_root, ".synlynk", "watch.log")
         self.settle_seconds = 3
         self.token_refresh_interval_seconds = 50 * 60
         self._lock_fh = None
 
     def start(self) -> None:
+        if _is_disposable_worktree_path(self.workspace_root):
+            raise RuntimeError(
+                "refusing to start the daemon with a disposable worktree as its "
+                f"workspace root: {self.workspace_root}"
+            )
         lock_path = _daemon_lock_path(self.pidfile)
         lock_fh = _try_acquire_daemon_lock(lock_path, blocking=False)
         if lock_fh is None:
@@ -360,7 +366,7 @@ class WatchDaemon:
         Best-effort per role: one role's failure (revoked App, bad
         installation_id) must not stop the others or crash the daemon loop.
         """
-        repo_dir = _repo_common_dir()
+        repo_dir = self.workspace_root
         apps_dir = str(resolve_github_apps_dir(repo_dir))
         if not os.path.isdir(apps_dir):
             return
@@ -1045,18 +1051,17 @@ class SynlynkDaemon(WatchDaemon):
     def __init__(self, autonomous: bool = False):
         import threading as _threading
         super().__init__()
-        self.pidfile = _daemon_state_path("daemon.pid")
-        self.logfile = _daemon_state_path("daemon.log")
+        self.pidfile = os.path.join(self.workspace_root, ".synlynk", "daemon.pid")
+        self.logfile = os.path.join(self.workspace_root, ".synlynk", "daemon.log")
         self._start_time = time.time()
         self._context_lock = _threading.Lock()
         self.autonomous = autonomous
         self._last_autonomous_run = 0.0
         # Bind request handlers to the workspace that created this daemon;
         # relative CWD resolution is unsafe for linked worktrees.
-        self.workspace_root = _repo_common_dir()
         self.sentinel_path = os.path.join(self.workspace_root, ".synlynk", "sentinel.md")
         self.start_revision = _current_repo_revision(self.workspace_root)
-        self.revision_file = _daemon_state_path("daemon.revision")
+        self.revision_file = os.path.join(self.workspace_root, ".synlynk", "daemon.revision")
         if self.start_revision:
             try:
                 os.makedirs(os.path.dirname(self.revision_file), exist_ok=True)

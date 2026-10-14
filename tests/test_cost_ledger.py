@@ -217,7 +217,9 @@ def test_insert_cost_row_idempotent_on_job_id(project_dir, monkeypatch):
     assert rows == [(200, "actual")]
 
 
-def test_exec_command_passes_agent_to_extract_tokens(project_dir, monkeypatch, tmp_path):
+def test_exec_command_passes_agent_to_extract_tokens(
+    project_dir, monkeypatch, tmp_path, daemon_workspace_root
+):
     import synlynk
     from synlynk import dispatch as dispatch_mod
 
@@ -1621,7 +1623,7 @@ def test_reconcile_daemon_jobs_trips_inflight_circuit_breaker(project_dir, monke
     assert tuple(cost) == (4000, 2000)
 
 
-def test_dispatch_writes_cost_row_even_on_zero_token_extraction(project_dir, monkeypatch):
+def test_dispatch_writes_cost_row_even_on_zero_token_extraction(project_dir, monkeypatch, daemon_workspace_root):
     import synlynk
     import synlynk.dispatch as dispatch_mod
     from synlynk.costs import _TokenCounts
