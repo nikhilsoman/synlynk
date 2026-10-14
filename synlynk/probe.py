@@ -68,11 +68,11 @@ _CAPABILITY_ALLOCATION_SOP = """\
 | canvas/JS/infra | Grok | canvas, JS, infra |
 | PM/review/deploy/brainstorm | Claude | PM, deploy, brainstorm |
 | PR review / GitHub write | Codex | PR review, issue/PR operations |
-| GitHub write actions | **codex, Claude/Agy fallback** | `gh pr review`, `gh pr merge`, `gh pr create`, `gh issue comment` — Codex by default (PR #1271, verified live in job `job-836e13a4`); Claude and Agy remain fallbacks; the Grok harness's dispatch sandbox denies shell execution entirely in this environment, do not route here |
+| GitHub write actions | **codex, then grok, claude, agy** | `gh pr review`, `gh pr merge`, `gh pr create`, `gh issue comment` — Codex by default (PR #1271, verified live in job `job-836e13a4`); Grok, Claude, and Agy follow the 2026-10-14 capability_ratings order. The Grok sandbox-deny finding is superseded (gh:#2034). |
 Do not start a task outside your role column without explicit Home Harness approval.
 
-**GitHub write routing (#426):** Route any task that requires GitHub write actions to **Codex by default, Claude/Agy as fallbacks** (PR #1271, verified live in job `job-836e13a4`)
-- Grok's dispatch sandbox denies `bash` execution entirely in this environment (confirmed via `git diff origin/main` showing a total silent no-op despite a generic "OK, exit 0" job status — do not trust job-status alone for Grok gh-write attempts)
+**GitHub write routing (#426):** Route any task that requires GitHub write actions to **Codex by default**, then Grok, Claude, and Agy (measured 2026-10-14, `capability_ratings` 14-day `AVG(quality)`, n≥5: codex 9.04 n=410, grok 8.55 n=176, claude 8.19 n=170, agy 7.58 n=89; local n=2 and muse n=1 excluded). `_GH_WRITE_HARNESS_PRIORITY` is `("codex", "grok", "claude", "agy")`. The pre-2026-10-04 heuristic that omitted Codex and listed Grok last is retired (PR #1271, job `job-836e13a4`).
+- Grok's sandbox-deny finding is superseded (LIVE-13 fixed 2026-09-22, PRs #1734/#1735, reconfirmed gh:#2034). Grok is second in the measured order.
 - Codex receives `sandbox_workspace_write.network_access=true` only for explicit `--requires-gh-write` dispatches
 - Pass `--requires-gh-write` on synlynk dispatch to enforce the routing hint automatically; it now also auto-implies the `run:shell` permission grant and fails closed with a `RuntimeError` if no role is resolvable via `--as-agent`, `--story`, or `--role` (#569)
 """
@@ -1409,7 +1409,7 @@ def _repair_capability_allocation_sop(cfg: dict) -> str:
             "## Capability-Based Task Allocation\n"
             "No repo-specific roles are recorded in `.synlynk/config.json`; keep work scoped to the "
             "harness you were assigned and follow the repo's own routing notes.\n"
-            "GitHub write routing (#1271): Codex by default, Claude/Agy as fallbacks.\n"
+            "GitHub write routing (#1271): Codex by default, then Grok, Claude, and Agy (measured 2026-10-14).\n"
         )
 
     escalation_target = _repair_escalation_target(cfg) or "the Home Harness"
@@ -1425,7 +1425,7 @@ def _repair_capability_allocation_sop(cfg: dict) -> str:
         *rows,
         f"Do not start a task outside your role column without explicit {approval_suffix}.",
         "",
-        "**GitHub write routing (#426):** Route any task that requires GitHub write actions to **Codex by default, Claude/Agy as fallbacks** (PR #1271, verified live in job `job-836e13a4`)\n- Grok's dispatch sandbox denies `bash` execution entirely in this environment (confirmed via `git diff origin/main` showing a total silent no-op despite a generic \"OK, exit 0\" job status — do not trust job-status alone for Grok gh-write attempts)\n- Codex receives network access only for explicit `--requires-gh-write` dispatches\n- Pass `--requires-gh-write` on synlynk dispatch to enforce the routing hint automatically; it now also auto-implies the `run:shell` permission grant and fails closed with a `RuntimeError` if no role is resolvable via `--as-agent`, `--story`, or `--role` (#569)",
+        "**GitHub write routing (#426):** Route any task that requires GitHub write actions to **Codex by default**, then Grok, Claude, and Agy (measured 2026-10-14, `capability_ratings` 14-day `AVG(quality)`, n≥5: codex 9.04 n=410, grok 8.55 n=176, claude 8.19 n=170, agy 7.58 n=89; local n=2 and muse n=1 excluded). `_GH_WRITE_HARNESS_PRIORITY` is `(\"codex\", \"grok\", \"claude\", \"agy\")`. The pre-2026-10-04 heuristic that omitted Codex and listed Grok last is retired (PR #1271, job `job-836e13a4`).\n- Grok's sandbox-deny finding is superseded (LIVE-13 fixed 2026-09-22, PRs #1734/#1735, reconfirmed gh:#2034). Grok is second in the measured order.\n- Codex receives network access only for explicit `--requires-gh-write` dispatches\n- Pass `--requires-gh-write` on synlynk dispatch to enforce the routing hint automatically; it now also auto-implies the `run:shell` permission grant and fails closed with a `RuntimeError` if no role is resolvable via `--as-agent`, `--story`, or `--role` (#569)",
         "",
         "This table is generated from `.synlynk/config.json` so it tracks the repo's own routing "
         "rather than synlynk's default fleet assumptions.",
