@@ -719,7 +719,7 @@ def test_dispatch_agent_gh_write_resolves_explicit_role_flag(tmp_path, isolated_
 
     def fake_build_env(agent, overrides, requires_gh_write, story_id, agent_role=None):
         captured["agent_role"] = agent_role
-        return {}
+        return {}, None
 
     monkeypatch.setattr(dispatch_mod, "_build_subprocess_env", fake_build_env)
     monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_gh_token", lambda role: "test-gh-token")
@@ -798,10 +798,11 @@ def test_build_subprocess_env_dev_default_unchanged_when_gh_write_not_required(m
     from synlynk.dispatch import _build_subprocess_env
 
     monkeypatch.chdir(tmp_path)
-    env = _build_subprocess_env(
+    env, shim_dir = _build_subprocess_env(
         "claude", {}, requires_gh_write=False, story_id=None, agent_role=None
     )
     assert "GH_TOKEN" not in env
+    shim_dir.cleanup()
 
 
 def test_build_subprocess_env_does_not_forward_private_key_material(monkeypatch):
@@ -810,11 +811,12 @@ def test_build_subprocess_env_does_not_forward_private_key_material(monkeypatch)
     monkeypatch.setenv("SYNLYNK_PRIVATE_KEY_PATH", "/runner/identity.pem")
     monkeypatch.setenv("GITHUB_APP_PRIVATE_KEY", "-----BEGIN PRIVATE KEY-----")
 
-    env = _build_subprocess_env("codex", {}, requires_gh_write=False, story_id="swarm-1")
+    env, shim_dir = _build_subprocess_env("codex", {}, requires_gh_write=False, story_id="swarm-1")
 
     assert "SYNLYNK_PRIVATE_KEY_PATH" not in env
     assert "GITHUB_APP_PRIVATE_KEY" not in env
     assert not any("pem" in key.lower() or "private_key" in key.lower() for key in env)
+    shim_dir.cleanup()
 
 
 def test_role_permission_defaults_cover_all_default_roles():
@@ -933,7 +935,7 @@ def test_dispatch_agent_gh_write_auto_implies_run_shell(tmp_path, isolated_db, m
         return []
 
     monkeypatch.setattr(dispatch_mod, "_permissions_to_flags", fake_permissions_to_flags)
-    monkeypatch.setattr(dispatch_mod, "_build_subprocess_env", lambda *a, **kw: {})
+    monkeypatch.setattr(dispatch_mod, "_build_subprocess_env", lambda *a, **kw: ({}, None))
     monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_gh_token", lambda role: "test-gh-token")
     monkeypatch.setattr(synlynk, "resolve_or_create_story_id", lambda *a, **kw: "story-adhoc")
     monkeypatch.setattr(
@@ -969,7 +971,7 @@ def test_dispatch_agent_non_gh_write_does_not_add_run_shell(tmp_path, isolated_d
         return []
 
     monkeypatch.setattr(dispatch_mod, "_permissions_to_flags", fake_permissions_to_flags)
-    monkeypatch.setattr(dispatch_mod, "_build_subprocess_env", lambda *a, **kw: {})
+    monkeypatch.setattr(dispatch_mod, "_build_subprocess_env", lambda *a, **kw: ({}, None))
     monkeypatch.setattr(synlynk, "resolve_or_create_story_id", lambda *a, **kw: "story-adhoc")
     monkeypatch.setattr(
         dispatch_mod,
