@@ -165,7 +165,7 @@ def test_directive_templates_contain_sop_headers(tmp_path, isolated_db, monkeypa
     assert "## Repo Hygiene" in content
     assert "## Herdr Workspace Protocol" in content
     # #432 supersedes #427's interim one-liner with a capability-table row + notes
-    assert "| GitHub write actions | **codex, Claude/Agy fallback** |" in content
+    assert "| GitHub write actions | **codex, then grok, claude, agy** |" in content
     assert "GitHub write routing (#426)" in content
     assert "GitHub identity note (#423)" in content
 
