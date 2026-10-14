@@ -48,4 +48,30 @@ def render_charter_section(repo_path: str = None, role: str = None) -> str:
     resolved_role, _agent_id, revision, content = resolve_role_charter(role=role, repo_path=repo_path)
     if not content:
         return ""
-    return f"## Role Charter ({resolved_role}, revision {revision})\n\n{content}\n\n---\n\n"
+
+    from synlynk import charter_schema
+
+    frontmatter_text, _body = charter_schema.split_frontmatter(content)
+    bound_skills = []
+    if frontmatter_text is not None:
+        parsed = charter_schema.parse_frontmatter(frontmatter_text)
+        skills = parsed.get("skills")
+        if isinstance(skills, list):
+            bound_skills = [skill for skill in skills if skill]
+
+    bound_skills_section = ""
+    if bound_skills:
+        bound_skills_section = (
+            "\n\n## Bound Skills (required)\n\n"
+            "This role's charter binds the following skills for this dispatch. "
+            "If your harness supports an\n"
+            "equivalent skill/tool-loading mechanism, invoke it before proceeding "
+            "— these are required, not optional,\n"
+            "for tasks they apply to:\n"
+            + "".join(f"- {skill}\n" for skill in bound_skills).rstrip("\n")
+        )
+
+    return (
+        f"## Role Charter ({resolved_role}, revision {revision})\n\n"
+        f"{content}{bound_skills_section}\n\n---\n\n"
+    )

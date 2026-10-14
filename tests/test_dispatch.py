@@ -109,6 +109,62 @@ def test_dispatch_agent_sets_instruction_receipt_fields(tmp_path, monkeypatch):
     assert job["instruction_receipt"] is None
 
 
+def test_dispatch_agent_injects_bound_skills_into_real_context_path(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "AGENTS.md").write_text('<!-- synlynk:start version="0.13.0" tool="codex" -->\n')
+    (tmp_path / "project-docs").mkdir()
+    from synlynk import agent_store
+    from synlynk.charters import adapt_charters_for_installed_tools
+    from synlynk.agent_cli import SEED_CHARTERS
+
+    fake_home = tmp_path / "fake_home"
+    monkeypatch.setattr("os.path.expanduser", lambda path: path.replace("~", str(fake_home)))
+    agent_store.register_agent("dev-primary", [{"kind": "role_slug", "value": "dev"}])
+    agent_store.propose_charter_revision(
+        "dev-primary", SEED_CHARTERS["dev"], actor="test", parent_revision=0
+    )
+    monkeypatch.setattr("synlynk.tool_installer.is_tool_available", lambda tool: False)
+    adapted = adapt_charters_for_installed_tools(dry_run=False)
+    assert "test-driven-development" in adapted["dev"]["skills"]
+
+    class FakeProc:
+        pid = 12345
+        returncode = 0
+
+        def communicate(self, *args, **kwargs):
+            return (b"", b"")
+
+        def poll(self):
+            return None
+
+    monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(
+        "synlynk.dispatch._preflight_dispatch",
+        lambda *a, **kw: {"passed": True, "sentinel": None, "reason": None},
+    )
+    worktree = tmp_path / "dispatch-worktree"
+    (worktree / ".synlynk" / "contexts").mkdir(parents=True)
+    monkeypatch.setattr(
+        "synlynk.dispatch._create_job_worktree",
+        lambda job_id, agent, base=None: {
+            "path": str(worktree),
+            "branch": f"dispatch/{agent}/{job_id}",
+            "base_branch": None,
+            "base_sha": None,
+        },
+    )
+
+    job = sl.dispatch_agent(
+        "codex", "implement the feature", role="dev", context_mode="full", skip_preflight=True
+    )
+    with open(job["context_file"]) as context_file:
+        context = context_file.read()
+
+    assert "## Bound Skills (required)" in context
+    assert "- test-driven-development" in context
+    assert "- systematic-debugging" in context
+
+
 def test_preflight_blocks_missing_stitch_mcp_when_required(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / "GEMINI.md").write_text("# Agy")
