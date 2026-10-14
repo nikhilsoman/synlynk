@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #TBD — Five Modules, Zero Callers: Finding the Other Dead Charter Bug | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-1">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Oct 14, 2026</span>
+        
+          <span class="blog-post-pr">PR 2310</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #TBD — Five Modules, Zero Callers: Finding the Other Dead Charter Bug</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>PR #2308 closed gh:#2305 end to end: dispatched-agent charters now bind superpowers skills with real
+enforcement language, not just inert YAML. That closed item 5 of the day's master-plan recap. The goal
+heading into this PR was item 6 — &quot;auto-upgrade/bundled deps&quot; — logged as a one-line stub with no scope.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>The recap line gave no hint of scope, so the first move was tracing where &quot;auto-upgrade/bundled deps&quot; actually
+came from. It traces to a 2026-10-01 DECIDE panel decision (<code>dec-00b401f2</code>) and a full design+plan that a
+prior fleet dispatch (PR #1894) claims to have shipped &quot;100% Complete &amp; Verified Green (25/25 Tests Passing).&quot;</p>
+<p>Direct <code>grep</code> for import sites — not trusting the completion report's test-pass count — found the same failure
+class gh:#2305 had just closed: four of the five new modules PR #1894 built (<code>probe_binding.py</code>,
+<code>fleet_templates.py</code>, <code>version_policy.py</code>, <code>first_win_loop.py</code>) have zero callers anywhere outside their own
+file and test suite. Their unit tests are real and green. Nothing in <code>cli.py</code>, <code>wizard.py</code>, or <code>viz/server.py</code>
+ever imports them. <code>topology_discovery.py</code> is in the same state. Only <code>onboarding_state.py</code> made it into a live
+code path. The existing <code>synlynk probe</code> command is unrelated pre-existing code that happens to share a name with
+<code>probe_binding.py</code> — easy to mistake for coverage if you don't check the import graph directly.</p>
+<p>The shift: item 6 isn't &quot;design auto-upgrade from scratch.&quot; It's &quot;five already-designed, already-tested modules
+were never wired to anything real — wire them in, or retire whichever ones turn out superseded.&quot;</p>
+<h2>What This PR Shipped</h2>
+<p>Filed gh:#2310 with the verified call-site table before writing any design, so the finding is reproducible by
+anyone re-running the same <code>grep</code> later.</p>
+<p>The design (<code>docs/superpowers/specs/2026-10-14-onboarding-engine-wiring-design.md</code>) and plan
+(<code>docs/superpowers/plans/2026-10-14-onboarding-engine-wiring.md</code>) scope five independent wiring tasks:</p>
+<ul>
+<li><strong><code>synlynk probe --deps</code></strong> — a new flag on the existing <code>probe</code> command (not a new command) that calls
+<code>probe_binding.probe_all_dependencies()</code> / <code>probe_all_harnesses()</code>. Read-only, matching the 2026-10-01 panel's
+&quot;probe, plan, confirm, never silent-install&quot; invariant.</li>
+<li><strong><code>synlynk fleet list</code> / <code>synlynk fleet apply</code></strong> — wires <code>fleet_templates.py</code>'s role-template merge into a real
+command, with an explicit flag to verify its output shape actually matches what dispatch routing reads, since
+that path was never exercised end to end.</li>
+<li><strong><code>synlynk upgrade --all</code></strong> — the piece that most literally matches item 6's &quot;auto-upgrade&quot; wording. Wires
+<code>version_policy.py</code>'s plan/check functions into a multi-workspace upgrade pass, one rollback checkpoint per
+workspace, explicit-invocation-only — the panel's own decision text was unambiguous that this must never run
+from the daemon.</li>
+<li><strong><code>first_win_loop.py</code>'s fate</strong> — not a blind wire-in. The task requires reading <code>wizard.py</code>'s current S10 stage
+handling first, since this module may already be superseded by something that shipped since 2026-10-01.</li>
+<li><strong><code>topology_discovery.py</code> → <code>onboarding_state.py</code></strong> — the one case where the &quot;wired&quot; module
+(<code>onboarding_state.py</code>) depends on a sibling that was never actually connected to it.</li>
+</ul>
+<p>Every task's definition of done requires an integration test that exercises the real CLI entry point — not
+just the underlying module function in isolation — since that's precisely the gap that let PR #1894's dead
+code pass review undetected the first time.</p>
+<h2>Brainstorm Visuals Used</h2>
+<p>None — scoped directly from reading <code>probe_binding.py</code>, <code>fleet_templates.py</code>, <code>version_policy.py</code>,
+<code>first_win_loop.py</code>, and the relevant <code>cli.py</code>/<code>wizard.py</code>/<code>viz/server.py</code> call sites.</p>
+<h2>What This Achieved on the Path to Autonomy</h2>
+<p>A second confirmed instance, in one session, of &quot;tests green&quot; being treated as &quot;feature shipped&quot; when the
+code was never reachable. gh:#2305 and gh:#2310 together are becoming a pattern worth naming explicitly:
+fleet-dispatched implementation work needs an integration-test gate, not just a unit-test gate, before a
+completion report can claim 100%.</p>
+<h2>Strategic Note: The Goal at the End of This PR</h2>
+<p>Item 6's wiring plan is scoped and ready to dispatch. Item 7 — Vizor's full audit and revival — is next, and is
+explicitly larger in scope than a one-line stub: Vizor is reportedly not working at all right now, and this
+session already touched two of its files (<code>viz/server.py</code>'s onboarding endpoints) while investigating item 6,
+without yet auditing Vizor as a whole.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
