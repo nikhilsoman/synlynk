@@ -392,6 +392,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [327](./327-pr2286-stop-false-job-status-denials-and-stale-.md) | PR #2286 — stop false job-status denials and stale file lists | [#2286](https://github.com/nikhilsoman/synlynk/pull/2286) | 2026-10-14 |
 | [328](./328-pr2292-model-catalog-discovery-design-spec-plan.md) | PR #2292 — model catalog discovery design spec + plan (gh:#2291) | [#2292](https://github.com/nikhilsoman/synlynk/pull/2292) | 2026-10-14 |
 | [329](./329-pr2293-add-provider-aware-harness-model-catalog.md) | PR #2293 — add provider-aware harness model catalog | [#2293](https://github.com/nikhilsoman/synlynk/pull/2293) | 2026-10-14 |
+| [330](./330-pr2290-parse-aider-token-lines-for-the-local-ha.md) | PR #2290 — parse aider token lines for the local harness | [#2290](https://github.com/nikhilsoman/synlynk/pull/2290) | 2026-10-14 |
 
 ## Per-PR Post Template
 

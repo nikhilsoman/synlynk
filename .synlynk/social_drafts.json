@@ -1246,5 +1246,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2293 \u2014 add provider-aware harness model catalog (PR #2293, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2293.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-14) - PR #2293\n- Merged improvements and fixes for PR #2293."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/330-pr2290-parse-aider-token-lines-for-the-local-ha.md",
+    "title": "PR #2290 \u2014 parse aider token lines for the local harness",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-14",
+    "pr": "#2290",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2290."
+    ],
+    "tweet": "\ud83d\ude80 PR #2290 \u2014 parse aider token lines for the local harness (PR #2290, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2290.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-14) - PR #2290\n- Merged improvements and fixes for PR #2290."
   }
 ]
