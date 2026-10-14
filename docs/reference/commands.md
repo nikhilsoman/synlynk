@@ -79,6 +79,8 @@ See [safe-caller-construction.md](safe-caller-construction.md) for guidance on b
 - `type seed` (secondary) — execute
 - `type relabel` (secondary) — execute
 - `connector add` (secondary) — execute
+- `fleet list` (secondary) — open
+- `fleet apply` (secondary) — open
 
 ## Tier 2 — Execute
 
