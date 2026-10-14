@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PR #TBD — Topology Discovery Finally Reaches Confirm | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-2">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Oct 14, 2026</span>
+        
+          <span class="blog-post-pr">PR TBD</span>
+        
+      </div>
+      <h1 class="blog-post-title">PR #TBD — Topology Discovery Finally Reaches Confirm</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>PR #2311 locked the onboarding-engine wiring design for gh:#2310: five modules from the
+2026-10-01 fleet dispatch were built and unit-tested, but never imported by a live command
+path. The goal after that spec landed was to wire each module into a real entry point, with
+integration tests that hit CLI/wizard/Vizor rather than the module in isolation.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>No redesign. <code>confirm_topology()</code> already did the right thing as a pure persist step — it
+expects a topology dict and writes it. The missing piece was the discovery engine that was
+supposed to produce that dict. This PR takes the plan's second integration approach:
+call <code>topology_discovery</code> before <code>confirm_topology</code> and feed the scored candidate in.</p>
+<h2>What This PR Shipped</h2>
+<ul>
+<li><code>propose_topology()</code> and <code>discover_and_confirm_topology()</code> in <code>onboarding_state.py</code></li>
+<li>Vizor <code>POST /w/&lt;slug&gt;/api/onboarding/topology/confirm</code> runs discovery when the body is
+empty or sets <code>discover: true</code>, then confirms the candidate; explicit topologies still win</li>
+<li>Wizard <code>_advance_wizard_onboarding_state</code> advances through S4 with the same discover→confirm path</li>
+<li>Integration test on the real <code>VizorHandler.do_POST</code> entry point in <code>tests/test_onboarding_topology.py</code></li>
+</ul>
+<h2>Brainstorm Visuals</h2>
+<p>None for this wiring task.</p>
+<h2>Progress Toward Full Autonomous Multi-Agent Dispatch</h2>
+<p>Closing one more &quot;tests green, callers zero&quot; gap from the 2026-10-01 onboarding fleet. Dual-surface
+onboarding (TUI + Vizor) now actually uses evidence-scored archetype discovery before topology
+confirmation.</p>
+<h2>New Goalpost</h2>
+<p>Remaining gh:#2310 tasks: <code>probe --deps</code>, <code>fleet list/apply</code>, <code>upgrade --all</code>, and the
+<code>first_win_loop.py</code> wire-or-retire decision (Task 4, sequenced after this PR to avoid
+wizard/server merge conflicts).</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
