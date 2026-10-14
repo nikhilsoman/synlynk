@@ -108,4 +108,9 @@ def cmd_logs(job_id: str, tail: int = 50) -> None:
     if os.path.exists(summary_path):
         print()
         with open(summary_path) as f:
-            print(f.read(), end="")
+            summary_content = f.read()
+        persisted_status = job.get("status")
+        if persisted_status and persisted_status in ("succeeded_gh_write_failed", "permission_denied", "failed_noop_denied"):
+            if "status:   OK (exit 0)" in summary_content:
+                summary_content = summary_content.replace("status:   OK (exit 0)", f"status:   {persisted_status}")
+        print(summary_content, end="")
