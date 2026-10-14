@@ -1429,8 +1429,11 @@ def test_job_status_add_realghwrite_endtoend_regr(project_dir, monkeypatch, caps
         "    with open(path, 'w') as f: json.dump(state, f)\n"
         "    raise SystemExit(0)\n"
         "if len(args) >= 4 and args[1] == 'view':\n"
-        "    field = args[4]\n"
-        "    print(json.dumps({field: state.get(field, state.get('state'))}))\n"
+        "    fields = [f.strip() for f in args[4].split(',')]\n"
+        "    out = {f: state[f] for f in fields if f in state}\n"
+        "    if not out:\n"
+        "        out = {fields[0]: state.get('state')}\n"
+        "    print(json.dumps(out))\n"
         "    raise SystemExit(0)\n"
         "raise SystemExit('unsupported fake gh command: ' + repr(args))\n"
     )
@@ -2855,7 +2858,7 @@ def test_job_lifecycle_epic_fix_didnt_cover_the_daemon_summary_uses_touched_file
         "has_activity": True, "remote_has_activity": False,
         "changed_files": [],
     })
-    monkeypatch.setattr(sl, "_worktree_files_touched", lambda path: ["real-change.py"])
+    monkeypatch.setattr(sl, "_worktree_files_touched", lambda path, base_sha=None: ["real-change.py"])
     captured = {}
     monkeypatch.setattr(sl, "_write_job_summary", lambda *args, **kwargs: captured.update({"files": args[8]}) or "")
     jobs_mod._reconcile_daemon_jobs()
