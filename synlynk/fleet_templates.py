@@ -65,6 +65,23 @@ def list_fleet_templates() -> List[str]:
     return list(FLEET_TEMPLATES)
 
 
+def _dispatch_roles(template: Dict[str, Any]) -> Dict[str, List[str]]:
+    """Convert template roles to the harness-keyed config shape.
+
+    ``dispatch.py`` reads ``config["roles"][harness]`` as a list of role
+    names.  Templates are authored in the more useful role-keyed shape, so
+    invert that mapping at the config boundary.
+    """
+
+    roles: Dict[str, List[str]] = {}
+    for role_name, role in template.get("roles", {}).items():
+        harness = role.get("harness")
+        if not harness:
+            continue
+        roles.setdefault(harness, []).append(role_name)
+    return roles
+
+
 def apply_fleet_template(repo_dir: str, template_name: str) -> Dict[str, Any]:
     """Merge a named fleet template into ``repo_dir``'s Synlynk config."""
 
@@ -85,11 +102,11 @@ def apply_fleet_template(repo_dir: str, template_name: str) -> Dict[str, Any]:
             config = {}
 
     config["fleet_template"] = template_name
-    config["roles"] = template["roles"]
+    config["roles"] = _dispatch_roles(template)
     config_path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
 
     return {
         "status": "applied",
         "template": template_name,
-        "roles": list(template["roles"]),
+        "roles": config["roles"],
     }
