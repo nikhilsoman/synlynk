@@ -2631,6 +2631,16 @@ def _resolve_explicit_base_ref(repo_path: Optional[str], explicit_base: str) -> 
     return base
 
 
+# Auto mode stacks only on short-lived task branches. A long-lived workspace
+# branch (for example docs/claude/...) is not a task base: inheriting it makes
+# the job diff and the opened PR contain that branch's unrelated history (#2229).
+_AUTO_STACK_BRANCH_PREFIXES = ("feat/", "fix/", "chore/", "dispatch/", "release/")
+
+
+def _is_auto_stackable_task_branch(branch: str) -> bool:
+    return bool(branch) and branch.startswith(_AUTO_STACK_BRANCH_PREFIXES)
+
+
 def _resolve_dispatch_worktree_base_ref(
     repo_path: Optional[str],
     stacking_mode: str = "auto",
@@ -2638,7 +2648,8 @@ def _resolve_dispatch_worktree_base_ref(
 ) -> str:
     """Resolve the base ref a new dispatch worktree should be anchored to.
 
-    stacking_mode: "auto" (stack on current non-mainline branch, else mainline),
+    stacking_mode: "auto" (stack on a current task branch such as feat/ or
+    fix/, otherwise the fresh mainline — never a long-lived workspace branch),
     "always" (stack on current branch, error on mainline/detached HEAD),
     "never" (always mainline — legacy behavior)
 
@@ -2667,7 +2678,12 @@ def _resolve_dispatch_worktree_base_ref(
             else ""
         )
         if current_branch and current_branch not in ("main", "master"):
-            return current_branch
+            if stacking_mode == "always" or _is_auto_stackable_task_branch(current_branch):
+                return current_branch
+            print(
+                f"  ⚠ worktree base: '{current_branch}' is not a task branch "
+                f"— using fresh mainline instead of this long-lived checkout (#2229)"
+            )
         if stacking_mode == "always":
             raise RuntimeError(
                 f"dispatch stacking is 'always' but current branch is "
@@ -3956,7 +3972,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             "Register an adapter before dispatching it."
         ) from exc
 
-    if agent == "grok" and not skip_permissions:
+    if agent in {"grok", "agy"} and not skip_permissions:
         # Grok's CLI has no working non-bypass headless mode (LIVE-13:
         # docs/rca/2026-09-22-LIVE-13-grok-headless-dispatch-permission-bypass.md).
         # Auto-opt-in here (rather than requiring every caller to pass
@@ -3964,6 +3980,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         # keep working unchanged after gh:#1925 part 1 made the bypass gated
         # instead of unconditional. See
         # docs/superpowers/specs/2026-10-04-grok-failclosed-permission-enforcement-design.md.
+        # Agy's --sandbox mode denies RunCommand outright and still reports
+        # SUCCESS (gh:#2216, job-0d75bb61). Same auto-opt-in so review and
+        # shell dispatches get --dangerously-skip-permissions instead.
         skip_permissions = True
 
     # A capability gate may reroute the harness (for example, Grok write

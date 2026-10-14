@@ -546,7 +546,7 @@ def _verify_contract_for_story(story_id: str, task: str, job_id: str = None) -> 
     label = job_id or story_id or "verify"
     changed = _test_files_for_verify_contract()
     if changed:
-        pytest_cmd = "pytest " + " ".join(shlex.quote(path) for path in changed) + " -v"
+        pytest_cmd = "pytest " + " ".join(shlex.quote(path) for path in changed) + " -q"
         cmd = verify_step_shell(pytest_cmd, label, 1)
         return (
             "\n\n## How to Verify\n"
@@ -559,7 +559,9 @@ def _verify_contract_for_story(story_id: str, task: str, job_id: str = None) -> 
         )
     return (
         "\n\n## How to Verify\n"
-        "Run pytest on the test files this change adds or modifies.\n"
+        "Run `pytest -q` on the test files this change adds or modifies.\n"
+        "Do not use `pytest -v`. Verbose per-test output is resent on later "
+        "turns and inflates dispatch cost.\n"
         "Do not pass a guessed pytest -k selector derived from the task title "
         "(that matches 0 tests and exits 5).\n"
         "If the captured output exceeds 4000 characters, write the full output "
