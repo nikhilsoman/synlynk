@@ -1185,6 +1185,29 @@ def _advance_wizard_onboarding_state(repo_dir: str, product_id: str) -> str:
         conn.close()
 
 
+def _execute_first_win_onboarding_cycle(
+    repo_dir: str, product_id: str, first_win_result: dict, dry_run: bool = False
+) -> dict | None:
+    """Complete S10 only after the wizard's first-win action was accepted."""
+    if dry_run or not isinstance(first_win_result, dict):
+        return None
+    if first_win_result.get("status") in {None, "skipped", "dry_run", "error"}:
+        return None
+
+    from synlynk.first_win_loop import execute_first_win_cycle
+
+    finding = first_win_result.get("finding") or {}
+    prompt = first_win_result.get("prompt") or finding.get("prompt") or finding.get("title")
+    if not prompt:
+        prompt = "Complete the discovered first-win task."
+    return execute_first_win_cycle(
+        os.path.join(repo_dir, ".synlynk", "state.db"),
+        product_id,
+        prompt,
+        repo_dir=repo_dir,
+    )
+
+
 def cmd_wizard_init(
     scan: dict = None,
     dry_run: bool = False,
@@ -1313,6 +1336,11 @@ def cmd_wizard_init(
     print(f"\n  {_GREEN}✓{_RESET} Zero-risk onboarding completed in {elapsed:.2f}s\n")
 
     current_stage = _advance_wizard_onboarding_state(repo_dir, ws_name)
+    first_win_cycle = _execute_first_win_onboarding_cycle(
+        repo_dir, ws_name, first_win_result, dry_run=dry_run
+    )
+    if first_win_cycle:
+        current_stage = first_win_cycle["current_stage"]
     result = {
         "workspace_name": ws_name,
         "harnesses": harnesses,
@@ -1321,6 +1349,7 @@ def cmd_wizard_init(
         "backlog_ingest": backlog_result,
         "backup": backup_result,
         "first_win": first_win_result,
+        "first_win_cycle": first_win_cycle,
         "elapsed_seconds": elapsed,
         "current_stage": current_stage,
     }
