@@ -1,5 +1,6 @@
 # synlynk Blog Series: Building the OS for Multi-Agent Development
 
+| [268](./268-prTBD-dispatch-cost-inflation-roots.md) | Dispatch jobs stop inheriting a long-lived branch, a cwd-relative todo archive, and pytest -v | TBD | 2026-10-14 |
 | [267](./267-pr2177-codex-cache-replay-pricing.md) | Codex cache-replay priced as fresh input | #2177 | 2026-10-10 |
 | [266](./266-pr2166-federated-quota-capture.md) | Federated subscription-quota capture | TBD | 2026-10-10 |
 | [265](./265-prTBD-state-shard-reconciliation.md) | gh:#1831 — Reconciling Orphaned State Shards Before Any Deletion | TBD | 2026-10-09 |
