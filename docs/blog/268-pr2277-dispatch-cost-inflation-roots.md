@@ -1,3 +1,15 @@
+---
+title: "Dispatch cost inflation had three separate causes"
+date: 2026-10-14
+series: "Building the OS for Multi-Agent Development"
+post: 268
+pr: 2277
+status: merged
+author: "synlynk team"
+version: "0.25.0"
+tags: [posts]
+type: pr
+---
 # Dispatch cost inflation had three separate causes
 
 The previous goalpost was to stop harness context from growing until a job hit forced compaction. The circuit breaker already contains a runaway job after the token bill explodes. It does not stop the dispatch from starting with a contaminated diff, a rewritten project snapshot, or a verbose test transcript that later turns keep resending.
