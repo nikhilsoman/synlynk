@@ -1326,5 +1326,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2297 \u2014 refresh the model catalog every 24h (PR #2297, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2297.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-14) - PR #2297\n- Merged improvements and fixes for PR #2297."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/271-pr2298-v0.25.1-model-catalog-release.md",
+    "title": "PR #2298 \u2014 cut v0.25.1 \u2014 Model Catalog Discovery",
+    "author": "nikhilsoman",
+    "date": "2026-10-14",
+    "pr": "#2298",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2298."
+    ],
+    "tweet": "\ud83d\ude80 PR #2298 \u2014 cut v0.25.1 \u2014 Model Catalog Discovery (PR #2298, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2298.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-14) - PR #2298\n- Merged improvements and fixes for PR #2298."
   }
 ]
