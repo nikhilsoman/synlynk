@@ -411,6 +411,14 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     upgrade_parser = subparsers.add_parser("upgrade", help="Check for and apply updates")
     upgrade_parser.add_argument("--dry-run", action="store_true", dest="dry_run",
                                 help="Preview what would be upgraded without installing")
+    upgrade_parser.add_argument(
+        "--all", action="store_true", dest="all_workspaces",
+        help="Plan/apply upgrades across every registered workspace (CLI-only; dry-run unless --yes)",
+    )
+    upgrade_parser.add_argument(
+        "--yes", action="store_true", dest="yes",
+        help="With --all, apply the upgrade plan (default is dry-run)",
+    )
 
     uninstall_parser = subparsers.add_parser("uninstall", help="Clean teardown, daemon shutdown, and shim removal")
     uninstall_parser.add_argument("--force", action="store_true", help="Force complete uninstall")
@@ -2223,6 +2231,15 @@ def main(argv=None) -> None:
             sys.exit(0)
         sys.exit(cmd_gh(args.role, getattr(args, "gh_args", []) or []))
     elif args.command == "upgrade":
+        if getattr(args, "all_workspaces", False):
+            from synlynk.upgrade import upgrade_all
+
+            sys.exit(
+                upgrade_all(
+                    yes=getattr(args, "yes", False),
+                    dry_run=getattr(args, "dry_run", False),
+                )
+            )
         upgrade(dry_run=getattr(args, "dry_run", False))
     elif args.command == "uninstall":
         from synlynk.uninstall import execute_uninstall
