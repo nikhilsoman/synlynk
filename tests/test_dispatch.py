@@ -2292,6 +2292,55 @@ def test_grok_dispatch_auto_skips_permissions_by_default(project_dir, monkeypatc
     assert "--permission-mode bypassPermissions" in shell_cmd
 
 
+def test_agy_dispatch_auto_skips_permissions_by_default(project_dir, monkeypatch):
+    """Agy review/shell dispatches must not stay on --sandbox (gh:#2216).
+
+    --sandbox denies RunCommand and the job still exits SUCCESS. Match Grok's
+    unconditional skip_permissions auto-opt-in so the CLI gets
+    --dangerously-skip-permissions.
+    """
+    import synlynk.dispatch as dispatch_mod
+
+    captured = {}
+
+    def fake_popen(command, *args, **kwargs):
+        captured["command"] = command
+
+        class FakeProc:
+            pid = 12345
+
+        return FakeProc()
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(dispatch_mod, "_preflight_dispatch", lambda *a, **kw: {"passed": True})
+
+    dispatch_mod.dispatch_agent(
+        agent="agy",
+        task="review the patch",
+        task_type="review",
+        grants=["run:shell"],
+        force_agent=True,
+        role="qa",
+        skip_preflight=True,
+        context_mode="none",
+    )
+
+    shell_cmd = captured["command"][2]
+    assert "--dangerously-skip-permissions" in shell_cmd
+    assert "--sandbox" not in shell_cmd
+
+
+def test_permissions_to_flags_agy_review_shell_uses_skip_when_opted_in():
+    from synlynk.dispatch import _permissions_to_flags
+
+    assert _permissions_to_flags(
+        "agy", ["run:shell"], read_only=True, skip_permissions=True
+    ) == ["--dangerously-skip-permissions"]
+    assert _permissions_to_flags(
+        "agy", ["run:shell"], read_only=True, skip_permissions=False
+    ) == ["--sandbox"]
+
+
 def test_permissions_to_flags_agy_warns_on_empty_permissions(capsys):
     from synlynk.dispatch import _permissions_to_flags
 
