@@ -1070,5 +1070,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2274 \u2014 exclude implementer harness from review capability probe (gh:#2271) (PR #2274, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2274.\n\n#posts",
     "changelog": "### v0.25.0 (2026-10-14) - PR #2274\n- Merged improvements and fixes for PR #2274."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/268-pr2277-dispatch-cost-inflation-roots.md",
+    "title": "PR #2277 \u2014 stop dispatch cost inflation from base, docs path, and pytest -v",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-14",
+    "pr": "#2277",
+    "version": "0.25.0",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2277."
+    ],
+    "tweet": "\ud83d\ude80 PR #2277 \u2014 stop dispatch cost inflation from base, docs path, and pytest -v (PR #2277, v0.25.0)\n\n\u2022 Merged improvements and fixes for PR #2277.\n\n#posts",
+    "changelog": "### v0.25.0 (2026-10-14) - PR #2277\n- Merged improvements and fixes for PR #2277."
   }
 ]
