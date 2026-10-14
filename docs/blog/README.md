@@ -397,6 +397,8 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [331](./331-pr2296-discover-harness-catalogs-from-live-base.md) | PR #2296 — discover harness catalogs from live baselines | [#2296](https://github.com/nikhilsoman/synlynk/pull/2296) | 2026-10-14 |
 | [332](./332-pr2289-bind-root-for-token-refresh.md) | PR #2289 — bind root for token refresh | [#2289](https://github.com/nikhilsoman/synlynk/pull/2289) | 2026-10-14 |
 | [333](./333-pr2295-resolve-dispatch-from-live-catalog.md) | PR #2295 — resolve dispatch from live catalog | [#2295](https://github.com/nikhilsoman/synlynk/pull/2295) | 2026-10-14 |
+| [270](./270-pr-model-catalog-24h-refresh.md) | The model catalog refreshes itself every 24 hours | 2297 | 2026-10-14 |
+| [334](./334-pr2297-refresh-the-model-catalog-every-24h.md) | PR #2297 — refresh the model catalog every 24h | [#2297](https://github.com/nikhilsoman/synlynk/pull/2297) | 2026-10-14 |
 
 ## Per-PR Post Template
 
