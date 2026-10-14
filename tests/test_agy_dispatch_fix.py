@@ -153,6 +153,41 @@ def test_dispatch_real_files_touched_from_different_cwd_uses_absolute_stored_pat
     assert sl._worktree_files_touched(job["worktree_path"]) == ["from-other-cwd.txt"]
 
 
+def test_files_touched_uses_dispatch_base_not_parent_branch_history(git_worktree_repo):
+    """gh:#2245: a no-op job on a stacked branch must not report the parent's files.
+
+    Those files are already committed. A clean worktree is not "uncommitted
+    work that was lost"; it is zero change since the dispatch base.
+    """
+    import synlynk as sl
+
+    repo = git_worktree_repo
+
+    def git(*args, check=True):
+        return subprocess.run(
+            ["git", "-C", repo, *args],
+            check=check, capture_output=True, text=True,
+        )
+
+    git("checkout", "-b", "feature/stacked")
+    with open(os.path.join(repo, "parent.txt"), "w") as handle:
+        handle.write("already on the parent branch\n")
+    git("add", "parent.txt")
+    git("commit", "-m", "parent work")
+    dispatch_base = git("rev-parse", "HEAD").stdout.strip()
+
+    assert sl._worktree_files_touched(repo, dispatch_base) == []
+
+    with open(os.path.join(repo, "job.txt"), "w") as handle:
+        handle.write("this job\n")
+    git("add", "job.txt")
+    git("commit", "-m", "job work")
+
+    assert sl._worktree_files_touched(repo, dispatch_base) == ["job.txt"]
+    stale = git("diff", "--name-only", "main", "HEAD").stdout.split()
+    assert "parent.txt" in stale
+
+
 def test_dispatch_real_files_touched_via_git_diff_missing_worktree_path_returns_empty():
     import synlynk as sl
 

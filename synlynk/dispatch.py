@@ -1518,16 +1518,19 @@ def _resolve_worktree_base_commit(worktree_path: Optional[str]) -> Optional[dict
     return None
 
 
-def _worktree_files_touched(worktree_path: Optional[str]) -> list:
-    """Return files committed or currently changed since the resolved merge-base."""
+def _worktree_files_touched(worktree_path: Optional[str], base_sha: Optional[str] = None) -> list:
+    """Return files committed or currently changed since this job's diff base.
+
+    ``base_sha`` is the commit recorded at dispatch. Stacked jobs must not
+    report files their parent branch already committed (gh:#2245).
+    """
     if not _worktree_path_is_available(worktree_path, "collect touched files"):
         return []
 
-    inspect_worktree_git_state = _pkg("_inspect_worktree_git_state")
-    git_state = inspect_worktree_git_state(worktree_path) if inspect_worktree_git_state else None
-    base_commit = (git_state or {}).get("base_commit") or (
-        _resolve_worktree_base_commit(worktree_path) or {}
-    ).get("base_commit")
+    resolve_job_diff_base = _pkg("_resolve_job_diff_base")
+    base_commit = resolve_job_diff_base(worktree_path, base_sha) if resolve_job_diff_base else None
+    if not base_commit:
+        base_commit = (_resolve_worktree_base_commit(worktree_path) or {}).get("base_commit")
     if not base_commit:
         return []
 
@@ -4931,6 +4934,11 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                         "UPDATE daemon_jobs SET cross_branch_pr=? WHERE job_id=?",
                         (cross_branch_pr_value, job_id),
                     )
+            _ensure_daemon_job_columns(dconn, {"base_sha": "TEXT"})
+            dconn.execute(
+                "UPDATE daemon_jobs SET base_sha=? WHERE job_id=?",
+                (base_sha, job_id),
+            )
             if container_failed:
                 dconn.execute(
                     "UPDATE daemon_jobs SET status=?, exit_code=?, completed_at=? WHERE job_id=?",

@@ -121,7 +121,7 @@ def stub_dispatch_worktree(monkeypatch, request):
         synlynk, "_inspect_worktree_git_state", lambda *args, **kwargs: None,
         raising=False,
     )
-    monkeypatch.setattr(dispatch_mod, "_worktree_files_touched", lambda worktree_path: [])
+    monkeypatch.setattr(dispatch_mod, "_worktree_files_touched", lambda worktree_path, base_sha=None: [])
 
 
 @pytest.fixture

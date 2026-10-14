@@ -2855,7 +2855,7 @@ def test_job_lifecycle_epic_fix_didnt_cover_the_daemon_summary_uses_touched_file
         "has_activity": True, "remote_has_activity": False,
         "changed_files": [],
     })
-    monkeypatch.setattr(sl, "_worktree_files_touched", lambda path: ["real-change.py"])
+    monkeypatch.setattr(sl, "_worktree_files_touched", lambda path, base_sha=None: ["real-change.py"])
     captured = {}
     monkeypatch.setattr(sl, "_write_job_summary", lambda *args, **kwargs: captured.update({"files": args[8]}) or "")
     jobs_mod._reconcile_daemon_jobs()
