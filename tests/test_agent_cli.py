@@ -1179,7 +1179,7 @@ def _quiet_checkpoint(monkeypatch):
 
 
 def test_fix_checkpoint_todomd_handling_it_bypass_migrated_archives_and_regenerates(
-    project_dir, monkeypatch
+    project_dir, monkeypatch, daemon_workspace_root
 ):
     import synlynk
 
@@ -1223,7 +1223,7 @@ def test_fix_checkpoint_todomd_handling_it_bypass_migrated_archives_and_regenera
 
 
 def test_fix_checkpoint_todomd_handling_it_bypass_pre_migration_backfill_is_idempotent(
-    project_dir, monkeypatch
+    project_dir, monkeypatch, daemon_workspace_root
 ):
     import synlynk
 
