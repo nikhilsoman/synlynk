@@ -169,6 +169,7 @@ def test_files_touched_uses_dispatch_base_not_parent_branch_history(git_worktree
             check=check, capture_output=True, text=True,
         )
 
+    git("branch", "-M", "main")
     git("checkout", "-b", "feature/stacked")
     with open(os.path.join(repo, "parent.txt"), "w") as handle:
         handle.write("already on the parent branch\n")
