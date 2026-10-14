@@ -4,6 +4,17 @@ import json
 import sqlite3
 
 
+def test_active_harness_models_treats_unavailable_catalog_as_empty():
+    from synlynk.db import get_active_harness_models
+
+    assert get_active_harness_models(None, harness="codex") == []
+
+    conn = sqlite3.connect(":memory:")
+    assert get_active_harness_models(conn, harness="codex") == []
+    conn.close()
+    assert get_active_harness_models(conn, harness="codex") == []
+
+
 def test_builtin_catalog_has_entitlement_and_geometry():
     from synlynk.models import BUILTIN_FAMILIES, BUILTIN_MODEL_CATALOG, EntitlementTier
 
@@ -77,3 +88,27 @@ def test_model_commands_seed_and_render_json(project_dir, capsys):
     cmd_models_list(json_output=True)
     payload = json.loads(capsys.readouterr().out)
     assert any(item["model_id"] == "gpt-5.6-luna" for item in payload)
+
+
+def test_resolve_tier_model_uses_static_bootstrap_when_discovery_is_empty(project_dir, monkeypatch):
+    import synlynk.models as models
+
+    monkeypatch.setattr(models, "_static_tier_model", lambda tier, harness, repo_path=None: "seed-model")
+    assert models.resolve_tier_model("pro", "codex") == "seed-model"
+
+
+def test_resolve_tier_model_prefers_state_db_discovery_over_static_catalog(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.models as models
+    from synlynk.db import upsert_harness_model
+
+    monkeypatch.setattr(models, "_static_tier_model", lambda tier, harness, repo_path=None: "stale-static-model")
+    conn = sl._get_db()
+    upsert_harness_model(
+        conn, "codex", "discovered-model", complexity_tier="pro",
+        discovered_at="2026-10-14T00:00:00+00:00",
+    )
+    conn.commit()
+    conn.close()
+
+    assert models.resolve_tier_model("pro", "codex") == "discovered-model"
