@@ -276,10 +276,23 @@ class VizorHandler(http.server.SimpleHTTPRequestHandler):
             payload = data.get("payload")
             slug = path.split("/")[2]
             from synlynk import open_state_db
-            from synlynk.onboarding_state import get_or_create_session, advance_stage
+            from synlynk.onboarding_state import (
+                STAGE_S10_BUILD_EXPERIENCE,
+                get_or_create_session,
+                advance_stage,
+            )
             conn, _ = open_state_db()
             sess = get_or_create_session(conn, slug)
-            new_sess = advance_stage(conn, sess["session_id"], target_stage, payload)
+            if target_stage == STAGE_S10_BUILD_EXPERIENCE:
+                from synlynk import get_state_db_path
+                from synlynk.first_win_loop import execute_first_win_cycle
+
+                prompt = (payload or {}).get("prompt", "Complete the discovered first-win task.")
+                new_sess = execute_first_win_cycle(
+                    get_state_db_path(), slug, prompt
+                )
+            else:
+                new_sess = advance_stage(conn, sess["session_id"], target_stage, payload)
             self._send_json_ok(new_sess)
         except Exception as e:
             self.send_error(500, str(e))

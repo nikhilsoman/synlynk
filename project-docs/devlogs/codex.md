@@ -178,3 +178,10 @@
   2 skipped, with one unrelated sandbox-only vizor daemon log permission
   failure; the isolated test passed with normal user-level log access.
 [@codex]
+2026-10-15 — gh:#2310 Task 4: re-read wizard and Vizor S10 handling and confirmed
+`first_win_loop.py` was still unreachable. Wired `execute_first_win_cycle()` into the
+accepted first-win wizard path and the Vizor S10 step handler, kept the unique
+`verify_first_win_effect()` helper, added a real `cmd_wizard_init` flow test, and wrote the
+Task 4 blog post. Focused changed-flow tests pass. Full `pytest -q` completed with 4476
+passed but baseline sparse-worktree/missing-artifact failures and unrelated failures remain;
+see verification output in the session transcript. [@codex]

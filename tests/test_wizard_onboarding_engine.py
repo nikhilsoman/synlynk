@@ -27,3 +27,36 @@ def test_wizard_init_advances_headless_state(tmp_path):
     assert row is not None
     assert row[0] != STAGE_S1_ORIENTATION
     assert row[0]
+
+
+def test_wizard_first_win_flow_executes_s10_cycle(tmp_path, monkeypatch):
+    state_db = tmp_path / ".synlynk" / "state.db"
+    state_db.parent.mkdir(parents=True)
+    monkeypatch.setattr(
+        "synlynk.wizard.prompt_first_win_remediation",
+        lambda **kwargs: {
+            "status": "simulated",
+            "finding": {"title": "Add a getting-started guide", "prompt": "add guide"},
+        },
+    )
+    monkeypatch.setattr(
+        "synlynk.backlog.ingest_backlog",
+        lambda **kwargs: {"ingested": 0, "fetched": 0, "duplicates": 0},
+    )
+
+    result = cmd_wizard_init(
+        repo_dir=str(tmp_path),
+        scan={"harnesses": [], "repos": []},
+        prompt_remediation=True,
+        sync_github=False,
+    )
+
+    assert result["first_win_cycle"]["status"] == "completed"
+    assert result["current_stage"] == "S10_BuildExperience"
+
+    conn = sqlite3.connect(str(state_db))
+    row = conn.execute(
+        "SELECT current_stage FROM onboarding_sessions ORDER BY updated_at DESC LIMIT 1"
+    ).fetchone()
+    conn.close()
+    assert row[0] == "S10_BuildExperience"
