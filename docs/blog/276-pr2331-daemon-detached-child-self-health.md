@@ -3,7 +3,7 @@ title: "Daemon detached children leave disposable worktrees and check their own 
 date: 2026-10-15
 series: "Building the OS for Multi-Agent Development"
 post: 276
-pr: TBD
+pr: 2331
 status: open
 author: "synlynk team"
 version: "0.25.2"
