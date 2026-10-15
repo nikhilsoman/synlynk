@@ -4086,6 +4086,14 @@ def _ensure_daemon_job_cost_entry(
             return False
         if existing:
             return False
+        dispatch_context = None
+        try:
+            context_row = conn.execute(
+                "SELECT dispatch_context FROM daemon_jobs WHERE job_id=?", (job_id,)
+            ).fetchone()
+            dispatch_context = context_row[0] if context_row else None
+        except Exception:
+            pass
         update_fn = _pkg("update_costs")
         if not update_fn:
             _mark_daemon_job_cost_missing(conn, job_id, "update_costs unavailable")
@@ -4125,6 +4133,7 @@ def _ensure_daemon_job_cost_entry(
                 basis=basis,
                 job_id=job_id,
                 harness=agent or "",
+                dispatch_context=dispatch_context,
                 turn_breakdown=turn_breakdown,
             )
             try:
@@ -5123,6 +5132,7 @@ def _reconcile_daemon_jobs() -> None:
                         basis=basis,
                         job_id=job_id,
                         harness=agent,
+                        dispatch_context=dispatch_context,
                         turn_breakdown=turn_breakdown,
                     )
                 except Exception as exc:

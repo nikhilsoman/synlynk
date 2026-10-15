@@ -2154,6 +2154,52 @@ def test_a3_set_dispatch_context_to_homeheadless_scheduler(project_dir, monkeypa
     assert row == ("headless",)
 
 
+def test_a3_deferred_local_enqueue_records_context(project_dir, monkeypatch, isatty=True):
+    import synlynk
+    import synlynk.dispatch as dispatch_mod
+
+    monkeypatch.setattr(dispatch_mod.sys.stdin, "isatty", lambda: isatty)
+    conn = synlynk._get_db()
+    dispatch_mod._defer_local_concurrency(
+        conn, job_id="job-a3-deferred", agent="local", task="defer", story_id=None,
+        reason="local_concurrency",
+    )
+    row = conn.execute(
+        "SELECT dispatch_context FROM daemon_jobs WHERE job_id='job-a3-deferred'"
+    ).fetchone()
+    conn.close()
+    assert row == ("home",)
+
+
+def test_a3_cost_backfill_inherits_job_context(project_dir, monkeypatch):
+    import synlynk
+    import synlynk.jobs as jobs_mod
+
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, enqueued_at, dispatch_context) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        ("job-a3-cost", "codex", "cost", "done", "2026-10-15T00:00:00", "headless"),
+    )
+    conn.commit()
+    captured = {}
+
+    def fake_update(*args, **kwargs):
+        captured["dispatch_context"] = kwargs["dispatch_context"]
+        conn.execute(
+            "INSERT INTO cost_entries (session_date, agent, cost_source, total_cost_usd, job_id, dispatch_context) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            ("2026-10-15", "codex", "estimated_tshirt", 0, "job-a3-cost", kwargs["dispatch_context"]),
+        )
+        conn.commit()
+
+    monkeypatch.setattr(synlynk, "update_costs", fake_update)
+    assert jobs_mod._ensure_daemon_job_cost_entry(
+        "job-a3-cost", "codex", None, conn=conn
+    )
+    assert captured["dispatch_context"] == "headless"
+
+
 def test_bug__secret_patterns_regex_doesnt_redact_ghs_installation_token():
     from synlynk import _redact_secret_patterns
 
