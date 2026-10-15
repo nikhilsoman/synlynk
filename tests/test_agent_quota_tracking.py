@@ -156,6 +156,37 @@ def test_open_reservation_with_scope_id_and_job_id(project_dir):
     assert row == ("plan", "run-abc123", "job-xyz")
 
 
+def test_open_reservation_reuses_caller_connection(project_dir):
+    import synlynk as sl
+
+    conn = sl._get_db()
+    rid = sl._open_reservation(conn, "codex", 2_000, scope="adhoc")
+
+    assert conn.execute(
+        "SELECT status FROM harness_reservations WHERE id=?", (rid,)
+    ).fetchone() == ("open",)
+
+
+def test_open_reservation_closes_connection_it_opens(project_dir, monkeypatch):
+    import synlynk as sl
+
+    conn = sl._get_db()
+    opened = []
+
+    def get_db():
+        opened.append(conn)
+        return conn
+
+    monkeypatch.setattr(sl, "_get_db", get_db)
+
+    rid = sl._open_reservation(harness="codex", tokens=2_000, scope="adhoc")
+
+    assert isinstance(rid, int)
+    assert opened == [conn]
+    with pytest.raises(sqlite3.ProgrammingError, match="closed database"):
+        conn.execute("SELECT 1")
+
+
 def test_quota_status_subtracts_open_reservations(project_dir):
     import synlynk as sl
 
