@@ -1,18 +1,18 @@
 """Real-inference tests against a live oMLX instance + real Aider subprocess.
 NOT run in standard CI — requires oMLX running locally (`omlx serve`) with the
 .agents/local.json roster downloaded, and the `aider` CLI installed. Run explicitly:
-`pytest tests/test_local_agent_hardware.py -m local_hardware -v`"""
+`pytest tests/test_local_agent_hardware.py -m local_hardware -q`"""
 
-import json
 import os
+import shutil
 import subprocess
 import tempfile
 import unittest
-from unittest.mock import patch
 
 import pytest
 
 from synlynk.local_agent import (
+    _DEFAULT_CONFIG_PATH,
     _health_check,
     _load_local_config,
     _local_dispatch_model_flags,
@@ -20,66 +20,66 @@ from synlynk.local_agent import (
 )
 
 
-_LOCAL_CONFIG = {
-    "name": "local",
-    "endpoint": "http://127.0.0.1:8080",
-    "models": [
-        {"id": "ornith-1.0-9b", "pinned": True, "edit_format": "whole"},
-        {"id": "qwen-coder", "pinned": False, "edit_format": "whole"},
-        {"id": "gemma-coder", "pinned": False, "edit_format": "diff"},
-    ],
-    "hardware_tier": "16gb-default",
-}
+def _skip_unless_local_stack_ready(test_case: unittest.TestCase) -> dict:
+    """Load real `.agents/local.json` and skip when the local stack is unavailable.
 
-
-def _make_local_config() -> tuple:
-    tmpdir = tempfile.TemporaryDirectory()
-    config_path = os.path.join(tmpdir.name, "local.json")
-    with open(config_path, "w") as f:
-        json.dump(_LOCAL_CONFIG, f)
-    return tmpdir, config_path
-
-
-class _LocalHardwareBase(unittest.TestCase):
-    def setUp(self):
-        self._tmpdir, config_path = _make_local_config()
-        self.addCleanup(self._tmpdir.cleanup)
-
-        self._config_patcher = patch(
-            "synlynk.local_agent._DEFAULT_CONFIG_PATH", config_path
+    Real-hardware tests must exercise the production roster path (not a temp
+    fixture with stale model ids / ports). Missing config, unreachable oMLX,
+    or a 401 without OPENAI_API_KEY all skip cleanly rather than fail CI.
+    """
+    try:
+        config = _load_local_config()
+    except FileNotFoundError as exc:
+        test_case.skipTest(
+            f"{exc} — materialize {_DEFAULT_CONFIG_PATH} (tracked on main) before "
+            "running the local_hardware tier"
         )
-        self._config_patcher.start()
-        self.addCleanup(self._config_patcher.stop)
 
-        self.config = _load_local_config()
-        result = _health_check(self.config["endpoint"])
-        if not result["reachable"]:
-            self.skipTest(
-                f"oMLX not reachable at {self.config['endpoint']} — start with `omlx serve`"
-            )
+    api_key = os.environ.get("OPENAI_API_KEY")
+    result = _health_check(config["endpoint"], api_key=api_key)
+    if not result["reachable"]:
+        hint = f"oMLX not reachable at {config['endpoint']} — start with `omlx serve`"
+        err = result.get("error", "")
+        if "401" in err:
+            hint += " (401 Unauthorized — export OPENAI_API_KEY and retry)"
+        test_case.skipTest(hint)
+    return config
 
 
 @pytest.mark.local_hardware
-class TestRealOmlxHealthCheck(_LocalHardwareBase):
+class TestRealOmlxHealthCheck(unittest.TestCase):
+    def setUp(self):
+        self.config = _skip_unless_local_stack_ready(self)
+
     def test_pinned_model_is_available(self):
-        result = _health_check(self.config["endpoint"])
+        api_key = os.environ.get("OPENAI_API_KEY")
+        result = _health_check(self.config["endpoint"], api_key=api_key)
         pinned = _pinned_model(self.config)
         self.assertIn(pinned, result["available_models"])
 
 
 @pytest.mark.local_hardware
-class TestAiderSubprocessEndToEnd(_LocalHardwareBase):
+class TestAiderSubprocessEndToEnd(unittest.TestCase):
     """Spawns the real `aider` CLI against the real oMLX endpoint, mirroring
     exactly what dispatch_agent() does for agent='local' in production (Task
     Group 1, Steps 7 and 10): static dispatch_flags + dynamic model flags,
     prompt delivered via --message-file, run inside a scratch git worktree
     (Aider requires a git repo to operate in)."""
 
+    def setUp(self):
+        self.config = _skip_unless_local_stack_ready(self)
+        if shutil.which("aider") is None:
+            self.skipTest("aider CLI not on PATH — install aider to run this tier")
+
     def test_aider_edits_a_real_file(self):
         with tempfile.TemporaryDirectory() as d:
             subprocess.run(["git", "init", "-q"], cwd=d, check=True)
-            subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=d, check=True)
-            subprocess.run(["git", "config", "user.name", "test"], cwd=d, check=True)
+            subprocess.run(
+                ["git", "config", "user.email", "test@test.com"], cwd=d, check=True
+            )
+            subprocess.run(
+                ["git", "config", "user.name", "test"], cwd=d, check=True
+            )
 
             target = os.path.join(d, "add.py")
             with open(target, "w") as f:
@@ -104,7 +104,7 @@ class TestAiderSubprocessEndToEnd(_LocalHardwareBase):
             with open(target) as f:
                 content = f.read()
 
-        self.assertEqual(proc.returncode, 0)
+        self.assertEqual(proc.returncode, 0, msg=proc.stderr[-2000:] if proc.stderr else "")
         self.assertIn("def add", content)
 
 
