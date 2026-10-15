@@ -128,6 +128,34 @@ def test_codex_cached_input_subset_is_not_priced_as_fresh_input(monkeypatch):
     assert value.api_equivalent_usd < 1.0
 
 
+def test_job_2a16259d_cache_replay_is_not_cost_inflation(monkeypatch):
+    """Regression for PR #2232's cumulative Codex usage accounting.
+
+    ``cached_input_tokens`` is a subset of Codex ``input_tokens``.  Pricing
+    the full cumulative input as fresh work incorrectly produced $18.89 and
+    tripped the $15 circuit breaker; the cache-aware result is about $0.85.
+    """
+    from synlynk import costs
+
+    monkeypatch.setattr(costs, "_payment_model_config_for_agent", lambda agent: {"mode": "pay_as_you_go"})
+    monkeypatch.setattr(
+        costs,
+        "_model_rate_for_version",
+        lambda model, agent=None: {"input": 0.003, "output": 0.015, "cache_read": 0.0000003},
+    )
+
+    value = costs.resolve_payment_value(
+        "codex",
+        6_169_874,
+        25_478,
+        cache_read_tokens=6_013_184,
+        model="gpt-5.6-luna",
+    )
+
+    assert value.api_equivalent_usd == pytest.approx(0.8540439552)
+    assert value.api_equivalent_usd < 15.0
+
+
 def test_non_codex_cache_read_stays_an_additive_pool(monkeypatch):
     from synlynk import costs
 
