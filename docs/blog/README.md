@@ -422,6 +422,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [348](./348-pr2323-spec-plan-for-daemon-cwd-health-fix-gh-2.md) | PR #2323 — spec + plan for daemon cwd health fix (gh:#2261, gh:#2288) | [#2323](https://github.com/nikhilsoman/synlynk/pull/2323) | 2026-10-15 |
 | [349](./349-pr2324-unconditionally-resolve-repo-root-in-chi.md) | PR #2324 — unconditionally resolve repo root in child-main entry points | [#2324](https://github.com/nikhilsoman/synlynk/pull/2324) | 2026-10-15 |
 | [350](./350-pr2326-spec-plan-for-daemon-autonomy-pass-wirin.md) | PR #2326 — spec + plan for daemon autonomy-pass wiring (gh:#2262 Task 4) | [#2326](https://github.com/nikhilsoman/synlynk/pull/2326) | 2026-10-15 |
+| [351](./351-pr2327-wire-hybrid-interval-idle-autonomy-pass-.md) | PR #2327 — wire hybrid interval+idle autonomy-pass trigger into poll loop (gh:#2262 Task 4) | [#2327](https://github.com/nikhilsoman/synlynk/pull/2327) | 2026-10-15 |
 
 ## Per-PR Post Template
 

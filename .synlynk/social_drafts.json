@@ -1598,5 +1598,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2326 \u2014 spec + plan for daemon autonomy-pass wiring (gh:#2262 Task 4) (PR #2326, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2326.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-15) - PR #2326\n- Merged improvements and fixes for PR #2326."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/351-pr2327-wire-hybrid-interval-idle-autonomy-pass-.md",
+    "title": "PR #2327 \u2014 wire hybrid interval+idle autonomy-pass trigger into poll loop (gh:#2262 Task 4)",
+    "author": "synlynk-pm agent",
+    "date": "2026-10-15",
+    "pr": "#2327",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2327."
+    ],
+    "tweet": "\ud83d\ude80 PR #2327 \u2014 wire hybrid interval+idle autonomy-pass trigger into poll loop (gh:#2262 Task 4) (PR #2327, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2327.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-15) - PR #2327\n- Merged improvements and fixes for PR #2327."
   }
 ]
