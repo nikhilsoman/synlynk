@@ -2,8 +2,8 @@
 title: "gh:#2261 — Catch a dead detached daemon before the backlog stalls"
 date: 2026-10-15
 series: "Building the OS for Multi-Agent Development"
-post: 276
-pr: TBD
+post: 277
+pr: 2337
 status: open
 author: "synlynk team"
 version: "0.25.2-dev"
