@@ -1614,5 +1614,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2327 \u2014 wire hybrid interval+idle autonomy-pass trigger into poll loop (gh:#2262 Task 4) (PR #2327, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2327.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-15) - PR #2327\n- Merged improvements and fixes for PR #2327."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/275-pr2330-live25-daemon-stop-port-isolation.md",
+    "title": "PR #2330 \u2014 isolate HTTP_PORT in daemon stop() stale-lock test (LIVE-25, gh:#2329)",
+    "author": "nikhilsoman",
+    "date": "2026-10-15",
+    "pr": "#2330",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2330."
+    ],
+    "tweet": "\ud83d\ude80 PR #2330 \u2014 isolate HTTP_PORT in daemon stop() stale-lock test (LIVE-25, gh:#2329) (PR #2330, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2330.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-15) - PR #2330\n- Merged improvements and fixes for PR #2330."
   }
 ]
