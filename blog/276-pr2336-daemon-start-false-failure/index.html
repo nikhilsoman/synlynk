@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>daemon start stopped crying wolf about stale log lines | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-0">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Oct 15, 2026</span>
+        
+          <span class="blog-post-pr">PR 2336</span>
+        
+      </div>
+      <h1 class="blog-post-title">daemon start stopped crying wolf about stale log lines</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>daemon start stopped crying wolf about stale log lines</h1>
+<p>The previous goalpost (PR #2330 / LIVE-25) stopped an unrelated pytest run from SIGTERM-ing a healthy daemon via the shared HTTP port reclaim path. With the daemon actually staying up, soak testing immediately surfaced a different false alarm: <code>synlynk daemon start</code> printing <code>⚠ Failed to start daemon: SystemExit: 143</code> and <code>synlynk watch is also running</code>, then <code>synlynk daemon status</code> confirming a healthy process seconds later.</p>
+<h2>What changed</h2>
+<p>Filed as gh:#2333. Root cause was two compounding bugs in <code>WatchDaemon.start()</code> (shared by <code>SynlynkDaemon</code>), plus a third stale-state check on the same start path:</p>
+<ol>
+<li><strong><code>_await_child_pidfile()</code> used a flat 2.0s cutoff.</strong> Under load the re-exec child often published its pidfile just after that window, so <code>start()</code> took the failure branch even though the child came up fine.</li>
+<li><strong>The failure branch tailed the entire append-only logfile.</strong> A quiet successful spawn writes nothing new, so the last non-blank line from an old diagnostic session (here: leftover <code>SystemExit: 143</code> from the LIVE-25 investigation) was misreported as today's error.</li>
+<li><strong><code>SynlynkDaemon._prepare_start()</code> treated <code>watch.pid</code> existence as &quot;watch is running&quot;.</strong> A dead pidfile triggered the dual-poller warning with zero live watch processes.</li>
+</ol>
+<p><strong>The fix.</strong> Pidfile wait now polls with exponential backoff up to a 10s ceiling. Before spawning, <code>start()</code> records the logfile byte offset and only reads lines appended after that watermark; if nothing new appeared, it reports an honest readiness-timeout message. The watch check now requires a live PID (or live lock owner), matching <code>_health()</code> liveness rules.</p>
+<p><strong>Tests.</strong> New file <code>tests/test_daemon_start_false_failure_2333.py</code> covers: stale log not misreported on a silent failed wait; backoff past 2.0s; stale watch pidfile ignored; live watch pidfile still warns; only newly appended log bytes reported on a real failure. Related suites (<code>test_daemon_liveness_1572</code>, <code>test_control_plane_daemon_health</code>, <code>test_daemon_token_refresh</code>) stay green: 47 passed.</p>
+<h2>Goalpost</h2>
+<p>Daemon start diagnostics now match reality: a late-but-successful child is waited for, stale log tails stay in the past, and a leftover <code>watch.pid</code> no longer claims a concurrent poller. Next soak pass can trust <code>Failed to start</code> as a real signal while the autonomy-pass loop from the prior PR cluster keeps running unattended.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
