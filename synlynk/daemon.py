@@ -86,6 +86,36 @@ def _daemon_caller_path() -> str:
     return os.path.abspath(os.getcwd())
 
 
+def _canonical_repo_root_from(cwd: str) -> str:
+    """Resolve the persistent repo root while *cwd* still exists.
+
+    Discovers git from the invoking shell's worktree before any detach, so a
+    disposable dispatch worktree can still resolve the shared common dir
+    (gh:#2261).
+    """
+    result = subprocess.run(
+        ["git", "rev-parse", "--show-toplevel"],
+        cwd=cwd,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    top_level = result.stdout.strip()
+    if not top_level:
+        raise RuntimeError("git returned an empty repository root")
+    common = subprocess.run(
+        ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+        cwd=cwd,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    if not common:
+        raise RuntimeError("git returned an empty common directory")
+    common = os.path.abspath(common)
+    return os.path.dirname(common) if os.path.basename(common) == ".git" else common
+
+
 def _current_repo_revision(repo_dir: Optional[str] = None) -> Optional[str]:
     """Return the current HEAD commit hash of the git repository."""
     try:
@@ -191,7 +221,22 @@ def _find_pid_listening_on_port(port: int) -> Optional[int]:
 
 def _daemonize_via_reexec(entry_point: str, logfile: str, cwd: Optional[str] = None) -> None:
     """Spawn a detached child process running a module-level entry point."""
-    cwd = os.path.abspath(cwd or os.getcwd())
+    invoking_cwd = os.path.abspath(os.getcwd())
+    requested_cwd = os.path.abspath(cwd or invoking_cwd)
+    if _is_disposable_worktree_path(invoking_cwd) or _is_disposable_worktree_path(requested_cwd):
+        try:
+            cwd = _canonical_repo_root_from(invoking_cwd)
+        except (OSError, subprocess.SubprocessError, RuntimeError) as exc:
+            raise RuntimeError(
+                "refusing to daemonize from a disposable worktree whose canonical "
+                f"repo root cannot be resolved: {invoking_cwd}: {exc}"
+            ) from exc
+        if _is_disposable_worktree_path(cwd):
+            raise RuntimeError(
+                f"refusing to daemonize with disposable worktree cwd: {cwd}"
+            )
+    else:
+        cwd = requested_cwd
     logfile = os.path.abspath(logfile)
     os.makedirs(os.path.dirname(logfile), exist_ok=True)
     module_path, func_name = entry_point.rsplit(".", 1)
@@ -231,7 +276,13 @@ class WatchDaemon:
         self.token_refresh_interval_seconds = 50 * 60
         self._lock_fh = None
 
-    def start(self) -> None:
+    def start(self) -> bool:
+        """Spawn the detached child. Return True if healthy (or already running).
+
+        A False return means the child never published a live pidfile. Callers
+        that are launchd/systemd-supervised must exit non-zero so KeepAlive can
+        restart (gh:#2261).
+        """
         if _is_disposable_worktree_path(self.workspace_root):
             raise RuntimeError(
                 "refusing to start the daemon with a disposable worktree as its "
@@ -243,17 +294,17 @@ class WatchDaemon:
             owner_pid = _daemon_lock_owner_pid(lock_path)
             if self._is_running() or _pid_is_alive(owner_pid):
                 print(self._already_running_message)
-                return
+                return True
             # Recover deterministically from stale lock metadata. A real
             # flock held by a live starter/daemon still fails this retry.
             lock_fh = _try_acquire_daemon_lock(lock_path, blocking=False)
             if lock_fh is None:
                 print(self._already_running_message)
-                return
+                return True
         try:
             if self._is_running():
                 print(self._already_running_message)
-                return
+                return True
             if os.path.exists(self.pidfile):
                 os.remove(self.pidfile)
             self._prepare_start()
@@ -267,23 +318,24 @@ class WatchDaemon:
             if self._is_running():
                 print(self._started_message)
                 print("    Tip: run 'synlynk daemon --install-service' so this survives a crash/reboot.")
-            else:
-                last_error = ""
-                try:
-                    with open(self.logfile) as log:
-                        last_error = next(
-                            (line.strip() for line in reversed(log.readlines()) if line.strip()),
-                            "",
-                        )
-                except OSError:
-                    pass
-                if last_error:
-                    print(f"  ⚠ Failed to start daemon: {last_error}", file=sys.stderr)
-                else:
-                    print(
-                        f"  ⚠ Failed to start daemon (check {os.path.basename(self.logfile)} for errors).",
-                        file=sys.stderr,
+                return True
+            last_error = ""
+            try:
+                with open(self.logfile) as log:
+                    last_error = next(
+                        (line.strip() for line in reversed(log.readlines()) if line.strip()),
+                        "",
                     )
+            except OSError:
+                pass
+            if last_error:
+                print(f"  ⚠ Failed to start daemon: {last_error}", file=sys.stderr)
+            else:
+                print(
+                    f"  ⚠ Failed to start daemon (check {os.path.basename(self.logfile)} for errors).",
+                    file=sys.stderr,
+                )
+            return False
         finally:
             _release_daemon_lock(lock_fh)
 
@@ -1103,6 +1155,55 @@ class SynlynkDaemon(WatchDaemon):
         except Exception as exc:
             log_telemetry_event({"event": "sre_heartbeat", "status": "degraded", "component": "autonomous_loop", "error": str(exc)})
 
+    def _self_health_check(self) -> bool:
+        """Verify the detached child still has a live cwd and Git context (gh:#2261)."""
+        try:
+            cwd = os.getcwd()
+        except OSError as exc:
+            print(
+                f"  ⚠ daemon exiting cleanly: current working directory is unavailable: {exc}",
+                file=sys.stderr,
+                flush=True,
+            )
+            return False
+        try:
+            result = subprocess.run(
+                ["git", "rev-parse", "--git-common-dir"],
+                cwd=cwd,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            print(
+                f"  ⚠ daemon exiting cleanly: Git context check failed: {exc}",
+                file=sys.stderr,
+                flush=True,
+            )
+            return False
+        if result.returncode != 0 or not result.stdout.strip():
+            detail = result.stderr.strip() or f"git exited {result.returncode}"
+            print(
+                f"  ⚠ daemon exiting cleanly: Git context is unavailable from {cwd}: {detail}",
+                file=sys.stderr,
+                flush=True,
+            )
+            return False
+        return True
+
+    def _cleanup_after_health_failure(self) -> None:
+        """Remove child identity files before exiting on a stale cwd."""
+        for path in (self.pidfile, self.pidfile.replace(".pid", ".start")):
+            try:
+                os.remove(path)
+            except FileNotFoundError:
+                pass
+            except OSError:
+                pass
+        if self._lock_fh is not None:
+            _release_daemon_lock(self._lock_fh)
+            self._lock_fh = None
+
     def _run_capability_watch_tick(self, config: dict) -> None:
         """Run due capability checks from the daemon cadence.
 
@@ -1373,6 +1474,12 @@ class SynlynkDaemon(WatchDaemon):
         last_quota_poll = 0.0
         while True:
             time.sleep(interval)
+            # Detached children are not launchd-supervised; exit cleanly when
+            # cwd/git context is gone so an outer KeepAlive (or a later
+            # daemon start) can recover (gh:#2261).
+            if os.environ.get("_SYNLYNK_DAEMON_CHILD") == "1" and not self._self_health_check():
+                self._cleanup_after_health_failure()
+                return
             current_mtimes = self._get_mtimes("project-docs")
             changed = [f for f in current_mtimes
                        if current_mtimes[f] != last_mtimes.get(f)]
@@ -1477,9 +1584,9 @@ def cmd_relay_broadcast(kind: str, body: str, relay_url: str = None) -> None:
         print(f"  Start relay: synlynk relay start")
 
 def check_daemon_health(sentinel_path: Optional[str] = None) -> None:
-    """Writes CRITICAL alert if watch daemon pidfile exists but process is dead."""
-    daemon = WatchDaemon()
-    if daemon._health() == "zombie":
+    """Writes CRITICAL alert if a daemon pidfile exists but its process is dead."""
+    watch = WatchDaemon()
+    if watch._health() == "zombie":
         _write_sentinel_alert(
             "CRITICAL", "ZOMBIE_DAEMON",
             "Watch daemon pidfile exists but process is dead. "
@@ -1487,6 +1594,19 @@ def check_daemon_health(sentinel_path: Optional[str] = None) -> None:
         )
         print("  🚨 [ZOMBIE_DAEMON] Watch daemon is dead — "
               "run: synlynk watch stop && synlynk watch start")
+    try:
+        daemon = SynlynkDaemon()
+    except Exception:
+        return
+    if daemon._health() == "zombie":
+        _write_sentinel_alert(
+            "CRITICAL", "ZOMBIE_DAEMON",
+            "Synlynk daemon pidfile exists but process is dead. "
+            "Run: synlynk daemon stop && synlynk daemon start",
+            sentinel_path=sentinel_path,
+        )
+        print("  🚨 [ZOMBIE_DAEMON] Synlynk daemon is dead — "
+              "run: synlynk daemon stop && synlynk daemon start")
 
 def check_stall(sentinel_path: Optional[str] = None) -> None:
     """Writes WARN alert if .synlynk/state has been 'active' longer than exec_timeout_minutes."""

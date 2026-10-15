@@ -562,6 +562,168 @@ def test_daemonize_via_reexec_pins_workspace_cwd(tmp_path, monkeypatch):
     assert captured["kwargs"]["env"]["SYNLYNK_DAEMON_WORKSPACE_ROOT"] == str(tmp_path)
 
 
+def test_daemonize_from_disposable_worktree_uses_common_repo_root(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git_run(["init"], repo)
+    _git_run(["config", "user.email", "test@example.com"], repo)
+    _git_run(["config", "user.name", "Test"], repo)
+    (repo / "tracked.txt").write_text("tracked\n")
+    _git_run(["add", "tracked.txt"], repo)
+    _git_run(["commit", "-m", "initial"], repo)
+    worktree = tmp_path / "worktrees" / "job-123"
+    worktree.parent.mkdir()
+    _git_run(["worktree", "add", str(worktree)], repo)
+
+    monkeypatch.chdir(worktree)
+    import synlynk.daemon as daemon_mod
+    captured = {}
+    resolved_from = []
+    monkeypatch.setattr(
+        daemon_mod,
+        "_canonical_repo_root_from",
+        lambda path: resolved_from.append(path) or str(repo),
+    )
+
+    class FakePopen:
+        def __init__(self, args, **kwargs):
+            captured["kwargs"] = kwargs
+
+    monkeypatch.setattr(daemon_mod.subprocess, "Popen", FakePopen)
+    daemon_mod._daemonize_via_reexec(
+        "synlynk.daemon._watch_daemon_child_main",
+        str(repo / "daemon.log"),
+        cwd=str(worktree),
+    )
+
+    assert captured["kwargs"]["cwd"] == str(repo)
+    assert captured["kwargs"]["env"]["SYNLYNK_DAEMON_WORKSPACE_ROOT"] == str(repo)
+    assert resolved_from == [str(worktree)]
+
+
+def test_synlynk_daemon_self_health_check_exits_cleanly_when_git_context_is_gone(
+    tmp_path, monkeypatch, capsys
+):
+    import synlynk.daemon as daemon_mod
+
+    monkeypatch.chdir(tmp_path)
+    daemon = daemon_mod.SynlynkDaemon()
+    monkeypatch.setattr(
+        daemon_mod.subprocess,
+        "run",
+        lambda *args, **kwargs: type(
+            "Result",
+            (),
+            {"returncode": 128, "stdout": "", "stderr": "fatal: not a git repository"},
+        )(),
+    )
+
+    assert daemon._self_health_check() is False
+    assert "daemon exiting cleanly" in capsys.readouterr().err
+
+
+def test_synlynk_daemon_self_health_check_fails_when_cwd_deleted(tmp_path, monkeypatch, capsys):
+    import synlynk.daemon as daemon_mod
+
+    monkeypatch.chdir(tmp_path)
+    daemon = daemon_mod.SynlynkDaemon()
+    monkeypatch.setattr(
+        daemon_mod.os,
+        "getcwd",
+        lambda: (_ for _ in ()).throw(FileNotFoundError("No such file or directory")),
+    )
+
+    assert daemon._self_health_check() is False
+    assert "current working directory is unavailable" in capsys.readouterr().err
+
+
+def test_synlynk_daemon_run_loop_returns_when_child_health_check_fails(
+    tmp_path, monkeypatch, capsys
+):
+    import http.server as _http_server
+    import synlynk.daemon as daemon_mod
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("_SYNLYNK_DAEMON_CHILD", "1")
+    monkeypatch.setattr(
+        daemon_mod,
+        "_pkg",
+        lambda name, default=None: {
+            "load_config": lambda: {"watch_interval_seconds": 0, "max_parallel": 1}
+        }.get(name, default),
+    )
+    monkeypatch.setattr(daemon_mod.SynlynkDaemon, "_refresh_github_tokens", lambda self: None)
+    monkeypatch.setattr(
+        daemon_mod.local_http_auth, "ensure_local_token", lambda: None
+    )
+
+    def failed_health_check(self):
+        print("  daemon exiting cleanly: Git context is unavailable", file=sys.stderr)
+        return False
+
+    monkeypatch.setattr(daemon_mod.SynlynkDaemon, "_self_health_check", failed_health_check)
+    monkeypatch.setattr(daemon_mod.time, "sleep", lambda _seconds: None)
+
+    class FakeServer:
+        allow_reuse_address = False
+
+        def __init__(self, addr, handler):
+            pass
+
+        def serve_forever(self):
+            return None
+
+    monkeypatch.setattr(_http_server, "HTTPServer", FakeServer)
+    daemon = daemon_mod.SynlynkDaemon()
+    daemon.HTTP_PORT = 0
+    daemon._get_mtimes = lambda path: {}
+    daemon.pidfile = str(tmp_path / ".synlynk" / "daemon.pid")
+    (tmp_path / ".synlynk").mkdir(exist_ok=True)
+    (tmp_path / ".synlynk" / "daemon.pid").write_text("12345")
+    (tmp_path / ".synlynk" / "daemon.start").write_text("1.0")
+
+    daemon._run_loop()
+
+    assert "daemon exiting cleanly" in capsys.readouterr().err
+    assert not (tmp_path / ".synlynk" / "daemon.pid").exists()
+    assert not (tmp_path / ".synlynk" / "daemon.start").exists()
+
+
+def test_watch_daemon_start_returns_false_when_child_never_becomes_healthy(
+    tmp_path, monkeypatch
+):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    import synlynk.daemon as daemon_mod
+
+    monkeypatch.setattr(daemon_mod.WatchDaemon, "_is_running", lambda self: False)
+    monkeypatch.setattr(
+        daemon_mod.WatchDaemon, "_await_child_pidfile", lambda self, timeout=2.0: None
+    )
+    monkeypatch.setattr(
+        daemon_mod, "_daemonize_via_reexec", lambda *args, **kwargs: None
+    )
+    daemon = daemon_mod.WatchDaemon()
+    assert daemon.start() is False
+
+
+def test_check_daemon_health_alerts_on_synlynk_daemon_zombie(tmp_path, monkeypatch):
+    import synlynk.daemon as daemon_mod
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    (tmp_path / ".synlynk" / "daemon.pid").write_text("99999999")
+    sentinel = str(tmp_path / ".synlynk" / "sentinel.md")
+    alerts = []
+
+    def capture_alert(severity, code, message, sentinel_path=None):
+        alerts.append((severity, code, message))
+
+    monkeypatch.setattr(daemon_mod, "_write_sentinel_alert", capture_alert)
+    daemon_mod.check_daemon_health(sentinel_path=sentinel)
+    assert any(code == "ZOMBIE_DAEMON" and "Synlynk daemon" in msg for _, code, msg in alerts)
+
+
 def test_watch_daemon_start_spawns_detached_child_and_returns_immediately(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".synlynk").mkdir()
