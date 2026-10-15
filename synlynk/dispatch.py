@@ -2828,7 +2828,7 @@ def _preflight_auth_check(harness_name: str, auth_check: dict) -> Optional[dict]
         part for part in [probe_result.stdout or "", probe_result.stderr or ""] if part
     ).lower()
     markers = [marker.lower() for marker in auth_check.get("unauthenticated_markers", []) if marker]
-    if markers and any(marker in auth_text for marker in markers):
+    if probe_result.returncode != 0 or (markers and any(marker in auth_text for marker in markers)):
         return {
             "passed": False,
             "sentinel": "HARNESS_PREFLIGHT_FAIL",
@@ -3563,7 +3563,11 @@ def _preflight_dispatch(
                 "reason": f"Required endpoint {endpoint!r} unreachable for agent '{harness_name}'",
             }
 
-    auth_check = baseline.get("auth_check", {})
+    # Panel-capable harnesses use the same authoritative auth probe for
+    # decision panels and headless dispatch.  Keep the legacy auth_check
+    # spelling for the other harnesses, but do not let Claude's panel-only
+    # probe disappear from dispatch preflight.
+    auth_check = baseline.get("auth_check") or baseline.get("panel_auth_check", {})
     auth_failure = _preflight_auth_check(harness_name, auth_check)
     if auth_failure:
         return auth_failure

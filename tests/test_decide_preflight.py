@@ -33,6 +33,53 @@ def test_run_agent_sync_fails_closed_on_auth_probe(monkeypatch):
     assert len(calls) == 1
 
 
+def test_headless_preflight_uses_panel_auth_probe_and_blocks_claude(monkeypatch):
+    import synlynk.dispatch as dispatch
+
+    baselines = deepcopy(dispatch.HARNESS_CAPABILITY_BASELINES)
+    baselines["claude"] = deepcopy(baselines["claude"])
+    baselines["claude"].pop("auth_check", None)
+    baselines["claude"]["panel_auth_check"] = {
+        "probe": ["claude", "auth", "status"],
+        "unauthenticated_markers": ['"loggedin": false'],
+    }
+    baselines["claude"]["dispatch_flags"] = {"valid_flags": [], "required_flags": []}
+    monkeypatch.setattr(dispatch, "HARNESS_CAPABILITY_BASELINES", baselines)
+    monkeypatch.setattr(dispatch.shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(
+        dispatch.subprocess,
+        "run",
+        lambda *args, **kwargs: _result('{"loggedIn": false}', "", 0),
+    )
+
+    result = dispatch._preflight_dispatch("claude", [], db_conn=None)
+
+    assert result["passed"] is False
+    assert result["sentinel"] == "HARNESS_PREFLIGHT_FAIL"
+    assert "not authenticated" in result["reason"]
+
+
+def test_headless_preflight_blocks_nonzero_claude_auth_probe(monkeypatch):
+    import synlynk.dispatch as dispatch
+
+    baselines = deepcopy(dispatch.HARNESS_CAPABILITY_BASELINES)
+    baselines["claude"] = deepcopy(baselines["claude"])
+    baselines["claude"]["dispatch_flags"] = {"valid_flags": [], "required_flags": []}
+    monkeypatch.setattr(dispatch, "HARNESS_CAPABILITY_BASELINES", baselines)
+    monkeypatch.setattr(dispatch.shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(
+        dispatch.subprocess,
+        "run",
+        lambda *args, **kwargs: _result("", "authentication unavailable", 9),
+    )
+
+    result = dispatch._preflight_dispatch("claude", [], db_conn=None)
+
+    assert result["passed"] is False
+    assert result["sentinel"] == "HARNESS_PREFLIGHT_FAIL"
+    assert "not authenticated" in result["reason"]
+
+
 def test_run_agent_sync_preserves_stderr_and_exit_code(monkeypatch):
     import synlynk.team as team
 
