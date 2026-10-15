@@ -257,6 +257,14 @@ class WatchDaemon:
             if os.path.exists(self.pidfile):
                 os.remove(self.pidfile)
             self._prepare_start()
+            # Watermark the append-only logfile before spawn so a failure
+            # report never attributes stale prior-session lines (gh:#2333).
+            log_offset = 0
+            try:
+                if os.path.exists(self.logfile):
+                    log_offset = os.path.getsize(self.logfile)
+            except OSError:
+                log_offset = 0
             _daemonize_via_reexec(
                 self._child_entry_point, self.logfile, cwd=self.workspace_root
             )
@@ -271,8 +279,14 @@ class WatchDaemon:
                 last_error = ""
                 try:
                     with open(self.logfile) as log:
+                        log.seek(max(0, log_offset))
+                        new_bytes = log.read()
                         last_error = next(
-                            (line.strip() for line in reversed(log.readlines()) if line.strip()),
+                            (
+                                line.strip()
+                                for line in reversed(new_bytes.splitlines())
+                                if line.strip()
+                            ),
                             "",
                         )
                 except OSError:
@@ -281,7 +295,8 @@ class WatchDaemon:
                     print(f"  ⚠ Failed to start daemon: {last_error}", file=sys.stderr)
                 else:
                     print(
-                        f"  ⚠ Failed to start daemon (check {os.path.basename(self.logfile)} for errors).",
+                        "  ⚠ Failed to start daemon: child did not report "
+                        "readiness in time, no error output produced.",
                         file=sys.stderr,
                     )
         finally:
@@ -291,13 +306,23 @@ class WatchDaemon:
         """Hook for subclasses (e.g. autonomous env) before re-exec spawn."""
         return
 
-    def _await_child_pidfile(self, timeout: float = 2.0) -> None:
-        """Wait briefly for the re-exec child to publish a live pidfile."""
+    def _await_child_pidfile(self, timeout: float = 10.0) -> None:
+        """Wait for the re-exec child to publish a live pidfile, with backoff.
+
+        A flat 2.0s cutoff was too short under load (gh:#2333): the child
+        often published its pidfile moments after start() had already taken
+        the failure branch. Poll with exponential backoff up to ``timeout``.
+        """
         deadline = time.time() + timeout
+        delay = 0.05
         while time.time() < deadline:
             if self._is_running():
                 return
-            time.sleep(0.05)
+            remaining = deadline - time.time()
+            if remaining <= 0:
+                return
+            time.sleep(min(delay, remaining))
+            delay = min(delay * 1.5, 0.5)
 
     def stop(self) -> None:
         if not os.path.exists(self.pidfile):
@@ -1166,8 +1191,27 @@ class SynlynkDaemon(WatchDaemon):
         self._last_dispatch_count = launched
 
     def _prepare_start(self) -> None:
-        watch_pid = _daemon_state_path("watch.pid", workspace_root=self.workspace_root)
-        if os.path.exists(watch_pid):
+        # Existence alone is a stale-pidfile false positive (gh:#2333) —
+        # require a live process, same liveness rule as WatchDaemon._health().
+        watch_pidfile = _daemon_state_path(
+            "watch.pid", workspace_root=self.workspace_root
+        )
+        watch_alive = False
+        if os.path.exists(watch_pidfile):
+            try:
+                with open(watch_pidfile) as f:
+                    watch_pid = int(f.read().strip())
+            except (OSError, ValueError):
+                watch_pid = None
+            watch_alive = _pid_is_alive(watch_pid)
+            if not watch_alive:
+                # Also honour a live lock owner (child mid-start) the way
+                # WatchDaemon._health() does, without treating the caller's
+                # own PID as evidence of a concurrent watch.
+                lock_owner = _daemon_lock_owner_pid(_daemon_lock_path(watch_pidfile))
+                if lock_owner and lock_owner != os.getpid():
+                    watch_alive = _pid_is_alive(lock_owner)
+        if watch_alive:
             print("  ⚠ synlynk watch is also running — both will poll project-docs/.")
         if self.autonomous:
             os.environ["SYNLYNK_AUTONOMOUS"] = "1"
