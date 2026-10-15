@@ -16,6 +16,7 @@ from typing import Optional
 from synlynk._lazy import pkg as _pkg
 from synlynk.context import generate_context
 from synlynk.jobs import _dispatch_ready_jobs, _reconcile_daemon_jobs
+from synlynk.scheduler import _autonomy_pass, _autonomy_pass_interval_seconds
 from synlynk.sentinel import _write_sentinel_alert, log_telemetry_event
 from synlynk.team import get_username
 from synlynk import github_app_auth
@@ -1076,6 +1077,8 @@ class SynlynkDaemon(WatchDaemon):
         self._context_lock = _threading.Lock()
         self.autonomous = autonomous
         self._last_autonomous_run = 0.0
+        self._last_autonomy_pass_at = 0.0
+        self._last_dispatch_count = 0
         # Bind request handlers to the workspace that created this daemon;
         # relative CWD resolution is unsafe for linked worktrees.
         self.sentinel_path = os.path.join(self.workspace_root, ".synlynk", "sentinel.md")
@@ -1122,6 +1125,45 @@ class SynlynkDaemon(WatchDaemon):
         finally:
             if conn is not None:
                 conn.close()
+
+    def _maybe_run_autonomy_pass(self, launched: int) -> None:
+        """Hybrid interval+idle trigger for the backlog/scheduling autonomy pass.
+
+        Both triggers call the exact same _autonomy_pass() -- no divergent
+        logic path. Resets the interval timer on every actual run so the
+        two triggers can't double-fire back to back in the same tick.
+        """
+        import time as _time
+
+        now = _time.time()
+        interval_elapsed = (
+            now - self._last_autonomy_pass_at
+        ) >= _autonomy_pass_interval_seconds()
+
+        idle_transition = False
+        if self._last_dispatch_count > 0 and launched == 0:
+            conn = None
+            try:
+                conn = _pkg("_get_db")()
+                row = conn.execute(
+                    "SELECT COUNT(*) FROM daemon_jobs WHERE status IN ('queued','running')"
+                ).fetchone()
+                idle_transition = bool(row and row[0] == 0)
+            except Exception:
+                idle_transition = False
+            finally:
+                if conn is not None:
+                    conn.close()
+
+        if interval_elapsed or idle_transition:
+            try:
+                _autonomy_pass()
+            except Exception:
+                import traceback as _traceback
+                _traceback.print_exc()
+            self._last_autonomy_pass_at = now
+
+        self._last_dispatch_count = launched
 
     def _prepare_start(self) -> None:
         watch_pid = _daemon_state_path("watch.pid", workspace_root=self.workspace_root)
@@ -1348,9 +1390,11 @@ class SynlynkDaemon(WatchDaemon):
             self._run_capability_watch_tick(config)
             try:
                 _reconcile_daemon_jobs()
-                _dispatch_ready_jobs(max_parallel=max_parallel)
+                launched = _dispatch_ready_jobs(max_parallel=max_parallel)
             except Exception:
                 _traceback.print_exc()
+                launched = 0
+            self._maybe_run_autonomy_pass(launched)
             current_rev = _current_repo_revision(self.workspace_root)
             if self.start_revision and current_rev and current_rev != self.start_revision:
                 try:
