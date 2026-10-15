@@ -1965,17 +1965,59 @@ Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'corre [backe
 - [ ] docs(devlog): record Pillar 1 blocker review + backlog triage pause [testing] <!-- id:story-issue-2186 -->
 - [ ] docs(costs): backfill 3 cost entries dropped by regeneration bug [testing] <!-- id:story-issue-2153 -->
 - [ ] docs: Muse harness config fix design + implementation plan (gh:#2187) [testing] <!-- id:story-issue-2226 -->
-- [ ] Relay hub: optional-dependency scaffolding + lazy nats-py import guard [backend] <!-- id:story-52549f07 -->
-- [ ] Relay hub: extend RELAY_EVENT_TYPES whitelist for hub event types [backend] <!-- id:story-085360d0 -->
-- [ ] Relay hub: subject-routing layer (event type to NATS subject) [backend] <!-- id:story-76b7162d -->
-- [ ] Relay hub: per-device bearer-token credential store with revocation [backend] <!-- id:story-0c7ecea4 -->
-- [ ] Relay hub: HubAdapter bridge, local broker to NATS, fake-client tests [backend] <!-- id:story-2263ec9a -->
-- [ ] Relay hub: JetStream durable replay plus sync-gap detection (ReplayTracker) [backend] <!-- id:story-29cc4aad -->
-- [ ] Relay hub: CLI wiring for hub init/connect, device add/revoke, subscribe/unsubscribe [backend] <!-- id:story-43a01b32 -->
-- [ ] Relay hub: integration test against real embedded nats-server [testing] <!-- id:story-f4824a3e -->
-- [ ] Relay hub: doc/artifact preview channel, payload builder and preview writer [backend] <!-- id:story-dbf68f01 -->
-- [ ] Relay hub: full-suite regression check [testing] <!-- id:story-f1639150 -->
 - [ ] Investigate cost anomaly on job-2a16259d / PR #2232 (TOKEN_BLOAT+COST_INFLATION) [backend] <!-- id:story-e8936675 -->
 - [ ] Investigate cost anomaly on job-2a16259d / PR #2232 (TOKEN_BLOAT+COST_INFLATION) [backend] <!-- id:story-b81f2806 -->
-- [ ] jobs.py: scope-review task_type derived from substring match, not persisted explicit value [backend] <!-- id:story-dd84b873 -->
-- [ ] dispatch.py verify contract: pytest -v full output captured into transcript instead of file+summary [backend] <!-- id:story-e7a340f9 -->
+- [ ] fix: _generate_todo_md() leaks project-wide snapshot into dispatch job worktrees via cwd-relative path [backend] <!-- id:story-a7b5674c -->
+- [ ] gh:#2163 fix sha_match false-negative on squash-merge for expect=merged verification [backend] <!-- id:story-3522e331 -->
+- [ ] Context-window optimization design spec + decide-panel R1/R2 [backend] <!-- id:story-c04f64b1 -->
+- [ ] synlynk decide: quorum (majority/minority) panel-response mode (gh:#2242) [backend] <!-- id:story-2ed5303f -->
+- [ ] Finalize workspace agent roles, charters, responsibilities and SOPs via brainstorm + decide panel (incl. durable platform-maintenance ownership) [architecture] <!-- id:story-0ad6c02b -->
+- [ ] fix: pass Muse API key through to dispatched jobs [backend] <!-- id:story-issue-2253 -->
+- [ ] feat: finalize PM/TPM durable wake-cycle charters [testing] <!-- id:story-issue-2246 -->
+- [ ] Muse harness: provision API key + migrate to HarnessAdapter registry before calibration [backend] <!-- id:story-issue-2077 -->
+- [ ] Fix: daemon detached child never daemonizes from a dispatch-job worktree, add self-health-check (gh:#2261) [devops] <!-- id:story-6dd31263 -->
+- [ ] Fix: test_goals.py tests missing project_dir isolation overwrite worktree todo.md (gh:#2263) [testing] <!-- id:story-110ecce3 -->
+- [ ] Brainstorm/spec: wire autonomous backlog pickup + scheduler + autonomy_mode into daemon loop (gh:#2262) [architecture] <!-- id:story-6e633122 -->
+- [ ] File a new GitHub issue on this repo (gh issue create, no --project needed unless default template requires it) titled: 'Agy model-tier defaults are stale across all 3 tiers -- discover_models() exist [devops] <!-- id:story-adhoc-1791911726 -->
+- [ ] Fix stale Agy model-tier defaults, wire discover_models() into resolve_tier_model() (gh:#2268) [backend] <!-- id:story-395153be -->
+- [ ] Fix capability-probe reroute hard-pinning gh-write review dispatches (gh:#2271) [backend] <!-- id:story-7322619b -->
+- [ ] fix(dispatch): exclude implementer harness from review capability probe (gh:#2271) [testing] <!-- id:story-issue-2274 -->
+- [ ] dispatch worktree base resolves against long-lived local branch instead of origin/main, causing cost inflation + corrupted PRs [testing] <!-- id:story-issue-2229 -->
+- [ ] Dispatch-layer job-status false negatives on genuinely merged PRs (job-54a21d5d, job-2fe76b53) [testing] <!-- id:story-issue-2163 -->
+- [ ] Agy model-tier defaults are stale across all 3 tiers -- discover_models() exists but is never wired into resolve_tier_model() [testing] <!-- id:story-issue-2268 -->
+- [ ] [Epic] Promote Meta Muse to a calibrated core harness after adapter conformance [frontend] <!-- id:story-issue-2109 -->
+- [ ] Context-window optimization: per-harness instruction-reload audit + instruction-writer redesign (goal-e79062e8 / story-c04f64b1) [testing] <!-- id:story-issue-2243 -->
+- [ ] fix: stop dispatch cost inflation from base, docs path, and pytest -v [testing] <!-- id:story-issue-2277 -->
+- [ ] fix(models): validate Agy tier models against live discovery (gh:#2268) [testing] <!-- id:story-issue-2278 -->
+- [ ] fix(dispatch): auto-opt Agy into skip_permissions (gh:#2216) [testing] <!-- id:story-issue-2279 -->
+- [ ] fix(dispatch): stop cold-start tiebreak from selecting local (gh:#2048) [testing] <!-- id:story-issue-2280 -->
+- [ ] fix(dispatch): order gh-write harnesses by measured quality [testing] <!-- id:story-issue-2281 -->
+- [ ] fix(muse): align MuseAdapter command building and conformance tests with real CLI contract (gh:#2109) [testing] <!-- id:story-issue-2282 -->
+- [ ] feat: tier the instruction writer by per-harness reload confidence (gh:#2243) [testing] <!-- id:story-issue-2283 -->
+- [ ] Job-status misclassification: false PERMISSION_DENIED label and logs/jobs-all status mismatch [testing] <!-- id:story-issue-2205 -->
+- [ ] fix(jobs): resolve false PERMISSION_DENIED and summary status mismatch (gh:#2205) [security] <!-- id:story-issue-2285 -->
+- [ ] fix(jobs): stop false job-status denials and stale file lists [testing] <!-- id:story-issue-2286 -->
+- [ ] Local harness (aider) jobs never produce real cost/capability measurement signal — extract_tokens has no aider adapter [testing] <!-- id:story-issue-2287 -->
+- [ ] Daemon crashes and stops refreshing GitHub App tokens after a stale/deleted worktree cwd — blocks all --requires-gh-write dispatch [testing] <!-- id:story-issue-2288 -->
+- [ ] Model catalog: extend harness_models schema with provider/rate-card/capability columns (sub-task 1, gh:#2291) [backend] <!-- id:story-868c7f0a -->
+- [ ] Model catalog: generalize discovery pipeline across all harnesses + gateway stub (sub-task 2, gh:#2291) [backend] <!-- id:story-a1de813b -->
+- [ ] Model catalog: wire 24h auto-refresh staleness check into daemon/CLI startup (sub-task 3, gh:#2291) [backend] <!-- id:story-5422a738 -->
+- [ ] Model catalog: dispatch-time live resolution + --model validation (sub-task 4, gh:#2291) [backend] <!-- id:story-00c51c3f -->
+- [ ] Model catalog validation (gh:#2268/#2278) was wired for Agy only; Grok/Codex still drift silently, and explicit --model bypasses it entirely [backend] <!-- id:story-issue-2291 -->
+- [ ] Review and merge PR #2298 (branch release/v0.25.1), the v0.25.1 Named Release cut. It bumps VERSION 0.25.0->0.25.1, adds a CHANGELOG entry, syncs README version/test-count/hero badges, and adds the re [testing] <!-- id:story-3ef62232 -->
+- [ ] chore(costs): log v0.25.1 release-prep PM session cost [testing] <!-- id:story-issue-2299 -->
+- [ ] docs(spec): pytest verbosity shim design for gh:#2294 [testing] <!-- id:story-issue-2301 -->
+- [ ] docs: recover continuous-momentum design spec from stashed WIP [testing] <!-- id:story-issue-2300 -->
+- [ ] Cost inflation: job-85fb27a2 recurs gh:#2240 pytest -v pattern ($7.13/2.3M tokens) despite task text not requesting a full suite run at all [testing] <!-- id:story-issue-2294 -->
+- [ ] fix: quiet pytest in dispatched jobs [testing] <!-- id:story-issue-2303 -->
+- [ ] Run pytest -v on tests/test_pytest_shim.py only, and report the exact command's full stdout back in your response (do not scope it down yourself, do not add -q, run exactly 'pytest -v tests/test_pytes [testing] <!-- id:story-adhoc-1791992804 -->
+- [ ] docs(spec): charter superpowers-skill binding design for gh:#2305 [testing] <!-- id:story-issue-2306 -->
+- [x] Bind superpowers skills into dispatched-agent charters (gh:#2305) [backend] <!-- id:story-0f622462 -->
+- [x] Wire onboarding-engine dead modules into live commands (gh:#2310, PR #2311) [backend] <!-- id:story-2f03edea -->
+- [x] Task 1: synlynk probe --deps (wires probe_binding.py) (gh:#2310) [backend] <!-- id:story-7aabc39e -->
+- [x] Task 2: synlynk fleet list/apply (wires fleet_templates.py) (gh:#2310) [backend] <!-- id:story-e9439716 -->
+- [x] Task 3: synlynk upgrade --all (wires version_policy.py) (gh:#2310) [backend] <!-- id:story-4918bcdb -->
+- [x] Task 5: topology_discovery.py integration into onboarding_state.py (gh:#2310) [backend] <!-- id:story-44a2fe03 -->
+- [ ] Task 4: first_win_loop.py fate decision (gh:#2310) [backend] <!-- id:story-5551aa7e -->
+- [ ] Fix daemon health: dormant re-exec bug (gh:#2261) + crash on stale worktree cwd (gh:#2288) [devops] <!-- id:story-e73fac9e -->
+- [ ] Wire daemon poll loop to call _autonomy_pass() on its own interval (Task 4, gh:#2262) [devops] <!-- id:story-f67acd86 -->
