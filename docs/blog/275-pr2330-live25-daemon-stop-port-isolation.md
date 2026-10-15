@@ -3,8 +3,8 @@ title: "LIVE-25: the daemon wasn't crashing, a test was killing it"
 date: 2026-10-15
 series: "Building the OS for Multi-Agent Development"
 post: 275
-pr: TBD
-status: draft
+pr: 2330
+status: open
 author: "synlynk team"
 version: "0.25.1"
 tags: [posts]
