@@ -1058,29 +1058,56 @@ def _hc_memory_leak() -> HealthCheck:
 
 def _hc_daemon_service() -> HealthCheck:
     """Checks whether synlynk daemon is installed under OS process supervision (launchd/systemd)."""
-    home = os.path.expanduser("~")
-    if sys.platform == "darwin":
-        plist_path = os.path.join(home, "Library", "LaunchAgents", "com.synlynk.daemon.plist")
-        if os.path.exists(plist_path):
-            return HealthCheck("daemon_service", "ok", f"Daemon launchd service installed: {plist_path}")
-        return HealthCheck(
-            "daemon_service",
-            "warn",
-            "Synlynk daemon is not registered as a background system service (launchd)",
-            fix="Run 'synlynk daemon --install-service' to supervise daemon across crashes/reboots",
-        )
-    elif shutil.which("systemctl") or os.path.exists("/run/systemd/system"):
-        unit_path = os.path.join(home, ".config", "systemd", "user", "synlynk-daemon.service")
-        if os.path.exists(unit_path):
-            return HealthCheck("daemon_service", "ok", f"Daemon systemd service installed: {unit_path}")
-        return HealthCheck(
-            "daemon_service",
-            "warn",
-            "Synlynk daemon is not registered as a background system service (systemd)",
-            fix="Run 'synlynk daemon --install-service' to supervise daemon across crashes/reboots",
-        )
-    else:
+    from synlynk.daemon import _daemon_service_path
+
+    service_path = _daemon_service_path()
+    if service_path is None:
         return HealthCheck("daemon_service", "ok", "Daemon supervision check not applicable for this environment")
+    if os.path.exists(service_path):
+        kind = "launchd" if sys.platform == "darwin" else "systemd"
+        return HealthCheck("daemon_service", "ok", f"Daemon {kind} service installed: {service_path}")
+    kind = "launchd" if sys.platform == "darwin" else "systemd"
+    return HealthCheck(
+        "daemon_service",
+        "warn",
+        f"Synlynk daemon is not registered as a background system service ({kind})",
+        fix="Run 'synlynk daemon --install-service' to supervise daemon across crashes/reboots",
+    )
+
+
+def _hc_daemon_liveness() -> HealthCheck:
+    """Detect a dead synlynk daemon process, including the gh:#2261 detached-child case."""
+    from synlynk.daemon import (
+        _daemon_service_installed,
+        _daemon_state_path,
+        _probe_pidfile_health,
+    )
+
+    pidfile = _daemon_state_path("daemon.pid")
+    health = _probe_pidfile_health(pidfile)
+    if health == "running":
+        return HealthCheck("daemon_liveness", "ok", "Synlynk daemon process is running")
+    if health == "zombie":
+        return HealthCheck(
+            "daemon_liveness",
+            "fail",
+            "Synlynk daemon pidfile exists but process is dead",
+            fix="Run 'synlynk daemon stop && synlynk daemon start'",
+        )
+    if _daemon_service_installed():
+        return HealthCheck(
+            "daemon_liveness",
+            "fail",
+            "Daemon service is installed but the process is not running "
+            "(detached child may have died without KeepAlive recovery)",
+            fix="Run 'synlynk daemon start' (or 'synlynk daemon restart')",
+        )
+    return HealthCheck(
+        "daemon_liveness",
+        "warn",
+        "Synlynk daemon is not running",
+        fix="Run 'synlynk daemon start' or 'synlynk daemon --install-service'",
+    )
 
 
 HEALTH_CHECKS = [
@@ -1111,6 +1138,7 @@ HEALTH_CHECKS = [
     _hc_spof_audit,
     _hc_memory_leak,
     _hc_daemon_service,
+    _hc_daemon_liveness,
 ]
 
 

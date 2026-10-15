@@ -1,5 +1,6 @@
 # synlynk Blog Series: Building the OS for Multi-Agent Development
 
+| [277](./276-prTBD-daemon-detached-child-self-health.md) | gh:#2261 — Catch a dead detached daemon before the backlog stalls | TBD | 2026-10-15 |
 | [276](./276-pr2336-daemon-start-false-failure.md) | daemon start stopped crying wolf about stale log lines | [#2336](https://github.com/nikhilsoman/synlynk/pull/2336) | 2026-10-15 |
 | [275](./275-pr2330-live25-daemon-stop-port-isolation.md) | LIVE-25: the daemon wasn't crashing, a test was killing it | [#2330](https://github.com/nikhilsoman/synlynk/pull/2330) | 2026-10-15 |
 | [274](./274-prTBD-topology-discovery-wiring.md) | Topology discovery finally reaches confirm | TBD | 2026-10-14 |
