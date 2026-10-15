@@ -418,6 +418,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [275](./275-prTBD-first-win-loop-wiring.md) | PR #TBD — Making the First Win Reach S10 | TBD | 2026-10-15 |
 | [345](./345-pr2317-wire-first-win-cycle-into-s10.md) | PR #2317 — wire first-win cycle into S10 | [#2317](https://github.com/nikhilsoman/synlynk/pull/2317) | 2026-10-14 |
 | [346](./346-pr2315-wire-synlynk-upgrade-all-to-version-poli.md) | PR #2315 — wire synlynk upgrade --all to version_policy (gh:#2310 Task 3) | [#2315](https://github.com/nikhilsoman/synlynk/pull/2315) | 2026-10-14 |
+| [347](./347-pr2322-track-daemon-health-autonomy-wiring-init.md) | PR #2322 — track daemon health & autonomy-wiring initiative (v0.25.2) | [#2322](https://github.com/nikhilsoman/synlynk/pull/2322) | 2026-10-15 |
 
 ## Per-PR Post Template
 
