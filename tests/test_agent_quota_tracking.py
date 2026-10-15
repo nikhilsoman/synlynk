@@ -2112,6 +2112,42 @@ def test_a3_set_dispatch_context_to_homeheadless_dispatch(project_dir, monkeypat
     assert row == (expected,)
 
 
+def test_a3_dispatch_replaces_unknown_context_on_existing_queue_row(project_dir, monkeypatch):
+    import synlynk
+    import synlynk.dispatch as dispatch_mod
+
+    class FakeProc:
+        pid = 74002
+
+    monkeypatch.setattr(dispatch_mod.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", lambda *args, **kwargs: FakeProc())
+    monkeypatch.setattr(
+        synlynk,
+        "_preflight_dispatch",
+        lambda *args, **kwargs: {"passed": True, "sentinel": None, "reason": None},
+    )
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, enqueued_at, dispatch_context) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        ("job-a3-unknown", "codex", "existing queued task", "queued", "2026-08-06T00:00:00", "unknown"),
+    )
+    conn.commit()
+    conn.close()
+
+    synlynk.dispatch_agent(
+        "codex", "existing queued task", job_id="job-a3-unknown",
+        force_agent=True, skip_preflight=True, context_mode="none",
+    )
+
+    conn = synlynk._get_db()
+    row = conn.execute(
+        "SELECT dispatch_context FROM daemon_jobs WHERE job_id='job-a3-unknown'"
+    ).fetchone()
+    conn.close()
+    assert row == ("home",)
+
+
 def test_a3_set_dispatch_context_to_homeheadless_daemon(project_dir, monkeypatch):
     import synlynk
     import synlynk.daemon as daemon_mod

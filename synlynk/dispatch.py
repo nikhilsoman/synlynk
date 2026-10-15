@@ -4965,7 +4965,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                     "UPDATE daemon_jobs SET status='running', pid=?, started_at=?, "
                     "log_path=?, worktree_path=?, worktree_branch=?, pid_identity=?, agent=?, harness=?, role=?, task=?, story_id=?, "
                     "model_tier=?, impact_score=?, requested_model=?, resolved_model=?, "
-                    "dispatch_context=COALESCE(dispatch_context, ?), "
+                    "dispatch_context=COALESCE(NULLIF(dispatch_context, 'unknown'), ?), "
                     "context_mode=?, context_bytes=?, "
                     "session_id=COALESCE(session_id, ?), "
                     "agent_id=COALESCE(agent_id, ?), "
