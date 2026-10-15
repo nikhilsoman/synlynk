@@ -70,6 +70,15 @@ def test_registry_file_is_atomic_json(tmp_path, monkeypatch):
     assert payload["products"]["demo"]["mode"] == "canonical"
 
 
+def test_registry_rejects_duplicate_product_id(tmp_path, monkeypatch):
+    registry = tmp_path / "registry.json"
+    monkeypatch.setenv("SYNLYNK_REGISTRY_PATH", str(registry))
+    ensure_registered_product("first", tmp_path / "first.db", "product-demo")
+
+    with pytest.raises(StateRegistryError, match="already registered"):
+        ensure_registered_product("second", tmp_path / "second.db", "product-demo")
+
+
 def test_ensure_registered_product_persists_repo_path(tmp_path, monkeypatch):
     registry = tmp_path / "registry.json"
     monkeypatch.setenv("SYNLYNK_REGISTRY_PATH", str(registry))
