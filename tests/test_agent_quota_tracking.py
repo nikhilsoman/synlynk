@@ -121,6 +121,22 @@ def test_open_release_reservation_lifecycle(project_dir):
     assert sl._open_reservations_sum(conn, "claude") == 0
 
 
+def test_open_reservation_owns_connection_when_not_supplied(project_dir):
+    import synlynk as sl
+
+    sl._open_reservation(harness="codex", tokens=2500, scope="adhoc")
+
+    conn = sl._get_db()
+    try:
+        row = conn.execute(
+            "SELECT harness, tokens, scope, status FROM harness_reservations"
+        ).fetchone()
+    finally:
+        conn.close()
+
+    assert row == ("codex", 2500, "adhoc", "open")
+
+
 def test_open_reservations_sum_ignores_expired(project_dir):
     import synlynk as sl
     import time
