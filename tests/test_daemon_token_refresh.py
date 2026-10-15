@@ -13,6 +13,91 @@ from synlynk.daemon import SynlynkDaemon, WatchDaemon, _repo_common_dir
 import synlynk.daemon as daemon_mod
 
 
+def test_maybe_run_autonomy_pass_fires_on_interval_elapsed(monkeypatch):
+    from synlynk.daemon import SynlynkDaemon
+    from synlynk import daemon as daemon_mod
+
+    d = SynlynkDaemon()
+    d._last_autonomy_pass_at = 0.0
+    d._last_dispatch_count = 0
+
+    calls = {"n": 0}
+    monkeypatch.setattr(daemon_mod, "_autonomy_pass", lambda conn=None: calls.__setitem__("n", calls["n"] + 1))
+    monkeypatch.setattr(daemon_mod, "_autonomy_pass_interval_seconds", lambda: 0)
+
+    d._maybe_run_autonomy_pass(launched=0)
+
+    assert calls["n"] == 1
+    assert d._last_dispatch_count == 0
+
+
+def test_maybe_run_autonomy_pass_fires_on_idle_transition(monkeypatch):
+    import time
+    from synlynk.daemon import SynlynkDaemon
+    from synlynk import daemon as daemon_mod
+
+    d = SynlynkDaemon()
+    d._last_autonomy_pass_at = time.time()
+    d._last_dispatch_count = 2
+
+    calls = {"n": 0}
+    monkeypatch.setattr(daemon_mod, "_autonomy_pass", lambda conn=None: calls.__setitem__("n", calls["n"] + 1))
+    monkeypatch.setattr(daemon_mod, "_autonomy_pass_interval_seconds", lambda: 999999)
+
+    class _FakeConn:
+        def execute(self, query, params=()):
+            class _Row:
+                def fetchone(self):
+                    return (0,)
+            return _Row()
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(daemon_mod, "_pkg", lambda name: (lambda: _FakeConn()) if name == "_get_db" else None)
+
+    d._maybe_run_autonomy_pass(launched=0)
+
+    assert calls["n"] == 1
+    assert d._last_dispatch_count == 0
+
+
+def test_maybe_run_autonomy_pass_no_trigger_does_not_fire(monkeypatch):
+    import time
+    from synlynk.daemon import SynlynkDaemon
+    from synlynk import daemon as daemon_mod
+
+    d = SynlynkDaemon()
+    d._last_autonomy_pass_at = time.time()
+    d._last_dispatch_count = 0
+
+    calls = {"n": 0}
+    monkeypatch.setattr(daemon_mod, "_autonomy_pass", lambda conn=None: calls.__setitem__("n", calls["n"] + 1))
+    monkeypatch.setattr(daemon_mod, "_autonomy_pass_interval_seconds", lambda: 999999)
+
+    d._maybe_run_autonomy_pass(launched=0)
+
+    assert calls["n"] == 0
+    assert d._last_dispatch_count == 0
+
+
+def test_maybe_run_autonomy_pass_swallows_exception(monkeypatch):
+    from synlynk.daemon import SynlynkDaemon
+    from synlynk import daemon as daemon_mod
+
+    d = SynlynkDaemon()
+    d._last_autonomy_pass_at = 0.0
+    d._last_dispatch_count = 0
+
+    def boom(conn=None):
+        raise RuntimeError("autonomy pass exploded")
+
+    monkeypatch.setattr(daemon_mod, "_autonomy_pass", boom)
+    monkeypatch.setattr(daemon_mod, "_autonomy_pass_interval_seconds", lambda: 0)
+
+    d._maybe_run_autonomy_pass(launched=0)
+
+
 @pytest.fixture(autouse=True)
 def _allow_temp_workspace_roots(monkeypatch, request):
     # Most tests exercise loop behavior from non-repository tmp_path dirs.
