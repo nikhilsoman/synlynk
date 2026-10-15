@@ -1662,5 +1662,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2336 \u2014 stop false Failed-to-start from racy pidfile wait + stale log (gh:#2333) (PR #2336, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2336.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-15) - PR #2336\n- Merged improvements and fixes for PR #2336."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/353-pr1899-bump-brace-expansion-from-1-1-16-to-1-1-.md",
+    "title": "PR #1899 \u2014 bump brace-expansion from 1.1.16 to 1.1.21 in /website",
+    "author": "dependabot agent",
+    "date": "2026-10-15",
+    "pr": "#1899",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #1899."
+    ],
+    "tweet": "\ud83d\ude80 PR #1899 \u2014 bump brace-expansion from 1.1.16 to 1.1.21 in /website (PR #1899, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #1899.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-15) - PR #1899\n- Merged improvements and fixes for PR #1899."
   }
 ]
