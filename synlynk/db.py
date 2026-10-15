@@ -3143,6 +3143,16 @@ def _generate_todo_md() -> None:
     Post-migration: writes to .synlynk/project-docs/todo.md and project-docs/todo.md.
     Pre-migration: writes to project-docs/todo.md."""
     from synlynk import _get_db, _is_migrated
+
+    # Tests use an isolated DB by default, but many legacy tests intentionally
+    # keep the repository-root cwd. Refuse to project that temporary DB into
+    # the real checkout unless the test explicitly opts into project_dir.
+    if (
+        os.environ.get("SYNLYNK_TEST_ISOLATED_DB") == "1"
+        and os.environ.get("SYNLYNK_TEST_PROJECT_DIR") != "1"
+        and os.path.exists(os.path.join(os.getcwd(), ".git"))
+    ):
+        return
     if not _is_migrated():
         docs_dir = _resolved_docs_dir()
         if not docs_dir or not os.path.exists(docs_dir):
