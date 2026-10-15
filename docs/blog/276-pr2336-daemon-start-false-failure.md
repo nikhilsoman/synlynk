@@ -3,7 +3,7 @@ title: "daemon start stopped crying wolf about stale log lines"
 date: 2026-10-15
 series: "Building the OS for Multi-Agent Development"
 post: 276
-pr: TBD
+pr: 2336
 status: open
 author: "synlynk team"
 version: "0.25.1"
