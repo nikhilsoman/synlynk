@@ -98,7 +98,7 @@ def test_extract_build_parser_from_clipy_main_for_cli_introspection():
     assert args.task == "build"
 
 
-def test_dispatch_real_files_touched_via_git_diff_lists_committed_files_only(git_worktree_repo, monkeypatch):
+def test_dispatch_real_files_touched_via_git_diff_unions_committed_and_live_files(git_worktree_repo, monkeypatch):
     import synlynk as sl
 
     job = _dispatch_git_worktree_job(monkeypatch)
@@ -112,7 +112,7 @@ def test_dispatch_real_files_touched_via_git_diff_lists_committed_files_only(git
 
     touched = sl._worktree_files_touched(job["worktree_path"])
 
-    assert touched == ["alpha.txt", "beta.txt"]
+    assert touched == ["alpha.txt", "beta.txt", "dirty.txt"]
 
 
 def test_dispatch_real_files_touched_via_git_diff_clean_worktree_returns_empty(git_worktree_repo, monkeypatch):
@@ -121,6 +121,22 @@ def test_dispatch_real_files_touched_via_git_diff_clean_worktree_returns_empty(g
     job = _dispatch_git_worktree_job(monkeypatch)
 
     assert sl._worktree_files_touched(job["worktree_path"]) == []
+
+
+def test_dispatch_real_files_touched_counts_staged_and_untracked_when_head_diff_is_empty(
+    git_worktree_repo, monkeypatch
+):
+    import synlynk as sl
+
+    job = _dispatch_git_worktree_job(monkeypatch)
+    tracked_path = os.path.join(job["worktree_path"], "tracked.txt")
+    with open(tracked_path, "a") as f:
+        f.write("staged edit\n")
+    subprocess.run(["git", "-C", job["worktree_path"], "add", "tracked.txt"], check=True)
+    with open(os.path.join(job["worktree_path"], "untracked.txt"), "w") as f:
+        f.write("untracked\n")
+
+    assert sl._worktree_files_touched(job["worktree_path"]) == ["tracked.txt", "untracked.txt"]
 
 
 def test_dispatch_real_files_touched_from_different_cwd_uses_absolute_stored_path(
@@ -135,6 +151,42 @@ def test_dispatch_real_files_touched_from_different_cwd_uses_absolute_stored_pat
 
     assert os.path.isabs(job["worktree_path"])
     assert sl._worktree_files_touched(job["worktree_path"]) == ["from-other-cwd.txt"]
+
+
+def test_files_touched_uses_dispatch_base_not_parent_branch_history(git_worktree_repo):
+    """gh:#2245: a no-op job on a stacked branch must not report the parent's files.
+
+    Those files are already committed. A clean worktree is not "uncommitted
+    work that was lost"; it is zero change since the dispatch base.
+    """
+    import synlynk as sl
+
+    repo = git_worktree_repo
+
+    def git(*args, check=True):
+        return subprocess.run(
+            ["git", "-C", repo, *args],
+            check=check, capture_output=True, text=True,
+        )
+
+    git("branch", "-M", "main")
+    git("checkout", "-b", "feature/stacked")
+    with open(os.path.join(repo, "parent.txt"), "w") as handle:
+        handle.write("already on the parent branch\n")
+    git("add", "parent.txt")
+    git("commit", "-m", "parent work")
+    dispatch_base = git("rev-parse", "HEAD").stdout.strip()
+
+    assert sl._worktree_files_touched(repo, dispatch_base) == []
+
+    with open(os.path.join(repo, "job.txt"), "w") as handle:
+        handle.write("this job\n")
+    git("add", "job.txt")
+    git("commit", "-m", "job work")
+
+    assert sl._worktree_files_touched(repo, dispatch_base) == ["job.txt"]
+    stale = git("diff", "--name-only", "main", "HEAD").stdout.split()
+    assert "parent.txt" in stale
 
 
 def test_dispatch_real_files_touched_via_git_diff_missing_worktree_path_returns_empty():
@@ -799,7 +851,7 @@ def test_dispatch_gitstateverified_job_reconciliation_rechecks_failed_job_with_l
         summary = f.read()
 
     assert "status:   FAILED_UNVERIFIED (exit unknown)" in summary
-    assert "files:    0 touched" in summary
+    assert "files:    1 touched" in summary
     assert "git-state recheck recovered" in summary
 
 

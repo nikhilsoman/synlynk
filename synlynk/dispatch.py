@@ -33,10 +33,15 @@ _ORG_ROLE_TO_BASELINE_ROLE = {
     "synlynk-bot": "builder",
 }
 
-# grok added 2026-10-04 (gh:#2034): live TC-9 probe confirms gh-write
-# capability post-LIVE-13 fix; listed last pending >=5 empirical
-# gh-write-task samples per the Empirical Capability Assessment Policy.
-_GH_WRITE_HARNESS_PRIORITY = ("claude", "agy", "grok")
+# Measured 2026-10-14 from ~/.synlynk/workspaces/synlynk/state.db
+# capability_ratings (no task_type column; 14-day AVG(quality), n>=5).
+# Query datetime('now')=2026-10-14 06:27:32, max(ts)=2026-10-14 06:24:10:
+#   codex 9.04 n=410, grok 8.55 n=176, claude 8.19 n=170, agy 7.58 n=89.
+# local (n=2) and muse (n=1) stay out. Codex is first because that
+# measurement says so. The pre-2026-10-04 tuple ("claude", "agy", "grok")
+# omitted Codex and listed Grok last; that heuristic is retired. Grok's
+# sandbox-deny finding is superseded (gh:#2034). Docs keep "Codex by default".
+_GH_WRITE_HARNESS_PRIORITY = ("codex", "grok", "claude", "agy")
 _STARTUP_FAILOVER_ORDER = ("codex", "agy", "claude")
 _CODEX_REVIEW_WRITABLE_ROOTS = "sandbox_workspace_write.writable_roots=[]"
 
@@ -46,6 +51,74 @@ MODEL_TIER_FAST = "fast"
 MODEL_TIER_PRO = "pro"
 MODEL_TIER_REASONING = "reasoning"
 MODEL_TIERS = (MODEL_TIER_FAST, MODEL_TIER_PRO, MODEL_TIER_REASONING)
+
+
+def _start_dispatch_circuit_breaker_watchdog(proc, job: dict, config: Optional[dict] = None) -> threading.Event:
+    """Watch one dispatched process for in-flight circuit-breaker breaches.
+
+    Bare dispatches cannot rely on the watch daemon (or another CLI command)
+    to reconcile their running job.  Keep this watchdog tied to the process so
+    Invariant 2 is enforced for the lifetime of every dispatch.
+    """
+    config = config or {}
+    interval = float(config.get("watch_interval_seconds", 30) or 30)
+    interval = max(0.1, interval)
+    stop_event = threading.Event()
+
+    def watch() -> None:
+        try:
+            from synlynk.circuit_breaker import evaluate_job_circuit_breaker
+
+            while not stop_event.wait(interval):
+                try:
+                    if proc.poll() is not None:
+                        return
+                except (AttributeError, OSError):
+                    # Test doubles and unusual process wrappers may not expose
+                    # poll(); let the evaluator make the authoritative check.
+                    pass
+
+                try:
+                    result = evaluate_job_circuit_breaker(
+                        job,
+                        config=config,
+                        process=proc,
+                    )
+                except Exception as exc:
+                    # A watchdog must never turn a completed dispatch into a
+                    # false failure; the daemon reconciliation path remains a
+                    # fallback for malformed/temporarily unreadable state.
+                    continue
+                if result.tripped:
+                    # The evaluator normally stamps these fields itself. Keep
+                    # the watchdog's terminal marker explicit so persistence
+                    # cannot race with a reconciliation pass.
+                    job["status"] = "circuit_breaker_tripped"
+                    job["circuit_breaker_result"] = asdict(result)
+                    load_jobs = _pkg("_load_jobs")
+                    save_jobs = _pkg("_save_jobs")
+                    if load_jobs and save_jobs:
+                        try:
+                            jobs = load_jobs()
+                            for index, saved_job in enumerate(jobs):
+                                if saved_job.get("id") == job.get("id"):
+                                    jobs[index] = dict(job)
+                                    break
+                            save_jobs(jobs)
+                        except Exception:
+                            # The critical in-memory state and process kill
+                            # must not depend on optional flat-file persistence.
+                            pass
+                    return
+        finally:
+            stop_event.set()
+
+    threading.Thread(
+        target=watch,
+        name=f"synlynk-circuit-breaker-{job.get('id', 'unknown')}",
+        daemon=True,
+    ).start()
+    return stop_event
 
 
 def _job_purpose(role: str | None, task_type: str | None, *, explicit: bool = True) -> str:
@@ -64,21 +137,21 @@ def _job_purpose(role: str | None, task_type: str | None, *, explicit: bool = Tr
 _DEFAULT_MODELS_BY_TIER = {
     MODEL_TIER_FAST: {
         "claude": "claude-haiku-4-5-20251001",
-        "agy": "gemini-3.7-flash-medium",
+        "agy": "gemini-3.8-flash-medium",
         "codex": "gpt-5.6-luna",
         "grok": "grok-4.6",
         "local": "qwen2.5",
     },
     MODEL_TIER_PRO: {
         "claude": "claude-sonnet-5",
-        "agy": "gemini-3.1-pro-low",
+        "agy": "gemini-3.8-flash-high",
         "codex": "gpt-5.6-luna",
         "grok": "grok-4.7",
         "local": "qwen2.5",
     },
     MODEL_TIER_REASONING: {
         "claude": "claude-opus-5-5",
-        "agy": "gemini-3.1-pro-high",
+        "agy": "claude-opus-4-6-thinking",
         "codex": "gpt-5.6-luna",
         "grok": "grok-4.7",
         "local": "deepseek-r1",
@@ -417,8 +490,9 @@ def _harness_for_org_role(org_role: str, baselines_map: dict, requires_gh_write:
     docs/superpowers/specs/2026-08-16-agent-dispatch-integration-design.md
     §6) includes the mapped tag for this org role. Does not consult the
     story_id-based capability_scores DB table — that stays story_id-only.
-    When requires_gh_write is set, candidates are tried in the fixed
-    priority order claude -> agy first, then any remaining CORE_FLEET members
+    When requires_gh_write is set, candidates are tried in
+    _GH_WRITE_HARNESS_PRIORITY (codex, grok, claude, agy — 2026-10-14
+    capability_ratings), then any remaining CORE_FLEET members
     alphabetically. Non-gh-write selection is untouched: plain alphabetical
     order over CORE_FLEET.
     """
@@ -1085,6 +1159,16 @@ def _create_exec_gh_shim() -> Tuple[tempfile.TemporaryDirectory, str]:
     return shim_dir, shim_path
 
 
+def _create_pytest_shim() -> Tuple[tempfile.TemporaryDirectory, str]:
+    """Create the short-lived quiet ``pytest`` guard for dispatched jobs."""
+    from synlynk.pytest_shim import write_shim
+
+    shim_dir = tempfile.TemporaryDirectory(prefix="synlynk-pytest-")
+    shim_path = os.path.join(shim_dir.name, "pytest")
+    write_shim(shim_path)
+    return shim_dir, shim_path
+
+
 def _exec_child_env() -> Tuple[dict, tempfile.TemporaryDirectory]:
     """Return the inherited env with the shared GitHub CLI PATH guard."""
     shim_dir, _shim_path = _create_exec_gh_shim()
@@ -1113,7 +1197,7 @@ def _build_subprocess_env(
     story_id: str,
     agent_role: str = None,
     worktree_path: str = None,
-) -> dict:
+) -> Tuple[dict, tempfile.TemporaryDirectory]:
     """Build a minimal, allowlisted environment for a dispatched subprocess.
 
     Replaces copying the full parent environment: only a fixed base set of
@@ -1179,7 +1263,17 @@ def _build_subprocess_env(
                 "Or set SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH=1 to opt into host `gh` auth "
                 "(uses personal keyring — not recommended; see #569)."
             )
-    return proc_env
+    pytest_shim_dir, _pytest_shim_path = _create_pytest_shim()
+    proc_env["PATH"] = pytest_shim_dir.name + os.pathsep + proc_env.get("PATH", "")
+    return proc_env, pytest_shim_dir
+
+
+def _cleanup_shim_after_process(process, shim_dir: tempfile.TemporaryDirectory) -> None:
+    """Keep a dispatched shim alive until its detached child exits."""
+    try:
+        process.wait()
+    finally:
+        shim_dir.cleanup()
 
 
 def _spawn_with_pty_fallback(cmd, env, cwd):
@@ -1450,16 +1544,19 @@ def _resolve_worktree_base_commit(worktree_path: Optional[str]) -> Optional[dict
     return None
 
 
-def _worktree_files_touched(worktree_path: Optional[str]) -> list:
-    """Return sorted file paths committed in a worktree since the resolved merge-base."""
+def _worktree_files_touched(worktree_path: Optional[str], base_sha: Optional[str] = None) -> list:
+    """Return files committed or currently changed since this job's diff base.
+
+    ``base_sha`` is the commit recorded at dispatch. Stacked jobs must not
+    report files their parent branch already committed (gh:#2245).
+    """
     if not _worktree_path_is_available(worktree_path, "collect touched files"):
         return []
 
-    inspect_worktree_git_state = _pkg("_inspect_worktree_git_state")
-    git_state = inspect_worktree_git_state(worktree_path) if inspect_worktree_git_state else None
-    base_commit = (git_state or {}).get("base_commit") or (
-        _resolve_worktree_base_commit(worktree_path) or {}
-    ).get("base_commit")
+    resolve_job_diff_base = _pkg("_resolve_job_diff_base")
+    base_commit = resolve_job_diff_base(worktree_path, base_sha) if resolve_job_diff_base else None
+    if not base_commit:
+        base_commit = (_resolve_worktree_base_commit(worktree_path) or {}).get("base_commit")
     if not base_commit:
         return []
 
@@ -1480,6 +1577,25 @@ def _worktree_files_touched(worktree_path: Optional[str]) -> list:
             path = path.strip()
             if path:
                 touched.add(path)
+
+    try:
+        working_tree_result = subprocess.run(
+            ["git", "-C", worktree_path, "diff", "--name-only", "HEAD"],
+            capture_output=True, text=True, check=False,
+        )
+        untracked_result = subprocess.run(
+            ["git", "-C", worktree_path, "ls-files", "--others", "--exclude-standard"],
+            capture_output=True, text=True, check=False,
+        )
+    except Exception:
+        working_tree_result = untracked_result = None
+
+    for result in (working_tree_result, untracked_result):
+        if result and result.returncode == 0:
+            for path in (result.stdout or "").splitlines():
+                path = path.strip()
+                if path:
+                    touched.add(path)
 
     return sorted(touched)
 
@@ -2024,6 +2140,233 @@ _PR_REVIEW_RETRY_GUARD = (
     "second cycle, stop retrying and report back for escalation.\n\n"
 )
 
+# A present graph is stale once HEAD has moved more than this many commits
+# past the commit recorded at extract time (#2140). Missing graphs still
+# refresh immediately. When that distance cannot be measured, file age is
+# the fallback so a graph with no built_at_commit cannot stay silent forever.
+_GRAPH_STALE_COMMIT_THRESHOLD = 25
+_GRAPH_STALE_MTIME_SECONDS = 7 * 24 * 60 * 60
+_CONTEXT_BUILD_SENTINEL_CODE = "CONTEXT_BUILD_DEGRADED"
+
+
+def _read_graph_built_at_commit(repo_root: str) -> str:
+    """Return the commit the on-disk graph was built at, or ""."""
+    out_dir = os.path.join(repo_root, ".synlynk", "graphify-out")
+    # manifest.json is the stamp written by _run_graphify_extract. graph.json
+    # can be multi-megabyte, so only a prefix is scanned for the same key.
+    candidates = (
+        (os.path.join(out_dir, "manifest.json"), None),
+        (os.path.join(out_dir, "graph.json"), 65536),
+    )
+    for path, limit in candidates:
+        if not os.path.isfile(path):
+            continue
+        try:
+            with open(path, encoding="utf-8") as fh:
+                raw = fh.read() if limit is None else fh.read(limit)
+        except OSError:
+            continue
+        for key in ("built_at_commit", "head_commit"):
+            match = re.search(rf'"{key}"\s*:\s*"([^"]+)"', raw)
+            if match and match.group(1).strip():
+                return match.group(1).strip()
+    return ""
+
+
+def _commits_since_graph_build(repo_root: str, built_at_commit: str) -> Optional[int]:
+    """Commits reachable from HEAD but not from built_at_commit.
+
+    Returns None when git cannot measure the distance (missing repo, unknown
+    commit, timeout) so the caller can fall back to mtime.
+    """
+    built = (built_at_commit or "").strip()
+    if not built:
+        return None
+    try:
+        result = subprocess.run(
+            ["git", "-C", repo_root, "rev-list", "--count", f"{built}..HEAD"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.TimeoutExpired, ValueError):
+        return None
+    if result.returncode != 0:
+        return None
+    raw = (result.stdout or "").strip()
+    try:
+        return int(raw)
+    except ValueError:
+        return None
+
+
+def _graph_mtime_is_stale(graph_file: str, *, now: Optional[float] = None) -> bool:
+    try:
+        age = (time.time() if now is None else now) - os.path.getmtime(graph_file)
+    except OSError:
+        return True
+    return age > _GRAPH_STALE_MTIME_SECONDS
+
+
+def _graph_needs_refresh(repo_root: str, graph_file: str) -> bool:
+    """True when the graph is missing or stale relative to HEAD (#2140)."""
+    if not os.path.exists(graph_file):
+        return True
+    built_at = _read_graph_built_at_commit(repo_root)
+    distance = _commits_since_graph_build(repo_root, built_at)
+    if distance is None:
+        return _graph_mtime_is_stale(graph_file)
+    return distance > _GRAPH_STALE_COMMIT_THRESHOLD
+
+
+def _warn_context_build_failure(step: str, reason: str, repo_root: str) -> None:
+    """Log a context-build failure and record a sentinel alert (#2141).
+
+    Graph extraction and pack synthesis used to swallow every exception.
+    A degraded prompt must stay visible to the job log and to `synlynk sentinel`.
+    """
+    message = f"{step} failed: {reason}"
+    print(f"  ⚠ context build: {message}", file=sys.stderr)
+    sentinel_path = os.path.join(repo_root, ".synlynk", "sentinel.md")
+    try:
+        from synlynk.sentinel import _write_sentinel_alert
+
+        _write_sentinel_alert(
+            "WARN",
+            _CONTEXT_BUILD_SENTINEL_CODE,
+            message,
+            sentinel_path=sentinel_path,
+        )
+    except Exception as exc:
+        print(
+            f"  ⚠ context build: could not record sentinel alert "
+            f"({type(exc).__name__}: {exc})",
+            file=sys.stderr,
+        )
+
+
+# Verbose pytest output is resent as cache-hit input on every later tool
+# round. Keep at most this many characters of a verify step in the transcript.
+VERIFY_OUTPUT_INLINE_LIMIT = 4000
+VERIFY_OUTPUT_TAIL_LINES = 30
+_VERIFY_INLINE_HEADROOM = 32
+
+
+def _verify_job_label(job_id: str) -> str:
+    label = (job_id or "verify").replace("/", "-").replace("\\", "-").strip()
+    return label or "verify"
+
+
+def verify_log_relpath(job_id: str, index: int = 1) -> str:
+    """Relative path of a spilled verify log inside the job worktree."""
+    return f".synlynk/logs/{_verify_job_label(job_id)}-verify-{int(index)}.log"
+
+
+def _verify_output_tail(text: str, lines: int = VERIFY_OUTPUT_TAIL_LINES) -> str:
+    return "\n".join((text or "").splitlines()[-lines:])
+
+
+def summarize_verify_output(
+    output: str,
+    exit_code: int,
+    *,
+    job_id: str,
+    worktree: str,
+    index: int = 1,
+    threshold: int = VERIFY_OUTPUT_INLINE_LIMIT,
+) -> str:
+    """Return a transcript-safe verify summary.
+
+    When the captured output is too large to keep inline, the full text is
+    written to ``.synlynk/logs/<job_id>-verify-<n>.log`` under ``worktree``.
+    The returned string always includes the exit code and stays within
+    ``threshold`` characters.
+    """
+    output = output or ""
+    prefix = f"exit_code={exit_code}\n"
+    if len(output) <= threshold and len(prefix) + len(output) <= threshold:
+        return prefix + output
+
+    root = worktree or os.getcwd()
+    logs_dir = os.path.join(root, ".synlynk", "logs")
+    os.makedirs(logs_dir, exist_ok=True)
+    rel = verify_log_relpath(job_id, index)
+    log_path = os.path.join(root, rel)
+    with open(log_path, "w", encoding="utf-8") as handle:
+        handle.write(output)
+
+    header = f"{prefix}full_log={rel}\n"
+    budget = threshold - len(header)
+    tail = _verify_output_tail(output)
+    if budget < 0:
+        header = prefix
+        budget = threshold - len(header)
+    if len(tail) > budget:
+        tail = tail[-budget:] if budget > 0 else ""
+    summary = header + tail
+    if len(summary) > threshold:
+        summary = summary[:threshold]
+    return summary
+
+
+def run_verify_step(
+    command: str,
+    *,
+    job_id: str,
+    worktree: str = None,
+    index: int = 1,
+) -> str:
+    """Run a verify command and return only a transcript-safe summary."""
+    root = worktree or os.getcwd()
+    completed = subprocess.run(
+        command,
+        shell=True,
+        cwd=root,
+        capture_output=True,
+        text=True,
+    )
+    output = f"{completed.stdout or ''}{completed.stderr or ''}"
+    return summarize_verify_output(
+        output,
+        completed.returncode,
+        job_id=job_id,
+        worktree=root,
+        index=index,
+    )
+
+
+def verify_step_shell(command: str, job_id: str, index: int = 1) -> str:
+    """Shell form of ``run_verify_step`` for the How to Verify contract.
+
+    The harness tool result is this command's stdout, so the full pytest
+    stream is redirected to a log once it passes the inline limit.
+    """
+    import shlex
+
+    log_rel = verify_log_relpath(job_id, index)
+    quoted_log = shlex.quote(log_rel)
+    inline_limit = VERIFY_OUTPUT_INLINE_LIMIT - _VERIFY_INLINE_HEADROOM
+    tail_budget = VERIFY_OUTPUT_INLINE_LIMIT - _VERIFY_INLINE_HEADROOM
+    return (
+        "mkdir -p .synlynk/logs && "
+        "_synlynk_verify_out=$(mktemp) && "
+        f"{{ {command}; }} > \"$_synlynk_verify_out\" 2>&1; "
+        "ec=$?; "
+        "_synlynk_verify_bytes=$(wc -c < \"$_synlynk_verify_out\" | tr -d ' '); "
+        f"if [ \"$_synlynk_verify_bytes\" -gt {inline_limit} ]; then "
+        f"mv \"$_synlynk_verify_out\" {quoted_log}; "
+        "echo exit_code=$ec; "
+        f"echo full_log={log_rel}; "
+        f"tail -n {VERIFY_OUTPUT_TAIL_LINES} {quoted_log} | head -c {tail_budget}; "
+        "else "
+        "echo exit_code=$ec; "
+        "cat \"$_synlynk_verify_out\"; "
+        "rm -f \"$_synlynk_verify_out\"; "
+        "fi; "
+        "exit $ec"
+    )
+
 
 def _format_prompt_for_agent(agent: str, context_text: str, story_id: str,
                               task: str, file_section: str, verify_section: str,
@@ -2042,19 +2385,33 @@ def _format_prompt_for_agent(agent: str, context_text: str, story_id: str,
 
     repo_root = cwd_hint or os.getcwd()
     graph_file = os.path.join(repo_root, ".synlynk", "graphify-out", "graph.json")
-    if not os.path.exists(graph_file):
+    if _graph_needs_refresh(repo_root, graph_file):
         try:
             from synlynk.scan import _run_graphify_extract
-            _run_graphify_extract(repo_root)
-        except Exception:
-            pass
+            refreshed = _run_graphify_extract(repo_root)
+            if refreshed is False:
+                _warn_context_build_failure(
+                    "graph extraction",
+                    "graphify extract returned failure",
+                    repo_root,
+                )
+        except Exception as exc:
+            _warn_context_build_failure(
+                "graph extraction",
+                f"{type(exc).__name__}: {exc}",
+                repo_root,
+            )
     try:
         from synlynk.pack import synthesize_context_pack
         pack_text = synthesize_context_pack(repo_root, task_text=task, story_id=story_id)
         if pack_text:
             context_text = f"{context_text}\n\n{pack_text}" if context_text else pack_text
-    except Exception:
-        pass
+    except Exception as exc:
+        _warn_context_build_failure(
+            "pack synthesis",
+            f"{type(exc).__name__}: {exc}",
+            repo_root,
+        )
     if role:
         try:
             from synlynk.charter_injection import render_charter_section
@@ -2297,6 +2654,16 @@ def _resolve_explicit_base_ref(repo_path: Optional[str], explicit_base: str) -> 
     return base
 
 
+# Auto mode stacks only on short-lived task branches. A long-lived workspace
+# branch (for example docs/claude/...) is not a task base: inheriting it makes
+# the job diff and the opened PR contain that branch's unrelated history (#2229).
+_AUTO_STACK_BRANCH_PREFIXES = ("feat/", "fix/", "chore/", "dispatch/", "release/")
+
+
+def _is_auto_stackable_task_branch(branch: str) -> bool:
+    return bool(branch) and branch.startswith(_AUTO_STACK_BRANCH_PREFIXES)
+
+
 def _resolve_dispatch_worktree_base_ref(
     repo_path: Optional[str],
     stacking_mode: str = "auto",
@@ -2304,7 +2671,8 @@ def _resolve_dispatch_worktree_base_ref(
 ) -> str:
     """Resolve the base ref a new dispatch worktree should be anchored to.
 
-    stacking_mode: "auto" (stack on current non-mainline branch, else mainline),
+    stacking_mode: "auto" (stack on a current task branch such as feat/ or
+    fix/, otherwise the fresh mainline — never a long-lived workspace branch),
     "always" (stack on current branch, error on mainline/detached HEAD),
     "never" (always mainline — legacy behavior)
 
@@ -2333,7 +2701,12 @@ def _resolve_dispatch_worktree_base_ref(
             else ""
         )
         if current_branch and current_branch not in ("main", "master"):
-            return current_branch
+            if stacking_mode == "always" or _is_auto_stackable_task_branch(current_branch):
+                return current_branch
+            print(
+                f"  ⚠ worktree base: '{current_branch}' is not a task branch "
+                f"— using fresh mainline instead of this long-lived checkout (#2229)"
+            )
         if stacking_mode == "always":
             raise RuntimeError(
                 f"dispatch stacking is 'always' but current branch is "
@@ -3285,6 +3658,60 @@ def _preflight_dispatch(
     return {"passed": True, "sentinel": None, "reason": None}
 
 
+_probed_dispatch_harness: Optional[str] = None
+
+
+def _set_probed_dispatch_harness(name: Optional[str]) -> None:
+    global _probed_dispatch_harness
+    _probed_dispatch_harness = name
+
+
+def take_probed_dispatch_harness() -> Optional[str]:
+    """Return and clear the harness the capability gate actually checked."""
+    global _probed_dispatch_harness
+    name = _probed_dispatch_harness
+    _probed_dispatch_harness = None
+    return name
+
+
+def _capability_reroute_message(initial_agent: str, resolved_agent: str, probed_agent: Optional[str]) -> str:
+    """Name the harness that failed the capability check, not the CLI argument.
+
+    Cold-start routing can substitute `local` before the gate runs (gh:#2048).
+    The reroute line must blame that substituted candidate.
+    """
+    blamed = probed_agent or initial_agent
+    if blamed == resolved_agent:
+        blamed = initial_agent
+    return (
+        f"  ↪ rerouted '{initial_agent}' -> '{resolved_agent}' "
+        f"(capability-probed: '{blamed}' lacks required capability for task)"
+    )
+
+
+def _story_routing_capabilities(task, task_type, requires, requires_gh_write):
+    if not (task or task_type or requires or requires_gh_write):
+        return None
+    from synlynk.capability_probe import infer_task_required_capabilities
+
+    return infer_task_required_capabilities(
+        task or "",
+        task_type=task_type,
+        requires=requires,
+        requires_gh_write=requires_gh_write,
+    )
+
+
+def _call_best_agent(best_agent, story_id, required_capabilities):
+    """Call the story router, tolerating test doubles that take only story_id."""
+    if required_capabilities:
+        try:
+            return best_agent(story_id, required_capabilities=required_capabilities)
+        except TypeError:
+            return best_agent(story_id)
+    return best_agent(story_id)
+
+
 def resolve_dispatch_harness(agent: str, agent_id: str = None, story_id: str = None,
                               force_agent: bool = False, requires_gh_write: bool = False,
                               static_baseline: bool = False, task_domain: str = None,
@@ -3325,6 +3752,9 @@ def resolve_dispatch_harness(agent: str, agent_id: str = None, story_id: str = N
         return agent
 
     baselines_map = _pkg("HARNESS_CAPABILITY_BASELINES", HARNESS_CAPABILITY_BASELINES)
+    required_capabilities = _story_routing_capabilities(
+        task, task_type, requires, requires_gh_write
+    )
     picked = None
     if task_domain and not static_baseline:
         try:
@@ -3344,7 +3774,7 @@ def resolve_dispatch_harness(agent: str, agent_id: str = None, story_id: str = N
     if story_id and not static_baseline and picked is None:
         best_agent = _pkg("_best_agent_for_story")
         if best_agent:
-            best = best_agent(story_id)
+            best = _call_best_agent(best_agent, story_id, required_capabilities)
             if best and best in baselines_map:
                 picked = best
     if picked is None and resolved_agent_role and not static_baseline:
@@ -3353,7 +3783,7 @@ def resolve_dispatch_harness(agent: str, agent_id: str = None, story_id: str = N
         synthetic_story_id = _role_dispatch_story_id(resolved_agent_role)
         best_agent = _pkg("_best_agent_for_story")
         if best_agent:
-            best = best_agent(synthetic_story_id)
+            best = _call_best_agent(best_agent, synthetic_story_id, required_capabilities)
             if best and best in baselines_map:
                 picked = best
     if picked is None and resolved_agent_role:
@@ -3362,9 +3792,28 @@ def resolve_dispatch_harness(agent: str, agent_id: str = None, story_id: str = N
     # An explicitly forced harness is binding.  Auto-routing may still
     # calculate a preferred harness for non-forced dispatches, but it must
     # never replace the user's requested harness when force_agent is set.
+    excluded_harnesses = set()
+    if task_type in {"review", "pr_review"} and task:
+        try:
+            from synlynk import _get_db
+            from synlynk.db import _implementation_job_from_branch
+            conn = _get_db()
+            for pr_num in _explicit_pr_numbers(task):
+                job_id = _implementation_job_from_branch(conn, pr_num)
+                if job_id:
+                    row = conn.execute(
+                        "SELECT lower(COALESCE(NULLIF(harness, ''), agent, '')) FROM daemon_jobs WHERE job_id=?",
+                        (job_id,),
+                    ).fetchone()
+                    if row and row[0]:
+                        excluded_harnesses.add(row[0].strip().lower())
+        except Exception:
+            pass
+
     candidate = agent if force_agent else (picked or agent)
-    if task or task_type or requires or requires_gh_write:
+    if task or task_type or requires or requires_gh_write or excluded_harnesses:
         from synlynk.capability_probe import resolve_capable_dispatch_harness
+        _set_probed_dispatch_harness(candidate)
         return resolve_capable_dispatch_harness(
             candidate_harness=candidate,
             task=task or "",
@@ -3374,8 +3823,10 @@ def resolve_dispatch_harness(agent: str, agent_id: str = None, story_id: str = N
             revokes=revokes,
             task_type=task_type,
             requires_gh_write=requires_gh_write,
+            excluded_harnesses=excluded_harnesses,
         )
     return candidate
+
 
 
 def dispatch_agent(agent: str, task: str, story_id: str = None,
@@ -3459,13 +3910,19 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     )
     request = pipeline.resolve(request)
     pipeline.authorize(request)
+    probed_agent = take_probed_dispatch_harness()
     initial_agent = agent
     agent = request.agent
     if agent != initial_agent and not force_agent:
-        print(
-            f"  ↪ rerouted '{initial_agent}' -> '{agent}' "
-            f"(capability-probed: '{initial_agent}' lacks required capability for task)"
-        )
+        print(_capability_reroute_message(initial_agent, agent, probed_agent))
+    # Reject unsupported harnesses before model resolution opens state.db.
+    try:
+        get_adapter(agent)
+    except KeyError as exc:
+        raise ValueError(
+            f"Unknown agent '{agent}': Harness '{agent}' has no registered dispatch adapter. "
+            "Register an adapter before dispatching it."
+        ) from exc
     resolved_agent_role = None
     if agent_id:
         from synlynk import agent_store
@@ -3598,11 +4055,11 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         adapter = get_adapter(agent)
     except KeyError as exc:
         raise ValueError(
-            f"Harness '{agent}' has no registered dispatch adapter. "
+            f"Unknown agent '{agent}': Harness '{agent}' has no registered dispatch adapter. "
             "Register an adapter before dispatching it."
         ) from exc
 
-    if agent == "grok" and not skip_permissions:
+    if agent in {"grok", "agy"} and not skip_permissions:
         # Grok's CLI has no working non-bypass headless mode (LIVE-13:
         # docs/rca/2026-09-22-LIVE-13-grok-headless-dispatch-permission-bypass.md).
         # Auto-opt-in here (rather than requiring every caller to pass
@@ -3610,6 +4067,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         # keep working unchanged after gh:#1925 part 1 made the bypass gated
         # instead of unconditional. See
         # docs/superpowers/specs/2026-10-04-grok-failclosed-permission-enforcement-design.md.
+        # Agy's --sandbox mode denies RunCommand outright and still reports
+        # SUCCESS (gh:#2216, job-0d75bb61). Same auto-opt-in so review and
+        # shell dispatches get --dangerously-skip-permissions instead.
         skip_permissions = True
 
     # A capability gate may reroute the harness (for example, Grok write
@@ -3642,6 +4102,23 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     elif callable(dconn) and not isinstance(dconn, sqlite3.Connection):
         dconn = dconn()
         owns_dconn = True
+
+    if requested_model_input and dconn is not None:
+        from synlynk.db import get_active_harness_models
+
+        active_models = get_active_harness_models(dconn, harness=agent)
+        if active_models:
+            valid_model_ids = list(dict.fromkeys(row["model_id"] for row in active_models))
+            if requested_model_input not in valid_model_ids:
+                if owns_dconn:
+                    try:
+                        dconn.close()
+                    except Exception:
+                        pass
+                raise ValueError(
+                    f"Invalid model '{requested_model_input}' for harness '{agent}'. "
+                    f"Valid model ids: {', '.join(valid_model_ids)}"
+                )
 
     if agent == "local" and dconn is not None:
         # Direct dispatch is a valid first-use path; do not require the
@@ -3939,8 +4416,17 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         except Exception:
             pass
     if agent == "muse":
-        if "--output-format" not in flags:
-            flags = flags + ["--output-format", "json"]
+        if "--json" not in flags:
+            flags = flags + ["--json"]
+        if "--approval-mode" not in flags:
+            flags = flags + ["--approval-mode", "never"]
+        else:
+            approval_mode_index = flags.index("--approval-mode")
+            if (
+                approval_mode_index + 1 == len(flags)
+                or flags[approval_mode_index + 1].startswith("--")
+            ):
+                flags.insert(approval_mode_index + 1, "never")
 
     # Baseline, override, permission, and harness-specific sources can each
     # contribute the same boolean flag (notably Grok's --always-approve).
@@ -3979,8 +4465,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         flags = flags + ["--cwd", worktree_path]
     if agent == "codex" and worktree_path and "-C" not in flags and "--cd" not in flags:
         flags = flags + ["-C", worktree_path]
-    if agent == "muse" and worktree_path and "-C" not in flags:
-        flags = flags + ["-C", worktree_path]
+    if agent == "muse" and worktree_path and "--workspace" not in flags:
+        flags = flags + ["--workspace", worktree_path]
     worktree_synlynk_dir = os.path.join(worktree_path, ".synlynk")
     logs_dir = os.path.join(worktree_synlynk_dir, "logs")
     prompts_dir = os.path.join(worktree_synlynk_dir, "prompts")
@@ -4034,7 +4520,12 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         file_section = "\n\n## Relevant Files\n" + "\n".join(f"- `{f}`" for f in file_list)
 
     verify_contract = _pkg("_verify_contract_for_story")
-    verify_section = verify_contract(story_id, task) if (story_id and verify_contract) else ""
+    verify_section = ""
+    if story_id and verify_contract:
+        try:
+            verify_section = verify_contract(story_id, task, job_id=job_id)
+        except TypeError:
+            verify_section = verify_contract(story_id, task)
 
     task_sha256_for_receipt = hashlib.sha256(task.encode("utf-8")).hexdigest()
     from synlynk.instructions import extract_instruction_version, get_instruction_file_for_agent
@@ -4163,7 +4654,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         cmd_str = " ".join(_shlex.quote(c) for c in [cli] + flags)
         shell_cmd = f"{cmd_str} < {_shlex.quote(prompt_file)} > {_shlex.quote(log_file)} 2>&1; echo $? > {_shlex.quote(log_file)}.exit"
 
-    proc_env = _build_subprocess_env(
+    proc_env, pytest_shim_dir = _build_subprocess_env(
         agent,
         overrides,
         requires_gh_write,
@@ -4199,6 +4690,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 dconn, job_id=job_id, agent=agent, task=task, story_id=story_id,
                 reason="local_concurrency",
             )
+            if pytest_shim_dir is not None:
+                pytest_shim_dir.cleanup()
             if owns_dconn:
                 dconn.close()
             return result
@@ -4250,16 +4743,23 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     if container_image is not None:
         docker_bin = shutil.which("docker")
         if not docker_bin:
+            if pytest_shim_dir is not None:
+                pytest_shim_dir.cleanup()
             raise ContainerExecError(
                 "docker is not on PATH; refusing to fall back to a host subprocess"
             )
-        spawn_cmd, spawn_env, spawn_cwd = wrap_container(
-            spawn_cmd,
-            proc_env,
-            worktree_path,
-            container_image,
-            docker_bin=docker_bin,
-        )
+        try:
+            spawn_cmd, spawn_env, spawn_cwd = wrap_container(
+                spawn_cmd,
+                proc_env,
+                worktree_path,
+                container_image,
+                docker_bin=docker_bin,
+            )
+        except Exception:
+            if pytest_shim_dir is not None:
+                pytest_shim_dir.cleanup()
+            raise
         stderr_handle = open(log_file, "a", encoding="utf-8")
         stderr_target = stderr_handle
     try:
@@ -4272,12 +4772,24 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             env=spawn_env,
         )
     except Exception:
+        if pytest_shim_dir is not None:
+            pytest_shim_dir.cleanup()
         if local_slot_claimed:
             dconn.rollback()
         raise
     finally:
         if stderr_handle is not None:
             stderr_handle.close()
+
+    if hasattr(proc, "wait"):
+        threading.Thread(
+            target=_cleanup_shim_after_process,
+            args=(proc, pytest_shim_dir),
+            daemon=True,
+        ).start()
+    else:
+        if pytest_shim_dir is not None:
+            pytest_shim_dir.cleanup()
 
     # A process that has already exited failed during CLI startup (bad flag,
     # missing binary, or sandbox setup). Give the task one deterministic
@@ -4396,6 +4908,11 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 saved_job["fence"] = asdict(saved_job["fence"])
             jobs_to_save.append(saved_job)
         save_jobs(jobs_to_save)
+
+    # Invariant 2 must be enforced while a bare dispatch is still running;
+    # neither daemon polling nor opportunistic CLI reconciliation is required.
+    if not container_failed:
+        _start_dispatch_circuit_breaker_watchdog(proc, job, cfg)
 
     try:
         if dconn is not None:
@@ -4545,6 +5062,11 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                         "UPDATE daemon_jobs SET cross_branch_pr=? WHERE job_id=?",
                         (cross_branch_pr_value, job_id),
                     )
+            _ensure_daemon_job_columns(dconn, {"base_sha": "TEXT"})
+            dconn.execute(
+                "UPDATE daemon_jobs SET base_sha=? WHERE job_id=?",
+                (base_sha, job_id),
+            )
             if container_failed:
                 dconn.execute(
                     "UPDATE daemon_jobs SET status=?, exit_code=?, completed_at=? WHERE job_id=?",
@@ -4679,15 +5201,10 @@ def exec_command(cmd_args: list, force: bool = False) -> int:
                     basis=basis,
                 )
             if in_tokens > 0 or out_tokens > 0:
-                rates = model_rate_for_version(model_version, agent=cmd_args[0]) if model_rate_for_version else {
-                    "input": 0.003,
-                    "output": 0.015,
-                    "cache_read": 0.0000003,
-                }
-                est_cost = (
-                    (in_tokens / 1000 * rates["input"]) +
-                    (out_tokens / 1000 * rates["output"]) +
-                    (cache_read_tokens / 1000 * rates["cache_read"])
+                from synlynk.costs import api_equivalent_usd
+                est_cost = api_equivalent_usd(
+                    cmd_args[0], in_tokens, out_tokens, cache_read_tokens,
+                    model=model_version,
                 )
                 load_config_fn = _pkg("load_config")
                 fence_config = load_config_fn() if load_config_fn else {}

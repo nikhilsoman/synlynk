@@ -68,6 +68,7 @@ CREATE TABLE IF NOT EXISTS backlog_items (
     stage               TEXT NOT NULL DEFAULT 'open',
     governs_stage       TEXT NOT NULL DEFAULT 'open',
     complexity_tier     INTEGER DEFAULT 2,
+    priority            INTEGER DEFAULT 5,
     goal_id             TEXT,
     acceptance_criteria TEXT DEFAULT '[]',
     status              TEXT NOT NULL DEFAULT 'staged',
@@ -216,6 +217,7 @@ CREATE TABLE IF NOT EXISTS daemon_jobs (
     lineage_root TEXT DEFAULT NULL,
     gh_write_evidence TEXT,
     gh_write_verification_attempts INTEGER NOT NULL DEFAULT 0,
+    terminal_evidence_strength TEXT NOT NULL DEFAULT 'unknown',
     cost_missing_reason TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_daemon_jobs_status ON daemon_jobs(status);

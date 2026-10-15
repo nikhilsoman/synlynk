@@ -60,6 +60,27 @@ check whether that evidence is still current before trusting it.
   review case above, can even produce a *worse* false-positive if the underlying
   bug happens to not trigger that run.
 
+## GitHub-write priority (measured 2026-10-14)
+
+Qualitative rows above still say every core harness can write. They do not
+order fallbacks. `_GH_WRITE_HARNESS_PRIORITY` and `.synlynk/policy.json`
+`gh_write.fallback` now follow a 14-day `AVG(quality)` from
+`capability_ratings` (this workspace `state.db`, query 2026-10-14 06:27:32,
+`max(ts)` 2026-10-14 06:24:10, n≥5). The table has no `task_type` column, so
+this is overall quality, not a gh-write-only slice.
+
+| Order | Harness | n | avg quality |
+|---|---|---:|---:|
+| 1 (default) | codex | 410 | 9.04 |
+| 2 | grok | 176 | 8.55 |
+| 3 | claude | 170 | 8.19 |
+| 4 | agy | 89 | 7.58 |
+
+`local` (n=2) and `muse` (n=1) stay out. Codex remains the default because
+the measurement says so. The pre-2026-10-04 constant `("claude", "agy", "grok")`
+omitted Codex and listed Grok last; that heuristic is retired. Grok's
+sandbox-deny finding stays superseded (gh:#2034).
+
 ## Reassessment cadence
 
 See "Harness Capability Reassessment Protocol" in `CLAUDE.md`. Short version: at
@@ -67,12 +88,14 @@ least every ~25 dispatched jobs or monthly (whichever comes first), scan recent
 job telemetry for failure patterns per harness, compare against this table, and
 file findings + policy.json updates in the same PR as this doc's edits.
 
-## Test execution baseline (2026-09-09)
+## Test execution baseline (2026-09-09; current policy 2026-10-10)
 
-Issue #1496 evaluated pytest-xdist after the #1494/#1495 CI changes. The current
-CI baseline is serial: the comparable post-#1495 run took 231s on Python 3.10
-and 165s on Python 3.12. A local Python 3.12 run took 426.78s serial, 180.40s
-with four workers, and 162.07s with `-n auto` (16 workers), but all three runs
-shared the same pre-existing live-selftest mutation failure. Keep CI serial;
-see `docs/testing/pytest-xdist-evaluation-1496.md` for the classification and
-scoped experiment command.
+Issue #1496 evaluated pytest-xdist after the #1494/#1495 CI changes. The
+comparable post-#1495 serial run took 231s on Python 3.10 and 165s on Python
+3.12. A local Python 3.12 run took 426.78s serial, 180.40s with four workers,
+and 162.07s with `-n auto` (16 workers), but all three runs shared the same
+pre-existing live-selftest mutation failure. PR #1544 subsequently enabled the
+bounded `-n 4 --dist loadfile` workflow. Keep the fixed worker cap; do not
+promote `-n auto` without a clean, complete-checkout comparison. See
+`docs/testing/pytest-xdist-evaluation-1496.md` for the classification and
+rollback boundary.

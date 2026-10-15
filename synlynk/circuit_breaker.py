@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import signal
+import subprocess
 import time
 import traceback
 from dataclasses import dataclass, field
@@ -23,6 +24,7 @@ from synlynk.sentinel import (
 DEFAULT_MAX_JOB_TOKENS = 5_000_000
 DEFAULT_MAX_JOB_COST_USD = 15.00
 DEFAULT_ZERO_FILE_TOKEN_THRESHOLD = 500_000
+DEFAULT_MAX_LOG_SIZE_BYTES = 50 * 1024 * 1024  # 50MB
 
 DEFAULT_TIER_OVERRIDES: Dict[str, Dict[str, Any]] = {
     "fast": {"max_job_tokens": 500_000, "max_job_cost_usd": 2.00},
@@ -46,8 +48,9 @@ class CircuitBreakerResult:
 def _resolve_circuit_breaker_limits(
     job: dict,
     config: Optional[dict] = None,
-) -> Tuple[int, float, int]:
-    """Resolve max_tokens, max_cost, and zero_file_threshold from config and tier overrides."""
+) -> Tuple[int, float, int, int]:
+    """Resolve max_tokens, max_cost, zero_file_threshold, and max_log_size_bytes
+    from config and tier overrides."""
     cb_config = {}
     if config and isinstance(config, dict):
         cb_config = config.get("circuit_breaker", {})
@@ -58,6 +61,9 @@ def _resolve_circuit_breaker_limits(
     max_cost = float(cb_config.get("max_job_cost_usd", DEFAULT_MAX_JOB_COST_USD))
     zero_file_threshold = int(
         cb_config.get("zero_file_token_threshold", DEFAULT_ZERO_FILE_TOKEN_THRESHOLD)
+    )
+    max_log_size_bytes = int(
+        cb_config.get("max_log_size_bytes", DEFAULT_MAX_LOG_SIZE_BYTES)
     )
 
     tier_overrides = cb_config.get("tier_overrides", DEFAULT_TIER_OVERRIDES)
@@ -72,8 +78,10 @@ def _resolve_circuit_breaker_limits(
                 max_cost = float(tier_cfg["max_job_cost_usd"])
             if "zero_file_token_threshold" in tier_cfg:
                 zero_file_threshold = int(tier_cfg["zero_file_token_threshold"])
+            if "max_log_size_bytes" in tier_cfg:
+                max_log_size_bytes = int(tier_cfg["max_log_size_bytes"])
 
-    return max_tokens, max_cost, zero_file_threshold
+    return max_tokens, max_cost, zero_file_threshold, max_log_size_bytes
 
 
 def _kill_process_tree(
@@ -125,6 +133,39 @@ def _kill_process_tree(
         return False, f"kill_failed: {exc}"
 
 
+def _worktree_branch_is_stable(worktree_path: Optional[str], expected_branch: Optional[str]) -> bool:
+    """Return whether a zero-file observation is safe to act on.
+
+    Detached HEAD is an in-progress checkout state. A named branch mismatch
+    is deferred only while its HEAD reflog entry is recent; an old feature
+    branch checkout must not permanently disable the circuit breaker.
+    """
+    if not worktree_path or not expected_branch:
+        return True
+    try:
+        result = subprocess.run(
+            ["git", "-C", worktree_path, "symbolic-ref", "--short", "HEAD"],
+            capture_output=True, text=True, check=False,
+        )
+    except Exception:
+        return True
+    if result.returncode != 0:
+        return False
+    if (result.stdout or "").strip() == expected_branch:
+        return True
+    try:
+        reflog = subprocess.run(
+            ["git", "-C", worktree_path, "reflog", "-1", "--format=%ct", "HEAD"],
+            capture_output=True, text=True, check=False,
+        )
+        if reflog.returncode != 0:
+            return True
+        changed_at = float((reflog.stdout or "").strip())
+    except (ValueError, OSError, TypeError):
+        return True
+    return time.time() - changed_at > 60
+
+
 def evaluate_job_circuit_breaker(
     job: dict,
     config: Optional[dict] = None,
@@ -147,38 +188,61 @@ def evaluate_job_circuit_breaker(
         except Exception:
             log_text = ""
 
-    # 2. Extract in-flight token metrics
-    from synlynk.costs import extract_tokens
+    # 2. Extract in-flight token metrics.
+    # Codex turn.completed input_tokens sums every tool-loop request, and
+    # cached_input_tokens is already inside that sum. Limits compare the
+    # uncached remainder so a ~50k prompt replayed from cache is not treated
+    # as a million-token prompt.
+    from synlynk.costs import extract_tokens, split_billed_tokens
     from synlynk.jobs import _job_cost_usd
     from synlynk.dispatch import _worktree_files_touched
 
-    in_tokens, out_tokens = extract_tokens(log_text, agent=job.get("agent", ""))
+    agent = job.get("agent", "")
+    token_counts = extract_tokens(log_text, agent=agent)
+    raw_in, out_tokens = token_counts
+    cache_read_tokens = int(getattr(token_counts, "cache_read_tokens", 0) or 0)
+    in_tokens, _cache = split_billed_tokens(agent, raw_in, cache_read_tokens)
     total_tokens = in_tokens + out_tokens
 
     model_version = job.get("model_version") or job.get("model_at_dispatch")
     cost_usd = _job_cost_usd(
-        job.get("agent", ""),
-        in_tokens,
+        agent,
+        raw_in,
         out_tokens,
         model_version,
+        cache_read_tokens=cache_read_tokens,
     )
 
     worktree_path = job.get("worktree_path")
     files_touched = 0
 
     # 4. Resolve limits
-    max_tokens, max_cost, zero_file_threshold = _resolve_circuit_breaker_limits(job, config)
+    max_tokens, max_cost, zero_file_threshold, max_log_size_bytes = _resolve_circuit_breaker_limits(job, config)
 
     # 5. Check triggers
+    log_size_bytes = 0
+    if log_file and os.path.exists(log_file):
+        try:
+            log_size_bytes = os.path.getsize(log_file)
+        except OSError:
+            log_size_bytes = 0
+
     reason = None
     if cost_usd >= max_cost:
         reason = f"Cost limit breached: ${cost_usd:.2f} >= ${max_cost:.2f}"
     elif total_tokens >= max_tokens:
         reason = f"Token limit breached: {total_tokens:,} >= {max_tokens:,} tokens"
+    elif log_size_bytes >= max_log_size_bytes:
+        reason = (
+            f"Log size runaway: {log_size_bytes:,} bytes >= {max_log_size_bytes:,} bytes "
+            f"(extracted tokens: {total_tokens:,} — likely mid-turn token-extraction blind spot)"
+        )
     elif total_tokens >= zero_file_threshold:
         files_touched_list = _worktree_files_touched(worktree_path) if worktree_path else []
         files_touched = len(files_touched_list)
-        if files_touched == 0:
+        if files_touched == 0 and _worktree_branch_is_stable(
+            worktree_path, job.get("worktree_branch")
+        ):
             reason = f"Zero-file runaway: {total_tokens:,} tokens with 0 files touched (limit: {zero_file_threshold:,})"
 
     if not reason:

@@ -138,7 +138,7 @@ def _seed_capability(conn, agent, engg, org, industry, phase, score, model="unkn
     seed_story = f"_capseed-{agent}-{engg}-{org}-{industry}-{phase}"
     conn.execute(
         "INSERT OR IGNORE INTO stories (story_id, title, engg_domain, org_domain, "
-        "industry, phase, readiness) VALUES (?, ?, ?, ?, ?, ?, 'draft')",
+        "industry, phase, readiness, goal_id) VALUES (?, ?, ?, ?, ?, ?, 'draft', 'goal-test')",
         (seed_story, seed_story, engg, org, industry, phase),
     )
     conn.execute(
@@ -153,7 +153,7 @@ def _seed_story(conn, story_id, priority=5, readiness="ready", tokens=1000,
                  engg="backend", org="platform", industry="unknown", phase="build"):
     conn.execute(
         "INSERT INTO stories (story_id, title, engg_domain, org_domain, industry, phase, "
-        "priority, readiness, estimated_tokens) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "priority, readiness, estimated_tokens, goal_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'goal-test')",
         (story_id, story_id, engg, org, industry, phase, priority, readiness, tokens),
     )
 
@@ -171,6 +171,31 @@ def test_plan_skips_draft_stories(scheduler_db):
     result = _compute_schedule_plan()
     assert result["plan"] == []
     assert result["blocked"] == []
+
+
+def test_compute_schedule_plan_blocks_story_with_no_goal_link(scheduler_db):
+    import sqlite3
+    from synlynk.scheduler import _compute_schedule_plan
+
+    conn = sqlite3.connect(scheduler_db)
+    conn.execute(
+        "INSERT INTO stories (story_id, title, engg_domain, org_domain, priority, readiness, goal_id) "
+        "VALUES ('story-nogoal', 'test', 'backend', 'platform', 3, 'ready', NULL)"
+    )
+    conn.commit()
+    conn.close()
+
+    import synlynk
+    orig = synlynk._capability_candidates_for_story
+    synlynk._capability_candidates_for_story = lambda conn, engg, org, industry, phase: [("codex", 10, "gpt-5")]
+    try:
+        result = _compute_schedule_plan()
+    finally:
+        synlynk._capability_candidates_for_story = orig
+
+    blocked_reasons = {b["story_id"]: b["reason"] for b in result["blocked"]}
+    assert blocked_reasons.get("story-nogoal") == "no_goal_link"
+    assert all(p["story_id"] != "story-nogoal" for p in result["plan"])
 
 
 def test_plan_assigns_ready_story_to_best_capability_agent(scheduler_db):
@@ -566,6 +591,10 @@ def test_end_to_end_ready_story_flows_to_queued_daemon_job(scheduler_db, monkeyp
     conn.close()
 
     story_id = cmd_story_create("end to end story", engg_domain="backend", org_domain="platform")
+    conn = _get_db()
+    conn.execute("UPDATE stories SET goal_id='goal-test' WHERE story_id=?", (story_id,))
+    conn.commit()
+    conn.close()
     cmd_story_ready(story_id)
 
     monkeypatch.setattr("synlynk._dispatch_ready_jobs", lambda max_parallel=4: 0)
@@ -577,3 +606,76 @@ def test_end_to_end_ready_story_flows_to_queued_daemon_job(scheduler_db, monkeyp
     ).fetchone()
     conn.close()
     assert row == ("grok", "queued")
+
+
+def test_autonomy_pass_interval_default_is_1800(scheduler_db):
+    from synlynk.scheduler import _autonomy_pass_interval_seconds
+    assert _autonomy_pass_interval_seconds() == 1800
+
+
+def test_autonomy_pass_interval_reads_config_override(scheduler_db, tmp_path):
+    import json
+    from synlynk.scheduler import _autonomy_pass_interval_seconds
+
+    with open(".synlynk/config.json", "w") as f:
+        json.dump({"autonomy_pass_interval_seconds": 60}, f)
+
+    assert _autonomy_pass_interval_seconds() == 60
+
+
+def test_autonomy_pass_manual_mode_skips_scheduling(scheduler_db, monkeypatch):
+    import json
+    from synlynk import scheduler as scheduler_mod
+
+    with open(".synlynk/config.json", "w") as f:
+        json.dump({"autonomy_mode": "manual"}, f)
+
+    calls = {"ingest": 0, "triage": 0, "promote": 0, "schedule": 0}
+    monkeypatch.setattr(scheduler_mod, "ingest_backlog", lambda *a, **kw: calls.__setitem__("ingest", calls["ingest"] + 1))
+    monkeypatch.setattr(scheduler_mod, "triage_backlog", lambda *a, **kw: calls.__setitem__("triage", calls["triage"] + 1))
+    monkeypatch.setattr(scheduler_mod, "auto_promote_backlog", lambda *a, **kw: calls.__setitem__("promote", calls["promote"] + 1))
+    monkeypatch.setattr(scheduler_mod, "cmd_schedule", lambda *a, **kw: calls.__setitem__("schedule", calls["schedule"] + 1))
+
+    scheduler_mod._autonomy_pass()
+
+    assert calls == {"ingest": 1, "triage": 1, "promote": 1, "schedule": 0}
+
+
+def test_autonomy_pass_supervised_mode_runs_scheduling(scheduler_db, monkeypatch):
+    import json
+    from synlynk import scheduler as scheduler_mod
+
+    with open(".synlynk/config.json", "w") as f:
+        json.dump({"autonomy_mode": "supervised"}, f)
+
+    calls = {"schedule": 0}
+    monkeypatch.setattr(scheduler_mod, "ingest_backlog", lambda *a, **kw: None)
+    monkeypatch.setattr(scheduler_mod, "triage_backlog", lambda *a, **kw: None)
+    monkeypatch.setattr(scheduler_mod, "auto_promote_backlog", lambda *a, **kw: [])
+    monkeypatch.setattr(scheduler_mod, "cmd_schedule", lambda *a, **kw: calls.__setitem__("schedule", calls["schedule"] + 1))
+
+    scheduler_mod._autonomy_pass()
+
+    assert calls["schedule"] == 1
+
+
+def test_autonomy_pass_stage_failure_does_not_abort_remaining_stages(scheduler_db, monkeypatch, capsys):
+    import json
+    from synlynk import scheduler as scheduler_mod
+
+    with open(".synlynk/config.json", "w") as f:
+        json.dump({"autonomy_mode": "autonomous"}, f)
+
+    calls = {"schedule": 0}
+
+    def boom(*a, **kw):
+        raise RuntimeError("ingest exploded")
+
+    monkeypatch.setattr(scheduler_mod, "ingest_backlog", boom)
+    monkeypatch.setattr(scheduler_mod, "triage_backlog", lambda *a, **kw: None)
+    monkeypatch.setattr(scheduler_mod, "auto_promote_backlog", lambda *a, **kw: [])
+    monkeypatch.setattr(scheduler_mod, "cmd_schedule", lambda *a, **kw: calls.__setitem__("schedule", calls["schedule"] + 1))
+
+    scheduler_mod._autonomy_pass()  # must not raise
+
+    assert calls["schedule"] == 1

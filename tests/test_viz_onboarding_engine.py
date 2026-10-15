@@ -44,6 +44,7 @@ def test_onboarding_api_state(mock_open_db):
     handler.path = ""
     handler.requestline = ""
     handler.request_version = "HTTP/1.1"
+    handler.command = "POST"
     handler.client_address = ("127.0.0.1", 12345)
 
     handler.path = "/w/test-slug/api/onboarding/state"
@@ -106,3 +107,50 @@ def test_onboarding_api_confirm_topology(mock_open_db):
     data = json.loads(args[0].decode('utf-8'))
     assert data["topology_status"] == "confirmed"
     assert data["topology_confirmed"] == {"test_topology": "value"}
+
+
+@patch("synlynk.open_state_db")
+@patch("synlynk.first_win_loop.execute_first_win_cycle")
+def test_onboarding_api_s10_runs_first_win_cycle(mock_execute, mock_open_db):
+    conn = sqlite3.connect(":memory:")
+    conn.execute("""
+    CREATE TABLE onboarding_sessions (
+        session_id TEXT PRIMARY KEY,
+        product_id TEXT NOT NULL,
+        current_stage TEXT NOT NULL,
+        topology_status TEXT,
+        topology_candidate TEXT,
+        topology_confirmed TEXT,
+        harness_probes TEXT,
+        dependency_checks TEXT,
+        first_win_meta TEXT,
+        created_at REAL NOT NULL,
+        updated_at REAL NOT NULL,
+        completed_at REAL
+    )
+    """)
+    get_or_create_session(conn, "test-slug")
+    mock_open_db.return_value = (conn, True)
+    mock_execute.return_value = {"status": "completed", "current_stage": "S10_BuildExperience"}
+
+    server = MagicMock()
+    server.server_port = 27472
+    handler = VizorHandler.__new__(VizorHandler)
+    handler.server = server
+    handler.require_auth = False
+    handler.path = "/w/test-slug/api/onboarding/step"
+    handler.requestline = ""
+    handler.request_version = "HTTP/1.1"
+    handler.client_address = ("127.0.0.1", 12345)
+    handler.headers = {"Content-Length": "81", "Cookie": "synlynk_local_token=123"}
+    handler.rfile = MagicMock()
+    body = json.dumps({"stage": "S10_BuildExperience", "payload": {"prompt": "add guide"}})
+    handler.headers["Content-Length"] = str(len(body))
+    handler.rfile.read.return_value = body.encode("utf-8")
+    handler.wfile = MagicMock()
+    handler._authorize_write = MagicMock(return_value=True)
+
+    handler.do_POST()
+
+    mock_execute.assert_called_once()
+    assert json.loads(handler.wfile.write.call_args.args[0].decode("utf-8"))["status"] == "completed"

@@ -207,9 +207,6 @@ def decide_job_outcome(
     """Pure precedence/tri-state oracle.  Evidence never mutates its inputs."""
     rows = list(evidence)
     ids = tuple(str(e.get("evidence_id") or e.get("event_id")) for e in rows if e.get("evidence_id") or e.get("event_id"))
-    if contract.get("kind") == "unknown_contract":
-        return CompletionDecision("unknown", "unknown", "unknown_contract", "manual_review", ids)
-
     def matches(kind: str, result: str = "true") -> list[Mapping[str, Any]]:
         return [e for e in rows if e.get("kind") == kind and e.get("result") == result]
 
@@ -237,6 +234,8 @@ def decide_job_outcome(
     if verified_remote:
         warnings = ("receipt_absent",) if any(e.get("kind") == "task_receipt" and e.get("result") == "false" for e in rows) else ()
         return CompletionDecision("completed", "verified", "contract_effect_verified", "none", ids, warnings)
+    if contract.get("kind") == "unknown_contract":
+        return CompletionDecision("unknown", "unknown", "unknown_contract", "manual_review", ids)
     if remote and predicate_mismatch:
         if deadline_expired or retry_exhausted:
             return CompletionDecision("failed_verification", "failed", "contract_predicate_mismatch", "manual_review", ids)

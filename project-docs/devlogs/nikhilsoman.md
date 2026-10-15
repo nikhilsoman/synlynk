@@ -1,3 +1,20 @@
+## 2026-10-13 Personal Hosted Relay final integration [@nikhilsoman]
+
+- Task 10 worker 468b3cb8 completed full regression: 4419 passed, one known
+  sandbox home-log failure, four skips and five expected failures. The failed
+  Vizor test passes with required permissions. Generated command reference fixed.
+- Integrated worker review fixes with main 6aaab228. Added four red/green
+  cancellation regressions and shield-and-drain cleanup; independent review
+  approved. Final targeted set: 260 passed, including all ten real NATS cases.
+- Corrected optional nats-py minimum to tested 2.16.0 after 2.6.0 API/auth failures.
+  Stdlib-only CLI and hub imports verified without importing NATS.
+- Final combined full suite: 4436 passed, 3 skipped, 5 xfailed in 273.59s,
+  no exclusions, real NATS available. PR #2257 proceeds to non-author final QA. Only the reviewer
+  may merge after pr-check, merge policy and CI pass. No deployment authorized.
+- Worker usage reported 6,177,615 input tokens (6,079,104 cached), 21,109 output;
+  provider billing remains unavailable. Full evidence and task commit mapping live
+  in personal-relay-task10-evidence.md and personal-hosted-relay-progress.md.
+
 ## 2026-09-27 — Align Dispatch Default Model Tiers with 2026 SOTA Catalog (#1803, `story-e8343134`, `goal-5be4eb8b`)
 
 ### Shipped & Verified
@@ -1744,6 +1761,27 @@ Cost logged via `synlynk cost log` (~$2.54, native PM work). PR #1818 opened (do
 
 [@nikhilsoman]
 
+## 2026-10-13 Personal Hosted Relay conductor
+
+User authorized goal-f4ce526a end-to-end execution and five-minute task updates.
+Session session-0fe91cb1, feature worktree feat-codex-personal-hosted-relay.
+Task 1 preserved from 2375ec24 as d7ed8c7c; 10 relay tests pass. Task 2 TDD
+completed, reviewed and integrated as 96aa05d7; four red tests then 14 green
+relay tests, broad suite 1381 passed/1 skipped. Stories marked done via CLI.
+Tasks 3-6 reviewed and integrated as d2dd8fa5, 45b54927, 36bcbb42, and
+31683d36. Task 6 verified authenticated durable replay with 166 targeted and
+1527 broad tests passing (1 skipped). Independent Task 5/6 reviews approved.
+All six stories marked done via CLI; checkpoint refreshed the generated views.
+Task 7 source 814151bf and reviewed onboarding corrections integrated as
+84d730ab, with 191 targeted tests passing. Remote devices use only their own
+exported credential. Task 8 dispatched as job-02ef4311 after zero-token routing
+failure job-20b0e6e2 (tracked gh:#2255). Task 10 full regression remains required.
+Pre-existing job-status reconciliation crash tracked separately in gh:#2254.
+The default gpt-5.3-codex was unsupported; user explicitly approved gpt-6-astra.
+Real NATS audit proved authorization.users token entries invalid; preserve random
+device secrets using supported user/password fields. Replay/echo/revocation and
+preview containment require real integration checks, recorded in the execution ledger.
+
 ## 2026-09-29 — R9 instruction dedup shipped, wave housekeeping, #1844 filed
 
 Shipped `[R9]` (`story-025c857c`, PERF-P5) as PR #1843: deduplicated the 5 generated instruction
@@ -1922,4 +1960,111 @@ reads terminal decisions and cannot write status. Targeted suites: 320 passed, 1
 existing loopback callback test passes when run with local socket permission. CLI help and
 `git diff --check` pass.
 
+[@nikhilsoman]
+## 2026-10-13 - Personal Hosted Relay Task 8 (#2201)
+
+Added real authenticated JetStream integration using two isolated CLI device
+processes, their own exported credentials, databases and subscriber observers.
+Covers exactly-once delivery, restart replay, independent category cursors,
+retention gaps, filters and actual auth reload/revocation. Moved earlier real-NATS
+smoke/config tests into the integration module and replaced machine-specific
+binary paths with PATH discovery. No production behavior changes were needed.
+
+Verification: initial run was 2 passed/1 failed because nats-py returns a generic
+Error containing Authorization Violation; corrected the precise error assertion.
+A temporary persistent-dedupe regression probe produced the expected duplicate
+delivery assertion failure and was fully restored. Targeted hub/onboarding/relay
+coverage passed 194 tests; final integration coverage passed all 9 real-NATS cases.
+Logs: .synlynk/logs/task8-{initial,dedupe-red,green,final-integration}.log.
+Broader requested regression: 1569 passed, 1 skipped (exit 0), recorded in
+.synlynk/logs/job-02ef4311-verify-1.log. All 9 NATS integration cases executed.
+No full suite, managed service, PR, story completion or global configuration change.
+Conductor owns review/integration. Estimated cost $1.00; actual billing unavailable
+to the worker, with dispatch telemetry authoritative. [@nikhilsoman, @codex]
+
+Conductor review added server-side connected-user revocation evidence and live
+wrong-workspace subject/envelope rejection. Final integration: 10 passed in 4.64s.
+
+## 2026-10-13 - Personal Hosted Relay Task 9 (#2201)
+
+Implemented doc preview payload construction and accepted-envelope reception in
+relay_hub.py. Outbound doc envelopes carry the local device ID and enforce the
+1,000,000-byte serialized JSON limit, including escaping and actor metadata;
+oversized content is omitted, while oversized metadata fails observably.
+Preview writes are confined to the three approved document roots, reject unsafe
+paths/device IDs and symlinks, and atomically replace labeled 0444 copies under
+.synlynk/relay/previews/<origin_device_id>/<path>. Storage errors remain retryable.
+No watcher, authoritative document edits, merge, deployment, or schema migration.
+
+TDD red: expected missing builder ImportError, exit 2 (task9-red.log).
+Initial targeted green: 230 passed, exit 0 (task9-green.log).
+Requested regression plus existing relay tests: 1611 passed, 1 skipped, exit 0
+(job-ceb33e8b-verify-1.log). Final targeted run after cleanup refinements:
+236 passed, exit 0 (task9-final-targeted.log), including all 10 real-NATS tests.
+Logs live in .synlynk/logs/. Used the supplied temporary Python environment and
+NATS binary PATH. No full-suite run. git diff --check passed.
+
+Origin identity is declared in the envelope; the existing workspace-scoped NATS
+authorization does not independently attest individual message authors. Preview
+ordering follows accepted delivery order; this is not a document merge protocol.
+The writer requires POSIX directory-descriptor/O_NOFOLLOW support, matching the
+existing hub's POSIX requirements. Conductor owns review and integration.
+No PR, subtasks, story completion, generated todo or global configuration edits.
+Estimated cost $1.00; actual billing unavailable to the worker, dispatch telemetry
+authoritative. synlynk status exited 0; no active sentinels, existing overdue
+capability/smoke checks. [@nikhilsoman, @codex]
+
+2026-10-13 — Mid-session checkpoint: executing plan docs/superpowers/plans/2026-10-13-finalize-workspace-agent-charters.md
+(story-0ad6c02b, GOVERNS goal-a222b393/goal-06758149) via Subagent-Driven Development on branch
+`dispatch/codex/job-85f9e9d1`. Tasks 1-2 done and committed (a6fdf7b7, e39296e7, de97200d, b9de8638):
+charters.py now supports `durability`/`wake_cycle_sop` fields and tolerates missing `harness_bindings`;
+pm.json durable charter written (took 3 dispatch attempts — shell text-processing corrupted the JSON
+string content twice; base64-decode-via-python3 is the write method that finally worked cleanly).
+Resolved an apparent test anomaly before starting Task 3: `test_load_tpm_charter` currently fails
+(`harness_bindings == ['claude','codex']` vs expected `[]`) even though `.synlynk/charters/tpm.json`
+doesn't exist yet — root cause is `load_charter()`'s pre-existing missing-file fallback at
+`synlynk/charters.py:43`, which hardcodes `["claude","codex"]` for role in `("architect","tpm")`.
+This is expected and resolves itself once tpm.json is created (file-exists branch at line 54 takes
+over) — not a bug needing a separate fix.
+⚠️ Next: dispatch Task 3 to Codex via `synlynk dispatch --base dispatch/codex/job-85f9e9d1`, writing
+`.synlynk/charters/tpm.json` with the 7-step wake_cycle_sop spec (durability: durable, autonomous
+authorities triage_issue/draft_plan/dispatch_track, escalation_triggers technical_ambiguity/
+priority_ambiguity/dispatch_blocked_twice) — use the file-write tool directly or base64-decode
+technique, not shell heredoc/sed. Then Task 4 (maintainer.json durability promotion), Tasks 5-9
+(run_tpm_wake_cycle, cmd_pm_wake, .agents/*.json, support_engineer.py wiring, CLI subcommands),
+Task 10 (cron dry-run verification only), Task 11 (final regression, no commit). Each implementer
+task routes through `synlynk dispatch` to Codex/Agy/Grok per standing instruction; reviewer stages
+stay with Claude. After all tasks: final whole-branch review, then finishing-a-development-branch
+targeting `dispatch/codex/job-85f9e9d1`, plus Blog Post Protocol + PR Review Discipline + Cost
+Capture Protocol once a PR opens.
+[@nikhilsoman]
+
+2026-10-13 — Mid-session checkpoint 2: Tasks 3-4 of the charters plan done and merged onto
+`dispatch/codex/job-85f9e9d1` (now at a52be3f4). Task 3 (`.synlynk/charters/tpm.json`, dispatched
+to Codex, `--role dev --task-type refactor`) and Task 4 (`maintainer.json` promoted to durable,
+same dispatch pattern) both verified via the actual `tests/test_charters.py` run inside each job's
+own worktree before merge (not job-status labels alone) — all 6 charter tests green, and
+`qa.json`/`designer.json`/`marketing.json` confirmed untouched vs `e41f2510` via `git diff`. Both
+sub-job worktrees/branches (job-bbe899ec, job-50e831fe) cleaned up per Worktree Hygiene Protocol,
+ancestry-verified via `git merge-base --is-ancestor` before force-delete (git's own `-d` safety
+check evaluates against the wrong ref from a nested worktree's perspective, so `-D` after
+independent verification is correct, not a bypass).
+Two dispatch-policy gotchas hit this segment, now known for the remaining tasks: (1) the
+worktree-isolation guard rejects a `cd <dir> && git ...` run from inside a *different* worktree
+than the session's own, and separately rejects chaining `cd <other-dir> && git-cmd` in one Bash
+call even from the correct worktree — split into one Bash call per directory; (2) `--story
+story-0ad6c02b` auto-resolves dispatch role to `pm`, which `.synlynk/policy.json`'s
+`role_task_type_compat` rejects for `--task-type refactor` (refactor requires role `dev`) — pass
+`--role dev` explicitly alongside `--task-type refactor` on every remaining implementer dispatch.
+⚠️ Next: dispatch Task 5 (PM-approval-gate columns on `backlog_items` + `run_tpm_wake_cycle()` in
+new `synlynk/tpm_sweep.py`, with `tests/test_tpm_sweep.py`) using
+`synlynk dispatch --role dev --task-type refactor --base dispatch/codex/job-85f9e9d1 --story
+story-0ad6c02b` to Codex. Grep `DEFAULT_BACKLOG_GOAL_ID` and `_get_db` naming in
+`synlynk/backlog.py` first to confirm the plan's assumed symbol names still hold before writing
+the dispatch task text. Then Tasks 6-9 (cmd_pm_wake, .agents/*.json, support_engineer.py wiring,
+CLI subcommands), Task 10 (cron — verification only), Task 11 (final regression — verification
+only). Full remaining-task detail is in
+`docs/superpowers/plans/2026-10-13-finalize-workspace-agent-charters.md` (read from the sibling
+`docs-context-window-optimization` worktree, not visible here — this worktree is sparse-checked-out
+without `docs/`).
 [@nikhilsoman]

@@ -147,6 +147,43 @@ def cmd_brief(args) -> None:
     print(f"\n✦ Executive Project Brief saved to {brief_path}")
 
 
+def cmd_probe_deps(harness=None) -> int:
+    """Render dependency and harness binding checks, returning a process code."""
+    from synlynk.probe_binding import probe_binding
+
+    result = probe_binding(harness)
+    rows = []
+    for name, probe in result["dependencies"].items():
+        rows.append((name, probe.get("installed", False), probe.get("version"), "n/a", probe.get("install_hint") or "—"))
+    for name, probe in result["harnesses"].items():
+        rows.append((name, probe.get("installed", False), probe.get("version"), "verified" if probe.get("auth_verified") else "unverified", probe.get("install_hint") or f"Install {name} CLI"))
+
+    headers = ("dependency/harness", "installed", "version", "auth status", "install hint")
+    rendered = []
+    widths = [len(value) for value in headers]
+    for row in rows:
+        values = (row[0], "yes" if row[1] else "no", row[2] or "—", row[3], row[4])
+        rendered.append(values)
+        widths = [max(width, len(value)) for width, value in zip(widths, values)]
+
+    def format_row(values):
+        return "  " + " | ".join(value.ljust(width) for value, width in zip(values, widths))
+
+    print(format_row(headers))
+    print("  " + "-+-".join("-" * width for width in widths))
+    for row in rendered:
+        print(format_row(row))
+
+    healthy = all(
+        probe.get("installed") and probe.get("version")
+        for probe in result["dependencies"].values()
+    ) and all(
+        probe.get("installed") and probe.get("version") and probe.get("auth_verified")
+        for probe in result["harnesses"].values()
+    )
+    return 0 if healthy else 1
+
+
 def cmd_watch(args) -> None:
     """Terminal HUD for live workspace state."""
     import select
@@ -278,7 +315,7 @@ def cmd_watch(args) -> None:
         sys.stdout.flush()
 
 _TOP_LEVEL_COMMANDS = (
-    "help", "init", "quickstart", "upgrade", "uninstall", "join", "start", "home", "testbed", "tool",
+    "help", "init", "quickstart", "upgrade", "fleet", "uninstall", "join", "start", "home", "testbed", "tool",
     "pack", "connector", "impact", "mesh", "spike", "team", "decide", "heal",
     "audit-docs", "goal", "governs", "local", "models", "media", "scan", "workspace",
     "migrate", "rollback", "probe", "doctor", "worktree", "tui", "notify", "exit",
@@ -411,6 +448,14 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     upgrade_parser = subparsers.add_parser("upgrade", help="Check for and apply updates")
     upgrade_parser.add_argument("--dry-run", action="store_true", dest="dry_run",
                                 help="Preview what would be upgraded without installing")
+    upgrade_parser.add_argument(
+        "--all", action="store_true", dest="all_workspaces",
+        help="Plan/apply upgrades across every registered workspace (CLI-only; dry-run unless --yes)",
+    )
+    upgrade_parser.add_argument(
+        "--yes", action="store_true", dest="yes",
+        help="With --all, apply the upgrade plan (default is dry-run)",
+    )
 
     uninstall_parser = subparsers.add_parser("uninstall", help="Clean teardown, daemon shutdown, and shim removal")
     uninstall_parser.add_argument("--force", action="store_true", help="Force complete uninstall")
@@ -679,6 +724,20 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     probe_parser.add_argument(
         "--no-fence", action="store_true", dest="no_fence",
         help="Probe harness capabilities without rewriting capability fences in directive files",
+    )
+    probe_parser.add_argument(
+        "--deps", action="store_true",
+        help="Probe required dependencies and harness authentication",
+    )
+
+    fleet_parser = subparsers.add_parser("fleet", help="Manage onboarding fleet templates")
+    fleet_sub = fleet_parser.add_subparsers(dest="fleet_action")
+    fleet_sub.add_parser("list", help="List available fleet templates")
+    fleet_apply_parser = fleet_sub.add_parser("apply", help="Apply a fleet template to this repository")
+    fleet_apply_parser.add_argument("template", help="Fleet template name")
+    fleet_apply_parser.add_argument(
+        "--dry-run", action="store_true", dest="dry_run",
+        help="Print the template role table without writing configuration",
     )
 
     doctor_parser = subparsers.add_parser("doctor", help="Run health checks on your synlynk installation")
@@ -1288,6 +1347,12 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     relay_start_p.add_argument("--port", type=int, default=7432,
         help="Port to listen on (default: 7432)")
     relay_start_p.add_argument("--daemon", action="store_true", help="Start in the background")
+    relay_start_p.add_argument("--hub", action="store_true", help="Opt in to the configured NATS hub (foreground only)")
+    relay_start_p.add_argument("--device-id", help="Device ID minted by relay device add")
+    relay_start_p.add_argument("--config-dir", help="Hub credential/config directory (default: ~/.synlynk/relay)")
+    relay_start_p.add_argument("--hub-url", help="Override configured NATS URL")
+    relay_start_p.add_argument("--credential-file", help="Exported credential for this device only; no administrator registry required")
+    relay_start_p.add_argument("--workspace-id", help="Workspace scope for --credential-file")
 
     relay_status_p = relay_sub.add_parser("status", help="Show relay health")
     relay_status_p.add_argument("--relay-url", default=None, dest="relay_url")
@@ -1315,6 +1380,27 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
     relay_peer_add_p.add_argument("--relay-url", default=None, dest="relay_url")
     relay_peer_list_p = relay_peer_sub.add_parser("list", help="List connected peer relay nodes")
     relay_peer_list_p.add_argument("--relay-url", default=None, dest="relay_url")
+
+    relay_hub_p = relay_sub.add_parser("hub", help="Configure an opt-in hosted hub")
+    relay_hub_sub = relay_hub_p.add_subparsers(dest="relay_hub_action")
+    relay_hub_init_p = relay_hub_sub.add_parser("init", help="Generate private NATS config with JetStream and authentication")
+    relay_hub_init_p.add_argument("--listen", default="127.0.0.1:4222", help="NATS server bind address (default: 127.0.0.1:4222)")
+    relay_hub_init_p.add_argument("--url", default="nats://127.0.0.1:4222", help="NATS URL used by this device")
+    relay_hub_connect_p = relay_hub_sub.add_parser("connect", help="Save managed settings locally; service connection is not implemented")
+    relay_hub_connect_p.add_argument("token", help="Managed workspace token (stored privately; no endpoint contacted)")
+    relay_hub_connect_p.add_argument("--url", default=None, help="Optional future managed service URL")
+    relay_device_p = relay_sub.add_parser("device", help="Manage self-hosted credentials; server reload required after changes")
+    relay_device_sub = relay_device_p.add_subparsers(dest="relay_device_action")
+    relay_device_add_p = relay_device_sub.add_parser("add", help="Mint a device and regenerate server authorization")
+    relay_device_add_p.add_argument("name")
+    relay_device_revoke_p = relay_device_sub.add_parser("revoke", help="Revoke locally; reload NATS to revoke live access")
+    relay_device_revoke_p.add_argument("device_id")
+    for command_parser in (relay_hub_init_p, relay_hub_connect_p, relay_device_add_p, relay_device_revoke_p):
+        command_parser.add_argument("--workspace-id", required=True)
+        command_parser.add_argument("--config-dir", default=None, help="Private config directory (default: ~/.synlynk/relay)")
+    for name in ("subscribe", "unsubscribe"):
+        command_parser = relay_sub.add_parser(name, help="Select inbound hub delivery; restart bridge to apply")
+        command_parser.add_argument("pattern", help="Relative NATS pattern, e.g. 'job.>' or 'sentinel.*'; missing file = all, empty list = none; excluded events are skipped")
 
     logs_parser = subparsers.add_parser("logs", help="Tail the output log of a job")
     logs_parser.add_argument("--job", required=True, dest="job_id",
@@ -1432,6 +1518,7 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
         "--radar", action="store_true",
         help="Plot Ring 3 opportunities to .synlynk/radar.json and docs/pm/opportunities-radar.md"
     )
+    pm_subparsers.add_parser("wake", help="Approve/reprioritize TPM's drafted intake queue (durable wake cycle)")
 
     tpm_parser = subparsers.add_parser("tpm", help="TPM sweep commands")
     tpm_subparsers = tpm_parser.add_subparsers(dest="tpm_command")
@@ -1439,6 +1526,7 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
         "sweep", help="Run one autonomous sweep pass over ready stories"
     )
     sweep_parser.add_argument("--assignee", default="nikhilsoman")
+    tpm_subparsers.add_parser("wake", help="Raw GitHub-issue intake, triage, ambiguity routing (durable wake cycle)")
 
     score_parser = subparsers.add_parser("score", help="Manage capability scores")
     score_sub = score_parser.add_subparsers(dest="score_action")
@@ -1716,6 +1804,20 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
         dest="cost_cap",
         help="Override the configured cost cap (USD) for this sweep run",
     )
+    report_parser = capability_sub.add_parser(
+        "report",
+        help=(
+            "Generate a task_allocation routing proposal from capability_ratings/cost_entries. "
+            "pr_review_cycles is a review-round count and is not filtered by quality_verified; "
+            "quality_verified filtering applies only to quality-score metrics."
+        ),
+    )
+    report_parser.add_argument(
+        "--json",
+        action="store_true",
+        dest="as_json",
+        help="Output the proposal as JSON instead of text",
+    )
 
     instructions_parser = subparsers.add_parser(
         "instructions", help="Manage synlynk instruction files across AI tools"
@@ -1776,6 +1878,8 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
         "media": media_parser,
         "models": models_parser,
         "relay": relay_parser,
+        "relay_hub": relay_hub_p,
+        "relay_device": relay_device_p,
         "run": run_parser,
         "team": team_parser,
         "worktree": worktree_parser,
@@ -2178,7 +2282,38 @@ def main(argv=None) -> None:
             sys.exit(0)
         sys.exit(cmd_gh(args.role, getattr(args, "gh_args", []) or []))
     elif args.command == "upgrade":
+        if getattr(args, "all_workspaces", False):
+            from synlynk.upgrade import upgrade_all
+
+            sys.exit(
+                upgrade_all(
+                    yes=getattr(args, "yes", False),
+                    dry_run=getattr(args, "dry_run", False),
+                )
+            )
         upgrade(dry_run=getattr(args, "dry_run", False))
+    elif args.command == "fleet":
+        from synlynk.fleet_templates import FLEET_TEMPLATES, apply_fleet_template, list_fleet_templates
+
+        action = getattr(args, "fleet_action", None)
+        if action == "list":
+            for template_name in list_fleet_templates():
+                template = FLEET_TEMPLATES[template_name]
+                print(f"{template_name}: {template['name']} — {template['description']}")
+        elif action == "apply":
+            template = FLEET_TEMPLATES.get(args.template)
+            if template is None:
+                raise SystemExit(f"Unknown fleet template: {args.template}")
+            if args.dry_run:
+                print(f"Fleet template: {args.template} ({template['name']})")
+                print(f"{'role':<16} {'harness':<10} tasks")
+                for role_name, role in template["roles"].items():
+                    print(f"{role_name:<16} {role['harness']:<10} {', '.join(role['tasks'])}")
+            else:
+                result = apply_fleet_template(os.getcwd(), args.template)
+                print(f"Applied fleet template '{result['template']}' to .synlynk/config.json")
+        else:
+            fleet_parser.print_help()
     elif args.command == "uninstall":
         from synlynk.uninstall import execute_uninstall
         res = execute_uninstall()
@@ -2553,6 +2688,14 @@ def main(argv=None) -> None:
     elif args.command == "relay":
         action = getattr(args, "relay_action", None)
         if action == "start":
+            if args.hub and args.daemon:
+                parser.error("--hub does not support --daemon; run the bridge in the foreground")
+            if not args.hub and (args.device_id or args.config_dir or args.hub_url or args.credential_file or args.workspace_id):
+                parser.error("Hub credential and configuration options require --hub")
+            if args.hub:
+                from synlynk.relay_hub import run_hub_relay
+                run_hub_relay(args)
+                return
             if getattr(args, "daemon", False):
                 from synlynk.relay import RelayServer
                 from synlynk.daemon import _daemonize_via_reexec, _daemon_state_path
@@ -2561,6 +2704,14 @@ def main(argv=None) -> None:
             else:
                 from synlynk.relay import RelayServer
                 RelayServer(port=args.port).start(background=False)
+        elif action in ("hub", "device", "subscribe", "unsubscribe"):
+            from synlynk import relay_hub
+            subaction = getattr(args, f"relay_{action}_action", None)
+            if action in ("hub", "device") and subaction is None:
+                help_parsers[f"relay_{action}"].print_help()
+            else:
+                suffix = f"{action}_{subaction}" if subaction else action
+                getattr(relay_hub, f"cmd_relay_{suffix}")(args)
         elif action == "status":
             from synlynk.relay import cmd_relay_status
             cmd_relay_status(args)
@@ -2654,6 +2805,10 @@ def main(argv=None) -> None:
         from synlynk.pm_agent import cmd_pm_sweep
 
         cmd_pm_sweep(dry_run=args.dry_run, radar=getattr(args, "radar", False))
+    elif args.command == "pm" and args.pm_command == "wake":
+        from synlynk.pm_agent import cmd_pm_wake
+
+        cmd_pm_wake()
     elif args.command == "tpm" and args.tpm_command == "sweep":
         from synlynk.tpm_sweep import run_sweep_pass
 
@@ -2662,6 +2817,10 @@ def main(argv=None) -> None:
             f"sweep pass: {summary['advanced']} advanced, "
             f"{summary['parked']} parked, {summary['failed']} failed"
         )
+    elif args.command == "tpm" and args.tpm_command == "wake":
+        from synlynk.tpm_sweep import run_tpm_wake_cycle
+
+        run_tpm_wake_cycle()
     elif args.command == "score":
         if args.score_action == "add":
             cmd_score_add(args.story_id, args.rating, note=args.note, rework=args.rework)
@@ -2880,6 +3039,9 @@ def main(argv=None) -> None:
     elif args.command == "capability":
         if args.capability_action == "sweep":
             cmd_capability_sweep(cost_cap_override=getattr(args, "cost_cap", None))
+        elif args.capability_action == "report":
+            from synlynk.capability_report import cmd_capability_report
+            cmd_capability_report(as_json=getattr(args, "as_json", False))
     elif args.command == "instructions":
         action = getattr(args, "instructions_action", None)
         if action == "status" or action is None:
@@ -3110,6 +3272,8 @@ def main(argv=None) -> None:
         )
     elif args.command == "probe":
         _warn_deprecated_harness_flag(cli_tokens)
+        if getattr(args, "deps", False):
+            sys.exit(cmd_probe_deps(getattr(args, "harness", None)))
         cmd_probe(
             agent=getattr(args, "harness", None),
             write_fence=not getattr(args, "no_fence", False),

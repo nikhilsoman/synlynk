@@ -4,6 +4,17 @@ import json
 import sqlite3
 
 
+def test_active_harness_models_treats_unavailable_catalog_as_empty():
+    from synlynk.db import get_active_harness_models
+
+    assert get_active_harness_models(None, harness="codex") == []
+
+    conn = sqlite3.connect(":memory:")
+    assert get_active_harness_models(conn, harness="codex") == []
+    conn.close()
+    assert get_active_harness_models(conn, harness="codex") == []
+
+
 def test_builtin_catalog_has_entitlement_and_geometry():
     from synlynk.models import BUILTIN_FAMILIES, BUILTIN_MODEL_CATALOG, EntitlementTier
 
@@ -24,7 +35,7 @@ def test_builtin_catalog_uses_current_remote_models_and_preserves_local_models()
     assert {
         "claude-opus-5", "claude-opus-5-5", "claude-sonnet-5",
         "claude-fable-5-1", "claude-fable-5", "claude-haiku-4-5-20251001",
-        "gemini-3.7-flash-medium", "gemini-3.1-pro-low", "gemini-3.1-pro-high",
+        "gemini-3.8-flash-medium", "gemini-3.8-flash-high", "claude-opus-4-6-thinking",
         "gpt-5.6-luna", "grok-4.7", "grok-4.6",
     } <= model_ids
     assert {"deepseek-r1", "gemma-2-9b-it-q4", "qwen2.5"} <= model_ids
@@ -77,3 +88,27 @@ def test_model_commands_seed_and_render_json(project_dir, capsys):
     cmd_models_list(json_output=True)
     payload = json.loads(capsys.readouterr().out)
     assert any(item["model_id"] == "gpt-5.6-luna" for item in payload)
+
+
+def test_resolve_tier_model_uses_static_bootstrap_when_discovery_is_empty(project_dir, monkeypatch):
+    import synlynk.models as models
+
+    monkeypatch.setattr(models, "_static_tier_model", lambda tier, harness, repo_path=None: "seed-model")
+    assert models.resolve_tier_model("pro", "codex") == "seed-model"
+
+
+def test_resolve_tier_model_prefers_state_db_discovery_over_static_catalog(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.models as models
+    from synlynk.db import upsert_harness_model
+
+    monkeypatch.setattr(models, "_static_tier_model", lambda tier, harness, repo_path=None: "stale-static-model")
+    conn = sl._get_db()
+    upsert_harness_model(
+        conn, "codex", "discovered-model", complexity_tier="pro",
+        discovered_at="2026-10-14T00:00:00+00:00",
+    )
+    conn.commit()
+    conn.close()
+
+    assert models.resolve_tier_model("pro", "codex") == "discovered-model"

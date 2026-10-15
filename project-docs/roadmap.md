@@ -269,7 +269,6 @@ scan --deep / upgrade auto-extract; synlynk mesh federated graphs; Vizor graphif
 Worktree lifecycle cleanup (#1886), daemon service auto-install prompt (#1883), and ~25 ghost issue burndown
 
 - [x] Stale Worktree Lifecycle GC (#1886) (P0)
-- [ ] #1979 verified job evidence surfaced in `synlynk jobs`; #2025 tracks remaining #1921 local-state GC bound gaps
   Prune leftover probe worktrees and auto-reap on doctor/dispatch
 - [x] Daemon Auto-Install Service Prompt (#1883) (P0)
   Prompt and install launchd/systemd service during init and doctor
@@ -277,9 +276,6 @@ Worktree lifecycle cleanup (#1886), daemon service auto-install prompt (#1883), 
   Systematically verify and close issues already fixed by recent PRs
 
 ## v0.24.0 — The Autonomous Platform, Boardroom & Concierge [shipped] (target: 2026-10-12)
-
-- [x] Job status truth pilot PR3 (#1933): canonical boundary projection,
-  shadow disagreement metrics, rollout gates, and operator reconciliation
 
 Self-management core, Board governance, Jev AST decisioning, swarms, concierge, and turnkey add-ons
 
@@ -302,20 +298,16 @@ Self-management core, Board governance, Jev AST decisioning, swarms, concierge, 
 - [x] Autonomous Maintainer Zero-Issue Burndown Driver (P1) <!-- story:story-v024-t10-maintainer-burndown -->
   Continuous sweeping of open GitHub issues, driving open bugs to zero
 
-## v0.25.0 — Sovereign Silicon: Local oMLX Fleet (2026-10-02)
+## v0.25.0 — Sovereign Silicon: Local oMLX Fleet [planned] (target: 2026-10-22)
 
 Zero-cloud offline local model inference harness optimized for Apple Silicon MLX
 
-- [x] Local oMLX / Aider Harness Integration (#1710) (P0)
-  Real subprocess dispatch to local MLX models (Ornith-1.0-9B, Qwen3.6-27B, Ternary-Bonsai-2-27B)
-- [x] Apple Silicon Hardware Tier & Health Prober (P1)
-  synlynk local doctor --init health check, hardware memory tier allocation, and prism-ml loader gate
-- [x] Offline Zero-Cloud AST Tier-0 Routing (P1)
-  Automatic fallback and tier-0 cost routing for self-hosted models (synlynk dispatch auto)
-- [x] Sovereign Silicon Orb Stack Docker Image (P1)
-  Single-container reproducible deployment (ghcr.io/nikhilsoman/synlynk-sovereign:v0.25.0)
-- [x] OpenRouter BYOK Universal Gateway Preview (P2)
-  Configuration schema preview and synlynk gateway probe connectivity check
+- [ ] Local oMLX / Aider Harness Integration (#1710) (P0)
+  Real subprocess dispatch to local MLX models (Llama-3, Qwen-2.5, DeepSeek)
+- [ ] Apple Silicon Hardware Tier & Health Prober (P1)
+  synlynk local doctor health check and hardware memory tier allocation
+- [ ] Offline Zero-Cloud AST Tier-0 Routing (P1)
+  Automatic fallback and tier-0 cost routing for self-hosted models
 
 ## v0.26.0 — Universal Gateway: OpenRouter & Fal.ai [planned] (target: 2026-11-05)
 
@@ -340,3 +332,13 @@ Meta Muse promoted to first-class 5th Core fleet harness
   Rotational non-author review across Claude, Codex, Agy, Grok, and Muse
 - [ ] Muse Structured Output & Cost Ledger Integration (P1)
   Verified token extraction and dual-ledger cost reporting for Muse
+
+## v0.25.2 — Daemon Health & Autonomous Pipeline Activation [planned]
+
+Closes gh:#2261 (dormant re-exec bug), gh:#2288 (crash on stale worktree cwd), and the daemon-wiring gap in gh:#2262 (Task 4: wire poll loop to call _autonomy_pass()). Prereq for flipping autonomy_mode to autonomous and completing goal-06758149 (Activate full fleet). Tracked under goal-bd5eaa14.
+
+- [ ] Daemon health fixes (gh:#2261, gh:#2288) (P0) <!-- story:story-e73fac9e -->
+  Dormant re-exec bug + crash on stale worktree cwd blocking --requires-gh-write dispatch.
+- [ ] Wire daemon poll loop to autonomy pass (Task 4, gh:#2262) (P1) <!-- story:story-f67acd86 -->
+  Daemon poll loop never calls _autonomy_pass(); backlog->schedule pipeline only runs via manual CLI today.
+

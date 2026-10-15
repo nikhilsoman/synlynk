@@ -27,6 +27,22 @@ def test_circuit_breaker_defaults_live19():
     assert DEFAULT_TIER_OVERRIDES["reasoning"]["max_job_cost_usd"] == 15.00
 
 
+def test_cost_breaker_uses_live_log_metrics_not_job_truth_verdict(tmp_path, monkeypatch):
+    """Regression characterization for #2121: cost protection is a sentinel path."""
+    log_file = tmp_path / "job.log"
+    log_file.write_text("not a job-truth evidence record")
+    monkeypatch.setattr("synlynk.circuit_breaker._kill_process_tree", lambda *args, **kwargs: (False, "no_pid"))
+    monkeypatch.setattr("synlynk.circuit_breaker.log_telemetry_event", lambda *args, **kwargs: None)
+    monkeypatch.setattr("synlynk.circuit_breaker._write_sentinel_alert", lambda *args, **kwargs: None)
+    monkeypatch.setattr("synlynk.costs.extract_tokens", lambda *args, **kwargs: (0, 0))
+    monkeypatch.setattr("synlynk.jobs._job_cost_usd", lambda *args, **kwargs: 16.0)
+
+    result = evaluate_job_circuit_breaker({"id": "job-2121", "agent": "codex", "log_file": str(log_file)}, config={})
+
+    assert result.tripped is False
+    assert result.reason == "Cost limit breached: $16.00 >= $15.00"
+
+
 @patch("synlynk.circuit_breaker.log_telemetry_event")
 @patch("synlynk.circuit_breaker._write_sentinel_alert")
 @patch("synlynk.circuit_breaker._kill_process_tree")

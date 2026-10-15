@@ -16,6 +16,7 @@ from typing import Optional
 from synlynk._lazy import pkg as _pkg
 from synlynk.context import generate_context
 from synlynk.jobs import _dispatch_ready_jobs, _reconcile_daemon_jobs
+from synlynk.scheduler import _autonomy_pass, _autonomy_pass_interval_seconds
 from synlynk.sentinel import _write_sentinel_alert, log_telemetry_event
 from synlynk.team import get_username
 from synlynk import github_app_auth
@@ -23,7 +24,7 @@ from synlynk import local_http_auth
 from synlynk.product_store import resolve_github_apps_dir
 
 
-def _repo_common_dir() -> str:
+def _repo_common_dir(*, strict: bool = False) -> str:
     """Return the repository root shared by all worktrees.
 
     Git's common directory is ``<repo>/.git`` for a normal repository and is
@@ -50,15 +51,22 @@ def _repo_common_dir() -> str:
             return os.path.dirname(common_dir)
         return common_dir
     except Exception:
-        # Broad by design: this must never crash daemon construction, whether
-        # from a missing git binary, a non-repo cwd, or a test harness that
-        # monkeypatches subprocess.Popen process-wide (subprocess.run() uses
-        # Popen internally, so unrelated tests' fakes can surface here too).
-        return os.getcwd()
+        if strict:
+            raise
+        # One-shot CLI callers retain the historical cwd fallback. Daemon
+        # constructors pass strict=True so failures surface before the process
+        # starts its long-lived loop.
+        try:
+            return os.getcwd()
+        except FileNotFoundError as exc:
+            raise RuntimeError(
+                "cwd no longer exists; cannot resolve repo root"
+            ) from exc
 
 
-def _daemon_state_path(*parts: str) -> str:
-    return os.path.join(_repo_common_dir(), ".synlynk", *parts)
+def _daemon_state_path(*parts: str, workspace_root: Optional[str] = None) -> str:
+    root = workspace_root if workspace_root is not None else _repo_common_dir()
+    return os.path.join(root, ".synlynk", *parts)
 
 
 def _daemon_package_path() -> str:
@@ -216,14 +224,19 @@ class WatchDaemon:
     _child_entry_point = "synlynk.daemon._watch_daemon_child_main"
 
     def __init__(self):
-        self.pidfile = _daemon_state_path("watch.pid")
-        self.logfile = _daemon_state_path("watch.log")
-        self.workspace_root = _repo_common_dir()
+        self.workspace_root = _repo_common_dir(strict=True)
+        self.pidfile = os.path.join(self.workspace_root, ".synlynk", "watch.pid")
+        self.logfile = os.path.join(self.workspace_root, ".synlynk", "watch.log")
         self.settle_seconds = 3
         self.token_refresh_interval_seconds = 50 * 60
         self._lock_fh = None
 
     def start(self) -> None:
+        if _is_disposable_worktree_path(self.workspace_root):
+            raise RuntimeError(
+                "refusing to start the daemon with a disposable worktree as its "
+                f"workspace root: {self.workspace_root}"
+            )
         lock_path = _daemon_lock_path(self.pidfile)
         lock_fh = _try_acquire_daemon_lock(lock_path, blocking=False)
         if lock_fh is None:
@@ -244,6 +257,14 @@ class WatchDaemon:
             if os.path.exists(self.pidfile):
                 os.remove(self.pidfile)
             self._prepare_start()
+            # Watermark the append-only logfile before spawn so a failure
+            # report never attributes stale prior-session lines (gh:#2333).
+            log_offset = 0
+            try:
+                if os.path.exists(self.logfile):
+                    log_offset = os.path.getsize(self.logfile)
+            except OSError:
+                log_offset = 0
             _daemonize_via_reexec(
                 self._child_entry_point, self.logfile, cwd=self.workspace_root
             )
@@ -255,7 +276,29 @@ class WatchDaemon:
                 print(self._started_message)
                 print("    Tip: run 'synlynk daemon --install-service' so this survives a crash/reboot.")
             else:
-                print(f"  ⚠ Failed to start daemon (check {os.path.basename(self.logfile)} for errors).", file=sys.stderr)
+                last_error = ""
+                try:
+                    with open(self.logfile) as log:
+                        log.seek(max(0, log_offset))
+                        new_bytes = log.read()
+                        last_error = next(
+                            (
+                                line.strip()
+                                for line in reversed(new_bytes.splitlines())
+                                if line.strip()
+                            ),
+                            "",
+                        )
+                except OSError:
+                    pass
+                if last_error:
+                    print(f"  ⚠ Failed to start daemon: {last_error}", file=sys.stderr)
+                else:
+                    print(
+                        "  ⚠ Failed to start daemon: child did not report "
+                        "readiness in time, no error output produced.",
+                        file=sys.stderr,
+                    )
         finally:
             _release_daemon_lock(lock_fh)
 
@@ -263,13 +306,23 @@ class WatchDaemon:
         """Hook for subclasses (e.g. autonomous env) before re-exec spawn."""
         return
 
-    def _await_child_pidfile(self, timeout: float = 2.0) -> None:
-        """Wait briefly for the re-exec child to publish a live pidfile."""
+    def _await_child_pidfile(self, timeout: float = 10.0) -> None:
+        """Wait for the re-exec child to publish a live pidfile, with backoff.
+
+        A flat 2.0s cutoff was too short under load (gh:#2333): the child
+        often published its pidfile moments after start() had already taken
+        the failure branch. Poll with exponential backoff up to ``timeout``.
+        """
         deadline = time.time() + timeout
+        delay = 0.05
         while time.time() < deadline:
             if self._is_running():
                 return
-            time.sleep(0.05)
+            remaining = deadline - time.time()
+            if remaining <= 0:
+                return
+            time.sleep(min(delay, remaining))
+            delay = min(delay * 1.5, 0.5)
 
     def stop(self) -> None:
         if not os.path.exists(self.pidfile):
@@ -360,7 +413,7 @@ class WatchDaemon:
         Best-effort per role: one role's failure (revoked App, bad
         installation_id) must not stop the others or crash the daemon loop.
         """
-        repo_dir = _repo_common_dir()
+        repo_dir = self.workspace_root
         apps_dir = str(resolve_github_apps_dir(repo_dir))
         if not os.path.isdir(apps_dir):
             return
@@ -456,9 +509,7 @@ class WatchDaemon:
 
 
 def _watch_daemon_child_main() -> None:
-    workspace_root = os.environ.get("SYNLYNK_DAEMON_WORKSPACE_ROOT")
-    if workspace_root:
-        os.chdir(workspace_root)
+    os.chdir(_repo_common_dir(strict=True))
     d = WatchDaemon()
     # Publish pidfile before taking the lifetime lock so the parent start()
     # waiter can observe readiness and release its start-time lock (#349).
@@ -784,6 +835,8 @@ def _daemon_install_service(daemon_instance) -> None:
                     <dict>
                       <key>SYNLYNK_DAEMON_WORKSPACE_ROOT</key>
                       <string>{workspace_root}</string>
+                      <key>SYNLYNK_AUTONOMOUS</key>
+                      <string>1</string>
                     </dict>
                     <key>RunAtLoad</key>
                     <true/>
@@ -820,6 +873,7 @@ def _daemon_install_service(daemon_instance) -> None:
                 WorkingDirectory={workspace_root}
                 ExecStart={python_path} -m synlynk daemon run
                 Environment=SYNLYNK_DAEMON_WORKSPACE_ROOT={workspace_root}
+                Environment=SYNLYNK_AUTONOMOUS=1
                 Restart=on-failure
                 RestartSec=30
 
@@ -834,7 +888,7 @@ def _daemon_install_service(daemon_instance) -> None:
 
         synlynk_dir = os.path.join(home, ".synlynk")
         os.makedirs(synlynk_dir, exist_ok=True)
-        entry = f"@reboot {python_path} -m synlynk daemon start"
+        entry = f"@reboot SYNLYNK_AUTONOMOUS=1 {python_path} -m synlynk daemon start"
         result = subprocess.run(["crontab", "-l"], capture_output=True, text=True)
         current = result.stdout if result.returncode == 0 else ""
         if entry not in current:
@@ -1042,18 +1096,19 @@ class SynlynkDaemon(WatchDaemon):
     def __init__(self, autonomous: bool = False):
         import threading as _threading
         super().__init__()
-        self.pidfile = _daemon_state_path("daemon.pid")
-        self.logfile = _daemon_state_path("daemon.log")
+        self.pidfile = os.path.join(self.workspace_root, ".synlynk", "daemon.pid")
+        self.logfile = os.path.join(self.workspace_root, ".synlynk", "daemon.log")
         self._start_time = time.time()
         self._context_lock = _threading.Lock()
         self.autonomous = autonomous
         self._last_autonomous_run = 0.0
+        self._last_autonomy_pass_at = 0.0
+        self._last_dispatch_count = 0
         # Bind request handlers to the workspace that created this daemon;
         # relative CWD resolution is unsafe for linked worktrees.
-        self.workspace_root = _repo_common_dir()
         self.sentinel_path = os.path.join(self.workspace_root, ".synlynk", "sentinel.md")
         self.start_revision = _current_repo_revision(self.workspace_root)
-        self.revision_file = _daemon_state_path("daemon.revision")
+        self.revision_file = os.path.join(self.workspace_root, ".synlynk", "daemon.revision")
         if self.start_revision:
             try:
                 os.makedirs(os.path.dirname(self.revision_file), exist_ok=True)
@@ -1096,9 +1151,67 @@ class SynlynkDaemon(WatchDaemon):
             if conn is not None:
                 conn.close()
 
+    def _maybe_run_autonomy_pass(self, launched: int) -> None:
+        """Hybrid interval+idle trigger for the backlog/scheduling autonomy pass.
+
+        Both triggers call the exact same _autonomy_pass() -- no divergent
+        logic path. Resets the interval timer on every actual run so the
+        two triggers can't double-fire back to back in the same tick.
+        """
+        import time as _time
+
+        now = _time.time()
+        interval_elapsed = (
+            now - self._last_autonomy_pass_at
+        ) >= _autonomy_pass_interval_seconds()
+
+        idle_transition = False
+        if self._last_dispatch_count > 0 and launched == 0:
+            conn = None
+            try:
+                conn = _pkg("_get_db")()
+                row = conn.execute(
+                    "SELECT COUNT(*) FROM daemon_jobs WHERE status IN ('queued','running')"
+                ).fetchone()
+                idle_transition = bool(row and row[0] == 0)
+            except Exception:
+                idle_transition = False
+            finally:
+                if conn is not None:
+                    conn.close()
+
+        if interval_elapsed or idle_transition:
+            try:
+                _autonomy_pass()
+            except Exception:
+                import traceback as _traceback
+                _traceback.print_exc()
+            self._last_autonomy_pass_at = now
+
+        self._last_dispatch_count = launched
+
     def _prepare_start(self) -> None:
-        watch_pid = _daemon_state_path("watch.pid")
-        if os.path.exists(watch_pid):
+        # Existence alone is a stale-pidfile false positive (gh:#2333) —
+        # require a live process, same liveness rule as WatchDaemon._health().
+        watch_pidfile = _daemon_state_path(
+            "watch.pid", workspace_root=self.workspace_root
+        )
+        watch_alive = False
+        if os.path.exists(watch_pidfile):
+            try:
+                with open(watch_pidfile) as f:
+                    watch_pid = int(f.read().strip())
+            except (OSError, ValueError):
+                watch_pid = None
+            watch_alive = _pid_is_alive(watch_pid)
+            if not watch_alive:
+                # Also honour a live lock owner (child mid-start) the way
+                # WatchDaemon._health() does, without treating the caller's
+                # own PID as evidence of a concurrent watch.
+                lock_owner = _daemon_lock_owner_pid(_daemon_lock_path(watch_pidfile))
+                if lock_owner and lock_owner != os.getpid():
+                    watch_alive = _pid_is_alive(lock_owner)
+        if watch_alive:
             print("  ⚠ synlynk watch is also running — both will poll project-docs/.")
         if self.autonomous:
             os.environ["SYNLYNK_AUTONOMOUS"] = "1"
@@ -1321,9 +1434,11 @@ class SynlynkDaemon(WatchDaemon):
             self._run_capability_watch_tick(config)
             try:
                 _reconcile_daemon_jobs()
-                _dispatch_ready_jobs(max_parallel=max_parallel)
+                launched = _dispatch_ready_jobs(max_parallel=max_parallel)
             except Exception:
                 _traceback.print_exc()
+                launched = 0
+            self._maybe_run_autonomy_pass(launched)
             current_rev = _current_repo_revision(self.workspace_root)
             if self.start_revision and current_rev and current_rev != self.start_revision:
                 try:
@@ -1349,9 +1464,7 @@ class SynlynkDaemon(WatchDaemon):
 
 
 def _synlynk_daemon_child_main(*, blocking_lock: bool = True) -> None:
-    workspace_root = os.environ.get("SYNLYNK_DAEMON_WORKSPACE_ROOT")
-    if workspace_root:
-        os.chdir(workspace_root)
+    os.chdir(_repo_common_dir(strict=True))
     d = SynlynkDaemon(autonomous=os.environ.get("SYNLYNK_AUTONOMOUS") == "1")
     # Acquire the lifetime lock before publishing the pidfile so a foreground
     # service cannot overwrite the identity of an already-running daemon.

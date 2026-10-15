@@ -811,6 +811,104 @@ def query_model(conn: sqlite3.Connection, model_id: str) -> dict | None:
     return get_model(conn, model_id)
 
 
+_HARNESS_MODEL_CATALOG_FIELDS = (
+    "rate_input_per_mtok", "rate_output_per_mtok", "rate_cache_read_per_mtok",
+    "rate_cache_write_per_mtok", "rate_tool_use_per_mtok", "rate_currency",
+    "rate_source", "complexity_tier", "max_effort_level", "context_window_tokens",
+    "max_output_tokens", "discovered_at",
+)
+
+
+def upsert_harness_model(
+    conn: sqlite3.Connection,
+    harness_name: str,
+    model_id: str,
+    *,
+    provider: str = "native",
+    first_seen_at: str | None = None,
+    last_seen_at: str | None = None,
+    status: str = "active",
+    superseded_by: str | None = None,
+    discovery_source: str = "curated",
+    rate_input_per_mtok: float | None = None,
+    rate_output_per_mtok: float | None = None,
+    rate_cache_read_per_mtok: float | None = None,
+    rate_cache_write_per_mtok: float | None = None,
+    rate_tool_use_per_mtok: float | None = None,
+    rate_currency: str = "usd",
+    rate_source: str | None = None,
+    complexity_tier: str | None = None,
+    max_effort_level: str | None = None,
+    context_window_tokens: int | None = None,
+    max_output_tokens: int | None = None,
+    discovered_at: str | None = None,
+) -> None:
+    """Insert or refresh a provider-specific discovered harness model."""
+    now = datetime.now(timezone.utc).isoformat()
+    first_seen_at = first_seen_at or now
+    last_seen_at = last_seen_at or now
+    discovered_at = discovered_at or last_seen_at
+    values = {
+        "rate_input_per_mtok": rate_input_per_mtok,
+        "rate_output_per_mtok": rate_output_per_mtok,
+        "rate_cache_read_per_mtok": rate_cache_read_per_mtok,
+        "rate_cache_write_per_mtok": rate_cache_write_per_mtok,
+        "rate_tool_use_per_mtok": rate_tool_use_per_mtok,
+        "rate_currency": rate_currency,
+        "rate_source": rate_source,
+        "complexity_tier": complexity_tier,
+        "max_effort_level": max_effort_level,
+        "context_window_tokens": context_window_tokens,
+        "max_output_tokens": max_output_tokens,
+        "discovered_at": discovered_at,
+    }
+    columns = ["harness_name", "model_id", "first_seen_at", "last_seen_at", "status",
+               "superseded_by", "discovery_source", "provider", *_HARNESS_MODEL_CATALOG_FIELDS]
+    params = [harness_name, model_id, first_seen_at, last_seen_at, status, superseded_by,
+              discovery_source, provider, *(values[name] for name in _HARNESS_MODEL_CATALOG_FIELDS)]
+    updates = ["last_seen_at=excluded.last_seen_at", "status=excluded.status",
+               "superseded_by=excluded.superseded_by", "discovery_source=excluded.discovery_source"]
+    updates.extend(f"{name}=excluded.{name}" for name in _HARNESS_MODEL_CATALOG_FIELDS)
+    conn.execute(
+        f"INSERT INTO harness_models ({', '.join(columns)}) VALUES ({', '.join('?' for _ in columns)}) "
+        f"ON CONFLICT(harness_name, model_id, provider) DO UPDATE SET {', '.join(updates)}",
+        params,
+    )
+
+
+def get_active_harness_models(
+    conn: sqlite3.Connection | None, harness: str | None = None, tier: str | None = None,
+) -> list[dict]:
+    """Return active catalog models, newest discoveries first.
+
+    An unavailable connection or an unmigrated database has no active models.
+    """
+    if conn is None:
+        return []
+    clauses = ["status='active'"]
+    params: list[object] = []
+    if harness is not None:
+        clauses.append("harness_name=?")
+        params.append(harness)
+    if tier is not None:
+        clauses.append("complexity_tier=?")
+        params.append(tier)
+    try:
+        cursor = conn.execute(
+            f"SELECT * FROM harness_models WHERE {' AND '.join(clauses)} "
+            "ORDER BY discovered_at DESC",
+            params,
+        )
+    except sqlite3.ProgrammingError:
+        # Dispatch callers may retain a connection that another owner closed.
+        return []
+    except sqlite3.OperationalError as exc:
+        if "no such table: harness_models" in str(exc):
+            return []
+        raise
+    return [dict(zip((item[0] for item in cursor.description), row)) for row in cursor.fetchall()]
+
+
 def _get_db():
     """Lazy compatibility access to the package DB connection."""
     from synlynk import _get_db as get_db
@@ -1046,6 +1144,16 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
             );
             CREATE INDEX IF NOT EXISTS idx_relay_mailbox_recipient
                 ON relay_mailbox(recipient_key, delivered_at);
+            CREATE TABLE IF NOT EXISTS relay_hub_devices (
+                device_id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                workspace_id TEXT NOT NULL,
+                revoked INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                revoked_at TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_relay_hub_devices_workspace
+                ON relay_hub_devices(workspace_id);
             CREATE TABLE IF NOT EXISTS backlog_items (
                 id                  INTEGER PRIMARY KEY AUTOINCREMENT,
                 item_id             TEXT UNIQUE,
@@ -1060,6 +1168,7 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
                 stage               TEXT NOT NULL DEFAULT 'open',
                 governs_stage       TEXT NOT NULL DEFAULT 'open',
                 complexity_tier     INTEGER DEFAULT 2,
+                priority            INTEGER DEFAULT 5,
                 goal_id             TEXT,
                 acceptance_criteria TEXT DEFAULT '[]',
                 status              TEXT NOT NULL DEFAULT 'staged',
@@ -1086,6 +1195,16 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
             CREATE INDEX IF NOT EXISTS idx_backlog_items_issue_number ON backlog_items(issue_number);
             CREATE INDEX IF NOT EXISTS idx_backlog_items_fingerprint ON backlog_items(fingerprint);
         """)
+        backlog_cols = set()
+        for _row in conn.execute("PRAGMA table_info(backlog_items)"):
+            backlog_cols.add(_row[1])
+        if backlog_cols and "priority" not in backlog_cols:
+            try:
+                conn.execute(
+                    "ALTER TABLE backlog_items ADD COLUMN priority INTEGER DEFAULT 5"
+                )
+            except sqlite3.OperationalError:
+                pass
         story_cols = {row[1] for row in conn.execute("PRAGMA table_info(stories)")}
         if "discipline" not in story_cols:
             try:
@@ -1307,6 +1426,14 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
                 )
             except sqlite3.OperationalError:
                 pass
+        if "terminal_evidence_strength" not in daemon_job_cols:
+            try:
+                conn.execute(
+                    "ALTER TABLE daemon_jobs ADD COLUMN "
+                    "terminal_evidence_strength TEXT NOT NULL DEFAULT 'unknown'"
+                )
+            except sqlite3.OperationalError:
+                pass
         if "unpushed_branch_check_attempts" not in daemon_job_cols:
             try:
                 conn.execute(
@@ -1445,7 +1572,20 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
                 status TEXT NOT NULL DEFAULT 'active',
                 superseded_by TEXT,
                 discovery_source TEXT NOT NULL DEFAULT 'curated',
-                PRIMARY KEY (harness_name, model_id)
+                provider TEXT NOT NULL DEFAULT 'native',
+                rate_input_per_mtok REAL,
+                rate_output_per_mtok REAL,
+                rate_cache_read_per_mtok REAL,
+                rate_cache_write_per_mtok REAL,
+                rate_tool_use_per_mtok REAL,
+                rate_currency TEXT NOT NULL DEFAULT 'usd',
+                rate_source TEXT,
+                complexity_tier TEXT,
+                max_effort_level TEXT,
+                context_window_tokens INTEGER,
+                max_output_tokens INTEGER,
+                discovered_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (harness_name, model_id, provider)
             );
 
             CREATE TABLE IF NOT EXISTS harness_modes (
@@ -1759,11 +1899,6 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
         if "pr_number" not in rating_cols:
             try:
                 conn.execute("ALTER TABLE capability_ratings ADD COLUMN pr_number INTEGER")
-            except sqlite3.OperationalError:
-                pass
-        if "quality_verified" not in rating_cols:
-            try:
-                conn.execute("ALTER TABLE capability_ratings ADD COLUMN quality_verified INTEGER")
             except sqlite3.OperationalError:
                 pass
         cost_cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}
@@ -2121,6 +2256,16 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
     cost_cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}
     if "turn_usage_json" not in cost_cols:
         conn.execute("ALTER TABLE cost_entries ADD COLUMN turn_usage_json TEXT")
+        conn.commit()
+
+    # Keep this repair outside the schema-version gate.  A database can have
+    # already reached the current version while a prior migration stopped
+    # before adding this column (or while the schema was bootstrapped by an
+    # older build).  In that state, the version-gated migration above is a
+    # no-op and _get_db() must still repair the missing column.
+    rating_cols = {row[1] for row in conn.execute("PRAGMA table_info(capability_ratings)")}
+    if "quality_verified" not in rating_cols:
+        conn.execute("ALTER TABLE capability_ratings ADD COLUMN quality_verified INTEGER")
         conn.commit()
 
     _migrate_onboarding_sessions(conn)
@@ -2816,11 +2961,29 @@ def cmd_migrate(dry_run: bool = False, recover: bool = False, setup_dr: bool = F
     except MigrationImportError:
         raise SystemExit(1)
 
+def _resolved_docs_dir() -> str:
+    """Absolute project-docs directory for generated writes.
+
+    ``_docs_dir()`` returns the workspace.json value as configured, normally
+    the relative string ``project-docs``. Joining that with the process cwd
+    writes into whichever dispatch worktree happens to be current (#2237).
+    Generated docs belong to the shared project root.
+    """
+    from synlynk import _docs_dir, _project_root
+
+    docs_dir = _docs_dir()
+    if docs_dir and not os.path.isabs(docs_dir):
+        try:
+            docs_dir = os.path.join(_project_root(), docs_dir)
+        except Exception:
+            return docs_dir
+    return docs_dir
+
+
 def _write_generated_project_doc(filename: str, content: str) -> None:
     """Write a generated 4-doc to the migrated cache and the git-tracked docs dir."""
     from synlynk import (
         DB_PATH,
-        _docs_dir,
         _dr_sync,
         _is_migrated,
         _project_root,
@@ -2946,7 +3109,7 @@ def _write_generated_project_doc(filename: str, content: str) -> None:
         syn_dir = _synlynk_project_docs_dir()
         os.makedirs(syn_dir, exist_ok=True)
         paths.append(os.path.join(syn_dir, filename))
-    docs_dir = _docs_dir()
+    docs_dir = _resolved_docs_dir()
     if docs_dir:
         if _is_migrated() or os.path.exists(docs_dir):
             os.makedirs(docs_dir, exist_ok=True)
@@ -2979,10 +3142,10 @@ def _generate_todo_md() -> None:
     """Writes todo.md as a generated view of stories.
     Post-migration: writes to .synlynk/project-docs/todo.md and project-docs/todo.md.
     Pre-migration: writes to project-docs/todo.md."""
-    from synlynk import _get_db, _is_migrated, _docs_dir
+    from synlynk import _get_db, _is_migrated
     if not _is_migrated():
-        docs_dir = _docs_dir()
-        if not os.path.exists(docs_dir):
+        docs_dir = _resolved_docs_dir()
+        if not docs_dir or not os.path.exists(docs_dir):
             return
 
     conn = _get_db()
@@ -3023,7 +3186,7 @@ def _rotate_project_doc(file_stem: str, all_rows: list, keep_n: int = None) -> l
     anything still loses it), but it closes the common case and is strictly
     additive: failures here never block doc generation.
     """
-    from synlynk import _docs_dir, _is_migrated, _synlynk_project_docs_dir
+    from synlynk import _is_migrated, _synlynk_project_docs_dir
 
     n = keep_n if keep_n is not None else _PROJECT_DOC_KEEP_N
     if len(all_rows) <= n:
@@ -3032,7 +3195,7 @@ def _rotate_project_doc(file_stem: str, all_rows: list, keep_n: int = None) -> l
     archived_rows = all_rows[:-n]
     live_rows = all_rows[-n:]
 
-    base_dir = _synlynk_project_docs_dir() if _is_migrated() else _docs_dir()
+    base_dir = _synlynk_project_docs_dir() if _is_migrated() else _resolved_docs_dir()
     archive_dir = os.path.join(base_dir, "archive")
     os.makedirs(archive_dir, exist_ok=True)
 
@@ -3180,10 +3343,10 @@ def _generate_roadmap_md() -> None:
     """Writes roadmap.md as a generated view of roadmap_arcs/roadmap_phases.
     Post-migration: writes to .synlynk/project-docs/roadmap.md and project-docs/roadmap.md.
     Pre-migration: writes to project-docs/roadmap.md."""
-    from synlynk import _docs_dir, _get_db, _is_migrated
+    from synlynk import _get_db, _is_migrated
     if not _is_migrated():
-        docs_dir = _docs_dir()
-        if not os.path.exists(docs_dir):
+        docs_dir = _resolved_docs_dir()
+        if not docs_dir or not os.path.exists(docs_dir):
             return
 
     conn = _get_db()
@@ -3223,10 +3386,10 @@ def _generate_costs_md() -> None:
     """Writes costs.md as a generated view of cost_entries.
     Post-migration: writes to .synlynk/project-docs/costs.md.
     Pre-migration: writes to project-docs/costs.md."""
-    from synlynk import _docs_dir, _get_db, _is_migrated, load_config
+    from synlynk import _get_db, _is_migrated, load_config
     if not _is_migrated():
-        docs_dir = _docs_dir()
-        if not os.path.exists(docs_dir):
+        docs_dir = _resolved_docs_dir()
+        if not docs_dir or not os.path.exists(docs_dir):
             return
 
     conn = _get_db()
@@ -3305,11 +3468,11 @@ def _write_memory_md() -> None:
     """Regenerate memory.md from memory_entries table.
     Post-migration: writes to .synlynk/project-docs/memory.md and project-docs/memory.md.
     Pre-migration: writes to project-docs/memory.md."""
-    from synlynk import _docs_dir, _get_db, _is_migrated
+    from synlynk import _get_db, _is_migrated
 
     if not _is_migrated():
-        docs_dir = _docs_dir()
-        if not os.path.exists(docs_dir):
+        docs_dir = _resolved_docs_dir()
+        if not docs_dir or not os.path.exists(docs_dir):
             return
 
     conn = _get_db()

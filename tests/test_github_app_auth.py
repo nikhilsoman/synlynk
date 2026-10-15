@@ -285,3 +285,14 @@ def test_refresh_installation_token_resolves_relative_pem_path_to_absolute(tmp_p
     assert len(minted_pem_paths) == 1
     assert os.path.isabs(minted_pem_paths[0])
     assert os.path.samefile(minted_pem_paths[0], pem_file)
+
+
+def test_default_apps_dir_resolves_via_product_store_after_migration(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk")
+    with open(".synlynk/workspace.json", "w", encoding="utf-8") as f:
+        json.dump({"identity_slug": "test-product"}, f)
+    from synlynk.github_app_auth import _default_apps_dir
+    result = _default_apps_dir()
+    # Must not silently fall back to the bare legacy dir once the repo is configured.
+    assert result != os.path.join(".synlynk", "github_apps")

@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from synlynk.capability import capability_score
 
@@ -19,6 +19,8 @@ class AgentCharter:
     autonomous_authorities: List[str]
     escalation_triggers: List[str]
     behavioral_weights: Dict[str, str]
+    durability: Optional[str] = None
+    wake_cycle_sop: List[str] = field(default_factory=list)
 
 
 def _charters_dir() -> str:
@@ -28,7 +30,7 @@ def _charters_dir() -> str:
 def validate_charter(charter: AgentCharter) -> bool:
     if not charter.role or not charter.mandate:
         return False
-    if not charter.harness_bindings or not isinstance(charter.harness_bindings, list):
+    if not isinstance(charter.harness_bindings, list):
         return False
     return True
 
@@ -49,11 +51,13 @@ def load_charter(role: str) -> AgentCharter:
         data = json.load(f)
     return AgentCharter(
         role=data["role"],
-        harness_bindings=data["harness_bindings"],
+        harness_bindings=data.get("harness_bindings", []),
         mandate=data["mandate"],
         autonomous_authorities=data.get("autonomous_authorities", []),
         escalation_triggers=data.get("escalation_triggers", []),
         behavioral_weights=data.get("behavioral_weights", {}),
+        durability=data.get("durability"),
+        wake_cycle_sop=data.get("wake_cycle_sop", []),
     )
 
 
@@ -160,6 +164,16 @@ TOOL_ROLE_SKILLS: dict[str, dict[str, str]] = {
     },
 }
 
+ROLE_SUPERPOWERS_SKILLS: dict[str, list[str]] = {
+    "dev": ["test-driven-development", "systematic-debugging"],
+    "builder": ["test-driven-development", "systematic-debugging"],
+    "qa": ["systematic-debugging"],
+    "verifier": ["systematic-debugging"],
+    "architect": ["brainstorming"],
+    "pm": ["brainstorming"],
+    "tpm": ["brainstorming"],
+}
+
 ALL_ADAPT_ROLES = (
     "architect",
     "qa",
@@ -212,6 +226,9 @@ def adapt_charters_for_installed_tools(*, dry_run: bool = False) -> dict[str, di
                 for s in active_role_skills.get(role, []):
                     if s not in desired_skills:
                         desired_skills.append(s)
+                for s in ROLE_SUPERPOWERS_SKILLS.get(role, []):
+                    if s not in desired_skills:
+                        desired_skills.append(s)
 
                 # Remove skills for tools that are not available
                 for tool_name, role_skill_map in TOOL_ROLE_SKILLS.items():
@@ -251,6 +268,9 @@ def adapt_charters_for_installed_tools(*, dry_run: bool = False) -> dict[str, di
 
         desired_skills = list(existing_skills)
         for s in active_role_skills.get(role, []):
+            if s not in desired_skills:
+                desired_skills.append(s)
+        for s in ROLE_SUPERPOWERS_SKILLS.get(role, []):
             if s not in desired_skills:
                 desired_skills.append(s)
 

@@ -1,4 +1,5 @@
 import json
+import os
 import sqlite3
 import subprocess
 from unittest.mock import patch, MagicMock
@@ -27,6 +28,27 @@ def test_db(tmp_path):
     conn = sqlite3.connect(str(db_file))
     _migrate_db(conn)
     return conn
+
+
+@pytest.fixture
+def scheduler_db(monkeypatch, tmp_path):
+    """Fresh state.db with schema + migrations applied, cwd set to a temp project."""
+    from synlynk import _DB_SCHEMA
+    from synlynk.db import _migrate_db
+
+    project_dir = tmp_path / "proj"
+    project_dir.mkdir()
+    monkeypatch.chdir(project_dir)
+    os.makedirs(".synlynk", exist_ok=True)
+    db_path = ".synlynk/state.db"
+    conn = sqlite3.connect(db_path)
+    conn.executescript(_DB_SCHEMA)
+    _migrate_db(conn)
+    conn.commit()
+    conn.close()
+
+    monkeypatch.setattr("synlynk._get_db", lambda: sqlite3.connect(db_path))
+    yield db_path
 
 
 def test_fetch_open_github_issues_parsing():
@@ -154,6 +176,32 @@ def test_synthesize_story_from_issue_roles_and_tiers():
     doc_story = synthesize_story_from_issue(doc_issue)
     assert doc_story["complexity_tier"] == 1
     assert doc_story["stage"] == "notify" or doc_story["stage"] == "open"
+
+
+def test_synthesize_story_from_issue_returns_none_goal_below_threshold():
+    issue = {
+        "title": "Fix typo in README",
+        "body": "One word is misspelled on line 4.",
+        "labels": [],
+        "number": 9001,
+    }
+    result = synthesize_story_from_issue(issue, active_goals=[
+        {"goal_id": "goal-unrelated", "title": "Swarm runners", "keywords": ["swarm", "fly", "k8s"]},
+    ])
+    assert result["goal_id"] is None
+
+
+def test_synthesize_story_from_issue_returns_goal_id_above_threshold():
+    issue = {
+        "title": "Add kubernetes pod runner for swarm dispatch",
+        "body": "Needs a new k8s pod registry entry.",
+        "labels": [],
+        "number": 9002,
+    }
+    result = synthesize_story_from_issue(issue, active_goals=[
+        {"goal_id": "goal-match", "title": "Swarm runners", "keywords": ["swarm", "pod", "k8s", "kubernetes", "registry", "dispatch"]},
+    ])
+    assert result["goal_id"] == "goal-match"
 
 
 def test_synthesize_story_markdown_acceptance_criteria_parsing():
@@ -317,6 +365,37 @@ def test_link_captured_backlog_item_to_explicit_or_default_goal(test_db):
     assert test_db.execute(
         "SELECT goal_id FROM backlog_items WHERE item_id = ?", (default_item,)
     ).fetchone()[0] == "goal-d3333441"
+
+
+def test_link_backlog_item_to_goal_require_explicit_skips_default_fallback(scheduler_db):
+    conn = sqlite3.connect(scheduler_db)
+    conn.execute("INSERT INTO stories (story_id, title) VALUES ('story-x1', 'test')")
+    conn.execute(
+        "INSERT INTO backlog_items (item_id, title, story_id, status) "
+        "VALUES ('item-x1', 'test', 'story-x1', 'triaged')"
+    )
+    conn.commit()
+
+    result = link_backlog_item_to_goal(
+        "item-x1", goal_id=None, db_conn=conn, require_explicit_goal=True
+    )
+    assert result["linked"] is False
+    assert result["reason"] == "no_confident_match"
+
+    row = conn.execute("SELECT goal_id FROM stories WHERE story_id='story-x1'").fetchone()
+    assert row[0] is None
+    conn.close()
+
+
+def test_link_backlog_item_to_goal_default_fallback_still_works_when_not_required(scheduler_db):
+    conn = sqlite3.connect(scheduler_db)
+    conn.execute("INSERT INTO stories (story_id, title) VALUES ('story-x2', 'test')")
+    conn.commit()
+
+    result = link_backlog_item_to_goal("story-x2", goal_id=None, db_conn=conn)
+    assert result["linked"] is True
+    assert result["goal_id"] == "goal-d3333441"
+    conn.close()
 
 
 def test_link_captured_backlog_item_keeps_promoted_story_contribution_in_sync(test_db):

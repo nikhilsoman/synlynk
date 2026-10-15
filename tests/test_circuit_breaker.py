@@ -1,10 +1,12 @@
 """Unit tests for Invariant 2: Hard in-flight token circuit breakers & runaway worker killer."""
 
 import os
+import time
 import signal
 import sys
 import tempfile
 import time
+import subprocess
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -12,9 +14,115 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from synlynk.jobs import STATUS_CIRCUIT_BREAKER_TRIPPED
 from synlynk.circuit_breaker import (
     CircuitBreakerResult,
+    _resolve_circuit_breaker_limits,
     evaluate_job_circuit_breaker,
 )
+from synlynk.dispatch import _start_dispatch_circuit_breaker_watchdog
 from synlynk.sentinel import _read_active_sentinel_alerts
+
+
+def _codex_turn_log(input_tokens, cached_input_tokens, output_tokens, reasoning=0):
+    return (
+        '{"type":"turn.completed","usage":{'
+        f'"input_tokens":{input_tokens},'
+        f'"cached_input_tokens":{cached_input_tokens},'
+        f'"output_tokens":{output_tokens},'
+        f'"reasoning_output_tokens":{reasoning}'
+        "}}\n"
+    )
+
+
+def test_zero_file_checkout_states_use_real_git(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    worktree = tmp_path / "worktree"
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    subprocess.run(["git", "-C", str(repo), "config", "user.email", "test@example.com"], check=True)
+    subprocess.run(["git", "-C", str(repo), "config", "user.name", "Test"], check=True)
+    (repo / "tracked.txt").write_text("base\n")
+    subprocess.run(["git", "-C", str(repo), "add", "tracked.txt"], check=True)
+    subprocess.run(["git", "-C", str(repo), "commit", "-qm", "base"], check=True)
+    subprocess.run(["git", "-C", str(repo), "branch", "dispatch"], check=True)
+    subprocess.run(["git", "-C", str(repo), "worktree", "add", "-q", str(worktree), "dispatch"], check=True)
+
+    from synlynk.circuit_breaker import _worktree_branch_is_stable
+
+    assert _worktree_branch_is_stable(str(worktree), "dispatch") is True
+    subprocess.run(["git", "-C", str(worktree), "switch", "-q", "-c", "feature"], check=True)
+    assert _worktree_branch_is_stable(str(worktree), "dispatch") is False
+    branch_switch_time = time.time()
+    monkeypatch.setattr("synlynk.circuit_breaker.time.time", lambda: branch_switch_time + 61)
+    assert _worktree_branch_is_stable(str(worktree), "dispatch") is True
+    subprocess.run(["git", "-C", str(worktree), "switch", "-q", "--detach"], check=True)
+    assert _worktree_branch_is_stable(str(worktree), "dispatch") is False
+
+
+def test_codex_tool_loop_cache_sum_does_not_trip_fast_tier_or_zero_file(tmp_path, monkeypatch):
+    """job-fccc76c4 / job-fda2e4ef: one Codex turn summed ~1.2M input tokens,
+    of which ~1.18M were cache reads of a ~50k prompt. The live prompt never
+    approached the 500k zero-file or fast-tier limits. Those jobs were killed
+    anyway because the sum was priced and compared as fresh input.
+    """
+    log_file = tmp_path / "job.log"
+    log_file.write_text(_codex_turn_log(1_248_424, 1_181_440, 6_645, 2_141))
+    killed = []
+    monkeypatch.setattr(os, "kill", lambda pid, sig: killed.append((pid, sig)))
+
+    job = {
+        "id": "job-fccc76c4",
+        "agent": "codex",
+        "model_tier": "fast",
+        "pid": 4242,
+        "log_file": str(log_file),
+        "worktree_path": str(tmp_path),
+        "status": "running",
+    }
+    config = {
+        "circuit_breaker": {
+            "max_job_tokens": 5_000_000,
+            "max_job_cost_usd": 15.00,
+            "zero_file_token_threshold": 500_000,
+            "tier_overrides": {
+                "fast": {"max_job_tokens": 500_000, "max_job_cost_usd": 2.00},
+            },
+        }
+    }
+    res = evaluate_job_circuit_breaker(
+        job,
+        config=config,
+        sentinel_path=str(tmp_path / "sentinel.md"),
+        skip_identity_check_for_test=True,
+    )
+    assert res.tripped is False
+    assert killed == []
+    assert job["status"] == "running"
+    assert res.total_tokens < 500_000
+    assert res.cost_usd < 2.00
+
+
+def test_codex_uncached_cumulative_input_still_trips_zero_file(tmp_path, monkeypatch):
+    log_file = tmp_path / "job.log"
+    log_file.write_text(_codex_turn_log(600_000, 0, 100))
+    monkeypatch.setattr(os, "kill", lambda pid, sig: None)
+    job = {
+        "id": "job-real-bloat",
+        "agent": "codex",
+        "pid": 4243,
+        "log_file": str(log_file),
+        "worktree_path": str(tmp_path),
+        "status": "running",
+    }
+    res = evaluate_job_circuit_breaker(
+        job,
+        config={"circuit_breaker": {
+            "max_job_tokens": 5_000_000,
+            "max_job_cost_usd": 100.0,
+            "zero_file_token_threshold": 500_000,
+        }},
+        sentinel_path=str(tmp_path / "sentinel.md"),
+        skip_identity_check_for_test=True,
+    )
+    assert res.tripped is True
+    assert job["status"] == STATUS_CIRCUIT_BREAKER_TRIPPED
 
 
 def test_circuit_breaker_not_tripped_under_limits(tmp_path):
@@ -124,6 +232,54 @@ def test_circuit_breaker_trips_on_cost_limit_breach(tmp_path, monkeypatch):
     assert "cost" in res.reason.lower()
 
 
+def test_dispatch_watchdog_kills_inflight_cost_runaway_without_daemon(tmp_path, monkeypatch):
+    """A bare dispatch enforces the breaker while its child is still running."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".synlynk").mkdir()
+    log_file = tmp_path / "inflight.log"
+    log_file.write_text("Input tokens: 1000\nOutput tokens: 100\n")
+
+    class FakeProcess:
+        pid = 24680
+
+        def __init__(self):
+            self.terminated = False
+
+        def poll(self):
+            return -9 if self.terminated else None
+
+        def terminate(self):
+            self.terminated = True
+
+        def kill(self):
+            self.terminated = True
+
+    process = FakeProcess()
+    job = {
+        "id": "job-watchdog-cost",
+        "agent": "claude",
+        "pid": process.pid,
+        "log_file": str(log_file),
+        "status": "running",
+    }
+    config = {
+        "watch_interval_seconds": 0.1,
+        "circuit_breaker": {"max_job_tokens": 1_000_000, "max_job_cost_usd": 1.50},
+    }
+
+    _start_dispatch_circuit_breaker_watchdog(process, job, config)
+    time.sleep(0.02)
+    log_file.write_text("Input tokens: 400000\nOutput tokens: 100000\n")
+
+    deadline = time.time() + 1.0
+    while time.time() < deadline and job["status"] != STATUS_CIRCUIT_BREAKER_TRIPPED:
+        time.sleep(0.01)
+
+    assert process.terminated is True
+    assert job["status"] == STATUS_CIRCUIT_BREAKER_TRIPPED
+    assert job["exit_code"] == -9
+
+
 def test_circuit_breaker_respects_tier_overrides(tmp_path, monkeypatch):
     log_file = tmp_path / "fast_tier.log"
     log_file.write_text("Input tokens: 60000\nOutput tokens: 5000\n")
@@ -161,3 +317,192 @@ def test_circuit_breaker_respects_tier_overrides(tmp_path, monkeypatch):
     # Fast tier max is 50,000, job has 65,000 -> must trip
     assert res.tripped is True
     assert job["status"] == STATUS_CIRCUIT_BREAKER_TRIPPED
+
+
+def test_circuit_breaker_resolves_log_size_tier_override():
+    from synlynk.circuit_breaker import _resolve_circuit_breaker_limits
+
+    job = {"id": "job-tier-log-size", "agent": "codex", "model_tier": "fast"}
+    config = {
+        "circuit_breaker": {
+            "max_job_tokens": 5_000_000,
+            "max_job_cost_usd": 15.00,
+            "zero_file_token_threshold": 500_000,
+            "tier_overrides": {
+                "fast": {
+                    "max_job_tokens": 500_000,
+                    "max_job_cost_usd": 2.00,
+                    "max_log_size_bytes": 10 * 1024 * 1024,
+                },
+            },
+        }
+    }
+    max_tokens, max_cost, zero_file_threshold, max_log_size_bytes = (
+        _resolve_circuit_breaker_limits(job, config)
+    )
+    assert max_log_size_bytes == 10 * 1024 * 1024
+
+    # No tier override set for this job's tier -> falls back to top-level default
+    job_no_override = {"id": "job-default-log-size", "agent": "codex", "model_tier": "pro"}
+    _, _, _, default_log_size = _resolve_circuit_breaker_limits(job_no_override, config)
+    assert default_log_size == 50 * 1024 * 1024
+
+
+def test_log_size_runaway_trips_with_zero_extracted_tokens(tmp_path, monkeypatch):
+    """Simulates gh:#1937: a long open Codex turn with no turn.completed line
+    yet, so extract_tokens() returns 0/0, but the transcript itself has grown
+    past the log-size ceiling from repeated tool-loop round trips."""
+    log_file = tmp_path / "runaway_no_usage.log"
+    # Plain-text padding with no turn.completed JSON line anywhere - simulates
+    # the mid-turn blind spot where extract_tokens() can't attribute any usage.
+    log_file.write_text("tool call output\n" * 2_000_000)
+    assert log_file.stat().st_size >= 10 * 1024 * 1024
+
+    killed_pids = []
+    monkeypatch.setattr(os, "kill", lambda pid, sig: killed_pids.append((pid, sig)))
+
+    job = {
+        "id": "job-log-size-runaway",
+        "agent": "codex",
+        "pid": 99001,
+        "log_file": str(log_file),
+        "status": "running",
+    }
+    config = {
+        "circuit_breaker": {
+            "max_job_tokens": 5_000_000,
+            "max_job_cost_usd": 15.00,
+            "zero_file_token_threshold": 500_000,
+            "max_log_size_bytes": 10 * 1024 * 1024,
+        }
+    }
+
+    res = evaluate_job_circuit_breaker(
+        job,
+        config=config,
+        sentinel_path=str(tmp_path / "sentinel.md"),
+        skip_identity_check_for_test=True,
+    )
+
+    assert res.tripped is True
+    assert res.process_killed is True
+    assert job["status"] == STATUS_CIRCUIT_BREAKER_TRIPPED
+    assert "log size runaway" in res.reason.lower()
+    assert "extracted tokens" in res.reason.lower()
+    assert len(killed_pids) >= 1
+
+
+def test_log_size_below_threshold_does_not_trip(tmp_path, monkeypatch):
+    log_file = tmp_path / "small_log.log"
+    log_file.write_text("tool call output\n" * 100)
+    assert log_file.stat().st_size < 10 * 1024 * 1024
+
+    monkeypatch.setattr(os, "kill", lambda pid, sig: None)
+
+    job = {
+        "id": "job-small-log",
+        "agent": "codex",
+        "pid": 99002,
+        "log_file": str(log_file),
+        "worktree_path": str(tmp_path),
+        "status": "running",
+    }
+    config = {
+        "circuit_breaker": {
+            "max_job_tokens": 5_000_000,
+            "max_job_cost_usd": 15.00,
+            "zero_file_token_threshold": 500_000,
+            "max_log_size_bytes": 10 * 1024 * 1024,
+        }
+    }
+
+    res = evaluate_job_circuit_breaker(
+        job,
+        config=config,
+        sentinel_path=str(tmp_path / "sentinel.md"),
+        skip_identity_check_for_test=True,
+    )
+
+    assert res.tripped is False
+    assert job["status"] == "running"
+
+
+def test_cost_check_wins_over_log_size_when_both_trigger(tmp_path, monkeypatch):
+    """Order-of-checks regression guard: a log large enough to cross
+    max_log_size_bytes AND containing a turn.completed whose usage crosses
+    max_job_cost_usd must report the cost reason, not the log-size reason."""
+    log_file = tmp_path / "big_and_expensive.log"
+    # Pad past the 10MB log-size ceiling, then append a turn.completed whose
+    # cost crosses the $1.50 ceiling (400k in + 100k out, same shape as the
+    # existing test_circuit_breaker_trips_on_cost_limit_breach fixture).
+    padding = "tool call output\n" * 700_000
+    log_file.write_text(padding + "Input tokens: 400000\nOutput tokens: 100000\n")
+    assert log_file.stat().st_size >= 10 * 1024 * 1024
+
+    killed_pids = []
+    monkeypatch.setattr(os, "kill", lambda pid, sig: killed_pids.append((pid, sig)))
+
+    job = {
+        "id": "job-cost-and-log-size",
+        "agent": "claude",
+        "pid": 99003,
+        "log_file": str(log_file),
+        "status": "running",
+    }
+    config = {
+        "circuit_breaker": {
+            "max_job_tokens": 1_000_000,
+            "max_job_cost_usd": 1.50,
+            "max_log_size_bytes": 10 * 1024 * 1024,
+        }
+    }
+
+    res = evaluate_job_circuit_breaker(
+        job,
+        config=config,
+        sentinel_path=str(tmp_path / "sentinel.md"),
+        skip_identity_check_for_test=True,
+    )
+
+    assert res.tripped is True
+    assert "cost" in res.reason.lower()
+    assert "log size" not in res.reason.lower()
+
+
+def test_zero_file_check_still_fires_below_log_size_threshold(tmp_path, monkeypatch):
+    """Regression guard: inserting the log-size elif between the token check
+    and the zero-file check must not break the existing zero-file path when
+    the log itself is small but token count crosses zero_file_threshold."""
+    log_file = tmp_path / "zero_file_small_log.log"
+    log_file.write_text("Input tokens: 600000\nOutput tokens: 100\n")
+    assert log_file.stat().st_size < 10 * 1024 * 1024
+
+    monkeypatch.setattr(os, "kill", lambda pid, sig: None)
+
+    job = {
+        "id": "job-zero-file-small-log",
+        "agent": "codex",
+        "pid": 99004,
+        "log_file": str(log_file),
+        "worktree_path": str(tmp_path),
+        "status": "running",
+    }
+    config = {
+        "circuit_breaker": {
+            "max_job_tokens": 5_000_000,
+            "max_job_cost_usd": 100.0,
+            "zero_file_token_threshold": 500_000,
+            "max_log_size_bytes": 10 * 1024 * 1024,
+        }
+    }
+
+    res = evaluate_job_circuit_breaker(
+        job,
+        config=config,
+        sentinel_path=str(tmp_path / "sentinel.md"),
+        skip_identity_check_for_test=True,
+    )
+
+    assert res.tripped is True
+    assert job["status"] == STATUS_CIRCUIT_BREAKER_TRIPPED
+    assert "zero-file" in res.reason.lower()

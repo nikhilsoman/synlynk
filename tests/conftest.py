@@ -121,7 +121,7 @@ def stub_dispatch_worktree(monkeypatch, request):
         synlynk, "_inspect_worktree_git_state", lambda *args, **kwargs: None,
         raising=False,
     )
-    monkeypatch.setattr(dispatch_mod, "_worktree_files_touched", lambda worktree_path: [])
+    monkeypatch.setattr(dispatch_mod, "_worktree_files_touched", lambda worktree_path, base_sha=None: [])
 
 
 @pytest.fixture
@@ -170,3 +170,11 @@ def project_dir(tmp_path, monkeypatch):
 
     monkeypatch.chdir(tmp_path)
     return tmp_path
+
+
+@pytest.fixture
+def daemon_workspace_root(request, monkeypatch):
+    """Give daemon tests using project_dir the same explicit root as launchers."""
+    if "project_dir" in request.fixturenames:
+        project_dir = request.getfixturevalue("project_dir")
+        monkeypatch.setenv("SYNLYNK_DAEMON_WORKSPACE_ROOT", str(project_dir))

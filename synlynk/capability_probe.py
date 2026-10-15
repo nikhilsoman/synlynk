@@ -259,8 +259,19 @@ def resolve_capable_dispatch_harness(
     revokes: Optional[Iterable[str]] = None,
     task_type: Optional[str] = None,
     requires_gh_write: bool = False,
+    excluded_harnesses: Optional[Iterable[str]] = None,
 ) -> str:
     """Resolve a capable harness prior to dispatch, enforcing fail-closed semantics."""
+    excluded_set = {h.strip().lower() for h in (excluded_harnesses or ())}
+    if candidate_harness.lower() in excluded_set:
+        if force_agent:
+            raise IncompatibleHarnessCapabilityError(
+                f"Dispatch refused: forced harness '{candidate_harness}' is excluded from this dispatch."
+            )
+        candidate_eligible = False
+    else:
+        candidate_eligible = True
+
     if required_capabilities is None:
         required_capabilities = infer_task_required_capabilities(
             task=task,
@@ -269,17 +280,24 @@ def resolve_capable_dispatch_harness(
             requires_gh_write=requires_gh_write,
         )
 
-    eval_result = evaluate_harness_capabilities(
-        candidate_harness,
-        required_capabilities,
-        grants=grants,
-        revokes=revokes,
-    )
+    if candidate_eligible:
+        eval_result = evaluate_harness_capabilities(
+            candidate_harness,
+            required_capabilities,
+            grants=grants,
+            revokes=revokes,
+        )
+        if eval_result.allowed:
+            return candidate_harness
+    else:
+        eval_result = evaluate_harness_capabilities(
+            candidate_harness,
+            required_capabilities,
+            grants=grants,
+            revokes=revokes,
+        )
 
-    if eval_result.allowed:
-        return candidate_harness
-
-    # Candidate does NOT satisfy requirements
+    # Candidate does NOT satisfy requirements (or is excluded and force_agent is False)
     if force_agent:
         missing_str = ", ".join(eval_result.missing_capabilities)
         raise IncompatibleHarnessCapabilityError(
@@ -293,7 +311,7 @@ def resolve_capable_dispatch_harness(
         fallback_chain = ["codex", "agy", "claude", "grok", "local"]
 
     for alt_harness in fallback_chain:
-        if alt_harness == candidate_harness:
+        if alt_harness == candidate_harness or alt_harness.lower() in excluded_set:
             continue
         alt_eval = evaluate_harness_capabilities(
             alt_harness,
@@ -309,3 +327,4 @@ def resolve_capable_dispatch_harness(
     raise NoCapableHarnessError(
         f"Dispatch failed: no harness in fleet satisfies required capabilities: {missing_str} for task {task!r}."
     )
+

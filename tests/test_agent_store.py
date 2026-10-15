@@ -3,6 +3,30 @@ import os
 import pytest
 
 
+def test_get_workspace_id_reads_from_workspace_json(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk")
+    wid = "11111111-2222-3333-4444-555555555555"
+    with open(".synlynk/workspace.json", "w", encoding="utf-8") as f:
+        json.dump({"workspace_id": wid}, f)
+    from synlynk.agent_store import get_workspace_id
+    assert get_workspace_id() == wid
+
+
+def test_get_workspace_id_mint_writes_to_workspace_json_not_legacy(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs(".synlynk")
+    with open(".synlynk/workspace.json", "w", encoding="utf-8") as f:
+        json.dump({}, f)
+    from synlynk.agent_store import get_workspace_id
+    minted = get_workspace_id()
+    assert minted
+    with open(".synlynk/workspace.json", encoding="utf-8") as f:
+        saved = json.load(f)
+    assert saved.get("workspace_id") == minted
+    assert not os.path.exists(".synlynk/config.json")
+
+
 def _valid_charter(marker: str) -> str:
     return (
         "---\n"

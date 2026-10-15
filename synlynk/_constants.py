@@ -266,31 +266,62 @@ HARNESS_CAPABILITY_BASELINES = {
         "env_passthrough": ["OPENAI_API_KEY"],
         "strengths": ["zero-cost inference", "on-device", "granular tasks"],
     },
-    "muse": {
-        "cli": "muse",
-        "can_gh_write": True,
-        "non_interactive_flags": ["run", "--non-interactive"],
+    "openrouter": {
+        "cli": "synlynk",
+        "can_gh_write": False,
+        # "gateway dispatch" is the real subcommand (synlynk/cli.py:598-603).
+        # --model is appended generically by dispatch_agent() when a model
+        # is passed; --prompt is appended by the prompt_flag/prompt_via_arg
+        # mechanism below (dispatch.py:4280-4289), carrying the task text.
+        "non_interactive_flags": ["gateway", "dispatch"],
         "prompt_flag": "--prompt",
         "prompt_via_arg": True,
         "dispatch_flags": {
-            "valid_flags": [
-                "--prompt",
-                "--model",
-                "--non-interactive",
-                "-C",
-                "--output-format",
-            ],
-            "invalid_flags": ["--dangerously-skip-permissions", "--always-approve"],
-            "required_flags": ["--non-interactive"],
+            "valid_flags": ["--model", "--config"],
+            "invalid_flags": ["--dangerously-skip-permissions", "--always-approve", "--non-interactive"],
+            "required_flags": [],
         },
         "headless_contract": {
             "requires_pty": False,
             "stdout_flush_method": "native",
             "env_vars_required": [],
-            "non_interactive_flag": "--non-interactive",
+            "non_interactive_flag": "--prompt",
         },
         "network_deps": {
-            "required_endpoints": ["api.muse.meta.com:443"],
+            "required_endpoints": ["openrouter.ai:443"],
+            "optional_endpoints": [],
+        },
+        "roles": ["builder"],
+        "env_passthrough": ["OPENROUTER_API_KEY"],
+        "strengths": ["model-agnostic HTTP dispatch", "BYOK provider aggregation", "no vendor CLI required"],
+    },
+    "muse": {
+        "cli": "muse",
+        "can_gh_write": True,
+        "non_interactive_flags": ["exec"],
+        "prompt_via_arg": True,
+        "dispatch_flags": {
+            "valid_flags": [
+                "--json",
+                "--provider",
+                "--model",
+                "--approval-mode",
+                "--workspace",
+                "--yolo",
+            ],
+            "invalid_flags": ["--dangerously-skip-permissions", "--always-approve"],
+            # Skip-permissions equivalent for Muse is '--approval-mode never'
+            # (or '--yolo' to also disable the sandbox).
+            "required_flags": ["--json", "--approval-mode"],
+        },
+        "headless_contract": {
+            "requires_pty": False,
+            "stdout_flush_method": "native",
+            "env_vars_required": [],
+            "non_interactive_flag": "exec",
+        },
+        "network_deps": {
+            "required_endpoints": [],
             "optional_endpoints": [],
         },
         "auth_check": {

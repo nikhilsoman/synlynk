@@ -1644,7 +1644,6 @@ If reviewer identity allows approval, submit a [testing] <!-- id:story-issue-189
 - [ ] PR #2006 (fix: verify GitHub pull request merges, gh:#2005) is APPROVED by qa review, all required checks pass (test matrix x4, qa-gate, release-docs all SUCCESS; only an unrelated marketing-sync chec [testing] <!-- id:story-issue-2006 -->
 - [ ] Fix gh:#2008. The task-delivery receipt check (_check_task_receipt / _classify_task_delivery in synlynk/jobs.py, around lines 2040-2189 and the duplicate block ~2280-2345) hard-fails a job as TASK_DEL [testing] <!-- id:story-issue-2008 -->
 - [ ] From within PR #2009's own worktree/branch (dispatch/codex/job-f9a82968), fix the failing CI. All 4 test-matrix jobs fail with: TypeError: test_dispatch_gitstateverified_job_reconciliation_rechecks_fa [testing] <!-- id:story-issue-2009 -->
-- [ ] feat(gateway): wire OpenRouter dispatch [backend] <!-- id:story-issue-2010 -->
 - [ ] chore(costs): log gh:#1711 interactive Codex session cost [testing] <!-- id:story-issue-2011 -->
 - [ ] You are implementing Task 1 only of the containerized-dispatch plan.
 
@@ -1825,3 +1824,200 @@ Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'corre [backe
 - [ ] gh #2098: audit README capability-routing claims against live evidence [docs] <!-- id:story-f7e03fdb -->
 - [ ] Support native reviewer provenance in cross-harness PR checks [backend] <!-- id:story-issue-2113 -->
 - [ ] feat: persist typed PR provenance [testing] <!-- id:story-issue-2115 -->
+- [ ] feat(provenance): attest legacy job classification [backend] <!-- id:story-issue-2117 -->
+- [ ] Policy enforcement maturity: observe-mode gates for GOVERNS/cross-harness review [backend] <!-- id:story-7117bb01 -->
+- [ ] test(adapters): add cross-harness conformance suite (#2062) [testing] <!-- id:story-issue-2081 -->
+- [ ] review-type dispatches crash on any synlynk CLI command: _reconcile_jobs() writes under read-only sandbox [testing] <!-- id:story-issue-2118 -->
+- [ ] dispatch: capability-probe reroutes codex/agy review tasks to 'local', which hard-crashes on permission enforcement [testing] <!-- id:story-issue-2124 -->
+- [ ] [P1] Make local harness preflight fail closed on missing MLX or OrbStack setup [testing] <!-- id:story-issue-2099 -->
+- [ ] [P0] Authorized role-scoped GitHub actions blocked by interactive harness classifier [backend] <!-- id:story-issue-2097 -->
+- [ ] Dispatch jobs run with stale Graphify graph + full (non-sparse) worktrees — plausible driver of repeated cost-inflation pattern [testing] <!-- id:story-issue-2133 -->
+- [ ] Job-status false-negative recurrence: 6/6 jobs this session reported failed/degraded despite confirmed real success [backend] <!-- id:story-issue-2130 -->
+- [ ] Bounded retry on unknown GH-write verification instead of permanent terminal settle [testing] <!-- id:story-issue-2136 -->
+- [ ] Close the race between per-CLI jobs.json classification and daemon-poll GH verification [testing] <!-- id:story-issue-2137 -->
+- [ ] ci: move cold-start and EPUB validation out of required CI [backend] <!-- id:story-issue-1943 -->
+- [ ] Version drift (VERSION/README/CHANGELOG) + blog index gap found during qa review [testing] <!-- id:story-issue-1914 -->
+- [ ] gh:#2101 Config decomposition: split config.json into workspace.json/billing.json/policy.json [backend] <!-- id:story-b04fdd2c -->
+- [ ] docs(plans): refresh five-track status against live gh issue state [testing] <!-- id:story-issue-2084 -->
+- [ ] [P1] Decompose workspace configuration into workspace, billing, and policy files [docs] <!-- id:story-issue-2101 -->
+- [ ] gh#1831: state shard reconciliation (project_root hardening, inventory, reconcile CLI) [backend] <!-- id:story-a266b194 -->
+- [ ] Cleanup: 11,384 legacy state.db shards under ~/.synlynk/projects/ (6.1GB, no active writes since 2026-09-15) [backend] <!-- id:story-issue-1831 -->
+- [ ] Brainstorm + arch-council design session: Herdr as bundled dependency and standard UX/UI layer [architecture] <!-- id:story-272f0252 -->
+- [ ] Federated subscription-quota capture [backend] <!-- id:story-d84372cd -->
+- [ ] SuperAgents Post-training/Distillation phase: Kaggle Gemma 4 Developer Agent Competition as near-term vehicle [ml] <!-- id:story-9442caf8 -->
+- [ ] Write a minimal example demonstrating Programming/Software Development for a small Python function. [backend] <!-- id:story-adhoc-1791627240 -->
+- [ ] Review this Programming/Software Development calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<tr [backend] <!-- id:story-adhoc-1791627258 -->
+- [ ] Write a minimal example demonstrating Testing for a small Python function. [testing] <!-- id:story-adhoc-1791627275 -->
+- [ ] Review this Testing calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<true|false>'.
+
+Executor har [testing] <!-- id:story-adhoc-1791627293 -->
+- [ ] Write a minimal example demonstrating Requirements Definition and Management for a small Python function. [backend] <!-- id:story-adhoc-1791627310 -->
+- [ ] Review this Requirements Definition and Management calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'corre [backend] <!-- id:story-adhoc-1791627326 -->
+- [ ] Write a minimal example demonstrating Programming/Software Development for a small Python function. [backend] <!-- id:story-adhoc-1791627344 -->
+- [ ] Review this Programming/Software Development calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<tr [backend] <!-- id:story-adhoc-1791627360 -->
+- [ ] Write a minimal example demonstrating Testing for a small Python function. [testing] <!-- id:story-adhoc-1791627379 -->
+- [ ] Review this Testing calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<true|false>'.
+
+Executor har [testing] <!-- id:story-adhoc-1791627396 -->
+- [ ] Write a minimal example demonstrating Requirements Definition and Management for a small Python function. [backend] <!-- id:story-adhoc-1791627415 -->
+- [ ] Review this Requirements Definition and Management calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'corre [backend] <!-- id:story-adhoc-1791627432 -->
+- [ ] Write a minimal example demonstrating Programming/Software Development for a small Python function. [backend] <!-- id:story-adhoc-1791627450 -->
+- [ ] Review this Programming/Software Development calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<tr [backend] <!-- id:story-adhoc-1791627469 -->
+- [ ] Write a minimal example demonstrating Testing for a small Python function. [testing] <!-- id:story-adhoc-1791627486 -->
+- [ ] Review this Testing calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<true|false>'.
+
+Executor har [testing] <!-- id:story-adhoc-1791627505 -->
+- [ ] Write a minimal example demonstrating Requirements Definition and Management for a small Python function. [backend] <!-- id:story-adhoc-1791627522 -->
+- [ ] Review this Requirements Definition and Management calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'corre [backend] <!-- id:story-adhoc-1791627540 -->
+- [ ] Write a minimal example demonstrating Programming/Software Development for a small Python function. [backend] <!-- id:story-adhoc-1791627558 -->
+- [ ] Review this Programming/Software Development calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<tr [backend] <!-- id:story-adhoc-1791627577 -->
+- [ ] Write a minimal example demonstrating Testing for a small Python function. [testing] <!-- id:story-adhoc-1791627595 -->
+- [ ] Review this Testing calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<true|false>'.
+
+Executor har [testing] <!-- id:story-adhoc-1791627614 -->
+- [ ] Write a minimal example demonstrating Requirements Definition and Management for a small Python function. [backend] <!-- id:story-adhoc-1791627633 -->
+- [ ] Review this Requirements Definition and Management calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'corre [backend] <!-- id:story-adhoc-1791627651 -->
+- [ ] Write a minimal example demonstrating Programming/Software Development for a small Python function. [backend] <!-- id:story-adhoc-1791627670 -->
+- [ ] Review this Programming/Software Development calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<tr [backend] <!-- id:story-adhoc-1791627688 -->
+- [ ] Write a minimal example demonstrating Testing for a small Python function. [testing] <!-- id:story-adhoc-1791627706 -->
+- [ ] Review this Testing calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<true|false>'.
+
+Executor har [testing] <!-- id:story-adhoc-1791627724 -->
+- [ ] Write a minimal example demonstrating Requirements Definition and Management for a small Python function. [backend] <!-- id:story-adhoc-1791627741 -->
+- [ ] Review this Requirements Definition and Management calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'corre [backend] <!-- id:story-adhoc-1791627761 -->
+- [ ] Write a minimal example demonstrating Programming/Software Development for a small Python function. [backend] <!-- id:story-adhoc-1791627778 -->
+- [ ] Review this Programming/Software Development calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<tr [backend] <!-- id:story-adhoc-1791627797 -->
+- [ ] Write a minimal example demonstrating Testing for a small Python function. [testing] <!-- id:story-adhoc-1791627815 -->
+- [ ] Review this Testing calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<true|false>'.
+
+Executor har [testing] <!-- id:story-adhoc-1791627834 -->
+- [ ] Write a minimal example demonstrating Requirements Definition and Management for a small Python function. [backend] <!-- id:story-adhoc-1791627855 -->
+- [ ] Review this Requirements Definition and Management calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'corre [backend] <!-- id:story-adhoc-1791627877 -->
+- [ ] Write a minimal example demonstrating Programming/Software Development for a small Python function. [backend] <!-- id:story-adhoc-1791627898 -->
+- [ ] Review this Programming/Software Development calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<tr [backend] <!-- id:story-adhoc-1791627916 -->
+- [ ] Write a minimal example demonstrating Testing for a small Python function. [testing] <!-- id:story-adhoc-1791627934 -->
+- [ ] Review this Testing calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'correct=<true|false>'.
+
+Executor har [testing] <!-- id:story-adhoc-1791627952 -->
+- [ ] Write a minimal example demonstrating Requirements Definition and Management for a small Python function. [backend] <!-- id:story-adhoc-1791627969 -->
+- [ ] Review this Requirements Definition and Management calibration task output from another harness and score it 0-10 for quality.
+Respond with a line '# synlynk-meta' followed by 'quality=<N>' and 'corre [backend] <!-- id:story-adhoc-1791627987 -->
+- [ ] Fix capability sweep quality_verified signal (gh:#2170) [backend] <!-- id:story-7270b57f -->
+- [ ] Fix missing YAML frontmatter blocking pr check repo-wide (gh:#2161) [backend] <!-- id:story-e4566473 -->
+- [ ] Investigate marketing-sync merge conflicts on generated files (gh:#2146) [backend] <!-- id:story-7348371d -->
+- [ ] Stop pricing Codex cache-replay input as fresh tokens [backend] <!-- id:story-f336c1c5 -->
+- [ ] TPM daemon autonomy fix: wire SYNLYNK_AUTONOMOUS into installers + gh:1133 regression test [devops] <!-- id:story-71c4ed60 -->
+- [ ] feat(cli): add 'synlynk goal update' subcommand (gh:#2182) [backend] <!-- id:story-574f68cb -->
+- [ ] feat(cli): add 'synlynk goal update' subcommand (gh:#2182) [testing] <!-- id:story-issue-2183 -->
+- [ ] fix(daemon): enable autonomous ticks in installed services [testing] <!-- id:story-issue-2181 -->
+- [ ] docs(blog): synchronize marketing collateral [security] <!-- id:story-issue-2175 -->
+- [ ] docs: align xdist evaluation with shipped CI policy [testing] <!-- id:story-issue-2180 -->
+- [ ] fix(dispatch): clean up no-op job worktrees [testing] <!-- id:story-issue-2179 -->
+- [ ] docs(blog): correct post 265 frontmatter [testing] <!-- id:story-issue-2174 -->
+- [ ] fix: price Codex cache-replay input separately from fresh tokens [testing] <!-- id:story-issue-2177 -->
+- [ ] docs: capability sweep quality signal — design spec + implementation plan [testing] <!-- id:story-issue-2171 -->
+- [ ] docs(archive): archive superseded regen write-through reconciliation spec [testing] <!-- id:story-issue-2156 -->
+- [ ] chore(deps-dev): bump liquidjs from 10.27.1 to 10.30.0 in /website [frontend] <!-- id:story-issue-2176 -->
+- [ ] chore(deps-dev): bump markdown-it from 14.2.0 to 14.3.2 in /website [frontend] <!-- id:story-issue-1900 -->
+- [ ] Backfill Blog Post Protocol posts for #2180/#2171/#2181/#2179/#2183 [docs] <!-- id:story-156924d6 -->
+- [ ] synlynk story done does not clear readiness, causing done stories to be re-swept [testing] <!-- id:story-issue-1133 -->
+- [ ] Muse harness CLI config drift blocks dispatch [testing] <!-- id:story-issue-2187 -->
+- [ ] PR number 2156, the daemon config fix, is already reviewed and approved by qa. Branch was just updated against main. Confirm merge authority for the qa role, then merge PR 2156 with squash. If rejecte [security] <!-- id:story-adhoc-1791694902 -->
+- [ ] PR number 2190, Muse harness config fix task 4, is already reviewed and approved by qa, and all CI checks are passing (mergeStateStatus is CLEAN). Confirm merge authority for the qa role, then merge P [testing] <!-- id:story-adhoc-1791694958 -->
+- [ ] PR number 2156, the daemon config fix, is already reviewed and approved by qa, and all CI checks are passing (mergeStateStatus is CLEAN). Confirm merge authority for the qa role, then merge PR 2156 wi [testing] <!-- id:story-adhoc-1791695480 -->
+- [ ] PR number 2177 is already reviewed and approved by qa, and all CI checks are passing, meaning mergeStateStatus is CLEAN. Confirm merge authority for the qa role, then merge PR 2177 with squash. [testing] <!-- id:story-adhoc-1791695991 -->
+- [ ] PR number 2191 is already reviewed and approved by qa, and all CI checks are passing, meaning mergeStateStatus is CLEAN. Confirm merge authority for the qa role, then merge PR 2191 with squash. [testing] <!-- id:story-adhoc-1791696028 -->
+- [ ] Read the file README.md in this repo and summarize it in exactly one sentence. Do not modify any file. [docs] <!-- id:story-adhoc-1791698278 -->
+- [ ] Muse harness probe reports degraded: network_deps.required_endpoints references non-existent host api.muse.meta.com [backend] <!-- id:story-issue-2192 -->
+- [ ] fix: muse harness has no real network dependency, baseline required_endpoints was a fabricated host [backend] <!-- id:story-issue-2193 -->
+- [ ] Read the file README.md in this repo and summarize it in exactly one sentence. Do not modify any file. [docs] <!-- id:story-adhoc-1791700665 -->
+- [ ] Muse harness dispatch cost not captured: extract_tokens returns 0 in/0 out despite real completion [testing] <!-- id:story-issue-2194 -->
+- [ ] job-d7090bf8: FAILED/unknown_contract status despite successful PR #2157 [testing] <!-- id:story-issue-2158 -->
+- [ ] Graphify auto-refresh should trigger on staleness, not only on file-absence [testing] <!-- id:story-issue-2140 -->
+- [ ] fix(dispatch): refresh stale Graphify graph, surface context-build failures [testing] <!-- id:story-issue-2198 -->
+- [ ] fix(docs): add missing frontmatter fields to blog post 267 [testing] <!-- id:story-issue-2199 -->
+- [ ] fix(job_truth): prioritize verified remote evidence over unknown_contract [testing] <!-- id:story-issue-2196 -->
+- [ ] Blog policy overhaul: PR-durable articulation, marketing-only blog surface, 294-post migration [backend] <!-- id:story-0ab760c5 -->
+- [ ] Job-status split-brain cluster: make terminal verdicts revisable (#2130/#2137/#2138/#2139/#2163) [backend] <!-- id:story-25872226 -->
+- [ ] feat(dispatch): Invariant 1 - Effect-verified completion contract (#1806) [backend] <!-- id:story-9b981c53 -->
+- [ ] feat(dispatch): wire openrouter harness baseline + cost parser (gh:#2076) [backend] <!-- id:story-fa106e5a -->
+- [ ] Wire Hermes local-model tier into dispatch measurement (gh:#2211 spec) [backend] <!-- id:story-d4075e76 -->
+- [ ] docs(devlog): record Pillar 1 blocker review + backlog triage pause [testing] <!-- id:story-issue-2186 -->
+- [ ] docs(costs): backfill 3 cost entries dropped by regeneration bug [testing] <!-- id:story-issue-2153 -->
+- [ ] docs: Muse harness config fix design + implementation plan (gh:#2187) [testing] <!-- id:story-issue-2226 -->
+- [ ] Investigate cost anomaly on job-2a16259d / PR #2232 (TOKEN_BLOAT+COST_INFLATION) [backend] <!-- id:story-e8936675 -->
+- [ ] Investigate cost anomaly on job-2a16259d / PR #2232 (TOKEN_BLOAT+COST_INFLATION) [backend] <!-- id:story-b81f2806 -->
+- [ ] fix: _generate_todo_md() leaks project-wide snapshot into dispatch job worktrees via cwd-relative path [backend] <!-- id:story-a7b5674c -->
+- [ ] gh:#2163 fix sha_match false-negative on squash-merge for expect=merged verification [backend] <!-- id:story-3522e331 -->
+- [ ] Context-window optimization design spec + decide-panel R1/R2 [backend] <!-- id:story-c04f64b1 -->
+- [ ] synlynk decide: quorum (majority/minority) panel-response mode (gh:#2242) [backend] <!-- id:story-2ed5303f -->
+- [ ] Finalize workspace agent roles, charters, responsibilities and SOPs via brainstorm + decide panel (incl. durable platform-maintenance ownership) [architecture] <!-- id:story-0ad6c02b -->
+- [ ] fix: pass Muse API key through to dispatched jobs [backend] <!-- id:story-issue-2253 -->
+- [ ] feat: finalize PM/TPM durable wake-cycle charters [testing] <!-- id:story-issue-2246 -->
+- [ ] Muse harness: provision API key + migrate to HarnessAdapter registry before calibration [backend] <!-- id:story-issue-2077 -->
+- [ ] Fix: daemon detached child never daemonizes from a dispatch-job worktree, add self-health-check (gh:#2261) [devops] <!-- id:story-6dd31263 -->
+- [ ] Fix: test_goals.py tests missing project_dir isolation overwrite worktree todo.md (gh:#2263) [testing] <!-- id:story-110ecce3 -->
+- [ ] Brainstorm/spec: wire autonomous backlog pickup + scheduler + autonomy_mode into daemon loop (gh:#2262) [architecture] <!-- id:story-6e633122 -->
+- [ ] File a new GitHub issue on this repo (gh issue create, no --project needed unless default template requires it) titled: 'Agy model-tier defaults are stale across all 3 tiers -- discover_models() exist [devops] <!-- id:story-adhoc-1791911726 -->
+- [ ] Fix stale Agy model-tier defaults, wire discover_models() into resolve_tier_model() (gh:#2268) [backend] <!-- id:story-395153be -->
+- [ ] Fix capability-probe reroute hard-pinning gh-write review dispatches (gh:#2271) [backend] <!-- id:story-7322619b -->
+- [ ] fix(dispatch): exclude implementer harness from review capability probe (gh:#2271) [testing] <!-- id:story-issue-2274 -->
+- [ ] dispatch worktree base resolves against long-lived local branch instead of origin/main, causing cost inflation + corrupted PRs [testing] <!-- id:story-issue-2229 -->
+- [ ] Dispatch-layer job-status false negatives on genuinely merged PRs (job-54a21d5d, job-2fe76b53) [testing] <!-- id:story-issue-2163 -->
+- [ ] Agy model-tier defaults are stale across all 3 tiers -- discover_models() exists but is never wired into resolve_tier_model() [testing] <!-- id:story-issue-2268 -->
+- [ ] [Epic] Promote Meta Muse to a calibrated core harness after adapter conformance [frontend] <!-- id:story-issue-2109 -->
+- [ ] Context-window optimization: per-harness instruction-reload audit + instruction-writer redesign (goal-e79062e8 / story-c04f64b1) [testing] <!-- id:story-issue-2243 -->
+- [ ] fix: stop dispatch cost inflation from base, docs path, and pytest -v [testing] <!-- id:story-issue-2277 -->
+- [ ] fix(models): validate Agy tier models against live discovery (gh:#2268) [testing] <!-- id:story-issue-2278 -->
+- [ ] fix(dispatch): auto-opt Agy into skip_permissions (gh:#2216) [testing] <!-- id:story-issue-2279 -->
+- [ ] fix(dispatch): stop cold-start tiebreak from selecting local (gh:#2048) [testing] <!-- id:story-issue-2280 -->
+- [ ] fix(dispatch): order gh-write harnesses by measured quality [testing] <!-- id:story-issue-2281 -->
+- [ ] fix(muse): align MuseAdapter command building and conformance tests with real CLI contract (gh:#2109) [testing] <!-- id:story-issue-2282 -->
+- [ ] feat: tier the instruction writer by per-harness reload confidence (gh:#2243) [testing] <!-- id:story-issue-2283 -->
+- [ ] Job-status misclassification: false PERMISSION_DENIED label and logs/jobs-all status mismatch [testing] <!-- id:story-issue-2205 -->
+- [ ] fix(jobs): resolve false PERMISSION_DENIED and summary status mismatch (gh:#2205) [security] <!-- id:story-issue-2285 -->
+- [ ] fix(jobs): stop false job-status denials and stale file lists [testing] <!-- id:story-issue-2286 -->
+- [ ] Local harness (aider) jobs never produce real cost/capability measurement signal — extract_tokens has no aider adapter [testing] <!-- id:story-issue-2287 -->
+- [ ] Daemon crashes and stops refreshing GitHub App tokens after a stale/deleted worktree cwd — blocks all --requires-gh-write dispatch [testing] <!-- id:story-issue-2288 -->
+- [ ] Model catalog: extend harness_models schema with provider/rate-card/capability columns (sub-task 1, gh:#2291) [backend] <!-- id:story-868c7f0a -->
+- [ ] Model catalog: generalize discovery pipeline across all harnesses + gateway stub (sub-task 2, gh:#2291) [backend] <!-- id:story-a1de813b -->
+- [ ] Model catalog: wire 24h auto-refresh staleness check into daemon/CLI startup (sub-task 3, gh:#2291) [backend] <!-- id:story-5422a738 -->
+- [ ] Model catalog: dispatch-time live resolution + --model validation (sub-task 4, gh:#2291) [backend] <!-- id:story-00c51c3f -->
+- [ ] Model catalog validation (gh:#2268/#2278) was wired for Agy only; Grok/Codex still drift silently, and explicit --model bypasses it entirely [backend] <!-- id:story-issue-2291 -->
+- [ ] Review and merge PR #2298 (branch release/v0.25.1), the v0.25.1 Named Release cut. It bumps VERSION 0.25.0->0.25.1, adds a CHANGELOG entry, syncs README version/test-count/hero badges, and adds the re [testing] <!-- id:story-3ef62232 -->
+- [ ] chore(costs): log v0.25.1 release-prep PM session cost [testing] <!-- id:story-issue-2299 -->
+- [ ] docs(spec): pytest verbosity shim design for gh:#2294 [testing] <!-- id:story-issue-2301 -->
+- [ ] docs: recover continuous-momentum design spec from stashed WIP [testing] <!-- id:story-issue-2300 -->
+- [ ] Cost inflation: job-85fb27a2 recurs gh:#2240 pytest -v pattern ($7.13/2.3M tokens) despite task text not requesting a full suite run at all [testing] <!-- id:story-issue-2294 -->
+- [ ] fix: quiet pytest in dispatched jobs [testing] <!-- id:story-issue-2303 -->
+- [ ] Run pytest -v on tests/test_pytest_shim.py only, and report the exact command's full stdout back in your response (do not scope it down yourself, do not add -q, run exactly 'pytest -v tests/test_pytes [testing] <!-- id:story-adhoc-1791992804 -->
+- [ ] docs(spec): charter superpowers-skill binding design for gh:#2305 [testing] <!-- id:story-issue-2306 -->
+- [x] Bind superpowers skills into dispatched-agent charters (gh:#2305) [backend] <!-- id:story-0f622462 -->
+- [x] Wire onboarding-engine dead modules into live commands (gh:#2310, PR #2311) [backend] <!-- id:story-2f03edea -->
+- [x] Task 1: synlynk probe --deps (wires probe_binding.py) (gh:#2310) [backend] <!-- id:story-7aabc39e -->
+- [x] Task 2: synlynk fleet list/apply (wires fleet_templates.py) (gh:#2310) [backend] <!-- id:story-e9439716 -->
+- [x] Task 3: synlynk upgrade --all (wires version_policy.py) (gh:#2310) [backend] <!-- id:story-4918bcdb -->
+- [x] Task 5: topology_discovery.py integration into onboarding_state.py (gh:#2310) [backend] <!-- id:story-44a2fe03 -->
+- [ ] Task 4: first_win_loop.py fate decision (gh:#2310) [backend] <!-- id:story-5551aa7e -->
+- [ ] Fix daemon health: dormant re-exec bug (gh:#2261) + crash on stale worktree cwd (gh:#2288) [devops] <!-- id:story-e73fac9e -->
+- [ ] Wire daemon poll loop to call _autonomy_pass() on its own interval (Task 4, gh:#2262) [devops] <!-- id:story-f67acd86 -->
