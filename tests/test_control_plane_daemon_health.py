@@ -2,6 +2,7 @@
 
 import json
 import os
+import socket
 import sqlite3
 import subprocess
 import sys
@@ -73,6 +74,17 @@ def test_synlynk_daemon_stop_cleans_stale_lock_when_no_pidfile(tmp_path, monkeyp
     daemon = SynlynkDaemon()
     daemon.pidfile = pidfile
 
+    # Isolate HTTP_PORT from the real default (gh:#2329 / LIVE-25): without this,
+    # stop()'s stale-lock/no-pidfile path falls through to a system-wide
+    # `lsof -ti :<port>` lookup on the real default HTTP_PORT and SIGTERMs
+    # whatever process is actually listening there -- including a real synlynk
+    # daemon running elsewhere on the machine. Mirrors the isolation already done
+    # in test_daemon_liveness_1572.py's orphan-port test.
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.bind(("127.0.0.1", 0))
+        test_port = probe.getsockname()[1]
+    monkeypatch.setattr(daemon, "HTTP_PORT", test_port)
+
     lock_path = _daemon_lock_path(pidfile)
     # Write a stale lockfile (with a dead PID)
     with open(lock_path, "w") as f:
@@ -84,6 +96,55 @@ def test_synlynk_daemon_stop_cleans_stale_lock_when_no_pidfile(tmp_path, monkeyp
     daemon.stop()
     # Lockfile should be cleaned up
     assert not os.path.exists(lock_path)
+
+
+def test_synlynk_daemon_stop_stale_lock_path_never_probes_real_default_http_port(tmp_path, monkeypatch):
+    """Regression for LIVE-25 (gh:#2329).
+
+    stop()'s stale-lock/no-pidfile path falls back to `_find_pid_listening_on_port`
+    against `self.HTTP_PORT`. That lookup shells out to `lsof -ti :<port>`, which is
+    a completely system-wide, unscoped search with no way to confirm the process it
+    finds is actually this daemon's own orphan. The port-based reclaim itself is
+    intentional (see test_daemon_stop_kills_orphaned_process_on_http_port in
+    test_daemon_liveness_1572.py), but it must only ever run against a port this
+    test controls -- never the real production default (27471). A sibling test in
+    this file (test_synlynk_daemon_stop_cleans_stale_lock_when_no_pidfile) used to
+    skip that isolation, so when it ran as part of a dispatched job's own
+    `pytest -q` verification step on a machine with a real synlynk daemon alive on
+    the default port, stop() found and SIGTERM'd that real daemon as a false
+    positive "orphan" -- killing it silently (clean signal, no crash) minutes into
+    every run.
+
+    This test guards the invariant directly: a SynlynkDaemon() instance exercising
+    this code path must never be left pointed at SynlynkDaemon's real class-default
+    HTTP_PORT.
+    """
+    pidfile = str(tmp_path / "daemon.pid")
+    daemon = SynlynkDaemon()
+    daemon.pidfile = pidfile
+
+    # The fix: isolate HTTP_PORT to a port this test controls, exactly like
+    # test_daemon_liveness_1572.py's orphan-port test already does. Without this
+    # line, the assertion below fails -- daemon.HTTP_PORT stays at the real
+    # production default (27471), which is the LIVE-25 bug.
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.bind(("127.0.0.1", 0))
+        test_port = probe.getsockname()[1]
+    monkeypatch.setattr(daemon, "HTTP_PORT", test_port)
+
+    lock_path = _daemon_lock_path(pidfile)
+    with open(lock_path, "w") as f:
+        f.write("9999999\n")
+
+    with patch("synlynk.daemon._find_pid_listening_on_port", return_value=None) as mock_port_lookup:
+        daemon.stop()
+
+    mock_port_lookup.assert_called_once_with(daemon.HTTP_PORT)
+    assert daemon.HTTP_PORT != SynlynkDaemon.HTTP_PORT, (
+        "this daemon instance's HTTP_PORT was never isolated away from the real "
+        "production default -- any port lookup against it risks matching a real, "
+        "unrelated, live daemon on an operator's machine (LIVE-25, gh:#2329)"
+    )
 
 
 def test_synlynk_daemon_stop_terminates_lock_owner_pid(tmp_path, monkeypatch):
