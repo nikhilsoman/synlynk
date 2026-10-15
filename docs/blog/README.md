@@ -424,6 +424,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [349](./349-pr2324-unconditionally-resolve-repo-root-in-chi.md) | PR #2324 — unconditionally resolve repo root in child-main entry points | [#2324](https://github.com/nikhilsoman/synlynk/pull/2324) | 2026-10-15 |
 | [350](./350-pr2326-spec-plan-for-daemon-autonomy-pass-wirin.md) | PR #2326 — spec + plan for daemon autonomy-pass wiring (gh:#2262 Task 4) | [#2326](https://github.com/nikhilsoman/synlynk/pull/2326) | 2026-10-15 |
 | [351](./351-pr2327-wire-hybrid-interval-idle-autonomy-pass-.md) | PR #2327 — wire hybrid interval+idle autonomy-pass trigger into poll loop (gh:#2262 Task 4) | [#2327](https://github.com/nikhilsoman/synlynk/pull/2327) | 2026-10-15 |
+| [352](./352-pr2335-repair-capability-rating-quality-verific.md) | PR #2335 — repair capability rating quality verification | [#2335](https://github.com/nikhilsoman/synlynk/pull/2335) | 2026-10-15 |
 
 ## Per-PR Post Template
 

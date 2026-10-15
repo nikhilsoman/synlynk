@@ -1630,5 +1630,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2330 \u2014 isolate HTTP_PORT in daemon stop() stale-lock test (LIVE-25, gh:#2329) (PR #2330, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2330.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-15) - PR #2330\n- Merged improvements and fixes for PR #2330."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/352-pr2335-repair-capability-rating-quality-verific.md",
+    "title": "PR #2335 \u2014 repair capability rating quality verification",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-15",
+    "pr": "#2335",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2335."
+    ],
+    "tweet": "\ud83d\ude80 PR #2335 \u2014 repair capability rating quality verification (PR #2335, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2335.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-15) - PR #2335\n- Merged improvements and fixes for PR #2335."
   }
 ]
