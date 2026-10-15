@@ -72,7 +72,7 @@ def test_goal_link_sets_primary_goal_id_on_story():
     assert row[0] == goal_id
 
 
-def test_goal_link_secondary_writes_contribution_not_primary():
+def test_goal_link_secondary_writes_contribution_not_primary(project_dir):
     from synlynk.db import cmd_goal_create, cmd_story_create, cmd_goal_link
     goal_a = cmd_goal_create(outcome="A", criterion="C", role="pm")
     goal_b = cmd_goal_create(outcome="B", criterion="C", role="pm")
@@ -165,7 +165,7 @@ def test_goal_update_supersede_relinks_open_stories_but_not_done_stories():
     assert old_status == "superseded"
 
 
-def test_goal_update_supersede_preserves_other_primary_goal_when_secondary_moves():
+def test_goal_update_supersede_preserves_other_primary_goal_when_secondary_moves(project_dir):
     from synlynk.db import cmd_goal_create, cmd_story_create, cmd_goal_link, cmd_goal_update
 
     primary_goal = cmd_goal_create(outcome="Primary", criterion="Keep me", role="pm")
@@ -187,6 +187,21 @@ def test_goal_update_supersede_preserves_other_primary_goal_when_secondary_moves
     conn.close()
     assert primary == primary_goal
     assert contribution == new_goal
+
+
+def test_isolated_story_create_does_not_touch_repo_todo():
+    from pathlib import Path
+
+    from synlynk.db import cmd_story_create
+
+    repo_todo = Path(__file__).resolve().parents[1] / "project-docs" / "todo.md"
+    original_content = repo_todo.read_text()
+    original_mtime_ns = repo_todo.stat().st_mtime_ns
+
+    cmd_story_create(title="Isolated generated story")
+
+    assert repo_todo.read_text() == original_content
+    assert repo_todo.stat().st_mtime_ns == original_mtime_ns
 
 
 def test_goal_update_rejects_invalid_values():
