@@ -70,6 +70,91 @@ def _normalized_copy(source: Path, destination_dir: Path) -> Path:
     return temporary
 
 
+def _canonicalize_identity(path: Path, *, product_id: str, canonical_path: Path) -> None:
+    """Rewrite copied identity metadata for its new canonical location."""
+    with sqlite3.connect(str(path), timeout=30.0) as conn:
+        tables = {
+            row[0]
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )
+        }
+        if "state_identity" not in tables:
+            identity_metadata(
+                conn, product_id=product_id, mode="canonical", path=canonical_path
+            )
+        else:
+            rows = conn.execute(
+                "SELECT product_id, mode FROM state_identity"
+            ).fetchall()
+            if any(row[0] != product_id for row in rows):
+                raise StateRegistryError(
+                    "state DB product identity mismatch during canonical recovery"
+                )
+            if len(rows) > 1:
+                raise StateRegistryError(
+                    "state DB contains multiple identity rows; refusing recovery"
+                )
+            if rows:
+                conn.execute(
+                    "UPDATE state_identity SET product_id=?, mode='canonical', "
+                    "canonical_path=?",
+                    (product_id, str(canonical_path.expanduser().resolve())),
+                )
+            else:
+                identity_metadata(
+                    conn, product_id=product_id, mode="canonical", path=canonical_path
+                )
+        conn.commit()
+
+
+def _recovery_copy(
+    source: Path,
+    destination_dir: Path,
+    *,
+    product_id: str,
+    canonical_path: Path,
+) -> Path:
+    """Create a verified copy and rewrite its identity before publication."""
+    temporary = _normalized_copy(source, destination_dir)
+    try:
+        with sqlite3.connect(f"file:{source}?mode=ro", uri=True) as conn:
+            tables = {
+                row[0]
+                for row in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                )
+            }
+            if "state_identity" in tables:
+                rows = conn.execute(
+                    "SELECT product_id, mode FROM state_identity"
+                ).fetchall()
+                if any(row[0] != product_id for row in rows):
+                    raise StateRegistryError("source state DB belongs to a different product")
+                if any(row[1] not in {"canonical", "backup", "restore"} for row in rows):
+                    raise StateRegistryError("source state DB has a non-recoverable identity mode")
+        _canonicalize_identity(
+            temporary, product_id=product_id, canonical_path=canonical_path
+        )
+        return temporary
+    except Exception:
+        if temporary.exists():
+            temporary.unlink()
+        raise
+
+
+def _logical_db_equal(left: Path, right: Path) -> bool:
+    """Compare SQLite content while ignoring recovery-owned identity metadata."""
+    def dump(path: Path) -> list[str]:
+        with sqlite3.connect(f"file:{path}?mode=ro", uri=True) as conn:
+            return [line for line in conn.iterdump() if "state_identity" not in line]
+
+    try:
+        return dump(left) == dump(right)
+    except sqlite3.Error:
+        return False
+
+
 def register_existing_state(
     path: str | Path,
     *,
@@ -81,18 +166,33 @@ def register_existing_state(
     source = Path(path).expanduser().resolve()
     if not source.is_file():
         raise FileNotFoundError(source)
+    expected_product_id = product_id or product_identity(slug)
     with sqlite3.connect(f"file:{source}?mode=ro", uri=True) as conn:
         if conn.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
             raise sqlite3.DatabaseError(f"state DB failed integrity check: {source}")
+        tables = {
+            row[0]
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )
+        }
+        if "state_identity" in tables:
+            rows = conn.execute(
+                "SELECT product_id, mode FROM state_identity"
+            ).fetchall()
+            if any(row[0] != expected_product_id for row in rows):
+                raise StateRegistryError("state DB belongs to a different product")
+            if any(row[1] != "canonical" for row in rows):
+                raise StateRegistryError("only canonical state DBs may be registered")
     entry = ensure_registered_product(
         slug,
         source,
-        product_id or product_identity(slug),
+        expected_product_id,
         repo_path=Path(repo_path) if repo_path else None,
     )
-    with sqlite3.connect(str(source), timeout=30.0) as conn:
-        identity_metadata(conn, product_id=entry["product_id"], mode="canonical", path=source)
-        conn.commit()
+    _canonicalize_identity(
+        source, product_id=entry["product_id"], canonical_path=source
+    )
     return {"disposition": "registered", "path": str(source), "product_id": entry["product_id"]}
 
 
@@ -129,16 +229,32 @@ def promote_state_db(
                 "sha256": _sha256(destination_path),
                 "product_id": entry["product_id"],
             }
-        temporary = _normalized_copy(source_path, destination_path.parent)
+        expected_product_id = product_id or product_identity(slug)
+        temporary = _recovery_copy(
+            source_path,
+            destination_path.parent,
+            product_id=expected_product_id,
+            canonical_path=destination_path,
+        )
         try:
             digest = _sha256(temporary)
             if destination_path.exists():
                 if _sha256(destination_path) != digest:
-                    raise StateRegistryError(
-                        f"refusing to overwrite different canonical DB: {destination_path}"
-                    )
-                disposition = "already-complete"
-                temporary.unlink()
+                    if _logical_db_equal(source_path, destination_path):
+                        disposition = "already-complete"
+                        temporary.unlink()
+                    else:
+                        raise StateRegistryError(
+                            f"refusing to overwrite different canonical DB: {destination_path}"
+                        )
+                else:
+                    disposition = "already-complete"
+                    temporary.unlink()
+                _canonicalize_identity(
+                    destination_path,
+                    product_id=expected_product_id,
+                    canonical_path=destination_path,
+                )
             else:
                 os.replace(temporary, destination_path)
                 _fsync_dir(destination_path.parent)
@@ -236,9 +352,24 @@ def restore_state_db(
     archive_path.parent.mkdir(parents=True, exist_ok=True)
     lock_path = destination_path.with_name(f".{destination_path.name}.restore.lock")
     with registry_lock(lock_path):
-        temporary = _normalized_copy(source, destination_path.parent)
+        expected_product_id = product_id or product_identity(slug)
+        temporary = _recovery_copy(
+            source,
+            destination_path.parent,
+            product_id=expected_product_id,
+            canonical_path=destination_path,
+        )
         try:
             if destination_path.exists():
+                if archive_path.exists():
+                    suffix = 1
+                    while archive_path.with_name(
+                        f"{archive_path.stem}-{suffix}{archive_path.suffix}"
+                    ).exists():
+                        suffix += 1
+                    archive_path = archive_path.with_name(
+                        f"{archive_path.stem}-{suffix}{archive_path.suffix}"
+                    )
                 os.replace(destination_path, archive_path)
                 for suffix in ("-wal", "-shm", "-journal"):
                     sidecar = Path(f"{destination_path}{suffix}")
@@ -249,7 +380,7 @@ def restore_state_db(
             entry = ensure_registered_product(
                 slug,
                 destination_path,
-                product_id or product_identity(slug),
+                expected_product_id,
                 repo_path=Path(repo_path) if repo_path else None,
             )
             generation = int(entry.get("lineage_generation", 1)) + 1
