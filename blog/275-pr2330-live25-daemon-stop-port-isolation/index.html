@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LIVE-25: the daemon wasn&#39;t crashing, a test was killing it | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-3">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Oct 15, 2026</span>
+        
+          <span class="blog-post-pr">PR 2330</span>
+        
+      </div>
+      <h1 class="blog-post-title">LIVE-25: the daemon wasn&#39;t crashing, a test was killing it</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h1>LIVE-25: the daemon wasn't crashing, a test was killing it</h1>
+<p>The previous goalpost (PRs #2322/#2323/#2324/#2326/#2327) wired a hybrid interval+idle autonomy-pass trigger into the daemon's poll loop. That work is only useful if the daemon stays alive. Minutes after <code>synlynk daemon start</code>, it didn't — with zero log output and no traceback, which looked like a crash and undermined the autonomy-pass wiring directly.</p>
+<h2>What changed</h2>
+<p>Filed as gh:#2329 (LIVE-25). Following <code>superpowers:systematic-debugging</code>'s Iron Law, no fix was attempted before root cause was confirmed.</p>
+<p><strong>Root cause, confirmed via instrumentation, not inference.</strong> A temporary <code>sigaction(SA_SIGINFO)</code> handler (plain Python <code>signal.signal()</code> doesn't expose a sender PID — only the kernel-level <code>siginfo_t.si_pid</code> does) captured the actual process that was terminating the daemon. It was <code>pytest -q</code>, running as a verification step inside an unrelated, concurrently dispatched job's own worktree.</p>
+<p><strong>The mechanism.</strong> <code>SynlynkDaemon.stop()</code> has a legitimate fallback for reclaiming an orphaned daemon when it can't resolve a <code>target_pid</code> from a pidfile or lock owner: it shells out to <code>lsof -ti :&lt;port&gt;</code> via <code>_find_pid_listening_on_port(self.HTTP_PORT)</code> and SIGTERMs whatever it finds. That lookup is system-wide and has no way to confirm the match is actually this daemon's own orphan — a sibling test (<code>test_daemon_stop_kills_orphaned_process_on_http_port</code> in <code>tests/test_daemon_liveness_1572.py</code>) already exercises this path correctly, binding an ephemeral port and monkeypatching <code>HTTP_PORT</code> away from the real default (27471) before calling <code>stop()</code>.</p>
+<p>One test in <code>tests/test_control_plane_daemon_health.py</code> — <code>test_synlynk_daemon_stop_cleans_stale_lock_when_no_pidfile</code> — skipped that isolation. It constructed a bare <code>SynlynkDaemon()</code>, left <code>HTTP_PORT</code> at the real production default, and called <code>.stop()</code>. On a machine running a real synlynk daemon bound to 27471 (the normal case), any <code>pytest -q</code> collecting this file would find that real daemon via <code>lsof</code> and kill it — cleanly, with a plain SIGTERM, which is exactly why it looked like silent death rather than a crash. This explained every observed symptom: correlation with concurrently running dispatched jobs (their own verification step triggers it), and a daemon with no concurrent jobs surviving 22+ minutes idle.</p>
+<p><strong>The fix.</strong> This is a test-isolation bug, not a defect in <code>stop()</code>'s orphan-reclaim logic, which is intentional and otherwise correctly tested. <code>test_synlynk_daemon_stop_cleans_stale_lock_when_no_pidfile</code> now binds an ephemeral port and monkeypatches <code>daemon.HTTP_PORT</code> to it, mirroring the already-correct sibling test. A new regression test, <code>test_synlynk_daemon_stop_stale_lock_path_never_probes_real_default_http_port</code>, guards the invariant directly: it asserts the daemon instance's <code>HTTP_PORT</code> is isolated away from <code>SynlynkDaemon.HTTP_PORT</code> before <code>stop()</code>'s port-fallback path runs, with a docstring citing gh:#2329 and explaining why the port-reclaim mechanism itself must stay.</p>
+<p>TDD was followed red→green: the new test failed first (<code>assert 27471 != 27471</code>) without the isolation line, then passed once it was added. Full <code>tests/test_control_plane_daemon_health.py</code> suite: 8 passed. Broader daemon-related check across <code>test_control_plane_daemon_health.py</code>, <code>test_daemon_liveness_1572.py</code>, and <code>test_synlynk.py -k daemon</code>: 47 passed, 502 deselected, nothing else broke.</p>
+<h2>Goalpost</h2>
+<p>The autonomy-pass wiring from the previous PR cluster can now actually run unattended — the daemon no longer gets killed by an unrelated test suite's own verification step running elsewhere on the same machine. The next measurement is whether a daemon left running during normal dispatch traffic now survives indefinitely, the way the pre-fix idle-only runs already did.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
