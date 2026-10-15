@@ -31,6 +31,11 @@ def test_promotion_is_idempotent_and_refuses_overwrite(tmp_path, monkeypatch):
     assert first["disposition"] == "promoted"
     assert second["disposition"] == "already-complete"
     assert not (destination.parent / "state.db-wal").exists()
+    conn = sqlite3.connect(destination)
+    assert conn.execute(
+        "SELECT product_id, mode FROM state_identity"
+    ).fetchone() == ("product-demo", "canonical")
+    conn.close()
 
     _db(tmp_path / "different.db", "different")
     with pytest.raises(StateRegistryError, match="refusing to overwrite"):
@@ -87,6 +92,9 @@ def test_restore_is_dry_run_by_default_and_assigns_new_lineage(tmp_path, monkeyp
     assert restored["lineage_generation"] == 2
     conn = sqlite3.connect(destination)
     assert conn.execute("SELECT value FROM facts").fetchone()[0] == "restored"
+    assert conn.execute(
+        "SELECT product_id, mode FROM state_identity"
+    ).fetchone() == ("product-demo", "canonical")
     conn.close()
     assert list((tmp_path / "archive").rglob("state.db"))
 

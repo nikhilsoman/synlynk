@@ -208,8 +208,17 @@ def ensure_registered_product(
                     products[slug] = entry
                     _write_unlocked(registry, payload)
             return entry
+        requested_product_id = product_id or _legacy_product_id(slug)
+        for registered_slug, registered in products.items():
+            if not isinstance(registered, dict):
+                raise StateRegistryError(f"registry entry for {registered_slug!r} is invalid")
+            if registered.get("product_id") == requested_product_id:
+                raise StateRegistryError(
+                    f"product_id {requested_product_id!r} is already registered for "
+                    f"product {registered_slug!r}"
+                )
         entry = {
-            "product_id": product_id or _legacy_product_id(slug),
+            "product_id": requested_product_id,
             "slug": slug,
             "canonical_path": str(path),
             "mode": "canonical",
