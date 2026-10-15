@@ -975,14 +975,57 @@ def _run_harness_rename_migration(conn) -> None:
 
 
 def _snapshot_before_migration(conn: sqlite3.Connection) -> str | None:
-    """Copy a non-trivial on-disk DB before migration can alter its schema."""
+    """Create a consistent snapshot before migration can alter the schema.
+
+    Committed SQLite pages may still live in the WAL sidecar.  Copying only
+    the main file can therefore produce a backup that is older than the
+    connection being migrated.  The online-backup API includes those pages;
+    publish the verified result atomically so an interrupted snapshot cannot
+    be mistaken for a usable DR artifact.
+    """
     row = conn.execute("PRAGMA database_list").fetchone()
     db_path = row[2] if row and len(row) > 2 else ""
     if not db_path or not os.path.isfile(db_path) or os.path.getsize(db_path) <= 4096:
         return None
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
     backup_path = f"{db_path}.pre-migration-{stamp}.bak"
-    shutil.copy2(db_path, backup_path)
+    temporary = f"{backup_path}.tmp"
+    try:
+        destination = sqlite3.connect(temporary)
+        try:
+            conn.backup(destination)
+            destination.commit()
+            integrity = destination.execute("PRAGMA integrity_check").fetchone()[0]
+            if integrity != "ok":
+                raise sqlite3.DatabaseError(
+                    f"migration snapshot failed integrity_check: {integrity}"
+                )
+            destination.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            destination.execute("PRAGMA journal_mode=DELETE")
+            destination.commit()
+        finally:
+            destination.close()
+    except Exception:
+        try:
+            os.unlink(temporary)
+        except FileNotFoundError:
+            pass
+        raise
+    for suffix in ("-wal", "-shm", "-journal"):
+        sidecar = f"{temporary}{suffix}"
+        if os.path.exists(sidecar):
+            os.unlink(sidecar)
+    with open(temporary, "rb") as handle:
+        os.fsync(handle.fileno())
+    os.replace(temporary, backup_path)
+    try:
+        directory_fd = os.open(os.path.dirname(backup_path) or ".", os.O_RDONLY)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
+    except OSError:
+        pass
     return backup_path
 
 
