@@ -1,5 +1,6 @@
 # synlynk Blog Series: Building the OS for Multi-Agent Development
 
+| [276](./276-pr2336-daemon-start-false-failure.md) | daemon start stopped crying wolf about stale log lines | [#2336](https://github.com/nikhilsoman/synlynk/pull/2336) | 2026-10-15 |
 | [275](./275-pr2330-live25-daemon-stop-port-isolation.md) | LIVE-25: the daemon wasn't crashing, a test was killing it | [#2330](https://github.com/nikhilsoman/synlynk/pull/2330) | 2026-10-15 |
 | [274](./274-prTBD-topology-discovery-wiring.md) | Topology discovery finally reaches confirm | TBD | 2026-10-14 |
 | [271](./271-pr2298-v0.25.1-model-catalog-release.md) | v0.25.1 — a model catalog synlynk actually trusts | TBD | 2026-10-14 |
