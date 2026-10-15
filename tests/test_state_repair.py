@@ -102,3 +102,44 @@ def test_register_existing_state_validates_and_registers(tmp_path, monkeypatch):
     assert result["disposition"] == "registered"
     payload = json.loads(registry.read_text())
     assert payload["products"]["demo"]["canonical_path"] == str(db.resolve())
+
+
+def test_recovery_rewrites_identity_for_new_canonical_path(tmp_path, monkeypatch):
+    monkeypatch.setenv("SYNLYNK_REGISTRY_PATH", str(tmp_path / "registry.json"))
+    source = tmp_path / "old" / "state.db"
+    destination = tmp_path / "new" / "state.db"
+    source.parent.mkdir()
+    _db(source)
+    with sqlite3.connect(source) as conn:
+        conn.execute(
+            "CREATE TABLE state_identity (product_id TEXT NOT NULL, mode TEXT NOT NULL, "
+            "canonical_path TEXT NOT NULL, lineage_generation INTEGER NOT NULL DEFAULT 1, "
+            "source_sha256 TEXT, bootstrapped_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"
+        )
+        conn.execute(
+            "INSERT INTO state_identity(product_id, mode, canonical_path) VALUES (?, ?, ?)",
+            ("product-demo", "canonical", str(source)),
+        )
+    promote_state_db(source, destination, slug="demo", product_id="product-demo")
+    with sqlite3.connect(destination) as conn:
+        assert conn.execute(
+            "SELECT product_id, mode, canonical_path FROM state_identity"
+        ).fetchone() == ("product-demo", "canonical", str(destination.resolve()))
+
+
+def test_recovery_rejects_foreign_identity(tmp_path, monkeypatch):
+    monkeypatch.setenv("SYNLYNK_REGISTRY_PATH", str(tmp_path / "registry.json"))
+    source = tmp_path / "source.db"
+    _db(source)
+    with sqlite3.connect(source) as conn:
+        conn.execute(
+            "CREATE TABLE state_identity (product_id TEXT NOT NULL, mode TEXT NOT NULL, "
+            "canonical_path TEXT NOT NULL, lineage_generation INTEGER NOT NULL DEFAULT 1, "
+            "source_sha256 TEXT, bootstrapped_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"
+        )
+        conn.execute(
+            "INSERT INTO state_identity(product_id, mode, canonical_path) VALUES (?, ?, ?)",
+            ("other-product", "canonical", str(source)),
+        )
+    with pytest.raises(StateRegistryError, match="different product"):
+        promote_state_db(source, tmp_path / "destination.db", slug="demo", product_id="product-demo")
