@@ -37,6 +37,10 @@ _RESET = "[0m"
 _HARNESS_INTERNAL_TIMEOUT_RETRY_CAP = 2
 _GH_WRITE_VERIFICATION_RETRY_CAP = 3
 _UNPUSHED_BRANCH_VERIFICATION_RETRY_CAP = 3
+_GITHUB_MCP_CANCELLATION_MARKERS = (
+    '"message":"user cancelled MCP tool call"',
+    "GitHub review submission was cancelled by the connector again;",
+)
 _TERMINAL_EVIDENCE_RANK = {"unknown": 0, "local": 1, "github": 2}
 _AUTOCOMMIT_EXCLUDED_PATHS = (
     "GEMINI.md",
@@ -491,6 +495,37 @@ def _should_classify_permission_denied(
     if _job_has_real_work_landed(git_state):
         return False
     return not requires_gh_write or gh_write_verified == "false"
+
+
+def _has_github_mcp_cancellation(log_text: Optional[str]) -> bool:
+    """Recognize the connector failure that can otherwise exit with code 0."""
+    return bool(log_text) and any(
+        marker in log_text for marker in _GITHUB_MCP_CANCELLATION_MARKERS
+    )
+
+
+def _apply_github_mcp_cancellation_status(
+    status: str,
+    exit_code: Optional[int],
+    log_text: str,
+    requires_gh_write: bool,
+    gh_write_verified: Optional[str],
+) -> tuple:
+    """Downgrade a falsely successful MCP write after effect verification.
+
+    The affected connector path can print a cancellation error and still exit
+    zero. GitHub verification remains authoritative: a real effect keeps the
+    job successful, while an unverified cancellation becomes an explicit
+    GH-write failure instead of ``done``.
+    """
+    if (
+        requires_gh_write
+        and _has_github_mcp_cancellation(log_text)
+        and gh_write_verified != "true"
+        and status in ("done", "completed")
+    ):
+        return "succeeded_gh_write_failed", exit_code if exit_code not in (None, 0) else 1
+    return status, exit_code
 
 
 _TASK_RECEIPT_MARKER_PREFIX = "SYNLYNK_TASK_RECEIVED:"
@@ -4312,7 +4347,11 @@ def _terminal_status_after_verification(
     requires_gh_write: bool = True,
 ) -> tuple:
     """Use an explicit terminal label after the bounded unknown window."""
-    if requires_gh_write and verified_str == "unknown":
+    if (
+        requires_gh_write
+        and verified_str == "unknown"
+        and status != "succeeded_gh_write_failed"
+    ):
         return STATUS_FAILED_VERIFICATION, exit_code if exit_code not in (None, 0) else 1
     return status, exit_code
 
@@ -4784,9 +4823,13 @@ def _reconcile_daemon_jobs() -> None:
                         started_at, gh_write_author, gh_write_expect,
                         worktree_branch=preferred_branch,
                     )
+                    status, exit_code = _apply_github_mcp_cancellation_status(
+                        status, exit_code, _read_job_log(log_path),
+                        bool(requires_gh_write), gh_write_verified_str,
+                    )
                     if _gh_write_verification_retry_pending(
                         conn, job_id, requires_gh_write, gh_write_verified_str
-                    ):
+                    ) and status != "succeeded_gh_write_failed":
                         conn.commit()
                         continue
                     status, exit_code = _terminal_status_after_verification(
@@ -4979,9 +5022,13 @@ def _reconcile_daemon_jobs() -> None:
                     started_at, gh_write_author, gh_write_expect,
                     worktree_branch=worktree_branch,
                 )
+                status, exit_code = _apply_github_mcp_cancellation_status(
+                    status, exit_code, log_text,
+                    bool(requires_gh_write), gh_write_verified_str,
+                )
                 if _gh_write_verification_retry_pending(
                     conn, job_id, requires_gh_write, gh_write_verified_str
-                ):
+                ) and status != "succeeded_gh_write_failed":
                     conn.commit()
                     continue
                 status, exit_code = _terminal_status_after_verification(

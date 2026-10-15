@@ -315,6 +315,13 @@ def test_format_job_summary_flags_cancelled_github_mcp_write():
     assert "status:   OK (exit 0) — GH WRITE CANCELLED" in summary
 
 
+@pytest.mark.parametrize("tool_name", ["add_review_to_pr", "add_comment_to_issue"])
+def test_task_requires_gh_write_detects_cancelled_mcp_write_tools(tool_name):
+    from synlynk.dispatch import _task_requires_gh_write
+
+    assert _task_requires_gh_write(f"Use {tool_name} for the GitHub write") is True
+
+
 def test_format_job_summary_does_not_false_positive_on_success():
     summary = _format_job_summary(
         "job-success", "codex", None, 0, 1.0, 0, 0, 0.0,
