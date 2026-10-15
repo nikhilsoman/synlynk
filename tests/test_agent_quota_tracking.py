@@ -2154,6 +2154,40 @@ def test_a3_set_dispatch_context_to_homeheadless_scheduler(project_dir, monkeypa
     assert row == ("headless",)
 
 
+def test_a3_cost_entry_inherits_dispatch_context_from_job(project_dir, monkeypatch):
+    import synlynk
+
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs "
+        "(job_id, agent, task, status, enqueued_at, dispatch_context) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        ("djob-cost-context-740", "codex", "cost context", "done",
+         "2026-08-06T00:00:00", "headless"),
+    )
+    conn.commit()
+    conn.close()
+
+    synlynk._insert_cost_row(
+        session_date="2026-08-06 00:00",
+        agent="codex",
+        model="o4-mini",
+        input_tokens=10,
+        output_tokens=5,
+        cost_source="actual",
+        total_cost_usd=0.01,
+        job_id="djob-cost-context-740",
+    )
+
+    conn = synlynk._get_db()
+    row = conn.execute(
+        "SELECT dispatch_context FROM cost_entries WHERE job_id=?",
+        ("djob-cost-context-740",),
+    ).fetchone()
+    conn.close()
+    assert row == ("headless",)
+
+
 def test_bug__secret_patterns_regex_doesnt_redact_ghs_installation_token():
     from synlynk import _redact_secret_patterns
 
