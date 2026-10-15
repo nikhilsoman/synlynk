@@ -116,10 +116,24 @@ def promote_state_db(
             with sqlite3.connect(f"file:{source_path}?mode=ro", uri=True) as conn:
                 if conn.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
                     raise sqlite3.DatabaseError(f"source state DB failed integrity check: {source_path}")
+            resolved_product_id = product_id or product_identity(slug)
+            source_digest = _sha256(source_path)
+            with sqlite3.connect(str(destination_path), timeout=30.0) as conn:
+                identity_metadata(
+                    conn,
+                    product_id=resolved_product_id,
+                    mode="canonical",
+                    path=destination_path,
+                )
+                conn.execute(
+                    "UPDATE state_identity SET source_sha256=?",
+                    (source_digest,),
+                )
+                conn.commit()
             entry = ensure_registered_product(
                 slug,
                 destination_path,
-                product_id or product_identity(slug),
+                resolved_product_id,
                 repo_path=Path(repo_path) if repo_path else None,
             )
             return {
@@ -132,28 +146,54 @@ def promote_state_db(
         temporary = _normalized_copy(source_path, destination_path.parent)
         try:
             digest = _sha256(temporary)
+            resolved_product_id = product_id or product_identity(slug)
             if destination_path.exists():
                 if _sha256(destination_path) != digest:
-                    raise StateRegistryError(
-                        f"refusing to overwrite different canonical DB: {destination_path}"
+                    with sqlite3.connect(
+                        f"file:{destination_path}?mode=ro", uri=True
+                    ) as existing_conn:
+                        identity = existing_conn.execute(
+                            "SELECT product_id, mode, canonical_path "
+                            ", source_sha256 FROM state_identity LIMIT 1"
+                        ).fetchone()
+                    expected_identity = (
+                        resolved_product_id,
+                        "canonical",
+                        str(destination_path),
                     )
+                    if identity is None or identity[:3] != expected_identity or identity[3] != digest:
+                        raise StateRegistryError(
+                            f"refusing to overwrite different canonical DB: {destination_path}"
+                        )
                 disposition = "already-complete"
                 temporary.unlink()
             else:
                 os.replace(temporary, destination_path)
                 _fsync_dir(destination_path.parent)
                 disposition = "promoted"
+            with sqlite3.connect(str(destination_path), timeout=30.0) as conn:
+                identity_metadata(
+                    conn,
+                    product_id=resolved_product_id,
+                    mode="canonical",
+                    path=destination_path,
+                )
+                conn.execute(
+                    "UPDATE state_identity SET source_sha256=?",
+                    (digest,),
+                )
+                conn.commit()
             entry = ensure_registered_product(
                 slug,
                 destination_path,
-                product_id or product_identity(slug),
+                resolved_product_id,
                 repo_path=Path(repo_path) if repo_path else None,
             )
             return {
                 "disposition": disposition,
                 "source": str(source_path),
                 "destination": str(destination_path),
-                "sha256": digest,
+                "sha256": _sha256(destination_path),
                 "product_id": entry["product_id"],
             }
         finally:
@@ -246,10 +286,19 @@ def restore_state_db(
                         os.replace(sidecar, archive_path.parent / sidecar.name)
             os.replace(temporary, destination_path)
             _fsync_dir(destination_path.parent)
+            resolved_product_id = product_id or product_identity(slug)
+            with sqlite3.connect(str(destination_path), timeout=30.0) as conn:
+                identity_metadata(
+                    conn,
+                    product_id=resolved_product_id,
+                    mode="canonical",
+                    path=destination_path,
+                )
+                conn.commit()
             entry = ensure_registered_product(
                 slug,
                 destination_path,
-                product_id or product_identity(slug),
+                resolved_product_id,
                 repo_path=Path(repo_path) if repo_path else None,
             )
             generation = int(entry.get("lineage_generation", 1)) + 1
