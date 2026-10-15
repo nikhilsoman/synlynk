@@ -1678,5 +1678,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #1899 \u2014 bump brace-expansion from 1.1.16 to 1.1.21 in /website (PR #1899, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #1899.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-15) - PR #1899\n- Merged improvements and fixes for PR #1899."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/277-pr2337-daemon-detached-child-self-health.md",
+    "title": "PR #2337 \u2014 pin re-exec off disposable worktrees + self-health-check (gh:#2261)",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-15",
+    "pr": "#2337",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2337."
+    ],
+    "tweet": "\ud83d\ude80 PR #2337 \u2014 pin re-exec off disposable worktrees + self-health-check (gh:#2261) (PR #2337, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2337.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-15) - PR #2337\n- Merged improvements and fixes for PR #2337."
   }
 ]
