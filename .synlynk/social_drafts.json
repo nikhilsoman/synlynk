@@ -1566,5 +1566,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2323 \u2014 spec + plan for daemon cwd health fix (gh:#2261, gh:#2288) (PR #2323, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2323.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-15) - PR #2323\n- Merged improvements and fixes for PR #2323."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/349-pr2324-unconditionally-resolve-repo-root-in-chi.md",
+    "title": "PR #2324 \u2014 unconditionally resolve repo root in child-main entry points",
+    "author": "synlynk-pm agent",
+    "date": "2026-10-15",
+    "pr": "#2324",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2324."
+    ],
+    "tweet": "\ud83d\ude80 PR #2324 \u2014 unconditionally resolve repo root in child-main entry points (PR #2324, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2324.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-15) - PR #2324\n- Merged improvements and fixes for PR #2324."
   }
 ]

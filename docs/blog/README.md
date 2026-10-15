@@ -420,6 +420,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [346](./346-pr2315-wire-synlynk-upgrade-all-to-version-poli.md) | PR #2315 — wire synlynk upgrade --all to version_policy (gh:#2310 Task 3) | [#2315](https://github.com/nikhilsoman/synlynk/pull/2315) | 2026-10-14 |
 | [347](./347-pr2322-track-daemon-health-autonomy-wiring-init.md) | PR #2322 — track daemon health & autonomy-wiring initiative (v0.25.2) | [#2322](https://github.com/nikhilsoman/synlynk/pull/2322) | 2026-10-15 |
 | [348](./348-pr2323-spec-plan-for-daemon-cwd-health-fix-gh-2.md) | PR #2323 — spec + plan for daemon cwd health fix (gh:#2261, gh:#2288) | [#2323](https://github.com/nikhilsoman/synlynk/pull/2323) | 2026-10-15 |
+| [349](./349-pr2324-unconditionally-resolve-repo-root-in-chi.md) | PR #2324 — unconditionally resolve repo root in child-main entry points | [#2324](https://github.com/nikhilsoman/synlynk/pull/2324) | 2026-10-15 |
 
 ## Per-PR Post Template
 
