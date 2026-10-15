@@ -325,8 +325,30 @@ def _event_shows_real_activity(event) -> bool:
         content = message.get("content", []) if isinstance(message, dict) else []
         if isinstance(content, list):
             for block in content:
-                if isinstance(block, dict) and block.get("type") == "tool_use":
+                if isinstance(block, dict) and (
+                    block.get("type") == "tool_use"
+                    or (block.get("type") == "text" and (block.get("text") or "").strip())
+                ):
                     return True
+    # Codex item events (item.completed, item.started)
+    if event.get("type") in ("item.completed", "item.started"):
+        item = event.get("item") or {}
+        if isinstance(item, dict):
+            item_type = item.get("type")
+            if item_type == "command_execution":
+                return True
+            if item_type == "agent_message" and (item.get("text") or "").strip():
+                return True
+    # Codex / general turn usage
+    if event.get("type") == "turn.completed":
+        usage = event.get("usage") or {}
+        if isinstance(usage, dict) and (usage.get("output_tokens", 0) or 0) > 0:
+            return True
+    # Grok structured / multi-turn output
+    if (event.get("num_turns", 0) or 0) > 1:
+        return True
+    if (event.get("text") or "").strip():
+        return True
     return False
 
 
@@ -366,7 +388,8 @@ def _log_has_permission_denied_signature(output_text: str) -> bool:
         line.lower() for line in signature_window if line == line.lstrip()
     )
     if lowered_window and any(phrase in lowered_window for phrase in signature_phrases):
-        return True
+        if not _log_has_prior_activity_evidence(lines):
+            return True
 
     # Some logs append a short trailer after the structured result. Scan the
     # tail backwards so the signal stays deterministic when the JSON line is
@@ -454,6 +477,55 @@ def _extract_openrouter_structured(output_text: str) -> Optional[_TokenCounts]:
     return _TokenCounts(in_tokens, out_tokens, 0, "structured_output")
 
 
+# Aider abbreviates with a 1000-based suffix: "2.3k" is 2300, "1.2m" is 1_200_000.
+_LOCAL_SUFFIX_SCALE = {"k": 1_000, "m": 1_000_000}
+_LOCAL_AMOUNT = r"(\d[\d,]*(?:\.\d+)?)([kKmM])?"
+# One line per message. Cache clauses are optional and always sit between
+# sent and received (aider/coders/base_coder.py calculate_and_show_tokens_and_cost).
+_LOCAL_TOKENS_RE = re.compile(
+    rf"Tokens:\s*{_LOCAL_AMOUNT}\s*sent"
+    rf"(?:,\s*{_LOCAL_AMOUNT}\s*cache write)?"
+    rf"(?:,\s*{_LOCAL_AMOUNT}\s*cache hit)?"
+    rf",\s*{_LOCAL_AMOUNT}\s*received"
+)
+
+
+def _parse_local_amount(number: str, suffix: Optional[str]) -> int:
+    """Parse an aider token amount, including thousands separators and k/m suffixes."""
+    value = float(number.replace(",", ""))
+    if suffix:
+        value *= _LOCAL_SUFFIX_SCALE[suffix.lower()]
+    # 2.3 * 1000 is not exact in binary floats (2299.999...), so round.
+    return int(round(value))
+
+
+def _extract_local_structured(output_text: str) -> Optional[_TokenCounts]:
+    """Parse aider's ``Tokens: X sent, Y received`` lines.
+
+    Aider (the ``local`` harness) prints one line per message and then resets
+    ``message_tokens_sent`` / ``message_tokens_received``, so a multi-message
+    job is the sum of those lines. Counts may be plain integers (``184``,
+    ``7,376``) or abbreviated (``2.3k``, ``1.2m``). ``cache write`` and
+    ``cache hit`` clauses may appear between sent and received; they are not
+    folded into the sent/received totals aider already printed.
+    """
+    if not output_text:
+        return None
+    in_tokens = 0
+    out_tokens = 0
+    found = False
+    for match in _LOCAL_TOKENS_RE.finditer(output_text):
+        try:
+            in_tokens += _parse_local_amount(match.group(1), match.group(2))
+            out_tokens += _parse_local_amount(match.group(7), match.group(8))
+        except (TypeError, ValueError, KeyError):
+            continue
+        found = True
+    if not found:
+        return None
+    return _TokenCounts(in_tokens, out_tokens, 0, "structured_output")
+
+
 def extract_tokens(output_text: str, agent: str = None) -> tuple:
     """Regex-scrapes token counts from AI CLI stdout, or delegates to a
     per-agent structured-output adapter when one exists.
@@ -482,6 +554,10 @@ def extract_tokens(output_text: str, agent: str = None) -> tuple:
             return structured
     if agent == "muse":
         structured = _extract_muse_structured(output_text)
+        if structured is not None:
+            return structured
+    if agent == "local":
+        structured = _extract_local_structured(output_text)
         if structured is not None:
             return structured
 

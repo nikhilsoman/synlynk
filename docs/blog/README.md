@@ -1,5 +1,11 @@
 # synlynk Blog Series: Building the OS for Multi-Agent Development
 
+| [276](./276-pr2336-daemon-start-false-failure.md) | daemon start stopped crying wolf about stale log lines | [#2336](https://github.com/nikhilsoman/synlynk/pull/2336) | 2026-10-15 |
+| [275](./275-pr2330-live25-daemon-stop-port-isolation.md) | LIVE-25: the daemon wasn't crashing, a test was killing it | [#2330](https://github.com/nikhilsoman/synlynk/pull/2330) | 2026-10-15 |
+| [274](./274-prTBD-topology-discovery-wiring.md) | Topology discovery finally reaches confirm | TBD | 2026-10-14 |
+| [271](./271-pr2298-v0.25.1-model-catalog-release.md) | v0.25.1 — a model catalog synlynk actually trusts | TBD | 2026-10-14 |
+| [270](./270-pr-model-catalog-24h-refresh.md) | PR #2297 — 24h auto-refresh for the model catalog | [#2297](https://github.com/nikhilsoman/synlynk/pull/2297) | 2026-10-14 |
+| [269](./269-pr-model-catalog-discovery-pass.md) | PR #2296 — One discovery pass for every harness baseline | [#2296](https://github.com/nikhilsoman/synlynk/pull/2296) | 2026-10-14 |
 | [268](./268-pr2277-dispatch-cost-inflation-roots.md) | Dispatch jobs stop inheriting a long-lived branch, a cwd-relative todo archive, and pytest -v | [#2277](https://github.com/nikhilsoman/synlynk/pull/2277) | 2026-10-14 |
 | [267](./267-pr2177-codex-cache-replay-pricing.md) | Codex cache-replay priced as fresh input | #2177 | 2026-10-10 |
 | [266](./266-pr2166-federated-quota-capture.md) | Federated subscription-quota capture | TBD | 2026-10-10 |

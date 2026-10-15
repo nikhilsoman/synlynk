@@ -50,7 +50,8 @@ def _get_worktree_changed_files(
     
     files = set()
 
-    # 0. Pre-computed git_state if supplied
+    # 0. Pre-computed git_state if supplied. Callers that already diffed
+    # against the dispatch base (gh:#2245) put the right names here.
     if git_state:
         for p in git_state.get("changed_files") or []:
             if p:
@@ -85,11 +86,18 @@ def _get_worktree_changed_files(
     except Exception:
         pass
 
-    # 2. Committed changes since base_sha
+    # 2. Committed changes since the job's diff base, not an older mainline.
+    diff_base = base_sha
     if base_sha:
         try:
+            from synlynk.jobs import _resolve_job_diff_base
+            diff_base = _resolve_job_diff_base(worktree_path, base_sha) or base_sha
+        except Exception:
+            diff_base = base_sha
+    if diff_base:
+        try:
             res = subprocess.run(
-                ["git", "-C", worktree_path, "diff", "--name-only", f"{base_sha}..HEAD"],
+                ["git", "-C", worktree_path, "diff", "--name-only", f"{diff_base}..HEAD"],
                 capture_output=True,
                 text=True,
                 timeout=10,

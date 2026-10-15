@@ -811,6 +811,104 @@ def query_model(conn: sqlite3.Connection, model_id: str) -> dict | None:
     return get_model(conn, model_id)
 
 
+_HARNESS_MODEL_CATALOG_FIELDS = (
+    "rate_input_per_mtok", "rate_output_per_mtok", "rate_cache_read_per_mtok",
+    "rate_cache_write_per_mtok", "rate_tool_use_per_mtok", "rate_currency",
+    "rate_source", "complexity_tier", "max_effort_level", "context_window_tokens",
+    "max_output_tokens", "discovered_at",
+)
+
+
+def upsert_harness_model(
+    conn: sqlite3.Connection,
+    harness_name: str,
+    model_id: str,
+    *,
+    provider: str = "native",
+    first_seen_at: str | None = None,
+    last_seen_at: str | None = None,
+    status: str = "active",
+    superseded_by: str | None = None,
+    discovery_source: str = "curated",
+    rate_input_per_mtok: float | None = None,
+    rate_output_per_mtok: float | None = None,
+    rate_cache_read_per_mtok: float | None = None,
+    rate_cache_write_per_mtok: float | None = None,
+    rate_tool_use_per_mtok: float | None = None,
+    rate_currency: str = "usd",
+    rate_source: str | None = None,
+    complexity_tier: str | None = None,
+    max_effort_level: str | None = None,
+    context_window_tokens: int | None = None,
+    max_output_tokens: int | None = None,
+    discovered_at: str | None = None,
+) -> None:
+    """Insert or refresh a provider-specific discovered harness model."""
+    now = datetime.now(timezone.utc).isoformat()
+    first_seen_at = first_seen_at or now
+    last_seen_at = last_seen_at or now
+    discovered_at = discovered_at or last_seen_at
+    values = {
+        "rate_input_per_mtok": rate_input_per_mtok,
+        "rate_output_per_mtok": rate_output_per_mtok,
+        "rate_cache_read_per_mtok": rate_cache_read_per_mtok,
+        "rate_cache_write_per_mtok": rate_cache_write_per_mtok,
+        "rate_tool_use_per_mtok": rate_tool_use_per_mtok,
+        "rate_currency": rate_currency,
+        "rate_source": rate_source,
+        "complexity_tier": complexity_tier,
+        "max_effort_level": max_effort_level,
+        "context_window_tokens": context_window_tokens,
+        "max_output_tokens": max_output_tokens,
+        "discovered_at": discovered_at,
+    }
+    columns = ["harness_name", "model_id", "first_seen_at", "last_seen_at", "status",
+               "superseded_by", "discovery_source", "provider", *_HARNESS_MODEL_CATALOG_FIELDS]
+    params = [harness_name, model_id, first_seen_at, last_seen_at, status, superseded_by,
+              discovery_source, provider, *(values[name] for name in _HARNESS_MODEL_CATALOG_FIELDS)]
+    updates = ["last_seen_at=excluded.last_seen_at", "status=excluded.status",
+               "superseded_by=excluded.superseded_by", "discovery_source=excluded.discovery_source"]
+    updates.extend(f"{name}=excluded.{name}" for name in _HARNESS_MODEL_CATALOG_FIELDS)
+    conn.execute(
+        f"INSERT INTO harness_models ({', '.join(columns)}) VALUES ({', '.join('?' for _ in columns)}) "
+        f"ON CONFLICT(harness_name, model_id, provider) DO UPDATE SET {', '.join(updates)}",
+        params,
+    )
+
+
+def get_active_harness_models(
+    conn: sqlite3.Connection | None, harness: str | None = None, tier: str | None = None,
+) -> list[dict]:
+    """Return active catalog models, newest discoveries first.
+
+    An unavailable connection or an unmigrated database has no active models.
+    """
+    if conn is None:
+        return []
+    clauses = ["status='active'"]
+    params: list[object] = []
+    if harness is not None:
+        clauses.append("harness_name=?")
+        params.append(harness)
+    if tier is not None:
+        clauses.append("complexity_tier=?")
+        params.append(tier)
+    try:
+        cursor = conn.execute(
+            f"SELECT * FROM harness_models WHERE {' AND '.join(clauses)} "
+            "ORDER BY discovered_at DESC",
+            params,
+        )
+    except sqlite3.ProgrammingError:
+        # Dispatch callers may retain a connection that another owner closed.
+        return []
+    except sqlite3.OperationalError as exc:
+        if "no such table: harness_models" in str(exc):
+            return []
+        raise
+    return [dict(zip((item[0] for item in cursor.description), row)) for row in cursor.fetchall()]
+
+
 def _get_db():
     """Lazy compatibility access to the package DB connection."""
     from synlynk import _get_db as get_db
@@ -1474,7 +1572,20 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
                 status TEXT NOT NULL DEFAULT 'active',
                 superseded_by TEXT,
                 discovery_source TEXT NOT NULL DEFAULT 'curated',
-                PRIMARY KEY (harness_name, model_id)
+                provider TEXT NOT NULL DEFAULT 'native',
+                rate_input_per_mtok REAL,
+                rate_output_per_mtok REAL,
+                rate_cache_read_per_mtok REAL,
+                rate_cache_write_per_mtok REAL,
+                rate_tool_use_per_mtok REAL,
+                rate_currency TEXT NOT NULL DEFAULT 'usd',
+                rate_source TEXT,
+                complexity_tier TEXT,
+                max_effort_level TEXT,
+                context_window_tokens INTEGER,
+                max_output_tokens INTEGER,
+                discovered_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (harness_name, model_id, provider)
             );
 
             CREATE TABLE IF NOT EXISTS harness_modes (
@@ -1788,11 +1899,6 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
         if "pr_number" not in rating_cols:
             try:
                 conn.execute("ALTER TABLE capability_ratings ADD COLUMN pr_number INTEGER")
-            except sqlite3.OperationalError:
-                pass
-        if "quality_verified" not in rating_cols:
-            try:
-                conn.execute("ALTER TABLE capability_ratings ADD COLUMN quality_verified INTEGER")
             except sqlite3.OperationalError:
                 pass
         cost_cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}
@@ -2150,6 +2256,16 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
     cost_cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}
     if "turn_usage_json" not in cost_cols:
         conn.execute("ALTER TABLE cost_entries ADD COLUMN turn_usage_json TEXT")
+        conn.commit()
+
+    # Keep this repair outside the schema-version gate.  A database can have
+    # already reached the current version while a prior migration stopped
+    # before adding this column (or while the schema was bootstrapped by an
+    # older build).  In that state, the version-gated migration above is a
+    # no-op and _get_db() must still repair the missing column.
+    rating_cols = {row[1] for row in conn.execute("PRAGMA table_info(capability_ratings)")}
+    if "quality_verified" not in rating_cols:
+        conn.execute("ALTER TABLE capability_ratings ADD COLUMN quality_verified INTEGER")
         conn.commit()
 
     _migrate_onboarding_sessions(conn)

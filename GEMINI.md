@@ -80,8 +80,8 @@ task, not the Agent (role) doing the work
 | implement / test / refactor / cli-plumbing | Codex | implement, test, refactor, cli-plumbing |
 Do not start a task outside your role column without explicit approval from Claude.
 
-**GitHub write routing (#426):** Route any task that requires GitHub write actions to **Codex by default, Claude/Agy as fallbacks** (PR #1271, verified live in job `job-836e13a4`)
-- Grok's dispatch sandbox denies `bash` execution entirely in this environment (confirmed via `git diff origin/main` showing a total silent no-op despite a generic "OK, exit 0" job status — do not trust job-status alone for Grok gh-write attempts)
+**GitHub write routing (#426):** Route any task that requires GitHub write actions to **Codex by default**, then Grok, Claude, and Agy (measured 2026-10-14, `capability_ratings` 14-day `AVG(quality)`, n≥5: codex 9.04 n=410, grok 8.55 n=176, claude 8.19 n=170, agy 7.58 n=89; local n=2 and muse n=1 excluded). `_GH_WRITE_HARNESS_PRIORITY` is `("codex", "grok", "claude", "agy")`. The pre-2026-10-04 heuristic that omitted Codex and listed Grok last is retired (PR #1271, job `job-836e13a4`).
+- Grok's sandbox-deny finding is superseded (LIVE-13 fixed 2026-09-22, PRs #1734/#1735, reconfirmed gh:#2034). Grok is second in the measured order.
 - Codex receives network access only for explicit `--requires-gh-write` dispatches
 - Pass `--requires-gh-write` on synlynk dispatch to enforce the routing hint automatically; it now also auto-implies the `run:shell` permission grant and fails closed with a `RuntimeError` if no role is resolvable via `--as-agent`, `--story`, or `--role` (#569)
 

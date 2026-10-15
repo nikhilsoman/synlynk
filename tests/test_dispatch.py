@@ -1,4 +1,6 @@
+import os
 import sqlite3
+import subprocess
 
 import pytest
 import synlynk as sl
@@ -105,6 +107,62 @@ def test_dispatch_agent_sets_instruction_receipt_fields(tmp_path, monkeypatch):
     assert job["instruction_file"] == "AGENTS.md"
     assert job["expected_instruction_version"] == "0.13.0"
     assert job["instruction_receipt"] is None
+
+
+def test_dispatch_agent_injects_bound_skills_into_real_context_path(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "AGENTS.md").write_text('<!-- synlynk:start version="0.13.0" tool="codex" -->\n')
+    (tmp_path / "project-docs").mkdir()
+    from synlynk import agent_store
+    from synlynk.charters import adapt_charters_for_installed_tools
+    from synlynk.agent_cli import SEED_CHARTERS
+
+    fake_home = tmp_path / "fake_home"
+    monkeypatch.setattr("os.path.expanduser", lambda path: path.replace("~", str(fake_home)))
+    agent_store.register_agent("dev-primary", [{"kind": "role_slug", "value": "dev"}])
+    agent_store.propose_charter_revision(
+        "dev-primary", SEED_CHARTERS["dev"], actor="test", parent_revision=0
+    )
+    monkeypatch.setattr("synlynk.tool_installer.is_tool_available", lambda tool: False)
+    adapted = adapt_charters_for_installed_tools(dry_run=False)
+    assert "test-driven-development" in adapted["dev"]["skills"]
+
+    class FakeProc:
+        pid = 12345
+        returncode = 0
+
+        def communicate(self, *args, **kwargs):
+            return (b"", b"")
+
+        def poll(self):
+            return None
+
+    monkeypatch.setattr("subprocess.Popen", lambda *a, **kw: FakeProc())
+    monkeypatch.setattr(
+        "synlynk.dispatch._preflight_dispatch",
+        lambda *a, **kw: {"passed": True, "sentinel": None, "reason": None},
+    )
+    worktree = tmp_path / "dispatch-worktree"
+    (worktree / ".synlynk" / "contexts").mkdir(parents=True)
+    monkeypatch.setattr(
+        "synlynk.dispatch._create_job_worktree",
+        lambda job_id, agent, base=None: {
+            "path": str(worktree),
+            "branch": f"dispatch/{agent}/{job_id}",
+            "base_branch": None,
+            "base_sha": None,
+        },
+    )
+
+    job = sl.dispatch_agent(
+        "codex", "implement the feature", role="dev", context_mode="full", skip_preflight=True
+    )
+    with open(job["context_file"]) as context_file:
+        context = context_file.read()
+
+    assert "## Bound Skills (required)" in context
+    assert "- test-driven-development" in context
+    assert "- systematic-debugging" in context
 
 
 def test_preflight_blocks_missing_stitch_mcp_when_required(tmp_path, monkeypatch):
@@ -1400,7 +1458,7 @@ def test_review_codex_gh_write_keeps_repository_read_only(project_dir, monkeypat
     monkeypatch.setattr(
         dispatch_mod,
         "_build_subprocess_env",
-        lambda *a, **kw: {},
+        lambda *a, **kw: ({}, None),
     )
     monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_gh_token", lambda role: "test-gh-token")
 
@@ -1751,12 +1809,13 @@ def test_build_subprocess_env_allowlists_base_vars_only(monkeypatch):
     monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "leaked-if-present")
     monkeypatch.setenv("SOME_RANDOM_API_TOKEN", "also-leaked-if-present")
 
-    env = _build_subprocess_env("codex", {}, requires_gh_write=False, story_id="story-1")
+    env, shim_dir = _build_subprocess_env("codex", {}, requires_gh_write=False, story_id="story-1")
 
-    assert env.get("PATH") == "/usr/bin"
+    assert env.get("PATH").endswith(os.pathsep + "/usr/bin")
     assert env.get("HOME") == "/home/test"
     assert "AWS_SECRET_ACCESS_KEY" not in env
     assert "SOME_RANDOM_API_TOKEN" not in env
+    shim_dir.cleanup()
 
 
 def test_build_subprocess_env_includes_env_passthrough_vars(monkeypatch):
@@ -1769,9 +1828,10 @@ def test_build_subprocess_env_includes_env_passthrough_vars(monkeypatch):
     }
     monkeypatch.setattr(dispatch_mod, "HARNESS_CAPABILITY_BASELINES", fake_baselines)
 
-    env = _build_subprocess_env("codex", {}, requires_gh_write=False, story_id="story-1")
+    env, shim_dir = _build_subprocess_env("codex", {}, requires_gh_write=False, story_id="story-1")
 
     assert env.get("MY_AGENT_TOKEN") == "should-be-included"
+    shim_dir.cleanup()
 
 
 def test_build_subprocess_env_applies_headless_contract_required_vars():
@@ -1784,8 +1844,9 @@ def test_build_subprocess_env_applies_headless_contract_required_vars():
     dispatch_mod_patch_target = dispatch_mod.HARNESS_CAPABILITY_BASELINES
     dispatch_mod.HARNESS_CAPABILITY_BASELINES = fake_baselines
     try:
-        env = _build_subprocess_env("agy", {}, requires_gh_write=False, story_id="story-1")
+        env, shim_dir = _build_subprocess_env("agy", {}, requires_gh_write=False, story_id="story-1")
         assert env.get("PYTHONUNBUFFERED") == "1"
+        shim_dir.cleanup()
     finally:
         dispatch_mod.HARNESS_CAPABILITY_BASELINES = dispatch_mod_patch_target
 
@@ -1795,9 +1856,43 @@ def test_build_subprocess_env_overrides_win_over_allowlist(monkeypatch):
 
     monkeypatch.setenv("PATH", "/usr/bin")
 
-    env = _build_subprocess_env("codex", {"env": {"PATH": "/custom/bin"}}, requires_gh_write=False, story_id="story-1")
+    env, shim_dir = _build_subprocess_env("codex", {"env": {"PATH": "/custom/bin"}}, requires_gh_write=False, story_id="story-1")
 
-    assert env.get("PATH") == "/custom/bin"
+    assert env.get("PATH").endswith(os.pathsep + "/custom/bin")
+    shim_dir.cleanup()
+
+
+def test_dispatch_env_quiets_pytest_v_without_task_verbosity(tmp_path, monkeypatch):
+    from synlynk.dispatch import _build_subprocess_env
+
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    fake_pytest = fake_bin / "pytest"
+    fake_pytest.write_text(
+        "#!/bin/sh\n"
+        "case \" $* \" in\n"
+        "  *\" -q \"*) printf '1 passed in 0.01s\\n' ;;\n"
+        "  *) printf 'tests/test_one.py::test_one PASSED\\n%.0s' $(seq 1 100) ;;\n"
+        "esac\n"
+    )
+    fake_pytest.chmod(0o700)
+    monkeypatch.setenv("PATH", str(fake_bin) + os.pathsep + os.environ["PATH"])
+
+    env, shim_dir = _build_subprocess_env(
+        "codex", {}, requires_gh_write=False, story_id="story-verbosity"
+    )
+    try:
+        quiet = subprocess.run(
+            ["pytest", "tests/", "-v"], env=env, text=True, capture_output=True, check=True
+        )
+        baseline = subprocess.run(
+            [str(fake_pytest), "tests/", "-q"], text=True, capture_output=True, check=True
+        )
+    finally:
+        shim_dir.cleanup()
+
+    assert "PASSED" not in quiet.stdout
+    assert len(quiet.stdout) <= len(baseline.stdout) * 3
 
 
 def test_dispatch_agent_requires_gh_write_true_capable_agent_unchanged(project_dir, monkeypatch):
@@ -2292,6 +2387,55 @@ def test_grok_dispatch_auto_skips_permissions_by_default(project_dir, monkeypatc
     assert "--permission-mode bypassPermissions" in shell_cmd
 
 
+def test_agy_dispatch_auto_skips_permissions_by_default(project_dir, monkeypatch):
+    """Agy review/shell dispatches must not stay on --sandbox (gh:#2216).
+
+    --sandbox denies RunCommand and the job still exits SUCCESS. Match Grok's
+    unconditional skip_permissions auto-opt-in so the CLI gets
+    --dangerously-skip-permissions.
+    """
+    import synlynk.dispatch as dispatch_mod
+
+    captured = {}
+
+    def fake_popen(command, *args, **kwargs):
+        captured["command"] = command
+
+        class FakeProc:
+            pid = 12345
+
+        return FakeProc()
+
+    monkeypatch.setattr(dispatch_mod.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(dispatch_mod, "_preflight_dispatch", lambda *a, **kw: {"passed": True})
+
+    dispatch_mod.dispatch_agent(
+        agent="agy",
+        task="review the patch",
+        task_type="review",
+        grants=["run:shell"],
+        force_agent=True,
+        role="qa",
+        skip_preflight=True,
+        context_mode="none",
+    )
+
+    shell_cmd = captured["command"][2]
+    assert "--dangerously-skip-permissions" in shell_cmd
+    assert "--sandbox" not in shell_cmd
+
+
+def test_permissions_to_flags_agy_review_shell_uses_skip_when_opted_in():
+    from synlynk.dispatch import _permissions_to_flags
+
+    assert _permissions_to_flags(
+        "agy", ["run:shell"], read_only=True, skip_permissions=True
+    ) == ["--dangerously-skip-permissions"]
+    assert _permissions_to_flags(
+        "agy", ["run:shell"], read_only=True, skip_permissions=False
+    ) == ["--sandbox"]
+
+
 def test_permissions_to_flags_agy_warns_on_empty_permissions(capsys):
     from synlynk.dispatch import _permissions_to_flags
 
@@ -2386,6 +2530,56 @@ def test_dispatch_emits_model_and_effort_flags(project_dir, monkeypatch):
     shell_cmd = recorded_cmd[0][2]
     assert "--model gemini-3.1-pro-high" in shell_cmd
     assert "--effort high" in shell_cmd
+
+
+def test_dispatch_accepts_explicit_model_in_active_harness_catalog(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+    from synlynk.db import upsert_harness_model
+
+    conn = sl._get_db()
+    upsert_harness_model(conn, "codex", "catalog-model")
+    conn.commit()
+    spawned = []
+    monkeypatch.setattr(
+        dispatch_mod.subprocess, "Popen",
+        lambda *args, **kwargs: spawned.append(args) or type("DummyProc", (), {"pid": 9999})(),
+    )
+
+    dispatch_mod.dispatch_agent(
+        "codex", "run task", model="catalog-model", db_conn=conn,
+        skip_preflight=True, context_mode="none",
+    )
+
+    assert spawned
+    conn.close()
+
+
+def test_dispatch_rejects_unknown_explicit_model_before_spawning(project_dir, monkeypatch):
+    import synlynk as sl
+    import synlynk.dispatch as dispatch_mod
+    from synlynk.db import upsert_harness_model
+
+    conn = sl._get_db()
+    upsert_harness_model(conn, "codex", "current-a")
+    upsert_harness_model(conn, "codex", "current-b")
+    conn.commit()
+    monkeypatch.setattr(
+        dispatch_mod.subprocess, "Popen",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("must not spawn")),
+    )
+
+    with pytest.raises(ValueError) as exc_info:
+        dispatch_mod.dispatch_agent(
+            "codex", "run task", model="removed-model", db_conn=conn,
+            skip_preflight=True, context_mode="none",
+        )
+
+    message = str(exc_info.value)
+    assert "Invalid model 'removed-model'" in message
+    assert "harness 'codex'" in message
+    assert "current-a" in message and "current-b" in message
+    conn.close()
 
 
 def test_agy_dispatch_flags_does_not_duplicate_print_timeout_if_already_present(project_dir, monkeypatch):

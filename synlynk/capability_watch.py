@@ -1,20 +1,26 @@
 """Local staleness triggers for harness capability data.
 
-Two independent thresholds, checked once per CLI invocation:
-Free tier (TC1-TC5 structural probe, no LLM spend): default 24h
+Thresholds checked from the daemon tick and from CLI startup
+(the latter via spawn_staleness_check_thread):
+- Free tier (TC1-TC5 structural probe, no LLM spend): default 24h
 - Paid tier (selftest --live smoke test): default 7 days, opt-in only
   via config['auto_smoke_test']
+- Model catalog discovery: default 24h since MAX(harness_models.discovered_at)
+
 See docs/superpowers/specs/2026-07-31-harness-capability-drift-regression-classification-design.md
+and docs/superpowers/specs/2026-10-14-model-catalog-discovery-design.md.
 """
 
 from __future__ import annotations
 
+import calendar
 import os
 import subprocess
 import sys
 import threading
 import time
 import sqlite3
+from datetime import datetime, timezone
 from typing import Optional
 
 from synlynk.sentinel import _write_sentinel_alert
@@ -49,6 +55,82 @@ def is_smoke_test_stale(conn, threshold_days: int = 7) -> bool:
     if last is None:
         return True
     return (time.time() - last) > threshold_days * 86400
+
+
+def _parse_catalog_timestamp(ts: Optional[str]) -> Optional[float]:
+    """Parse harness_models.discovered_at as a UTC instant.
+
+    Discovery writes ``datetime.isoformat()`` (offset, optional microseconds).
+    Older rows and tests use ``YYYY-MM-DDTHH:MM:SSZ`` or SQLite's
+    ``YYYY-MM-DD HH:MM:SS``. Unparseable values are treated as missing.
+    """
+    if not ts:
+        return None
+    text = str(ts).strip()
+    for fmt in ("%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%d %H:%M:%S"):
+        try:
+            return calendar.timegm(time.strptime(text, fmt))
+        except (TypeError, ValueError):
+            continue
+    try:
+        normalized = text[:-1] + "+00:00" if text.endswith("Z") else text
+        parsed = datetime.fromisoformat(normalized)
+    except (TypeError, ValueError):
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.timestamp()
+
+
+def is_model_catalog_stale(conn, threshold_hours: int = 24) -> bool:
+    """True when the newest harness_models.discovered_at is older than the threshold.
+
+    No rows, a missing table, or an unparseable timestamp count as stale so a
+    fresh install discovers on the next daemon tick or CLI startup.
+    """
+    try:
+        row = conn.execute("SELECT MAX(discovered_at) FROM harness_models").fetchone()
+    except sqlite3.Error:
+        return True
+    last = _parse_catalog_timestamp(row[0] if row else None)
+    if last is None:
+        return True
+    return (time.time() - last) > threshold_hours * 3600
+
+
+# One in-flight catalog refresh per process. CLI startup and the daemon tick
+# can both observe a due window before either write lands.
+_catalog_refresh_lock = threading.Lock()
+_catalog_refresh_inflight = False
+
+
+def _run_model_catalog_refresh(conn) -> bool:
+    """Refresh the catalog once. Returns False when another refresh is in flight."""
+    global _catalog_refresh_inflight
+    with _catalog_refresh_lock:
+        if _catalog_refresh_inflight:
+            return False
+        _catalog_refresh_inflight = True
+    try:
+        from synlynk.models import run_model_catalog_discovery
+
+        run_model_catalog_discovery(conn)
+        conn.commit()
+        return True
+    except Exception as exc:
+        try:
+            conn.rollback()
+        except sqlite3.Error:
+            pass
+        _record_check_failure(
+            conn,
+            "AUTO_MODEL_CATALOG_FAILED",
+            f"Automatic model catalog discovery failed: {exc}",
+        )
+        return False
+    finally:
+        with _catalog_refresh_lock:
+            _catalog_refresh_inflight = False
 
 
 def _dispatched_job_count(conn) -> int:
@@ -235,19 +317,23 @@ def maybe_trigger_staleness_checks(
     config: dict,
     probe_threshold_hours: int = 24,
     smoke_threshold_days: int = 7,
+    catalog_threshold_hours: int = 24,
 ) -> None:
     """Runs due checks synchronously.
 
-    Callers that want non-blocking behavior (e.g. the CLI entrypoint) should
-    invoke this inside a background thread.
+    Callers that want non-blocking behavior (the CLI entrypoint) invoke this
+    inside spawn_staleness_check_thread(). The daemon tick calls it directly.
+    Probe and smoke stay mutually exclusive. Catalog discovery is independent
+    and runs at most once per process while a refresh is already in flight.
     """
     if is_probe_stale(conn, threshold_hours=probe_threshold_hours):
         _run_free_probe(conn)
-        return
-    if config.get("auto_smoke_test", False) and is_smoke_test_stale(
+    elif config.get("auto_smoke_test", False) and is_smoke_test_stale(
         conn, threshold_days=smoke_threshold_days
     ):
         _run_paid_smoke_test(conn)
+    if is_model_catalog_stale(conn, threshold_hours=catalog_threshold_hours):
+        _run_model_catalog_refresh(conn)
 
 
 def _db_path_for_conn(conn) -> Optional[str]:

@@ -71,3 +71,7 @@
   local work is off the NATS loop; detach finishes persistence and disposition.
   Workspace credentials trust all devices and do not attest origin labels.
   Evidence: `project-docs/devlogs/personal-relay-task10-evidence.md`. [@nikhilsoman]
+- **2026-10-15 [gh:#2310 Task 4]:** S10 was present in `onboarding_state.py` but neither the
+  wizard nor Vizor invoked `first_win_loop.execute_first_win_cycle()`. Keep the module and
+  invoke it only after an accepted first-win action; `verify_first_win_effect()` has no
+  duplicate git-diff helper elsewhere. [@codex]

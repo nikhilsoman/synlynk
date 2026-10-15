@@ -5,10 +5,157 @@ import os
 import subprocess
 import sys
 import time
+import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ""))
 
 from synlynk.daemon import SynlynkDaemon, WatchDaemon, _repo_common_dir
+import synlynk.daemon as daemon_mod
+
+
+def test_maybe_run_autonomy_pass_fires_on_interval_elapsed(monkeypatch):
+    from synlynk.daemon import SynlynkDaemon
+    from synlynk import daemon as daemon_mod
+
+    d = SynlynkDaemon()
+    d._last_autonomy_pass_at = 0.0
+    d._last_dispatch_count = 0
+
+    calls = {"n": 0}
+    monkeypatch.setattr(daemon_mod, "_autonomy_pass", lambda conn=None: calls.__setitem__("n", calls["n"] + 1))
+    monkeypatch.setattr(daemon_mod, "_autonomy_pass_interval_seconds", lambda: 0)
+
+    d._maybe_run_autonomy_pass(launched=0)
+
+    assert calls["n"] == 1
+    assert d._last_dispatch_count == 0
+
+
+def test_maybe_run_autonomy_pass_fires_on_idle_transition(monkeypatch):
+    import time
+    from synlynk.daemon import SynlynkDaemon
+    from synlynk import daemon as daemon_mod
+
+    d = SynlynkDaemon()
+    d._last_autonomy_pass_at = time.time()
+    d._last_dispatch_count = 2
+
+    calls = {"n": 0}
+    monkeypatch.setattr(daemon_mod, "_autonomy_pass", lambda conn=None: calls.__setitem__("n", calls["n"] + 1))
+    monkeypatch.setattr(daemon_mod, "_autonomy_pass_interval_seconds", lambda: 999999)
+
+    class _FakeConn:
+        def execute(self, query, params=()):
+            class _Row:
+                def fetchone(self):
+                    return (0,)
+            return _Row()
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(daemon_mod, "_pkg", lambda name: (lambda: _FakeConn()) if name == "_get_db" else None)
+
+    d._maybe_run_autonomy_pass(launched=0)
+
+    assert calls["n"] == 1
+    assert d._last_dispatch_count == 0
+
+
+def test_maybe_run_autonomy_pass_no_trigger_does_not_fire(monkeypatch):
+    import time
+    from synlynk.daemon import SynlynkDaemon
+    from synlynk import daemon as daemon_mod
+
+    d = SynlynkDaemon()
+    d._last_autonomy_pass_at = time.time()
+    d._last_dispatch_count = 0
+
+    calls = {"n": 0}
+    monkeypatch.setattr(daemon_mod, "_autonomy_pass", lambda conn=None: calls.__setitem__("n", calls["n"] + 1))
+    monkeypatch.setattr(daemon_mod, "_autonomy_pass_interval_seconds", lambda: 999999)
+
+    d._maybe_run_autonomy_pass(launched=0)
+
+    assert calls["n"] == 0
+    assert d._last_dispatch_count == 0
+
+
+def test_maybe_run_autonomy_pass_swallows_exception(monkeypatch):
+    from synlynk.daemon import SynlynkDaemon
+    from synlynk import daemon as daemon_mod
+
+    d = SynlynkDaemon()
+    d._last_autonomy_pass_at = 0.0
+    d._last_dispatch_count = 0
+
+    def boom(conn=None):
+        raise RuntimeError("autonomy pass exploded")
+
+    monkeypatch.setattr(daemon_mod, "_autonomy_pass", boom)
+    monkeypatch.setattr(daemon_mod, "_autonomy_pass_interval_seconds", lambda: 0)
+
+    d._maybe_run_autonomy_pass(launched=0)
+
+
+@pytest.fixture(autouse=True)
+def _allow_temp_workspace_roots(monkeypatch, request):
+    # Most tests exercise loop behavior from non-repository tmp_path dirs.
+    # Model the explicit root provided by real daemon launchers there.
+    if request.node.name not in {
+        "test_repo_common_dir_strict_raises_while_default_falls_back",
+        "test_daemon_paths_and_token_refresh_use_main_repo_from_worktree",
+    }:
+        monkeypatch.setattr(
+            daemon_mod,
+            "_repo_common_dir",
+            lambda *, strict=False: os.path.abspath(os.getcwd()),
+        )
+
+
+def test_repo_common_dir_strict_raises_while_default_falls_back(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    import synlynk.daemon as daemon_mod
+    monkeypatch.setattr(
+        daemon_mod.subprocess,
+        "run",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("git unavailable")),
+    )
+    monkeypatch.setattr(daemon_mod.os, "getcwd", lambda: str(tmp_path))
+
+    assert _repo_common_dir() == str(tmp_path)
+    import pytest
+    with pytest.raises(RuntimeError, match="git unavailable"):
+        _repo_common_dir(strict=True)
+
+
+def test_watch_daemon_start_refuses_disposable_workspace_root(tmp_path, monkeypatch):
+    import pytest
+    import synlynk.daemon as daemon_mod
+
+    disposable = tmp_path / "worktrees" / "job-test"
+    disposable.mkdir(parents=True)
+    daemon = WatchDaemon.__new__(WatchDaemon)
+    daemon.workspace_root = str(disposable)
+
+    with pytest.raises(RuntimeError, match="disposable worktree as its workspace root"):
+        daemon.start()
+
+
+def test_refresh_github_tokens_uses_bound_workspace_root(tmp_path, monkeypatch):
+    daemon = WatchDaemon()
+    bound_root = daemon.workspace_root
+    helper_calls = []
+    resolved_roots = []
+    monkeypatch.setattr(daemon_mod, "_repo_common_dir", lambda *args, **kwargs: helper_calls.append("repo"))
+    monkeypatch.setattr(daemon_mod.os, "getcwd", lambda: (_ for _ in ()).throw(AssertionError("cwd re-read")))
+    monkeypatch.setattr(daemon_mod.subprocess, "run", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("git re-run")))
+    monkeypatch.setattr(daemon_mod, "resolve_github_apps_dir", lambda root: resolved_roots.append(root) or tmp_path / "absent")
+
+    daemon._refresh_github_tokens()
+
+    assert helper_calls == []
+    assert resolved_roots == [bound_root]
 
 
 def _git_run(args, cwd):
@@ -36,6 +183,22 @@ def test_repo_common_dir_is_shared_by_main_repo_and_worktree(tmp_path, monkeypat
 def test_repo_common_dir_falls_back_to_cwd_outside_git(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     assert _repo_common_dir() == str(tmp_path)
+
+
+def test_repo_common_dir_reports_deleted_cwd_clearly(monkeypatch):
+    monkeypatch.setattr(
+        daemon_mod.subprocess,
+        "run",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("git unavailable")),
+    )
+    monkeypatch.setattr(
+        daemon_mod.os,
+        "getcwd",
+        lambda: (_ for _ in ()).throw(FileNotFoundError("deleted cwd")),
+    )
+
+    with pytest.raises(RuntimeError, match="cwd no longer exists; cannot resolve repo root"):
+        _repo_common_dir()
 
 
 def test_daemon_paths_and_token_refresh_use_main_repo_from_worktree(tmp_path, monkeypatch):
@@ -441,6 +604,25 @@ def test_watch_daemon_child_main_writes_pidfile_then_runs_loop(tmp_path, monkeyp
     assert (tmp_path / ".synlynk" / "watch.pid").read_text() == "12345"
     assert call_order == ["set_state:watching", "run_loop"]
     assert (tmp_path / ".synlynk" / "watch.pid.lock").exists()
+
+
+def test_watch_daemon_child_main_pins_repo_root_before_constructor(tmp_path, monkeypatch):
+    repo_root = tmp_path / "repo"
+    launch_dir = tmp_path / "launch"
+    repo_root.mkdir()
+    (repo_root / ".synlynk").mkdir()
+    launch_dir.mkdir()
+    monkeypatch.chdir(launch_dir)
+    monkeypatch.delenv("SYNLYNK_DAEMON_WORKSPACE_ROOT", raising=False)
+    monkeypatch.setattr(daemon_mod, "_repo_common_dir", lambda *, strict=False: str(repo_root))
+    monkeypatch.setattr(daemon_mod.WatchDaemon, "_run_loop", lambda self: None)
+    monkeypatch.setattr(daemon_mod, "_pkg", lambda name, default=None:
+                        (lambda state: None) if name == "set_state" else default)
+
+    daemon_mod._watch_daemon_child_main()
+
+    assert os.getcwd() == str(repo_root)
+    assert (repo_root / ".synlynk" / "watch.pid").exists()
 
 
 def test_synlynk_daemon_start_spawns_detached_child_and_returns_immediately(tmp_path, monkeypatch):

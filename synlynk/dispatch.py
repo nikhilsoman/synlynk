@@ -33,10 +33,15 @@ _ORG_ROLE_TO_BASELINE_ROLE = {
     "synlynk-bot": "builder",
 }
 
-# grok added 2026-10-04 (gh:#2034): live TC-9 probe confirms gh-write
-# capability post-LIVE-13 fix; listed last pending >=5 empirical
-# gh-write-task samples per the Empirical Capability Assessment Policy.
-_GH_WRITE_HARNESS_PRIORITY = ("claude", "agy", "grok")
+# Measured 2026-10-14 from ~/.synlynk/workspaces/synlynk/state.db
+# capability_ratings (no task_type column; 14-day AVG(quality), n>=5).
+# Query datetime('now')=2026-10-14 06:27:32, max(ts)=2026-10-14 06:24:10:
+#   codex 9.04 n=410, grok 8.55 n=176, claude 8.19 n=170, agy 7.58 n=89.
+# local (n=2) and muse (n=1) stay out. Codex is first because that
+# measurement says so. The pre-2026-10-04 tuple ("claude", "agy", "grok")
+# omitted Codex and listed Grok last; that heuristic is retired. Grok's
+# sandbox-deny finding is superseded (gh:#2034). Docs keep "Codex by default".
+_GH_WRITE_HARNESS_PRIORITY = ("codex", "grok", "claude", "agy")
 _STARTUP_FAILOVER_ORDER = ("codex", "agy", "claude")
 _CODEX_REVIEW_WRITABLE_ROOTS = "sandbox_workspace_write.writable_roots=[]"
 
@@ -132,21 +137,21 @@ def _job_purpose(role: str | None, task_type: str | None, *, explicit: bool = Tr
 _DEFAULT_MODELS_BY_TIER = {
     MODEL_TIER_FAST: {
         "claude": "claude-haiku-4-5-20251001",
-        "agy": "gemini-3.7-flash-medium",
+        "agy": "gemini-3.8-flash-medium",
         "codex": "gpt-5.6-luna",
         "grok": "grok-4.6",
         "local": "qwen2.5",
     },
     MODEL_TIER_PRO: {
         "claude": "claude-sonnet-5",
-        "agy": "gemini-3.1-pro-low",
+        "agy": "gemini-3.8-flash-high",
         "codex": "gpt-5.6-luna",
         "grok": "grok-4.7",
         "local": "qwen2.5",
     },
     MODEL_TIER_REASONING: {
         "claude": "claude-opus-5-5",
-        "agy": "gemini-3.1-pro-high",
+        "agy": "claude-opus-4-6-thinking",
         "codex": "gpt-5.6-luna",
         "grok": "grok-4.7",
         "local": "deepseek-r1",
@@ -485,8 +490,9 @@ def _harness_for_org_role(org_role: str, baselines_map: dict, requires_gh_write:
     docs/superpowers/specs/2026-08-16-agent-dispatch-integration-design.md
     §6) includes the mapped tag for this org role. Does not consult the
     story_id-based capability_scores DB table — that stays story_id-only.
-    When requires_gh_write is set, candidates are tried in the fixed
-    priority order claude -> agy first, then any remaining CORE_FLEET members
+    When requires_gh_write is set, candidates are tried in
+    _GH_WRITE_HARNESS_PRIORITY (codex, grok, claude, agy — 2026-10-14
+    capability_ratings), then any remaining CORE_FLEET members
     alphabetically. Non-gh-write selection is untouched: plain alphabetical
     order over CORE_FLEET.
     """
@@ -1153,6 +1159,16 @@ def _create_exec_gh_shim() -> Tuple[tempfile.TemporaryDirectory, str]:
     return shim_dir, shim_path
 
 
+def _create_pytest_shim() -> Tuple[tempfile.TemporaryDirectory, str]:
+    """Create the short-lived quiet ``pytest`` guard for dispatched jobs."""
+    from synlynk.pytest_shim import write_shim
+
+    shim_dir = tempfile.TemporaryDirectory(prefix="synlynk-pytest-")
+    shim_path = os.path.join(shim_dir.name, "pytest")
+    write_shim(shim_path)
+    return shim_dir, shim_path
+
+
 def _exec_child_env() -> Tuple[dict, tempfile.TemporaryDirectory]:
     """Return the inherited env with the shared GitHub CLI PATH guard."""
     shim_dir, _shim_path = _create_exec_gh_shim()
@@ -1181,7 +1197,7 @@ def _build_subprocess_env(
     story_id: str,
     agent_role: str = None,
     worktree_path: str = None,
-) -> dict:
+) -> Tuple[dict, tempfile.TemporaryDirectory]:
     """Build a minimal, allowlisted environment for a dispatched subprocess.
 
     Replaces copying the full parent environment: only a fixed base set of
@@ -1247,7 +1263,17 @@ def _build_subprocess_env(
                 "Or set SYNLYNK_GH_WRITE_ALLOW_HOST_AUTH=1 to opt into host `gh` auth "
                 "(uses personal keyring — not recommended; see #569)."
             )
-    return proc_env
+    pytest_shim_dir, _pytest_shim_path = _create_pytest_shim()
+    proc_env["PATH"] = pytest_shim_dir.name + os.pathsep + proc_env.get("PATH", "")
+    return proc_env, pytest_shim_dir
+
+
+def _cleanup_shim_after_process(process, shim_dir: tempfile.TemporaryDirectory) -> None:
+    """Keep a dispatched shim alive until its detached child exits."""
+    try:
+        process.wait()
+    finally:
+        shim_dir.cleanup()
 
 
 def _spawn_with_pty_fallback(cmd, env, cwd):
@@ -1518,16 +1544,19 @@ def _resolve_worktree_base_commit(worktree_path: Optional[str]) -> Optional[dict
     return None
 
 
-def _worktree_files_touched(worktree_path: Optional[str]) -> list:
-    """Return files committed or currently changed since the resolved merge-base."""
+def _worktree_files_touched(worktree_path: Optional[str], base_sha: Optional[str] = None) -> list:
+    """Return files committed or currently changed since this job's diff base.
+
+    ``base_sha`` is the commit recorded at dispatch. Stacked jobs must not
+    report files their parent branch already committed (gh:#2245).
+    """
     if not _worktree_path_is_available(worktree_path, "collect touched files"):
         return []
 
-    inspect_worktree_git_state = _pkg("_inspect_worktree_git_state")
-    git_state = inspect_worktree_git_state(worktree_path) if inspect_worktree_git_state else None
-    base_commit = (git_state or {}).get("base_commit") or (
-        _resolve_worktree_base_commit(worktree_path) or {}
-    ).get("base_commit")
+    resolve_job_diff_base = _pkg("_resolve_job_diff_base")
+    base_commit = resolve_job_diff_base(worktree_path, base_sha) if resolve_job_diff_base else None
+    if not base_commit:
+        base_commit = (_resolve_worktree_base_commit(worktree_path) or {}).get("base_commit")
     if not base_commit:
         return []
 
@@ -3629,6 +3658,60 @@ def _preflight_dispatch(
     return {"passed": True, "sentinel": None, "reason": None}
 
 
+_probed_dispatch_harness: Optional[str] = None
+
+
+def _set_probed_dispatch_harness(name: Optional[str]) -> None:
+    global _probed_dispatch_harness
+    _probed_dispatch_harness = name
+
+
+def take_probed_dispatch_harness() -> Optional[str]:
+    """Return and clear the harness the capability gate actually checked."""
+    global _probed_dispatch_harness
+    name = _probed_dispatch_harness
+    _probed_dispatch_harness = None
+    return name
+
+
+def _capability_reroute_message(initial_agent: str, resolved_agent: str, probed_agent: Optional[str]) -> str:
+    """Name the harness that failed the capability check, not the CLI argument.
+
+    Cold-start routing can substitute `local` before the gate runs (gh:#2048).
+    The reroute line must blame that substituted candidate.
+    """
+    blamed = probed_agent or initial_agent
+    if blamed == resolved_agent:
+        blamed = initial_agent
+    return (
+        f"  ↪ rerouted '{initial_agent}' -> '{resolved_agent}' "
+        f"(capability-probed: '{blamed}' lacks required capability for task)"
+    )
+
+
+def _story_routing_capabilities(task, task_type, requires, requires_gh_write):
+    if not (task or task_type or requires or requires_gh_write):
+        return None
+    from synlynk.capability_probe import infer_task_required_capabilities
+
+    return infer_task_required_capabilities(
+        task or "",
+        task_type=task_type,
+        requires=requires,
+        requires_gh_write=requires_gh_write,
+    )
+
+
+def _call_best_agent(best_agent, story_id, required_capabilities):
+    """Call the story router, tolerating test doubles that take only story_id."""
+    if required_capabilities:
+        try:
+            return best_agent(story_id, required_capabilities=required_capabilities)
+        except TypeError:
+            return best_agent(story_id)
+    return best_agent(story_id)
+
+
 def resolve_dispatch_harness(agent: str, agent_id: str = None, story_id: str = None,
                               force_agent: bool = False, requires_gh_write: bool = False,
                               static_baseline: bool = False, task_domain: str = None,
@@ -3669,6 +3752,9 @@ def resolve_dispatch_harness(agent: str, agent_id: str = None, story_id: str = N
         return agent
 
     baselines_map = _pkg("HARNESS_CAPABILITY_BASELINES", HARNESS_CAPABILITY_BASELINES)
+    required_capabilities = _story_routing_capabilities(
+        task, task_type, requires, requires_gh_write
+    )
     picked = None
     if task_domain and not static_baseline:
         try:
@@ -3688,7 +3774,7 @@ def resolve_dispatch_harness(agent: str, agent_id: str = None, story_id: str = N
     if story_id and not static_baseline and picked is None:
         best_agent = _pkg("_best_agent_for_story")
         if best_agent:
-            best = best_agent(story_id)
+            best = _call_best_agent(best_agent, story_id, required_capabilities)
             if best and best in baselines_map:
                 picked = best
     if picked is None and resolved_agent_role and not static_baseline:
@@ -3697,7 +3783,7 @@ def resolve_dispatch_harness(agent: str, agent_id: str = None, story_id: str = N
         synthetic_story_id = _role_dispatch_story_id(resolved_agent_role)
         best_agent = _pkg("_best_agent_for_story")
         if best_agent:
-            best = best_agent(synthetic_story_id)
+            best = _call_best_agent(best_agent, synthetic_story_id, required_capabilities)
             if best and best in baselines_map:
                 picked = best
     if picked is None and resolved_agent_role:
@@ -3727,6 +3813,7 @@ def resolve_dispatch_harness(agent: str, agent_id: str = None, story_id: str = N
     candidate = agent if force_agent else (picked or agent)
     if task or task_type or requires or requires_gh_write or excluded_harnesses:
         from synlynk.capability_probe import resolve_capable_dispatch_harness
+        _set_probed_dispatch_harness(candidate)
         return resolve_capable_dispatch_harness(
             candidate_harness=candidate,
             task=task or "",
@@ -3823,13 +3910,19 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     )
     request = pipeline.resolve(request)
     pipeline.authorize(request)
+    probed_agent = take_probed_dispatch_harness()
     initial_agent = agent
     agent = request.agent
     if agent != initial_agent and not force_agent:
-        print(
-            f"  ↪ rerouted '{initial_agent}' -> '{agent}' "
-            f"(capability-probed: '{initial_agent}' lacks required capability for task)"
-        )
+        print(_capability_reroute_message(initial_agent, agent, probed_agent))
+    # Reject unsupported harnesses before model resolution opens state.db.
+    try:
+        get_adapter(agent)
+    except KeyError as exc:
+        raise ValueError(
+            f"Unknown agent '{agent}': Harness '{agent}' has no registered dispatch adapter. "
+            "Register an adapter before dispatching it."
+        ) from exc
     resolved_agent_role = None
     if agent_id:
         from synlynk import agent_store
@@ -3962,11 +4055,11 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         adapter = get_adapter(agent)
     except KeyError as exc:
         raise ValueError(
-            f"Harness '{agent}' has no registered dispatch adapter. "
+            f"Unknown agent '{agent}': Harness '{agent}' has no registered dispatch adapter. "
             "Register an adapter before dispatching it."
         ) from exc
 
-    if agent == "grok" and not skip_permissions:
+    if agent in {"grok", "agy"} and not skip_permissions:
         # Grok's CLI has no working non-bypass headless mode (LIVE-13:
         # docs/rca/2026-09-22-LIVE-13-grok-headless-dispatch-permission-bypass.md).
         # Auto-opt-in here (rather than requiring every caller to pass
@@ -3974,6 +4067,9 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         # keep working unchanged after gh:#1925 part 1 made the bypass gated
         # instead of unconditional. See
         # docs/superpowers/specs/2026-10-04-grok-failclosed-permission-enforcement-design.md.
+        # Agy's --sandbox mode denies RunCommand outright and still reports
+        # SUCCESS (gh:#2216, job-0d75bb61). Same auto-opt-in so review and
+        # shell dispatches get --dangerously-skip-permissions instead.
         skip_permissions = True
 
     # A capability gate may reroute the harness (for example, Grok write
@@ -4006,6 +4102,23 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     elif callable(dconn) and not isinstance(dconn, sqlite3.Connection):
         dconn = dconn()
         owns_dconn = True
+
+    if requested_model_input and dconn is not None:
+        from synlynk.db import get_active_harness_models
+
+        active_models = get_active_harness_models(dconn, harness=agent)
+        if active_models:
+            valid_model_ids = list(dict.fromkeys(row["model_id"] for row in active_models))
+            if requested_model_input not in valid_model_ids:
+                if owns_dconn:
+                    try:
+                        dconn.close()
+                    except Exception:
+                        pass
+                raise ValueError(
+                    f"Invalid model '{requested_model_input}' for harness '{agent}'. "
+                    f"Valid model ids: {', '.join(valid_model_ids)}"
+                )
 
     if agent == "local" and dconn is not None:
         # Direct dispatch is a valid first-use path; do not require the
@@ -4541,7 +4654,7 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
         cmd_str = " ".join(_shlex.quote(c) for c in [cli] + flags)
         shell_cmd = f"{cmd_str} < {_shlex.quote(prompt_file)} > {_shlex.quote(log_file)} 2>&1; echo $? > {_shlex.quote(log_file)}.exit"
 
-    proc_env = _build_subprocess_env(
+    proc_env, pytest_shim_dir = _build_subprocess_env(
         agent,
         overrides,
         requires_gh_write,
@@ -4577,6 +4690,8 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 dconn, job_id=job_id, agent=agent, task=task, story_id=story_id,
                 reason="local_concurrency",
             )
+            if pytest_shim_dir is not None:
+                pytest_shim_dir.cleanup()
             if owns_dconn:
                 dconn.close()
             return result
@@ -4628,16 +4743,23 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     if container_image is not None:
         docker_bin = shutil.which("docker")
         if not docker_bin:
+            if pytest_shim_dir is not None:
+                pytest_shim_dir.cleanup()
             raise ContainerExecError(
                 "docker is not on PATH; refusing to fall back to a host subprocess"
             )
-        spawn_cmd, spawn_env, spawn_cwd = wrap_container(
-            spawn_cmd,
-            proc_env,
-            worktree_path,
-            container_image,
-            docker_bin=docker_bin,
-        )
+        try:
+            spawn_cmd, spawn_env, spawn_cwd = wrap_container(
+                spawn_cmd,
+                proc_env,
+                worktree_path,
+                container_image,
+                docker_bin=docker_bin,
+            )
+        except Exception:
+            if pytest_shim_dir is not None:
+                pytest_shim_dir.cleanup()
+            raise
         stderr_handle = open(log_file, "a", encoding="utf-8")
         stderr_target = stderr_handle
     try:
@@ -4650,12 +4772,24 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             env=spawn_env,
         )
     except Exception:
+        if pytest_shim_dir is not None:
+            pytest_shim_dir.cleanup()
         if local_slot_claimed:
             dconn.rollback()
         raise
     finally:
         if stderr_handle is not None:
             stderr_handle.close()
+
+    if hasattr(proc, "wait"):
+        threading.Thread(
+            target=_cleanup_shim_after_process,
+            args=(proc, pytest_shim_dir),
+            daemon=True,
+        ).start()
+    else:
+        if pytest_shim_dir is not None:
+            pytest_shim_dir.cleanup()
 
     # A process that has already exited failed during CLI startup (bad flag,
     # missing binary, or sandbox setup). Give the task one deterministic
@@ -4928,6 +5062,11 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                         "UPDATE daemon_jobs SET cross_branch_pr=? WHERE job_id=?",
                         (cross_branch_pr_value, job_id),
                     )
+            _ensure_daemon_job_columns(dconn, {"base_sha": "TEXT"})
+            dconn.execute(
+                "UPDATE daemon_jobs SET base_sha=? WHERE job_id=?",
+                (base_sha, job_id),
+            )
             if container_failed:
                 dconn.execute(
                     "UPDATE daemon_jobs SET status=?, exit_code=?, completed_at=? WHERE job_id=?",

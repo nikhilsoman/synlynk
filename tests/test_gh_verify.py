@@ -23,6 +23,48 @@ def test_gh_write_verified_false_when_issue_still_open(monkeypatch):
     assert gh_write_verified("issue:701", expect="closed") is False
 
 
+def test_gh_write_verified_merged_matches_app_prefixed_bot_login(monkeypatch):
+    """gh:#2236: GitHub App merges report mergedBy as app/<slug>, not <slug>[bot]."""
+    def fake_run(cmd, **kwargs):
+        return subprocess.CompletedProcess(
+            cmd, 0,
+            stdout='{"state":"MERGED","mergedBy":{"login":"app/synlynk-synlynk-qa","is_bot":true},'
+                   '"mergeCommit":{"oid":"3e6a710c19b12da2487f8c696515d95aa7a61d93"}}',
+            stderr="",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    evidence = {}
+    assert gh_write_verified(
+        "pr:2234",
+        expect="merged",
+        expect_author="synlynk-synlynk-qa[bot]",
+        evidence=evidence,
+    ) is True
+    assert evidence["actor_match"] is True
+
+
+def test_gh_write_verified_review_accepts_merge_by_same_app_actor(monkeypatch):
+    """gh:#2163: a review dispatch that also merged must not fail when the review
+    list is empty but mergedBy is the expected App and mergedAt is after start."""
+    def fake_run(cmd, **kwargs):
+        return subprocess.CompletedProcess(
+            cmd, 0,
+            stdout='{"reviews":[],"state":"MERGED",'
+                   '"mergedAt":"2026-10-10T04:02:59Z",'
+                   '"mergedBy":{"login":"app/synlynk-synlynk-qa"}}',
+            stderr="",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    assert gh_write_verified(
+        "pr:2160",
+        expect="review_posted",
+        since="2026-10-10T04:00:00Z",
+        expect_author="synlynk-synlynk-qa[bot]",
+    ) is True
+
+
 def test_gh_write_verified_true_when_pr_merged(monkeypatch):
     def fake_run(cmd, **kwargs):
         assert cmd[:3] == ["gh", "pr", "view"]
@@ -319,7 +361,7 @@ def test_gh_write_verified_review_posted_true_with_matching_author(monkeypatch):
 
 def test_gh_write_verified_review_posted_matches_expected_author_and_state(monkeypatch):
     def fake_run(cmd, **kwargs):
-        assert cmd == ["gh", "pr", "view", "1038", "--json", "reviews"]
+        assert cmd == ["gh", "pr", "view", "1038", "--json", "reviews,state,mergedAt,mergedBy"]
         return subprocess.CompletedProcess(
             cmd,
             0,

@@ -1,3 +1,8 @@
+import pytest
+
+pytestmark = pytest.mark.usefixtures("daemon_workspace_root")
+
+
 def test_checkpoint_writes_to_canonical_member_path(project_dir, monkeypatch):
     import os
 

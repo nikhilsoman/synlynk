@@ -161,9 +161,16 @@ def _compare_dt_lt(a: Optional[datetime], b: Optional[datetime]) -> bool:
 
 
 def _normalize_gh_login(login: Optional[str]) -> str:
+    """Compare GitHub App actors across the three login shapes we observe.
+
+    Dispatch stores ``<slug>[bot]``. Review payloads use ``<slug>``. Merge
+    payloads use ``app/<slug>`` (gh:#2163, gh:#2236, PR #2160/#2234).
+    """
     value = (login or "").strip().lower()
+    if value.startswith("app/"):
+        value = value[4:]
     if value.endswith("[bot]"):
-        return value[:-5]
+        value = value[:-5]
     return value
 
 
@@ -288,7 +295,10 @@ def gh_write_verified(
         if not since:
             return None
         field = _LIST_EXPECT_FIELD[expect]
-        cmd = ["gh", subcommand, "view", number, "--json", field]
+        # Merge fields let a review dispatch accept a same-actor merge when the
+        # reviews array has not caught up, or only the merge was recorded.
+        json_fields = field if expect != "review_posted" else "reviews,state,mergedAt,mergedBy"
+        cmd = ["gh", subcommand, "view", number, "--json", json_fields]
     else:
         return None
 
@@ -425,6 +435,23 @@ def gh_write_verified(
                         continue
                     matched = True
                     break
+            if (
+                matched is not True
+                and expect == "review_posted"
+                and isinstance(payload, dict)
+                and str(payload.get("state") or "").upper() == "MERGED"
+            ):
+                merged_at = _parse_iso8601(payload.get("mergedAt"), naive_as="utc")
+                actor_ok = _gh_logins_match(
+                    _author_login({"author": payload.get("mergedBy")}), expect_author
+                )
+                if (
+                    actor_ok
+                    and merged_at is not None
+                    and since_dt is not None
+                    and not _compare_dt_lt(merged_at, since_dt)
+                ):
+                    matched = True
         if evidence is not None:
             evidence["attempts"][-1]["matched"] = matched
         if matched is True:

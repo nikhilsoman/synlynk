@@ -60,6 +60,27 @@ check whether that evidence is still current before trusting it.
   review case above, can even produce a *worse* false-positive if the underlying
   bug happens to not trigger that run.
 
+## GitHub-write priority (measured 2026-10-14)
+
+Qualitative rows above still say every core harness can write. They do not
+order fallbacks. `_GH_WRITE_HARNESS_PRIORITY` and `.synlynk/policy.json`
+`gh_write.fallback` now follow a 14-day `AVG(quality)` from
+`capability_ratings` (this workspace `state.db`, query 2026-10-14 06:27:32,
+`max(ts)` 2026-10-14 06:24:10, n≥5). The table has no `task_type` column, so
+this is overall quality, not a gh-write-only slice.
+
+| Order | Harness | n | avg quality |
+|---|---|---:|---:|
+| 1 (default) | codex | 410 | 9.04 |
+| 2 | grok | 176 | 8.55 |
+| 3 | claude | 170 | 8.19 |
+| 4 | agy | 89 | 7.58 |
+
+`local` (n=2) and `muse` (n=1) stay out. Codex remains the default because
+the measurement says so. The pre-2026-10-04 constant `("claude", "agy", "grok")`
+omitted Codex and listed Grok last; that heuristic is retired. Grok's
+sandbox-deny finding stays superseded (gh:#2034).
+
 ## Reassessment cadence
 
 See "Harness Capability Reassessment Protocol" in `CLAUDE.md`. Short version: at

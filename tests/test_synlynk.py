@@ -6,6 +6,8 @@ from datetime import datetime, timedelta, timezone
 import pytest
 import subprocess
 
+pytestmark = pytest.mark.usefixtures("daemon_workspace_root")
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 import synlynk
 
@@ -165,7 +167,7 @@ def test_directive_templates_contain_sop_headers(tmp_path, isolated_db, monkeypa
     assert "## Repo Hygiene" in content
     assert "## Herdr Workspace Protocol" in content
     # #432 supersedes #427's interim one-liner with a capability-table row + notes
-    assert "| GitHub write actions | **codex, Claude/Agy fallback** |" in content
+    assert "| GitHub write actions | **codex, then grok, claude, agy** |" in content
     assert "GitHub write routing (#426)" in content
     assert "GitHub identity note (#423)" in content
 
@@ -204,11 +206,20 @@ def test_capability_allocation_sop_routes_gh_write_to_codex_not_grok():
     from synlynk.probe import _CAPABILITY_ALLOCATION_SOP, _repair_capability_allocation_sop
 
     assert "Codex by default" in _CAPABILITY_ALLOCATION_SOP
+    assert "then Grok, Claude, and Agy" in _CAPABILITY_ALLOCATION_SOP
+    assert "sandbox denies" not in _CAPABILITY_ALLOCATION_SOP
     assert "Route any task that requires GitHub write actions to **Grok by default**" not in _CAPABILITY_ALLOCATION_SOP
 
     repaired = _repair_capability_allocation_sop({"roles": {}})
     assert "Codex by default" in repaired
+    assert "then Grok, Claude, and Agy" in repaired
+    assert "sandbox denies" not in repaired
     assert "Route any task that requires GitHub write actions to **Grok by default**" not in repaired
+
+    repaired_roles = _repair_capability_allocation_sop({"roles": {"codex": ["implement"]}})
+    assert "Codex by default" in repaired_roles
+    assert "then Grok, Claude, and Agy" in repaired_roles
+    assert "sandbox denies" not in repaired_roles
 
 
 def test_run_tc7_passes_when_all_gh_write_allow_rules_present(tmp_path):
@@ -708,7 +719,7 @@ def test_dispatch_agent_gh_write_resolves_explicit_role_flag(tmp_path, isolated_
 
     def fake_build_env(agent, overrides, requires_gh_write, story_id, agent_role=None):
         captured["agent_role"] = agent_role
-        return {}
+        return {}, None
 
     monkeypatch.setattr(dispatch_mod, "_build_subprocess_env", fake_build_env)
     monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_gh_token", lambda role: "test-gh-token")
@@ -787,10 +798,11 @@ def test_build_subprocess_env_dev_default_unchanged_when_gh_write_not_required(m
     from synlynk.dispatch import _build_subprocess_env
 
     monkeypatch.chdir(tmp_path)
-    env = _build_subprocess_env(
+    env, shim_dir = _build_subprocess_env(
         "claude", {}, requires_gh_write=False, story_id=None, agent_role=None
     )
     assert "GH_TOKEN" not in env
+    shim_dir.cleanup()
 
 
 def test_build_subprocess_env_does_not_forward_private_key_material(monkeypatch):
@@ -799,11 +811,12 @@ def test_build_subprocess_env_does_not_forward_private_key_material(monkeypatch)
     monkeypatch.setenv("SYNLYNK_PRIVATE_KEY_PATH", "/runner/identity.pem")
     monkeypatch.setenv("GITHUB_APP_PRIVATE_KEY", "-----BEGIN PRIVATE KEY-----")
 
-    env = _build_subprocess_env("codex", {}, requires_gh_write=False, story_id="swarm-1")
+    env, shim_dir = _build_subprocess_env("codex", {}, requires_gh_write=False, story_id="swarm-1")
 
     assert "SYNLYNK_PRIVATE_KEY_PATH" not in env
     assert "GITHUB_APP_PRIVATE_KEY" not in env
     assert not any("pem" in key.lower() or "private_key" in key.lower() for key in env)
+    shim_dir.cleanup()
 
 
 def test_role_permission_defaults_cover_all_default_roles():
@@ -832,6 +845,37 @@ def test_resolve_dispatch_permissions_returns_role_defaults():
     perms = _resolve_dispatch_permissions("codex", role_list=["implement", "test"])
     assert "write:src/" in perms
     assert "run:tests" in perms
+
+
+def test_gh_write_harness_priority_follows_measured_quality():
+    """2026-10-14 capability_ratings: codex, grok, claude, agy."""
+    from synlynk.dispatch import _GH_WRITE_HARNESS_PRIORITY, _harness_for_org_role
+    from synlynk.policy import DEFAULT_WORKSPACE_POLICY
+
+    assert _GH_WRITE_HARNESS_PRIORITY == ("codex", "grok", "claude", "agy")
+    baselines_map = {
+        "agy": {"roles": ["builder"], "can_gh_write": True},
+        "claude": {"roles": ["builder"], "can_gh_write": True},
+        "codex": {"roles": ["builder"], "can_gh_write": True},
+        "grok": {"roles": ["builder"], "can_gh_write": True},
+    }
+    picked = _harness_for_org_role("dev", baselines_map, requires_gh_write=True)
+    assert picked == "codex"
+    gh_write = DEFAULT_WORKSPACE_POLICY["defaults"]["dev_authority"]["task_allocation"]["gh_write"]
+    assert gh_write == {"harness": "codex", "fallback": ["grok", "claude", "agy"]}
+
+
+def test_gh_write_priority_skips_codex_when_it_cannot_write():
+    from synlynk.dispatch import _harness_for_org_role
+
+    baselines_map = {
+        "agy": {"roles": ["builder"], "can_gh_write": True},
+        "claude": {"roles": ["builder"], "can_gh_write": True},
+        "codex": {"roles": ["builder"], "can_gh_write": False},
+        "grok": {"roles": ["builder"], "can_gh_write": True},
+    }
+    picked = _harness_for_org_role("dev", baselines_map, requires_gh_write=True)
+    assert picked == "grok"
 
 
 def test_harness_for_org_role_prefers_claude_over_agy_for_gh_write():
@@ -891,7 +935,7 @@ def test_dispatch_agent_gh_write_auto_implies_run_shell(tmp_path, isolated_db, m
         return []
 
     monkeypatch.setattr(dispatch_mod, "_permissions_to_flags", fake_permissions_to_flags)
-    monkeypatch.setattr(dispatch_mod, "_build_subprocess_env", lambda *a, **kw: {})
+    monkeypatch.setattr(dispatch_mod, "_build_subprocess_env", lambda *a, **kw: ({}, None))
     monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_gh_token", lambda role: "test-gh-token")
     monkeypatch.setattr(synlynk, "resolve_or_create_story_id", lambda *a, **kw: "story-adhoc")
     monkeypatch.setattr(
@@ -927,7 +971,7 @@ def test_dispatch_agent_non_gh_write_does_not_add_run_shell(tmp_path, isolated_d
         return []
 
     monkeypatch.setattr(dispatch_mod, "_permissions_to_flags", fake_permissions_to_flags)
-    monkeypatch.setattr(dispatch_mod, "_build_subprocess_env", lambda *a, **kw: {})
+    monkeypatch.setattr(dispatch_mod, "_build_subprocess_env", lambda *a, **kw: ({}, None))
     monkeypatch.setattr(synlynk, "resolve_or_create_story_id", lambda *a, **kw: "story-adhoc")
     monkeypatch.setattr(
         dispatch_mod,
@@ -5007,6 +5051,7 @@ def test_exec_grok_skips_missing_rules_files(tmp_path, monkeypatch):
         return FakeProc()
 
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SYNLYNK_DAEMON_WORKSPACE_ROOT", str(tmp_path))
     monkeypatch.setattr(sl.subprocess, "Popen", fake_popen)
     monkeypatch.setattr(sl, "generate_context", lambda scope="full", out_path=None: "")
     monkeypatch.setattr(sl, "check_budgets", lambda: None)
