@@ -1582,5 +1582,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2324 \u2014 unconditionally resolve repo root in child-main entry points (PR #2324, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2324.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-15) - PR #2324\n- Merged improvements and fixes for PR #2324."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/350-pr2326-spec-plan-for-daemon-autonomy-pass-wirin.md",
+    "title": "PR #2326 \u2014 spec + plan for daemon autonomy-pass wiring (gh:#2262 Task 4)",
+    "author": "synlynk-pm agent",
+    "date": "2026-10-15",
+    "pr": "#2326",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2326."
+    ],
+    "tweet": "\ud83d\ude80 PR #2326 \u2014 spec + plan for daemon autonomy-pass wiring (gh:#2262 Task 4) (PR #2326, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2326.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-15) - PR #2326\n- Merged improvements and fixes for PR #2326."
   }
 ]
