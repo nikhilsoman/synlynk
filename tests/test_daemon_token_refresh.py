@@ -100,6 +100,22 @@ def test_repo_common_dir_falls_back_to_cwd_outside_git(tmp_path, monkeypatch):
     assert _repo_common_dir() == str(tmp_path)
 
 
+def test_repo_common_dir_reports_deleted_cwd_clearly(monkeypatch):
+    monkeypatch.setattr(
+        daemon_mod.subprocess,
+        "run",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("git unavailable")),
+    )
+    monkeypatch.setattr(
+        daemon_mod.os,
+        "getcwd",
+        lambda: (_ for _ in ()).throw(FileNotFoundError("deleted cwd")),
+    )
+
+    with pytest.raises(RuntimeError, match="cwd no longer exists; cannot resolve repo root"):
+        _repo_common_dir()
+
+
 def test_daemon_paths_and_token_refresh_use_main_repo_from_worktree(tmp_path, monkeypatch):
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -503,6 +519,25 @@ def test_watch_daemon_child_main_writes_pidfile_then_runs_loop(tmp_path, monkeyp
     assert (tmp_path / ".synlynk" / "watch.pid").read_text() == "12345"
     assert call_order == ["set_state:watching", "run_loop"]
     assert (tmp_path / ".synlynk" / "watch.pid.lock").exists()
+
+
+def test_watch_daemon_child_main_pins_repo_root_before_constructor(tmp_path, monkeypatch):
+    repo_root = tmp_path / "repo"
+    launch_dir = tmp_path / "launch"
+    repo_root.mkdir()
+    (repo_root / ".synlynk").mkdir()
+    launch_dir.mkdir()
+    monkeypatch.chdir(launch_dir)
+    monkeypatch.delenv("SYNLYNK_DAEMON_WORKSPACE_ROOT", raising=False)
+    monkeypatch.setattr(daemon_mod, "_repo_common_dir", lambda *, strict=False: str(repo_root))
+    monkeypatch.setattr(daemon_mod.WatchDaemon, "_run_loop", lambda self: None)
+    monkeypatch.setattr(daemon_mod, "_pkg", lambda name, default=None:
+                        (lambda state: None) if name == "set_state" else default)
+
+    daemon_mod._watch_daemon_child_main()
+
+    assert os.getcwd() == str(repo_root)
+    assert (repo_root / ".synlynk" / "watch.pid").exists()
 
 
 def test_synlynk_daemon_start_spawns_detached_child_and_returns_immediately(tmp_path, monkeypatch):

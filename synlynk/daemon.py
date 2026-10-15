@@ -55,11 +55,17 @@ def _repo_common_dir(*, strict: bool = False) -> str:
         # One-shot CLI callers retain the historical cwd fallback. Daemon
         # constructors pass strict=True so failures surface before the process
         # starts its long-lived loop.
-        return os.getcwd()
+        try:
+            return os.getcwd()
+        except FileNotFoundError as exc:
+            raise RuntimeError(
+                "cwd no longer exists; cannot resolve repo root"
+            ) from exc
 
 
-def _daemon_state_path(*parts: str) -> str:
-    return os.path.join(_repo_common_dir(), ".synlynk", *parts)
+def _daemon_state_path(*parts: str, workspace_root: Optional[str] = None) -> str:
+    root = workspace_root if workspace_root is not None else _repo_common_dir()
+    return os.path.join(root, ".synlynk", *parts)
 
 
 def _daemon_package_path() -> str:
@@ -261,7 +267,22 @@ class WatchDaemon:
                 print(self._started_message)
                 print("    Tip: run 'synlynk daemon --install-service' so this survives a crash/reboot.")
             else:
-                print(f"  ⚠ Failed to start daemon (check {os.path.basename(self.logfile)} for errors).", file=sys.stderr)
+                last_error = ""
+                try:
+                    with open(self.logfile) as log:
+                        last_error = next(
+                            (line.strip() for line in reversed(log.readlines()) if line.strip()),
+                            "",
+                        )
+                except OSError:
+                    pass
+                if last_error:
+                    print(f"  ⚠ Failed to start daemon: {last_error}", file=sys.stderr)
+                else:
+                    print(
+                        f"  ⚠ Failed to start daemon (check {os.path.basename(self.logfile)} for errors).",
+                        file=sys.stderr,
+                    )
         finally:
             _release_daemon_lock(lock_fh)
 
@@ -462,9 +483,7 @@ class WatchDaemon:
 
 
 def _watch_daemon_child_main() -> None:
-    workspace_root = os.environ.get("SYNLYNK_DAEMON_WORKSPACE_ROOT")
-    if workspace_root:
-        os.chdir(workspace_root)
+    os.chdir(_repo_common_dir(strict=True))
     d = WatchDaemon()
     # Publish pidfile before taking the lifetime lock so the parent start()
     # waiter can observe readiness and release its start-time lock (#349).
@@ -1105,7 +1124,7 @@ class SynlynkDaemon(WatchDaemon):
                 conn.close()
 
     def _prepare_start(self) -> None:
-        watch_pid = _daemon_state_path("watch.pid")
+        watch_pid = _daemon_state_path("watch.pid", workspace_root=self.workspace_root)
         if os.path.exists(watch_pid):
             print("  ⚠ synlynk watch is also running — both will poll project-docs/.")
         if self.autonomous:
@@ -1357,9 +1376,7 @@ class SynlynkDaemon(WatchDaemon):
 
 
 def _synlynk_daemon_child_main(*, blocking_lock: bool = True) -> None:
-    workspace_root = os.environ.get("SYNLYNK_DAEMON_WORKSPACE_ROOT")
-    if workspace_root:
-        os.chdir(workspace_root)
+    os.chdir(_repo_common_dir(strict=True))
     d = SynlynkDaemon(autonomous=os.environ.get("SYNLYNK_AUTONOMOUS") == "1")
     # Acquire the lifetime lock before publishing the pidfile so a foreground
     # service cannot overwrite the identity of an already-running daemon.
