@@ -31,6 +31,34 @@ def test_ensure_daemon_job_columns_reads_schema_once_and_adds_missing_columns():
     conn.close()
 
 
+@pytest.mark.parametrize("isatty, expected", [(True, "home"), (False, "headless")])
+def test_local_concurrency_deferred_enqueue_records_dispatch_context(monkeypatch, isatty, expected):
+    import synlynk.dispatch as dispatch_mod
+
+    conn = sqlite3.connect(":memory:")
+    conn.execute(
+        "CREATE TABLE daemon_jobs ("
+        "job_id TEXT PRIMARY KEY, agent TEXT, task TEXT, story_id TEXT, status TEXT, "
+        "priority INTEGER, depends_on TEXT, enqueued_at TEXT)"
+    )
+    monkeypatch.setattr(dispatch_mod.sys.stdin, "isatty", lambda: isatty)
+
+    dispatch_mod._defer_local_concurrency(
+        conn,
+        job_id="djob-context",
+        agent="local",
+        task="deferred task",
+        story_id="story-context",
+        reason="local_concurrency",
+    )
+
+    row = conn.execute(
+        "SELECT dispatch_context FROM daemon_jobs WHERE job_id='djob-context'"
+    ).fetchone()
+    conn.close()
+    assert row == (expected,)
+
+
 def test_dispatch_agent_rejects_explicit_incompatible_role(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     repo = tmp_path / "repo"
