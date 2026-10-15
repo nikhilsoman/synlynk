@@ -31,3 +31,34 @@ def test_local_driver_accepts_shell_command():
     output = []
     driver.stream_telemetry(runner_id, output.append)
     assert output[0]["message"] == "hello"
+
+
+def test_manager_persists_telemetry_and_results(tmp_path):
+    conn = sqlite3.connect(str(tmp_path / "state.db"))
+    _migrate_db(conn)
+    manager = RunnerManager({"swarm_runners": {"enabled": ["local"]}}, conn)
+    runner_id = manager.provision({"command": [sys.executable, "-c", "print('managed')"]})
+    events = []
+    manager.stream_telemetry(runner_id, events.append)
+    result = manager.collect_results(runner_id)
+
+    row = conn.execute(
+        "SELECT status, exit_code, results_json, last_telemetry_at FROM swarm_runners WHERE runner_id=?",
+        (runner_id,),
+    ).fetchone()
+    assert events[0]["message"] == "managed"
+    assert result["exit_code"] == 0
+    assert row[0:2] == ("completed", 0)
+    assert json.loads(row[2])["runner_id"] == runner_id
+    assert row[3]
+
+
+def test_local_driver_merges_environment():
+    driver = LocalRunnerDriver()
+    runner_id = driver.provision({
+        "command": [sys.executable, "-c", "import os; print(os.environ['SYNLYNK_TEST_ENV'])"],
+        "env": {"SYNLYNK_TEST_ENV": "present"},
+    })
+    output = []
+    driver.stream_telemetry(runner_id, output.append)
+    assert output[0]["message"] == "present"

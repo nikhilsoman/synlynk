@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import uuid
 from datetime import datetime, timezone
 
 from synlynk import load_config
@@ -37,6 +36,9 @@ class RunnerManager:
         if "fly" in enabled or "fly" in runner_config:
             from synlynk.runners.fly import FlyRunnerDriver
             self.drivers["fly"] = FlyRunnerDriver(runner_config.get("fly", {}))
+        if "k8s" in enabled or "kubernetes" in enabled or "k8s" in runner_config:
+            from synlynk.runners.kubernetes import KubernetesRunnerDriver
+            self.drivers["k8s"] = KubernetesRunnerDriver(runner_config.get("k8s", {}))
 
     def driver(self, name=None) -> SwarmRunnerDriver:
         name = name or self.config.get("swarm_runners", {}).get("default", "local")
@@ -80,6 +82,49 @@ class RunnerManager:
             )
             self.conn.commit()
         return result
+
+    def stream_telemetry(self, runner_id, callback, driver=None) -> None:
+        """Stream a runner's output and persist the last-seen timestamp."""
+        record = self._record(runner_id)
+        impl = self.driver(driver or record.get("driver"))
+
+        def observe(event):
+            if self.conn is not None:
+                self.conn.execute(
+                    "UPDATE swarm_runners SET last_telemetry_at=? WHERE runner_id=?",
+                    (_now(), runner_id),
+                )
+                self.conn.commit()
+            if callback is not None:
+                callback(event)
+
+        impl.stream_telemetry(runner_id, observe)
+
+    def collect_results(self, runner_id, driver=None) -> dict:
+        """Collect and persist the terminal receipt returned by a driver."""
+        record = self._record(runner_id)
+        impl = self.driver(driver or record.get("driver"))
+        results = dict(impl.collect_results(runner_id) or {})
+        if self.conn is not None:
+            exit_code = results.get("exit_code")
+            status = results.get("status")
+            if not isinstance(status, str):
+                status = None
+            if status is None and exit_code is not None:
+                try:
+                    status = "completed" if int(exit_code) == 0 else "failed"
+                except (TypeError, ValueError):
+                    status = None
+            self.conn.execute(
+                """UPDATE swarm_runners
+                   SET status=COALESCE(?, status), exit_code=?, commit_sha=?,
+                       results_json=?, error=?
+                   WHERE runner_id=?""",
+                (status, exit_code, results.get("commit_sha"), json.dumps(results),
+                 results.get("error"), runner_id),
+            )
+            self.conn.commit()
+        return results
 
     def _record(self, runner_id):
         if self.conn is None:
