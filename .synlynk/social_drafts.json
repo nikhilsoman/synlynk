@@ -1694,5 +1694,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2337 \u2014 pin re-exec off disposable worktrees + self-health-check (gh:#2261) (PR #2337, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2337.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-15) - PR #2337\n- Merged improvements and fixes for PR #2337."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/354-pr2265-isolate-generated-todo-writes-in-tests.md",
+    "title": "PR #2265 \u2014 isolate generated todo writes in tests",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-15",
+    "pr": "#2265",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2265."
+    ],
+    "tweet": "\ud83d\ude80 PR #2265 \u2014 isolate generated todo writes in tests (PR #2265, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2265.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-15) - PR #2265\n- Merged improvements and fixes for PR #2265."
   }
 ]
