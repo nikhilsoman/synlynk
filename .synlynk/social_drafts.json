@@ -1710,5 +1710,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2265 \u2014 isolate generated todo writes in tests (PR #2265, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2265.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-15) - PR #2265\n- Merged improvements and fixes for PR #2265."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/355-pr2042-close-ci-follow-up-for-1943.md",
+    "title": "PR #2042 \u2014 close CI follow-up for #1943",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-15",
+    "pr": "#2042",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2042."
+    ],
+    "tweet": "\ud83d\ude80 PR #2042 \u2014 close CI follow-up for #1943 (PR #2042, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2042.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-15) - PR #2042\n- Merged improvements and fixes for PR #2042."
   }
 ]
