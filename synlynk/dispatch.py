@@ -1264,7 +1264,13 @@ def _build_subprocess_env(
                 "(uses personal keyring — not recommended; see #569)."
             )
     pytest_shim_dir, _pytest_shim_path = _create_pytest_shim()
+    # Keep the wrapper first for direct commands, and also force pytest's own
+    # option parser quiet. Login shells may prepend PATH entries from dotfiles,
+    # causing the real pytest executable to shadow the wrapper.
     proc_env["PATH"] = pytest_shim_dir.name + os.pathsep + proc_env.get("PATH", "")
+    proc_env["PYTEST_ADDOPTS"] = (
+        proc_env.get("PYTEST_ADDOPTS", "") + " -qqqq"
+    ).strip()
     return proc_env, pytest_shim_dir
 
 

@@ -1811,7 +1811,7 @@ def test_build_subprocess_env_allowlists_base_vars_only(monkeypatch):
 
     env, shim_dir = _build_subprocess_env("codex", {}, requires_gh_write=False, story_id="story-1")
 
-    assert env.get("PATH").endswith(os.pathsep + "/usr/bin")
+    assert env.get("PATH").startswith(shim_dir.name + os.pathsep + "/usr/bin")
     assert env.get("HOME") == "/home/test"
     assert "AWS_SECRET_ACCESS_KEY" not in env
     assert "SOME_RANDOM_API_TOKEN" not in env
@@ -1858,7 +1858,7 @@ def test_build_subprocess_env_overrides_win_over_allowlist(monkeypatch):
 
     env, shim_dir = _build_subprocess_env("codex", {"env": {"PATH": "/custom/bin"}}, requires_gh_write=False, story_id="story-1")
 
-    assert env.get("PATH").endswith(os.pathsep + "/custom/bin")
+    assert env.get("PATH").startswith(shim_dir.name + os.pathsep + "/custom/bin")
     shim_dir.cleanup()
 
 
@@ -1876,6 +1876,8 @@ def test_dispatch_env_quiets_pytest_v_without_task_verbosity(tmp_path, monkeypat
         "esac\n"
     )
     fake_pytest.chmod(0o700)
+    test_file = tmp_path / "test_one.py"
+    test_file.write_text("def test_one():\n    assert True\n")
     monkeypatch.setenv("PATH", str(fake_bin) + os.pathsep + os.environ["PATH"])
 
     env, shim_dir = _build_subprocess_env(
@@ -1883,16 +1885,20 @@ def test_dispatch_env_quiets_pytest_v_without_task_verbosity(tmp_path, monkeypat
     )
     try:
         quiet = subprocess.run(
-            ["pytest", "tests/", "-v"], env=env, text=True, capture_output=True, check=True
+            ["zsh", "-lc", f"pytest {test_file} -v"],
+            env=env,
+            text=True,
+            capture_output=True,
+            check=True,
         )
         baseline = subprocess.run(
-            [str(fake_pytest), "tests/", "-q"], text=True, capture_output=True, check=True
+            [str(fake_pytest), str(test_file), "-v"], text=True, capture_output=True, check=True
         )
     finally:
         shim_dir.cleanup()
 
     assert "PASSED" not in quiet.stdout
-    assert len(quiet.stdout) <= len(baseline.stdout) * 3
+    assert len(quiet.stdout) < len(baseline.stdout)
 
 
 def test_dispatch_agent_requires_gh_write_true_capable_agent_unchanged(project_dir, monkeypatch):
