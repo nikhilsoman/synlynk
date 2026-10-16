@@ -1045,3 +1045,37 @@ def test_migrate_repairs_turn_usage_json_on_bootstrapped_schema(tmp_path):
     cost_cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}
     assert "turn_usage_json" in cost_cols
     conn.close()
+
+
+def test_migrate_repairs_quality_verified_on_bootstrapped_schema(tmp_path):
+    """A current-version DB missing the column is repaired on the next open."""
+    import sqlite3
+    from synlynk.db import _DB_MIGRATION_VERSION, _migrate_db
+
+    conn = sqlite3.connect(str(tmp_path / "state.db"))
+    _migrate_db(conn)
+
+    # Rebuild only capability_ratings from the bootstrapped schema, simulating
+    # an older snapshot that predates quality_verified while retaining every
+    # other table and the current user_version.
+    columns = [
+        row[1]
+        for row in conn.execute("PRAGMA table_info(capability_ratings)")
+        if row[1] != "quality_verified"
+    ]
+    quoted_columns = ", ".join('"' + column.replace('"', '""') + '"' for column in columns)
+    conn.execute(
+        "CREATE TABLE capability_ratings_legacy AS "
+        f"SELECT {quoted_columns} FROM capability_ratings"
+    )
+    conn.execute("DROP VIEW capability_scores")
+    conn.execute("DROP TABLE capability_ratings")
+    conn.execute("ALTER TABLE capability_ratings_legacy RENAME TO capability_ratings")
+    conn.execute(f"PRAGMA user_version = {_DB_MIGRATION_VERSION}")
+    conn.commit()
+
+    _migrate_db(conn)
+
+    rating_cols = {row[1] for row in conn.execute("PRAGMA table_info(capability_ratings)")}
+    assert "quality_verified" in rating_cols
+    conn.close()
