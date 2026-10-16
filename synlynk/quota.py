@@ -562,7 +562,10 @@ def _open_reservation(
             "VALUES (?, ?, ?, ?, ?, 'open')",
             (harness, int(tokens), scope, scope_id, job_id),
         )
-        conn.commit()
+        # A caller-provided connection may be participating in a larger
+        # transaction. Leave its commit/rollback decision to the caller.
+        if own_conn:
+            conn.commit()
         return cur.lastrowid
     finally:
         if own_conn and conn is not None:

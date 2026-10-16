@@ -121,6 +121,26 @@ def test_open_release_reservation_lifecycle(project_dir):
     assert sl._open_reservations_sum(conn, "claude") == 0
 
 
+def test_open_reservation_preserves_caller_transaction(project_dir):
+    import synlynk as sl
+
+    conn = sl._get_db()
+    conn.execute("BEGIN")
+    rid = sl._open_reservation(
+        conn, "codex", 1200, scope="plan", job_id="job-uncommitted-reservation"
+    )
+
+    assert conn.in_transaction
+    assert conn.execute(
+        "SELECT COUNT(*) FROM harness_reservations WHERE id=?", (rid,)
+    ).fetchone()[0] == 1
+
+    conn.rollback()
+    assert conn.execute(
+        "SELECT COUNT(*) FROM harness_reservations WHERE id=?", (rid,)
+    ).fetchone()[0] == 0
+
+
 def test_open_reservations_sum_ignores_expired(project_dir):
     import synlynk as sl
     import time
