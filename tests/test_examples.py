@@ -1,8 +1,16 @@
-from synlynk.examples import active_items, greet
+from synlynk.examples import active_items, greet, word_count
 
 
 def test_greet_returns_a_friendly_message():
     assert greet("Ada") == "Hello, Ada!"
+
+
+def test_word_count_counts_words_separated_by_whitespace():
+    assert word_count("  Python makes small tools\tquickly ") == 5
+
+
+def test_word_count_returns_zero_for_empty_text():
+    assert word_count(" \n\t ") == 0
 
 
 def test_write_3_test_cases_for_a_general_scenario_happy_path():
