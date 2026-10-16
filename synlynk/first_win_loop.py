@@ -47,27 +47,34 @@ def execute_first_win_cycle(
 
     conn = sqlite3.connect(db_path)
 
-    session = get_or_create_session(conn, product_id)
-    session_id = session["session_id"]
+    try:
+        session = get_or_create_session(conn, product_id)
+        session_id = session["session_id"]
+        meta = {
+            "prompt": prompt,
+            "started_at": time.time(),
+            "status": "in_progress",
+        }
+        conn.execute(
+            "UPDATE onboarding_sessions SET first_win_meta = ? WHERE session_id = ?",
+            (json.dumps(meta), session_id),
+        )
+        conn.commit()
 
-    meta = {
-        "prompt": prompt,
-        "started_at": time.time(),
-        "status": "in_progress",
-    }
-    conn.execute(
-        "UPDATE onboarding_sessions SET first_win_meta = ? WHERE session_id = ?",
-        (json.dumps(meta), session_id),
-    )
-    conn.commit()
+        session = advance_stage(conn, session_id, STAGE_S10_BUILD_EXPERIENCE)
+        meta.update({"status": "completed", "completed_at": time.time()})
+        conn.execute(
+            "UPDATE onboarding_sessions SET first_win_meta = ? WHERE session_id = ?",
+            (json.dumps(meta), session_id),
+        )
+        conn.commit()
 
-    session = advance_stage(conn, session_id, STAGE_S10_BUILD_EXPERIENCE)
-    conn.close()
-
-    return {
-        "status": "completed",
-        "product_id": product_id,
-        "session_id": session_id,
-        "prompt": prompt,
-        "current_stage": session["current_stage"],
-    }
+        return {
+            "status": "completed",
+            "product_id": product_id,
+            "session_id": session_id,
+            "prompt": prompt,
+            "current_stage": session["current_stage"],
+        }
+    finally:
+        conn.close()
