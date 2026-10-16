@@ -1,4 +1,22 @@
-from synlynk.examples import active_items, greet
+import pytest
+
+from synlynk.examples import active_items, greet, is_adult
+
+
+def test_req_adult_1_accepts_age_range_endpoints():
+    assert is_adult(0) is False
+    assert is_adult(120) is True
+
+
+@pytest.mark.parametrize("age", [-1, 121, 18.0, "18", True])
+def test_req_adult_1_rejects_invalid_ages(age):
+    with pytest.raises(ValueError, match="integer from 0 through 120"):
+        is_adult(age)
+
+
+def test_req_adult_2_uses_18_as_the_eligibility_threshold():
+    assert is_adult(17) is False
+    assert is_adult(18) is True
 
 
 def test_greet_returns_a_friendly_message():
