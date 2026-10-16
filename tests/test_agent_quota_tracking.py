@@ -100,8 +100,11 @@ def test_open_release_reservation_lifecycle(project_dir):
     import synlynk as sl
 
     conn = sl._get_db()
+    conn.execute("BEGIN")
     rid = sl._open_reservation(conn, "claude", 5000, scope="adhoc")
     assert isinstance(rid, int)
+    # A caller-owned connection keeps transaction control with its caller.
+    assert conn.in_transaction
 
     row = conn.execute(
         "SELECT harness, tokens, scope, scope_id, job_id, status FROM harness_reservations WHERE id=?",
