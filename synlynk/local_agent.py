@@ -22,8 +22,13 @@ _DEFAULT_LOCAL_CONFIG = {
     "endpoint": "http://127.0.0.1:8000",
     "models": [
         {"id": "ornith-1.0-9b", "pinned": True, "edit_format": "whole"},
-        {"id": "qwen-coder", "pinned": False, "edit_format": "whole"},
-        {"id": "gemma-coder", "pinned": False, "edit_format": "diff"},
+        {
+            "id": "qwen-coder",
+            "pinned": False,
+            "edit_format": "whole",
+            "dispatch_eligible": False,
+            "qualification": "benchmark-only",
+        },
     ],
     "hardware_tier": "16gb-default",
 }
@@ -71,10 +76,17 @@ def _detect_hardware_tier() -> str:
     return "64gb-fleet"
 
 
+def _is_dispatch_eligible(model: dict) -> bool:
+    """Return whether a roster model may be selected by normal dispatch."""
+    return model.get("dispatch_eligible", True)
+
+
 def _select_model_for_tier(tier: str, config: dict) -> str:
     """Return the best available model id for a hardware tier."""
     candidates = [
-        model for model in config["models"] if tier in model.get("tier", [])
+        model
+        for model in config["models"]
+        if tier in model.get("tier", []) and _is_dispatch_eligible(model)
     ]
     eligible = [
         model for model in candidates
@@ -87,12 +99,16 @@ def _select_model_for_tier(tier: str, config: dict) -> str:
         return eligible[0]["id"]
 
     fallback = next(
-        (model for model in config["models"] if not model.get("loader")),
+        (
+            model
+            for model in config["models"]
+            if not model.get("loader") and _is_dispatch_eligible(model)
+        ),
         None,
     )
     if fallback:
         return fallback["id"]
-    return config["models"][0]["id"]
+    raise ValueError("local roster has no dispatch-eligible models")
 
 
 def _load_local_config(path: str = None) -> dict:
@@ -108,13 +124,23 @@ def _load_local_config(path: str = None) -> dict:
 
 
 def _pinned_model(config: dict) -> str:
-    """Returns the pinned model id, or the first roster entry if none is pinned."""
-    if "pinned_model" in config:
-        return config["pinned_model"]
-    for model in config["models"]:
+    """Return the eligible pinned model, or the first eligible roster entry.
+
+    Models marked ``dispatch_eligible: false`` stay visible for qualification
+    but cannot become the normal local-dispatch default.
+    """
+    eligible = [model for model in config["models"] if _is_dispatch_eligible(model)]
+    if not eligible:
+        raise ValueError("local roster has no dispatch-eligible models")
+    configured_id = config.get("pinned_model")
+    if configured_id:
+        configured = next((model for model in eligible if model["id"] == configured_id), None)
+        if configured:
+            return configured["id"]
+    for model in eligible:
         if model.get("pinned"):
             return model["id"]
-    return config["models"][0]["id"]
+    return eligible[0]["id"]
 
 
 def _health_check(endpoint: str, timeout: int = 5, api_key: str = None) -> dict:
@@ -182,14 +208,24 @@ def _local_dispatch_model_flags(config_path: str = None) -> list:
     except FileNotFoundError:
         return []
     endpoint = config["endpoint"]
-    model_id = _pinned_model(config)
+    try:
+        model_id = _pinned_model(config)
+    except ValueError:
+        return []
 
     def _entry_for(mid):
         return next((model for model in config["models"] if model["id"] == mid), {})
 
     model_entry = _entry_for(model_id)
     if model_entry.get("loader") == "prism-ml" and not _check_prism_ml_available():
-        fallback = next((model for model in config["models"] if not model.get("loader")), None)
+        fallback = next(
+            (
+                model
+                for model in config["models"]
+                if not model.get("loader") and _is_dispatch_eligible(model)
+            ),
+            None,
+        )
         if fallback is None:
             return []
         model_id = fallback["id"]

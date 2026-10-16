@@ -4,25 +4,19 @@
   "models": [
     {
       "id": "Ornith-1.0-9B-4bit",
-      "pinned": false,
+      "pinned": true,
       "edit_format": "diff",
-      "tier": ["8gb-light", "16gb-default"]
+      "tier": ["8gb-light", "16gb-default", "32gb-pro", "64gb-fleet"]
     },
     {
-      "id": "Qwen3.6-27B-4bit",
+      "id": "Qwen2.5-Coder-14B-Instruct-4bit",
       "pinned": false,
       "edit_format": "whole",
-      "tier": ["64gb-fleet"]
-    },
-    {
-      "id": "Ternary-Bonsai-2-27B-mlx-2bit",
-      "pinned": false,
-      "edit_format": "diff",
-      "loader": "prism-ml",
-      "tier": ["32gb-pro", "64gb-fleet"]
+      "dispatch_eligible": false,
+      "qualification": "benchmark-only"
     }
   ],
   "hardware_tier": "32gb-pro",
-  "pinned_model": "Ternary-Bonsai-2-27B-mlx-2bit",
+  "pinned_model": "Ornith-1.0-9B-4bit",
   "max_concurrent": 1
 }
