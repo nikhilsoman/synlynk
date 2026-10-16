@@ -29,6 +29,41 @@ class TestLocalAgentConfigEditFormat(unittest.TestCase):
         self.assertNotIn("Ternary-Bonsai-2-27B-mlx-2bit", [m["id"] for m in config["models"]])
 
 
+
+    def test_qualified_profiles_ornith_qwen_bonsai_gemma4(self):
+        """Verify all qualified profiles (Ornith, Qwen 3.6, Bonsai, Gemma4)
+        are properly configured according to their qualification status."""
+        repo_root = Path(__file__).resolve().parents[1]
+        with open(repo_root / ".agents" / "local.json") as f:
+            config = json.load(f)
+        
+        model_ids = [m["id"] for m in config["models"]]
+        
+        # Ornith: passed qualification, dispatch-eligible, pinned
+        self.assertIn("Ornith-1.0-9B-4bit", model_ids)
+        ornith = next(m for m in config["models"] if m["id"] == "Ornith-1.0-9B-4bit")
+        self.assertTrue(ornith.get("pinned", False))
+        self.assertNotEqual(ornith.get("dispatch_eligible"), False)
+        
+        # Qwen2.5-Coder: passed benchmark, not dispatch-eligible, marked benchmark-only
+        self.assertIn("Qwen2.5-Coder-14B-Instruct-4bit", model_ids)
+        qwen = next(m for m in config["models"] if m["id"] == "Qwen2.5-Coder-14B-Instruct-4bit")
+        self.assertFalse(qwen.get("dispatch_eligible"))
+        self.assertEqual(qwen.get("qualification"), "benchmark-only")
+        
+        # Qwen3.6: rejected for insufficient storage, should not be in roster
+        self.assertNotIn("Qwen3.6-27B-4bit", model_ids)
+        
+        # Bonsai: blocked on prism-ml support, should not be in roster
+        self.assertNotIn("Ternary-Bonsai-2-27B-mlx-2bit", model_ids)
+        
+        # Gemma4: serving-only qualification, not dispatch-eligible
+        self.assertIn("gemma-4-12B-it-qat-4bit", model_ids)
+        gemma4 = next(m for m in config["models"] if m["id"] == "gemma-4-12B-it-qat-4bit")
+        self.assertFalse(gemma4.get("dispatch_eligible"))
+        self.assertEqual(gemma4.get("qualification"), "serving-only")
+
+
 class TestPrismMlCheck(unittest.TestCase):
     def test_returns_true_when_prism_ml_importable(self):
         with patch("importlib.util.find_spec", return_value=object()):

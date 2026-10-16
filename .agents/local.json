@@ -16,6 +16,13 @@
       "edit_format": "whole",
       "dispatch_eligible": false,
       "qualification": "benchmark-only"
+    },
+    {
+      "id": "gemma-4-12B-it-qat-4bit",
+      "pinned": false,
+      "edit_format": "whole",
+      "dispatch_eligible": false,
+      "qualification": "serving-only"
     }
   ],
   "hardware_tier": "32gb-pro",
