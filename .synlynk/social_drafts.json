@@ -1726,5 +1726,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2042 \u2014 close CI follow-up for #1943 (PR #2042, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2042.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-15) - PR #2042\n- Merged improvements and fixes for PR #2042."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/356-pr1970-post-243-for-pr-1967-claude-local-adapte.md",
+    "title": "PR #1970 \u2014 post 243 for PR #1967 \u2014 Claude/local adapter port, gh:#1924 close",
+    "author": "synlynk-pm agent",
+    "date": "2026-10-16",
+    "pr": "#1970",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #1970."
+    ],
+    "tweet": "\ud83d\ude80 PR #1970 \u2014 post 243 for PR #1967 \u2014 Claude/local adapter port, gh:#1924 close (PR #1970, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #1970.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-16) - PR #1970\n- Merged improvements and fixes for PR #1970."
   }
 ]
