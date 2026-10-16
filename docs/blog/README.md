@@ -1,5 +1,6 @@
 # synlynk Blog Series: Building the OS for Multi-Agent Development
 
+| [279](./279-prTBD-pm-tpm-durable-wake-cycle-charters.md) | Durable PM/TPM charters get a real wake cycle and CLI surface | TBD | 2026-10-13 |
 | [278](./278-pr2334-worktree-hygiene-audit-1487.md) | Worktree hygiene audit: archive before you prune | [#2334](https://github.com/nikhilsoman/synlynk/pull/2334) | 2026-10-15 |
 | [277](./277-pr2337-daemon-detached-child-self-health.md) | gh:#2261 — Catch a dead detached daemon before the backlog stalls | [#2337](https://github.com/nikhilsoman/synlynk/pull/2337) | 2026-10-15 |
 | [276](./276-pr2336-daemon-start-false-failure.md) | daemon start stopped crying wolf about stale log lines | [#2336](https://github.com/nikhilsoman/synlynk/pull/2336) | 2026-10-15 |

@@ -2,7 +2,7 @@
 title: "Durable PM/TPM charters get a real wake cycle and CLI surface"
 date: 2026-10-13
 series: "Building the OS for Multi-Agent Development"
-post: 268
+post: 279
 pr: "#TBD"
 status: open
 author: "synlynk team"
