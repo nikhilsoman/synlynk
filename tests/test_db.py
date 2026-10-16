@@ -839,3 +839,44 @@ def test_quality_verified_column_added_idempotently(tmp_path, monkeypatch):
 
     assert "quality_verified" in rating_cols
     assert "quality_verified" in result_cols
+
+
+def test_quality_verified_repair_tolerates_concurrent_schema_winner():
+    """A second startup may lose the additive-column race after its PRAGMA."""
+    from synlynk.db import _add_column_if_missing
+
+    class ConcurrentWinnerConnection:
+        def execute(self, sql):
+            if sql.startswith("PRAGMA table_info"):
+                return [(0, "id")]
+            if sql.startswith("ALTER TABLE capability_ratings"):
+                raise sqlite3.OperationalError("duplicate column name: quality_verified")
+            raise AssertionError(f"unexpected SQL: {sql}")
+
+        def commit(self):
+            raise AssertionError("the losing connection must not commit")
+
+    _add_column_if_missing(
+        ConcurrentWinnerConnection(),
+        table="capability_ratings",
+        column="quality_verified",
+        definition="INTEGER",
+    )
+
+
+def test_add_column_if_missing_reraises_unrelated_sqlite_error():
+    from synlynk.db import _add_column_if_missing
+
+    class FailingConnection:
+        def execute(self, sql):
+            if sql.startswith("PRAGMA table_info"):
+                return [(0, "id")]
+            raise sqlite3.OperationalError("database is locked")
+
+    with pytest.raises(sqlite3.OperationalError, match="database is locked"):
+        _add_column_if_missing(
+            FailingConnection(),
+            table="capability_ratings",
+            column="quality_verified",
+            definition="INTEGER",
+        )
