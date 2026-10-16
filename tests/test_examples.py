@@ -1,4 +1,14 @@
-from synlynk.examples import active_items, greet
+import pytest
+
+from synlynk.examples import (
+    CLAMP_REQUIREMENTS,
+    active_items,
+    clamp,
+    define_requirements,
+    greet,
+    set_requirement_status,
+    uncovered_requirement_ids,
+)
 
 
 def test_greet_returns_a_friendly_message():
@@ -112,3 +122,93 @@ def test_greet_handles_an_empty_name():
 
 def test_greet_preserves_punctuation_in_a_name():
     assert greet("O'Connor") == "Hello, O'Connor!"
+
+
+def test_define_requirements_builds_an_open_catalog():
+    catalog = define_requirements(CLAMP_REQUIREMENTS)
+
+    assert list(catalog) == [
+        "REQ-CLAMP-01",
+        "REQ-CLAMP-02",
+        "REQ-CLAMP-03",
+        "REQ-CLAMP-04",
+    ]
+    assert catalog["REQ-CLAMP-01"].status == "open"
+    assert "unchanged" in catalog["REQ-CLAMP-01"].statement
+
+
+def test_define_requirements_rejects_duplicate_ids():
+    with pytest.raises(ValueError, match="duplicate requirement id"):
+        define_requirements(
+            [
+                ("REQ-1", "first"),
+                ("REQ-1", "again"),
+            ]
+        )
+
+
+def test_set_requirement_status_marks_a_requirement_satisfied():
+    catalog = define_requirements(CLAMP_REQUIREMENTS)
+    updated = set_requirement_status(catalog, "REQ-CLAMP-01", "satisfied")
+
+    assert updated["REQ-CLAMP-01"].status == "satisfied"
+    assert catalog["REQ-CLAMP-01"].status == "open"
+
+
+def test_set_requirement_status_rejects_unknown_id_and_status():
+    catalog = define_requirements(CLAMP_REQUIREMENTS)
+
+    with pytest.raises(KeyError):
+        set_requirement_status(catalog, "REQ-MISSING", "satisfied")
+    with pytest.raises(ValueError, match="unknown requirement status"):
+        set_requirement_status(catalog, "REQ-CLAMP-01", "shipped")
+
+
+def test_uncovered_requirement_ids_reports_open_untraced_requirements():
+    catalog = define_requirements(CLAMP_REQUIREMENTS)
+    catalog = set_requirement_status(catalog, "REQ-CLAMP-04", "deferred")
+
+    missing = uncovered_requirement_ids(
+        catalog,
+        traced_ids=["REQ-CLAMP-01", "REQ-CLAMP-02"],
+    )
+
+    assert missing == ["REQ-CLAMP-03"]
+
+
+def test_clamp_returns_value_inside_range():
+    """REQ-CLAMP-01"""
+    assert clamp(5, 0, 10) == 5
+    assert clamp(0, 0, 10) == 0
+    assert clamp(10, 0, 10) == 10
+
+
+def test_clamp_returns_lo_when_value_is_below_range():
+    """REQ-CLAMP-02"""
+    assert clamp(-3, 0, 10) == 0
+
+
+def test_clamp_returns_hi_when_value_is_above_range():
+    """REQ-CLAMP-03"""
+    assert clamp(15, 0, 10) == 10
+
+
+def test_clamp_raises_when_bounds_are_inverted():
+    """REQ-CLAMP-04"""
+    with pytest.raises(ValueError, match="lo must be <= hi"):
+        clamp(1, 10, 0)
+
+
+def test_clamp_requirements_are_fully_traced_by_this_suite():
+    catalog = define_requirements(CLAMP_REQUIREMENTS)
+    traced = [
+        "REQ-CLAMP-01",
+        "REQ-CLAMP-02",
+        "REQ-CLAMP-03",
+        "REQ-CLAMP-04",
+    ]
+
+    assert uncovered_requirement_ids(catalog, traced) == []
+    for req_id in traced:
+        catalog = set_requirement_status(catalog, req_id, "satisfied")
+    assert all(req.status == "satisfied" for req in catalog.values())
