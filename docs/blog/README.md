@@ -441,6 +441,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [362](./362-pr2355-isolate-aider-qualification-network.md) | PR #2355 — isolate Aider qualification network | [#2355](https://github.com/nikhilsoman/synlynk/pull/2355) | 2026-10-16 |
 | [363](./363-pr2351-modernize-authenticated-local-hardware-c.md) | PR #2351 — modernize authenticated local hardware checks | [#2351](https://github.com/nikhilsoman/synlynk/pull/2351) | 2026-10-16 |
 | [364](./364-pr2364-retry-concurrent-schema-refresh.md) | PR #2364 — retry concurrent schema refresh | [#2364](https://github.com/nikhilsoman/synlynk/pull/2364) | 2026-10-16 |
+| [365](./365-pr2363-add-isolated-qualification-benchmark.md) | PR #2363 — add isolated qualification benchmark | [#2363](https://github.com/nikhilsoman/synlynk/pull/2363) | 2026-10-16 |
 
 ## Per-PR Post Template
 

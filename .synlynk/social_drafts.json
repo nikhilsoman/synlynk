@@ -1886,5 +1886,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2364 \u2014 retry concurrent schema refresh (PR #2364, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2364.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-16) - PR #2364\n- Merged improvements and fixes for PR #2364."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/365-pr2363-add-isolated-qualification-benchmark.md",
+    "title": "PR #2363 \u2014 add isolated qualification benchmark",
+    "author": "nikhilsoman",
+    "date": "2026-10-16",
+    "pr": "#2363",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2363."
+    ],
+    "tweet": "\ud83d\ude80 PR #2363 \u2014 add isolated qualification benchmark (PR #2363, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2363.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-16) - PR #2363\n- Merged improvements and fixes for PR #2363."
   }
 ]
