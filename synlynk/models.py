@@ -519,10 +519,12 @@ def probe_cli_harness(harness: str, executable: str | None = None, timeout: floa
 
 
 def discovered_model_ids(harness: str) -> list[str]:
-    """Return live model ids from the same probe ``discover_models()`` uses.
+    """Return live model ids from the shared environment discovery pass.
 
     Pytest skips the probe unless ``SYNLYNK_FORCE_MODEL_DISCOVERY=1``, so
-    catalog unit tests stay offline. A successful probe is cached briefly.
+    catalog unit tests stay offline. A discovery pass is cached briefly for
+    every harness it finds, so tier resolution and the models command share
+    the same model inventory without repeating CLI and runtime probes.
     """
     forced = os.environ.get("SYNLYNK_FORCE_MODEL_DISCOVERY") == "1"
     if os.environ.get("PYTEST_CURRENT_TEST") and not forced:
@@ -531,8 +533,15 @@ def discovered_model_ids(harness: str) -> list[str]:
     cached = _DISCOVERY_CACHE.get(harness)
     if cached and (now - cached[0]) < _DISCOVERY_TTL_SECONDS:
         return list(cached[1])
-    ids = tuple(spec.model_id for spec in probe_cli_harness(harness))
-    _DISCOVERY_CACHE[harness] = (now, ids)
+    discovered = discover_models()
+    by_harness: dict[str, list[str]] = {}
+    for spec in discovered:
+        by_harness.setdefault(spec.harness_binding, []).append(spec.model_id)
+    for name, ids in by_harness.items():
+        _DISCOVERY_CACHE[name] = (now, tuple(dict.fromkeys(ids)))
+    ids = _DISCOVERY_CACHE.get(harness, (now, ()))[1]
+    # Cache empty results too, preventing repeated probes for absent harnesses.
+    _DISCOVERY_CACHE.setdefault(harness, (now, tuple(ids)))
     return list(ids)
 
 
