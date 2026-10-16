@@ -239,6 +239,14 @@ def test_lazy_parser_registers_only_the_selected_top_level_command():
     assert (args.command, args.agent, args.task) == ("dispatch", "codex", "build")
 
 
+@pytest.mark.parametrize("command", ["brainstorm", "brief", "gc"])
+def test_lazy_parser_registers_every_top_level_command(command):
+    parser = cli_mod.build_parser(selected_command=command)
+    choices = parser._subparsers._group_actions[0].choices
+
+    assert choices[command].__class__.__name__ == "ArgumentParser"
+
+
 def test_lazy_parser_unknown_command_keeps_the_complete_choice_list():
     parser = cli_mod.build_parser(selected_command="not-a-real-command")
 
