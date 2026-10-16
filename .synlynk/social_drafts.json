@@ -1758,5 +1758,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2334 \u2014 archive unique unmerged worktree content (gh:#1487) (PR #2334, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2334.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-16) - PR #2334\n- Merged improvements and fixes for PR #2334."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/357-pr2340-mock-webbrowser-open-in-test-role-add-id.md",
+    "title": "PR #2340 \u2014 mock webbrowser.open in test_role_add_identity_prompt and stub globally (#2339)",
+    "author": "nikhilsoman",
+    "date": "2026-10-16",
+    "pr": "#2340",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2340."
+    ],
+    "tweet": "\ud83d\ude80 PR #2340 \u2014 mock webbrowser.open in test_role_add_identity_prompt and stub globally (#2339) (PR #2340, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2340.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-16) - PR #2340\n- Merged improvements and fixes for PR #2340."
   }
 ]
