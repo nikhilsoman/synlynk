@@ -2154,6 +2154,24 @@ def test_a3_set_dispatch_context_to_homeheadless_scheduler(project_dir, monkeypa
     assert row == ("headless",)
 
 
+@pytest.mark.parametrize(("isatty", "expected"), [(True, "home"), (False, "headless")])
+def test_a3_deferred_dispatch_records_context(project_dir, monkeypatch, isatty, expected):
+    import synlynk
+    import synlynk.dispatch as dispatch_mod
+
+    monkeypatch.setattr(dispatch_mod.sys.stdin, "isatty", lambda: isatty)
+    conn = synlynk._get_db()
+    dispatch_mod._defer_local_concurrency(
+        conn, job_id="djob-deferred-a3", agent="local", task="deferred",
+        story_id=None, reason="local concurrency limit",
+    )
+    row = conn.execute(
+        "SELECT dispatch_context FROM daemon_jobs WHERE job_id='djob-deferred-a3'"
+    ).fetchone()
+    conn.close()
+    assert row == (expected,)
+
+
 def test_bug__secret_patterns_regex_doesnt_redact_ghs_installation_token():
     from synlynk import _redact_secret_patterns
 
