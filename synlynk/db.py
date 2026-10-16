@@ -52,6 +52,23 @@ def _current_pr_number(pr_number=None):
     return current_pr_number(pr_number=pr_number)
 
 
+def _current_branch_name() -> str | None:
+    """Best-effort current branch name, or None when it cannot be determined."""
+    for args in (
+        ["git", "branch", "--show-current"],
+        ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+    ):
+        try:
+            proc = subprocess.run(args, capture_output=True, text=True, check=False)
+        except Exception:
+            continue
+        if proc.returncode == 0:
+            name = (proc.stdout or "").strip()
+            if name and name != "HEAD":
+                return name
+    return None
+
+
 def _extract_pr_review_cycles():
     from synlynk.sentinel import _extract_pr_review_cycles as extract_pr_review_cycles
 
@@ -4870,9 +4887,24 @@ def cmd_pr_check(pr_number=None, impact_attested: bool = False) -> None:
     conn = _get_db()
     if _is_github_remote():
         pr_number = _current_pr_number(pr_number=pr_number)
-        if pr_number is not None:
-            changes_requested_count = _extract_pr_review_cycles() or 0
-            _apply_review_cycle_multiplier(conn, pr_number, changes_requested_count)
+        if pr_number is None:
+            branch = _current_branch_name()
+            conn.close()
+            if branch:
+                print(
+                    f"\n  🚫 [PR CHECK BLOCKED] no PR found for branch {branch!r}, cannot verify\n"
+                    "  This branch has no associated GitHub PR — rerun with an explicit PR number:\n"
+                    "  synlynk pr check --pr <number>\n"
+                )
+            else:
+                print(
+                    "\n  🚫 [PR CHECK BLOCKED] no PR found for the current branch, cannot verify\n"
+                    "  Could not resolve an associated GitHub PR — rerun with an explicit PR number:\n"
+                    "  synlynk pr check --pr <number>\n"
+                )
+            raise SystemExit(1)
+        changes_requested_count = _extract_pr_review_cycles() or 0
+        _apply_review_cycle_multiplier(conn, pr_number, changes_requested_count)
 
     from synlynk.governs_gate import pr_governs_linkage_violations
     from synlynk.policy_gates import _evaluate_gate, classify_governs_violations
