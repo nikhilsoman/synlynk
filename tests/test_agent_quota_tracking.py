@@ -121,6 +121,20 @@ def test_open_release_reservation_lifecycle(project_dir):
     assert sl._open_reservations_sum(conn, "claude") == 0
 
 
+def test_open_reservation_reuses_connection_transaction(project_dir):
+    import synlynk as sl
+
+    conn = sl._get_db()
+    conn.execute("BEGIN")
+    rid = sl._open_reservation(conn, "claude", 5000, scope="adhoc")
+
+    # A caller-supplied connection keeps transaction control with its caller.
+    conn.rollback()
+    assert conn.execute(
+        "SELECT 1 FROM harness_reservations WHERE id=?", (rid,)
+    ).fetchone() is None
+
+
 def test_open_reservations_sum_ignores_expired(project_dir):
     import synlynk as sl
     import time
