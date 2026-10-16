@@ -1901,11 +1901,6 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
                 conn.execute("ALTER TABLE capability_ratings ADD COLUMN pr_number INTEGER")
             except sqlite3.OperationalError:
                 pass
-        if "quality_verified" not in rating_cols:
-            try:
-                conn.execute("ALTER TABLE capability_ratings ADD COLUMN quality_verified INTEGER")
-            except sqlite3.OperationalError:
-                pass
         cost_cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}
         for col, typedef in [
             ("story_id", "TEXT REFERENCES stories(story_id)"),
@@ -2261,6 +2256,16 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
     cost_cols = {row[1] for row in conn.execute("PRAGMA table_info(cost_entries)")}
     if "turn_usage_json" not in cost_cols:
         conn.execute("ALTER TABLE cost_entries ADD COLUMN turn_usage_json TEXT")
+        conn.commit()
+
+    # Keep this repair outside the schema-version gate.  A database can have
+    # already reached the current version while a prior migration stopped
+    # before adding this column (or while the schema was bootstrapped by an
+    # older build).  In that state, the version-gated migration above is a
+    # no-op and _get_db() must still repair the missing column.
+    rating_cols = {row[1] for row in conn.execute("PRAGMA table_info(capability_ratings)")}
+    if "quality_verified" not in rating_cols:
+        conn.execute("ALTER TABLE capability_ratings ADD COLUMN quality_verified INTEGER")
         conn.commit()
 
     _migrate_onboarding_sessions(conn)
@@ -3138,6 +3143,16 @@ def _generate_todo_md() -> None:
     Post-migration: writes to .synlynk/project-docs/todo.md and project-docs/todo.md.
     Pre-migration: writes to project-docs/todo.md."""
     from synlynk import _get_db, _is_migrated
+
+    # Tests use an isolated DB by default, but many legacy tests intentionally
+    # keep the repository-root cwd. Refuse to project that temporary DB into
+    # the real checkout unless the test explicitly opts into project_dir.
+    if (
+        os.environ.get("SYNLYNK_TEST_ISOLATED_DB") == "1"
+        and os.environ.get("SYNLYNK_TEST_PROJECT_DIR") != "1"
+        and os.path.exists(os.path.join(os.getcwd(), ".git"))
+    ):
+        return
     if not _is_migrated():
         docs_dir = _resolved_docs_dir()
         if not docs_dir or not os.path.exists(docs_dir):

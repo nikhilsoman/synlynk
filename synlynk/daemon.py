@@ -190,16 +190,27 @@ def _find_pid_listening_on_port(port: int) -> Optional[int]:
 
 
 def _daemonize_via_reexec(entry_point: str, logfile: str, cwd: Optional[str] = None) -> None:
-    """Spawn a detached child process running a module-level entry point."""
+    """Spawn a detached child process running a module-level entry point.
+
+    Never detaches with a disposable dispatch/worktree path as the child's cwd
+    (gh:#2261): if the requested cwd is disposable, pin to the canonical repo
+    root instead. A disposable canonical root fails closed.
+    """
     cwd = os.path.abspath(cwd or os.getcwd())
+    if _is_disposable_worktree_path(cwd):
+        cwd = os.path.abspath(_repo_common_dir(strict=True))
+        if _is_disposable_worktree_path(cwd):
+            raise RuntimeError(
+                "refusing to daemonize with a disposable worktree as its "
+                f"workspace root: {cwd}"
+            )
     logfile = os.path.abspath(logfile)
     os.makedirs(os.path.dirname(logfile), exist_ok=True)
     module_path, func_name = entry_point.rsplit(".", 1)
     code = f"from {module_path} import {func_name}; {func_name}()"
     log = open(logfile, "a")
     env = {**os.environ, "_SYNLYNK_DAEMON_CHILD": "1"}
-    if cwd:
-        env["SYNLYNK_DAEMON_WORKSPACE_ROOT"] = os.path.abspath(cwd)
+    env["SYNLYNK_DAEMON_WORKSPACE_ROOT"] = cwd
     subprocess.Popen(
         [sys.executable, "-c", code],
         stdin=subprocess.DEVNULL,
@@ -257,6 +268,14 @@ class WatchDaemon:
             if os.path.exists(self.pidfile):
                 os.remove(self.pidfile)
             self._prepare_start()
+            # Watermark the append-only logfile before spawn so a failure
+            # report never attributes stale prior-session lines (gh:#2333).
+            log_offset = 0
+            try:
+                if os.path.exists(self.logfile):
+                    log_offset = os.path.getsize(self.logfile)
+            except OSError:
+                log_offset = 0
             _daemonize_via_reexec(
                 self._child_entry_point, self.logfile, cwd=self.workspace_root
             )
@@ -271,8 +290,14 @@ class WatchDaemon:
                 last_error = ""
                 try:
                     with open(self.logfile) as log:
+                        log.seek(max(0, log_offset))
+                        new_bytes = log.read()
                         last_error = next(
-                            (line.strip() for line in reversed(log.readlines()) if line.strip()),
+                            (
+                                line.strip()
+                                for line in reversed(new_bytes.splitlines())
+                                if line.strip()
+                            ),
                             "",
                         )
                 except OSError:
@@ -281,7 +306,8 @@ class WatchDaemon:
                     print(f"  ⚠ Failed to start daemon: {last_error}", file=sys.stderr)
                 else:
                     print(
-                        f"  ⚠ Failed to start daemon (check {os.path.basename(self.logfile)} for errors).",
+                        "  ⚠ Failed to start daemon: child did not report "
+                        "readiness in time, no error output produced.",
                         file=sys.stderr,
                     )
         finally:
@@ -291,13 +317,23 @@ class WatchDaemon:
         """Hook for subclasses (e.g. autonomous env) before re-exec spawn."""
         return
 
-    def _await_child_pidfile(self, timeout: float = 2.0) -> None:
-        """Wait briefly for the re-exec child to publish a live pidfile."""
+    def _await_child_pidfile(self, timeout: float = 10.0) -> None:
+        """Wait for the re-exec child to publish a live pidfile, with backoff.
+
+        A flat 2.0s cutoff was too short under load (gh:#2333): the child
+        often published its pidfile moments after start() had already taken
+        the failure branch. Poll with exponential backoff up to ``timeout``.
+        """
         deadline = time.time() + timeout
+        delay = 0.05
         while time.time() < deadline:
             if self._is_running():
                 return
-            time.sleep(0.05)
+            remaining = deadline - time.time()
+            if remaining <= 0:
+                return
+            time.sleep(min(delay, remaining))
+            delay = min(delay * 1.5, 0.5)
 
     def stop(self) -> None:
         if not os.path.exists(self.pidfile):
@@ -877,6 +913,21 @@ def _daemon_install_service(daemon_instance) -> None:
         print("  not installed")
 
 
+def _daemon_service_path() -> Optional[str]:
+    """Return the expected launchd/systemd unit path for the synlynk daemon."""
+    home = os.path.expanduser("~")
+    if sys.platform == "darwin":
+        return os.path.join(home, "Library", "LaunchAgents", "com.synlynk.daemon.plist")
+    if shutil.which("systemctl") or os.path.exists("/run/systemd/system"):
+        return os.path.join(home, ".config", "systemd", "user", "synlynk-daemon.service")
+    return None
+
+
+def _daemon_service_installed() -> bool:
+    path = _daemon_service_path()
+    return bool(path and os.path.exists(path))
+
+
 def _daemon_service_registration() -> Optional[bool]:
     """Return whether the configured service is registered, if detectable."""
     try:
@@ -899,6 +950,13 @@ def _daemon_service_registration() -> Optional[bool]:
     except OSError:
         return False
     return None
+
+
+def _probe_pidfile_health(pidfile: str) -> str:
+    """Return 'running', 'stopped', or 'zombie' for an arbitrary daemon pidfile."""
+    probe = WatchDaemon.__new__(WatchDaemon)
+    probe.pidfile = pidfile
+    return WatchDaemon._health(probe)
 
 def _daemon_uninstall_service() -> None:
     home = os.path.expanduser("~")
@@ -1166,8 +1224,27 @@ class SynlynkDaemon(WatchDaemon):
         self._last_dispatch_count = launched
 
     def _prepare_start(self) -> None:
-        watch_pid = _daemon_state_path("watch.pid", workspace_root=self.workspace_root)
-        if os.path.exists(watch_pid):
+        # Existence alone is a stale-pidfile false positive (gh:#2333) —
+        # require a live process, same liveness rule as WatchDaemon._health().
+        watch_pidfile = _daemon_state_path(
+            "watch.pid", workspace_root=self.workspace_root
+        )
+        watch_alive = False
+        if os.path.exists(watch_pidfile):
+            try:
+                with open(watch_pidfile) as f:
+                    watch_pid = int(f.read().strip())
+            except (OSError, ValueError):
+                watch_pid = None
+            watch_alive = _pid_is_alive(watch_pid)
+            if not watch_alive:
+                # Also honour a live lock owner (child mid-start) the way
+                # WatchDaemon._health() does, without treating the caller's
+                # own PID as evidence of a concurrent watch.
+                lock_owner = _daemon_lock_owner_pid(_daemon_lock_path(watch_pidfile))
+                if lock_owner and lock_owner != os.getpid():
+                    watch_alive = _pid_is_alive(lock_owner)
+        if watch_alive:
             print("  ⚠ synlynk watch is also running — both will poll project-docs/.")
         if self.autonomous:
             os.environ["SYNLYNK_AUTONOMOUS"] = "1"
@@ -1276,15 +1353,7 @@ class SynlynkDaemon(WatchDaemon):
             print("  ✦ synlynk daemon not running")
             if stale_pidfile:
                 print("    stale pidfile cleaned")
-            if sys.platform == "darwin":
-                service_path = os.path.join(
-                    os.path.expanduser("~"), "Library", "LaunchAgents", "com.synlynk.daemon.plist"
-                )
-            else:
-                service_path = os.path.join(
-                    os.path.expanduser("~"), ".config", "systemd", "user", "synlynk-daemon.service"
-                )
-            if os.path.exists(service_path):
+            if _daemon_service_installed():
                 registration = _daemon_service_registration()
                 registration_text = (
                     "registered" if registration is True
@@ -1477,9 +1546,16 @@ def cmd_relay_broadcast(kind: str, body: str, relay_url: str = None) -> None:
         print(f"  Start relay: synlynk relay start")
 
 def check_daemon_health(sentinel_path: Optional[str] = None) -> None:
-    """Writes CRITICAL alert if watch daemon pidfile exists but process is dead."""
-    daemon = WatchDaemon()
-    if daemon._health() == "zombie":
+    """Surface dead watch/synlynk daemons via sentinel (gh:#2261 self-health-check).
+
+    Covers two failure modes:
+    - zombie pidfile (process gone, pidfile left behind)
+    - service unit installed but the detached/supervised process is not running
+      (launchd KeepAlive does not recover a child that exited after the wrapper
+      already returned success — the dormancy mode from gh:#2261)
+    """
+    watch = WatchDaemon()
+    if watch._health() == "zombie":
         _write_sentinel_alert(
             "CRITICAL", "ZOMBIE_DAEMON",
             "Watch daemon pidfile exists but process is dead. "
@@ -1487,6 +1563,35 @@ def check_daemon_health(sentinel_path: Optional[str] = None) -> None:
         )
         print("  🚨 [ZOMBIE_DAEMON] Watch daemon is dead — "
               "run: synlynk watch stop && synlynk watch start")
+
+    synlynk_pidfile = _daemon_state_path("daemon.pid")
+    synlynk_health = _probe_pidfile_health(synlynk_pidfile)
+    if synlynk_health == "zombie":
+        _write_sentinel_alert(
+            "CRITICAL", "ZOMBIE_SYNLYNK_DAEMON",
+            "Synlynk daemon pidfile exists but process is dead. "
+            "Run: synlynk daemon stop && synlynk daemon start",
+            sentinel_path=sentinel_path,
+        )
+        print("  🚨 [ZOMBIE_SYNLYNK_DAEMON] Synlynk daemon is dead — "
+              "run: synlynk daemon stop && synlynk daemon start")
+    elif synlynk_health == "stopped" and _daemon_service_installed():
+        registration = _daemon_service_registration()
+        registration_text = (
+            "registered" if registration is True
+            else "not registered" if registration is False
+            else "registration unknown"
+        )
+        _write_sentinel_alert(
+            "ERROR", "DAEMON_DETACHED_DEAD",
+            "Synlynk daemon service is installed "
+            f"({registration_text}) but the process is not running. "
+            "A detached child can die after the launcher exits 0 with no "
+            "KeepAlive recovery. Run: synlynk daemon start",
+            sentinel_path=sentinel_path,
+        )
+        print("  🚨 [DAEMON_DETACHED_DEAD] Daemon service installed but process "
+              "not running — run: synlynk daemon start")
 
 def check_stall(sentinel_path: Optional[str] = None) -> None:
     """Writes WARN alert if .synlynk/state has been 'active' longer than exec_timeout_minutes."""

@@ -562,6 +562,36 @@ def test_daemonize_via_reexec_pins_workspace_cwd(tmp_path, monkeypatch):
     assert captured["kwargs"]["env"]["SYNLYNK_DAEMON_WORKSPACE_ROOT"] == str(tmp_path)
 
 
+def test_daemonize_via_reexec_repins_disposable_worktree_cwd(tmp_path, monkeypatch):
+    """gh:#2261: never detach a child with a dispatch worktree as its cwd."""
+    import synlynk.daemon as daemon_mod
+
+    repo_root = tmp_path / "repo"
+    disposable = tmp_path / "worktrees" / "job-dead"
+    repo_root.mkdir()
+    (repo_root / ".synlynk").mkdir()
+    disposable.mkdir(parents=True)
+    monkeypatch.chdir(disposable)
+    captured = {}
+
+    class FakePopen:
+        def __init__(self, args, **kwargs):
+            captured["kwargs"] = kwargs
+
+    monkeypatch.setattr(daemon_mod.subprocess, "Popen", FakePopen)
+    monkeypatch.setattr(
+        daemon_mod, "_repo_common_dir", lambda *, strict=False: str(repo_root)
+    )
+    logfile = str(repo_root / ".synlynk" / "daemon.log")
+    daemon_mod._daemonize_via_reexec(
+        "synlynk.daemon._synlynk_daemon_child_main", logfile, str(disposable)
+    )
+
+    assert captured["kwargs"]["cwd"] == str(repo_root)
+    assert captured["kwargs"]["env"]["SYNLYNK_DAEMON_WORKSPACE_ROOT"] == str(repo_root)
+    assert "worktrees" not in captured["kwargs"]["cwd"]
+
+
 def test_watch_daemon_start_spawns_detached_child_and_returns_immediately(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".synlynk").mkdir()
@@ -645,6 +675,11 @@ def test_synlynk_daemon_start_spawns_detached_child_and_returns_immediately(tmp_
         daemon_mod.sys.executable, "-c",
         "from synlynk.daemon import _synlynk_daemon_child_main; _synlynk_daemon_child_main()",
     ]
+    assert captured["kwargs"]["cwd"] == daemon.workspace_root
+    assert (
+        captured["kwargs"]["env"]["SYNLYNK_DAEMON_WORKSPACE_ROOT"]
+        == daemon.workspace_root
+    )
 
 
 def test_synlynk_daemon_child_main_writes_pidfile_and_start_file_then_runs_loop(tmp_path, monkeypatch):

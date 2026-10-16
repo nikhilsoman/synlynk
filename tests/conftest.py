@@ -38,9 +38,11 @@ def allow_cwd_fallback_in_tests(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def isolated_db(tmp_path, monkeypatch):
-    """Redirect DB_PATH to a per-test temp file so tests never share state.db."""
+    """Redirect DB_PATH to a per-test temp file and mark docs as isolated."""
     import synlynk
+
     monkeypatch.setattr(synlynk, "DB_PATH", str(tmp_path / "state.db"))
+    monkeypatch.setenv("SYNLYNK_TEST_ISOLATED_DB", "1")
 
 
 @pytest.fixture(autouse=True)
@@ -127,7 +129,7 @@ def stub_dispatch_worktree(monkeypatch, request):
 @pytest.fixture
 def project_dir(tmp_path, monkeypatch):
     """Creates a minimal synlynk project structure and chdirs into it."""
-    (tmp_path / "project-docs").mkdir()
+    (tmp_path / "project-docs").mkdir(exist_ok=True)
     (tmp_path / "project-docs" / "devlogs").mkdir()
     (tmp_path / ".synlynk").mkdir()
     shutil.copyfile(
@@ -169,6 +171,7 @@ def project_dir(tmp_path, monkeypatch):
     )
 
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SYNLYNK_TEST_PROJECT_DIR", "1")
     return tmp_path
 
 
