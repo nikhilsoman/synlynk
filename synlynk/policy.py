@@ -20,6 +20,7 @@ ROLE_TASK_TYPE_COMPAT: Dict[str, List[str]] = {
         "canvas", "js", "infra", "refactor", "cli-plumbing",
     ],
     "qa": ["review", "test"],
+    "architect": ["review"],
     "pm": ["pm", "brainstorm", "architecture-review", "deploy"],
 }
 
