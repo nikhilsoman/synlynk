@@ -185,3 +185,9 @@ accepted first-win wizard path and the Vizor S10 step handler, kept the unique
 Task 4 blog post. Focused changed-flow tests pass. Full `pytest -q` completed with 4476
 passed but baseline sparse-worktree/missing-artifact failures and unrelated failures remain;
 see verification output in the session transcript. [@codex]
+
+2026-10-16 — gh:#2310 Task 4 follow-up: completed first-win metadata after the S10
+transition, persisted `completed_at`, and closed the SQLite connection in `finally`.
+`pytest -q tests/test_first_win_loop.py` passed (3 tests); `git diff --check` passed.
+Canonical story-state and cost logging were unavailable because the sandbox denied access
+to the external state database. [@codex]

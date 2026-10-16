@@ -1,3 +1,4 @@
+import json
 import sqlite3
 import subprocess
 
@@ -49,8 +50,12 @@ def test_execute_first_win_cycle(tmp_path):
     conn = sqlite3.connect(str(db_file))
     conn.row_factory = sqlite3.Row
     row = conn.execute(
-        "SELECT current_stage FROM onboarding_sessions WHERE session_id = ?",
+        "SELECT current_stage, first_win_meta FROM onboarding_sessions WHERE session_id = ?",
         (result["session_id"],),
     ).fetchone()
     conn.close()
     assert row["current_stage"] == STAGE_S10_BUILD_EXPERIENCE
+    meta = json.loads(row["first_win_meta"])
+    assert meta["status"] == "completed"
+    assert meta["prompt"] == "add guide"
+    assert meta["completed_at"] >= meta["started_at"]

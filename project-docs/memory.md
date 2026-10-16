@@ -75,6 +75,9 @@
   wizard nor Vizor invoked `first_win_loop.execute_first_win_cycle()`. Keep the module and
   invoke it only after an accepted first-win action; `verify_first_win_effect()` has no
   duplicate git-diff helper elsewhere. [@codex]
+- **2026-10-16 [gh:#2310 Task 4 follow-up]:** Persist `first_win_meta.status=completed`
+  and `completed_at` only after the S10 transition succeeds; always close the SQLite
+  connection in `finally`. Focused module tests verify the persisted metadata. [@codex]
 - **2026-10-16 Architecture-review evidence:** Independent Codex review at
   `19132dfabd1ecca9de7a9f06b1a8691262d90d1b` recommends a bounded integration
   pilot, contingent on authority/completion/attribution fixes. This is advisory,
