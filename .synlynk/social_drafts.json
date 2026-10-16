@@ -1790,5 +1790,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2341 \u2014 add frontier-lab architecture review (PR #2341, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2341.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-16) - PR #2341\n- Merged improvements and fixes for PR #2341."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/359-pr2354-approve-local-harness-operationalization.md",
+    "title": "PR #2354 \u2014 approve Local Harness operationalization design",
+    "author": "nikhilsoman",
+    "date": "2026-10-16",
+    "pr": "#2354",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2354."
+    ],
+    "tweet": "\ud83d\ude80 PR #2354 \u2014 approve Local Harness operationalization design (PR #2354, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2354.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-16) - PR #2354\n- Merged improvements and fixes for PR #2354."
   }
 ]
