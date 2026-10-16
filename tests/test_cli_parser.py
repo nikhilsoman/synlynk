@@ -216,6 +216,26 @@ def test_fast_cli_preserves_help_and_invalid_command_paths():
     assert "invalid choice" in invalid_result.stderr
 
 
+def test_fast_cli_version_does_not_import_cli_module():
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import sys; import synlynk; "
+            "exec(\"try: synlynk.main(['--version'])\\nexcept SystemExit: pass\"); "
+            "print('synlynk.cli' in sys.modules)",
+        ],
+        capture_output=True,
+        text=True,
+        env={**os.environ, "SYNLYNK_CLI_ENTRYPOINT": "1"},
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert result.stdout.splitlines()[0].startswith("synlynk ")
+    assert result.stdout.splitlines()[1] == "False"
+
+
 def test_tiered_help_command_supports_core_and_all_views(capsys):
     cli_mod.main(["help"])
     core = capsys.readouterr().out
