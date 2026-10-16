@@ -541,10 +541,12 @@ def _open_reservation(
     scope_id: Optional[str] = None,
     job_id: Optional[str] = None,
 ) -> int:
-    """Opens an harness_reservations row. Returns the new reservation id.
+    """Open a harness_reservations row and return its reservation id.
 
     scope is one of 'plan' | 'session' | 'adhoc'; callers are internal and
-    already constrained by the design's dispatch-time flow.
+    already constrained by the design's dispatch-time flow. When a caller
+    supplies ``conn``, it owns the surrounding transaction; otherwise this
+    helper commits and closes the connection it opens.
     """
     if not harness:
         raise ValueError("harness is required")
@@ -562,7 +564,8 @@ def _open_reservation(
             "VALUES (?, ?, ?, ?, ?, 'open')",
             (harness, int(tokens), scope, scope_id, job_id),
         )
-        conn.commit()
+        if own_conn:
+            conn.commit()
         return cur.lastrowid
     finally:
         if own_conn and conn is not None:
