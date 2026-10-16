@@ -562,7 +562,8 @@ def _open_reservation(
             "VALUES (?, ?, ?, ?, ?, 'open')",
             (harness, int(tokens), scope, scope_id, job_id),
         )
-        conn.commit()
+        if own_conn:
+            conn.commit()
         return cur.lastrowid
     finally:
         if own_conn and conn is not None:
