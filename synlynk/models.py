@@ -283,8 +283,13 @@ def resolve_tier_model(tier: str, harness: str, repo_path: Optional[str] = None)
 
     configured = _static_tier_model(tier, harness, repo_path)
     if harness == "agy":
+        # Use the same complete discovery pass as the model catalog. Filtering
+        # by binding matters because Agy may advertise Claude model IDs too.
         configured = _pick_discovered_tier_model(
-            harness, tier, configured, discovered_model_ids("agy")
+            harness,
+            tier,
+            configured,
+            [spec.model_id for spec in discover_models() if spec.harness_binding == "agy"],
         )
     return configured
 
