@@ -75,3 +75,13 @@
   wizard nor Vizor invoked `first_win_loop.execute_first_win_cycle()`. Keep the module and
   invoke it only after an accepted first-win action; `verify_first_win_effect()` has no
   duplicate git-diff helper elsewhere. [@codex]
+- **2026-10-16 Architecture-review evidence:** Independent Codex review at
+  `19132dfabd1ecca9de7a9f06b1a8691262d90d1b` recommends a bounded integration
+  pilot, contingent on authority/completion/attribution fixes. This is advisory,
+  not human-approved implementation scope. See
+  `docs/reviews/2026-10-16-frontier-lab-architecture-review.md` (F01-F12,
+  H01-H32, R01-R18) and its decision-ledger companion (54 panel records).
+  Decision recording hardcodes approved; do not infer human sign-off or empirical
+  validation from that status. Selected checks: 123 passed, 5 xfailed. Generated
+  exports follow the new #2328 decision; PR #2338 merge unverified. Actual review
+  cost and live status unavailable under sandbox permissions. [@nikhilsoman]
