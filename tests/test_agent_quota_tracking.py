@@ -121,6 +121,27 @@ def test_open_release_reservation_lifecycle(project_dir):
     assert sl._open_reservations_sum(conn, "claude") == 0
 
 
+def test_open_reservation_reuses_supplied_connection(project_dir, monkeypatch):
+    import synlynk as sl
+
+    conn = sl._get_db()
+
+    def unexpected_second_connection():
+        raise AssertionError("_open_reservation opened a second connection")
+
+    monkeypatch.setattr(sl, "_get_db", unexpected_second_connection)
+
+    rid = sl._open_reservation(conn, "claude", 5000, scope="adhoc")
+
+    row = conn.execute(
+        "SELECT harness, tokens, status FROM harness_reservations WHERE id=?",
+        (rid,),
+    ).fetchone()
+    assert row == ("claude", 5000, "open")
+    # The caller owns this connection; _open_reservation must leave it usable.
+    assert conn.execute("SELECT 1").fetchone() == (1,)
+
+
 def test_open_reservations_sum_ignores_expired(project_dir):
     import synlynk as sl
     import time
