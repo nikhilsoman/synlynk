@@ -289,7 +289,23 @@ def _write_sentinel_alert(severity: str, code: str, message: str, sentinel_path:
                 existing = f.read()
         existing = _migrate_sentinel_content(existing, now)
         alerts = _iter_sentinel_alerts(sentinel_file, active_only=False)
-        matching = [alert for alert in alerts if _alert_identity(alert) == identity]
+        dedup_window = _sentinel_policy()["dedup_window_seconds"]
+        matching = []
+        for alert in alerts:
+            if _alert_identity(alert) != identity:
+                continue
+            last_seen = alert.get("last_seen_dt") or alert.get("timestamp_dt")
+            # Rows without a reliable timestamp cannot safely be aged out;
+            # the migration above gives timestamp-less structured alerts a
+            # current timestamp before this check.
+            if last_seen is None:
+                matching.append(alert)
+                continue
+            elapsed = (now - last_seen).total_seconds()
+            # Allow small clock skew, while starting a fresh counted incident
+            # once the configured deduplication window has elapsed.
+            if -60 <= elapsed <= dedup_window:
+                matching.append(alert)
         if matching:
             first = min(
                 (a.get("first_seen_dt") or a.get("timestamp_dt") for a in matching if a.get("timestamp_dt")),
