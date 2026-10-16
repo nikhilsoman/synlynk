@@ -1854,5 +1854,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2355 \u2014 isolate Aider qualification network (PR #2355, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2355.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-16) - PR #2355\n- Merged improvements and fixes for PR #2355."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/363-pr2351-modernize-authenticated-local-hardware-c.md",
+    "title": "PR #2351 \u2014 modernize authenticated local hardware checks",
+    "author": "nikhilsoman",
+    "date": "2026-10-16",
+    "pr": "#2351",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2351."
+    ],
+    "tweet": "\ud83d\ude80 PR #2351 \u2014 modernize authenticated local hardware checks (PR #2351, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2351.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-16) - PR #2351\n- Merged improvements and fixes for PR #2351."
   }
 ]
