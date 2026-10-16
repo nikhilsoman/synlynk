@@ -1550,13 +1550,20 @@ def _worktree_files_touched(worktree_path: Optional[str], base_sha: Optional[str
     ``base_sha`` is the commit recorded at dispatch. Stacked jobs must not
     report files their parent branch already committed (gh:#2245).
     """
-    if not _worktree_path_is_available(worktree_path, "collect touched files"):
+    # Job rows outlive their disposable worktrees.  Reconciliation and daemon
+    # startup routinely inspect those rows, so a cleaned-up worktree is an
+    # empty result rather than an operational warning or startup failure.
+    if not worktree_path or not os.path.isdir(worktree_path):
         return []
 
-    resolve_job_diff_base = _pkg("_resolve_job_diff_base")
-    base_commit = resolve_job_diff_base(worktree_path, base_sha) if resolve_job_diff_base else None
-    if not base_commit:
-        base_commit = (_resolve_worktree_base_commit(worktree_path) or {}).get("base_commit")
+    try:
+        resolve_job_diff_base = _pkg("_resolve_job_diff_base")
+        base_commit = resolve_job_diff_base(worktree_path, base_sha) if resolve_job_diff_base else None
+        if not base_commit:
+            base_commit = (_resolve_worktree_base_commit(worktree_path) or {}).get("base_commit")
+    except (FileNotFoundError, NotADirectoryError):
+        # The directory may be removed after the existence check above.
+        return []
     if not base_commit:
         return []
 

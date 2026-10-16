@@ -195,6 +195,15 @@ def test_dispatch_real_files_touched_via_git_diff_missing_worktree_path_returns_
     assert sl._worktree_files_touched(None) == []
 
 
+def test_dispatch_real_files_touched_skips_deleted_worktree_without_warning(tmp_path, capsys):
+    import synlynk as sl
+
+    missing = tmp_path / "cleaned-up-job-worktree"
+
+    assert sl._worktree_files_touched(str(missing)) == []
+    assert capsys.readouterr().err == ""
+
+
 def test_dispatch_real_files_touched_via_git_diff_summary_lists_and_truncates_files():
     import synlynk as sl
 
