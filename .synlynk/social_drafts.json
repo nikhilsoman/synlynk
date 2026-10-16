@@ -1838,5 +1838,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2358 \u2014 tolerate concurrent quality repair (PR #2358, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2358.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-16) - PR #2358\n- Merged improvements and fixes for PR #2358."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/362-pr2355-isolate-aider-qualification-network.md",
+    "title": "PR #2355 \u2014 isolate Aider qualification network",
+    "author": "nikhilsoman",
+    "date": "2026-10-16",
+    "pr": "#2355",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2355."
+    ],
+    "tweet": "\ud83d\ude80 PR #2355 \u2014 isolate Aider qualification network (PR #2355, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2355.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-16) - PR #2355\n- Merged improvements and fixes for PR #2355."
   }
 ]
