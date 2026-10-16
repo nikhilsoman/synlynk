@@ -13,6 +13,36 @@ from synlynk.db import (
 )
 
 
+def test_schema_refresh_migration_retry_is_narrow(monkeypatch):
+    import synlynk
+
+    calls = []
+
+    def migrate(_conn):
+        calls.append("migrate")
+        if len(calls) == 1:
+            raise sqlite3.OperationalError("database schema has changed")
+
+    class Connection:
+        def rollback(self):
+            calls.append("rollback")
+
+    monkeypatch.setattr("synlynk.db._migrate_db", migrate)
+    synlynk._migrate_db_with_schema_retry(Connection())
+    assert calls == ["migrate", "rollback", "migrate"]
+
+
+def test_schema_refresh_migration_retry_reraises_other_errors(monkeypatch):
+    import synlynk
+
+    monkeypatch.setattr(
+        "synlynk.db._migrate_db",
+        lambda _conn: (_ for _ in ()).throw(sqlite3.OperationalError("database is locked")),
+    )
+    with pytest.raises(sqlite3.OperationalError, match="database is locked"):
+        synlynk._migrate_db_with_schema_retry(object())
+
+
 def test_subscriptions_harness_rename_migration_preserves_data_and_constraint():
     from synlynk.db import _run_harness_rename_migration
 
