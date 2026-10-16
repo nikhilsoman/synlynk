@@ -24,9 +24,20 @@ def test_identity_init_role_registers_new_role_in_roles_yaml(tmp_path, monkeypat
     })
     monkeypatch.setattr(team_mod, "_confirm_installation", lambda slug, path: None)
     monkeypatch.setattr(team_mod.github_app_auth, "refresh_installation_token", lambda role, app_config: None)
+    opened = []
+    monkeypatch.setattr(team_mod.webbrowser, "open", lambda url: opened.append(url))
 
     team_mod.cmd_identity_init_role("designer")
 
     from synlynk.identity_roles import load_declared_roles
 
     assert "designer" in load_declared_roles()
+    assert opened == ["http://fake"]
+
+
+def test_webbrowser_open_is_stubbed_by_default_in_tests():
+    import pytest
+    import webbrowser
+
+    with pytest.raises(pytest.fail.Exception, match="webbrowser.open.*was called during test execution without being mocked"):
+        webbrowser.open("http://fake")
