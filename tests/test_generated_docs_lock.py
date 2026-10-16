@@ -114,7 +114,7 @@ def test_brownfield_project_name_uses_root_identity_not_worktree(tmp_path, monke
     assert res["project_name"] == "synlynk"
 
 
-def test_generate_roadmap_md_writes_git_tracked_copy_when_migrated(tmp_path, monkeypatch):
+def test_generate_roadmap_md_writes_only_canonical_export_when_migrated(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     _mark_migrated(tmp_path)
     (tmp_path / "project-docs").mkdir()
@@ -125,6 +125,8 @@ def test_generate_roadmap_md_writes_git_tracked_copy_when_migrated(tmp_path, mon
     monkeypatch.setattr(
         synlynk, "_synlynk_project_docs_dir", lambda: str(tmp_path / ".synlynk" / "project-docs")
     )
+    canonical = tmp_path / "home-store" / "project-docs"
+    monkeypatch.setattr(synlynk, "_generated_project_docs_dir", lambda: str(canonical))
 
     cmd_roadmap_add(
         version="v0.23.0",
@@ -134,9 +136,30 @@ def test_generate_roadmap_md_writes_git_tracked_copy_when_migrated(tmp_path, mon
     )
     _generate_roadmap_md()
 
-    migrated = (tmp_path / ".synlynk" / "project-docs" / "roadmap.md").read_text()
-    tracked = (tmp_path / "project-docs" / "roadmap.md").read_text()
-    assert GENERATED_HEADER in migrated
-    assert GENERATED_HEADER in tracked
-    assert "v0.23.0" in tracked
-    assert SKELETON_MARK not in tracked
+    exported = (canonical / "roadmap.md").read_text()
+    assert GENERATED_HEADER in exported
+    assert "v0.23.0" in exported
+    assert not (tmp_path / ".synlynk" / "project-docs" / "roadmap.md").exists()
+    assert not (tmp_path / "project-docs" / "roadmap.md").exists()
+
+
+def test_generation_from_linked_worktree_has_no_generated_doc_diff(git_worktree_repo, tmp_path, monkeypatch):
+    import synlynk.db as db
+
+    repo = git_worktree_repo
+    worktree = tmp_path / "dispatch-worktree"
+    _git(repo, "worktree", "add", "--detach", str(worktree), "HEAD")
+    export_dir = tmp_path / "home" / "synlynk" / "project-docs"
+    monkeypatch.setattr(synlynk, "_generated_project_docs_dir", lambda: str(export_dir))
+    monkeypatch.chdir(worktree)
+
+    db._generate_todo_md()
+    db._generate_roadmap_md()
+    db._generate_costs_md()
+
+    assert sorted(p.name for p in export_dir.iterdir()) == ["costs.md", "roadmap.md", "todo.md"]
+    result = subprocess.run(
+        ["git", "diff", "--name-only", "HEAD", "--", "project-docs/todo.md", "project-docs/roadmap.md", "project-docs/costs.md"],
+        cwd=worktree, capture_output=True, text=True, check=True,
+    )
+    assert result.stdout == ""

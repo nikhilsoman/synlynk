@@ -263,41 +263,24 @@ def _hc_docs_dir() -> HealthCheck:
             "Could not resolve docs directory (project may not be initialized)",
             fix="Run: synlynk init",
         )
-    required = ["roadmap.md", "todo.md", "memory.md"]
-    missing = [f for f in required if not os.path.exists(os.path.join(docs, f))]
+    generated = _pkg("_generated_project_docs_dir")()
+    required = [os.path.join(docs, "memory.md")]
+    required.extend(os.path.join(generated, name) for name in ("roadmap.md", "todo.md", "costs.md"))
+    missing = [path for path in required if not os.path.exists(path)]
     if not missing:
-        return HealthCheck("docs_dir", "ok", f"project-docs complete ({docs})")
+        return HealthCheck("docs_dir", "ok", f"project docs and canonical exports present ({docs})")
     return HealthCheck(
         "docs_dir",
         "warn",
-        f"project-docs missing: {', '.join(missing)}",
+        f"project docs or canonical exports missing: {', '.join(missing)}",
         fix="Run: synlynk init",
     )
 
 
 def _hc_todo_drift() -> HealthCheck:
-    """Warns if todo.md has drifted between migration paths or from state.db regeneration."""
-    try:
-        is_migrated = _pkg("_is_migrated")() if callable(_pkg("_is_migrated")) else False
-        legacy_path = os.path.join(_pkg("_docs_dir")(), "todo.md") if callable(_pkg("_docs_dir")) else "project-docs/todo.md"
-        migrated_path = os.path.join(_pkg("_synlynk_project_docs_dir")(), "todo.md") if callable(_pkg("_synlynk_project_docs_dir")) else ".synlynk/project-docs/todo.md"
-    except Exception:
+    """Warns if the canonical todo export has drifted from state.db."""
+    if not callable(_pkg("_generated_project_docs_dir")):
         return HealthCheck("todo_drift", "ok", "todo.md path check skipped")
-
-    # Check for split-path divergence in migrated repos
-    if is_migrated and os.path.exists(legacy_path) and os.path.exists(migrated_path):
-        try:
-            with open(legacy_path, "r", encoding="utf-8") as f1, open(migrated_path, "r", encoding="utf-8") as f2:
-                c1, c2 = f1.read().strip(), f2.read().strip()
-            if c1 != c2:
-                return HealthCheck(
-                    "todo_drift",
-                    "warn",
-                    "todo.md exists in both project-docs/ and .synlynk/project-docs/ with divergent content",
-                    fix="Reconcile tasks into state.db and run: synlynk checkpoint",
-                )
-        except Exception:
-            pass
 
     # Check for hand-edit drift against state.db
     detect_fn = _pkg("_detect_hand_edit")

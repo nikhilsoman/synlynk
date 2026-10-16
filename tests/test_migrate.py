@@ -276,7 +276,8 @@ def test_migrate_copies_to_synlynk_project_docs(tmp_path, monkeypatch):
     synlynk.cmd_migrate()
     backup = tmp_path / ".synlynk" / "project-docs"
     assert (backup / "memory.md").exists()
-    assert (backup / "costs.md").exists()
+    assert not (backup / "costs.md").exists()
+    assert os.path.exists(os.path.join(synlynk._generated_project_docs_dir(), "costs.md"))
     assert (backup / "devlogs" / "nikhil.md").exists()
 
 
@@ -659,21 +660,20 @@ def _setup_migrated(tmp_path, monkeypatch):
 
 def test_write_through_todo_goes_to_synlynk_path(tmp_path, monkeypatch):
     backup = _setup_migrated(tmp_path, monkeypatch)
+    monkeypatch.setattr(synlynk, "_generated_project_docs_dir", lambda: str(tmp_path / "state" / "project-docs"))
     synlynk._generate_todo_md()
-    assert (backup / "todo.md").exists()
+    assert (tmp_path / "state" / "project-docs" / "todo.md").exists()
     tracked = tmp_path / "project-docs" / "todo.md"
-    assert tracked.exists()
-    assert "source of truth is state.db" in tracked.read_text()
+    assert not tracked.exists()
 
 
 def test_write_through_noop_before_migration(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("HOME", str(tmp_path))
     (tmp_path / ".synlynk").mkdir()
-    # No sentinel — _generate_todo_md should write to project-docs/ (old path)
-    # but since project-docs/ doesn't exist either, it just returns silently
+    # Exports are written under the product store even before the migration marker.
     synlynk._generate_todo_md()  # must not raise
-    assert not (tmp_path / ".synlynk" / "project-docs" / "todo.md").exists()
+    assert not (tmp_path / "project-docs" / "todo.md").exists()
 
 
 def test_cmd_memory_add_writes_to_db_and_flat_file(tmp_path, monkeypatch):
@@ -742,13 +742,13 @@ def test_write_devlog_file_pre_migration(project_dir):
 
 
 def test_update_costs_writes_to_db_and_flat_file_post_migration(tmp_path, monkeypatch):
-    backup = _setup_migrated(tmp_path, monkeypatch)
+    _setup_migrated(tmp_path, monkeypatch)
     synlynk.update_costs("scan", 50000, 10000, 12.5)
     conn = synlynk._get_db()
     count = conn.execute("SELECT COUNT(*) FROM cost_entries").fetchone()[0]
     conn.close()
     assert count == 1
-    content = (backup / "costs.md").read_text()
+    content = open(os.path.join(synlynk._generated_project_docs_dir(), "costs.md")).read()
     assert "# Costs (generated - source of truth is state.db)" in content
     assert "| Date | Agent | Model | Tokens In | Tokens Out | Cost | Source | Story | Notes |" in content
     assert sum(1 for line in content.splitlines() if "scan" in line) == 1

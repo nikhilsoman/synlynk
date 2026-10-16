@@ -216,7 +216,7 @@ def test_generate_roadmap_md_creates_file_pre_migration(project_dir):
 
     _generate_roadmap_md()
 
-    path = os.path.join(str(project_dir), "project-docs", "roadmap.md")
+    path = os.path.join(__import__("synlynk")._generated_project_docs_dir(), "roadmap.md")
     assert os.path.exists(path)
     content = open(path).read()
     assert "v0.13.0" in content
@@ -236,7 +236,7 @@ def test_generate_roadmap_md_writes_post_migration_path(tmp_path, monkeypatch):
 
     _generate_roadmap_md()
 
-    path = os.path.join(".synlynk", "project-docs", "roadmap.md")
+    path = os.path.join(__import__("synlynk")._generated_project_docs_dir(), "roadmap.md")
     assert os.path.exists(path)
     assert "v0.13.0" in open(path).read()
 
@@ -253,7 +253,7 @@ def test_cmd_roadmap_add_inserts_arc_and_regenerates_md(project_dir):
     conn.close()
     assert row == ("Next Thing", "planned")
 
-    path = os.path.join(str(project_dir), "project-docs", "roadmap.md")
+    path = os.path.join(__import__("synlynk")._generated_project_docs_dir(), "roadmap.md")
     assert "Next Thing" in open(path).read()
 
 
@@ -321,7 +321,7 @@ def test_generate_costs_md_creates_file_pre_migration(project_dir):
 
     _generate_costs_md()
 
-    path = os.path.join(str(project_dir), "project-docs", "costs.md")
+    path = os.path.join(__import__("synlynk")._generated_project_docs_dir(), "costs.md")
     assert os.path.exists(path)
     content = open(path).read()
     assert "claude" in content
@@ -368,7 +368,7 @@ def test_generate_costs_md_escapes_newlines_and_pipes_in_text_cells(project_dir)
 
     _generate_costs_md()
 
-    content = open(os.path.join(str(project_dir), "project-docs", "costs.md")).read()
+    content = open(os.path.join(__import__("synlynk")._generated_project_docs_dir(), "costs.md")).read()
     data_rows = [line for line in content.splitlines() if line.startswith("| 2026-")]
     assert len(data_rows) == 2
     assert all(line.replace(r"\|", "").count("|") == 10 for line in data_rows)
@@ -380,12 +380,12 @@ def test_generate_costs_md_escapes_newlines_and_pipes_in_text_cells(project_dir)
 def test_cmd_cost_log_regenerates_costs_md(project_dir):
     cmd_cost_log(agent="codex", tokens_in=500, tokens_out=100, note="from cmd_cost_log")
 
-    path = os.path.join(str(project_dir), "project-docs", "costs.md")
+    path = os.path.join(__import__("synlynk")._generated_project_docs_dir(), "costs.md")
     assert os.path.exists(path)
     assert "from cmd_cost_log" in open(path).read()
 
 
-def test_cmd_cost_log_writes_post_migration_and_dr_syncs(tmp_path, monkeypatch):
+def test_cmd_cost_log_writes_only_canonical_export(tmp_path, monkeypatch):
     import json
 
     from tests.test_migrate import _setup_migrated
@@ -399,10 +399,10 @@ def test_cmd_cost_log_writes_post_migration_and_dr_syncs(tmp_path, monkeypatch):
 
     cmd_cost_log(agent="gemini", tokens_in=10, tokens_out=5)
 
-    md_path = os.path.join(".synlynk", "project-docs", "costs.md")
+    md_path = os.path.join(__import__("synlynk")._generated_project_docs_dir(), "costs.md")
     assert os.path.exists(md_path)
     dr_path = os.path.join(str(dr_dir), "project-docs", "costs.md")
-    assert os.path.exists(dr_path)
+    assert not os.path.exists(dr_path)
 
 
 def test_cmd_remediation_log_appends_past_telemetry_cap(project_dir):
@@ -474,11 +474,12 @@ def test_rotate_moves_old_cost_entries_to_archive(tmp_path, monkeypatch):
 
     _generate_costs_md()
 
-    live = open(os.path.join(".synlynk", "project-docs", "costs.md")).read()
+    export_dir = __import__("synlynk")._generated_project_docs_dir()
+    live = open(os.path.join(export_dir, "costs.md")).read()
     assert "row3" in live
     assert "row0" not in live
 
-    archive_dir = os.path.join(".synlynk", "project-docs", "archive")
+    archive_dir = os.path.join(export_dir, "archive")
     archive_files = os.listdir(archive_dir)
     assert any(f.startswith("costs-") for f in archive_files)
     archived_content = open(
@@ -491,15 +492,12 @@ def test_rotate_moves_old_cost_entries_to_archive(tmp_path, monkeypatch):
     assert "costs-" in open(index_path).read()
 
 
-def test_regeneration_preserves_tracked_cost_row_missing_from_local_db(tmp_path, monkeypatch):
+def test_regeneration_uses_canonical_db_as_cost_export_source(tmp_path, monkeypatch):
     from tests.test_migrate import _setup_migrated
     from synlynk import _get_db, _insert_cost_row
     from synlynk.db import _generate_costs_md
 
-    backup = _setup_migrated(tmp_path, monkeypatch)
-    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
-    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, check=True)
-    subprocess.run(["git", "config", "user.name", "Test"], cwd=tmp_path, check=True)
+    _setup_migrated(tmp_path, monkeypatch)
 
     for date, note in [("2026-01-01 10:00", "main-only-row"), ("2026-01-02 10:00", "local-row")]:
         _insert_cost_row(
@@ -518,14 +516,10 @@ def test_regeneration_preserves_tracked_cost_row_missing_from_local_db(tmp_path,
             actual_usd=None,
             payment_mode=None,
         )
-    _generate_costs_md()
-    costs_path = backup / "costs.md"
-    subprocess.run(["git", "add", str(costs_path)], cwd=tmp_path, check=True)
-    subprocess.run(
-        ["git", "-c", "user.email=test@example.com", "-c", "user.name=Test", "commit", "-q", "-m", "seed"],
-        cwd=tmp_path,
-        check=True,
-    )
+    export_path = __import__("synlynk")._generated_project_docs_dir() + "/costs.md"
+    os.makedirs(os.path.dirname(export_path), exist_ok=True)
+    with open(export_path, "w") as costs_file:
+        costs_file.write("# Costs\n\n| Date | Agent | Model | Tokens In | Tokens Out | Cost | Source | Story | Notes |\n|---|---|---|---|---|---|---|---|---|\n| stale | main | old | 1 | 1 | $1 | old | - | disk-only-row |\n")
 
     conn = _get_db()
     conn.execute("DELETE FROM cost_entries WHERE session_date=?", ("2026-01-01 10:00",))
@@ -533,8 +527,8 @@ def test_regeneration_preserves_tracked_cost_row_missing_from_local_db(tmp_path,
     conn.close()
     _generate_costs_md()
 
-    regenerated = costs_path.read_text()
-    assert "main-only-row" in regenerated
+    regenerated = open(export_path).read()
+    assert "main-only-row" not in regenerated
     assert "local-row" in regenerated
 
 
@@ -543,8 +537,10 @@ def test_regeneration_unions_concurrent_cost_rows_with_same_date_and_agent(tmp_p
     from synlynk import _insert_cost_row
     from synlynk.db import _generate_costs_md
 
-    backup = _setup_migrated(tmp_path, monkeypatch)
-    costs_path = backup / "costs.md"
+    _setup_migrated(tmp_path, monkeypatch)
+    costs_path = __import__("synlynk")._generated_project_docs_dir()
+    os.makedirs(costs_path, exist_ok=True)
+    costs_path = __import__("pathlib").Path(costs_path) / "costs.md"
     costs_path.write_text(
         "# Costs\n\n"
         "| Date | Agent | Model | Tokens In | Tokens Out | Cost | Source | Story | Notes |\n"
@@ -572,8 +568,8 @@ def test_regeneration_unions_concurrent_cost_rows_with_same_date_and_agent(tmp_p
     _generate_costs_md()
 
     regenerated = costs_path.read_text()
-    assert "concurrent-main" in regenerated
-    assert "concurrent-branch" in regenerated
+    assert "concurrent-main" not in regenerated
+    assert "concurrent-branch" not in regenerated
     assert "concurrent-local" in regenerated
 
 
@@ -623,24 +619,21 @@ def test_regeneration_does_not_duplicate_archive_rows(tmp_path, monkeypatch):
         )
 
     _generate_costs_md()
-    archive_path = next((backup / "archive").glob("costs-*.md"))
+    archive_path = next((__import__("pathlib").Path(__import__("synlynk")._generated_project_docs_dir()) / "archive").glob("costs-*.md"))
     first = archive_path.read_text()
     _generate_costs_md()
     assert archive_path.read_text() == first
 
 
-def test_rotate_auto_stages_archive_file_for_git_commit(tmp_path, monkeypatch):
-    """gh:#1995: a dispatched job's ephemeral worktree silently drops the
-    archive file _rotate_project_doc() writes, because nothing commits it.
-    The fix best-effort `git add`s the archive path the moment it's created,
-    so it's already staged if the calling job goes on to `git commit`."""
+def test_rotate_canonical_export_archive_is_not_staged_for_git_commit(tmp_path, monkeypatch):
+    """Canonical generated export archives stay outside the job's Git index."""
     import subprocess
 
     from tests.test_migrate import _setup_migrated
     from synlynk import _insert_cost_row
     from synlynk.db import _generate_costs_md
 
-    backup = _setup_migrated(tmp_path, monkeypatch)
+    _setup_migrated(tmp_path, monkeypatch)
     monkeypatch.setattr("synlynk.db._PROJECT_DOC_KEEP_N", 1)
 
     subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
@@ -672,14 +665,10 @@ def test_rotate_auto_stages_archive_file_for_git_commit(tmp_path, monkeypatch):
         cwd=tmp_path, check=True, capture_output=True, text=True,
     ).stdout
 
-    archive_dir = backup / "archive"
+    archive_dir = __import__("pathlib").Path(__import__("synlynk")._generated_project_docs_dir()) / "archive"
     archive_files = [f for f in os.listdir(archive_dir) if f.startswith("costs-")]
     assert archive_files, "rotation did not create an archive file"
-    archive_rel = os.path.relpath(archive_dir / archive_files[0], tmp_path)
-    index_rel = os.path.relpath(archive_dir / "INDEX.md", tmp_path)
-
-    assert archive_rel in staged
-    assert index_rel in staged
+    assert staged == ""
 
 
 def test_detect_hand_edit_no_warning_when_content_matches_regeneration(tmp_path, monkeypatch):
@@ -700,7 +689,7 @@ def test_detect_hand_edit_warns_on_genuine_uncommitted_edit(tmp_path, monkeypatc
     _setup_migrated(tmp_path, monkeypatch)
     _generate_costs_md()
 
-    path = os.path.join(".synlynk", "project-docs", "costs.md")
+    path = os.path.join(__import__("synlynk")._generated_project_docs_dir(), "costs.md")
     with open(path, "a") as f:
         f.write("\nSOMEONE HAND-EDITED THIS LINE\n")
 
@@ -718,13 +707,7 @@ def test_detect_hand_edit_no_warning_on_pull_then_resync_case(tmp_path, monkeypa
     _setup_migrated(tmp_path, monkeypatch)
     _generate_costs_md()
 
-    path = os.path.join(".synlynk", "project-docs", "costs.md")
-    subprocess.run(["git", "init", "-q"], check=True)
-    subprocess.run(["git", "add", path], check=True)
-    subprocess.run(
-        ["git", "-c", "user.email=t@t.com", "-c", "user.name=t", "commit", "-q", "-m", "seed"],
-        check=True,
-    )
+    path = os.path.join(__import__("synlynk")._generated_project_docs_dir(), "costs.md")
 
     _insert_cost_row(
         session_date="2026-07-25 10:00",
@@ -743,6 +726,7 @@ def test_detect_hand_edit_no_warning_on_pull_then_resync_case(tmp_path, monkeypa
         payment_mode=None,
     )
 
+    _generate_costs_md()
     warning = _detect_hand_edit("costs.md")
     assert warning is None
 
@@ -755,7 +739,7 @@ def test_detect_hand_edit_does_not_open_live_file_for_write(tmp_path, monkeypatc
     _setup_migrated(tmp_path, monkeypatch)
     _generate_costs_md()
 
-    live = os.path.abspath(os.path.join(".synlynk", "project-docs", "costs.md"))
+    live = os.path.abspath(os.path.join(__import__("synlynk")._generated_project_docs_dir(), "costs.md"))
     before = open(live).read()
     writes = []
     real_open = open

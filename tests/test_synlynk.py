@@ -5,6 +5,7 @@ import json
 from datetime import datetime, timedelta, timezone
 import pytest
 import subprocess
+from pathlib import Path
 
 pytestmark = pytest.mark.usefixtures("daemon_workspace_root")
 
@@ -1487,7 +1488,7 @@ def test_check_budgets_reads_cost_entries_not_markdown(project_dir, capsys, monk
     from synlynk import _insert_cost_row
     from synlynk.costs import check_budgets
 
-    costs_path = os.path.join(str(project_dir), "project-docs", "costs.md")
+    costs_path = os.path.join(synlynk._generated_project_docs_dir(), "costs.md")
     with open(costs_path, "w") as f:
         f.write("# Costs\n\n| Date | Agent | Cost |\n|---|---|---|\n")
 
@@ -1591,7 +1592,7 @@ def test_flatline_appends_to_existing_sentinel(project_dir, monkeypatch):
 
 
 def test_generate_context_excludes_done_tasks(project_dir):
-    (project_dir / "project-docs" / "todo.md").write_text(
+    (Path(synlynk._generated_project_docs_dir()) / "todo.md").write_text(
         "## Active Tasks\n"
         "- [ ] Active task <!-- id: 1 -->\n"
         "- [x] Done task <!-- id: 2 -->\n"
@@ -1826,7 +1827,7 @@ def test_check_budgets_warning_at_80_percent(project_dir, capsys):
 def test_check_costs_freshness_warns_when_stale(project_dir, capsys, monkeypatch):
     # Make costs.md appear old by setting mtime to 2 hours ago
     import time
-    costs_path = str(project_dir / "project-docs" / "costs.md")
+    costs_path = os.path.join(synlynk._generated_project_docs_dir(), "costs.md")
     old_time = time.time() - 7200
     os.utime(costs_path, (old_time, old_time))
     synlynk._check_costs_freshness()
@@ -1847,7 +1848,10 @@ def test_check_costs_freshness_resolves_migrated_path(tmp_path, monkeypatch, cap
     (tmp_path / ".synlynk" / ".synlynk_migrated").write_text("2026-07-01")
     migrated_docs = tmp_path / ".synlynk" / "project-docs"
     migrated_docs.mkdir()
-    costs_path = migrated_docs / "costs.md"
+    exports = tmp_path / "home-exports"
+    exports.mkdir()
+    monkeypatch.setattr(synlynk, "_generated_project_docs_dir", lambda: str(exports))
+    costs_path = exports / "costs.md"
     costs_path.write_text("| date | ... |\n")
     old_time = time.time() - 7200
     os.utime(str(costs_path), (old_time, old_time))
@@ -1892,19 +1896,19 @@ def test_watch_daemon_cleans_stale_pidfile_on_stop(project_dir):
 
 def test_checkpoint_archives_done_tasks(project_dir, monkeypatch):
     monkeypatch.setattr(synlynk, 'get_username', lambda: "nikhil")
-    (project_dir / "project-docs" / "todo.md").write_text(
+    (Path(synlynk._generated_project_docs_dir()) / "todo.md").write_text(
         "## Active Tasks\n"
         "- [ ] Still active <!-- id: 1 -->\n"
         "- [x] Done task <!-- id: 2 -->\n"
     )
     synlynk.checkpoint()
-    todo = (project_dir / "project-docs" / "todo.md").read_text()
+    todo = (Path(synlynk._generated_project_docs_dir()) / "todo.md").read_text()
     assert "Done task" not in todo
     assert "Still active" in todo
 
 def test_checkpoint_appends_to_devlog(project_dir, monkeypatch):
     monkeypatch.setattr(synlynk, 'get_username', lambda: "nikhil")
-    (project_dir / "project-docs" / "todo.md").write_text(
+    (Path(synlynk._generated_project_docs_dir()) / "todo.md").write_text(
         "- [x] Finished feature <!-- id: 5 -->\n"
     )
     synlynk.checkpoint()
@@ -1913,7 +1917,7 @@ def test_checkpoint_appends_to_devlog(project_dir, monkeypatch):
 
 def test_checkpoint_writes_devlog_entries_row(project_dir, monkeypatch):
     monkeypatch.setattr(synlynk, 'get_username', lambda: "nikhil")
-    (project_dir / "project-docs" / "todo.md").write_text(
+    (Path(synlynk._generated_project_docs_dir()) / "todo.md").write_text(
         "- [x] Finished feature <!-- id: 5 -->\n"
     )
     synlynk.checkpoint()
@@ -1950,7 +1954,7 @@ def test_archive_old_devlog_entries_deletes_synced_db_rows(project_dir):
 
 def test_checkpoint_emits_telemetry_event(project_dir, monkeypatch):
     monkeypatch.setattr(synlynk, 'get_username', lambda: "nikhil")
-    (project_dir / "project-docs" / "todo.md").write_text(
+    (Path(synlynk._generated_project_docs_dir()) / "todo.md").write_text(
         "- [x] Task A <!-- id: 3 -->\n"
     )
     synlynk.checkpoint()
@@ -1964,9 +1968,9 @@ def test_checkpoint_emits_telemetry_event(project_dir, monkeypatch):
 
 def test_checkpoint_idempotent_when_no_done_tasks(project_dir, monkeypatch):
     monkeypatch.setattr(synlynk, 'get_username', lambda: "nikhil")
-    original_todo = (project_dir / "project-docs" / "todo.md").read_text()
+    original_todo = (Path(synlynk._generated_project_docs_dir()) / "todo.md").read_text()
     synlynk.checkpoint()
-    assert (project_dir / "project-docs" / "todo.md").read_text() == original_todo
+    assert (Path(synlynk._generated_project_docs_dir()) / "todo.md").read_text() == original_todo
 
 def test_status_json_structure(project_dir, monkeypatch, capsys):
     monkeypatch.setattr(synlynk, 'get_username', lambda: "nikhil")
@@ -2007,6 +2011,8 @@ def test_status_human_output_contains_sections(project_dir, monkeypatch, capsys)
 def test_status_shows_active_tasks(project_dir, monkeypatch, capsys):
     monkeypatch.setattr(synlynk, 'get_username', lambda: "nikhil")
     monkeypatch.setattr(synlynk, 'get_mode', lambda: "single")
+    synlynk.cmd_story_create("Task one")
+    synlynk.cmd_story_create("Task two")
     with pytest.raises(SystemExit):
         synlynk.cmd_status(json_output=False)
     captured = capsys.readouterr()
@@ -2613,11 +2619,11 @@ def test_extract_tokens_no_match(project_dir):
 
 
 def test_update_costs_appends_row(project_dir):
-    before_lines = (project_dir / "project-docs" / "costs.md").read_text().splitlines()
+    before_lines = (Path(synlynk._generated_project_docs_dir()) / "costs.md").read_text().splitlines()
     synlynk.update_costs("claude --print hello", 1000, 200, 30.0)
-    content_lines = (project_dir / "project-docs" / "costs.md").read_text().splitlines()
-    assert len(content_lines) == len(before_lines) + 1
-    assert sum(1 for line in content_lines if "1000/200" in line) == 1
+    content_lines = (Path(synlynk._generated_project_docs_dir()) / "costs.md").read_text().splitlines()
+    assert len(content_lines) == len(before_lines)
+    assert sum(1 for line in content_lines if "| 1000 | 200 |" in line) == 1
     # cost: (1000/1000*0.003) + (200/1000*0.015) = 0.003 + 0.003 = $0.0060
     assert any("$0.0060" in line for line in content_lines)
 
@@ -5085,11 +5091,11 @@ def test_stories_table_has_status_column(project_dir):
 
 
 def test_generate_todo_md_creates_file(project_dir):
-    """_generate_todo_md writes project-docs/todo.md from stories."""
+    """_generate_todo_md writes the canonical todo export from stories."""
     import synlynk as sl
     sl.cmd_story_create("Fix login bug", engg_domain="backend")
     sl._generate_todo_md()
-    todo = (project_dir / "project-docs" / "todo.md").read_text()
+    todo = open(os.path.join(sl._generated_project_docs_dir(), "todo.md")).read()
     assert "Fix login bug" in todo
     assert "- [ ]" in todo
 
@@ -5103,7 +5109,7 @@ def test_generate_todo_md_marks_done_stories(project_dir):
     conn.commit()
     conn.close()
     sl._generate_todo_md()
-    todo = (project_dir / "project-docs" / "todo.md").read_text()
+    todo = open(os.path.join(sl._generated_project_docs_dir(), "todo.md")).read()
     assert "- [x]" in todo
 
 
@@ -5111,7 +5117,7 @@ def test_cmd_story_create_generates_todo_md(project_dir):
     """cmd_story_create automatically regenerates todo.md."""
     import synlynk as sl
     sl.cmd_story_create("Auto-sync check")
-    todo = (project_dir / "project-docs" / "todo.md").read_text()
+    todo = open(os.path.join(synlynk._generated_project_docs_dir(), "todo.md")).read()
     assert "Auto-sync check" in todo
 
 
@@ -5129,7 +5135,7 @@ def test_generate_todo_md_does_not_write_to_dispatch_worktree(project_dir, tmp_p
     sl.cmd_story_create("Shared-root generated doc")
 
     assert job_todo.read_text() == "job worktree content\n"
-    assert "Shared-root generated doc" in (project_dir / "project-docs" / "todo.md").read_text()
+    assert "Shared-root generated doc" in open(os.path.join(sl._generated_project_docs_dir(), "todo.md")).read()
 
 
 def test_generate_todo_md_real_worktree_does_not_rewrite_job_copy(git_worktree_repo, tmp_path, monkeypatch):
@@ -5150,7 +5156,7 @@ def test_generate_todo_md_real_worktree_does_not_rewrite_job_copy(git_worktree_r
     sl.cmd_story_create("Must not land in the job worktree")
 
     assert job_todo.read_text() == original
-    assert "Must not land in the job worktree" in (repo / "project-docs" / "todo.md").read_text()
+    assert "Must not land in the job worktree" in open(os.path.join(sl._generated_project_docs_dir(), "todo.md")).read()
 
 
 def test_rotate_project_doc_does_not_archive_into_job_worktree(git_worktree_repo, tmp_path, monkeypatch):
@@ -5169,13 +5175,13 @@ def test_rotate_project_doc_does_not_archive_into_job_worktree(git_worktree_repo
     db._rotate_project_doc("costs", [{"n": 1}, {"n": 2}], keep_n=1)
 
     assert not (job / "project-docs" / "archive").exists()
-    assert (repo / "project-docs" / "archive").is_dir()
+    assert (Path(synlynk._generated_project_docs_dir()) / "archive").is_dir()
 
 
 def test_import_todo_to_stories_imports_unchecked_lines(project_dir):
     """_import_todo_to_stories creates story rows for all supported checkbox states."""
     import synlynk as sl
-    (project_dir / "project-docs" / "todo.md").write_text(
+    (Path(synlynk._generated_project_docs_dir()) / "todo.md").write_text(
         "- [ ] Migrate auth module\n"
         "- [x] Old done task\n"
         "- [ ] Write API docs\n"
@@ -5198,7 +5204,7 @@ def test_import_todo_to_stories_backfills_completed_rows(project_dir):
     """_import_todo_to_stories also backfills checked rows for metadata sync."""
     import synlynk as sl
 
-    (project_dir / "project-docs" / "todo.md").write_text(
+    (Path(synlynk._generated_project_docs_dir()) / "todo.md").write_text(
         "- [x] Some completed story [platform] <!-- id:story-abc12345 --> <!-- gh:#999 -->\n"
     )
 
@@ -5226,7 +5232,7 @@ def test_import_todo_to_stories_skips_existing_stories(project_dir):
     """_import_todo_to_stories does not duplicate stories already in DB."""
     import synlynk as sl
     story_id = sl.cmd_story_create("Already exists")
-    (project_dir / "project-docs" / "todo.md").write_text(
+    (Path(synlynk._generated_project_docs_dir()) / "todo.md").write_text(
         f"- [ ] Already exists <!-- id:{story_id} -->\n"
         "- [ ] Brand new task\n"
     )
@@ -5237,7 +5243,7 @@ def test_import_todo_to_stories_skips_existing_stories(project_dir):
 def test_import_todo_to_stories_is_idempotent(project_dir):
     """_import_todo_to_stories dedups by title and deterministic story_id."""
     import synlynk as sl
-    (project_dir / "project-docs" / "todo.md").write_text(
+    (Path(synlynk._generated_project_docs_dir()) / "todo.md").write_text(
         "- [ ] First unchecked item\n"
         "- [ ] Second unchecked item\n"
     )
@@ -5859,6 +5865,10 @@ def test_cmd_shell_injects_synlynk_env(project_dir, monkeypatch):
 
 def test_cmd_launch_starts_agent_interactively(project_dir, monkeypatch):
     import synlynk as sl
+    conn = sl._get_db()
+    conn.execute("INSERT INTO stories (story_id, title, status) VALUES ('14', 'Launch test', 'open')")
+    conn.commit()
+    conn.close()
     launched = []
     def fake_run(cmd, **kw):
         launched.append(cmd)
@@ -5879,6 +5889,10 @@ def test_cmd_launch_unknown_agent_prints_error(project_dir, capsys):
 
 def test_cmd_launch_generates_agent_context(project_dir, monkeypatch):
     import synlynk as sl
+    conn = sl._get_db()
+    conn.execute("INSERT INTO stories (story_id, title, status) VALUES ('5', 'Launch context test', 'open')")
+    conn.commit()
+    conn.close()
     monkeypatch.setattr("subprocess.run", lambda *a, **kw: type("R", (), {"returncode": 0})())
     sl.cmd_launch("claude", story_id="5")
     assert os.path.exists(".synlynk/context-claude.md")
@@ -5936,7 +5950,7 @@ def test_task_statuses_constant_defined():
 
 
 def test_generate_context_includes_deferred_tasks(project_dir):
-    (project_dir / "project-docs" / "todo.md").write_text(
+    (Path(synlynk._generated_project_docs_dir()) / "todo.md").write_text(
         "## Active Tasks\n"
         "- [ ] Active task <!-- id: 1 -->\n"
         "- [-] Deferred task <!-- id: 2 -->\n"
@@ -5950,7 +5964,7 @@ def test_generate_context_includes_deferred_tasks(project_dir):
 
 
 def test_generate_context_excludes_superseded_tasks(project_dir):
-    (project_dir / "project-docs" / "todo.md").write_text(
+    (Path(synlynk._generated_project_docs_dir()) / "todo.md").write_text(
         "- [ ] Active task <!-- id: 1 -->\n"
         "- [~] Superseded task <!-- id: 2 -->\n"
     )
@@ -5961,7 +5975,7 @@ def test_generate_context_excludes_superseded_tasks(project_dir):
 
 
 def test_generate_context_excludes_absorbed_tasks(project_dir):
-    (project_dir / "project-docs" / "todo.md").write_text(
+    (Path(synlynk._generated_project_docs_dir()) / "todo.md").write_text(
         "- [ ] Active task <!-- id: 1 -->\n"
         "- [>] Absorbed task <!-- id: 2 -->\n"
     )
@@ -5973,37 +5987,37 @@ def test_generate_context_excludes_absorbed_tasks(project_dir):
 
 def test_checkpoint_archives_superseded_tasks(project_dir, monkeypatch):
     monkeypatch.setattr(synlynk, 'get_username', lambda: "nikhil")
-    (project_dir / "project-docs" / "todo.md").write_text(
+    (Path(synlynk._generated_project_docs_dir()) / "todo.md").write_text(
         "- [ ] Still active <!-- id: 1 -->\n"
         "- [~] Superseded task <!-- id: 2 -->\n"
     )
     synlynk.checkpoint()
-    todo = (project_dir / "project-docs" / "todo.md").read_text()
+    todo = (Path(synlynk._generated_project_docs_dir()) / "todo.md").read_text()
     assert "Still active" in todo
     assert "Superseded task" not in todo
 
 
 def test_checkpoint_archives_absorbed_tasks(project_dir, monkeypatch):
     monkeypatch.setattr(synlynk, 'get_username', lambda: "nikhil")
-    (project_dir / "project-docs" / "todo.md").write_text(
+    (Path(synlynk._generated_project_docs_dir()) / "todo.md").write_text(
         "- [ ] Still active <!-- id: 1 -->\n"
         "- [>] Absorbed task <!-- id: 2 -->\n"
     )
     synlynk.checkpoint()
-    todo = (project_dir / "project-docs" / "todo.md").read_text()
+    todo = (Path(synlynk._generated_project_docs_dir()) / "todo.md").read_text()
     assert "Still active" in todo
     assert "Absorbed task" not in todo
 
 
 def test_checkpoint_keeps_deferred_tasks(project_dir, monkeypatch):
     monkeypatch.setattr(synlynk, 'get_username', lambda: "nikhil")
-    (project_dir / "project-docs" / "todo.md").write_text(
+    (Path(synlynk._generated_project_docs_dir()) / "todo.md").write_text(
         "- [ ] Still active <!-- id: 1 -->\n"
         "- [-] Deferred task <!-- id: 2 -->\n"
         "- [x] Done task <!-- id: 3 -->\n"
     )
     synlynk.checkpoint()
-    todo = (project_dir / "project-docs" / "todo.md").read_text()
+    todo = (Path(synlynk._generated_project_docs_dir()) / "todo.md").read_text()
     assert "Still active" in todo
     assert "Deferred task" in todo
     assert "Done task" not in todo
@@ -8195,6 +8209,11 @@ def test_hc_docs_dir_ok(tmp_path, monkeypatch):
     docs.mkdir()
     for fname in ["roadmap.md", "todo.md", "memory.md"]:
         (docs / fname).write_text("")
+    exports = tmp_path / "home-exports"
+    exports.mkdir()
+    for fname in ["roadmap.md", "todo.md", "costs.md"]:
+        (exports / fname).write_text("")
+    monkeypatch.setattr(synlynk, "_generated_project_docs_dir", lambda: str(exports))
     os.makedirs(tmp_path / ".synlynk")
     (tmp_path / ".synlynk" / "config.json").write_text('{"project_docs_dir": "project-docs"}')
     result = synlynk._hc_docs_dir()
@@ -8224,6 +8243,11 @@ def test_hc_docs_dir_resolves_migrated_path(tmp_path, monkeypatch):
     migrated_docs.mkdir()
     for fname in ["roadmap.md", "todo.md", "memory.md"]:
         (migrated_docs / fname).write_text("")
+    exports = tmp_path / "home-exports"
+    exports.mkdir()
+    for fname in ["roadmap.md", "todo.md", "costs.md"]:
+        (exports / fname).write_text("")
+    monkeypatch.setattr(synlynk, "_generated_project_docs_dir", lambda: str(exports))
     # Old pre-migration path does NOT exist — if _hc_docs_dir() still reads
     # the raw _docs_dir(), this must fail/warn instead of reporting ok.
     result = synlynk._hc_docs_dir()

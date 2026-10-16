@@ -46,6 +46,8 @@ _AUTOCOMMIT_EXCLUDED_PATHS = (
     "cursorrules",
     ".cursor/rules/synlynk.mdc",
     "project-docs/todo.md",
+    "project-docs/roadmap.md",
+    "project-docs/costs.md",
 )
 _AUTOCOMMIT_TRAILER = "Co-Authored-By: synlynk-dispatch <noreply@synlynk.dev>"
 
@@ -661,7 +663,19 @@ def _normalize_worktree_relative_path(path: str) -> str:
 
 def _is_autocommit_excluded(path: str) -> bool:
     normalized = _normalize_worktree_relative_path(path)
-    return normalized in _AUTOCOMMIT_EXCLUDED_PATHS
+    if normalized in _AUTOCOMMIT_EXCLUDED_PATHS:
+        return True
+    # A job can observe changes to the shared canonical export when its home
+    # product store is visible from the worktree.
+    try:
+        from synlynk import _generated_project_docs_dir
+        canonical = os.path.realpath(_generated_project_docs_dir())
+        candidate = os.path.realpath(os.path.expanduser(path))
+        return os.path.commonpath((canonical, candidate)) == canonical and os.path.basename(candidate) in {
+            "todo.md", "roadmap.md", "costs.md",
+        }
+    except (ImportError, OSError, ValueError):
+        return False
 
 
 def _collect_worktree_status_paths(worktree_path: str) -> list:

@@ -2910,10 +2910,18 @@ def cmd_migrate(dry_run: bool = False, recover: bool = False, setup_dr: bool = F
                 print(f"  ✗ {exc}")
                 raise
 
+            _generate_todo_md()
+            _generate_roadmap_md()
+            _generate_costs_md()
+
             print(f"  ▶ Copying {raw_docs_dir}/ → {backup_dir}/ ...")
             if os.path.exists(backup_dir):
                 _shutil.rmtree(backup_dir)
-            _shutil.copytree(docs_dir, backup_dir)
+            _shutil.copytree(
+                docs_dir,
+                backup_dir,
+                ignore=_shutil.ignore_patterns("todo.md", "roadmap.md", "costs.md"),
+            )
 
             _migrate_dr_mirror(backup_dir)
 
@@ -2981,95 +2989,19 @@ def _resolved_docs_dir() -> str:
 
 
 def _write_generated_project_doc(filename: str, content: str) -> None:
-    """Write a generated 4-doc to the migrated cache and the git-tracked docs dir."""
+    """Write state exports beside the canonical DB; keep memory at its existing path."""
     from synlynk import (
-        DB_PATH,
-        _dr_sync,
-        _is_migrated,
-        _project_root,
+        DB_PATH, _dr_sync, _generated_project_docs_dir, _is_migrated,
         _synlynk_project_docs_dir,
     )
 
-    def _is_tracked(path: str) -> bool:
-        try:
-            relative = os.path.relpath(path, _project_root())
-            result = subprocess.run(
-                ["git", "ls-files", "--error-unmatch", "--", relative],
-                cwd=_project_root(),
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                check=False,
-            )
-            return bool(result and getattr(result, "returncode", None) == 0)
-        except Exception:
-            # Tracking is advisory; mocked or unavailable subprocess runners
-            # must not prevent generated docs from being written.
-            return False
-
-    def _split_table_row(line: str) -> list:
-        cells = []
-        current = []
-        escaped = False
-        for char in line.strip().strip("|"):
-            if char == "|" and not escaped:
-                cells.append("".join(current).strip())
-                current = []
-            else:
-                current.append(char)
-            escaped = char == "\\" and not escaped
-            if char != "\\":
-                escaped = False
-        cells.append("".join(current).strip())
-        return cells
-
-    def _reconcile_costs(existing: str, generated: str) -> str:
-        if "| Date | Agent |" not in generated:
-            return generated
-
-        def rows(text: str) -> list:
-            return [
-                line
-                for line in text.splitlines(keepends=True)
-                if line.lstrip().startswith("|")
-                and len(_split_table_row(line)) >= 9
-                and not set(_split_table_row(line)[0]) <= {"-", ":"}
-                and not line.lstrip().startswith("| Date | Agent |")
-            ]
-
-        def key(line: str):
-            cells = _split_table_row(line)
-            # Cost entries are immutable ledger rows.  Date + agent is not a
-            # unique identity: concurrent jobs can emit several rows for the
-            # same agent in the same minute.  Union the complete rendered row
-            # so none of those rows can overwrite another during regeneration.
-            return tuple(cells) if len(cells) >= 9 else None
-
-        local_rows = rows(generated)
-        disk_rows = rows(existing)
-        merged = {}
-        order = []
-        for line in disk_rows + local_rows:
-            row_key = key(line)
-            if row_key is None:
-                continue
-            if row_key not in merged:
-                order.append(row_key)
-            merged[row_key] = line
-        merged_rows = [merged[row_key] for row_key in order]
-
-        generated_lines = generated.splitlines(keepends=True)
-        header_index = next(
-            (index for index, line in enumerate(generated_lines)
-             if line.lstrip().startswith("| Date | Agent |")),
-            None,
-        )
-        if header_index is None:
-            return generated
-        start = header_index + 2
-        end = start
-        while end < len(generated_lines) and generated_lines[end].lstrip().startswith("|"):
-            end += 1
-        return "".join(generated_lines[:start] + merged_rows + generated_lines[end:])
+    if (
+        filename in {"todo.md", "roadmap.md", "costs.md"}
+        and os.environ.get("SYNLYNK_TEST_ISOLATED_DB") == "1"
+        and os.environ.get("SYNLYNK_TEST_PROJECT_DIR") != "1"
+        and os.path.exists(os.path.join(os.getcwd(), ".git"))
+    ):
+        return
 
     def _reconcile_memory(existing: str, generated: str) -> str:
         disk_sections = _parse_memory_md(existing)
@@ -3091,7 +3023,7 @@ def _write_generated_project_doc(filename: str, content: str) -> None:
         return header + body
 
     def _reconcile(path: str, generated: str) -> str:
-        if filename not in {"costs.md", "memory.md"}:
+        if filename != "memory.md":
             return generated
         if not os.path.exists(path):
             return generated
@@ -3100,22 +3032,20 @@ def _write_generated_project_doc(filename: str, content: str) -> None:
                 existing = fh.read()
         except OSError:
             return generated
-        if filename == "costs.md":
-            return _reconcile_costs(existing, generated)
         return _reconcile_memory(existing, generated)
 
-    paths = []
-    if _is_migrated():
-        syn_dir = _synlynk_project_docs_dir()
-        os.makedirs(syn_dir, exist_ok=True)
-        paths.append(os.path.join(syn_dir, filename))
-    docs_dir = _resolved_docs_dir()
-    if docs_dir:
-        if _is_migrated() or os.path.exists(docs_dir):
-            os.makedirs(docs_dir, exist_ok=True)
+    if filename in {"todo.md", "roadmap.md", "costs.md"}:
+        paths = [os.path.join(_generated_project_docs_dir(), filename)]
+    else:
+        paths = []
+        if _is_migrated():
+            paths.append(os.path.join(_synlynk_project_docs_dir(), filename))
+        docs_dir = _resolved_docs_dir()
+        if docs_dir and (_is_migrated() or os.path.isdir(docs_dir)):
             paths.append(os.path.join(docs_dir, filename))
-        elif not _is_migrated():
-            return
+        if docs_dir and not os.path.isdir(docs_dir):
+            if not paths:
+                return
 
     seen = set()
     for path in paths:
@@ -3134,15 +3064,13 @@ def _write_generated_project_doc(filename: str, content: str) -> None:
                 fh.write(reconciled_content)
         except (OSError, PermissionError):
             continue
-    if _is_migrated():
+    if filename not in {"todo.md", "roadmap.md", "costs.md"}:
         _dr_sync(filename)
 
 
 def _generate_todo_md() -> None:
-    """Writes todo.md as a generated view of stories.
-    Post-migration: writes to .synlynk/project-docs/todo.md and project-docs/todo.md.
-    Pre-migration: writes to project-docs/todo.md."""
-    from synlynk import _get_db, _is_migrated
+    """Write the generated todo export beside the canonical state DB."""
+    from synlynk import _get_db
 
     # Tests use an isolated DB by default, but many legacy tests intentionally
     # keep the repository-root cwd. Refuse to project that temporary DB into
@@ -3153,11 +3081,6 @@ def _generate_todo_md() -> None:
         and os.path.exists(os.path.join(os.getcwd(), ".git"))
     ):
         return
-    if not _is_migrated():
-        docs_dir = _resolved_docs_dir()
-        if not docs_dir or not os.path.exists(docs_dir):
-            return
-
     conn = _get_db()
     rows = conn.execute(
         "SELECT story_id, title, engg_domain, status FROM stories "
@@ -3205,7 +3128,8 @@ def _rotate_project_doc(file_stem: str, all_rows: list, keep_n: int = None) -> l
     archived_rows = all_rows[:-n]
     live_rows = all_rows[-n:]
 
-    base_dir = _synlynk_project_docs_dir() if _is_migrated() else _resolved_docs_dir()
+    from synlynk import _generated_project_docs_dir
+    base_dir = _generated_project_docs_dir() if file_stem in {"todo", "roadmap", "costs"} else (_synlynk_project_docs_dir() if _is_migrated() else _resolved_docs_dir())
     archive_dir = os.path.join(base_dir, "archive")
     os.makedirs(archive_dir, exist_ok=True)
 
@@ -3252,25 +3176,28 @@ def _rotate_project_doc(file_stem: str, all_rows: list, keep_n: int = None) -> l
                 f"- [{archive_filename}]({archive_filename}) \u2014 {file_stem} entries older than the live window\n"
             )
 
-    try:
-        subprocess.run(
-            ["git", "add", "--", archive_path, index_path, cursor_path],
-            cwd=base_dir,
-            check=False,
-            capture_output=True,
-            timeout=5,
-        )
-    except (OSError, subprocess.SubprocessError):
-        pass
+    if file_stem not in {"todo", "roadmap", "costs"}:
+        try:
+            subprocess.run(
+                ["git", "add", "--", archive_path, index_path, cursor_path],
+                cwd=base_dir,
+                check=False,
+                capture_output=True,
+                timeout=5,
+            )
+        except (OSError, subprocess.SubprocessError):
+            pass
 
     return live_rows
 
 
 def _detect_hand_edit(filename: str) -> str | None:
     """Detect a genuine uncommitted hand-edit for a generated project doc."""
-    from synlynk import _docs_dir, _is_migrated, _synlynk_project_docs_dir
+    from synlynk import _docs_dir, _generated_project_docs_dir, _is_migrated, _synlynk_project_docs_dir
 
-    if _is_migrated():
+    if filename in {"todo.md", "roadmap.md", "costs.md"}:
+        file_path = os.path.join(_generated_project_docs_dir(), filename)
+    elif _is_migrated():
         file_path = os.path.join(_synlynk_project_docs_dir(), filename)
     else:
         file_path = os.path.join(_docs_dir(), filename)
@@ -3318,10 +3245,12 @@ def _detect_hand_edit(filename: str) -> str | None:
     tmp = tempfile.mkdtemp(prefix="synlynk-hand-edit-")
     orig_syn = sl._synlynk_project_docs_dir
     orig_docs = sl._docs_dir
+    orig_generated = sl._generated_project_docs_dir
     orig_sync = getattr(sl, "_dr_sync", None)
     try:
         sl._synlynk_project_docs_dir = lambda: tmp
         sl._docs_dir = lambda: tmp
+        sl._generated_project_docs_dir = lambda: tmp
         if orig_sync is not None:
             sl._dr_sync = lambda *_a, **_k: None
         generator()
@@ -3336,6 +3265,7 @@ def _detect_hand_edit(filename: str) -> str | None:
     finally:
         sl._synlynk_project_docs_dir = orig_syn
         sl._docs_dir = orig_docs
+        sl._generated_project_docs_dir = orig_generated
         if orig_sync is not None:
             sl._dr_sync = orig_sync
         shutil.rmtree(tmp, ignore_errors=True)
@@ -3350,14 +3280,8 @@ def _detect_hand_edit(filename: str) -> str | None:
     )
 
 def _generate_roadmap_md() -> None:
-    """Writes roadmap.md as a generated view of roadmap_arcs/roadmap_phases.
-    Post-migration: writes to .synlynk/project-docs/roadmap.md and project-docs/roadmap.md.
-    Pre-migration: writes to project-docs/roadmap.md."""
-    from synlynk import _get_db, _is_migrated
-    if not _is_migrated():
-        docs_dir = _resolved_docs_dir()
-        if not docs_dir or not os.path.exists(docs_dir):
-            return
+    """Write the generated roadmap export beside the canonical state DB."""
+    from synlynk import _get_db
 
     conn = _get_db()
     arcs = conn.execute(
@@ -3393,14 +3317,8 @@ def _generate_roadmap_md() -> None:
     _write_generated_project_doc("roadmap.md", "".join(lines))
 
 def _generate_costs_md() -> None:
-    """Writes costs.md as a generated view of cost_entries.
-    Post-migration: writes to .synlynk/project-docs/costs.md.
-    Pre-migration: writes to project-docs/costs.md."""
-    from synlynk import _get_db, _is_migrated, load_config
-    if not _is_migrated():
-        docs_dir = _resolved_docs_dir()
-        if not docs_dir or not os.path.exists(docs_dir):
-            return
+    """Write the generated costs export beside the canonical state DB."""
+    from synlynk import _get_db, load_config
 
     conn = _get_db()
     cursor = conn.execute(
@@ -3728,11 +3646,11 @@ def cmd_decision_record(decision_id: str, topic: str, date: str, panel: list,
 
 def _import_todo_to_stories(docs_dir: str = None, conn=None) -> int:
     """Reads checkbox lines from todo.md and inserts missing story rows."""
-    from synlynk import _docs_dir, _get_db
+    from synlynk import _generated_project_docs_dir, _get_db
     import hashlib as _hashlib
 
     if docs_dir is None:
-        docs_dir = _docs_dir()
+        docs_dir = _generated_project_docs_dir()
     todo_path = os.path.join(docs_dir, "todo.md")
     if not os.path.exists(todo_path):
         return 0
@@ -4586,9 +4504,7 @@ def cmd_cost_log(
     from synlynk import (
         _GREEN,
         _RESET,
-        _dr_sync,
         _get_db,
-        _is_migrated,
         _insert_cost_row,
         extract_model_version,
         _generate_costs_md,
@@ -4637,8 +4553,6 @@ def cmd_cost_log(
         agent_role=role_val,
     )
     _generate_costs_md()
-    if _is_migrated():
-        _dr_sync("costs.md")
     label = f"story {story_id}" if story_id else f"phase={phase or 'dream/plan'} (no story)"
     print(
         f"  {_GREEN}✓{_RESET} Manual cost entry logged for {agent} — {label}: "
@@ -4840,8 +4754,21 @@ def cmd_pr_check(pr_number=None, impact_attested: bool = False) -> None:
                 print(warning)
 
     conn = _get_db()
-    if _is_github_remote():
+    github_remote = _is_github_remote()
+    if github_remote:
         pr_number = _current_pr_number(pr_number=pr_number)
+    if pr_number is not None:
+        touched = set(_gh_pr_changed_files(pr_number))
+        forbidden = sorted(touched.intersection({
+            "project-docs/todo.md", "project-docs/roadmap.md", "project-docs/costs.md",
+        }))
+        if forbidden:
+            print("\n  🚫 [PR CHECK BLOCKED] PR diff touches generated state exports:")
+            for path in forbidden:
+                print(f"    {path}")
+            conn.close()
+            raise SystemExit(1)
+    if github_remote:
         if pr_number is not None:
             changes_requested_count = _extract_pr_review_cycles() or 0
             _apply_review_cycle_multiplier(conn, pr_number, changes_requested_count)
