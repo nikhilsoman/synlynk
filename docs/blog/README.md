@@ -434,6 +434,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [355](./355-pr2042-close-ci-follow-up-for-1943.md) | PR #2042 — close CI follow-up for #1943 | [#2042](https://github.com/nikhilsoman/synlynk/pull/2042) | 2026-10-15 |
 | [356](./356-pr1970-post-243-for-pr-1967-claude-local-adapte.md) | PR #1970 — post 243 for PR #1967 — Claude/local adapter port, gh:#1924 close | [#1970](https://github.com/nikhilsoman/synlynk/pull/1970) | 2026-10-16 |
 | [357](./357-pr2340-mock-webbrowser-open-in-test-role-add-id.md) | PR #2340 — mock webbrowser.open in test_role_add_identity_prompt and stub globally (#2339) | [#2340](https://github.com/nikhilsoman/synlynk/pull/2340) | 2026-10-16 |
+| [358](./358-pr2341-add-frontier-lab-architecture-review.md) | PR #2341 — add frontier-lab architecture review | [#2341](https://github.com/nikhilsoman/synlynk/pull/2341) | 2026-10-16 |
 
 ## Per-PR Post Template
 

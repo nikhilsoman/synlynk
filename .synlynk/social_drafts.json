@@ -1774,5 +1774,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2340 \u2014 mock webbrowser.open in test_role_add_identity_prompt and stub globally (#2339) (PR #2340, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2340.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-16) - PR #2340\n- Merged improvements and fixes for PR #2340."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/358-pr2341-add-frontier-lab-architecture-review.md",
+    "title": "PR #2341 \u2014 add frontier-lab architecture review",
+    "author": "nikhilsoman",
+    "date": "2026-10-16",
+    "pr": "#2341",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2341."
+    ],
+    "tweet": "\ud83d\ude80 PR #2341 \u2014 add frontier-lab architecture review (PR #2341, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2341.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-16) - PR #2341\n- Merged improvements and fixes for PR #2341."
   }
 ]
