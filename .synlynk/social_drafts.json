@@ -1822,5 +1822,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2356 \u2014 record local model qualification evidence (PR #2356, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2356.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-16) - PR #2356\n- Merged improvements and fixes for PR #2356."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/361-pr2358-tolerate-concurrent-quality-repair.md",
+    "title": "PR #2358 \u2014 tolerate concurrent quality repair",
+    "author": "nikhilsoman",
+    "date": "2026-10-16",
+    "pr": "#2358",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2358."
+    ],
+    "tweet": "\ud83d\ude80 PR #2358 \u2014 tolerate concurrent quality repair (PR #2358, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2358.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-16) - PR #2358\n- Merged improvements and fixes for PR #2358."
   }
 ]

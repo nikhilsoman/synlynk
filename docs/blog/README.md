@@ -437,6 +437,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [358](./358-pr2341-add-frontier-lab-architecture-review.md) | PR #2341 — add frontier-lab architecture review | [#2341](https://github.com/nikhilsoman/synlynk/pull/2341) | 2026-10-16 |
 | [359](./359-pr2354-approve-local-harness-operationalization.md) | PR #2354 — approve Local Harness operationalization design | [#2354](https://github.com/nikhilsoman/synlynk/pull/2354) | 2026-10-16 |
 | [360](./360-pr2356-record-local-model-qualification-evidenc.md) | PR #2356 — record local model qualification evidence | [#2356](https://github.com/nikhilsoman/synlynk/pull/2356) | 2026-10-16 |
+| [361](./361-pr2358-tolerate-concurrent-quality-repair.md) | PR #2358 — tolerate concurrent quality repair | [#2358](https://github.com/nikhilsoman/synlynk/pull/2358) | 2026-10-16 |
 
 ## Per-PR Post Template
 
