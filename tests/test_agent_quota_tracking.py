@@ -2106,10 +2106,25 @@ def test_a3_set_dispatch_context_to_homeheadless_dispatch(project_dir, monkeypat
 
     conn = synlynk._get_db()
     row = conn.execute(
-        "SELECT dispatch_context FROM daemon_jobs ORDER BY enqueued_at DESC LIMIT 1"
+        "SELECT job_id, dispatch_context FROM daemon_jobs ORDER BY enqueued_at DESC LIMIT 1"
     ).fetchone()
     conn.close()
-    assert row == (expected,)
+    assert row[1] == expected
+
+    # Terminal cost logging must use the context captured at enqueue time.
+    synlynk._insert_cost_row(
+        session_date="2026-10-16",
+        agent="codex",
+        cost_source="actual",
+        total_cost_usd=0.01,
+        job_id=row[0],
+    )
+    conn = synlynk._get_db()
+    cost_context = conn.execute(
+        "SELECT dispatch_context FROM cost_entries WHERE job_id=?", (row[0],)
+    ).fetchone()
+    conn.close()
+    assert cost_context == (expected,)
 
 
 def test_a3_set_dispatch_context_to_homeheadless_daemon(project_dir, monkeypatch):

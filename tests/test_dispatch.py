@@ -1042,10 +1042,10 @@ def test_dispatch_agent_defers_when_quota_exhausted(project_dir, monkeypatch):
     assert "retry_after" in result
 
     row = conn.execute(
-        "SELECT status, blocked_reason FROM daemon_jobs WHERE agent='codex' "
+        "SELECT status, blocked_reason, dispatch_context FROM daemon_jobs WHERE agent='codex' "
         "ORDER BY enqueued_at DESC LIMIT 1"
     ).fetchone()
-    assert row == ("queued", "quota_exhausted")
+    assert row == ("queued", "quota_exhausted", "headless")
     conn.close()
 
 
