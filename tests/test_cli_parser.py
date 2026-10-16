@@ -216,6 +216,26 @@ def test_fast_cli_preserves_help_and_invalid_command_paths():
     assert "invalid choice" in invalid_result.stderr
 
 
+def test_fast_cli_version_does_not_import_cli_module():
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import sys; import synlynk; "
+            "exec(\"try: synlynk.main(['--version'])\\nexcept SystemExit: pass\"); "
+            "print('synlynk.cli' in sys.modules)",
+        ],
+        capture_output=True,
+        text=True,
+        env={**os.environ, "SYNLYNK_CLI_ENTRYPOINT": "1"},
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert result.stdout.splitlines()[0].startswith("synlynk ")
+    assert result.stdout.splitlines()[1] == "False"
+
+
 def test_tiered_help_command_supports_core_and_all_views(capsys):
     cli_mod.main(["help"])
     core = capsys.readouterr().out
@@ -237,6 +257,14 @@ def test_lazy_parser_registers_only_the_selected_top_level_command():
     assert subparser_action.choices["status"].__class__.__name__ == "_LazyParserStub"
     args = parser.parse_args(["dispatch", "codex", "--task", "build"])
     assert (args.command, args.agent, args.task) == ("dispatch", "codex", "build")
+
+
+@pytest.mark.parametrize("command", ["brainstorm", "brief", "gc"])
+def test_lazy_parser_registers_every_declared_top_level_command(command):
+    parser = cli_mod.build_parser(selected_command=command)
+    subparser_action = parser._subparsers._group_actions[0]
+
+    assert subparser_action.choices[command].__class__.__name__ == "ArgumentParser"
 
 
 def test_lazy_parser_unknown_command_keeps_the_complete_choice_list():
