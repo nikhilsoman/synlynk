@@ -129,3 +129,24 @@ def test_resolve_tier_model_keeps_live_catalog_id(tmp_path, monkeypatch):
     _DISCOVERY_CACHE.clear()
 
     assert resolve_tier_model("fast", "agy", repo_path=str(tmp_path)) == "gemini-3.8-flash-low"
+
+
+def test_resolve_tier_model_uses_shared_discovery_pass(tmp_path, monkeypatch):
+    path = tmp_path / ".synlynk"
+    path.mkdir()
+    (path / "models.json").write_text(
+        json.dumps({"tiers": {"fast": {"agy": "retired-model"}}})
+    )
+    monkeypatch.setenv("SYNLYNK_FORCE_MODEL_DISCOVERY", "1")
+    from synlynk.models import _DISCOVERY_CACHE
+    _DISCOVERY_CACHE.clear()
+    calls = []
+
+    def fake_discover_models():
+        calls.append(True)
+        return [ModelSpec("gemini-live", "discovered", "agy", discovered=True)]
+
+    monkeypatch.setattr("synlynk.models.discover_models", fake_discover_models)
+
+    assert resolve_tier_model("fast", "agy", repo_path=str(tmp_path)) == "gemini-live"
+    assert calls == [True]

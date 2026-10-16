@@ -531,7 +531,12 @@ def discovered_model_ids(harness: str) -> list[str]:
     cached = _DISCOVERY_CACHE.get(harness)
     if cached and (now - cached[0]) < _DISCOVERY_TTL_SECONDS:
         return list(cached[1])
-    ids = tuple(spec.model_id for spec in probe_cli_harness(harness))
+    # Use the shared discovery pass so tier resolution sees the same
+    # harness-bound roster as catalog discovery (including overlapping ids).
+    ids = tuple(
+        spec.model_id for spec in discover_models()
+        if spec.harness_binding == harness
+    )
     _DISCOVERY_CACHE[harness] = (now, ids)
     return list(ids)
 
