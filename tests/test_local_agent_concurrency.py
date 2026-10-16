@@ -51,6 +51,31 @@ class TestLocalConcurrencyGuard(unittest.TestCase):
                 reason="local_concurrency",
             )
 
+    def test_deferred_jobs_record_dispatch_context(self):
+        conn = sqlite3.connect(":memory:")
+        conn.execute(
+            "CREATE TABLE daemon_jobs (job_id TEXT PRIMARY KEY, agent TEXT, task TEXT, "
+            "story_id TEXT, status TEXT, priority INTEGER, depends_on TEXT, "
+            "enqueued_at TEXT, dispatch_context TEXT)"
+        )
+        with patch.object(dispatch_module.sys.stdin, "isatty", return_value=False):
+            _defer_local_concurrency(
+                conn, job_id="new", agent="local", task="wait", story_id=None,
+                reason="local_concurrency",
+            )
+            conn.execute(
+                "INSERT INTO daemon_jobs (job_id, dispatch_context) VALUES ('legacy', 'unknown')"
+            )
+            _defer_local_concurrency(
+                conn, job_id="legacy", agent="local", task="wait", story_id=None,
+                reason="local_concurrency",
+            )
+
+        contexts = dict(conn.execute(
+            "SELECT job_id, dispatch_context FROM daemon_jobs ORDER BY job_id"
+        ).fetchall())
+        self.assertEqual(contexts, {"legacy": "headless", "new": "headless"})
+
 
 class TestSchedulerLocalConcurrency(unittest.TestCase):
     def test_scheduler_leaves_local_job_queued_at_capacity(self):
