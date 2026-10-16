@@ -2068,3 +2068,30 @@ only). Full remaining-task detail is in
 `docs-context-window-optimization` worktree, not visible here — this worktree is sparse-checked-out
 without `docs/`).
 [@nikhilsoman]
+
+### 2026-10-16 - Frontier-lab architecture review (Codex)
+
+Independent review requested by Nikhil, anchored to commit
+`19132dfabd1ecca9de7a9f06b1a8691262d90d1b`, on isolated branch
+`chore/architecture-review-20261016`.
+
+Deliverables: `docs/reviews/2026-10-16-frontier-lab-architecture-review.md`
+and `docs/reviews/2026-10-16-decide-recommendation-ledger.md`. These contain
+the portfolio assessment, goals/design/code delta, F01-F12 findings,
+H01-H32 housekeeping register, R01-R18 proposed roadmap, and dispositions
+for all 54 current decision JSON records plus individual major-panel
+recommendations. Recommendations are advisory, not approved build work.
+
+Selected verification: 123 passed, 5 expected adapter-conformance failures.
+20/50-thread short WAL tests passed; these do not prove sustained fleet
+reliability. Isolated reproductions confirmed supervised scheduling requesting
+execution, capability-report cross-attribution, missing OpenRouter registry
+entry, and permissive legacy verification. Status/watch-status attempted
+reconciliation and failed on canonical DB write permissions in this sandbox.
+
+Read issue #2328 and its comments: user approved canonical sidecar exports;
+PR #2338 implementation was reported but its merge state could not be checked
+after GitHub connectivity failed. Generated roadmap/todo/cost views were not
+hand-edited. Actual session cost is unavailable and was not invented. No
+implementation dispatched, external messages sent, or policy changed.
+[@nikhilsoman, reviewed by Codex]
