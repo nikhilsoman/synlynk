@@ -102,6 +102,30 @@ def test_resolve_tier_model_replaces_stale_agy_catalog_id(tmp_path, monkeypatch)
     assert resolve_tier_model("reasoning", "agy", repo_path=str(tmp_path)) == "claude-opus-4-6-thinking"
 
 
+def test_resolve_tier_model_uses_harness_scoped_discover_models_results(tmp_path, monkeypatch):
+    path = tmp_path / ".synlynk"
+    path.mkdir()
+    (path / "models.json").write_text(
+        json.dumps({"tiers": {"fast": {"agy": "retired-agy-model"}}})
+    )
+    calls = []
+
+    def fake_discover_models():
+        calls.append(True)
+        return [
+            ModelSpec("claude-sonnet-4-6", "discovered", "claude", discovered=True),
+            ModelSpec("gemini-3.8-flash-medium", "discovered", "agy", discovered=True),
+        ]
+
+    monkeypatch.setenv("SYNLYNK_FORCE_MODEL_DISCOVERY", "1")
+    monkeypatch.setattr("synlynk.models.discover_models", fake_discover_models)
+    from synlynk.models import _DISCOVERY_CACHE
+    _DISCOVERY_CACHE.clear()
+
+    assert resolve_tier_model("fast", "agy", repo_path=str(tmp_path)) == "gemini-3.8-flash-medium"
+    assert calls == [True]
+
+
 def test_resolve_tier_model_keeps_catalog_id_when_probe_is_empty(tmp_path, monkeypatch):
     catalog = {"tiers": {"fast": {"agy": "gemini-3.7-flash-medium"}}}
     path = tmp_path / ".synlynk"
