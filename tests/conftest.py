@@ -178,3 +178,21 @@ def daemon_workspace_root(request, monkeypatch):
     if "project_dir" in request.fixturenames:
         project_dir = request.getfixturevalue("project_dir")
         monkeypatch.setenv("SYNLYNK_DAEMON_WORKSPACE_ROOT", str(project_dir))
+
+
+@pytest.fixture(autouse=True)
+def stub_webbrowser_open(monkeypatch):
+    """Prevent tests from launching browser windows on developer or CI machines.
+
+    Tests that intentionally exercise browser opening must explicitly monkeypatch
+    or spy on webbrowser.open.
+    """
+    import webbrowser
+
+    def _fail_on_open(url, *args, **kwargs):
+        pytest.fail(
+            f"webbrowser.open({url!r}) was called during test execution without being mocked. "
+            "Please monkeypatch webbrowser.open in your test."
+        )
+
+    monkeypatch.setattr(webbrowser, "open", _fail_on_open)
