@@ -3479,6 +3479,12 @@ def init(force: bool = False, agents: list = None,
 
     _seed_capability_ledger_from_baseline(_get_db())
 
+    # Database-backed state documents are exported beside the canonical DB;
+    # project-docs in a checkout retains only authored files such as memory.md.
+    _generate_todo_md()
+    _generate_roadmap_md()
+    _generate_costs_md()
+
     # LIVE-21: make probe metadata available before the first dispatch.  Do
     # not probe fallback names when no harness is installed: some harness
     # probes perform network checks and init must retain its fast headless

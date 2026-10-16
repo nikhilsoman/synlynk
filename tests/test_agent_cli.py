@@ -1186,12 +1186,11 @@ def test_fix_checkpoint_todomd_handling_it_bypass_migrated_archives_and_regenera
     db_path = project_dir / "state.db"
     monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(db_path))
     (project_dir / ".synlynk" / ".synlynk_migrated").touch()
-    generated_todo = project_dir / ".synlynk" / "project-docs" / "todo.md"
-    generated_todo.parent.mkdir(parents=True)
+    generated_todo = Path(synlynk._generated_project_docs_dir()) / "todo.md"
+    generated_todo.parent.mkdir(parents=True, exist_ok=True)
     generated_todo.write_text("# generated\n")
-    (project_dir / "project-docs" / "todo.md").write_text(
-        "- [x] legacy wrong path <!-- id: story-wrong -->\n"
-    )
+    checkout_todo = project_dir / "project-docs" / "todo.md"
+    checkout_todo.unlink(missing_ok=True)
     conn = synlynk._get_db()
     conn.execute(
         "INSERT INTO stories (story_id, title, status) VALUES (?, ?, ?)",
@@ -1216,10 +1215,10 @@ def test_fix_checkpoint_todomd_handling_it_bypass_migrated_archives_and_regenera
     assert rows[1][1] is None
     assert "Finished work" not in generated_todo.read_text()
     assert "Still active" in generated_todo.read_text()
-    tracked = (project_dir / "project-docs" / "todo.md").read_text()
-    assert "legacy wrong path" not in tracked
-    assert "Still active" in tracked
-    assert "source of truth is state.db" in tracked
+    assert "legacy wrong path" not in generated_todo.read_text()
+    assert "Still active" in generated_todo.read_text()
+    assert "source of truth is state.db" in generated_todo.read_text()
+    assert not checkout_todo.exists()
 
 
 def test_fix_checkpoint_todomd_handling_it_bypass_pre_migration_backfill_is_idempotent(
@@ -1229,7 +1228,9 @@ def test_fix_checkpoint_todomd_handling_it_bypass_pre_migration_backfill_is_idem
 
     db_path = project_dir / "state.db"
     monkeypatch.setenv("SYNLYNK_STATE_DB_PATH", str(db_path))
-    (project_dir / "project-docs" / "todo.md").write_text(
+    legacy_todo = Path(synlynk._generated_project_docs_dir()) / "todo.md"
+    legacy_todo.parent.mkdir(parents=True, exist_ok=True)
+    legacy_todo.write_text(
         "- [x] Finished legacy work <!-- id: story-legacy -->\n"
         "- [ ] Current legacy work <!-- id: story-current -->\n"
     )

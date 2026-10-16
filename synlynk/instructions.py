@@ -327,6 +327,8 @@ Each arc below can be tagged `<!-- goal:goal-xxxxxxxx -->` to link it to a goal.
 
     written = []
     for path, fallback in targets:
+        if os.path.basename(path) in {"todo.md", "roadmap.md"}:
+            continue
         if locked and os.path.basename(path) in generated_names:
             continue
         if skip_existing and os.path.exists(path):

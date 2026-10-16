@@ -3,6 +3,7 @@ import os
 import sqlite3
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -1294,17 +1295,22 @@ def test_update_costs_writes_agent_name_not_username(project_dir, monkeypatch):
 def test_costs_py_parse_costs_md_handles_est_prefix(project_dir, monkeypatch):
     import synlynk
 
-    docs_dir = os.path.join(project_dir, "project-docs")
-    os.makedirs(docs_dir, exist_ok=True)
-    monkeypatch.setattr(synlynk, "_docs_dir", lambda: docs_dir)
-    with open(os.path.join(docs_dir, "costs.md"), "w") as f:
+    canonical_docs = os.path.join(project_dir, "canonical", "project-docs")
+    os.makedirs(canonical_docs, exist_ok=True)
+    monkeypatch.setattr(synlynk, "_generated_project_docs_dir", lambda: canonical_docs)
+    with open(os.path.join(canonical_docs, "costs.md"), "w") as f:
         f.write("| 2026-07-13 10:00 | claude | 1 | 1000/500 | [est] $0.0270 | exec: claude -p |\n")
         f.write("| 2026-07-13 10:02 | claude | 1 | 1000/500 | [est?] $0.0270 | exec: claude -p |\n")
         f.write("| 2026-07-13 10:05 | claude | 1 | 800/400 | [legacy] $0.0100 | exec: claude -p |\n")
         f.write("| 2026-07-13 10:10 | claude | 1 | 200/100 | $0.0050 | exec: claude -p |\n")
+    legacy_docs = os.path.join(project_dir, "project-docs")
+    os.makedirs(legacy_docs, exist_ok=True)
+    with open(os.path.join(legacy_docs, "costs.md"), "w") as f:
+        f.write("| 2026-07-13 | wrong | wrong | 0 | 0 | 999.0 | legacy checkout copy |\n")
     total_usd, total_requests = costs_parse_costs_md()
     assert total_requests == 4
     assert round(total_usd, 4) == round(0.0270 + 0.0270 + 0.0100 + 0.0050, 4)
+    assert os.path.exists(os.path.join(legacy_docs, "costs.md"))
 
 
 def test_db_parse_costs_md_handles_prefixed_cost_column():
@@ -1778,7 +1784,7 @@ def test_update_costs_costs_md_includes_provenance_prefix(project_dir, monkeypat
     monkeypatch.setattr(synlynk, "DB_PATH", os.path.join(project_dir, "state.db"))
     monkeypatch.setattr(synlynk, "_is_migrated", lambda: True)
 
-    costs_path = project_dir / ".synlynk" / "project-docs" / "costs.md"
+    costs_path = Path(synlynk._generated_project_docs_dir()) / "costs.md"
 
     update_costs("claude -p 'x'", 0, 0, 5.0, model_version="claude-sonnet-4-6", agent="claude")
     estimated_line = costs_path.read_text().strip().splitlines()[-1]
@@ -1820,7 +1826,7 @@ def test_update_costs_regenerates_costs_md_and_syncs(project_dir, monkeypatch):
     )
 
     assert calls[0] == "generate"
-    assert ("sync", "costs.md") in calls
+    assert ("sync", "costs.md") not in calls
 
 
 def test_update_costs_flags_implausible_token_outlier(project_dir, monkeypatch, capsys):
@@ -1829,7 +1835,7 @@ def test_update_costs_flags_implausible_token_outlier(project_dir, monkeypatch, 
     monkeypatch.setattr(synlynk, "DB_PATH", os.path.join(project_dir, "state.db"))
     monkeypatch.setattr(synlynk, "_is_migrated", lambda: True)
 
-    costs_path = project_dir / ".synlynk" / "project-docs" / "costs.md"
+    costs_path = Path(synlynk._generated_project_docs_dir()) / "costs.md"
 
     update_costs(
         "codex -p 'x'",
