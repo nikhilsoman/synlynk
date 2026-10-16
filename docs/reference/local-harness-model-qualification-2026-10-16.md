@@ -62,3 +62,35 @@ with `dispatch_eligible: false` and `qualification: benchmark-only`, so it is
 visible to the controlled benchmark runner but cannot become a normal local
 dispatch default. Qwen3.6 and Bonsai are absent from the roster; Gemma4 remains
 outside it until its Aider qualification succeeds.
+
+### Reproducible benchmark receipt
+
+`scripts/local_qualification_benchmark.py` implements the fixed 24-task
+corpus: eight test/log summaries, eight diagnoses, four bounded explanations,
+and four scoped mechanical/documentation edits. Every task receipt records the
+exact model ID and Aider mode, completion/correctness, test result, declared
+scope, retry count, wall time, memory evidence, changed paths, and safety
+events (no-op, unexpected edit, or out-of-scope edit).
+
+Use a dry run only to validate runner plumbing:
+
+```sh
+python scripts/local_qualification_benchmark.py --output /private/tmp/local-benchmark-dry.json
+```
+
+For qualification evidence, first start `omlx-relay` as documented in
+`local-harness-isolated-qualification.md`, source the ignored local oMLX
+environment file, then run:
+
+```sh
+python scripts/local_qualification_benchmark.py --live \
+  --peak-memory-mb <host-omlx-peak> \
+  --output /private/tmp/qwen2.5-coder-qualification.json
+```
+
+Only a **live** receipt can advance a candidate. It requires all 24 tasks,
+at least 85% correctness, memory evidence on every task, and zero safety
+events. A dry run is never routing evidence; a failed threshold keeps Qwen in
+its `benchmark-only` roster state and leaves normal local routing disabled.
+The peak-memory input must come from host oMLX telemetry for the serialized
+run; Docker client memory is not accepted as model-memory evidence.
