@@ -410,6 +410,25 @@ def resolve_dispatch_model(
     }
 
 
+def _validate_rerouted_model(requested_model: Optional[str], requested_harness: str,
+                             resolved_harness: str, repo_root: Optional[str] = None) -> None:
+    """Reject an explicit model that cannot be verified for a rerouted harness."""
+    if not requested_model or requested_harness == resolved_harness:
+        return
+    from synlynk.models import get_models_from_catalog
+
+    models = get_models_from_catalog(repo_root)
+    match = next((item for item in models if item.model_id == requested_model), None)
+    if match is None or match.harness_binding != resolved_harness:
+        owner = match.harness_binding if match else "unknown"
+        raise ValueError(
+            f"Cannot use explicit model '{requested_model}' after dispatch was rerouted "
+            f"from harness '{requested_harness}' to '{resolved_harness}': model is "
+            f"registered for '{owner}'. Choose a model registered for '{resolved_harness}' "
+            "or omit --model to use that harness's default."
+        )
+
+
 def _codex_network_flags(read_only: bool = False) -> list:
     """Enable Codex network access while keeping review worktrees unwritable."""
     flags = ["-c", "sandbox_workspace_write.network_access=true"]
@@ -4044,6 +4063,10 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
                 raise RuntimeError(
                     "Dispatch refused: Grok sandbox denies write capability for write-required task (see #1522)."
                 )
+
+    _validate_rerouted_model(
+        requested_model_input, initial_agent, agent, repo_root=os.getcwd()
+    )
 
     if agent not in baselines_map:
         raise ValueError(f"Unknown agent: '{agent}'. Known: {list(baselines_map)}")

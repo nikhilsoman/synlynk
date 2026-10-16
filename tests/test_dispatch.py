@@ -2582,6 +2582,19 @@ def test_dispatch_rejects_unknown_explicit_model_before_spawning(project_dir, mo
     conn.close()
 
 
+def test_rerouted_dispatch_rejects_model_from_requested_harness(project_dir):
+    from synlynk.dispatch import _validate_rerouted_model
+
+    with pytest.raises(ValueError, match=r"rerouted from harness 'codex' to 'claude'.*omit --model"):
+        _validate_rerouted_model("gpt-5.6-luna", "codex", "claude", str(project_dir))
+
+
+def test_rerouted_dispatch_accepts_model_registered_for_resolved_harness(project_dir):
+    from synlynk.dispatch import _validate_rerouted_model
+
+    _validate_rerouted_model("claude-sonnet-5", "codex", "claude", str(project_dir))
+
+
 def test_agy_dispatch_flags_does_not_duplicate_print_timeout_if_already_present(project_dir, monkeypatch):
     import synlynk.dispatch as dispatch_mod
 
