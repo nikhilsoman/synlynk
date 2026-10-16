@@ -55,3 +55,10 @@ format for this gate. Gemma4 requires a successful isolated Aider edit before
 it can join the benchmark. The former Qwen3.6 candidate requires a capacity
 remediation and fresh probe. Bonsai remains deferred until the separate
 Prism/oMLX compatibility question is resolved.
+
+The active local roster is intentionally more restrictive than the live oMLX
+inventory: Ornith is the only normal-dispatch model. Qwen2.5-Coder is retained
+with `dispatch_eligible: false` and `qualification: benchmark-only`, so it is
+visible to the controlled benchmark runner but cannot become a normal local
+dispatch default. Qwen3.6 and Bonsai are absent from the roster; Gemma4 remains
+outside it until its Aider qualification succeeds.
