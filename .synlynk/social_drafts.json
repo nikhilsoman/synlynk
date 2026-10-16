@@ -1806,5 +1806,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2354 \u2014 approve Local Harness operationalization design (PR #2354, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2354.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-16) - PR #2354\n- Merged improvements and fixes for PR #2354."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/360-pr2356-record-local-model-qualification-evidenc.md",
+    "title": "PR #2356 \u2014 record local model qualification evidence",
+    "author": "nikhilsoman",
+    "date": "2026-10-16",
+    "pr": "#2356",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2356."
+    ],
+    "tweet": "\ud83d\ude80 PR #2356 \u2014 record local model qualification evidence (PR #2356, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2356.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-16) - PR #2356\n- Merged improvements and fixes for PR #2356."
   }
 ]

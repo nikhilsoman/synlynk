@@ -436,6 +436,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [357](./357-pr2340-mock-webbrowser-open-in-test-role-add-id.md) | PR #2340 — mock webbrowser.open in test_role_add_identity_prompt and stub globally (#2339) | [#2340](https://github.com/nikhilsoman/synlynk/pull/2340) | 2026-10-16 |
 | [358](./358-pr2341-add-frontier-lab-architecture-review.md) | PR #2341 — add frontier-lab architecture review | [#2341](https://github.com/nikhilsoman/synlynk/pull/2341) | 2026-10-16 |
 | [359](./359-pr2354-approve-local-harness-operationalization.md) | PR #2354 — approve Local Harness operationalization design | [#2354](https://github.com/nikhilsoman/synlynk/pull/2354) | 2026-10-16 |
+| [360](./360-pr2356-record-local-model-qualification-evidenc.md) | PR #2356 — record local model qualification evidence | [#2356](https://github.com/nikhilsoman/synlynk/pull/2356) | 2026-10-16 |
 
 ## Per-PR Post Template
 
