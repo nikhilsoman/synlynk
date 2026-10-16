@@ -1,7 +1,7 @@
 # Local Harness Operationalization Design
 
 **Date:** 2026-10-16
-**Status:** Proposed — awaiting human approval
+**Status:** Approved by Nikhil on 2026-10-16
 **Epic:** gh:#2342
 **Design ticket:** gh:#2343
 **Goal:** `goal-8d34c416`
