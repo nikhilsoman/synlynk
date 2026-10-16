@@ -2080,6 +2080,42 @@ def test_daemon_jobs_cost_entries_has_dispatch_context_column(project_dir, monke
     conn.close()
 
 
+@pytest.mark.parametrize("dispatch_context", ["home", "headless"])
+def test_cost_entry_inherits_dispatch_context_from_job(project_dir, monkeypatch, dispatch_context):
+    import synlynk
+
+    monkeypatch.setattr(synlynk, "DB_PATH", os.path.join(project_dir, "state.db"))
+    conn = synlynk._get_db()
+    conn.execute(
+        "INSERT INTO daemon_jobs (job_id, agent, task, status, enqueued_at, dispatch_context) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        (f"djob-cost-{dispatch_context}", "codex", "cost context", "completed",
+         "2026-08-06T00:00:00", dispatch_context),
+    )
+    conn.commit()
+    conn.close()
+
+    synlynk._insert_cost_row(
+        session_date="2026-08-06 00:00",
+        agent="codex",
+        model="gpt-test",
+        input_tokens=100,
+        output_tokens=50,
+        cache_read_tokens=0,
+        cost_source="actual",
+        total_cost_usd=0.01,
+        job_id=f"djob-cost-{dispatch_context}",
+    )
+
+    conn = synlynk._get_db()
+    row = conn.execute(
+        "SELECT dispatch_context FROM cost_entries WHERE job_id=?",
+        (f"djob-cost-{dispatch_context}",),
+    ).fetchone()
+    conn.close()
+    assert row == (dispatch_context,)
+
+
 @pytest.mark.parametrize(
     ("isatty", "expected"),
     [(True, "home"), (False, "headless")],

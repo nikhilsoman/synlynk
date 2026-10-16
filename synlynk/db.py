@@ -2324,10 +2324,6 @@ def _insert_cost_row(
             f"Invalid cost_source: {cost_source!r}, must be one of {_VALID_COST_SOURCES}"
         )
 
-    # Distinguish home vs headless dispatch context; detection logic itself is future work (issue #740).
-    if dispatch_context is None:
-        dispatch_context = "unknown"
-
     conn = _get_db()
     try:
         harness_val = harness or agent
@@ -2359,6 +2355,21 @@ def _insert_cost_row(
 
         # Inherit context_mode from the job row when the caller did not pass one
         # so cost rollups can segment by task/full/none without plumbing every path.
+        # Dispatch context follows the same job provenance so cost rows created
+        # by delayed or indirect accounting paths retain home/headless context.
+        if dispatch_context is None and job_id is not None:
+            try:
+                row = conn.execute(
+                    "SELECT dispatch_context FROM daemon_jobs WHERE job_id=?",
+                    (job_id,),
+                ).fetchone()
+                if row and row[0]:
+                    dispatch_context = row[0]
+            except sqlite3.Error:
+                pass
+        if dispatch_context is None:
+            dispatch_context = "unknown"
+
         if context_mode is None and job_id is not None:
             try:
                 row = conn.execute(
