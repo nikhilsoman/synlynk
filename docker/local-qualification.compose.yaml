@@ -1,0 +1,45 @@
+name: synlynk-local-qualification
+
+services:
+  omlx-relay:
+    image: alpine/socat:latest
+    command:
+      - TCP-LISTEN:8000,fork,reuseaddr
+      - TCP:host.docker.internal:8000
+    restart: unless-stopped
+    networks:
+      qualification:
+        aliases:
+          - omlx
+      upstream: {}
+
+  aider:
+    profiles: ["manual"]
+    build:
+      context: ..
+      dockerfile: docker/local-aider.Dockerfile
+      args:
+        AIDER_VERSION: ${AIDER_VERSION:-0.86.2}
+    image: synlynk-local-aider:${AIDER_VERSION:-0.86.2}
+    working_dir: /workspace
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=256m
+      - /home/aider:rw,noexec,nosuid,size=64m
+    environment:
+      HOME: /home/aider
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?set OPENAI_API_KEY before running qualification}
+    networks:
+      - qualification
+    volumes:
+      - type: bind
+        source: ${QUALIFICATION_WORKTREE:?set QUALIFICATION_WORKTREE to a disposable Git worktree}
+        target: /workspace
+
+networks:
+  qualification:
+    internal: true
+  upstream: {}
