@@ -31,3 +31,30 @@ def test_local_driver_accepts_shell_command():
     output = []
     driver.stream_telemetry(runner_id, output.append)
     assert output[0]["message"] == "hello"
+
+
+def test_manager_persists_telemetry_and_result_receipt(tmp_path):
+    conn = sqlite3.connect(str(tmp_path / "state.db"))
+    _migrate_db(conn)
+    manager = RunnerManager({"swarm_runners": {"enabled": ["local"]}}, conn)
+    runner_id = manager.provision(
+        {"command": [sys.executable, "-c", "print('receipt')"], "commit_sha": "abc123"},
+        "local",
+    )
+
+    events = []
+    manager.stream_telemetry(runner_id, events.append)
+    result = manager.collect_results(runner_id)
+    record = manager.list()[0]
+
+    assert events[0]["message"] == "receipt"
+    assert record["last_telemetry_at"] is not None
+    assert record["status"] == "completed"
+    assert record["exit_code"] == 0
+    assert record["commit_sha"] == "abc123"
+    assert json.loads(record["results_json"]) == result
+
+
+def test_fly_driver_is_only_loaded_when_enabled():
+    manager = RunnerManager({"swarm_runners": {"enabled": ["local"], "fly": {"app": "demo"}}})
+    assert set(manager.drivers) == {"local"}

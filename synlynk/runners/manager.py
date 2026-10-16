@@ -21,6 +21,7 @@ class RunnerManager:
         self.config = config if config is not None else load_config()
         self.conn = conn
         self.drivers = {}
+        self._runner_drivers = {}
         self._load_drivers()
 
     def _load_drivers(self):
@@ -34,7 +35,7 @@ class RunnerManager:
             self.drivers["local"] = LocalRunnerDriver(
                 timeout_seconds=runner_config.get("timeout_seconds", 900)
             )
-        if "fly" in enabled or "fly" in runner_config:
+        if "fly" in enabled:
             from synlynk.runners.fly import FlyRunnerDriver
             self.drivers["fly"] = FlyRunnerDriver(runner_config.get("fly", {}))
 
@@ -51,14 +52,53 @@ class RunnerManager:
         driver_name = driver or job_spec.get("driver") or self.config.get("swarm_runners", {}).get("default", "local")
         impl = self.driver(driver_name)
         runner_id = impl.provision(job_spec)
+        self._runner_drivers[runner_id] = driver_name
         if self.conn is not None:
             self.conn.execute(
-                "INSERT OR REPLACE INTO swarm_runners "
-                "(runner_id, driver, status, job_spec, provisioned_at) VALUES (?, ?, ?, ?, ?)",
+                "INSERT INTO swarm_runners "
+                "(runner_id, driver, status, job_spec, provisioned_at) VALUES (?, ?, ?, ?, ?) "
+                "ON CONFLICT(runner_id) DO UPDATE SET driver=excluded.driver, status=excluded.status, "
+                "job_spec=excluded.job_spec, provisioned_at=excluded.provisioned_at, "
+                "last_telemetry_at=NULL, exit_code=NULL, commit_sha=NULL, results_json=NULL, "
+                "error=NULL, destroyed_at=NULL",
                 (runner_id, driver_name, "running", json.dumps(job_spec), _now()),
             )
             self.conn.commit()
         return runner_id
+
+    def stream_telemetry(self, runner_id, callback):
+        record = self._record(runner_id)
+        driver = self.driver(record["driver"])
+
+        def record_event(event):
+            if self.conn is not None:
+                self.conn.execute(
+                    "UPDATE swarm_runners SET last_telemetry_at=? WHERE runner_id=?",
+                    (_now(), runner_id),
+                )
+                self.conn.commit()
+            callback(event)
+
+        driver.stream_telemetry(runner_id, record_event)
+
+    def collect_results(self, runner_id):
+        record = self._record(runner_id)
+        result = self.driver(record["driver"]).collect_results(runner_id)
+        if not isinstance(result, dict):
+            raise TypeError("Runner result must be a dictionary")
+        if self.conn is not None:
+            status = result.get("status") or (
+                "completed" if result.get("exit_code") == 0 else
+                "failed" if result.get("exit_code") is not None else "running"
+            )
+            self.conn.execute(
+                "UPDATE swarm_runners SET status=?, exit_code=?, commit_sha=?, results_json=?, error=? "
+                "WHERE runner_id=?",
+                (status, result.get("exit_code"), result.get("commit_sha"),
+                 json.dumps(result), result.get("error"), runner_id),
+            )
+            self.conn.commit()
+        return result
 
     def list(self, *, include_destroyed=False):
         if self.conn is None:
@@ -83,7 +123,9 @@ class RunnerManager:
 
     def _record(self, runner_id):
         if self.conn is None:
-            return {}
+            if runner_id not in self._runner_drivers:
+                raise ValueError(f"Unknown swarm runner {runner_id!r}")
+            return {"runner_id": runner_id, "driver": self._runner_drivers[runner_id]}
         cursor = self.conn.execute("SELECT * FROM swarm_runners WHERE runner_id=?", (runner_id,))
         row = cursor.fetchone()
         if row is None:
