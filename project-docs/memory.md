@@ -75,3 +75,7 @@
   wizard nor Vizor invoked `first_win_loop.execute_first_win_cycle()`. Keep the module and
   invoke it only after an accepted first-win action; `verify_first_win_effect()` has no
   duplicate git-diff helper elsewhere. [@codex]
+# 2026-10-15 [story-3aeb1c7a swarm runners]: Swarm runner lifecycle is backed by
+# local subprocess, Fly Machines, and Kubernetes Jobs drivers. The manager
+# persists telemetry timestamps and result receipts; Kubernetes uses batch/v1
+# Jobs with TTL cleanup and namespace-scoped operations. [@codex]

@@ -185,3 +185,12 @@ accepted first-win wizard path and the Vizor S10 step handler, kept the unique
 Task 4 blog post. Focused changed-flow tests pass. Full `pytest -q` completed with 4476
 passed but baseline sparse-worktree/missing-artifact failures and unrelated failures remain;
 see verification output in the session transcript. [@codex]
+# 2026-10-15 — story-3aeb1c7a: ephemeral swarm execution infrastructure
+
+- Added Kubernetes Job runner support to `synlynk swarm dispatch --driver k8s`,
+  including namespace, image, command, environment, log, result, and destroy handling.
+- Added manager helpers that persist runner telemetry timestamps and collected
+  result receipts. Local runner environment overrides now inherit the parent
+  environment; Fly's HTTP error import is explicit.
+- Verification: `pytest -q tests/test_runners.py tests/test_swarm_engine.py`
+  passed (13 tests); `git diff --check` passed.
