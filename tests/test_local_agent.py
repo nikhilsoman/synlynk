@@ -10,13 +10,20 @@ from synlynk import local_agent
 
 
 class TestLocalAgentConfigEditFormat(unittest.TestCase):
-    def test_pinned_ornith_model_uses_diff_edit_format(self):
+    def test_active_roster_pins_ornith_and_keeps_qwen_benchmark_only(self):
         repo_root = Path(__file__).resolve().parents[1]
         with open(repo_root / ".agents" / "local.json") as f:
             config = json.load(f)
-        self.assertEqual(config["pinned_model"], "Ternary-Bonsai-2-27B-mlx-2bit")
+        self.assertEqual(config["pinned_model"], "Ornith-1.0-9B-4bit")
         ornith = next(m for m in config["models"] if m["id"] == "Ornith-1.0-9B-4bit")
         self.assertEqual(ornith["edit_format"], "diff")
+        qwen = next(
+            m for m in config["models"] if m["id"] == "Qwen2.5-Coder-14B-Instruct-4bit"
+        )
+        self.assertFalse(qwen["dispatch_eligible"])
+        self.assertEqual(qwen["qualification"], "benchmark-only")
+        self.assertNotIn("Qwen3.6-27B-4bit", [m["id"] for m in config["models"]])
+        self.assertNotIn("Ternary-Bonsai-2-27B-mlx-2bit", [m["id"] for m in config["models"]])
 
 
 class TestPrismMlCheck(unittest.TestCase):
@@ -61,30 +68,19 @@ class TestSelectModelForTier(unittest.TestCase):
             {
                 "id": "Ornith-1.0-9B-4bit",
                 "edit_format": "diff",
-                "tier": ["8gb-light", "16gb-default"],
+                "tier": ["8gb-light", "16gb-default", "32gb-pro", "64gb-fleet"],
             },
             {
-                "id": "Qwen3.6-27B-4bit",
+                "id": "Qwen2.5-Coder-14B-Instruct-4bit",
                 "edit_format": "whole",
+                "dispatch_eligible": False,
                 "tier": ["64gb-fleet"],
-            },
-            {
-                "id": "Ternary-Bonsai-2-27B-mlx-2bit",
-                "edit_format": "diff",
-                "loader": "prism-ml",
-                "tier": ["32gb-pro", "64gb-fleet"],
             },
         ]
     }
 
-    def test_32gb_pro_returns_bonsai_when_loader_present(self):
-        with patch("importlib.util.find_spec", return_value=object()):
-            result = local_agent._select_model_for_tier("32gb-pro", self.CONFIG)
-        self.assertEqual(result, "Ternary-Bonsai-2-27B-mlx-2bit")
-
-    def test_32gb_pro_falls_back_to_ornith_when_loader_absent(self):
-        with patch("importlib.util.find_spec", return_value=None):
-            result = local_agent._select_model_for_tier("32gb-pro", self.CONFIG)
+    def test_64gb_fleet_falls_back_to_ornith_when_only_benchmark_model_matches(self):
+        result = local_agent._select_model_for_tier("64gb-fleet", self.CONFIG)
         self.assertEqual(result, "Ornith-1.0-9B-4bit")
 
     def test_8gb_light_returns_ornith(self):
@@ -100,6 +96,30 @@ class TestNewRosterSchema(unittest.TestCase):
     def test_falls_back_to_model_pinned_field_when_top_level_absent(self):
         config = {"models": [{"id": "a", "pinned": True}]}
         self.assertEqual(local_agent._pinned_model(config), "a")
+
+    def test_ignores_benchmark_only_pinned_model(self):
+        config = {
+            "pinned_model": "qwen",
+            "models": [
+                {"id": "ornith", "pinned": True},
+                {"id": "qwen", "dispatch_eligible": False},
+            ],
+        }
+        self.assertEqual(local_agent._pinned_model(config), "ornith")
+
+    def test_returns_empty_dispatch_flags_when_no_model_is_eligible(self):
+        config = {
+            "endpoint": "http://127.0.0.1:8000",
+            "models": [{"id": "qwen", "dispatch_eligible": False}],
+            "pinned_model": "qwen",
+        }
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump(config, f)
+            path = f.name
+        try:
+            self.assertEqual(local_agent._local_dispatch_model_flags(path), [])
+        finally:
+            os.unlink(path)
 
     def test_bonsai_excluded_when_prism_ml_absent(self):
         config = {
