@@ -1,0 +1,26 @@
+{
+  "schema": "architecture-review-evidence.v1",
+  "date": "2026-10-16",
+  "commit": "19132dfabd1ecca9de7a9f06b1a8691262d90d1b",
+  "scope": "selected subsystem tests and isolated logic reproductions; not full-suite or live-provider certification",
+  "test_runs": [
+    {"passed": 96, "xfailed": 5, "duration_seconds": 3.31},
+    {"passed": 27, "xfailed": 0, "duration_seconds": 12.24}
+  ],
+  "sqlite_short_concurrency": [
+    {"threads": 20, "transactions_per_thread": 8, "successful_transactions": 160, "lock_failures": 0, "p95_seconds": 0.010671855934197215},
+    {"threads": 50, "transactions_per_thread": 8, "successful_transactions": 400, "lock_failures": 0, "p95_seconds": 0.03975463987590049}
+  ],
+  "reproductions": {
+    "supervised_scheduler": {"can_auto_advance_execute": false, "schedule_execute_requested": true, "method": "mock external bookkeeping and schedule; invoke real autonomy pass"},
+    "capability_attribution": {"input_harnesses": ["codex", "grok"], "input_costs": [1.0, 20.0], "surviving_bucket": "codex/implement", "surviving_costs": [1.0, 20.0], "surviving_cycles": [1, 1], "method": "real build_buckets with in-memory SQLite and shared story"},
+    "openrouter_registry": {"result": "KeyError", "method": "real get_adapter lookup; no dispatch"},
+    "legacy_mutation_no_verification": {"verified": true, "status": "completed", "tests_passed": null, "method": "mock changed-file inspection only"},
+    "legacy_unknown_task_class": {"verified": true, "status": "completed", "method": "real verifier with unrecognized task_class"},
+    "status_read": {"commands": ["synlynk status", "synlynk watch status"], "result": "failed during reconciliation: canonical DB write permission denied", "environment": "workspace-write sandbox"}
+  },
+  "decision_json_records_including_uncommitted_overlay": 54,
+  "github": {"issue_2328_comments_read": true, "pr_2338_implementation_reported_in_comment": true, "pr_2338_merge_verified": false, "other_issue_lookups": "connection failures"},
+  "actual_session_cost_usd": null,
+  "production_changes_authorized_or_performed": false
+}
