@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>gh:#1924 PR5 — Claude, Local, and the End of the Strangler Pattern | The OS for multi-agent development</title>
+  <!-- Google Fonts: Inter + JetBrains Mono (per spec) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <!-- Fixed nav: desktop keeps full link row; mobile collapses behind hamburger -->
+  <nav>
+    <a href="/" class="nav-logo">
+      <img src="/assets/img/logo/s-glyph.svg" alt="synlynk" width="28" height="28">
+      <span class="nav-brand">synlynk</span>
+    </a>
+    <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav">
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+      <span class="nav-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+    </div>
+    <a href="https://github.com/nikhilsoman/synlynk" class="nav-cta" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+
+  <main>
+    
+<article class="blog-post-page">
+  <!-- Hero Banner Area (Using fallback sequence gradients) -->
+  <div class="blog-post-hero-fallback fallback-grad-3">
+    <div class="blog-post-hero-content">
+      <div class="blog-post-meta">
+        <a href="/blog/" class="blog-back-link">← Back to Blog</a>
+        <span class="blog-post-date">Oct 03, 2026</span>
+        
+          <span class="blog-post-pr">PR 1967</span>
+        
+      </div>
+      <h1 class="blog-post-title">gh:#1924 PR5 — Claude, Local, and the End of the Strangler Pattern</h1>
+    </div>
+  </div>
+
+  <!-- Post Content Area -->
+  <div class="blog-post-container">
+    <div class="blog-post-prose">
+      <h2>The Broader Goal at the End of the Previous PR</h2>
+<p>PR4 (#1965) had just put Agy on the <code>HarnessAdapter</code> protocol, leaving one port outstanding. The
+goalpost coming into PR5 was explicit from #1965's own closing line: port Claude and local, then
+delete <code>LegacyAdapter</code> once nothing in the registry still depends on it — closing out gh:#1924
+entirely.</p>
+<h2>Strategic Shifts in This PR</h2>
+<p>The plan said &quot;delete <code>LegacyAdapter</code>.&quot; The PR that shipped does not. That's not scope creep —
+it's a correction the first version of this PR got wrong and CI caught immediately.</p>
+<p><code>dispatch_agent()</code>'s original fallback was:</p>
+<pre><code class="language-python">try:
+    adapter = get_adapter(request.agent)
+except KeyError:
+    from synlynk.harness_adapters.legacy import LegacyAdapter
+    adapter = LegacyAdapter(agent=request.agent)
+</code></pre>
+<p>PR5's first commit replaced this with a bare <code>get_adapter(request.agent)</code> call, on the
+assumption that once all five core harnesses had adapters, nothing could still hit the
+<code>KeyError</code> branch. That assumption was wrong: <code>muse</code> (Meta Muse, Milestone v0.20.0 Cluster D,
+#1508) is a sixth harness that was never in scope for this five-harness migration, and it was
+never going to get its own adapter here. All four CI matrix jobs failed identically —
+<code>tests/test_muse_harness.py::test_muse_dispatch_flags_and_command_construction</code> raising
+<code>KeyError: 'muse'</code> straight out of <code>registry.py</code>.</p>
+<p>The fix restored the fallback exactly as it was, and un-deleted <code>legacy.py</code> and
+<code>test_legacy_adapter.py</code>, which the same first commit had also removed. <code>LegacyAdapter</code> is now
+explicitly permanent infrastructure — the generic landing spot for any harness name outside this
+migration's five-harness scope, not a placeholder scheduled for deletion once the migration
+finished. The strangler pattern strangled the <em>conditionals</em>, not the <em>concept</em> of a fallback.</p>
+<h2>What This PR Shipped</h2>
+<ul>
+<li><strong><code>ClaudeAdapter</code></strong> and <strong><code>LocalAdapter</code></strong> implementing the <code>HarnessAdapter</code> protocol, matching
+the <code>translate_permissions()</code> / <code>build_cmd()</code> / <code>parse_output()</code> / <code>classify_failure()</code> /
+<code>resolve_model()</code> shape already established by <code>CodexAdapter</code>, <code>GrokAdapter</code>, and <code>AgyAdapter</code>.</li>
+<li><strong><code>LocalAdapter</code> fails closed.</strong> aider (the local/oMLX harness) has no mechanism to enforce a
+read-only or file-scope restriction, so <code>translate_permissions()</code> raises
+<code>PermissionEnforcementError</code> the moment any permission is requested, rather than silently
+granting full read/write access it can't actually bound. Architect review specifically verified
+this is enforced, not just asserted in a test.</li>
+<li><strong><code>registry.py</code></strong> now registers exactly five harnesses — <code>codex</code>, <code>grok</code>, <code>agy</code>, <code>claude</code>,
+<code>local</code> — and nothing else. <code>muse</code> (and any future sixth harness) stays on the <code>LegacyAdapter</code>
+fallback by design.</li>
+</ul>
+<h2>Caught in Review</h2>
+<p>Two things surfaced after the muse regression was fixed, both before merge:</p>
+<ol>
+<li><strong>A real merge conflict</strong>, not a stale GitHub cache artifact. PR #1962 landed on <code>main</code>
+mid-flight, also touching README's test-count badge/hero line — the same CI gate that had
+already bitten PR4 and PR4's predecessor. <code>gh pr update-branch</code> correctly refused (it only
+handles non-conflicting fast-forwards), so the fix was a manual merge, re-running
+<code>pytest --collect-only -q</code> on the merged branch to get the <em>true</em> count (3764) rather than
+taking either side's stale number, and patching both the badge and the hero line to match.</li>
+<li><strong>Branch protection caught a second gap after merge, on the next PR in the queue.</strong> #1966
+(this same session's blog-batch PR) merged to <code>main</code> just ahead of #1967, which put #1967's
+branch <code>BEHIND</code> again. One <code>gh pr update-branch</code> cycle, a CI re-run (all six checks green),
+and the merge went through clean — exactly the &quot;at most 2 update-branch → CI-wait cycles&quot;
+discipline this repo's PR Review Discipline calls for.</li>
+</ol>
+<p>Architect review (non-author, routed here rather than qa because this PR is
+architecture-impacting — it closes a cross-cutting migration) verified the restored fallback,
+confirmed <code>legacy.py</code>/<code>test_legacy_adapter.py</code> exist, confirmed the registry's exact five-harness
+membership, and ran the full suite: 3,759 passed, 4 skipped, 1 sandbox-only logger failure that
+passes with an isolated writable <code>HOME</code>. Approved.</p>
+<h2>What Was Achieved Toward the Long-Arc Goal</h2>
+<p>All five harnesses — Codex, Grok, Agy, Claude, local — now route through dedicated
+<code>HarnessAdapter</code> implementations instead of the scattered if/elif branching that used to live
+directly in <code>dispatch_agent()</code>. Each of the four ports in this series caught something real
+before it shipped: Grok's port surfaced a stale capability-routing bug; Agy's port caught a
+missing lifecycle-telemetry population; Claude/local's port caught its own regression against a
+harness explicitly outside the migration's scope. The pattern did exactly what it was brought in
+to do — turn harness-specific quirks into isolated, testable, single-adapter concerns instead of
+silent gaps in a shared conditional.</p>
+<p>gh:#1924 is closed.</p>
+<h2>The New Goalpost</h2>
+<p>The adapter migration itself is done; what it leaves behind is a cost-anomaly thread worth
+watching. Three of the four dispatch jobs that reviewed and fixed this PR cluster (#1966 and
+#1967 together) ran 6x–130x over their own preflight cost estimates, two of them tripping
+critical cost-inflation sentinels ($14.69 and $21.34 on jobs whose estimates were under a
+dollar). Filed as #1969 rather than folded into the five prior cost-inflation issues that closed
+without a hard cap — this one has harder evidence (same session, same PR cluster, consecutive
+jobs) and a specific suspected mechanism (conflict-resolution retries inside a dispatch possibly
+not respecting <code>--context-mode</code>'s intent to minimize injected context). That's the next thread to
+pull, not another adapter port.</p>
+<p>Refs #1924, #1969.</p>
+
+    </div>
+    
+    <div class="blog-post-footer">
+      <a href="/blog/" class="blog-footer-back-link">← Back to all posts</a>
+    </div>
+  </div>
+</article>
+
+  </main>
+
+  <!-- Footer stub -->
+  <footer>
+    <div>
+      <span>© 2026 synlynk · MIT License</span>
+    </div>
+    <div>
+      <a href="https://github.com/nikhilsoman/synlynk" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs/">Docs</a>
+      <a href="/features/">Features</a>
+      <a href="/blog/">Blog</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/about/">About</a>
+      <a href="/#waitlist">Waitlist</a>
+    </div>
+  </footer>
+
+  <script src="/assets/js/carousel.js"></script>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
