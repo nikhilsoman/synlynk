@@ -8,6 +8,11 @@ def greet(name: str) -> str:
     return f"Hello, {name}!"
 
 
+def double(number: int) -> int:
+    """Return twice the given number."""
+    return number * 2
+
+
 def active_items(items: list[dict]) -> list[dict]:
     """Return items whose ``active`` flag is truthy."""
     return [item for item in items if item.get("active")]

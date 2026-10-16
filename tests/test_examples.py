@@ -1,4 +1,8 @@
-from synlynk.examples import active_items, greet
+from synlynk.examples import active_items, double, greet
+
+
+def test_double_returns_twice_the_number():
+    assert double(4) == 8
 
 
 def test_greet_returns_a_friendly_message():
