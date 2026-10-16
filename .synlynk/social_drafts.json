@@ -1870,5 +1870,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2351 \u2014 modernize authenticated local hardware checks (PR #2351, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2351.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-16) - PR #2351\n- Merged improvements and fixes for PR #2351."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/364-pr2364-retry-concurrent-schema-refresh.md",
+    "title": "PR #2364 \u2014 retry concurrent schema refresh",
+    "author": "nikhilsoman",
+    "date": "2026-10-16",
+    "pr": "#2364",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2364."
+    ],
+    "tweet": "\ud83d\ude80 PR #2364 \u2014 retry concurrent schema refresh (PR #2364, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2364.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-16) - PR #2364\n- Merged improvements and fixes for PR #2364."
   }
 ]

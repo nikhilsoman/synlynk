@@ -440,6 +440,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [361](./361-pr2358-tolerate-concurrent-quality-repair.md) | PR #2358 — tolerate concurrent quality repair | [#2358](https://github.com/nikhilsoman/synlynk/pull/2358) | 2026-10-16 |
 | [362](./362-pr2355-isolate-aider-qualification-network.md) | PR #2355 — isolate Aider qualification network | [#2355](https://github.com/nikhilsoman/synlynk/pull/2355) | 2026-10-16 |
 | [363](./363-pr2351-modernize-authenticated-local-hardware-c.md) | PR #2351 — modernize authenticated local hardware checks | [#2351](https://github.com/nikhilsoman/synlynk/pull/2351) | 2026-10-16 |
+| [364](./364-pr2364-retry-concurrent-schema-refresh.md) | PR #2364 — retry concurrent schema refresh | [#2364](https://github.com/nikhilsoman/synlynk/pull/2364) | 2026-10-16 |
 
 ## Per-PR Post Template
 
