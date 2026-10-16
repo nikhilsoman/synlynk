@@ -2324,7 +2324,7 @@ def _insert_cost_row(
             f"Invalid cost_source: {cost_source!r}, must be one of {_VALID_COST_SOURCES}"
         )
 
-    # Distinguish home vs headless dispatch context; detection logic itself is future work (issue #740).
+    # Preserve a concrete default for cost rows that are not linked to a dispatch.
     if dispatch_context is None:
         dispatch_context = "unknown"
 
