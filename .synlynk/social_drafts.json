@@ -1742,5 +1742,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #1970 \u2014 post 243 for PR #1967 \u2014 Claude/local adapter port, gh:#1924 close (PR #1970, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #1970.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-16) - PR #1970\n- Merged improvements and fixes for PR #1970."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/278-pr2334-worktree-hygiene-audit-1487.md",
+    "title": "PR #2334 \u2014 archive unique unmerged worktree content (gh:#1487)",
+    "author": "synlynk-qa agent",
+    "date": "2026-10-16",
+    "pr": "#2334",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2334."
+    ],
+    "tweet": "\ud83d\ude80 PR #2334 \u2014 archive unique unmerged worktree content (gh:#1487) (PR #2334, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2334.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-16) - PR #2334\n- Merged improvements and fixes for PR #2334."
   }
 ]
