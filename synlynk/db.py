@@ -2263,13 +2263,41 @@ def _run_legacy_migration_and_repairs(conn: sqlite3.Connection) -> None:
     # before adding this column (or while the schema was bootstrapped by an
     # older build).  In that state, the version-gated migration above is a
     # no-op and _get_db() must still repair the missing column.
-    rating_cols = {row[1] for row in conn.execute("PRAGMA table_info(capability_ratings)")}
-    if "quality_verified" not in rating_cols:
-        conn.execute("ALTER TABLE capability_ratings ADD COLUMN quality_verified INTEGER")
-        conn.commit()
+    _add_column_if_missing(
+        conn,
+        table="capability_ratings",
+        column="quality_verified",
+        definition="INTEGER",
+    )
 
     _migrate_onboarding_sessions(conn)
     conn.commit()
+
+
+def _add_column_if_missing(
+    conn: sqlite3.Connection,
+    *,
+    table: str,
+    column: str,
+    definition: str,
+) -> None:
+    """Add an additive schema column, tolerating a concurrent migrator.
+
+    Startup can open the same state database from two CLI processes.  Both
+    processes can observe a missing column before one wins the ``ALTER TABLE``.
+    SQLite reports the losing operation as ``duplicate column name``; that
+    specific result means the requested repair is already complete.
+    """
+    columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+    if column in columns:
+        return
+    try:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+    except sqlite3.OperationalError as exc:
+        if "duplicate column name" not in str(exc).lower():
+            raise
+    else:
+        conn.commit()
 
 
 def _migrate_db(conn: sqlite3.Connection) -> None:
