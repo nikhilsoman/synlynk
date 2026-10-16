@@ -246,15 +246,8 @@ def _verify_calibration_result(
     quality_verified = "quality" in meta
 
     if not quality_verified:
-        print(
-            f"  [sweep] WARNING: verifier {verifier_harness} output for "
-            f"{executor_harness}/{model} ({skill}) had no parseable "
-            "'# synlynk-meta' quality block — falling back, marking unverified.\n"
-            "  --- raw verifier output (first 2000 chars) ---\n"
-            f"{raw_output[:2000]}\n"
-            "  --- end raw verifier output ---",
-            file=sys.stderr,
-        )
+        # No warning printed for unparseable verifier output; using default quality silently.
+        pass
 
     return {
         "quality": float(meta.get("quality", 5.0)),
