@@ -1,3 +1,4 @@
+import hashlib
 import os
 import sqlite3
 import subprocess
@@ -2781,6 +2782,10 @@ def test_local_pilot_dispatch_uses_isolated_runner_and_records_cohort_receipt(pr
         },
     )
     monkeypatch.setattr("synlynk.harness_adapters.registry.get_adapter", lambda agent: adapter)
+    monkeypatch.setattr("synlynk.local_pilot.load_pilot_runtime", lambda root: {
+        "enabled": True, "qualified": True, "isolated": True,
+        "share": 0.2, "qualified_models": ["ornith"],
+    })
     runner_calls = []
 
     def fake_build(**kwargs):
@@ -2800,14 +2805,23 @@ def test_local_pilot_dispatch_uses_isolated_runner_and_records_cohort_receipt(pr
         return type("DummyProc", (), {"pid": 9998})()
 
     monkeypatch.setattr(dispatch_mod.subprocess, "Popen", fake_popen)
-    receipt = {
+    receipt_payload = {
         "route_local": True, "reason": "eligible_local_cohort",
         "pilot_class": "test_summary", "share": 0.2, "bucket": 137,
         "dispatch_key_sha256": "receipt-key-hash",
+        "dispatch_key": "test-2", "task_sha256": hashlib.sha256(
+            b"summarize focused test output"
+        ).hexdigest(),
+        "role": "dev", "scope_paths": ["test.log"],
+        "requested_model": None,
+        "effective_model": "ornith", "qualified_models": ["ornith"],
+        "edit_format": "diff", "model_health": "available",
     }
+    receipt = dispatch_mod._seal_local_pilot_receipt(receipt_payload)
     job = dispatch_mod.dispatch_agent(
         agent="local", task="summarize focused test output", role="dev",
-        skip_preflight=True, context_mode="none", local_pilot_receipt=receipt,
+        skip_preflight=True, context_mode="none", scope_paths=["test.log"],
+        local_pilot_receipt=receipt,
     )
 
     assert len(runner_calls) == 1
@@ -2816,11 +2830,37 @@ def test_local_pilot_dispatch_uses_isolated_runner_and_records_cohort_receipt(pr
     assert spawned[0][1]["env"]["OPENAI_API_KEY"] == "local-pilot-test-key"
     assert "GH_TOKEN" not in spawned[0][1]["env"]
     expected_receipt = {
-        **receipt,
+        **{key: value for key, value in receipt_payload.items() if key != "dispatch_key"},
         "result_receipt_file": job["log_file"] + ".pilot.json",
     }
     assert job["local_pilot_receipt"] == expected_receipt
     assert job["local_model_receipt"]["pilot"] == expected_receipt
+
+
+def test_local_pilot_rejects_forged_or_replayed_for_different_task_receipts(project_dir):
+    import synlynk.dispatch as dispatch_mod
+
+    forged = {"route_local": True, "pilot_class": "test_summary"}
+    with pytest.raises(RuntimeError, match="invalid Local Pilot routing receipt"):
+        dispatch_mod.dispatch_agent(
+            agent="local", task="summarize something", role="dev",
+            local_pilot_receipt=forged,
+        )
+
+    payload = {
+        "route_local": True, "reason": "eligible_local_cohort",
+        "pilot_class": "test_summary", "share": 0.2, "bucket": 137,
+        "dispatch_key_sha256": "receipt-key-hash", "dispatch_key": "test-2",
+        "task_sha256": hashlib.sha256(b"original task").hexdigest(),
+        "role": "dev", "scope_paths": ["test.log"], "requested_model": None,
+        "effective_model": "ornith", "qualified_models": ["ornith"],
+    }
+    signed = dispatch_mod._seal_local_pilot_receipt(payload)
+    with pytest.raises(RuntimeError, match="admission no longer matches"):
+        dispatch_mod.dispatch_agent(
+            agent="local", task="different task", role="dev",
+            scope_paths=["test.log"], local_pilot_receipt=signed,
+        )
 
 
 def test_local_dispatch_rejects_approved_model_not_live_before_aider(project_dir, monkeypatch):

@@ -1,10 +1,12 @@
 """synlynk dispatch: preflight gates, agent dispatch, exec wrapper."""
 
 import hashlib
+import hmac
 import json
 import os
 import random
 import re
+import secrets
 import shutil
 from dataclasses import asdict
 import select
@@ -44,6 +46,24 @@ _ORG_ROLE_TO_BASELINE_ROLE = {
 _GH_WRITE_HARNESS_PRIORITY = ("codex", "grok", "claude", "agy")
 _STARTUP_FAILOVER_ORDER = ("codex", "agy", "claude")
 _CODEX_REVIEW_WRITABLE_ROOTS = "sandbox_workspace_write.writable_roots=[]"
+_LOCAL_PILOT_RECEIPT_KEY = secrets.token_bytes(32)
+
+
+def _seal_local_pilot_receipt(payload: dict) -> dict:
+    """Authenticate an in-process pilot admission decision."""
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    signature = hmac.new(_LOCAL_PILOT_RECEIPT_KEY, canonical, hashlib.sha256).hexdigest()
+    return {**payload, "_signature": signature}
+
+
+def _verify_local_pilot_receipt(receipt: dict) -> bool:
+    signature = receipt.get("_signature")
+    if not isinstance(signature, str):
+        return False
+    payload = {key: value for key, value in receipt.items() if key != "_signature"}
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    expected = hmac.new(_LOCAL_PILOT_RECEIPT_KEY, canonical, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(signature, expected)
 
 # Model selection is deliberately independent from workspace role and harness.
 # These are adapter-facing defaults; an explicit ``model`` always wins.
@@ -291,6 +311,7 @@ def _resolve_dispatch_agent(
     pilot_class: Optional[str] = None,
     dispatch_key: Optional[str] = None,
     scope_paths: Optional[list[str]] = None,
+    requested_model: Optional[str] = None,
 ) -> str:
     """Resolve ``auto`` to the isolated local pilot only for admitted work."""
     global _pending_local_pilot_receipt
@@ -346,6 +367,7 @@ def _resolve_dispatch_agent(
 
         model_resolution = resolve_effective_local_model(
             config_path=os.path.join(os.getcwd(), ".agents", "local.json"),
+            requested_model=requested_model,
             require_live_inventory=True,
         )
     except Exception as exc:
@@ -362,7 +384,7 @@ def _resolve_dispatch_agent(
         _log_routing_fallback(message, requested="local", actual=fallback)
         return fallback
     score = _get_local_capability_score(task_type, db)
-    _pending_local_pilot_receipt = {
+    _pending_local_pilot_receipt = _seal_local_pilot_receipt({
         "route_local": True,
         "reason": decision.reason,
         "pilot_class": decision.pilot_class,
@@ -371,12 +393,17 @@ def _resolve_dispatch_agent(
         "dispatch_key_sha256": hashlib.sha256(
             str(dispatch_key or task).encode("utf-8")
         ).hexdigest(),
+        "dispatch_key": str(dispatch_key or task),
+        "task_sha256": hashlib.sha256(task.encode("utf-8")).hexdigest(),
+        "role": role,
+        "scope_paths": list(scope_paths or []),
+        "requested_model": requested_model,
         "qualified_models": runtime["qualified_models"],
         "effective_model": model_resolution["effective_model"],
         "edit_format": model_resolution["edit_format"],
         "model_health": model_resolution["health"],
         "historical_capability_score": score,
-    }
+    })
     print(f"Routing to: local (pilot {decision.share:.0%}; capability score: {score:.2f})")
     return "local"
 
@@ -4048,7 +4075,11 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             "--task is empty or whitespace-only; refusing to dispatch (see #720)"
         )
     if local_pilot_receipt:
-        if agent != "local" or not local_pilot_receipt.get("route_local"):
+        if (
+            agent != "local"
+            or not local_pilot_receipt.get("route_local")
+            or not _verify_local_pilot_receipt(local_pilot_receipt)
+        ):
             raise RuntimeError("invalid Local Pilot routing receipt; refusing dispatch")
         if requires_gh_write or _task_requires_gh_write(task, task_type=task_type):
             raise RuntimeError("Local Pilot cannot execute GitHub-write work")
@@ -4056,6 +4087,41 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
             raise RuntimeError(
                 "Local Pilot uses its fixed isolated Compose runner; custom container images are refused"
             )
+        from synlynk.local_pilot import evaluate_local_pilot, load_pilot_runtime
+
+        receipt_payload = {
+            key: value for key, value in local_pilot_receipt.items() if key != "_signature"
+        }
+        runtime = load_pilot_runtime(os.getcwd())
+        decision = evaluate_local_pilot(
+            enabled=runtime["enabled"],
+            qualified=runtime["qualified"],
+            isolated=runtime["isolated"],
+            pilot_class=receipt_payload.get("pilot_class"),
+            role=role,
+            requires_gh_write=requires_gh_write,
+            share=runtime["share"],
+            dispatch_key=receipt_payload.get("dispatch_key"),
+            task=task,
+            scope_paths=scope_paths or [],
+        )
+        if (
+            not decision.route_local
+            or decision.share != receipt_payload.get("share")
+            or decision.bucket != receipt_payload.get("bucket")
+            or decision.pilot_class != receipt_payload.get("pilot_class")
+            or receipt_payload.get("task_sha256")
+            != hashlib.sha256(task.encode("utf-8")).hexdigest()
+            or receipt_payload.get("role") != role
+            or receipt_payload.get("scope_paths") != list(scope_paths or [])
+            or receipt_payload.get("requested_model") != model
+        ):
+            raise RuntimeError("Local Pilot admission no longer matches dispatch request")
+        # Drop the signing material and raw cohort key before persisting the
+        # receipt; task identity remains auditable via its one-way digest.
+        local_pilot_receipt = {
+            key: value for key, value in receipt_payload.items() if key != "dispatch_key"
+        }
     if routing_fallback is None:
         routing_fallback = take_routing_fallback(agent)
     if task_type:
@@ -4138,6 +4204,14 @@ def dispatch_agent(agent: str, task: str, story_id: str = None,
     # Preserve the old model parameter/flag while making the resolved
     # model explicit in the job contract.
     model = model_routing["resolved_model"]
+    if local_pilot_receipt:
+        if (
+            model != local_pilot_receipt.get("effective_model")
+            or model not in local_pilot_receipt.get("qualified_models", [])
+        ):
+            raise RuntimeError(
+                "resolved Local Pilot model differs from the qualified admission receipt"
+            )
     # W5: when a product registry exists, role/type dispatch must resolve the
     # product-owned type rather than silently treating an arbitrary string as
     # an identity. Legacy repos without a registry retain role-only dispatch.

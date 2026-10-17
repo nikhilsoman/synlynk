@@ -214,6 +214,7 @@ def test_isolated_runner_cleans_up_compose_and_redacts_persisted_logs(tmp_path, 
     source = tmp_path / "source"
     source.mkdir()
     (source / "test.log").write_text("passed")
+    (source / "private.md").write_text("out of scope source must not enter the model mount")
     subprocess.run(["git", "init", "--quiet", str(source)], check=True)
     subprocess.run(["git", "-C", str(source), "add", "--all"], check=True)
     subprocess.run(
@@ -225,12 +226,19 @@ def test_isolated_runner_cleans_up_compose_and_redacts_persisted_logs(tmp_path, 
     compose_calls = []
     compose_envs = []
     scratch_entries = []
+    scratch_files = []
 
     def fake_run(argv, env):
         compose_calls.append(argv)
         compose_envs.append(dict(env))
         if env.get("PILOT_WORKTREE"):
             scratch_entries.append(sorted(os.listdir(env["PILOT_WORKTREE"])))
+            scratch_files.append(sorted(
+                os.path.relpath(os.path.join(root, name), env["PILOT_WORKTREE"])
+                for root, _, names in os.walk(env["PILOT_WORKTREE"])
+                for name in names
+                if ".git" not in os.path.relpath(root, env["PILOT_WORKTREE"]).split(os.sep)
+            ))
         return subprocess.CompletedProcess(argv, 0, b"", b"")
 
     class FakeChild:
@@ -266,5 +274,6 @@ def test_isolated_runner_cleans_up_compose_and_redacts_persisted_logs(tmp_path, 
     assert receipt["changed_paths"] == []
     assert compose_envs[0]["PILOT_WORKTREE"] != str(source)
     assert scratch_entries[0] == [".git", "test.log"]
+    assert scratch_files[0] == ["test.log"]
     assert compose_calls[0][5:8] == ["job-test", "up", "--detach"]
     assert compose_calls[-1][-2:] == ["down", "--remove-orphans"]

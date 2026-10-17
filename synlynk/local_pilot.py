@@ -209,8 +209,8 @@ def build_isolated_compose_shell(
 ) -> tuple[list[str], dict]:
     """Build a one-shot Docker Compose command with a closed Aider network.
 
-    The runner builds a tracked-file-only scratch repository from the
-    disposable job worktree. No Git metadata, untracked files, or secrets are
+    The runner builds a declared-scope-only scratch repository from the
+    disposable job worktree. No out-of-scope files or host Git metadata are
     mounted into Aider. No setup failure falls back to host execution.
     """
     if not env.get("OPENAI_API_KEY"):
@@ -272,7 +272,7 @@ def build_isolated_compose_shell(
         {
             "PILOT_UID": str(os.getuid()),
             "PILOT_GID": str(os.getgid()),
-            # The runner replaces this with a fresh tracked-file scratch repo.
+            # The runner replaces this with a fresh declared-scope scratch repo.
             "PILOT_WORKTREE": "",
             "OPENAI_API_KEY": env["OPENAI_API_KEY"],
         }

@@ -2602,6 +2602,7 @@ def main(argv=None) -> None:
                             or args.task
                         ),
                         scope_paths=getattr(args, "scope_paths", []),
+                        requested_model=getattr(args, "model", None),
                     )
                     local_pilot_receipt = take_local_pilot_receipt()
                 finally:

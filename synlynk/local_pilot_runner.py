@@ -60,23 +60,24 @@ def _run_captured(argv: list[str], env: dict) -> subprocess.CompletedProcess:
     return subprocess.run(argv, env=env, capture_output=True, check=False)
 
 
-def _tracked_file_copy(source: str, destination: str) -> None:
-    result = subprocess.run(
-        ["git", "-C", source, "ls-files", "-z"],
-        capture_output=True,
-        check=False,
-    )
-    if result.returncode != 0:
-        raise RuntimeError("cannot enumerate tracked source files for isolated pilot")
+def _scoped_file_copy(source: str, destination: str, scope_paths: list[str]) -> None:
+    """Copy only files explicitly admitted by the declared path scope."""
     source_root = os.path.realpath(source)
-    for raw_path in result.stdout.split(b"\0"):
-        if not raw_path:
-            continue
-        relative = raw_path.decode("utf-8", errors="surrogateescape").replace("\\", "/")
-        if relative == ".synlynk" or relative.startswith(".synlynk/"):
-            continue
-        if relative == ".git" or relative.startswith(".git/"):
-            continue
+    selected = set()
+    for pattern in scope_paths:
+        if not valid_scope_path(pattern):
+            raise RuntimeError("Local Pilot scope contains an unsafe path")
+        for candidate in Path(source).glob(pattern):
+            if not candidate.is_file():
+                continue
+            relative = candidate.relative_to(source).as_posix()
+            if not valid_scope_path(relative):
+                raise RuntimeError("Local Pilot scope selected a forbidden state path")
+            selected.add(relative)
+    if not selected:
+        raise RuntimeError("Local Pilot scope did not match a file in the source worktree")
+
+    for relative in sorted(selected):
         src_path = os.path.join(source, relative)
         if not os.path.lexists(src_path):
             continue
@@ -222,7 +223,7 @@ def run_isolated_dispatch(
     try:
         if find_sensitive_worktree_paths(source_worktree):
             raise RuntimeError("source worktree contains credential-like paths")
-        _tracked_file_copy(source_worktree, scratch)
+        _scoped_file_copy(source_worktree, scratch, scope_paths)
         expanded_scope = _expanded_scope(scratch, scope_paths, require_existing=True)
         if not expanded_scope:
             raise RuntimeError("Local Pilot scope resolved to no files")

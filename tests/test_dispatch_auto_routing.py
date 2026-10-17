@@ -26,10 +26,10 @@ def test_read_local_threshold_reads_workspace_json(tmp_path, monkeypatch):
 
 class TestResolveDispatchAgent(unittest.TestCase):
     def _resolve(self, requested, task_type="testing", preflight_ok=True, cap_score=0.8,
-                 pilot_class="test_summary", dispatch_key="test-2"):
+                 pilot_class="test_summary", dispatch_key="test-2", requested_model=None):
         import synlynk.dispatch as dispatch_mod
         def resolve_model(**_kwargs):
-            if not preflight_ok:
+            if not preflight_ok or _kwargs.get("requested_model") not in (None, "Ornith-1.0-9B-4bit"):
                 raise ValueError("cannot resolve local model without healthy live oMLX inventory")
             return {
                 "effective_model": "Ornith-1.0-9B-4bit",
@@ -48,7 +48,7 @@ class TestResolveDispatchAgent(unittest.TestCase):
             return dispatch_mod._resolve_dispatch_agent(
                 requested, task_type, MagicMock(), task="summarize tests",
                 role="dev", pilot_class=pilot_class, dispatch_key=dispatch_key,
-                scope_paths=["test.log"],
+                scope_paths=["test.log"], requested_model=requested_model,
             )
 
     def test_explicit_agent_bypasses_routing(self):
@@ -85,6 +85,12 @@ class TestResolveDispatchAgent(unittest.TestCase):
 
     def test_auto_routes_to_fallback_when_local_unhealthy(self):
         self.assertEqual(self._resolve("auto", preflight_ok=False), "agy")
+
+    def test_unqualified_explicit_model_falls_back_instead_of_entering_pilot(self):
+        self.assertEqual(
+            self._resolve("auto", requested_model="Qwen2.5-Coder-14B-Instruct-4bit"),
+            "agy",
+        )
 
     def test_qualified_pilot_gate_replaces_legacy_capability_threshold(self):
         self.assertEqual(self._resolve("auto", cap_score=0.3), "local")

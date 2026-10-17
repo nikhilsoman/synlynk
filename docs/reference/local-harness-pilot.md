@@ -32,9 +32,10 @@ recommended share to the frontier (0%).
 Pilot Aider runs use `docker/local-pilot.compose.yaml`: Aider is on an
 internal-only Docker network; its sole peer is a relay with a fixed destination
 of host oMLX TCP port 8000. Aider receives a credential-scanned copy of only
-tracked files in a disposable scratch repository, not the job worktree or its
-Git metadata. Only validated in-scope edits are applied back to the disposable
-job worktree. The Aider container gets only
+explicitly scoped files in a disposable scratch repository, not the job
+worktree or its Git metadata. Out-of-scope tracked and untracked files are not
+copied into the model's view. Only validated in-scope edits are applied back
+to the disposable job worktree. The Aider container gets only
 `OPENAI_API_KEY`. It does not receive GitHub tokens, SSH credentials, or the
 host home directory. The API base inside Aider is rewritten to
 `http://omlx:8000/v1`. A Docker, Compose, authentication, or isolation setup
