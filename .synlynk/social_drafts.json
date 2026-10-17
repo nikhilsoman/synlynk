@@ -2238,5 +2238,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2391 \u2014 add isolated graduated pilot (PR #2391, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2391.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-17) - PR #2391\n- Merged improvements and fixes for PR #2391."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/387-pr2396-send-pilot-context-as-one-aider-message.md",
+    "title": "PR #2396 \u2014 send pilot context as one Aider message",
+    "author": "nikhilsoman",
+    "date": "2026-10-17",
+    "pr": "#2396",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2396."
+    ],
+    "tweet": "\ud83d\ude80 PR #2396 \u2014 send pilot context as one Aider message (PR #2396, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2396.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-17) - PR #2396\n- Merged improvements and fixes for PR #2396."
   }
 ]
