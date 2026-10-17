@@ -2386,6 +2386,38 @@ def test_local_pilot_class_with_explicit_local_fails_closed(project_dir, capsys)
     assert "--local-pilot-class requires auto-routing" in capsys.readouterr().out
 
 
+def test_local_pilot_dispatch_binds_frontier_fallback_and_marks_pilot_intent(
+    project_dir, monkeypatch, capsys
+):
+    import synlynk
+    from synlynk import dispatch as dispatch_mod
+    from synlynk.cli import main
+
+    seen = {}
+
+    def fake_resolve(*_args, **_kwargs):
+        return "agy"  # pilot admission denied; use the frontier fallback
+
+    def fake_dispatch(agent, task, **kwargs):
+        seen.update(agent=agent, **kwargs)
+        return {"id": "job-pilot-denied", "pid": 1234, "status": "running"}
+
+    monkeypatch.setattr(dispatch_mod, "_resolve_dispatch_agent", fake_resolve)
+    monkeypatch.setattr(dispatch_mod, "take_local_pilot_receipt", lambda: None)
+    monkeypatch.setattr(synlynk, "dispatch_agent", fake_dispatch)
+
+    main([
+        "dispatch", "--task", "summarize focused test output", "--task-type", "test",
+        "--local-pilot-class", "test_summary", "--scope-paths", "tests/test_local_pilot.py",
+    ])
+
+    capsys.readouterr()
+    assert seen["agent"] == "agy"
+    assert seen["force_agent"] is True
+    assert seen["local_pilot_requested"] is True
+    assert seen["local_pilot_receipt"] is None
+
+
 def test_cli_dispatch_infers_defaults_and_prints_one_line_preview(project_dir, capsys):
     from synlynk.cli import main
 

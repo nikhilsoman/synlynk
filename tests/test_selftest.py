@@ -614,12 +614,16 @@ def test_all_paid_commands_have_registered_scenarios():
         assert cmd in SELFTEST_SCENARIOS, f"missing scenario for {cmd!r}"
 
 
-def test_scenario_migrate_failure_injection_triggers_rollback():
+def test_scenario_migrate_failure_injection_triggers_rollback(tmp_path):
     from synlynk.selftest import (
         ScenarioContext, _scenario_migrate_failure_injection,
     )
 
     ctx = ScenarioContext(repo_path="", live=True)
+    # Keep this active fixture outside the prefix swept by `synlynk repair`'s
+    # orphan cleanup. Under xdist, that cleanup must not remove another test's
+    # currently executing workspace.
+    ctx.state["workspace_dir"] = tmp_path / "migrate-failure-workspace"
     result = _scenario_migrate_failure_injection({"command": "migrate"}, ctx)
     assert result.status == "pass", result.detail
 

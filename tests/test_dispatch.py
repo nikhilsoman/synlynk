@@ -1052,6 +1052,25 @@ def test_dispatch_agent_auto_provisions_story_id_when_not_given(project_dir, mon
     assert row is not None
 
 
+def test_pilot_intent_refuses_local_after_downstream_capability_reroute(
+    project_dir, monkeypatch
+):
+    import synlynk.dispatch as dispatch_mod
+    from synlynk import dispatch_pipeline
+
+    monkeypatch.setattr(
+        dispatch_pipeline, "resolve",
+        lambda request: request.__class__(**{**request.__dict__, "agent": "local"}),
+    )
+    monkeypatch.setattr(dispatch_pipeline, "authorize", lambda _request: None)
+
+    with pytest.raises(RuntimeError, match="requires a valid admitted isolated-runner receipt"):
+        dispatch_mod.dispatch_agent(
+            "agy", "summarize a focused test", task_type="test",
+            force_agent=True, local_pilot_requested=True,
+        )
+
+
 def test_dispatch_agent_defers_when_quota_exhausted(project_dir, monkeypatch):
     """Even with --force-agent, dispatch_agent must not bypass the quota gate."""
     import synlynk as sl
