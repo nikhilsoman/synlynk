@@ -1253,7 +1253,7 @@ def build_parser(selected_command=None) -> argparse.ArgumentParser:
         help="Bypass harness preflight checks"
     )
     dispatch_parser.add_argument(
-        "--dangerously-skip-permissions", action="store_true", dest="skip_permissions",
+        "--dangerously-skip-permissions", "--insecure-skip-permissions", action="store_true", dest="skip_permissions",
         help="Explicitly bypass harness permission prompts (unsafe; opt-in only)",
     )
     dispatch_parser.add_argument(

@@ -4505,7 +4505,7 @@ def test_grok_dispatch_uses_always_approve(project_dir, monkeypatch):
     # requires Agy Task 1 — passes after feat/v0.9.7-grok-agy merges
     if "grok" not in sl.HARNESS_CAPABILITY_BASELINES:
         pytest.xfail("requires Agy Task 1 — passes after feat/v0.9.7-grok-agy merges")
-    sl.dispatch_agent("grok", "implement auth fix", story_id="14", force_agent=True)
+    sl.dispatch_agent("grok", "implement auth fix", story_id="14", force_agent=True, skip_permissions=True)
     shell_cmd = captured["cmd"][2]
     assert "--always-approve" in shell_cmd
     assert "--permission-mode dontAsk" not in shell_cmd
@@ -4544,7 +4544,7 @@ def test_grok_fallback_permission_mode(project_dir, monkeypatch):
 
     if "grok" not in sl.HARNESS_CAPABILITY_BASELINES:
         pytest.xfail("requires Agy Task 1 — passes after feat/v0.9.7-grok-agy merges")
-    sl.dispatch_agent("grok", "implement auth fix", story_id="14", force_agent=True)
+    sl.dispatch_agent("grok", "implement auth fix", story_id="14", force_agent=True, skip_permissions=True)
     shell_cmd = captured["cmd"][2]
     assert "--permission-mode bypassPermissions" in shell_cmd
     assert "--always-approve" not in shell_cmd
@@ -4580,7 +4580,7 @@ def test_grok_dispatch_single_flag_placed_before_prompt(project_dir, monkeypatch
     monkeypatch.setattr(sl, "generate_context", lambda scope="full", out_path=None: "")
     monkeypatch.setattr(sl, "load_config", lambda: {"roles": {"grok": ["implement", "test"]}})
 
-    sl.dispatch_agent("grok", "fix the login bug", story_id="99", force_agent=True)
+    sl.dispatch_agent("grok", "fix the login bug", story_id="99", force_agent=True, skip_permissions=True)
     shell_cmd = captured["cmd"][2]
     # --single must appear after the Grok permission flags and directly before "$PROMPT"
     assert "--always-approve" in shell_cmd
@@ -5538,7 +5538,7 @@ def test_grok_dispatch_includes_cwd_flag(project_dir, monkeypatch):
     monkeypatch.setattr(sl, "_probe_model_version", lambda *a, **kw: "unknown")
     monkeypatch.setattr(sl, "generate_context", lambda scope="full", out_path=None: "")
     monkeypatch.setattr(sl, "load_config", lambda: {"roles": {"grok": ["implement", "test"]}})
-    job = sl.dispatch_agent("grok", "implement auth fix", force_agent=True)
+    job = sl.dispatch_agent("grok", "implement auth fix", force_agent=True, skip_permissions=True)
     shell_cmd = captured["cmd"][2]
     assert f"--cwd {job['worktree_path']}" in shell_cmd or f"--cwd '{job['worktree_path']}'" in shell_cmd or f'--cwd "{job["worktree_path"]}"' in shell_cmd
 
