@@ -160,3 +160,13 @@ def test_start_reports_only_new_logfile_bytes_on_failure(tmp_path, monkeypatch, 
     assert fresh_error in combined
     assert STALE_ERROR not in combined
     assert "Failed to start daemon:" in combined
+
+
+def test_worktree_files_touched_ignores_missing_worktree_quietly(capsys):
+    from synlynk.dispatch import _worktree_files_touched
+
+    result = _worktree_files_touched("/path/to/missing/worktree/job-08ee6d4f")
+    assert result == []
+    captured = capsys.readouterr()
+    assert "worktree unavailable" not in captured.err
+    assert "worktree unavailable" not in captured.out
