@@ -7,6 +7,7 @@ import math
 import os
 import sqlite3
 from collections import Counter, defaultdict
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from typing import Any, Mapping
 
@@ -39,6 +40,32 @@ def _row_dict(row, columns: list[str] | tuple[str, ...] | None = None) -> dict[s
     if columns is not None:
         return dict(zip(columns, row))
     return dict(row)
+
+
+@contextmanager
+def _mapping_rows(conn):
+    """Temporarily expose named columns for projection queries.
+
+    The normal database helper returns tuple-backed SQLite connections.  The
+    projection needs column names, so set the row factory only for its query
+    window and restore the caller's connection configuration afterwards.
+    """
+    has_row_factory = hasattr(conn, "row_factory")
+    previous = getattr(conn, "row_factory", None)
+    projection_conn = conn
+    if not has_row_factory:
+        underlying = getattr(conn, "_real", None)
+        if underlying is not None and hasattr(underlying, "row_factory"):
+            projection_conn = underlying
+            has_row_factory = True
+            previous = getattr(projection_conn, "row_factory", None)
+    if has_row_factory and previous is None:
+        projection_conn.row_factory = sqlite3.Row
+    try:
+        yield projection_conn
+    finally:
+        if has_row_factory:
+            projection_conn.row_factory = previous
 
 
 def _json(value, default):
@@ -88,6 +115,12 @@ def _confidence(decision: Mapping[str, Any] | None) -> str:
 
 
 def project_job_status(conn, job_id: str) -> dict[str, Any]:
+    """Return the versioned status/evidence contract for any SQLite row mode."""
+    with _mapping_rows(conn) as projection_conn:
+        return _project_job_status(projection_conn, job_id)
+
+
+def _project_job_status(conn, job_id: str) -> dict[str, Any]:
     """Return the versioned status/evidence contract for one job."""
     daemon_cursor = conn.execute("SELECT * FROM daemon_jobs WHERE job_id=?", (job_id,))
     daemon = _row_dict(daemon_cursor.fetchone(), _columns(daemon_cursor))
@@ -143,23 +176,7 @@ def project_job_status(conn, job_id: str) -> dict[str, Any]:
 
 
 def record_shadow_comparison(conn, job_id: str) -> dict[str, Any]:
-    # The normal DB helper returns tuple rows.  The projection reader also
-    # supports the Row-based test/integration connections, so provide that
-    # shape locally without changing the caller's connection configuration.
-    has_row_factory = hasattr(conn, "row_factory")
-    previous_row_factory = getattr(conn, "row_factory", None)
-    projection_conn = conn
-    if not has_row_factory:
-        underlying = getattr(conn, "_real", None)
-        if underlying is not None and hasattr(underlying, "row_factory"):
-            projection_conn = underlying
-    if has_row_factory and previous_row_factory is None:
-        conn.row_factory = sqlite3.Row
-    try:
-        projection = project_job_status(projection_conn, job_id)
-    finally:
-        if has_row_factory:
-            conn.row_factory = previous_row_factory
+    projection = project_job_status(conn, job_id)
     shadow = projection["shadow_comparison"]
     conn.execute(
         "INSERT OR REPLACE INTO job_status_shadow "
