@@ -2414,5 +2414,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2362 \u2014 Fix gh:#2260: 'python3 -m synlynk pr check' (or 'syn (job-7945916e) (PR #2362, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2362.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-17) - PR #2362\n- Merged improvements and fixes for PR #2362."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/398-pr2361-fix-gh-2320-dispatched-job-worktrees-in-.md",
+    "title": "PR #2361 \u2014 Fix gh:#2320: dispatched job worktrees in synlynk cu (job-01306c88)",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-17",
+    "pr": "#2361",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2361."
+    ],
+    "tweet": "\ud83d\ude80 PR #2361 \u2014 Fix gh:#2320: dispatched job worktrees in synlynk cu (job-01306c88) (PR #2361, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2361.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-17) - PR #2361\n- Merged improvements and fixes for PR #2361."
   }
 ]
