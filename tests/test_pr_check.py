@@ -132,8 +132,8 @@ def test_pr_check_passes_on_green_qa_gate(project_dir, capsys):
     with patch("synlynk.pr_multiplier._is_github_remote", return_value=True), \
          patch("synlynk.db.detect_remote_owner_repo", return_value=("nikhilsoman", "synlynk")), \
          patch("synlynk.db.qa_gate_verdict", return_value=green_verdict), \
-         patch("synlynk.pr_multiplier._current_pr_number", return_value=None):
-        cmd_pr_check()
+         patch("synlynk.pr_multiplier._current_pr_number", return_value=1451):
+        cmd_pr_check(pr_number=1451)
     captured = capsys.readouterr()
     assert "qa gate" in captured.out.lower()
 
@@ -145,3 +145,43 @@ def test_pr_check_skips_qa_gate_off_github_remote(project_dir, capsys):
         cmd_pr_check()
     captured = capsys.readouterr()
     assert "qa gate" not in captured.out.lower()
+
+
+def test_pr_check_fails_closed_when_no_pr_resolved(project_dir, capsys):
+    """gh:#2260: a worktree branch with no associated PR must fail closed, not green."""
+    from synlynk.db import cmd_pr_check
+
+    green_verdict = {
+        "verdict": "green", "ci_status": True, "sentinel_status": True,
+        "reason": "CI green, no unresolved sentinel alert",
+    }
+    with patch("synlynk.pr_multiplier._is_github_remote", return_value=True), \
+         patch("synlynk.db.detect_remote_owner_repo", return_value=("nikhilsoman", "synlynk")), \
+         patch("synlynk.pr_multiplier._current_pr_number", return_value=None), \
+         patch("synlynk.db.qa_gate_verdict", return_value=green_verdict):
+        with pytest.raises(SystemExit) as exc_info:
+            cmd_pr_check()
+    assert exc_info.value.code != 0
+    captured = capsys.readouterr()
+    assert "no PR found" in captured.out
+    assert "cannot verify" in captured.out
+    assert "PR check passed" not in captured.out
+    conn = synlynk._get_db()
+    rows = conn.execute("SELECT COUNT(*) FROM policy_gate_events").fetchone()
+    conn.close()
+    assert rows[0] == 0
+
+
+def test_pr_check_no_pr_message_names_branch(project_dir, capsys):
+    """gh:#2260: the fail-closed diagnostic names the unresolvable branch."""
+    from synlynk.db import cmd_pr_check
+
+    with patch("synlynk.pr_multiplier._is_github_remote", return_value=True), \
+         patch("synlynk.pr_multiplier._current_pr_number", return_value=None), \
+         patch("synlynk.db._current_branch_name", return_value="dispatch/codex/job-7945916e"):
+        with pytest.raises(SystemExit) as exc_info:
+            cmd_pr_check()
+    assert exc_info.value.code != 0
+    captured = capsys.readouterr()
+    assert "dispatch/codex/job-7945916e" in captured.out
+    assert "cannot verify" in captured.out
