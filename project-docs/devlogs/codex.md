@@ -212,4 +212,8 @@ see verification output in the session transcript. [@codex]
   context limits.
 - Verification: local agent/resolver/catalog/adapter/conformance suites
   (109 passed, 3 expected xfails); local dispatch integration (9 passed).
+- Independent CI caught that the concurrency race test now reached production
+  live-inventory validation. Added a deterministic healthy oMLX inventory
+  fixture to keep that test isolated while preserving fail-closed dispatch;
+  expanded local suite passes (311 passed, 3 expected xfails).
 [@codex]

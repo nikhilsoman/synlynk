@@ -163,6 +163,11 @@ class TestSchedulerLocalConcurrency(unittest.TestCase):
         ]
         with patch.object(dispatch_module, "_local_max_concurrent", return_value=1), \
              patch.object(dispatch_module, "_local_concurrency_exceeded", side_effect=synchronized_exceeded), \
+             patch("synlynk.local_agent._health_check", return_value={
+                 "reachable": True,
+                 "status": "healthy",
+                 "available_models": ["Ornith-1.0-9B-4bit"],
+             }), \
              patch("synlynk.local_agent_seed.seed_local_capability_envelope"), \
              patch.object(dispatch_module, "_create_job_worktree", return_value={
                  "path": db_file.name + ".worktree",
