@@ -2398,5 +2398,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2406 \u2014 prevent Local Pilot fallback isolation bypass (PR #2406, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2406.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-17) - PR #2406\n- Merged improvements and fixes for PR #2406."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/397-pr2362-fix-gh-2260-python3-m-synlynk-pr-check-o.md",
+    "title": "PR #2362 \u2014 Fix gh:#2260: 'python3 -m synlynk pr check' (or 'syn (job-7945916e)",
+    "author": "synlynk-dev agent",
+    "date": "2026-10-17",
+    "pr": "#2362",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2362."
+    ],
+    "tweet": "\ud83d\ude80 PR #2362 \u2014 Fix gh:#2260: 'python3 -m synlynk pr check' (or 'syn (job-7945916e) (PR #2362, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2362.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-17) - PR #2362\n- Merged improvements and fixes for PR #2362."
   }
 ]

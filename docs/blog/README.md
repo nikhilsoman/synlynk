@@ -473,6 +473,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [394](./394-pr2402-trust-live-inventory-over-stale-model-ca.md) | PR #2402 — trust live inventory over stale model catalog | [#2402](https://github.com/nikhilsoman/synlynk/pull/2402) | 2026-10-17 |
 | [395](./395-pr2404-fail-closed-on-explicit-pilot-bypass.md) | PR #2404 — fail closed on explicit pilot bypass | [#2404](https://github.com/nikhilsoman/synlynk/pull/2404) | 2026-10-17 |
 | [396](./396-pr2406-prevent-local-pilot-fallback-isolation-b.md) | PR #2406 — prevent Local Pilot fallback isolation bypass | [#2406](https://github.com/nikhilsoman/synlynk/pull/2406) | 2026-10-17 |
+| [397](./397-pr2362-fix-gh-2260-python3-m-synlynk-pr-check-o.md) | PR #2362 — Fix gh:#2260: 'python3 -m synlynk pr check' (or 'syn (job-7945916e) | [#2362](https://github.com/nikhilsoman/synlynk/pull/2362) | 2026-10-17 |
 
 ## Per-PR Post Template
 
