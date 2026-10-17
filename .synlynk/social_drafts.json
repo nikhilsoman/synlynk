@@ -2382,5 +2382,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2404 \u2014 fail closed on explicit pilot bypass (PR #2404, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2404.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-17) - PR #2404\n- Merged improvements and fixes for PR #2404."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/396-pr2406-prevent-local-pilot-fallback-isolation-b.md",
+    "title": "PR #2406 \u2014 prevent Local Pilot fallback isolation bypass",
+    "author": "nikhilsoman",
+    "date": "2026-10-17",
+    "pr": "#2406",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2406."
+    ],
+    "tweet": "\ud83d\ude80 PR #2406 \u2014 prevent Local Pilot fallback isolation bypass (PR #2406, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2406.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-17) - PR #2406\n- Merged improvements and fixes for PR #2406."
   }
 ]
