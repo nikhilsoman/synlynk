@@ -2156,6 +2156,13 @@ implementation dispatched, external messages sent, or policy changed.
   by sandbox loopback permissions, and that single test passed when rerun with
   loopback access. No local pilot resumed. Actual session cost is unavailable;
   generated `project-docs/costs.md` was not hand-edited.
-- Next: review diff, commit and open PR for independent QA. Keep pilot disabled;
-  only resume after QA merge and runtime/evidence review.
+- PR #2406 CI then exposed a separate xdist race: repair's orphan cleanup
+  removed the active `synlynk-selftest-*` fixture used by a migrate rollback
+  test. Filed LIVE-26 (#2407); isolated that test fixture under `tmp_path` so
+  the Local Harness PR is not dependent on the global cleanup namespace. The
+  test and its repair-cleanup neighbor pass locally; the production cleanup
+  race remains tracked separately.
+- Next: push the isolated-test fixture follow-up to PR #2406, rerun required CI,
+  and request QA approval on the new head. Keep pilot disabled; only resume after
+  QA merge and runtime/evidence review.
 [@codex]
