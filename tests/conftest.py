@@ -54,6 +54,22 @@ def isolate_local_http_token(tmp_path, monkeypatch):
     monkeypatch.setattr(http_auth, "http_token_path", lambda: token_path)
 
 
+@pytest.fixture(autouse=True)
+def isolate_user_home(tmp_path, monkeypatch):
+    """Keep tests independent of files in the developer's real ~/.synlynk.
+
+    CI runners start with a clean home directory, while local machines may
+    have persistent Synlynk state that changes probe and configuration
+    behavior. A per-test HOME gives both environments the same baseline.
+    """
+    home = tmp_path / "isolated-home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    # Python uses USERPROFILE for expanduser on Windows; keeping it aligned
+    # makes this fixture portable if the CI matrix gains Windows later.
+    monkeypatch.setenv("USERPROFILE", str(home))
+
+
 @pytest.fixture
 def git_worktree_repo(project_dir):
     """Create a real git repo for worktree-isolation tests."""
