@@ -24,6 +24,14 @@ from synlynk import local_http_auth
 from synlynk.product_store import resolve_github_apps_dir
 
 
+def _is_disposable_worktree_path(path: str) -> bool:
+    path = os.path.abspath(path)
+    return any(marker in path for marker in (
+        f"{os.sep}.claude{os.sep}worktrees{os.sep}",
+        f"{os.sep}worktrees{os.sep}",
+    ))
+
+
 def _repo_common_dir(*, strict: bool = False) -> str:
     """Return the repository root shared by all worktrees.
 
@@ -32,10 +40,17 @@ def _repo_common_dir(*, strict: bool = False) -> str:
     directory itself, so only strip the final component when it is actually
     named ``.git``.  Commands outside a Git repository retain the historical
     current-working-directory behavior.
+
+    Disposable dispatch/worktree paths in ``SYNLYNK_DAEMON_WORKSPACE_ROOT`` are
+    ignored (gh:#2261) so a stale child env cannot pin the daemon there.
     """
     configured_root = os.environ.get("SYNLYNK_DAEMON_WORKSPACE_ROOT")
     if configured_root and os.path.isdir(configured_root):
-        return os.path.abspath(configured_root)
+        configured_root = os.path.abspath(configured_root)
+        # Ignore leftover dispatch-worktree env (gh:#2261); fall through to
+        # git-common-dir so a stale child cannot stay pinned to a disposable cwd.
+        if not _is_disposable_worktree_path(configured_root):
+            return configured_root
     try:
         result = subprocess.run(
             ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
@@ -74,12 +89,51 @@ def _daemon_package_path() -> str:
     return os.path.abspath(__file__)
 
 
-def _is_disposable_worktree_path(path: str) -> bool:
+def _canonical_repo_root_from(cwd: str) -> str:
+    """Resolve the persistent repo root while *cwd* still exists.
+
+    Discovers git from the invoking shell's worktree before any detach, so a
+    disposable dispatch worktree can still resolve the shared common dir
+    (gh:#2261).
+    """
+    result = subprocess.run(
+        ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+        cwd=cwd,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    common_dir = result.stdout.strip()
+    if not common_dir:
+        raise RuntimeError("git returned an empty common directory")
+    common_dir = os.path.abspath(common_dir)
+    if os.path.basename(common_dir) == ".git":
+        return os.path.dirname(common_dir)
+    return common_dir
+
+
+def _pin_persistent_workspace_root(path: str) -> str:
+    """Remap a disposable worktree path onto the shared repo root.
+
+    Fail closed when the path is disposable and the canonical root cannot be
+    resolved, or when that resolved root is itself disposable.
+    """
     path = os.path.abspath(path)
-    return any(marker in path for marker in (
-        f"{os.sep}.claude{os.sep}worktrees{os.sep}",
-        f"{os.sep}worktrees{os.sep}",
-    ))
+    if not _is_disposable_worktree_path(path):
+        return path
+    try:
+        pinned = os.path.abspath(_canonical_repo_root_from(path))
+    except (OSError, subprocess.SubprocessError, RuntimeError) as exc:
+        raise RuntimeError(
+            "refusing to daemonize from a disposable worktree whose canonical "
+            f"repo root cannot be resolved: {path}: {exc}"
+        ) from exc
+    if _is_disposable_worktree_path(pinned):
+        raise RuntimeError(
+            "refusing to daemonize with a disposable worktree as its "
+            f"workspace root: {pinned}"
+        )
+    return pinned
 
 
 def _daemon_caller_path() -> str:
@@ -193,17 +247,25 @@ def _daemonize_via_reexec(entry_point: str, logfile: str, cwd: Optional[str] = N
     """Spawn a detached child process running a module-level entry point.
 
     Never detaches with a disposable dispatch/worktree path as the child's cwd
-    (gh:#2261): if the requested cwd is disposable, pin to the canonical repo
-    root instead. A disposable canonical root fails closed.
+    (gh:#2261): if the requested or invoking cwd is disposable, pin to the
+    canonical repo root discovered from that worktree. A disposable canonical
+    root fails closed.
     """
-    cwd = os.path.abspath(cwd or os.getcwd())
-    if _is_disposable_worktree_path(cwd):
-        cwd = os.path.abspath(_repo_common_dir(strict=True))
-        if _is_disposable_worktree_path(cwd):
+    try:
+        invoking_cwd = os.path.abspath(os.getcwd())
+    except FileNotFoundError as exc:
+        if not cwd:
             raise RuntimeError(
-                "refusing to daemonize with a disposable worktree as its "
-                f"workspace root: {cwd}"
-            )
+                "cwd no longer exists; cannot daemonize"
+            ) from exc
+        invoking_cwd = None
+    requested_cwd = os.path.abspath(cwd) if cwd else invoking_cwd
+    probe = requested_cwd
+    if invoking_cwd and _is_disposable_worktree_path(invoking_cwd):
+        probe = invoking_cwd
+    elif requested_cwd and _is_disposable_worktree_path(requested_cwd):
+        probe = requested_cwd
+    cwd = _pin_persistent_workspace_root(probe)
     logfile = os.path.abspath(logfile)
     os.makedirs(os.path.dirname(logfile), exist_ok=True)
     module_path, func_name = entry_point.rsplit(".", 1)
@@ -235,14 +297,22 @@ class WatchDaemon:
     _child_entry_point = "synlynk.daemon._watch_daemon_child_main"
 
     def __init__(self):
-        self.workspace_root = _repo_common_dir(strict=True)
+        self.workspace_root = _pin_persistent_workspace_root(
+            _repo_common_dir(strict=True)
+        )
         self.pidfile = os.path.join(self.workspace_root, ".synlynk", "watch.pid")
         self.logfile = os.path.join(self.workspace_root, ".synlynk", "watch.log")
         self.settle_seconds = 3
         self.token_refresh_interval_seconds = 50 * 60
         self._lock_fh = None
 
-    def start(self) -> None:
+    def start(self) -> bool:
+        """Spawn the detached child. Return True if healthy (or already running).
+
+        A False return means the child never published a live pidfile. Callers
+        that are launchd/systemd-supervised must exit non-zero so KeepAlive can
+        restart (gh:#2261).
+        """
         if _is_disposable_worktree_path(self.workspace_root):
             raise RuntimeError(
                 "refusing to start the daemon with a disposable worktree as its "
@@ -254,17 +324,17 @@ class WatchDaemon:
             owner_pid = _daemon_lock_owner_pid(lock_path)
             if self._is_running() or _pid_is_alive(owner_pid):
                 print(self._already_running_message)
-                return
+                return True
             # Recover deterministically from stale lock metadata. A real
             # flock held by a live starter/daemon still fails this retry.
             lock_fh = _try_acquire_daemon_lock(lock_path, blocking=False)
             if lock_fh is None:
                 print(self._already_running_message)
-                return
+                return True
         try:
             if self._is_running():
                 print(self._already_running_message)
-                return
+                return True
             if os.path.exists(self.pidfile):
                 os.remove(self.pidfile)
             self._prepare_start()
@@ -286,36 +356,86 @@ class WatchDaemon:
             if self._is_running():
                 print(self._started_message)
                 print("    Tip: run 'synlynk daemon --install-service' so this survives a crash/reboot.")
-            else:
-                last_error = ""
-                try:
-                    with open(self.logfile) as log:
-                        log.seek(max(0, log_offset))
-                        new_bytes = log.read()
-                        last_error = next(
-                            (
-                                line.strip()
-                                for line in reversed(new_bytes.splitlines())
-                                if line.strip()
-                            ),
-                            "",
-                        )
-                except OSError:
-                    pass
-                if last_error:
-                    print(f"  ⚠ Failed to start daemon: {last_error}", file=sys.stderr)
-                else:
-                    print(
-                        "  ⚠ Failed to start daemon: child did not report "
-                        "readiness in time, no error output produced.",
-                        file=sys.stderr,
+                return True
+            last_error = ""
+            try:
+                with open(self.logfile) as log:
+                    log.seek(max(0, log_offset))
+                    new_bytes = log.read()
+                    last_error = next(
+                        (
+                            line.strip()
+                            for line in reversed(new_bytes.splitlines())
+                            if line.strip()
+                        ),
+                        "",
                     )
+            except OSError:
+                pass
+            if last_error:
+                print(f"  ⚠ Failed to start daemon: {last_error}", file=sys.stderr)
+            else:
+                print(
+                    "  ⚠ Failed to start daemon: child did not report "
+                    "readiness in time, no error output produced.",
+                    file=sys.stderr,
+                )
+            return False
         finally:
             _release_daemon_lock(lock_fh)
 
     def _prepare_start(self) -> None:
         """Hook for subclasses (e.g. autonomous env) before re-exec spawn."""
         return
+
+    def _self_health_check(self) -> bool:
+        """Verify the detached child still has a live cwd and Git context (gh:#2261)."""
+        try:
+            cwd = os.getcwd()
+        except OSError as exc:
+            print(
+                f"  ⚠ daemon exiting cleanly: current working directory is unavailable: {exc}",
+                file=sys.stderr,
+                flush=True,
+            )
+            return False
+        try:
+            result = subprocess.run(
+                ["git", "rev-parse", "--git-common-dir"],
+                cwd=cwd,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            print(
+                f"  ⚠ daemon exiting cleanly: Git context check failed: {exc}",
+                file=sys.stderr,
+                flush=True,
+            )
+            return False
+        if result.returncode != 0 or not result.stdout.strip():
+            detail = result.stderr.strip() or f"git exited {result.returncode}"
+            print(
+                f"  ⚠ daemon exiting cleanly: Git context is unavailable from {cwd}: {detail}",
+                file=sys.stderr,
+                flush=True,
+            )
+            return False
+        return True
+
+    def _cleanup_after_health_failure(self) -> None:
+        """Remove child identity files before exiting on a stale cwd."""
+        for path in (self.pidfile, self.pidfile.replace(".pid", ".start")):
+            try:
+                os.remove(path)
+            except FileNotFoundError:
+                pass
+            except OSError:
+                pass
+        if self._lock_fh is not None:
+            _release_daemon_lock(self._lock_fh)
+            self._lock_fh = None
 
     def _await_child_pidfile(self, timeout: float = 10.0) -> None:
         """Wait for the re-exec child to publish a live pidfile, with backoff.
@@ -503,6 +623,12 @@ class WatchDaemon:
         last_token_refresh = time.time()
         while True:
             time.sleep(interval)
+            # Detached children are not launchd-supervised; exit cleanly when
+            # cwd/git context is gone so an outer KeepAlive (or a later
+            # daemon start) can recover (gh:#2261).
+            if os.environ.get("_SYNLYNK_DAEMON_CHILD") == "1" and not self._self_health_check():
+                self._cleanup_after_health_failure()
+                return
             current_mtimes = self._get_mtimes("project-docs")
             changed = [f for f in current_mtimes
                        if current_mtimes[f] != last_mtimes.get(f)]
@@ -807,6 +933,11 @@ def _daemon_install_service(daemon_instance) -> None:
             f"workspace root: {caller_root}"
         )
     workspace_root = _repo_common_dir()
+    if _is_disposable_worktree_path(workspace_root):
+        raise RuntimeError(
+            "refusing to install the daemon service with a disposable worktree as its "
+            f"workspace root: {workspace_root}"
+        )
     service_command = [python_path, "-m", "synlynk", "daemon", "run"]
 
     def _run_checked(command, **kwargs):
@@ -1442,6 +1573,12 @@ class SynlynkDaemon(WatchDaemon):
         last_quota_poll = 0.0
         while True:
             time.sleep(interval)
+            # Detached children are not launchd-supervised; exit cleanly when
+            # cwd/git context is gone so an outer KeepAlive (or a later
+            # daemon start) can recover (gh:#2261).
+            if os.environ.get("_SYNLYNK_DAEMON_CHILD") == "1" and not self._self_health_check():
+                self._cleanup_after_health_failure()
+                return
             current_mtimes = self._get_mtimes("project-docs")
             changed = [f for f in current_mtimes
                        if current_mtimes[f] != last_mtimes.get(f)]

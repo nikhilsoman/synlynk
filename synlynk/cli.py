@@ -2324,14 +2324,16 @@ def main(argv=None) -> None:
             from synlynk.daemon import WatchDaemon
             w = WatchDaemon()
             if action == "start":
-                w.start()
+                if w.start() is False:
+                    raise SystemExit(1)
             elif action == "stop":
                 w.stop()
             elif action == "status":
                 w.status()
             elif action == "restart":
                 w.stop()
-                w.start()
+                if w.start() is False:
+                    raise SystemExit(1)
         else:
             cmd_watch(args)
     elif args.command == "swarm":
@@ -2354,14 +2356,19 @@ def main(argv=None) -> None:
         else:
             action = getattr(args, "action", None) or "status"
             if action == "start":
-                d.start()
+                # launchd may supervise this wrapper, not the detached child. A
+                # non-zero wrapper exit is required for KeepAlive policies that
+                # only restart after a failed exit (gh:#2261).
+                if d.start() is False:
+                    raise SystemExit(1)
             elif action == "stop":
                 d.stop()
             elif action == "status":
                 d.status()
             elif action == "restart":
                 d.stop()
-                d.start()
+                if d.start() is False:
+                    raise SystemExit(1)
             elif action == "run":
                 from synlynk.daemon import _synlynk_daemon_foreground_main
                 _synlynk_daemon_foreground_main()

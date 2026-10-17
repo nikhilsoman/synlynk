@@ -7988,6 +7988,32 @@ def test_install_service_rejects_disposable_worktree(project_dir, monkeypatch):
         daemon_mod._daemon_install_service(object())
 
 
+def test_install_service_rejects_disposable_resolved_workspace_root(project_dir, monkeypatch):
+    """gh:#2261: install-service must not bake a dispatch worktree into the unit."""
+    import synlynk.daemon as daemon_mod
+
+    disposable = project_dir / "worktrees" / "job-123"
+    disposable.mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(project_dir))
+    monkeypatch.setattr(synlynk.sys, "platform", "darwin")
+    monkeypatch.setattr(
+        daemon_mod,
+        "_daemon_package_path",
+        lambda: str(project_dir / "synlynk" / "daemon.py"),
+    )
+    monkeypatch.setattr(daemon_mod, "_daemon_caller_path", lambda: str(project_dir))
+    monkeypatch.setattr(daemon_mod, "_repo_common_dir", lambda: str(disposable))
+    monkeypatch.setattr(
+        daemon_mod.subprocess,
+        "run",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("must not install")),
+    )
+
+    with pytest.raises(RuntimeError, match="disposable worktree"):
+        daemon_mod._daemon_install_service(object())
+    assert not (project_dir / "Library" / "LaunchAgents" / "com.synlynk.daemon.plist").exists()
+
+
 def test_uninstall_service_macos(project_dir, monkeypatch):
     monkeypatch.setenv("HOME", str(project_dir))
     monkeypatch.setattr(synlynk.sys, "platform", "darwin")
