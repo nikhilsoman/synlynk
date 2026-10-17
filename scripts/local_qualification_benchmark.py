@@ -25,6 +25,11 @@ COMPOSE_FILE = REPO_ROOT / "docker" / "local-qualification.compose.yaml"
 MODEL_ID = "Qwen2.5-Coder-14B-Instruct-4bit"
 EDIT_FORMAT = "whole"
 PASSING_CORRECTNESS = 0.85
+READ_ONLY_PATHS = {
+    "test-log-summary": ("test.log",),
+    "diagnosis": ("service.log",),
+    "bounded-explanation": ("src/example.py",),
+}
 
 
 @dataclass(frozen=True)
@@ -190,17 +195,29 @@ def _docker_executor(
         raise RuntimeError("OPENAI_API_KEY is required for --live")
     if shutil.which("docker") is None:
         raise RuntimeError("docker is required for --live")
-    prompt = workspace / "benchmark-prompt.txt"
-    prompt.write_text(task.prompt)
     env = os.environ.copy()
     env["QUALIFICATION_WORKTREE"] = str(workspace)
-    result = subprocess.run([
+    command = [
         "docker", "compose", "-f", str(COMPOSE_FILE), "run", "--rm", "aider",
         "--model", f"openai/{model_id}", "--openai-api-base", "http://omlx:8000/v1",
-        "--edit-format", edit_format, "--message-file", "/workspace/benchmark-prompt.txt",
+        "--edit-format", edit_format, "--message", task.prompt,
+        # Aider defaults its histories into the mounted worktree. Keep those
+        # runner artifacts in the container tmpfs so they cannot be mistaken
+        # for model edits by the benchmark safety checks.
+        "--chat-history-file", "/tmp/aider-chat.md",
+        "--input-history-file", "/tmp/aider-input",
+        "--llm-history-file", "/tmp/aider-llm.md",
+        "--no-restore-chat-history",
         "--no-stream", "--no-auto-commits", "--yes-always", "--no-auto-lint", "--no-auto-test",
         "--map-tokens", "0", "--no-check-update", "--no-analytics", "--no-show-model-warnings", "--no-gitignore",
-    ], cwd=workspace, env=env, capture_output=True, text=True, timeout=300)
+    ]
+    if task.requires_change:
+        for path in task.allowed_paths:
+            command.extend(("--file", path))
+    else:
+        for path in READ_ONLY_PATHS[task.category]:
+            command.extend(("--read", path))
+    result = subprocess.run(command, cwd=workspace, env=env, capture_output=True, text=True, timeout=300)
     # oMLX is native on the host, outside the container cgroup.  Do not report
     # Docker-client RSS as model memory: callers must supply the host oMLX
     # measurement captured for this serialized run.
