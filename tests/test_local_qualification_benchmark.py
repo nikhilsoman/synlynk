@@ -166,11 +166,56 @@ def test_live_timeout_removes_only_its_named_container_and_records_failure(tmp_p
     assert cleanup_command == ["docker", "rm", "-f", container_name]
 
 
-def test_timeout_is_a_non_qualifying_safety_event():
+def test_read_only_timeout_is_classified_without_becoming_an_edit_safety_event():
     def timed_out(task, workspace, model_id, edit_format):
+        if task.task_id != "diagnosis-01":
+            return _dry_executor(task, workspace, model_id, edit_format)
         return ExecutionEvidence(124, "timed out", peak_memory_mb=42.0, timed_out=True)
 
     receipt = run_benchmark(executor=timed_out, mode="live")
 
-    assert "execution-timeout" in receipt.safety_events
-    assert not receipt.qualifies
+    timed_out_task = next(task for task in receipt.tasks if task.task_id == "diagnosis-01")
+    assert timed_out_task.failure_class == "timeout"
+    assert timed_out_task.execution_exit_code == 124
+    assert "timed out" in timed_out_task.failure_excerpt
+    assert not timed_out_task.correct
+    assert timed_out_task.unsafe_events == []
+    assert receipt.safety_events == []
+    assert receipt.correctness == 23 / 24
+    assert receipt.qualifies
+
+
+def test_failed_task_receipt_classifies_provider_failure_and_redacts_secrets(monkeypatch):
+    monkeypatch.setenv("PROVIDER_SECRET", "provider-secret-value")
+
+    def failed(task, workspace, model_id, edit_format):
+        if task.task_id == "diagnosis-01":
+            return ExecutionEvidence(
+                2,
+                "provider rejected request; Authorization: Bearer provider-secret-value",
+                peak_memory_mb=42.0,
+            )
+        return _dry_executor(task, workspace, model_id, edit_format)
+
+    receipt = run_benchmark(executor=failed, mode="live")
+    task = next(task for task in receipt.tasks if task.task_id == "diagnosis-01")
+
+    assert task.failure_class == "aider-provider-failure"
+    assert task.execution_exit_code == 2
+    assert "provider-secret-value" not in task.failure_excerpt
+    assert "[REDACTED]" in task.failure_excerpt
+    assert all(item.failure_excerpt is None for item in receipt.tasks if item.correct)
+
+
+def test_successful_but_incorrect_response_has_bounded_excerpt():
+    def incorrect(task, workspace, model_id, edit_format):
+        if task.task_id == "diagnosis-01":
+            return ExecutionEvidence(0, "wrong " * 200, peak_memory_mb=42.0)
+        return _dry_executor(task, workspace, model_id, edit_format)
+
+    receipt = run_benchmark(executor=incorrect, mode="live")
+    task = next(task for task in receipt.tasks if task.task_id == "diagnosis-01")
+
+    assert task.failure_class == "incorrect-response"
+    assert task.execution_exit_code == 0
+    assert len(task.failure_excerpt) == 500
