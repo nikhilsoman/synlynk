@@ -2286,10 +2286,10 @@ def _enforce_job_effect_verification(job: dict, git_state: Optional[dict], senti
     )
     task_type_norm = (job.get("task_type") or "").strip().lower()
     default_expect = "closed"
-    if "review" in task_type_norm:
-        default_expect = "review_posted"
-    elif "merge" in task_type_norm:
+    if "merge" in task_type_norm:
         default_expect = "merged"
+    elif "review" in task_type_norm:
+        default_expect = "review_posted"
     elif "pr" in task_type_norm:
         default_expect = "pr_open"
 
