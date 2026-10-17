@@ -2126,5 +2126,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2383 \u2014 safe-by-default permissions with role-scoped profiles and strict bypass audit (P0-5) (PR #2383, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2383.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-17) - PR #2383\n- Merged improvements and fixes for PR #2383."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/380-pr2381-record-gemma-qualification-result.md",
+    "title": "PR #2381 \u2014 record Gemma qualification result",
+    "author": "nikhilsoman",
+    "date": "2026-10-17",
+    "pr": "#2381",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2381."
+    ],
+    "tweet": "\ud83d\ude80 PR #2381 \u2014 record Gemma qualification result (PR #2381, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2381.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-17) - PR #2381\n- Merged improvements and fixes for PR #2381."
   }
 ]

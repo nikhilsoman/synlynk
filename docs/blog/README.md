@@ -456,6 +456,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [377](./377-pr2379-surface-tiering-with-8-core-verbs-and-ex.md) | PR #2379 — surface tiering with 8 core verbs and experimental quarantine fence (P0-4) | [#2379](https://github.com/nikhilsoman/synlynk/pull/2379) | 2026-10-17 |
 | [378](./378-pr2382-classify-qualification-failures-safely.md) | PR #2382 — classify qualification failures safely | [#2382](https://github.com/nikhilsoman/synlynk/pull/2382) | 2026-10-17 |
 | [379](./379-pr2383-safe-by-default-permissions-with-role-sc.md) | PR #2383 — safe-by-default permissions with role-scoped profiles and strict bypass audit (P0-5) | [#2383](https://github.com/nikhilsoman/synlynk/pull/2383) | 2026-10-17 |
+| [380](./380-pr2381-record-gemma-qualification-result.md) | PR #2381 — record Gemma qualification result | [#2381](https://github.com/nikhilsoman/synlynk/pull/2381) | 2026-10-17 |
 
 ## Per-PR Post Template
 
