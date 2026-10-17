@@ -1,4 +1,5 @@
 import json
+from types import SimpleNamespace
 
 import pytest
 
@@ -6,9 +7,11 @@ from scripts.local_qualification_benchmark import (
     BENCHMARK_TASKS,
     EDIT_FORMAT,
     MODEL_ID,
+    READ_ONLY_PATHS,
     BenchmarkReceipt,
     ExecutionEvidence,
     TaskReceipt,
+    _docker_executor,
     _dry_executor,
     main,
     run_benchmark,
@@ -82,3 +85,43 @@ def test_threshold_needs_85_percent_and_memory_for_every_task():
 def test_live_mode_requires_host_memory_evidence():
     with pytest.raises(SystemExit, match="2"):
         main(["--live"])
+
+
+def test_live_read_only_task_uses_read_context_and_keeps_aider_artifacts_off_workspace(tmp_path, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr("scripts.local_qualification_benchmark.shutil.which", lambda name: "/usr/bin/docker")
+    calls = []
+
+    def fake_run(command, **kwargs):
+        calls.append((command, kwargs))
+        return SimpleNamespace(returncode=0, stdout="test_math 4 5", stderr="")
+
+    monkeypatch.setattr("scripts.local_qualification_benchmark.subprocess.run", fake_run)
+
+    evidence = _docker_executor(BENCHMARK_TASKS[0], tmp_path, MODEL_ID, EDIT_FORMAT, peak_memory_mb=42.0)
+
+    command, kwargs = calls[0]
+    assert evidence.exit_code == 0
+    assert ("--read", READ_ONLY_PATHS["test-log-summary"][0]) == tuple(command[command.index("--read"):command.index("--read") + 2])
+    assert "--file" not in command
+    assert "--message-file" not in command
+    assert "/tmp/aider-chat.md" in command
+    assert kwargs["env"]["QUALIFICATION_WORKTREE"] == str(tmp_path)
+
+
+def test_live_edit_task_limits_aider_to_declared_editable_path(tmp_path, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr("scripts.local_qualification_benchmark.shutil.which", lambda name: "/usr/bin/docker")
+    calls = []
+
+    def fake_run(command, **kwargs):
+        calls.append(command)
+        return SimpleNamespace(returncode=0, stdout="docstring", stderr="")
+
+    monkeypatch.setattr("scripts.local_qualification_benchmark.subprocess.run", fake_run)
+
+    _docker_executor(BENCHMARK_TASKS[-4], tmp_path, MODEL_ID, EDIT_FORMAT, peak_memory_mb=42.0)
+
+    command = calls[0]
+    assert ("--file", "target.py") == tuple(command[command.index("--file"):command.index("--file") + 2])
+    assert "--read" not in command
