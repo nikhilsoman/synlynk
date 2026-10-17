@@ -227,6 +227,8 @@ def test_isolated_runner_cleans_up_compose_and_redacts_persisted_logs(tmp_path, 
     compose_envs = []
     scratch_entries = []
     scratch_files = []
+    aider_calls = []
+    aider_stdin = []
 
     def fake_run(argv, env):
         compose_calls.append(argv)
@@ -256,6 +258,8 @@ def test_isolated_runner_cleans_up_compose_and_redacts_persisted_logs(tmp_path, 
 
     def fake_popen(argv, *args, **kwargs):
         if argv and argv[0] == "docker" and "run" in argv:
+            aider_calls.append(argv)
+            aider_stdin.append(kwargs["stdin"].read())
             return FakeChild(*args, **kwargs)
         return original_popen(argv, *args, **kwargs)
 
@@ -275,5 +279,12 @@ def test_isolated_runner_cleans_up_compose_and_redacts_persisted_logs(tmp_path, 
     assert compose_envs[0]["PILOT_WORKTREE"] != str(source)
     assert scratch_entries[0] == [".git", "test.log"]
     assert scratch_files[0] == ["test.log"]
+    assert aider_stdin == [b"prompt"]
+    assert aider_calls[0][aider_calls[0].index("aider") + 1:] == [
+        "--model", "openai/ornith",
+        "--no-show-model-warnings",
+        "--message-file", "/dev/stdin",
+        "--read", "test.log",
+    ]
     assert compose_calls[0][5:8] == ["job-test", "up", "--detach"]
     assert compose_calls[-1][-2:] == ["down", "--remove-orphans"]

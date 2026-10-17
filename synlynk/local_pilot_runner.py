@@ -246,10 +246,21 @@ def run_isolated_dispatch(
         } else "--file"
         for path in expanded_scope:
             scope_flags.extend([flag, path])
+        invocation_args = list(aider_args)
+        # Aider otherwise probes the public LiteLLM model-price catalog during
+        # startup. The pilot container is intentionally network-isolated except
+        # for the fixed oMLX relay, so suppress that optional network lookup.
+        if "--no-show-model-warnings" not in invocation_args:
+            invocation_args.append("--no-show-model-warnings")
+        # Read the complete stdin stream as one Aider message. Without this,
+        # Aider's interactive loop interprets each line of Synlynk's context
+        # prompt as a separate message and may answer unrelated fragments.
+        if "--message-file" not in invocation_args:
+            invocation_args.extend(["--message-file", "/dev/stdin"])
         with open(prompt_file, "rb") as prompt_handle:
             child = subprocess.Popen(
                 prefix + ["run", "--rm", "--no-deps", "--interactive", "--no-TTY", "aider"]
-                + aider_args + scope_flags,
+                + invocation_args + scope_flags,
                 env=env,
                 stdin=prompt_handle,
                 stdout=subprocess.PIPE,
