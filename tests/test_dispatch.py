@@ -2630,6 +2630,38 @@ def test_permissions_to_flags_local_no_permissions_is_noop():
     assert _permissions_to_flags("local", None) == []
 
 
+def test_local_dispatch_builds_production_flags_through_adapter(project_dir, monkeypatch):
+    import synlynk.dispatch as dispatch_mod
+    from synlynk.harness_adapters.local import LocalAdapter
+
+    adapter = LocalAdapter()
+    calls = []
+    original_build = adapter.build_cmd
+
+    def spy_build(request):
+        calls.append(request)
+        return original_build(request)
+
+    monkeypatch.setattr(adapter, "build_cmd", spy_build)
+    monkeypatch.setattr("synlynk.harness_adapters.registry.get_adapter", lambda agent: adapter)
+    monkeypatch.setattr(
+        dispatch_mod.subprocess,
+        "Popen",
+        lambda *args, **kwargs: type("DummyProc", (), {"pid": 9999})(),
+    )
+
+    dispatch_mod.dispatch_agent(
+        agent="local",
+        task="summarize this file",
+        skip_preflight=True,
+        context_mode="none",
+    )
+
+    assert len(calls) == 1
+    assert calls[0].agent == "local"
+    assert calls[0].permissions == []
+
+
 def test_resolve_dispatch_base_ref_stacks_on_current_feature_branch(git_worktree_repo, monkeypatch):
     import synlynk.dispatch as dispatch_mod
     import subprocess
