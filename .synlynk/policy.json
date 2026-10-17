@@ -222,6 +222,17 @@
           "network"
         ]
       }
+    },
+    "ceremony_policy": {
+      "parent_issue_required_for_multi_task": true,
+      "conversational_rollup_target": "parent_issue_or_pr",
+      "per_pr_blog_convention": "retired",
+      "milestone_blog_focus": [
+        "intent",
+        "context",
+        "pathway",
+        "outcome"
+      ]
     }
   }
 }
