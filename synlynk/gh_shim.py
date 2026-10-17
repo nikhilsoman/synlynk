@@ -106,6 +106,8 @@ def write_shim(path: str) -> str:
         f"#!{sys.executable}\n"
         "import os\n"
         "import sys\n"
+        "os.environ.setdefault('SYNLYNK_ALLOW_CWD_FALLBACK', '1')\n"
+        "os.environ.setdefault('SYNLYNK_FAST_CLI', '1')\n"
         f"sys.path.insert(0, {package_root!r})\n"
         "from synlynk.gh_shim import main\n"
         "raise SystemExit(main(shim_dir=os.path.dirname(os.path.realpath(__file__))))\n"

@@ -771,10 +771,12 @@ def _role_for_story(story_id: str) -> Optional[str]:
     if not get_db:
         return None
     conn = get_db()
-    if conn is None:
+    try:
+        row = conn.execute("SELECT role FROM stories WHERE story_id=?", (story_id,)).fetchone()
+        return row[0] if row else None
+    except Exception:
         return None
-    row = conn.execute("SELECT role FROM stories WHERE story_id=?", (story_id,)).fetchone()
-    return row[0] if row else None
+
 
 
 def _infer_dispatch_defaults(
@@ -1244,6 +1246,8 @@ def _create_dispatch_shims() -> Tuple[tempfile.TemporaryDirectory, dict]:
         "ZDOTDIR": zdot_dir,
         "BASH_ENV": os.path.join(zdot_dir, ".zshenv"),
         "ENV": os.path.join(zdot_dir, ".zshenv"),
+        "SYNLYNK_ALLOW_CWD_FALLBACK": "1",
+        "SYNLYNK_FAST_CLI": "1",
     }
     return shim_dir, env_vars
 
