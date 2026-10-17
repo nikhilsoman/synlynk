@@ -451,6 +451,7 @@ A post-mortem / build diary documenting the design choices, strategic pivots, an
 | [372](./372-pr2374-preserve-byte-timeout-receipts.md) | PR #2374 — preserve byte timeout receipts | [#2374](https://github.com/nikhilsoman/synlynk/pull/2374) | 2026-10-17 |
 | [373](./373-pr2375-eliminate-false-negative-status-verdicts.md) | PR #2375 — eliminate false-negative status verdicts on review and merge dispatches (P0-2) | [#2375](https://github.com/nikhilsoman/synlynk/pull/2375) | 2026-10-17 |
 | [374](./374-pr2377-blog-test-isolation-sqlite-row-hardening.md) | PR #2377 — blog test isolation, sqlite row hardening, and daemon stale worktree handling (P0-3 PR 2) | [#2377](https://github.com/nikhilsoman/synlynk/pull/2377) | 2026-10-17 |
+| [375](./375-pr2376-enforce-login-shell-shim-isolation-and-d.md) | PR #2376 — enforce login-shell shim isolation and dynamic token refresh (P0-3 PR 1) | [#2376](https://github.com/nikhilsoman/synlynk/pull/2376) | 2026-10-17 |
 
 ## Per-PR Post Template
 

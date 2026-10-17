@@ -2046,5 +2046,21 @@
     ],
     "tweet": "\ud83d\ude80 PR #2377 \u2014 blog test isolation, sqlite row hardening, and daemon stale worktree handling (P0-3 PR 2) (PR #2377, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2377.\n\n#posts",
     "changelog": "### v0.25.1 (2026-10-17) - PR #2377\n- Merged improvements and fixes for PR #2377."
+  },
+  {
+    "file": "/home/runner/work/synlynk/synlynk/docs/blog/375-pr2376-enforce-login-shell-shim-isolation-and-d.md",
+    "title": "PR #2376 \u2014 enforce login-shell shim isolation and dynamic token refresh (P0-3 PR 1)",
+    "author": "nikhilsoman",
+    "date": "2026-10-17",
+    "pr": "#2376",
+    "version": "0.25.1",
+    "tags": [
+      "posts"
+    ],
+    "highlights": [
+      "Merged improvements and fixes for PR #2376."
+    ],
+    "tweet": "\ud83d\ude80 PR #2376 \u2014 enforce login-shell shim isolation and dynamic token refresh (P0-3 PR 1) (PR #2376, v0.25.1)\n\n\u2022 Merged improvements and fixes for PR #2376.\n\n#posts",
+    "changelog": "### v0.25.1 (2026-10-17) - PR #2376\n- Merged improvements and fixes for PR #2376."
   }
 ]
